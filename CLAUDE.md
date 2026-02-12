@@ -90,6 +90,19 @@ Project config: `.opencode.json` in project root (backward-compatible with OpenC
 ### Runtime Registries (ETS)
 Provider.Registry, Tool.Registry, Config.Cache — these are caches, not source of truth. All rebuild from config + DB on restart.
 
+## Elixir / Phoenix Conventions
+
+- Use `Req` for HTTP requests — already included as a dependency. Avoid `:httpoison`, `:tesla`, `:httpc`
+- Use `mix precommit` alias (in synapsis_server) to compile with warnings-as-errors, format, and test
+- Elixir lists do not support index-based access via `list[i]` — use `Enum.at/2` or pattern matching
+- Never nest multiple modules in the same file (causes cyclic dependency and compilation errors)
+- Never use map access syntax (`changeset[:field]`) on structs — use `my_struct.field` or `Ecto.Changeset.get_field/2`
+- Don't use `String.to_atom/1` on user input (memory leak risk)
+- Predicate functions end with `?` — reserve `is_` prefix for guards only
+- OTP primitives (`DynamicSupervisor`, `Registry`) require names in child spec: `{DynamicSupervisor, name: MyApp.MySup}`
+- Phoenix router `scope` blocks prefix the alias automatically — don't duplicate it
+- In tests: always use `start_supervised!/1` for process cleanup; use `Process.monitor/1` + `assert_receive {:DOWN, ...}` instead of `Process.sleep/1`; use `:sys.get_state/1` to synchronize before assertions
+
 ## Guardrails
 
 - **Never store persistent state in GenServer** — DB is source of truth
