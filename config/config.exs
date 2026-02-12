@@ -3,9 +3,16 @@
 # help of the Config module.
 import Config
 
+# Ecto Repo configuration
+config :synapsis_core, ecto_repos: [Synapsis.Repo]
+
+config :synapsis_core, Synapsis.Repo,
+  migration_primary_key: [type: :binary_id],
+  migration_timestamps: [type: :utc_datetime_usec]
+
 # General application configuration
 config :synapsis_server,
-  generators: [timestamp_type: :utc_datetime]
+  generators: [timestamp_type: :utc_datetime_usec]
 
 # Configure the endpoint
 config :synapsis_server, SynapsisServerWeb.Endpoint,
@@ -15,7 +22,7 @@ config :synapsis_server, SynapsisServerWeb.Endpoint,
     formats: [json: SynapsisServerWeb.ErrorJSON],
     layout: false
   ],
-  pubsub_server: SynapsisServer.PubSub
+  pubsub_server: Synapsis.PubSub
 
 # Configure Elixir's Logger
 config :logger, :default_formatter,

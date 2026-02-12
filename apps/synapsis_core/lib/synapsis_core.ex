@@ -1,18 +1,7 @@
 defmodule SynapsisCore do
   @moduledoc """
-  Documentation for `SynapsisCore`.
+  Core domain logic for Synapsis AI coding agent.
+  Contains schemas, business logic, and provider integrations.
+  No Phoenix dependencies.
   """
-
-  @doc """
-  Hello world.
-
-  ## Examples
-
-      iex> SynapsisCore.hello()
-      :world
-
-  """
-  def hello do
-    :world
-  end
 end

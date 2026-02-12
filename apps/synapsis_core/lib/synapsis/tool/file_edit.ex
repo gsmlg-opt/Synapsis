@@ -1,0 +1,80 @@
+defmodule Synapsis.Tool.FileEdit do
+  @moduledoc "Edit file contents via search/replace."
+  @behaviour Synapsis.Tool.Behaviour
+
+  @impl true
+  def name, do: "file_edit"
+
+  @impl true
+  def description, do: "Edit a file by replacing a specific string with new content."
+
+  @impl true
+  def parameters do
+    %{
+      "type" => "object",
+      "properties" => %{
+        "path" => %{"type" => "string", "description" => "Path to the file to edit"},
+        "old_string" => %{
+          "type" => "string",
+          "description" => "The exact string to find and replace"
+        },
+        "new_string" => %{"type" => "string", "description" => "The replacement string"}
+      },
+      "required" => ["path", "old_string", "new_string"]
+    }
+  end
+
+  @impl true
+  def call(input, context) do
+    path = resolve_path(input["path"], context[:project_path])
+
+    with :ok <- validate_path(path, context[:project_path]),
+         {:ok, content} <- File.read(path) do
+      old_string = input["old_string"]
+      new_string = input["new_string"]
+
+      case String.split(content, old_string) do
+        [_only] ->
+          {:error, "String not found in file: #{inspect(String.slice(old_string, 0..50))}"}
+
+        [before, after_part] ->
+          new_content = before <> new_string <> after_part
+          File.write!(path, new_content)
+          {:ok, "Successfully edited #{path}"}
+
+        _multiple ->
+          # Multiple occurrences - replace only the first
+          {before, _} = :binary.split(content, old_string)
+
+          rest =
+            :binary.part(
+              content,
+              byte_size(before) + byte_size(old_string),
+              byte_size(content) - byte_size(before) - byte_size(old_string)
+            )
+
+          new_content = before <> new_string <> rest
+          File.write!(path, new_content)
+          {:ok, "Successfully edited #{path} (replaced first occurrence)"}
+      end
+    else
+      {:error, :enoent} -> {:error, "File not found: #{path}"}
+      {:error, reason} -> {:error, inspect(reason)}
+    end
+  end
+
+  defp resolve_path(path, project_path) do
+    if Path.type(path) == :absolute, do: path, else: Path.join(project_path || ".", path)
+  end
+
+  defp validate_path(_path, nil), do: :ok
+
+  defp validate_path(path, project_path) do
+    abs_path = Path.expand(path)
+    abs_project = Path.expand(project_path)
+
+    if String.starts_with?(abs_path, abs_project),
+      do: :ok,
+      else: {:error, "Path outside project root"}
+  end
+end
