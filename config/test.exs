@@ -2,14 +2,13 @@ import Config
 
 # Database configuration for test
 config :synapsis_core, Synapsis.Repo,
-  username: "postgres",
-  password: "postgres",
-  hostname: "localhost",
+  username: System.get_env("PGUSER", "postgres"),
   database: "synapsis_test#{System.get_env("MIX_TEST_PARTITION")}",
+  socket_dir: System.get_env("PGHOST"),
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: System.schedulers_online() * 2
 
-config :synapsis_server, SynapsisServerWeb.Endpoint,
+config :synapsis_web, SynapsisWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4002],
   secret_key_base: "TG9IIkMoPGf7vzj3p+QiUXZ0wHl0MCb+PRPa58Tw/OSQFuxSh5OhfuLfDkhQo5FO",
   server: false

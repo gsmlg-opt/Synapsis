@@ -11,18 +11,19 @@ config :synapsis_core, Synapsis.Repo,
   migration_timestamps: [type: :utc_datetime_usec]
 
 # General application configuration
-config :synapsis_server,
+config :synapsis_web,
   generators: [timestamp_type: :utc_datetime_usec]
 
 # Configure the endpoint
-config :synapsis_server, SynapsisServerWeb.Endpoint,
+config :synapsis_web, SynapsisWeb.Endpoint,
   url: [host: "localhost"],
   adapter: Bandit.PhoenixAdapter,
   render_errors: [
-    formats: [json: SynapsisServerWeb.ErrorJSON],
+    formats: [html: SynapsisWeb.ErrorHTML, json: SynapsisWeb.ErrorJSON],
     layout: false
   ],
-  pubsub_server: Synapsis.PubSub
+  pubsub_server: Synapsis.PubSub,
+  live_view: [signing_salt: "GJORt-a_O8D4qyGG"]
 
 # Configure Elixir's Logger
 config :logger, :default_formatter,
@@ -31,6 +32,24 @@ config :logger, :default_formatter,
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
+
+# Configure bun for JS bundling
+config :bun,
+  version: "1.2.5",
+  synapsis_web: [
+    args: ~w(build assets/js/app.ts --outdir=priv/static/assets
+             --external=/fonts/* --external=/images/*),
+    cd: Path.expand("../apps/synapsis_web", __DIR__),
+    env: %{}
+  ]
+
+# Configure tailwind for CSS bundling
+config :tailwind,
+  version: "4.1.11",
+  synapsis_web: [
+    args: ~w(--input=assets/css/app.css --output=priv/static/assets/app.css),
+    cd: Path.expand("../apps/synapsis_web", __DIR__)
+  ]
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

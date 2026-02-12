@@ -35,11 +35,14 @@ in
     listen_addresses = "";  # Empty string = Unix socket only
     initialDatabases = [
       { name = "synapsis"; }
+      { name = "synapsis_test"; }
     ];
     initialScript = ''
       CREATE USER synapsis WITH PASSWORD 'synapsis' CREATEDB;
       GRANT ALL PRIVILEGES ON DATABASE synapsis TO synapsis;
+      GRANT ALL PRIVILEGES ON DATABASE synapsis_test TO synapsis;
       ALTER DATABASE synapsis OWNER TO synapsis;
+      ALTER DATABASE synapsis_test OWNER TO synapsis;
     '';
   };
 

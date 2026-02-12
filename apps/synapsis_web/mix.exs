@@ -10,24 +10,54 @@ defmodule SynapsisWeb.MixProject do
       deps_path: "../../deps",
       lockfile: "../../mix.lock",
       elixir: "~> 1.18",
+      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      aliases: aliases(),
+      deps: deps(),
+      listeners: [Phoenix.CodeReloader]
     ]
   end
 
-  # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger]
+      mod: {SynapsisWeb.Application, []},
+      extra_applications: [:logger, :runtime_tools]
     ]
   end
 
-  # Run "mix help deps" to learn about dependencies.
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
+
   defp deps do
     [
-      # {:dep_from_hexpm, "~> 0.3.0"},
-      # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"},
-      # {:sibling_app_in_umbrella, in_umbrella: true}
+      {:synapsis_core, in_umbrella: true},
+      {:synapsis_lsp, in_umbrella: true},
+      {:phoenix, "~> 1.8"},
+      {:phoenix_html, "~> 4.2"},
+      {:phoenix_live_view, "~> 1.0"},
+      {:telemetry_metrics, "~> 1.0"},
+      {:telemetry_poller, "~> 1.0"},
+      {:gettext, "~> 1.0"},
+      {:jason, "~> 1.4"},
+      {:dns_cluster, "~> 0.2.0"},
+      {:bandit, "~> 1.6"},
+      {:cors_plug, "~> 3.0"},
+      {:bun, "~> 1.6", runtime: Mix.env() == :dev},
+      {:tailwind, "~> 0.2", runtime: Mix.env() == :dev}
+    ]
+  end
+
+  defp aliases do
+    [
+      setup: ["deps.get", "assets.setup"],
+      "assets.setup": ["tailwind.install --if-missing", "bun.install --if-missing"],
+      "assets.build": ["tailwind synapsis_web", "bun synapsis_web"],
+      "assets.deploy": [
+        "phx.digest.clean",
+        "tailwind synapsis_web --minify",
+        "bun synapsis_web --minify",
+        "phx.digest"
+      ]
     ]
   end
 end

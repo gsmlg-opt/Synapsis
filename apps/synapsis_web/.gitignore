@@ -21,3 +21,7 @@ synapsis_web-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# Frontend build artifacts and dependencies
+/node_modules/
+/priv/static/assets/

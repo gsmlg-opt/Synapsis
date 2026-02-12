@@ -1,0 +1,3 @@
+[install]
+# Frozen lockfile in CI
+# frozenLockfile = true

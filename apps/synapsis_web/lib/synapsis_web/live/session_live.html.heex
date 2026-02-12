@@ -1,0 +1,65 @@
+<div class="flex h-screen bg-gray-950 text-gray-100">
+  <%!-- Sidebar --%>
+  <aside class="w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
+    <div class="p-4 border-b border-gray-800">
+      <h2 class="text-lg font-semibold">Synapsis</h2>
+      <button
+        phx-click="create_session"
+        class="mt-2 w-full px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+      >
+        + New Session
+      </button>
+    </div>
+    <div class="flex-1 overflow-y-auto">
+      <div
+        :for={session <- @sessions}
+        class={[
+          "px-4 py-3 cursor-pointer border-b border-gray-800 hover:bg-gray-800 flex justify-between items-center",
+          session.id == @active_session_id && "bg-gray-800"
+        ]}
+      >
+        <.link patch={~p"/sessions/#{session.id}"} class="min-w-0 flex-1">
+          <div class="text-sm truncate">
+            {session.title || "Session #{String.slice(session.id, 0, 8)}"}
+          </div>
+          <div class="text-xs text-gray-500 mt-0.5">
+            {session.provider}/{session.model}
+          </div>
+        </.link>
+        <button
+          phx-click="delete_session"
+          phx-value-id={session.id}
+          class="ml-2 text-gray-600 hover:text-red-400 text-xs"
+        >
+          &#10005;
+        </button>
+      </div>
+    </div>
+  </aside>
+  <%!-- Main content --%>
+  <main class="flex-1 flex flex-col">
+    <%= if @active_session_id do %>
+      <div
+        id={"chat-#{@active_session_id}"}
+        phx-hook="ChatView"
+        phx-update="ignore"
+        data-session-id={@active_session_id}
+        class="flex-1 flex flex-col"
+      >
+      </div>
+    <% else %>
+      <div class="flex-1 flex items-center justify-center text-gray-500">
+        <div class="text-center">
+          <h1 class="text-2xl font-bold mb-2">Synapsis</h1>
+          <p>AI Coding Agent</p>
+          <button
+            phx-click="create_session"
+            class="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            New Session
+          </button>
+        </div>
+      </div>
+    <% end %>
+  </main>
+</div>
