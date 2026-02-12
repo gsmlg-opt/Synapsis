@@ -34,6 +34,10 @@ erl_crash.dump
 # VSCode
 /.vscode
 
+# claude code
+!/.claude/commands
+!/.claude/skills
+
 # Elixir Language Server
 .elixir_ls
 
