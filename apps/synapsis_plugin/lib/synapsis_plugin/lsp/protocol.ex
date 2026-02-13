@@ -1,5 +1,5 @@
-defmodule Synapsis.LSP.Protocol do
-  @moduledoc "JSON-RPC encoding/decoding for LSP."
+defmodule SynapsisPlugin.LSP.Protocol do
+  @moduledoc "JSON-RPC encoding/decoding for LSP (Content-Length framing)."
 
   def encode_request(id, method, params) do
     msg =

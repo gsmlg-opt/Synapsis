@@ -1,6 +1,6 @@
 defmodule Synapsis.Tool.FileEdit do
   @moduledoc "Edit file contents via search/replace."
-  @behaviour Synapsis.Tool.Behaviour
+  use Synapsis.Tool
 
   @impl true
   def name, do: "file_edit"
@@ -25,7 +25,7 @@ defmodule Synapsis.Tool.FileEdit do
   end
 
   @impl true
-  def call(input, context) do
+  def execute(input, context) do
     path = resolve_path(input["path"], context[:project_path])
 
     with :ok <- validate_path(path, context[:project_path]),
@@ -62,6 +62,9 @@ defmodule Synapsis.Tool.FileEdit do
       {:error, reason} -> {:error, inspect(reason)}
     end
   end
+
+  @impl true
+  def side_effects, do: [:file_changed]
 
   defp resolve_path(path, project_path) do
     if Path.type(path) == :absolute, do: path, else: Path.join(project_path || ".", path)

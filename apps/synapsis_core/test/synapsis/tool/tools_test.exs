@@ -1,7 +1,17 @@
 defmodule Synapsis.Tool.ToolsTest do
   use ExUnit.Case
 
-  alias Synapsis.Tool.{FileRead, FileEdit, FileWrite, Bash, Grep, Glob}
+  alias Synapsis.Tool.{
+    FileRead,
+    FileEdit,
+    FileWrite,
+    Bash,
+    Grep,
+    Glob,
+    ListDir,
+    FileDelete,
+    FileMove
+  }
 
   @test_dir System.tmp_dir!() |> Path.join("synapsis_tool_test_#{:rand.uniform(100_000)}")
 
@@ -23,13 +33,13 @@ defmodule Synapsis.Tool.ToolsTest do
 
   describe "FileRead" do
     test "reads a file" do
-      {:ok, content} = FileRead.call(%{"path" => "hello.txt"}, %{project_path: @test_dir})
+      {:ok, content} = FileRead.execute(%{"path" => "hello.txt"}, %{project_path: @test_dir})
       assert content =~ "Hello World"
     end
 
     test "reads with offset and limit" do
       {:ok, content} =
-        FileRead.call(
+        FileRead.execute(
           %{"path" => "hello.txt", "offset" => 1, "limit" => 1},
           %{project_path: @test_dir}
         )
@@ -38,12 +48,12 @@ defmodule Synapsis.Tool.ToolsTest do
     end
 
     test "returns error for missing file" do
-      {:error, msg} = FileRead.call(%{"path" => "nonexistent.txt"}, %{project_path: @test_dir})
+      {:error, msg} = FileRead.execute(%{"path" => "nonexistent.txt"}, %{project_path: @test_dir})
       assert msg =~ "not found"
     end
 
     test "rejects path outside project root" do
-      {:error, msg} = FileRead.call(%{"path" => "/etc/passwd"}, %{project_path: @test_dir})
+      {:error, msg} = FileRead.execute(%{"path" => "/etc/passwd"}, %{project_path: @test_dir})
       assert msg =~ "outside project root"
     end
   end
@@ -51,7 +61,7 @@ defmodule Synapsis.Tool.ToolsTest do
   describe "FileWrite" do
     test "writes a new file" do
       {:ok, msg} =
-        FileWrite.call(
+        FileWrite.execute(
           %{"path" => "new_file.txt", "content" => "new content"},
           %{project_path: @test_dir}
         )
@@ -62,12 +72,16 @@ defmodule Synapsis.Tool.ToolsTest do
 
     test "creates directories as needed" do
       {:ok, _} =
-        FileWrite.call(
+        FileWrite.execute(
           %{"path" => "deep/dir/file.txt", "content" => "deep content"},
           %{project_path: @test_dir}
         )
 
       assert File.exists?(Path.join(@test_dir, "deep/dir/file.txt"))
+    end
+
+    test "declares file_changed side effect" do
+      assert :file_changed in FileWrite.side_effects()
     end
   end
 
@@ -77,7 +91,7 @@ defmodule Synapsis.Tool.ToolsTest do
       File.write!(test_file, "foo bar baz")
 
       {:ok, msg} =
-        FileEdit.call(
+        FileEdit.execute(
           %{"path" => "edit_test.txt", "old_string" => "bar", "new_string" => "qux"},
           %{project_path: @test_dir}
         )
@@ -88,58 +102,139 @@ defmodule Synapsis.Tool.ToolsTest do
 
     test "returns error when string not found" do
       {:error, msg} =
-        FileEdit.call(
+        FileEdit.execute(
           %{"path" => "hello.txt", "old_string" => "NONEXISTENT", "new_string" => "x"},
           %{project_path: @test_dir}
         )
 
       assert msg =~ "not found"
     end
+
+    test "declares file_changed side effect" do
+      assert :file_changed in FileEdit.side_effects()
+    end
   end
 
   describe "Bash" do
     test "executes a simple command" do
-      {:ok, output} = Bash.call(%{"command" => "echo hello"}, %{project_path: @test_dir})
+      {:ok, output} = Bash.execute(%{"command" => "echo hello"}, %{project_path: @test_dir})
       assert output == "hello"
     end
 
     test "returns exit code for failing command" do
-      {:ok, output} = Bash.call(%{"command" => "exit 1"}, %{project_path: @test_dir})
+      {:ok, output} = Bash.execute(%{"command" => "exit 1"}, %{project_path: @test_dir})
       assert output =~ "Exit code: 1"
     end
 
     test "uses project directory as cwd" do
-      {:ok, output} = Bash.call(%{"command" => "ls hello.txt"}, %{project_path: @test_dir})
+      {:ok, output} = Bash.execute(%{"command" => "ls hello.txt"}, %{project_path: @test_dir})
       assert output =~ "hello.txt"
+    end
+
+    test "has no side effects by default" do
+      assert Bash.side_effects() == []
     end
   end
 
   describe "Grep" do
     test "searches for pattern" do
-      {:ok, output} = Grep.call(%{"pattern" => "Hello"}, %{project_path: @test_dir})
+      {:ok, output} = Grep.execute(%{"pattern" => "Hello"}, %{project_path: @test_dir})
       assert output =~ "hello.txt"
     end
 
     test "returns no matches message" do
-      {:ok, output} = Grep.call(%{"pattern" => "ZZZNONEXISTENT"}, %{project_path: @test_dir})
+      {:ok, output} = Grep.execute(%{"pattern" => "ZZZNONEXISTENT"}, %{project_path: @test_dir})
       assert output =~ "No matches"
     end
   end
 
   describe "Glob" do
     test "finds files by pattern" do
-      {:ok, output} = Glob.call(%{"pattern" => "**/*.txt"}, %{project_path: @test_dir})
+      {:ok, output} = Glob.execute(%{"pattern" => "**/*.txt"}, %{project_path: @test_dir})
       assert output =~ "hello.txt"
     end
 
     test "finds nested files" do
-      {:ok, output} = Glob.call(%{"pattern" => "**/*.txt"}, %{project_path: @test_dir})
+      {:ok, output} = Glob.execute(%{"pattern" => "**/*.txt"}, %{project_path: @test_dir})
       assert output =~ "nested.txt"
     end
 
     test "returns no matches message" do
-      {:ok, output} = Glob.call(%{"pattern" => "**/*.xyz"}, %{project_path: @test_dir})
+      {:ok, output} = Glob.execute(%{"pattern" => "**/*.xyz"}, %{project_path: @test_dir})
       assert output =~ "No files matched"
+    end
+  end
+
+  describe "ListDir" do
+    test "lists directory contents" do
+      {:ok, output} = ListDir.execute(%{"path" => "."}, %{project_path: @test_dir})
+      assert output =~ "hello.txt"
+      assert output =~ "sub/"
+    end
+
+    test "lists with depth" do
+      {:ok, output} = ListDir.execute(%{"path" => ".", "depth" => 2}, %{project_path: @test_dir})
+      assert output =~ "nested.txt"
+    end
+
+    test "returns error for missing directory" do
+      {:error, msg} = ListDir.execute(%{"path" => "nonexistent"}, %{project_path: @test_dir})
+      assert msg =~ "not found" or msg =~ "does not exist"
+    end
+  end
+
+  describe "FileDelete" do
+    test "deletes a file" do
+      delete_path = Path.join(@test_dir, "to_delete.txt")
+      File.write!(delete_path, "delete me")
+
+      {:ok, msg} =
+        FileDelete.execute(%{"path" => "to_delete.txt"}, %{project_path: @test_dir})
+
+      assert msg =~ "deleted"
+      refute File.exists?(delete_path)
+    end
+
+    test "returns error for missing file" do
+      {:error, msg} =
+        FileDelete.execute(%{"path" => "nonexistent_del.txt"}, %{project_path: @test_dir})
+
+      assert msg =~ "not found" or msg =~ "does not exist"
+    end
+
+    test "declares file_changed side effect" do
+      assert :file_changed in FileDelete.side_effects()
+    end
+  end
+
+  describe "FileMove" do
+    test "moves a file" do
+      source = Path.join(@test_dir, "move_source.txt")
+      File.write!(source, "move me")
+
+      {:ok, msg} =
+        FileMove.execute(
+          %{"source" => "move_source.txt", "destination" => "move_dest.txt"},
+          %{project_path: @test_dir}
+        )
+
+      assert msg =~ "Moved"
+      refute File.exists?(source)
+      assert File.exists?(Path.join(@test_dir, "move_dest.txt"))
+    end
+
+    test "returns error for missing source" do
+      {:error, msg} =
+        FileMove.execute(
+          %{"source" => "no_exist.txt", "destination" => "dest.txt"},
+          %{project_path: @test_dir}
+        )
+
+      assert msg =~ "not found" or msg =~ "does not exist"
+    end
+
+    test "declares file_changed side effect" do
+      assert :file_changed in FileMove.side_effects()
     end
   end
 end

@@ -1,5 +1,9 @@
 defmodule Synapsis.MCPConfig do
-  @moduledoc "Configuration for an MCP (Model Context Protocol) server."
+  @moduledoc """
+  Deprecated: Use `Synapsis.PluginConfig` with type "mcp" instead.
+
+  Configuration for an MCP (Model Context Protocol) server.
+  """
   use Ecto.Schema
   import Ecto.Changeset
 

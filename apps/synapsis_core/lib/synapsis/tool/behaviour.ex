@@ -1,5 +1,9 @@
 defmodule Synapsis.Tool.Behaviour do
-  @moduledoc "Behaviour for tool implementations."
+  @moduledoc """
+  Deprecated: Use `use Synapsis.Tool` instead.
+
+  Kept for compile compatibility only.
+  """
 
   @callback name() :: String.t()
   @callback description() :: String.t()

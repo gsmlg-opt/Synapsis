@@ -1,9 +1,9 @@
-defmodule Synapsis.MCP.ProtocolTest do
+defmodule SynapsisPlugin.MCPTest do
   use ExUnit.Case, async: true
 
-  alias Synapsis.MCP.Protocol
+  alias SynapsisPlugin.MCP.Protocol
 
-  describe "encode_request/3" do
+  describe "MCP Protocol" do
     test "encodes a JSON-RPC request" do
       encoded = Protocol.encode_request(1, "tools/list")
       assert encoded =~ "\"jsonrpc\":\"2.0\""
@@ -11,17 +11,13 @@ defmodule Synapsis.MCP.ProtocolTest do
       assert encoded =~ "\"method\":\"tools/list\""
       assert String.ends_with?(encoded, "\n")
     end
-  end
 
-  describe "encode_notification/2" do
     test "encodes a notification" do
       encoded = Protocol.encode_notification("notifications/initialized")
       assert encoded =~ "\"method\":\"notifications/initialized\""
       refute encoded =~ "\"id\""
     end
-  end
 
-  describe "decode_message/1" do
     test "decodes a complete message" do
       json = Jason.encode!(%{"jsonrpc" => "2.0", "id" => 1, "result" => %{"tools" => []}})
       {messages, rest} = Protocol.decode_message("#{json}\n")
@@ -41,6 +37,29 @@ defmodule Synapsis.MCP.ProtocolTest do
       {messages, rest} = Protocol.decode_message("{incomplete")
       assert messages == []
       assert rest == "{incomplete"
+    end
+  end
+
+  describe "MCP plugin module" do
+    test "tools/1 formats tool names with server prefix" do
+      state = %SynapsisPlugin.MCP{
+        server_name: "my_server",
+        tools: [
+          %{"name" => "read_file", "description" => "Read a file", "inputSchema" => %{}}
+        ],
+        port: nil,
+        request_id: 1,
+        pending: %{},
+        buffer: "",
+        env: %{},
+        initialized: true,
+        command: "test",
+        args: []
+      }
+
+      tools = SynapsisPlugin.MCP.tools(state)
+      assert length(tools) == 1
+      assert hd(tools).name == "mcp:my_server:read_file"
     end
   end
 end

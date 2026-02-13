@@ -29,7 +29,7 @@ defmodule SynapsisServer.MixProject do
     [
       {:synapsis_core, in_umbrella: true},
       {:synapsis_provider, in_umbrella: true},
-      {:synapsis_lsp, in_umbrella: true},
+      {:synapsis_plugin, in_umbrella: true},
       {:phoenix, "~> 1.8"},
       {:phoenix_html, "~> 4.2"},
       {:phoenix_live_view, "~> 1.0"},

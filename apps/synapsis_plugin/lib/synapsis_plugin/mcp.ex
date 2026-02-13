@@ -1,9 +1,12 @@
-defmodule Synapsis.MCP.Client do
-  @moduledoc "GenServer managing a single MCP server connection via stdio (Port)."
-  use GenServer
-  require Logger
+defmodule SynapsisPlugin.MCP do
+  @moduledoc """
+  MCP (Model Context Protocol) plugin implementation.
 
-  alias Synapsis.MCP.Protocol
+  Manages an MCP server process via Port (stdio) or HTTP (SSE).
+  Discovers tools via `tools/list` and executes them via `tools/call`.
+  """
+  use Synapsis.Plugin
+  require Logger
 
   defstruct [
     :port,
@@ -18,52 +21,31 @@ defmodule Synapsis.MCP.Client do
     :initialized
   ]
 
-  def start_link(opts) do
-    server_name = Keyword.fetch!(opts, :server_name)
-    name = {:via, Registry, {Synapsis.MCP.Registry, server_name}}
-    GenServer.start_link(__MODULE__, opts, name: name)
-  end
+  @impl Synapsis.Plugin
+  def init(config) do
+    server_name = config[:name] || config["name"]
+    command = config[:command] || config["command"]
+    args = config[:args] || config["args"] || []
+    env = config[:env] || config["env"] || %{}
 
-  def list_tools(server_name) do
-    name = {:via, Registry, {Synapsis.MCP.Registry, server_name}}
-
-    try do
-      GenServer.call(name, :list_tools, 10_000)
-    catch
-      :exit, _ -> {:error, :not_running}
-    end
-  end
-
-  def call_tool(server_name, tool_name, arguments) do
-    name = {:via, Registry, {Synapsis.MCP.Registry, server_name}}
-
-    try do
-      GenServer.call(name, {:call_tool, tool_name, arguments}, 30_000)
-    catch
-      :exit, _ -> {:error, :not_running}
-    end
-  end
-
-  @impl true
-  def init(opts) do
-    server_name = Keyword.fetch!(opts, :server_name)
-    command = Keyword.fetch!(opts, :command)
-    args = Keyword.get(opts, :args, [])
-    env = Keyword.get(opts, :env, %{})
-
-    case System.find_executable(command) do
+    case System.find_executable(to_string(command)) do
       nil ->
         Logger.warning("mcp_binary_not_found", server: server_name, command: command)
-        {:stop, {:no_binary, command}}
+        {:error, {:no_binary, command}}
 
       exe_path ->
-        env_list = Enum.map(env, fn {k, v} -> {String.to_charlist(k), String.to_charlist(v)} end)
+        env_list =
+          Enum.map(env, fn {k, v} ->
+            {String.to_charlist(to_string(k)), String.to_charlist(to_string(v))}
+          end)
+
+        str_args = Enum.map(args, &to_string/1)
 
         port =
           Port.open({:spawn_executable, exe_path}, [
             :binary,
             :exit_status,
-            {:args, args},
+            {:args, str_args},
             {:env, env_list}
           ])
 
@@ -80,7 +62,7 @@ defmodule Synapsis.MCP.Client do
           initialized: false
         }
 
-        # Send initialize
+        # Send initialize request
         state =
           send_request(state, "initialize", %{
             "protocolVersion" => "2024-11-05",
@@ -92,45 +74,56 @@ defmodule Synapsis.MCP.Client do
     end
   end
 
-  @impl true
-  def handle_call(:list_tools, _from, %{tools: tools} = state) do
-    {:reply, {:ok, tools}, state}
+  @impl Synapsis.Plugin
+  def tools(%__MODULE__{tools: tools, server_name: server_name}) do
+    Enum.map(tools, fn tool ->
+      %{
+        name: "mcp:#{server_name}:#{tool["name"]}",
+        description: tool["description"] || "",
+        parameters: tool["inputSchema"] || %{}
+      }
+    end)
   end
 
-  def handle_call({:call_tool, tool_name, arguments}, from, state) do
+  @impl Synapsis.Plugin
+  def execute(tool_name, input, %__MODULE__{} = state) do
+    # Extract the MCP tool name from the full name (mcp:server:tool)
+    mcp_tool_name =
+      case String.split(tool_name, ":", parts: 3) do
+        [_mcp, _server, name] -> name
+        _ -> tool_name
+      end
+
     state =
       send_request(
         state,
         "tools/call",
-        %{
-          "name" => tool_name,
-          "arguments" => arguments
-        },
-        from
+        %{"name" => mcp_tool_name, "arguments" => input},
+        :tool_call
       )
 
-    {:noreply, state}
+    {:async, state}
   end
 
-  @impl true
-  def handle_info({port, {:data, data}}, %{port: port} = state) do
+  @impl Synapsis.Plugin
+  def handle_info({port, {:data, data}}, %__MODULE__{port: port} = state) do
     buffer = state.buffer <> data
-    {messages, rest} = Protocol.decode_message(buffer)
+    {messages, rest} = SynapsisPlugin.MCP.Protocol.decode_message(buffer)
     state = %{state | buffer: rest}
 
     state = Enum.reduce(messages, state, &handle_mcp_message/2)
-    {:noreply, state}
+    {:ok, state}
   end
 
-  def handle_info({port, {:exit_status, status}}, %{port: port} = state) do
+  def handle_info({port, {:exit_status, status}}, %__MODULE__{port: port} = state) do
     Logger.info("mcp_server_exited", server: state.server_name, status: status)
-    {:stop, :normal, state}
+    {:ok, %{state | port: nil}}
   end
 
-  def handle_info(_msg, state), do: {:noreply, state}
+  def handle_info(_msg, state), do: {:ok, state}
 
-  @impl true
-  def terminate(_reason, %{port: port}) when is_port(port) do
+  @impl Synapsis.Plugin
+  def terminate(_reason, %__MODULE__{port: port}) when is_port(port) do
     Port.close(port)
     :ok
   rescue
@@ -139,24 +132,30 @@ defmodule Synapsis.MCP.Client do
 
   def terminate(_reason, _state), do: :ok
 
+  # Private helpers
+
   defp handle_mcp_message(%{"id" => id, "result" => result}, state) do
     case Map.pop(state.pending, id) do
       {{:initialize, _from}, pending} ->
-        # Send initialized notification
-        Port.command(state.port, Protocol.encode_notification("notifications/initialized"))
+        Port.command(
+          state.port,
+          SynapsisPlugin.MCP.Protocol.encode_notification("notifications/initialized")
+        )
 
-        # Discover tools
         state = %{state | pending: pending, initialized: true}
         send_request(state, "tools/list", %{})
 
       {{:tools_list, _from}, pending} ->
         tools = result["tools"] || []
-        register_mcp_tools(state.server_name, tools)
         %{state | pending: pending, tools: tools}
 
       {{:tool_call, from}, pending} ->
         content = extract_tool_content(result)
-        GenServer.reply(from, {:ok, content})
+
+        if from do
+          GenServer.reply(from, {:ok, content})
+        end
+
         %{state | pending: pending}
 
       {nil, _} ->
@@ -177,36 +176,24 @@ defmodule Synapsis.MCP.Client do
 
   defp handle_mcp_message(_msg, state), do: state
 
-  defp send_request(state, method, params, from \\ nil) do
+  defp send_request(state, method, params, tag \\ nil) do
     id = state.request_id
-    data = Protocol.encode_request(id, method, params)
+    data = SynapsisPlugin.MCP.Protocol.encode_request(id, method, params)
     Port.command(state.port, data)
 
+    from = state[:_pending_from]
+
     request_type =
-      case method do
+      case tag || method do
         "initialize" -> {:initialize, from}
         "tools/list" -> {:tools_list, from}
+        :tool_call -> {:tool_call, from}
         "tools/call" -> {:tool_call, from}
         _ -> {:other, from}
       end
 
+    state = Map.delete(state, :_pending_from)
     %{state | request_id: id + 1, pending: Map.put(state.pending, id, request_type)}
-  end
-
-  defp register_mcp_tools(server_name, tools) do
-    for tool <- tools do
-      tool_def = %{
-        name: "mcp:#{server_name}:#{tool["name"]}",
-        description: tool["description"] || "",
-        parameters: tool["inputSchema"] || %{},
-        module: Synapsis.MCP.ToolProxy,
-        timeout: 30_000,
-        mcp_server: server_name,
-        mcp_tool: tool["name"]
-      }
-
-      Synapsis.Tool.Registry.register(tool_def)
-    end
   end
 
   defp extract_tool_content(%{"content" => content}) when is_list(content) do

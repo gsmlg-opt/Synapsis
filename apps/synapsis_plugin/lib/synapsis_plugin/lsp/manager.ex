@@ -1,35 +1,23 @@
-defmodule Synapsis.LSP.Manager do
-  @moduledoc "Manages LSP servers - auto-detects languages and starts servers."
+defmodule SynapsisPlugin.LSP.Manager do
+  @moduledoc """
+  Manages LSP plugins - language detection, starting servers, aggregating diagnostics.
+  """
 
   def start_for_project(project_path) do
     languages = detect_languages(project_path)
 
     results =
       for lang <- languages do
-        start_server(lang, project_path)
+        config = %{
+          name: lang,
+          language: lang,
+          root_path: project_path
+        }
+
+        SynapsisPlugin.start_plugin(SynapsisPlugin.LSP, "lsp:#{lang}", config)
       end
 
     {:ok, results}
-  end
-
-  def start_server(language, root_path) do
-    spec = {Synapsis.LSP.Server, language: language, root_path: root_path}
-
-    case DynamicSupervisor.start_child(Synapsis.LSP.DynamicSupervisor, spec) do
-      {:ok, pid} -> {:ok, pid}
-      {:error, {:already_started, pid}} -> {:ok, pid}
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
-  def stop_server(language, root_path) do
-    case Registry.lookup(Synapsis.LSP.Registry, {language, root_path}) do
-      [{pid, _}] ->
-        DynamicSupervisor.terminate_child(Synapsis.LSP.DynamicSupervisor, pid)
-
-      [] ->
-        {:error, :not_found}
-    end
   end
 
   def get_all_diagnostics(project_path) do
@@ -38,9 +26,19 @@ defmodule Synapsis.LSP.Manager do
     diagnostics =
       for lang <- languages, reduce: %{} do
         acc ->
-          case Synapsis.LSP.Server.get_diagnostics(lang, project_path) do
-            {:ok, diags} -> Map.merge(acc, diags)
-            {:error, _} -> acc
+          name = "lsp:#{lang}"
+
+          case Registry.lookup(SynapsisPlugin.Registry, name) do
+            [{pid, _}] ->
+              try do
+                state = GenServer.call(pid, :get_state, 5_000)
+                Map.merge(acc, state.diagnostics || %{})
+              catch
+                :exit, _ -> acc
+              end
+
+            [] ->
+              acc
           end
       end
 

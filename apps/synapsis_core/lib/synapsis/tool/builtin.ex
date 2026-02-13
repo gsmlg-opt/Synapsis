@@ -9,20 +9,19 @@ defmodule Synapsis.Tool.Builtin do
     Synapsis.Tool.Grep,
     Synapsis.Tool.Glob,
     Synapsis.Tool.Fetch,
-    Synapsis.Tool.Diagnostics
+    Synapsis.Tool.Diagnostics,
+    Synapsis.Tool.ListDir,
+    Synapsis.Tool.FileDelete,
+    Synapsis.Tool.FileMove
   ]
 
   def register_all do
     for mod <- @tools do
-      tool = %{
-        name: mod.name(),
+      Synapsis.Tool.Registry.register_module(mod.name(), mod,
+        timeout: default_timeout(mod.name()),
         description: mod.description(),
-        parameters: mod.parameters(),
-        module: mod,
-        timeout: default_timeout(mod.name())
-      }
-
-      Synapsis.Tool.Registry.register(tool)
+        parameters: mod.parameters()
+      )
     end
 
     :ok
@@ -35,5 +34,8 @@ defmodule Synapsis.Tool.Builtin do
   defp default_timeout("file_write"), do: 10_000
   defp default_timeout("file_read"), do: 5_000
   defp default_timeout("glob"), do: 5_000
+  defp default_timeout("list_dir"), do: 5_000
+  defp default_timeout("file_delete"), do: 5_000
+  defp default_timeout("file_move"), do: 5_000
   defp default_timeout(_), do: 10_000
 end

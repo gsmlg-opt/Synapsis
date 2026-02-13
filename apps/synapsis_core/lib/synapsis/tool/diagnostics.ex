@@ -1,6 +1,6 @@
 defmodule Synapsis.Tool.Diagnostics do
   @moduledoc "LSP diagnostics tool - queries active LSP servers for errors/warnings."
-  @behaviour Synapsis.Tool.Behaviour
+  use Synapsis.Tool
 
   @impl true
   def name, do: "diagnostics"
@@ -23,11 +23,11 @@ defmodule Synapsis.Tool.Diagnostics do
   end
 
   @impl true
-  def call(input, context) do
+  def execute(input, context) do
     project_path = context[:project_path] || "."
 
     # Use apply/3 to avoid cross-umbrella compile-time reference warning
-    case apply(Synapsis.LSP.Manager, :get_all_diagnostics, [project_path]) do
+    case apply(SynapsisPlugin.LSP.Manager, :get_all_diagnostics, [project_path]) do
       {:ok, diagnostics} ->
         filtered =
           case input["path"] do

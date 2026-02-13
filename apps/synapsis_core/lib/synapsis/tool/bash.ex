@@ -1,6 +1,6 @@
 defmodule Synapsis.Tool.Bash do
   @moduledoc "Execute shell commands via Port (not System.cmd)."
-  @behaviour Synapsis.Tool.Behaviour
+  use Synapsis.Tool
 
   @default_timeout 30_000
 
@@ -26,7 +26,7 @@ defmodule Synapsis.Tool.Bash do
   end
 
   @impl true
-  def call(input, context) do
+  def execute(input, context) do
     command = input["command"]
     timeout = input["timeout"] || @default_timeout
     cwd = context[:project_path] || "."

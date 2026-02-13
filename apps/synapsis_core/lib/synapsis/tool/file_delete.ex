@@ -1,22 +1,21 @@
-defmodule Synapsis.Tool.FileWrite do
-  @moduledoc "Write new files."
+defmodule Synapsis.Tool.FileDelete do
+  @moduledoc "Delete a file."
   use Synapsis.Tool
 
   @impl true
-  def name, do: "file_write"
+  def name, do: "file_delete"
 
   @impl true
-  def description, do: "Write content to a file, creating it if it doesn't exist."
+  def description, do: "Delete a file at the given path."
 
   @impl true
   def parameters do
     %{
       "type" => "object",
       "properties" => %{
-        "path" => %{"type" => "string", "description" => "Path to write the file"},
-        "content" => %{"type" => "string", "description" => "Content to write to the file"}
+        "path" => %{"type" => "string", "description" => "Path to the file to delete"}
       },
-      "required" => ["path", "content"]
+      "required" => ["path"]
     }
   end
 
@@ -25,10 +24,12 @@ defmodule Synapsis.Tool.FileWrite do
     path = resolve_path(input["path"], context[:project_path])
 
     with :ok <- validate_path(path, context[:project_path]) do
-      dir = Path.dirname(path)
-      File.mkdir_p!(dir)
-      File.write!(path, input["content"])
-      {:ok, "Successfully wrote #{byte_size(input["content"])} bytes to #{path}"}
+      if File.exists?(path) do
+        File.rm!(path)
+        {:ok, "Successfully deleted #{path}"}
+      else
+        {:error, "File does not exist: #{path}"}
+      end
     end
   end
 

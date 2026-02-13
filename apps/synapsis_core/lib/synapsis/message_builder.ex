@@ -4,10 +4,7 @@ defmodule Synapsis.MessageBuilder do
   def build_request(messages, agent, provider_name) do
     provider_module = provider_module!(provider_name)
 
-    tools =
-      (agent[:tools] || [])
-      |> Enum.map(&tool_definition/1)
-      |> Enum.reject(&is_nil/1)
+    tools = resolve_tools(agent[:tools])
 
     opts = %{
       model: agent[:model],
@@ -26,16 +23,13 @@ defmodule Synapsis.MessageBuilder do
     end
   end
 
-  defp tool_definition(tool_name) when is_binary(tool_name) do
-    case Synapsis.Tool.Registry.get(tool_name) do
-      {:ok, tool} -> tool
-      {:error, _} -> nil
-    end
-  end
+  defp resolve_tools(nil), do: []
+  defp resolve_tools(:all), do: Synapsis.Tool.Registry.list_for_llm()
 
-  defp tool_definition(tool_name) when is_atom(tool_name) do
-    tool_definition(to_string(tool_name))
-  end
+  defp resolve_tools(tool_names) when is_list(tool_names) do
+    all_tools = Synapsis.Tool.Registry.list_for_llm()
 
-  defp tool_definition(_), do: nil
+    all_tools
+    |> Enum.filter(fn tool -> tool.name in tool_names end)
+  end
 end

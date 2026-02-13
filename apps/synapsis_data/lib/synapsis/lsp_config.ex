@@ -1,5 +1,9 @@
 defmodule Synapsis.LSPConfig do
-  @moduledoc "Configuration for a Language Server Protocol server."
+  @moduledoc """
+  Deprecated: Use `Synapsis.PluginConfig` with type "lsp" instead.
+
+  Configuration for a Language Server Protocol server.
+  """
   use Ecto.Schema
   import Ecto.Changeset
 

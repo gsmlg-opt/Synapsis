@@ -13,11 +13,9 @@ defmodule SynapsisCore.Application do
       Synapsis.Tool.Registry,
       {Registry, keys: :unique, name: Synapsis.Session.Registry},
       {Registry, keys: :unique, name: Synapsis.Session.SupervisorRegistry},
-      {Registry, keys: :unique, name: Synapsis.MCP.Registry},
       {Registry, keys: :unique, name: Synapsis.FileWatcher.Registry},
       Synapsis.Session.DynamicSupervisor,
-      Synapsis.MCP.Supervisor,
-      SynapsisLsp.Supervisor,
+      SynapsisPlugin.Supervisor,
       SynapsisServer.Supervisor
     ]
 
@@ -30,6 +28,13 @@ defmodule SynapsisCore.Application do
 
         try do
           Synapsis.Providers.load_all_into_registry()
+        rescue
+          _ -> :ok
+        end
+
+        try do
+          # Runtime reference to avoid cross-umbrella compile-time warning
+          apply(SynapsisPlugin.Loader, :start_auto_plugins, [])
         rescue
           _ -> :ok
         end

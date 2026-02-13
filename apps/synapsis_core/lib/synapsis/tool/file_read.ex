@@ -1,6 +1,6 @@
 defmodule Synapsis.Tool.FileRead do
   @moduledoc "Read file contents."
-  @behaviour Synapsis.Tool.Behaviour
+  use Synapsis.Tool
 
   @impl true
   def name, do: "file_read"
@@ -25,7 +25,7 @@ defmodule Synapsis.Tool.FileRead do
   end
 
   @impl true
-  def call(input, context) do
+  def execute(input, context) do
     path = resolve_path(input["path"], context[:project_path])
 
     with :ok <- validate_path(path, context[:project_path]),

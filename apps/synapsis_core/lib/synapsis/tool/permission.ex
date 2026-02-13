@@ -1,17 +1,10 @@
 defmodule Synapsis.Tool.Permission do
-  @moduledoc "Tool permission checking - auto-approve vs require user approval."
+  @moduledoc """
+  Tool permission checking - delegates to Synapsis.Tool.Permissions for risk-level-based checks.
+  """
 
-  @auto_approve ~w(file_read grep glob diagnostics)
-  @always_ask ~w(bash file_edit file_write fetch)
-
-  def check(tool_name, _session) when tool_name in @auto_approve, do: :approved
-  def check(tool_name, _session) when tool_name in @always_ask, do: :requires_approval
-
-  def check(tool_name, _session) do
-    if String.starts_with?(to_string(tool_name), "mcp:") do
-      :requires_approval
-    else
-      :requires_approval
-    end
+  @doc "Check if a tool requires approval."
+  def check(tool_name, session) do
+    Synapsis.Tool.Permissions.check(tool_name, session)
   end
 end

@@ -1,6 +1,6 @@
 defmodule Synapsis.Tool.Glob do
   @moduledoc "File pattern matching."
-  @behaviour Synapsis.Tool.Behaviour
+  use Synapsis.Tool
 
   @impl true
   def name, do: "glob"
@@ -24,7 +24,7 @@ defmodule Synapsis.Tool.Glob do
   end
 
   @impl true
-  def call(input, context) do
+  def execute(input, context) do
     pattern = input["pattern"]
     base_path = input["path"] || context[:project_path] || "."
 

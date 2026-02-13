@@ -1,6 +1,6 @@
 defmodule Synapsis.Tool.Fetch do
   @moduledoc "Fetch content from a URL."
-  @behaviour Synapsis.Tool.Behaviour
+  use Synapsis.Tool
 
   @impl true
   def name, do: "fetch"
@@ -20,7 +20,7 @@ defmodule Synapsis.Tool.Fetch do
   end
 
   @impl true
-  def call(input, _context) do
+  def execute(input, _context) do
     url = input["url"]
 
     case Req.get(url, receive_timeout: 15_000) do

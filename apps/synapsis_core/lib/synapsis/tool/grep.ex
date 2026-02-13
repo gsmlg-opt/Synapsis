@@ -1,6 +1,6 @@
 defmodule Synapsis.Tool.Grep do
   @moduledoc "Search file contents using ripgrep or grep."
-  @behaviour Synapsis.Tool.Behaviour
+  use Synapsis.Tool
 
   @impl true
   def name, do: "grep"
@@ -29,7 +29,7 @@ defmodule Synapsis.Tool.Grep do
   end
 
   @impl true
-  def call(input, context) do
+  def execute(input, context) do
     pattern = input["pattern"]
     search_path = input["path"] || "."
     cwd = context[:project_path] || "."

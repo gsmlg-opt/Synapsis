@@ -1,4 +1,4 @@
-defmodule Synapsis.MCP.Protocol do
+defmodule SynapsisPlugin.MCP.Protocol do
   @moduledoc "JSON-RPC encoding/decoding for MCP (Model Context Protocol)."
 
   def encode_request(id, method, params \\ %{}) do

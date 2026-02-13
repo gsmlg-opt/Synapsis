@@ -484,7 +484,9 @@ defmodule Synapsis.Session.Worker do
     Task.Supervisor.async_nolink(Synapsis.Tool.TaskSupervisor, fn ->
       result =
         Synapsis.Tool.Executor.execute(tool_use.tool, tool_use.input, %{
-          project_path: project_path
+          project_path: project_path,
+          session_id: state.session_id,
+          working_dir: project_path
         })
 
       case result do
