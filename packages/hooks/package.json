@@ -1,0 +1,20 @@
+{
+  "name": "@synapsis/hooks",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@synapsis/ui": "workspace:*",
+    "@synapsis/channel": "workspace:*",
+    "phoenix": "file:../../../deps/phoenix",
+    "phoenix_html": "file:../../../deps/phoenix_html",
+    "phoenix_live_view": "file:../../../deps/phoenix_live_view",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0"
+  }
+}
