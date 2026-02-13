@@ -558,9 +558,21 @@ defmodule Synapsis.Session.Worker do
         config
 
       {:error, _} ->
-        auth = Synapsis.Config.load_auth()
-        api_key = get_in(auth, [provider_name, "apiKey"]) || get_env_key(provider_name)
-        %{api_key: api_key, base_url: default_base_url(provider_name)}
+        # Fallback: try DB directly
+        case Synapsis.Providers.get_by_name(provider_name) do
+          {:ok, provider} ->
+            %{
+              api_key: provider.api_key_encrypted,
+              base_url: provider.base_url || default_base_url(provider_name),
+              type: provider.type
+            }
+
+          {:error, _} ->
+            # Final fallback: config files + env vars
+            auth = Synapsis.Config.load_auth()
+            api_key = get_in(auth, [provider_name, "apiKey"]) || get_env_key(provider_name)
+            %{api_key: api_key, base_url: default_base_url(provider_name)}
+        end
     end
   end
 

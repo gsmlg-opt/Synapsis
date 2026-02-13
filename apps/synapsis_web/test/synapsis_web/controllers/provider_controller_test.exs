@@ -1,24 +1,152 @@
 defmodule SynapsisWeb.ProviderControllerTest do
   use SynapsisWeb.ConnCase
 
+  alias Synapsis.Providers
+
+  @valid_attrs %{
+    "name" => "test-anthropic",
+    "type" => "anthropic",
+    "api_key" => "sk-ant-secret"
+  }
+
+  defp create_provider(_ctx) do
+    {:ok, provider} =
+      Providers.create(%{
+        name: "test-anthropic",
+        type: "anthropic",
+        api_key_encrypted: "sk-ant-secret",
+        enabled: true
+      })
+
+    %{provider: provider}
+  end
+
   describe "GET /api/providers" do
-    test "returns provider list", %{conn: conn} do
+    test "returns empty list when no providers", %{conn: conn} do
       conn = get(conn, "/api/providers")
-      assert %{"data" => providers} = json_response(conn, 200)
+      response = json_response(conn, 200)
+      assert is_list(response["data"])
+    end
+
+    setup [:create_provider]
+
+    test "returns provider list from DB", %{conn: conn, provider: provider} do
+      conn = get(conn, "/api/providers")
+      %{"data" => providers} = json_response(conn, 200)
       assert is_list(providers)
+
+      db_provider = Enum.find(providers, fn p -> p["id"] == provider.id end)
+      assert db_provider
+      assert db_provider["name"] == "test-anthropic"
+      assert db_provider["type"] == "anthropic"
+      assert db_provider["has_api_key"] == true
+      refute Map.has_key?(db_provider, "api_key_encrypted")
+      refute Map.has_key?(db_provider, "api_key")
     end
   end
 
-  describe "GET /api/providers/:name/models" do
+  describe "POST /api/providers" do
+    test "creates provider with valid attrs", %{conn: conn} do
+      conn = post(conn, "/api/providers", @valid_attrs)
+      %{"data" => provider} = json_response(conn, 201)
+
+      assert provider["name"] == "test-anthropic"
+      assert provider["type"] == "anthropic"
+      assert provider["has_api_key"] == true
+      assert provider["id"]
+      refute Map.has_key?(provider, "api_key_encrypted")
+      refute Map.has_key?(provider, "api_key")
+    end
+
+    test "returns 422 for invalid attrs", %{conn: conn} do
+      conn = post(conn, "/api/providers", %{"name" => "", "type" => ""})
+      assert %{"errors" => errors} = json_response(conn, 422)
+      assert errors["name"]
+      assert errors["type"]
+    end
+
+    test "returns 422 for invalid type", %{conn: conn} do
+      conn = post(conn, "/api/providers", %{"name" => "test", "type" => "invalid"})
+      assert %{"errors" => errors} = json_response(conn, 422)
+      assert errors["type"]
+    end
+
+    test "returns 422 for duplicate name", %{conn: conn} do
+      post(conn, "/api/providers", @valid_attrs)
+      conn = post(conn, "/api/providers", @valid_attrs)
+      assert %{"errors" => _} = json_response(conn, 422)
+    end
+  end
+
+  describe "GET /api/providers/:id" do
+    setup [:create_provider]
+
+    test "returns provider by id", %{conn: conn, provider: provider} do
+      conn = get(conn, "/api/providers/#{provider.id}")
+      %{"data" => data} = json_response(conn, 200)
+      assert data["name"] == "test-anthropic"
+      assert data["has_api_key"] == true
+    end
+
+    test "returns 404 for missing provider", %{conn: conn} do
+      conn = get(conn, "/api/providers/#{Ecto.UUID.generate()}")
+      assert json_response(conn, 404)
+    end
+  end
+
+  describe "PUT /api/providers/:id" do
+    setup [:create_provider]
+
+    test "updates provider", %{conn: conn, provider: provider} do
+      conn = put(conn, "/api/providers/#{provider.id}", %{"base_url" => "https://custom.api.com"})
+      %{"data" => data} = json_response(conn, 200)
+      assert data["base_url"] == "https://custom.api.com"
+    end
+
+    test "updates api key", %{conn: conn, provider: provider} do
+      conn = put(conn, "/api/providers/#{provider.id}", %{"api_key" => "new-key"})
+      %{"data" => data} = json_response(conn, 200)
+      assert data["has_api_key"] == true
+    end
+
+    test "returns 404 for missing provider", %{conn: conn} do
+      conn = put(conn, "/api/providers/#{Ecto.UUID.generate()}", %{"enabled" => false})
+      assert json_response(conn, 404)
+    end
+
+    test "returns 422 for invalid update", %{conn: conn, provider: provider} do
+      conn = put(conn, "/api/providers/#{provider.id}", %{"type" => "invalid"})
+      assert %{"errors" => _} = json_response(conn, 422)
+    end
+  end
+
+  describe "DELETE /api/providers/:id" do
+    setup [:create_provider]
+
+    test "deletes provider", %{conn: conn, provider: provider} do
+      conn = delete(conn, "/api/providers/#{provider.id}")
+      assert response(conn, 204)
+
+      conn = get(build_conn(), "/api/providers/#{provider.id}")
+      assert json_response(conn, 404)
+    end
+
+    test "returns 404 for missing provider", %{conn: conn} do
+      conn = delete(conn, "/api/providers/#{Ecto.UUID.generate()}")
+      assert json_response(conn, 404)
+    end
+  end
+
+  describe "GET /api/providers/by-name/:name/models" do
     test "returns models for anthropic", %{conn: conn} do
-      conn = get(conn, "/api/providers/anthropic/models")
-      assert %{"data" => models} = json_response(conn, 200)
+      conn = get(conn, "/api/providers/by-name/anthropic/models")
+      %{"data" => models} = json_response(conn, 200)
       assert is_list(models)
       assert length(models) > 0
     end
 
     test "returns 404 for unknown provider", %{conn: conn} do
-      conn = get(conn, "/api/providers/unknown_xyz/models")
+      conn = get(conn, "/api/providers/by-name/unknown_xyz/models")
       assert json_response(conn, 404)
     end
   end

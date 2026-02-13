@@ -5,11 +5,8 @@ defmodule SynapsisCore.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      Synapsis.Repo,
       {Phoenix.PubSub, name: Synapsis.PubSub},
-      {Task.Supervisor, name: Synapsis.Provider.TaskSupervisor},
       {Task.Supervisor, name: Synapsis.Tool.TaskSupervisor},
-      Synapsis.Provider.Registry,
       Synapsis.Tool.Registry,
       {Registry, keys: :unique, name: Synapsis.Session.Registry},
       {Registry, keys: :unique, name: Synapsis.Session.SupervisorRegistry},
@@ -25,6 +22,13 @@ defmodule SynapsisCore.Application do
     case result do
       {:ok, _pid} ->
         Synapsis.Tool.Builtin.register_all()
+
+        try do
+          Synapsis.Providers.load_all_into_registry()
+        rescue
+          _ -> :ok
+        end
+
         result
 
       other ->

@@ -24,8 +24,10 @@ defmodule SynapsisWeb.Router do
     post "/sessions/:id/compact", SessionController, :compact
     get "/sessions/:id/events", SSEController, :events
 
-    get "/providers", ProviderController, :index
-    get "/providers/:name/models", ProviderController, :models
+    resources "/providers", ProviderController, only: [:index, :show, :create, :update, :delete]
+    get "/providers/:id/models", ProviderController, :models
+    post "/providers/:id/test", ProviderController, :test_connection
+    get "/providers/by-name/:name/models", ProviderController, :models_by_name
 
     get "/config", ConfigController, :show
   end

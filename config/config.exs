@@ -4,9 +4,9 @@
 import Config
 
 # Ecto Repo configuration
-config :synapsis_core, ecto_repos: [Synapsis.Repo]
+config :synapsis_data, ecto_repos: [Synapsis.Repo]
 
-config :synapsis_core, Synapsis.Repo,
+config :synapsis_data, Synapsis.Repo,
   migration_primary_key: [type: :binary_id],
   migration_timestamps: [type: :utc_datetime_usec]
 

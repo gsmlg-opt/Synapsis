@@ -1,25 +1,110 @@
 defmodule SynapsisWeb.ProviderController do
   use SynapsisWeb, :controller
 
-  def index(conn, _params) do
-    providers = Synapsis.Provider.Registry.list()
+  alias Synapsis.Providers
 
-    data =
-      Enum.map(providers, fn {name, config} ->
-        %{
-          name: name,
-          base_url: config[:base_url],
-          has_api_key: not is_nil(config[:api_key])
-        }
+  def index(conn, _params) do
+    {:ok, db_providers} = Providers.list()
+
+    db_data =
+      Enum.map(db_providers, fn p ->
+        serialize_provider(p)
       end)
 
-    # Also add providers from env
-    env_providers = detect_env_providers()
+    # Merge in env-detected providers not already in DB
+    db_names = MapSet.new(db_data, & &1.name)
 
-    json(conn, %{data: data ++ env_providers})
+    env_providers =
+      detect_env_providers() |> Enum.reject(fn p -> MapSet.member?(db_names, p.name) end)
+
+    json(conn, %{data: db_data ++ env_providers})
   end
 
-  def models(conn, %{"name" => name}) do
+  def create(conn, params) do
+    attrs = normalize_attrs(params)
+
+    case Providers.create(attrs) do
+      {:ok, provider} ->
+        conn
+        |> put_status(:created)
+        |> json(%{data: serialize_provider(provider)})
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{errors: format_errors(changeset)})
+    end
+  end
+
+  def show(conn, %{"id" => id}) do
+    case Providers.get(id) do
+      {:ok, provider} ->
+        json(conn, %{data: serialize_provider(provider)})
+
+      {:error, :not_found} ->
+        conn |> put_status(:not_found) |> json(%{error: "Provider not found"})
+    end
+  end
+
+  def update(conn, %{"id" => id} = params) do
+    attrs = normalize_attrs(params)
+
+    case Providers.update(id, attrs) do
+      {:ok, provider} ->
+        json(conn, %{data: serialize_provider(provider)})
+
+      {:error, :not_found} ->
+        conn |> put_status(:not_found) |> json(%{error: "Provider not found"})
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{errors: format_errors(changeset)})
+    end
+  end
+
+  def delete(conn, %{"id" => id}) do
+    case Providers.delete(id) do
+      {:ok, _} ->
+        send_resp(conn, :no_content, "")
+
+      {:error, :not_found} ->
+        conn |> put_status(:not_found) |> json(%{error: "Provider not found"})
+    end
+  end
+
+  def models(conn, %{"id" => id}) do
+    case Providers.models(id) do
+      {:ok, models} ->
+        json(conn, %{data: models})
+
+      {:error, :not_found} ->
+        conn |> put_status(:not_found) |> json(%{error: "Provider not found"})
+
+      {:error, :unknown_provider} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "Unknown provider type"})
+
+      {:error, reason} ->
+        conn |> put_status(500) |> json(%{error: inspect(reason)})
+    end
+  end
+
+  def test_connection(conn, %{"id" => id}) do
+    case Providers.test_connection(id) do
+      {:ok, result} ->
+        json(conn, %{data: %{status: "ok", models_count: result.models_count}})
+
+      {:error, :not_found} ->
+        conn |> put_status(:not_found) |> json(%{error: "Provider not found"})
+
+      {:error, reason} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{data: %{status: "error", error: inspect(reason)}})
+    end
+  end
+
+  def models_by_name(conn, %{"name" => name}) do
     case Synapsis.Provider.Registry.module_for(name) do
       {:ok, mod} ->
         config = get_provider_config(name)
@@ -30,8 +115,42 @@ defmodule SynapsisWeb.ProviderController do
         end
 
       {:error, _} ->
-        conn |> put_status(404) |> json(%{error: "Unknown provider"})
+        conn |> put_status(:not_found) |> json(%{error: "Unknown provider"})
     end
+  end
+
+  defp serialize_provider(%Synapsis.ProviderConfig{} = p) do
+    %{
+      id: p.id,
+      name: p.name,
+      type: p.type,
+      base_url: p.base_url,
+      has_api_key: not is_nil(p.api_key_encrypted),
+      config: p.config,
+      enabled: p.enabled,
+      inserted_at: p.inserted_at,
+      updated_at: p.updated_at
+    }
+  end
+
+  defp normalize_attrs(params) do
+    params
+    |> Map.drop(["id"])
+    |> Map.new(fn
+      {"api_key", v} -> {:api_key_encrypted, v}
+      {k, v} when is_binary(k) -> {String.to_existing_atom(k), v}
+      {k, v} -> {k, v}
+    end)
+  rescue
+    ArgumentError -> params |> Map.drop(["id"])
+  end
+
+  defp format_errors(changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+      Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
+        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
+      end)
+    end)
   end
 
   defp detect_env_providers do
@@ -39,17 +158,21 @@ defmodule SynapsisWeb.ProviderController do
 
     providers =
       if System.get_env("ANTHROPIC_API_KEY"),
-        do: [%{name: "anthropic", has_api_key: true} | providers],
+        do: [
+          %{name: "anthropic", type: "anthropic", has_api_key: true, source: "env"} | providers
+        ],
         else: providers
 
     providers =
       if System.get_env("OPENAI_API_KEY"),
-        do: [%{name: "openai", has_api_key: true} | providers],
+        do: [
+          %{name: "openai", type: "openai_compat", has_api_key: true, source: "env"} | providers
+        ],
         else: providers
 
     providers =
       if System.get_env("GOOGLE_API_KEY"),
-        do: [%{name: "google", has_api_key: true} | providers],
+        do: [%{name: "google", type: "google", has_api_key: true, source: "env"} | providers],
         else: providers
 
     providers

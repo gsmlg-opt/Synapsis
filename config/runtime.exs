@@ -14,6 +14,12 @@ if System.get_env("MIX_TAILWIND_PATH") do
   config :tailwind, path: System.get_env("MIX_TAILWIND_PATH")
 end
 
+# Encryption key for provider API keys (AES-256-GCM)
+config :synapsis_data,
+  encryption_key:
+    System.get_env("SYNAPSIS_ENCRYPTION_KEY") ||
+      "dev-only-encryption-key-32bytes!"
+
 if config_env() == :prod do
   secret_key_base =
     System.get_env("SECRET_KEY_BASE") ||

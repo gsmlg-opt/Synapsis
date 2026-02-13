@@ -259,3 +259,38 @@ mix format --check-formatted
 ```
 
 All three must pass with zero errors.
+
+---
+
+## Package Policy: `synapsis_data`
+
+### Scope
+
+The `synapsis_data` package is responsible ONLY for:
+- Defining data models
+- Defining Ecto schemas
+- Managing `Ecto.Repo`
+- Persisting data to Postgres
+
+### Hard Boundaries (Do NOT violate)
+
+- Do NOT introduce business logic or orchestration logic
+- Do NOT implement agent/runtime workflows
+- Do NOT modify code outside `synapsis_data`
+- Do NOT refactor other packages
+- Do NOT change public APIs unless explicitly requested
+
+### Persistence Rules
+
+- All Postgres persistence MUST go through `synapsis_data`
+- Other packages must NOT define their own Ecto schemas
+- Other packages must NOT talk to Repo directly except through `synapsis_data` APIs
+
+### Query & Transaction Discipline
+
+- Encapsulate queries inside `synapsis_data` (no raw Ecto queries in other packages)
+- Encapsulate transaction boundaries inside `synapsis_data`
+
+### Failure Policy (Fail Closed)
+
+If a task requires changes outside `synapsis_data`, new cross-package abstractions, or architecture redesign — STOP and explain the required changes instead of implementing them.

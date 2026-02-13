@@ -1,7 +1,7 @@
 import Config
 
 # Database configuration for development
-config :synapsis_core, Synapsis.Repo,
+config :synapsis_data, Synapsis.Repo,
   username: System.get_env("PGUSER", "postgres"),
   database: System.get_env("PGDATABASE", "synapsis_dev"),
   socket_dir: System.get_env("PGHOST"),

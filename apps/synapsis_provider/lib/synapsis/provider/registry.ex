@@ -13,6 +13,11 @@ defmodule Synapsis.Provider.Registry do
     :ok
   end
 
+  def unregister(provider_name) do
+    :ets.delete(@table, provider_name)
+    :ok
+  end
+
   def get(provider_name) do
     case :ets.lookup(@table, provider_name) do
       [{^provider_name, config}] -> {:ok, config}
@@ -26,15 +31,23 @@ defmodule Synapsis.Provider.Registry do
   end
 
   def module_for(provider_name) do
-    case to_string(provider_name) do
-      "anthropic" -> {:ok, Synapsis.Provider.Anthropic}
-      "openai" -> {:ok, Synapsis.Provider.OpenAICompat}
-      "google" -> {:ok, Synapsis.Provider.Google}
-      "local" -> {:ok, Synapsis.Provider.OpenAICompat}
-      "openrouter" -> {:ok, Synapsis.Provider.OpenAICompat}
-      _ -> {:error, :unknown_provider}
-    end
+    # Check ETS config for a type field first
+    type =
+      case get(provider_name) do
+        {:ok, %{type: t}} -> t
+        _ -> nil
+      end
+
+    resolve_module(type || to_string(provider_name))
   end
+
+  defp resolve_module("anthropic"), do: {:ok, Synapsis.Provider.Anthropic}
+  defp resolve_module("openai"), do: {:ok, Synapsis.Provider.OpenAICompat}
+  defp resolve_module("openai_compat"), do: {:ok, Synapsis.Provider.OpenAICompat}
+  defp resolve_module("google"), do: {:ok, Synapsis.Provider.Google}
+  defp resolve_module("local"), do: {:ok, Synapsis.Provider.OpenAICompat}
+  defp resolve_module("openrouter"), do: {:ok, Synapsis.Provider.OpenAICompat}
+  defp resolve_module(_), do: {:error, :unknown_provider}
 
   @impl true
   def init(:ok) do
