@@ -1,6 +1,6 @@
 # ADR-003: React Frontend via Phoenix Channels
 
-## Status: Accepted
+## Status: Superseded by [ADR-005](ADR-005-liveview-react-hybrid.md)
 
 ## Context
 

@@ -13,13 +13,13 @@ Umbrella project with 5 apps:
 - `synapsis_server` — Phoenix endpoints, depends on core
 - `synapsis_lsp` — LSP client management, depends on core
 - `synapsis_cli` — standalone escript, communicates via HTTP/WS (no Elixir deps)
-- `synapsis_web` — React frontend, build artifact served by server
+- `synapsis_web` — Phoenix app with LiveView + React hybrid frontend (see [ADR-005](ADR-005-liveview-react-hybrid.md))
 
 ## Rationale
 
 - Clear deployment boundaries: core+server+lsp = one release, CLI = separate binary
 - Enforced dependency direction via Mix project config
-- Frontend is a separate concern — bun run build pipeline, no LiveView coupling
+- Frontend uses LiveView for page structure with React via `phx-hook` for the chat widget — bun build pipeline for JS/CSS assets
 - CLI connects over the network, not in-process — enables remote server operation
 
 ## Alternatives Considered

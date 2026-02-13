@@ -32,7 +32,24 @@ Synapsis.Config.resolve(project_path)                 # => config_map
 Synapsis.Config.update_user(key, value)               # => :ok
 ```
 
-### synapsis_server → Channel Protocol
+### synapsis_web → LiveView
+
+The web frontend uses LiveView for page structure with React mounted via `phx-hook` for the chat widget:
+
+```
+GET  /                LiveView (SessionLive) — sidebar + welcome
+GET  /sessions/:id    LiveView (SessionLive) — sidebar + ChatView hook
+```
+
+`SessionLive` handles:
+- `mount/3` — loads session list from `Synapsis.Sessions.list/1`
+- `handle_params/3` — sets active session from URL
+- `handle_event("create_session", ...)` — creates session, `push_patch` to new URL
+- `handle_event("delete_session", ...)` — deletes session, updates sidebar
+
+The ChatView React component is mounted into a `<div phx-hook="ChatView" phx-update="ignore">` element. React manages its own Channel connection for streaming chat — LiveView does not participate in the message flow.
+
+### synapsis_web → Channel Protocol
 
 ```elixir
 # Client → Server (push)
@@ -54,7 +71,9 @@ Synapsis.Config.update_user(key, value)               # => :ok
 "done"                  %{session_id: str}
 ```
 
-### synapsis_server → REST API
+### synapsis_web → REST API
+
+The `:api` pipeline serves JSON endpoints (no session, no CSRF):
 
 ```
 GET    /api/sessions                 # list sessions for project

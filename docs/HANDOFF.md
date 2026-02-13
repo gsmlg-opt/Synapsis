@@ -16,7 +16,7 @@ mix phx.new synapsis_server --no-html --no-assets --no-mailers
 mix new synapsis_lsp --sup
 # CLI
 mix new synapsis_cli
-# Web frontend (plain Mix project, bun managed)
+# Web frontend (Phoenix app with LiveView + React hybrid, bun managed)
 mix new synapsis_web --app synapsis_web
 ```
 
@@ -56,8 +56,21 @@ defp deps do
    {:owl, "~> 0.12"}]        # terminal UI (optional)
 end
 
-# apps/synapsis_web — no Mix deps, managed by bun
-# package.json: react, tailwindcss, phoenix (JS client)
+# apps/synapsis_web/mix.exs
+defp deps do
+  [{:synapsis_core, in_umbrella: true},
+   {:synapsis_lsp, in_umbrella: true},
+   {:phoenix, "~> 1.8"},
+   {:phoenix_html, "~> 4.2"},
+   {:phoenix_live_view, "~> 1.0"},
+   {:gettext, "~> 1.0"},
+   {:jason, "~> 1.4"},
+   {:bandit, "~> 1.6"},
+   {:cors_plug, "~> 3.0"},
+   {:bun, "~> 1.6", runtime: Mix.env() == :dev},
+   {:tailwind, "~> 0.2", runtime: Mix.env() == :dev}]
+end
+# package.json: react, react-dom, phoenix, phoenix_html, phoenix_live_view
 ```
 
 ---
@@ -111,19 +124,25 @@ Tasks:
 
 ### Phase 4: Web Frontend (Week 5-6)
 
-**Goal**: React UI with chat, file viewer, terminal
+**Goal**: LiveView + React hybrid UI (see [ADR-005](decisions/ADR-005-liveview-react-hybrid.md))
+
+Architecture: LiveView manages page layout, sidebar, session list, and URL routing. React is mounted via `phx-hook` only for the ChatView component (streaming text, tool permissions, Channel interaction).
 
 Tasks:
-1. Set up React + Bun + Tailwind CSS in `synapsis_web`, configure Phoenix to serve built assets
-2. Implement Phoenix Channel client (JS)
-3. Chat UI: message list, streaming text rendering, markdown
-4. Tool permission dialog
-5. File diff viewer (CodeMirror or simple)
-6. Session sidebar (list, create, switch)
-7. Provider/model selector
-8. Agent mode toggle (build/plan)
+1. Add `phoenix_live_view` and `phoenix_html` to `synapsis_web` deps
+2. Add LiveView macros (`live_view`, `live_component`, `html`) to `SynapsisWeb` module
+3. Create layout components: `Layouts` module, `root.html.heex`, `app.html.heex`, `CoreComponents`
+4. Add `/live` socket to endpoint, `:browser` pipeline to router with LiveView routes
+5. Implement `SessionLive` — mount loads sessions, `handle_params` sets active session, events for create/delete
+6. Create `ChatViewHook` (`phx-hook`) — mounts React `ChatView` into LiveView DOM with `phx-update="ignore"`
+7. Rewrite JS entry point (`app.ts`) — LiveView bootstrap + hook registration
+8. Chat UI (React): message list, streaming text rendering, markdown (retained from SPA)
+9. Tool permission dialog (React, retained)
+10. File diff viewer (CodeMirror or simple)
+11. Provider/model selector
+12. Agent mode toggle (build/plan)
 
-**Deliverable**: Functional web UI for coding sessions.
+**Deliverable**: Functional web UI — LiveView sidebar with server-rendered session list, React chat view with streaming.
 
 ### Phase 5: LSP + MCP (Week 7)
 

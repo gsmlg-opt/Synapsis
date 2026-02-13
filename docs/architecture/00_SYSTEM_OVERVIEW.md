@@ -2,27 +2,32 @@
 
 ## What This System Does
 
-Synapsis.ex is an AI coding agent that runs as a local Phoenix server. Developers interact with it through a web UI (React) or CLI to get AI assistance with coding tasks. The AI can read files, search code, execute commands, edit files, and manage LSP diagnostics — all through a permission-controlled tool system.
+Synapsis.ex is an AI coding agent that runs as a local Phoenix server. Developers interact with it through a web UI (LiveView + React hybrid) or CLI to get AI assistance with coding tasks. The AI can read files, search code, execute commands, edit files, and manage LSP diagnostics — all through a permission-controlled tool system.
 
 ## High-Level Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    Clients                               │
-│  ┌──────────┐  ┌──────────────┐  ┌──────────────────┐   │
-│  │   CLI    │  │  Web UI      │  │  IDE Extension   │   │
-│  │ (escript)│  │ (React/WS)   │  │  (future)        │   │
-│  └────┬─────┘  └──────┬───────┘  └────────┬─────────┘   │
-│       │ WebSocket      │ Channel           │ HTTP/WS     │
-└───────┼────────────────┼───────────────────┼─────────────┘
-        │                │                   │
-┌───────▼────────────────▼───────────────────▼─────────────┐
-│                synapsis_server (Phoenix)                   │
-│  ┌────────────────┐  ┌──────────────┐  ┌──────────────┐  │
-│  │ SessionChannel │  │  REST API    │  │  SSE Stream  │  │
-│  │ (per-client)   │  │  /api/...    │  │  /events     │  │
-│  └────────┬───────┘  └──────┬───────┘  └──────┬───────┘  │
-│           │    PubSub       │                  │          │
+│  ┌──────────┐  ┌───────────────────┐  ┌──────────────────┐   │
+│  │   CLI    │  │  Web UI           │  │  IDE Extension   │   │
+│  │ (escript)│  │ (LiveView+React)  │  │  (future)        │   │
+│  └────┬─────┘  └──────┬────────────┘  └────────┬─────────┘   │
+│       │ WebSocket      │ LiveView+Channel       │ HTTP/WS     │
+└───────┼────────────────┼────────────────────────┼─────────────┘
+        │                │                        │
+┌───────▼────────────────▼────────────────────────▼─────────────┐
+│                synapsis_web (Phoenix)                           │
+│  ┌────────────────┐  ┌──────────────┐  ┌──────────────┐       │
+│  │ SessionLive    │  │  REST API    │  │  SSE Stream  │       │
+│  │ (LiveView)     │  │  /api/...    │  │  /events     │       │
+│  │  └─ChatView    │  └──────┬───────┘  └──────┬───────┘       │
+│  │   (React hook) │         │                  │               │
+│  ├────────────────┤  ┌──────────────┐                          │
+│  │ SessionChannel │  │ Browser pipe │                          │
+│  │ (per-client)   │  │ CSRF+Session │                          │
+│  └────────┬───────┘  └──────────────┘                          │
+│           │    PubSub                                          │
 └───────────┼─────────────────┼──────────────────┼──────────┘
             │                 │                  │
 ┌───────────▼─────────────────▼──────────────────▼──────────┐
@@ -73,7 +78,7 @@ Synapsis.Application
 
 ## Data Flow: User Message → AI Response
 
-1. Client sends message via Channel `"session:lobby"` → `push("user_message", %{content: "..."})`
+1. User types in the ChatView (React, mounted via LiveView hook). React sends message via Phoenix Channel `push("user_message", %{content: "..."})`.
 2. `SessionChannel` looks up or creates session, calls `Session.Worker.send_message/2`
 3. `Session.Worker` (GenServer):
    - Persists user message to Ecto/PostgreSQL
