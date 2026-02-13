@@ -1,10 +1,10 @@
 defmodule SynapsisWeb.ConnCase do
-  @moduledoc "Test case for controller tests."
+  @moduledoc "Test case for LiveView tests."
   use ExUnit.CaseTemplate
 
   using do
     quote do
-      @endpoint SynapsisWeb.Endpoint
+      @endpoint SynapsisServer.Endpoint
 
       use SynapsisWeb, :verified_routes
 

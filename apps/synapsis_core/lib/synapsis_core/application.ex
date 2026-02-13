@@ -18,7 +18,7 @@ defmodule SynapsisCore.Application do
       Synapsis.Session.DynamicSupervisor,
       Synapsis.MCP.Supervisor,
       SynapsisLsp.Supervisor,
-      SynapsisWeb.Supervisor
+      SynapsisServer.Supervisor
     ]
 
     opts = [strategy: :one_for_one, name: SynapsisCore.Supervisor]

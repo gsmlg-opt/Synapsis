@@ -50,6 +50,33 @@ defmodule Synapsis.Sessions do
     {:ok, Repo.all(query)}
   end
 
+  def list_by_project(project_id, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 50)
+
+    query =
+      from(s in Session,
+        where: s.project_id == ^project_id,
+        order_by: [desc: s.updated_at],
+        limit: ^limit,
+        preload: [:project]
+      )
+
+    Repo.all(query)
+  end
+
+  def recent(opts \\ []) do
+    limit = Keyword.get(opts, :limit, 10)
+
+    query =
+      from(s in Session,
+        order_by: [desc: s.updated_at],
+        limit: ^limit,
+        preload: [:project]
+      )
+
+    Repo.all(query)
+  end
+
   def delete(session_id) do
     Synapsis.Session.DynamicSupervisor.stop_session(session_id)
 

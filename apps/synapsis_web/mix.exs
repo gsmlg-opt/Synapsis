@@ -29,19 +29,12 @@ defmodule SynapsisWeb.MixProject do
 
   defp deps do
     [
-      {:synapsis_core, in_umbrella: true},
-      {:synapsis_provider, in_umbrella: true},
-      {:synapsis_lsp, in_umbrella: true},
+      {:synapsis_server, in_umbrella: true},
       {:phoenix, "~> 1.8"},
       {:phoenix_html, "~> 4.2"},
       {:phoenix_live_view, "~> 1.0"},
-      {:telemetry_metrics, "~> 1.0"},
-      {:telemetry_poller, "~> 1.0"},
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.4"},
-      {:dns_cluster, "~> 0.2.0"},
-      {:bandit, "~> 1.6"},
-      {:cors_plug, "~> 3.0"},
       {:bun, "~> 1.6", runtime: Mix.env() == :dev},
       {:tailwind, "~> 0.2", runtime: Mix.env() == :dev}
     ]

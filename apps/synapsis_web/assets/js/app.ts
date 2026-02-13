@@ -1,11 +1,7 @@
 import "phoenix_html"
 import { Socket } from "phoenix"
 import { LiveSocket } from "phoenix_live_view"
-import { ChatViewHook } from "./hooks/chat_view_hook"
-
-const Hooks = {
-  ChatView: ChatViewHook,
-}
+import { Hooks } from "@synapsis/hooks"
 
 const csrfToken =
   document.querySelector("meta[name='csrf-token']")?.getAttribute("content") || ""
@@ -20,6 +16,6 @@ liveSocket.connect()
 
 // Expose liveSocket on window for web console debug logs and latency simulation:
 // >> liveSocket.enableDebug()
-// >> liveSocket.enableLatencySim(1000)  // enabled for duration of browser session
+// >> liveSocket.enableLatencySim(1000)
 // >> liveSocket.disableLatencySim()
 ;(window as any).liveSocket = liveSocket
