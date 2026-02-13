@@ -5,7 +5,10 @@ defmodule SynapsisCore.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      Synapsis.Repo,
       {Phoenix.PubSub, name: Synapsis.PubSub},
+      {Task.Supervisor, name: Synapsis.Provider.TaskSupervisor},
+      Synapsis.Provider.Registry,
       {Task.Supervisor, name: Synapsis.Tool.TaskSupervisor},
       Synapsis.Tool.Registry,
       {Registry, keys: :unique, name: Synapsis.Session.Registry},

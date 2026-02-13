@@ -262,6 +262,28 @@ All three must pass with zero errors.
 
 ---
 
+## Constitution
+
+### Single Application Rule
+
+Only `synapsis_core` defines an OTP application with a supervision tree. All other umbrella sub-apps (`synapsis_data`, `synapsis_provider`, `synapsis_lsp`, `synapsis_cli`, `synapsis_web`) are pure library packages — they define modules and supervisors but do NOT start their own application. All process supervision is centralized in `SynapsisCore.Application`.
+
+### Dependency Graph (acyclic, strictly enforced)
+
+```
+synapsis_data        (schemas, Repo, migrations — no umbrella deps, no application)
+  ↑
+synapsis_provider    (provider behaviour + implementations — depends on synapsis_data, no application)
+  ↑
+synapsis_core        (sessions, tools, agents, config — THE application, starts all supervision)
+  ↑
+synapsis_web/lsp/server/cli (presentation layers — depend on synapsis_core)
+```
+
+Violations of this dependency direction are forbidden. A lower-layer package must never depend on a higher-layer one.
+
+---
+
 ## Package Policy: `synapsis_data`
 
 ### Scope

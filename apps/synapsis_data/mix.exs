@@ -19,8 +19,7 @@ defmodule SynapsisData.MixProject do
 
   def application do
     [
-      extra_applications: [:logger],
-      mod: {SynapsisData.Application, []}
+      extra_applications: [:logger]
     ]
   end
 
