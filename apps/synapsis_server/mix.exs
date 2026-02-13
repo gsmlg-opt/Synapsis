@@ -17,7 +17,6 @@ defmodule SynapsisServer.MixProject do
 
   def application do
     [
-      mod: {SynapsisServer.Application, []},
       extra_applications: [:logger]
     ]
   end

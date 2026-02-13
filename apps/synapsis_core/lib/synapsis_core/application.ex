@@ -16,7 +16,9 @@ defmodule SynapsisCore.Application do
       {Registry, keys: :unique, name: Synapsis.MCP.Registry},
       {Registry, keys: :unique, name: Synapsis.FileWatcher.Registry},
       Synapsis.Session.DynamicSupervisor,
-      Synapsis.MCP.Supervisor
+      Synapsis.MCP.Supervisor,
+      SynapsisLsp.Supervisor,
+      SynapsisWeb.Supervisor
     ]
 
     opts = [strategy: :one_for_one, name: SynapsisCore.Supervisor]

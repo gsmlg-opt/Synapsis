@@ -20,7 +20,6 @@ defmodule SynapsisWeb.MixProject do
 
   def application do
     [
-      mod: {SynapsisWeb.Application, []},
       extra_applications: [:logger, :runtime_tools]
     ]
   end
