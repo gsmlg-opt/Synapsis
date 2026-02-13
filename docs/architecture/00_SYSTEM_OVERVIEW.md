@@ -7,74 +7,125 @@ Synapsis.ex is an AI coding agent that runs as a local Phoenix server. Developer
 ## High-Level Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Clients                               │
-│  ┌──────────┐  ┌───────────────────┐  ┌──────────────────┐   │
-│  │   CLI    │  │  Web UI           │  │  IDE Extension   │   │
-│  │ (escript)│  │ (LiveView+React)  │  │  (future)        │   │
-│  └────┬─────┘  └──────┬────────────┘  └────────┬─────────┘   │
-│       │ WebSocket      │ LiveView+Channel       │ HTTP/WS     │
-└───────┼────────────────┼────────────────────────┼─────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                         Clients                              │
+│  ┌──────────┐  ┌───────────────────┐  ┌──────────────────┐  │
+│  │   CLI    │  │  Web UI           │  │  IDE Extension   │  │
+│  │ (escript)│  │ (LiveView+React)  │  │  (future)        │  │
+│  └────┬─────┘  └──────┬────────────┘  └────────┬─────────┘  │
+│       │ WebSocket      │ LiveView+Channel       │ HTTP/WS    │
+└───────┼────────────────┼────────────────────────┼────────────┘
         │                │                        │
-┌───────▼────────────────▼────────────────────────▼─────────────┐
-│                synapsis_web (Phoenix)                           │
-│  ┌────────────────┐  ┌──────────────┐  ┌──────────────┐       │
-│  │ SessionLive    │  │  REST API    │  │  SSE Stream  │       │
-│  │ (LiveView)     │  │  /api/...    │  │  /events     │       │
-│  │  └─ChatView    │  └──────┬───────┘  └──────┬───────┘       │
-│  │   (React hook) │         │                  │               │
-│  ├────────────────┤  ┌──────────────┐                          │
-│  │ SessionChannel │  │ Browser pipe │                          │
-│  │ (per-client)   │  │ CSRF+Session │                          │
-│  └────────┬───────┘  └──────────────┘                          │
-│           │    PubSub                                          │
-└───────────┼─────────────────┼──────────────────┼──────────┘
-            │                 │                  │
-┌───────────▼─────────────────▼──────────────────▼──────────┐
-│                  synapsis_core                             │
-│  ┌──────────────┐  ┌──────────┐  ┌────────────────────┐  │
-│  │ Session.Sup  │  │ Provider │  │   Tool.Supervisor  │  │
-│  │  ├─Worker    │  │  Manager │  │    ├─FileEdit      │  │
-│  │  ├─Stream    │  │  ├─Anthropic│  │    ├─BashExec   │  │
-│  │  └─Context   │  │  ├─OpenAI│  │    ├─FileSearch   │  │
-│  └──────────────┘  │  ├─Google │  │    └─Diagnostics  │  │
-│                    │  └─Local  │  └────────────────────┘  │
-│  ┌──────────────┐  └──────────┘  ┌────────────────────┐  │
-│  │   Ecto/DB    │                │   MCP.Supervisor   │  │
-│  │ (PostgreSQL) │                │    ├─Server1        │  │
-│  └──────────────┘                │    └─Server2        │  │
-│                                  └────────────────────┘  │
-└───────────────────────────────────────────────────────────┘
-            │
-┌───────────▼───────────────────────────────────────────────┐
-│                    synapsis_lsp                            │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
-│  │ LSP.Manager  │  │ LSP.Server   │  │ LSP.Server   │    │
-│  │ (supervisor) │  │ (gopls)      │  │ (ts-server)  │    │
-│  └──────────────┘  └──────────────┘  └──────────────┘    │
-└───────────────────────────────────────────────────────────┘
+┌───────▼────────────────▼────────────────────────▼────────────┐
+│              synapsis_web (LiveView pages)                    │
+│  ┌──────────────┐ ┌──────────────┐ ┌───────────────────────┐│
+│  │ DashboardLive│ │ ProjectLive  │ │ SessionLive.Show      ││
+│  │ SettingsLive │ │ ProviderLive │ │  └─ChatApp (React)    ││
+│  │ MemoryLive   │ │ SkillLive    │ │    via phx-hook       ││
+│  │ MCPLive      │ │ LSPLive      │ │    phx-update="ignore"││
+│  └──────────────┘ └──────────────┘ └───────────────────────┘│
+│                                                              │
+│  Workspace packages: @synapsis/hooks, @synapsis/ui,          │
+│                      @synapsis/channel                       │
+├──────────────────────────────────────────────────────────────┤
+│              synapsis_server (Phoenix infra)                  │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
+│  │  Endpoint    │  │  REST API    │  │  SSE Stream  │       │
+│  │  Router      │  │  /api/...    │  │  /events     │       │
+│  │  Plugs       │  └──────┬───────┘  └──────┬───────┘       │
+│  ├──────────────┤  ┌──────────────┐                          │
+│  │ SessionChannel│ │ Browser pipe │                          │
+│  │ UserSocket   │  │ CSRF+Session │                          │
+│  └──────┬───────┘  └──────────────┘                          │
+│         │    PubSub                                          │
+└─────────┼────────────────────────────────────────────────────┘
+          │
+┌─────────▼────────────────────────────────────────────────────┐
+│                    synapsis_core (THE application)            │
+│  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐ │
+│  │ Session.Sup  │  │ Provider.Reg │  │   Tool.Supervisor  │ │
+│  │  ├─Worker    │  │ Tool.Reg     │  │    ├─FileEdit      │ │
+│  │  ├─Stream    │  │              │  │    ├─BashExec      │ │
+│  │  └─Context   │  │              │  │    ├─FileSearch    │ │
+│  └──────────────┘  └──────────────┘  │    └─Diagnostics   │ │
+│                                      └────────────────────┘ │
+│  ┌──────────────┐                    ┌────────────────────┐ │
+│  │ MCP.Supervisor│                   │ SynapsisLsp.Sup    │ │
+│  │  ├─Server1   │                   │  ├─LSP.Server      │ │
+│  │  └─Server2   │                   │  └─LSP.Server      │ │
+│  └──────────────┘                    └────────────────────┘ │
+├──────────────────────────────────────────────────────────────┤
+│              synapsis_provider (library)                      │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
+│  │  Adapter     │  │ EventMapper  │  │ MessageMapper│       │
+│  │ (unified)    │  │ (normalize)  │  │ (build req)  │       │
+│  ├──────────────┤  ├──────────────┤  ├──────────────┤       │
+│  │ Transport:   │  │ SSE.Parser   │  │ ModelRegistry│       │
+│  │  Anthropic   │  │ (shared)     │  │              │       │
+│  │  OpenAI      │  └──────────────┘  └──────────────┘       │
+│  │  Google      │                                            │
+│  └──────────────┘                                            │
+├──────────────────────────────────────────────────────────────┤
+│              synapsis_data (library)                          │
+│  ┌──────────────┐  ┌──────────────────────────────────────┐ │
+│  │ Synapsis.Repo│  │ Schemas: Project, Session, Message,  │ │
+│  │ (PostgreSQL) │  │ MemoryEntry, Skill, MCPConfig,       │ │
+│  │              │  │ LspConfig, Provider, Part (custom)   │ │
+│  └──────────────┘  └──────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────┘
 ```
+
+### Dependency Graph (acyclic, strictly enforced)
+
+```
+synapsis_data        (schemas, Repo, migrations — no umbrella deps, no application)
+  ↑
+synapsis_provider    (provider behaviour + implementations — depends on synapsis_data, no application)
+  ↑
+synapsis_core        (sessions, tools, agents, config — THE application, starts all supervision)
+  ↑
+synapsis_server      (Endpoint, Router, Controllers, Channels — no application)
+  ↑
+synapsis_web         (LiveView pages, HEEx templates, React hooks — no application)
+
+synapsis_lsp         (LSP client management — depends on synapsis_core, no application)
+synapsis_cli         (standalone escript — communicates via HTTP/WS)
+```
+
+Only `synapsis_core` defines an OTP application with a supervision tree. All other umbrella sub-apps are pure library packages.
 
 ## Supervision Tree
 
+All processes are started by `SynapsisCore.Application` (the only OTP application):
+
 ```
-Synapsis.Application
+SynapsisCore.Application
 ├── Synapsis.Repo (Ecto — PostgreSQL)
-├── Synapsis.PubSub (Phoenix.PubSub)
+├── Phoenix.PubSub (name: Synapsis.PubSub)
+├── Task.Supervisor (name: Synapsis.Provider.TaskSupervisor)
+├── Synapsis.Provider.Registry           — ETS-backed provider lookup
+├── Task.Supervisor (name: Synapsis.Tool.TaskSupervisor)
+├── Synapsis.Tool.Registry               — ETS-backed tool lookup
+├── Registry (name: Synapsis.Session.Registry)
+├── Registry (name: Synapsis.Session.SupervisorRegistry)
+├── Registry (name: Synapsis.MCP.Registry)
+├── Registry (name: Synapsis.FileWatcher.Registry)
 ├── Synapsis.Session.DynamicSupervisor
 │   └── (per session)
 │       ├── Synapsis.Session.Worker      — state machine, orchestrates agent loop
 │       ├── Synapsis.Session.Stream      — manages provider SSE connection
 │       └── Synapsis.Session.Context     — token counting, compaction
-├── Synapsis.Provider.Registry           — ETS-backed provider lookup
-├── Synapsis.Tool.TaskSupervisor         — Task.Supervisor for tool execution
-├── Synapsis.MCP.DynamicSupervisor       — one GenServer per MCP connection
-├── Synapsis.Config.Server               — watches .opencode.json for changes
-└── Synapsis.LSP.Manager                 — DynamicSupervisor for LSP servers
-    ├── Synapsis.LSP.Server (gopls)
-    ├── Synapsis.LSP.Server (typescript-language-server)
-    └── ...
+├── Synapsis.MCP.Supervisor              — one GenServer per MCP connection
+├── SynapsisLsp.Supervisor               — DynamicSupervisor for LSP servers
+│   ├── Synapsis.LSP.Server (gopls)
+│   ├── Synapsis.LSP.Server (typescript-language-server)
+│   └── ...
+└── SynapsisServer.Supervisor            — Phoenix infrastructure (runtime reference)
+    ├── SynapsisServer.Telemetry
+    └── SynapsisServer.Endpoint
 ```
+
+Note: `SynapsisServer.Supervisor` is referenced at runtime (an atom), not a compile-time dependency. This avoids a circular dependency since `synapsis_server` depends on `synapsis_core`.
 
 ## Data Flow: User Message → AI Response
 

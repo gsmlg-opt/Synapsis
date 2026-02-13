@@ -6,9 +6,14 @@ PostgreSQL via Ecto. Single database, projects distinguished by `project_id` col
 
 ```
 PostgreSQL: synapsis_dev / synapsis_prod
-├── projects    (project path registry)
-├── sessions    (project scoped)
-└── messages    (session scoped, append-only)
+├── projects        (project path registry)
+├── sessions        (project scoped)
+├── messages        (session scoped, append-only)
+├── providers       (LLM provider configs with encrypted API keys)
+├── memory_entries  (scoped key-value memory)
+├── skills          (agent behavior extensions)
+├── mcp_configs     (MCP server configurations)
+└── lsp_configs     (LSP server configurations)
 ```
 
 File-based storage (not in Postgres):
@@ -64,6 +69,95 @@ CREATE TABLE messages (
 );
 CREATE INDEX idx_messages_session ON messages(session_id, inserted_at);
 ```
+
+### providers
+
+```sql
+CREATE TABLE providers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL UNIQUE,
+  type TEXT NOT NULL,              -- anthropic | openai | google | copilot | local
+  api_key_encrypted TEXT,          -- encrypted API key
+  base_url TEXT,
+  enabled BOOLEAN NOT NULL DEFAULT true,
+  config JSONB DEFAULT '{}',
+  inserted_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
+```
+
+### memory_entries
+
+```sql
+CREATE TABLE memory_entries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  scope TEXT NOT NULL,             -- global | project | session
+  scope_id TEXT,                   -- project_id or session_id
+  key TEXT NOT NULL,
+  content TEXT NOT NULL,
+  metadata JSONB DEFAULT '{}',
+  inserted_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX idx_memory_entries_scope ON memory_entries(scope, scope_id);
+CREATE UNIQUE INDEX idx_memory_entries_unique ON memory_entries(scope, scope_id, key);
+```
+
+### skills
+
+```sql
+CREATE TABLE skills (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  scope TEXT NOT NULL DEFAULT 'global',  -- global | project
+  project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  system_prompt_fragment TEXT,
+  tool_allowlist JSONB DEFAULT '[]',
+  config_overrides JSONB DEFAULT '{}',
+  is_builtin BOOLEAN NOT NULL DEFAULT false,
+  inserted_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX idx_skills_scope ON skills(scope);
+CREATE INDEX idx_skills_project ON skills(project_id);
+CREATE UNIQUE INDEX idx_skills_unique ON skills(scope, project_id, name);
+```
+
+### mcp_configs
+
+```sql
+CREATE TABLE mcp_configs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL UNIQUE,
+  transport TEXT NOT NULL DEFAULT 'stdio',  -- stdio | sse
+  command TEXT,
+  args JSONB DEFAULT '[]',
+  url TEXT,
+  env JSONB DEFAULT '{}',
+  auto_connect BOOLEAN NOT NULL DEFAULT false,
+  inserted_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
+```
+
+### lsp_configs
+
+```sql
+CREATE TABLE lsp_configs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  language TEXT NOT NULL UNIQUE,
+  command TEXT NOT NULL,
+  args JSONB DEFAULT '[]',
+  root_path TEXT,
+  auto_start BOOLEAN NOT NULL DEFAULT true,
+  settings JSONB DEFAULT '{}',
+  inserted_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
+```
+
+> **Package note**: All Ecto schemas, Repo, and migrations live in the `synapsis_data` umbrella app. Other packages access persistence through `synapsis_data`'s public API. See CLAUDE.md for the package policy.
 
 ## Why PostgreSQL
 

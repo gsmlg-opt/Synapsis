@@ -91,6 +91,80 @@ A capability the AI can invoke.
 }
 ```
 
+### MemoryEntry
+
+Persistent key-value memory scoped to global, project, or session.
+
+```elixir
+%MemoryEntry{
+  id: UUID,
+  scope: :global | :project | :session,
+  scope_id: String | nil,        # project_id or session_id for scoped entries
+  key: String,
+  content: String,
+  metadata: map(),
+  inserted_at: DateTime,
+  updated_at: DateTime
+}
+```
+
+### Skill
+
+Configurable agent behavior extension with custom system prompt fragments.
+
+```elixir
+%Skill{
+  id: UUID,
+  scope: :global | :project,
+  project_id: UUID | nil,         # set for project-scoped skills
+  name: String,
+  description: String,
+  system_prompt_fragment: String,
+  tool_allowlist: [String],        # JSONB list of allowed tool names
+  config_overrides: map(),         # JSONB overrides for agent config
+  is_builtin: boolean(),
+  inserted_at: DateTime,
+  updated_at: DateTime
+}
+```
+
+### MCPConfig
+
+Configuration for a Model Context Protocol server connection.
+
+```elixir
+%MCPConfig{
+  id: UUID,
+  name: String,
+  transport: :stdio | :sse,
+  command: String | nil,           # for stdio transport
+  args: [String],                  # JSONB list
+  url: String | nil,               # for SSE transport
+  env: map(),                      # JSONB environment variables
+  auto_connect: boolean(),
+  inserted_at: DateTime,
+  updated_at: DateTime
+}
+```
+
+### LSPConfig
+
+Configuration for a Language Server Protocol integration.
+
+```elixir
+%LSPConfig{
+  id: UUID,
+  language: String,
+  command: String,
+  args: [String],                  # JSONB list
+  root_path: String | nil,
+  auto_start: boolean(),
+  settings: map(),                 # JSONB LSP-specific settings
+  inserted_at: DateTime,
+  updated_at: DateTime
+}
+```
+
 ## Entity Relationships
 
 ```
@@ -99,6 +173,9 @@ Message 1──*  Part (embedded)
 Session *──1  Agent (config ref)
 Session *──1  Provider (config ref)
 Agent   1──*  Tool (config ref)
+Project 1──*  Skill (optional, project-scoped)
+Project 1──*  MemoryEntry (via scope_id, when scope = project)
+Session 1──*  MemoryEntry (via scope_id, when scope = session)
 ```
 
 ## State Machines
