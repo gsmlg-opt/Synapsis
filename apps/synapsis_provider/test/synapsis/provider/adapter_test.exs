@@ -1,0 +1,326 @@
+defmodule Synapsis.Provider.AdapterTest do
+  use ExUnit.Case
+
+  alias Synapsis.Provider.Adapter
+
+  setup do
+    bypass = Bypass.open()
+    %{bypass: bypass, port: bypass.port}
+  end
+
+  # ---------------------------------------------------------------------------
+  # stream/2 — Anthropic
+  # ---------------------------------------------------------------------------
+
+  describe "stream/2 Anthropic" do
+    test "receives streaming chunks", %{bypass: bypass, port: port} do
+      Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("text/event-stream")
+        |> Plug.Conn.send_resp(200, """
+        data: {"type":"message_start","message":{"id":"msg_01"}}
+
+        data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+        data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}
+
+        data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" world"}}
+
+        data: {"type":"message_stop"}
+
+        """)
+      end)
+
+      config = %{api_key: "test-key", base_url: "http://localhost:#{port}", type: "anthropic"}
+
+      request =
+        Adapter.format_request([], [], %{
+          model: "claude-sonnet-4-20250514",
+          system_prompt: "test",
+          provider_type: "anthropic"
+        })
+
+      assert {:ok, ref} = Adapter.stream(request, config)
+
+      chunks = collect_chunks(ref)
+      text_deltas = for {:text_delta, text} <- chunks, do: text
+      assert "Hello" in text_deltas
+      assert " world" in text_deltas
+      assert :done in chunks
+    end
+
+    test "handles error response", %{bypass: bypass, port: port} do
+      Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(401, Jason.encode!(%{"error" => %{"type" => "authentication_error"}}))
+      end)
+
+      config = %{api_key: "bad-key", base_url: "http://localhost:#{port}", type: "anthropic"}
+      request = Adapter.format_request([], [], %{model: "claude-sonnet-4-20250514", provider_type: "anthropic"})
+
+      assert {:ok, _ref} = Adapter.stream(request, config)
+
+      # Should receive done eventually (non-SSE response)
+      assert_receive(:provider_done, 5000)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # stream/2 — OpenAI
+  # ---------------------------------------------------------------------------
+
+  describe "stream/2 OpenAI" do
+    test "receives streaming chunks", %{bypass: bypass, port: port} do
+      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("text/event-stream")
+        |> Plug.Conn.send_resp(200, """
+        data: {"id":"chatcmpl-1","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+        data: {"id":"chatcmpl-1","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}
+
+        data: {"id":"chatcmpl-1","choices":[{"index":0,"delta":{"content":" there"},"finish_reason":null}]}
+
+        data: {"id":"chatcmpl-1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+        data: [DONE]
+
+        """)
+      end)
+
+      config = %{api_key: "test-key", base_url: "http://localhost:#{port}", type: "openai"}
+
+      request =
+        Adapter.format_request([], [], %{
+          model: "gpt-4o",
+          provider_type: "openai"
+        })
+
+      assert {:ok, ref} = Adapter.stream(request, config)
+
+      chunks = collect_chunks(ref)
+      text_deltas = for {:text_delta, text} <- chunks, do: text
+      assert "Hello" in text_deltas
+      assert " there" in text_deltas
+      assert :done in chunks
+    end
+
+    test "works without api_key for local models", %{bypass: bypass, port: port} do
+      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("text/event-stream")
+        |> Plug.Conn.send_resp(200, """
+        data: {"id":"1","choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":null}]}
+
+        data: {"id":"1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+        data: [DONE]
+
+        """)
+      end)
+
+      config = %{base_url: "http://localhost:#{port}", type: "local"}
+
+      request =
+        Adapter.format_request([], [], %{
+          model: "llama3",
+          provider_type: "openai"
+        })
+
+      assert {:ok, ref} = Adapter.stream(request, config)
+      chunks = collect_chunks(ref)
+      text_deltas = for {:text_delta, text} <- chunks, do: text
+      assert "Hi" in text_deltas
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # stream/2 — Google
+  # ---------------------------------------------------------------------------
+
+  describe "stream/2 Google" do
+    test "receives streaming chunks", %{bypass: bypass, port: port} do
+      Bypass.expect_once(
+        bypass,
+        "POST",
+        "/v1beta/models/gemini-2.0-flash:streamGenerateContent",
+        fn conn ->
+          conn
+          |> Plug.Conn.put_resp_content_type("text/event-stream")
+          |> Plug.Conn.send_resp(200, """
+          data: {"candidates":[{"content":{"parts":[{"text":"Hello"}],"role":"model"}}]}
+
+          data: {"candidates":[{"content":{"parts":[{"text":" world"}],"role":"model"}}]}
+
+          data: {"candidates":[{"finishReason":"STOP"}]}
+
+          """)
+        end
+      )
+
+      config = %{api_key: "test-key", base_url: "http://localhost:#{port}", type: "google"}
+
+      request =
+        Adapter.format_request([], [], %{
+          model: "gemini-2.0-flash",
+          provider_type: "google"
+        })
+
+      assert {:ok, ref} = Adapter.stream(request, config)
+
+      chunks = collect_chunks(ref)
+      text_deltas = for {:text_delta, text} <- chunks, do: text
+      assert "Hello" in text_deltas
+      assert " world" in text_deltas
+      assert :done in chunks
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # format_request/3
+  # ---------------------------------------------------------------------------
+
+  describe "format_request/3" do
+    test "formats for anthropic" do
+      messages = [%{role: :user, parts: [%Synapsis.Part.Text{content: "Hello"}]}]
+
+      request =
+        Adapter.format_request(messages, [], %{
+          model: "claude-sonnet-4-20250514",
+          system_prompt: "You are helpful",
+          provider_type: "anthropic"
+        })
+
+      assert request.model == "claude-sonnet-4-20250514"
+      assert request.system == "You are helpful"
+      assert request.stream == true
+    end
+
+    test "formats for openai" do
+      messages = [%{role: :user, parts: [%Synapsis.Part.Text{content: "Hello"}]}]
+
+      request =
+        Adapter.format_request(messages, [], %{
+          model: "gpt-4o",
+          system_prompt: "You are helpful",
+          provider_type: "openai"
+        })
+
+      assert request.model == "gpt-4o"
+      assert length(request.messages) == 2
+      assert hd(request.messages).role == "system"
+    end
+
+    test "formats for google" do
+      messages = [%{role: :user, parts: [%Synapsis.Part.Text{content: "Hello"}]}]
+
+      request =
+        Adapter.format_request(messages, [], %{
+          model: "gemini-2.0-flash",
+          system_prompt: "You are helpful",
+          provider_type: "google"
+        })
+
+      assert request.model == "gemini-2.0-flash"
+      assert request.systemInstruction == %{parts: [%{text: "You are helpful"}]}
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # models/1
+  # ---------------------------------------------------------------------------
+
+  describe "models/1" do
+    test "returns static anthropic models" do
+      {:ok, models} = Adapter.models(%{type: "anthropic"})
+      assert length(models) >= 3
+      ids = Enum.map(models, & &1.id)
+      assert "claude-sonnet-4-20250514" in ids
+    end
+
+    test "returns static google models" do
+      {:ok, models} = Adapter.models(%{type: "google"})
+      assert length(models) >= 3
+      ids = Enum.map(models, & &1.id)
+      assert "gemini-2.0-flash" in ids
+    end
+
+    test "fetches openai models from API", %{bypass: bypass, port: port} do
+      Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(
+          200,
+          Jason.encode!(%{
+            "data" => [
+              %{"id" => "gpt-4o", "context_length" => 128_000},
+              %{"id" => "gpt-4o-mini", "context_length" => 128_000}
+            ]
+          })
+        )
+      end)
+
+      config = %{api_key: "test-key", base_url: "http://localhost:#{port}", type: "openai"}
+      {:ok, models} = Adapter.models(config)
+      assert length(models) == 2
+      ids = Enum.map(models, & &1.id)
+      assert "gpt-4o" in ids
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # resolve_transport_type/1
+  # ---------------------------------------------------------------------------
+
+  describe "resolve_transport_type/1" do
+    test "maps string types correctly" do
+      assert :anthropic = Adapter.resolve_transport_type("anthropic")
+      assert :openai = Adapter.resolve_transport_type("openai")
+      assert :openai = Adapter.resolve_transport_type("openai_compat")
+      assert :openai = Adapter.resolve_transport_type("local")
+      assert :openai = Adapter.resolve_transport_type("openrouter")
+      assert :openai = Adapter.resolve_transport_type("groq")
+      assert :openai = Adapter.resolve_transport_type("deepseek")
+      assert :google = Adapter.resolve_transport_type("google")
+    end
+
+    test "passes through atoms" do
+      assert :anthropic = Adapter.resolve_transport_type(:anthropic)
+      assert :openai = Adapter.resolve_transport_type(:openai)
+      assert :google = Adapter.resolve_transport_type(:google)
+    end
+
+    test "defaults to openai for unknown" do
+      assert :openai = Adapter.resolve_transport_type("unknown")
+      assert :openai = Adapter.resolve_transport_type(nil)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Helpers
+  # ---------------------------------------------------------------------------
+
+  defp collect_chunks(ref) do
+    collect_chunks(ref, [])
+  end
+
+  defp collect_chunks(ref, acc) do
+    receive do
+      {:provider_chunk, chunk} ->
+        collect_chunks(ref, [chunk | acc])
+
+      :provider_done ->
+        Enum.reverse(acc)
+
+      {:provider_error, _reason} ->
+        Enum.reverse(acc)
+
+      {:DOWN, ^ref, :process, _pid, _reason} ->
+        Enum.reverse(acc)
+    after
+      5000 ->
+        Enum.reverse(acc)
+    end
+  end
+end

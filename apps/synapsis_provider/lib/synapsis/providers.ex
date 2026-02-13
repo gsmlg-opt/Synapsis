@@ -127,8 +127,13 @@ defmodule Synapsis.Providers do
   end
 
   defp default_base_url("anthropic"), do: "https://api.anthropic.com"
+  defp default_base_url("openai"), do: "https://api.openai.com"
   defp default_base_url("openai_compat"), do: "https://api.openai.com"
   defp default_base_url("google"), do: "https://generativelanguage.googleapis.com"
+  defp default_base_url("groq"), do: "https://api.groq.com/openai"
+  defp default_base_url("deepseek"), do: "https://api.deepseek.com"
+  defp default_base_url("openrouter"), do: "https://openrouter.ai/api"
+  defp default_base_url("local"), do: "http://localhost:11434"
   defp default_base_url(_), do: nil
 
   defp atomize_keys(map) when is_map(map) do

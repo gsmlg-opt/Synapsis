@@ -12,11 +12,15 @@ defmodule Synapsis.Provider.RegistryTest do
     assert {:error, :not_found} = Registry.get("unknown_provider_#{:rand.uniform(100_000)}")
   end
 
-  test "module_for returns correct modules" do
-    assert {:ok, Synapsis.Provider.Anthropic} = Registry.module_for("anthropic")
-    assert {:ok, Synapsis.Provider.OpenAICompat} = Registry.module_for("openai")
-    assert {:ok, Synapsis.Provider.Google} = Registry.module_for("google")
-    assert {:ok, Synapsis.Provider.OpenAICompat} = Registry.module_for("local")
+  test "module_for returns Adapter for all known types" do
+    assert {:ok, Synapsis.Provider.Adapter} = Registry.module_for("anthropic")
+    assert {:ok, Synapsis.Provider.Adapter} = Registry.module_for("openai")
+    assert {:ok, Synapsis.Provider.Adapter} = Registry.module_for("google")
+    assert {:ok, Synapsis.Provider.Adapter} = Registry.module_for("local")
+    assert {:ok, Synapsis.Provider.Adapter} = Registry.module_for("openai_compat")
+    assert {:ok, Synapsis.Provider.Adapter} = Registry.module_for("openrouter")
+    assert {:ok, Synapsis.Provider.Adapter} = Registry.module_for("groq")
+    assert {:ok, Synapsis.Provider.Adapter} = Registry.module_for("deepseek")
     assert {:error, :unknown_provider} = Registry.module_for("unknown")
   end
 

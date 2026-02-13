@@ -12,7 +12,8 @@ defmodule Synapsis.MessageBuilder do
     opts = %{
       model: agent[:model],
       system_prompt: agent[:system_prompt],
-      max_tokens: agent[:max_tokens] || 8192
+      max_tokens: agent[:max_tokens] || 8192,
+      provider_type: provider_name
     }
 
     provider_module.format_request(messages, tools, opts)
@@ -21,7 +22,7 @@ defmodule Synapsis.MessageBuilder do
   defp provider_module!(provider_name) do
     case Synapsis.Provider.Registry.module_for(provider_name) do
       {:ok, mod} -> mod
-      {:error, _} -> Synapsis.Provider.Anthropic
+      {:error, _} -> Synapsis.Provider.Adapter
     end
   end
 

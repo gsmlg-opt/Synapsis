@@ -181,7 +181,7 @@ defmodule SynapsisWeb.ProviderController do
   defp get_provider_config(name) do
     case Synapsis.Provider.Registry.get(name) do
       {:ok, config} -> config
-      {:error, _} -> %{api_key: get_env_key(name)}
+      {:error, _} -> %{api_key: get_env_key(name), type: name}
     end
   end
 

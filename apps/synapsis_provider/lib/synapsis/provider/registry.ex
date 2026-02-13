@@ -30,8 +30,12 @@ defmodule Synapsis.Provider.Registry do
     |> Enum.map(fn {name, config} -> {name, config} end)
   end
 
+  @doc """
+  Returns the unified Adapter module for any provider name.
+  All providers are now handled by `Synapsis.Provider.Adapter`.
+  """
   def module_for(provider_name) do
-    # Check ETS config for a type field first
+    # Check ETS config for a type field to validate the provider is known
     type =
       case get(provider_name) do
         {:ok, %{type: t}} -> t
@@ -41,12 +45,12 @@ defmodule Synapsis.Provider.Registry do
     resolve_module(type || to_string(provider_name))
   end
 
-  defp resolve_module("anthropic"), do: {:ok, Synapsis.Provider.Anthropic}
-  defp resolve_module("openai"), do: {:ok, Synapsis.Provider.OpenAICompat}
-  defp resolve_module("openai_compat"), do: {:ok, Synapsis.Provider.OpenAICompat}
-  defp resolve_module("google"), do: {:ok, Synapsis.Provider.Google}
-  defp resolve_module("local"), do: {:ok, Synapsis.Provider.OpenAICompat}
-  defp resolve_module("openrouter"), do: {:ok, Synapsis.Provider.OpenAICompat}
+  @known_types ~w(anthropic openai openai_compat google local openrouter groq deepseek)
+
+  defp resolve_module(type) when type in @known_types do
+    {:ok, Synapsis.Provider.Adapter}
+  end
+
   defp resolve_module(_), do: {:error, :unknown_provider}
 
   @impl true
