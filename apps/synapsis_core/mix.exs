@@ -31,7 +31,13 @@ defmodule SynapsisCore.MixProject do
     [
       {:synapsis_data, in_umbrella: true},
       {:synapsis_provider, in_umbrella: true},
+      {:phoenix, "~> 1.8"},
+      {:phoenix_live_view, "~> 1.0"},
       {:phoenix_pubsub, "~> 2.1"},
+      {:bandit, "~> 1.6"},
+      {:dns_cluster, "~> 0.2.0"},
+      {:telemetry_metrics, "~> 1.0"},
+      {:telemetry_poller, "~> 1.0"},
       {:req, "~> 0.5"},
       {:finch, "~> 0.18"},
       {:jason, "~> 1.4"},
