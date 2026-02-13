@@ -9,7 +9,7 @@ config :synapsis_data, Synapsis.Repo,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10
 
-config :synapsis_web, SynapsisWeb.Endpoint,
+config :synapsis_server, SynapsisServer.Endpoint,
   http: [ip: {0, 0, 0, 0, 0, 0, 0, 0}, port: 4000],
   check_origin: false,
   code_reloader: true,
@@ -20,7 +20,7 @@ config :synapsis_web, SynapsisWeb.Endpoint,
     bun: {Bun, :install_and_run, [:synapsis_web, ~w(--sourcemap=inline --watch)]}
   ]
 
-config :synapsis_web, dev_routes: true
+config :synapsis_server, dev_routes: true
 
 config :logger, :default_formatter, format: "[$level] $message\n"
 

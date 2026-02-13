@@ -11,15 +11,15 @@ config :synapsis_data, Synapsis.Repo,
   migration_timestamps: [type: :utc_datetime_usec]
 
 # General application configuration
-config :synapsis_web,
+config :synapsis_server,
   generators: [timestamp_type: :utc_datetime_usec]
 
 # Configure the endpoint
-config :synapsis_web, SynapsisWeb.Endpoint,
+config :synapsis_server, SynapsisServer.Endpoint,
   url: [host: "localhost"],
   adapter: Bandit.PhoenixAdapter,
   render_errors: [
-    formats: [html: SynapsisWeb.ErrorHTML, json: SynapsisWeb.ErrorJSON],
+    formats: [html: SynapsisServer.ErrorHTML, json: SynapsisServer.ErrorJSON],
     layout: false
   ],
   pubsub_server: Synapsis.PubSub,

@@ -8,7 +8,7 @@ config :synapsis_data, Synapsis.Repo,
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: System.schedulers_online() * 2
 
-config :synapsis_web, SynapsisWeb.Endpoint,
+config :synapsis_server, SynapsisServer.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4002],
   secret_key_base: "TG9IIkMoPGf7vzj3p+QiUXZ0wHl0MCb+PRPa58Tw/OSQFuxSh5OhfuLfDkhQo5FO",
   server: false

@@ -10,6 +10,7 @@ defmodule SynapsisServer.MixProject do
       deps_path: "../../deps",
       lockfile: "../../mix.lock",
       elixir: "~> 1.18",
+      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps()
     ]
@@ -17,14 +18,27 @@ defmodule SynapsisServer.MixProject do
 
   def application do
     [
-      extra_applications: [:logger]
+      extra_applications: [:logger, :runtime_tools]
     ]
   end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 
   defp deps do
     [
       {:synapsis_core, in_umbrella: true},
-      {:synapsis_web, in_umbrella: true}
+      {:synapsis_provider, in_umbrella: true},
+      {:synapsis_lsp, in_umbrella: true},
+      {:phoenix, "~> 1.8"},
+      {:phoenix_html, "~> 4.2"},
+      {:phoenix_live_view, "~> 1.0"},
+      {:telemetry_metrics, "~> 1.0"},
+      {:telemetry_poller, "~> 1.0"},
+      {:jason, "~> 1.4"},
+      {:dns_cluster, "~> 0.2.0"},
+      {:bandit, "~> 1.6"},
+      {:cors_plug, "~> 3.0"}
     ]
   end
 end
