@@ -62,5 +62,44 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       assert html =~ "Providers"
       assert html =~ provider.name
     end
+
+    test "update_provider with enabled=false disables the provider", %{
+      conn: conn,
+      provider: provider
+    } do
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+
+      view
+      |> form("form", %{"base_url" => "", "enabled" => "false"})
+      |> render_submit()
+
+      {:ok, updated} = Synapsis.Providers.get(provider.id)
+      assert updated.enabled == false
+    end
+
+    test "update_provider with empty api_key does not overwrite existing key", %{
+      conn: conn,
+      provider: provider
+    } do
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+
+      view
+      |> form("form", %{"base_url" => "", "enabled" => "true", "api_key" => ""})
+      |> render_submit()
+
+      {:ok, updated} = Synapsis.Providers.get(provider.id)
+      assert updated.api_key_encrypted != nil
+    end
+
+    test "update_provider with new api_key updates it", %{conn: conn, provider: provider} do
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+
+      view
+      |> form("form", %{"base_url" => "", "enabled" => "true", "api_key" => "new-secret-key"})
+      |> render_submit()
+
+      html = render(view)
+      assert html =~ "Provider updated"
+    end
   end
 end

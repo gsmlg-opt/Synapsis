@@ -65,5 +65,37 @@ defmodule Synapsis.Agent.ResolverTest do
       agent = Resolver.resolve("build", config)
       assert agent.provider == "openai"
     end
+
+    test "unknown agent name defaults to build agent config" do
+      agent = Resolver.resolve("unknown_agent_xyz")
+      assert agent.name == "unknown_agent_xyz"
+      assert agent.read_only == false
+      assert "bash" in agent.tools
+    end
+
+    test "merges maxTokens override" do
+      config = %{"agents" => %{"build" => %{"maxTokens" => 2048}}}
+      agent = Resolver.resolve("build", config)
+      assert agent.max_tokens == 2048
+    end
+
+    test "merges reasoningEffort override" do
+      config = %{"agents" => %{"build" => %{"reasoningEffort" => "low"}}}
+      agent = Resolver.resolve("build", config)
+      assert agent.reasoning_effort == "low"
+    end
+
+    test "merges readOnly override" do
+      config = %{"agents" => %{"build" => %{"readOnly" => true}}}
+      agent = Resolver.resolve("build", config)
+      assert agent.read_only == true
+    end
+
+    test "non-list tools override falls back to defaults" do
+      config = %{"agents" => %{"build" => %{"tools" => "not_a_list"}}}
+      agent = Resolver.resolve("build", config)
+      # Non-list override is ignored, default tools returned
+      assert "bash" in agent.tools
+    end
   end
 end
