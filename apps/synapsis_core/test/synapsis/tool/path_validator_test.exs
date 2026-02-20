@@ -42,7 +42,8 @@ defmodule Synapsis.Tool.PathValidatorTest do
 
     test "handles Path.expand for relative paths with dot segments" do
       # Path.expand resolves .., so ../../etc/passwd expands to /etc/passwd
-      assert {:error, _} = PathValidator.validate("#{@project_root}/../outside.txt", @project_root)
+      assert {:error, _} =
+               PathValidator.validate("#{@project_root}/../outside.txt", @project_root)
     end
   end
 end
