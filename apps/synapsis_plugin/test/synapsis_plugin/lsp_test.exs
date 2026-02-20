@@ -42,6 +42,12 @@ defmodule SynapsisPlugin.LSPTest do
       assert {:ok, msg2, ""} = Protocol.decode_message(rest)
       assert msg2["method"] == "notify"
     end
+
+    test "returns error for invalid JSON body" do
+      invalid_body = "not valid json!"
+      data = "Content-Length: #{byte_size(invalid_body)}\r\n\r\n#{invalid_body}"
+      assert {:error, :invalid_json} = Protocol.decode_message(data)
+    end
   end
 
   describe "LSP tools" do

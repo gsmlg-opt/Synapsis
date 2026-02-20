@@ -128,6 +128,27 @@ defmodule Synapsis.Provider.MessageMapperTest do
       [m] = request.messages
       assert m.role == "user"
     end
+
+    test "formats Image parts as base64 source block" do
+      msg = %{role: :user, parts: [%Synapsis.Part.Image{media_type: "image/png", data: "base64data"}]}
+      request = MessageMapper.build_request(:anthropic, [msg], [], %{})
+      [m] = request.messages
+      [block] = m.content
+      assert block.type == "image"
+      assert block.source.type == "base64"
+      assert block.source.media_type == "image/png"
+      assert block.source.data == "base64data"
+    end
+
+    test "formats unknown parts via generic content fallback" do
+      # Part.File has :content key, falls through to catch-all
+      msg = %{role: :user, parts: [%Synapsis.Part.File{path: "/tmp/f.txt", content: "file body"}]}
+      request = MessageMapper.build_request(:anthropic, [msg], [], %{})
+      [m] = request.messages
+      [block] = m.content
+      assert block.type == "text"
+      assert block.text == "file body"
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -185,6 +206,24 @@ defmodule Synapsis.Provider.MessageMapperTest do
     test "uses default model" do
       request = MessageMapper.build_request(:openai, [], [], %{})
       assert request.model == "gpt-4o"
+    end
+
+    test "formats Image parts as multimodal image_url content" do
+      msg = %{role: :user, parts: [%Synapsis.Part.Image{media_type: "image/jpeg", data: "b64data"}]}
+      request = MessageMapper.build_request(:openai, [msg], [], %{})
+      [m] = request.messages
+      assert is_list(m.content)
+      [block] = m.content
+      assert block.type == "image_url"
+      assert block.image_url.url =~ "data:image/jpeg;base64,b64data"
+    end
+
+    test "handles string-keyed messages" do
+      msg = %{"role" => "user", "parts" => [%Synapsis.Part.Text{content: "Hi there"}]}
+      request = MessageMapper.build_request(:openai, [msg], [], %{})
+      [m] = request.messages
+      assert m.role == "user"
+      assert m.content == "Hi there"
     end
   end
 

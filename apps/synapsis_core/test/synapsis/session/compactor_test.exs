@@ -99,4 +99,21 @@ defmodule Synapsis.Session.CompactorTest do
     assert Compactor.maybe_compact(session.id, "claude-sonnet-4-20250514", extra_tokens: 20_000) ==
              :compacted
   end
+
+  test "maybe_compact/3 uses default 128k limit for unknown model", %{session: session} do
+    # Default limit 128k, threshold 80% = 102.4k
+    # 15 × 8k = 120k > 102.4k → triggers compaction
+    for i <- 1..15 do
+      %Message{}
+      |> Message.changeset(%{
+        session_id: session.id,
+        role: if(rem(i, 2) == 0, do: "assistant", else: "user"),
+        parts: [%Synapsis.Part.Text{content: "Message #{i}"}],
+        token_count: 8_000
+      })
+      |> Repo.insert!()
+    end
+
+    assert Compactor.maybe_compact(session.id, "unknown-model-xyz") == :compacted
+  end
 end
