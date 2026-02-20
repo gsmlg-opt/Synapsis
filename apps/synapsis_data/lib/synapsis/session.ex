@@ -16,6 +16,8 @@ defmodule Synapsis.Session do
 
     belongs_to(:project, Synapsis.Project)
     has_many(:messages, Synapsis.Message)
+    has_many(:failed_attempts, Synapsis.FailedAttempt)
+    has_many(:patches, Synapsis.Patch)
 
     timestamps(type: :utc_datetime_usec)
   end

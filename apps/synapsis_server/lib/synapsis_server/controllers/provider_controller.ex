@@ -118,6 +118,30 @@ defmodule SynapsisServer.ProviderController do
     end
   end
 
+  def authenticate(conn, %{"provider" => provider_name, "api_key" => api_key}) do
+    case Providers.get_by_name(provider_name) do
+      {:ok, provider} ->
+        case Providers.authenticate(provider.id, api_key) do
+          {:ok, updated} ->
+            json(conn, %{data: serialize_provider(updated)})
+
+          {:error, %Ecto.Changeset{} = changeset} ->
+            conn
+            |> put_status(:unprocessable_entity)
+            |> json(%{errors: format_errors(changeset)})
+        end
+
+      {:error, :not_found} ->
+        conn |> put_status(:not_found) |> json(%{error: "Provider not found"})
+    end
+  end
+
+  def authenticate(conn, %{"provider" => _provider_name}) do
+    conn
+    |> put_status(:unprocessable_entity)
+    |> json(%{error: "api_key is required"})
+  end
+
   defp serialize_provider(%Synapsis.ProviderConfig{} = p) do
     %{
       id: p.id,

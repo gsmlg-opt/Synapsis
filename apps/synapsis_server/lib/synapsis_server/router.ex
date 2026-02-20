@@ -50,6 +50,8 @@ defmodule SynapsisServer.Router do
     post "/providers/:id/test", ProviderController, :test_connection
     get "/providers/by-name/:name/models", ProviderController, :models_by_name
 
+    post "/auth/:provider", ProviderController, :authenticate
+
     get "/config", ConfigController, :show
   end
 

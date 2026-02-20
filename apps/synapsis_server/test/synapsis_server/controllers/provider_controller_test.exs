@@ -137,6 +137,27 @@ defmodule SynapsisServer.ProviderControllerTest do
     end
   end
 
+  describe "POST /api/auth/:provider" do
+    setup [:create_provider]
+
+    test "authenticates provider with api key", %{conn: conn} do
+      conn = post(conn, "/api/auth/test-anthropic", %{"api_key" => "new-secret-key"})
+      %{"data" => data} = json_response(conn, 200)
+      assert data["name"] == "test-anthropic"
+      assert data["has_api_key"] == true
+    end
+
+    test "returns 404 for unknown provider name", %{conn: conn} do
+      conn = post(conn, "/api/auth/nonexistent", %{"api_key" => "key"})
+      assert json_response(conn, 404)
+    end
+
+    test "returns 422 when api_key missing", %{conn: conn} do
+      conn = post(conn, "/api/auth/test-anthropic", %{})
+      assert json_response(conn, 422)
+    end
+  end
+
   describe "GET /api/providers/by-name/:name/models" do
     test "returns models for anthropic", %{conn: conn} do
       conn = get(conn, "/api/providers/by-name/anthropic/models")
