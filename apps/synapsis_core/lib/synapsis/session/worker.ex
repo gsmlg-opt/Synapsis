@@ -10,6 +10,8 @@ defmodule Synapsis.Session.Worker do
   alias Synapsis.{Repo, Session, Message, ContextWindow}
   alias Synapsis.Session.Stream, as: SessionStream
 
+  @max_tool_iterations 25
+
   defstruct [
     :session_id,
     :session,
@@ -22,7 +24,9 @@ defmodule Synapsis.Session.Worker do
     pending_tool_input: "",
     pending_reasoning: "",
     tool_uses: [],
-    retry_count: 0
+    retry_count: 0,
+    tool_call_hashes: MapSet.new(),
+    iteration_count: 0
   ]
 
   def start_link(opts) do
@@ -30,8 +34,8 @@ defmodule Synapsis.Session.Worker do
     GenServer.start_link(__MODULE__, opts, name: via(session_id))
   end
 
-  def send_message(session_id, content) do
-    GenServer.call(via(session_id), {:send_message, content}, 30_000)
+  def send_message(session_id, content, image_parts \\ []) do
+    GenServer.call(via(session_id), {:send_message, content, image_parts}, 30_000)
   end
 
   def cancel(session_id) do
@@ -82,8 +86,12 @@ defmodule Synapsis.Session.Worker do
   end
 
   @impl true
-  def handle_call({:send_message, content}, _from, %{status: :idle} = state) do
-    parts = [%Synapsis.Part.Text{content: content}]
+  def handle_call({:send_message, content, image_parts}, _from, %{status: :idle} = state) do
+    text_part = %Synapsis.Part.Text{content: content}
+    parts = [text_part | image_parts]
+
+    token_count =
+      ContextWindow.estimate_tokens(content) + length(image_parts) * 1000
 
     {:ok, _user_msg} =
       %Message{}
@@ -91,7 +99,7 @@ defmodule Synapsis.Session.Worker do
         session_id: state.session_id,
         role: "user",
         parts: parts,
-        token_count: ContextWindow.estimate_tokens(content)
+        token_count: token_count
       })
       |> Repo.insert()
 
@@ -105,6 +113,9 @@ defmodule Synapsis.Session.Worker do
     messages = load_messages(state.session_id)
     request = Synapsis.MessageBuilder.build_request(messages, state.agent, state.session.provider)
 
+    # Reset loop safety counters on new user message
+    state = %{state | tool_call_hashes: MapSet.new(), iteration_count: 0}
+
     case SessionStream.start_stream(request, state.provider_config, state.session.provider) do
       {:ok, ref} ->
         {:reply, :ok,
@@ -117,7 +128,7 @@ defmodule Synapsis.Session.Worker do
     end
   end
 
-  def handle_call({:send_message, _content}, _from, state) do
+  def handle_call({:send_message, _content, _image_parts}, _from, state) do
     {:reply, {:error, :not_idle}, state}
   end
 
@@ -475,6 +486,14 @@ defmodule Synapsis.Session.Worker do
   end
 
   defp process_tool_uses(state) do
+    # Record tool call hashes for loop detection
+    new_hashes =
+      Enum.reduce(state.tool_uses, state.tool_call_hashes, fn tu, acc ->
+        MapSet.put(acc, :erlang.phash2({tu.tool, tu.input}))
+      end)
+
+    state = %{state | tool_call_hashes: new_hashes}
+
     for tool_use <- state.tool_uses do
       permission = Synapsis.Tool.Permission.check(tool_use.tool, state.session)
 
@@ -503,6 +522,10 @@ defmodule Synapsis.Session.Worker do
     worker_pid = self()
     project_path = state.session.project.path
 
+    # Check for duplicate tool calls within the same turn
+    call_hash = :erlang.phash2({tool_use.tool, tool_use.input})
+    is_duplicate = MapSet.member?(state.tool_call_hashes, call_hash)
+
     # Auto-checkpoint before write operations
     if tool_use.tool in ["file_edit", "file_write", "bash"] and
          Synapsis.Git.is_repo?(project_path) do
@@ -519,7 +542,15 @@ defmodule Synapsis.Session.Worker do
 
       case result do
         {:ok, output} ->
-          send(worker_pid, {:tool_result, tool_use.tool_use_id, output, false})
+          final_output =
+            if is_duplicate do
+              output <>
+                "\n\nWarning: This exact tool call was already made in this conversation turn. The same approach may not work. Try a different approach."
+            else
+              output
+            end
+
+          send(worker_pid, {:tool_result, tool_use.tool_use_id, final_output, false})
 
         {:error, reason} ->
           send(worker_pid, {:tool_result, tool_use.tool_use_id, inspect(reason), true})
@@ -528,29 +559,69 @@ defmodule Synapsis.Session.Worker do
   end
 
   defp continue_after_tools([], state) do
-    # All tools processed, continue the agent loop
-    messages = load_messages(state.session_id)
-    request = Synapsis.MessageBuilder.build_request(messages, state.agent, state.session.provider)
+    # Increment iteration count and check limit
+    iteration_count = state.iteration_count + 1
 
-    case SessionStream.start_stream(request, state.provider_config, state.session.provider) do
-      {:ok, ref} ->
-        update_session_status(state.session_id, "streaming")
-        broadcast(state.session_id, "session_status", %{status: "streaming"})
+    max_iterations =
+      Application.get_env(:synapsis_core, :max_tool_iterations, @max_tool_iterations)
 
-        {:noreply,
-         %{
-           state
-           | status: :streaming,
-             stream_ref: ref,
-             pending_text: "",
-             tool_uses: [],
-             pending_reasoning: ""
-         }}
+    if iteration_count >= max_iterations do
+      Logger.warning("max_tool_iterations_reached",
+        session_id: state.session_id,
+        iterations: iteration_count
+      )
 
-      {:error, reason} ->
-        update_session_status(state.session_id, "error")
-        broadcast(state.session_id, "error", %{message: inspect(reason)})
-        {:noreply, %{state | status: :error}}
+      # Persist a system message about the limit
+      limit_part = %Synapsis.Part.Text{
+        content:
+          "Reached maximum tool iterations (#{max_iterations}). Stopping to prevent infinite loop."
+      }
+
+      {:ok, _msg} =
+        %Message{}
+        |> Message.changeset(%{
+          session_id: state.session_id,
+          role: "assistant",
+          parts: [limit_part],
+          token_count: 20
+        })
+        |> Repo.insert()
+
+      update_session_status(state.session_id, "idle")
+      broadcast(state.session_id, "max_iterations", %{iterations: iteration_count})
+      broadcast(state.session_id, "session_status", %{status: "idle"})
+
+      {:noreply,
+       %{state | status: :idle, stream_ref: nil, tool_uses: [], iteration_count: iteration_count}}
+    else
+      state = %{state | iteration_count: iteration_count}
+
+      # All tools processed, continue the agent loop
+      messages = load_messages(state.session_id)
+
+      request =
+        Synapsis.MessageBuilder.build_request(messages, state.agent, state.session.provider)
+
+      case SessionStream.start_stream(request, state.provider_config, state.session.provider) do
+        {:ok, ref} ->
+          update_session_status(state.session_id, "streaming")
+          broadcast(state.session_id, "session_status", %{status: "streaming"})
+
+          {:noreply,
+           %{
+             state
+             | status: :streaming,
+               stream_ref: ref,
+               pending_text: "",
+               tool_uses: [],
+               pending_reasoning: ""
+           }}
+
+        {:error, reason} ->
+          update_session_status(state.session_id, "error")
+          broadcast(state.session_id, "error", %{message: inspect(reason)})
+          {:noreply, %{state | status: :error}}
+      end
     end
   end
 

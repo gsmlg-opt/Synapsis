@@ -61,6 +61,17 @@ defmodule SynapsisServer.SessionController do
     end
   end
 
+  def send_message(conn, %{"id" => id, "content" => content, "images" => images})
+      when is_list(images) do
+    case Sessions.send_message(id, %{content: content, images: images}) do
+      :ok ->
+        json(conn, %{status: "ok"})
+
+      {:error, reason} ->
+        conn |> put_status(422) |> json(%{error: inspect(reason)})
+    end
+  end
+
   def send_message(conn, %{"id" => id, "content" => content}) do
     case Sessions.send_message(id, content) do
       :ok ->

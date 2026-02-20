@@ -86,7 +86,31 @@ defmodule Synapsis.Sessions do
     end
   end
 
-  def send_message(session_id, content) do
+  def send_message(session_id, %{content: content, images: images}) when is_list(images) do
+    image_parts =
+      images
+      |> Enum.map(&Synapsis.Image.encode_file/1)
+      |> Enum.filter(fn
+        {:ok, _} -> true
+        _ -> false
+      end)
+      |> Enum.map(fn {:ok, img} ->
+        %Synapsis.Part.Image{
+          media_type: img.media_type,
+          data: img.data,
+          path: nil
+        }
+      end)
+
+    ensure_session_running(session_id)
+    Synapsis.Session.Worker.send_message(session_id, content, image_parts)
+  end
+
+  def send_message(session_id, %{content: content}) do
+    send_message(session_id, content)
+  end
+
+  def send_message(session_id, content) when is_binary(content) do
     ensure_session_running(session_id)
     Synapsis.Session.Worker.send_message(session_id, content)
   end

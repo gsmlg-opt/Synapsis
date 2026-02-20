@@ -100,6 +100,17 @@ defmodule Synapsis.Provider.MessageMapper do
     %{type: "tool_result", tool_use_id: id, content: content, is_error: is_error}
   end
 
+  defp format_anthropic_content(%Synapsis.Part.Image{media_type: mt, data: data}) do
+    %{
+      type: "image",
+      source: %{
+        type: "base64",
+        media_type: mt,
+        data: data
+      }
+    }
+  end
+
   defp format_anthropic_content(%Synapsis.Part.Reasoning{content: content}) do
     %{type: "text", text: "[thinking] #{content}"}
   end
@@ -131,18 +142,44 @@ defmodule Synapsis.Provider.MessageMapper do
   end
 
   defp format_openai_message(%{role: role, parts: parts}) do
-    content = parts |> Enum.map(&format_openai_content/1) |> merge_text_content()
+    content_items = Enum.map(parts, &format_openai_content/1)
+    content = merge_openai_content(content_items)
     %{role: to_string(role), content: content}
   end
 
   defp format_openai_message(%{"role" => role, "parts" => parts}) do
-    content = parts |> Enum.map(&format_openai_content/1) |> merge_text_content()
+    content_items = Enum.map(parts, &format_openai_content/1)
+    content = merge_openai_content(content_items)
     %{role: role, content: content}
   end
 
   defp format_openai_content(%Synapsis.Part.Text{content: content}), do: content
+
+  defp format_openai_content(%Synapsis.Part.Image{media_type: mt, data: data}) do
+    %{
+      type: "image_url",
+      image_url: %{
+        url: "data:#{mt};base64,#{data}"
+      }
+    }
+  end
+
   defp format_openai_content(%Synapsis.Part.ToolResult{content: content}), do: content
   defp format_openai_content(%{content: content}), do: to_string(content)
+
+  defp merge_openai_content(items) do
+    has_multimodal = Enum.any?(items, &is_map/1)
+
+    if has_multimodal do
+      # When images are present, use content array format
+      Enum.map(items, fn
+        text when is_binary(text) -> %{type: "text", text: text}
+        map when is_map(map) -> map
+      end)
+    else
+      merge_text_content(items)
+    end
+  end
 
   defp merge_text_content([single]) when is_binary(single), do: single
   defp merge_text_content(parts), do: Enum.join(parts, "\n")
@@ -173,6 +210,16 @@ defmodule Synapsis.Provider.MessageMapper do
   end
 
   defp format_google_content(%Synapsis.Part.Text{content: content}), do: %{text: content}
+
+  defp format_google_content(%Synapsis.Part.Image{media_type: mt, data: data}) do
+    %{
+      inlineData: %{
+        mimeType: mt,
+        data: data
+      }
+    }
+  end
+
   defp format_google_content(%{content: content}), do: %{text: to_string(content)}
 
   defp format_google_tool(tool) do

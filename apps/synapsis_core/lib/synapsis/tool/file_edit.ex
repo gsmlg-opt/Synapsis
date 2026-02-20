@@ -40,7 +40,14 @@ defmodule Synapsis.Tool.FileEdit do
         [before, after_part] ->
           new_content = before <> new_string <> after_part
           File.write!(path, new_content)
-          {:ok, "Successfully edited #{path}"}
+
+          {:ok,
+           Jason.encode!(%{
+             status: "ok",
+             path: path,
+             message: "Successfully edited #{path}",
+             diff: %{old: old_string, new: new_string}
+           })}
 
         _multiple ->
           # Multiple occurrences - replace only the first
@@ -55,7 +62,14 @@ defmodule Synapsis.Tool.FileEdit do
 
           new_content = before <> new_string <> rest
           File.write!(path, new_content)
-          {:ok, "Successfully edited #{path} (replaced first occurrence)"}
+
+          {:ok,
+           Jason.encode!(%{
+             status: "ok",
+             path: path,
+             message: "Successfully edited #{path} (replaced first occurrence)",
+             diff: %{old: old_string, new: new_string}
+           })}
       end
     else
       {:error, :enoent} -> {:error, "File not found: #{path}"}
