@@ -102,6 +102,20 @@ defmodule SynapsisPlugin.Server do
   def terminate(reason, state) do
     unregister_tools(state.registered_tools)
 
+    unless reason in [:normal, :shutdown] do
+      Logger.warning("plugin_crashed",
+        name: state.name,
+        reason: inspect(reason),
+        tools: length(state.registered_tools)
+      )
+
+      Phoenix.PubSub.broadcast(
+        Synapsis.PubSub,
+        "plugin_events",
+        {:plugin_crashed, %{name: state.name, reason: inspect(reason)}}
+      )
+    end
+
     if function_exported?(state.plugin_module, :terminate, 2) do
       state.plugin_module.terminate(reason, state.plugin_state)
     end

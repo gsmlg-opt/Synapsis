@@ -10,6 +10,7 @@ defmodule SynapsisCli.Main do
         strict: [
           prompt: :string,
           model: :string,
+          provider: :string,
           host: :string,
           serve: :boolean,
           help: :boolean,
@@ -93,11 +94,13 @@ defmodule SynapsisCli.Main do
   end
 
   defp create_session(host, opts) do
-    body = %{
-      project_path: File.cwd!(),
-      provider: "anthropic",
-      model: opts[:model] || "claude-sonnet-4-20250514"
-    }
+    body =
+      %{project_path: File.cwd!()}
+      |> put_if_present(:provider, opts[:provider])
+      |> put_if_present(:model, opts[:model])
+
+    # When neither provider nor model is specified, let the server choose
+    # based on its config (sends body without provider/model keys)
 
     case Req.post("#{host}/api/sessions", json: body) do
       {:ok, %{status: 201, body: %{"data" => %{"id" => id}}}} ->
@@ -214,6 +217,9 @@ defmodule SynapsisCli.Main do
     {event, data || ""}
   end
 
+  defp put_if_present(map, _key, nil), do: map
+  defp put_if_present(map, key, value), do: Map.put(map, key, value)
+
   defp print_help do
     IO.puts("""
     Synapsis - AI Coding Agent
@@ -225,10 +231,17 @@ defmodule SynapsisCli.Main do
 
     Options:
       -p, --prompt TEXT            Prompt to send (non-interactive mode)
-      -m, --model MODEL            Model to use (default: claude-sonnet-4-20250514)
+      -m, --model MODEL            Model to use (server config default if omitted)
+      --provider PROVIDER          Provider to use: anthropic, openai, google, local
       -h, --host URL               Server URL (default: http://localhost:4000)
+      --serve                      Start server (delegates to mix phx.server)
       --help                       Show this help
       --version                    Show version
+
+    Examples:
+      synapsis -p "explain this file" --model claude-sonnet-4-20250514
+      synapsis --provider openai --model gpt-4o
+      synapsis -p "fix the bug" --provider anthropic
     """)
   end
 end

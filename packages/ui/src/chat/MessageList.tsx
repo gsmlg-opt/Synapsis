@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from "react"
 import { useSelector } from "react-redux"
 import { MessageItem } from "./MessageItem"
+import { MessageErrorBoundary } from "../ErrorBoundary"
 import type { RootState } from "./store"
 
 export function MessageList() {
@@ -22,7 +23,9 @@ export function MessageList() {
   return (
     <div className="space-y-4">
       {messages.map((msg) => (
-        <MessageItem key={msg.id} message={msg} />
+        <MessageErrorBoundary key={msg.id} messageId={msg.id}>
+          <MessageItem message={msg} />
+        </MessageErrorBoundary>
       ))}
       <div ref={endRef} />
     </div>

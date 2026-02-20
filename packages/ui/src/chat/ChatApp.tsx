@@ -7,6 +7,7 @@ import { ToolCallCard } from "./ToolCallCard"
 import { ThinkingBlock } from "./ThinkingBlock"
 import { useSelector } from "react-redux"
 import type { RootState } from "./store"
+import { ErrorBoundary } from "../ErrorBoundary"
 
 function ChatContent({ onNavigate }: { onNavigate?: (path: string) => void }) {
   const status = useSelector((s: RootState) => s.chat.status)
@@ -58,8 +59,10 @@ interface ChatAppProps {
 
 export function ChatApp({ store, onNavigate }: ChatAppProps) {
   return (
-    <Provider store={store}>
-      <ChatContent onNavigate={onNavigate} />
-    </Provider>
+    <ErrorBoundary>
+      <Provider store={store}>
+        <ChatContent onNavigate={onNavigate} />
+      </Provider>
+    </ErrorBoundary>
   )
 }

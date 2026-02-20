@@ -18,8 +18,12 @@ defmodule SynapsisPlugin.Supervisor do
 
   def start_plugin(plugin_module, name, config) do
     spec =
-      {SynapsisPlugin.Server,
-       plugin_module: plugin_module, name: name, config: config}
+      Supervisor.child_spec(
+        {SynapsisPlugin.Server,
+         plugin_module: plugin_module, name: name, config: config},
+        restart: :transient,
+        id: {:plugin, name}
+      )
 
     DynamicSupervisor.start_child(SynapsisPlugin.DynamicSupervisor, spec)
   end
