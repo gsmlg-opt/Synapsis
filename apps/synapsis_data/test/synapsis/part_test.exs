@@ -65,6 +65,20 @@ defmodule Synapsis.PartTest do
       assert {:ok, loaded} = Part.load(dumped)
       assert %Part.Agent{agent: "build"} = loaded
     end
+
+    test "ImagePart" do
+      part = %Part.Image{media_type: "image/png", data: "base64abc", path: "/tmp/img.png"}
+      assert {:ok, dumped} = Part.dump(part)
+      assert %{"type" => "image", "media_type" => "image/png", "data" => "base64abc"} = dumped
+      assert {:ok, loaded} = Part.load(dumped)
+      assert %Part.Image{media_type: "image/png", data: "base64abc", path: "/tmp/img.png"} = loaded
+    end
+
+    test "unknown type in load falls back to TextPart with inspect" do
+      unknown = %{"type" => "unknown_custom_type", "payload" => "some data"}
+      assert {:ok, %Part.Text{content: text}} = Part.load(unknown)
+      assert text =~ "unknown_custom_type"
+    end
   end
 
   describe "cast" do
