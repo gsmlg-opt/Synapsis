@@ -146,6 +146,15 @@ defmodule Synapsis.Tool.ToolsTest do
       {:ok, output} = Grep.execute(%{"pattern" => "ZZZNONEXISTENT"}, %{project_path: @test_dir})
       assert output =~ "No matches"
     end
+
+    test "rejects path traversal outside project root" do
+      {:error, msg} =
+        Grep.execute(%{"pattern" => "root", "path" => "../../../../etc"}, %{
+          project_path: @test_dir
+        })
+
+      assert msg =~ "outside project root"
+    end
   end
 
   describe "Glob" do
@@ -162,6 +171,13 @@ defmodule Synapsis.Tool.ToolsTest do
     test "returns no matches message" do
       {:ok, output} = Glob.execute(%{"pattern" => "**/*.xyz"}, %{project_path: @test_dir})
       assert output =~ "No files matched"
+    end
+
+    test "rejects base path outside project root" do
+      {:error, msg} =
+        Glob.execute(%{"pattern" => "*", "path" => "/etc"}, %{project_path: @test_dir})
+
+      assert msg =~ "outside project root"
     end
   end
 
@@ -180,6 +196,18 @@ defmodule Synapsis.Tool.ToolsTest do
     test "returns error for missing directory" do
       {:error, msg} = ListDir.execute(%{"path" => "nonexistent"}, %{project_path: @test_dir})
       assert msg =~ "not found" or msg =~ "does not exist"
+    end
+
+    test "rejects path traversal outside project root" do
+      {:error, msg} = ListDir.execute(%{"path" => "/etc"}, %{project_path: @test_dir})
+      assert msg =~ "outside project root"
+    end
+
+    test "rejects relative path traversal" do
+      {:error, msg} =
+        ListDir.execute(%{"path" => "../../../../../../etc"}, %{project_path: @test_dir})
+
+      assert msg =~ "outside project root"
     end
   end
 

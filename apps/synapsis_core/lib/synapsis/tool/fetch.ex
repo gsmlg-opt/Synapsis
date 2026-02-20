@@ -19,10 +19,44 @@ defmodule Synapsis.Tool.Fetch do
     }
   end
 
+  @blocked_hosts ~w(localhost 127.0.0.1 0.0.0.0 ::1 169.254.169.254 metadata.google.internal)
+
   @impl true
   def execute(input, _context) do
     url = input["url"]
 
+    with :ok <- validate_url(url) do
+      fetch_url(url)
+    end
+  end
+
+  defp validate_url(url) do
+    case URI.parse(url) do
+      %URI{scheme: scheme} when scheme not in ["http", "https"] ->
+        {:error, "Only http and https URLs are allowed"}
+
+      %URI{host: host} when is_binary(host) ->
+        if host in @blocked_hosts or private_ip?(host) do
+          {:error, "Access to internal/private addresses is not allowed"}
+        else
+          :ok
+        end
+
+      _ ->
+        {:error, "Invalid URL"}
+    end
+  end
+
+  defp private_ip?(host) do
+    case :inet.parse_address(String.to_charlist(host)) do
+      {:ok, {10, _, _, _}} -> true
+      {:ok, {172, b, _, _}} when b >= 16 and b <= 31 -> true
+      {:ok, {192, 168, _, _}} -> true
+      _ -> false
+    end
+  end
+
+  defp fetch_url(url) do
     case Req.get(url, receive_timeout: 15_000) do
       {:ok, %{status: 200, body: body}} when is_binary(body) ->
         truncated = String.slice(body, 0, 50_000)

@@ -35,6 +35,25 @@ defmodule Synapsis.Tool.Grep do
     cwd = context[:project_path] || "."
     include = input["include"]
 
+    with :ok <- validate_path(search_path, cwd) do
+      execute_search(pattern, search_path, cwd, include)
+    end
+  end
+
+  defp validate_path(_path, nil), do: :ok
+
+  defp validate_path(path, project_path) do
+    abs_path = Path.expand(Path.join(project_path, path))
+    abs_project = Path.expand(project_path)
+
+    if String.starts_with?(abs_path, abs_project) do
+      :ok
+    else
+      {:error, "Path #{path} is outside project root"}
+    end
+  end
+
+  defp execute_search(pattern, search_path, cwd, include) do
     {cmd, args} = build_command(pattern, search_path, include)
 
     port =
