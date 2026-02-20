@@ -72,6 +72,14 @@ defmodule Synapsis.Encrypted.BinaryTest do
     end
   end
 
+  describe "dump/1 error case" do
+    test "rejects non-binary input" do
+      assert :error = Binary.dump(12_345)
+      assert :error = Binary.dump(:atom)
+      assert :error = Binary.dump(["list"])
+    end
+  end
+
   describe "equal?/2" do
     test "nils are equal" do
       assert Binary.equal?(nil, nil)

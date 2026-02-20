@@ -87,5 +87,146 @@ defmodule SynapsisWeb.SessionLive.ShowTest do
       assert {:error, {:live_redirect, %{to: "/projects/" <> _}}} =
                live(conn, ~p"/projects/#{project.id}/sessions/#{bad_id}")
     end
+
+    test "toggle_new_session_form shows and hides the create form", %{
+      conn: conn,
+      project: project,
+      session: session
+    } do
+      {:ok, view, _html} =
+        live(conn, ~p"/projects/#{project.id}/sessions/#{session.id}")
+
+      refute has_element?(view, "button", "Create")
+      view |> element("button", "+ New Session") |> render_click()
+      assert has_element?(view, "button", "Create")
+      view |> element("button", "+ New Session") |> render_click()
+      refute has_element?(view, "button", "Create")
+    end
+
+    test "select_model via value key updates the model", %{
+      conn: conn,
+      project: project,
+      session: session
+    } do
+      {:ok, view, _html} =
+        live(conn, ~p"/projects/#{project.id}/sessions/#{session.id}")
+
+      # Show form so the model input is rendered in the DOM
+      view |> element("button", "+ New Session") |> render_click()
+      render_hook(view, "select_model", %{"value" => "claude-opus-4-20250514"})
+      html = render(view)
+      assert html =~ "claude-opus-4-20250514"
+    end
+
+    test "select_model via model key updates the model", %{
+      conn: conn,
+      project: project,
+      session: session
+    } do
+      {:ok, view, _html} =
+        live(conn, ~p"/projects/#{project.id}/sessions/#{session.id}")
+
+      # Show form so the model input is rendered in the DOM
+      view |> element("button", "+ New Session") |> render_click()
+      render_hook(view, "select_model", %{"model" => "gpt-4o"})
+      html = render(view)
+      assert html =~ "gpt-4o"
+    end
+
+    test "select_provider event updates provider state", %{
+      conn: conn,
+      project: project,
+      session: session
+    } do
+      {:ok, view, _html} =
+        live(conn, ~p"/projects/#{project.id}/sessions/#{session.id}")
+
+      html = render_hook(view, "select_provider", %{"provider" => "anthropic"})
+      assert is_binary(html)
+    end
+
+    test "navigate event redirects to the given path", %{
+      conn: conn,
+      project: project,
+      session: session
+    } do
+      {:ok, view, _html} =
+        live(conn, ~p"/projects/#{project.id}/sessions/#{session.id}")
+
+      assert {:error, {:live_redirect, %{to: "/projects"}}} =
+               render_hook(view, "navigate", %{"path" => "/projects"})
+    end
+
+    test "create_session event creates a new session and navigates", %{
+      conn: conn,
+      project: project,
+      session: session
+    } do
+      {:ok, view, _html} =
+        live(conn, ~p"/projects/#{project.id}/sessions/#{session.id}")
+
+      render_hook(view, "select_model", %{"value" => "claude-sonnet-4-20250514"})
+
+      assert {:error, {:live_redirect, %{to: "/projects/" <> _}}} =
+               render_hook(view, "create_session", %{})
+    end
+
+    test "delete_session on current session navigates to project page", %{
+      conn: conn,
+      project: project,
+      session: session
+    } do
+      {:ok, view, _html} =
+        live(conn, ~p"/projects/#{project.id}/sessions/#{session.id}")
+
+      assert {:error, {:live_redirect, %{to: "/projects/" <> _}}} =
+               render_hook(view, "delete_session", %{"id" => session.id})
+    end
+
+    test "delete_session on another session removes it from the sidebar", %{
+      conn: conn,
+      project: project,
+      session: session
+    } do
+      {:ok, other_session} =
+        %Synapsis.Session{}
+        |> Synapsis.Session.changeset(%{
+          project_id: project.id,
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514",
+          title: "Other Session"
+        })
+        |> Synapsis.Repo.insert()
+
+      {:ok, view, html} =
+        live(conn, ~p"/projects/#{project.id}/sessions/#{session.id}")
+
+      assert html =~ "Other Session"
+      render_hook(view, "delete_session", %{"id" => other_session.id})
+      refute render(view) =~ "Other Session"
+    end
+
+    test "switch_session event navigates to the selected session", %{
+      conn: conn,
+      project: project,
+      session: session
+    } do
+      {:ok, other_session} =
+        %Synapsis.Session{}
+        |> Synapsis.Session.changeset(%{
+          project_id: project.id,
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+        |> Synapsis.Repo.insert()
+
+      {:ok, view, _html} =
+        live(conn, ~p"/projects/#{project.id}/sessions/#{session.id}")
+
+      assert {:error, {:live_redirect, %{to: path}}} =
+               render_hook(view, "switch_session", %{"id" => other_session.id})
+
+      assert path =~ other_session.id
+    end
   end
 end

@@ -232,5 +232,44 @@ defmodule Synapsis.Provider.MessageMapperTest do
       request = MessageMapper.build_request(:google, [], [], %{})
       assert request.model == "gemini-2.0-flash"
     end
+
+    test "formats tool_result parts via generic content handler" do
+      msg = %{
+        role: :user,
+        parts: [
+          %Synapsis.Part.ToolResult{
+            tool_use_id: "toolu_x",
+            content: "file contents here",
+            is_error: false
+          }
+        ]
+      }
+
+      request = MessageMapper.build_request(:google, [msg], [], %{})
+      [m] = request.contents
+      [block] = m.parts
+      assert block.text == "file contents here"
+    end
+
+    test "formats image parts as inlineData" do
+      msg = %{
+        role: :user,
+        parts: [%Synapsis.Part.Image{media_type: "image/png", data: "base64data"}]
+      }
+
+      request = MessageMapper.build_request(:google, [msg], [], %{})
+      [m] = request.contents
+      [block] = m.parts
+      assert block.inlineData.mimeType == "image/png"
+      assert block.inlineData.data == "base64data"
+    end
+
+    test "handles string-keyed messages" do
+      msg = %{"role" => "user", "parts" => [%Synapsis.Part.Text{content: "Hi"}]}
+      request = MessageMapper.build_request(:google, [msg], [], %{})
+      [m] = request.contents
+      assert m.role == "user"
+      assert [%{text: "Hi"}] = m.parts
+    end
   end
 end
