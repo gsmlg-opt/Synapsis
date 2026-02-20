@@ -151,4 +151,95 @@ defmodule Synapsis.Session.SharingTest do
     assert length(msgs) == 1
     assert hd(hd(msgs).parts) == %Synapsis.Part.Text{content: "[imported content]"}
   end
+
+  test "export/1 serializes ToolUse and ToolResult parts", %{session: session} do
+    %Message{}
+    |> Message.changeset(%{
+      session_id: session.id,
+      role: "assistant",
+      parts: [
+        %Synapsis.Part.ToolUse{tool: "bash", tool_use_id: "tu-1", input: %{"cmd" => "ls"}},
+        %Synapsis.Part.ToolResult{tool_use_id: "tu-1", content: "file.txt", is_error: false}
+      ],
+      token_count: 10
+    })
+    |> Repo.insert!()
+
+    {:ok, json} = Sharing.export(session.id)
+    data = Jason.decode!(json)
+    last_parts = List.last(data["messages"])["parts"]
+
+    [tool_use, tool_result] = last_parts
+    assert tool_use["type"] == "tool_use"
+    assert tool_use["tool"] == "bash"
+    assert tool_use["input"] == %{"cmd" => "ls"}
+
+    assert tool_result["type"] == "tool_result"
+    assert tool_result["content"] == "file.txt"
+    assert tool_result["is_error"] == false
+  end
+
+  test "export/1 serializes Reasoning and File parts", %{session: session} do
+    %Message{}
+    |> Message.changeset(%{
+      session_id: session.id,
+      role: "assistant",
+      parts: [
+        %Synapsis.Part.Reasoning{content: "I need to think about this"},
+        %Synapsis.Part.File{path: "/tmp/hello.ex", content: "IO.puts(\"hi\")"}
+      ],
+      token_count: 10
+    })
+    |> Repo.insert!()
+
+    {:ok, json} = Sharing.export(session.id)
+    data = Jason.decode!(json)
+    last_parts = List.last(data["messages"])["parts"]
+
+    [reasoning, file] = last_parts
+    assert reasoning["type"] == "reasoning"
+    assert reasoning["content"] == "I need to think about this"
+
+    assert file["type"] == "file"
+    assert file["path"] == "/tmp/hello.ex"
+    assert file["content"] == "IO.puts(\"hi\")"
+  end
+
+  test "import_session/2 restores Reasoning and File part types", %{session: _session} do
+    json =
+      Jason.encode!(%{
+        "version" => "1.0",
+        "session" => %{
+          "title" => "Part Types",
+          "provider" => "anthropic",
+          "model" => "claude-sonnet-4-20250514",
+          "agent" => "build",
+          "config" => %{}
+        },
+        "messages" => [
+          %{
+            "role" => "assistant",
+            "token_count" => 20,
+            "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
+            "parts" => [
+              %{"type" => "reasoning", "content" => "deep thought"},
+              %{"type" => "file", "path" => "/tmp/x.ex", "content" => "defmodule X, do: :ok"}
+            ]
+          }
+        ]
+      })
+
+    {:ok, imported} =
+      Sharing.import_session(json, "/tmp/sharing-parts-#{System.unique_integer([:positive])}")
+
+    msgs =
+      Synapsis.Message
+      |> Ecto.Query.where([m], m.session_id == ^imported.id)
+      |> Synapsis.Repo.all()
+
+    assert length(msgs) == 1
+    [reasoning, file] = hd(msgs).parts
+    assert %Synapsis.Part.Reasoning{content: "deep thought"} = reasoning
+    assert %Synapsis.Part.File{path: "/tmp/x.ex", content: "defmodule X, do: :ok"} = file
+  end
 end

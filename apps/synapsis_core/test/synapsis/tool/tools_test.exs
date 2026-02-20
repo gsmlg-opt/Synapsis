@@ -298,6 +298,13 @@ defmodule Synapsis.Tool.ToolsTest do
     test "declares file_changed side effect" do
       assert :file_changed in FileDelete.side_effects()
     end
+
+    test "rejects path traversal outside project root" do
+      {:error, msg} =
+        FileDelete.execute(%{"path" => "../../etc/passwd"}, %{project_path: @test_dir})
+
+      assert msg =~ "outside"
+    end
   end
 
   describe "FileMove" do
@@ -328,6 +335,29 @@ defmodule Synapsis.Tool.ToolsTest do
 
     test "declares file_changed side effect" do
       assert :file_changed in FileMove.side_effects()
+    end
+
+    test "rejects source path traversal outside project root" do
+      {:error, msg} =
+        FileMove.execute(
+          %{"source" => "../../etc/passwd", "destination" => "safe_dest.txt"},
+          %{project_path: @test_dir}
+        )
+
+      assert msg =~ "outside"
+    end
+
+    test "rejects destination path traversal outside project root" do
+      source = Path.join(@test_dir, "move_trav_src.txt")
+      File.write!(source, "data")
+
+      {:error, msg} =
+        FileMove.execute(
+          %{"source" => "move_trav_src.txt", "destination" => "../../tmp/evil.txt"},
+          %{project_path: @test_dir}
+        )
+
+      assert msg =~ "outside"
     end
   end
 end
