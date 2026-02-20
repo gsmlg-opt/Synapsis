@@ -53,6 +53,10 @@ defmodule Synapsis.Session.ForkTest do
     assert length(new_messages) == 5
   end
 
+  test "fork/1 returns error for unknown session" do
+    assert {:error, :not_found} = Fork.fork(Ecto.UUID.generate())
+  end
+
   test "fork/2 with at_message copies up to that message", %{session: session, messages: msgs} do
     target = Enum.at(msgs, 2)
 

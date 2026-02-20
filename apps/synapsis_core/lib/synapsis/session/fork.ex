@@ -7,8 +7,15 @@ defmodule Synapsis.Session.Fork do
   def fork(session_id, opts \\ []) do
     message_id = Keyword.get(opts, :at_message)
 
-    session = Repo.get!(Session, session_id) |> Repo.preload(:project)
-    messages = load_messages(session_id)
+    case Repo.get(Session, session_id) do
+      nil -> {:error, :not_found}
+      session -> do_fork(session, message_id)
+    end
+  end
+
+  defp do_fork(session, message_id) do
+    session = Repo.preload(session, :project)
+    messages = load_messages(session.id)
 
     messages_to_copy =
       if message_id do
