@@ -9,7 +9,7 @@ defmodule Synapsis.Session.Worker do
 
   alias Synapsis.{Repo, Session, Message, ContextWindow}
   alias Synapsis.Session.Stream, as: SessionStream
-  alias Synapsis.Session.{Monitor, Orchestrator}
+  alias Synapsis.Session.{Monitor, Orchestrator, WorkspaceManager}
 
   @max_tool_iterations 25
   @inactivity_timeout :timer.minutes(30)
@@ -30,7 +30,8 @@ defmodule Synapsis.Session.Worker do
     retry_count: 0,
     tool_call_hashes: MapSet.new(),
     iteration_count: 0,
-    monitor: nil
+    monitor: nil,
+    worktree_path: nil
   ]
 
   def start_link(opts) do
@@ -79,12 +80,29 @@ defmodule Synapsis.Session.Worker do
     effective_provider = agent[:provider] || session.provider
     provider_config = resolve_provider_config(effective_provider)
 
+    worktree_path =
+      if Synapsis.Git.is_repo?(session.project.path) do
+        case WorkspaceManager.setup(session.project.path, session_id) do
+          {:ok, path} ->
+            path
+
+          {:error, reason} ->
+            Logger.warning("workspace_setup_failed",
+              session_id: session_id,
+              reason: reason
+            )
+
+            nil
+        end
+      end
+
     state = %__MODULE__{
       session_id: session_id,
       session: session,
       agent: agent,
       provider_config: provider_config,
-      monitor: Monitor.new()
+      monitor: Monitor.new(),
+      worktree_path: worktree_path
     }
 
     Logger.info("session_worker_started", session_id: session_id)
@@ -402,6 +420,10 @@ defmodule Synapsis.Session.Worker do
       reason: inspect(reason)
     )
 
+    if state.worktree_path do
+      WorkspaceManager.teardown(state.session.project.path, state.session_id)
+    end
+
     :ok
   end
 
@@ -582,13 +604,15 @@ defmodule Synapsis.Session.Worker do
   defp execute_tool_async(tool_use, state) do
     worker_pid = self()
     project_path = state.session.project.path
+    # Use worktree for file/shell operations when available; fallback to project root
+    effective_path = state.worktree_path || project_path
 
     # Check for duplicate tool calls within the same turn
     call_hash = :erlang.phash2({tool_use.tool, tool_use.input})
     is_duplicate = MapSet.member?(state.tool_call_hashes, call_hash)
 
-    # Auto-checkpoint before write operations
-    if tool_use.tool in ["file_edit", "file_write", "bash"] and
+    # Auto-checkpoint before write operations (only on main tree — worktree tracks via git)
+    if is_nil(state.worktree_path) and tool_use.tool in ["file_edit", "file_write", "bash"] and
          Synapsis.Git.is_repo?(project_path) do
       Synapsis.Git.checkpoint(project_path, "synapsis pre-#{tool_use.tool}")
     end
@@ -596,9 +620,9 @@ defmodule Synapsis.Session.Worker do
     Task.Supervisor.async_nolink(Synapsis.Tool.TaskSupervisor, fn ->
       result =
         Synapsis.Tool.Executor.execute(tool_use.tool, tool_use.input, %{
-          project_path: project_path,
+          project_path: effective_path,
           session_id: state.session_id,
-          working_dir: project_path
+          working_dir: effective_path
         })
 
       case result do
