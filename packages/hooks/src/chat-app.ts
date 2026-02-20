@@ -1,6 +1,7 @@
 import { createRoot, type Root } from "react-dom/client"
 import { createElement } from "react"
 import { ChatApp } from "@synapsis/ui"
+import { ErrorBoundary } from "@synapsis/ui/ErrorBoundary"
 import { createChatStore } from "@synapsis/ui/chat/store"
 import { createSessionChannel, createChannelMiddleware } from "@synapsis/channel"
 import { chatActions } from "@synapsis/ui/chat/store"
@@ -44,12 +45,14 @@ export const ChatAppHook = {
 
     this.root = createRoot(this.el)
     this.root.render(
-      createElement(ChatApp, {
-        store,
-        onNavigate: (path: string) => {
-          this.pushEvent("navigate", { path })
-        },
-      })
+      createElement(ErrorBoundary, null,
+        createElement(ChatApp, {
+          store,
+          onNavigate: (path: string) => {
+            this.pushEvent("navigate", { path })
+          },
+        })
+      )
     )
   },
 

@@ -10,12 +10,15 @@ defmodule Synapsis.Session.Worker do
   alias Synapsis.{Repo, Session, Message, ContextWindow}
   alias Synapsis.Session.Stream, as: SessionStream
 
+  @inactivity_timeout :timer.minutes(30)
+
   defstruct [
     :session_id,
     :session,
     :agent,
     :provider_config,
     :stream_ref,
+    :stream_monitor_ref,
     status: :idle,
     pending_text: "",
     pending_tool_use: nil,
@@ -74,7 +77,7 @@ defmodule Synapsis.Session.Worker do
     }
 
     Logger.info("session_worker_started", session_id: session_id)
-    {:ok, state}
+    {:ok, state, @inactivity_timeout}
   end
 
   @impl true
@@ -154,7 +157,7 @@ defmodule Synapsis.Session.Worker do
     flush_pending(state)
     update_session_status(state.session_id, "idle")
     broadcast(state.session_id, "session_status", %{status: "idle"})
-    {:noreply, %{state | status: :idle, stream_ref: nil}}
+    {:noreply, %{state | status: :idle, stream_ref: nil}, @inactivity_timeout}
   end
 
   def handle_cast(:cancel, state) do
@@ -215,7 +218,7 @@ defmodule Synapsis.Session.Worker do
       update_session_status(state.session_id, "idle")
       broadcast(state.session_id, "done", %{})
       broadcast(state.session_id, "session_status", %{status: "idle"})
-      {:noreply, %{state | status: :idle, stream_ref: nil}}
+      {:noreply, %{state | status: :idle, stream_ref: nil}, @inactivity_timeout}
     else
       update_session_status(state.session_id, "tool_executing")
       broadcast(state.session_id, "session_status", %{status: "tool_executing"})
@@ -241,17 +244,42 @@ defmodule Synapsis.Session.Worker do
     end
   end
 
-  def handle_info({:DOWN, ref, :process, _pid, reason}, %{stream_ref: ref} = state) do
-    if reason != :normal do
-      Logger.warning("stream_process_down", session_id: state.session_id, reason: inspect(reason))
+  def handle_info({:DOWN, ref, :process, _pid, reason}, %{stream_monitor_ref: ref} = state)
+      when reason != :normal do
+    Logger.warning("stream_process_down", session_id: state.session_id, reason: inspect(reason))
+    retry_count = Map.get(state, :retry_count, 0)
+
+    if retry_count < 3 and retriable_error?(inspect(reason)) do
+      Logger.info("provider_retry_after_down",
+        session_id: state.session_id,
+        attempt: retry_count + 1
+      )
+
+      delay = :timer.seconds(trunc(:math.pow(2, retry_count)))
+      Process.send_after(self(), :retry_stream, delay)
+
+      {:noreply,
+       %{state | status: :error, stream_ref: nil, stream_monitor_ref: nil, retry_count: retry_count + 1}}
+    else
       flush_pending(state)
       update_session_status(state.session_id, "error")
-      broadcast(state.session_id, "error", %{message: "Stream process terminated"})
+      broadcast(state.session_id, "error", %{message: "Stream process terminated unexpectedly"})
       broadcast(state.session_id, "session_status", %{status: "error"})
-      {:noreply, %{state | status: :error, stream_ref: nil}}
-    else
-      {:noreply, state}
+      {:noreply, %{state | status: :error, stream_ref: nil, stream_monitor_ref: nil}}
     end
+  end
+
+  def handle_info({:DOWN, _ref, :process, _pid, :normal}, state) do
+    {:noreply, state}
+  end
+
+  def handle_info({:DOWN, _ref, :process, _pid, reason}, state) do
+    Logger.warning("monitored_process_down",
+      session_id: state.session_id,
+      reason: inspect(reason)
+    )
+
+    {:noreply, state}
   end
 
   def handle_info({:tool_result, tool_use_id, result, is_error}, state) do
@@ -281,6 +309,22 @@ defmodule Synapsis.Session.Worker do
     continue_after_tools(remaining, state)
   end
 
+  def handle_info(:timeout, %{status: :idle} = state) do
+    Logger.info("session_inactivity_timeout",
+      session_id: state.session_id,
+      timeout_ms: @inactivity_timeout
+    )
+
+    update_session_status(state.session_id, "idle")
+    broadcast(state.session_id, "session_status", %{status: "idle", reason: "inactivity_timeout"})
+    {:stop, :normal, state}
+  end
+
+  def handle_info(:timeout, state) do
+    # Not idle — reset the timeout by continuing without stopping
+    {:noreply, state, @inactivity_timeout}
+  end
+
   def handle_info(:retry_stream, %{status: :error} = state) do
     messages = load_messages(state.session_id)
     request = Synapsis.MessageBuilder.build_request(messages, state.agent, state.session.provider)
@@ -300,6 +344,7 @@ defmodule Synapsis.Session.Worker do
     end
   end
 
+  def handle_info(_msg, %{status: :idle} = state), do: {:noreply, state, @inactivity_timeout}
   def handle_info(_msg, state), do: {:noreply, state}
 
   @impl true
