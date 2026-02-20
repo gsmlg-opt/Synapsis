@@ -137,8 +137,14 @@ defmodule Synapsis.Providers do
   defp default_base_url(_), do: nil
 
   defp atomize_keys(map) when is_map(map) do
-    Map.new(map, fn {k, v} -> {String.to_atom(k), v} end)
-  rescue
-    _ -> map
+    Map.new(map, fn {k, v} -> {safe_to_atom(k), v} end)
   end
+
+  defp safe_to_atom(k) when is_binary(k) do
+    String.to_existing_atom(k)
+  rescue
+    ArgumentError -> k
+  end
+
+  defp safe_to_atom(k), do: k
 end

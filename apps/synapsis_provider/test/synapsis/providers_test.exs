@@ -162,4 +162,39 @@ defmodule Synapsis.ProvidersTest do
       assert {:error, :not_found} = ProviderRegistry.get("disabled-one")
     end
   end
+
+  describe "build_runtime_config/1 (via create + registry)" do
+    test "config with known atom keys are atomized safely" do
+      # base_url is a known atom — should be present in runtime config as atom key
+      {:ok, provider} =
+        Providers.create(%{
+          @valid_attrs
+          | name: "atom-test-provider"
+        })
+
+      {:ok, config} = ProviderRegistry.get("atom-test-provider")
+      assert Map.has_key?(config, :api_key)
+      assert Map.has_key?(config, :type)
+      assert config.type == "anthropic"
+    end
+
+    test "config with unknown string keys does not raise" do
+      # Provider.config JSONB field with an unknown key — safe_to_atom uses to_existing_atom
+      # so unknown atoms stay as strings rather than polluting the atom table
+      {:ok, _provider} =
+        Providers.create(%{
+          name: "unknown-key-provider",
+          type: "anthropic",
+          api_key_encrypted: "sk-test",
+          enabled: true,
+          config: %{"unk_key_#{:rand.uniform(999_999_999)}" => "value"}
+        })
+
+      # The registry should be reachable and contain known atom keys
+      {:ok, config} = ProviderRegistry.get("unknown-key-provider")
+      assert is_map(config)
+      assert Map.has_key?(config, :api_key)
+      assert Map.has_key?(config, :type)
+    end
+  end
 end
