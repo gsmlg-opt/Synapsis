@@ -5,7 +5,7 @@
   "type": "module",
   "main": "src/index.ts",
   "dependencies": {
-    "phoenix": "file:../../../deps/phoenix"
+    "phoenix": "1.8.3"
   },
   "peerDependencies": {
     "@reduxjs/toolkit": "^2.0.0"
