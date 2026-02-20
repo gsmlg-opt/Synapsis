@@ -81,6 +81,20 @@ defmodule Synapsis.ConfigTest do
     end
   end
 
+  describe "load_user_config/0" do
+    test "returns a map (empty when file absent)" do
+      result = Config.load_user_config()
+      assert is_map(result)
+    end
+  end
+
+  describe "load_auth/0" do
+    test "returns a map (empty when file absent)" do
+      result = Config.load_auth()
+      assert is_map(result)
+    end
+  end
+
   describe "load_env_overrides/0" do
     test "picks up ANTHROPIC_API_KEY from env" do
       System.put_env("ANTHROPIC_API_KEY", "test-key-123")
