@@ -145,6 +145,10 @@ defmodule Synapsis.ProvidersTest do
       {:ok, updated} = Providers.authenticate(provider.id, "new-api-key")
       assert updated.api_key_encrypted == "new-api-key"
     end
+
+    test "returns error for missing provider" do
+      assert {:error, :not_found} = Providers.authenticate(Ecto.UUID.generate(), "new-key")
+    end
   end
 
   describe "load_all_into_registry/0" do

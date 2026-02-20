@@ -51,7 +51,7 @@ defmodule Synapsis.Tool.FileEdit do
 
         _multiple ->
           # Multiple occurrences - replace only the first
-          {before, _} = :binary.split(content, old_string)
+          [before | _] = :binary.split(content, old_string)
 
           rest =
             :binary.part(

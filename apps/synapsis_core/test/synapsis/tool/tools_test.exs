@@ -133,6 +133,21 @@ defmodule Synapsis.Tool.ToolsTest do
     test "declares file_changed side effect" do
       assert :file_changed in FileEdit.side_effects()
     end
+
+    test "replaces only first occurrence when string appears multiple times" do
+      test_file = Path.join(@test_dir, "multi_edit_test.txt")
+      File.write!(test_file, "foo bar foo bar foo")
+
+      {:ok, msg} =
+        FileEdit.execute(
+          %{"path" => "multi_edit_test.txt", "old_string" => "foo", "new_string" => "XXX"},
+          %{project_path: @test_dir}
+        )
+
+      assert msg =~ "replaced first occurrence"
+      content = File.read!(test_file)
+      assert content == "XXX bar foo bar foo"
+    end
   end
 
   describe "Bash" do
