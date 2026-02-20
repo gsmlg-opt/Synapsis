@@ -53,5 +53,14 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
       html = render(view)
       refute html =~ "deletable"
     end
+
+    test "create_config with empty name shows error flash", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings/mcp")
+      view
+      |> form("form", %{"name" => "", "command" => "npx", "args" => "", "env" => ""})
+      |> render_submit()
+
+      assert render(view) =~ "Failed to add MCP server"
+    end
   end
 end

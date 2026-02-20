@@ -48,5 +48,11 @@ defmodule SynapsisWeb.LSPLive.IndexTest do
       html = render(view)
       refute html =~ "rust-analyzer"
     end
+
+    test "create_config with empty command shows error flash", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings/lsp")
+      view |> form("form", %{"language" => "", "command" => ""}) |> render_submit()
+      assert render(view) =~ "Failed to add LSP server"
+    end
   end
 end
