@@ -45,17 +45,17 @@ mix compile --force
 ### Test Suite
 
 ```
-Total: 357 tests across 7 apps
-  synapsis_data:     51 tests, 0 failures
+Total: 449 tests across 7 apps, 0 failures
+  synapsis_data:     65 tests, 0 failures
   synapsis_cli:      12 tests, 0 failures
-  synapsis_provider: 104 tests, 3 failures (test DB pollution)
-  synapsis_core:     85 tests, 0 failures
+  synapsis_provider: 104 tests, 0 failures
+  synapsis_core:     150 tests, 0 failures
   synapsis_plugin:   51 tests, 0 failures
-  synapsis_server:   26 tests, 0 failures
-  synapsis_web:      29 tests, 2 failures (test DB pollution)
+  synapsis_server:   38 tests, 0 failures
+  synapsis_web:      29 tests, 0 failures
 ```
 
-**5 failures explained:** All caused by pre-existing data in the test database from prior sessions (provider configs and projects already exist, causing `assert providers == []` and `assert html =~ "No projects yet."` to fail). These are test isolation issues, not code bugs. Running with a clean test DB would produce 0 failures.
+**Updated 2026-02-21:** All 449 tests pass with zero failures after adding orchestration module tests, SessionChannel event tests, and fixing prior test isolation issues.
 
 ### Server Boot
 
