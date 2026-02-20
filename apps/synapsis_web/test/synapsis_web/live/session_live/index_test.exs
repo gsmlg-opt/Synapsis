@@ -1,0 +1,56 @@
+defmodule SynapsisWeb.SessionLive.IndexTest do
+  use SynapsisWeb.ConnCase
+
+  setup do
+    {:ok, project} =
+      %Synapsis.Project{}
+      |> Synapsis.Project.changeset(%{
+        path: "/tmp/sess_idx_#{:rand.uniform(100_000)}",
+        slug: "sess-idx"
+      })
+      |> Synapsis.Repo.insert()
+
+    %{project: project}
+  end
+
+  describe "session index page" do
+    test "mounts and renders session list heading", %{conn: conn, project: project} do
+      {:ok, view, html} = live(conn, ~p"/projects/#{project.id}/sessions")
+      assert html =~ "Sessions"
+      assert has_element?(view, "h1", "Sessions")
+    end
+
+    test "shows project breadcrumb", %{conn: conn, project: project} do
+      {:ok, _view, html} = live(conn, ~p"/projects/#{project.id}/sessions")
+      assert html =~ project.slug
+    end
+
+    test "renders new session button", %{conn: conn, project: project} do
+      {:ok, view, _html} = live(conn, ~p"/projects/#{project.id}/sessions")
+      assert has_element?(view, "button", "+ New Session")
+    end
+
+    test "lists sessions for the project", %{conn: conn, project: project} do
+      {:ok, _session} =
+        %Synapsis.Session{}
+        |> Synapsis.Session.changeset(%{
+          project_id: project.id,
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514",
+          title: "Listed Session"
+        })
+        |> Synapsis.Repo.insert()
+
+      {:ok, _view, html} = live(conn, ~p"/projects/#{project.id}/sessions")
+      assert html =~ "Listed Session"
+      assert html =~ "anthropic/claude-sonnet-4-20250514"
+    end
+
+    test "redirects with flash on invalid project", %{conn: conn} do
+      bad_id = Ecto.UUID.generate()
+
+      assert {:error, {:live_redirect, %{to: "/projects"}}} =
+               live(conn, ~p"/projects/#{bad_id}/sessions")
+    end
+  end
+end
