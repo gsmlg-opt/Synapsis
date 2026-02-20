@@ -231,4 +231,31 @@ defmodule Synapsis.Session.WorkerTest do
       assert Process.alive?(pid)
     end
   end
+
+  describe "handle_cast(:cancel)" do
+    test "no-ops when status is idle", %{session: session} do
+      {:ok, _pid} = start_supervised({Worker, session_id: session.id})
+      Worker.cancel(session.id)
+      :timer.sleep(50)
+      assert Worker.get_status(session.id) == :idle
+    end
+  end
+
+  describe "handle_info catch-all" do
+    test "unknown messages ignored when idle", %{session: session} do
+      {:ok, pid} = start_supervised({Worker, session_id: session.id})
+      send(pid, :unexpected_random_message)
+      :timer.sleep(50)
+      assert Process.alive?(pid)
+      assert Worker.get_status(session.id) == :idle
+    end
+
+    test "unknown messages ignored when not idle", %{session: session} do
+      {:ok, pid} = start_supervised({Worker, session_id: session.id})
+      :sys.replace_state(pid, fn state -> %{state | status: :streaming} end)
+      send(pid, :unexpected_random_message)
+      :timer.sleep(50)
+      assert Process.alive?(pid)
+    end
+  end
 end
