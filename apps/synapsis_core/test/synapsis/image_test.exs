@@ -59,12 +59,20 @@ defmodule Synapsis.ImageTest do
     assert result["source"]["data"] == "abc"
   end
 
-  test "to_openai_content/1 formats for OpenAI API" do
+  test "to_openai_content/1 formats base64 image for OpenAI API" do
     result =
       Synapsis.Image.to_openai_content(%{type: "image", media_type: "image/png", data: "abc"})
 
     assert result["type"] == "image_url"
     assert result["image_url"]["url"] =~ "data:image/png;base64,abc"
+  end
+
+  test "to_openai_content/1 passes through image_url type" do
+    result =
+      Synapsis.Image.to_openai_content(%{type: "image_url", url: "https://example.com/img.jpg"})
+
+    assert result["type"] == "image_url"
+    assert result["image_url"]["url"] == "https://example.com/img.jpg"
   end
 
   test "to_google_content/1 formats for Google API" do

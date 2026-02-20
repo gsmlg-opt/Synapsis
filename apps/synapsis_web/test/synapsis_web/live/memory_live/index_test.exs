@@ -52,5 +52,21 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
       html = render(view)
       assert html =~ "gk"
     end
+
+    test "deletes a memory entry", %{conn: conn} do
+      {:ok, entry} =
+        %Synapsis.MemoryEntry{}
+        |> Synapsis.MemoryEntry.changeset(%{scope: "global", key: "to-delete-key", content: "bye"})
+        |> Synapsis.Repo.insert()
+
+      {:ok, view, html} = live(conn, ~p"/settings/memory")
+      assert html =~ "to-delete-key"
+
+      view
+      |> element(~s(button[phx-click="delete_entry"][phx-value-id="#{entry.id}"]))
+      |> render_click()
+
+      refute render(view) =~ "to-delete-key"
+    end
   end
 end
