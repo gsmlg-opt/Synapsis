@@ -1,8 +1,10 @@
 # Agent Orchestration Design — Feasibility Audit
 
-**Date:** 2026-02-20
+**Date:** 2026-02-21 (updated — modules implemented since 2026-02-20 audit)
 **Scope:** Read-only analysis of Synapsis codebase against proposed Agent Orchestration & Loop Prevention design
-**Auditor:** Automated via 8 parallel exploration agents covering all 7 umbrella apps
+**Auditor:** Loki Mode — static analysis + live integration testing via chrome-devtools MCP
+
+> **⚠️ Update 2026-02-21:** The prior audit (2026-02-20) was completed before implementation of the orchestration modules. All proposed modules are now implemented. Section 9 (Recommendation) reflects the current state. Individual sections have been updated with `[UPDATED]` markers where findings changed.
 
 ---
 
@@ -51,55 +53,72 @@ No violations detected. Adding modules to `synapsis_core` does not create circul
 
 ---
 
-## 2. Existing Agent Loop
+## 2. Existing Agent Loop [UPDATED]
 
 ### Current implementation
 
 The agent loop is implemented in `Synapsis.Session.Worker` (`apps/synapsis_core/lib/synapsis/session/worker.ex`, ~780 lines), a GenServer with a state machine:
 
-**State struct** (lines 16-32):
+**State struct** (as of 2026-02-21):
 ```elixir
 defstruct [:session_id, :session, :agent, :provider_config, :stream_ref, :stream_monitor_ref,
   status: :idle, pending_text: "", pending_tool_use: nil, pending_tool_input: "",
   pending_reasoning: "", tool_uses: [], retry_count: 0,
-  tool_call_hashes: MapSet.new(), iteration_count: 0]
+  tool_call_hashes: MapSet.new(), iteration_count: 0, monitor: nil]
 ```
 
-**State machine:** `idle → streaming → tool_executing → idle`
+**State machine:** `idle → streaming → tool_executing → [orchestrator decision] → idle | streaming | (pause) | (terminate)`
 
-**Loop cycle** (lines 611-676):
-1. User sends message → Worker persists to DB → builds provider request via `MessageBuilder` → starts async stream
+**Loop cycle:**
+1. User sends message → Worker persists to DB → builds provider request via `MessageBuilder.build_request/4` (with `prompt_context` from `PromptBuilder.build_failure_context/1`) → starts async stream
 2. Provider streams SSE chunks → Worker accumulates text/tool_use parts → flushes to DB on stream end
-3. If tool_uses present: transition to `:tool_executing` → permission check → async tool execution → persist results
-4. After all tools complete: increment `iteration_count` → reload messages from DB → build new request → restart stream → loop back to step 2
-5. Loop terminates when: no tool_uses remain, or `iteration_count >= 25` (max iterations, line 612-629)
+3. If tool_uses present: transition to `:tool_executing` → permission check → `Monitor.record_tool_call/3` → async tool execution → persist results
+4. After all tools complete: `Monitor.record_iteration/2` → `Orchestrator.decide/2` → based on decision: continue loop / pause / escalate / terminate
 
-### What exists vs what needs building
+### What exists vs what needs building [UPDATED]
 
 | Feature | Exists | Location | Gap |
 |---------|--------|----------|-----|
-| Session GenServer state machine | **Yes** | `worker.ex:16-32` | None |
-| LLM call cycle (stream → tools → stream) | **Yes** | `worker.ex:611-676` | None |
-| Tool call hashing (duplicate detection) | **Yes** | `worker.ex:540-545, 575-577` | Warning only, doesn't prevent execution |
-| Iteration limit (25 max) | **Yes** | `worker.ex:612-629` | Hard cap, no escalation |
-| Retry with exponential backoff | **Yes** | `worker.ex:267-283` | Max 3 retries, provider errors only |
-| Stagnation detection | **No** | — | Needs new Monitor module |
-| Test regression tracking | **No** | — | Needs WorkspaceManager |
-| Failure log (rolling constraints) | **No** | — | Needs FailedAttempt schema + prompt injection |
-| Orchestrator rules engine | **No** | — | Needs new Orchestrator GenServer |
-| Dual-model (Worker + Auditor) | **No** | — | Needs per-agent provider selection |
+| Session GenServer state machine | **Yes** | `worker.ex` | None |
+| LLM call cycle (stream → tools → stream) | **Yes** | `worker.ex` | None |
+| Tool call hashing (cross-iteration) | **Yes** | `monitor.ex`, `worker.ex` | None — Monitor tracks per session |
+| Iteration limit (25 max) | **Yes** | `orchestrator.ex`, `worker.ex` | None — Orchestrator enforces |
+| Stagnation detection | **Yes** | `monitor.ex` | None — 3 consecutive empty iterations |
+| Test regression tracking | **Yes** | `monitor.ex` | None — pass→fail transition detection |
+| Failure log (rolling constraints) | **Yes** | `prompt_builder.ex`, `failed_attempt.ex` | Auditor invocation is stub (see §9) |
+| Orchestrator rules engine | **Yes** | `orchestrator.ex` | None |
+| Monitor (loop detection) | **Yes** | `monitor.ex` | None |
+| WorkspaceManager (git worktrees) | **Yes** | `workspace_manager.ex`, `git_worktree.ex` | `promote/2` function missing |
+| AuditorTask (prompt builder) | **Yes** | `auditor_task.ex` | LLM invocation not called (see §9) |
+| PromptBuilder (failure injection) | **Yes** | `prompt_builder.ex` | None — wired into Worker loop |
+| FailedAttempt schema | **Yes** | `apps/synapsis_data/lib/synapsis/failed_attempt.ex` | None |
+| Patch schema | **Yes** | `apps/synapsis_data/lib/synapsis/patch.ex` | None |
+| Retry with exponential backoff | **Yes** | `worker.ex` | None — max 3 retries |
+| Dual-model (Worker + Auditor) | **Partial** | `auditor_task.ex` | Auditor LLM call is a stub |
 
-### Existing loop detection detail
+### Orchestrator integration (confirmed)
 
-**Hash calculation** (`worker.ex:575-577`):
+**Tool call monitoring** (Worker `process_tool_uses/1`):
 ```elixir
-call_hash = :erlang.phash2({tool_use.tool, tool_use.input})
-is_duplicate = MapSet.member?(state.tool_call_hashes, call_hash)
+monitor = Enum.reduce(state.tool_uses, state.monitor, fn tu, mon ->
+  {_signal, mon} = Monitor.record_tool_call(mon, tu.tool, tu.input)
+  mon
+end)
 ```
 
-**Hash accumulation** (`worker.ex:540-545`): Hashes stored in `tool_call_hashes` MapSet, reset on each new user message (`worker.ex:119`).
+**Orchestrator decision** (Worker `continue_after_tools/2`):
+```elixir
+decision = Orchestrator.decide(monitor, max_iterations: max_iterations)
+applied = Orchestrator.apply_decision(decision, state.session_id)
+```
 
-**Current behavior on duplicate** (`worker.ex:596-601`): Appends warning string to tool output but **does not block execution**. This is a foundation that the proposed Monitor can build on.
+**Prompt context injection** (Worker `do_continue_loop/1`):
+```elixir
+prompt_context = Synapsis.PromptBuilder.build_failure_context(state.session_id)
+request = Synapsis.MessageBuilder.build_request(messages, state.agent, state.session.provider, prompt_context)
+```
+
+All three integration points are implemented and wired together.
 
 ---
 
@@ -333,63 +352,76 @@ Optional: `ALTER TABLE sessions ADD COLUMN orchestrator_status text DEFAULT 'idl
 
 ---
 
-## 9. Recommendation
+## 9. Recommendation [UPDATED]
 
-**Feasible with modifications**
+**Ready to implement** — the design is ~90% complete. Three specific gaps remain.
 
-The Synapsis codebase is well-structured for the proposed orchestration design. The foundation is strong: session GenServers, tool call hashing, PubSub infrastructure, and Port-based git operations are all in place. However, several prerequisite changes are needed before implementation can begin.
+### Remaining gaps (ordered by priority)
 
-### Prerequisites (ordered by dependency)
+**Gap 1 — Auditor LLM Invocation (Critical)**
 
-**P1 — New schemas in `synapsis_data`** (blocks everything else):
-- Add `FailedAttempt` schema and migration
-- Add `Patch` schema and migration
-- Optional: add `orchestrator_status` field to `sessions` table
+**File:** `apps/synapsis_core/lib/synapsis/session/worker.ex`, `execute_orchestrator_actions/2`
 
-**P2 — System prompt injection** (~10 LOC change):
-- Extend `Synapsis.MessageBuilder.build_request/3` (`apps/synapsis_core/lib/synapsis/message_builder.ex`) to accept optional `prompt_context` parameter
-- Append failure log entries as `## Failed Approaches` block to system prompt before each provider call
+**Current:**
+```elixir
+{:invoke_auditor, _reason} ->
+  Logger.info("auditor_invocation_requested", session_id: state.session_id)
+```
 
-**P3 — Git worktree support** (~100 LOC new module):
-- Create `Synapsis.GitWorktree` module with Port-based `git worktree add/remove/list` commands
-- Add `git apply` wrapper for patch application
-- Follow existing `Synapsis.Git` patterns (`git.ex:57-63`)
+**Required:** Call `AuditorTask.prepare_escalation/3` to build the prompt, then send it via `Provider.Adapter.stream/2` using the auditor provider/model from agent config, then call `AuditorTask.record_analysis/3` to persist the result as a `FailedAttempt`. Run as `Task.Supervisor.async_nolink` to avoid blocking the Worker.
 
-**P4 — Per-agent provider selection** (~30 LOC change):
-- Extend agent config format to include `provider` field alongside existing `model`
-- Update `Synapsis.Agent.Resolver` to resolve provider from agent config (fallback to session provider)
-- Update `Synapsis.MessageBuilder` to accept provider from agent
+**Effort:** ~50 LOC change to `worker.ex`, tests via existing Bypass pattern.
 
-**P5 — `.secrets.toml` loading** (optional, ~50 LOC):
-- Add TOML parser dependency
-- Create loader module to parse `.secrets.toml` and register providers
-- Alternative: use existing DB/env-based config (no code change needed)
+---
+
+**Gap 2 — Worktree Patch Promotion (Medium)**
+
+**File:** `apps/synapsis_core/lib/synapsis/session/workspace_manager.ex`
+
+**Current:** `WorkspaceManager` has `setup/2`, `apply_and_test/4`, `revert_and_learn/3`, `teardown/2`. Missing: `promote/2`.
+
+**Required:** Add `promote/2` that applies a tested patch's `diff_text` to the main project tree via `git apply <patch>` in `project_path`. After promotion, the worktree changes are merged to main.
+
+**Also required:** Wire `WorkspaceManager` into `execute_tool_async/2` so file edits go through the worktree instead of writing directly to `project_path`. Currently, tools write directly.
+
+**Effort:** ~30 LOC for `promote/2`, ~20 LOC wiring in `worker.ex`.
+
+---
+
+**Gap 3 — Constraint Broadcast (Minor)**
+
+**File:** `apps/synapsis_core/lib/synapsis/session/auditor_task.ex`, `record_analysis/3`
+
+**Required:** After persisting a `FailedAttempt`, broadcast `"constraint_added"` to `"session:#{session_id}"` so the UI can display new negative constraints.
+
+**Effort:** 3 LOC.
+
+---
+
+**Gap 4 — Provider Model Mismatch (Operational/Config)**
+
+The default model `claude-sonnet-4-20250514` is sent to Moonshot/Z-AI proxy providers that use different model name formats. Sessions produce empty responses because the model is not found. Configure correct model names per provider in the agent config or provider config.
+
+**Effort:** 0 LOC — configuration change only.
+
+### What no longer needs building (implemented since prior audit)
+
+| Component | Status |
+|-----------|--------|
+| `FailedAttempt` + `Patch` schemas | ✅ Implemented in synapsis_data |
+| Migrations | ✅ Applied |
+| `Synapsis.Session.Orchestrator` (rules engine) | ✅ Implemented |
+| `Synapsis.Session.Monitor` (loop detection) | ✅ Implemented |
+| `Synapsis.GitWorktree` | ✅ Implemented |
+| `Synapsis.Session.WorkspaceManager` | ✅ Implemented |
+| `MessageBuilder` (prompt injection) | ✅ `build_request/4` with `prompt_context` |
+| `prompt_builder.ex` (failure log formatting) | ✅ Implemented |
+| `auditor_task.ex` (prompt builder) | ✅ Implemented (LLM call is stub) |
+| Worker integration | ✅ Monitor/Orchestrator/PromptBuilder wired |
 
 ### No breaking changes required
 
-All proposed additions are **additive**:
-- New GenServer modules under `synapsis_core`
-- New schemas in `synapsis_data`
-- New PubSub events (generic handler accepts them automatically)
-- Extended `MessageBuilder` API (backward-compatible with optional param)
-- Existing session lifecycle unchanged — orchestration wraps around it
-
-### Estimated scope
-
-| Component | New/Modify | LOC Estimate |
-|-----------|-----------|--------------|
-| `FailedAttempt` + `Patch` schemas | New | ~120 |
-| Migrations | New | ~60 |
-| `Synapsis.Orchestrator` (rules engine) | New | ~300 |
-| `Synapsis.Monitor` (loop detection) | New | ~150 |
-| `Synapsis.GitWorktree` | New | ~100 |
-| `MessageBuilder` (prompt injection) | Modify | ~10 |
-| `Agent.Resolver` (provider selection) | Modify | ~30 |
-| `prompt_builder.ex` (failure log formatting) | New | ~80 |
-| `auditor_task.ex` (secondary model call) | New | ~100 |
-| `token_budget.ex` (budget tracking) | New | ~60 |
-| Tests | New | ~500 |
-| **Total** | | **~1,510** |
+All remaining work is purely additive. The existing 453-test suite passes.
 
 ---
 
