@@ -9,6 +9,7 @@ defmodule Synapsis.Session.Worker do
 
   alias Synapsis.{Repo, Session, Message, ContextWindow}
   alias Synapsis.Session.Stream, as: SessionStream
+  alias Synapsis.Session.{Monitor, Orchestrator}
 
   @max_tool_iterations 25
   @inactivity_timeout :timer.minutes(30)
@@ -28,7 +29,8 @@ defmodule Synapsis.Session.Worker do
     tool_uses: [],
     retry_count: 0,
     tool_call_hashes: MapSet.new(),
-    iteration_count: 0
+    iteration_count: 0,
+    monitor: nil
   ]
 
   def start_link(opts) do
@@ -81,7 +83,8 @@ defmodule Synapsis.Session.Worker do
       session_id: session_id,
       session: session,
       agent: agent,
-      provider_config: provider_config
+      provider_config: provider_config,
+      monitor: Monitor.new()
     }
 
     Logger.info("session_worker_started", session_id: session_id)
@@ -117,7 +120,7 @@ defmodule Synapsis.Session.Worker do
     request = Synapsis.MessageBuilder.build_request(messages, state.agent, state.session.provider)
 
     # Reset loop safety counters on new user message
-    state = %{state | tool_call_hashes: MapSet.new(), iteration_count: 0}
+    state = %{state | tool_call_hashes: MapSet.new(), iteration_count: 0, monitor: Monitor.new()}
 
     case SessionStream.start_stream(request, state.provider_config, state.session.provider) do
       {:ok, ref} ->
@@ -543,7 +546,14 @@ defmodule Synapsis.Session.Worker do
         MapSet.put(acc, :erlang.phash2({tu.tool, tu.input}))
       end)
 
-    state = %{state | tool_call_hashes: new_hashes}
+    # Feed tool calls to Monitor for cross-iteration tracking
+    monitor =
+      Enum.reduce(state.tool_uses, state.monitor, fn tu, mon ->
+        {_signal, mon} = Monitor.record_tool_call(mon, tu.tool, tu.input)
+        mon
+      end)
+
+    state = %{state | tool_call_hashes: new_hashes, monitor: monitor}
 
     for tool_use <- state.tool_uses do
       permission = Synapsis.Tool.Permission.check(tool_use.tool, state.session)
@@ -610,74 +620,110 @@ defmodule Synapsis.Session.Worker do
   end
 
   defp continue_after_tools([], state) do
-    # Increment iteration count and check limit
+    # Record iteration in Monitor
     iteration_count = state.iteration_count + 1
+    has_output = state.pending_text != "" or length(state.tool_uses) > 0
+    {_signals, monitor} = Monitor.record_iteration(state.monitor, has_output)
+    state = %{state | iteration_count: iteration_count, monitor: monitor}
 
+    # Consult Orchestrator for continue/pause/escalate/terminate decision
     max_iterations =
       Application.get_env(:synapsis_core, :max_tool_iterations, @max_tool_iterations)
 
-    if iteration_count >= max_iterations do
-      Logger.warning("max_tool_iterations_reached",
-        session_id: state.session_id,
-        iterations: iteration_count
-      )
+    decision = Orchestrator.decide(monitor, max_iterations: max_iterations)
+    applied = Orchestrator.apply_decision(decision, state.session_id)
 
-      # Persist a system message about the limit
-      limit_part = %Synapsis.Part.Text{
-        content:
-          "Reached maximum tool iterations (#{max_iterations}). Stopping to prevent infinite loop."
-      }
+    case applied.decision do
+      :continue ->
+        do_continue_loop(state)
 
-      {:ok, _msg} =
-        %Message{}
-        |> Message.changeset(%{
-          session_id: state.session_id,
-          role: "assistant",
-          parts: [limit_part],
-          token_count: 20
-        })
-        |> Repo.insert()
+      :pause ->
+        execute_orchestrator_actions(applied.actions, state)
 
-      update_session_status(state.session_id, "idle")
-      broadcast(state.session_id, "max_iterations", %{iterations: iteration_count})
-      broadcast(state.session_id, "session_status", %{status: "idle"})
+        {:noreply,
+         %{state | status: :idle, stream_ref: nil, tool_uses: []}}
 
-      {:noreply,
-       %{state | status: :idle, stream_ref: nil, tool_uses: [], iteration_count: iteration_count}}
-    else
-      state = %{state | iteration_count: iteration_count}
+      :escalate ->
+        execute_orchestrator_actions(applied.actions, state)
 
-      # All tools processed, continue the agent loop
-      messages = load_messages(state.session_id)
+        {:noreply,
+         %{state | status: :idle, stream_ref: nil, tool_uses: []}}
 
-      request =
-        Synapsis.MessageBuilder.build_request(messages, state.agent, state.session.provider)
+      :terminate ->
+        execute_orchestrator_actions(applied.actions, state)
 
-      case SessionStream.start_stream(request, state.provider_config, state.session.provider) do
-        {:ok, ref} ->
-          update_session_status(state.session_id, "streaming")
-          broadcast(state.session_id, "session_status", %{status: "streaming"})
-
-          {:noreply,
-           %{
-             state
-             | status: :streaming,
-               stream_ref: ref,
-               pending_text: "",
-               tool_uses: [],
-               pending_reasoning: ""
-           }}
-
-        {:error, reason} ->
-          update_session_status(state.session_id, "error")
-          broadcast(state.session_id, "error", %{message: inspect(reason)})
-          {:noreply, %{state | status: :error}}
-      end
+        {:noreply,
+         %{state | status: :idle, stream_ref: nil, tool_uses: []}}
     end
   end
 
   defp continue_after_tools(remaining, state) do
     {:noreply, %{state | tool_uses: remaining}}
+  end
+
+  defp do_continue_loop(state) do
+    # All tools processed, continue the agent loop with prompt context injection
+    messages = load_messages(state.session_id)
+    prompt_context = Synapsis.PromptBuilder.build_failure_context(state.session_id)
+
+    request =
+      Synapsis.MessageBuilder.build_request(
+        messages,
+        state.agent,
+        state.session.provider,
+        prompt_context
+      )
+
+    case SessionStream.start_stream(request, state.provider_config, state.session.provider) do
+      {:ok, ref} ->
+        update_session_status(state.session_id, "streaming")
+        broadcast(state.session_id, "session_status", %{status: "streaming"})
+
+        {:noreply,
+         %{
+           state
+           | status: :streaming,
+             stream_ref: ref,
+             pending_text: "",
+             tool_uses: [],
+             pending_reasoning: ""
+         }}
+
+      {:error, reason} ->
+        update_session_status(state.session_id, "error")
+        broadcast(state.session_id, "error", %{message: inspect(reason)})
+        {:noreply, %{state | status: :error}}
+    end
+  end
+
+  defp execute_orchestrator_actions(actions, state) do
+    Enum.each(actions, fn
+      {:broadcast, event, payload} ->
+        broadcast(state.session_id, event, payload)
+
+      {:set_status, status} ->
+        update_session_status(state.session_id, to_string(status))
+        broadcast(state.session_id, "session_status", %{status: to_string(status)})
+
+      {:persist_message, text} ->
+        part = %Synapsis.Part.Text{content: text}
+
+        {:ok, _msg} =
+          %Message{}
+          |> Message.changeset(%{
+            session_id: state.session_id,
+            role: "assistant",
+            parts: [part],
+            token_count: 20
+          })
+          |> Repo.insert()
+
+      {:invoke_auditor, _reason} ->
+        # Auditor invocation is handled asynchronously — the Worker
+        # transitions to idle and the auditor result will come back
+        # as a new user message or system event
+        Logger.info("auditor_invocation_requested", session_id: state.session_id)
+    end)
   end
 
   defp load_messages(session_id) do
