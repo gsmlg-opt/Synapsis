@@ -283,6 +283,33 @@ defmodule Synapsis.Provider.AdapterTest do
       assert {:error, reason} = Adapter.complete(request, config)
       assert reason != nil
     end
+
+    test "Google complete sends API key in header not URL", %{bypass: bypass, port: port} do
+      Bypass.expect_once(bypass, "POST", "/v1beta/models/gemini-2.0-flash:generateContent", fn conn ->
+        headers = Map.new(conn.req_headers)
+        assert headers["x-goog-api-key"] == "secret-key"
+        refute conn.query_string =~ "key="
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(
+          200,
+          Jason.encode!(%{
+            "candidates" => [
+              %{"content" => %{"parts" => [%{"text" => "Gemini response"}]}}
+            ]
+          })
+        )
+      end)
+
+      config = %{api_key: "secret-key", base_url: "http://localhost:#{port}", type: "google"}
+
+      request =
+        Adapter.format_request([], [], %{model: "gemini-2.0-flash", provider_type: "google"})
+
+      request = Map.put(request, :stream, false)
+      assert {:ok, "Gemini response"} = Adapter.complete(request, config)
+    end
   end
 
   # ---------------------------------------------------------------------------
