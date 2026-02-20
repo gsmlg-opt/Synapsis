@@ -146,4 +146,53 @@ defmodule SynapsisServer.SessionChannelTest do
     refute payload.reason =~ "#"
     refute payload.reason =~ "%{"
   end
+
+  test "session:message with images list is accepted", %{socket: socket} do
+    ref = push(socket, "session:message", %{"content" => "hello with images", "images" => []})
+    assert_reply ref, :ok
+  end
+
+  test "handle_info ignores unknown messages without crashing", %{socket: socket} do
+    send(socket.channel_pid, :some_random_unknown_tuple)
+    Process.sleep(30)
+    assert Process.alive?(socket.channel_pid)
+  end
+
+  test "join serializes all part types in messages", %{session: session} do
+    alias Synapsis.{Message, Repo}
+
+    %Message{}
+    |> Message.changeset(%{
+      session_id: session.id,
+      role: "assistant",
+      parts: [
+        %Synapsis.Part.ToolUse{tool: "bash", tool_use_id: "tu1", input: %{}, status: :pending},
+        %Synapsis.Part.ToolResult{tool_use_id: "tu1", content: "result", is_error: false},
+        %Synapsis.Part.Reasoning{content: "thinking"},
+        %Synapsis.Part.File{path: "/tmp/f.ex", content: "code"},
+        %Synapsis.Part.Agent{agent: "build", message: "Running"},
+        %Synapsis.Part.Image{media_type: "image/png", data: "base64data"}
+      ],
+      token_count: 10
+    })
+    |> Repo.insert!()
+
+    {:ok, reply, _socket} =
+      UserSocket
+      |> socket("user_id2", %{})
+      |> subscribe_and_join(
+        SynapsisServer.SessionChannel,
+        "session:#{session.id}"
+      )
+
+    [_part_tool_use, _part_tool_result, _part_reasoning, _part_file, _part_agent, _part_image] =
+      hd(reply.messages).parts
+
+    assert hd(reply.messages).parts |> Enum.any?(&(&1.type == "tool_use"))
+    assert hd(reply.messages).parts |> Enum.any?(&(&1.type == "tool_result"))
+    assert hd(reply.messages).parts |> Enum.any?(&(&1.type == "reasoning"))
+    assert hd(reply.messages).parts |> Enum.any?(&(&1.type == "file"))
+    assert hd(reply.messages).parts |> Enum.any?(&(&1.type == "agent"))
+    assert hd(reply.messages).parts |> Enum.any?(&(&1.type == "image"))
+  end
 end
