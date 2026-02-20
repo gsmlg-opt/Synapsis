@@ -48,6 +48,14 @@ defmodule Synapsis.Part do
     %Synapsis.Part.Reasoning{content: data["content"] || ""}
   end
 
+  defp load_part(%{"type" => "image"} = data) do
+    %Synapsis.Part.Image{
+      media_type: data["media_type"] || "image/png",
+      data: data["data"] || "",
+      path: data["path"]
+    }
+  end
+
   defp load_part(%{"type" => "file"} = data) do
     %Synapsis.Part.File{path: data["path"], content: data["content"] || ""}
   end
@@ -90,6 +98,15 @@ defmodule Synapsis.Part do
 
   defp dump_part(%Synapsis.Part.Reasoning{content: content}) do
     %{"type" => "reasoning", "content" => content}
+  end
+
+  defp dump_part(%Synapsis.Part.Image{} = p) do
+    %{
+      "type" => "image",
+      "media_type" => p.media_type,
+      "data" => p.data,
+      "path" => p.path
+    }
   end
 
   defp dump_part(%Synapsis.Part.File{path: path, content: content}) do

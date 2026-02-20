@@ -10,6 +10,20 @@ defmodule SynapsisServer.SessionChannel do
   end
 
   @impl true
+  def handle_in("session:message", %{"content" => content, "images" => images}, socket)
+      when is_list(images) do
+    case Synapsis.Sessions.send_message(socket.assigns.session_id, %{
+           content: content,
+           images: images
+         }) do
+      :ok ->
+        {:reply, :ok, socket}
+
+      {:error, reason} ->
+        {:reply, {:error, %{reason: inspect(reason)}}, socket}
+    end
+  end
+
   def handle_in("session:message", %{"content" => content}, socket) do
     case Synapsis.Sessions.send_message(socket.assigns.session_id, content) do
       :ok ->
