@@ -47,8 +47,8 @@ in
   };
 
   # Set DATABASE_URL for Ecto to use Unix socket
-  env.DATABASE_URL = "postgres://synapsis:synapsis@localhost/synapsis?socket=${config.env.DEVENV_STATE}/postgres";
-  env.PGHOST = "${config.env.DEVENV_STATE}/postgres";
+  # DEVENV_RUNTIME is the actual socket directory (e.g. /tmp/devenv-XXXX)
+  # It is only available at shell runtime, so we set PGHOST/DATABASE_URL in enterShell
   env.PGUSER = "synapsis";
   env.PGDATABASE = "synapsis";
 
@@ -64,6 +64,8 @@ in
   '';
 
   enterShell = ''
+    export PGHOST="$DEVENV_RUNTIME/postgres"
+    export DATABASE_URL="postgres://synapsis:synapsis@localhost/synapsis?socket=$DEVENV_RUNTIME/postgres"
     hello
     echo "PostgreSQL socket: $PGHOST"
   '';

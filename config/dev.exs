@@ -1,16 +1,14 @@
 import Config
 
 # Database configuration for development
+# Note: socket_dir is set in runtime.exs to pick up PGHOST at startup time
 config :synapsis_data, Synapsis.Repo,
-  username: System.get_env("PGUSER", "postgres"),
-  database: System.get_env("PGDATABASE", "synapsis_dev"),
-  socket_dir: System.get_env("PGHOST"),
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10
 
 config :synapsis_server, SynapsisServer.Endpoint,
-  http: [ip: {0, 0, 0, 0, 0, 0, 0, 0}, port: 4000],
+  http: [ip: {0, 0, 0, 0, 0, 0, 0, 0}, port: 4657],
   check_origin: false,
   code_reloader: true,
   debug_errors: true,

@@ -35,7 +35,7 @@ config :phoenix, :json_library, Jason
 
 # Configure bun for JS bundling
 config :bun,
-  version: "1.2.5",
+  version: "1.3.3",
   synapsis_web: [
     args: ~w(build assets/js/app.ts --outdir=priv/static/assets
              --external=/fonts/* --external=/images/*),
@@ -45,7 +45,7 @@ config :bun,
 
 # Configure tailwind for CSS bundling
 config :tailwind,
-  version: "4.1.11",
+  version: "4.1.18",
   synapsis_web: [
     args: ~w(--input=assets/css/app.css --output=priv/static/assets/app.css),
     cd: Path.expand("../apps/synapsis_web", __DIR__)

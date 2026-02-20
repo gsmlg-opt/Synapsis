@@ -1,3 +1,4 @@
 [install]
 # Frozen lockfile in CI
 # frozenLockfile = true
+registry = "https://registry.npmmirror.com"

@@ -1,10 +1,9 @@
 import Config
 
 # Database configuration for test
+# Note: socket_dir is set in runtime.exs to pick up PGHOST at startup time
 config :synapsis_data, Synapsis.Repo,
-  username: System.get_env("PGUSER", "postgres"),
   database: "synapsis_test#{System.get_env("MIX_TEST_PARTITION")}",
-  socket_dir: System.get_env("PGHOST"),
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: System.schedulers_online() * 2
 

@@ -14,6 +14,12 @@ if System.get_env("MIX_TAILWIND_PATH") do
   config :tailwind, path: System.get_env("MIX_TAILWIND_PATH")
 end
 
+# Database connection — read PGHOST/PGUSER at runtime so devenv socket paths work
+config :synapsis_data, Synapsis.Repo,
+  username: System.get_env("PGUSER", "postgres"),
+  database: System.get_env("PGDATABASE", if(config_env() == :test, do: "synapsis_test", else: "synapsis_dev")),
+  socket_dir: System.get_env("PGHOST")
+
 # Encryption key for provider API keys (AES-256-GCM)
 config :synapsis_data,
   encryption_key:
@@ -29,7 +35,7 @@ if config_env() == :prod do
       """
 
   host = System.get_env("PHX_HOST") || "example.com"
-  port = String.to_integer(System.get_env("PORT") || "4000")
+  port = String.to_integer(System.get_env("PORT") || "4657")
 
   config :synapsis_server, SynapsisServer.Endpoint,
     url: [host: host, port: 443, scheme: "https"],
