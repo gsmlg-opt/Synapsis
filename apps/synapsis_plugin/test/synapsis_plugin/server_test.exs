@@ -46,5 +46,30 @@ defmodule SynapsisPlugin.ServerTest do
 
       GenServer.stop(pid)
     end
+
+    test "execute returns error tuple for unknown tool" do
+      {:ok, pid} =
+        SynapsisPlugin.start_plugin(MockPlugin, "test_err_#{:rand.uniform(100_000)}", %{
+          name: "err_test"
+        })
+
+      assert {:error, "unknown tool"} =
+               GenServer.call(pid, {:execute, "nonexistent_tool", %{}, %{}})
+
+      GenServer.stop(pid)
+    end
+
+    test "unknown messages are silently ignored without crash" do
+      {:ok, pid} =
+        SynapsisPlugin.start_plugin(MockPlugin, "test_noop_#{:rand.uniform(100_000)}", %{
+          name: "noop"
+        })
+
+      send(pid, :completely_random_unknown_message)
+      Process.sleep(30)
+
+      assert Process.alive?(pid)
+      GenServer.stop(pid)
+    end
   end
 end
