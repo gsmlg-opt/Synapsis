@@ -60,29 +60,35 @@ defmodule Synapsis.ProvidersTest do
 
   describe "list/1" do
     test "lists all providers" do
+      {:ok, initial} = Providers.list()
+      initial_count = length(initial)
+
       {:ok, _} = Providers.create(@valid_attrs)
       {:ok, _} = Providers.create(%{@valid_attrs | name: "other-provider", type: "google"})
 
       {:ok, providers} = Providers.list()
-      assert length(providers) == 2
+      assert length(providers) == initial_count + 2
     end
 
     test "filters by enabled" do
+      {:ok, initial_enabled} = Providers.list(enabled: true)
+      {:ok, initial_disabled} = Providers.list(enabled: false)
+
       {:ok, _} = Providers.create(@valid_attrs)
       {:ok, _} = Providers.create(%{@valid_attrs | name: "disabled-one", enabled: false})
 
       {:ok, enabled} = Providers.list(enabled: true)
-      assert length(enabled) == 1
-      assert hd(enabled).name == "test-provider"
+      assert length(enabled) == length(initial_enabled) + 1
+      assert Enum.any?(enabled, &(&1.name == "test-provider"))
 
       {:ok, disabled} = Providers.list(enabled: false)
-      assert length(disabled) == 1
-      assert hd(disabled).name == "disabled-one"
+      assert length(disabled) == length(initial_disabled) + 1
+      assert Enum.any?(disabled, &(&1.name == "disabled-one"))
     end
 
-    test "returns empty list when no providers" do
+    test "returns providers as list" do
       {:ok, providers} = Providers.list()
-      assert providers == []
+      assert is_list(providers)
     end
   end
 

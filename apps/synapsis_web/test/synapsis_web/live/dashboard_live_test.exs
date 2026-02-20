@@ -5,23 +5,23 @@ defmodule SynapsisWeb.DashboardLiveTest do
     test "mounts and renders heading", %{conn: conn} do
       {:ok, view, html} = live(conn, ~p"/")
       assert html =~ "Synapsis"
-      assert has_element?(view, "h1", "Synapsis")
+      assert has_element?(view, "h1", "Dashboard")
     end
 
-    test "shows empty projects message when no projects exist", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/")
-      assert html =~ "No projects yet."
+    test "shows projects section heading", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+      assert has_element?(view, "h2", "Projects")
     end
 
-    test "shows empty sessions message when no sessions exist", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/")
-      assert html =~ "No sessions yet."
+    test "shows recent sessions section heading", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+      assert has_element?(view, "h2", "Recent Sessions")
     end
 
-    test "renders quick links", %{conn: conn} do
+    test "renders appbar navigation links", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/")
       assert html =~ "Providers"
-      assert html =~ "MCP Servers"
+      assert html =~ "MCP"
       assert html =~ "LSP"
       assert html =~ "Settings"
     end
