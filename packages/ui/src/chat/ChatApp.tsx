@@ -5,6 +5,7 @@ import { MessageInput } from "./MessageInput"
 import { StreamingText } from "./StreamingText"
 import { ToolCallCard } from "./ToolCallCard"
 import { ThinkingBlock } from "./ThinkingBlock"
+import { PermissionDialog } from "./PermissionDialog"
 import { useSelector } from "react-redux"
 import type { RootState } from "./store"
 import { ErrorBoundary } from "../ErrorBoundary"
@@ -48,6 +49,8 @@ function ChatContent({ onNavigate }: { onNavigate?: (path: string) => void }) {
       </div>
 
       <MessageInput disabled={status === "streaming" || status === "tool_wait"} />
+
+      <PermissionDialog />
     </div>
   )
 }
