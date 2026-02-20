@@ -178,14 +178,13 @@ defmodule Synapsis.Provider.Adapter do
     base_url = config[:base_url] || Transport.Google.default_base_url()
     model = request[:model] || "gemini-2.0-flash"
 
-    url =
-      "#{base_url}/v1beta/models/#{model}:streamGenerateContent?alt=sse&key=#{config.api_key}"
+    url = "#{base_url}/v1beta/models/#{model}:streamGenerateContent?alt=sse"
 
     body = Map.drop(request, [:model, :stream])
 
     try do
       Req.post!(url,
-        headers: [{"content-type", "application/json"}],
+        headers: [{"content-type", "application/json"}, {"x-goog-api-key", config.api_key}],
         json: body,
         receive_timeout: 300_000,
         into: fn {:data, data}, acc ->
@@ -266,10 +265,16 @@ defmodule Synapsis.Provider.Adapter do
   defp do_complete(:google, request, config) do
     base_url = config[:base_url] || Transport.Google.default_base_url()
     model = request[:model] || "gemini-2.0-flash"
-    url = "#{base_url}/v1beta/models/#{model}:generateContent?key=#{config.api_key}"
+    url = "#{base_url}/v1beta/models/#{model}:generateContent"
 
     body = Map.drop(request, [:model, :stream])
-    response = Req.post!(url, headers: [{"content-type", "application/json"}], json: body, receive_timeout: 60_000)
+
+    response =
+      Req.post!(url,
+        headers: [{"content-type", "application/json"}, {"x-goog-api-key", config.api_key}],
+        json: body,
+        receive_timeout: 60_000
+      )
 
     case response.body do
       %{"candidates" => [%{"content" => %{"parts" => [%{"text" => text} | _]}} | _]} ->
