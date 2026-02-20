@@ -199,8 +199,8 @@ defmodule SynapsisServer.SessionController do
     %{type: "agent", agent: agent, message: message}
   end
 
-  defp serialize_part(part) do
-    %{type: "unknown", data: inspect(part)}
+  defp serialize_part(_part) do
+    %{type: "unknown"}
   end
 
   defp format_error(reason) when is_binary(reason), do: reason
