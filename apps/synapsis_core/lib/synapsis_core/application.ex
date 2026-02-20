@@ -1,6 +1,7 @@
 defmodule SynapsisCore.Application do
   @moduledoc false
   use Application
+  require Logger
 
   @impl true
   def start(_type, _args) do
@@ -29,14 +30,13 @@ defmodule SynapsisCore.Application do
         try do
           Synapsis.Providers.load_all_into_registry()
         rescue
-          _ -> :ok
+          e -> Logger.warning("provider_registry_load_failed", error: Exception.message(e))
         end
 
         try do
-          # Runtime reference to avoid cross-umbrella compile-time warning
           apply(SynapsisPlugin.Loader, :start_auto_plugins, [])
         rescue
-          _ -> :ok
+          e -> Logger.warning("plugin_auto_start_failed", error: Exception.message(e))
         end
 
         result
