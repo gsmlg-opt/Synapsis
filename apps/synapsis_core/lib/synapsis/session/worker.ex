@@ -324,7 +324,7 @@ defmodule Synapsis.Session.Worker do
     else
       flush_pending(state)
       update_session_status(state.session_id, "error")
-      broadcast(state.session_id, "error", %{message: reason})
+      broadcast(state.session_id, "error", %{message: "Provider error"})
       broadcast(state.session_id, "session_status", %{status: "error"})
       {:noreply, %{state | status: :error, stream_ref: nil}}
     end
