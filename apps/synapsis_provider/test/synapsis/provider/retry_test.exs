@@ -58,4 +58,42 @@ defmodule Synapsis.Provider.RetryTest do
   test "passes through non-error non-ok return values" do
     assert :unexpected = Retry.with_retry(fn -> :unexpected end)
   end
+
+  test "retries and recovers from Req.TransportError" do
+    counter = :counters.new(1, [:atomics])
+
+    result =
+      Retry.with_retry(fn ->
+        count = :counters.get(counter, 1)
+        :counters.add(counter, 1, 1)
+
+        if count == 0 do
+          {:error, %Req.TransportError{reason: :econnrefused}}
+        else
+          {:ok, :recovered}
+        end
+      end)
+
+    assert {:ok, :recovered} = result
+    assert :counters.get(counter, 1) == 2
+  end
+
+  test "503 status is retryable" do
+    counter = :counters.new(1, [:atomics])
+
+    result =
+      Retry.with_retry(fn ->
+        count = :counters.get(counter, 1)
+        :counters.add(counter, 1, 1)
+
+        if count == 0 do
+          {:error, %{status: 503}}
+        else
+          {:ok, :recovered}
+        end
+      end)
+
+    assert {:ok, :recovered} = result
+    assert :counters.get(counter, 1) == 2
+  end
 end
