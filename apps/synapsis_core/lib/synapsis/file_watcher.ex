@@ -81,6 +81,6 @@ defmodule Synapsis.FileWatcher do
   end
 
   defp file_system_available? do
-    Code.ensure_loaded?(FileSystem)
+    Application.get_env(:synapsis_core, :file_system_enabled, Code.ensure_loaded?(FileSystem))
   end
 end

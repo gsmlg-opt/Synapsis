@@ -18,3 +18,5 @@ config :logger, level: :warning
 
 config :phoenix, :plug_init_mode, :runtime
 config :phoenix, sort_verified_routes_query_params: true
+
+config :synapsis_core, :file_system_enabled, false
