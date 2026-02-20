@@ -2,16 +2,22 @@ defmodule SynapsisServer.SSEController do
   use SynapsisServer, :controller
 
   def events(conn, %{"id" => session_id}) do
-    Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session_id}")
+    case Synapsis.Sessions.get(session_id) do
+      {:error, :not_found} ->
+        conn |> put_status(404) |> json(%{error: "Session not found"})
 
-    conn =
-      conn
-      |> put_resp_content_type("text/event-stream")
-      |> put_resp_header("cache-control", "no-cache")
-      |> put_resp_header("connection", "keep-alive")
-      |> send_chunked(200)
+      {:ok, _session} ->
+        Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session_id}")
 
-    sse_loop(conn, session_id)
+        conn =
+          conn
+          |> put_resp_content_type("text/event-stream")
+          |> put_resp_header("cache-control", "no-cache")
+          |> put_resp_header("connection", "keep-alive")
+          |> send_chunked(200)
+
+        sse_loop(conn, session_id)
+    end
   end
 
   @event_pattern ~r/^[a-z0-9_-]+$/
