@@ -84,6 +84,31 @@ defmodule SynapsisServer.SessionChannelTest do
     assert_push "orchestrator_terminate", %{reason: "Max iterations reached"}
   end
 
+  test "forwards auditing event from PubSub", %{socket: _socket, session: session} do
+    Phoenix.PubSub.broadcast(
+      Synapsis.PubSub,
+      "session:#{session.id}",
+      {"auditing", %{reason: "Duplicate tool calls"}}
+    )
+
+    assert_push "auditing", %{reason: "Duplicate tool calls"}
+  end
+
+  test "forwards constraint_added event from PubSub", %{socket: _socket, session: session} do
+    Phoenix.PubSub.broadcast(
+      Synapsis.PubSub,
+      "session:#{session.id}",
+      {"constraint_added",
+       %{attempt_number: 1, error_message: "Repeated same edit", lesson: "Try a different file"}}
+    )
+
+    assert_push "constraint_added", %{
+      attempt_number: 1,
+      error_message: "Repeated same edit",
+      lesson: "Try a different file"
+    }
+  end
+
   test "forwards text_delta event from PubSub", %{socket: _socket, session: session} do
     Phoenix.PubSub.broadcast(
       Synapsis.PubSub,
