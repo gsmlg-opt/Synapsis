@@ -173,6 +173,23 @@ defmodule Synapsis.Provider.EventMapperTest do
 
       assert :ignore = EventMapper.map_event(:openai, chunk)
     end
+
+    test "processes only the first tool_call when multiple are present" do
+      chunk = %{
+        "choices" => [
+          %{
+            "delta" => %{
+              "tool_calls" => [
+                %{"index" => 0, "id" => "call_first", "function" => %{"name" => "bash"}},
+                %{"index" => 1, "id" => "call_second", "function" => %{"name" => "grep"}}
+              ]
+            }
+          }
+        ]
+      }
+
+      assert {:tool_use_start, "bash", "call_first"} = EventMapper.map_event(:openai, chunk)
+    end
   end
 
   # ---------------------------------------------------------------------------

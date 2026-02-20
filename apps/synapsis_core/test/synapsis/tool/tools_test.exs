@@ -148,6 +148,16 @@ defmodule Synapsis.Tool.ToolsTest do
       content = File.read!(test_file)
       assert content == "XXX bar foo bar foo"
     end
+
+    test "rejects path traversal outside project root" do
+      {:error, msg} =
+        FileEdit.execute(
+          %{"path" => "../../etc/hosts", "old_string" => "localhost", "new_string" => "evil"},
+          %{project_path: @test_dir}
+        )
+
+      assert msg =~ "outside"
+    end
   end
 
   describe "Bash" do
