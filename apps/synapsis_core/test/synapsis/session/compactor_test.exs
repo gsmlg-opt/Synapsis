@@ -74,4 +74,30 @@ defmodule Synapsis.Session.CompactorTest do
 
     assert Compactor.compact(session.id, messages) == :ok
   end
+
+  test "maybe_compact/3 triggers compaction when extra_tokens push over threshold", %{
+    session: session
+  } do
+    # Insert 15 messages with 10k tokens each = 150k total
+    # Model limit for claude-sonnet is 200k, threshold 80% = 160k
+    # 150k alone is under threshold
+    for i <- 1..15 do
+      %Message{}
+      |> Message.changeset(%{
+        session_id: session.id,
+        role: if(rem(i, 2) == 0, do: "assistant", else: "user"),
+        parts: [%Synapsis.Part.Text{content: "Message #{i}"}],
+        token_count: 10_000
+      })
+      |> Repo.insert!()
+    end
+
+    # Without extra_tokens: 150k < 160k threshold → no compaction
+    assert Compactor.maybe_compact(session.id, "claude-sonnet-4-20250514") == :ok
+
+    # With 20k extra_tokens (failure log): 170k > 160k threshold → compaction
+    assert Compactor.maybe_compact(session.id, "claude-sonnet-4-20250514",
+             extra_tokens: 20_000
+           ) == :compacted
+  end
 end
