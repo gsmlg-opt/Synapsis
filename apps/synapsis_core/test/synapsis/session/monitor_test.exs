@@ -162,4 +162,21 @@ defmodule Synapsis.Session.MonitorTest do
       assert {:test_regression, _} = Monitor.worst_signal(m)
     end
   end
+
+  describe "record_iteration/2 combined signals" do
+    test "emits both iteration_warning and stagnation simultaneously" do
+      m = %{Monitor.new() | iteration_count: 19, consecutive_empty_iterations: 3}
+      {signals, _m} = Monitor.record_iteration(m, false)
+
+      assert Enum.any?(signals, fn
+               {:iteration_warning, 20} -> true
+               _ -> false
+             end)
+
+      assert Enum.any?(signals, fn
+               {:stagnation, _} -> true
+               _ -> false
+             end)
+    end
+  end
 end

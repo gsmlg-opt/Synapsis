@@ -119,6 +119,11 @@ defmodule Synapsis.Session.WorkspaceManagerTest do
 
       WorkspaceManager.teardown(pp, session.id)
     end
+
+    test "returns error for unknown patch id" do
+      assert {:error, :not_found} =
+               WorkspaceManager.revert_and_learn(Ecto.UUID.generate(), "reason", "/tmp")
+    end
   end
 
   describe "list_patches/2" do
