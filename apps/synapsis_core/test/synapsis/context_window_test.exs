@@ -13,6 +13,20 @@ defmodule Synapsis.ContextWindowTest do
       messages = [%{token_count: 50_000}, %{token_count: 40_000}]
       assert ContextWindow.needs_compaction?(messages, 100_000)
     end
+
+    test "extra_tokens tips budget over threshold" do
+      # Messages alone are under threshold (30k / 100k = 30%)
+      messages = [%{token_count: 30_000}]
+      refute ContextWindow.needs_compaction?(messages, 100_000)
+
+      # But with 55k extra tokens (failure log), total = 85k > 80k threshold
+      assert ContextWindow.needs_compaction?(messages, 100_000, extra_tokens: 55_000)
+    end
+
+    test "accepts legacy float threshold argument" do
+      messages = [%{token_count: 50_000}, %{token_count: 40_000}]
+      assert ContextWindow.needs_compaction?(messages, 100_000, 0.8)
+    end
   end
 
   describe "partition_for_compaction/2" do
