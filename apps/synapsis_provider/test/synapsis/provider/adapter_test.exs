@@ -430,8 +430,13 @@ defmodule Synapsis.Provider.AdapterTest do
       assert :openai = Adapter.resolve_transport_type("unknown")
       assert :openai = Adapter.resolve_transport_type(nil)
     end
-  end
 
+    test "defaults to openai for unknown atom" do
+      assert :openai = Adapter.resolve_transport_type(:unknown_custom)
+      assert :openai = Adapter.resolve_transport_type(:foo)
+    end
+
+  end
   # ---------------------------------------------------------------------------
   # Helpers
   # ---------------------------------------------------------------------------

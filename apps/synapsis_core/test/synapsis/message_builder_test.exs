@@ -89,5 +89,37 @@ defmodule Synapsis.MessageBuilderTest do
       result = MessageBuilder.build_request(messages, agent, "unknown_provider")
       assert is_map(result)
     end
+
+    test "builds request with nil context (no extra appended)" do
+      messages = []
+      agent = %{
+        system_prompt: "Base prompt",
+        tools: nil,
+        model: "test-model",
+        max_tokens: 4096,
+        reasoning_effort: nil,
+        context: nil
+      }
+
+      result = MessageBuilder.build_request(messages, agent, "anthropic")
+      assert result.system =~ "Base prompt"
+      # nil context should not add extra text
+      assert result.system == "Base prompt"
+    end
+
+    test "builds request with empty string context (no extra appended)" do
+      messages = []
+      agent = %{
+        system_prompt: "Base prompt",
+        tools: nil,
+        model: "test-model",
+        max_tokens: 4096,
+        reasoning_effort: nil,
+        context: ""
+      }
+
+      result = MessageBuilder.build_request(messages, agent, "anthropic")
+      assert result.system == "Base prompt"
+    end
   end
 end
