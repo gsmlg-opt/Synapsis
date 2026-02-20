@@ -5,20 +5,23 @@ defmodule SynapsisCore.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [
-      Synapsis.Repo,
-      {Phoenix.PubSub, name: Synapsis.PubSub},
-      {Task.Supervisor, name: Synapsis.Provider.TaskSupervisor},
-      Synapsis.Provider.Registry,
-      {Task.Supervisor, name: Synapsis.Tool.TaskSupervisor},
-      Synapsis.Tool.Registry,
-      {Registry, keys: :unique, name: Synapsis.Session.Registry},
-      {Registry, keys: :unique, name: Synapsis.Session.SupervisorRegistry},
-      {Registry, keys: :unique, name: Synapsis.FileWatcher.Registry},
-      Synapsis.Session.DynamicSupervisor,
-      SynapsisPlugin.Supervisor,
-      SynapsisServer.Supervisor
-    ]
+    optional_children =
+      [SynapsisPlugin.Supervisor, SynapsisServer.Supervisor]
+      |> Enum.filter(&Code.ensure_loaded?/1)
+
+    children =
+      [
+        Synapsis.Repo,
+        {Phoenix.PubSub, name: Synapsis.PubSub},
+        {Task.Supervisor, name: Synapsis.Provider.TaskSupervisor},
+        Synapsis.Provider.Registry,
+        {Task.Supervisor, name: Synapsis.Tool.TaskSupervisor},
+        Synapsis.Tool.Registry,
+        {Registry, keys: :unique, name: Synapsis.Session.Registry},
+        {Registry, keys: :unique, name: Synapsis.Session.SupervisorRegistry},
+        {Registry, keys: :unique, name: Synapsis.FileWatcher.Registry},
+        Synapsis.Session.DynamicSupervisor
+      ] ++ optional_children
 
     opts = [strategy: :one_for_one, name: SynapsisCore.Supervisor]
     result = Supervisor.start_link(children, opts)
