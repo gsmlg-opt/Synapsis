@@ -107,6 +107,17 @@ defmodule Synapsis.Session.AuditorTaskTest do
 
       assert fa.auditor_model == "claude-opus-4-20250514"
     end
+
+    test "broadcasts constraint_added after persisting", %{session: session} do
+      # Subscribe to the session topic
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}")
+
+      {:ok, fa} = AuditorTask.record_analysis(session.id, "Lesson: do not repeat this.\nApproach: try differently.")
+
+      assert_receive {"constraint_added", payload}, 1000
+      assert payload.attempt_number == fa.attempt_number
+      assert payload.lesson != nil
+    end
   end
 
   describe "prepare_escalation/3" do

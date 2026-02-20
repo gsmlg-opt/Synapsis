@@ -178,6 +178,88 @@ defmodule Synapsis.Provider.AdapterTest do
   end
 
   # ---------------------------------------------------------------------------
+  # complete/2
+  # ---------------------------------------------------------------------------
+
+  describe "complete/2" do
+    test "Anthropic synchronous completion returns text", %{bypass: bypass, port: port} do
+      Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(
+          200,
+          Jason.encode!(%{
+            "content" => [%{"type" => "text", "text" => "The answer is 4"}]
+          })
+        )
+      end)
+
+      config = %{api_key: "test-key", base_url: "http://localhost:#{port}", type: "anthropic"}
+
+      request =
+        Adapter.format_request([], [], %{
+          model: "claude-sonnet-4-20250514",
+          system_prompt: "test",
+          provider_type: "anthropic"
+        })
+
+      # complete/2 sets stream: false on the request
+      request = Map.put(request, :stream, false)
+
+      assert {:ok, text} = Adapter.complete(request, config)
+      assert text == "The answer is 4"
+    end
+
+    test "OpenAI synchronous completion returns text", %{bypass: bypass, port: port} do
+      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(
+          200,
+          Jason.encode!(%{
+            "choices" => [
+              %{"message" => %{"role" => "assistant", "content" => "Hello"}}
+            ]
+          })
+        )
+      end)
+
+      config = %{api_key: "test-key", base_url: "http://localhost:#{port}", type: "openai"}
+
+      request =
+        Adapter.format_request([], [], %{
+          model: "gpt-4o",
+          provider_type: "openai"
+        })
+
+      assert {:ok, text} = Adapter.complete(request, config)
+      assert text == "Hello"
+    end
+
+    test "returns error on 401 unauthorized", %{bypass: bypass, port: port} do
+      Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(
+          401,
+          Jason.encode!(%{"error" => %{"message" => "invalid_api_key"}})
+        )
+      end)
+
+      config = %{api_key: "bad-key", base_url: "http://localhost:#{port}", type: "anthropic"}
+
+      request =
+        Adapter.format_request([], [], %{
+          model: "claude-sonnet-4-20250514",
+          provider_type: "anthropic"
+        })
+
+      assert {:error, reason} = Adapter.complete(request, config)
+      assert reason != nil
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # format_request/3
   # ---------------------------------------------------------------------------
 

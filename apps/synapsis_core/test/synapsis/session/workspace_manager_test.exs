@@ -146,4 +146,54 @@ defmodule Synapsis.Session.WorkspaceManagerTest do
       WorkspaceManager.teardown(pp, session.id)
     end
   end
+
+  describe "promote/2" do
+    test "applies a passing patch to main project", %{project_path: pp, session: session} do
+      {:ok, _} = WorkspaceManager.setup(pp, session.id)
+
+      diff = """
+      --- a/hello.txt
+      +++ b/hello.txt
+      @@ -1 +1,2 @@
+       Hello
+      +World
+      """
+
+      {:ok, patch} = WorkspaceManager.apply_and_test(pp, session.id, diff, "true")
+      assert patch.test_status == "passed"
+
+      # Promote to main tree
+      assert :ok = WorkspaceManager.promote(patch.id, pp)
+
+      # Verify file was updated in the main project
+      content = File.read!(Path.join(pp, "hello.txt"))
+      assert content =~ "World"
+
+      WorkspaceManager.teardown(pp, session.id)
+    end
+
+    test "rejects promotion of non-passing patch", %{project_path: pp, session: session} do
+      {:ok, _} = WorkspaceManager.setup(pp, session.id)
+
+      diff = """
+      --- a/hello.txt
+      +++ b/hello.txt
+      @@ -1 +1,2 @@
+       Hello
+      +World
+      """
+
+      {:ok, patch} = WorkspaceManager.apply_and_test(pp, session.id, diff, "false")
+      assert patch.test_status == "failed"
+
+      assert {:error, reason} = WorkspaceManager.promote(patch.id, pp)
+      assert reason =~ "Cannot promote patch"
+
+      WorkspaceManager.teardown(pp, session.id)
+    end
+
+    test "returns error for unknown patch" do
+      assert {:error, :not_found} = WorkspaceManager.promote("00000000-0000-0000-0000-000000000000", "/tmp")
+    end
+  end
 end
