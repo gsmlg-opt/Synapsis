@@ -22,6 +22,24 @@ defmodule Synapsis.GitTest do
     {:ok, path: tmp_dir}
   end
 
+  test "diff/1 returns empty string for clean repo", %{path: path} do
+    assert {:ok, output} = Synapsis.Git.diff(path)
+    assert String.trim(output) == ""
+  end
+
+  test "diff/1 shows changes for modified files", %{path: path} do
+    File.write!(Path.join(path, "README.md"), "# Modified")
+    assert {:ok, output} = Synapsis.Git.diff(path)
+    assert output =~ "Modified"
+  end
+
+  test "diff/2 accepts extra args like --stat", %{path: path} do
+    File.write!(Path.join(path, "README.md"), "# Modified")
+    System.cmd("git", ["add", "."], cd: path)
+    assert {:ok, output} = Synapsis.Git.diff(path, args: ["--staged", "--stat"])
+    assert output =~ "README.md"
+  end
+
   test "is_repo?/1 returns true for git repos", %{path: path} do
     assert Synapsis.Git.is_repo?(path)
   end
