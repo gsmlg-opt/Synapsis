@@ -74,7 +74,8 @@ defmodule Synapsis.Session.Worker do
     session = Repo.get!(Session, session_id) |> Repo.preload(:project)
 
     agent = Synapsis.Agent.Resolver.resolve(session.agent, session.config)
-    provider_config = resolve_provider_config(session.provider)
+    effective_provider = agent[:provider] || session.provider
+    provider_config = resolve_provider_config(effective_provider)
 
     state = %__MODULE__{
       session_id: session_id,

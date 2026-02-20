@@ -8,6 +8,7 @@ defmodule Synapsis.Agent.Resolver do
     %{
       name: to_string(agent_name),
       model: overrides["model"] || default.model,
+      provider: overrides["provider"] || default.provider,
       system_prompt: overrides["systemPrompt"] || default.system_prompt,
       tools: resolve_tools(default.tools, overrides["tools"]),
       reasoning_effort: overrides["reasoningEffort"] || default.reasoning_effort,
@@ -19,6 +20,7 @@ defmodule Synapsis.Agent.Resolver do
   defp default_agent("build") do
     %{
       model: nil,
+      provider: nil,
       system_prompt: """
       You are Synapsis, an AI coding assistant. You help developers write, edit, and understand code.
       You have access to tools for reading files, editing files, running shell commands, and searching code.
@@ -43,6 +45,7 @@ defmodule Synapsis.Agent.Resolver do
   defp default_agent("plan") do
     %{
       model: nil,
+      provider: nil,
       system_prompt:
         "You are a planning assistant. Analyze the codebase and create implementation plans. Do NOT make changes.",
       tools: ["file_read", "grep", "glob", "diagnostics"],

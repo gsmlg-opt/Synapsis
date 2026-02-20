@@ -47,5 +47,23 @@ defmodule Synapsis.Agent.ResolverTest do
       agent = Resolver.resolve("build", config)
       assert agent.tools == ["file_read", "grep"]
     end
+
+    test "defaults provider to nil" do
+      agent = Resolver.resolve("build")
+      assert agent.provider == nil
+    end
+
+    test "allows per-agent provider override" do
+      config = %{
+        "agents" => %{
+          "build" => %{
+            "provider" => "openai"
+          }
+        }
+      }
+
+      agent = Resolver.resolve("build", config)
+      assert agent.provider == "openai"
+    end
   end
 end
