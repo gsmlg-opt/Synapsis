@@ -117,6 +117,12 @@ defmodule SynapsisServer.SessionControllerTest do
     end
   end
 
+    test "returns 422 for unknown session id", %{conn: conn} do
+      unknown_id = Ecto.UUID.generate()
+      conn = post(conn, "/api/sessions/#{unknown_id}/fork", %{})
+      assert json_response(conn, 422)["error"] != nil
+    end
+
   describe "GET /api/sessions/:id/export" do
     test "exports session as JSON", %{conn: conn} do
       create_conn =
