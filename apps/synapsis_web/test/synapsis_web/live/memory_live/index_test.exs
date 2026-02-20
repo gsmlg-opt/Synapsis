@@ -53,6 +53,30 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
       assert html =~ "gk"
     end
 
+    test "filter_scope hides entries of other scopes", %{conn: conn} do
+      %Synapsis.MemoryEntry{}
+      |> Synapsis.MemoryEntry.changeset(%{scope: "global", key: "global-only-key", content: "g"})
+      |> Synapsis.Repo.insert!()
+
+      %Synapsis.MemoryEntry{}
+      |> Synapsis.MemoryEntry.changeset(%{
+        scope: "project",
+        key: "project-only-key",
+        content: "p"
+      })
+      |> Synapsis.Repo.insert!()
+
+      {:ok, view, _html} = live(conn, ~p"/settings/memory")
+
+      view
+      |> element(~s(button[phx-click="filter_scope"][phx-value-scope="project"]))
+      |> render_click()
+
+      html = render(view)
+      assert html =~ "project-only-key"
+      refute html =~ "global-only-key"
+    end
+
     test "deletes a memory entry", %{conn: conn} do
       {:ok, entry} =
         %Synapsis.MemoryEntry{}
