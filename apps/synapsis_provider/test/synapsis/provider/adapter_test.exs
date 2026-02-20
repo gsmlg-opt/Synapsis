@@ -310,6 +310,58 @@ defmodule Synapsis.Provider.AdapterTest do
       request = Map.put(request, :stream, false)
       assert {:ok, "Gemini response"} = Adapter.complete(request, config)
     end
+
+    test "Anthropic complete returns error for unexpected response format", %{bypass: bypass, port: port} do
+      Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(200, Jason.encode!(%{"unexpected" => "format"}))
+      end)
+
+      config = %{api_key: "test-key", base_url: "http://localhost:#{port}", type: "anthropic"}
+
+      request =
+        Adapter.format_request([], [], %{
+          model: "claude-sonnet-4-20250514",
+          provider_type: "anthropic"
+        })
+
+      assert {:error, reason} = Adapter.complete(request, config)
+      assert reason =~ "unexpected response"
+    end
+
+    test "OpenAI complete returns error for unexpected response format", %{bypass: bypass, port: port} do
+      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(200, Jason.encode!(%{"unexpected" => "format"}))
+      end)
+
+      config = %{api_key: "test-key", base_url: "http://localhost:#{port}", type: "openai"}
+
+      request =
+        Adapter.format_request([], [], %{model: "gpt-4o", provider_type: "openai"})
+
+      assert {:error, reason} = Adapter.complete(request, config)
+      assert reason =~ "unexpected response"
+    end
+
+    test "Google complete returns error for unexpected response format", %{bypass: bypass, port: port} do
+      Bypass.expect_once(bypass, "POST", "/v1beta/models/gemini-2.0-flash:generateContent", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(200, Jason.encode!(%{"unexpected" => "format"}))
+      end)
+
+      config = %{api_key: "test-key", base_url: "http://localhost:#{port}", type: "google"}
+
+      request =
+        Adapter.format_request([], [], %{model: "gemini-2.0-flash", provider_type: "google"})
+
+      request = Map.put(request, :stream, false)
+      assert {:error, reason} = Adapter.complete(request, config)
+      assert reason =~ "unexpected response"
+    end
   end
 
   # ---------------------------------------------------------------------------
