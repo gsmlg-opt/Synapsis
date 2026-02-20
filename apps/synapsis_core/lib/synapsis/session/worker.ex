@@ -297,7 +297,13 @@ defmodule Synapsis.Session.Worker do
       Process.send_after(self(), :retry_stream, delay)
 
       {:noreply,
-       %{state | status: :error, stream_ref: nil, stream_monitor_ref: nil, retry_count: retry_count + 1}}
+       %{
+         state
+         | status: :error,
+           stream_ref: nil,
+           stream_monitor_ref: nil,
+           retry_count: retry_count + 1
+       }}
     else
       flush_pending(state)
       update_session_status(state.session_id, "error")
