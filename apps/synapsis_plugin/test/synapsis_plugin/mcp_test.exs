@@ -12,10 +12,28 @@ defmodule SynapsisPlugin.MCPTest do
       assert String.ends_with?(encoded, "\n")
     end
 
+    test "encodes a request with explicit params" do
+      params = %{"name" => "read_file", "arguments" => %{"path" => "/tmp/test.txt"}}
+      encoded = Protocol.encode_request(42, "tools/call", params)
+      decoded = Jason.decode!(String.trim_trailing(encoded, "\n"))
+      assert decoded["id"] == 42
+      assert decoded["method"] == "tools/call"
+      assert decoded["params"]["name"] == "read_file"
+      assert decoded["params"]["arguments"]["path"] == "/tmp/test.txt"
+    end
+
     test "encodes a notification" do
       encoded = Protocol.encode_notification("notifications/initialized")
       assert encoded =~ "\"method\":\"notifications/initialized\""
       refute encoded =~ "\"id\""
+    end
+
+    test "encodes a notification with explicit params" do
+      encoded = Protocol.encode_notification("notifications/progress", %{"sessionId" => "abc123"})
+      decoded = Jason.decode!(String.trim_trailing(encoded, "\n"))
+      assert decoded["method"] == "notifications/progress"
+      assert decoded["params"]["sessionId"] == "abc123"
+      refute Map.has_key?(decoded, "id")
     end
 
     test "decodes a complete message" do

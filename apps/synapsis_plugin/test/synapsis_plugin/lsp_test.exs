@@ -100,6 +100,69 @@ defmodule SynapsisPlugin.LSPTest do
       assert result =~ "error"
       assert result =~ "undefined function foo/0"
     end
+
+    test "lsp_diagnostics returns 'No diagnostics found' when empty" do
+      state = %SynapsisPlugin.LSP{
+        port: nil,
+        language: "elixir",
+        root_path: "/tmp",
+        request_id: 1,
+        pending: %{},
+        buffer: "",
+        initialized: true,
+        diagnostics: %{},
+        pending_requests: %{}
+      }
+
+      assert {:ok, "No diagnostics found.", _state} =
+               SynapsisPlugin.LSP.execute("lsp_diagnostics", %{}, state)
+    end
+
+    test "lsp_diagnostics filters by path when provided" do
+      state = %SynapsisPlugin.LSP{
+        port: nil,
+        language: "elixir",
+        root_path: "/tmp",
+        request_id: 1,
+        pending: %{},
+        buffer: "",
+        initialized: true,
+        diagnostics: %{
+          "file:///tmp/a.ex" => [
+            %{"range" => %{"start" => %{"line" => 0}}, "severity" => 1, "message" => "error in A"}
+          ],
+          "file:///tmp/b.ex" => [
+            %{"range" => %{"start" => %{"line" => 0}}, "severity" => 2, "message" => "warning in B"}
+          ]
+        },
+        pending_requests: %{}
+      }
+
+      assert {:ok, result, _state} =
+               SynapsisPlugin.LSP.execute("lsp_diagnostics", %{"path" => "/tmp/a.ex"}, state)
+
+      assert result =~ "error in A"
+      refute result =~ "warning in B"
+    end
+
+    test "execute returns error for unknown tool" do
+      state = %SynapsisPlugin.LSP{
+        port: nil,
+        language: "elixir",
+        root_path: "/tmp",
+        request_id: 1,
+        pending: %{},
+        buffer: "",
+        initialized: false,
+        diagnostics: %{},
+        pending_requests: %{}
+      }
+
+      assert {:error, msg, _state} =
+               SynapsisPlugin.LSP.execute("lsp_nonexistent_tool", %{}, state)
+
+      assert msg =~ "Unknown LSP tool"
+    end
   end
 
   describe "LSP Manager" do
