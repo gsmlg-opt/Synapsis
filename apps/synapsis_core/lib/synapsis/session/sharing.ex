@@ -5,24 +5,30 @@ defmodule Synapsis.Session.Sharing do
   import Ecto.Query
 
   def export(session_id) do
-    session = Repo.get!(Session, session_id) |> Repo.preload(:project)
-    messages = load_messages(session_id)
+    case Repo.get(Session, session_id) do
+      nil ->
+        {:error, :not_found}
 
-    data = %{
-      version: "1.0",
-      exported_at: DateTime.utc_now() |> DateTime.to_iso8601(),
-      session: %{
-        title: session.title,
-        agent: session.agent,
-        provider: session.provider,
-        model: session.model,
-        project_path: session.project.path,
-        created_at: session.inserted_at |> DateTime.to_iso8601()
-      },
-      messages: Enum.map(messages, &export_message/1)
-    }
+      session ->
+        session = Repo.preload(session, :project)
+        messages = load_messages(session_id)
 
-    {:ok, Jason.encode!(data, pretty: true)}
+        data = %{
+          version: "1.0",
+          exported_at: DateTime.utc_now() |> DateTime.to_iso8601(),
+          session: %{
+            title: session.title,
+            agent: session.agent,
+            provider: session.provider,
+            model: session.model,
+            project_path: session.project.path,
+            created_at: session.inserted_at |> DateTime.to_iso8601()
+          },
+          messages: Enum.map(messages, &export_message/1)
+        }
+
+        {:ok, Jason.encode!(data, pretty: true)}
+    end
   end
 
   def export_to_file(session_id, path) do

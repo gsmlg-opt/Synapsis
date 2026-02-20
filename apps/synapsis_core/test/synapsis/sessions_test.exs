@@ -72,6 +72,75 @@ defmodule Synapsis.SessionsTest do
     end
   end
 
+  describe "list_by_project/2" do
+    test "returns sessions for a project" do
+      {:ok, s1} =
+        Sessions.create("/tmp/test_sessions_by_proj", %{
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      sessions = Sessions.list_by_project(s1.project_id)
+      ids = Enum.map(sessions, & &1.id)
+      assert s1.id in ids
+    end
+
+    test "returns empty list for unknown project_id" do
+      sessions = Sessions.list_by_project(Ecto.UUID.generate())
+      assert sessions == []
+    end
+  end
+
+  describe "recent/1" do
+    test "returns recently updated sessions" do
+      {:ok, _} =
+        Sessions.create("/tmp/test_sessions_recent", %{
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      recents = Sessions.recent()
+      assert is_list(recents)
+      assert length(recents) >= 1
+    end
+  end
+
+  describe "get_messages/1" do
+    test "returns empty list for session with no messages" do
+      {:ok, session} =
+        Sessions.create("/tmp/test_sessions_msgs", %{
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      assert [] = Sessions.get_messages(session.id)
+    end
+
+    test "returns empty list for unknown session_id" do
+      assert [] = Sessions.get_messages(Ecto.UUID.generate())
+    end
+  end
+
+  describe "export/1" do
+    test "returns JSON string with session data" do
+      {:ok, session} =
+        Sessions.create("/tmp/test_sessions_export", %{
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      {:ok, json} = Sessions.export(session.id)
+      data = Jason.decode!(json)
+      assert data["version"] == "1.0"
+      assert is_map(data["session"])
+      assert is_list(data["messages"])
+    end
+
+    test "returns error for unknown session" do
+      assert {:error, :not_found} = Sessions.export(Ecto.UUID.generate())
+    end
+  end
+
   describe "delete/1" do
     test "deletes a session" do
       {:ok, session} =
