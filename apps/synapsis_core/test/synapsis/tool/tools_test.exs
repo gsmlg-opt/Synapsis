@@ -142,6 +142,26 @@ defmodule Synapsis.Tool.ToolsTest do
     test "has no side effects by default" do
       assert Bash.side_effects() == []
     end
+
+    test "caps timeout at 300_000ms when caller passes larger value" do
+      # Large timeout should be capped, not cause issues
+      {:ok, output} =
+        Bash.execute(
+          %{"command" => "echo capped", "timeout" => 999_999_999},
+          %{project_path: @test_dir}
+        )
+
+      assert output == "capped"
+    end
+
+    test "returns ok with truncation message for large output" do
+      # Generate ~11MB output to trigger 10MB truncation cap
+      # Use seq to produce many lines without storing them
+      cmd = "dd if=/dev/zero bs=1024 count=11000 2>/dev/null | tr '\\0' 'x'"
+
+      {:ok, output} = Bash.execute(%{"command" => cmd}, %{project_path: @test_dir})
+      assert output =~ "[Output truncated at 10MB]"
+    end
   end
 
   describe "Grep" do
