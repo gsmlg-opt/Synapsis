@@ -203,4 +203,40 @@ defmodule SynapsisServer.ProviderControllerTest do
       assert json_response(conn, 404)
     end
   end
+
+  describe "GET /api/providers (env detection)" do
+    test "includes env provider when ANTHROPIC_API_KEY is set", %{conn: conn} do
+      System.put_env("ANTHROPIC_API_KEY", "sk-ant-env-test")
+
+      conn = get(conn, "/api/providers")
+      response = json_response(conn, 200)
+
+      env_provider = Enum.find(response["data"], fn p -> p["source"] == "env" end)
+      assert env_provider, "expected an env-sourced provider in response"
+      assert env_provider["name"] == "anthropic"
+      assert env_provider["has_api_key"] == true
+
+      System.delete_env("ANTHROPIC_API_KEY")
+    end
+
+    test "excludes env provider when same name exists in DB", %{conn: conn} do
+      System.put_env("ANTHROPIC_API_KEY", "sk-ant-env-dup")
+
+      {:ok, _} =
+        Providers.create(%{
+          name: "anthropic",
+          type: "anthropic",
+          api_key_encrypted: "sk-ant-db",
+          enabled: true
+        })
+
+      conn = get(conn, "/api/providers")
+      response = json_response(conn, 200)
+
+      anthropic_entries = Enum.filter(response["data"], fn p -> p["name"] == "anthropic" end)
+      assert length(anthropic_entries) == 1
+
+      System.delete_env("ANTHROPIC_API_KEY")
+    end
+  end
 end
