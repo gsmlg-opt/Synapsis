@@ -32,4 +32,22 @@ defmodule Synapsis.Provider.RegistryTest do
     assert "list_test_1" in names
     assert "list_test_2" in names
   end
+
+  test "unregister removes a registered provider" do
+    Registry.register("to_unregister", %{api_key: "x"})
+    assert {:ok, _} = Registry.get("to_unregister")
+
+    Registry.unregister("to_unregister")
+    assert {:error, :not_found} = Registry.get("to_unregister")
+  end
+
+  test "unregister is idempotent for unknown providers" do
+    assert :ok = Registry.unregister("never_existed_#{:rand.uniform(999_999)}")
+  end
+
+  test "register overwrites existing entry" do
+    Registry.register("overwrite_me", %{api_key: "old"})
+    Registry.register("overwrite_me", %{api_key: "new"})
+    assert {:ok, %{api_key: "new"}} = Registry.get("overwrite_me")
+  end
 end

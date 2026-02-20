@@ -141,6 +141,27 @@ defmodule Synapsis.SessionsTest do
     end
   end
 
+  describe "export_to_file/2" do
+    test "writes JSON to a file" do
+      {:ok, session} =
+        Sessions.create("/tmp/test_sessions_export_file", %{
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      path = "/tmp/synapsis-sessions-test-#{System.unique_integer([:positive])}.json"
+      assert :ok = Sessions.export_to_file(session.id, path)
+      assert File.exists?(path)
+      data = Jason.decode!(File.read!(path))
+      assert data["version"] == "1.0"
+      File.rm!(path)
+    end
+
+    test "returns error for unknown session" do
+      assert {:error, :not_found} = Sessions.export_to_file(Ecto.UUID.generate(), "/tmp/x.json")
+    end
+  end
+
   describe "delete/1" do
     test "deletes a session" do
       {:ok, session} =
