@@ -48,5 +48,11 @@ defmodule SynapsisWeb.SkillLive.IndexTest do
       html = render(view)
       refute html =~ "to-delete"
     end
+
+    test "create_skill with empty name shows error flash", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings/skills")
+      view |> form("form", %{"name" => "", "scope" => "global"}) |> render_submit()
+      assert render(view) =~ "Failed to create skill"
+    end
   end
 end

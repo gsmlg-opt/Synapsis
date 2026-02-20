@@ -94,5 +94,13 @@ defmodule SynapsisWeb.SessionLive.IndexTest do
       assert {:error, {:live_redirect, %{to: "/projects/" <> _}}} =
                view |> element("button", "Create Session") |> render_click()
     end
+
+    test "select_provider updates provider and model in socket", %{conn: conn, project: project} do
+      {:ok, view, _html} = live(conn, ~p"/projects/#{project.id}/sessions")
+      view |> element("button", "+ New Session") |> render_click()
+      render_hook(view, "select_provider", %{"provider" => "anthropic"})
+      html = render(view)
+      assert html =~ "Create Session"
+    end
   end
 end

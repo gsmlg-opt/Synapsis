@@ -65,5 +65,11 @@ defmodule SynapsisWeb.SkillLive.ShowTest do
 
       assert html =~ "Skill updated"
     end
+
+    test "update_skill with empty name shows error flash", %{conn: conn, skill: skill} do
+      {:ok, view, _html} = live(conn, ~p"/settings/skills/#{skill.id}")
+      view |> form("form", %{"name" => "", "description" => ""}) |> render_submit()
+      assert render(view) =~ "Failed to update skill"
+    end
   end
 end

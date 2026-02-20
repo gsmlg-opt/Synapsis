@@ -92,5 +92,11 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
 
       refute render(view) =~ "to-delete-key"
     end
+
+    test "create_entry with empty key shows error flash", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings/memory")
+      view |> form("form", %{"scope" => "global", "key" => "", "content" => "some content"}) |> render_submit()
+      assert render(view) =~ "Failed to create entry"
+    end
   end
 end
