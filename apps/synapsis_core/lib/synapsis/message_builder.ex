@@ -1,19 +1,28 @@
 defmodule Synapsis.MessageBuilder do
   @moduledoc "Builds provider-specific requests from session history."
 
-  def build_request(messages, agent, provider_name) do
+  def build_request(messages, agent, provider_name, prompt_context \\ nil) do
     provider_module = provider_module!(provider_name)
 
     tools = resolve_tools(agent[:tools])
 
+    system_prompt = build_system_prompt(agent[:system_prompt], prompt_context)
+
     opts = %{
       model: agent[:model],
-      system_prompt: agent[:system_prompt],
+      system_prompt: system_prompt,
       max_tokens: agent[:max_tokens] || 8192,
       provider_type: provider_name
     }
 
     provider_module.format_request(messages, tools, opts)
+  end
+
+  defp build_system_prompt(base, nil), do: base
+  defp build_system_prompt(base, ""), do: base
+
+  defp build_system_prompt(base, context) when is_binary(context) do
+    base <> "\n\n" <> context
   end
 
   defp provider_module!(provider_name) do
