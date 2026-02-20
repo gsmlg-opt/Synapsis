@@ -24,5 +24,25 @@ defmodule SynapsisWeb.ProjectLive.IndexTest do
       {:ok, _view, html} = live(conn, ~p"/projects/new")
       assert html =~ "New Project"
     end
+
+    test "create_project event creates a project and navigates", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/projects/new")
+
+      assert {:error, {:live_redirect, %{to: "/projects/" <> _}}} =
+               view
+               |> form("form", %{"path" => "/tmp/create_proj_#{:rand.uniform(100_000)}"})
+               |> render_submit()
+    end
+
+    test "create_project event with empty path shows error", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/projects/new")
+
+      html =
+        view
+        |> form("form", %{"path" => ""})
+        |> render_submit()
+
+      assert html =~ "Failed to create project"
+    end
   end
 end

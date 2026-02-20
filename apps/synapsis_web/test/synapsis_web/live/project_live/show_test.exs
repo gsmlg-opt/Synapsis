@@ -52,6 +52,16 @@ defmodule SynapsisWeb.ProjectLive.ShowTest do
       assert html =~ session.title
     end
 
+    test "create_session event creates a new session and navigates", %{
+      conn: conn,
+      project: project
+    } do
+      {:ok, view, _html} = live(conn, ~p"/projects/#{project.id}")
+
+      assert {:error, {:live_redirect, %{to: "/projects/" <> _}}} =
+               view |> element("button", "+ New Session") |> render_click()
+    end
+
     test "delete_session event removes session", %{conn: conn, project: project} do
       {:ok, session} =
         %Synapsis.Session{}
