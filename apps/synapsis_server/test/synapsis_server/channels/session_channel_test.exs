@@ -133,4 +133,17 @@ defmodule SynapsisServer.SessionChannelTest do
     ref = push(socket, "unknown:event", %{})
     refute_reply ref, _
   end
+
+  test "session:retry returns error when no messages exist", %{socket: socket} do
+    ref = push(socket, "session:retry", %{})
+    assert_reply ref, :error, %{reason: "no_messages"}
+  end
+
+  test "session:retry error does not expose internal details", %{socket: socket} do
+    ref = push(socket, "session:retry", %{})
+    assert_reply ref, :error, payload
+    assert is_binary(payload.reason)
+    refute payload.reason =~ "#"
+    refute payload.reason =~ "%{"
+  end
 end
