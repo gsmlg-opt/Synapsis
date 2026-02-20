@@ -17,11 +17,12 @@ defmodule Synapsis.Session.Compactor do
 
   @default_limit 128_000
 
-  def maybe_compact(session_id, model) do
+  def maybe_compact(session_id, model, opts \\ []) do
     messages = load_messages(session_id)
     limit = model_limit(model)
+    extra_tokens = Keyword.get(opts, :extra_tokens, 0)
 
-    if ContextWindow.needs_compaction?(messages, limit) do
+    if ContextWindow.needs_compaction?(messages, limit, extra_tokens: extra_tokens) do
       compact(session_id, messages)
     else
       :ok

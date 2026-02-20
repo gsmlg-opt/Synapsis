@@ -1,8 +1,16 @@
 defmodule Synapsis.ContextWindow do
   @moduledoc "Pure functions for context window management."
 
-  def needs_compaction?(messages, model_context_limit, threshold \\ 0.8) do
-    total = messages |> Enum.map(& &1.token_count) |> Enum.sum()
+  def needs_compaction?(messages, model_context_limit, opts_or_threshold \\ 0.8)
+
+  def needs_compaction?(messages, model_context_limit, threshold) when is_float(threshold) do
+    needs_compaction?(messages, model_context_limit, threshold: threshold)
+  end
+
+  def needs_compaction?(messages, model_context_limit, opts) when is_list(opts) do
+    threshold = Keyword.get(opts, :threshold, 0.8)
+    extra_tokens = Keyword.get(opts, :extra_tokens, 0)
+    total = (messages |> Enum.map(& &1.token_count) |> Enum.sum()) + extra_tokens
     total > model_context_limit * threshold
   end
 

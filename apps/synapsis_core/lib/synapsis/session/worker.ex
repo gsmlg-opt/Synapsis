@@ -687,6 +687,10 @@ defmodule Synapsis.Session.Worker do
     messages = load_messages(state.session_id)
     prompt_context = Synapsis.PromptBuilder.build_failure_context(state.session_id)
 
+    # Account for failure log tokens when deciding whether to compact
+    failure_log_tokens = if prompt_context, do: Synapsis.ContextWindow.estimate_tokens(prompt_context), else: 0
+    Synapsis.Session.Compactor.maybe_compact(state.session_id, state.session.model, extra_tokens: failure_log_tokens)
+
     request =
       Synapsis.MessageBuilder.build_request(
         messages,
