@@ -39,7 +39,9 @@ defmodule Synapsis.Tool.RegistryTest do
     test "registers a process-based tool" do
       pid = self()
       assert :ok = Registry.register_process("test_process_tool", pid, description: "proc tool")
-      assert {:ok, {:process, ^pid, [description: "proc tool"]}} = Registry.lookup("test_process_tool")
+
+      assert {:ok, {:process, ^pid, [description: "proc tool"]}} =
+               Registry.lookup("test_process_tool")
     end
   end
 
@@ -78,7 +80,11 @@ defmodule Synapsis.Tool.RegistryTest do
 
     test "returns map format for process tool" do
       pid = self()
-      Registry.register_process("test_process_tool", pid, description: "proc", parameters: %{"a" => 1})
+
+      Registry.register_process("test_process_tool", pid,
+        description: "proc",
+        parameters: %{"a" => 1}
+      )
 
       assert {:ok, tool} = Registry.get("test_process_tool")
       assert tool.name == "test_process_tool"
