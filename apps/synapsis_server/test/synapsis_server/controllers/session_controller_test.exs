@@ -67,4 +67,74 @@ defmodule SynapsisServer.SessionControllerTest do
       assert response(conn, 204)
     end
   end
+
+  describe "POST /api/sessions/:id/messages" do
+    test "returns 400 when content is missing", %{conn: conn} do
+      create_conn =
+        post(conn, "/api/sessions", %{
+          project_path: "/tmp/test_ctrl_msg_#{:rand.uniform(100_000)}",
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      %{"data" => %{"id" => id}} = json_response(create_conn, 201)
+
+      conn = post(conn, "/api/sessions/#{id}/messages", %{})
+      assert %{"error" => "content is required"} = json_response(conn, 400)
+    end
+  end
+
+  describe "POST /api/sessions/:id/compact" do
+    test "returns ok status when session has no messages", %{conn: conn} do
+      create_conn =
+        post(conn, "/api/sessions", %{
+          project_path: "/tmp/test_ctrl_compact_#{:rand.uniform(100_000)}",
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      %{"data" => %{"id" => id}} = json_response(create_conn, 201)
+
+      conn = post(conn, "/api/sessions/#{id}/compact", %{})
+      assert %{"status" => "ok", "compacted" => false} = json_response(conn, 200)
+    end
+  end
+
+  describe "POST /api/sessions/:id/fork" do
+    test "creates a new forked session", %{conn: conn} do
+      create_conn =
+        post(conn, "/api/sessions", %{
+          project_path: "/tmp/test_ctrl_fork_#{:rand.uniform(100_000)}",
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      %{"data" => %{"id" => original_id}} = json_response(create_conn, 201)
+
+      conn = post(conn, "/api/sessions/#{original_id}/fork", %{})
+      assert %{"data" => %{"id" => forked_id}} = json_response(conn, 201)
+      assert forked_id != original_id
+    end
+  end
+
+  describe "GET /api/sessions/:id/export" do
+    test "exports session as JSON", %{conn: conn} do
+      create_conn =
+        post(conn, "/api/sessions", %{
+          project_path: "/tmp/test_ctrl_export_#{:rand.uniform(100_000)}",
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      %{"data" => %{"id" => id}} = json_response(create_conn, 201)
+
+      conn = get(conn, "/api/sessions/#{id}/export")
+      assert conn.status == 200
+      assert get_resp_header(conn, "content-type") |> hd() =~ "application/json"
+      body = conn.resp_body |> Jason.decode!()
+      assert body["version"] == "1.0"
+      assert is_map(body["session"])
+      assert is_list(body["messages"])
+    end
+  end
 end
