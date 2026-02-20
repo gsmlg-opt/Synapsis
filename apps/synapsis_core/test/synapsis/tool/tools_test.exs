@@ -56,6 +56,14 @@ defmodule Synapsis.Tool.ToolsTest do
       {:error, msg} = FileRead.execute(%{"path" => "/etc/passwd"}, %{project_path: @test_dir})
       assert msg =~ "outside project root"
     end
+
+    test "rejects sibling-directory path traversal" do
+      # Sibling dir: @test_dir is e.g. /tmp/synapsis_tool_test_12345
+      # sibling would be /tmp/synapsis_tool_test_12345_evil
+      sibling = @test_dir <> "_evil"
+      {:error, msg} = FileRead.execute(%{"path" => sibling}, %{project_path: @test_dir})
+      assert msg =~ "outside project root"
+    end
   end
 
   describe "FileWrite" do

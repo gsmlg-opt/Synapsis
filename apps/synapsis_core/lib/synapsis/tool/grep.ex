@@ -31,25 +31,16 @@ defmodule Synapsis.Tool.Grep do
   @impl true
   def execute(input, context) do
     pattern = input["pattern"]
-    search_path = input["path"] || "."
+    raw_path = input["path"] || "."
     cwd = context[:project_path] || "."
     include = input["include"]
 
-    with :ok <- validate_path(search_path, cwd) do
+    # Resolve relative to project root before path validation
+    search_path =
+      if Path.type(raw_path) == :absolute, do: raw_path, else: Path.join(cwd, raw_path)
+
+    with :ok <- Synapsis.Tool.PathValidator.validate(search_path, cwd) do
       execute_search(pattern, search_path, cwd, include)
-    end
-  end
-
-  defp validate_path(_path, nil), do: :ok
-
-  defp validate_path(path, project_path) do
-    abs_path = Path.expand(Path.join(project_path, path))
-    abs_project = Path.expand(project_path)
-
-    if String.starts_with?(abs_path, abs_project) do
-      :ok
-    else
-      {:error, "Path #{path} is outside project root"}
     end
   end
 

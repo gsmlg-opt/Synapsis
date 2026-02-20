@@ -29,7 +29,7 @@ defmodule Synapsis.Tool.Glob do
     base_path = input["path"] || context[:project_path] || "."
     project_path = context[:project_path]
 
-    with :ok <- validate_path(base_path, project_path) do
+    with :ok <- Synapsis.Tool.PathValidator.validate(base_path, project_path) do
       full_pattern = Path.join(base_path, pattern)
       files = Path.wildcard(full_pattern)
 
@@ -45,26 +45,14 @@ defmodule Synapsis.Tool.Glob do
     end
   end
 
-  defp validate_path(_path, nil), do: :ok
-
-  defp validate_path(path, project_path) do
-    abs_path = Path.expand(path)
-    abs_project = Path.expand(project_path)
-
-    if String.starts_with?(abs_path, abs_project) do
-      :ok
-    else
-      {:error, "Path #{path} is outside project root"}
-    end
-  end
-
   defp filter_within_project(files, nil), do: files
 
   defp filter_within_project(files, project_path) do
     abs_project = Path.expand(project_path)
 
     Enum.filter(files, fn file ->
-      String.starts_with?(Path.expand(file), abs_project)
+      Path.expand(file) == abs_project or
+        String.starts_with?(Path.expand(file), abs_project <> "/")
     end)
   end
 end

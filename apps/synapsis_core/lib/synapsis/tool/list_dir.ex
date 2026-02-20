@@ -28,7 +28,7 @@ defmodule Synapsis.Tool.ListDir do
     path = resolve_path(input["path"], context[:project_path])
     depth = input["depth"] || 1
 
-    with :ok <- validate_path(path, context[:project_path]) do
+    with :ok <- Synapsis.Tool.PathValidator.validate(path, context[:project_path]) do
       if File.dir?(path) do
         entries = list_entries(path, depth, 0)
         {:ok, Enum.join(entries, "\n")}
@@ -40,19 +40,6 @@ defmodule Synapsis.Tool.ListDir do
 
   defp resolve_path(path, project_path) do
     if Path.type(path) == :absolute, do: path, else: Path.join(project_path || ".", path)
-  end
-
-  defp validate_path(_path, nil), do: :ok
-
-  defp validate_path(path, project_path) do
-    abs_path = Path.expand(path)
-    abs_project = Path.expand(project_path)
-
-    if String.starts_with?(abs_path, abs_project) do
-      :ok
-    else
-      {:error, "Path #{path} is outside project root"}
-    end
   end
 
   defp list_entries(dir, max_depth, current_depth) when current_depth >= max_depth do

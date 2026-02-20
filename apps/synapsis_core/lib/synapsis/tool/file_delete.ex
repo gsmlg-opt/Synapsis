@@ -23,7 +23,7 @@ defmodule Synapsis.Tool.FileDelete do
   def execute(input, context) do
     path = resolve_path(input["path"], context[:project_path])
 
-    with :ok <- validate_path(path, context[:project_path]) do
+    with :ok <- Synapsis.Tool.PathValidator.validate(path, context[:project_path]) do
       if File.exists?(path) do
         File.rm!(path)
         {:ok, "Successfully deleted #{path}"}
@@ -38,16 +38,5 @@ defmodule Synapsis.Tool.FileDelete do
 
   defp resolve_path(path, project_path) do
     if Path.type(path) == :absolute, do: path, else: Path.join(project_path || ".", path)
-  end
-
-  defp validate_path(_path, nil), do: :ok
-
-  defp validate_path(path, project_path) do
-    abs_path = Path.expand(path)
-    abs_project = Path.expand(project_path)
-
-    if String.starts_with?(abs_path, abs_project),
-      do: :ok,
-      else: {:error, "Path outside project root"}
   end
 end
