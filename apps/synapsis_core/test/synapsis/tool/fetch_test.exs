@@ -3,6 +3,23 @@ defmodule Synapsis.Tool.FetchTest do
 
   alias Synapsis.Tool.Fetch
 
+  describe "URL validation" do
+    test "returns error for malformed URL without scheme" do
+      assert {:error, _msg} = Fetch.execute(%{"url" => "not-a-url"}, %{})
+    end
+
+    test "allows external https URL format to pass validation" do
+      # We can't actually fetch externally in CI, but verify that validation
+      # passes (it may fail at network level, not validation)
+      result = Fetch.execute(%{"url" => "https://example.invalid/docs"}, %{})
+      # Should be error at network level, NOT an SSRF error
+      case result do
+        {:error, msg} -> refute msg =~ "internal/private"
+        {:ok, _} -> :ok
+      end
+    end
+  end
+
   describe "SSRF protection" do
     test "blocks localhost" do
       {:error, msg} = Fetch.execute(%{"url" => "http://localhost:8080/admin"}, %{})
