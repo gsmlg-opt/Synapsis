@@ -69,4 +69,17 @@ defmodule Synapsis.Session.ForkTest do
 
     assert length(new_messages) == 3
   end
+
+  test "fork/2 with non-existent at_message creates full fork", %{session: session} do
+    {:ok, new_session} = Fork.fork(session.id, at_message: Ecto.UUID.generate())
+
+    new_messages =
+      Message
+      |> Ecto.Query.where([m], m.session_id == ^new_session.id)
+      |> Repo.all()
+
+    # Non-existent message id: take_while returns all 5, find returns nil,
+    # reject removes the nil -> all 5 messages are copied
+    assert length(new_messages) == 5
+  end
 end

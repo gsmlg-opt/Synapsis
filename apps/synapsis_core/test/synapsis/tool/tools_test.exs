@@ -64,6 +64,18 @@ defmodule Synapsis.Tool.ToolsTest do
       {:error, msg} = FileRead.execute(%{"path" => sibling}, %{project_path: @test_dir})
       assert msg =~ "outside project root"
     end
+
+    test "reads with offset zero returns all lines" do
+      {:ok, content} =
+        FileRead.execute(
+          %{"path" => "hello.txt", "offset" => 0},
+          %{project_path: @test_dir}
+        )
+
+      assert content =~ "Hello World"
+      assert content =~ "Line 2"
+    end
+
   end
 
   describe "FileWrite" do

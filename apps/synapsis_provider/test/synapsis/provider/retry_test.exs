@@ -54,4 +54,8 @@ defmodule Synapsis.Provider.RetryTest do
 
     assert {:ok, :recovered} = result
   end
+
+  test "passes through non-error non-ok return values" do
+    assert :unexpected = Retry.with_retry(fn -> :unexpected end)
+  end
 end

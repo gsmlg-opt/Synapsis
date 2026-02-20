@@ -157,6 +157,22 @@ defmodule Synapsis.Provider.EventMapperTest do
     test "unknown events return ignore" do
       assert :ignore = EventMapper.map_event(:openai, %{"object" => "chat.completion.chunk"})
     end
+
+    test "ignores malformed tool_calls with no recognized fields" do
+      chunk = %{
+        "choices" => [
+          %{
+            "delta" => %{
+              "tool_calls" => [
+                %{"unknown_field" => "value"}
+              ]
+            }
+          }
+        ]
+      }
+
+      assert :ignore = EventMapper.map_event(:openai, chunk)
+    end
   end
 
   # ---------------------------------------------------------------------------
