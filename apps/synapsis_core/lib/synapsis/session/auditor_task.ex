@@ -94,9 +94,29 @@ defmodule Synapsis.Session.AuditorTask do
       auditor_model: Keyword.get(opts, :auditor_model)
     }
 
-    %FailedAttempt{}
-    |> FailedAttempt.changeset(attrs)
-    |> Repo.insert()
+    result =
+      %FailedAttempt{}
+      |> FailedAttempt.changeset(attrs)
+      |> Repo.insert()
+
+    case result do
+      {:ok, attempt} ->
+        Phoenix.PubSub.broadcast(
+          Synapsis.PubSub,
+          "session:#{session_id}",
+          {"constraint_added",
+           %{
+             attempt_number: attempt.attempt_number,
+             error_message: attempt.error_message,
+             lesson: attempt.lesson
+           }}
+        )
+
+        {:ok, attempt}
+
+      error ->
+        error
+    end
   end
 
   @doc """

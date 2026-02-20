@@ -67,6 +67,30 @@ defmodule Synapsis.Provider.Adapter do
     MessageMapper.build_request(provider_type, messages, tools, opts)
   end
 
+  @doc """
+  Synchronous (non-streaming) single-turn call. Returns `{:ok, text}` or
+  `{:error, reason}`. Intended for short auditor/analysis calls where
+  the full response is needed before continuing.
+
+  `request` is a provider-format map (from `format_request/3`).
+  `config` must include `:type` and `:api_key`.
+  """
+  def complete(request, config) do
+    transport_type = resolve_transport_type(config[:type] || config["type"])
+
+    task =
+      Task.Supervisor.async_nolink(
+        Synapsis.Provider.TaskSupervisor,
+        fn -> do_complete(transport_type, request, config) end,
+        timeout: 60_000
+      )
+
+    case Task.yield(task, 60_000) || Task.shutdown(task) do
+      {:ok, result} -> result
+      nil -> {:error, "auditor timeout"}
+    end
+  end
+
   # ---------------------------------------------------------------------------
   # Streaming — inline SSE parse + event mapping per transport
   # ---------------------------------------------------------------------------
@@ -179,6 +203,83 @@ defmodule Synapsis.Provider.Adapter do
       e ->
         send(caller, {:provider_error, Exception.message(e)})
     end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Synchronous complete (auditor path)
+  # ---------------------------------------------------------------------------
+
+  defp do_complete(:anthropic, request, config) do
+    base_url = config[:base_url] || Transport.Anthropic.default_base_url()
+    url = "#{base_url}/v1/messages"
+
+    body = Map.merge(request, %{stream: false})
+
+    headers = [
+      {"x-api-key", config.api_key},
+      {"anthropic-version", "2023-06-01"},
+      {"content-type", "application/json"}
+    ]
+
+    response = Req.post!(url, headers: headers, json: body, receive_timeout: 60_000)
+
+    case response.body do
+      %{"content" => [%{"text" => text} | _]} ->
+        {:ok, text}
+
+      %{"error" => %{"message" => msg}} ->
+        {:error, msg}
+
+      other ->
+        {:error, "unexpected response: #{inspect(other)}"}
+    end
+  rescue
+    e -> {:error, Exception.message(e)}
+  end
+
+  defp do_complete(:openai, request, config) do
+    base_url = config[:base_url] || Transport.OpenAI.default_base_url()
+    url = "#{base_url}/v1/chat/completions"
+
+    body = Map.merge(request, %{stream: false})
+
+    headers =
+      [{"content-type", "application/json"}] ++
+        if(config[:api_key], do: [{"authorization", "Bearer #{config.api_key}"}], else: [])
+
+    response = Req.post!(url, headers: headers, json: body, receive_timeout: 60_000)
+
+    case response.body do
+      %{"choices" => [%{"message" => %{"content" => text}} | _]} ->
+        {:ok, text}
+
+      %{"error" => %{"message" => msg}} ->
+        {:error, msg}
+
+      other ->
+        {:error, "unexpected response: #{inspect(other)}"}
+    end
+  rescue
+    e -> {:error, Exception.message(e)}
+  end
+
+  defp do_complete(:google, request, config) do
+    base_url = config[:base_url] || Transport.Google.default_base_url()
+    model = request[:model] || "gemini-2.0-flash"
+    url = "#{base_url}/v1beta/models/#{model}:generateContent?key=#{config.api_key}"
+
+    body = Map.drop(request, [:model, :stream])
+    response = Req.post!(url, headers: [{"content-type", "application/json"}], json: body, receive_timeout: 60_000)
+
+    case response.body do
+      %{"candidates" => [%{"content" => %{"parts" => [%{"text" => text} | _]}} | _]} ->
+        {:ok, text}
+
+      other ->
+        {:error, "unexpected response: #{inspect(other)}"}
+    end
+  rescue
+    e -> {:error, Exception.message(e)}
   end
 
   # ---------------------------------------------------------------------------

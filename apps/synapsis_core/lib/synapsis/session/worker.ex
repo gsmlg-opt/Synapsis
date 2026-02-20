@@ -715,11 +715,65 @@ defmodule Synapsis.Session.Worker do
           })
           |> Repo.insert()
 
-      {:invoke_auditor, _reason} ->
-        # Auditor invocation is handled asynchronously — the Worker
-        # transitions to idle and the auditor result will come back
-        # as a new user message or system event
-        Logger.info("auditor_invocation_requested", session_id: state.session_id)
+      {:invoke_auditor, reason} ->
+        invoke_auditor_async(state, reason)
+    end)
+  end
+
+  defp invoke_auditor_async(state, reason) do
+    session_id = state.session_id
+    monitor = state.monitor
+    agent = state.agent
+
+    Logger.info("auditor_invocation_started",
+      session_id: session_id,
+      reason: reason
+    )
+
+    broadcast(session_id, "auditing", %{reason: reason})
+
+    Task.Supervisor.async_nolink(Synapsis.Tool.TaskSupervisor, fn ->
+      auditor_request =
+        Synapsis.Session.AuditorTask.prepare_escalation(session_id, monitor, agent)
+
+      auditor_provider = auditor_request.config.provider || state.session.provider
+      auditor_model = auditor_request.config.model
+
+      provider_config =
+        case Synapsis.Provider.Registry.get(auditor_provider || state.session.provider) do
+          {:ok, cfg} -> cfg
+          {:error, _} -> state.provider_config
+        end
+
+      provider_type = provider_config[:type] || provider_config["type"] || "anthropic"
+
+      # Build a minimal non-streaming request for the auditor
+      request = %{
+        model: auditor_model || provider_config[:default_model] || "claude-haiku-3-5-20241022",
+        max_tokens: auditor_request.config.max_tokens || 1024,
+        system: auditor_request.system_prompt,
+        messages: [%{role: "user", content: auditor_request.user_message}]
+      }
+
+      config = Map.put(provider_config, :type, provider_type)
+
+      case Synapsis.Provider.Adapter.complete(request, config) do
+        {:ok, response_text} ->
+          Synapsis.Session.AuditorTask.record_analysis(
+            session_id,
+            response_text,
+            trigger: reason,
+            auditor_model: request.model
+          )
+
+          Logger.info("auditor_analysis_recorded", session_id: session_id)
+
+        {:error, err} ->
+          Logger.warning("auditor_invocation_failed",
+            session_id: session_id,
+            reason: inspect(err)
+          )
+      end
     end)
   end
 

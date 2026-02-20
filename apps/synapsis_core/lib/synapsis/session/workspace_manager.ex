@@ -138,6 +138,54 @@ defmodule Synapsis.Session.WorkspaceManager do
   end
 
   @doc """
+  Promotes a tested patch from the worktree to the main project tree.
+
+  Applies the patch's `diff_text` directly to `project_path` using `git apply`.
+  The patch must have `test_status: "passed"` to be promoted.
+
+  Returns `:ok` on success or `{:error, reason}` if the apply fails.
+  """
+  @spec promote(String.t(), String.t()) :: :ok | {:error, String.t()}
+  def promote(patch_id, project_path) do
+    case Repo.get(Patch, patch_id) do
+      nil ->
+        {:error, :not_found}
+
+      %Patch{test_status: status} when status != "passed" ->
+        {:error, "Cannot promote patch with status: #{status}"}
+
+      patch ->
+        # Write diff to a temp file and apply to main tree
+        tmp_path = System.tmp_dir!() |> Path.join("synapsis-patch-#{patch.id}.diff")
+
+        try do
+          File.write!(tmp_path, patch.diff_text)
+
+          case run_in_dir(project_path, ["apply", "--check", tmp_path]) do
+            {:ok, _} ->
+              case run_in_dir(project_path, ["apply", tmp_path]) do
+                {:ok, _} ->
+                  Logger.info("patch_promoted",
+                    patch_id: patch_id,
+                    project_path: project_path
+                  )
+
+                  :ok
+
+                {:error, reason} ->
+                  {:error, "git apply failed: #{reason}"}
+              end
+
+            {:error, reason} ->
+              {:error, "Patch does not apply cleanly: #{reason}"}
+          end
+        after
+          File.rm(tmp_path)
+        end
+    end
+  end
+
+  @doc """
   Removes the worktree for a session. Called during session cleanup.
   """
   @spec teardown(String.t(), String.t()) :: :ok | {:error, String.t()}
