@@ -12,6 +12,18 @@ defmodule SynapsisCliTest do
       assert {:ok, output} = capture_main(["--version"])
       assert output =~ "Synapsis CLI v0.1.0"
     end
+
+    test "parses --serve flag" do
+      assert {:ok, output} = capture_main(["--serve"])
+      assert output =~ "mix phx.server"
+    end
+
+    test "--help output includes all major options" do
+      {:ok, output} = capture_main(["--help"])
+      assert output =~ "--model"
+      assert output =~ "--provider"
+      assert output =~ "--host"
+    end
   end
 
   defp capture_main(args) do
