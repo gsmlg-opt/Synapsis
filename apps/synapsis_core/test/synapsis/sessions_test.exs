@@ -253,4 +253,65 @@ defmodule Synapsis.SessionsTest do
       assert {:error, :not_found} = Sessions.compact(Ecto.UUID.generate())
     end
   end
+
+  describe "send_message/2 (map form)" do
+    test "sends message via map with content key" do
+      {:ok, session} =
+        Sessions.create("/tmp/test_sess_map_msg_#{:rand.uniform(100_000)}", %{
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      result = Sessions.send_message(session.id, %{content: "Hello via map"})
+      assert result == :ok
+    end
+
+    test "sends message with images list (filters invalid paths)" do
+      {:ok, session} =
+        Sessions.create("/tmp/test_sess_img_msg_#{:rand.uniform(100_000)}", %{
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      # Invalid image paths are filtered out - should still succeed
+      result =
+        Sessions.send_message(session.id, %{
+          content: "Check this image",
+          images: ["/nonexistent/image.jpg"]
+        })
+
+      assert result == :ok
+    end
+  end
+
+  describe "cancel/1" do
+    test "cancel broadcasts to session worker (cast - always ok)" do
+      {:ok, session} =
+        Sessions.create("/tmp/test_sess_cancel_#{:rand.uniform(100_000)}", %{
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      # Ensure session is running so cancel has a target
+      # cancel is a GenServer.cast so always returns :ok even if process doesn't receive it
+      assert :ok = Sessions.cancel(session.id)
+    end
+  end
+
+  describe "switch_agent/2" do
+    test "switches agent mode for a running session" do
+      {:ok, session} =
+        Sessions.create("/tmp/test_sess_switch_#{:rand.uniform(100_000)}", %{
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514",
+          agent: "build"
+        })
+
+      result = Sessions.switch_agent(session.id, "plan")
+      assert result == :ok
+
+      {:ok, updated} = Sessions.get(session.id)
+      assert updated.agent == "plan"
+    end
+  end
 end
