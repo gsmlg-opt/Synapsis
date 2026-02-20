@@ -1,5 +1,6 @@
 defmodule SynapsisServer.SessionController do
   use SynapsisServer, :controller
+  require Logger
 
   alias Synapsis.Sessions
 
@@ -45,9 +46,11 @@ defmodule SynapsisServer.SessionController do
         |> json(%{errors: format_changeset_errors(changeset)})
 
       {:error, reason} ->
+        Logger.warning("session_create_failed", reason: inspect(reason))
+
         conn
         |> put_status(500)
-        |> json(%{error: inspect(reason)})
+        |> json(%{error: "Failed to create session"})
     end
   end
 
@@ -68,7 +71,7 @@ defmodule SynapsisServer.SessionController do
         json(conn, %{status: "ok"})
 
       {:error, reason} ->
-        conn |> put_status(422) |> json(%{error: inspect(reason)})
+        conn |> put_status(422) |> json(%{error: format_error(reason)})
     end
   end
 
@@ -78,7 +81,7 @@ defmodule SynapsisServer.SessionController do
         json(conn, %{status: "ok"})
 
       {:error, reason} ->
-        conn |> put_status(422) |> json(%{error: inspect(reason)})
+        conn |> put_status(422) |> json(%{error: format_error(reason)})
     end
   end
 
@@ -98,7 +101,7 @@ defmodule SynapsisServer.SessionController do
         conn |> put_status(201) |> json(%{data: serialize_session(new_session)})
 
       {:error, reason} ->
-        conn |> put_status(422) |> json(%{error: inspect(reason)})
+        conn |> put_status(422) |> json(%{error: format_error(reason)})
     end
   end
 
@@ -111,7 +114,7 @@ defmodule SynapsisServer.SessionController do
         |> send_resp(200, json_data)
 
       {:error, reason} ->
-        conn |> put_status(422) |> json(%{error: inspect(reason)})
+        conn |> put_status(422) |> json(%{error: format_error(reason)})
     end
   end
 
@@ -124,7 +127,7 @@ defmodule SynapsisServer.SessionController do
         json(conn, %{status: "ok", compacted: true})
 
       {:error, reason} ->
-        conn |> put_status(422) |> json(%{error: inspect(reason)})
+        conn |> put_status(422) |> json(%{error: format_error(reason)})
     end
   end
 
@@ -198,6 +201,15 @@ defmodule SynapsisServer.SessionController do
 
   defp serialize_part(part) do
     %{type: "unknown", data: inspect(part)}
+  end
+
+  defp format_error(reason) when is_binary(reason), do: reason
+  defp format_error(:not_found), do: "Not found"
+  defp format_error(:timeout), do: "Request timed out"
+
+  defp format_error(reason) do
+    Logger.warning("session_operation_failed", reason: inspect(reason))
+    "Operation failed"
   end
 
   defp format_changeset_errors(changeset) do
