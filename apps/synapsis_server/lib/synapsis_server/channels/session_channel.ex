@@ -2,6 +2,8 @@ defmodule SynapsisServer.SessionChannel do
   @moduledoc "WebSocket channel for real-time session interaction."
   use Phoenix.Channel
 
+  require Logger
+
   @impl true
   def join("session:" <> session_id, _payload, socket) do
     Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session_id}")
@@ -27,7 +29,8 @@ defmodule SynapsisServer.SessionChannel do
         {:reply, :ok, socket}
 
       {:error, reason} ->
-        {:reply, {:error, %{reason: inspect(reason)}}, socket}
+        Logger.warning("session_channel_error", event: "session:message", reason: inspect(reason))
+        {:reply, {:error, %{reason: format_error(reason)}}, socket}
     end
   end
 
@@ -37,7 +40,8 @@ defmodule SynapsisServer.SessionChannel do
         {:reply, :ok, socket}
 
       {:error, reason} ->
-        {:reply, {:error, %{reason: inspect(reason)}}, socket}
+        Logger.warning("session_channel_error", event: "session:message", reason: inspect(reason))
+        {:reply, {:error, %{reason: format_error(reason)}}, socket}
     end
   end
 
@@ -48,8 +52,12 @@ defmodule SynapsisServer.SessionChannel do
 
   def handle_in("session:retry", _payload, socket) do
     case Synapsis.Sessions.retry(socket.assigns.session_id) do
-      :ok -> {:reply, :ok, socket}
-      {:error, reason} -> {:reply, {:error, %{reason: inspect(reason)}}, socket}
+      :ok ->
+        {:reply, :ok, socket}
+
+      {:error, reason} ->
+        Logger.warning("session_channel_error", event: "session:retry", reason: inspect(reason))
+        {:reply, {:error, %{reason: format_error(reason)}}, socket}
     end
   end
 
@@ -69,7 +77,12 @@ defmodule SynapsisServer.SessionChannel do
         {:reply, :ok, socket}
 
       {:error, reason} ->
-        {:reply, {:error, %{reason: inspect(reason)}}, socket}
+        Logger.warning("session_channel_error",
+          event: "session:switch_agent",
+          reason: inspect(reason)
+        )
+
+        {:reply, {:error, %{reason: format_error(reason)}}, socket}
     end
   end
 
@@ -129,4 +142,7 @@ defmodule SynapsisServer.SessionChannel do
     do: %{type: "agent", agent: agent, message: message}
 
   defp serialize_part(_), do: %{type: "unknown"}
+
+  defp format_error(reason) when is_atom(reason), do: to_string(reason)
+  defp format_error(_reason), do: "Operation failed"
 end

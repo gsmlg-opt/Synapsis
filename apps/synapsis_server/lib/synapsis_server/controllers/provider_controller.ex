@@ -1,6 +1,8 @@
 defmodule SynapsisServer.ProviderController do
   use SynapsisServer, :controller
 
+  require Logger
+
   alias Synapsis.Providers
 
   def index(conn, _params) do
@@ -84,7 +86,8 @@ defmodule SynapsisServer.ProviderController do
         conn |> put_status(:unprocessable_entity) |> json(%{error: "Unknown provider type"})
 
       {:error, reason} ->
-        conn |> put_status(500) |> json(%{error: inspect(reason)})
+        Logger.warning("provider_models_error", provider_id: id, reason: inspect(reason))
+        conn |> put_status(500) |> json(%{error: "Failed to retrieve models"})
     end
   end
 
@@ -97,9 +100,11 @@ defmodule SynapsisServer.ProviderController do
         conn |> put_status(:not_found) |> json(%{error: "Provider not found"})
 
       {:error, reason} ->
+        Logger.warning("provider_test_connection_error", provider_id: id, reason: inspect(reason))
+
         conn
         |> put_status(:unprocessable_entity)
-        |> json(%{data: %{status: "error", error: inspect(reason)}})
+        |> json(%{data: %{status: "error", error: "Connection failed"}})
     end
   end
 
@@ -109,8 +114,12 @@ defmodule SynapsisServer.ProviderController do
         config = get_provider_config(name)
 
         case mod.models(config) do
-          {:ok, models} -> json(conn, %{data: models})
-          {:error, reason} -> conn |> put_status(500) |> json(%{error: inspect(reason)})
+          {:ok, models} ->
+            json(conn, %{data: models})
+
+          {:error, reason} ->
+            Logger.warning("provider_models_by_name_error", name: name, reason: inspect(reason))
+            conn |> put_status(500) |> json(%{error: "Failed to retrieve models"})
         end
 
       {:error, _} ->

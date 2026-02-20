@@ -160,8 +160,13 @@ defmodule Synapsis.Session.Worker do
          %{state | status: :streaming, stream_ref: ref, pending_text: "", tool_uses: []}}
 
       {:error, reason} ->
+        Logger.warning("session_stream_start_failed",
+          session_id: state.session_id,
+          reason: inspect(reason)
+        )
+
         update_session_status(state.session_id, "error")
-        broadcast(state.session_id, "error", %{message: inspect(reason)})
+        broadcast(state.session_id, "error", %{message: "Failed to start stream"})
         {:reply, {:error, reason}, %{state | status: :error}}
     end
   end
@@ -659,7 +664,8 @@ defmodule Synapsis.Session.Worker do
           send(worker_pid, {:tool_result, tool_use.tool_use_id, final_output, false})
 
         {:error, reason} ->
-          send(worker_pid, {:tool_result, tool_use.tool_use_id, inspect(reason), true})
+          error_msg = if is_binary(reason), do: reason, else: "Tool execution failed"
+          send(worker_pid, {:tool_result, tool_use.tool_use_id, error_msg, true})
       end
     end)
   end
@@ -740,8 +746,13 @@ defmodule Synapsis.Session.Worker do
          }}
 
       {:error, reason} ->
+        Logger.warning("session_retry_stream_failed",
+          session_id: state.session_id,
+          reason: inspect(reason)
+        )
+
         update_session_status(state.session_id, "error")
-        broadcast(state.session_id, "error", %{message: inspect(reason)})
+        broadcast(state.session_id, "error", %{message: "Failed to start stream"})
         {:noreply, %{state | status: :error}}
     end
   end

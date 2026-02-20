@@ -3,6 +3,8 @@ defmodule Synapsis.Tool.Bash do
   use Synapsis.Tool
 
   @default_timeout 30_000
+  @max_timeout 300_000
+  @max_output_bytes 10_000_000
 
   @impl true
   def name, do: "bash"
@@ -28,7 +30,7 @@ defmodule Synapsis.Tool.Bash do
   @impl true
   def execute(input, context) do
     command = input["command"]
-    timeout = input["timeout"] || @default_timeout
+    timeout = min(input["timeout"] || @default_timeout, @max_timeout)
     cwd = context[:project_path] || "."
 
     port =
@@ -46,7 +48,14 @@ defmodule Synapsis.Tool.Bash do
   defp collect_output(port, acc, timeout) do
     receive do
       {^port, {:data, data}} ->
-        collect_output(port, acc <> data, timeout)
+        new_acc = acc <> data
+
+        if byte_size(new_acc) > @max_output_bytes do
+          Port.close(port)
+          {:ok, binary_part(new_acc, 0, @max_output_bytes) <> "\n[Output truncated at 10MB]"}
+        else
+          collect_output(port, new_acc, timeout)
+        end
 
       {^port, {:exit_status, 0}} ->
         {:ok, String.trim_trailing(acc)}
