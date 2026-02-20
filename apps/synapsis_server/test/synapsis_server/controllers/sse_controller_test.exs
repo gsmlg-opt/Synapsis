@@ -42,5 +42,33 @@ defmodule SynapsisServer.SSEControllerTest do
       # If we reach here, the controller didn't crash on a valid session
       assert true
     end
+
+    test "non-binary message (catch-all) is silently ignored", %{conn: conn, session: session} do
+      task =
+        Task.async(fn ->
+          get(conn, "/api/sessions/#{session.id}/events")
+        end)
+
+      Process.sleep(50)
+      # Send a non-binary-event-keyed message; triggers catch-all `_ -> sse_loop`
+      send(task.pid, :random_unknown_message)
+      Process.sleep(30)
+      assert Process.alive?(task.pid)
+      Task.shutdown(task, :brutal_kill)
+    end
+
+    test "event with invalid name is skipped without crashing", %{conn: conn, session: session} do
+      task =
+        Task.async(fn ->
+          get(conn, "/api/sessions/#{session.id}/events")
+        end)
+
+      Process.sleep(50)
+      # Capital letters fail @event_pattern ~r/^[a-z0-9_-]+$/
+      send(task.pid, {"InvalidEvent/Name!", %{data: "x"}})
+      Process.sleep(30)
+      assert Process.alive?(task.pid)
+      Task.shutdown(task, :brutal_kill)
+    end
   end
 end

@@ -153,6 +153,42 @@ defmodule SynapsisServer.SessionControllerTest do
       assert is_binary(response["error"])
     end
   end
+  describe "POST /api/sessions/:id/messages with images" do
+    test "accepts images list and returns ok", %{conn: conn} do
+      create_conn =
+        post(conn, "/api/sessions", %{
+          project_path: "/tmp/test_ctrl_img_#{:rand.uniform(100_000)}",
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      %{"data" => %{"id" => id}} = json_response(create_conn, 201)
+
+      conn = post(conn, "/api/sessions/#{id}/messages", %{content: "describe this", images: []})
+      assert %{"status" => "ok"} = json_response(conn, 200)
+    end
+  end
+
+  describe "POST /api/sessions/:id/fork with at_message" do
+    test "passes at_message option to fork", %{conn: conn} do
+      create_conn =
+        post(conn, "/api/sessions", %{
+          project_path: "/tmp/test_ctrl_fork_atm_#{:rand.uniform(100_000)}",
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      %{"data" => %{"id" => original_id}} = json_response(create_conn, 201)
+      fake_msg_id = Ecto.UUID.generate()
+
+      conn =
+        post(conn, "/api/sessions/#{original_id}/fork", %{at_message: fake_msg_id})
+
+      assert %{"data" => %{"id" => forked_id}} = json_response(conn, 201)
+      assert forked_id != original_id
+    end
+  end
+
   describe "GET /api/sessions/:id (serialize_part types)" do
     setup %{conn: conn} do
       create_conn =
@@ -274,6 +310,23 @@ defmodule SynapsisServer.SessionControllerTest do
       assert part["type"] == "agent"
       assert part["agent"] == "build"
       assert part["message"] == "Starting build..."
+    end
+
+    test "serialize_part catch-all returns unknown type for Image parts", %{conn: conn, session: session} do
+      %Synapsis.Message{}
+      |> Synapsis.Message.changeset(%{
+        session_id: session.id,
+        role: "user",
+        parts: [%Synapsis.Part.Image{media_type: "image/png", data: "base64data"}],
+        token_count: 5
+      })
+      |> Synapsis.Repo.insert!()
+
+      conn = get(conn, "/api/sessions/#{session.id}")
+      %{"data" => %{"messages" => messages}} = json_response(conn, 200)
+
+      part = messages |> List.last() |> Map.get("parts") |> hd()
+      assert part["type"] == "unknown"
     end
   end
 end
