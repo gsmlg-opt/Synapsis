@@ -167,8 +167,13 @@ defmodule Synapsis.Sessions do
     case get(session_id) do
       {:ok, session} ->
         failure_context = Synapsis.PromptBuilder.build_failure_context(session_id)
-        failure_log_tokens = if failure_context, do: Synapsis.ContextWindow.estimate_tokens(failure_context), else: 0
-        Synapsis.Session.Compactor.maybe_compact(session_id, session.model, extra_tokens: failure_log_tokens)
+
+        failure_log_tokens =
+          if failure_context, do: Synapsis.ContextWindow.estimate_tokens(failure_context), else: 0
+
+        Synapsis.Session.Compactor.maybe_compact(session_id, session.model,
+          extra_tokens: failure_log_tokens
+        )
 
       error ->
         error

@@ -96,8 +96,7 @@ defmodule Synapsis.Session.CompactorTest do
     assert Compactor.maybe_compact(session.id, "claude-sonnet-4-20250514") == :ok
 
     # With 20k extra_tokens (failure log): 170k > 160k threshold → compaction
-    assert Compactor.maybe_compact(session.id, "claude-sonnet-4-20250514",
-             extra_tokens: 20_000
-           ) == :compacted
+    assert Compactor.maybe_compact(session.id, "claude-sonnet-4-20250514", extra_tokens: 20_000) ==
+             :compacted
   end
 end

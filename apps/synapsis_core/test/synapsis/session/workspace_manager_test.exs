@@ -193,7 +193,8 @@ defmodule Synapsis.Session.WorkspaceManagerTest do
     end
 
     test "returns error for unknown patch" do
-      assert {:error, :not_found} = WorkspaceManager.promote("00000000-0000-0000-0000-000000000000", "/tmp")
+      assert {:error, :not_found} =
+               WorkspaceManager.promote("00000000-0000-0000-0000-000000000000", "/tmp")
     end
   end
 end

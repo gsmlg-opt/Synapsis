@@ -112,7 +112,11 @@ defmodule Synapsis.Session.AuditorTaskTest do
       # Subscribe to the session topic
       Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}")
 
-      {:ok, fa} = AuditorTask.record_analysis(session.id, "Lesson: do not repeat this.\nApproach: try differently.")
+      {:ok, fa} =
+        AuditorTask.record_analysis(
+          session.id,
+          "Lesson: do not repeat this.\nApproach: try differently."
+        )
 
       assert_receive {"constraint_added", payload}, 1000
       assert payload.attempt_number == fa.attempt_number

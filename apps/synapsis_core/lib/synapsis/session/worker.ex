@@ -132,12 +132,24 @@ defmodule Synapsis.Session.Worker do
 
     # Build failure context — inject into system prompt and account for its token usage
     prompt_context = Synapsis.PromptBuilder.build_failure_context(state.session_id)
-    failure_log_tokens = if prompt_context, do: Synapsis.ContextWindow.estimate_tokens(prompt_context), else: 0
-    Synapsis.Session.Compactor.maybe_compact(state.session_id, state.session.model, extra_tokens: failure_log_tokens)
+
+    failure_log_tokens =
+      if prompt_context, do: Synapsis.ContextWindow.estimate_tokens(prompt_context), else: 0
+
+    Synapsis.Session.Compactor.maybe_compact(state.session_id, state.session.model,
+      extra_tokens: failure_log_tokens
+    )
 
     # Load all messages and start streaming
     messages = load_messages(state.session_id)
-    request = Synapsis.MessageBuilder.build_request(messages, state.agent, state.session.provider, prompt_context)
+
+    request =
+      Synapsis.MessageBuilder.build_request(
+        messages,
+        state.agent,
+        state.session.provider,
+        prompt_context
+      )
 
     # Reset loop safety counters on new user message
     state = %{state | tool_call_hashes: MapSet.new(), iteration_count: 0, monitor: Monitor.new()}
@@ -697,8 +709,12 @@ defmodule Synapsis.Session.Worker do
     prompt_context = Synapsis.PromptBuilder.build_failure_context(state.session_id)
 
     # Account for failure log tokens when deciding whether to compact
-    failure_log_tokens = if prompt_context, do: Synapsis.ContextWindow.estimate_tokens(prompt_context), else: 0
-    Synapsis.Session.Compactor.maybe_compact(state.session_id, state.session.model, extra_tokens: failure_log_tokens)
+    failure_log_tokens =
+      if prompt_context, do: Synapsis.ContextWindow.estimate_tokens(prompt_context), else: 0
+
+    Synapsis.Session.Compactor.maybe_compact(state.session_id, state.session.model,
+      extra_tokens: failure_log_tokens
+    )
 
     request =
       Synapsis.MessageBuilder.build_request(

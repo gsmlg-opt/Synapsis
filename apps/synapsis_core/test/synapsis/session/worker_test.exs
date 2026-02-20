@@ -75,6 +75,5 @@ defmodule Synapsis.Session.WorkerTest do
 
       File.rm_rf!(non_git_dir)
     end
-
   end
 end
