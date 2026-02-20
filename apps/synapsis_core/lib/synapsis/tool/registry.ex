@@ -34,10 +34,12 @@ defmodule Synapsis.Tool.Registry do
       parameters: tool[:parameters] || tool.module.parameters()
     ]
 
-    opts =
+    extra =
       tool
       |> Map.drop([:name, :module, :description, :parameters, :timeout])
-      |> Enum.into(opts)
+      |> Enum.to_list()
+
+    opts = opts ++ extra
 
     :ets.insert(@table, {tool.name, {:module, tool.module, opts}})
     :ok
