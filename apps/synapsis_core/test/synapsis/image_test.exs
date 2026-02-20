@@ -82,4 +82,42 @@ defmodule Synapsis.ImageTest do
     assert result["inlineData"]["mimeType"] == "image/jpeg"
     assert result["inlineData"]["data"] == "xyz"
   end
+
+  test "encode_file/1 rejects files exceeding 20MB limit" do
+    tmp_dir =
+      Path.join(System.tmp_dir!(), "synapsis_img_big_#{System.unique_integer([:positive])}")
+
+    File.mkdir_p!(tmp_dir)
+    path = Path.join(tmp_dir, "huge.png")
+    png_header = <<0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A>>
+    oversized = png_header <> :binary.copy(<<0>>, 21 * 1024 * 1024)
+    File.write!(path, oversized)
+
+    assert {:error, msg} = Synapsis.Image.encode_file(path)
+    assert msg =~ "too large"
+    assert msg =~ "MB"
+
+    File.rm_rf!(tmp_dir)
+  end
+
+  test "encode_file/1 handles all supported media types" do
+    tmp_dir =
+      Path.join(System.tmp_dir!(), "synapsis_img_types_#{System.unique_integer([:positive])}")
+
+    File.mkdir_p!(tmp_dir)
+
+    for {ext, expected_mt} <- [
+          {".jpg", "image/jpeg"},
+          {".jpeg", "image/jpeg"},
+          {".gif", "image/gif"},
+          {".webp", "image/webp"}
+        ] do
+      path = Path.join(tmp_dir, "test#{ext}")
+      File.write!(path, "fake_image_data")
+      assert {:ok, result} = Synapsis.Image.encode_file(path)
+      assert result.media_type == expected_mt
+    end
+
+    File.rm_rf!(tmp_dir)
+  end
 end
