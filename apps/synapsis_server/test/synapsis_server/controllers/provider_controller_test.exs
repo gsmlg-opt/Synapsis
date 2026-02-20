@@ -171,4 +171,36 @@ defmodule SynapsisServer.ProviderControllerTest do
       assert json_response(conn, 404)
     end
   end
+
+  describe "GET /api/providers/:id/models" do
+    setup [:create_provider]
+
+    test "returns models for DB provider", %{conn: conn, provider: provider} do
+      conn = get(conn, "/api/providers/#{provider.id}/models")
+      %{"data" => models} = json_response(conn, 200)
+      assert is_list(models)
+      assert length(models) > 0
+    end
+
+    test "returns 404 for missing provider id", %{conn: conn} do
+      conn = get(conn, "/api/providers/#{Ecto.UUID.generate()}/models")
+      assert json_response(conn, 404)
+    end
+  end
+
+  describe "POST /api/providers/:id/test" do
+    setup [:create_provider]
+
+    test "returns ok status for provider with static models", %{conn: conn, provider: provider} do
+      conn = post(conn, "/api/providers/#{provider.id}/test", %{})
+      response = json_response(conn, 200)
+      assert response["data"]["status"] == "ok"
+      assert is_integer(response["data"]["models_count"])
+    end
+
+    test "returns 404 for missing provider", %{conn: conn} do
+      conn = post(conn, "/api/providers/#{Ecto.UUID.generate()}/test", %{})
+      assert json_response(conn, 404)
+    end
+  end
 end
