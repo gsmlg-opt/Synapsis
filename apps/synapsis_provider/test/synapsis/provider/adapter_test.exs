@@ -175,6 +175,32 @@ defmodule Synapsis.Provider.AdapterTest do
       assert " world" in text_deltas
       assert :done in chunks
     end
+
+    test "sends API key in header, not URL query string", %{bypass: bypass, port: port} do
+      Bypass.expect_once(
+        bypass,
+        "POST",
+        "/v1beta/models/gemini-2.0-flash:streamGenerateContent",
+        fn conn ->
+          headers = Map.new(conn.req_headers)
+          assert headers["x-goog-api-key"] == "secret-key"
+          refute conn.query_string =~ "key="
+
+          conn
+          |> Plug.Conn.put_resp_content_type("text/event-stream")
+          |> Plug.Conn.send_resp(200, """
+          data: {"candidates":[{"finishReason":"STOP"}]}
+
+          """)
+        end
+      )
+
+      config = %{api_key: "secret-key", base_url: "http://localhost:#{port}", type: "google"}
+      request = Adapter.format_request([], [], %{model: "gemini-2.0-flash", provider_type: "google"})
+
+      assert {:ok, ref} = Adapter.stream(request, config)
+      collect_chunks(ref)
+    end
   end
 
   # ---------------------------------------------------------------------------
