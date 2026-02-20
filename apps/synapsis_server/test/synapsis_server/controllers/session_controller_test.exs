@@ -137,4 +137,14 @@ defmodule SynapsisServer.SessionControllerTest do
       assert is_list(body["messages"])
     end
   end
+
+  describe "POST /api/sessions/:id/compact (error case)" do
+    test "returns error for unknown session", %{conn: conn} do
+      unknown_id = Ecto.UUID.generate()
+      conn = post(conn, "/api/sessions/#{unknown_id}/compact", %{})
+      # compact returns 422 with error message for unknown sessions
+      response = json_response(conn, 422)
+      assert is_binary(response["error"])
+    end
+  end
 end
