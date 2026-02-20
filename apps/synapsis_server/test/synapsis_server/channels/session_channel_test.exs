@@ -37,4 +37,75 @@ defmodule SynapsisServer.SessionChannelTest do
     ref = push(socket, "session:cancel", %{})
     assert_reply ref, :ok
   end
+
+  test "handles tool approve event", %{socket: socket} do
+    ref = push(socket, "session:tool_approve", %{"tool_use_id" => "tu_123"})
+    assert_reply ref, :ok
+  end
+
+  test "handles tool deny event", %{socket: socket} do
+    ref = push(socket, "session:tool_deny", %{"tool_use_id" => "tu_456"})
+    assert_reply ref, :ok
+  end
+
+  test "handles switch agent event", %{socket: socket} do
+    ref = push(socket, "session:switch_agent", %{"agent" => "plan"})
+    # May succeed or fail depending on session state, but should not crash
+    assert_reply ref, _status
+  end
+
+  test "forwards orchestrator_pause event from PubSub", %{socket: _socket, session: session} do
+    Phoenix.PubSub.broadcast(
+      Synapsis.PubSub,
+      "session:#{session.id}",
+      {"orchestrator_pause", %{reason: "Stagnation detected"}}
+    )
+
+    assert_push "orchestrator_pause", %{reason: "Stagnation detected"}
+  end
+
+  test "forwards orchestrator_escalate event from PubSub", %{socket: _socket, session: session} do
+    Phoenix.PubSub.broadcast(
+      Synapsis.PubSub,
+      "session:#{session.id}",
+      {"orchestrator_escalate", %{reason: "Duplicate tool calls"}}
+    )
+
+    assert_push "orchestrator_escalate", %{reason: "Duplicate tool calls"}
+  end
+
+  test "forwards orchestrator_terminate event from PubSub", %{socket: _socket, session: session} do
+    Phoenix.PubSub.broadcast(
+      Synapsis.PubSub,
+      "session:#{session.id}",
+      {"orchestrator_terminate", %{reason: "Max iterations reached"}}
+    )
+
+    assert_push "orchestrator_terminate", %{reason: "Max iterations reached"}
+  end
+
+  test "forwards text_delta event from PubSub", %{socket: _socket, session: session} do
+    Phoenix.PubSub.broadcast(
+      Synapsis.PubSub,
+      "session:#{session.id}",
+      {"text_delta", %{text: "Hello"}}
+    )
+
+    assert_push "text_delta", %{text: "Hello"}
+  end
+
+  test "forwards permission_request event from PubSub", %{socket: _socket, session: session} do
+    Phoenix.PubSub.broadcast(
+      Synapsis.PubSub,
+      "session:#{session.id}",
+      {"permission_request", %{tool: "bash", tool_use_id: "tu_789", input: %{"command" => "ls"}}}
+    )
+
+    assert_push "permission_request", %{tool: "bash", tool_use_id: "tu_789"}
+  end
+
+  test "ignores unknown handle_in events", %{socket: socket} do
+    ref = push(socket, "unknown:event", %{})
+    refute_reply ref, _
+  end
 end

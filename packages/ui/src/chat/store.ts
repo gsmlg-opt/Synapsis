@@ -32,6 +32,12 @@ export interface PermissionRequest {
   input: Record<string, any>
 }
 
+export interface ImageAttachment {
+  name: string
+  media_type: string
+  data: string  // base64-encoded
+}
+
 interface ChatState {
   messages: Message[]
   streamingText: string
@@ -65,11 +71,14 @@ const chatSlice = createSlice({
       state.status = "idle"
       state.error = null
     },
-    sendMessage(state, action: PayloadAction<string>) {
+    sendMessage(state, action: PayloadAction<string | { content: string; images?: ImageAttachment[] }>) {
+      const payload = action.payload
+      const content = typeof payload === "string" ? payload : payload.content
+
       state.messages.push({
         id: crypto.randomUUID(),
         role: "user",
-        parts: [{ type: "text", content: action.payload }],
+        parts: [{ type: "text", content }],
         timestamp: new Date().toISOString(),
       })
       state.status = "streaming"
