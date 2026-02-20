@@ -50,6 +50,10 @@ defmodule Synapsis.Session.Worker do
     GenServer.cast(via(session_id), {:deny_tool, tool_use_id})
   end
 
+  def switch_agent(session_id, agent_name) do
+    GenServer.call(via(session_id), {:switch_agent, agent_name})
+  end
+
   def get_status(session_id) do
     GenServer.call(via(session_id), :get_status)
   end
@@ -146,6 +150,30 @@ defmodule Synapsis.Session.Worker do
 
   def handle_call(:get_status, _from, state) do
     {:reply, state.status, state}
+  end
+
+  def handle_call({:switch_agent, agent_name}, _from, %{status: :idle} = state) do
+    agent = Synapsis.Agent.Resolver.resolve(agent_name, state.session.config)
+
+    # Update the session record in DB
+    state.session
+    |> Session.changeset(%{agent: to_string(agent_name)})
+    |> Repo.update!()
+
+    session = %{state.session | agent: to_string(agent_name)}
+
+    broadcast(state.session_id, "agent_switched", %{agent: to_string(agent_name)})
+
+    Logger.info("session_agent_switched",
+      session_id: state.session_id,
+      agent: to_string(agent_name)
+    )
+
+    {:reply, :ok, %{state | agent: agent, session: session}}
+  end
+
+  def handle_call({:switch_agent, _agent_name}, _from, state) do
+    {:reply, {:error, :not_idle}, state}
   end
 
   @impl true

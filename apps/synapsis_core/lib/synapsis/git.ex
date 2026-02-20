@@ -1,6 +1,8 @@
 defmodule Synapsis.Git do
   @moduledoc "Git integration for auto-checkpointing and undo."
 
+  @default_timeout 10_000
+
   def checkpoint(project_path, message \\ "synapsis auto-checkpoint") do
     with {:ok, _} <- run(project_path, ["add", "-A"]),
          {:ok, status} <- run(project_path, ["status", "--porcelain"]) do
@@ -46,11 +48,40 @@ defmodule Synapsis.Git do
   end
 
   defp run(project_path, args) do
-    case System.cmd("git", args, cd: project_path, stderr_to_stdout: true) do
-      {output, 0} -> {:ok, output}
-      {output, code} -> {:error, "git exited with #{code}: #{output}"}
+    case System.find_executable("git") do
+      nil ->
+        {:error, "git executable not found"}
+
+      git_path ->
+        port =
+          Port.open({:spawn_executable, git_path}, [
+            :binary,
+            :exit_status,
+            :stderr_to_stdout,
+            args: args,
+            cd: project_path
+          ])
+
+        collect_output(port, "")
     end
   rescue
     e -> {:error, "git error: #{Exception.message(e)}"}
+  end
+
+  defp collect_output(port, acc) do
+    receive do
+      {^port, {:data, data}} ->
+        collect_output(port, acc <> data)
+
+      {^port, {:exit_status, 0}} ->
+        {:ok, acc}
+
+      {^port, {:exit_status, code}} ->
+        {:error, "git exited with #{code}: #{acc}"}
+    after
+      @default_timeout ->
+        Port.close(port)
+        {:error, "git command timed out after #{@default_timeout}ms"}
+    end
   end
 end

@@ -42,8 +42,14 @@ defmodule SynapsisServer.SessionChannel do
     {:reply, :ok, socket}
   end
 
-  def handle_in("session:switch_agent", %{"agent" => _agent}, socket) do
-    {:reply, :ok, socket}
+  def handle_in("session:switch_agent", %{"agent" => agent}, socket) do
+    case Synapsis.Sessions.switch_agent(socket.assigns.session_id, agent) do
+      :ok ->
+        {:reply, :ok, socket}
+
+      {:error, reason} ->
+        {:reply, {:error, %{reason: inspect(reason)}}, socket}
+    end
   end
 
   def handle_in(_event, _payload, socket) do

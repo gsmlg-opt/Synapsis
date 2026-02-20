@@ -100,6 +100,11 @@ defmodule Synapsis.Sessions do
     Synapsis.Session.Worker.retry(session_id)
   end
 
+  def switch_agent(session_id, agent_name) do
+    ensure_session_running(session_id)
+    Synapsis.Session.Worker.switch_agent(session_id, agent_name)
+  end
+
   def approve_tool(session_id, tool_use_id) do
     Synapsis.Session.Worker.approve_tool(session_id, tool_use_id)
   end
