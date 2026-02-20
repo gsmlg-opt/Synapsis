@@ -165,8 +165,15 @@ defmodule Synapsis.Session.Worker do
       update_session_status(state.session_id, "streaming")
       broadcast(state.session_id, "session_status", %{status: "streaming"})
 
+      prompt_context = Synapsis.PromptBuilder.build_failure_context(state.session_id)
+
       request =
-        Synapsis.MessageBuilder.build_request(messages, state.agent, state.session.provider)
+        Synapsis.MessageBuilder.build_request(
+          messages,
+          state.agent,
+          state.session.provider,
+          prompt_context
+        )
 
       case SessionStream.start_stream(request, state.provider_config, state.session.provider) do
         {:ok, ref} ->
