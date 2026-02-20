@@ -107,4 +107,48 @@ defmodule Synapsis.Session.SharingTest do
 
     assert session1.project_id == session2.project_id
   end
+
+  test "export/1 serializes unknown part types as 'unknown'", %{session: session} do
+    # Agent part has no export_part clause → falls back to %{type: "unknown"}
+    %Message{}
+    |> Message.changeset(%{
+      session_id: session.id,
+      role: "assistant",
+      parts: [%Synapsis.Part.Agent{agent: "build", message: "Running..."}],
+      token_count: 5
+    })
+    |> Repo.insert!()
+
+    {:ok, json} = Sharing.export(session.id)
+    data = Jason.decode!(json)
+    last_msg = List.last(data["messages"])
+    assert hd(last_msg["parts"])["type"] == "unknown"
+  end
+
+  test "import_session/2 maps unknown part types to Text fallback", %{session: _session} do
+    json =
+      Jason.encode!(%{
+        "version" => "1.0",
+        "session" => %{
+          "title" => "Imported",
+          "provider" => "anthropic",
+          "model" => "claude-sonnet-4-20250514",
+          "agent" => "build",
+          "config" => %{}
+        },
+        "messages" => [
+          %{
+            "role" => "user",
+            "token_count" => 5,
+            "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
+            "parts" => [%{"type" => "mystery_part", "foo" => "bar"}]
+          }
+        ]
+      })
+
+    {:ok, imported} = Sharing.import_session(json, "/tmp/sharing-fallback-#{System.unique_integer([:positive])}")
+    msgs = Synapsis.Message |> Ecto.Query.where([m], m.session_id == ^imported.id) |> Synapsis.Repo.all()
+    assert length(msgs) == 1
+    assert hd(hd(msgs).parts) == %Synapsis.Part.Text{content: "[imported content]"}
+  end
 end
