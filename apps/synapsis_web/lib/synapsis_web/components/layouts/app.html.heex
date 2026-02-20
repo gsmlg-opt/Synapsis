@@ -1,2 +1,27 @@
-<.flash_group flash={@flash} />
-{@inner_content}
+<div class="flex flex-col h-screen">
+  <nav class="shrink-0 h-12 border-b border-gray-800 bg-gray-900/80 backdrop-blur flex items-center px-4 gap-6 z-50">
+    <.link navigate={~p"/"} class="text-lg font-bold text-white hover:text-blue-400 mr-2">
+      Synapsis
+    </.link>
+    <.link navigate={~p"/projects"} class="text-sm text-gray-400 hover:text-gray-200">
+      Projects
+    </.link>
+    <.link navigate={~p"/settings/providers"} class="text-sm text-gray-400 hover:text-gray-200">
+      Providers
+    </.link>
+    <.link navigate={~p"/settings/mcp"} class="text-sm text-gray-400 hover:text-gray-200">
+      MCP
+    </.link>
+    <.link navigate={~p"/settings/lsp"} class="text-sm text-gray-400 hover:text-gray-200">
+      LSP
+    </.link>
+    <div class="flex-1" />
+    <.link navigate={~p"/settings"} class="text-sm text-gray-400 hover:text-gray-200">
+      Settings
+    </.link>
+  </nav>
+  <.flash_group flash={@flash} />
+  <main class="flex-1 min-h-0 overflow-y-auto">
+    {@inner_content}
+  </main>
+</div>

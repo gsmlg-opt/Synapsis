@@ -13,7 +13,9 @@ defmodule SynapsisWeb.MCPLive.Index do
       name: params["name"],
       transport: params["transport"] || "stdio",
       command: params["command"],
+      args: parse_args(params["args"]),
       url: params["url"],
+      env: parse_env(params["env"]),
       auto_connect: params["auto_connect"] == "true"
     }
 
@@ -41,6 +43,29 @@ defmodule SynapsisWeb.MCPLive.Index do
   defp list_configs do
     import Ecto.Query
     Synapsis.Repo.all(from(m in Synapsis.MCPConfig, order_by: [asc: m.name]))
+  end
+
+  defp parse_args(nil), do: []
+  defp parse_args(""), do: []
+
+  defp parse_args(str) when is_binary(str) do
+    str |> String.split("\n", trim: true) |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == ""))
+  end
+
+  defp parse_env(nil), do: %{}
+  defp parse_env(""), do: %{}
+
+  defp parse_env(str) when is_binary(str) do
+    str
+    |> String.split("\n", trim: true)
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.reduce(%{}, fn line, acc ->
+      case String.split(line, "=", parts: 2) do
+        [key, value] -> Map.put(acc, String.trim(key), String.trim(value))
+        _ -> acc
+      end
+    end)
   end
 
   @impl true
@@ -85,12 +110,24 @@ defmodule SynapsisWeb.MCPLive.Index do
               placeholder="Command (for stdio transport)"
               class="w-full bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none"
             />
+            <textarea
+              name="args"
+              placeholder="Arguments (one per line)"
+              rows="2"
+              class="w-full bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none font-mono text-sm"
+            ></textarea>
             <input
               type="text"
               name="url"
               placeholder="URL (for SSE transport)"
               class="w-full bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none"
             />
+            <textarea
+              name="env"
+              placeholder="Environment variables (KEY=VALUE, one per line)\ne.g. GITHUB_TOKEN=ghp_xxx"
+              rows="3"
+              class="w-full bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none font-mono text-sm"
+            ></textarea>
           </form>
         </div>
 
@@ -104,7 +141,13 @@ defmodule SynapsisWeb.MCPLive.Index do
               <div class="text-xs text-gray-500 mt-1">
                 {config.transport}
                 <span :if={config.command}>{"| #{config.command}"}</span>
+                <span :if={config.args != []}>
+                  {Enum.join(config.args, " ")}
+                </span>
                 <span :if={config.url}>{"| #{config.url}"}</span>
+                <span :if={map_size(config.env) > 0} class="text-yellow-600">
+                  {"| #{map_size(config.env)} env var(s)"}
+                </span>
               </div>
             </.link>
             <button

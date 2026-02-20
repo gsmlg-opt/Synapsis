@@ -17,7 +17,11 @@ end
 # Database connection — read PGHOST/PGUSER at runtime so devenv socket paths work
 config :synapsis_data, Synapsis.Repo,
   username: System.get_env("PGUSER", "postgres"),
-  database: System.get_env("PGDATABASE", if(config_env() == :test, do: "synapsis_test", else: "synapsis_dev")),
+  database:
+    System.get_env(
+      "PGDATABASE",
+      if(config_env() == :test, do: "synapsis_test", else: "synapsis_dev")
+    ),
   socket_dir: System.get_env("PGHOST")
 
 # Encryption key for provider API keys (AES-256-GCM)

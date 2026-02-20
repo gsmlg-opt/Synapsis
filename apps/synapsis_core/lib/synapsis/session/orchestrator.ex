@@ -61,8 +61,7 @@ defmodule Synapsis.Session.Orchestrator do
 
       # Warn but continue: approaching iteration limit
       monitor.iteration_count >= max_iterations - 5 ->
-        {:continue,
-         "Approaching iteration limit (#{monitor.iteration_count}/#{max_iterations})"}
+        {:continue, "Approaching iteration limit (#{monitor.iteration_count}/#{max_iterations})"}
 
       # All clear
       true ->

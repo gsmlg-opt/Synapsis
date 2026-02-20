@@ -91,7 +91,9 @@ defmodule Synapsis.Session.WorkspaceManagerTest do
     test "returns error for bad patch", %{project_path: pp, session: session} do
       {:ok, _wt_path} = WorkspaceManager.setup(pp, session.id)
 
-      assert {:error, reason} = WorkspaceManager.apply_and_test(pp, session.id, "bad patch", "true")
+      assert {:error, reason} =
+               WorkspaceManager.apply_and_test(pp, session.id, "bad patch", "true")
+
       assert reason =~ "Patch apply failed"
 
       WorkspaceManager.teardown(pp, session.id)

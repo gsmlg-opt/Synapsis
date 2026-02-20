@@ -1,342 +1,405 @@
-# PRD: Agent Orchestration & Loop Prevention — Implementation
+# PRD: Agent Orchestration & Loop Prevention — Feasibility Audit
 
 ## Objective
 
-Implement the Agent Orchestration layer in `synapsis_core` to solve the regression loop problem: agent detects bug → applies fix → tests fail → rolls back → forgets failure → repeats same fix infinitely.
+Audit the current Synapsis codebase through **static analysis AND live integration testing**. Boot the app, verify subsystems work (providers, MCP, LSP, sessions), run a real coding task end-to-end, then produce a gap analysis determining whether the Agent Orchestration & Loop Prevention design can be implemented.
 
 **Deliverables:**
-- `Synapsis.Session.Orchestrator` — rules-engine GenServer controlling the agent loop
-- `Synapsis.Session.Monitor` — deterministic loop/stagnation detector
-- `Synapsis.Session.WorkspaceManager` — git patch tracking with atomic revert-and-learn
-- `Synapsis.Session.PromptBuilder` — dynamic system prompt assembly with failure log injection
-- `Synapsis.Session.AuditorTask` — dual-model escalation (cheap worker, expensive auditor)
-- Data layer additions: `FailedAttempt` embedded schema, `Patch` struct, session `failure_constraints` column
-- PubSub events: `:auditing`, `:paused`, `:terminated`, `:constraint_added`
-- Tests for all new modules
+- `docs/architecture/ORCHESTRATION_AUDIT.md` — structured findings with file references
+- `docs/architecture/INTEGRATION_TEST_RESULTS.md` — live test results from running the app
 
-## Prior Art — What Already Exists
+## Background
 
-The audit (completed) and tier work established these foundations:
+The proposed design introduces:
 
-| Capability | Status | Location |
-|-----------|--------|----------|
-| Tool call hashing (MapSet dedup) | **Done** | `Session.Worker` — `tool_call_hashes` field, `:erlang.phash2/1` |
-| Iteration cap (25) | **Done** | `Session.Worker` — `@max_tool_iterations`, `iteration_count` |
-| Git via Port (not System.cmd) | **Done** | `Synapsis.Git` — `checkpoint`, `undo_last`, `diff`, `is_repo?` |
-| Per-session supervisor (`:one_for_all`) | **Done** | `Session.Supervisor` — currently only starts Worker |
-| Provider adapter (multi-provider) | **Done** | `Provider.Adapter` — supports Anthropic, OpenAI, Google, local |
-| Dual-model capable | **Done** | `Provider.Adapter.stream/2` accepts any config map per call |
-| System prompt via Agent.Resolver | **Done** | `Agent.Resolver.resolve/2` → `MessageBuilder.build_request/3` |
-| PubSub broadcast infra | **Done** | `session:{id}` topic with 8+ event types, catch-all channel forwarding |
-| Error recovery (stream DOWN) | **Done** | Worker handles `:DOWN` with retry, 30-min inactivity timeout |
-| Agent switching | **Done** | `Sessions.switch_agent/2` → Worker re-resolves config |
-| Context compaction | **Done** | `Session.Compactor` — summarizes old messages, preserves recent 10 |
+- **Orchestrator** — pure Elixir GenServer as rules engine (pattern-matched `handle_info` clauses), no ML. Decides continue/pause/escalate/terminate.
+- **Monitor** — deterministic loop detection. Tool call hashing via `MapSet`, test regression tracking, stagnation counters.
+- **Failure Log** — rolling negative constraints (max 5–7) injected into LLM system prompt. Each entry: description + result + lesson. Survives context window compression.
+- **WorkspaceManager** — granular git patch tracking. Atomic revert-and-learn: reverting code simultaneously records the failure reason. Uses `git worktree` per session.
+- **Dual-Model (Auditor-Worker)** — cheap fast model for code gen (high volume), expensive reasoning model for failure synthesis (2–3 calls per session on escalation triggers). API keys for all providers are stored in `.secrets.toml` at the project root.
+- **Scratch Worktrees** — patches tested in isolation before touching main tree.
 
-## Architecture
+Target location: `apps/synapsis_core/lib/synapsis_core/sessions/` with modules `orchestrator.ex`, `monitor.ex`, `workspace_manager.ex`, `agent_loop.ex`, `auditor_task.ex`, `prompt_builder.ex`, `state.ex`, `token_budget.ex`, `patch.ex`.
 
-### Process Tree (per session)
+## Approach
 
-```
-Session.Supervisor (:one_for_all)
-├── Session.Worker          (existing — state machine, tool dispatch)
-├── Session.Orchestrator    (NEW — rules engine, loop control)
-└── Session.Monitor         (NEW — hashing, stagnation detection)
-```
+This audit has two phases:
 
-`WorkspaceManager` is a library module (not a GenServer) called by the Orchestrator. `PromptBuilder` and `AuditorTask` are also library/task modules.
+1. **Static analysis (steps 1–8):** Read the codebase, map modules, identify gaps.
+2. **Live integration testing (steps 9–13):** Boot the app, use **chrome-devtools MCP** to drive the web UI, test each subsystem, run a real coding session, and intentionally try to trigger the regression loop.
 
-### Data Flow
-
-```
-User message
-    │
-    ▼
-Worker.send_message/2
-    │
-    ├──► Orchestrator.pre_iteration/1     ← check constraints before LLM call
-    │       │
-    │       ├── PromptBuilder.build/2     ← inject failure log into system prompt
-    │       └── Monitor.check/1           ← verify not looping
-    │
-    ├──► Provider.Adapter.stream/2        ← LLM call (Worker model)
-    │
-    ├──► Tool execution
-    │       │
-    │       └──► WorkspaceManager.record_patch/3  ← track what changed
-    │
-    ├──► Orchestrator.post_iteration/2    ← evaluate results
-    │       │
-    │       ├── continue    → next iteration
-    │       ├── pause       → broadcast :paused, wait for user
-    │       ├── escalate    → AuditorTask.analyze/2 (Auditor model)
-    │       └── terminate   → broadcast :terminated, force idle
-    │
-    └──► (on escalation result)
-            │
-            └── WorkspaceManager.revert_and_learn/2  ← atomic rollback + record lesson
-```
+The integration tests provide ground truth that static analysis cannot — does the system prompt have room for injection? Can two models run in the same session? What does the tool call data look like for hashing?
 
 ## Steps
 
-### Step 1: Data Layer — FailedAttempt and Patch structs
+### Step 1: Read Project Structure
 
-**Location:** `apps/synapsis_data/lib/synapsis/`
+Map the current umbrella layout. Identify all apps, their dependencies, and supervision trees.
 
-1. Create `Synapsis.FailedAttempt` embedded schema:
-   ```elixir
-   embedded_schema do
-     field :approach, :string        # what was tried
-     field :result, :string          # what happened
-     field :lesson, :string          # why it's a dead end
-     field :patch_hash, :string      # hash of the code change
-     field :recorded_at, :utc_datetime
-   end
-   ```
-
-2. Create `Synapsis.Patch` embedded schema:
-   ```elixir
-   embedded_schema do
-     field :path, :string            # file path
-     field :diff, :string            # unified diff
-     field :hash, :string            # content hash for dedup
-     field :tool_call_id, :string    # which tool call produced it
-     field :applied_at, :utc_datetime
-   end
-   ```
-
-3. Add migration: `failure_constraints` JSONB column on `sessions` table (array of `FailedAttempt`, default `[]`).
-
-4. Update `Synapsis.Session` schema to include `failure_constraints` field with `{:array, :map}` type.
-
-5. Register both as castable in `Synapsis.Part` if needed for message serialization.
-
-**Tests:** Round-trip serialization, changeset validation, empty defaults.
-
-### Step 2: Session.Monitor — Deterministic Loop Detection
-
-**Location:** `apps/synapsis_core/lib/synapsis/session/monitor.ex`
-
-Pure-function module (NOT a GenServer — keeps it simple, called by Orchestrator).
-
-```elixir
-defmodule Synapsis.Session.Monitor do
-  @type state :: %{
-    tool_hashes: MapSet.t(),
-    test_results: [{String.t(), :pass | :fail}],
-    stagnation_counter: non_neg_integer(),
-    iteration: non_neg_integer()
-  }
-
-  def new() :: state
-  def record_tool_call(state, tool_name, input) :: {state, :ok | :duplicate}
-  def record_test_result(state, test_output) :: {state, :improved | :regressed | :unchanged}
-  def record_iteration(state) :: {state, :ok | :stagnating}
-  def reset(state) :: state
-end
+```bash
+ls apps/
+find . -name "mix.exs" -maxdepth 3 | sort
+for app in apps/*/; do echo "=== $app ===" && head -30 "${app}mix.exs"; done
 ```
 
-**Detection rules:**
-- **Duplicate tool call:** `:erlang.phash2({tool_name, input})` collision in MapSet → `:duplicate`
-- **Test regression:** Compare latest test pass/fail counts against previous. If fail count increased → `:regressed`
-- **Stagnation:** If 3 consecutive iterations produce no test improvement and no new file changes → `:stagnating`
+Record: which apps exist, dependency direction between them, any existing `Application.start` children.
 
-**Move existing logic:** Extract `tool_call_hashes` and `iteration_count` from `Session.Worker` into Monitor. Worker calls `Monitor.record_tool_call/3` instead of maintaining its own MapSet.
+### Step 2: Locate Existing Session Management
 
-**Tests:** Unit tests for each detection rule with mock tool calls and test outputs.
+Find everything related to sessions, agent loops, and conversation state.
 
-### Step 3: Session.PromptBuilder — Dynamic System Prompt with Failure Log
-
-**Location:** `apps/synapsis_core/lib/synapsis/session/prompt_builder.ex`
-
-```elixir
-defmodule Synapsis.Session.PromptBuilder do
-  def build(base_system_prompt, failure_constraints) :: String.t()
-  def format_constraint(failed_attempt) :: String.t()
-end
+```bash
+grep -r "Session\|session" apps/synapsis_core/lib/ --include="*.ex" -l
+grep -r "GenServer\|use GenServer" apps/synapsis_core/lib/ --include="*.ex" -l
+grep -r "Supervisor\|DynamicSupervisor" apps/synapsis_core/lib/ --include="*.ex" -l
+grep -r "agent\|loop\|iterate\|step\|orchestrat" apps/synapsis_core/lib/ --include="*.ex" -l
 ```
 
-**Behavior:**
-- Takes the base system prompt from `Agent.Resolver` and the session's `failure_constraints` list
-- Appends a `## Failed Approaches — Do NOT Repeat` block at the end of the system prompt
-- Each constraint formatted as:
-  ```
-  ### Attempt: [approach]
-  Result: [result]
-  Lesson: [lesson]
-  ```
-- Maximum 7 constraints. When adding an 8th, drop the oldest.
-- If `failure_constraints` is empty, return base prompt unchanged.
+For each file found, read it fully. Document:
+- Current session lifecycle (how sessions start, run, stop)
+- What state a session holds (GenServer state struct, ETS, DB)
+- Whether there's an existing agent loop / LLM call cycle
+- Any existing loop detection, failure memory, or retry logic
 
-**Integration point:** In `Session.Worker`, before calling `MessageBuilder.build_request/3`, replace `agent[:system_prompt]` with `PromptBuilder.build(agent[:system_prompt], session.failure_constraints)`.
+### Step 3: Check Tool System
 
-**Tests:** Empty constraints → unchanged prompt. 1-7 constraints → appended block. 8+ → oldest dropped. Format matches expected markdown.
+The design depends on hashing tool calls. Find the current tool implementation.
 
-### Step 4: Session.WorkspaceManager — Git Patch Tracking
-
-**Location:** `apps/synapsis_core/lib/synapsis/session/workspace_manager.ex`
-
-Library module using existing `Synapsis.Git`.
-
-```elixir
-defmodule Synapsis.Session.WorkspaceManager do
-  def record_patch(project_path, tool_call_id) :: {:ok, Patch.t()} | {:error, term()}
-  def revert_and_learn(project_path, patch, lesson) :: {:ok, FailedAttempt.t()} | {:error, term()}
-  def list_patches(project_path) :: [Patch.t()]
-end
+```bash
+grep -r "Tool\|tool_use\|tool_call\|function_call" apps/ --include="*.ex" -l
+grep -r "execute\|side_effect\|file_edit\|file_write\|bash_exec" apps/synapsis_core/lib/ --include="*.ex" -l
+find apps/ -path "*/tools/*" -name "*.ex"
 ```
 
-**`record_patch/2`:**
-1. Run `Synapsis.Git.diff(project_path)` to capture what changed since last checkpoint
-2. Hash the diff with `:crypto.hash(:sha256, diff)`
-3. Return a `Patch` struct
+Document:
+- How tools are defined (behaviour? module? registry?)
+- How tool calls are dispatched and results returned
+- Whether tool call arguments are accessible for hashing
+- Existing side effect declarations (`:file_changed` etc.)
 
-**`revert_and_learn/3`:** (atomic operation)
-1. `Synapsis.Git.undo_last(project_path)` — revert the code
-2. Build a `FailedAttempt` struct with the lesson
-3. Return both — caller persists the `FailedAttempt` to the session's `failure_constraints`
+### Step 4: Check Provider / LLM Layer
 
-**Extend `Synapsis.Git`:** Add `worktree_add/3`, `worktree_remove/2` for scratch worktree support (Phase 2 — not required for initial implementation).
+The design needs: system prompt injection, multi-model support, streaming. API provider keys are stored in `.secrets.toml` at the project root (not in the database).
 
-**Tests:** Mock git operations, verify patch capture, verify atomic revert-and-learn produces correct structs.
-
-### Step 5: Session.AuditorTask — Dual-Model Escalation
-
-**Location:** `apps/synapsis_core/lib/synapsis/session/auditor_task.ex`
-
-```elixir
-defmodule Synapsis.Session.AuditorTask do
-  def analyze(context, opts \\ []) :: {:ok, FailedAttempt.t()} | {:error, term()}
-end
+```bash
+grep -r "system_prompt\|system_message\|messages\|prompt" apps/synapsis_provider/lib/ --include="*.ex" -l 2>/dev/null
+grep -r "system_prompt\|system_message\|messages\|prompt" apps/req_llm/lib/ --include="*.ex" -l 2>/dev/null
+grep -r "stream\|Stream\|chunk\|SSE" apps/synapsis_provider/lib/ --include="*.ex" -l 2>/dev/null
+grep -r "secrets\|toml\|api_key\|TOML\|Toml" apps/ --include="*.ex" -l
+cat .secrets.toml 2>/dev/null || echo "File not found"
 ```
 
-**Behavior:**
-1. Called by Orchestrator when escalation is triggered (3 consecutive failures, test regression, or stagnation)
-2. Assembles a concise prompt: "Here is what was tried, here is what failed, here is the test output. What is the root cause and what lesson should be recorded?"
-3. Calls `Provider.Adapter.stream/2` with the **auditor model** config (expensive reasoning model)
-4. Parses the response into a `FailedAttempt` struct
-5. Returns the constraint to be added to the failure log
+Document:
+- How the system prompt is assembled (is there a builder module?)
+- Can we inject a `## Failed Approaches` block into the system prompt per-turn?
+- Does the provider layer support calling different models in the same session? (Needed for Worker + Auditor dual-model pattern — each may use a different provider/key from `.secrets.toml`)
+- How streaming events reach the session process
+- How `.secrets.toml` is loaded and which providers are configured
+- Whether the current config structure supports selecting different provider/model pairs per role (Worker vs Auditor)
 
-**Model selection:**
-- Read `auditor` config from agent config: `agent[:auditor_model]` and `agent[:auditor_provider]`
-- Defaults: use the same provider but with a reasoning-class model (e.g., `claude-opus-4-20250514` if worker is `claude-sonnet-4-20250514`)
-- Extend `Agent.Resolver` to support `auditor_model` and `auditor_provider` fields
+### Step 5: Check Git / Workspace Operations
 
-**Tests:** Mock provider response, verify FailedAttempt parsing, verify it uses the auditor model config.
+The design uses `git worktree`, `git apply`, and patch tracking.
 
-### Step 6: Session.Orchestrator — Rules Engine
-
-**Location:** `apps/synapsis_core/lib/synapsis/session/orchestrator.ex`
-
-GenServer, sibling to Worker under `Session.Supervisor`.
-
-```elixir
-defmodule Synapsis.Session.Orchestrator do
-  use GenServer
-
-  defstruct [
-    :session_id,
-    :monitor,          # Monitor state
-    :failure_log,      # [FailedAttempt.t()]
-    :patches,          # [Patch.t()]
-    escalation_count: 0,
-    max_escalations: 3
-  ]
-
-  # Called by Worker before each LLM call
-  def pre_iteration(session_id) :: :continue | :pause | :terminate
-
-  # Called by Worker after tool execution
-  def post_iteration(session_id, result) :: :continue | :pause | :escalate | :terminate
-
-  # Called by Worker to get the augmented system prompt
-  def get_system_prompt(session_id, base_prompt) :: String.t()
-
-  # Manual override from UI
-  def force_continue(session_id) :: :ok
-  def clear_constraints(session_id) :: :ok
-end
+```bash
+grep -r "git\|Git\|System.cmd.*git\|worktree\|patch\|diff" apps/ --include="*.ex" -l
+grep -r "File.write\|File.read\|Path.join" apps/synapsis_core/lib/ --include="*.ex" -l | head -20
 ```
 
-**Rules (pattern-matched `handle_call` clauses):**
+Document:
+- Any existing git integration
+- How file edits are currently applied (direct write? transactional?)
+- Whether there's any concept of rollback or undo
 
-| Condition | Action |
-|-----------|--------|
-| Monitor returns `:duplicate` | Warn in tool result (existing behavior), increment stagnation |
-| Monitor returns `:stagnating` (3+ iterations) | `:escalate` → trigger AuditorTask |
-| Monitor returns `:regressed` | `:escalate` → trigger AuditorTask |
-| Escalation returns a lesson | Record `FailedAttempt`, call `WorkspaceManager.revert_and_learn`, broadcast `:constraint_added` |
-| `escalation_count >= max_escalations` | `:terminate` → too many failures, stop |
-| Iteration count > `@max_tool_iterations` | `:terminate` (existing, moved from Worker) |
-| All checks pass | `:continue` |
+### Step 6: Check PubSub / Channel Integration
 
-**PubSub broadcasts:** On state transitions, broadcast to `session:{id}`:
-- `"orchestrator_status"` with `%{status: :auditing | :paused | :terminated}`
-- `"constraint_added"` with `%{lesson: "...", approach: "..."}`
+The Orchestrator broadcasts status events. Check what exists.
 
-**Integration:** Modify `Session.Supervisor` to start Orchestrator alongside Worker. Modify Worker's `continue_after_tools/2` to call `Orchestrator.post_iteration/2` before unconditionally restarting the stream.
+```bash
+grep -r "PubSub\|broadcast\|subscribe\|Phoenix.PubSub" apps/ --include="*.ex" -l
+grep -r "Channel\|channel\|SessionChannel" apps/synapsis_server/lib/ --include="*.ex" -l
+grep -r "topic\|\"session:" apps/ --include="*.ex"
+```
 
-### Step 7: Wire Into Session.Worker
+Document:
+- Current PubSub topic structure
+- What events are currently broadcast
+- Whether `SessionChannel` exists and what it handles
+- Gap between current events and proposed events (`:auditing`, `:paused`, `:constraint_added`, `:budget_update`)
 
-Minimal changes to existing Worker:
+### Step 7: Check Schema / Data Layer
 
-1. **Remove** `tool_call_hashes`, `iteration_count`, and `@max_tool_iterations` from Worker — these move to Monitor/Orchestrator
-2. **Before** `MessageBuilder.build_request/3`: call `Orchestrator.get_system_prompt(session_id, agent[:system_prompt])` to get the augmented prompt
-3. **In** `continue_after_tools/2`: call `Orchestrator.post_iteration(session_id, result)` and act on the response:
-   - `:continue` → proceed as before
-   - `:pause` → transition to `:idle`, broadcast `:paused`
-   - `:escalate` → broadcast `:auditing`, let Orchestrator handle async
-   - `:terminate` → transition to `:idle`, broadcast `:terminated`
-4. **In** `execute_tool_async/2`: call `WorkspaceManager.record_patch/2` after write tools, call `Monitor.record_tool_call/3` before execution
+The design adds `FailedAttempt` and `Patch` structs. Check what's in `synapsis_data`.
 
-### Step 8: Channel & UI Integration
+```bash
+find apps/synapsis_data/lib/ -name "*.ex" | sort
+grep -r "schema\|embedded_schema\|defstruct" apps/synapsis_data/lib/ --include="*.ex" -l
+```
 
-1. Add `handle_in("session:force_continue", ...)` to `SessionChannel` → calls `Orchestrator.force_continue/1`
-2. Add `handle_in("session:clear_constraints", ...)` → calls `Orchestrator.clear_constraints/1`
-3. The existing catch-all `handle_info({event, payload}, socket)` already forwards new PubSub events to the client — no channel code changes needed for broadcasts
+Document:
+- Existing session schema fields
+- Whether there's a messages table and its structure
+- Any existing failure/error tracking schemas
+- Where `FailedAttempt` and `Patch` structs should live (embedded schemas in core? data layer?)
 
-### Step 9: Tests
+### Step 8: Check Test Infrastructure
 
-1. **Monitor tests** — unit tests for each detection rule
-2. **PromptBuilder tests** — prompt assembly with 0, 1, 7, 8 constraints
-3. **WorkspaceManager tests** — patch recording, revert-and-learn (mock Git)
-4. **AuditorTask tests** — mock provider, verify FailedAttempt parsing
-5. **Orchestrator tests** — full rules engine: simulate sequences of `:duplicate`, `:regressed`, `:stagnating` and verify correct decisions
-6. **Integration test** — Worker → Orchestrator → Monitor → PromptBuilder round-trip with mock provider
+```bash
+find apps/synapsis_core/test/ -name "*.exs" | sort 2>/dev/null
+grep -r "Bypass\|Mock\|mock\|bypass" apps/ --include="*.exs" -l
+```
+
+Document:
+- Existing test patterns and helpers
+- Whether there's infrastructure for testing GenServer message flows without LLM calls
+
+### Step 9: Boot & Compile Check
+
+Start the application and verify it compiles and runs.
+
+```bash
+mix deps.get
+mix compile --warnings-as-errors
+mix ecto.setup  # or mix ecto.create && mix ecto.migrate
+```
+
+If JS assets are needed:
+```bash
+cd apps/synapsis_web && bun install && cd ../..
+```
+
+Start the server:
+```bash
+mix phx.server
+# or: iex -S mix phx.server
+```
+
+Document:
+- Compile errors or warnings
+- Missing dependencies
+- Database setup issues
+- The URL and port the app starts on
+
+### Step 10: Test Provider Configuration
+
+Verify providers can be configured and connected. Use chrome-devtools MCP to interact with the running web UI.
+
+1. Open the app in browser via chrome-devtools
+2. Navigate to provider settings (likely `/settings/providers`)
+3. Verify `.secrets.toml` keys are loaded — check if providers appear pre-configured or need manual setup
+4. If there's a "Test Connection" button, use it for each configured provider
+5. Verify at least one provider can list available models
+
+```bash
+# Also test from the API if it exists
+curl -s http://localhost:4000/api/providers 2>/dev/null | head -50
+```
+
+Document:
+- Which providers are configured and reachable
+- Whether the UI for provider management works
+- Any connection errors
+- Whether the provider layer can handle multiple providers simultaneously (needed for Worker + Auditor)
+
+### Step 11: Test MCP & LSP Integration
+
+Verify plugin subsystems are functional.
+
+**MCP:**
+1. Navigate to MCP settings via chrome-devtools (likely `/settings/mcp`)
+2. Check if any MCP servers are configured
+3. If configured, test connect/disconnect
+4. Verify discovered tools appear in the UI
+
+**LSP:**
+1. Navigate to LSP settings (likely `/settings/lsp`)
+2. Check if any language servers are configured
+3. Verify status indicators show correct state
+
+```bash
+# Check if MCP/LSP processes are running
+# From iex:
+# Process.list() |> Enum.filter(fn pid -> match?({:registered_name, name} when is_atom(name), Process.info(pid, :registered_name)) end)
+```
+
+Document:
+- MCP server configuration status and connectivity
+- LSP server status
+- Any errors in the plugin supervision tree
+- Whether tools from MCP/LSP appear in the tool registry
+
+### Step 12: Test Session Lifecycle — Real Coding Task
+
+This is the critical test. Create a project, start a session, and have the agent perform a simple task. Use chrome-devtools MCP to drive the entire flow through the web UI.
+
+**Setup:**
+1. Create or select a test project directory with a `README.md`
+2. Navigate to the app via chrome-devtools
+3. Create a new project pointing to the test directory
+
+**Execute a real task:**
+1. Create a new session within the project
+2. Select a provider and model
+3. Send a simple message: `"Read the README.md and add a 'Getting Started' section with basic setup instructions"`
+4. Observe:
+   - Does the message appear in the chat UI?
+   - Does the LLM respond with streaming text?
+   - Does the agent invoke tools (file_read, file_write/file_edit)?
+   - Do tool approval cards appear if permissions require it?
+   - Does the final file edit get applied?
+5. Verify the README.md was actually modified on disk
+
+**Test session controls:**
+1. Try sending a follow-up message
+2. Try cancelling a response mid-stream (if supported)
+3. Navigate away and back — does the session restore?
+
+Document:
+- Full timeline of what happened (message sent → tools invoked → result)
+- Which tools were called and their arguments (this is what the Monitor would hash)
+- How the system prompt was assembled (check if there's an injection point for failure log)
+- Streaming behavior — latency, chunk rendering
+- Any errors or unexpected behavior
+- Screenshot or description of the UI at each stage
+
+### Step 13: Stress Test — Identify Loop Behavior
+
+If step 12 succeeded, attempt to trigger the regression loop problem intentionally.
+
+1. Start a new session on the same project
+2. Send a message that requires a code change: `"Add a function called hello/1 to lib/example.ex that returns a greeting. Make sure it compiles."`
+3. If the agent succeeds, send: `"Actually, change hello/1 to accept a keyword list instead of a single argument, and update any callers"`
+4. Observe whether the agent:
+   - Retries the same edit if compilation fails
+   - Rolls back changes (git checkout or similar)
+   - Shows any sign of loop detection or failure memory
+   - Gets stuck repeating the same approach
+
+Document:
+- How many iterations the agent took
+- Whether any form of loop detection exists
+- Whether rollbacks are amnesiac (loses the lesson) or tracked
+- The exact gap this reveals — this is the evidence for why the Orchestrator design is needed
+
+### Step 14: Write Audit Report
+
+Create `docs/architecture/ORCHESTRATION_AUDIT.md` with these sections:
+
+```markdown
+# Agent Orchestration Design — Feasibility Audit
+
+## 1. Structural Fit
+[Can the proposed modules live under synapsis_core/sessions/?]
+[Supervision tree conflicts?]
+
+## 2. Existing Agent Loop
+[Current implementation description]
+[What exists vs what needs building]
+
+## 3. Tool System Compatibility
+[Can tool calls be hashed?]
+[Is the tool registry accessible?]
+
+## 4. Provider Integration
+[System prompt injection point?]
+[Multi-model support?]
+[.secrets.toml loading mechanism?]
+
+## 5. Git / Workspace
+[Current state vs design requirements]
+
+## 6. PubSub / Channels
+[Current events vs proposed events]
+[Breaking changes?]
+
+## 7. Data Layer
+[Where new structs go]
+[Schema migrations needed?]
+
+## 8. Test Infrastructure
+[Existing patterns applicable?]
+
+## 9. Recommendation
+One of:
+- **Ready to implement** — minimal changes needed, list them
+- **Feasible with modifications** — list specific prerequisite changes
+- **Needs redesign** — identify fundamental conflicts
+
+## Appendix: Files Examined
+[Full list of files read during audit]
+```
+
+Create `docs/architecture/INTEGRATION_TEST_RESULTS.md` with these sections:
+
+```markdown
+# Integration Test Results
+
+## Environment
+[Elixir/OTP version, OS, database, Node/Bun version]
+
+## 1. Boot & Compile
+[Compile result, warnings, startup log]
+
+## 2. Provider Tests
+[Which providers configured, connection test results, model listing]
+
+## 3. MCP & LSP Tests
+[MCP servers status, LSP servers status, discovered tools]
+
+## 4. Session Lifecycle — Real Task
+[Full timeline: message → tools → result]
+[Tool calls observed (names + arguments — these are what Monitor would hash)]
+[System prompt structure observed (injection point for failure log?)]
+[Streaming behavior notes]
+
+## 5. Loop Behavior Test
+[Did the agent loop? How many iterations?]
+[Rollback behavior (amnesiac or tracked?)]
+[Evidence of existing loop detection: YES/NO]
+[Gap analysis: what the Orchestrator would have done differently]
+
+## 6. Blockers Found
+[Anything that prevents the orchestration design from working]
+
+## 7. Subsystem Readiness Matrix
+
+| Subsystem | Status | Notes |
+|---|---|---|
+| Provider (Worker model) | ✅/⚠️/❌ | ... |
+| Provider (Auditor model) | ✅/⚠️/❌ | ... |
+| Tool Registry | ✅/⚠️/❌ | ... |
+| Tool Call Hashing (feasible?) | ✅/⚠️/❌ | ... |
+| System Prompt Injection | ✅/⚠️/❌ | ... |
+| PubSub Events | ✅/⚠️/❌ | ... |
+| Channel Streaming | ✅/⚠️/❌ | ... |
+| Git Operations | ✅/⚠️/❌ | ... |
+| Session Persistence | ✅/⚠️/❌ | ... |
+| MCP Plugin | ✅/⚠️/❌ | ... |
+| LSP Plugin | ✅/⚠️/❌ | ... |
+```
 
 ## Constraints
 
-- **`synapsis_data` boundary:** `FailedAttempt` and `Patch` are embedded schemas in `synapsis_data`. No business logic in the data layer.
-- **DB is source of truth:** `failure_constraints` persisted to session record after each update. Orchestrator ephemeral state is reconstructable from DB.
-- **No ML in Orchestrator:** All rules are deterministic pattern matches. The only LLM call is `AuditorTask` for failure analysis.
-- **Backward compatible:** Sessions without an Orchestrator (e.g., from before migration) work fine — Worker falls back to direct iteration if Orchestrator process isn't found.
-- **Port for shell execution:** Any new git operations must use Port, not System.cmd.
-- **Structured logging:** All new Logger calls use `Logger.info("event_name", key: value)`.
+- **Static analysis is read-only** — do NOT modify any source files during steps 1–8.
+- **Integration tests may create test data** — steps 9–13 will create projects, sessions, and file edits. Use a dedicated test directory (e.g., `/tmp/synapsis-audit-test/`). Clean up after.
+- **Do NOT read `.secrets.toml` values** — check its structure and how it's loaded, but do NOT output any API keys or secrets in the report.
+- **Use chrome-devtools MCP for UI testing** — interact with the running app through the browser, not by calling internal functions directly. This tests the real user path.
+- **Reference specific files** — every static analysis finding must cite the file path and relevant line numbers.
+- **Do NOT guess** — if a module doesn't exist, say so explicitly. Don't assume based on naming conventions.
+- **Do NOT skip apps** — check all umbrella apps, even if they seem unrelated. Cross-cutting concerns hide in unexpected places.
+- **Read fully before concluding** — don't stop at `grep` output. Open and read each relevant file to understand the actual implementation, not just the file name.
+- **If the app doesn't boot, document why and skip to the audit report** — the static analysis is still valuable. Note the boot failure as a blocker.
 
 ## Verification
 
 ```bash
-# All tests pass
-mix test
+# Confirm both reports were created
+test -f docs/architecture/ORCHESTRATION_AUDIT.md && echo "PASS: audit" || echo "FAIL: audit"
+test -f docs/architecture/INTEGRATION_TEST_RESULTS.md && echo "PASS: integration" || echo "FAIL: integration"
 
-# No warnings
-mix compile --warnings-as-errors
+# Confirm no source files were modified (docs/ changes are expected)
+git diff --name-only | grep -v "docs/" && echo "FAIL: source files modified" || echo "PASS: read-only"
 
-# Formatted
-mix format --check-formatted
-
-# New modules exist
-test -f apps/synapsis_core/lib/synapsis/session/orchestrator.ex && echo "PASS"
-test -f apps/synapsis_core/lib/synapsis/session/monitor.ex && echo "PASS"
-test -f apps/synapsis_core/lib/synapsis/session/workspace_manager.ex && echo "PASS"
-test -f apps/synapsis_core/lib/synapsis/session/prompt_builder.ex && echo "PASS"
-test -f apps/synapsis_core/lib/synapsis/session/auditor_task.ex && echo "PASS"
-test -f apps/synapsis_data/lib/synapsis/failed_attempt.ex && echo "PASS"
-test -f apps/synapsis_data/lib/synapsis/patch.ex && echo "PASS"
-
-# Integration: Orchestrator starts in session supervision tree
-mix run -e '
-  {:ok, session} = Synapsis.Sessions.create("/tmp/test-orch")
-  pid = GenServer.whereis({:via, Registry, {Synapsis.Session.Registry, session.id}})
-  IO.inspect(pid != nil, label: "worker_alive")
-'
+# Clean up test data
+rm -rf /tmp/synapsis-audit-test/
 ```

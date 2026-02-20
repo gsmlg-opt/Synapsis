@@ -62,7 +62,8 @@ defmodule Synapsis.GitWorktree do
   @spec apply_patch(String.t(), String.t()) :: {:ok, String.t()} | {:error, String.t()}
   def apply_patch(worktree_path, patch_text) do
     # Write patch to a temp file, then apply it — avoids stdin pipe issues with Port
-    tmp_path = Path.join(System.tmp_dir!(), "synapsis_patch_#{System.unique_integer([:positive])}.patch")
+    tmp_path =
+      Path.join(System.tmp_dir!(), "synapsis_patch_#{System.unique_integer([:positive])}.patch")
 
     try do
       File.write!(tmp_path, patch_text)

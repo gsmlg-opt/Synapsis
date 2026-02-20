@@ -190,6 +190,8 @@ defmodule Synapsis.Sessions do
     end
   end
 
+  def ensure_running(session_id), do: ensure_session_running(session_id)
+
   defp ensure_session_running(session_id) do
     case Registry.lookup(Synapsis.Session.Registry, session_id) do
       [{_pid, _}] ->

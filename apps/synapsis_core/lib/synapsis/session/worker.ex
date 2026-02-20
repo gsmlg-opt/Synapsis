@@ -640,20 +640,17 @@ defmodule Synapsis.Session.Worker do
       :pause ->
         execute_orchestrator_actions(applied.actions, state)
 
-        {:noreply,
-         %{state | status: :idle, stream_ref: nil, tool_uses: []}}
+        {:noreply, %{state | status: :idle, stream_ref: nil, tool_uses: []}}
 
       :escalate ->
         execute_orchestrator_actions(applied.actions, state)
 
-        {:noreply,
-         %{state | status: :idle, stream_ref: nil, tool_uses: []}}
+        {:noreply, %{state | status: :idle, stream_ref: nil, tool_uses: []}}
 
       :terminate ->
         execute_orchestrator_actions(applied.actions, state)
 
-        {:noreply,
-         %{state | status: :idle, stream_ref: nil, tool_uses: []}}
+        {:noreply, %{state | status: :idle, stream_ref: nil, tool_uses: []}}
     end
   end
 

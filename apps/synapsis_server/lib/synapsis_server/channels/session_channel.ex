@@ -5,8 +5,15 @@ defmodule SynapsisServer.SessionChannel do
   @impl true
   def join("session:" <> session_id, _payload, socket) do
     Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session_id}")
+    Synapsis.Sessions.ensure_running(session_id)
     socket = assign(socket, :session_id, session_id)
-    {:ok, socket}
+
+    messages =
+      session_id
+      |> Synapsis.Sessions.get_messages()
+      |> Enum.map(&serialize_message/1)
+
+    {:ok, %{messages: messages}, socket}
   end
 
   @impl true
@@ -79,4 +86,47 @@ defmodule SynapsisServer.SessionChannel do
   def handle_info(_msg, socket) do
     {:noreply, socket}
   end
+
+  defp serialize_message(message) do
+    %{
+      id: message.id,
+      role: message.role,
+      parts: Enum.map(message.parts, &serialize_part/1),
+      inserted_at: message.inserted_at
+    }
+  end
+
+  defp serialize_part(%Synapsis.Part.Text{content: content}),
+    do: %{type: "text", content: content}
+
+  defp serialize_part(%Synapsis.Part.ToolUse{} = p),
+    do: %{
+      type: "tool_use",
+      tool: p.tool,
+      tool_use_id: p.tool_use_id,
+      input: p.input,
+      status: p.status
+    }
+
+  defp serialize_part(%Synapsis.Part.ToolResult{} = p),
+    do: %{
+      type: "tool_result",
+      tool_use_id: p.tool_use_id,
+      content: p.content,
+      is_error: p.is_error
+    }
+
+  defp serialize_part(%Synapsis.Part.Reasoning{content: content}),
+    do: %{type: "reasoning", content: content}
+
+  defp serialize_part(%Synapsis.Part.File{path: path, content: content}),
+    do: %{type: "file", path: path, content: content}
+
+  defp serialize_part(%Synapsis.Part.Image{media_type: mt, data: data}),
+    do: %{type: "image", media_type: mt, data: data}
+
+  defp serialize_part(%Synapsis.Part.Agent{agent: agent, message: message}),
+    do: %{type: "agent", agent: agent, message: message}
+
+  defp serialize_part(_), do: %{type: "unknown"}
 end

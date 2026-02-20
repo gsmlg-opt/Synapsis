@@ -19,8 +19,10 @@ defmodule SynapsisWeb.MCPLive.Show do
   def handle_event("update_config", params, socket) do
     attrs = %{
       command: params["command"],
+      args: parse_args(params["args"]),
       url: params["url"],
       transport: params["transport"],
+      env: parse_env(params["env"]),
       auto_connect: params["auto_connect"] == "true"
     }
 
@@ -37,6 +39,38 @@ defmodule SynapsisWeb.MCPLive.Show do
         {:noreply, put_flash(socket, :error, "Failed to update")}
     end
   end
+
+  defp parse_args(nil), do: []
+  defp parse_args(""), do: []
+
+  defp parse_args(str) when is_binary(str) do
+    str |> String.split("\n", trim: true) |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == ""))
+  end
+
+  defp parse_env(nil), do: %{}
+  defp parse_env(""), do: %{}
+
+  defp parse_env(str) when is_binary(str) do
+    str
+    |> String.split("\n", trim: true)
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.reduce(%{}, fn line, acc ->
+      case String.split(line, "=", parts: 2) do
+        [key, value] -> Map.put(acc, String.trim(key), String.trim(value))
+        _ -> acc
+      end
+    end)
+  end
+
+  defp format_args(args) when is_list(args), do: Enum.join(args, "\n")
+  defp format_args(_), do: ""
+
+  defp format_env(env) when is_map(env) do
+    env |> Enum.sort() |> Enum.map_join("\n", fn {k, v} -> "#{k}=#{v}" end)
+  end
+
+  defp format_env(_), do: ""
 
   @impl true
   def render(assigns) do
@@ -79,6 +113,15 @@ defmodule SynapsisWeb.MCPLive.Show do
             </div>
 
             <div>
+              <label class="block text-sm text-gray-400 mb-1">Arguments (one per line)</label>
+              <textarea
+                name="args"
+                rows="3"
+                class="w-full bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none font-mono text-sm"
+              >{format_args(@config.args)}</textarea>
+            </div>
+
+            <div>
               <label class="block text-sm text-gray-400 mb-1">URL</label>
               <input
                 type="text"
@@ -86,6 +129,18 @@ defmodule SynapsisWeb.MCPLive.Show do
                 value={@config.url}
                 class="w-full bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none"
               />
+            </div>
+
+            <div>
+              <label class="block text-sm text-gray-400 mb-1">
+                Environment Variables (KEY=VALUE, one per line)
+              </label>
+              <textarea
+                name="env"
+                rows="4"
+                placeholder="GITHUB_TOKEN=ghp_xxx\nAPI_KEY=sk-xxx"
+                class="w-full bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none font-mono text-sm"
+              >{format_env(@config.env)}</textarea>
             </div>
 
             <div>

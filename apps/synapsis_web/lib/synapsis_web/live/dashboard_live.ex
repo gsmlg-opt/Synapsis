@@ -22,9 +22,9 @@ defmodule SynapsisWeb.DashboardLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen bg-gray-950 text-gray-100">
+    <div class="bg-gray-950 text-gray-100">
       <div class="max-w-6xl mx-auto p-6">
-        <h1 class="text-3xl font-bold mb-8">Synapsis</h1>
+        <h1 class="text-2xl font-bold mb-6">Dashboard</h1>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <%!-- Projects Section --%>
@@ -72,34 +72,6 @@ defmodule SynapsisWeb.DashboardLive do
               </.link>
             </div>
           </div>
-        </div>
-
-        <%!-- Quick Links --%>
-        <div class="mt-8 flex gap-4">
-          <.link
-            navigate={~p"/settings/providers"}
-            class="px-4 py-2 bg-gray-800 rounded hover:bg-gray-700 text-sm"
-          >
-            Providers
-          </.link>
-          <.link
-            navigate={~p"/settings/mcp"}
-            class="px-4 py-2 bg-gray-800 rounded hover:bg-gray-700 text-sm"
-          >
-            MCP Servers
-          </.link>
-          <.link
-            navigate={~p"/settings/lsp"}
-            class="px-4 py-2 bg-gray-800 rounded hover:bg-gray-700 text-sm"
-          >
-            LSP
-          </.link>
-          <.link
-            navigate={~p"/settings"}
-            class="px-4 py-2 bg-gray-800 rounded hover:bg-gray-700 text-sm"
-          >
-            Settings
-          </.link>
         </div>
       </div>
     </div>
