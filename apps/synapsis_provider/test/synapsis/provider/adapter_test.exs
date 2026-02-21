@@ -106,6 +106,45 @@ defmodule Synapsis.Provider.AdapterTest do
       assert :done in chunks
     end
 
+    test "Azure OpenAI uses deployment URL and api-key header", %{bypass: bypass, port: port} do
+      Bypass.expect_once(
+        bypass,
+        "POST",
+        "/openai/deployments/gpt-4o/chat/completions",
+        fn conn ->
+          headers = Map.new(conn.req_headers)
+          assert headers["api-key"] == "azure-key"
+          refute Map.has_key?(headers, "authorization")
+
+          {:ok, body, conn} = Plug.Conn.read_body(conn)
+          parsed = Jason.decode!(body)
+          refute Map.has_key?(parsed, "model")
+
+          conn
+          |> Plug.Conn.put_resp_content_type("text/event-stream")
+          |> Plug.Conn.send_resp(200, """
+          data: {"id":"1","choices":[{"index":0,"delta":{"content":"Azure response"},"finish_reason":null}]}
+
+          data: [DONE]
+
+          """)
+        end
+      )
+
+      config = %{
+        api_key: "azure-key",
+        base_url: "http://localhost:#{port}",
+        type: "openai",
+        azure: true
+      }
+
+      request = Adapter.format_request([], [], %{model: "gpt-4o", provider_type: "openai"})
+      assert {:ok, ref} = Adapter.stream(request, config)
+      chunks = collect_chunks(ref)
+      text_deltas = for {:text_delta, text} <- chunks, do: text
+      assert "Azure response" in text_deltas
+    end
+
     test "works without api_key for local models", %{bypass: bypass, port: port} do
       Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
         conn

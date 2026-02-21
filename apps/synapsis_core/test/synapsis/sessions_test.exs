@@ -17,6 +17,46 @@ defmodule Synapsis.SessionsTest do
       assert session.project.path == "/tmp/test_sessions_create"
     end
 
+    test "defaults to anthropic when no config and no env vars set" do
+      # Temporarily clear env vars that would influence provider selection
+      prev_ant = System.get_env("ANTHROPIC_API_KEY")
+      prev_oai = System.get_env("OPENAI_API_KEY")
+      prev_goo = System.get_env("GOOGLE_API_KEY")
+      System.delete_env("ANTHROPIC_API_KEY")
+      System.delete_env("OPENAI_API_KEY")
+      System.delete_env("GOOGLE_API_KEY")
+
+      on_exit(fn ->
+        if prev_ant, do: System.put_env("ANTHROPIC_API_KEY", prev_ant)
+        if prev_oai, do: System.put_env("OPENAI_API_KEY", prev_oai)
+        if prev_goo, do: System.put_env("GOOGLE_API_KEY", prev_goo)
+      end)
+
+      {:ok, session} =
+        Sessions.create("/tmp/test_sess_default_#{:rand.uniform(100_000)}")
+
+      assert session.provider == "anthropic"
+      assert session.model == "claude-sonnet-4-20250514"
+    end
+
+    test "selects openai when OPENAI_API_KEY is set and ANTHROPIC not set" do
+      prev_ant = System.get_env("ANTHROPIC_API_KEY")
+      prev_oai = System.get_env("OPENAI_API_KEY")
+      System.delete_env("ANTHROPIC_API_KEY")
+      System.put_env("OPENAI_API_KEY", "sk-openai-test")
+
+      on_exit(fn ->
+        if prev_ant, do: System.put_env("ANTHROPIC_API_KEY", prev_ant)
+        if prev_oai, do: System.put_env("OPENAI_API_KEY", prev_oai), else: System.delete_env("OPENAI_API_KEY")
+      end)
+
+      {:ok, session} =
+        Sessions.create("/tmp/test_sess_oai_env_#{:rand.uniform(100_000)}")
+
+      assert session.provider == "openai"
+      assert session.model == "gpt-4o"
+    end
+
     test "reuses existing project" do
       {:ok, s1} =
         Sessions.create("/tmp/test_sessions_reuse", %{

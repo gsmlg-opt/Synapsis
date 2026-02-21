@@ -121,5 +121,13 @@ defmodule Synapsis.MessageBuilderTest do
       result = MessageBuilder.build_request(messages, agent, "anthropic")
       assert result.system == "Base prompt"
     end
+
+    test "empty string as 4th positional arg does not append to system prompt" do
+      messages = []
+      agent = %{system_prompt: "Base prompt", tools: nil, model: "test-model", max_tokens: 4096}
+
+      result = MessageBuilder.build_request(messages, agent, "anthropic", "")
+      assert result.system == "Base prompt"
+    end
   end
 end
