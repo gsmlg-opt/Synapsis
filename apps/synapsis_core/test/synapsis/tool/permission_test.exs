@@ -68,6 +68,12 @@ defmodule Synapsis.Tool.PermissionTest do
       assert :read = Permissions.level("lsp_diagnostics")
       assert :read = Permissions.level("lsp_definition")
     end
+
+    test "unknown tools default to write (catch-all)" do
+      # Not in any list, not starting with "mcp:" or "lsp_"
+      assert :write = Permissions.level("custom_unknown_tool_xyz")
+      assert :write = Permissions.level("mcp_without_colon")
+    end
   end
 
   describe "Permissions.allowed?/2" do

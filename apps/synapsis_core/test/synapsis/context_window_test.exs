@@ -43,6 +43,13 @@ defmodule Synapsis.ContextWindowTest do
       assert to_compact == []
       assert length(to_keep) == 1
     end
+
+    test "keeps all when count equals keep_recent exactly" do
+      messages = Enum.map(1..5, fn i -> %{id: i, token_count: 100} end)
+      {to_compact, to_keep} = ContextWindow.partition_for_compaction(messages, keep_recent: 5)
+      assert to_compact == []
+      assert length(to_keep) == 5
+    end
   end
 
   describe "estimate_tokens/1" do

@@ -51,6 +51,11 @@ defmodule Synapsis.Tool.FetchTest do
       assert msg =~ "internal/private"
     end
 
+    test "blocks metadata.google.internal" do
+      {:error, msg} = Fetch.execute(%{"url" => "http://metadata.google.internal/computeMetadata"}, %{})
+      assert msg =~ "internal/private"
+    end
+
     test "blocks non-http schemes" do
       {:error, msg} = Fetch.execute(%{"url" => "file:///etc/passwd"}, %{})
       assert msg =~ "Only http and https"
