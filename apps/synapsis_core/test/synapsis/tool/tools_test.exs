@@ -199,6 +199,17 @@ defmodule Synapsis.Tool.ToolsTest do
       {:ok, output} = Bash.execute(%{"command" => cmd}, %{project_path: @test_dir})
       assert output =~ "[Output truncated at 10MB]"
     end
+
+    test "returns error when command times out" do
+      result =
+        Bash.execute(
+          %{"command" => "sleep 5", "timeout" => 100},
+          %{project_path: @test_dir}
+        )
+
+      assert {:error, msg} = result
+      assert msg =~ "timed out"
+    end
   end
 
   describe "Grep" do

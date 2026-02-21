@@ -107,6 +107,27 @@ defmodule Synapsis.Tool.ExecutorTest do
 
       GenServer.stop(server)
     end
+
+    test "process tool timeout returns {:error, :timeout}" do
+      {:ok, server} =
+        GenServer.start_link(Synapsis.Tool.ExecutorTest.SlowProcessServer, :ok)
+
+      Registry.register_process("exec_proc_slow", server, timeout: 100)
+      on_exit(fn -> Registry.unregister("exec_proc_slow") end)
+
+      assert {:error, :timeout} = Executor.execute("exec_proc_slow", %{}, %{})
+    end
+
+    test "process tool crash returns {:error, {:exit, reason}}" do
+      # Use start (not start_link) so test process isn't linked and doesn't crash
+      {:ok, server} =
+        GenServer.start(Synapsis.Tool.ExecutorTest.CrashProcessServer, :ok)
+
+      Registry.register_process("exec_proc_crash", server)
+      on_exit(fn -> Registry.unregister("exec_proc_crash") end)
+
+      assert {:error, {:exit, _reason}} = Executor.execute("exec_proc_crash", %{}, %{})
+    end
   end
 
   defmodule FakeToolServer do
@@ -116,6 +137,27 @@ defmodule Synapsis.Tool.ExecutorTest do
 
     def handle_call({:execute, _name, _input, _ctx}, _from, state) do
       {:reply, {:ok, "process result"}, state}
+    end
+  end
+
+  defmodule SlowProcessServer do
+    use GenServer
+
+    def init(:ok), do: {:ok, :ok}
+
+    def handle_call({:execute, _, _, _}, _from, state) do
+      Process.sleep(:infinity)
+      {:reply, {:ok, "never"}, state}
+    end
+  end
+
+  defmodule CrashProcessServer do
+    use GenServer
+
+    def init(:ok), do: {:ok, :ok}
+
+    def handle_call({:execute, _, _, _}, _from, _state) do
+      exit(:boom)
     end
   end
 end
