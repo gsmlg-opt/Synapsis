@@ -73,6 +73,32 @@ defmodule Synapsis.PluginConfigTest do
     end
   end
 
+  describe "unique_constraint" do
+    test "enforces uniqueness of name + scope + project_id with same non-nil project_id" do
+      {:ok, project} =
+        %Synapsis.Project{}
+        |> Synapsis.Project.changeset(%{
+          path: "/tmp/plugin-unique-#{:rand.uniform(100_000)}",
+          slug: "plugin-unique-#{:rand.uniform(100_000)}"
+        })
+        |> Repo.insert()
+
+      attrs = %{type: "mcp", name: "unique-plugin", scope: "project", project_id: project.id}
+
+      {:ok, _} =
+        %PluginConfig{}
+        |> PluginConfig.changeset(attrs)
+        |> Repo.insert()
+
+      {:error, changeset} =
+        %PluginConfig{}
+        |> PluginConfig.changeset(attrs)
+        |> Repo.insert()
+
+      assert not changeset.valid? or changeset.errors != []
+    end
+  end
+
   describe "persistence" do
     test "inserts and retrieves config" do
       {:ok, config} =

@@ -50,6 +50,14 @@ defmodule Synapsis.ContextWindowTest do
       assert to_compact == []
       assert length(to_keep) == 5
     end
+
+    test "uses default keep_recent of 10 when no opts given" do
+      # 15 messages, default keep_recent=10 → split 5/10
+      messages = Enum.map(1..15, fn i -> %{id: i, token_count: 100} end)
+      {to_compact, to_keep} = ContextWindow.partition_for_compaction(messages)
+      assert length(to_compact) == 5
+      assert length(to_keep) == 10
+    end
   end
 
   describe "estimate_tokens/1" do

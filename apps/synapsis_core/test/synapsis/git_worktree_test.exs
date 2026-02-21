@@ -79,6 +79,21 @@ defmodule Synapsis.GitWorktreeTest do
       assert added != nil
       assert added[:path] == worktree_path
     end
+
+    test "parses detached HEAD worktree with branch '(detached)'", %{project_path: project_path} do
+      worktree_path = Path.join(project_path, ".trees/detached-wt")
+      # Get current HEAD SHA for a detached checkout
+      {sha, 0} = System.cmd("git", ["-C", project_path, "rev-parse", "HEAD"])
+      sha = String.trim(sha)
+
+      {_, 0} =
+        System.cmd("git", ["-C", project_path, "worktree", "add", "--detach", worktree_path, sha])
+
+      assert {:ok, worktrees} = GitWorktree.list(project_path)
+      detached = Enum.find(worktrees, fn wt -> wt[:path] == worktree_path end)
+      assert detached != nil
+      assert detached[:branch] == "(detached)"
+    end
   end
 
   describe "apply_patch/2" do
