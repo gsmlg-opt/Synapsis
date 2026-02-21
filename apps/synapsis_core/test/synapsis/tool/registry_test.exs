@@ -127,6 +127,22 @@ defmodule Synapsis.Tool.RegistryTest do
       assert tool.parameters == FakeTool.parameters()
       refute Map.has_key?(tool, :module)
     end
+
+    test "returns name, description, parameters for process tools" do
+      pid = self()
+
+      Registry.register_process("test_process_tool", pid,
+        description: "A process tool",
+        parameters: %{"type" => "object"}
+      )
+
+      tools = Registry.list_for_llm()
+      tool = Enum.find(tools, &(&1.name == "test_process_tool"))
+      assert tool
+      assert tool.description == "A process tool"
+      assert tool.parameters == %{"type" => "object"}
+      refute Map.has_key?(tool, :process)
+    end
   end
 
   describe "unregister/1" do

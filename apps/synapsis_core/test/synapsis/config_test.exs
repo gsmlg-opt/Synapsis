@@ -59,6 +59,26 @@ defmodule Synapsis.ConfigTest do
 
       File.rm_rf!(dir)
     end
+
+    test "returns empty map for invalid JSON content" do
+      dir = "/tmp/config_test_invalid_#{:rand.uniform(100_000)}"
+      File.mkdir_p!(dir)
+      File.write!(Path.join(dir, ".opencode.json"), "not valid json {{")
+
+      assert Config.load_project_config(dir) == %{}
+
+      File.rm_rf!(dir)
+    end
+
+    test "returns empty map when JSON is not a map (e.g. array)" do
+      dir = "/tmp/config_test_arr_#{:rand.uniform(100_000)}"
+      File.mkdir_p!(dir)
+      File.write!(Path.join(dir, ".opencode.json"), "[1, 2, 3]")
+
+      assert Config.load_project_config(dir) == %{}
+
+      File.rm_rf!(dir)
+    end
   end
 
   describe "resolve/1" do

@@ -99,6 +99,16 @@ defmodule Synapsis.Session.AuditorTaskTest do
       assert fa.lesson == nil
     end
 
+    test "lesson keyword on first line (split_at_lesson idx==0)", %{session: session} do
+      # When the first line itself contains "Lesson:", split_at_lesson returns
+      # {[first_line], rest} — so error_message is the first line and lesson is the rest
+      response = "Lesson: avoid this pattern\nBecause it causes repeated failures"
+
+      {:ok, fa} = AuditorTask.record_analysis(session.id, response)
+      assert fa.error_message =~ "Lesson:"
+      assert fa.lesson =~ "repeated failures"
+    end
+
     test "records auditor model", %{session: session} do
       {:ok, fa} =
         AuditorTask.record_analysis(session.id, "Error occurred",
