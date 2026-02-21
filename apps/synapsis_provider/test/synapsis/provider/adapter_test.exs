@@ -362,6 +362,45 @@ defmodule Synapsis.Provider.AdapterTest do
       assert {:error, reason} = Adapter.complete(request, config)
       assert reason =~ "unexpected response"
     end
+
+    test "OpenAI complete without api_key omits Authorization header", %{bypass: bypass, port: port} do
+      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+        headers = Map.new(conn.req_headers)
+        refute Map.has_key?(headers, "authorization")
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(
+          200,
+          Jason.encode!(%{
+            "choices" => [%{"message" => %{"role" => "assistant", "content" => "Hi"}}]
+          })
+        )
+      end)
+
+      config = %{base_url: "http://localhost:#{port}", type: "openai"}
+
+      request = Adapter.format_request([], [], %{model: "gpt-4o", provider_type: "openai"})
+
+      assert {:ok, "Hi"} = Adapter.complete(request, config)
+    end
+
+    test "OpenAI complete returns error message from error response body", %{bypass: bypass, port: port} do
+      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(
+          429,
+          Jason.encode!(%{"error" => %{"message" => "rate_limit_exceeded"}})
+        )
+      end)
+
+      config = %{api_key: "test-key", base_url: "http://localhost:#{port}", type: "openai"}
+
+      request = Adapter.format_request([], [], %{model: "gpt-4o", provider_type: "openai"})
+
+      assert {:error, "rate_limit_exceeded"} = Adapter.complete(request, config)
+    end
   end
 
   # ---------------------------------------------------------------------------
