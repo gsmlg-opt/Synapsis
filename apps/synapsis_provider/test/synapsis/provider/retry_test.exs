@@ -96,4 +96,53 @@ defmodule Synapsis.Provider.RetryTest do
     assert {:ok, :recovered} = result
     assert :counters.get(counter, 1) == 2
   end
+
+  test "502 status is retryable" do
+    counter = :counters.new(1, [:atomics])
+
+    result =
+      Retry.with_retry(fn ->
+        count = :counters.get(counter, 1)
+        :counters.add(counter, 1, 1)
+
+        if count == 0 do
+          {:error, %{status: 502}}
+        else
+          {:ok, :recovered}
+        end
+      end)
+
+    assert {:ok, :recovered} = result
+    assert :counters.get(counter, 1) == 2
+  end
+
+  test "TransportError with 0 retries returns error immediately" do
+    counter = :counters.new(1, [:atomics])
+
+    result =
+      Retry.with_retry(
+        fn ->
+          :counters.add(counter, 1, 1)
+          {:error, %Req.TransportError{reason: :econnrefused}}
+        end,
+        0
+      )
+
+    assert {:error, %Req.TransportError{}} = result
+    # Only called once (no retries since retries == 0)
+    assert :counters.get(counter, 1) == 1
+  end
+
+  test "non-status-map error returns immediately without retry" do
+    counter = :counters.new(1, [:atomics])
+
+    result =
+      Retry.with_retry(fn ->
+        :counters.add(counter, 1, 1)
+        {:error, :custom_error_atom}
+      end)
+
+    assert {:error, :custom_error_atom} = result
+    assert :counters.get(counter, 1) == 1
+  end
 end
