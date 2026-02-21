@@ -66,6 +66,11 @@ defmodule SynapsisServer.SessionControllerTest do
       conn = delete(conn, "/api/sessions/#{id}")
       assert response(conn, 204)
     end
+
+    test "returns 404 for unknown session", %{conn: conn} do
+      conn = delete(conn, "/api/sessions/#{Ecto.UUID.generate()}")
+      assert json_response(conn, 404)
+    end
   end
 
   describe "POST /api/sessions/:id/messages" do
@@ -124,6 +129,11 @@ defmodule SynapsisServer.SessionControllerTest do
     end
 
   describe "GET /api/sessions/:id/export" do
+    test "returns 422 for unknown session", %{conn: conn} do
+      conn = get(conn, "/api/sessions/#{Ecto.UUID.generate()}/export")
+      assert json_response(conn, 422)["error"] != nil
+    end
+
     test "exports session as JSON", %{conn: conn} do
       create_conn =
         post(conn, "/api/sessions", %{
@@ -141,6 +151,35 @@ defmodule SynapsisServer.SessionControllerTest do
       assert body["version"] == "1.0"
       assert is_map(body["session"])
       assert is_list(body["messages"])
+    end
+  end
+
+  describe "POST /api/sessions/:id/compact (compacted: true)" do
+    test "returns compacted: true when tokens exceed threshold", %{conn: conn} do
+      create_conn =
+        post(conn, "/api/sessions", %{
+          project_path: "/tmp/test_ctrl_compact_t_#{:rand.uniform(100_000)}",
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      %{"data" => %{"id" => id}} = json_response(create_conn, 201)
+      {:ok, session} = Synapsis.Sessions.get(id)
+
+      # 15 messages × 12k tokens each = 180k > 160k (80% of claude-sonnet 200k limit)
+      for i <- 1..15 do
+        %Synapsis.Message{}
+        |> Synapsis.Message.changeset(%{
+          session_id: session.id,
+          role: if(rem(i, 2) == 0, do: "assistant", else: "user"),
+          parts: [%Synapsis.Part.Text{content: "Message #{i}"}],
+          token_count: 12_000
+        })
+        |> Synapsis.Repo.insert!()
+      end
+
+      conn = post(conn, "/api/sessions/#{id}/compact", %{})
+      assert %{"status" => "ok", "compacted" => true} = json_response(conn, 200)
     end
   end
 
