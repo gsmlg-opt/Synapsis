@@ -79,6 +79,23 @@ defmodule Synapsis.PromptBuilderTest do
       assert result =~ "Error only"
       refute result =~ "Lesson:"
     end
+
+    test "handles entries with lesson but no error_message", %{session: session} do
+      insert_attempt(session.id, 1, nil, "Always check imports first")
+
+      result = PromptBuilder.build_failure_context(session.id)
+      assert result =~ "Attempt 1"
+      assert result =~ "Always check imports first"
+      refute result =~ ": nil"
+    end
+
+    test "handles entries with neither error_message nor lesson", %{session: session} do
+      insert_attempt(session.id, 1, nil, nil)
+
+      result = PromptBuilder.build_failure_context(session.id)
+      assert result =~ "Attempt 1"
+      refute result =~ "nil"
+    end
   end
 
   defp insert_attempt(session_id, number, error, lesson) do

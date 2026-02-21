@@ -100,6 +100,38 @@ defmodule Synapsis.Session.CompactorTest do
              :compacted
   end
 
+  test "compact/2 handles ToolUse, ToolResult, Reasoning, and unknown part types", %{
+    session: session
+  } do
+    parts_cycle = [
+      [%Synapsis.Part.ToolUse{tool: "bash", tool_use_id: "tid1", input: %{"cmd" => "ls"}, status: "done"}],
+      [%Synapsis.Part.ToolResult{tool_use_id: "tid1", content: "file.txt", is_error: false}],
+      [%Synapsis.Part.Reasoning{content: "Thinking step..."}],
+      [%Synapsis.Part.Image{media_type: "image/png", data: "abc"}]
+    ]
+
+    for i <- 1..15 do
+      parts = Enum.at(parts_cycle, rem(i - 1, length(parts_cycle)))
+
+      %Message{}
+      |> Message.changeset(%{
+        session_id: session.id,
+        role: if(rem(i, 2) == 0, do: "assistant", else: "user"),
+        parts: parts,
+        token_count: 1000
+      })
+      |> Repo.insert!()
+    end
+
+    messages =
+      Message
+      |> Ecto.Query.where([m], m.session_id == ^session.id)
+      |> Ecto.Query.order_by([m], asc: m.inserted_at)
+      |> Repo.all()
+
+    assert Compactor.compact(session.id, messages) == :compacted
+  end
+
   test "maybe_compact/3 uses default 128k limit for unknown model", %{session: session} do
     # Default limit 128k, threshold 80% = 102.4k
     # 15 × 8k = 120k > 102.4k → triggers compaction
