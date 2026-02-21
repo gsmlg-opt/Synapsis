@@ -167,6 +167,31 @@ defmodule Synapsis.ProvidersTest do
     end
   end
 
+  describe "models/1" do
+    test "returns static models for anthropic provider" do
+      {:ok, provider} = Providers.create(%{@valid_attrs | name: "models-test-provider"})
+      assert {:ok, models} = Providers.models(provider.id)
+      assert is_list(models)
+      assert length(models) > 0
+    end
+
+    test "returns error for unknown provider id" do
+      assert {:error, :not_found} = Providers.models(Ecto.UUID.generate())
+    end
+  end
+
+  describe "test_connection/1" do
+    test "returns ok status with models_count for anthropic provider" do
+      {:ok, provider} = Providers.create(%{@valid_attrs | name: "tc-test-provider"})
+      assert {:ok, %{status: :ok, models_count: count}} = Providers.test_connection(provider.id)
+      assert count > 0
+    end
+
+    test "returns error for unknown provider id" do
+      assert {:error, :not_found} = Providers.test_connection(Ecto.UUID.generate())
+    end
+  end
+
   describe "build_runtime_config/1 (via create + registry)" do
     test "config with known atom keys are atomized safely" do
       # base_url is a known atom — should be present in runtime config as atom key
@@ -180,6 +205,19 @@ defmodule Synapsis.ProvidersTest do
       assert Map.has_key?(config, :api_key)
       assert Map.has_key?(config, :type)
       assert config.type == "anthropic"
+    end
+
+    test "uses correct default base_url for openai_compat type when none set" do
+      {:ok, _} =
+        Providers.create(%{
+          name: "openai-compat-default-url-test",
+          type: "openai_compat",
+          api_key_encrypted: "sk-test",
+          enabled: true
+        })
+
+      {:ok, config} = ProviderRegistry.get("openai-compat-default-url-test")
+      assert config.base_url == "https://api.openai.com"
     end
 
     test "config with unknown string keys does not raise" do
