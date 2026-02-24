@@ -45,5 +45,18 @@ defmodule Synapsis.Tool.PathValidatorTest do
       assert {:error, _} =
                PathValidator.validate("#{@project_root}/../outside.txt", @project_root)
     end
+
+    test "rejects double-dot traversal at start" do
+      assert {:error, _} = PathValidator.validate("../../etc/shadow", @project_root)
+    end
+
+    test "allows current directory reference with dot" do
+      assert :ok = PathValidator.validate("#{@project_root}/./file.txt", @project_root)
+    end
+
+    test "rejects path with project root as substring prefix" do
+      assert {:error, _} =
+               PathValidator.validate("#{@project_root}_malicious/file.txt", @project_root)
+    end
   end
 end

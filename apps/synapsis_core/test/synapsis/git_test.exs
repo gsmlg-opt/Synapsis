@@ -77,4 +77,24 @@ defmodule Synapsis.GitTest do
   test "undo_last/1 refuses to undo non-synapsis commits", %{path: path} do
     assert {:error, _} = Synapsis.Git.undo_last(path)
   end
+
+  test "is_repo?/1 returns false for non-existent path" do
+    refute Synapsis.Git.is_repo?("/tmp/does_not_exist_#{System.unique_integer([:positive])}")
+  end
+
+  test "checkpoint/2 with custom message", %{path: path} do
+    File.write!(Path.join(path, "custom_msg.txt"), "data")
+    assert {:ok, _} = Synapsis.Git.checkpoint(path, "synapsis custom-checkpoint")
+    assert {:ok, "synapsis custom-checkpoint"} = Synapsis.Git.last_commit_message(path)
+  end
+
+  test "multiple checkpoints create separate commits", %{path: path} do
+    File.write!(Path.join(path, "first.txt"), "a")
+    {:ok, _} = Synapsis.Git.checkpoint(path, "synapsis first")
+
+    File.write!(Path.join(path, "second.txt"), "b")
+    {:ok, _} = Synapsis.Git.checkpoint(path, "synapsis second")
+
+    assert {:ok, "synapsis second"} = Synapsis.Git.last_commit_message(path)
+  end
 end

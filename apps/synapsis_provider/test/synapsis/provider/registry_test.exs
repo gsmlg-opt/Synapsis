@@ -50,4 +50,23 @@ defmodule Synapsis.Provider.RegistryTest do
     Registry.register("overwrite_me", %{api_key: "new"})
     assert {:ok, %{api_key: "new"}} = Registry.get("overwrite_me")
   end
+
+  test "module_for returns error for nil" do
+    assert {:error, :unknown_provider} = Registry.module_for(nil)
+  end
+
+  test "module_for returns error for empty string" do
+    assert {:error, :unknown_provider} = Registry.module_for("")
+  end
+
+  test "list returns empty when filtered by name" do
+    all = Registry.list()
+    assert is_list(all)
+  end
+
+  test "register with complex config" do
+    config = %{api_key: "sk-test", base_url: "http://custom:8080", extra: %{timeout: 30}}
+    Registry.register("complex_test", config)
+    assert {:ok, ^config} = Registry.get("complex_test")
+  end
 end

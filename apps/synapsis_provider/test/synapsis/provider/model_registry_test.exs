@@ -68,5 +68,39 @@ defmodule Synapsis.Provider.ModelRegistryTest do
       providers = all |> Enum.map(& &1.provider) |> Enum.uniq() |> Enum.sort()
       assert providers == ["anthropic", "google", "openai"]
     end
+
+    test "all models have required fields" do
+      for model <- ModelRegistry.list_all() do
+        assert is_binary(model.id)
+        assert is_binary(model.name)
+        assert is_binary(model.provider)
+        assert is_integer(model.context_window)
+        assert model.context_window > 0
+        assert is_boolean(model.supports_tools)
+        assert is_boolean(model.supports_streaming)
+      end
+    end
+
+    test "all model IDs are unique" do
+      all = ModelRegistry.list_all()
+      ids = Enum.map(all, & &1.id)
+      assert ids == Enum.uniq(ids)
+    end
+  end
+
+  describe "get/1 edge cases" do
+    test "returns error for empty string" do
+      assert {:error, :unknown} = ModelRegistry.get("")
+    end
+
+    test "returns error for nil" do
+      assert {:error, :unknown} = ModelRegistry.get(nil)
+    end
+
+    test "Claude Opus has expected capabilities" do
+      assert {:ok, model} = ModelRegistry.get("claude-opus-4-20250514")
+      assert model.supports_tools == true
+      assert model.context_window == 200_000
+    end
   end
 end
