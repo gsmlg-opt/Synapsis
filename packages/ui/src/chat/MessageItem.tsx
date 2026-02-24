@@ -1,6 +1,17 @@
 import React from "react"
 import type { Message, MessagePart } from "./store"
 import { MarkdownView } from "../widgets/MarkdownView"
+import { DiffViewer } from "../widgets/DiffViewer"
+
+function tryParseToolResult(content: string | undefined): { parsed: any; hasDiff: boolean } {
+  if (!content) return { parsed: null, hasDiff: false }
+  try {
+    const parsed = JSON.parse(content)
+    return { parsed, hasDiff: !!(parsed?.diff?.old !== undefined && parsed?.diff?.new !== undefined) }
+  } catch {
+    return { parsed: null, hasDiff: false }
+  }
+}
 
 function PartView({ part }: { part: MessagePart }) {
   switch (part.type) {
@@ -31,7 +42,22 @@ function PartView({ part }: { part: MessagePart }) {
           )}
         </div>
       )
-    case "tool_result":
+    case "tool_result": {
+      const { parsed, hasDiff } = tryParseToolResult(part.content)
+      if (hasDiff) {
+        return (
+          <div className="border border-green-800 rounded p-3 text-sm">
+            <div className="font-mono text-xs mb-2 text-green-400">
+              {parsed.message || `Edited ${parsed.path || "file"}`}
+            </div>
+            <DiffViewer
+              oldContent={parsed.diff.old}
+              newContent={parsed.diff.new}
+              filename={parsed.path}
+            />
+          </div>
+        )
+      }
       return (
         <div
           className={`border rounded p-3 text-sm ${
@@ -48,6 +74,7 @@ function PartView({ part }: { part: MessagePart }) {
           </pre>
         </div>
       )
+    }
     case "file":
       return (
         <div className="border border-yellow-800 rounded p-3 text-sm">
