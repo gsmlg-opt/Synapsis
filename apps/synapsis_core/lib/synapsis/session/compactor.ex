@@ -2,18 +2,8 @@ defmodule Synapsis.Session.Compactor do
   @moduledoc "Compacts old messages when approaching context window limit."
 
   alias Synapsis.{Repo, Message, ContextWindow}
+  alias Synapsis.Provider.ModelRegistry
   import Ecto.Query
-
-  @model_limits %{
-    "claude-sonnet-4-20250514" => 200_000,
-    "claude-opus-4-20250514" => 200_000,
-    "claude-3-5-sonnet-20241022" => 200_000,
-    "gpt-4o" => 128_000,
-    "gpt-4o-mini" => 128_000,
-    "gpt-4-turbo" => 128_000,
-    "gemini-2.0-flash" => 1_048_576,
-    "gemini-2.0-pro" => 1_048_576
-  }
 
   @default_limit 128_000
 
@@ -98,6 +88,9 @@ defmodule Synapsis.Session.Compactor do
   end
 
   defp model_limit(model) do
-    Map.get(@model_limits, model, @default_limit)
+    case ModelRegistry.get(model) do
+      {:ok, meta} -> meta.context_window
+      {:error, :unknown} -> @default_limit
+    end
   end
 end
