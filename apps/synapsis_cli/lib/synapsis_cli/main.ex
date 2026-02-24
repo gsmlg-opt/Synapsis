@@ -1,7 +1,7 @@
 defmodule SynapsisCli.Main do
   @moduledoc "CLI entry point and argument parsing."
 
-  @default_host "http://localhost:4000"
+  @default_host "http://localhost:4657"
 
   def main(args) do
     {opts, rest, _} =
