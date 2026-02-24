@@ -402,11 +402,11 @@ defmodule Synapsis.ProvidersTest do
     end
 
     test "returns openrouter default model" do
-      assert Providers.default_model("openrouter") == "openai/gpt-4o"
+      assert Providers.default_model("openrouter") == "openai/gpt-4.1"
     end
 
     test "returns openai_compat default model" do
-      assert Providers.default_model("openai_compat") == "gpt-4o"
+      assert Providers.default_model("openai_compat") == "gpt-4.1"
     end
   end
 end

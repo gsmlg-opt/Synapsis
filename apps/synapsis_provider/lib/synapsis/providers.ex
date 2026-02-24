@@ -140,8 +140,8 @@ defmodule Synapsis.Providers do
   @doc "Default model for a provider type string."
   def default_model("anthropic"), do: "claude-sonnet-4-6"
   def default_model("openai"), do: "gpt-4.1"
-  def default_model("openai_compat"), do: "gpt-4o"
-  def default_model("openrouter"), do: "openai/gpt-4o"
+  def default_model("openai_compat"), do: "gpt-4.1"
+  def default_model("openrouter"), do: "openai/gpt-4.1"
   def default_model("google"), do: "gemini-2.5-flash"
   def default_model(_), do: "claude-sonnet-4-6"
 
