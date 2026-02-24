@@ -74,7 +74,11 @@ defmodule Synapsis.Session.Worker do
   @impl true
   def init(opts) do
     session_id = Keyword.fetch!(opts, :session_id)
-    session = Repo.get!(Session, session_id) |> Repo.preload(:project)
+    session =
+      case Repo.get(Session, session_id) do
+        nil -> raise "Session #{session_id} not found"
+        s -> Repo.preload(s, :project)
+      end
 
     agent = Synapsis.Agent.Resolver.resolve(session.agent, session.config)
     effective_provider = agent[:provider] || session.provider
@@ -217,9 +221,10 @@ defmodule Synapsis.Session.Worker do
     agent = Synapsis.Agent.Resolver.resolve(agent_name, state.session.config)
 
     # Update the session record in DB
-    state.session
-    |> Session.changeset(%{agent: to_string(agent_name)})
-    |> Repo.update!()
+    {:ok, _} =
+      state.session
+      |> Session.changeset(%{agent: to_string(agent_name)})
+      |> Repo.update()
 
     session = %{state.session | agent: to_string(agent_name)}
 

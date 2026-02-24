@@ -65,14 +65,17 @@ defmodule Synapsis.GitWorktree do
     tmp_path =
       Path.join(System.tmp_dir!(), "synapsis_patch_#{System.unique_integer([:positive])}.patch")
 
-    try do
-      File.write!(tmp_path, patch_text)
-      run(worktree_path, ["apply", "--verbose", tmp_path])
-    after
-      File.rm(tmp_path)
+    case File.write(tmp_path, patch_text) do
+      :ok ->
+        try do
+          run(worktree_path, ["apply", "--verbose", tmp_path])
+        after
+          File.rm(tmp_path)
+        end
+
+      {:error, reason} ->
+        {:error, "Failed to write patch file: #{inspect(reason)}"}
     end
-  rescue
-    e -> {:error, "git apply error: #{Exception.message(e)}"}
   end
 
   @doc """

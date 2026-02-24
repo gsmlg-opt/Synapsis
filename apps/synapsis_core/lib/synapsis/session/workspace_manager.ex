@@ -159,7 +159,7 @@ defmodule Synapsis.Session.WorkspaceManager do
         tmp_path = System.tmp_dir!() |> Path.join("synapsis-patch-#{patch.id}.diff")
 
         try do
-          File.write!(tmp_path, patch.diff_text)
+          :ok = File.write(tmp_path, patch.diff_text)
 
           case run_in_dir(project_path, ["apply", "--check", tmp_path]) do
             {:ok, _} ->
