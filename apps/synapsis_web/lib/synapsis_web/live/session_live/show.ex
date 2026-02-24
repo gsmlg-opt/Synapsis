@@ -71,11 +71,10 @@ defmodule SynapsisWeb.SessionLive.Show do
   end
 
   def handle_event("select_provider", %{"provider" => provider_name}, socket) do
-    # Pick a reasonable default model for the selected provider
+    # Pick the canonical default model for the selected provider
     provider = Enum.find(socket.assigns.providers, &(&1.name == provider_name))
     type = if provider, do: provider.type, else: provider_name
-    models = Synapsis.Provider.ModelRegistry.list(type)
-    default_model = if models != [], do: hd(models).id, else: ""
+    default_model = Synapsis.Providers.default_model(type)
 
     {:noreply,
      assign(socket, new_session_provider: provider_name, new_session_model: default_model)}
