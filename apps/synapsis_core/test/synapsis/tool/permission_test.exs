@@ -130,5 +130,23 @@ defmodule Synapsis.Tool.PermissionTest do
       result = Permissions.check("file_read", session)
       assert result in [:approved, :requires_approval]
     end
+
+    test "handles session with atom autoApprove levels" do
+      session = %{config: %{"permissions" => %{"autoApprove" => [:write, :execute]}}}
+      assert :approved = Permissions.check("file_write", session)
+      assert :approved = Permissions.check("bash", session)
+      assert :approved = Permissions.check("file_read", session)
+    end
+
+    test "handles non-existent session struct" do
+      result = Permissions.check("file_read", nil)
+      assert result in [:approved, :requires_approval]
+    end
+  end
+
+  describe "Permissions.check/2 fallback behavior" do
+    test "unknown tool defaults to :write level requiring approval" do
+      assert :requires_approval = Permissions.check("custom_tool_xyz", nil)
+    end
   end
 end

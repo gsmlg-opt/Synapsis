@@ -258,4 +258,66 @@ defmodule Synapsis.Session.WorkerTest do
       assert Process.alive?(pid)
     end
   end
+
+  describe "handle_info({:provider_error})" do
+    test "sets status to error on non-retriable provider error", %{session: session} do
+      {:ok, pid} = start_supervised({Worker, session_id: session.id})
+      :sys.replace_state(pid, fn state -> %{state | status: :streaming} end)
+      send(pid, {:provider_error, "400 Bad Request"})
+      :timer.sleep(100)
+      assert :sys.get_state(pid).status == :error
+    end
+  end
+
+  describe "handle_info({:provider_chunk})" do
+    test "accumulates text deltas", %{session: session} do
+      {:ok, pid} = start_supervised({Worker, session_id: session.id})
+      :sys.replace_state(pid, fn state -> %{state | status: :streaming} end)
+      send(pid, {:provider_chunk, {:text_delta, "hello"}})
+      :timer.sleep(100)
+      assert :sys.get_state(pid).pending_text =~ "hello"
+    end
+
+    test "accumulates reasoning deltas", %{session: session} do
+      {:ok, pid} = start_supervised({Worker, session_id: session.id})
+      :sys.replace_state(pid, fn state -> %{state | status: :streaming} end)
+      send(pid, {:provider_chunk, {:reasoning_delta, "thinking"}})
+      :timer.sleep(100)
+      assert :sys.get_state(pid).pending_reasoning =~ "thinking"
+    end
+  end
+
+  describe "handle_info(:provider_done) without tool_uses" do
+    test "transitions to idle and persists assistant message", %{session: session} do
+      {:ok, pid} = start_supervised({Worker, session_id: session.id})
+      allow_worker(pid)
+
+      :sys.replace_state(pid, fn state ->
+        %{state | status: :streaming, pending_text: "response text", tool_uses: []}
+      end)
+
+      send(pid, :provider_done)
+      :timer.sleep(300)
+
+      assert :sys.get_state(pid).status == :idle
+
+      import Ecto.Query
+
+      msgs =
+        Repo.all(
+          from(m in Synapsis.Message,
+            where: m.session_id == ^session.id and m.role == "assistant"
+          )
+        )
+
+      assert length(msgs) > 0
+
+      text_parts =
+        Enum.flat_map(msgs, fn m ->
+          Enum.filter(m.parts, &match?(%Synapsis.Part.Text{}, &1))
+        end)
+
+      assert Enum.any?(text_parts, fn p -> p.content == "response text" end)
+    end
+  end
 end

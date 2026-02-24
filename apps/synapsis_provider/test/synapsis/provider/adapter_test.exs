@@ -567,6 +567,64 @@ defmodule Synapsis.Provider.AdapterTest do
     end
 
   end
+
+  # ---------------------------------------------------------------------------
+  # cancel/1
+  # ---------------------------------------------------------------------------
+
+  describe "cancel/1" do
+    test "cancel returns :ok" do
+      # Start a long-running task under the provider TaskSupervisor so we have a real PID
+      task =
+        Task.Supervisor.async_nolink(Synapsis.Provider.TaskSupervisor, fn ->
+          Process.sleep(:infinity)
+        end)
+
+      assert :ok = Adapter.cancel(task.pid)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # stream/2 error handling
+  # ---------------------------------------------------------------------------
+
+  describe "stream/2 error handling" do
+    test "sends provider_error when connection refused", %{bypass: bypass, port: port} do
+      Bypass.down(bypass)
+
+      config = %{api_key: "test-key", base_url: "http://localhost:#{port}", type: "anthropic"}
+
+      request =
+        Adapter.format_request([], [], %{
+          model: "claude-sonnet-4-20250514",
+          system_prompt: "test",
+          provider_type: "anthropic"
+        })
+
+      assert {:ok, _ref} = Adapter.stream(request, config)
+
+      assert_receive({:provider_error, _reason}, 5000)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # resolve_transport_type/1 — additional edge cases
+  # ---------------------------------------------------------------------------
+
+  describe "resolve_transport_type/1 edge cases" do
+    test "groq maps to :openai" do
+      assert :openai = Adapter.resolve_transport_type("groq")
+    end
+
+    test "deepseek maps to :openai" do
+      assert :openai = Adapter.resolve_transport_type("deepseek")
+    end
+
+    test "integer input defaults to :openai" do
+      assert :openai = Adapter.resolve_transport_type(42)
+    end
+  end
+
   # ---------------------------------------------------------------------------
   # Helpers
   # ---------------------------------------------------------------------------

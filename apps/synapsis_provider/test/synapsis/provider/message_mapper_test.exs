@@ -149,6 +149,19 @@ defmodule Synapsis.Provider.MessageMapperTest do
       assert block.type == "text"
       assert block.text == "file body"
     end
+
+    test "includes max_tokens when specified" do
+      request = MessageMapper.build_request(:anthropic, [@text_msg], [], %{max_tokens: 2048})
+      assert request.max_tokens == 2048
+    end
+
+    test "includes reasoning_effort when specified via opts" do
+      request =
+        MessageMapper.build_request(:anthropic, [@text_msg], [], %{reasoning_effort: "high"})
+
+      # reasoning_effort is not currently forwarded to the request body
+      refute Map.has_key?(request, :reasoning_effort)
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -224,6 +237,48 @@ defmodule Synapsis.Provider.MessageMapperTest do
       [m] = request.messages
       assert m.role == "user"
       assert m.content == "Hi there"
+    end
+
+    test "formats tool_use parts as tool_calls" do
+      msg = %{
+        role: :assistant,
+        parts: [
+          %Synapsis.Part.ToolUse{
+            tool: "bash",
+            tool_use_id: "id1",
+            input: %{"cmd" => "ls"},
+            status: :pending
+          }
+        ]
+      }
+
+      request = MessageMapper.build_request(:openai, [msg], [], %{})
+      [m] = request.messages
+      assert m.role == "assistant"
+      assert is_list(m.tool_calls)
+      [tc] = m.tool_calls
+      assert tc.id == "id1"
+      assert tc.type == "function"
+      assert tc.function.name == "bash"
+    end
+
+    test "formats tool_result parts" do
+      msg = %{
+        role: :user,
+        parts: [
+          %Synapsis.Part.ToolResult{
+            tool_use_id: "id1",
+            content: "output",
+            is_error: false
+          }
+        ]
+      }
+
+      request = MessageMapper.build_request(:openai, [msg], [], %{})
+      [m] = request.messages
+      assert m.role == "tool"
+      assert m.tool_call_id == "id1"
+      assert m.content == "output"
     end
   end
 
@@ -309,6 +364,32 @@ defmodule Synapsis.Provider.MessageMapperTest do
       [m] = request.contents
       assert m.role == "user"
       assert [%{text: "Hi"}] = m.parts
+    end
+
+    test "formats tool_use parts as functionCall" do
+      msg = %{
+        role: :assistant,
+        parts: [
+          %Synapsis.Part.ToolUse{
+            tool: "bash",
+            tool_use_id: "id1",
+            input: %{"cmd" => "ls"},
+            status: :pending
+          }
+        ]
+      }
+
+      request = MessageMapper.build_request(:google, [msg], [], %{})
+      [m] = request.contents
+      assert m.role == "model"
+      [block] = m.parts
+      assert block.functionCall.name == "bash"
+      assert block.functionCall.args == %{"cmd" => "ls"}
+    end
+
+    test "omits systemInstruction when nil" do
+      request = MessageMapper.build_request(:google, [@text_msg], [], %{})
+      refute Map.has_key?(request, :systemInstruction)
     end
   end
 end

@@ -38,6 +38,44 @@ defmodule Synapsis.ConfigTest do
       assert Config.deep_merge("old_value", %{"a" => 1}) == %{"a" => 1}
       assert Config.deep_merge(42, "new") == "new"
     end
+
+    test "deeply nested three-level merge" do
+      base = %{"a" => %{"b" => %{"c" => 1, "d" => 2}}}
+      override = %{"a" => %{"b" => %{"c" => 10, "e" => 3}}}
+      result = Config.deep_merge(base, override)
+      assert result == %{"a" => %{"b" => %{"c" => 10, "d" => 2, "e" => 3}}}
+    end
+
+    test "override replaces list values entirely (no list merge)" do
+      base = %{"tools" => ["a", "b"]}
+      override = %{"tools" => ["c"]}
+      assert Config.deep_merge(base, override) == %{"tools" => ["c"]}
+    end
+
+    test "nil override replaces map" do
+      assert Config.deep_merge(%{"a" => %{"b" => 1}}, nil) == nil
+    end
+  end
+
+  describe "defaults/0 structure" do
+    test "build agent has fetch tool" do
+      config = Config.defaults()
+      assert "fetch" in config["agents"]["build"]["tools"]
+    end
+
+    test "plan agent is read-only with high reasoning effort" do
+      config = Config.defaults()
+      assert config["agents"]["plan"]["readOnly"] == true
+      assert config["agents"]["plan"]["reasoningEffort"] == "high"
+    end
+
+    test "top-level keys exist" do
+      config = Config.defaults()
+      assert Map.has_key?(config, "agents")
+      assert Map.has_key?(config, "providers")
+      assert Map.has_key?(config, "mcpServers")
+      assert Map.has_key?(config, "lsp")
+    end
   end
 
   describe "load_project_config/1" do

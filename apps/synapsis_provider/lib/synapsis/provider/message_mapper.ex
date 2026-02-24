@@ -141,17 +141,55 @@ defmodule Synapsis.Provider.MessageMapper do
     system_messages ++ Enum.map(messages, &format_openai_message/1)
   end
 
-  defp format_openai_message(%{role: role, parts: parts}) do
-    content_items = Enum.map(parts, &format_openai_content/1)
-    content = merge_openai_content(content_items)
-    %{role: to_string(role), content: content}
+  defp format_openai_message(msg) do
+    {role, parts} = extract_role_parts(msg)
+    {tool_uses, other_parts} = Enum.split_with(parts, &match?(%Synapsis.Part.ToolUse{}, &1))
+    {tool_results, content_parts} = Enum.split_with(other_parts, &match?(%Synapsis.Part.ToolResult{}, &1))
+
+    cond do
+      tool_results != [] ->
+        # ToolResult messages become role: "tool" in OpenAI format
+        result = hd(tool_results)
+
+        %{
+          role: "tool",
+          tool_call_id: result.tool_use_id,
+          content: result.content
+        }
+
+      tool_uses != [] ->
+        # Assistant messages with tool_use become tool_calls
+        base =
+          case content_parts do
+            [] -> %{role: "assistant"}
+            _ ->
+              content_items = Enum.map(content_parts, &format_openai_content/1)
+              %{role: "assistant", content: merge_openai_content(content_items)}
+          end
+
+        tool_calls =
+          Enum.map(tool_uses, fn %Synapsis.Part.ToolUse{tool: tool, tool_use_id: id, input: input} ->
+            %{
+              id: id,
+              type: "function",
+              function: %{
+                name: tool,
+                arguments: Jason.encode!(input)
+              }
+            }
+          end)
+
+        Map.put(base, :tool_calls, tool_calls)
+
+      true ->
+        content_items = Enum.map(content_parts, &format_openai_content/1)
+        content = merge_openai_content(content_items)
+        %{role: to_string(role), content: content}
+    end
   end
 
-  defp format_openai_message(%{"role" => role, "parts" => parts}) do
-    content_items = Enum.map(parts, &format_openai_content/1)
-    content = merge_openai_content(content_items)
-    %{role: role, content: content}
-  end
+  defp extract_role_parts(%{role: role, parts: parts}), do: {role, parts}
+  defp extract_role_parts(%{"role" => role, "parts" => parts}), do: {role, parts}
 
   defp format_openai_content(%Synapsis.Part.Text{content: content}), do: content
 
@@ -218,6 +256,10 @@ defmodule Synapsis.Provider.MessageMapper do
         data: data
       }
     }
+  end
+
+  defp format_google_content(%Synapsis.Part.ToolUse{tool: tool, input: input}) do
+    %{functionCall: %{name: tool, args: input}}
   end
 
   defp format_google_content(%{content: content}), do: %{text: to_string(content)}
