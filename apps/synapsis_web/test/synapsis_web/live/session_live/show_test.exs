@@ -228,5 +228,123 @@ defmodule SynapsisWeb.SessionLive.ShowTest do
 
       assert path =~ other_session.id
     end
+
+    test "switch_agent to build from plan and back", %{
+      conn: conn,
+      project: project,
+      session: session
+    } do
+      {:ok, view, _html} =
+        live(conn, ~p"/projects/#{project.id}/sessions/#{session.id}")
+
+      # Switch to plan
+      view |> element("button", "plan") |> render_click()
+      html = render(view)
+      assert html =~ "plan"
+
+      # Switch back to build
+      view |> element("button", "build") |> render_click()
+      html = render(view)
+      assert html =~ "build"
+    end
+
+    test "redirects with flash when both project and session are invalid", %{conn: conn} do
+      bad_project = Ecto.UUID.generate()
+      bad_session = Ecto.UUID.generate()
+
+      assert {:error, {:live_redirect, %{to: "/projects/" <> _}}} =
+               live(conn, ~p"/projects/#{bad_project}/sessions/#{bad_session}")
+    end
+
+    test "session without title renders 'Session' heading", %{conn: conn, project: project} do
+      {:ok, untitled_session} =
+        %Synapsis.Session{}
+        |> Synapsis.Session.changeset(%{
+          project_id: project.id,
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+        |> Synapsis.Repo.insert()
+
+      {:ok, _view, html} =
+        live(conn, ~p"/projects/#{project.id}/sessions/#{untitled_session.id}")
+
+      # The header should say "Session" when no title is set
+      assert html =~ "Session"
+    end
+
+    test "chat container element has session id in data attribute", %{
+      conn: conn,
+      project: project,
+      session: session
+    } do
+      {:ok, view, _html} =
+        live(conn, ~p"/projects/#{project.id}/sessions/#{session.id}")
+
+      assert has_element?(view, "#chat-#{session.id}")
+    end
+
+    test "sidebar highlights the current session", %{
+      conn: conn,
+      project: project,
+      session: session
+    } do
+      {:ok, _view, html} =
+        live(conn, ~p"/projects/#{project.id}/sessions/#{session.id}")
+
+      # The current session should have bg-gray-800 (active indicator)
+      assert html =~ "bg-gray-800"
+    end
+
+    test "project slug link in sidebar points to project page", %{
+      conn: conn,
+      project: project,
+      session: session
+    } do
+      {:ok, _view, html} =
+        live(conn, ~p"/projects/#{project.id}/sessions/#{session.id}")
+
+      assert html =~ project.slug
+    end
+
+    test "select_provider with unknown provider name does not crash", %{
+      conn: conn,
+      project: project,
+      session: session
+    } do
+      {:ok, view, _html} =
+        live(conn, ~p"/projects/#{project.id}/sessions/#{session.id}")
+
+      html = render_hook(view, "select_provider", %{"provider" => "totally_fake"})
+      assert is_binary(html)
+    end
+
+    test "session header shows 'Session' when title is nil", %{conn: conn, project: project} do
+      {:ok, untitled} =
+        %Synapsis.Session{}
+        |> Synapsis.Session.changeset(%{
+          project_id: project.id,
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+        |> Synapsis.Repo.insert()
+
+      {:ok, view, _html} =
+        live(conn, ~p"/projects/#{project.id}/sessions/#{untitled.id}")
+
+      assert has_element?(view, "h2", "Session")
+    end
+
+    test "delete_session with invalid id shows error flash", %{
+      conn: conn,
+      project: project,
+      session: session
+    } do
+      {:ok, view, _html} =
+        live(conn, ~p"/projects/#{project.id}/sessions/#{session.id}")
+
+      html = render_hook(view, "delete_session", %{"id" => Ecto.UUID.generate()})
+      assert html =~ "Failed to delete session"
+    end
   end
 end

@@ -39,6 +39,15 @@ defmodule Synapsis.Session.WorkerTest do
     Ecto.Adapters.SQL.Sandbox.allow(Repo, self(), pid)
   end
 
+  describe "init/1 — graceful stop on missing session" do
+    test "returns :stop for non-existent session" do
+      bogus_id = Ecto.UUID.generate()
+
+      assert {:stop, {:error, :session_not_found}} =
+               Worker.init(session_id: bogus_id)
+    end
+  end
+
   describe "init/1 — worktree setup" do
     test "sets worktree_path when project is a git repo", %{session: session, project_path: pp} do
       {:ok, pid} = start_supervised({Worker, session_id: session.id})

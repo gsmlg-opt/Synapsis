@@ -71,5 +71,64 @@ defmodule SynapsisWeb.SkillLive.ShowTest do
       view |> form("form", %{"name" => "", "description" => ""}) |> render_submit()
       assert render(view) =~ "Failed to update skill"
     end
+
+    test "heading displays the skill name", %{conn: conn, skill: skill} do
+      {:ok, view, _html} = live(conn, ~p"/settings/skills/#{skill.id}")
+      assert has_element?(view, "h1", skill.name)
+    end
+
+    test "form shows name input with current value", %{conn: conn, skill: skill} do
+      {:ok, _view, html} = live(conn, ~p"/settings/skills/#{skill.id}")
+      assert html =~ ~s(value="#{skill.name}")
+    end
+
+    test "update_skill changes scope to project", %{conn: conn, skill: skill} do
+      {:ok, view, _html} = live(conn, ~p"/settings/skills/#{skill.id}")
+
+      view
+      |> form("form", %{
+        "name" => skill.name,
+        "description" => skill.description,
+        "system_prompt_fragment" => skill.system_prompt_fragment,
+        "scope" => "project"
+      })
+      |> render_submit()
+
+      updated = Synapsis.Repo.get(Synapsis.Skill, skill.id)
+      assert updated.scope == "project"
+    end
+
+    test "update_skill changes system prompt fragment", %{conn: conn, skill: skill} do
+      {:ok, view, _html} = live(conn, ~p"/settings/skills/#{skill.id}")
+
+      view
+      |> form("form", %{
+        "name" => skill.name,
+        "description" => skill.description,
+        "system_prompt_fragment" => "New specialized prompt for testing.",
+        "scope" => "global"
+      })
+      |> render_submit()
+
+      updated = Synapsis.Repo.get(Synapsis.Skill, skill.id)
+      assert updated.system_prompt_fragment == "New specialized prompt for testing."
+    end
+
+    test "breadcrumb links to skills index", %{conn: conn, skill: skill} do
+      {:ok, _view, html} = live(conn, ~p"/settings/skills/#{skill.id}")
+      assert html =~ ~s(href="/settings/skills")
+    end
+
+    test "description textarea is displayed", %{conn: conn, skill: skill} do
+      {:ok, _view, html} = live(conn, ~p"/settings/skills/#{skill.id}")
+      assert html =~ "Description"
+      assert html =~ skill.description
+    end
+
+    test "system prompt fragment textarea is displayed", %{conn: conn, skill: skill} do
+      {:ok, _view, html} = live(conn, ~p"/settings/skills/#{skill.id}")
+      assert html =~ "System Prompt Fragment"
+      assert html =~ skill.system_prompt_fragment
+    end
   end
 end

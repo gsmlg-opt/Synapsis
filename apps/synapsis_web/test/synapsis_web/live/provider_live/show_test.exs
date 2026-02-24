@@ -101,5 +101,49 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       html = render(view)
       assert html =~ "Provider updated"
     end
+
+    test "provider without api_key does not show 'Key is set'", %{conn: conn} do
+      {:ok, no_key_provider} =
+        %Synapsis.ProviderConfig{}
+        |> Synapsis.ProviderConfig.changeset(%{
+          name: "no-key-prov-#{:rand.uniform(100_000)}",
+          type: "openai_compat"
+        })
+        |> Synapsis.Repo.insert()
+
+      {:ok, _view, html} = live(conn, ~p"/settings/providers/#{no_key_provider.id}")
+      refute html =~ "Key is set"
+    end
+
+    test "heading displays the provider name", %{conn: conn, provider: provider} do
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+      assert has_element?(view, "h1", provider.name)
+    end
+
+    test "form has base_url input field", %{conn: conn, provider: provider} do
+      {:ok, _view, html} = live(conn, ~p"/settings/providers/#{provider.id}")
+      assert html =~ "Base URL"
+      assert html =~ "base_url"
+    end
+
+    test "form has enabled checkbox", %{conn: conn, provider: provider} do
+      {:ok, _view, html} = live(conn, ~p"/settings/providers/#{provider.id}")
+      assert html =~ "Enabled"
+      assert html =~ ~s(name="enabled")
+    end
+
+    test "update_provider with new base_url persists it", %{conn: conn, provider: provider} do
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+
+      view
+      |> form("form", %{
+        "base_url" => "https://new-base.example.com/v2",
+        "enabled" => "true"
+      })
+      |> render_submit()
+
+      {:ok, updated} = Synapsis.Providers.get(provider.id)
+      assert updated.base_url == "https://new-base.example.com/v2"
+    end
   end
 end

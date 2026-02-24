@@ -102,5 +102,62 @@ defmodule SynapsisWeb.SessionLive.IndexTest do
       html = render(view)
       assert html =~ "Create Session"
     end
+
+    test "shows empty session list when project has no sessions", %{conn: conn, project: project} do
+      {:ok, _view, html} = live(conn, ~p"/projects/#{project.id}/sessions")
+      # No session cards should be rendered; the session list area should be empty
+      refute html =~ "anthropic/"
+    end
+
+    test "session without title shows truncated id", %{conn: conn, project: project} do
+      {:ok, session} =
+        %Synapsis.Session{}
+        |> Synapsis.Session.changeset(%{
+          project_id: project.id,
+          provider: "openai_compat",
+          model: "gpt-4o"
+        })
+        |> Synapsis.Repo.insert()
+
+      {:ok, _view, html} = live(conn, ~p"/projects/#{project.id}/sessions")
+      assert html =~ "Session #{String.slice(session.id, 0, 8)}"
+    end
+
+    test "session displays agent and provider/model info", %{conn: conn, project: project} do
+      {:ok, _session} =
+        %Synapsis.Session{}
+        |> Synapsis.Session.changeset(%{
+          project_id: project.id,
+          provider: "google",
+          model: "gemini-pro",
+          agent: "plan"
+        })
+        |> Synapsis.Repo.insert()
+
+      {:ok, _view, html} = live(conn, ~p"/projects/#{project.id}/sessions")
+      assert html =~ "google/gemini-pro"
+      assert html =~ "plan"
+    end
+
+    test "heading displays Sessions", %{conn: conn, project: project} do
+      {:ok, view, _html} = live(conn, ~p"/projects/#{project.id}/sessions")
+      assert has_element?(view, "h1", "Sessions")
+    end
+
+    test "breadcrumb contains Projects link", %{conn: conn, project: project} do
+      {:ok, _view, html} = live(conn, ~p"/projects/#{project.id}/sessions")
+      assert html =~ "Projects"
+    end
+
+    test "select_provider with unknown provider name does not crash", %{
+      conn: conn,
+      project: project
+    } do
+      {:ok, view, _html} = live(conn, ~p"/projects/#{project.id}/sessions")
+      view |> element("button", "+ New Session") |> render_click()
+      # Sending a non-existent provider name should not crash
+      html = render_hook(view, "select_provider", %{"provider" => "nonexistent_provider"})
+      assert is_binary(html)
+    end
   end
 end

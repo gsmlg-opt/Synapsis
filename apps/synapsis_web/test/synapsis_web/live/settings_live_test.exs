@@ -37,5 +37,30 @@ defmodule SynapsisWeb.SettingsLiveTest do
       assert html =~ "LSP Servers"
       assert html =~ "Configure Language Server Protocol integrations."
     end
+
+    test "heading is present and page mounts correctly", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings")
+      # Verify the page renders with the expected structure
+      assert has_element?(view, "h1", "Settings")
+      assert page_title(view) =~ "Synapsis"
+    end
+
+    test "all five setting cards are rendered", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/settings")
+      assert html =~ ~p"/settings/providers"
+      assert html =~ ~p"/settings/memory"
+      assert html =~ ~p"/settings/skills"
+      assert html =~ ~p"/settings/mcp"
+      assert html =~ ~p"/settings/lsp"
+    end
+
+    test "each card has a heading and description", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings")
+      assert has_element?(view, "h2", "Providers")
+      assert has_element?(view, "h2", "Memory")
+      assert has_element?(view, "h2", "Skills")
+      assert has_element?(view, "h2", "MCP Servers")
+      assert has_element?(view, "h2", "LSP Servers")
+    end
   end
 end

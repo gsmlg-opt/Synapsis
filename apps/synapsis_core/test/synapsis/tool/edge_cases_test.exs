@@ -27,6 +27,25 @@ defmodule Synapsis.Tool.EdgeCasesTest do
     end
   end
 
+  describe "Bash deadline-based timeout with periodic output" do
+    test "command producing slow periodic output still times out within deadline", %{ctx: ctx} do
+      # Each iteration prints a number and sleeps 1 second. With a 1500ms
+      # deadline the command should be killed after ~1-2 iterations rather than
+      # running to completion (which would take 3+ seconds).
+      result =
+        Bash.execute(
+          %{"command" => "for i in 1 2 3; do echo $i; sleep 1; done", "timeout" => 1500},
+          ctx
+        )
+
+      assert {:error, msg} = result
+      assert msg =~ "timed out"
+      assert msg =~ "1500ms"
+      # Should have captured at least the first echo before being killed
+      assert msg =~ "1"
+    end
+  end
+
   describe "Bash non-zero exit code" do
     test "exit code 1 returns ok with exit code in output", %{ctx: ctx} do
       {:ok, output} = Bash.execute(%{"command" => "exit 1"}, ctx)
