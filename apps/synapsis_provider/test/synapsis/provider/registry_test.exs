@@ -69,4 +69,23 @@ defmodule Synapsis.Provider.RegistryTest do
     Registry.register("complex_test", config)
     assert {:ok, ^config} = Registry.get("complex_test")
   end
+
+  test "module_for resolves via registered config type field" do
+    # Register a provider with an explicit :type field
+    Registry.register("my_openai_compat", %{type: "openai_compat", api_key: "k", base_url: "http://localhost"})
+    assert {:ok, Synapsis.Provider.Adapter} = Registry.module_for("my_openai_compat")
+  end
+
+  test "module_for returns error when registered config has unknown type" do
+    Registry.register("bad_type_provider", %{type: "foobar_unknown", api_key: "k"})
+    # "foobar_unknown" is not in @known_types, but provider name isn't either
+    # module_for falls back to string(provider_name) = "bad_type_provider"
+    assert {:error, :unknown_provider} = Registry.module_for("bad_type_provider")
+  end
+
+  test "module_for for registered provider with no type falls back to provider name" do
+    Registry.register("anthropic", %{api_key: "real-key"})
+    # "anthropic" is in @known_types as provider name itself
+    assert {:ok, Synapsis.Provider.Adapter} = Registry.module_for("anthropic")
+  end
 end

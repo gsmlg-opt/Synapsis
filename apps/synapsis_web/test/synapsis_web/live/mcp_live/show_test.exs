@@ -125,4 +125,67 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     assert html =~ "--verbose"
     assert html =~ "--port=8080"
   end
+
+  test "submitting form with empty args and env clears them", %{conn: conn, config: config} do
+    {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
+
+    # Submit with empty args and env strings — exercises parse_args("") and parse_env("")
+    view
+    |> form("form", %{"command" => "some-cmd", "args" => "", "env" => ""})
+    |> render_submit()
+
+    html = render(view)
+    assert html =~ "MCP server updated"
+  end
+
+  test "submitting form with args as newline-delimited list", %{conn: conn, config: config} do
+    {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
+
+    view
+    |> form("form", %{"command" => "cmd", "args" => "--verbose\n--debug\n"})
+    |> render_submit()
+
+    html = render(view)
+    assert html =~ "MCP server updated"
+    assert html =~ "--verbose"
+    assert html =~ "--debug"
+  end
+
+  test "submitting form with env vars as KEY=VALUE lines", %{conn: conn, config: config} do
+    {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
+
+    view
+    |> form("form", %{
+      "command" => "cmd",
+      "env" => "MYVAR=hello\nOTHER=world\nINVALID_LINE_NO_EQUALS\n"
+    })
+    |> render_submit()
+
+    html = render(view)
+    assert html =~ "MCP server updated"
+    assert html =~ "MYVAR=hello"
+    assert html =~ "OTHER=world"
+  end
+
+  test "submitting form with sse transport updates transport", %{conn: conn, config: config} do
+    {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
+
+    view
+    |> form("form", %{"command" => "test", "transport" => "sse", "url" => "http://example.com"})
+    |> render_submit()
+
+    html = render(view)
+    assert html =~ "MCP server updated"
+  end
+
+  test "auto_connect checkbox — submitting with false value", %{conn: conn, config: config} do
+    {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
+
+    # Hidden field sends "false", no checkbox checked
+    view
+    |> form("form", %{"command" => "test", "auto_connect" => "false"})
+    |> render_submit()
+
+    assert render(view) =~ "MCP server updated"
+  end
 end
