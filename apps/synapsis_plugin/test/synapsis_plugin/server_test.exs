@@ -3,6 +3,24 @@ defmodule SynapsisPlugin.ServerTest do
 
   alias SynapsisPlugin.Test.MockPlugin
 
+  # A minimal plugin that does NOT export handle_info/2
+  defmodule NoHandleInfoPlugin do
+    use Synapsis.Plugin
+
+    defstruct [:name]
+
+    @impl Synapsis.Plugin
+    def init(_config), do: {:ok, %__MODULE__{name: "no_handle_info"}}
+
+    @impl Synapsis.Plugin
+    def tools(_state),
+      do: [%{name: "nhi_tool", description: "test", parameters: %{"type" => "object"}}]
+
+    @impl Synapsis.Plugin
+    def execute("nhi_tool", _input, state), do: {:ok, "ok", state}
+    def execute(_, _, state), do: {:error, "unknown", state}
+  end
+
   describe "plugin lifecycle" do
     test "starts a mock plugin and registers tools" do
       {:ok, pid} =
@@ -69,6 +87,64 @@ defmodule SynapsisPlugin.ServerTest do
       Process.sleep(30)
 
       assert Process.alive?(pid)
+      GenServer.stop(pid)
+    end
+
+    test "plugin without handle_info/2 ignores unknown messages silently" do
+      name = "test_nhi_#{:rand.uniform(100_000)}"
+      {:ok, pid} = SynapsisPlugin.start_plugin(NoHandleInfoPlugin, name, %{name: name})
+
+      assert Process.alive?(pid)
+
+      send(pid, :some_unknown_message)
+      Process.sleep(30)
+
+      assert Process.alive?(pid)
+      GenServer.stop(pid)
+    end
+
+    test "plugin without handle_info/2 ignores tool_effect messages" do
+      name = "test_nhi_effect_#{:rand.uniform(100_000)}"
+      {:ok, pid} = SynapsisPlugin.start_plugin(NoHandleInfoPlugin, name, %{name: name})
+
+      # Tool effect: plugin doesn't export handle_effect/3 either, so this
+      # should go to the no-op branch in Server.handle_info/2
+      send(pid, {:tool_effect, :file_changed, %{path: "/tmp/test.ex"}})
+      Process.sleep(30)
+
+      assert Process.alive?(pid)
+      GenServer.stop(pid)
+    end
+
+    test "plugin init failure returns stop tuple" do
+      # Use a module that returns {:error, ...} from init
+      defmodule FailInitPlugin do
+        use Synapsis.Plugin
+
+        @impl Synapsis.Plugin
+        def init(_config), do: {:error, :init_failed}
+
+        @impl Synapsis.Plugin
+        def tools(_state), do: []
+
+        @impl Synapsis.Plugin
+        def execute(_, _, state), do: {:error, "n/a", state}
+      end
+
+      name = "test_fail_init_#{:rand.uniform(100_000)}"
+      result = SynapsisPlugin.start_plugin(FailInitPlugin, name, %{})
+      # DynamicSupervisor wraps the :stop as an error
+      assert {:error, _} = result
+    end
+
+    test "get_state returns current plugin state" do
+      name = "test_get_state_#{:rand.uniform(100_000)}"
+      {:ok, pid} = SynapsisPlugin.start_plugin(MockPlugin, name, %{name: name})
+
+      state = GenServer.call(pid, :get_state)
+      assert %MockPlugin{} = state
+      assert state.counter == 0
+
       GenServer.stop(pid)
     end
   end
