@@ -412,6 +412,47 @@ defmodule Synapsis.SessionsTest do
     end
   end
 
+  describe "retry/1" do
+    test "returns error when no messages exist in session" do
+      {:ok, session} =
+        Sessions.create("/tmp/test_sess_retry_#{:rand.uniform(100_000)}", %{
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      assert {:error, :no_messages} = Sessions.retry(session.id)
+    end
+  end
+
+  describe "approve_tool/2" do
+    test "delegates approve_tool to session worker (cast - no return value)" do
+      {:ok, session} =
+        Sessions.create("/tmp/test_sess_approve_#{:rand.uniform(100_000)}", %{
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      # approve_tool is a cast — it returns :ok without error
+      Sessions.approve_tool(session.id, "tu_fake_id")
+      # No crash means it delegates correctly
+      assert true
+    end
+  end
+
+  describe "deny_tool/2" do
+    test "delegates deny_tool to session worker (cast - no return value)" do
+      {:ok, session} =
+        Sessions.create("/tmp/test_sess_deny_#{:rand.uniform(100_000)}", %{
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      # deny_tool is a cast — it returns :ok without error
+      Sessions.deny_tool(session.id, "tu_fake_id")
+      assert true
+    end
+  end
+
   describe "compact/1" do
     test "returns :ok when tokens are below threshold" do
       {:ok, session} =

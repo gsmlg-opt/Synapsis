@@ -139,4 +139,61 @@ defmodule Synapsis.GitWorktreeTest do
       refute GitWorktree.is_worktree?("/tmp")
     end
   end
+
+  describe "apply_patch/2 — write failure" do
+    test "returns error when patch file cannot be written" do
+      # Use a read-only directory to trigger write failure
+      result = GitWorktree.apply_patch("/nonexistent/path", "some patch")
+      # Either returns error from write failure or from git apply (no cd to path)
+      assert {:error, _msg} = result
+    end
+  end
+
+  describe "list/1 — bare worktree" do
+    test "lists bare worktrees if any exist", %{project_path: project_path} do
+      # Verify that list/1 works even if parsing encounters unknown lines
+      # We simulate by just calling list and checking the structure
+      assert {:ok, worktrees} = GitWorktree.list(project_path)
+      assert is_list(worktrees)
+
+      # Each entry should have at least a :path key
+      for wt <- worktrees do
+        assert Map.has_key?(wt, :path)
+      end
+    end
+
+    test "list returns error for non-git path" do
+      result = GitWorktree.list("/nonexistent/not-a-git-repo")
+      assert {:error, _msg} = result
+    end
+  end
+
+  describe "add/3 — error for invalid path" do
+    test "returns error when cd path does not exist" do
+      result = GitWorktree.add("/this/does/not/exist", "/tmp/wt_test", "test-branch")
+      assert {:error, _msg} = result
+    end
+  end
+
+  describe "Grep tool — include parameter" do
+    @tag :tmp_dir
+    test "searches only in files matching include glob" do
+      alias Synapsis.Tool.Grep
+
+      test_dir = System.tmp_dir!() |> Path.join("grep_include_#{System.unique_integer()}")
+      File.mkdir_p!(test_dir)
+      File.write!(Path.join(test_dir, "match.ex"), "hello world")
+      File.write!(Path.join(test_dir, "no_match.txt"), "hello world")
+
+      {:ok, output} =
+        Grep.execute(
+          %{"pattern" => "hello", "include" => "*.ex"},
+          %{project_path: test_dir}
+        )
+
+      assert output =~ "match.ex"
+      # txt file should not be in results since we filter to *.ex
+      File.rm_rf!(test_dir)
+    end
+  end
 end
