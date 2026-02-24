@@ -286,6 +286,68 @@ defmodule Synapsis.Tool.ToolsTest do
     end
   end
 
+  describe "FileWrite error handling" do
+    test "returns error for read-only path" do
+      result =
+        FileWrite.execute(
+          %{"path" => "/proc/test_file", "content" => "x"},
+          %{project_path: "/proc"}
+        )
+
+      assert {:error, msg} = result
+      assert msg =~ "Failed to write"
+    end
+  end
+
+  describe "FileEdit returns JSON with diff" do
+    test "response contains path and diff fields" do
+      test_file = Path.join(@test_dir, "json_edit_test.txt")
+      File.write!(test_file, "alpha beta gamma")
+
+      {:ok, json_str} =
+        FileEdit.execute(
+          %{"path" => "json_edit_test.txt", "old_string" => "beta", "new_string" => "BETA"},
+          %{project_path: @test_dir}
+        )
+
+      parsed = Jason.decode!(json_str)
+      assert parsed["status"] == "ok"
+      assert parsed["path"] =~ "json_edit_test.txt"
+      assert parsed["diff"]["old"] == "beta"
+      assert parsed["diff"]["new"] == "BETA"
+    end
+
+    test "returns error for nonexistent file" do
+      {:error, msg} =
+        FileEdit.execute(
+          %{"path" => "no_such_file.txt", "old_string" => "x", "new_string" => "y"},
+          %{project_path: @test_dir}
+        )
+
+      assert msg =~ "not found" or msg =~ "File not found"
+    end
+  end
+
+  describe "Tool metadata consistency" do
+    test "all tools implement required callbacks" do
+      tools = [FileRead, FileEdit, FileWrite, Bash, Grep, Glob, ListDir, FileDelete, FileMove]
+
+      for mod <- tools do
+        assert is_binary(mod.name()), "#{mod}.name/0 must return a string"
+        assert is_binary(mod.description()), "#{mod}.description/0 must return a string"
+        assert is_map(mod.parameters()), "#{mod}.parameters/0 must return a map"
+        assert mod.parameters()["type"] == "object", "#{mod} parameters must be type: object"
+        assert is_list(mod.side_effects()), "#{mod}.side_effects/0 must return a list"
+      end
+    end
+
+    test "all tool names are unique" do
+      tools = [FileRead, FileEdit, FileWrite, Bash, Grep, Glob, ListDir, FileDelete, FileMove]
+      names = Enum.map(tools, & &1.name())
+      assert length(names) == length(Enum.uniq(names)), "Duplicate tool names found"
+    end
+  end
+
   describe "FileDelete" do
     test "deletes a file" do
       delete_path = Path.join(@test_dir, "to_delete.txt")
