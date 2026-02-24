@@ -137,8 +137,13 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
     test "form at /new shows type selector with all options", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/settings/providers/new")
       assert html =~ "Anthropic"
+      assert html =~ "OpenAI"
       assert html =~ "OpenAI Compatible"
       assert html =~ "Google"
+      assert html =~ "Groq"
+      assert html =~ "OpenRouter"
+      assert html =~ "DeepSeek"
+      assert html =~ "Local"
     end
 
     test "form is hidden on index action", %{conn: conn} do

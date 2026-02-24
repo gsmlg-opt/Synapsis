@@ -95,8 +95,13 @@ defmodule SynapsisWeb.ProviderLive.Index do
                 class="bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none"
               >
                 <option value="anthropic">Anthropic</option>
+                <option value="openai">OpenAI</option>
                 <option value="openai_compat">OpenAI Compatible</option>
                 <option value="google">Google</option>
+                <option value="groq">Groq</option>
+                <option value="openrouter">OpenRouter</option>
+                <option value="deepseek">DeepSeek</option>
+                <option value="local">Local (Ollama etc.)</option>
               </select>
             </div>
             <input
