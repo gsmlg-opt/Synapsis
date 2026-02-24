@@ -101,6 +101,19 @@ defmodule SynapsisWeb.SessionLive.IndexTest do
       render_hook(view, "select_provider", %{"provider" => "anthropic"})
       html = render(view)
       assert html =~ "Create Session"
+      # After selecting anthropic, the model input should show the canonical default
+      assert html =~ Synapsis.Providers.default_model("anthropic")
+    end
+
+    test "select_provider sets canonical default model for openai provider", %{
+      conn: conn,
+      project: project
+    } do
+      {:ok, view, _html} = live(conn, ~p"/projects/#{project.id}/sessions")
+      view |> element("button", "+ New Session") |> render_click()
+      render_hook(view, "select_provider", %{"provider" => "openai"})
+      html = render(view)
+      assert html =~ Synapsis.Providers.default_model("openai")
     end
 
     test "shows empty session list when project has no sessions", %{conn: conn, project: project} do

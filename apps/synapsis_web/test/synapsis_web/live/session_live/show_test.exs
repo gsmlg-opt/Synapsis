@@ -145,6 +145,22 @@ defmodule SynapsisWeb.SessionLive.ShowTest do
       assert is_binary(html)
     end
 
+    test "select_provider sets canonical default model for the selected provider", %{
+      conn: conn,
+      project: project,
+      session: session
+    } do
+      {:ok, view, _html} =
+        live(conn, ~p"/projects/#{project.id}/sessions/#{session.id}")
+
+      # Open the new session form so the model input is rendered
+      render_hook(view, "toggle_new_session_form", %{})
+      render_hook(view, "select_provider", %{"provider" => "openai"})
+      html = render(view)
+      # Should show gpt-4.1, not gpt-4o or claude-opus-4-6
+      assert html =~ Synapsis.Providers.default_model("openai")
+    end
+
     test "navigate event redirects to the given path", %{
       conn: conn,
       project: project,
