@@ -92,6 +92,7 @@ defmodule Synapsis.MessageBuilderTest do
 
     test "builds request with nil context (no extra appended)" do
       messages = []
+
       agent = %{
         system_prompt: "Base prompt",
         tools: nil,
@@ -109,6 +110,7 @@ defmodule Synapsis.MessageBuilderTest do
 
     test "builds request with empty string context (no extra appended)" do
       messages = []
+
       agent = %{
         system_prompt: "Base prompt",
         tools: nil,

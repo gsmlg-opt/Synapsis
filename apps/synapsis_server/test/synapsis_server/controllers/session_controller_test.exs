@@ -122,11 +122,11 @@ defmodule SynapsisServer.SessionControllerTest do
     end
   end
 
-    test "returns 422 for unknown session id", %{conn: conn} do
-      unknown_id = Ecto.UUID.generate()
-      conn = post(conn, "/api/sessions/#{unknown_id}/fork", %{})
-      assert json_response(conn, 422)["error"] != nil
-    end
+  test "returns 422 for unknown session id", %{conn: conn} do
+    unknown_id = Ecto.UUID.generate()
+    conn = post(conn, "/api/sessions/#{unknown_id}/fork", %{})
+    assert json_response(conn, 422)["error"] != nil
+  end
 
   describe "GET /api/sessions/:id/export" do
     test "returns 422 for unknown session", %{conn: conn} do
@@ -192,6 +192,7 @@ defmodule SynapsisServer.SessionControllerTest do
       assert is_binary(response["error"])
     end
   end
+
   describe "POST /api/sessions/:id/messages with images" do
     test "accepts images list and returns ok", %{conn: conn} do
       create_conn =
@@ -351,7 +352,10 @@ defmodule SynapsisServer.SessionControllerTest do
       assert part["message"] == "Starting build..."
     end
 
-    test "serialize_part catch-all returns unknown type for Image parts", %{conn: conn, session: session} do
+    test "serialize_part catch-all returns unknown type for Image parts", %{
+      conn: conn,
+      session: session
+    } do
       %Synapsis.Message{}
       |> Synapsis.Message.changeset(%{
         session_id: session.id,

@@ -47,7 +47,10 @@ defmodule Synapsis.SessionsTest do
 
       on_exit(fn ->
         if prev_ant, do: System.put_env("ANTHROPIC_API_KEY", prev_ant)
-        if prev_oai, do: System.put_env("OPENAI_API_KEY", prev_oai), else: System.delete_env("OPENAI_API_KEY")
+
+        if prev_oai,
+          do: System.put_env("OPENAI_API_KEY", prev_oai),
+          else: System.delete_env("OPENAI_API_KEY")
       end)
 
       {:ok, session} =

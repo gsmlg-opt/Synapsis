@@ -10,12 +10,14 @@ defmodule Synapsis.FileWatcherTest do
     path = "#{@project_path}-#{System.unique_integer([:positive])}"
     File.mkdir_p!(path)
     {:ok, _pid} = FileWatcher.start_link(project_path: path)
+
     on_exit(fn ->
       case Registry.lookup(Synapsis.FileWatcher.Registry, path) do
         [{pid, _}] -> if Process.alive?(pid), do: GenServer.stop(pid)
         [] -> :ok
       end
     end)
+
     {:ok, path: path}
   end
 

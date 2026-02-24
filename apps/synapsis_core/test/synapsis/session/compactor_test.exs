@@ -104,7 +104,14 @@ defmodule Synapsis.Session.CompactorTest do
     session: session
   } do
     parts_cycle = [
-      [%Synapsis.Part.ToolUse{tool: "bash", tool_use_id: "tid1", input: %{"cmd" => "ls"}, status: "done"}],
+      [
+        %Synapsis.Part.ToolUse{
+          tool: "bash",
+          tool_use_id: "tid1",
+          input: %{"cmd" => "ls"},
+          status: "done"
+        }
+      ],
       [%Synapsis.Part.ToolResult{tool_use_id: "tid1", content: "file.txt", is_error: false}],
       [%Synapsis.Part.Reasoning{content: "Thinking step..."}],
       [%Synapsis.Part.Image{media_type: "image/png", data: "abc"}]

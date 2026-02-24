@@ -80,7 +80,11 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
     test "deletes a memory entry", %{conn: conn} do
       {:ok, entry} =
         %Synapsis.MemoryEntry{}
-        |> Synapsis.MemoryEntry.changeset(%{scope: "global", key: "to-delete-key", content: "bye"})
+        |> Synapsis.MemoryEntry.changeset(%{
+          scope: "global",
+          key: "to-delete-key",
+          content: "bye"
+        })
         |> Synapsis.Repo.insert()
 
       {:ok, view, html} = live(conn, ~p"/settings/memory")
@@ -95,7 +99,11 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
 
     test "create_entry with empty key shows error flash", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings/memory")
-      view |> form("form", %{"scope" => "global", "key" => "", "content" => "some content"}) |> render_submit()
+
+      view
+      |> form("form", %{"scope" => "global", "key" => "", "content" => "some content"})
+      |> render_submit()
+
       assert render(view) =~ "Failed to create entry"
     end
   end

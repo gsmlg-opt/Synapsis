@@ -52,7 +52,9 @@ defmodule Synapsis.Tool.FetchTest do
     end
 
     test "blocks metadata.google.internal" do
-      {:error, msg} = Fetch.execute(%{"url" => "http://metadata.google.internal/computeMetadata"}, %{})
+      {:error, msg} =
+        Fetch.execute(%{"url" => "http://metadata.google.internal/computeMetadata"}, %{})
+
       assert msg =~ "internal/private"
     end
 

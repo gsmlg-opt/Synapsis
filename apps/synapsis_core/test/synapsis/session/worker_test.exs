@@ -148,7 +148,7 @@ defmodule Synapsis.Session.WorkerTest do
 
       import Ecto.Query
 
-      msgs = Repo.all(from m in Synapsis.Message, where: m.session_id == ^session.id)
+      msgs = Repo.all(from(m in Synapsis.Message, where: m.session_id == ^session.id))
 
       tool_results =
         Enum.flat_map(msgs, fn m ->
@@ -201,7 +201,7 @@ defmodule Synapsis.Session.WorkerTest do
 
       import Ecto.Query
 
-      msgs = Repo.all(from m in Synapsis.Message, where: m.session_id == ^session.id)
+      msgs = Repo.all(from(m in Synapsis.Message, where: m.session_id == ^session.id))
 
       tool_results =
         Enum.flat_map(msgs, fn m ->

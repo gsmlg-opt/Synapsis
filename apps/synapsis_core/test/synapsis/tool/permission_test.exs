@@ -93,8 +93,8 @@ defmodule Synapsis.Tool.PermissionTest do
     end
   end
 
-    test "returns false when config has no auto_approve key" do
-      refute Permissions.allowed?("file_read", %{})
-      refute Permissions.allowed?("bash", %{some_other: true})
-    end
+  test "returns false when config has no auto_approve key" do
+    refute Permissions.allowed?("file_read", %{})
+    refute Permissions.allowed?("bash", %{some_other: true})
+  end
 end

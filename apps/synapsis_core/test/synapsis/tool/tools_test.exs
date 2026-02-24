@@ -75,7 +75,6 @@ defmodule Synapsis.Tool.ToolsTest do
       assert content =~ "Hello World"
       assert content =~ "Line 2"
     end
-
   end
 
   describe "FileWrite" do

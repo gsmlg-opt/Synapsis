@@ -146,8 +146,14 @@ defmodule Synapsis.Session.SharingTest do
         ]
       })
 
-    {:ok, imported} = Sharing.import_session(json, "/tmp/sharing-fallback-#{System.unique_integer([:positive])}")
-    msgs = Synapsis.Message |> Ecto.Query.where([m], m.session_id == ^imported.id) |> Synapsis.Repo.all()
+    {:ok, imported} =
+      Sharing.import_session(json, "/tmp/sharing-fallback-#{System.unique_integer([:positive])}")
+
+    msgs =
+      Synapsis.Message
+      |> Ecto.Query.where([m], m.session_id == ^imported.id)
+      |> Synapsis.Repo.all()
+
     assert length(msgs) == 1
     assert hd(hd(msgs).parts) == %Synapsis.Part.Text{content: "[imported content]"}
   end
