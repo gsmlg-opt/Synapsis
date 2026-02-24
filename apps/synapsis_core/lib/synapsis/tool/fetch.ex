@@ -36,7 +36,7 @@ defmodule Synapsis.Tool.Fetch do
         {:error, "Only http and https URLs are allowed"}
 
       %URI{host: host} when is_binary(host) ->
-        if host in @blocked_hosts or private_ip?(host) do
+        if host in @blocked_hosts or private_ip?(host) or resolves_to_private?(host) do
           {:error, "Access to internal/private addresses is not allowed"}
         else
           :ok
@@ -49,12 +49,25 @@ defmodule Synapsis.Tool.Fetch do
 
   defp private_ip?(host) do
     case :inet.parse_address(String.to_charlist(host)) do
-      {:ok, {10, _, _, _}} -> true
-      {:ok, {172, b, _, _}} when b >= 16 and b <= 31 -> true
-      {:ok, {192, 168, _, _}} -> true
+      {:ok, addr} -> private_addr?(addr)
       _ -> false
     end
   end
+
+  defp resolves_to_private?(host) do
+    case :inet.getaddr(String.to_charlist(host), :inet) do
+      {:ok, addr} -> private_addr?(addr)
+      _ -> false
+    end
+  end
+
+  defp private_addr?({10, _, _, _}), do: true
+  defp private_addr?({172, b, _, _}) when b >= 16 and b <= 31, do: true
+  defp private_addr?({192, 168, _, _}), do: true
+  defp private_addr?({127, _, _, _}), do: true
+  defp private_addr?({0, 0, 0, 0}), do: true
+  defp private_addr?({169, 254, _, _}), do: true
+  defp private_addr?(_), do: false
 
   defp fetch_url(url) do
     case Req.get(url, receive_timeout: 15_000) do

@@ -77,10 +77,21 @@ defmodule Synapsis.Session.Worker do
 
     session =
       case Repo.get(Session, session_id) do
-        nil -> raise "Session #{session_id} not found"
-        s -> Repo.preload(s, :project)
+        nil ->
+          Logger.warning("session_not_found", session_id: session_id)
+          {:stop, {:error, :session_not_found}}
+
+        s ->
+          Repo.preload(s, :project)
       end
 
+    case session do
+      {:stop, _} = stop -> stop
+      session -> init_with_session(session, session_id, opts)
+    end
+  end
+
+  defp init_with_session(session, session_id, _opts) do
     agent = Synapsis.Agent.Resolver.resolve(session.agent, session.config)
     effective_provider = agent[:provider] || session.provider
     provider_config = resolve_provider_config(effective_provider)
@@ -122,15 +133,23 @@ defmodule Synapsis.Session.Worker do
     token_count =
       ContextWindow.estimate_tokens(content) + length(image_parts) * 1000
 
-    {:ok, _user_msg} =
-      %Message{}
-      |> Message.changeset(%{
-        session_id: state.session_id,
-        role: "user",
-        parts: parts,
-        token_count: token_count
-      })
-      |> Repo.insert()
+    case %Message{}
+         |> Message.changeset(%{
+           session_id: state.session_id,
+           role: "user",
+           parts: parts,
+           token_count: token_count
+         })
+         |> Repo.insert() do
+      {:ok, _user_msg} ->
+        :ok
+
+      {:error, changeset} ->
+        Logger.warning("message_insert_failed",
+          session_id: state.session_id,
+          errors: inspect(changeset.errors)
+        )
+    end
 
     update_session_status(state.session_id, "streaming")
     broadcast(state.session_id, "session_status", %{status: "streaming"})
@@ -275,15 +294,12 @@ defmodule Synapsis.Session.Worker do
       is_error: true
     }
 
-    {:ok, _msg} =
-      %Message{}
-      |> Message.changeset(%{
-        session_id: state.session_id,
-        role: "user",
-        parts: [result_part],
-        token_count: 5
-      })
-      |> Repo.insert()
+    safe_insert_message(state.session_id, %{
+      session_id: state.session_id,
+      role: "user",
+      parts: [result_part],
+      token_count: 5
+    })
 
     broadcast(state.session_id, "tool_result", %{
       tool_use_id: tool_use_id,
@@ -387,15 +403,12 @@ defmodule Synapsis.Session.Worker do
       is_error: is_error
     }
 
-    {:ok, _msg} =
-      %Message{}
-      |> Message.changeset(%{
-        session_id: state.session_id,
-        role: "user",
-        parts: [result_part],
-        token_count: ContextWindow.estimate_tokens(result)
-      })
-      |> Repo.insert()
+    safe_insert_message(state.session_id, %{
+      session_id: state.session_id,
+      role: "user",
+      parts: [result_part],
+      token_count: ContextWindow.estimate_tokens(result)
+    })
 
     broadcast(state.session_id, "tool_result", %{
       tool_use_id: tool_use_id,
@@ -544,15 +557,12 @@ defmodule Synapsis.Session.Worker do
         end)
         |> Enum.sum()
 
-      {:ok, _msg} =
-        %Message{}
-        |> Message.changeset(%{
-          session_id: state.session_id,
-          role: "assistant",
-          parts: parts,
-          token_count: token_count
-        })
-        |> Repo.insert()
+      safe_insert_message(state.session_id, %{
+        session_id: state.session_id,
+        role: "assistant",
+        parts: parts,
+        token_count: token_count
+      })
     end
 
     %{
@@ -775,15 +785,12 @@ defmodule Synapsis.Session.Worker do
       {:persist_message, text} ->
         part = %Synapsis.Part.Text{content: text}
 
-        {:ok, _msg} =
-          %Message{}
-          |> Message.changeset(%{
-            session_id: state.session_id,
-            role: "assistant",
-            parts: [part],
-            token_count: 20
-          })
-          |> Repo.insert()
+        safe_insert_message(state.session_id, %{
+          session_id: state.session_id,
+          role: "assistant",
+          parts: [part],
+          token_count: 20
+        })
 
       {:invoke_auditor, reason} ->
         invoke_auditor_async(state, reason)
@@ -892,6 +899,21 @@ defmodule Synapsis.Session.Worker do
       "session:#{session_id}",
       {event, payload}
     )
+  end
+
+  defp safe_insert_message(session_id, attrs) do
+    case %Message{} |> Message.changeset(attrs) |> Repo.insert() do
+      {:ok, msg} ->
+        {:ok, msg}
+
+      {:error, changeset} ->
+        Logger.warning("message_insert_failed",
+          session_id: session_id,
+          errors: inspect(changeset.errors)
+        )
+
+        {:error, changeset}
+    end
   end
 
   defp resolve_provider_config(provider_name) do

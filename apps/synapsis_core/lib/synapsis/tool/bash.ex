@@ -42,30 +42,38 @@ defmodule Synapsis.Tool.Bash do
         cd: cwd
       ])
 
-    collect_output(port, "", timeout)
+    deadline = System.monotonic_time(:millisecond) + timeout
+    collect_output(port, "", deadline, timeout)
   end
 
-  defp collect_output(port, acc, timeout) do
-    receive do
-      {^port, {:data, data}} ->
-        new_acc = acc <> data
+  defp collect_output(port, acc, deadline, original_timeout) do
+    remaining = deadline - System.monotonic_time(:millisecond)
 
-        if byte_size(new_acc) > @max_output_bytes do
+    if remaining <= 0 do
+      Port.close(port)
+      {:error, "Command timed out after #{original_timeout}ms\n#{acc}"}
+    else
+      receive do
+        {^port, {:data, data}} ->
+          new_acc = acc <> data
+
+          if byte_size(new_acc) > @max_output_bytes do
+            Port.close(port)
+            {:ok, binary_part(new_acc, 0, @max_output_bytes) <> "\n[Output truncated at 10MB]"}
+          else
+            collect_output(port, new_acc, deadline, original_timeout)
+          end
+
+        {^port, {:exit_status, 0}} ->
+          {:ok, String.trim_trailing(acc)}
+
+        {^port, {:exit_status, status}} ->
+          {:ok, "Exit code: #{status}\n#{String.trim_trailing(acc)}"}
+      after
+        remaining ->
           Port.close(port)
-          {:ok, binary_part(new_acc, 0, @max_output_bytes) <> "\n[Output truncated at 10MB]"}
-        else
-          collect_output(port, new_acc, timeout)
-        end
-
-      {^port, {:exit_status, 0}} ->
-        {:ok, String.trim_trailing(acc)}
-
-      {^port, {:exit_status, status}} ->
-        {:ok, "Exit code: #{status}\n#{String.trim_trailing(acc)}"}
-    after
-      timeout ->
-        Port.close(port)
-        {:error, "Command timed out after #{timeout}ms\n#{acc}"}
+          {:error, "Command timed out after #{original_timeout}ms\n#{acc}"}
+      end
     end
   end
 end

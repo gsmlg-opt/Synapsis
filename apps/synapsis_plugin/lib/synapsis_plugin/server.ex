@@ -81,6 +81,14 @@ defmodule SynapsisPlugin.Server do
       case state.plugin_module.handle_effect(effect, payload, state.plugin_state) do
         {:ok, new_plugin_state} ->
           {:noreply, %{state | plugin_state: new_plugin_state}}
+
+        other ->
+          Logger.warning("plugin_handle_effect_unexpected",
+            name: state.name,
+            result: inspect(other)
+          )
+
+          {:noreply, state}
       end
     else
       {:noreply, state}
@@ -92,6 +100,14 @@ defmodule SynapsisPlugin.Server do
       case state.plugin_module.handle_info(msg, state.plugin_state) do
         {:ok, new_plugin_state} ->
           {:noreply, %{state | plugin_state: new_plugin_state}}
+
+        other ->
+          Logger.warning("plugin_handle_info_unexpected",
+            name: state.name,
+            result: inspect(other)
+          )
+
+          {:noreply, state}
       end
     else
       {:noreply, state}
