@@ -17,5 +17,28 @@ services:
       retries: 5
       start_period: 10s
 
+  app:
+    build: .
+    container_name: synapsis_app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "4657:4657"
+    environment:
+      PGHOST: postgres
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: synapsis_dev
+      DATABASE_URL: "ecto://postgres:postgres@postgres/synapsis_dev"
+      SECRET_KEY_BASE: "change-me-in-production-use-mix-phx-gen-secret-to-generate"
+      SYNAPSIS_ENCRYPTION_KEY: "change-me-32-byte-encryption-key"
+      PHX_HOST: localhost
+      PORT: "4657"
+      MIX_ENV: prod
+    volumes:
+      - app_data:/app/data
+
 volumes:
   pgdata:
+  app_data:

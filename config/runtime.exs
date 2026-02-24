@@ -14,15 +14,39 @@ if System.get_env("MIX_TAILWIND_PATH") do
   config :tailwind, path: System.get_env("MIX_TAILWIND_PATH")
 end
 
-# Database connection — read PGHOST/PGUSER at runtime so devenv socket paths work
-config :synapsis_data, Synapsis.Repo,
+# Database connection — supports both Unix socket (devenv) and TCP (Docker/prod)
+db_config = [
   username: System.get_env("PGUSER", "postgres"),
   database:
     System.get_env(
       "PGDATABASE",
       if(config_env() == :test, do: "synapsis_test", else: "synapsis_dev")
-    ),
-  socket_dir: System.get_env("PGHOST")
+    )
+]
+
+pghost = System.get_env("PGHOST")
+
+db_config =
+  cond do
+    # TCP connection when PGPASSWORD is set (Docker / remote DB)
+    System.get_env("PGPASSWORD") ->
+      db_config ++
+        [
+          hostname: pghost || "localhost",
+          password: System.get_env("PGPASSWORD"),
+          port: String.to_integer(System.get_env("PGPORT", "5432"))
+        ]
+
+    # Unix socket (devenv / local development)
+    pghost ->
+      db_config ++ [socket_dir: pghost]
+
+    # Default: try localhost TCP
+    true ->
+      db_config ++ [hostname: "localhost"]
+  end
+
+config :synapsis_data, Synapsis.Repo, db_config
 
 # Encryption key for provider API keys (AES-256-GCM)
 config :synapsis_data,

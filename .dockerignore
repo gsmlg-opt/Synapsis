@@ -1,0 +1,32 @@
+# Build artifacts
+_build/
+deps/
+.elixir_ls/
+
+# Git
+.git/
+.gitignore
+.trees/
+
+# Node/Bun artifacts
+apps/synapsis_web/node_modules/
+apps/synapsis_web/dist/
+
+# Development
+.loki/
+.claude/
+docs/
+*.md
+!README.md
+
+# Test
+cover/
+test/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
