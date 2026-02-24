@@ -36,6 +36,8 @@ defmodule SynapsisCore.Application do
           e -> Logger.warning("provider_registry_load_failed", error: Exception.message(e))
         end
 
+        register_env_providers()
+
         try do
           apply(SynapsisPlugin.Loader, :start_auto_plugins, [])
         rescue
@@ -47,5 +49,30 @@ defmodule SynapsisCore.Application do
       other ->
         other
     end
+  end
+
+  @env_providers [
+    {"anthropic", "ANTHROPIC_API_KEY", "https://api.anthropic.com"},
+    {"openai", "OPENAI_API_KEY", "https://api.openai.com"},
+    {"google", "GOOGLE_API_KEY", "https://generativelanguage.googleapis.com"}
+  ]
+
+  defp register_env_providers do
+    Enum.each(@env_providers, fn {name, env_var, base_url} ->
+      case {Synapsis.Provider.Registry.get(name), System.get_env(env_var)} do
+        {{:ok, _}, _} ->
+          # Already registered from DB, skip
+          :ok
+
+        {_, nil} ->
+          # No env var set, skip
+          :ok
+
+        {_, api_key} ->
+          config = %{api_key: api_key, base_url: base_url, type: name}
+          Synapsis.Provider.Registry.register(name, config)
+          Logger.info("env_provider_registered", provider: name)
+      end
+    end)
   end
 end

@@ -41,10 +41,31 @@ defmodule Synapsis.Tool.Permissions do
 
   @doc "Check permission, returning :approved or :requires_approval."
   @spec check(String.t(), term()) :: :approved | :requires_approval
-  def check(tool_name, _session) do
-    case level(tool_name) do
-      :read -> :approved
-      _ -> :requires_approval
+  def check(tool_name, session) do
+    tool_level = level(tool_name)
+
+    # Build approved levels from session config + application default
+    default_levels = Application.get_env(:synapsis_core, :default_auto_approve, [:read])
+
+    session_levels =
+      case session do
+        %{config: %{"permissions" => %{"autoApprove" => levels}}} when is_list(levels) ->
+          Enum.map(levels, &safe_to_atom/1)
+
+        _ ->
+          []
+      end
+
+    approved_levels = Enum.uniq(default_levels ++ session_levels)
+
+    if tool_level in approved_levels do
+      :approved
+    else
+      :requires_approval
     end
   end
+
+  defp safe_to_atom(val) when is_atom(val), do: val
+  defp safe_to_atom(val) when is_binary(val), do: String.to_existing_atom(val)
+  defp safe_to_atom(_), do: :unknown
 end

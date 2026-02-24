@@ -884,7 +884,7 @@ defmodule Synapsis.Session.Worker do
             # Final fallback: config files + env vars
             auth = Synapsis.Config.load_auth()
             api_key = get_in(auth, [provider_name, "apiKey"]) || get_env_key(provider_name)
-            %{api_key: api_key, base_url: default_base_url(provider_name)}
+            %{api_key: api_key, base_url: default_base_url(provider_name), type: provider_name}
         end
     end
   end

@@ -5,7 +5,7 @@ defmodule Synapsis.ProviderConfig do
 
   @primary_key {:id, :binary_id, autogenerate: true}
 
-  @valid_types ~w(anthropic openai_compat google)
+  @valid_types ~w(anthropic openai openai_compat google local openrouter groq deepseek)
   @name_format ~r/^[a-z0-9][a-z0-9_-]*$/
 
   schema "provider_configs" do

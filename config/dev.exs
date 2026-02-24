@@ -24,3 +24,6 @@ config :logger, :default_formatter, format: "[$level] $message\n"
 
 config :phoenix, :stacktrace_depth, 20
 config :phoenix, :plug_init_mode, :runtime
+
+# Auto-approve all tool risk levels in dev for uninterrupted agent loops
+config :synapsis_core, default_auto_approve: [:read, :write, :execute]
