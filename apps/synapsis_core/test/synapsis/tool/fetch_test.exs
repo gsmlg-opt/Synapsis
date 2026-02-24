@@ -122,4 +122,31 @@ defmodule Synapsis.Tool.FetchTest do
       assert %{"type" => "object", "required" => ["url"]} = Fetch.parameters()
     end
   end
+
+  describe "SSRF protection — private IP boundary cases" do
+    test "blocks 172.16.0.1 (start of 172.16-31 range)" do
+      {:error, msg} = Fetch.execute(%{"url" => "http://172.16.0.1/secret"}, %{})
+      assert msg =~ "internal/private"
+    end
+
+    test "blocks 172.31.255.255 (end of 172.16-31 range)" do
+      {:error, msg} = Fetch.execute(%{"url" => "http://172.31.255.255/secret"}, %{})
+      assert msg =~ "internal/private"
+    end
+
+    test "blocks ::1 IPv6 loopback (in blocked_hosts)" do
+      # ::1 is in @blocked_hosts; URL needs brackets for proper IPv6 URI syntax
+      # http://[::1]/secret is well-formed; http://::1/secret may parse as "Invalid URL"
+      result = Fetch.execute(%{"url" => "http://[::1]/secret"}, %{})
+      assert {:error, msg} = result
+      # Either it resolves via blocked_hosts or the address-based check
+      assert msg =~ "internal/private" or msg =~ "Invalid URL"
+    end
+
+    test "blocks http://::1 without brackets (invalid URL fallback)" do
+      # Without brackets, the URI parser cannot extract the host — falls through to "Invalid URL"
+      result = Fetch.execute(%{"url" => "http://::1/secret"}, %{})
+      assert {:error, _} = result
+    end
+  end
 end

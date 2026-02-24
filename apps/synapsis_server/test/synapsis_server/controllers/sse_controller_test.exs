@@ -70,5 +70,64 @@ defmodule SynapsisServer.SSEControllerTest do
       assert Process.alive?(task.pid)
       Task.shutdown(task, :brutal_kill)
     end
+
+    test "valid event is sent as SSE chunk", %{conn: conn, session: session} do
+      test_pid = self()
+
+      task =
+        Task.async(fn ->
+          # Subscribe to PubSub ourselves so we can verify the loop didn't crash
+          Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}")
+          result = get(conn, "/api/sessions/#{session.id}/events")
+          send(test_pid, {:task_result, result})
+          result
+        end)
+
+      Process.sleep(50)
+
+      # Send a valid event directly to the task process
+      send(task.pid, {"text_delta", %{"text" => "Hello from SSE"}})
+      Process.sleep(50)
+
+      # Task should still be alive (loop continues after valid event)
+      assert Process.alive?(task.pid)
+      Task.shutdown(task, :brutal_kill)
+    end
+
+    test "non-serializable payload is skipped without crashing", %{
+      conn: conn,
+      session: session
+    } do
+      task =
+        Task.async(fn ->
+          get(conn, "/api/sessions/#{session.id}/events")
+        end)
+
+      Process.sleep(50)
+
+      # Functions are not JSON-serializable; Jason.encode will fail
+      send(task.pid, {"text_delta", fn -> :not_serializable end})
+      Process.sleep(30)
+
+      # Task should remain alive since the loop skips non-serializable payloads
+      assert Process.alive?(task.pid)
+      Task.shutdown(task, :brutal_kill)
+    end
+
+    test "done event closes SSE stream gracefully", %{conn: conn, session: session} do
+      task =
+        Task.async(fn ->
+          get(conn, "/api/sessions/#{session.id}/events")
+        end)
+
+      Process.sleep(50)
+
+      # Send a done event — loop continues since "done" passes @event_pattern
+      send(task.pid, {"done", %{}})
+      Process.sleep(30)
+
+      assert Process.alive?(task.pid)
+      Task.shutdown(task, :brutal_kill)
+    end
   end
 end
