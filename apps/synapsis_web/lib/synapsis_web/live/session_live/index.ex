@@ -16,7 +16,7 @@ defmodule SynapsisWeb.SessionLive.Index do
            page_title: "Sessions",
            show_new_session_form: false,
            new_session_provider: if(providers != [], do: hd(providers).name, else: "anthropic"),
-           new_session_model: "claude-sonnet-4-20250514"
+           new_session_model: Synapsis.Providers.default_model("anthropic")
          )}
 
       {:error, :not_found} ->

@@ -126,15 +126,28 @@ defmodule Synapsis.Providers do
     Map.merge(base, atomize_keys(provider.config || %{}))
   end
 
-  defp default_base_url("anthropic"), do: "https://api.anthropic.com"
-  defp default_base_url("openai"), do: "https://api.openai.com"
-  defp default_base_url("openai_compat"), do: "https://api.openai.com"
-  defp default_base_url("google"), do: "https://generativelanguage.googleapis.com"
-  defp default_base_url("groq"), do: "https://api.groq.com/openai"
-  defp default_base_url("deepseek"), do: "https://api.deepseek.com"
-  defp default_base_url("openrouter"), do: "https://openrouter.ai/api"
-  defp default_base_url("local"), do: "http://localhost:11434"
-  defp default_base_url(_), do: nil
+  @doc "Default base URL for a provider type string."
+  def default_base_url("anthropic"), do: "https://api.anthropic.com"
+  def default_base_url("openai"), do: "https://api.openai.com"
+  def default_base_url("openai_compat"), do: "https://api.openai.com"
+  def default_base_url("google"), do: "https://generativelanguage.googleapis.com"
+  def default_base_url("groq"), do: "https://api.groq.com/openai"
+  def default_base_url("deepseek"), do: "https://api.deepseek.com"
+  def default_base_url("openrouter"), do: "https://openrouter.ai/api"
+  def default_base_url("local"), do: "http://localhost:11434"
+  def default_base_url(_), do: nil
+
+  @doc "Default model for a provider type string."
+  def default_model("anthropic"), do: "claude-sonnet-4-20250514"
+  def default_model("openai"), do: "gpt-4o"
+  def default_model("google"), do: "gemini-2.0-flash"
+  def default_model(_), do: "claude-sonnet-4-20250514"
+
+  @doc "Environment variable name for a provider's API key."
+  def env_var_name("anthropic"), do: "ANTHROPIC_API_KEY"
+  def env_var_name("openai"), do: "OPENAI_API_KEY"
+  def env_var_name("google"), do: "GOOGLE_API_KEY"
+  def env_var_name(_), do: nil
 
   defp atomize_keys(map) when is_map(map) do
     Map.new(map, fn {k, v} -> {safe_to_atom(k), v} end)

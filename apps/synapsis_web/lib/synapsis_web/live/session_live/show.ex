@@ -19,7 +19,7 @@ defmodule SynapsisWeb.SessionLive.Show do
            page_title: session.title || "Session",
            show_new_session_form: false,
            new_session_provider: if(providers != [], do: hd(providers).name, else: "anthropic"),
-           new_session_model: "claude-sonnet-4-20250514"
+           new_session_model: Synapsis.Providers.default_model("anthropic")
          )}
 
       _ ->

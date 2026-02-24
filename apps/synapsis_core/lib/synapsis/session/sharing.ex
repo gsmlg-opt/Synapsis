@@ -74,7 +74,7 @@ defmodule Synapsis.Session.Sharing do
     attrs = %{
       project_id: project.id,
       provider: session_data["provider"] || "anthropic",
-      model: session_data["model"] || "claude-sonnet-4-20250514",
+      model: session_data["model"] || Synapsis.Providers.default_model("anthropic"),
       agent: session_data["agent"] || "build",
       title: "[Imported] #{session_data["title"] || "session"}"
     }

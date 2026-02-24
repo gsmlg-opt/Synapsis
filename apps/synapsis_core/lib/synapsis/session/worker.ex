@@ -889,16 +889,16 @@ defmodule Synapsis.Session.Worker do
     end
   end
 
-  defp get_env_key("anthropic"), do: System.get_env("ANTHROPIC_API_KEY")
-  defp get_env_key("openai"), do: System.get_env("OPENAI_API_KEY")
-  defp get_env_key("google"), do: System.get_env("GOOGLE_API_KEY")
-  defp get_env_key(_), do: nil
+  defp get_env_key(provider_name) do
+    case Synapsis.Providers.env_var_name(provider_name) do
+      nil -> nil
+      var -> System.get_env(var)
+    end
+  end
 
-  defp default_base_url("anthropic"), do: "https://api.anthropic.com"
-  defp default_base_url("openai"), do: "https://api.openai.com"
-  defp default_base_url("google"), do: "https://generativelanguage.googleapis.com"
-  defp default_base_url("local"), do: "http://localhost:11434"
-  defp default_base_url(_), do: "https://api.openai.com"
+  defp default_base_url(provider_name) do
+    Synapsis.Providers.default_base_url(provider_name) || "https://api.openai.com"
+  end
 
   defp find_pending_tool(tool_uses, tool_use_id) do
     Enum.find(tool_uses, fn tu -> tu.tool_use_id == tool_use_id end)

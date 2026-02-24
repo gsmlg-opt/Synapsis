@@ -51,14 +51,13 @@ defmodule SynapsisCore.Application do
     end
   end
 
-  @env_providers [
-    {"anthropic", "ANTHROPIC_API_KEY", "https://api.anthropic.com"},
-    {"openai", "OPENAI_API_KEY", "https://api.openai.com"},
-    {"google", "GOOGLE_API_KEY", "https://generativelanguage.googleapis.com"}
-  ]
+  @env_provider_names ~w(anthropic openai google)
 
   defp register_env_providers do
-    Enum.each(@env_providers, fn {name, env_var, base_url} ->
+    Enum.each(@env_provider_names, fn name ->
+      env_var = Synapsis.Providers.env_var_name(name)
+      base_url = Synapsis.Providers.default_base_url(name)
+
       case {Synapsis.Provider.Registry.get(name), System.get_env(env_var)} do
         {{:ok, _}, _} ->
           # Already registered from DB, skip

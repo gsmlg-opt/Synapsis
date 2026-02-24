@@ -227,8 +227,5 @@ defmodule Synapsis.Sessions do
     end
   end
 
-  defp default_model(_config, "anthropic"), do: "claude-sonnet-4-20250514"
-  defp default_model(_config, "openai"), do: "gpt-4o"
-  defp default_model(_config, "google"), do: "gemini-2.0-flash"
-  defp default_model(_config, _), do: "claude-sonnet-4-20250514"
+  defp default_model(_config, provider), do: Synapsis.Providers.default_model(provider)
 end
