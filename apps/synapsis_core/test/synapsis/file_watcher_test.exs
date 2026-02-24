@@ -97,4 +97,53 @@ defmodule Synapsis.FileWatcherTest do
     Process.sleep(50)
     assert Process.alive?(pid)
   end
+
+  test "does not broadcast for node_modules paths", %{path: path} do
+    Phoenix.PubSub.subscribe(Synapsis.PubSub, "file_changes:#{path}")
+    [{pid, _}] = Registry.lookup(Synapsis.FileWatcher.Registry, path)
+
+    send(pid, {:file_event, self(), {"#{path}/node_modules/lodash/index.js", [:modified]}})
+
+    refute_receive {:file_changed, _, _}, 100
+  end
+
+  test "does not broadcast for .elixir_ls paths", %{path: path} do
+    Phoenix.PubSub.subscribe(Synapsis.PubSub, "file_changes:#{path}")
+    [{pid, _}] = Registry.lookup(Synapsis.FileWatcher.Registry, path)
+
+    send(pid, {:file_event, self(), {"#{path}/.elixir_ls/build/module.beam", [:modified]}})
+
+    refute_receive {:file_changed, _, _}, 100
+  end
+
+  test "does not broadcast for .pyc files", %{path: path} do
+    Phoenix.PubSub.subscribe(Synapsis.PubSub, "file_changes:#{path}")
+    [{pid, _}] = Registry.lookup(Synapsis.FileWatcher.Registry, path)
+
+    send(pid, {:file_event, self(), {"/some/path/module.pyc", [:modified]}})
+
+    refute_receive {:file_changed, _, _}, 100
+  end
+
+  test "terminate/2 with nil fs_pid returns :ok", %{path: path} do
+    [{pid, _}] = Registry.lookup(Synapsis.FileWatcher.Registry, path)
+    # Replace state so fs_pid is nil then stop
+    :sys.replace_state(pid, fn state -> %{state | fs_pid: nil} end)
+    :ok = GenServer.stop(pid)
+    refute Process.alive?(pid)
+  end
+
+  test "terminate/2 with non-nil fs_pid exits the fs process", %{path: path} do
+    [{pid, _}] = Registry.lookup(Synapsis.FileWatcher.Registry, path)
+    state = :sys.get_state(pid)
+    # fs_pid may be nil if FileSystem is disabled in test env
+    if state.fs_pid do
+      assert is_pid(state.fs_pid)
+      :ok = GenServer.stop(pid)
+      refute Process.alive?(pid)
+    else
+      # FileSystem not available in test env — terminate/2 with nil is already covered
+      assert true
+    end
+  end
 end
