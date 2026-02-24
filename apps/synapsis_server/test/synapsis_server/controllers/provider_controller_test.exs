@@ -238,5 +238,52 @@ defmodule SynapsisServer.ProviderControllerTest do
 
       System.delete_env("ANTHROPIC_API_KEY")
     end
+
+    test "includes openai env provider with type 'openai' (not openai_compat)", %{conn: conn} do
+      System.put_env("OPENAI_API_KEY", "sk-openai-env-test")
+
+      conn = get(conn, "/api/providers")
+      response = json_response(conn, 200)
+
+      openai_env =
+        Enum.find(response["data"], fn p -> p["name"] == "openai" and p["source"] == "env" end)
+
+      assert openai_env, "expected an openai env-sourced provider"
+
+      assert openai_env["type"] == "openai",
+             "env-detected OpenAI must have type 'openai', not 'openai_compat'"
+
+      assert openai_env["has_api_key"] == true
+
+      System.delete_env("OPENAI_API_KEY")
+    end
+
+    test "includes google env provider when GOOGLE_API_KEY is set", %{conn: conn} do
+      System.put_env("GOOGLE_API_KEY", "goog-env-key")
+
+      conn = get(conn, "/api/providers")
+      response = json_response(conn, 200)
+
+      google_env =
+        Enum.find(response["data"], fn p -> p["name"] == "google" and p["source"] == "env" end)
+
+      assert google_env, "expected a google env-sourced provider"
+      assert google_env["type"] == "google"
+      assert google_env["has_api_key"] == true
+
+      System.delete_env("GOOGLE_API_KEY")
+    end
+
+    test "no env providers when no env keys are set", %{conn: conn} do
+      System.delete_env("ANTHROPIC_API_KEY")
+      System.delete_env("OPENAI_API_KEY")
+      System.delete_env("GOOGLE_API_KEY")
+
+      conn = get(conn, "/api/providers")
+      response = json_response(conn, 200)
+
+      env_providers = Enum.filter(response["data"], fn p -> Map.get(p, "source") == "env" end)
+      assert env_providers == [], "expected no env providers when no API keys set"
+    end
   end
 end

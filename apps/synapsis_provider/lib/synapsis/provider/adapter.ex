@@ -132,7 +132,7 @@ defmodule Synapsis.Provider.Adapter do
 
     {url, headers, body} =
       if config[:azure] do
-        model = request[:model] || "gpt-4o"
+        model = request[:model] || "gpt-4.1"
         api_version = config[:api_version] || "2024-02-15-preview"
 
         url =
@@ -176,7 +176,7 @@ defmodule Synapsis.Provider.Adapter do
 
   defp do_stream(:google, request, config, caller) do
     base_url = config[:base_url] || Transport.Google.default_base_url()
-    model = request[:model] || "gemini-2.0-flash"
+    model = request[:model] || "gemini-2.5-flash"
 
     url = "#{base_url}/v1beta/models/#{model}:streamGenerateContent?alt=sse"
 
@@ -264,7 +264,7 @@ defmodule Synapsis.Provider.Adapter do
 
   defp do_complete(:google, request, config) do
     base_url = config[:base_url] || Transport.Google.default_base_url()
-    model = request[:model] || "gemini-2.0-flash"
+    model = request[:model] || "gemini-2.5-flash"
     url = "#{base_url}/v1beta/models/#{model}:generateContent"
 
     body = Map.drop(request, [:model, :stream])

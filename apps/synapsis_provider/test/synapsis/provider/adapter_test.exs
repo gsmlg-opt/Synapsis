@@ -497,18 +497,22 @@ defmodule Synapsis.Provider.AdapterTest do
   # ---------------------------------------------------------------------------
 
   describe "models/1" do
-    test "returns static anthropic models" do
+    test "returns static anthropic models including latest" do
       {:ok, models} = Adapter.models(%{type: "anthropic"})
       assert length(models) >= 3
       ids = Enum.map(models, & &1.id)
       assert "claude-sonnet-4-20250514" in ids
+      assert "claude-sonnet-4-6" in ids
+      assert "claude-opus-4-6" in ids
     end
 
-    test "returns static google models" do
+    test "returns static google models including latest" do
       {:ok, models} = Adapter.models(%{type: "google"})
       assert length(models) >= 3
       ids = Enum.map(models, & &1.id)
       assert "gemini-2.0-flash" in ids
+      assert "gemini-2.5-flash" in ids
+      assert "gemini-2.5-pro" in ids
     end
 
     test "fetches openai models from API", %{bypass: bypass, port: port} do

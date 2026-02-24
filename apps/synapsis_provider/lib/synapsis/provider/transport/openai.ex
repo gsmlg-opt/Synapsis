@@ -80,7 +80,7 @@ defmodule Synapsis.Provider.Transport.OpenAI do
   # ---------------------------------------------------------------------------
 
   defp build_url_and_headers(base_url, request, %{azure: true} = config) do
-    model = request[:model] || "gpt-4o"
+    model = request[:model] || "gpt-4.1"
     api_version = config[:api_version] || "2024-02-15-preview"
 
     url =

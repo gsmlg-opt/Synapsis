@@ -17,7 +17,7 @@ defmodule Synapsis.Session.AuditorTask do
     "agents": {
       "build": {
         "auditorProvider": "anthropic",
-        "auditorModel": "claude-sonnet-4-20250514"
+        "auditorModel": "claude-sonnet-4-6"
       }
     }
   }

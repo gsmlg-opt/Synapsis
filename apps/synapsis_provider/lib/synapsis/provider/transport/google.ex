@@ -19,7 +19,7 @@ defmodule Synapsis.Provider.Transport.Google do
   """
   def stream(request, config, caller) do
     base_url = config[:base_url] || @default_base_url
-    model = request[:model] || "gemini-2.0-flash"
+    model = request[:model] || "gemini-2.5-flash"
 
     url =
       "#{base_url}/v1beta/models/#{model}:streamGenerateContent?alt=sse&key=#{config.api_key}"
