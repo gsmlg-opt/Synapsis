@@ -75,6 +75,10 @@ PREVIOUS.LOG
 # escript binaries
 apps/synapsis_cli/synapsis_cli
 
+# git worktrees (created by claude code worktree feature)
+.trees/
+apps/**/.trees/
+
 # nodejs
 node_modules
 package-lock.json

@@ -239,8 +239,8 @@ defmodule SynapsisCli.Main do
       --version                    Show version
 
     Examples:
-      synapsis -p "explain this file" --model claude-sonnet-4-20250514
-      synapsis --provider openai --model gpt-4o
+      synapsis -p "explain this file" --model claude-sonnet-4-6
+      synapsis --provider openai --model gpt-4.1
       synapsis -p "fix the bug" --provider anthropic
     """)
   end

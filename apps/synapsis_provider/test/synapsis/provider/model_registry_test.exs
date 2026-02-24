@@ -116,6 +116,40 @@ defmodule Synapsis.Provider.ModelRegistryTest do
   end
 
   describe "get/1 specific model metadata" do
+    test "Claude Sonnet 4.6 has expected capabilities" do
+      assert {:ok, model} = ModelRegistry.get("claude-sonnet-4-6")
+      assert model.name == "Claude Sonnet 4.6"
+      assert model.provider == "anthropic"
+      assert model.context_window == 200_000
+      assert model.supports_tools == true
+      assert model.supports_thinking == true
+      assert model.max_output_tokens == 64_000
+    end
+
+    test "Claude Opus 4.6 has expected capabilities" do
+      assert {:ok, model} = ModelRegistry.get("claude-opus-4-6")
+      assert model.name == "Claude Opus 4.6"
+      assert model.provider == "anthropic"
+      assert model.context_window == 200_000
+      assert model.supports_tools == true
+      assert model.supports_thinking == true
+    end
+
+    test "GPT-4.1 has large context window" do
+      assert {:ok, model} = ModelRegistry.get("gpt-4.1")
+      assert model.name == "GPT-4.1"
+      assert model.provider == "openai"
+      assert model.context_window == 1_047_576
+      assert model.supports_images == true
+    end
+
+    test "GPT-4.1 Mini has large context window" do
+      assert {:ok, model} = ModelRegistry.get("gpt-4.1-mini")
+      assert model.name == "GPT-4.1 Mini"
+      assert model.provider == "openai"
+      assert model.context_window == 1_047_576
+    end
+
     test "Claude 3.5 Haiku does not support thinking" do
       assert {:ok, model} = ModelRegistry.get("claude-haiku-3-5-20241022")
       assert model.name == "Claude 3.5 Haiku"
@@ -161,6 +195,14 @@ defmodule Synapsis.Provider.ModelRegistryTest do
 
     test "Gemini 2.5 Pro has large context and supports thinking" do
       assert {:ok, model} = ModelRegistry.get("gemini-2.5-pro-preview-05-06")
+      assert model.name == "Gemini 2.5 Pro Preview"
+      assert model.context_window == 1_000_000
+      assert model.max_output_tokens == 65_536
+      assert model.supports_thinking == true
+    end
+
+    test "Gemini 2.5 Pro GA model has large context and supports thinking" do
+      assert {:ok, model} = ModelRegistry.get("gemini-2.5-pro")
       assert model.name == "Gemini 2.5 Pro"
       assert model.context_window == 1_000_000
       assert model.max_output_tokens == 65_536
@@ -169,6 +211,13 @@ defmodule Synapsis.Provider.ModelRegistryTest do
 
     test "Gemini 2.5 Flash supports thinking" do
       assert {:ok, model} = ModelRegistry.get("gemini-2.5-flash-preview-05-20")
+      assert model.name == "Gemini 2.5 Flash Preview"
+      assert model.supports_thinking == true
+      assert model.max_output_tokens == 65_536
+    end
+
+    test "Gemini 2.5 Flash GA model supports thinking" do
+      assert {:ok, model} = ModelRegistry.get("gemini-2.5-flash")
       assert model.name == "Gemini 2.5 Flash"
       assert model.supports_thinking == true
       assert model.max_output_tokens == 65_536
@@ -223,6 +272,16 @@ defmodule Synapsis.Provider.ModelRegistryTest do
     test "string unknown provider returns empty list" do
       assert ModelRegistry.list("unknown") == []
       assert ModelRegistry.list("") == []
+    end
+
+    test "openai_compat returns openai models" do
+      assert ModelRegistry.list(:openai_compat) == ModelRegistry.list(:openai)
+      assert ModelRegistry.list("openai_compat") == ModelRegistry.list(:openai)
+    end
+
+    test "openrouter returns openai models" do
+      assert ModelRegistry.list(:openrouter) == ModelRegistry.list(:openai)
+      assert ModelRegistry.list("openrouter") == ModelRegistry.list(:openai)
     end
   end
 

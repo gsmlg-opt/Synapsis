@@ -18,6 +18,28 @@ defmodule Synapsis.Provider.ModelRegistry do
 
   @anthropic_models [
     %{
+      id: "claude-opus-4-6",
+      name: "Claude Opus 4.6",
+      provider: "anthropic",
+      context_window: 200_000,
+      max_output_tokens: 32_000,
+      supports_tools: true,
+      supports_thinking: true,
+      supports_images: true,
+      supports_streaming: true
+    },
+    %{
+      id: "claude-sonnet-4-6",
+      name: "Claude Sonnet 4.6",
+      provider: "anthropic",
+      context_window: 200_000,
+      max_output_tokens: 64_000,
+      supports_tools: true,
+      supports_thinking: true,
+      supports_images: true,
+      supports_streaming: true
+    },
+    %{
       id: "claude-opus-4-20250514",
       name: "Claude Opus 4",
       provider: "anthropic",
@@ -53,6 +75,28 @@ defmodule Synapsis.Provider.ModelRegistry do
   ]
 
   @openai_models [
+    %{
+      id: "gpt-4.1",
+      name: "GPT-4.1",
+      provider: "openai",
+      context_window: 1_047_576,
+      max_output_tokens: 32_768,
+      supports_tools: true,
+      supports_thinking: false,
+      supports_images: true,
+      supports_streaming: true
+    },
+    %{
+      id: "gpt-4.1-mini",
+      name: "GPT-4.1 Mini",
+      provider: "openai",
+      context_window: 1_047_576,
+      max_output_tokens: 32_768,
+      supports_tools: true,
+      supports_thinking: false,
+      supports_images: true,
+      supports_streaming: true
+    },
     %{
       id: "gpt-4o",
       name: "GPT-4o",
@@ -101,6 +145,28 @@ defmodule Synapsis.Provider.ModelRegistry do
 
   @google_models [
     %{
+      id: "gemini-2.5-pro",
+      name: "Gemini 2.5 Pro",
+      provider: "google",
+      context_window: 1_000_000,
+      max_output_tokens: 65_536,
+      supports_tools: true,
+      supports_thinking: true,
+      supports_images: true,
+      supports_streaming: true
+    },
+    %{
+      id: "gemini-2.5-flash",
+      name: "Gemini 2.5 Flash",
+      provider: "google",
+      context_window: 1_000_000,
+      max_output_tokens: 65_536,
+      supports_tools: true,
+      supports_thinking: true,
+      supports_images: true,
+      supports_streaming: true
+    },
+    %{
       id: "gemini-2.0-flash",
       name: "Gemini 2.0 Flash",
       provider: "google",
@@ -113,7 +179,7 @@ defmodule Synapsis.Provider.ModelRegistry do
     },
     %{
       id: "gemini-2.5-pro-preview-05-06",
-      name: "Gemini 2.5 Pro",
+      name: "Gemini 2.5 Pro Preview",
       provider: "google",
       context_window: 1_000_000,
       max_output_tokens: 65_536,
@@ -124,7 +190,7 @@ defmodule Synapsis.Provider.ModelRegistry do
     },
     %{
       id: "gemini-2.5-flash-preview-05-20",
-      name: "Gemini 2.5 Flash",
+      name: "Gemini 2.5 Flash Preview",
       provider: "google",
       context_window: 1_000_000,
       max_output_tokens: 65_536,
@@ -152,6 +218,11 @@ defmodule Synapsis.Provider.ModelRegistry do
   def list("anthropic"), do: @anthropic_models
   def list(:openai), do: @openai_models
   def list("openai"), do: @openai_models
+  # openai_compat, openrouter, groq, local, deepseek all use OpenAI-compatible models
+  def list(:openai_compat), do: @openai_models
+  def list("openai_compat"), do: @openai_models
+  def list(:openrouter), do: @openai_models
+  def list("openrouter"), do: @openai_models
   def list(:google), do: @google_models
   def list("google"), do: @google_models
   def list(_), do: []

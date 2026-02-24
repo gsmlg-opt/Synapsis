@@ -260,14 +260,14 @@ defmodule Synapsis.ProvidersTest do
 
   describe "default_model/1" do
     test "returns correct models for known providers" do
-      assert Providers.default_model("anthropic") == "claude-sonnet-4-20250514"
-      assert Providers.default_model("openai") == "gpt-4o"
-      assert Providers.default_model("google") == "gemini-2.0-flash"
+      assert Providers.default_model("anthropic") == "claude-sonnet-4-6"
+      assert Providers.default_model("openai") == "gpt-4.1"
+      assert Providers.default_model("google") == "gemini-2.5-flash"
     end
 
     test "returns anthropic default for unknown provider" do
-      assert Providers.default_model("unknown") == "claude-sonnet-4-20250514"
-      assert Providers.default_model("local") == "claude-sonnet-4-20250514"
+      assert Providers.default_model("unknown") == "claude-sonnet-4-6"
+      assert Providers.default_model("local") == "claude-sonnet-4-6"
     end
   end
 
@@ -389,17 +389,24 @@ defmodule Synapsis.ProvidersTest do
 
   describe "default_model/1 edge cases" do
     test "returns fallback for nil input" do
-      assert Providers.default_model(nil) == "claude-sonnet-4-20250514"
+      assert Providers.default_model(nil) == "claude-sonnet-4-6"
     end
 
     test "returns fallback for empty string" do
-      assert Providers.default_model("") == "claude-sonnet-4-20250514"
+      assert Providers.default_model("") == "claude-sonnet-4-6"
     end
 
     test "returns fallback for providers without specific default" do
-      assert Providers.default_model("groq") == "claude-sonnet-4-20250514"
-      assert Providers.default_model("deepseek") == "claude-sonnet-4-20250514"
-      assert Providers.default_model("openrouter") == "claude-sonnet-4-20250514"
+      assert Providers.default_model("groq") == "claude-sonnet-4-6"
+      assert Providers.default_model("deepseek") == "claude-sonnet-4-6"
+    end
+
+    test "returns openrouter default model" do
+      assert Providers.default_model("openrouter") == "openai/gpt-4o"
+    end
+
+    test "returns openai_compat default model" do
+      assert Providers.default_model("openai_compat") == "gpt-4o"
     end
   end
 end

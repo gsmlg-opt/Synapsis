@@ -49,7 +49,7 @@ defmodule Synapsis.SessionsTest do
         Sessions.create("/tmp/test_sess_default_#{:rand.uniform(100_000)}")
 
       assert session.provider == "anthropic"
-      assert session.model == "claude-sonnet-4-20250514"
+      assert session.model == Synapsis.Providers.default_model("anthropic")
     end
 
     test "selects openai when OPENAI_API_KEY is set and ANTHROPIC not set" do
@@ -70,7 +70,7 @@ defmodule Synapsis.SessionsTest do
         Sessions.create("/tmp/test_sess_oai_env_#{:rand.uniform(100_000)}")
 
       assert session.provider == "openai"
-      assert session.model == "gpt-4o"
+      assert session.model == Synapsis.Providers.default_model("openai")
     end
 
     test "reuses existing project" do

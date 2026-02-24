@@ -138,10 +138,12 @@ defmodule Synapsis.Providers do
   def default_base_url(_), do: nil
 
   @doc "Default model for a provider type string."
-  def default_model("anthropic"), do: "claude-sonnet-4-20250514"
-  def default_model("openai"), do: "gpt-4o"
-  def default_model("google"), do: "gemini-2.0-flash"
-  def default_model(_), do: "claude-sonnet-4-20250514"
+  def default_model("anthropic"), do: "claude-sonnet-4-6"
+  def default_model("openai"), do: "gpt-4.1"
+  def default_model("openai_compat"), do: "gpt-4o"
+  def default_model("openrouter"), do: "openai/gpt-4o"
+  def default_model("google"), do: "gemini-2.5-flash"
+  def default_model(_), do: "claude-sonnet-4-6"
 
   @doc "Environment variable name for a provider's API key."
   def env_var_name("anthropic"), do: "ANTHROPIC_API_KEY"

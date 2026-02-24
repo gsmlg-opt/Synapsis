@@ -287,8 +287,8 @@ defmodule SynapsisCli.ArgsTest do
     end
 
     test "examples reference known models", %{output: output} do
-      assert output =~ "claude-sonnet-4-20250514"
-      assert output =~ "gpt-4o"
+      assert output =~ "claude-sonnet-4-6"
+      assert output =~ "gpt-4.1"
     end
   end
 

@@ -119,7 +119,7 @@ defmodule Synapsis.Provider.MessageMapperTest do
 
     test "uses default model" do
       request = MessageMapper.build_request(:anthropic, [], [], %{})
-      assert request.model == "claude-sonnet-4-20250514"
+      assert request.model == Synapsis.Providers.default_model("anthropic")
     end
 
     test "handles string-keyed messages" do
@@ -218,7 +218,7 @@ defmodule Synapsis.Provider.MessageMapperTest do
 
     test "uses default model" do
       request = MessageMapper.build_request(:openai, [], [], %{})
-      assert request.model == "gpt-4o"
+      assert request.model == Synapsis.Providers.default_model("openai")
     end
 
     test "formats Image parts as multimodal image_url content" do
@@ -324,7 +324,7 @@ defmodule Synapsis.Provider.MessageMapperTest do
 
     test "uses default model" do
       request = MessageMapper.build_request(:google, [], [], %{})
-      assert request.model == "gemini-2.0-flash"
+      assert request.model == Synapsis.Providers.default_model("google")
     end
 
     test "formats tool_result parts via generic content handler" do
