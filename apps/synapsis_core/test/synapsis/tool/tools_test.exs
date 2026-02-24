@@ -348,6 +348,76 @@ defmodule Synapsis.Tool.ToolsTest do
     end
   end
 
+  describe "Glob edge cases" do
+    test "finds files with specific extension" do
+      {:ok, output} = Glob.execute(%{"pattern" => "*.ex"}, %{project_path: @test_dir})
+      assert output =~ "code.ex"
+    end
+
+    test "uses custom base path within project" do
+      sub = Path.join(@test_dir, "sub")
+
+      {:ok, output} =
+        Glob.execute(%{"pattern" => "*.txt", "path" => sub}, %{project_path: @test_dir})
+
+      assert output =~ "nested.txt"
+    end
+  end
+
+  describe "ListDir edge cases" do
+    test "handles empty subdirectory" do
+      empty_dir = Path.join(@test_dir, "empty_dir_test")
+      File.mkdir_p!(empty_dir)
+
+      {:ok, output} =
+        ListDir.execute(%{"path" => ".", "depth" => 1}, %{project_path: @test_dir})
+
+      assert output =~ "empty_dir_test/"
+    end
+  end
+
+  describe "Grep edge cases" do
+    test "searches for pattern in specific file" do
+      {:ok, output} =
+        Grep.execute(%{"pattern" => "Hello World"}, %{project_path: @test_dir})
+
+      assert output =~ "hello.txt"
+      assert output =~ "Hello World"
+    end
+  end
+
+  describe "FileRead edge cases" do
+    test "reads with negative offset treated as no offset" do
+      {:ok, content} =
+        FileRead.execute(
+          %{"path" => "hello.txt", "offset" => -1},
+          %{project_path: @test_dir}
+        )
+
+      assert content =~ "Hello World"
+    end
+
+    test "reads with limit larger than file" do
+      {:ok, content} =
+        FileRead.execute(
+          %{"path" => "hello.txt", "limit" => 1000},
+          %{project_path: @test_dir}
+        )
+
+      assert content =~ "Hello World"
+      assert content =~ "Line 3"
+    end
+  end
+
+  describe "Diagnostics tool metadata" do
+    test "has correct name and parameters" do
+      alias Synapsis.Tool.Diagnostics
+      assert Diagnostics.name() == "diagnostics"
+      assert is_binary(Diagnostics.description())
+      assert %{"type" => "object"} = Diagnostics.parameters()
+    end
+  end
+
   describe "FileDelete" do
     test "deletes a file" do
       delete_path = Path.join(@test_dir, "to_delete.txt")
