@@ -54,7 +54,7 @@ defmodule Synapsis.Tool.FileEdit do
                   {:ok, json}
 
                 {:error, _} ->
-                  {:ok, Jason.encode!(%{status: "error", message: "Failed to encode response"})}
+                  {:ok, ~s({"status":"error","message":"Failed to encode response"})}
               end
 
             {:error, reason} ->
@@ -88,7 +88,7 @@ defmodule Synapsis.Tool.FileEdit do
                   {:ok, json}
 
                 {:error, _} ->
-                  {:ok, Jason.encode!(%{status: "error", message: "Failed to encode response"})}
+                  {:ok, ~s({"status":"error","message":"Failed to encode response"})}
               end
 
             {:error, reason} ->
