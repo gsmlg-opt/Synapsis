@@ -198,7 +198,7 @@ defmodule SynapsisServer.ProviderController do
     providers =
       if System.get_env("OPENAI_API_KEY"),
         do: [
-          %{name: "openai", type: "openai_compat", has_api_key: true, source: "env"} | providers
+          %{name: "openai", type: "openai", has_api_key: true, source: "env"} | providers
         ],
         else: providers
 
