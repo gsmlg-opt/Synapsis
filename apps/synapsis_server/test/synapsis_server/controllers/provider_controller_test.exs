@@ -286,4 +286,27 @@ defmodule SynapsisServer.ProviderControllerTest do
       assert env_providers == [], "expected no env providers when no API keys set"
     end
   end
+
+  describe "normalize_attrs with unknown keys" do
+    test "POST with unknown key in params does not crash (rescue branch)", %{conn: conn} do
+      # "non_existent_atom_key_xyz_987" does not exist as an atom, triggering rescue
+      params = %{
+        "name" => "edge-provider",
+        "type" => "anthropic",
+        "non_existent_atom_key_xyz_987" => "value"
+      }
+
+      conn = post(conn, "/api/providers", params)
+      # It may succeed (422 if attrs incomplete) or create the provider
+      # The key assertion is no crash (500 error)
+      assert conn.status in [201, 422]
+    end
+  end
+
+  describe "GET /api/providers/by-name/:name/models — error paths" do
+    test "returns 404 for provider name with no module mapping", %{conn: conn} do
+      conn = get(conn, "/api/providers/by-name/totally_unknown_provider_xyz/models")
+      assert json_response(conn, 404)["error"] =~ "Unknown provider"
+    end
+  end
 end
