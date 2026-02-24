@@ -99,7 +99,12 @@ defmodule Synapsis.ContextWindowTest do
 
     test "returns reasonable token count for longer text" do
       short = ContextWindow.estimate_tokens("Hello")
-      long = ContextWindow.estimate_tokens("Hello world, this is a much longer sentence with many words")
+
+      long =
+        ContextWindow.estimate_tokens(
+          "Hello world, this is a much longer sentence with many words"
+        )
+
       assert long > short
     end
 

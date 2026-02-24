@@ -82,7 +82,10 @@ defmodule Synapsis.Session.StreamTest do
       %{bypass: bypass, port: bypass.port}
     end
 
-    test "returns {:ok, ref} and caller receives streaming text chunks", %{bypass: bypass, port: port} do
+    test "returns {:ok, ref} and caller receives streaming text chunks", %{
+      bypass: bypass,
+      port: port
+    } do
       provider_name = unique_provider_name()
       config = register_provider(provider_name, "anthropic", port)
 
@@ -125,14 +128,20 @@ defmodule Synapsis.Session.StreamTest do
       assert Enum.any?(events, fn {type, _} -> type == :done end)
     end
 
-    test "caller receives :provider_error when server returns HTTP error", %{bypass: bypass, port: port} do
+    test "caller receives :provider_error when server returns HTTP error", %{
+      bypass: bypass,
+      port: port
+    } do
       provider_name = unique_provider_name()
       config = register_provider(provider_name, "anthropic", port)
 
       Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(500, Jason.encode!(%{"error" => %{"message" => "internal failure"}}))
+        |> Plug.Conn.send_resp(
+          500,
+          Jason.encode!(%{"error" => %{"message" => "internal failure"}})
+        )
       end)
 
       request = %{model: "claude-sonnet-4-20250514", max_tokens: 10, messages: [], stream: true}
@@ -147,7 +156,10 @@ defmodule Synapsis.Session.StreamTest do
       assert has_terminal
     end
 
-    test "caller receives :provider_error when connection is refused", %{bypass: bypass, port: port} do
+    test "caller receives :provider_error when connection is refused", %{
+      bypass: bypass,
+      port: port
+    } do
       provider_name = unique_provider_name()
       config = register_provider(provider_name, "anthropic", port)
 
@@ -345,6 +357,7 @@ defmodule Synapsis.Session.StreamTest do
       assert {:ok, _ref} = Stream.start_stream(request, config, provider_name)
 
       events = collect_stream_events(10_000)
+
       assert Enum.any?(events, fn {type, _} -> type == :error end),
              "Expected a :provider_error event but got: #{inspect(events)}"
     end

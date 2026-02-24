@@ -113,6 +113,7 @@ defmodule Synapsis.PromptBuilderTest do
       insert_attempt(session.id, 1, "compile error", "Use correct module name")
 
       result = PromptBuilder.build_failure_context(session.id)
+
       # The format_entry joins: "- **Attempt 1**: compile error -> Lesson: Use correct module name"
       assert result =~ "Lesson: Use correct module name"
     end
@@ -130,6 +131,7 @@ defmodule Synapsis.PromptBuilderTest do
       end
 
       result = PromptBuilder.build_failure_context(session.id)
+
       for i <- 1..7 do
         assert result =~ "Attempt #{i}"
       end
@@ -148,7 +150,12 @@ defmodule Synapsis.PromptBuilderTest do
     end
 
     test "error_message with special characters renders correctly", %{session: session} do
-      insert_attempt(session.id, 1, "** (MatchError) no match of right-hand side value: {:error, :nxdomain}", nil)
+      insert_attempt(
+        session.id,
+        1,
+        "** (MatchError) no match of right-hand side value: {:error, :nxdomain}",
+        nil
+      )
 
       result = PromptBuilder.build_failure_context(session.id)
       assert result =~ "MatchError"
@@ -167,12 +174,20 @@ defmodule Synapsis.PromptBuilderTest do
 
       {:ok, session_a} =
         %Synapsis.Session{}
-        |> Synapsis.Session.changeset(%{project_id: project2.id, provider: "anthropic", model: "claude-sonnet-4-20250514"})
+        |> Synapsis.Session.changeset(%{
+          project_id: project2.id,
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
         |> Repo.insert()
 
       {:ok, session_b} =
         %Synapsis.Session{}
-        |> Synapsis.Session.changeset(%{project_id: project2.id, provider: "anthropic", model: "claude-sonnet-4-20250514"})
+        |> Synapsis.Session.changeset(%{
+          project_id: project2.id,
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
         |> Repo.insert()
 
       insert_attempt(session_a.id, 1, "Error from A", "Lesson A")

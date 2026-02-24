@@ -68,7 +68,9 @@ defmodule Synapsis.Tool.BuiltinTest do
 
       for {name, %{module: expected_module}} <- @expected_tools do
         {:ok, {:module, module, _opts}} = Registry.lookup(name)
-        assert module == expected_module, "Tool #{name}: expected module #{expected_module}, got #{module}"
+
+        assert module == expected_module,
+               "Tool #{name}: expected module #{expected_module}, got #{module}"
       end
     end
 

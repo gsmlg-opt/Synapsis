@@ -21,7 +21,12 @@ defmodule SynapsisServer.RouterTest do
 
     test "GET /api/sessions/:id" do
       assert %{plug: SynapsisServer.SessionController, plug_opts: :show} =
-               Phoenix.Router.route_info(SynapsisServer.Router, "GET", "/api/sessions/#{@uuid}", "")
+               Phoenix.Router.route_info(
+                 SynapsisServer.Router,
+                 "GET",
+                 "/api/sessions/#{@uuid}",
+                 ""
+               )
     end
 
     test "DELETE /api/sessions/:id" do

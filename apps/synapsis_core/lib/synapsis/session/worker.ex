@@ -74,6 +74,7 @@ defmodule Synapsis.Session.Worker do
   @impl true
   def init(opts) do
     session_id = Keyword.fetch!(opts, :session_id)
+
     session =
       case Repo.get(Session, session_id) do
         nil -> raise "Session #{session_id} not found"
@@ -863,7 +864,9 @@ defmodule Synapsis.Session.Worker do
 
       session ->
         case session |> Session.status_changeset(status) |> Repo.update() do
-          {:ok, _} -> :ok
+          {:ok, _} ->
+            :ok
+
           {:error, changeset} ->
             Logger.warning("session_status_update_failed",
               session_id: session_id,
