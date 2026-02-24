@@ -239,4 +239,48 @@ defmodule Synapsis.ProvidersTest do
       assert Map.has_key?(config, :type)
     end
   end
+
+  describe "default_base_url/1" do
+    test "returns correct URLs for all known providers" do
+      assert Providers.default_base_url("anthropic") == "https://api.anthropic.com"
+      assert Providers.default_base_url("openai") == "https://api.openai.com"
+      assert Providers.default_base_url("openai_compat") == "https://api.openai.com"
+      assert Providers.default_base_url("google") == "https://generativelanguage.googleapis.com"
+      assert Providers.default_base_url("groq") == "https://api.groq.com/openai"
+      assert Providers.default_base_url("deepseek") == "https://api.deepseek.com"
+      assert Providers.default_base_url("openrouter") == "https://openrouter.ai/api"
+      assert Providers.default_base_url("local") == "http://localhost:11434"
+    end
+
+    test "returns nil for unknown provider" do
+      assert is_nil(Providers.default_base_url("unknown"))
+      assert is_nil(Providers.default_base_url(""))
+    end
+  end
+
+  describe "default_model/1" do
+    test "returns correct models for known providers" do
+      assert Providers.default_model("anthropic") == "claude-sonnet-4-20250514"
+      assert Providers.default_model("openai") == "gpt-4o"
+      assert Providers.default_model("google") == "gemini-2.0-flash"
+    end
+
+    test "returns anthropic default for unknown provider" do
+      assert Providers.default_model("unknown") == "claude-sonnet-4-20250514"
+      assert Providers.default_model("local") == "claude-sonnet-4-20250514"
+    end
+  end
+
+  describe "env_var_name/1" do
+    test "returns correct env var names for known providers" do
+      assert Providers.env_var_name("anthropic") == "ANTHROPIC_API_KEY"
+      assert Providers.env_var_name("openai") == "OPENAI_API_KEY"
+      assert Providers.env_var_name("google") == "GOOGLE_API_KEY"
+    end
+
+    test "returns nil for unknown provider" do
+      assert is_nil(Providers.env_var_name("unknown"))
+      assert is_nil(Providers.env_var_name("local"))
+    end
+  end
 end
