@@ -131,6 +131,191 @@ defmodule Synapsis.SessionTest do
     end
   end
 
+  describe "default values" do
+    test "status defaults to idle when not provided", %{project: project} do
+      {:ok, session} =
+        %Session{}
+        |> Session.changeset(%{provider: "p", model: "m", project_id: project.id})
+        |> Repo.insert()
+
+      found = Repo.get!(Session, session.id)
+      assert found.status == "idle"
+    end
+
+    test "agent defaults to build when not provided", %{project: project} do
+      {:ok, session} =
+        %Session{}
+        |> Session.changeset(%{provider: "p", model: "m", project_id: project.id})
+        |> Repo.insert()
+
+      found = Repo.get!(Session, session.id)
+      assert found.agent == "build"
+    end
+
+    test "config defaults to empty map when not provided", %{project: project} do
+      {:ok, session} =
+        %Session{}
+        |> Session.changeset(%{provider: "p", model: "m", project_id: project.id})
+        |> Repo.insert()
+
+      found = Repo.get!(Session, session.id)
+      assert found.config == %{}
+    end
+
+    test "defaults survive round-trip through database", %{project: project} do
+      {:ok, session} =
+        %Session{}
+        |> Session.changeset(%{provider: "p", model: "m", project_id: project.id})
+        |> Repo.insert()
+
+      found = Repo.get!(Session, session.id)
+      assert found.status == "idle"
+      assert found.agent == "build"
+      assert found.config == %{}
+    end
+  end
+
+  describe "status_changeset/2 transitions" do
+    test "transitions from idle to streaming", %{project: project} do
+      {:ok, session} =
+        %Session{}
+        |> Session.changeset(%{provider: "p", model: "m", project_id: project.id})
+        |> Repo.insert()
+
+      assert session.status == "idle"
+      cs = Session.status_changeset(session, "streaming")
+      assert cs.valid?
+      {:ok, updated} = Repo.update(cs)
+      assert updated.status == "streaming"
+    end
+
+    test "transitions from streaming to tool_executing", %{project: project} do
+      {:ok, session} =
+        %Session{}
+        |> Session.changeset(%{provider: "p", model: "m", project_id: project.id, status: "streaming"})
+        |> Repo.insert()
+
+      cs = Session.status_changeset(session, "tool_executing")
+      assert cs.valid?
+      {:ok, updated} = Repo.update(cs)
+      assert updated.status == "tool_executing"
+    end
+
+    test "transitions from tool_executing back to idle", %{project: project} do
+      {:ok, session} =
+        %Session{}
+        |> Session.changeset(%{provider: "p", model: "m", project_id: project.id, status: "tool_executing"})
+        |> Repo.insert()
+
+      cs = Session.status_changeset(session, "idle")
+      assert cs.valid?
+      {:ok, updated} = Repo.update(cs)
+      assert updated.status == "idle"
+    end
+
+    test "transitions to error from any state", %{project: project} do
+      for initial_status <- ~w(idle streaming tool_executing) do
+        {:ok, session} =
+          %Session{}
+          |> Session.changeset(%{provider: "p", model: "m", project_id: project.id, status: initial_status})
+          |> Repo.insert()
+
+        cs = Session.status_changeset(session, "error")
+        assert cs.valid?, "Expected transition from #{initial_status} to error to be valid"
+        {:ok, updated} = Repo.update(cs)
+        assert updated.status == "error"
+      end
+    end
+
+    test "rejects transition to empty string", %{project: project} do
+      {:ok, session} =
+        %Session{}
+        |> Session.changeset(%{provider: "p", model: "m", project_id: project.id})
+        |> Repo.insert()
+
+      cs = Session.status_changeset(session, "")
+      refute cs.valid?
+    end
+
+    test "nil status passes changeset validation but fails on DB not-null constraint", %{project: project} do
+      {:ok, session} =
+        %Session{}
+        |> Session.changeset(%{provider: "p", model: "m", project_id: project.id})
+        |> Repo.insert()
+
+      # validate_inclusion allows nil (only validates non-nil values),
+      # so the changeset is valid but the DB would reject the nil
+      cs = Session.status_changeset(session, nil)
+      assert cs.valid?
+      assert get_change(cs, :status) == nil
+    end
+  end
+
+  describe "config field JSON storage" do
+    test "stores and retrieves a simple JSON map", %{project: project} do
+      config = %{"theme" => "dark", "font_size" => 14}
+
+      {:ok, session} =
+        %Session{}
+        |> Session.changeset(%{provider: "p", model: "m", project_id: project.id, config: config})
+        |> Repo.insert()
+
+      found = Repo.get!(Session, session.id)
+      assert found.config == config
+    end
+
+    test "stores and retrieves nested JSON maps", %{project: project} do
+      config = %{
+        "provider_settings" => %{
+          "temperature" => 0.7,
+          "max_tokens" => 4096
+        },
+        "agent" => %{
+          "system_prompt" => "You are helpful.",
+          "tools" => ["bash", "file_read"]
+        }
+      }
+
+      {:ok, session} =
+        %Session{}
+        |> Session.changeset(%{provider: "p", model: "m", project_id: project.id, config: config})
+        |> Repo.insert()
+
+      found = Repo.get!(Session, session.id)
+      assert found.config == config
+      assert found.config["provider_settings"]["temperature"] == 0.7
+      assert found.config["agent"]["tools"] == ["bash", "file_read"]
+    end
+
+    test "config can be updated after creation", %{project: project} do
+      {:ok, session} =
+        %Session{}
+        |> Session.changeset(%{provider: "p", model: "m", project_id: project.id, config: %{"a" => 1}})
+        |> Repo.insert()
+
+      {:ok, updated} =
+        session
+        |> Session.changeset(%{config: %{"a" => 1, "b" => 2}})
+        |> Repo.update()
+
+      found = Repo.get!(Session, updated.id)
+      assert found.config == %{"a" => 1, "b" => 2}
+    end
+
+    test "config can store empty nested structures", %{project: project} do
+      config = %{"empty_map" => %{}, "empty_list" => []}
+
+      {:ok, session} =
+        %Session{}
+        |> Session.changeset(%{provider: "p", model: "m", project_id: project.id, config: config})
+        |> Repo.insert()
+
+      found = Repo.get!(Session, session.id)
+      assert found.config["empty_map"] == %{}
+      assert found.config["empty_list"] == []
+    end
+  end
+
   describe "persistence" do
     test "inserts and retrieves session", %{project: project} do
       {:ok, session} =

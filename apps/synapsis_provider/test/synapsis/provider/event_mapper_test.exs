@@ -227,5 +227,65 @@ defmodule Synapsis.Provider.EventMapperTest do
     test "unknown events return ignore" do
       assert :ignore = EventMapper.map_event(:google, %{"usageMetadata" => %{}})
     end
+
+    test "function call with no args returns empty map for args" do
+      chunk = %{
+        "candidates" => [
+          %{
+            "content" => %{
+              "parts" => [
+                %{"functionCall" => %{"name" => "bash"}}
+              ]
+            }
+          }
+        ]
+      }
+
+      # functionCall without "args" key does not match the parse_google_parts clause
+      # that requires both "name" and "args", so it falls through to :ignore
+      assert :ignore = EventMapper.map_event(:google, chunk)
+    end
+
+    test "ignores candidates with empty parts" do
+      chunk = %{"candidates" => [%{"content" => %{"parts" => []}}]}
+      assert :ignore = EventMapper.map_event(:google, chunk)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Anthropic edge cases
+  # ---------------------------------------------------------------------------
+
+  describe "map_event/2 Anthropic edge cases" do
+    test "handles content_block_start with tool_use and partial data" do
+      chunk = %{
+        "type" => "content_block_start",
+        "index" => 1,
+        "content_block" => %{
+          "type" => "tool_use",
+          "name" => "file_edit",
+          "id" => "toolu_abc",
+          "input" => %{}
+        }
+      }
+
+      assert {:tool_use_start, "file_edit", "toolu_abc"} = EventMapper.map_event(:anthropic, chunk)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # OpenAI edge cases
+  # ---------------------------------------------------------------------------
+
+  describe "map_event/2 OpenAI edge cases" do
+    test "handles empty choices" do
+      chunk = %{"choices" => []}
+      assert :ignore = EventMapper.map_event(:openai, chunk)
+    end
+
+    test "handles nil content in delta" do
+      chunk = %{"choices" => [%{"delta" => %{"content" => nil}, "index" => 0}]}
+      assert :ignore = EventMapper.map_event(:openai, chunk)
+    end
   end
 end

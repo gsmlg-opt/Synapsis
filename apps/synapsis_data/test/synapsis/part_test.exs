@@ -97,4 +97,55 @@ defmodule Synapsis.PartTest do
       assert {:ok, ^part} = Part.cast(part)
     end
   end
+
+  describe "edge cases" do
+    test "dump with nil returns nil" do
+      assert {:ok, nil} = Part.dump(nil)
+    end
+
+    test "load with nil returns nil" do
+      assert {:ok, nil} = Part.load(nil)
+    end
+
+    test "cast with empty map raises FunctionClauseError" do
+      assert_raise FunctionClauseError, fn ->
+        Part.cast(%{})
+      end
+    end
+
+    test "ToolUse status serialization round-trips through :pending" do
+      part = %Part.ToolUse{
+        tool: "bash",
+        tool_use_id: "toolu_pending",
+        input: %{"command" => "ls"},
+        status: :pending
+      }
+
+      assert {:ok, dumped} = Part.dump(part)
+      assert %{"status" => "pending"} = dumped
+      assert {:ok, loaded} = Part.load(dumped)
+      assert %Part.ToolUse{status: :pending} = loaded
+    end
+
+    test "ToolUse status serialization handles string status" do
+      dumped = %{
+        "type" => "tool_use",
+        "tool" => "grep",
+        "tool_use_id" => "toolu_str",
+        "input" => %{},
+        "status" => "done"
+      }
+
+      assert {:ok, loaded} = Part.load(dumped)
+      assert %Part.ToolUse{status: :done} = loaded
+    end
+
+    test "Image part preserves optional path field" do
+      part = %Part.Image{media_type: "image/jpeg", data: "abc123", path: nil}
+      assert {:ok, dumped} = Part.dump(part)
+      assert %{"path" => nil} = dumped
+      assert {:ok, loaded} = Part.load(dumped)
+      assert %Part.Image{media_type: "image/jpeg", data: "abc123", path: nil} = loaded
+    end
+  end
 end

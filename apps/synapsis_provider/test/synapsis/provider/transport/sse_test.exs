@@ -72,5 +72,27 @@ defmodule Synapsis.Provider.Transport.SSETest do
       assert length(parsed) == 1
       assert Enum.at(parsed, 0) == %{"type" => "ping"}
     end
+
+    test "handles multiple newlines between events" do
+      data = "data: {\"type\":\"ping\"}\n\n\n\ndata: {\"type\":\"message_stop\"}\n\n\n"
+      parsed = SSE.parse_lines(data)
+      assert length(parsed) == 2
+      assert Enum.at(parsed, 0) == %{"type" => "ping"}
+      assert Enum.at(parsed, 1) == %{"type" => "message_stop"}
+    end
+
+    test "handles data with trailing whitespace" do
+      data = "data: {\"type\":\"ping\"}   \n"
+      parsed = SSE.parse_lines(data)
+      assert length(parsed) == 1
+      assert Enum.at(parsed, 0) == %{"type" => "ping"}
+    end
+
+    test "handles data: prefix with extra spaces" do
+      data = "data:  {\"type\":\"ping\"}\n"
+      parsed = SSE.parse_lines(data)
+      assert length(parsed) == 1
+      assert Enum.at(parsed, 0) == %{"type" => "ping"}
+    end
   end
 end

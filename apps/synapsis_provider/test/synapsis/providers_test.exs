@@ -282,5 +282,124 @@ defmodule Synapsis.ProvidersTest do
       assert is_nil(Providers.env_var_name("unknown"))
       assert is_nil(Providers.env_var_name("local"))
     end
+
+    test "returns nil for empty string" do
+      assert is_nil(Providers.env_var_name(""))
+    end
+
+    test "returns nil for providers without dedicated env vars" do
+      assert is_nil(Providers.env_var_name("groq"))
+      assert is_nil(Providers.env_var_name("deepseek"))
+      assert is_nil(Providers.env_var_name("openrouter"))
+      assert is_nil(Providers.env_var_name("openai_compat"))
+    end
+  end
+
+  describe "list/1 ordering" do
+    test "returns providers ordered by name ascending" do
+      {:ok, _} = Providers.create(%{@valid_attrs | name: "zulu-provider"})
+      {:ok, _} = Providers.create(%{@valid_attrs | name: "alpha-provider", type: "openai"})
+      {:ok, _} = Providers.create(%{@valid_attrs | name: "mike-provider", type: "google"})
+
+      {:ok, providers} = Providers.list()
+      names = Enum.map(providers, & &1.name)
+      assert names == Enum.sort(names)
+    end
+  end
+
+  describe "create/1 with disabled provider" do
+    test "disabled provider is not synced to registry" do
+      {:ok, provider} =
+        Providers.create(%{@valid_attrs | name: "disabled-at-create", enabled: false})
+
+      assert provider.enabled == false
+      assert {:error, :not_found} = ProviderRegistry.get("disabled-at-create")
+    end
+  end
+
+  describe "create/1 with custom base_url" do
+    test "custom base_url overrides default in registry config" do
+      {:ok, _} =
+        Providers.create(%{
+          name: "custom-url-provider",
+          type: "anthropic",
+          api_key_encrypted: "sk-test",
+          enabled: true,
+          base_url: "https://custom.example.com"
+        })
+
+      {:ok, config} = ProviderRegistry.get("custom-url-provider")
+      assert config.base_url == "https://custom.example.com"
+    end
+
+    test "nil base_url uses default for provider type" do
+      {:ok, _} =
+        Providers.create(%{
+          name: "nil-url-provider",
+          type: "google",
+          api_key_encrypted: "key",
+          enabled: true,
+          base_url: nil
+        })
+
+      {:ok, config} = ProviderRegistry.get("nil-url-provider")
+      assert config.base_url == "https://generativelanguage.googleapis.com"
+    end
+  end
+
+  describe "update/2 re-enabling provider" do
+    test "re-enabling provider syncs it back to registry" do
+      {:ok, provider} =
+        Providers.create(%{@valid_attrs | name: "reenable-provider", enabled: false})
+
+      assert {:error, :not_found} = ProviderRegistry.get("reenable-provider")
+
+      {:ok, _} = Providers.update(provider.id, %{enabled: true})
+      assert {:ok, config} = ProviderRegistry.get("reenable-provider")
+      assert config.type == "anthropic"
+    end
+  end
+
+  describe "authenticate/2 registry sync" do
+    test "updates api key in registry" do
+      {:ok, provider} = Providers.create(%{@valid_attrs | name: "auth-sync-provider"})
+      {:ok, config_before} = ProviderRegistry.get("auth-sync-provider")
+      assert config_before.api_key == "sk-ant-test"
+
+      {:ok, _} = Providers.authenticate(provider.id, "new-secret-key")
+      {:ok, config_after} = ProviderRegistry.get("auth-sync-provider")
+      assert config_after.api_key == "new-secret-key"
+    end
+  end
+
+  describe "default_base_url/1 edge cases" do
+    test "returns nil for nil input" do
+      assert is_nil(Providers.default_base_url(nil))
+    end
+
+    test "returns nil for empty string" do
+      assert is_nil(Providers.default_base_url(""))
+    end
+
+    test "is case-sensitive" do
+      assert is_nil(Providers.default_base_url("Anthropic"))
+      assert is_nil(Providers.default_base_url("OPENAI"))
+    end
+  end
+
+  describe "default_model/1 edge cases" do
+    test "returns fallback for nil input" do
+      assert Providers.default_model(nil) == "claude-sonnet-4-20250514"
+    end
+
+    test "returns fallback for empty string" do
+      assert Providers.default_model("") == "claude-sonnet-4-20250514"
+    end
+
+    test "returns fallback for providers without specific default" do
+      assert Providers.default_model("groq") == "claude-sonnet-4-20250514"
+      assert Providers.default_model("deepseek") == "claude-sonnet-4-20250514"
+      assert Providers.default_model("openrouter") == "claude-sonnet-4-20250514"
+    end
   end
 end
