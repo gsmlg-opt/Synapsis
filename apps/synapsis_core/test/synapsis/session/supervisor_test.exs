@@ -87,7 +87,8 @@ defmodule Synapsis.Session.SupervisorTest do
 
       assert_receive {:DOWN, ^ref, :process, ^sup_pid, _reason}, 5_000
 
-      # Supervisor should no longer be in the registry
+      # Registry cleanup may be async; wait briefly for it
+      Process.sleep(50)
       assert Registry.lookup(Synapsis.Session.SupervisorRegistry, session.id) == []
     end
 

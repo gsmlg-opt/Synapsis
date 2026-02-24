@@ -172,4 +172,237 @@ defmodule SynapsisPlugin.MCP.ProtocolTest do
       assert hd(messages)["result"]["serverInfo"]["name"] == "test-server"
     end
   end
+
+  describe "encode/decode round-trip" do
+    test "request round-trips through encode then decode" do
+      encoded = Protocol.encode_request(7, "tools/list", %{"cursor" => "abc"})
+      {[decoded], ""} = Protocol.decode_message(encoded)
+      assert decoded["jsonrpc"] == "2.0"
+      assert decoded["id"] == 7
+      assert decoded["method"] == "tools/list"
+      assert decoded["params"]["cursor"] == "abc"
+    end
+
+    test "notification round-trips through encode then decode" do
+      encoded = Protocol.encode_notification("notifications/cancelled", %{"requestId" => 3, "reason" => "timeout"})
+      {[decoded], ""} = Protocol.decode_message(encoded)
+      assert decoded["jsonrpc"] == "2.0"
+      assert decoded["method"] == "notifications/cancelled"
+      assert decoded["params"]["requestId"] == 3
+      assert decoded["params"]["reason"] == "timeout"
+      refute Map.has_key?(decoded, "id")
+    end
+
+    test "request with empty params round-trips" do
+      encoded = Protocol.encode_request(100, "ping")
+      {[decoded], ""} = Protocol.decode_message(encoded)
+      assert decoded["id"] == 100
+      assert decoded["method"] == "ping"
+      assert decoded["params"] == %{}
+    end
+
+    test "request with nested params round-trips" do
+      params = %{
+        "name" => "write_file",
+        "arguments" => %{
+          "path" => "/tmp/deep/nested/file.txt",
+          "content" => "line1\nline2\nline3"
+        }
+      }
+
+      encoded = Protocol.encode_request(42, "tools/call", params)
+      {[decoded], ""} = Protocol.decode_message(encoded)
+      assert decoded["params"]["arguments"]["path"] == "/tmp/deep/nested/file.txt"
+      assert decoded["params"]["arguments"]["content"] == "line1\nline2\nline3"
+    end
+
+    test "request with unicode content round-trips" do
+      params = %{"text" => "Hello, \u4e16\u754c! \u{1F600}"}
+      encoded = Protocol.encode_request(1, "echo", params)
+      {[decoded], ""} = Protocol.decode_message(encoded)
+      assert decoded["params"]["text"] == "Hello, \u4e16\u754c! \u{1F600}"
+    end
+  end
+
+  describe "error response encoding" do
+    test "decodes standard JSON-RPC error codes" do
+      errors = [
+        {-32_700, "Parse error"},
+        {-32_600, "Invalid Request"},
+        {-32_601, "Method not found"},
+        {-32_602, "Invalid params"},
+        {-32_603, "Internal error"}
+      ]
+
+      for {code, message} <- errors do
+        json = Jason.encode!(%{"jsonrpc" => "2.0", "id" => 1, "error" => %{"code" => code, "message" => message}})
+        {[decoded], ""} = Protocol.decode_message("#{json}\n")
+        assert decoded["error"]["code"] == code
+        assert decoded["error"]["message"] == message
+      end
+    end
+
+    test "decodes error response with data field" do
+      error = %{
+        "code" => -32_602,
+        "message" => "Invalid params",
+        "data" => %{"details" => "missing required field 'name'", "field" => "name"}
+      }
+
+      json = Jason.encode!(%{"jsonrpc" => "2.0", "id" => 5, "error" => error})
+      {[decoded], ""} = Protocol.decode_message("#{json}\n")
+      assert decoded["error"]["data"]["details"] == "missing required field 'name'"
+      assert decoded["error"]["data"]["field"] == "name"
+    end
+
+    test "decodes error response with null data" do
+      error = %{"code" => -32_603, "message" => "Internal error", "data" => nil}
+      json = Jason.encode!(%{"jsonrpc" => "2.0", "id" => 1, "error" => error})
+      {[decoded], ""} = Protocol.decode_message("#{json}\n")
+      assert decoded["error"]["code"] == -32_603
+      assert is_nil(decoded["error"]["data"])
+    end
+  end
+
+  describe "empty tool list handling" do
+    test "decodes tools/list response with empty tools array" do
+      json = Jason.encode!(%{"jsonrpc" => "2.0", "id" => 1, "result" => %{"tools" => []}})
+      {[decoded], ""} = Protocol.decode_message("#{json}\n")
+      assert decoded["result"]["tools"] == []
+    end
+
+    test "decodes tools/list response with no tools key" do
+      json = Jason.encode!(%{"jsonrpc" => "2.0", "id" => 1, "result" => %{}})
+      {[decoded], ""} = Protocol.decode_message("#{json}\n")
+      assert decoded["result"] == %{}
+      refute Map.has_key?(decoded["result"], "tools")
+    end
+
+    test "decodes tools/list response with null result" do
+      json = Jason.encode!(%{"jsonrpc" => "2.0", "id" => 1, "result" => nil})
+      {[decoded], ""} = Protocol.decode_message("#{json}\n")
+      assert is_nil(decoded["result"])
+    end
+  end
+
+  describe "invalid JSON-RPC handling" do
+    test "non-JSON line is treated as partial/incomplete" do
+      {messages, rest} = Protocol.decode_message("this is not json\n")
+      assert messages == []
+      # The non-JSON line is retained as rest since it failed to parse
+      assert rest == "this is not json"
+    end
+
+    test "empty JSON object is decoded as a message" do
+      json = Jason.encode!(%{})
+      {[decoded], ""} = Protocol.decode_message("#{json}\n")
+      assert decoded == %{}
+    end
+
+    test "JSON array is not a valid JSON-RPC message but is decoded" do
+      json = Jason.encode!([1, 2, 3])
+      {[decoded], ""} = Protocol.decode_message("#{json}\n")
+      assert decoded == [1, 2, 3]
+    end
+
+    test "message missing jsonrpc field is still decoded" do
+      json = Jason.encode!(%{"id" => 1, "method" => "test"})
+      {[decoded], ""} = Protocol.decode_message("#{json}\n")
+      assert decoded["id"] == 1
+      refute Map.has_key?(decoded, "jsonrpc")
+    end
+
+    test "message with string id is decoded" do
+      json = Jason.encode!(%{"jsonrpc" => "2.0", "id" => "string-id", "result" => %{}})
+      {[decoded], ""} = Protocol.decode_message("#{json}\n")
+      assert decoded["id"] == "string-id"
+    end
+
+    test "multiple newlines between messages do not produce extra messages" do
+      msg = Jason.encode!(%{"jsonrpc" => "2.0", "id" => 1, "result" => %{}})
+      {messages, ""} = Protocol.decode_message("#{msg}\n\n\n")
+      assert length(messages) == 1
+    end
+
+    test "only whitespace input produces no messages" do
+      {messages, rest} = Protocol.decode_message("   \n  \n")
+      assert messages == []
+      # Whitespace lines fail JSON parse and the last one is kept as rest
+      assert rest == "  "
+    end
+
+    test "truncated JSON is treated as partial" do
+      {messages, rest} = Protocol.decode_message("{\"jsonrpc\":\"2.0\",\"id\":")
+      assert messages == []
+      assert rest == "{\"jsonrpc\":\"2.0\",\"id\":"
+    end
+  end
+
+  describe "large message handling" do
+    test "decodes a response with many tools" do
+      tools =
+        for i <- 1..100 do
+          %{
+            "name" => "tool_#{i}",
+            "description" => "Description for tool #{i}",
+            "inputSchema" => %{"type" => "object", "properties" => %{"arg" => %{"type" => "string"}}}
+          }
+        end
+
+      json = Jason.encode!(%{"jsonrpc" => "2.0", "id" => 1, "result" => %{"tools" => tools}})
+      {[decoded], ""} = Protocol.decode_message("#{json}\n")
+      assert length(decoded["result"]["tools"]) == 100
+      assert Enum.at(decoded["result"]["tools"], 99)["name"] == "tool_100"
+    end
+
+    test "decodes a response with large text content" do
+      large_text = String.duplicate("a", 100_000)
+      result = %{"content" => [%{"type" => "text", "text" => large_text}]}
+      json = Jason.encode!(%{"jsonrpc" => "2.0", "id" => 1, "result" => result})
+      {[decoded], ""} = Protocol.decode_message("#{json}\n")
+      assert String.length(hd(decoded["result"]["content"])["text"]) == 100_000
+    end
+  end
+
+  describe "encode_request/3 edge cases" do
+    test "encodes with integer zero id" do
+      encoded = Protocol.encode_request(0, "test/method")
+      {[decoded], ""} = Protocol.decode_message(encoded)
+      assert decoded["id"] == 0
+    end
+
+    test "encodes with negative id" do
+      encoded = Protocol.encode_request(-1, "test/method")
+      {[decoded], ""} = Protocol.decode_message(encoded)
+      assert decoded["id"] == -1
+    end
+
+    test "encodes with very large id" do
+      encoded = Protocol.encode_request(999_999_999, "test/method")
+      {[decoded], ""} = Protocol.decode_message(encoded)
+      assert decoded["id"] == 999_999_999
+    end
+
+    test "encodes method with special characters" do
+      encoded = Protocol.encode_request(1, "$/cancelRequest")
+      {[decoded], ""} = Protocol.decode_message(encoded)
+      assert decoded["method"] == "$/cancelRequest"
+    end
+
+    test "encodes params with boolean and null values" do
+      params = %{"enabled" => true, "disabled" => false, "value" => nil}
+      encoded = Protocol.encode_request(1, "config/set", params)
+      {[decoded], ""} = Protocol.decode_message(encoded)
+      assert decoded["params"]["enabled"] == true
+      assert decoded["params"]["disabled"] == false
+      assert is_nil(decoded["params"]["value"])
+    end
+
+    test "encodes params with list values" do
+      params = %{"items" => [1, "two", true, nil]}
+      encoded = Protocol.encode_request(1, "batch", params)
+      {[decoded], ""} = Protocol.decode_message(encoded)
+      assert decoded["params"]["items"] == [1, "two", true, nil]
+    end
+  end
 end
