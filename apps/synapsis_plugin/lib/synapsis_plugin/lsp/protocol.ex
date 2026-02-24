@@ -2,26 +2,26 @@ defmodule SynapsisPlugin.LSP.Protocol do
   @moduledoc "JSON-RPC encoding/decoding for LSP (Content-Length framing)."
 
   def encode_request(id, method, params) do
-    msg =
-      Jason.encode!(%{
-        "jsonrpc" => "2.0",
-        "id" => id,
-        "method" => method,
-        "params" => params
-      })
-
-    "Content-Length: #{byte_size(msg)}\r\n\r\n#{msg}"
+    case Jason.encode(%{
+           "jsonrpc" => "2.0",
+           "id" => id,
+           "method" => method,
+           "params" => params
+         }) do
+      {:ok, msg} -> {:ok, "Content-Length: #{byte_size(msg)}\r\n\r\n#{msg}"}
+      {:error, reason} -> {:error, {:encode_failed, reason}}
+    end
   end
 
   def encode_notification(method, params) do
-    msg =
-      Jason.encode!(%{
-        "jsonrpc" => "2.0",
-        "method" => method,
-        "params" => params
-      })
-
-    "Content-Length: #{byte_size(msg)}\r\n\r\n#{msg}"
+    case Jason.encode(%{
+           "jsonrpc" => "2.0",
+           "method" => method,
+           "params" => params
+         }) do
+      {:ok, msg} -> {:ok, "Content-Length: #{byte_size(msg)}\r\n\r\n#{msg}"}
+      {:error, reason} -> {:error, {:encode_failed, reason}}
+    end
   end
 
   def decode_message(data) do

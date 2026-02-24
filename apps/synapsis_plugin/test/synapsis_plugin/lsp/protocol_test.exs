@@ -5,7 +5,7 @@ defmodule SynapsisPlugin.LSP.ProtocolTest do
 
   describe "encode_request/3" do
     test "produces valid Content-Length framed JSON-RPC" do
-      encoded = Protocol.encode_request(1, "initialize", %{"rootUri" => "file:///tmp"})
+      {:ok, encoded} = Protocol.encode_request(1, "initialize", %{"rootUri" => "file:///tmp"})
       assert encoded =~ "Content-Length:"
       assert encoded =~ "\r\n\r\n"
 
@@ -19,7 +19,7 @@ defmodule SynapsisPlugin.LSP.ProtocolTest do
     end
 
     test "Content-Length matches the body byte size" do
-      encoded = Protocol.encode_request(42, "textDocument/didOpen", %{"uri" => "file:///test.ex"})
+      {:ok, encoded} = Protocol.encode_request(42, "textDocument/didOpen", %{"uri" => "file:///test.ex"})
       [header, body] = String.split(encoded, "\r\n\r\n", parts: 2)
       "Content-Length: " <> len_str = header
       assert String.to_integer(len_str) == byte_size(body)
@@ -31,7 +31,7 @@ defmodule SynapsisPlugin.LSP.ProtocolTest do
         "position" => %{"line" => 10, "character" => 5}
       }
 
-      encoded = Protocol.encode_request(3, "textDocument/definition", params)
+      {:ok, encoded} = Protocol.encode_request(3, "textDocument/definition", params)
       [_header, body] = String.split(encoded, "\r\n\r\n", parts: 2)
       {:ok, decoded} = Jason.decode(body)
       assert decoded["method"] == "textDocument/definition"
@@ -45,7 +45,7 @@ defmodule SynapsisPlugin.LSP.ProtocolTest do
         "context" => %{"includeDeclaration" => true}
       }
 
-      encoded = Protocol.encode_request(4, "textDocument/references", params)
+      {:ok, encoded} = Protocol.encode_request(4, "textDocument/references", params)
       [_header, body] = String.split(encoded, "\r\n\r\n", parts: 2)
       {:ok, decoded} = Jason.decode(body)
       assert decoded["method"] == "textDocument/references"
@@ -53,8 +53,8 @@ defmodule SynapsisPlugin.LSP.ProtocolTest do
     end
 
     test "increments id correctly across multiple requests" do
-      r1 = Protocol.encode_request(1, "method1", %{})
-      r2 = Protocol.encode_request(2, "method2", %{})
+      {:ok, r1} = Protocol.encode_request(1, "method1", %{})
+      {:ok, r2} = Protocol.encode_request(2, "method2", %{})
 
       [_, b1] = String.split(r1, "\r\n\r\n", parts: 2)
       [_, b2] = String.split(r2, "\r\n\r\n", parts: 2)
@@ -69,7 +69,7 @@ defmodule SynapsisPlugin.LSP.ProtocolTest do
 
   describe "encode_notification/2" do
     test "produces Content-Length framed notification without id" do
-      encoded = Protocol.encode_notification("initialized", %{})
+      {:ok, encoded} = Protocol.encode_notification("initialized", %{})
       assert encoded =~ "Content-Length:"
       assert encoded =~ "\r\n\r\n"
 
@@ -90,7 +90,7 @@ defmodule SynapsisPlugin.LSP.ProtocolTest do
         }
       }
 
-      encoded = Protocol.encode_notification("textDocument/didOpen", params)
+      {:ok, encoded} = Protocol.encode_notification("textDocument/didOpen", params)
       [_header, body] = String.split(encoded, "\r\n\r\n", parts: 2)
       {:ok, decoded} = Jason.decode(body)
       assert decoded["method"] == "textDocument/didOpen"
@@ -103,7 +103,7 @@ defmodule SynapsisPlugin.LSP.ProtocolTest do
         "contentChanges" => [%{"text" => "new content"}]
       }
 
-      encoded = Protocol.encode_notification("textDocument/didChange", params)
+      {:ok, encoded} = Protocol.encode_notification("textDocument/didChange", params)
       [_header, body] = String.split(encoded, "\r\n\r\n", parts: 2)
       {:ok, decoded} = Jason.decode(body)
       assert decoded["method"] == "textDocument/didChange"
@@ -202,7 +202,7 @@ defmodule SynapsisPlugin.LSP.ProtocolTest do
 
   describe "encode/decode round-trip" do
     test "request round-trips through encode then decode" do
-      encoded = Protocol.encode_request(10, "textDocument/completion", %{
+      {:ok, encoded} = Protocol.encode_request(10, "textDocument/completion", %{
         "textDocument" => %{"uri" => "file:///project/main.ex"},
         "position" => %{"line" => 20, "character" => 15}
       })
@@ -215,7 +215,7 @@ defmodule SynapsisPlugin.LSP.ProtocolTest do
     end
 
     test "notification round-trips through encode then decode" do
-      encoded = Protocol.encode_notification("textDocument/didSave", %{
+      {:ok, encoded} = Protocol.encode_notification("textDocument/didSave", %{
         "textDocument" => %{"uri" => "file:///project/app.ex"}
       })
 
@@ -227,7 +227,7 @@ defmodule SynapsisPlugin.LSP.ProtocolTest do
     end
 
     test "request with unicode content round-trips" do
-      encoded = Protocol.encode_request(1, "textDocument/hover", %{
+      {:ok, encoded} = Protocol.encode_request(1, "textDocument/hover", %{
         "text" => "Hello, \u4e16\u754c! \u{1F600}"
       })
 
@@ -236,7 +236,7 @@ defmodule SynapsisPlugin.LSP.ProtocolTest do
     end
 
     test "request with empty params round-trips" do
-      encoded = Protocol.encode_request(99, "shutdown", %{})
+      {:ok, encoded} = Protocol.encode_request(99, "shutdown", %{})
       assert {:ok, decoded, ""} = Protocol.decode_message(encoded)
       assert decoded["id"] == 99
       assert decoded["method"] == "shutdown"
@@ -250,7 +250,7 @@ defmodule SynapsisPlugin.LSP.ProtocolTest do
         "textDocument" => %{"uri" => "file:///tmp/closed.ex"}
       }
 
-      encoded = Protocol.encode_notification("textDocument/didClose", params)
+      {:ok, encoded} = Protocol.encode_notification("textDocument/didClose", params)
       [_header, body] = String.split(encoded, "\r\n\r\n", parts: 2)
       {:ok, decoded} = Jason.decode(body)
       assert decoded["method"] == "textDocument/didClose"
@@ -264,7 +264,7 @@ defmodule SynapsisPlugin.LSP.ProtocolTest do
         "text" => "defmodule Saved do\nend\n"
       }
 
-      encoded = Protocol.encode_notification("textDocument/didSave", params)
+      {:ok, encoded} = Protocol.encode_notification("textDocument/didSave", params)
       [_header, body] = String.split(encoded, "\r\n\r\n", parts: 2)
       {:ok, decoded} = Jason.decode(body)
       assert decoded["method"] == "textDocument/didSave"
@@ -272,7 +272,7 @@ defmodule SynapsisPlugin.LSP.ProtocolTest do
     end
 
     test "encodes initialized notification with empty params" do
-      encoded = Protocol.encode_notification("initialized", %{})
+      {:ok, encoded} = Protocol.encode_notification("initialized", %{})
       [header, body] = String.split(encoded, "\r\n\r\n", parts: 2)
       "Content-Length: " <> len_str = header
       assert String.to_integer(len_str) == byte_size(body)
@@ -282,14 +282,14 @@ defmodule SynapsisPlugin.LSP.ProtocolTest do
     end
 
     test "encodes exit notification" do
-      encoded = Protocol.encode_notification("exit", %{})
+      {:ok, encoded} = Protocol.encode_notification("exit", %{})
       assert {:ok, decoded, ""} = Protocol.decode_message(encoded)
       assert decoded["method"] == "exit"
     end
 
     test "Content-Length is correct for notification with multi-byte characters" do
       params = %{"text" => "\u00e9\u00e8\u00ea\u00eb"}
-      encoded = Protocol.encode_notification("test/unicode", params)
+      {:ok, encoded} = Protocol.encode_notification("test/unicode", params)
       [header, body] = String.split(encoded, "\r\n\r\n", parts: 2)
       "Content-Length: " <> len_str = header
       assert String.to_integer(len_str) == byte_size(body)
@@ -444,20 +444,20 @@ defmodule SynapsisPlugin.LSP.ProtocolTest do
   describe "encode_request/3 edge cases" do
     test "Content-Length is correct for multi-byte UTF-8 characters" do
       params = %{"text" => "\u00e9l\u00e8ve \u{1F600}"}
-      encoded = Protocol.encode_request(1, "test", params)
+      {:ok, encoded} = Protocol.encode_request(1, "test", params)
       [header, body] = String.split(encoded, "\r\n\r\n", parts: 2)
       "Content-Length: " <> len_str = header
       assert String.to_integer(len_str) == byte_size(body)
     end
 
     test "encodes with zero id" do
-      encoded = Protocol.encode_request(0, "shutdown", %{})
+      {:ok, encoded} = Protocol.encode_request(0, "shutdown", %{})
       assert {:ok, decoded, ""} = Protocol.decode_message(encoded)
       assert decoded["id"] == 0
     end
 
     test "encodes with very large id" do
-      encoded = Protocol.encode_request(999_999_999, "test", %{})
+      {:ok, encoded} = Protocol.encode_request(999_999_999, "test", %{})
       assert {:ok, decoded, ""} = Protocol.decode_message(encoded)
       assert decoded["id"] == 999_999_999
     end
@@ -473,13 +473,13 @@ defmodule SynapsisPlugin.LSP.ProtocolTest do
         }
       }
 
-      encoded = Protocol.encode_request(1, "deep/test", params)
+      {:ok, encoded} = Protocol.encode_request(1, "deep/test", params)
       assert {:ok, decoded, ""} = Protocol.decode_message(encoded)
       assert get_in(decoded, ["params", "level1", "level2", "level3", "value"]) == "deep"
     end
 
     test "encodes $/cancelRequest method" do
-      encoded = Protocol.encode_request(1, "$/cancelRequest", %{"id" => 5})
+      {:ok, encoded} = Protocol.encode_request(1, "$/cancelRequest", %{"id" => 5})
       assert {:ok, decoded, ""} = Protocol.decode_message(encoded)
       assert decoded["method"] == "$/cancelRequest"
       assert decoded["params"]["id"] == 5

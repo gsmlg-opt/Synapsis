@@ -2,26 +2,26 @@ defmodule SynapsisPlugin.MCP.Protocol do
   @moduledoc "JSON-RPC encoding/decoding for MCP (Model Context Protocol)."
 
   def encode_request(id, method, params \\ %{}) do
-    msg =
-      Jason.encode!(%{
-        "jsonrpc" => "2.0",
-        "id" => id,
-        "method" => method,
-        "params" => params
-      })
-
-    "#{msg}\n"
+    case Jason.encode(%{
+           "jsonrpc" => "2.0",
+           "id" => id,
+           "method" => method,
+           "params" => params
+         }) do
+      {:ok, msg} -> {:ok, "#{msg}\n"}
+      {:error, reason} -> {:error, {:encode_failed, reason}}
+    end
   end
 
   def encode_notification(method, params \\ %{}) do
-    msg =
-      Jason.encode!(%{
-        "jsonrpc" => "2.0",
-        "method" => method,
-        "params" => params
-      })
-
-    "#{msg}\n"
+    case Jason.encode(%{
+           "jsonrpc" => "2.0",
+           "method" => method,
+           "params" => params
+         }) do
+      {:ok, msg} -> {:ok, "#{msg}\n"}
+      {:error, reason} -> {:error, {:encode_failed, reason}}
+    end
   end
 
   def decode_message(data) do

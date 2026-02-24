@@ -5,7 +5,7 @@ defmodule SynapsisPlugin.MCPTest do
 
   describe "MCP Protocol" do
     test "encodes a JSON-RPC request" do
-      encoded = Protocol.encode_request(1, "tools/list")
+      {:ok, encoded} = Protocol.encode_request(1, "tools/list")
       assert encoded =~ "\"jsonrpc\":\"2.0\""
       assert encoded =~ "\"id\":1"
       assert encoded =~ "\"method\":\"tools/list\""
@@ -14,7 +14,7 @@ defmodule SynapsisPlugin.MCPTest do
 
     test "encodes a request with explicit params" do
       params = %{"name" => "read_file", "arguments" => %{"path" => "/tmp/test.txt"}}
-      encoded = Protocol.encode_request(42, "tools/call", params)
+      {:ok, encoded} = Protocol.encode_request(42, "tools/call", params)
       decoded = Jason.decode!(String.trim_trailing(encoded, "\n"))
       assert decoded["id"] == 42
       assert decoded["method"] == "tools/call"
@@ -23,13 +23,13 @@ defmodule SynapsisPlugin.MCPTest do
     end
 
     test "encodes a notification" do
-      encoded = Protocol.encode_notification("notifications/initialized")
+      {:ok, encoded} = Protocol.encode_notification("notifications/initialized")
       assert encoded =~ "\"method\":\"notifications/initialized\""
       refute encoded =~ "\"id\""
     end
 
     test "encodes a notification with explicit params" do
-      encoded = Protocol.encode_notification("notifications/progress", %{"sessionId" => "abc123"})
+      {:ok, encoded} = Protocol.encode_notification("notifications/progress", %{"sessionId" => "abc123"})
       decoded = Jason.decode!(String.trim_trailing(encoded, "\n"))
       assert decoded["method"] == "notifications/progress"
       assert decoded["params"]["sessionId"] == "abc123"

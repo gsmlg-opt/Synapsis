@@ -42,13 +42,20 @@ defmodule Synapsis.Tool.FileEdit do
 
           case File.write(path, new_content) do
             :ok ->
-              {:ok,
-               Jason.encode!(%{
-                 status: "ok",
-                 path: path,
-                 message: "Successfully edited #{path}",
-                 diff: %{old: old_string, new: new_string}
-               })}
+              result_map = %{
+                status: "ok",
+                path: path,
+                message: "Successfully edited #{path}",
+                diff: %{old: old_string, new: new_string}
+              }
+
+              case Jason.encode(result_map) do
+                {:ok, json} ->
+                  {:ok, json}
+
+                {:error, _} ->
+                  {:ok, Jason.encode!(%{status: "error", message: "Failed to encode response"})}
+              end
 
             {:error, reason} ->
               {:error, "Failed to write #{path}: #{inspect(reason)}"}
@@ -69,13 +76,20 @@ defmodule Synapsis.Tool.FileEdit do
 
           case File.write(path, new_content) do
             :ok ->
-              {:ok,
-               Jason.encode!(%{
-                 status: "ok",
-                 path: path,
-                 message: "Successfully edited #{path} (replaced first occurrence)",
-                 diff: %{old: old_string, new: new_string}
-               })}
+              result_map = %{
+                status: "ok",
+                path: path,
+                message: "Successfully edited #{path} (replaced first occurrence)",
+                diff: %{old: old_string, new: new_string}
+              }
+
+              case Jason.encode(result_map) do
+                {:ok, json} ->
+                  {:ok, json}
+
+                {:error, _} ->
+                  {:ok, Jason.encode!(%{status: "error", message: "Failed to encode response"})}
+              end
 
             {:error, reason} ->
               {:error, "Failed to write #{path}: #{inspect(reason)}"}

@@ -30,7 +30,8 @@ defmodule SynapsisCli.MixProject do
     [
       {:req, "~> 0.5"},
       {:jason, "~> 1.4"},
-      {:owl, "~> 0.12"}
+      {:owl, "~> 0.12"},
+      {:bypass, "~> 2.1", only: :test}
     ]
   end
 end

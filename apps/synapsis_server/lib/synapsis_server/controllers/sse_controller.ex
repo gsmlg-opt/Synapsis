@@ -26,12 +26,18 @@ defmodule SynapsisServer.SSEController do
     receive do
       {event, payload} when is_binary(event) ->
         if Regex.match?(@event_pattern, event) do
-          data = Jason.encode!(payload)
-          chunk_data = "event: #{event}\ndata: #{data}\n\n"
+          case Jason.encode(payload) do
+            {:ok, data} ->
+              chunk_data = "event: #{event}\ndata: #{data}\n\n"
 
-          case chunk(conn, chunk_data) do
-            {:ok, conn} -> sse_loop(conn, session_id)
-            {:error, _} -> conn
+              case chunk(conn, chunk_data) do
+                {:ok, conn} -> sse_loop(conn, session_id)
+                {:error, _} -> conn
+              end
+
+            {:error, _} ->
+              # Skip events that cannot be serialized
+              sse_loop(conn, session_id)
           end
         else
           # Skip events with invalid names to prevent SSE protocol injection

@@ -200,13 +200,13 @@ defmodule SynapsisPlugin.LSP do
 
     case File.read(Path.expand(to_string(path), state.root_path)) do
       {:ok, content} ->
-        notification =
-          SynapsisPlugin.LSP.Protocol.encode_notification("textDocument/didChange", %{
-            "textDocument" => %{"uri" => uri, "version" => 1},
-            "contentChanges" => [%{"text" => content}]
-          })
-
-        Port.command(state.port, notification)
+        case SynapsisPlugin.LSP.Protocol.encode_notification("textDocument/didChange", %{
+               "textDocument" => %{"uri" => uri, "version" => 1},
+               "contentChanges" => [%{"text" => content}]
+             }) do
+          {:ok, notification} -> Port.command(state.port, notification)
+          {:error, _} -> :ok
+        end
         {:ok, state}
 
       {:error, _} ->
@@ -302,8 +302,10 @@ defmodule SynapsisPlugin.LSP do
   end
 
   defp send_initialized(state) do
-    data = SynapsisPlugin.LSP.Protocol.encode_notification("initialized", %{})
-    Port.command(state.port, data)
+    case SynapsisPlugin.LSP.Protocol.encode_notification("initialized", %{}) do
+      {:ok, data} -> Port.command(state.port, data)
+      {:error, _} -> :ok
+    end
   end
 
   defp send_lsp_request(state, method, params) do
@@ -314,8 +316,15 @@ defmodule SynapsisPlugin.LSP do
 
   defp send_lsp_raw_request(state, method, params, tag) do
     id = state.request_id
-    data = SynapsisPlugin.LSP.Protocol.encode_request(id, method, params)
-    Port.command(state.port, data)
+
+    case SynapsisPlugin.LSP.Protocol.encode_request(id, method, params) do
+      {:ok, data} ->
+        Port.command(state.port, data)
+
+      {:error, reason} ->
+        Logger.warning("lsp_encode_failed", method: method, reason: inspect(reason))
+    end
+
     %{state | request_id: id + 1, pending: Map.put(state.pending, id, tag)}
   end
 

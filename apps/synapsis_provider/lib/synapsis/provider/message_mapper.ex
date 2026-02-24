@@ -174,7 +174,10 @@ defmodule Synapsis.Provider.MessageMapper do
               type: "function",
               function: %{
                 name: tool,
-                arguments: Jason.encode!(input)
+                arguments: case Jason.encode(input) do
+                  {:ok, json} -> json
+                  {:error, _} -> "{}"
+                end
               }
             }
           end)

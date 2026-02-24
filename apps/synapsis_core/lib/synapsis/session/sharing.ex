@@ -27,7 +27,10 @@ defmodule Synapsis.Session.Sharing do
           messages: Enum.map(messages, &export_message/1)
         }
 
-        {:ok, Jason.encode!(data, pretty: true)}
+        case Jason.encode(data, pretty: true) do
+          {:ok, json} -> {:ok, json}
+          {:error, reason} -> {:error, "Failed to encode session data: #{inspect(reason)}"}
+        end
     end
   end
 

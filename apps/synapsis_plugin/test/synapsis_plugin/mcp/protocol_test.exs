@@ -5,7 +5,7 @@ defmodule SynapsisPlugin.MCP.ProtocolTest do
 
   describe "encode_request/3" do
     test "encodes a tools/list request with newline delimiter" do
-      encoded = Protocol.encode_request(1, "tools/list")
+      {:ok, encoded} = Protocol.encode_request(1, "tools/list")
       assert String.ends_with?(encoded, "\n")
 
       json = String.trim_trailing(encoded, "\n")
@@ -18,7 +18,7 @@ defmodule SynapsisPlugin.MCP.ProtocolTest do
 
     test "encodes a tools/call request with arguments" do
       params = %{"name" => "read_file", "arguments" => %{"path" => "/tmp/test.txt"}}
-      encoded = Protocol.encode_request(2, "tools/call", params)
+      {:ok, encoded} = Protocol.encode_request(2, "tools/call", params)
 
       json = String.trim_trailing(encoded, "\n")
       {:ok, decoded} = Jason.decode(json)
@@ -35,7 +35,7 @@ defmodule SynapsisPlugin.MCP.ProtocolTest do
         "clientInfo" => %{"name" => "synapsis", "version" => "0.1.0"}
       }
 
-      encoded = Protocol.encode_request(1, "initialize", params)
+      {:ok, encoded} = Protocol.encode_request(1, "initialize", params)
       json = String.trim_trailing(encoded, "\n")
       {:ok, decoded} = Jason.decode(json)
       assert decoded["method"] == "initialize"
@@ -44,14 +44,14 @@ defmodule SynapsisPlugin.MCP.ProtocolTest do
     end
 
     test "defaults params to empty map" do
-      encoded = Protocol.encode_request(5, "some/method")
+      {:ok, encoded} = Protocol.encode_request(5, "some/method")
       json = String.trim_trailing(encoded, "\n")
       {:ok, decoded} = Jason.decode(json)
       assert decoded["params"] == %{}
     end
 
     test "each request has exactly one newline at the end" do
-      encoded = Protocol.encode_request(1, "test")
+      {:ok, encoded} = Protocol.encode_request(1, "test")
       assert String.ends_with?(encoded, "\n")
       refute String.ends_with?(encoded, "\n\n")
     end
@@ -59,7 +59,7 @@ defmodule SynapsisPlugin.MCP.ProtocolTest do
 
   describe "encode_notification/2" do
     test "encodes a notification without id" do
-      encoded = Protocol.encode_notification("notifications/initialized")
+      {:ok, encoded} = Protocol.encode_notification("notifications/initialized")
       assert String.ends_with?(encoded, "\n")
 
       json = String.trim_trailing(encoded, "\n")
@@ -70,7 +70,7 @@ defmodule SynapsisPlugin.MCP.ProtocolTest do
     end
 
     test "encodes a notification with params" do
-      encoded = Protocol.encode_notification("notifications/progress", %{"token" => "abc", "value" => 50})
+      {:ok, encoded} = Protocol.encode_notification("notifications/progress", %{"token" => "abc", "value" => 50})
       json = String.trim_trailing(encoded, "\n")
       {:ok, decoded} = Jason.decode(json)
       assert decoded["params"]["token"] == "abc"
@@ -78,7 +78,7 @@ defmodule SynapsisPlugin.MCP.ProtocolTest do
     end
 
     test "defaults params to empty map" do
-      encoded = Protocol.encode_notification("notifications/test")
+      {:ok, encoded} = Protocol.encode_notification("notifications/test")
       json = String.trim_trailing(encoded, "\n")
       {:ok, decoded} = Jason.decode(json)
       assert decoded["params"] == %{}
@@ -175,7 +175,7 @@ defmodule SynapsisPlugin.MCP.ProtocolTest do
 
   describe "encode/decode round-trip" do
     test "request round-trips through encode then decode" do
-      encoded = Protocol.encode_request(7, "tools/list", %{"cursor" => "abc"})
+      {:ok, encoded} = Protocol.encode_request(7, "tools/list", %{"cursor" => "abc"})
       {[decoded], ""} = Protocol.decode_message(encoded)
       assert decoded["jsonrpc"] == "2.0"
       assert decoded["id"] == 7
@@ -184,7 +184,7 @@ defmodule SynapsisPlugin.MCP.ProtocolTest do
     end
 
     test "notification round-trips through encode then decode" do
-      encoded = Protocol.encode_notification("notifications/cancelled", %{"requestId" => 3, "reason" => "timeout"})
+      {:ok, encoded} = Protocol.encode_notification("notifications/cancelled", %{"requestId" => 3, "reason" => "timeout"})
       {[decoded], ""} = Protocol.decode_message(encoded)
       assert decoded["jsonrpc"] == "2.0"
       assert decoded["method"] == "notifications/cancelled"
@@ -194,7 +194,7 @@ defmodule SynapsisPlugin.MCP.ProtocolTest do
     end
 
     test "request with empty params round-trips" do
-      encoded = Protocol.encode_request(100, "ping")
+      {:ok, encoded} = Protocol.encode_request(100, "ping")
       {[decoded], ""} = Protocol.decode_message(encoded)
       assert decoded["id"] == 100
       assert decoded["method"] == "ping"
@@ -210,7 +210,7 @@ defmodule SynapsisPlugin.MCP.ProtocolTest do
         }
       }
 
-      encoded = Protocol.encode_request(42, "tools/call", params)
+      {:ok, encoded} = Protocol.encode_request(42, "tools/call", params)
       {[decoded], ""} = Protocol.decode_message(encoded)
       assert decoded["params"]["arguments"]["path"] == "/tmp/deep/nested/file.txt"
       assert decoded["params"]["arguments"]["content"] == "line1\nline2\nline3"
@@ -218,7 +218,7 @@ defmodule SynapsisPlugin.MCP.ProtocolTest do
 
     test "request with unicode content round-trips" do
       params = %{"text" => "Hello, \u4e16\u754c! \u{1F600}"}
-      encoded = Protocol.encode_request(1, "echo", params)
+      {:ok, encoded} = Protocol.encode_request(1, "echo", params)
       {[decoded], ""} = Protocol.decode_message(encoded)
       assert decoded["params"]["text"] == "Hello, \u4e16\u754c! \u{1F600}"
     end
@@ -366,32 +366,32 @@ defmodule SynapsisPlugin.MCP.ProtocolTest do
 
   describe "encode_request/3 edge cases" do
     test "encodes with integer zero id" do
-      encoded = Protocol.encode_request(0, "test/method")
+      {:ok, encoded} = Protocol.encode_request(0, "test/method")
       {[decoded], ""} = Protocol.decode_message(encoded)
       assert decoded["id"] == 0
     end
 
     test "encodes with negative id" do
-      encoded = Protocol.encode_request(-1, "test/method")
+      {:ok, encoded} = Protocol.encode_request(-1, "test/method")
       {[decoded], ""} = Protocol.decode_message(encoded)
       assert decoded["id"] == -1
     end
 
     test "encodes with very large id" do
-      encoded = Protocol.encode_request(999_999_999, "test/method")
+      {:ok, encoded} = Protocol.encode_request(999_999_999, "test/method")
       {[decoded], ""} = Protocol.decode_message(encoded)
       assert decoded["id"] == 999_999_999
     end
 
     test "encodes method with special characters" do
-      encoded = Protocol.encode_request(1, "$/cancelRequest")
+      {:ok, encoded} = Protocol.encode_request(1, "$/cancelRequest")
       {[decoded], ""} = Protocol.decode_message(encoded)
       assert decoded["method"] == "$/cancelRequest"
     end
 
     test "encodes params with boolean and null values" do
       params = %{"enabled" => true, "disabled" => false, "value" => nil}
-      encoded = Protocol.encode_request(1, "config/set", params)
+      {:ok, encoded} = Protocol.encode_request(1, "config/set", params)
       {[decoded], ""} = Protocol.decode_message(encoded)
       assert decoded["params"]["enabled"] == true
       assert decoded["params"]["disabled"] == false
@@ -400,7 +400,7 @@ defmodule SynapsisPlugin.MCP.ProtocolTest do
 
     test "encodes params with list values" do
       params = %{"items" => [1, "two", true, nil]}
-      encoded = Protocol.encode_request(1, "batch", params)
+      {:ok, encoded} = Protocol.encode_request(1, "batch", params)
       {[decoded], ""} = Protocol.decode_message(encoded)
       assert decoded["params"]["items"] == [1, "two", true, nil]
     end

@@ -5,7 +5,7 @@ defmodule SynapsisPlugin.LSPTest do
 
   describe "LSP Protocol" do
     test "encodes a valid JSON-RPC request with Content-Length" do
-      encoded = Protocol.encode_request(1, "initialize", %{"rootUri" => "file:///tmp"})
+      {:ok, encoded} = Protocol.encode_request(1, "initialize", %{"rootUri" => "file:///tmp"})
       assert encoded =~ "Content-Length:"
       assert encoded =~ "\"jsonrpc\":\"2.0\""
       assert encoded =~ "\"id\":1"
@@ -13,7 +13,7 @@ defmodule SynapsisPlugin.LSPTest do
     end
 
     test "encodes a notification without id" do
-      encoded = Protocol.encode_notification("initialized", %{})
+      {:ok, encoded} = Protocol.encode_notification("initialized", %{})
       assert encoded =~ "Content-Length:"
       refute encoded =~ "\"id\""
       assert encoded =~ "\"method\":\"initialized\""

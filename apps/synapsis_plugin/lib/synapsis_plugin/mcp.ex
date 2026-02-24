@@ -137,10 +137,10 @@ defmodule SynapsisPlugin.MCP do
   defp handle_mcp_message(%{"id" => id, "result" => result}, state) do
     case Map.pop(state.pending, id) do
       {{:initialize, _from}, pending} ->
-        Port.command(
-          state.port,
-          SynapsisPlugin.MCP.Protocol.encode_notification("notifications/initialized")
-        )
+        case SynapsisPlugin.MCP.Protocol.encode_notification("notifications/initialized") do
+          {:ok, notification} -> Port.command(state.port, notification)
+          {:error, _} -> :ok
+        end
 
         state = %{state | pending: pending, initialized: true}
         send_request(state, "tools/list", %{})
@@ -178,8 +178,14 @@ defmodule SynapsisPlugin.MCP do
 
   defp send_request(state, method, params, tag \\ nil) do
     id = state.request_id
-    data = SynapsisPlugin.MCP.Protocol.encode_request(id, method, params)
-    Port.command(state.port, data)
+
+    case SynapsisPlugin.MCP.Protocol.encode_request(id, method, params) do
+      {:ok, data} ->
+        Port.command(state.port, data)
+
+      {:error, reason} ->
+        Logger.warning("mcp_encode_failed", method: method, reason: inspect(reason))
+    end
 
     from = state[:_pending_from]
 
