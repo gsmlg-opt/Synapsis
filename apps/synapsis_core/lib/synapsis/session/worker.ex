@@ -851,10 +851,31 @@ defmodule Synapsis.Session.Worker do
   end
 
   defp update_session_status(session_id, status) do
-    Session
-    |> Repo.get!(session_id)
-    |> Session.status_changeset(status)
-    |> Repo.update!()
+    case Repo.get(Session, session_id) do
+      nil ->
+        Logger.warning("session_status_update_failed", session_id: session_id, reason: :not_found)
+        :ok
+
+      session ->
+        case session |> Session.status_changeset(status) |> Repo.update() do
+          {:ok, _} -> :ok
+          {:error, changeset} ->
+            Logger.warning("session_status_update_failed",
+              session_id: session_id,
+              errors: inspect(changeset.errors)
+            )
+
+            :ok
+        end
+    end
+  rescue
+    e ->
+      Logger.warning("session_status_update_error",
+        session_id: session_id,
+        error: Exception.message(e)
+      )
+
+      :ok
   end
 
   defp broadcast(session_id, event, payload) do
