@@ -75,6 +75,64 @@ defmodule Synapsis.Session.OrchestratorTest do
 
       assert {:escalate, _} = Orchestrator.decide(m)
     end
+
+    test "continues with empty signals list" do
+      m = %{Monitor.new() | signals: []}
+      assert {:continue, "ok"} = Orchestrator.decide(m)
+    end
+
+    test "test_regressions below threshold escalates rather than terminates" do
+      # 2 regressions is below the termination threshold (3) but above 0
+      m = %{Monitor.new() | test_regressions: 2}
+      assert {:escalate, reason} = Orchestrator.decide(m)
+      assert reason =~ "Test regression"
+    end
+
+    test "test_regressions at exactly the threshold terminates" do
+      m = %{Monitor.new() | test_regressions: 3}
+      assert {:terminate, reason} = Orchestrator.decide(m)
+      assert reason =~ "test regressions"
+    end
+
+    test "test_regressions above threshold still terminates" do
+      m = %{Monitor.new() | test_regressions: 5}
+      assert {:terminate, reason} = Orchestrator.decide(m)
+      assert reason =~ "test regressions"
+    end
+
+    test "iteration count at max_iterations - 1 triggers approaching warning" do
+      # Default max is 25; at 20 (>= 25-5) should warn
+      m = %{Monitor.new() | iteration_count: 20}
+      assert {:continue, reason} = Orchestrator.decide(m)
+      assert reason =~ "Approaching iteration limit"
+    end
+
+    test "iteration count just below warning threshold returns ok" do
+      # Default max is 25; warning at >= 20; 19 should be plain ok
+      m = %{Monitor.new() | iteration_count: 19}
+      assert {:continue, "ok"} = Orchestrator.decide(m)
+    end
+
+    test "custom max_iterations adjusts the warning threshold too" do
+      # max_iterations: 15, warning at >= 10
+      m = %{Monitor.new() | iteration_count: 10}
+      assert {:continue, reason} = Orchestrator.decide(m, max_iterations: 15)
+      assert reason =~ "Approaching iteration limit"
+
+      # At 9, should be ok
+      m2 = %{Monitor.new() | iteration_count: 9}
+      assert {:continue, "ok"} = Orchestrator.decide(m2, max_iterations: 15)
+    end
+
+    test "stagnation exactly at threshold pauses" do
+      m = %{Monitor.new() | consecutive_empty_iterations: 3}
+      assert {:pause, _} = Orchestrator.decide(m)
+    end
+
+    test "stagnation below threshold continues" do
+      m = %{Monitor.new() | consecutive_empty_iterations: 2}
+      assert {:continue, "ok"} = Orchestrator.decide(m)
+    end
   end
 
   describe "apply_decision/2" do
@@ -104,6 +162,45 @@ defmodule Synapsis.Session.OrchestratorTest do
       assert {:broadcast, "orchestrator_terminate", _} = Enum.at(result.actions, 0)
       assert {:persist_message, "max reached"} = Enum.at(result.actions, 1)
       assert {:set_status, :idle} = Enum.at(result.actions, 2)
+    end
+
+    test "all decisions include reason in result" do
+      for {decision, reason} <- [
+            {:continue, "ok"},
+            {:pause, "stalled"},
+            {:escalate, "loop detected"},
+            {:terminate, "done"}
+          ] do
+        result = Orchestrator.apply_decision({decision, reason}, "sess-x")
+        assert result.reason == reason
+        assert result.decision == decision
+      end
+    end
+
+    test "continue returns exactly zero actions" do
+      result = Orchestrator.apply_decision({:continue, "approaching limit"}, "sess-2")
+      assert result.actions == []
+    end
+
+    test "pause has exactly 2 actions" do
+      result = Orchestrator.apply_decision({:pause, "empty"}, "sess-3")
+      assert length(result.actions) == 2
+    end
+
+    test "escalate has exactly 2 actions" do
+      result = Orchestrator.apply_decision({:escalate, "dup"}, "sess-4")
+      assert length(result.actions) == 2
+    end
+
+    test "terminate has exactly 3 actions" do
+      result = Orchestrator.apply_decision({:terminate, "max"}, "sess-5")
+      assert length(result.actions) == 3
+    end
+
+    test "broadcast actions include reason in payload" do
+      result = Orchestrator.apply_decision({:pause, "waiting for user"}, "sess-6")
+      {:broadcast, _event, payload} = Enum.at(result.actions, 0)
+      assert payload.reason == "waiting for user"
     end
   end
 end

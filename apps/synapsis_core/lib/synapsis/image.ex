@@ -4,6 +4,12 @@ defmodule Synapsis.Image do
   @supported_types ~w(.png .jpg .jpeg .gif .webp)
   @max_size 20 * 1024 * 1024
 
+  @doc "Returns true if the given file path has a supported image extension."
+  def supported?(path) do
+    ext = Path.extname(path) |> String.downcase()
+    ext in @supported_types
+  end
+
   def encode_file(path) do
     ext = Path.extname(path) |> String.downcase()
 
@@ -72,9 +78,11 @@ defmodule Synapsis.Image do
     }
   end
 
-  defp media_type(".png"), do: "image/png"
-  defp media_type(".jpg"), do: "image/jpeg"
-  defp media_type(".jpeg"), do: "image/jpeg"
-  defp media_type(".gif"), do: "image/gif"
-  defp media_type(".webp"), do: "image/webp"
+  @doc "Returns the MIME media type for the given extension."
+  def media_type(".png"), do: "image/png"
+  def media_type(".jpg"), do: "image/jpeg"
+  def media_type(".jpeg"), do: "image/jpeg"
+  def media_type(".gif"), do: "image/gif"
+  def media_type(".webp"), do: "image/webp"
+  def media_type(ext), do: {:error, "unsupported extension: #{ext}"}
 end

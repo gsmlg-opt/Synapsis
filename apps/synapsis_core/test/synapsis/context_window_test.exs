@@ -58,11 +58,54 @@ defmodule Synapsis.ContextWindowTest do
       assert length(to_compact) == 5
       assert length(to_keep) == 10
     end
+
+    test "oldest messages (including system prompt) go into compact partition" do
+      # Simulate: first message is system prompt, rest are conversation
+      system = %{id: :system, role: :system, token_count: 500}
+      conversation = Enum.map(1..12, fn i -> %{id: i, role: :user, token_count: 100} end)
+      messages = [system | conversation]
+
+      {to_compact, to_keep} = ContextWindow.partition_for_compaction(messages, keep_recent: 5)
+
+      # The system prompt (oldest) ends up in the to_compact partition
+      assert List.first(to_compact).id == :system
+      # The 5 most recent messages are kept
+      assert length(to_keep) == 5
+      assert List.last(to_keep).id == 12
+    end
+
+    test "preserves original ordering within each partition" do
+      messages = Enum.map(1..10, fn i -> %{id: i, token_count: 100} end)
+      {to_compact, to_keep} = ContextWindow.partition_for_compaction(messages, keep_recent: 4)
+
+      compact_ids = Enum.map(to_compact, & &1.id)
+      keep_ids = Enum.map(to_keep, & &1.id)
+
+      assert compact_ids == [1, 2, 3, 4, 5, 6]
+      assert keep_ids == [7, 8, 9, 10]
+    end
+
+    test "returns empty compact list for empty messages" do
+      {to_compact, to_keep} = ContextWindow.partition_for_compaction([])
+      assert to_compact == []
+      assert to_keep == []
+    end
   end
 
   describe "estimate_tokens/1" do
     test "estimates token count from text" do
       assert ContextWindow.estimate_tokens("Hello world") > 0
+    end
+
+    test "returns reasonable token count for longer text" do
+      short = ContextWindow.estimate_tokens("Hello")
+      long = ContextWindow.estimate_tokens("Hello world, this is a much longer sentence with many words")
+      assert long > short
+    end
+
+    test "handles empty string" do
+      # Empty string has length 0; div(0,4) = 0, max(0,1) = 1
+      assert ContextWindow.estimate_tokens("") == 1
     end
 
     test "returns 0 for nil" do
@@ -76,6 +119,13 @@ defmodule Synapsis.ContextWindowTest do
     test "returns 0 for non-binary" do
       assert ContextWindow.estimate_tokens(42) == 0
       assert ContextWindow.estimate_tokens([]) == 0
+    end
+
+    test "scales roughly at 4 chars per token" do
+      # 100 chars should yield ~25 tokens
+      text = String.duplicate("a", 100)
+      tokens = ContextWindow.estimate_tokens(text)
+      assert tokens == 25
     end
   end
 
