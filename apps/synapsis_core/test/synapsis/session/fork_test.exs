@@ -82,4 +82,60 @@ defmodule Synapsis.Session.ForkTest do
     # reject removes the nil -> all 5 messages are copied
     assert length(new_messages) == 5
   end
+
+  test "fork preserves message roles", %{session: session} do
+    {:ok, new_session} = Fork.fork(session.id)
+
+    new_messages =
+      Message
+      |> Ecto.Query.where([m], m.session_id == ^new_session.id)
+      |> Ecto.Query.order_by([m], asc: m.inserted_at)
+      |> Repo.all()
+
+    roles = Enum.map(new_messages, & &1.role)
+    assert roles == ["user", "assistant", "user", "assistant", "user"]
+  end
+
+  test "fork preserves message parts content", %{session: session} do
+    {:ok, new_session} = Fork.fork(session.id)
+
+    new_messages =
+      Message
+      |> Ecto.Query.where([m], m.session_id == ^new_session.id)
+      |> Ecto.Query.order_by([m], asc: m.inserted_at)
+      |> Repo.all()
+
+    first_parts = hd(new_messages).parts
+    assert [%Synapsis.Part.Text{content: "Message 1"}] = first_parts
+  end
+
+  test "fork preserves provider and model", %{session: session} do
+    {:ok, new_session} = Fork.fork(session.id)
+    assert new_session.provider == "anthropic"
+    assert new_session.model == "claude-sonnet-4-20250514"
+  end
+
+  test "fork at first message copies only 1 message", %{session: session, messages: msgs} do
+    first = hd(msgs)
+    {:ok, new_session} = Fork.fork(session.id, at_message: first.id)
+
+    new_messages =
+      Message
+      |> Ecto.Query.where([m], m.session_id == ^new_session.id)
+      |> Repo.all()
+
+    assert length(new_messages) == 1
+  end
+
+  test "fork at last message copies all messages", %{session: session, messages: msgs} do
+    last = List.last(msgs)
+    {:ok, new_session} = Fork.fork(session.id, at_message: last.id)
+
+    new_messages =
+      Message
+      |> Ecto.Query.where([m], m.session_id == ^new_session.id)
+      |> Repo.all()
+
+    assert length(new_messages) == 5
+  end
 end

@@ -67,5 +67,28 @@ defmodule Synapsis.Tool.FetchTest do
       {:error, msg} = Fetch.execute(%{"url" => "ftp://evil.com/data"}, %{})
       assert msg =~ "Only http and https"
     end
+
+    test "blocks 0.0.0.0" do
+      {:error, msg} = Fetch.execute(%{"url" => "http://0.0.0.0:8080/admin"}, %{})
+      assert msg =~ "internal/private"
+    end
+
+    test "blocks data URI scheme" do
+      {:error, msg} = Fetch.execute(%{"url" => "data:text/html,<h1>evil</h1>"}, %{})
+      assert msg =~ "Only http and https"
+    end
+
+    test "blocks javascript scheme" do
+      {:error, msg} = Fetch.execute(%{"url" => "javascript:alert(1)"}, %{})
+      assert msg =~ "Only http and https"
+    end
+  end
+
+  describe "tool metadata" do
+    test "has correct name and parameters" do
+      assert Fetch.name() == "fetch"
+      assert is_binary(Fetch.description())
+      assert %{"type" => "object", "required" => ["url"]} = Fetch.parameters()
+    end
   end
 end

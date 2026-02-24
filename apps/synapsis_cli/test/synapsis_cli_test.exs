@@ -24,6 +24,19 @@ defmodule SynapsisCliTest do
       assert output =~ "--provider"
       assert output =~ "--host"
     end
+
+    test "help output lists example commands" do
+      {:ok, output} = capture_main(["--help"])
+      assert output =~ "synapsis -p"
+      assert output =~ "--provider"
+    end
+  end
+
+  describe "version output" do
+    test "includes version number pattern" do
+      {:ok, output} = capture_main(["--version"])
+      assert output =~ ~r/v\d+\.\d+\.\d+/
+    end
   end
 
   defp capture_main(args) do

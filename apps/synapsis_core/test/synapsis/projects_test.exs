@@ -59,5 +59,24 @@ defmodule Synapsis.ProjectsTest do
       {:ok, project} = Projects.find_or_create("/home/user/MyProject")
       assert project.slug == "myproject"
     end
+
+    test "handles nested paths" do
+      {:ok, project} = Projects.find_or_create("/home/user/deep/nested/myapp")
+      assert project.slug == "myapp"
+      assert project.path == "/home/user/deep/nested/myapp"
+    end
+
+    test "handles paths with hyphens" do
+      {:ok, project} = Projects.find_or_create("/tmp/my-cool-project-test")
+      assert project.slug == "my-cool-project-test"
+    end
+
+    test "returns same project on repeated calls" do
+      {:ok, p1} = Projects.find_or_create("/tmp/idempotent-test")
+      {:ok, p2} = Projects.find_or_create("/tmp/idempotent-test")
+      {:ok, p3} = Projects.find_or_create("/tmp/idempotent-test")
+      assert p1.id == p2.id
+      assert p2.id == p3.id
+    end
   end
 end

@@ -204,8 +204,7 @@ defmodule Synapsis.Session.AuditorTask do
 
     case idx do
       nil -> {lines, []}
-      0 -> {[hd(lines)], tl(lines)}
-      n -> Enum.split(lines, n)
+      n -> Enum.split(lines, max(n, 1))
     end
   end
 
