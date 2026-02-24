@@ -195,7 +195,7 @@ defmodule Synapsis.ProvidersTest do
   describe "build_runtime_config/1 (via create + registry)" do
     test "config with known atom keys are atomized safely" do
       # base_url is a known atom — should be present in runtime config as atom key
-      {:ok, provider} =
+      {:ok, _provider} =
         Providers.create(%{
           @valid_attrs
           | name: "atom-test-provider"

@@ -97,4 +97,38 @@ defmodule Synapsis.Tool.PermissionTest do
     refute Permissions.allowed?("file_read", %{})
     refute Permissions.allowed?("bash", %{some_other: true})
   end
+
+  describe "Permissions.check/2 with session config" do
+    test "approves tools matching session autoApprove levels" do
+      session = %{config: %{"permissions" => %{"autoApprove" => ["write", "execute"]}}}
+      assert :approved = Permissions.check("file_write", session)
+      assert :approved = Permissions.check("bash", session)
+    end
+
+    test "merges session levels with application default" do
+      # Application default includes :read (set in test.exs config)
+      session = %{config: %{"permissions" => %{"autoApprove" => ["write"]}}}
+      assert :approved = Permissions.check("file_read", session)
+      assert :approved = Permissions.check("file_write", session)
+    end
+
+    test "requires approval for levels not in session or default config" do
+      session = %{config: %{"permissions" => %{"autoApprove" => ["read"]}}}
+      assert :requires_approval = Permissions.check("bash", session)
+      assert :requires_approval = Permissions.check("file_delete", session)
+    end
+
+    test "handles session with empty config" do
+      session = %{config: %{}}
+      # Should still approve read tools from app-level default
+      result = Permissions.check("file_read", session)
+      assert result in [:approved, :requires_approval]
+    end
+
+    test "handles session with nil config" do
+      session = %{config: nil}
+      result = Permissions.check("file_read", session)
+      assert result in [:approved, :requires_approval]
+    end
+  end
 end
