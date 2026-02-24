@@ -39,15 +39,20 @@ defmodule Synapsis.Tool.FileEdit do
 
         [before, after_part] ->
           new_content = before <> new_string <> after_part
-          File.write!(path, new_content)
 
-          {:ok,
-           Jason.encode!(%{
-             status: "ok",
-             path: path,
-             message: "Successfully edited #{path}",
-             diff: %{old: old_string, new: new_string}
-           })}
+          case File.write(path, new_content) do
+            :ok ->
+              {:ok,
+               Jason.encode!(%{
+                 status: "ok",
+                 path: path,
+                 message: "Successfully edited #{path}",
+                 diff: %{old: old_string, new: new_string}
+               })}
+
+            {:error, reason} ->
+              {:error, "Failed to write #{path}: #{inspect(reason)}"}
+          end
 
         _multiple ->
           # Multiple occurrences - replace only the first
@@ -61,15 +66,20 @@ defmodule Synapsis.Tool.FileEdit do
             )
 
           new_content = before <> new_string <> rest
-          File.write!(path, new_content)
 
-          {:ok,
-           Jason.encode!(%{
-             status: "ok",
-             path: path,
-             message: "Successfully edited #{path} (replaced first occurrence)",
-             diff: %{old: old_string, new: new_string}
-           })}
+          case File.write(path, new_content) do
+            :ok ->
+              {:ok,
+               Jason.encode!(%{
+                 status: "ok",
+                 path: path,
+                 message: "Successfully edited #{path} (replaced first occurrence)",
+                 diff: %{old: old_string, new: new_string}
+               })}
+
+            {:error, reason} ->
+              {:error, "Failed to write #{path}: #{inspect(reason)}"}
+          end
       end
     else
       {:error, :enoent} -> {:error, "File not found: #{path}"}

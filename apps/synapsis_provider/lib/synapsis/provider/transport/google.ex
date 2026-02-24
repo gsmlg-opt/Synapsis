@@ -6,6 +6,7 @@ defmodule Synapsis.Provider.Transport.Google do
   by `EventMapper`.
   """
 
+  require Logger
   alias Synapsis.Provider.Transport.SSE
 
   @default_base_url "https://generativelanguage.googleapis.com"
@@ -42,6 +43,7 @@ defmodule Synapsis.Provider.Transport.Google do
       send(caller, :stream_done)
     rescue
       e ->
+        Logger.warning("google_stream_error", error: Exception.message(e))
         send(caller, {:stream_error, Exception.message(e)})
     end
   end

@@ -72,6 +72,9 @@ PREVIOUS.LOG
 # burrito binary
 /burrito_out
 
+# escript binaries
+apps/synapsis_cli/synapsis_cli
+
 # nodejs
 node_modules
 package-lock.json

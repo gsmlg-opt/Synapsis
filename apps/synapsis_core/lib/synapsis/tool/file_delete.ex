@@ -25,8 +25,10 @@ defmodule Synapsis.Tool.FileDelete do
 
     with :ok <- Synapsis.Tool.PathValidator.validate(path, context[:project_path]) do
       if File.exists?(path) do
-        File.rm!(path)
-        {:ok, "Successfully deleted #{path}"}
+        case File.rm(path) do
+          :ok -> {:ok, "Successfully deleted #{path}"}
+          {:error, reason} -> {:error, "Failed to delete #{path}: #{inspect(reason)}"}
+        end
       else
         {:error, "File does not exist: #{path}"}
       end

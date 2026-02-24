@@ -7,6 +7,7 @@ defmodule Synapsis.Provider.Transport.Anthropic do
   by `EventMapper`.
   """
 
+  require Logger
   alias Synapsis.Provider.Transport.SSE
 
   @api_version "2023-06-01"
@@ -45,6 +46,7 @@ defmodule Synapsis.Provider.Transport.Anthropic do
       send(caller, :stream_done)
     rescue
       e ->
+        Logger.warning("anthropic_stream_error", error: Exception.message(e))
         send(caller, {:stream_error, Exception.message(e)})
     end
   end

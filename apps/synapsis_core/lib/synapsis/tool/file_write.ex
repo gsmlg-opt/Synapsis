@@ -24,11 +24,12 @@ defmodule Synapsis.Tool.FileWrite do
   def execute(input, context) do
     path = resolve_path(input["path"], context[:project_path])
 
-    with :ok <- Synapsis.Tool.PathValidator.validate(path, context[:project_path]) do
-      dir = Path.dirname(path)
-      File.mkdir_p!(dir)
-      File.write!(path, input["content"])
+    with :ok <- Synapsis.Tool.PathValidator.validate(path, context[:project_path]),
+         :ok <- File.mkdir_p(Path.dirname(path)),
+         :ok <- File.write(path, input["content"]) do
       {:ok, "Successfully wrote #{byte_size(input["content"])} bytes to #{path}"}
+    else
+      {:error, reason} -> {:error, "Failed to write #{path}: #{inspect(reason)}"}
     end
   end
 

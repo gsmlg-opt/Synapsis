@@ -28,10 +28,12 @@ defmodule Synapsis.Tool.FileMove do
     with :ok <- Synapsis.Tool.PathValidator.validate(source, context[:project_path]),
          :ok <- Synapsis.Tool.PathValidator.validate(dest, context[:project_path]) do
       if File.exists?(source) do
-        dest_dir = Path.dirname(dest)
-        File.mkdir_p!(dest_dir)
-        File.rename!(source, dest)
-        {:ok, "Moved #{source} to #{dest}"}
+        with :ok <- File.mkdir_p(Path.dirname(dest)),
+             :ok <- File.rename(source, dest) do
+          {:ok, "Moved #{source} to #{dest}"}
+        else
+          {:error, reason} -> {:error, "Failed to move #{source} to #{dest}: #{inspect(reason)}"}
+        end
       else
         {:error, "Source file does not exist: #{source}"}
       end
