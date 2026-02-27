@@ -339,7 +339,65 @@ defmodule Synapsis.Provider.ModelRegistry do
     }
   ]
 
-  @all_models @anthropic_models ++ @openai_models ++ @google_models ++ @moonshot_models ++ @zhipu_models
+  @minimax_models [
+    %{
+      id: "MiniMax-M2.5",
+      name: "MiniMax M2.5",
+      provider: "minimax",
+      context_window: 204_800,
+      max_output_tokens: 40_960,
+      supports_tools: true,
+      supports_thinking: true,
+      supports_images: false,
+      supports_streaming: true
+    },
+    %{
+      id: "MiniMax-M2.5-highspeed",
+      name: "MiniMax M2.5 Highspeed",
+      provider: "minimax",
+      context_window: 204_800,
+      max_output_tokens: 40_960,
+      supports_tools: true,
+      supports_thinking: false,
+      supports_images: false,
+      supports_streaming: true
+    },
+    %{
+      id: "MiniMax-M2.1",
+      name: "MiniMax M2.1",
+      provider: "minimax",
+      context_window: 204_800,
+      max_output_tokens: 40_960,
+      supports_tools: true,
+      supports_thinking: true,
+      supports_images: false,
+      supports_streaming: true
+    },
+    %{
+      id: "MiniMax-M2.1-highspeed",
+      name: "MiniMax M2.1 Highspeed",
+      provider: "minimax",
+      context_window: 204_800,
+      max_output_tokens: 40_960,
+      supports_tools: true,
+      supports_thinking: false,
+      supports_images: false,
+      supports_streaming: true
+    },
+    %{
+      id: "MiniMax-M2",
+      name: "MiniMax M2",
+      provider: "minimax",
+      context_window: 204_800,
+      max_output_tokens: 40_960,
+      supports_tools: true,
+      supports_thinking: false,
+      supports_images: false,
+      supports_streaming: true
+    }
+  ]
+
+  @all_models @anthropic_models ++ @openai_models ++ @google_models ++ @moonshot_models ++ @zhipu_models ++ @minimax_models
 
   @doc "Look up metadata for a specific model ID."
   @spec get(String.t()) :: {:ok, model_meta()} | {:error, :unknown}
@@ -367,6 +425,8 @@ defmodule Synapsis.Provider.ModelRegistry do
   def list("moonshot"), do: @moonshot_models
   def list(:zhipu), do: @zhipu_models
   def list("zhipu"), do: @zhipu_models
+  def list(:minimax), do: @minimax_models
+  def list("minimax"), do: @minimax_models
   def list(_), do: []
 
   @doc "List all known models across all providers."

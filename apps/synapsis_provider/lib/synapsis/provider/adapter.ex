@@ -59,6 +59,9 @@ defmodule Synapsis.Provider.Adapter do
           String.contains?(base_url, "bigmodel") or String.contains?(base_url, "z.ai") ->
             {:ok, ModelRegistry.list(:zhipu)}
 
+          String.contains?(base_url, "minimax") ->
+            {:ok, ModelRegistry.list(:minimax)}
+
           true ->
             {:ok, ModelRegistry.list(:anthropic)}
         end
@@ -109,11 +112,13 @@ defmodule Synapsis.Provider.Adapter do
     base_url = config[:base_url] || Transport.Anthropic.default_base_url()
     url = "#{base_url}/v1/messages"
 
-    headers = [
-      {"x-api-key", config[:api_key]},
-      {"anthropic-version", "2023-06-01"},
-      {"content-type", "application/json"}
-    ]
+    # Send both auth headers: official Anthropic uses x-api-key,
+    # compatible proxies (MiniMax, Moonshot, ZhipuAI) require Bearer.
+    headers =
+      [
+        {"anthropic-version", "2023-06-01"},
+        {"content-type", "application/json"}
+      ] ++ anthropic_auth_headers(config[:api_key])
 
     try do
       resp =
@@ -240,11 +245,11 @@ defmodule Synapsis.Provider.Adapter do
 
     body = Map.merge(request, %{stream: false})
 
-    headers = [
-      {"x-api-key", config[:api_key]},
-      {"anthropic-version", "2023-06-01"},
-      {"content-type", "application/json"}
-    ]
+    headers =
+      [
+        {"anthropic-version", "2023-06-01"},
+        {"content-type", "application/json"}
+      ] ++ anthropic_auth_headers(config[:api_key])
 
     response = Req.post!(url, headers: headers, json: body, receive_timeout: 60_000)
 
@@ -329,6 +334,17 @@ defmodule Synapsis.Provider.Adapter do
   defp extract_error(%{body: %{"error" => msg}}) when is_binary(msg), do: msg
   defp extract_error(%{body: body}) when is_map(body), do: inspect(body) |> String.slice(0, 200)
   defp extract_error(_), do: "unknown error"
+
+  # Sends both x-api-key (official Anthropic) and Authorization: Bearer
+  # (required by MiniMax, Moonshot, ZhipuAI and other Anthropic-compat proxies).
+  defp anthropic_auth_headers(nil), do: []
+
+  defp anthropic_auth_headers(api_key) do
+    [
+      {"x-api-key", api_key},
+      {"authorization", "Bearer #{api_key}"}
+    ]
+  end
 
   # ---------------------------------------------------------------------------
   # Transport resolution

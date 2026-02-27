@@ -57,7 +57,7 @@ defmodule SynapsisCore.Application do
     end
   end
 
-  @env_provider_names ~w(anthropic openai openai-sub google moonshot-ai moonshot-cn zhipu-ai zhipu-cn zhipu-coding openrouter)
+  @env_provider_names ~w(anthropic openai openai-sub google moonshot-ai moonshot-cn zhipu-ai zhipu-cn zhipu-coding minimax-io minimax-cn openrouter)
 
   defp register_env_providers do
     Enum.each(@env_provider_names, fn name ->

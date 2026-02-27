@@ -116,6 +116,8 @@ defmodule Synapsis.Providers do
       type: "anthropic",
       base_url: "https://open.bigmodel.cn/api/anthropic"
     },
+    %{name: "minimax-io", type: "anthropic", base_url: "https://api.minimax.io/anthropic"},
+    %{name: "minimax-cn", type: "anthropic", base_url: "https://api.minimaxi.com/anthropic"},
     %{name: "openrouter", type: "openrouter", base_url: "https://openrouter.ai/api"}
   ]
 
@@ -179,6 +181,8 @@ defmodule Synapsis.Providers do
   def default_base_url("zhipu-ai"), do: "https://api.z.ai/api/anthropic"
   def default_base_url("zhipu-cn"), do: "https://open.bigmodel.cn/api/anthropic"
   def default_base_url("zhipu-coding"), do: "https://open.bigmodel.cn/api/anthropic"
+  def default_base_url("minimax-io"), do: "https://api.minimax.io/anthropic"
+  def default_base_url("minimax-cn"), do: "https://api.minimaxi.com/anthropic"
   def default_base_url("local"), do: "http://localhost:11434"
   def default_base_url(_), do: nil
 
@@ -194,6 +198,8 @@ defmodule Synapsis.Providers do
   def default_model("zhipu-ai"), do: "glm-4.7"
   def default_model("zhipu-cn"), do: "glm-4.7"
   def default_model("zhipu-coding"), do: "glm-4.7"
+  def default_model("minimax-io"), do: "MiniMax-M2.5"
+  def default_model("minimax-cn"), do: "MiniMax-M2.5"
   def default_model(_), do: "gpt-4.1"
 
   @doc "Environment variable name for a provider's API key."
@@ -206,6 +212,8 @@ defmodule Synapsis.Providers do
   def env_var_name("zhipu-ai"), do: "ZHIPU_API_KEY"
   def env_var_name("zhipu-cn"), do: "ZHIPU_API_KEY"
   def env_var_name("zhipu-coding"), do: "ZHIPU_API_KEY"
+  def env_var_name("minimax-io"), do: "MINIMAX_API_KEY"
+  def env_var_name("minimax-cn"), do: "MINIMAX_API_KEY"
   def env_var_name("openrouter"), do: "OPENROUTER_API_KEY"
   def env_var_name(_), do: nil
 
