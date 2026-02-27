@@ -80,6 +80,18 @@ defmodule Synapsis.Providers do
     end
   end
 
+  @doc "Fetch available models for a provider by name."
+  def models_for(provider_name) do
+    case get_by_name(provider_name) do
+      {:ok, provider} ->
+        config = build_runtime_config(provider)
+        Synapsis.Provider.Adapter.models(config)
+
+      {:error, _} ->
+        {:error, :not_found}
+    end
+  end
+
   def test_connection(id) do
     case models(id) do
       {:ok, models} -> {:ok, %{status: :ok, models_count: length(models)}}

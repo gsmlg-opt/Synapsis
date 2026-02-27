@@ -12,7 +12,7 @@ defmodule Synapsis.MessageBuilder do
       model: agent[:model],
       system_prompt: system_prompt,
       max_tokens: agent[:max_tokens] || 8192,
-      provider_type: provider_name
+      provider_type: resolve_provider_type(provider_name)
     }
 
     provider_module.format_request(messages, tools, opts)
@@ -23,6 +23,13 @@ defmodule Synapsis.MessageBuilder do
 
   defp build_system_prompt(base, context) when is_binary(context) do
     base <> "\n\n" <> context
+  end
+
+  defp resolve_provider_type(provider_name) do
+    case Synapsis.Provider.Registry.get(provider_name) do
+      {:ok, config} -> config[:type] || config["type"] || provider_name
+      _ -> provider_name
+    end
   end
 
   defp provider_module!(provider_name) do

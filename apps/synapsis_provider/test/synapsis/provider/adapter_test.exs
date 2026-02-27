@@ -61,8 +61,8 @@ defmodule Synapsis.Provider.AdapterTest do
 
       assert {:ok, _ref} = Adapter.stream(request, config)
 
-      # Should receive done eventually (non-SSE response)
-      assert_receive(:provider_done, 5000)
+      # Should receive provider_error for non-200 responses
+      assert_receive({:provider_error, "HTTP 401:" <> _}, 5000)
     end
   end
 

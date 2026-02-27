@@ -7,6 +7,10 @@ defmodule SynapsisWeb.SessionLive.Index do
       {:ok, project} ->
         sessions = Synapsis.Sessions.list_by_project(project.id)
         {:ok, providers} = Synapsis.Providers.list(enabled: true)
+        default_provider = if providers != [], do: hd(providers).name, else: "anthropic"
+        default_type = if providers != [], do: hd(providers).type, else: "anthropic"
+        available_models = fetch_provider_models(default_provider)
+        default_model = if available_models != [], do: hd(available_models).id, else: Synapsis.Providers.default_model(default_type)
 
         {:ok,
          assign(socket,
@@ -15,8 +19,9 @@ defmodule SynapsisWeb.SessionLive.Index do
            providers: providers,
            page_title: "Sessions",
            show_new_session_form: false,
-           new_session_provider: if(providers != [], do: hd(providers).name, else: "anthropic"),
-           new_session_model: Synapsis.Providers.default_model("anthropic")
+           new_session_provider: default_provider,
+           new_session_model: default_model,
+           available_models: available_models
          )}
 
       {:error, :not_found} ->
@@ -40,10 +45,15 @@ defmodule SynapsisWeb.SessionLive.Index do
   def handle_event("select_provider", %{"provider" => provider_name}, socket) do
     provider = Enum.find(socket.assigns.providers, &(&1.name == provider_name))
     type = if provider, do: provider.type, else: provider_name
-    default_model = Synapsis.Providers.default_model(type)
+    available_models = fetch_provider_models(provider_name)
+    default_model = if available_models != [], do: hd(available_models).id, else: Synapsis.Providers.default_model(type)
 
     {:noreply,
-     assign(socket, new_session_provider: provider_name, new_session_model: default_model)}
+     assign(socket,
+       new_session_provider: provider_name,
+       new_session_model: default_model,
+       available_models: available_models
+     )}
   end
 
   def handle_event("select_model", %{"value" => model}, socket) do
@@ -69,6 +79,13 @@ defmodule SynapsisWeb.SessionLive.Index do
 
       {:error, _} ->
         {:noreply, put_flash(socket, :error, "Failed to create session")}
+    end
+  end
+
+  defp fetch_provider_models(provider_name) do
+    case Synapsis.Providers.models_for(provider_name) do
+      {:ok, models} -> models
+      {:error, _} -> []
     end
   end
 
@@ -119,16 +136,32 @@ defmodule SynapsisWeb.SessionLive.Index do
           </div>
           <div>
             <label class="block text-xs text-gray-400 mb-1">Model</label>
-            <input
-              type="text"
-              name="model"
-              value={@new_session_model}
-              phx-blur="select_model"
-              phx-keydown="select_model"
-              phx-key="Enter"
-              class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-200"
-              placeholder="model id"
-            />
+            <%= if @available_models != [] do %>
+              <select
+                phx-change="select_model"
+                name="model"
+                class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-200"
+              >
+                <option
+                  :for={m <- @available_models}
+                  value={m.id}
+                  selected={m.id == @new_session_model}
+                >
+                  {m[:name] || m.id}
+                </option>
+              </select>
+            <% else %>
+              <input
+                type="text"
+                name="model"
+                value={@new_session_model}
+                phx-blur="select_model"
+                phx-keydown="select_model"
+                phx-key="Enter"
+                class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-200"
+                placeholder="model id"
+              />
+            <% end %>
           </div>
           <button
             phx-click="create_session"

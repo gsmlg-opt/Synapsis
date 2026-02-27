@@ -190,7 +190,7 @@ defmodule Synapsis.Session.Worker do
         )
 
         update_session_status(state.session_id, "error")
-        broadcast(state.session_id, "error", %{message: "Failed to start stream"})
+        broadcast(state.session_id, "error", %{message: "Failed to start stream: #{inspect(reason)}"})
         {:reply, {:error, reason}, %{state | status: :error}}
     end
   end
@@ -346,7 +346,7 @@ defmodule Synapsis.Session.Worker do
     else
       flush_pending(state)
       update_session_status(state.session_id, "error")
-      broadcast(state.session_id, "error", %{message: "Provider error"})
+      broadcast(state.session_id, "error", %{message: to_string(reason)})
       broadcast(state.session_id, "session_status", %{status: "error"})
       {:noreply, %{state | status: :error, stream_ref: nil}}
     end
@@ -542,6 +542,8 @@ defmodule Synapsis.Session.Worker do
 
   defp handle_stream_event({:error, error}, state) do
     Logger.warning("stream_error_event", session_id: state.session_id, error: inspect(error))
+    error_msg = if is_map(error), do: error["message"] || inspect(error), else: inspect(error)
+    broadcast(state.session_id, "error", %{message: error_msg})
     state
   end
 
@@ -768,7 +770,7 @@ defmodule Synapsis.Session.Worker do
         )
 
         update_session_status(state.session_id, "error")
-        broadcast(state.session_id, "error", %{message: "Failed to start stream"})
+        broadcast(state.session_id, "error", %{message: "Failed to start stream: #{inspect(reason)}"})
         {:noreply, %{state | status: :error}}
     end
   end

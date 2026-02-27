@@ -100,27 +100,28 @@ defmodule Synapsis.Provider.Adapter do
     url = "#{base_url}/v1/messages"
 
     headers = [
-      {"x-api-key", config.api_key},
+      {"x-api-key", config[:api_key]},
       {"anthropic-version", "2023-06-01"},
       {"content-type", "application/json"}
     ]
 
     try do
-      Req.post!(url,
-        headers: headers,
-        json: request,
-        receive_timeout: 300_000,
-        into: fn {:data, data}, acc ->
-          for chunk <- Transport.SSE.parse_lines(data) do
-            event = EventMapper.map_event(:anthropic, chunk)
-            send(caller, {:provider_chunk, event})
+      resp =
+        Req.post!(url,
+          headers: headers,
+          json: request,
+          receive_timeout: 300_000,
+          into: fn {:data, data}, {req, resp} ->
+            for chunk <- Transport.SSE.parse_lines(data) do
+              event = EventMapper.map_event(:anthropic, chunk)
+              send(caller, {:provider_chunk, event})
+            end
+
+            {:cont, {req, %{resp | body: (resp.body || "") <> data}}}
           end
+        )
 
-          {:cont, acc}
-        end
-      )
-
-      send(caller, :provider_done)
+      handle_stream_response(resp, caller)
     rescue
       e ->
         send(caller, {:provider_error, Exception.message(e)})
@@ -139,7 +140,7 @@ defmodule Synapsis.Provider.Adapter do
           "#{base_url}/openai/deployments/#{model}/chat/completions?api-version=#{api_version}"
 
         headers = [
-          {"api-key", config.api_key},
+          {"api-key", config[:api_key]},
           {"content-type", "application/json"}
         ]
 
@@ -147,27 +148,28 @@ defmodule Synapsis.Provider.Adapter do
       else
         headers =
           [{"content-type", "application/json"}] ++
-            if(config[:api_key], do: [{"authorization", "Bearer #{config.api_key}"}], else: [])
+            if(config[:api_key], do: [{"authorization", "Bearer #{config[:api_key]}"}], else: [])
 
         {"#{base_url}/v1/chat/completions", headers, request}
       end
 
     try do
-      Req.post!(url,
-        headers: headers,
-        json: body,
-        receive_timeout: 300_000,
-        into: fn {:data, data}, acc ->
-          for chunk <- Transport.SSE.parse_lines(data) do
-            event = EventMapper.map_event(:openai, chunk)
-            send(caller, {:provider_chunk, event})
+      resp =
+        Req.post!(url,
+          headers: headers,
+          json: body,
+          receive_timeout: 300_000,
+          into: fn {:data, data}, {req, resp} ->
+            for chunk <- Transport.SSE.parse_lines(data) do
+              event = EventMapper.map_event(:openai, chunk)
+              send(caller, {:provider_chunk, event})
+            end
+
+            {:cont, {req, %{resp | body: (resp.body || "") <> data}}}
           end
+        )
 
-          {:cont, acc}
-        end
-      )
-
-      send(caller, :provider_done)
+      handle_stream_response(resp, caller)
     rescue
       e ->
         send(caller, {:provider_error, Exception.message(e)})
@@ -183,24 +185,38 @@ defmodule Synapsis.Provider.Adapter do
     body = Map.drop(request, [:model, :stream])
 
     try do
-      Req.post!(url,
-        headers: [{"content-type", "application/json"}, {"x-goog-api-key", config.api_key}],
-        json: body,
-        receive_timeout: 300_000,
-        into: fn {:data, data}, acc ->
-          for chunk <- Transport.SSE.parse_lines(data) do
-            event = EventMapper.map_event(:google, chunk)
-            send(caller, {:provider_chunk, event})
+      resp =
+        Req.post!(url,
+          headers: [{"content-type", "application/json"}, {"x-goog-api-key", config[:api_key]}],
+          json: body,
+          receive_timeout: 300_000,
+          into: fn {:data, data}, {req, resp} ->
+            for chunk <- Transport.SSE.parse_lines(data) do
+              event = EventMapper.map_event(:google, chunk)
+              send(caller, {:provider_chunk, event})
+            end
+
+            {:cont, {req, %{resp | body: (resp.body || "") <> data}}}
           end
+        )
 
-          {:cont, acc}
-        end
-      )
-
-      send(caller, :provider_done)
+      handle_stream_response(resp, caller)
     rescue
       e ->
         send(caller, {:provider_error, Exception.message(e)})
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Stream response handling — uses accumulated raw data for error extraction
+  # ---------------------------------------------------------------------------
+
+  defp handle_stream_response(resp, caller) do
+    if resp.status >= 400 do
+      error_msg = extract_error(resp)
+      send(caller, {:provider_error, "HTTP #{resp.status}: #{error_msg}"})
+    else
+      send(caller, :provider_done)
     end
   end
 
@@ -215,7 +231,7 @@ defmodule Synapsis.Provider.Adapter do
     body = Map.merge(request, %{stream: false})
 
     headers = [
-      {"x-api-key", config.api_key},
+      {"x-api-key", config[:api_key]},
       {"anthropic-version", "2023-06-01"},
       {"content-type", "application/json"}
     ]
@@ -244,7 +260,7 @@ defmodule Synapsis.Provider.Adapter do
 
     headers =
       [{"content-type", "application/json"}] ++
-        if(config[:api_key], do: [{"authorization", "Bearer #{config.api_key}"}], else: [])
+        if(config[:api_key], do: [{"authorization", "Bearer #{config[:api_key]}"}], else: [])
 
     response = Req.post!(url, headers: headers, json: body, receive_timeout: 60_000)
 
@@ -271,7 +287,7 @@ defmodule Synapsis.Provider.Adapter do
 
     response =
       Req.post!(url,
-        headers: [{"content-type", "application/json"}, {"x-goog-api-key", config.api_key}],
+        headers: [{"content-type", "application/json"}, {"x-goog-api-key", config[:api_key]}],
         json: body,
         receive_timeout: 60_000
       )
@@ -286,6 +302,23 @@ defmodule Synapsis.Provider.Adapter do
   rescue
     e -> {:error, Exception.message(e)}
   end
+
+  # ---------------------------------------------------------------------------
+  # Error extraction
+  # ---------------------------------------------------------------------------
+
+  defp extract_error(%{body: body}) when is_binary(body) do
+    case Jason.decode(body) do
+      {:ok, %{"error" => %{"message" => msg}}} -> msg
+      {:ok, %{"error" => msg}} when is_binary(msg) -> msg
+      _ -> String.slice(body, 0, 200)
+    end
+  end
+
+  defp extract_error(%{body: %{"error" => %{"message" => msg}}}), do: msg
+  defp extract_error(%{body: %{"error" => msg}}) when is_binary(msg), do: msg
+  defp extract_error(%{body: body}) when is_map(body), do: inspect(body) |> String.slice(0, 200)
+  defp extract_error(_), do: "unknown error"
 
   # ---------------------------------------------------------------------------
   # Transport resolution
