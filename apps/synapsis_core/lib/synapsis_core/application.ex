@@ -31,6 +31,12 @@ defmodule SynapsisCore.Application do
         Synapsis.Tool.Builtin.register_all()
 
         try do
+          Synapsis.Providers.seed_defaults()
+        rescue
+          e -> Logger.warning("provider_seed_failed", error: Exception.message(e))
+        end
+
+        try do
           Synapsis.Providers.load_all_into_registry()
         rescue
           e -> Logger.warning("provider_registry_load_failed", error: Exception.message(e))
@@ -51,7 +57,7 @@ defmodule SynapsisCore.Application do
     end
   end
 
-  @env_provider_names ~w(anthropic openai google)
+  @env_provider_names ~w(anthropic openai openai-sub google moonshot-ai moonshot-cn zhipu-ai zhipu-cn zhipu-coding openrouter)
 
   defp register_env_providers do
     Enum.each(@env_provider_names, fn name ->

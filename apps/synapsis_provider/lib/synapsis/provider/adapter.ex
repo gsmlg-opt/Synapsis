@@ -45,13 +45,23 @@ defmodule Synapsis.Provider.Adapter do
   @doc "List available models for the given provider config."
   def models(config) do
     transport_type = resolve_transport_type(config[:type] || config["type"])
+    base_url = config[:base_url] || config["base_url"] || ""
 
     case transport_type do
       :openai ->
         Transport.OpenAI.fetch_models(config)
 
       :anthropic ->
-        {:ok, ModelRegistry.list(:anthropic)}
+        cond do
+          String.contains?(base_url, "moonshot") ->
+            {:ok, ModelRegistry.list(:moonshot)}
+
+          String.contains?(base_url, "bigmodel") or String.contains?(base_url, "z.ai") ->
+            {:ok, ModelRegistry.list(:zhipu)}
+
+          true ->
+            {:ok, ModelRegistry.list(:anthropic)}
+        end
 
       :google ->
         {:ok, ModelRegistry.list(:google)}

@@ -201,7 +201,145 @@ defmodule Synapsis.Provider.ModelRegistry do
     }
   ]
 
-  @all_models @anthropic_models ++ @openai_models ++ @google_models
+  @moonshot_models [
+    %{
+      id: "kimi-k2",
+      name: "Kimi K2",
+      provider: "moonshot",
+      context_window: 128_000,
+      max_output_tokens: 32_768,
+      supports_tools: true,
+      supports_thinking: false,
+      supports_images: false,
+      supports_streaming: true
+    },
+    %{
+      id: "kimi-k2.5",
+      name: "Kimi K2.5",
+      provider: "moonshot",
+      context_window: 128_000,
+      max_output_tokens: 32_768,
+      supports_tools: true,
+      supports_thinking: false,
+      supports_images: false,
+      supports_streaming: true
+    },
+    %{
+      id: "kimi-k2-thinking",
+      name: "Kimi K2 Thinking",
+      provider: "moonshot",
+      context_window: 256_000,
+      max_output_tokens: 32_768,
+      supports_tools: true,
+      supports_thinking: true,
+      supports_images: false,
+      supports_streaming: true
+    },
+    %{
+      id: "kimi-k2-0905-preview",
+      name: "Kimi K2 (Sep 2025)",
+      provider: "moonshot",
+      context_window: 256_000,
+      max_output_tokens: 32_768,
+      supports_tools: true,
+      supports_thinking: false,
+      supports_images: false,
+      supports_streaming: true
+    },
+    %{
+      id: "moonshot-v1-8k",
+      name: "Moonshot V1 8K",
+      provider: "moonshot",
+      context_window: 8_192,
+      max_output_tokens: 4096,
+      supports_tools: false,
+      supports_thinking: false,
+      supports_images: false,
+      supports_streaming: true
+    },
+    %{
+      id: "moonshot-v1-32k",
+      name: "Moonshot V1 32K",
+      provider: "moonshot",
+      context_window: 32_768,
+      max_output_tokens: 4096,
+      supports_tools: false,
+      supports_thinking: false,
+      supports_images: false,
+      supports_streaming: true
+    },
+    %{
+      id: "moonshot-v1-128k",
+      name: "Moonshot V1 128K",
+      provider: "moonshot",
+      context_window: 128_000,
+      max_output_tokens: 4096,
+      supports_tools: false,
+      supports_thinking: false,
+      supports_images: false,
+      supports_streaming: true
+    }
+  ]
+
+  @zhipu_models [
+    %{
+      id: "glm-4.7",
+      name: "GLM-4.7",
+      provider: "zhipu",
+      context_window: 200_000,
+      max_output_tokens: 96_000,
+      supports_tools: true,
+      supports_thinking: false,
+      supports_images: false,
+      supports_streaming: true
+    },
+    %{
+      id: "glm-4.5",
+      name: "GLM-4.5",
+      provider: "zhipu",
+      context_window: 128_000,
+      max_output_tokens: 96_000,
+      supports_tools: true,
+      supports_thinking: false,
+      supports_images: false,
+      supports_streaming: true
+    },
+    %{
+      id: "glm-4.5-air",
+      name: "GLM-4.5 Air",
+      provider: "zhipu",
+      context_window: 128_000,
+      max_output_tokens: 96_000,
+      supports_tools: true,
+      supports_thinking: false,
+      supports_images: false,
+      supports_streaming: true
+    },
+    %{
+      id: "glm-4.5-flash",
+      name: "GLM-4.5 Flash",
+      provider: "zhipu",
+      context_window: 128_000,
+      max_output_tokens: 96_000,
+      supports_tools: true,
+      supports_thinking: false,
+      supports_images: false,
+      supports_streaming: true
+    },
+    %{
+      id: "glm-5",
+      name: "GLM-5",
+      provider: "zhipu",
+      context_window: 200_000,
+      max_output_tokens: 96_000,
+      supports_tools: true,
+      supports_thinking: false,
+      supports_images: false,
+      supports_streaming: true
+    }
+  ]
+
+  @all_models @anthropic_models ++ @openai_models ++ @google_models ++ @moonshot_models ++ @zhipu_models
 
   @doc "Look up metadata for a specific model ID."
   @spec get(String.t()) :: {:ok, model_meta()} | {:error, :unknown}
@@ -225,6 +363,10 @@ defmodule Synapsis.Provider.ModelRegistry do
   def list("openrouter"), do: @openai_models
   def list(:google), do: @google_models
   def list("google"), do: @google_models
+  def list(:moonshot), do: @moonshot_models
+  def list("moonshot"), do: @moonshot_models
+  def list(:zhipu), do: @zhipu_models
+  def list("zhipu"), do: @zhipu_models
   def list(_), do: []
 
   @doc "List all known models across all providers."
