@@ -265,9 +265,9 @@ defmodule Synapsis.ProvidersTest do
       assert Providers.default_model("google") == "gemini-2.5-flash"
     end
 
-    test "returns anthropic default for unknown provider" do
-      assert Providers.default_model("unknown") == "claude-sonnet-4-6"
-      assert Providers.default_model("local") == "claude-sonnet-4-6"
+    test "returns gpt-4.1 fallback for unknown provider" do
+      assert Providers.default_model("unknown") == "gpt-4.1"
+      assert Providers.default_model("local") == "gpt-4.1"
     end
   end
 
@@ -290,8 +290,11 @@ defmodule Synapsis.ProvidersTest do
     test "returns nil for providers without dedicated env vars" do
       assert is_nil(Providers.env_var_name("groq"))
       assert is_nil(Providers.env_var_name("deepseek"))
-      assert is_nil(Providers.env_var_name("openrouter"))
       assert is_nil(Providers.env_var_name("openai_compat"))
+    end
+
+    test "returns env var for openrouter" do
+      assert Providers.env_var_name("openrouter") == "OPENROUTER_API_KEY"
     end
   end
 
@@ -387,18 +390,104 @@ defmodule Synapsis.ProvidersTest do
     end
   end
 
+  describe "model_for_tier/2" do
+    test "default tier returns same as default_model" do
+      for provider <- ~w(anthropic openai google openrouter moonshot-ai zhipu-ai minimax-io) do
+        assert Providers.model_for_tier(provider, :default) == Providers.default_model(provider)
+      end
+    end
+
+    test "fast tier returns cheaper models for known providers" do
+      assert Providers.model_for_tier("anthropic", :fast) == "claude-haiku-3-5-20241022"
+      assert Providers.model_for_tier("openai", :fast) == "gpt-4.1-mini"
+      assert Providers.model_for_tier("openai-sub", :fast) == "gpt-4.1-mini"
+      assert Providers.model_for_tier("google", :fast) == "gemini-2.0-flash"
+      assert Providers.model_for_tier("moonshot-ai", :fast) == "kimi-k2-turbo-preview"
+      assert Providers.model_for_tier("moonshot-cn", :fast) == "kimi-k2-turbo-preview"
+      assert Providers.model_for_tier("zhipu-ai", :fast) == "glm-4-flash"
+      assert Providers.model_for_tier("zhipu-cn", :fast) == "glm-4-flash"
+      assert Providers.model_for_tier("zhipu-coding", :fast) == "codegeex-4"
+      assert Providers.model_for_tier("minimax-io", :fast) == "MiniMax-M1"
+      assert Providers.model_for_tier("minimax-cn", :fast) == "MiniMax-M1"
+      assert Providers.model_for_tier("openrouter", :fast) == "openai/gpt-4.1-mini"
+    end
+
+    test "expert tier returns most capable models for known providers" do
+      assert Providers.model_for_tier("anthropic", :expert) == "claude-opus-4-6"
+      assert Providers.model_for_tier("openai", :expert) == "o3"
+      assert Providers.model_for_tier("openai-sub", :expert) == "o3"
+      assert Providers.model_for_tier("google", :expert) == "gemini-2.5-pro"
+      assert Providers.model_for_tier("moonshot-ai", :expert) == "kimi-k2-thinking"
+      assert Providers.model_for_tier("zhipu-ai", :expert) == "glm-4.7"
+      assert Providers.model_for_tier("zhipu-coding", :expert) == "glm-4.7"
+      assert Providers.model_for_tier("minimax-io", :expert) == "MiniMax-M2.5"
+      assert Providers.model_for_tier("openrouter", :expert) == "anthropic/claude-opus-4-6"
+    end
+
+    test "unknown provider returns fallback for fast" do
+      assert Providers.model_for_tier("unknown", :fast) == "gpt-4.1-mini"
+    end
+
+    test "unknown provider returns fallback for expert" do
+      assert Providers.model_for_tier("unknown", :expert) == "o3"
+    end
+
+    test "default tier arg is :default when omitted" do
+      assert Providers.model_for_tier("anthropic") == Providers.default_model("anthropic")
+    end
+  end
+
+  describe "model_tiers/1" do
+    test "returns map with all three tiers" do
+      tiers = Providers.model_tiers("anthropic")
+      assert tiers.default == "claude-sonnet-4-6"
+      assert tiers.fast == "claude-haiku-3-5-20241022"
+      assert tiers.expert == "claude-opus-4-6"
+    end
+
+    test "returns correct tiers for openai" do
+      tiers = Providers.model_tiers("openai")
+      assert tiers.default == "gpt-4.1"
+      assert tiers.fast == "gpt-4.1-mini"
+      assert tiers.expert == "o3"
+    end
+
+    test "returns correct tiers for google" do
+      tiers = Providers.model_tiers("google")
+      assert tiers.default == "gemini-2.5-flash"
+      assert tiers.fast == "gemini-2.0-flash"
+      assert tiers.expert == "gemini-2.5-pro"
+    end
+  end
+
+  describe "preset_providers/0" do
+    test "returns a list of preset provider maps" do
+      presets = Providers.preset_providers()
+      assert is_list(presets)
+      assert length(presets) > 0
+      assert Enum.all?(presets, &(is_map(&1) and Map.has_key?(&1, :name) and Map.has_key?(&1, :type) and Map.has_key?(&1, :base_url)))
+    end
+
+    test "includes known providers" do
+      names = Providers.preset_providers() |> Enum.map(& &1.name)
+      assert "anthropic" in names
+      assert "openai" in names
+      assert "openrouter" in names
+    end
+  end
+
   describe "default_model/1 edge cases" do
     test "returns fallback for nil input" do
-      assert Providers.default_model(nil) == "claude-sonnet-4-6"
+      assert Providers.default_model(nil) == "gpt-4.1"
     end
 
     test "returns fallback for empty string" do
-      assert Providers.default_model("") == "claude-sonnet-4-6"
+      assert Providers.default_model("") == "gpt-4.1"
     end
 
     test "returns fallback for providers without specific default" do
-      assert Providers.default_model("groq") == "claude-sonnet-4-6"
-      assert Providers.default_model("deepseek") == "claude-sonnet-4-6"
+      assert Providers.default_model("groq") == "gpt-4.1"
+      assert Providers.default_model("deepseek") == "gpt-4.1"
     end
 
     test "returns openrouter default model" do
