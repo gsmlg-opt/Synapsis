@@ -1,17 +1,48 @@
 defmodule Synapsis.Provider.Transport.SSE do
   @moduledoc """
-  Shared SSE line parser. Pure functions for splitting raw HTTP response data
-  into decoded JSON events. Used by all transport plugins.
+  SSE (Server-Sent Events) parser with buffer accumulation.
+
+  HTTP chunks can split SSE events at arbitrary byte boundaries. This module
+  handles partial lines by carrying a buffer between chunks, inspired by
+  the `req_llm` / `server_sent_events` approach.
   """
 
   @doc """
-  Parse raw SSE data into a list of decoded JSON maps or sentinel strings.
+  Parse raw SSE data combined with a buffer of leftover bytes from the
+  previous HTTP chunk. Returns `{parsed_events, remaining_buffer}`.
 
-  Handles:
-  - `data: [DONE]` sentinel (returned as the string `"[DONE]"`)
-  - `data: {json}` lines (decoded to maps)
-  - Partial/incomplete JSON lines (silently dropped)
-  - Non-data lines like `event:` or blank lines (ignored)
+  The remaining buffer should be passed as the second argument on the
+  next invocation to handle lines that were split across HTTP chunks.
+  """
+  @spec accumulate_and_parse(binary(), binary()) :: {[map() | String.t()], binary()}
+  def accumulate_and_parse(chunk, buffer) do
+    combined = buffer <> chunk
+
+    # Split on double-newline (SSE event boundary) to find complete events.
+    # The last segment may be incomplete — carry it forward as the new buffer.
+    case String.split(combined, "\n\n") do
+      [incomplete] ->
+        # No complete event yet — everything is buffer
+        {[], incomplete}
+
+      segments ->
+        {complete, [tail]} = Enum.split(segments, -1)
+
+        events =
+          complete
+          |> Enum.flat_map(fn segment ->
+            segment
+            |> String.split("\n", trim: true)
+            |> Enum.flat_map(&parse_line/1)
+          end)
+
+        {events, tail}
+    end
+  end
+
+  @doc """
+  Stateless parse — splits raw data by newlines and decodes data: lines.
+  Kept for backwards compatibility with tests and non-streaming callers.
   """
   @spec parse_lines(binary()) :: [map() | String.t()]
   def parse_lines(data) when is_binary(data) do

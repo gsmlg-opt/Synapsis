@@ -126,13 +126,18 @@ defmodule Synapsis.Provider.Adapter do
           headers: headers,
           json: request,
           receive_timeout: 300_000,
+          compressed: false,
+          retry: false,
+          redirect: false,
           into: fn {:data, data}, {req, resp} ->
-            for chunk <- Transport.SSE.parse_lines(data) do
+            {events, buffer} = Transport.SSE.accumulate_and_parse(data, resp.body || "")
+
+            for chunk <- events do
               event = EventMapper.map_event(:anthropic, chunk)
               send(caller, {:provider_chunk, event})
             end
 
-            {:cont, {req, %{resp | body: (resp.body || "") <> data}}}
+            {:cont, {req, %{resp | body: buffer}}}
           end
         )
 
@@ -174,13 +179,18 @@ defmodule Synapsis.Provider.Adapter do
           headers: headers,
           json: body,
           receive_timeout: 300_000,
+          compressed: false,
+          retry: false,
+          redirect: false,
           into: fn {:data, data}, {req, resp} ->
-            for chunk <- Transport.SSE.parse_lines(data) do
+            {events, buffer} = Transport.SSE.accumulate_and_parse(data, resp.body || "")
+
+            for chunk <- events do
               event = EventMapper.map_event(:openai, chunk)
               send(caller, {:provider_chunk, event})
             end
 
-            {:cont, {req, %{resp | body: (resp.body || "") <> data}}}
+            {:cont, {req, %{resp | body: buffer}}}
           end
         )
 
@@ -205,13 +215,18 @@ defmodule Synapsis.Provider.Adapter do
           headers: [{"content-type", "application/json"}, {"x-goog-api-key", config[:api_key]}],
           json: body,
           receive_timeout: 300_000,
+          compressed: false,
+          retry: false,
+          redirect: false,
           into: fn {:data, data}, {req, resp} ->
-            for chunk <- Transport.SSE.parse_lines(data) do
+            {events, buffer} = Transport.SSE.accumulate_and_parse(data, resp.body || "")
+
+            for chunk <- events do
               event = EventMapper.map_event(:google, chunk)
               send(caller, {:provider_chunk, event})
             end
 
-            {:cont, {req, %{resp | body: (resp.body || "") <> data}}}
+            {:cont, {req, %{resp | body: buffer}}}
           end
         )
 

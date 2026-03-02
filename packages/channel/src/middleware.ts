@@ -1,8 +1,21 @@
 import type { Channel } from "phoenix"
 import type { Middleware, Dispatch, AnyAction } from "@reduxjs/toolkit"
 
+const CHANNEL_EVENTS = [
+  "text_delta", "reasoning", "tool_use", "tool_result",
+  "permission_request", "session_status", "error", "done",
+  "orchestrator_pause", "orchestrator_escalate", "orchestrator_terminate",
+  "agent_switched",
+] as const
+
 export function createChannelMiddleware(channel: Channel): Middleware {
   return (store) => {
+    // Remove any previously registered listeners to prevent duplicates
+    // when the same channel instance is reused across hook remounts
+    for (const event of CHANNEL_EVENTS) {
+      channel.off(event)
+    }
+
     // Inbound: channel events → dispatch
     channel.on("text_delta", (payload: any) => {
       store.dispatch({ type: "chat/appendChunk", payload: { type: "text", ...payload } })

@@ -6,7 +6,11 @@ defmodule SynapsisServer.SessionChannel do
 
   @impl true
   def join("session:" <> session_id, _payload, socket) do
-    Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session_id}")
+    # NOTE: Do NOT call Phoenix.PubSub.subscribe here — the endpoint's
+    # pubsub_server is Synapsis.PubSub, so Phoenix automatically subscribes
+    # this channel process to the topic on join. A manual subscribe would
+    # create a duplicate subscription, causing every broadcast to be
+    # delivered (and pushed) twice.
     Synapsis.Sessions.ensure_running(session_id)
     socket = assign(socket, :session_id, session_id)
 

@@ -3,7 +3,7 @@ import { createElement } from "react"
 import { ChatApp } from "@synapsis/ui"
 import { ErrorBoundary } from "@synapsis/ui/ErrorBoundary"
 import { createChatStore } from "@synapsis/ui/chat/store"
-import { createSessionChannel, createChannelMiddleware } from "@synapsis/channel"
+import { createSessionChannel, removeSessionChannel, createChannelMiddleware } from "@synapsis/channel"
 import { chatActions } from "@synapsis/ui/chat/store"
 import type { Channel } from "phoenix"
 
@@ -57,7 +57,11 @@ export const ChatAppHook = {
   },
 
   destroyed(this: ChatAppHookInstance) {
-    this.channel?.leave()
+    if (this.channel) {
+      this.channel.leave()
+      const sessionId = this.el.dataset.sessionId
+      if (sessionId) removeSessionChannel(sessionId)
+    }
     this.root?.unmount()
   },
 }

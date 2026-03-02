@@ -15,6 +15,7 @@ export type SessionEvent =
   | "agent_switched"
 
 let socket: Socket | null = null
+const channelCache = new Map<string, Channel>()
 
 export function getSocket(): Socket {
   if (!socket) {
@@ -30,6 +31,19 @@ export function getSocket(): Socket {
 }
 
 export function createSessionChannel(sessionId: string): Channel {
+  // Reuse existing channel for the same session to prevent duplicate
+  // event callbacks when the LiveView hook remounts.
+  const existing = channelCache.get(sessionId)
+  if (existing) {
+    return existing
+  }
+
   const s = getSocket()
-  return s.channel(`session:${sessionId}`, {})
+  const channel = s.channel(`session:${sessionId}`, {})
+  channelCache.set(sessionId, channel)
+  return channel
+}
+
+export function removeSessionChannel(sessionId: string): void {
+  channelCache.delete(sessionId)
 }
