@@ -2,6 +2,18 @@ defmodule SynapsisWeb.SessionLive.IndexTest do
   use SynapsisWeb.ConnCase
 
   setup do
+    # Ensure a clean provider slate and create an anthropic provider
+    Synapsis.Repo.delete_all(Synapsis.ProviderConfig)
+
+    {:ok, _provider} =
+      %Synapsis.ProviderConfig{}
+      |> Synapsis.ProviderConfig.changeset(%{
+        name: "anthropic",
+        type: "anthropic",
+        api_key_encrypted: "sk-ant-test"
+      })
+      |> Synapsis.Repo.insert()
+
     {:ok, project} =
       %Synapsis.Project{}
       |> Synapsis.Project.changeset(%{

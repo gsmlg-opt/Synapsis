@@ -1,5 +1,19 @@
 import { configureStore, createSlice, type PayloadAction, type Middleware } from "@reduxjs/toolkit"
 
+/** Generate a UUID v4 that works in non-secure contexts (HTTP). */
+function generateUUID(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID()
+  }
+  // Fallback using crypto.getRandomValues (available in all modern browsers)
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
+  bytes[6] = (bytes[6] & 0x0f) | 0x40 // version 4
+  bytes[8] = (bytes[8] & 0x3f) | 0x80 // variant 1
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
 export interface Message {
   id: string
   role: "user" | "assistant" | "system"
@@ -76,7 +90,7 @@ const chatSlice = createSlice({
       const content = typeof payload === "string" ? payload : payload.content
 
       state.messages.push({
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         role: "user",
         parts: [{ type: "text", content }],
         timestamp: new Date().toISOString(),
@@ -144,7 +158,7 @@ const chatSlice = createSlice({
         let assistantMsg = state.messages[state.messages.length - 1]
         if (!assistantMsg || assistantMsg.role !== "assistant") {
           assistantMsg = {
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             role: "assistant",
             parts: [],
             timestamp: new Date().toISOString(),
@@ -162,7 +176,7 @@ const chatSlice = createSlice({
         let assistantMsg = state.messages[state.messages.length - 1]
         if (!assistantMsg || assistantMsg.role !== "assistant") {
           assistantMsg = {
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             role: "assistant",
             parts: [],
             timestamp: new Date().toISOString(),

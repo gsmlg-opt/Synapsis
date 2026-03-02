@@ -2,6 +2,18 @@ defmodule SynapsisWeb.SessionLive.ShowTest do
   use SynapsisWeb.ConnCase
 
   setup do
+    # Ensure a clean provider slate and create an anthropic provider for model lookups
+    Synapsis.Repo.delete_all(Synapsis.ProviderConfig)
+
+    {:ok, _provider} =
+      %Synapsis.ProviderConfig{}
+      |> Synapsis.ProviderConfig.changeset(%{
+        name: "anthropic",
+        type: "anthropic",
+        api_key_encrypted: "sk-ant-test"
+      })
+      |> Synapsis.Repo.insert()
+
     {:ok, project} =
       %Synapsis.Project{}
       |> Synapsis.Project.changeset(%{
@@ -361,6 +373,74 @@ defmodule SynapsisWeb.SessionLive.ShowTest do
 
       html = render_hook(view, "delete_session", %{"id" => Ecto.UUID.generate()})
       assert html =~ "Failed to delete session"
+    end
+
+    test "model selector button shows current provider/model", %{
+      conn: conn,
+      project: project,
+      session: session
+    } do
+      {:ok, _view, html} =
+        live(conn, ~p"/projects/#{project.id}/sessions/#{session.id}")
+
+      assert html =~ "anthropic/claude-sonnet-4-20250514"
+    end
+
+    test "toggle_model_selector opens and closes the dropdown", %{
+      conn: conn,
+      project: project,
+      session: session
+    } do
+      {:ok, view, html} =
+        live(conn, ~p"/projects/#{project.id}/sessions/#{session.id}")
+
+      refute html =~ "switch_model"
+
+      html = render_hook(view, "toggle_model_selector", %{})
+      assert html =~ "switch_model"
+
+      html = render_hook(view, "toggle_model_selector", %{})
+      refute html =~ "switch_model"
+    end
+
+    test "switch_model updates the session model", %{
+      conn: conn,
+      project: project,
+      session: session
+    } do
+      {:ok, view, _html} =
+        live(conn, ~p"/projects/#{project.id}/sessions/#{session.id}")
+
+      # Open model selector
+      view
+      |> element(~s(button[phx-click="toggle_model_selector"]))
+      |> render_click()
+
+      # Click on a different model
+      html =
+        render_hook(view, "switch_model", %{
+          "provider" => "anthropic",
+          "model" => "claude-opus-4-20250514"
+        })
+
+      assert html =~ "Model switched"
+      assert html =~ "anthropic/claude-opus-4-20250514"
+    end
+
+    test "switch_provider in model selector updates the model list", %{
+      conn: conn,
+      project: project,
+      session: session
+    } do
+      {:ok, view, _html} =
+        live(conn, ~p"/projects/#{project.id}/sessions/#{session.id}")
+
+      view
+      |> element(~s(button[phx-click="toggle_model_selector"]))
+      |> render_click()
+
+      html = render_hook(view, "switch_provider", %{"provider" => "anthropic"})
+      assert html =~ "Claude"
     end
   end
 end

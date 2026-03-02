@@ -13,6 +13,9 @@ defmodule SynapsisWeb.SessionLive.Show do
         available_models = fetch_provider_models(default_provider)
         default_model = if available_models != [], do: hd(available_models).id, else: Synapsis.Providers.default_model(default_type)
 
+        # Models for the current session's provider
+        session_models = fetch_provider_models(session.provider)
+
         {:ok,
          assign(socket,
            project: project,
@@ -20,12 +23,14 @@ defmodule SynapsisWeb.SessionLive.Show do
            sessions: sessions,
            providers: providers,
            agent_mode: session.agent || "build",
-           provider_label: "#{session.provider}/#{session.model}",
            page_title: session.title || "Session",
            show_new_session_form: false,
            new_session_provider: default_provider,
            new_session_model: default_model,
-           available_models: available_models
+           available_models: available_models,
+           session_models: session_models,
+           show_model_selector: false,
+           selector_provider: session.provider
          )}
 
       _ ->
@@ -44,6 +49,56 @@ defmodule SynapsisWeb.SessionLive.Show do
   @impl true
   def handle_event("switch_agent", %{"mode" => mode}, socket) when mode in ["build", "plan"] do
     {:noreply, assign(socket, agent_mode: mode)}
+  end
+
+  def handle_event("toggle_model_selector", _params, socket) do
+    opening = !socket.assigns.show_model_selector
+
+    socket =
+      if opening do
+        # Reset to current session's provider when opening
+        session_models = fetch_provider_models(socket.assigns.session.provider)
+
+        assign(socket,
+          show_model_selector: true,
+          selector_provider: socket.assigns.session.provider,
+          session_models: session_models
+        )
+      else
+        assign(socket, show_model_selector: false)
+      end
+
+    {:noreply, socket}
+  end
+
+  def handle_event("switch_provider", %{"provider" => provider_name}, socket) do
+    session_models = fetch_provider_models(provider_name)
+    {:noreply, assign(socket, session_models: session_models, selector_provider: provider_name)}
+  end
+
+  def handle_event("switch_model", %{"provider" => provider_name, "model" => model}, socket) do
+    session = socket.assigns.session
+
+    case Synapsis.Sessions.switch_model(session.id, provider_name, model) do
+      :ok ->
+        session = %{session | provider: provider_name, model: model}
+        session_models = fetch_provider_models(provider_name)
+
+        {:noreply,
+         socket
+         |> assign(
+           session: session,
+           session_models: session_models,
+           show_model_selector: false
+         )
+         |> put_flash(:info, "Model switched to #{model}")}
+
+      {:error, :not_idle} ->
+        {:noreply, put_flash(socket, :error, "Cannot switch model while session is active")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Failed to switch model")}
+    end
   end
 
   def handle_event("switch_session", %{"id" => id}, socket) do
@@ -234,9 +289,77 @@ defmodule SynapsisWeb.SessionLive.Show do
       <main class="flex-1 flex flex-col">
         <%!-- Session header --%>
         <div class="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
-          <div>
+          <div class="flex items-center gap-3">
             <h2 class="font-semibold">{@session.title || "Session"}</h2>
-            <div class="text-xs text-gray-500">{@provider_label}</div>
+            <div class="relative">
+              <button
+                phx-click="toggle_model_selector"
+                class="flex items-center gap-1.5 px-2 py-1 text-xs bg-gray-800 border border-gray-700 rounded hover:border-gray-600 text-gray-300"
+              >
+                <span>{@session.provider}/{@session.model}</span>
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M19 9l-7 7-7-7"
+                  />
+                </svg>
+              </button>
+
+              <div
+                :if={@show_model_selector}
+                class="absolute top-full left-0 mt-1 w-80 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 p-3 space-y-3"
+              >
+                <div>
+                  <label class="block text-xs text-gray-400 mb-1">Provider</label>
+                  <form phx-change="switch_provider" class="w-full">
+                    <select
+                      name="provider"
+                      class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-200"
+                    >
+                      <option
+                        :for={p <- @providers}
+                        value={p.name}
+                        selected={p.name == @selector_provider}
+                      >
+                        {p.name}
+                      </option>
+                    </select>
+                  </form>
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-400 mb-1">Model</label>
+                  <div class="max-h-48 overflow-y-auto space-y-1">
+                    <button
+                      :for={m <- @session_models}
+                      phx-click="switch_model"
+                      phx-value-provider={@selector_provider}
+                      phx-value-model={m.id}
+                      class={[
+                        "w-full text-left px-2 py-1.5 rounded text-sm hover:bg-gray-800",
+                        if(m.id == @session.model,
+                          do: "bg-blue-900/40 text-blue-300",
+                          else: "text-gray-300"
+                        )
+                      ]}
+                    >
+                      <div class="font-medium">{m[:name] || m.id}</div>
+                      <div class="text-xs text-gray-500">{m.id}</div>
+                    </button>
+                  </div>
+                  <div :if={@session_models == []} class="text-xs text-gray-500 py-2">
+                    No models available for this provider
+                  </div>
+                </div>
+                <button
+                  phx-click="toggle_model_selector"
+                  class="w-full text-xs text-gray-500 hover:text-gray-300 pt-1"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
           </div>
           <div class="flex gap-2">
             <button

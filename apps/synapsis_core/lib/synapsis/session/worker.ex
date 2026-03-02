@@ -63,6 +63,10 @@ defmodule Synapsis.Session.Worker do
     GenServer.call(via(session_id), {:switch_agent, agent_name})
   end
 
+  def switch_model(session_id, provider_name, model) do
+    GenServer.call(via(session_id), {:switch_model, provider_name, model})
+  end
+
   def get_status(session_id) do
     GenServer.call(via(session_id), :get_status)
   end
@@ -292,6 +296,36 @@ defmodule Synapsis.Session.Worker do
   end
 
   def handle_call({:switch_agent, _agent_name}, _from, state) do
+    {:reply, {:error, :not_idle}, state}
+  end
+
+  def handle_call({:switch_model, provider_name, model}, _from, %{status: :idle} = state) do
+    # Update session record in DB
+    {:ok, _} =
+      state.session
+      |> Session.changeset(%{provider: provider_name, model: model})
+      |> Repo.update()
+
+    session = %{state.session | provider: provider_name, model: model}
+
+    # Resolve new provider config
+    provider_config = resolve_provider_config(provider_name)
+
+    # Update agent with new model
+    agent = Map.put(state.agent, :model, model)
+
+    broadcast(state.session_id, "model_switched", %{provider: provider_name, model: model})
+
+    Logger.info("session_model_switched",
+      session_id: state.session_id,
+      provider: provider_name,
+      model: model
+    )
+
+    {:reply, :ok, %{state | session: session, agent: agent, provider_config: provider_config}}
+  end
+
+  def handle_call({:switch_model, _provider, _model}, _from, state) do
     {:reply, {:error, :not_idle}, state}
   end
 
