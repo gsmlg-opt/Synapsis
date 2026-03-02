@@ -45,9 +45,16 @@ defmodule SynapsisWeb.SettingsLiveTest do
       assert page_title(view) =~ "Synapsis"
     end
 
-    test "all five setting cards are rendered", %{conn: conn} do
+    test "renders default model link", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/settings")
+      assert html =~ "Default Model"
+      assert html =~ "View default, fast, and expert model tiers per provider."
+    end
+
+    test "all setting cards are rendered", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/settings")
       assert html =~ ~p"/settings/providers"
+      assert html =~ ~p"/settings/models"
       assert html =~ ~p"/settings/memory"
       assert html =~ ~p"/settings/skills"
       assert html =~ ~p"/settings/mcp"
@@ -57,6 +64,7 @@ defmodule SynapsisWeb.SettingsLiveTest do
     test "each card has a heading and description", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings")
       assert has_element?(view, "h2", "Providers")
+      assert has_element?(view, "h2", "Default Model")
       assert has_element?(view, "h2", "Memory")
       assert has_element?(view, "h2", "Skills")
       assert has_element?(view, "h2", "MCP Servers")

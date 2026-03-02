@@ -23,6 +23,16 @@ defmodule SynapsisWeb.SettingsLive do
           </.link>
 
           <.link
+            navigate={~p"/settings/models"}
+            class="bg-gray-900 rounded-lg p-6 border border-gray-800 hover:border-gray-700 block"
+          >
+            <h2 class="text-lg font-semibold mb-1">Default Model</h2>
+            <p class="text-sm text-gray-500">
+              View default, fast, and expert model tiers per provider.
+            </p>
+          </.link>
+
+          <.link
             navigate={~p"/settings/memory"}
             class="bg-gray-900 rounded-lg p-6 border border-gray-800 hover:border-gray-700 block"
           >

@@ -12,7 +12,8 @@ defmodule Synapsis.MessageBuilder do
       model: agent[:model],
       system_prompt: system_prompt,
       max_tokens: agent[:max_tokens] || 8192,
-      provider_type: resolve_provider_type(provider_name)
+      provider_type: resolve_provider_type(provider_name),
+      provider_name: provider_name
     }
 
     provider_module.format_request(messages, tools, opts)

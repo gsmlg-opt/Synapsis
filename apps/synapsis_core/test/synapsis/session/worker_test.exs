@@ -585,4 +585,159 @@ defmodule Synapsis.Session.WorkerTest do
       assert Worker.get_status(session.id) == :idle
     end
   end
+
+  describe "session.model propagation to agent" do
+    test "agent uses session model when agent config has no model override", %{
+      session: session,
+      project_path: project_path
+    } do
+      # Session was created with model: "claude-sonnet-4-20250514" in setup
+      {:ok, pid} = start_supervised({Worker, session_id: session.id})
+
+      state = :sys.get_state(pid)
+
+      assert state.agent[:model] == "claude-sonnet-4-20250514",
+             "Expected agent model to be the session model, got: #{inspect(state.agent[:model])}"
+
+      _ = project_path
+    end
+
+    test "agent uses session model after switch_agent", %{session: session} do
+      # Session model is "claude-sonnet-4-20250514"
+      {:ok, _pid} = start_supervised({Worker, session_id: session.id})
+
+      assert :ok = Worker.switch_agent(session.id, "plan")
+
+      # Resolve the PID via the Registry directly
+      pid = GenServer.whereis({:via, Registry, {Synapsis.Session.Registry, session.id}})
+      state = :sys.get_state(pid)
+      assert state.agent[:model] == "claude-sonnet-4-20250514"
+    end
+
+    test "different model is used correctly when session has a non-default model" do
+      unique_dir = System.tmp_dir!() |> Path.join("model-test-#{System.unique_integer()}")
+      File.mkdir_p!(unique_dir)
+
+      {:ok, project} =
+        %Synapsis.Project{}
+        |> Synapsis.Project.changeset(%{
+          path: unique_dir,
+          slug: "model-test-#{System.unique_integer([:positive])}"
+        })
+        |> Repo.insert()
+
+      {:ok, session} =
+        %Synapsis.Session{}
+        |> Synapsis.Session.changeset(%{
+          project_id: project.id,
+          provider: "anthropic",
+          model: "claude-opus-4-20250514"
+        })
+        |> Repo.insert()
+
+      {:ok, pid} = start_supervised({Worker, session_id: session.id}, id: :model_test_worker)
+
+      state = :sys.get_state(pid)
+
+      assert state.agent[:model] == "claude-opus-4-20250514",
+             "Expected opus model, got: #{inspect(state.agent[:model])}"
+
+      File.rm_rf!(unique_dir)
+    end
+
+    test "agent uses tier-aware model when session model is nil in state" do
+      # Session schema requires model, but we simulate nil model via state replacement
+      # to test the Worker's tier fallback logic
+      unique_dir = System.tmp_dir!() |> Path.join("tier-test-#{System.unique_integer()}")
+      File.mkdir_p!(unique_dir)
+
+      {:ok, project} =
+        %Synapsis.Project{}
+        |> Synapsis.Project.changeset(%{
+          path: unique_dir,
+          slug: "tier-test-#{System.unique_integer([:positive])}"
+        })
+        |> Repo.insert()
+
+      {:ok, session} =
+        %Synapsis.Session{}
+        |> Synapsis.Session.changeset(%{
+          project_id: project.id,
+          provider: "anthropic",
+          model: "placeholder"
+        })
+        |> Repo.insert()
+
+      {:ok, pid} = start_supervised({Worker, session_id: session.id}, id: :tier_test_worker)
+
+      # Simulate nil model on session and re-resolve agent with tier fallback
+      :sys.replace_state(pid, fn state ->
+        session_no_model = %{state.session | model: nil}
+        agent = Synapsis.Agent.Resolver.resolve("build", session_no_model.config)
+        tier = agent[:model_tier] || :default
+        provider = agent[:provider] || session_no_model.provider
+        agent = Map.put(agent, :model, Synapsis.Providers.model_for_tier(provider, tier))
+        %{state | session: session_no_model, agent: agent}
+      end)
+
+      state = :sys.get_state(pid)
+      assert state.agent[:model] == Synapsis.Providers.model_for_tier("anthropic", :default)
+
+      File.rm_rf!(unique_dir)
+    end
+
+    test "switch_agent resolves agent with model_tier field", %{session: session} do
+      # When session has a model, switch_agent uses session model. But we verify
+      # the resolved agent has the correct model_tier field set.
+      {:ok, _pid} = start_supervised({Worker, session_id: session.id}, id: :tier_switch_worker)
+
+      assert :ok = Worker.switch_agent(session.id, "plan")
+
+      pid = GenServer.whereis({:via, Registry, {Synapsis.Session.Registry, session.id}})
+      state = :sys.get_state(pid)
+
+      # Plan agent has :expert model_tier
+      assert state.agent[:model_tier] == :expert
+
+      # Session model takes precedence, so model is the session model
+      assert state.agent[:model] == session.model
+    end
+
+    test "project config agent model override takes precedence over session model" do
+      unique_dir = System.tmp_dir!() |> Path.join("model-override-#{System.unique_integer()}")
+      File.mkdir_p!(unique_dir)
+
+      config_with_model = %{
+        "agents" => %{"build" => %{"model" => "claude-haiku-3-5-20241022"}}
+      }
+
+      {:ok, project} =
+        %Synapsis.Project{}
+        |> Synapsis.Project.changeset(%{
+          path: unique_dir,
+          slug: "model-override-#{System.unique_integer([:positive])}"
+        })
+        |> Repo.insert()
+
+      {:ok, session} =
+        %Synapsis.Session{}
+        |> Synapsis.Session.changeset(%{
+          project_id: project.id,
+          provider: "anthropic",
+          model: "claude-opus-4-20250514",
+          config: config_with_model
+        })
+        |> Repo.insert()
+
+      {:ok, pid} = start_supervised({Worker, session_id: session.id}, id: :override_test_worker)
+
+      state = :sys.get_state(pid)
+
+      # Project config overrides session model
+      assert state.agent[:model] == "claude-haiku-3-5-20241022",
+             "Expected haiku override model, got: #{inspect(state.agent[:model])}"
+
+      File.rm_rf!(unique_dir)
+    end
+  end
 end

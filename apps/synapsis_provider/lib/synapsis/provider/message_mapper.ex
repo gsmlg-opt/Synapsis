@@ -19,7 +19,7 @@ defmodule Synapsis.Provider.MessageMapper do
   """
   def build_request(:anthropic, messages, tools, opts) do
     request = %{
-      model: opts[:model] || Synapsis.Providers.default_model("anthropic"),
+      model: opts[:model] || Synapsis.Providers.default_model(opts[:provider_name] || "anthropic"),
       max_tokens: opts[:max_tokens] || 8192,
       stream: true,
       messages: Enum.map(messages, &format_anthropic_message/1)
@@ -39,7 +39,7 @@ defmodule Synapsis.Provider.MessageMapper do
 
   def build_request(:openai, messages, tools, opts) do
     request = %{
-      model: opts[:model] || Synapsis.Providers.default_model("openai"),
+      model: opts[:model] || Synapsis.Providers.default_model(opts[:provider_name] || "openai"),
       stream: true,
       messages: format_openai_messages(messages, opts)
     }
@@ -52,7 +52,7 @@ defmodule Synapsis.Provider.MessageMapper do
 
   def build_request(:google, messages, tools, opts) do
     request = %{
-      model: opts[:model] || Synapsis.Providers.default_model("google"),
+      model: opts[:model] || Synapsis.Providers.default_model(opts[:provider_name] || "google"),
       stream: true,
       contents: Enum.map(messages, &format_google_message/1)
     }

@@ -93,6 +93,23 @@ defmodule Synapsis.Session.Worker do
 
   defp init_with_session(session, session_id, _opts) do
     agent = Synapsis.Agent.Resolver.resolve(session.agent, session.config)
+
+    # If the agent doesn't specify a model, fall back to the session's selected model,
+    # then to tier-aware default
+    agent =
+      cond do
+        not is_nil(agent[:model]) ->
+          agent
+
+        not is_nil(session.model) ->
+          Map.put(agent, :model, session.model)
+
+        true ->
+          tier = agent[:model_tier] || :default
+          provider = agent[:provider] || session.provider
+          Map.put(agent, :model, Synapsis.Providers.model_for_tier(provider, tier))
+      end
+
     effective_provider = agent[:provider] || session.provider
     provider_config = resolve_provider_config(effective_provider)
 
@@ -239,6 +256,22 @@ defmodule Synapsis.Session.Worker do
 
   def handle_call({:switch_agent, agent_name}, _from, %{status: :idle} = state) do
     agent = Synapsis.Agent.Resolver.resolve(agent_name, state.session.config)
+
+    # If the agent doesn't specify a model, fall back to the session's selected model,
+    # then to tier-aware default
+    agent =
+      cond do
+        not is_nil(agent[:model]) ->
+          agent
+
+        not is_nil(state.session.model) ->
+          Map.put(agent, :model, state.session.model)
+
+        true ->
+          tier = agent[:model_tier] || :default
+          provider = agent[:provider] || state.session.provider
+          Map.put(agent, :model, Synapsis.Providers.model_for_tier(provider, tier))
+      end
 
     # Update the session record in DB
     {:ok, _} =
@@ -828,7 +861,9 @@ defmodule Synapsis.Session.Worker do
 
       # Build a minimal non-streaming request for the auditor
       request = %{
-        model: auditor_model || provider_config[:default_model] || "claude-haiku-3-5-20241022",
+        model:
+          auditor_model || provider_config[:default_model] ||
+            Synapsis.Providers.model_for_tier(auditor_provider || state.session.provider, :fast),
         max_tokens: auditor_request.config.max_tokens || 1024,
         system: auditor_request.system_prompt,
         messages: [%{role: "user", content: auditor_request.user_message}]

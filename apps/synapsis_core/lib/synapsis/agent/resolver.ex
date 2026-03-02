@@ -5,6 +5,14 @@ defmodule Synapsis.Agent.Resolver do
     default = default_agent(to_string(agent_name))
     overrides = get_in(project_config, ["agents", to_string(agent_name)]) || %{}
 
+    model_tier =
+      case overrides["modelTier"] do
+        "fast" -> :fast
+        "expert" -> :expert
+        "default" -> :default
+        _ -> default.model_tier
+      end
+
     %{
       name: to_string(agent_name),
       model: overrides["model"] || default.model,
@@ -13,7 +21,8 @@ defmodule Synapsis.Agent.Resolver do
       tools: resolve_tools(default.tools, overrides["tools"]),
       reasoning_effort: overrides["reasoningEffort"] || default.reasoning_effort,
       read_only: Map.get(overrides, "readOnly", default.read_only),
-      max_tokens: overrides["maxTokens"] || default.max_tokens
+      max_tokens: overrides["maxTokens"] || default.max_tokens,
+      model_tier: model_tier
     }
   end
 
@@ -38,7 +47,8 @@ defmodule Synapsis.Agent.Resolver do
       ],
       reasoning_effort: "medium",
       read_only: false,
-      max_tokens: 8192
+      max_tokens: 8192,
+      model_tier: :default
     }
   end
 
@@ -51,7 +61,8 @@ defmodule Synapsis.Agent.Resolver do
       tools: ["file_read", "grep", "glob", "diagnostics"],
       reasoning_effort: "high",
       read_only: true,
-      max_tokens: 8192
+      max_tokens: 8192,
+      model_tier: :expert
     }
   end
 

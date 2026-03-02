@@ -19,7 +19,8 @@ defmodule SynapsisServer.Router do
               SynapsisWeb.MCPLive.Index,
               SynapsisWeb.MCPLive.Show,
               SynapsisWeb.LSPLive.Index,
-              SynapsisWeb.LSPLive.Show
+              SynapsisWeb.LSPLive.Show,
+              SynapsisWeb.ModelTierLive.Index
             ]}
 
   pipeline :browser do
@@ -74,6 +75,8 @@ defmodule SynapsisServer.Router do
     live "/settings/providers", ProviderLive.Index, :index
     live "/settings/providers/new", ProviderLive.Index, :new
     live "/settings/providers/:id", ProviderLive.Show, :show
+
+    live "/settings/models", ModelTierLive.Index, :index
 
     live "/settings/memory", MemoryLive.Index, :index
 

@@ -160,6 +160,7 @@ defmodule SynapsisServer.ProviderController do
       has_api_key: not is_nil(p.api_key_encrypted),
       config: p.config,
       enabled: p.enabled,
+      model_tiers: Providers.model_tiers(p.name),
       inserted_at: p.inserted_at,
       updated_at: p.updated_at
     }

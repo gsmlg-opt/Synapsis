@@ -37,7 +37,8 @@ defmodule Synapsis.Agent.ResolverTest do
       assert Map.has_key?(agent, :reasoning_effort)
       assert Map.has_key?(agent, :read_only)
       assert Map.has_key?(agent, :max_tokens)
-      assert map_size(agent) == 8
+      assert Map.has_key?(agent, :model_tier)
+      assert map_size(agent) == 9
     end
 
     test "default build agent includes all expected tools" do
@@ -93,6 +94,21 @@ defmodule Synapsis.Agent.ResolverTest do
       agent = Resolver.resolve(:build)
       assert agent.name == "build"
       assert agent.read_only == false
+    end
+
+    test "build agent has :default model_tier" do
+      agent = Resolver.resolve("build")
+      assert agent.model_tier == :default
+    end
+
+    test "plan agent has :expert model_tier" do
+      agent = Resolver.resolve("plan")
+      assert agent.model_tier == :expert
+    end
+
+    test "unknown agent inherits build model_tier (:default)" do
+      agent = Resolver.resolve("unknown_agent")
+      assert agent.model_tier == :default
     end
   end
 
@@ -177,6 +193,24 @@ defmodule Synapsis.Agent.ResolverTest do
       agent = Resolver.resolve("build", config)
       default = Resolver.resolve("build")
       assert agent.model == default.model
+    end
+
+    test "merges modelTier override to :fast" do
+      config = %{"agents" => %{"build" => %{"modelTier" => "fast"}}}
+      agent = Resolver.resolve("build", config)
+      assert agent.model_tier == :fast
+    end
+
+    test "merges modelTier override to :expert" do
+      config = %{"agents" => %{"plan" => %{"modelTier" => "default"}}}
+      agent = Resolver.resolve("plan", config)
+      assert agent.model_tier == :default
+    end
+
+    test "invalid modelTier keeps default" do
+      config = %{"agents" => %{"build" => %{"modelTier" => "bogus"}}}
+      agent = Resolver.resolve("build", config)
+      assert agent.model_tier == :default
     end
 
     test "multiple fields can be overridden at once" do

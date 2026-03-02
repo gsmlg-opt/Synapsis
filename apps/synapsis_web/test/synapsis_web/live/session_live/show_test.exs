@@ -128,9 +128,9 @@ defmodule SynapsisWeb.SessionLive.ShowTest do
 
       # Show form so the model input is rendered in the DOM
       view |> element("button", "+ New Session") |> render_click()
-      render_hook(view, "select_model", %{"model" => "gpt-4o"})
+      render_hook(view, "select_model", %{"model" => "claude-haiku-3-5-20241022"})
       html = render(view)
-      assert html =~ "gpt-4o"
+      assert html =~ "claude-haiku-3-5-20241022"
     end
 
     test "select_provider event updates provider state", %{

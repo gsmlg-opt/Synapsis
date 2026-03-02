@@ -145,5 +145,187 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       {:ok, updated} = Synapsis.Providers.get(provider.id)
       assert updated.base_url == "https://new-base.example.com/v2"
     end
+
+    test "shows models section for anthropic provider", %{conn: conn, provider: provider} do
+      {:ok, _view, html} = live(conn, ~p"/settings/providers/#{provider.id}")
+      assert html =~ "Models"
+      assert html =~ "Claude"
+    end
+
+    test "shows all models enabled by default", %{conn: conn, provider: provider} do
+      {:ok, _view, html} = live(conn, ~p"/settings/providers/#{provider.id}")
+      assert html =~ "All models enabled"
+    end
+
+    test "edit button toggles model editing mode", %{conn: conn, provider: provider} do
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+
+      html =
+        view
+        |> element(~s(button[phx-click="toggle_edit_models"]))
+        |> render_click()
+
+      assert html =~ "Save Models"
+      assert html =~ ~s(name="models[]")
+    end
+
+    test "save_models persists enabled models", %{conn: conn, provider: provider} do
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+
+      # Enter edit mode
+      view
+      |> element(~s(button[phx-click="toggle_edit_models"]))
+      |> render_click()
+
+      # Submit with specific models selected
+      html =
+        view
+        |> form("form[phx-submit='save_models']", %{
+          "models" => ["claude-sonnet-4-6", "claude-haiku-3-5-20241022"]
+        })
+        |> render_submit()
+
+      assert html =~ "Models updated"
+
+      # Verify persisted
+      {:ok, updated} = Synapsis.Providers.get(provider.id)
+      assert updated.config["enabled_models"] == ["claude-sonnet-4-6", "claude-haiku-3-5-20241022"]
+    end
+
+    test "disabled models shown differently from enabled", %{conn: conn} do
+      {:ok, provider} =
+        %Synapsis.ProviderConfig{}
+        |> Synapsis.ProviderConfig.changeset(%{
+          name: "filtered-prov-#{:rand.uniform(100_000)}",
+          type: "anthropic",
+          api_key_encrypted: "sk-key",
+          config: %{"enabled_models" => ["claude-sonnet-4-6"]}
+        })
+        |> Synapsis.Repo.insert()
+
+      {:ok, _view, html} = live(conn, ~p"/settings/providers/#{provider.id}")
+      # Should not show "All models enabled" since a filter is set
+      refute html =~ "All models enabled"
+    end
+
+    test "test chat section is present", %{conn: conn, provider: provider} do
+      {:ok, _view, html} = live(conn, ~p"/settings/providers/#{provider.id}")
+      assert html =~ "Test Chat"
+    end
+
+    test "toggle_chat opens and closes the chat panel", %{conn: conn, provider: provider} do
+      {:ok, view, html} = live(conn, ~p"/settings/providers/#{provider.id}")
+      refute html =~ "Send a message to test"
+
+      html =
+        view
+        |> element(~s(button[phx-click="toggle_chat"]))
+        |> render_click()
+
+      assert html =~ "Send a message to test"
+
+      html =
+        view
+        |> element(~s(button[phx-click="toggle_chat"]))
+        |> render_click()
+
+      refute html =~ "Send a message to test"
+    end
+
+    test "chat panel shows model selector", %{conn: conn, provider: provider} do
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+
+      html =
+        view
+        |> element(~s(button[phx-click="toggle_chat"]))
+        |> render_click()
+
+      assert html =~ "Claude"
+      assert html =~ ~s(phx-change="chat_select_model")
+    end
+
+    test "chat_select_model changes selected model", %{conn: conn, provider: provider} do
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+
+      view
+      |> element(~s(button[phx-click="toggle_chat"]))
+      |> render_click()
+
+      html = render_hook(view, "chat_select_model", %{"model" => "claude-haiku-3-5-20241022"})
+      assert html =~ "claude-haiku-3-5-20241022"
+    end
+
+    test "chat_send with empty message does nothing", %{conn: conn, provider: provider} do
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+
+      view
+      |> element(~s(button[phx-click="toggle_chat"]))
+      |> render_click()
+
+      html = render_hook(view, "chat_send", %{"message" => ""})
+      refute html =~ "error"
+    end
+
+    test "chat_send without registered provider shows error", %{conn: conn, provider: provider} do
+      # Ensure provider is not in the registry
+      Synapsis.Provider.Registry.unregister(provider.name)
+
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+
+      view
+      |> element(~s(button[phx-click="toggle_chat"]))
+      |> render_click()
+
+      html = render_hook(view, "chat_send", %{"message" => "hello"})
+      assert html =~ "Provider not registered"
+    end
+
+    test "chat_clear resets messages", %{conn: conn, provider: provider} do
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+
+      view
+      |> element(~s(button[phx-click="toggle_chat"]))
+      |> render_click()
+
+      render_hook(view, "chat_clear", %{})
+      html = render(view)
+      assert html =~ "Send a message to test"
+    end
+
+    test "handle_info for provider_done appends assistant message", %{
+      conn: conn,
+      provider: provider
+    } do
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+
+      view
+      |> element(~s(button[phx-click="toggle_chat"]))
+      |> render_click()
+
+      # Simulate streaming lifecycle via handle_info
+      send(view.pid, {:provider_chunk, {:text_delta, "Hello "}})
+      send(view.pid, {:provider_chunk, {:text_delta, "world!"}})
+      send(view.pid, :provider_done)
+
+      # Give the view a moment to process
+      html = render(view)
+      assert html =~ "Hello world!"
+    end
+
+    test "handle_info for provider_error shows error message", %{
+      conn: conn,
+      provider: provider
+    } do
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+
+      view
+      |> element(~s(button[phx-click="toggle_chat"]))
+      |> render_click()
+
+      send(view.pid, {:provider_error, "HTTP 401: Invalid API key"})
+
+      html = render(view)
+      assert html =~ "Error: HTTP 401"
+    end
   end
 end

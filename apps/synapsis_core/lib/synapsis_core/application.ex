@@ -31,12 +31,6 @@ defmodule SynapsisCore.Application do
         Synapsis.Tool.Builtin.register_all()
 
         try do
-          Synapsis.Providers.seed_defaults()
-        rescue
-          e -> Logger.warning("provider_seed_failed", error: Exception.message(e))
-        end
-
-        try do
           Synapsis.Providers.load_all_into_registry()
         rescue
           e -> Logger.warning("provider_registry_load_failed", error: Exception.message(e))

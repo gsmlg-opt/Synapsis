@@ -75,16 +75,18 @@ defmodule SynapsisWeb.SessionLive.IndexTest do
       {:ok, view, _html} = live(conn, ~p"/projects/#{project.id}/sessions")
       view |> element("button", "+ New Session") |> render_click()
 
-      render_hook(view, "select_model", %{"value" => "gpt-4o"})
-      assert render(view) =~ "gpt-4o"
+      # Use a model from the default provider's model list (anthropic)
+      render_hook(view, "select_model", %{"value" => "claude-opus-4-6"})
+      assert render(view) =~ "claude-opus-4-6"
     end
 
     test "select_model via model key updates model", %{conn: conn, project: project} do
       {:ok, view, _html} = live(conn, ~p"/projects/#{project.id}/sessions")
       view |> element("button", "+ New Session") |> render_click()
 
-      render_hook(view, "select_model", %{"model" => "custom-model-v2"})
-      assert render(view) =~ "custom-model-v2"
+      # Use a model from the default provider's model list (anthropic)
+      render_hook(view, "select_model", %{"model" => "claude-sonnet-4-6"})
+      assert render(view) =~ "claude-sonnet-4-6"
     end
 
     test "create_session creates a session and navigates", %{conn: conn, project: project} do

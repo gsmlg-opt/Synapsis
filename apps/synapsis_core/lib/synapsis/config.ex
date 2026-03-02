@@ -33,6 +33,7 @@ defmodule Synapsis.Config do
             "fetch"
           ],
           "model" => nil,
+          "modelTier" => "default",
           "reasoningEffort" => "medium",
           "readOnly" => false
         },
@@ -42,6 +43,7 @@ defmodule Synapsis.Config do
             "You are a planning assistant. Analyze the codebase and create implementation plans. Do NOT make changes.",
           "tools" => ["file_read", "grep", "glob", "diagnostics"],
           "model" => nil,
+          "modelTier" => "expert",
           "reasoningEffort" => "high",
           "readOnly" => true
         }

@@ -66,7 +66,7 @@ defmodule Synapsis.Provider.ModelRegistryTest do
     test "returns all models across providers" do
       all = ModelRegistry.list_all()
       providers = all |> Enum.map(& &1.provider) |> Enum.uniq() |> Enum.sort()
-      assert providers == ["anthropic", "google", "openai"]
+      assert providers == ["anthropic", "google", "minimax", "moonshot", "openai", "zhipu"]
     end
 
     test "all models have required fields" do
@@ -292,14 +292,22 @@ defmodule Synapsis.Provider.ModelRegistryTest do
       anthropic_count = length(ModelRegistry.list(:anthropic))
       openai_count = length(ModelRegistry.list(:openai))
       google_count = length(ModelRegistry.list(:google))
+      moonshot_count = length(ModelRegistry.list(:moonshot))
+      zhipu_count = length(ModelRegistry.list(:zhipu))
+      minimax_count = length(ModelRegistry.list(:minimax))
 
-      assert length(all) == anthropic_count + openai_count + google_count
+      assert length(all) ==
+               anthropic_count + openai_count + google_count + moonshot_count + zhipu_count +
+                 minimax_count
     end
 
-    test "all three provider lists are non-empty" do
+    test "all provider lists are non-empty" do
       assert length(ModelRegistry.list(:anthropic)) > 0
       assert length(ModelRegistry.list(:openai)) > 0
       assert length(ModelRegistry.list(:google)) > 0
+      assert length(ModelRegistry.list(:moonshot)) > 0
+      assert length(ModelRegistry.list(:zhipu)) > 0
+      assert length(ModelRegistry.list(:minimax)) > 0
     end
 
     test "every model in list_all is retrievable via get/1" do
@@ -316,15 +324,17 @@ defmodule Synapsis.Provider.ModelRegistryTest do
       end
     end
 
-    test "all models support images" do
-      for model <- ModelRegistry.list_all() do
+    test "anthropic, openai, and google models support images" do
+      for provider <- [:anthropic, :openai, :google],
+          model <- ModelRegistry.list(provider) do
         assert model.supports_images == true,
                "Expected #{model.id} to support images"
       end
     end
 
-    test "all models support tools" do
-      for model <- ModelRegistry.list_all() do
+    test "anthropic, openai, and google models support tools" do
+      for provider <- [:anthropic, :openai, :google],
+          model <- ModelRegistry.list(provider) do
         assert model.supports_tools == true,
                "Expected #{model.id} to support tools"
       end

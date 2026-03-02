@@ -43,6 +43,17 @@ defmodule SynapsisServer.ProviderControllerTest do
       refute Map.has_key?(db_provider, "api_key_encrypted")
       refute Map.has_key?(db_provider, "api_key")
     end
+
+    test "provider includes model_tiers", %{conn: conn, provider: provider} do
+      conn = get(conn, "/api/providers/#{provider.id}")
+      %{"data" => data} = json_response(conn, 200)
+
+      assert is_map(data["model_tiers"])
+      tiers = data["model_tiers"]
+      assert Map.has_key?(tiers, "default")
+      assert Map.has_key?(tiers, "fast")
+      assert Map.has_key?(tiers, "expert")
+    end
   end
 
   describe "POST /api/providers" do
@@ -159,6 +170,17 @@ defmodule SynapsisServer.ProviderControllerTest do
   end
 
   describe "GET /api/providers/by-name/:name/models" do
+    setup do
+      # Ensure "anthropic" is in the ETS registry (may have been cleared by other tests)
+      Synapsis.Provider.Registry.register("anthropic", %{
+        api_key: nil,
+        type: "anthropic",
+        base_url: "https://api.anthropic.com"
+      })
+
+      :ok
+    end
+
     test "returns models for anthropic", %{conn: conn} do
       conn = get(conn, "/api/providers/by-name/anthropic/models")
       %{"data" => models} = json_response(conn, 200)
@@ -205,6 +227,13 @@ defmodule SynapsisServer.ProviderControllerTest do
   end
 
   describe "GET /api/providers (env detection)" do
+    setup %{} do
+      # Remove seeded providers so env detection tests start clean
+      import Ecto.Query
+      Synapsis.Repo.delete_all(from p in Synapsis.ProviderConfig, where: p.name in ["anthropic", "openai", "google"])
+      :ok
+    end
+
     test "includes env provider when ANTHROPIC_API_KEY is set", %{conn: conn} do
       System.put_env("ANTHROPIC_API_KEY", "sk-ant-env-test")
 
