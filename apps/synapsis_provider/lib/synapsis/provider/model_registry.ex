@@ -203,19 +203,19 @@ defmodule Synapsis.Provider.ModelRegistry do
 
   @moonshot_models [
     %{
-      id: "kimi-k2",
-      name: "Kimi K2",
+      id: "kimi-k2.5",
+      name: "Kimi K2.5",
       provider: "moonshot",
       context_window: 128_000,
       max_output_tokens: 32_768,
       supports_tools: true,
       supports_thinking: false,
-      supports_images: false,
+      supports_images: true,
       supports_streaming: true
     },
     %{
-      id: "kimi-k2.5",
-      name: "Kimi K2.5",
+      id: "kimi-k2-turbo-preview",
+      name: "Kimi K2 Turbo",
       provider: "moonshot",
       context_window: 128_000,
       max_output_tokens: 32_768,
@@ -236,12 +236,34 @@ defmodule Synapsis.Provider.ModelRegistry do
       supports_streaming: true
     },
     %{
+      id: "kimi-k2-thinking-turbo",
+      name: "Kimi K2 Thinking Turbo",
+      provider: "moonshot",
+      context_window: 256_000,
+      max_output_tokens: 32_768,
+      supports_tools: true,
+      supports_thinking: true,
+      supports_images: false,
+      supports_streaming: true
+    },
+    %{
       id: "kimi-k2-0905-preview",
       name: "Kimi K2 (Sep 2025)",
       provider: "moonshot",
       context_window: 256_000,
       max_output_tokens: 32_768,
       supports_tools: true,
+      supports_thinking: false,
+      supports_images: false,
+      supports_streaming: true
+    },
+    %{
+      id: "moonshot-v1-auto",
+      name: "Moonshot V1 Auto",
+      provider: "moonshot",
+      context_window: 128_000,
+      max_output_tokens: 4096,
+      supports_tools: false,
       supports_thinking: false,
       supports_images: false,
       supports_streaming: true

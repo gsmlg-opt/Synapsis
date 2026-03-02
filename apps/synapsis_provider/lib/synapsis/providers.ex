@@ -92,6 +92,26 @@ defmodule Synapsis.Providers do
     end
   end
 
+  @doc "Fetch all available models for a provider by id."
+  def models_by_id(id) do
+    case get(id) do
+      {:ok, provider} ->
+        config = build_runtime_config(provider)
+        Synapsis.Provider.Adapter.models(config)
+
+      {:error, _} ->
+        {:error, :not_found}
+    end
+  end
+
+  @doc "Return the list of enabled model IDs for a provider. Empty list means all models enabled."
+  def enabled_models(%ProviderConfig{config: config}) do
+    case config do
+      %{"enabled_models" => models} when is_list(models) -> models
+      _ -> []
+    end
+  end
+
   def test_connection(id) do
     case models(id) do
       {:ok, models} -> {:ok, %{status: :ok, models_count: length(models)}}
@@ -120,6 +140,9 @@ defmodule Synapsis.Providers do
     %{name: "minimax-cn", type: "anthropic", base_url: "https://api.minimaxi.com/anthropic"},
     %{name: "openrouter", type: "openrouter", base_url: "https://openrouter.ai/api"}
   ]
+
+  @doc "Return the list of known provider presets (name, type, base_url)."
+  def preset_providers, do: @default_providers
 
   @doc "Insert default providers (idempotent — skips existing names)."
   def seed_defaults do
@@ -193,14 +216,100 @@ defmodule Synapsis.Providers do
   def default_model("openai_compat"), do: "gpt-4.1"
   def default_model("openrouter"), do: "openai/gpt-4.1"
   def default_model("google"), do: "gemini-2.5-flash"
-  def default_model("moonshot-ai"), do: "kimi-k2"
-  def default_model("moonshot-cn"), do: "kimi-k2"
+  def default_model("moonshot-ai"), do: "kimi-k2.5"
+  def default_model("moonshot-cn"), do: "kimi-k2.5"
   def default_model("zhipu-ai"), do: "glm-4.7"
   def default_model("zhipu-cn"), do: "glm-4.7"
   def default_model("zhipu-coding"), do: "glm-4.7"
   def default_model("minimax-io"), do: "MiniMax-M2.5"
   def default_model("minimax-cn"), do: "MiniMax-M2.5"
-  def default_model(_), do: "gpt-4.1"
+
+  def default_model(provider_name) do
+    # For custom-named providers, look up their config and infer default model from base_url
+    case Synapsis.Provider.Registry.get(provider_name) do
+      {:ok, config} ->
+        base_url = config[:base_url] || ""
+
+        cond do
+          String.contains?(base_url, "moonshot") ->
+            "kimi-k2.5"
+
+          String.contains?(base_url, "bigmodel") or String.contains?(base_url, "z.ai") ->
+            "glm-4.7"
+
+          String.contains?(base_url, "minimax") ->
+            "MiniMax-M2.5"
+
+          String.contains?(base_url, "anthropic.com") ->
+            "claude-sonnet-4-6"
+
+          String.contains?(base_url, "openai.com") or String.contains?(base_url, "chatgpt.com") ->
+            "gpt-4.1"
+
+          String.contains?(base_url, "googleapis.com") ->
+            "gemini-2.5-flash"
+
+          String.contains?(base_url, "openrouter") ->
+            "openai/gpt-4.1"
+
+          true ->
+            "gpt-4.1"
+        end
+
+      {:error, _} ->
+        "gpt-4.1"
+    end
+  end
+
+  @doc "Return the model for a given tier (:default | :fast | :expert) and provider."
+  def model_for_tier(provider_name, tier \\ :default)
+
+  def model_for_tier(provider_name, :default), do: default_model(provider_name)
+
+  def model_for_tier(provider_name, :fast) do
+    case provider_name do
+      "anthropic" -> "claude-haiku-3-5-20241022"
+      "openai" -> "gpt-4.1-mini"
+      "openai-sub" -> "gpt-4.1-mini"
+      "google" -> "gemini-2.0-flash"
+      "moonshot-ai" -> "kimi-k2-turbo-preview"
+      "moonshot-cn" -> "kimi-k2-turbo-preview"
+      "zhipu-ai" -> "glm-4-flash"
+      "zhipu-cn" -> "glm-4-flash"
+      "zhipu-coding" -> "codegeex-4"
+      "minimax-io" -> "MiniMax-M1"
+      "minimax-cn" -> "MiniMax-M1"
+      "openrouter" -> "openai/gpt-4.1-mini"
+      _ -> infer_fast_from_registry(provider_name)
+    end
+  end
+
+  def model_for_tier(provider_name, :expert) do
+    case provider_name do
+      "anthropic" -> "claude-opus-4-6"
+      "openai" -> "o3"
+      "openai-sub" -> "o3"
+      "google" -> "gemini-2.5-pro"
+      "moonshot-ai" -> "kimi-k2-thinking"
+      "moonshot-cn" -> "kimi-k2-thinking"
+      "zhipu-ai" -> "glm-4.7"
+      "zhipu-cn" -> "glm-4.7"
+      "zhipu-coding" -> "glm-4.7"
+      "minimax-io" -> "MiniMax-M2.5"
+      "minimax-cn" -> "MiniMax-M2.5"
+      "openrouter" -> "anthropic/claude-opus-4-6"
+      _ -> infer_expert_from_registry(provider_name)
+    end
+  end
+
+  @doc "Return all three tier models for a provider."
+  def model_tiers(provider_name) do
+    %{
+      default: model_for_tier(provider_name, :default),
+      fast: model_for_tier(provider_name, :fast),
+      expert: model_for_tier(provider_name, :expert)
+    }
+  end
 
   @doc "Environment variable name for a provider's API key."
   def env_var_name("anthropic"), do: "ANTHROPIC_API_KEY"
@@ -228,4 +337,76 @@ defmodule Synapsis.Providers do
   end
 
   defp safe_to_atom(k), do: k
+
+  defp infer_fast_from_registry(provider_name) do
+    case Synapsis.Provider.Registry.get(provider_name) do
+      {:ok, config} ->
+        base_url = config[:base_url] || ""
+
+        cond do
+          String.contains?(base_url, "moonshot") ->
+            "kimi-k2-turbo-preview"
+
+          String.contains?(base_url, "bigmodel") or String.contains?(base_url, "z.ai") ->
+            "glm-4-flash"
+
+          String.contains?(base_url, "minimax") ->
+            "MiniMax-M1"
+
+          String.contains?(base_url, "anthropic.com") ->
+            "claude-haiku-3-5-20241022"
+
+          String.contains?(base_url, "openai.com") or String.contains?(base_url, "chatgpt.com") ->
+            "gpt-4.1-mini"
+
+          String.contains?(base_url, "googleapis.com") ->
+            "gemini-2.0-flash"
+
+          String.contains?(base_url, "openrouter") ->
+            "openai/gpt-4.1-mini"
+
+          true ->
+            "gpt-4.1-mini"
+        end
+
+      {:error, _} ->
+        "gpt-4.1-mini"
+    end
+  end
+
+  defp infer_expert_from_registry(provider_name) do
+    case Synapsis.Provider.Registry.get(provider_name) do
+      {:ok, config} ->
+        base_url = config[:base_url] || ""
+
+        cond do
+          String.contains?(base_url, "moonshot") ->
+            "kimi-k2-thinking"
+
+          String.contains?(base_url, "bigmodel") or String.contains?(base_url, "z.ai") ->
+            "glm-4.7"
+
+          String.contains?(base_url, "minimax") ->
+            "MiniMax-M2.5"
+
+          String.contains?(base_url, "anthropic.com") ->
+            "claude-opus-4-6"
+
+          String.contains?(base_url, "openai.com") or String.contains?(base_url, "chatgpt.com") ->
+            "o3"
+
+          String.contains?(base_url, "googleapis.com") ->
+            "gemini-2.5-pro"
+
+          String.contains?(base_url, "openrouter") ->
+            "anthropic/claude-opus-4-6"
+
+          true ->
+            "o3"
+        end
+
+      {:error, _} ->
+        "o3"
+    end
+  end
 end
