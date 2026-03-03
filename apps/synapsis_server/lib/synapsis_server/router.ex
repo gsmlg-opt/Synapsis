@@ -84,9 +84,11 @@ defmodule SynapsisServer.Router do
     live "/settings/skills/:id", SkillLive.Show, :show
 
     live "/settings/mcp", MCPLive.Index, :index
+    live "/settings/mcp/new", MCPLive.Index, :new
     live "/settings/mcp/:id", MCPLive.Show, :show
 
     live "/settings/lsp", LSPLive.Index, :index
+    live "/settings/lsp/new", LSPLive.Index, :new
     live "/settings/lsp/:id", LSPLive.Show, :show
   end
 end

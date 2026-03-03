@@ -1,15 +1,18 @@
 defmodule SynapsisWeb.MCPLive.ShowTest do
   use SynapsisWeb.ConnCase
 
+  alias Synapsis.{Repo, PluginConfig}
+
   setup do
     {:ok, config} =
-      %Synapsis.MCPConfig{}
-      |> Synapsis.MCPConfig.changeset(%{
+      %PluginConfig{}
+      |> PluginConfig.changeset(%{
+        type: "mcp",
         name: "test-server",
         transport: "stdio",
         command: "npx test-server"
       })
-      |> Synapsis.Repo.insert()
+      |> Repo.insert()
 
     %{config: config}
   end
@@ -50,10 +53,10 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     assert html =~ "SSE"
   end
 
-  test "shows auto-connect checkbox", %{conn: conn, config: config} do
+  test "shows auto-start checkbox", %{conn: conn, config: config} do
     {:ok, _view, html} = live(conn, ~p"/settings/mcp/#{config.id}")
-    assert html =~ "Auto-connect on startup"
-    assert html =~ ~s(name="auto_connect")
+    assert html =~ "Auto-start on startup"
+    assert html =~ ~s(name="auto_start")
   end
 
   test "heading displays config name", %{conn: conn, config: config} do
@@ -96,14 +99,15 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
 
   test "config with env vars displays them formatted", %{conn: conn} do
     {:ok, config_with_env} =
-      %Synapsis.MCPConfig{}
-      |> Synapsis.MCPConfig.changeset(%{
+      %PluginConfig{}
+      |> PluginConfig.changeset(%{
+        type: "mcp",
         name: "env-show-test",
         transport: "stdio",
         command: "test",
         env: %{"TOKEN" => "abc123", "SECRET" => "xyz789"}
       })
-      |> Synapsis.Repo.insert()
+      |> Repo.insert()
 
     {:ok, _view, html} = live(conn, ~p"/settings/mcp/#{config_with_env.id}")
     assert html =~ "TOKEN=abc123"
@@ -112,14 +116,15 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
 
   test "config with args displays them one per line", %{conn: conn} do
     {:ok, config_with_args} =
-      %Synapsis.MCPConfig{}
-      |> Synapsis.MCPConfig.changeset(%{
+      %PluginConfig{}
+      |> PluginConfig.changeset(%{
+        type: "mcp",
         name: "args-show-test",
         transport: "stdio",
         command: "test",
         args: ["--verbose", "--port=8080"]
       })
-      |> Synapsis.Repo.insert()
+      |> Repo.insert()
 
     {:ok, _view, html} = live(conn, ~p"/settings/mcp/#{config_with_args.id}")
     assert html =~ "--verbose"
@@ -129,7 +134,6 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
   test "submitting form with empty args and env clears them", %{conn: conn, config: config} do
     {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
 
-    # Submit with empty args and env strings — exercises parse_args("") and parse_env("")
     view
     |> form("form", %{"command" => "some-cmd", "args" => "", "env" => ""})
     |> render_submit()
@@ -178,12 +182,11 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     assert html =~ "MCP server updated"
   end
 
-  test "auto_connect checkbox — submitting with false value", %{conn: conn, config: config} do
+  test "auto_start checkbox — submitting with false value", %{conn: conn, config: config} do
     {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
 
-    # Hidden field sends "false", no checkbox checked
     view
-    |> form("form", %{"command" => "test", "auto_connect" => "false"})
+    |> form("form", %{"command" => "test", "auto_start" => "false"})
     |> render_submit()
 
     assert render(view) =~ "MCP server updated"

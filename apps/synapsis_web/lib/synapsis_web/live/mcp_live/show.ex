@@ -1,17 +1,25 @@
 defmodule SynapsisWeb.MCPLive.Show do
   use SynapsisWeb, :live_view
 
+  alias Synapsis.{Repo, PluginConfig}
+
   @impl true
   def mount(%{"id" => id}, _session, socket) do
-    case Synapsis.Repo.get(Synapsis.MCPConfig, id) do
+    case Repo.get(PluginConfig, id) do
       nil ->
         {:ok,
          socket
          |> put_flash(:error, "MCP server not found")
          |> push_navigate(to: ~p"/settings/mcp")}
 
-      config ->
+      %PluginConfig{type: "mcp"} = config ->
         {:ok, assign(socket, config: config, page_title: config.name)}
+
+      _other ->
+        {:ok,
+         socket
+         |> put_flash(:error, "Not an MCP configuration")
+         |> push_navigate(to: ~p"/settings/mcp")}
     end
   end
 
@@ -23,12 +31,12 @@ defmodule SynapsisWeb.MCPLive.Show do
       url: params["url"],
       transport: params["transport"],
       env: parse_env(params["env"]),
-      auto_connect: params["auto_connect"] == "true"
+      auto_start: params["auto_start"] == "true"
     }
 
-    changeset = Synapsis.MCPConfig.changeset(socket.assigns.config, attrs)
+    changeset = PluginConfig.changeset(socket.assigns.config, attrs)
 
-    case Synapsis.Repo.update(changeset) do
+    case Repo.update(changeset) do
       {:ok, config} ->
         {:noreply,
          socket
@@ -145,15 +153,15 @@ defmodule SynapsisWeb.MCPLive.Show do
 
             <div>
               <label class="flex items-center gap-2">
-                <input type="hidden" name="auto_connect" value="false" />
+                <input type="hidden" name="auto_start" value="false" />
                 <input
                   type="checkbox"
-                  name="auto_connect"
+                  name="auto_start"
                   value="true"
-                  checked={@config.auto_connect}
+                  checked={@config.auto_start}
                   class="rounded bg-gray-800 border-gray-700"
                 />
-                <span class="text-sm">Auto-connect on startup</span>
+                <span class="text-sm">Auto-start on startup</span>
               </label>
             </div>
 

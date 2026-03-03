@@ -92,40 +92,52 @@ defmodule SynapsisPlugin.LSP do
     language = config[:name] || config["name"] || config[:language] || config["language"]
     root_path = config[:root_path] || config["root_path"]
 
-    case lsp_command(language) do
-      nil ->
+    command = config[:command] || config["command"]
+    args = config[:args] || config["args"]
+
+    {executable, exec_args} =
+      if command do
+        {command, args || []}
+      else
+        case SynapsisPlugin.LSP.Presets.lsp_command(language) do
+          nil -> {nil, nil}
+          result -> result
+        end
+      end
+
+    cond do
+      is_nil(executable) ->
         {:error, {:no_lsp_for_language, language}}
 
-      {executable, args} ->
-        case System.find_executable(executable) do
-          nil ->
-            Logger.info("lsp_binary_not_found", language: language, executable: executable)
-            {:error, {:no_lsp_binary, executable}}
+      is_nil(System.find_executable(executable)) ->
+        Logger.info("lsp_binary_not_found", language: language, executable: executable)
+        {:error, {:no_lsp_binary, executable}}
 
-          exe_path ->
-            port =
-              Port.open({:spawn_executable, exe_path}, [
-                :binary,
-                :exit_status,
-                {:args, args},
-                {:cd, root_path || "."}
-              ])
+      true ->
+        exe_path = System.find_executable(executable)
 
-            state = %__MODULE__{
-              port: port,
-              language: language,
-              root_path: root_path || ".",
-              request_id: 1,
-              pending: %{},
-              buffer: "",
-              initialized: false,
-              diagnostics: %{},
-              pending_requests: %{}
-            }
+        port =
+          Port.open({:spawn_executable, exe_path}, [
+            :binary,
+            :exit_status,
+            {:args, exec_args},
+            {:cd, root_path || "."}
+          ])
 
-            state = send_initialize(state)
-            {:ok, state}
-        end
+        state = %__MODULE__{
+          port: port,
+          language: language,
+          root_path: root_path || ".",
+          request_id: 1,
+          pending: %{},
+          buffer: "",
+          initialized: false,
+          diagnostics: %{},
+          pending_requests: %{}
+        }
+
+        state = send_initialize(state)
+        {:ok, state}
     end
   end
 
@@ -403,8 +415,4 @@ defmodule SynapsisPlugin.LSP do
   defp symbol_kind(13), do: "variable"
   defp symbol_kind(_), do: "symbol"
 
-  defp lsp_command("elixir"), do: {"elixir-ls", ["--stdio"]}
-  defp lsp_command("typescript"), do: {"typescript-language-server", ["--stdio"]}
-  defp lsp_command("go"), do: {"gopls", ["serve"]}
-  defp lsp_command(_), do: nil
 end

@@ -48,6 +48,30 @@ defmodule SynapsisPlugin.LSP.ManagerTest do
       assert "go" in langs
     end
 
+    test "detects python from .py files", %{dir: dir} do
+      File.write!(Path.join(dir, "main.py"), "print('hello')")
+      langs = Manager.detect_languages(dir)
+      assert "python" in langs
+    end
+
+    test "detects rust from .rs files", %{dir: dir} do
+      File.write!(Path.join(dir, "main.rs"), "fn main() {}")
+      langs = Manager.detect_languages(dir)
+      assert "rust" in langs
+    end
+
+    test "detects c_cpp from .c files", %{dir: dir} do
+      File.write!(Path.join(dir, "main.c"), "int main() { return 0; }")
+      langs = Manager.detect_languages(dir)
+      assert "c_cpp" in langs
+    end
+
+    test "detects c_cpp from .cpp files", %{dir: dir} do
+      File.write!(Path.join(dir, "main.cpp"), "int main() { return 0; }")
+      langs = Manager.detect_languages(dir)
+      assert "c_cpp" in langs
+    end
+
     test "detects multiple languages when files exist", %{dir: dir} do
       File.write!(Path.join(dir, "module.ex"), "defmodule Foo do\nend")
       File.write!(Path.join(dir, "main.go"), "package main")
@@ -61,6 +85,9 @@ defmodule SynapsisPlugin.LSP.ManagerTest do
       langs = Manager.detect_languages(dir)
       refute "go" in langs
       refute "typescript" in langs
+      refute "python" in langs
+      refute "rust" in langs
+      refute "c_cpp" in langs
     end
   end
 end

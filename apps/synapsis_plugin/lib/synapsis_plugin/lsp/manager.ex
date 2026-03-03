@@ -46,36 +46,6 @@ defmodule SynapsisPlugin.LSP.Manager do
   end
 
   def detect_languages(project_path) do
-    languages = []
-
-    languages =
-      if has_files?(project_path, "**/*.ex") or has_files?(project_path, "**/*.exs") do
-        ["elixir" | languages]
-      else
-        languages
-      end
-
-    languages =
-      if has_files?(project_path, "**/*.ts") or has_files?(project_path, "**/*.tsx") do
-        ["typescript" | languages]
-      else
-        languages
-      end
-
-    languages =
-      if has_files?(project_path, "**/*.go") do
-        ["go" | languages]
-      else
-        languages
-      end
-
-    languages
-  end
-
-  defp has_files?(project_path, pattern) do
-    project_path
-    |> Path.join(pattern)
-    |> Path.wildcard()
-    |> Enum.any?()
+    SynapsisPlugin.LSP.Presets.detect_languages(project_path)
   end
 end

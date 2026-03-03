@@ -1,17 +1,25 @@
 defmodule SynapsisWeb.LSPLive.Show do
   use SynapsisWeb, :live_view
 
+  alias Synapsis.{Repo, PluginConfig}
+
   @impl true
   def mount(%{"id" => id}, _session, socket) do
-    case Synapsis.Repo.get(Synapsis.LSPConfig, id) do
+    case Repo.get(PluginConfig, id) do
       nil ->
         {:ok,
          socket
          |> put_flash(:error, "LSP server not found")
          |> push_navigate(to: ~p"/settings/lsp")}
 
-      config ->
-        {:ok, assign(socket, config: config, page_title: config.language)}
+      %PluginConfig{type: "lsp"} = config ->
+        {:ok, assign(socket, config: config, page_title: config.name)}
+
+      _other ->
+        {:ok,
+         socket
+         |> put_flash(:error, "Not an LSP configuration")
+         |> push_navigate(to: ~p"/settings/lsp")}
     end
   end
 
@@ -23,9 +31,9 @@ defmodule SynapsisWeb.LSPLive.Show do
       auto_start: params["auto_start"] == "true"
     }
 
-    changeset = Synapsis.LSPConfig.changeset(socket.assigns.config, attrs)
+    changeset = PluginConfig.changeset(socket.assigns.config, attrs)
 
-    case Synapsis.Repo.update(changeset) do
+    case Repo.update(changeset) do
       {:ok, config} ->
         {:noreply,
          socket
@@ -47,10 +55,10 @@ defmodule SynapsisWeb.LSPLive.Show do
           <span>/</span>
           <.link navigate={~p"/settings/lsp"} class="hover:text-gray-300">LSP Servers</.link>
           <span>/</span>
-          <span class="text-gray-300">{@config.language}</span>
+          <span class="text-gray-300">{@config.name}</span>
         </div>
 
-        <h1 class="text-2xl font-bold mb-6">{@config.language}</h1>
+        <h1 class="text-2xl font-bold mb-6">{@config.name}</h1>
 
         <.flash_group flash={@flash} />
 
@@ -64,6 +72,13 @@ defmodule SynapsisWeb.LSPLive.Show do
                 value={@config.command}
                 class="w-full bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none"
               />
+            </div>
+
+            <div>
+              <label class="block text-sm text-gray-400 mb-1">Args</label>
+              <div class="bg-gray-800 text-gray-400 rounded px-3 py-2 border border-gray-700">
+                {Enum.join(@config.args || [], " ")}
+              </div>
             </div>
 
             <div>
