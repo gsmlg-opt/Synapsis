@@ -33,7 +33,7 @@ function PartView({ part }: { part: MessagePart }) {
             Tool: {part.tool}
           </div>
           {part.input && (
-            <pre className="text-gray-400 text-xs overflow-x-auto">
+            <pre className="text-gray-400 text-xs whitespace-pre-wrap break-all overflow-x-auto">
               {JSON.stringify(part.input, null, 2)}
             </pre>
           )}
@@ -94,9 +94,9 @@ export function MessageItem({ message }: { message: Message }) {
   const isUser = message.role === "user"
 
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+    <div className={`flex min-w-0 ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[85%] rounded-lg p-3 ${
+        className={`max-w-[85%] min-w-0 rounded-lg p-3 ${
           isUser
             ? "bg-blue-900/50 text-blue-100"
             : "bg-gray-800/50 text-gray-100"

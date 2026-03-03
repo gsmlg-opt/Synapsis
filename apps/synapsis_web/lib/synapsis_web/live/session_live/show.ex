@@ -286,7 +286,7 @@ defmodule SynapsisWeb.SessionLive.Show do
       </aside>
 
       <%!-- Main content --%>
-      <main class="flex-1 flex flex-col">
+      <main class="flex-1 min-w-0 flex flex-col">
         <%!-- Session header --%>
         <div class="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
           <div class="flex items-center gap-3">
