@@ -1,10 +1,15 @@
 defmodule SynapsisWeb.MemoryLive.IndexTest do
   use SynapsisWeb.ConnCase
 
+  defp create_memory_entry(content) do
+    %Synapsis.MemoryEntry{}
+    |> Synapsis.MemoryEntry.changeset(%{scope: "global", key: "CLAUDE.md", content: content})
+    |> Synapsis.Repo.insert!()
+  end
+
   describe "memory page" do
     test "mounts and renders heading", %{conn: conn} do
-      {:ok, view, html} = live(conn, ~p"/settings/memory")
-      assert html =~ "Memory"
+      {:ok, view, _html} = live(conn, ~p"/settings/memory")
       assert has_element?(view, "h1", "Memory")
     end
 
@@ -13,225 +18,118 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
       assert html =~ "Settings"
     end
 
-    test "shows create form", %{conn: conn} do
+    test "shows Edit button by default", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/settings/memory")
-      assert html =~ "Add Entry"
+      assert html =~ "Edit"
     end
 
-    test "shows scope filter buttons", %{conn: conn} do
+    test "shows empty state when no entry", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/settings/memory")
-      assert html =~ "all"
-      assert html =~ "global"
-      assert html =~ "project"
-      assert html =~ "session"
+      assert html =~ "No memory content yet"
     end
 
-    test "creates memory entry", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/settings/memory")
-
-      view
-      |> form("form", %{"scope" => "global", "key" => "test-key", "content" => "test value"})
-      |> render_submit()
-
-      html = render(view)
-      assert html =~ "test-key"
-      assert html =~ "test value"
-    end
-
-    test "filters by scope", %{conn: conn} do
-      %Synapsis.MemoryEntry{}
-      |> Synapsis.MemoryEntry.changeset(%{scope: "global", key: "gk", content: "gc"})
-      |> Synapsis.Repo.insert!()
-
-      {:ok, view, _html} = live(conn, ~p"/settings/memory")
-
-      view
-      |> element(~s(button[phx-click="filter_scope"][phx-value-scope="global"]))
-      |> render_click()
-
-      html = render(view)
-      assert html =~ "gk"
-    end
-
-    test "filter_scope hides entries of other scopes", %{conn: conn} do
-      %Synapsis.MemoryEntry{}
-      |> Synapsis.MemoryEntry.changeset(%{scope: "global", key: "global-only-key", content: "g"})
-      |> Synapsis.Repo.insert!()
-
-      %Synapsis.MemoryEntry{}
-      |> Synapsis.MemoryEntry.changeset(%{
-        scope: "project",
-        key: "project-only-key",
-        content: "p"
-      })
-      |> Synapsis.Repo.insert!()
-
-      {:ok, view, _html} = live(conn, ~p"/settings/memory")
-
-      view
-      |> element(~s(button[phx-click="filter_scope"][phx-value-scope="project"]))
-      |> render_click()
-
-      html = render(view)
-      assert html =~ "project-only-key"
-      refute html =~ "global-only-key"
-    end
-
-    test "deletes a memory entry", %{conn: conn} do
-      {:ok, entry} =
-        %Synapsis.MemoryEntry{}
-        |> Synapsis.MemoryEntry.changeset(%{
-          scope: "global",
-          key: "to-delete-key",
-          content: "bye"
-        })
-        |> Synapsis.Repo.insert()
-
-      {:ok, view, html} = live(conn, ~p"/settings/memory")
-      assert html =~ "to-delete-key"
-
-      view
-      |> element(~s(button[phx-click="delete_entry"][phx-value-id="#{entry.id}"]))
-      |> render_click()
-
-      refute render(view) =~ "to-delete-key"
-    end
-
-    test "create_entry with empty key shows error flash", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/settings/memory")
-
-      view
-      |> form("form", %{"scope" => "global", "key" => "", "content" => "some content"})
-      |> render_submit()
-
-      assert render(view) =~ "Failed to create entry"
-    end
-
-    test "create_entry with empty content shows error flash", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/settings/memory")
-
-      view
-      |> form("form", %{"scope" => "global", "key" => "test-key", "content" => ""})
-      |> render_submit()
-
-      assert render(view) =~ "Failed to create entry"
-    end
-
-    test "filter back to 'all' shows all entries", %{conn: conn} do
-      %Synapsis.MemoryEntry{}
-      |> Synapsis.MemoryEntry.changeset(%{scope: "global", key: "g-all", content: "gc"})
-      |> Synapsis.Repo.insert!()
-
-      %Synapsis.MemoryEntry{}
-      |> Synapsis.MemoryEntry.changeset(%{scope: "project", key: "p-all", content: "pc"})
-      |> Synapsis.Repo.insert!()
-
-      {:ok, view, _html} = live(conn, ~p"/settings/memory")
-
-      # Filter to project only
-      view
-      |> element(~s(button[phx-click="filter_scope"][phx-value-scope="project"]))
-      |> render_click()
-
-      html = render(view)
-      assert html =~ "p-all"
-      refute html =~ "g-all"
-
-      # Filter back to all
-      view
-      |> element(~s(button[phx-click="filter_scope"][phx-value-scope="all"]))
-      |> render_click()
-
-      html = render(view)
-      assert html =~ "g-all"
-      assert html =~ "p-all"
-    end
-
-    test "filtering by session scope shows only session entries", %{conn: conn} do
-      %Synapsis.MemoryEntry{}
-      |> Synapsis.MemoryEntry.changeset(%{scope: "session", key: "sess-key", content: "sc"})
-      |> Synapsis.Repo.insert!()
-
-      %Synapsis.MemoryEntry{}
-      |> Synapsis.MemoryEntry.changeset(%{scope: "global", key: "glob-key", content: "gc"})
-      |> Synapsis.Repo.insert!()
-
-      {:ok, view, _html} = live(conn, ~p"/settings/memory")
-
-      view
-      |> element(~s(button[phx-click="filter_scope"][phx-value-scope="session"]))
-      |> render_click()
-
-      html = render(view)
-      assert html =~ "sess-key"
-      refute html =~ "glob-key"
-    end
-
-    test "create_entry shows success flash", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/settings/memory")
-
-      view
-      |> form("form", %{
-        "scope" => "global",
-        "key" => "flash-key-#{:rand.uniform(100_000)}",
-        "content" => "flash content"
-      })
-      |> render_submit()
-
-      assert render(view) =~ "Memory entry created"
-    end
-
-    test "heading displays Memory", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/settings/memory")
-      assert has_element?(view, "h1", "Memory")
-    end
-
-    test "entry content is displayed", %{conn: conn} do
-      %Synapsis.MemoryEntry{}
-      |> Synapsis.MemoryEntry.changeset(%{
-        scope: "global",
-        key: "content-display-key",
-        content: "This is the displayed content body."
-      })
-      |> Synapsis.Repo.insert!()
-
+    test "displays existing content readonly", %{conn: conn} do
+      create_memory_entry("Hello from memory")
       {:ok, _view, html} = live(conn, ~p"/settings/memory")
-      assert html =~ "This is the displayed content body."
+      assert html =~ "Hello from memory"
     end
 
-    test "entry displays its scope badge", %{conn: conn} do
-      %Synapsis.MemoryEntry{}
-      |> Synapsis.MemoryEntry.changeset(%{
-        scope: "project",
-        key: "scope-badge-key",
-        content: "content"
-      })
-      |> Synapsis.Repo.insert!()
-
+    test "content displayed with whitespace preserved", %{conn: conn} do
+      create_memory_entry("line one\nline two")
       {:ok, _view, html} = live(conn, ~p"/settings/memory")
-      assert html =~ "scope-badge-key"
-      assert html =~ "project"
+      assert html =~ "whitespace-pre-wrap"
+      assert html =~ "line one\nline two"
     end
 
-    test "delete_entry with nonexistent id does not crash", %{conn: conn} do
+    test "clicking Edit shows textarea", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings/memory")
-      html = render_hook(view, "delete_entry", %{"id" => Ecto.UUID.generate()})
-      assert is_binary(html)
+
+      view |> element("button", "Edit") |> render_click()
+
+      assert has_element?(view, "textarea[name=content]")
     end
 
-    test "create_entry with project scope sets scope correctly", %{conn: conn} do
+    test "clicking Edit hides Edit button", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings/memory")
+
+      view |> element("button", "Edit") |> render_click()
+
+      html = render(view)
+      refute html =~ ~r/<button[^>]*>.*Edit.*<\/button>/s
+      assert html =~ "Save"
+    end
+
+    test "edit mode shows Save and Cancel buttons", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings/memory")
+
+      view |> element("button", "Edit") |> render_click()
+
+      assert has_element?(view, "button", "Save")
+      assert has_element?(view, "button", "Cancel")
+    end
+
+    test "cancel returns to readonly without saving", %{conn: conn} do
+      create_memory_entry("original content")
+      {:ok, view, _html} = live(conn, ~p"/settings/memory")
+
+      view |> element("button", "Edit") |> render_click()
+      view |> element("button", "Cancel") |> render_click()
+
+      html = render(view)
+      assert html =~ "original content"
+      refute has_element?(view, "textarea")
+    end
+
+    test "save persists new content", %{conn: conn} do
+      create_memory_entry("old content")
+      {:ok, view, _html} = live(conn, ~p"/settings/memory")
+
+      view |> element("button", "Edit") |> render_click()
 
       view
-      |> form("form", %{
-        "scope" => "project",
-        "key" => "proj-scope-test-#{:rand.uniform(100_000)}",
-        "content" => "proj content"
-      })
+      |> form("#memory-form", %{"content" => "new content"})
       |> render_submit()
 
       html = render(view)
-      assert html =~ "proj content"
+      assert html =~ "new content"
+      refute has_element?(view, "textarea")
+    end
+
+    test "save shows success flash", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings/memory")
+
+      view |> element("button", "Edit") |> render_click()
+
+      view
+      |> form("#memory-form", %{"content" => "some content"})
+      |> render_submit()
+
+      assert render(view) =~ "Memory saved"
+    end
+
+    test "save creates entry when none exists", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings/memory")
+
+      view |> element("button", "Edit") |> render_click()
+
+      view
+      |> form("#memory-form", %{"content" => "brand new content"})
+      |> render_submit()
+
+      html = render(view)
+      assert html =~ "brand new content"
+      refute html =~ "No memory content yet"
+    end
+
+    test "edit mode textarea contains current content", %{conn: conn} do
+      create_memory_entry("pre-existing text")
+      {:ok, view, _html} = live(conn, ~p"/settings/memory")
+
+      view |> element("button", "Edit") |> render_click()
+
+      html = render(view)
+      assert html =~ "pre-existing text"
+      assert has_element?(view, "textarea[name=content]")
     end
   end
 end
