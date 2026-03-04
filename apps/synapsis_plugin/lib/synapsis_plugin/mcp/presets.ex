@@ -35,6 +35,30 @@ defmodule SynapsisPlugin.MCP.Presets do
       transport: "stdio"
     },
     %{
+      name: "chrome-devtools",
+      description: "Chrome DevTools for AI agents — debugging, performance tracing, network inspection",
+      command: "npx",
+      args: ["-y", "chrome-devtools-mcp@latest"],
+      env: %{},
+      transport: "stdio"
+    },
+    %{
+      name: "gitlab",
+      description: "GitLab repository management — issues, merge requests, pipelines, code search",
+      command: "npx",
+      args: ["-y", "@modelcontextprotocol/server-gitlab"],
+      env: %{"GITLAB_PERSONAL_ACCESS_TOKEN" => "", "GITLAB_API_URL" => "https://gitlab.com/api/v4"},
+      transport: "stdio"
+    },
+    %{
+      name: "figma",
+      description: "Figma design files — inspect layouts, extract design tokens, read components",
+      command: "npx",
+      args: ["-y", "figma-developer-mcp", "--stdio"],
+      env: %{"FIGMA_API_KEY" => ""},
+      transport: "stdio"
+    },
+    %{
       name: "memory",
       description: "Knowledge graph-based persistent memory across sessions",
       command: "npx",

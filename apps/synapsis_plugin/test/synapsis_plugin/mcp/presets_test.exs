@@ -4,8 +4,8 @@ defmodule SynapsisPlugin.MCP.PresetsTest do
   alias SynapsisPlugin.MCP.Presets
 
   describe "all/0" do
-    test "returns 12 presets" do
-      assert length(Presets.all()) == 12
+    test "returns 15 presets" do
+      assert length(Presets.all()) == 15
     end
 
     test "each preset has required keys" do
@@ -24,6 +24,9 @@ defmodule SynapsisPlugin.MCP.PresetsTest do
       assert "filesystem" in names
       assert "github" in names
       assert "playwright" in names
+      assert "chrome-devtools" in names
+      assert "gitlab" in names
+      assert "figma" in names
       assert "memory" in names
       assert "brave-search" in names
       assert "fetch" in names
@@ -63,6 +66,28 @@ defmodule SynapsisPlugin.MCP.PresetsTest do
       assert preset.command == "npx"
     end
 
+    test "returns preset for chrome-devtools" do
+      preset = Presets.get("chrome-devtools")
+      assert preset.name == "chrome-devtools"
+      assert preset.command == "npx"
+      assert "chrome-devtools-mcp@latest" in preset.args
+    end
+
+    test "returns preset for gitlab" do
+      preset = Presets.get("gitlab")
+      assert preset.name == "gitlab"
+      assert preset.command == "npx"
+      assert Map.has_key?(preset.env, "GITLAB_PERSONAL_ACCESS_TOKEN")
+      assert Map.has_key?(preset.env, "GITLAB_API_URL")
+    end
+
+    test "returns preset for figma" do
+      preset = Presets.get("figma")
+      assert preset.name == "figma"
+      assert preset.command == "npx"
+      assert Map.has_key?(preset.env, "FIGMA_API_KEY")
+    end
+
     test "returns preset for fetch (uvx)" do
       preset = Presets.get("fetch")
       assert preset.command == "uvx"
@@ -86,6 +111,15 @@ defmodule SynapsisPlugin.MCP.PresetsTest do
       assert "GITHUB_PERSONAL_ACCESS_TOKEN" in Presets.required_env("github")
     end
 
+    test "returns required env var names for gitlab" do
+      env = Presets.required_env("gitlab")
+      assert "GITLAB_PERSONAL_ACCESS_TOKEN" in env
+    end
+
+    test "returns required env var names for figma" do
+      assert "FIGMA_API_KEY" in Presets.required_env("figma")
+    end
+
     test "returns required env var names for brave-search" do
       assert "BRAVE_API_KEY" in Presets.required_env("brave-search")
     end
@@ -100,6 +134,7 @@ defmodule SynapsisPlugin.MCP.PresetsTest do
       assert Presets.required_env("filesystem") == []
       assert Presets.required_env("memory") == []
       assert Presets.required_env("playwright") == []
+      assert Presets.required_env("chrome-devtools") == []
     end
 
     test "returns empty list for unknown server" do
