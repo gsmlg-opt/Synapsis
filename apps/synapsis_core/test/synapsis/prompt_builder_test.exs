@@ -1,9 +1,13 @@
 defmodule Synapsis.PromptBuilderTest do
   use Synapsis.DataCase, async: true
 
-  alias Synapsis.{PromptBuilder, FailedAttempt, Repo}
+  alias Synapsis.{PromptBuilder, FailedAttempt, MemoryEntry, Repo}
 
   setup do
+    # Clear any pre-existing global memory entries to isolate tests
+    import Ecto.Query
+    Repo.delete_all(from m in MemoryEntry, where: m.scope == "global")
+
     {:ok, project} =
       %Synapsis.Project{}
       |> Synapsis.Project.changeset(%{
@@ -21,7 +25,7 @@ defmodule Synapsis.PromptBuilderTest do
       })
       |> Repo.insert()
 
-    {:ok, session: session}
+    {:ok, session: session, project: project}
   end
 
   describe "build_failure_context/1" do
@@ -202,6 +206,105 @@ defmodule Synapsis.PromptBuilderTest do
       assert result_b =~ "Error from B"
       refute result_b =~ "Error from A"
     end
+  end
+
+  describe "build_memory_context/1" do
+    test "returns nil when no memory entries", %{session: session} do
+      assert PromptBuilder.build_memory_context(session.id) == nil
+    end
+
+    test "returns global memory content", %{session: session} do
+      insert_memory("global", nil, "preference", "Always use snake_case")
+
+      result = PromptBuilder.build_memory_context(session.id)
+      assert result =~ "## Memory"
+      assert result =~ "**preference**"
+      assert result =~ "Always use snake_case"
+    end
+
+    test "returns project-scoped memory content", %{session: session, project: project} do
+      insert_memory("project", project.id, "stack", "Elixir + Phoenix")
+
+      result = PromptBuilder.build_memory_context(session.id)
+      assert result =~ "## Memory"
+      assert result =~ "**stack**"
+      assert result =~ "Elixir + Phoenix"
+    end
+
+    test "combines global and project entries", %{session: session, project: project} do
+      insert_memory("global", nil, "style", "Be concise")
+      insert_memory("project", project.id, "framework", "Phoenix 1.8")
+
+      result = PromptBuilder.build_memory_context(session.id)
+      assert result =~ "Be concise"
+      assert result =~ "Phoenix 1.8"
+    end
+
+    test "does not include entries from other projects", %{session: session} do
+      {:ok, other_project} =
+        %Synapsis.Project{}
+        |> Synapsis.Project.changeset(%{
+          path: "/tmp/other_#{System.unique_integer([:positive])}",
+          slug: "other-#{System.unique_integer([:positive])}"
+        })
+        |> Repo.insert()
+
+      insert_memory("project", other_project.id, "secret", "Should not appear")
+
+      assert PromptBuilder.build_memory_context(session.id) == nil
+    end
+
+    test "returns nil for nonexistent session_id" do
+      bogus_id = Ecto.UUID.generate()
+      assert PromptBuilder.build_memory_context(bogus_id) == nil
+    end
+  end
+
+  describe "build_prompt_context/1" do
+    test "returns nil when neither memory nor failures exist", %{session: session} do
+      assert PromptBuilder.build_prompt_context(session.id) == nil
+    end
+
+    test "returns only memory when no failures", %{session: session} do
+      insert_memory("global", nil, "note", "Remember this")
+
+      result = PromptBuilder.build_prompt_context(session.id)
+      assert result =~ "## Memory"
+      assert result =~ "Remember this"
+      refute result =~ "Failed Approaches"
+    end
+
+    test "returns only failures when no memory", %{session: session} do
+      insert_attempt(session.id, 1, "Compile error", "Fix imports")
+
+      result = PromptBuilder.build_prompt_context(session.id)
+      assert result =~ "## Failed Approaches"
+      assert result =~ "Compile error"
+      refute result =~ "## Memory"
+    end
+
+    test "combines both when both exist", %{session: session} do
+      insert_memory("global", nil, "note", "Use pattern matching")
+      insert_attempt(session.id, 1, "Timeout error", "Add timeout option")
+
+      result = PromptBuilder.build_prompt_context(session.id)
+      assert result =~ "## Memory"
+      assert result =~ "Use pattern matching"
+      assert result =~ "## Failed Approaches"
+      assert result =~ "Timeout error"
+    end
+  end
+
+  defp insert_memory(scope, scope_id, key, content) do
+    {:ok, _} =
+      %MemoryEntry{}
+      |> MemoryEntry.changeset(%{
+        scope: scope,
+        scope_id: scope_id,
+        key: key,
+        content: content
+      })
+      |> Repo.insert()
   end
 
   defp insert_attempt(session_id, number, error, lesson) do

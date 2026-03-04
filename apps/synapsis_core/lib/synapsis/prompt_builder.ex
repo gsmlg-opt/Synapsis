@@ -2,12 +2,11 @@ defmodule Synapsis.PromptBuilder do
   @moduledoc """
   Builds dynamic prompt context for system prompt injection.
 
-  Formats FailedAttempt records into a "Failed Approaches" block that gets
-  appended to the system prompt before each provider call. This implements
-  rolling negative constraints for loop prevention.
+  Combines memory entries and failed attempts into context blocks that get
+  appended to the system prompt before each provider call.
   """
 
-  alias Synapsis.{FailedAttempt, Repo}
+  alias Synapsis.{FailedAttempt, MemoryEntry, Session, Repo}
   import Ecto.Query
 
   @max_entries 7
@@ -31,6 +30,70 @@ defmodule Synapsis.PromptBuilder do
       [] -> nil
       entries -> format_failure_block(Enum.reverse(entries))
     end
+  end
+
+  @doc """
+  Builds the combined prompt context (memory + failures) for a session.
+
+  Returns nil if neither memory entries nor failed attempts exist.
+  """
+  @spec build_prompt_context(String.t()) :: String.t() | nil
+  def build_prompt_context(session_id) do
+    parts =
+      [build_memory_context(session_id), build_failure_context(session_id)]
+      |> Enum.reject(&is_nil/1)
+
+    case parts do
+      [] -> nil
+      parts -> Enum.join(parts, "\n\n")
+    end
+  end
+
+  @doc """
+  Builds memory context from global and project-scoped MemoryEntry records.
+
+  Returns nil if no memory entries exist for the session's scope.
+  """
+  @spec build_memory_context(String.t()) :: String.t() | nil
+  def build_memory_context(session_id) do
+    case Repo.get(Session, session_id) do
+      nil ->
+        nil
+
+      session ->
+        global_entries =
+          MemoryEntry
+          |> where([m], m.scope == "global")
+          |> where([m], is_nil(m.scope_id))
+          |> order_by([m], asc: m.inserted_at)
+          |> Repo.all()
+
+        project_entries =
+          MemoryEntry
+          |> where([m], m.scope == "project" and m.scope_id == ^session.project_id)
+          |> order_by([m], asc: m.inserted_at)
+          |> Repo.all()
+
+        entries = global_entries ++ project_entries
+
+        case entries do
+          [] -> nil
+          entries -> format_memory_block(entries)
+        end
+    end
+  end
+
+  defp format_memory_block(entries) do
+    formatted =
+      entries
+      |> Enum.map(fn entry -> "- **#{entry.key}**: #{entry.content}" end)
+      |> Enum.join("\n")
+
+    """
+    ## Memory
+
+    #{formatted}\
+    """
   end
 
   defp format_failure_block(entries) do

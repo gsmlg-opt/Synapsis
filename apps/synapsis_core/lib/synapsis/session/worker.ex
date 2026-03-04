@@ -176,7 +176,7 @@ defmodule Synapsis.Session.Worker do
     broadcast(state.session_id, "session_status", %{status: "streaming"})
 
     # Build failure context — inject into system prompt and account for its token usage
-    prompt_context = Synapsis.PromptBuilder.build_failure_context(state.session_id)
+    prompt_context = Synapsis.PromptBuilder.build_prompt_context(state.session_id)
 
     failure_log_tokens =
       if prompt_context, do: Synapsis.ContextWindow.estimate_tokens(prompt_context), else: 0
@@ -227,7 +227,7 @@ defmodule Synapsis.Session.Worker do
       update_session_status(state.session_id, "streaming")
       broadcast(state.session_id, "session_status", %{status: "streaming"})
 
-      prompt_context = Synapsis.PromptBuilder.build_failure_context(state.session_id)
+      prompt_context = Synapsis.PromptBuilder.build_prompt_context(state.session_id)
 
       request =
         Synapsis.MessageBuilder.build_request(
@@ -797,7 +797,7 @@ defmodule Synapsis.Session.Worker do
   defp do_continue_loop(state) do
     # All tools processed, continue the agent loop with prompt context injection
     messages = load_messages(state.session_id)
-    prompt_context = Synapsis.PromptBuilder.build_failure_context(state.session_id)
+    prompt_context = Synapsis.PromptBuilder.build_prompt_context(state.session_id)
 
     # Account for failure log tokens when deciding whether to compact
     failure_log_tokens =
