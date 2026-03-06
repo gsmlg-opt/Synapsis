@@ -6,6 +6,7 @@ defmodule Synapsis.MixProject do
       apps_path: "apps",
       version: "0.1.0",
       start_permanent: Mix.env() == :prod,
+      listeners: [Phoenix.CodeReloader],
       deps: deps(),
       releases: releases()
     ]
@@ -16,6 +17,7 @@ defmodule Synapsis.MixProject do
       synapsis: [
         applications: [
           synapsis_data: :permanent,
+          synapsis_agent: :load,
           synapsis_provider: :permanent,
           synapsis_core: :permanent,
           synapsis_server: :permanent,
