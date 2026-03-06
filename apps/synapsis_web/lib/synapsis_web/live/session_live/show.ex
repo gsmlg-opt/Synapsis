@@ -11,7 +11,11 @@ defmodule SynapsisWeb.SessionLive.Show do
         default_provider = if providers != [], do: hd(providers).name, else: "anthropic"
         default_type = if providers != [], do: hd(providers).type, else: "anthropic"
         available_models = fetch_provider_models(default_provider)
-        default_model = if available_models != [], do: hd(available_models).id, else: Synapsis.Providers.default_model(default_type)
+
+        default_model =
+          if available_models != [],
+            do: hd(available_models).id,
+            else: Synapsis.Providers.default_model(default_type)
 
         # Models for the current session's provider
         session_models = fetch_provider_models(session.provider)
@@ -135,7 +139,11 @@ defmodule SynapsisWeb.SessionLive.Show do
     provider = Enum.find(socket.assigns.providers, &(&1.name == provider_name))
     type = if provider, do: provider.type, else: provider_name
     available_models = fetch_provider_models(provider_name)
-    default_model = if available_models != [], do: hd(available_models).id, else: Synapsis.Providers.default_model(type)
+
+    default_model =
+      if available_models != [],
+        do: hd(available_models).id,
+        else: Synapsis.Providers.default_model(type)
 
     {:noreply,
      assign(socket,

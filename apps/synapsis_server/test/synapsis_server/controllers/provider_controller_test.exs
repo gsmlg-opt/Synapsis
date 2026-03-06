@@ -230,7 +230,11 @@ defmodule SynapsisServer.ProviderControllerTest do
     setup %{} do
       # Remove seeded providers so env detection tests start clean
       import Ecto.Query
-      Synapsis.Repo.delete_all(from p in Synapsis.ProviderConfig, where: p.name in ["anthropic", "openai", "google"])
+
+      Synapsis.Repo.delete_all(
+        from(p in Synapsis.ProviderConfig, where: p.name in ["anthropic", "openai", "google"])
+      )
+
       :ok
     end
 

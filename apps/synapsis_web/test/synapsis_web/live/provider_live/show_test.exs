@@ -189,7 +189,11 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
 
       # Verify persisted
       {:ok, updated} = Synapsis.Providers.get(provider.id)
-      assert updated.config["enabled_models"] == ["claude-sonnet-4-6", "claude-haiku-3-5-20241022"]
+
+      assert updated.config["enabled_models"] == [
+               "claude-sonnet-4-6",
+               "claude-haiku-3-5-20241022"
+             ]
     end
 
     test "disabled models shown differently from enabled", %{conn: conn} do

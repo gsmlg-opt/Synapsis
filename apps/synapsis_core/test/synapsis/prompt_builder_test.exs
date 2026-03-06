@@ -6,7 +6,7 @@ defmodule Synapsis.PromptBuilderTest do
   setup do
     # Clear any pre-existing global memory entries to isolate tests
     import Ecto.Query
-    Repo.delete_all(from m in MemoryEntry, where: m.scope == "global")
+    Repo.delete_all(from(m in MemoryEntry, where: m.scope == "global"))
 
     {:ok, project} =
       %Synapsis.Project{}

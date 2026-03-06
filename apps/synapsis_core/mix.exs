@@ -30,6 +30,7 @@ defmodule SynapsisCore.MixProject do
   defp deps do
     [
       {:synapsis_data, in_umbrella: true},
+      {:synapsis_agent, in_umbrella: true},
       {:synapsis_provider, in_umbrella: true},
       {:phoenix, "~> 1.8"},
       {:phoenix_live_view, "~> 1.0"},

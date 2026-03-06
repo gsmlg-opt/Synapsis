@@ -30,6 +30,7 @@ defmodule SynapsisWeb.MixProject do
   defp deps do
     [
       {:synapsis_server, in_umbrella: true},
+      {:synapsis_agent, in_umbrella: true},
       {:phoenix, "~> 1.8"},
       {:phoenix_html, "~> 4.2"},
       {:phoenix_live_view, "~> 1.0"},

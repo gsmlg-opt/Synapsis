@@ -211,7 +211,11 @@ defmodule Synapsis.Session.Worker do
         )
 
         update_session_status(state.session_id, "error")
-        broadcast(state.session_id, "error", %{message: "Failed to start stream: #{inspect(reason)}"})
+
+        broadcast(state.session_id, "error", %{
+          message: "Failed to start stream: #{inspect(reason)}"
+        })
+
         {:reply, {:error, reason}, %{state | status: :error}}
     end
   end
@@ -837,7 +841,11 @@ defmodule Synapsis.Session.Worker do
         )
 
         update_session_status(state.session_id, "error")
-        broadcast(state.session_id, "error", %{message: "Failed to start stream: #{inspect(reason)}"})
+
+        broadcast(state.session_id, "error", %{
+          message: "Failed to start stream: #{inspect(reason)}"
+        })
+
         {:noreply, %{state | status: :error}}
     end
   end

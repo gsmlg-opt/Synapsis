@@ -6,6 +6,7 @@ defmodule SynapsisServer.Router do
   @compile {:no_warn_undefined,
             [
               SynapsisWeb.DashboardLive,
+              SynapsisWeb.AssistantLive.Index,
               SynapsisWeb.ProjectLive.Index,
               SynapsisWeb.ProjectLive.Show,
               SynapsisWeb.SessionLive.Index,
@@ -60,6 +61,7 @@ defmodule SynapsisServer.Router do
     pipe_through :browser
 
     live "/", DashboardLive, :index
+    live "/assistant", AssistantLive.Index, :index
 
     live "/projects", ProjectLive.Index, :index
     live "/projects/new", ProjectLive.Index, :new

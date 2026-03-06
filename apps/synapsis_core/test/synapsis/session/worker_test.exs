@@ -375,6 +375,7 @@ defmodule Synapsis.Session.WorkerTest do
 
     test "content_block_stop with nil pending_tool_use is a no-op", %{session: session} do
       {:ok, pid} = start_supervised({Worker, session_id: session.id})
+
       :sys.replace_state(pid, fn state ->
         %{state | status: :streaming, pending_tool_use: nil}
       end)
@@ -460,6 +461,7 @@ defmodule Synapsis.Session.WorkerTest do
       {:ok, pid} = start_supervised({Worker, session_id: session.id})
 
       fake_ref = make_ref()
+
       :sys.replace_state(pid, fn state ->
         %{state | status: :streaming, stream_monitor_ref: fake_ref}
       end)

@@ -5,7 +5,11 @@ defmodule SynapsisWeb.MemoryLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    entry = Synapsis.Repo.one(from m in Synapsis.MemoryEntry, where: m.scope == "global" and m.key == "CLAUDE.md")
+    entry =
+      Synapsis.Repo.one(
+        from(m in Synapsis.MemoryEntry, where: m.scope == "global" and m.key == "CLAUDE.md")
+      )
+
     content = if entry, do: entry.content, else: ""
 
     {:ok,
@@ -71,14 +75,24 @@ defmodule SynapsisWeb.MemoryLive.Index do
           <h1 class="text-2xl font-bold">Memory</h1>
           <div class="flex gap-2">
             <%= if @editing do %>
-              <button phx-click="cancel" class="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded hover:bg-gray-700">
+              <button
+                phx-click="cancel"
+                class="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded hover:bg-gray-700"
+              >
                 Cancel
               </button>
-              <button type="submit" form="memory-form" class="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
+              <button
+                type="submit"
+                form="memory-form"
+                class="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
                 Save
               </button>
             <% else %>
-              <button phx-click="edit" class="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded hover:bg-gray-700">
+              <button
+                phx-click="edit"
+                class="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded hover:bg-gray-700"
+              >
                 Edit
               </button>
             <% end %>
@@ -102,7 +116,7 @@ defmodule SynapsisWeb.MemoryLive.Index do
                 No memory content yet. Click Edit to start writing.
               </div>
             <% else %>
-              <div class="whitespace-pre-wrap font-mono text-sm text-gray-300 p-4"><%= @content %></div>
+              <div class="whitespace-pre-wrap font-mono text-sm text-gray-300 p-4">{@content}</div>
             <% end %>
           <% end %>
         </div>

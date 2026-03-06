@@ -6,8 +6,15 @@ import { Hooks } from "@synapsis/hooks"
 const csrfToken =
   document.querySelector("meta[name='csrf-token']")?.getAttribute("content") || ""
 
+// Clear any previously memorized Phoenix longpoll fallback decision.
+try {
+  window.sessionStorage.removeItem("phx:fallback:LongPoll")
+} catch {
+  // Ignore storage access issues (private mode / disabled storage).
+}
+
 const liveSocket = new LiveSocket("/live", Socket, {
-  longPollFallbackMs: 2500,
+  transport: window.WebSocket,
   params: { _csrf_token: csrfToken },
   hooks: Hooks,
 })

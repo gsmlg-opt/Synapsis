@@ -20,6 +20,7 @@ defmodule SynapsisWeb.DashboardLiveTest do
 
     test "renders appbar navigation links", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/")
+      assert html =~ "Assistant"
       assert html =~ "Providers"
       assert html =~ "MCP"
       assert html =~ "LSP"

@@ -8,7 +8,9 @@ defmodule SynapsisServer.Endpoint do
     same_site: "Lax"
   ]
 
-  socket "/live", Phoenix.LiveView.Socket, websocket: [connect_info: [session: @session_options]]
+  socket "/live", Phoenix.LiveView.Socket,
+    websocket: [connect_info: [session: @session_options]],
+    longpoll: false
 
   socket "/socket", SynapsisServer.UserSocket,
     websocket: true,
@@ -39,5 +41,14 @@ defmodule SynapsisServer.Endpoint do
   plug Plug.MethodOverride
   plug Plug.Head
   plug Plug.Session, @session_options
+  plug :reject_live_longpoll
   plug SynapsisServer.Router
+
+  defp reject_live_longpoll(%Plug.Conn{request_path: "/live/longpoll"} = conn, _opts) do
+    conn
+    |> Plug.Conn.send_resp(410, "LiveView longpoll is disabled. WebSocket transport is required.")
+    |> Plug.Conn.halt()
+  end
+
+  defp reject_live_longpoll(conn, _opts), do: conn
 end
