@@ -1,37 +1,22 @@
 <div class="flex flex-col h-screen">
-  <.dm_appbar title="" class="shrink-0">
+  <.dm_simple_appbar title="" class="shrink-0 bg-base-200 border-b border-base-300">
     <:logo>
       <.dm_link navigate={~p"/"} class="text-lg font-bold">Synapsis</.dm_link>
     </:logo>
     <:menu to={~p"/assistant"}>
-      <.dm_mdi name="robot" class="w-4 h-4 inline mr-1" />
-      <span class="hidden sm:inline">
-        Assistant
-      </span>
+      <.dm_mdi name="robot" class="w-4 h-4 inline mr-1" /> Assistant
     </:menu>
     <:menu to={~p"/projects"}>
-      <.dm_mdi name="folder-multiple" class="w-4 h-4 inline mr-1" />
-      <span class="hidden sm:inline">
-        Projects
-      </span>
+      <.dm_mdi name="folder-multiple" class="w-4 h-4 inline mr-1" /> Projects
     </:menu>
     <:menu to={~p"/settings/providers"}>
-      <.dm_mdi name="cloud" class="w-4 h-4 inline mr-1" />
-      <span class="hidden md:inline">
-        Providers
-      </span>
+      <.dm_mdi name="cloud" class="w-4 h-4 inline mr-1" /> Providers
     </:menu>
     <:menu to={~p"/settings/mcp"}>
-      <.dm_mdi name="puzzle" class="w-4 h-4 inline mr-1" />
-      <span class="hidden md:inline">
-        MCP
-      </span>
+      <.dm_mdi name="puzzle" class="w-4 h-4 inline mr-1" /> MCP
     </:menu>
     <:menu to={~p"/settings/lsp"}>
-      <.dm_mdi name="code-braces" class="w-4 h-4 inline mr-1" />
-      <span class="hidden md:inline">
-        LSP
-      </span>
+      <.dm_mdi name="code-braces" class="w-4 h-4 inline mr-1" /> LSP
     </:menu>
     <:user_profile>
       <div class="flex items-center gap-2">
@@ -41,7 +26,7 @@
         </.dm_link>
       </div>
     </:user_profile>
-  </.dm_appbar>
+  </.dm_simple_appbar>
   <.dm_flash_group flash={@flash} />
   <main class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
     {@inner_content}

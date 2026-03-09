@@ -10,6 +10,7 @@
     "phoenix_live_view": "1.1.23"
   },
   "devDependencies": {
+    "@types/phoenix": "^1.6.7",
     "typescript": "^5.7.0"
   }
 }
