@@ -22,10 +22,10 @@ defmodule SynapsisWeb.DashboardLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="max-w-6xl mx-auto p-6">
-      <h1 class="text-2xl font-bold mb-6">Dashboard</h1>
+    <div class="flex flex-col h-full max-w-6xl mx-auto p-6 min-h-0">
+      <h1 class="text-2xl font-bold mb-4 shrink-0">Dashboard</h1>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4 shrink-0">
         <.stat_card
           icon="folder-outline"
           value={to_string(length(@projects))}
@@ -40,8 +40,8 @@ defmodule SynapsisWeb.DashboardLive do
         />
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <.dm_card variant="bordered">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 min-h-0">
+        <.dm_card variant="bordered" class="flex flex-col min-h-0">
           <:title>Projects</:title>
           <:action>
             <.dm_link navigate={~p"/projects/new"}>
@@ -64,7 +64,7 @@ defmodule SynapsisWeb.DashboardLive do
             </:action>
           </.empty_state>
 
-          <div :if={@projects != []} class="space-y-1">
+          <div :if={@projects != []} class="flex-1 overflow-y-auto min-h-0 space-y-1">
             <.dm_link
               :for={project <- @projects}
               navigate={~p"/projects/#{project.id}"}
@@ -82,7 +82,7 @@ defmodule SynapsisWeb.DashboardLive do
           </div>
         </.dm_card>
 
-        <.dm_card variant="bordered">
+        <.dm_card variant="bordered" class="flex flex-col min-h-0">
           <:title>Recent Sessions</:title>
 
           <.empty_state
@@ -92,7 +92,7 @@ defmodule SynapsisWeb.DashboardLive do
             description="Start a conversation from a project."
           />
 
-          <div :if={@recent_sessions != []} class="space-y-1">
+          <div :if={@recent_sessions != []} class="flex-1 overflow-y-auto min-h-0 space-y-1">
             <.dm_link
               :for={session <- @recent_sessions}
               navigate={~p"/projects/#{session.project_id}/sessions/#{session.id}"}
