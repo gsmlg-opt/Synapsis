@@ -80,14 +80,14 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "${{ inputs.version }}" -m "Release ${{ inputs.version }}"
-          git push origin "${{ inputs.version }}"
+          git tag -a "v${{ inputs.version }}" -m "Release v${{ inputs.version }}"
+          git push origin "v${{ inputs.version }}"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.version }}
-          name: Synapsis ${{ inputs.version }}
+          tag_name: v${{ inputs.version }}
+          name: Synapsis v${{ inputs.version }}
           generate_release_notes: true
           files: |
             _build/prod/synapsis-*.tar.gz
