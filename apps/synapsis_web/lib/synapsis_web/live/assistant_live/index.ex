@@ -81,44 +81,44 @@ defmodule SynapsisWeb.AssistantLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen bg-gray-950 text-gray-100">
-      <div class="max-w-4xl mx-auto p-6">
-        <div class="flex items-center justify-between mb-6">
-          <h1 class="text-2xl font-bold">Assistant</h1>
-          <span class="text-xs px-2 py-1 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-600/30">
-            Global Assistant Online
-          </span>
-        </div>
-
-        <div class="bg-gray-900 border border-gray-800 rounded-lg p-4 space-y-3 min-h-64">
-          <div :for={message <- @messages} class={message_class(message.role)}>
-            <div class="text-xs uppercase tracking-wide text-gray-400 mb-1">
-              {message.role}
-            </div>
-            <p class="whitespace-pre-wrap leading-relaxed">{message.content}</p>
-          </div>
-        </div>
-
-        <.form for={%{}} as={:assistant} phx-submit="send" class="mt-4 flex gap-3">
-          <input
-            type="text"
-            name="prompt"
-            value={@prompt}
-            placeholder="Ask global assistant to summarize system status..."
-            class="flex-1 rounded-lg bg-gray-900 border border-gray-800 px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-          />
-          <button
-            type="submit"
-            class="px-4 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            Send
-          </button>
-        </.form>
+    <div class="max-w-4xl mx-auto p-6">
+      <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold">Assistant</h1>
+        <.dm_badge color="success" size="sm">
+          Global Assistant Online
+        </.dm_badge>
       </div>
+
+      <.dm_card variant="bordered" class="min-h-64">
+        <:title>Conversation</:title>
+        <div class="space-y-3">
+          <.chat_bubble
+            :for={message <- @messages}
+            role={to_string(message.role)}
+          >
+            <p class="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+          </.chat_bubble>
+        </div>
+        <:action>
+          <.dm_form for={to_form(%{})} as={:assistant} phx-submit="send" class="w-full">
+            <div class="flex gap-3 w-full">
+              <div class="flex-1">
+                <.dm_input
+                  type="text"
+                  name="prompt"
+                  value={@prompt}
+                  label=""
+                  placeholder="Ask global assistant to summarize system status..."
+                />
+              </div>
+              <.dm_btn type="submit" variant="primary">
+                Send
+              </.dm_btn>
+            </div>
+          </.dm_form>
+        </:action>
+      </.dm_card>
     </div>
     """
   end
-
-  defp message_class(:assistant), do: "rounded-md bg-gray-800/60 border border-gray-700 p-3"
-  defp message_class(:user), do: "rounded-md bg-blue-500/10 border border-blue-700/40 p-3"
 end

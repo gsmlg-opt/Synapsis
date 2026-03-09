@@ -1,1 +1,35 @@
 @import "tailwindcss";
+@source "../../../../deps/phoenix_duskmoon/lib/**/*.ex";
+@plugin "@duskmoon-dev/core/plugin";
+@import "@duskmoon-dev/core/themes/sunshine";
+@import "@duskmoon-dev/core/themes/moonlight";
+@import "@duskmoon-dev/core/components";
+
+/* Workaround: phoenix_duskmoon dm_theme_switcher uses .theme-controller
+   but @duskmoon-dev/core only defines .theme-controller-item.
+   TODO: file upstream issue at duskmoon-dev/duskmoon-css with label "internal request" */
+@layer components {
+  input.theme-controller {
+    appearance: none;
+    cursor: pointer;
+    min-height: 2rem;
+    font-size: 0.875rem;
+    border-radius: 0.375rem;
+    padding: 0.25rem 0.75rem;
+    text-align: center;
+    color: inherit;
+  }
+  input.theme-controller::after {
+    content: attr(aria-label);
+  }
+  input.theme-controller:checked {
+    background-color: var(--color-secondary, oklch(0.65 0.15 250));
+    color: var(--color-secondary-content, #fff);
+  }
+  input.theme-controller:hover {
+    background-color: var(--color-base-300, oklch(0.25 0.02 260));
+  }
+  input.theme-controller:checked:hover {
+    background-color: var(--color-secondary, oklch(0.65 0.15 250));
+  }
+}

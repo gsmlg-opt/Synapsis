@@ -87,165 +87,139 @@ defmodule SynapsisWeb.LSPLive.Index do
       )
 
     ~H"""
-    <div class="min-h-screen bg-gray-950 text-gray-100">
-      <div class="max-w-5xl mx-auto p-6">
-        <div class="flex items-center gap-2 text-sm text-gray-500 mb-4">
-          <.link navigate={~p"/settings"} class="hover:text-gray-300">Settings</.link>
-          <span>/</span>
-          <span class="text-gray-300">LSP Servers</span>
-        </div>
+    <div class="max-w-5xl mx-auto p-6">
+      <.dm_breadcrumb class="mb-4">
+        <:crumb to={~p"/settings"}>Settings</:crumb>
+        <:crumb>LSP Servers</:crumb>
+      </.dm_breadcrumb>
 
-        <div class="flex justify-between items-center mb-6">
-          <h1 class="text-2xl font-bold">LSP Servers</h1>
-          <.link
-            :if={!@show_form}
-            navigate={~p"/settings/lsp/new"}
-            class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            + Add LSP Server
-          </.link>
-        </div>
+      <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold">LSP Servers</h1>
+        <.dm_link
+          :if={!@show_form}
+          navigate={~p"/settings/lsp/new"}
+        >
+          <.dm_btn variant="primary" size="sm">+ Add LSP Server</.dm_btn>
+        </.dm_link>
+      </div>
 
-        <.flash_group flash={@flash} />
+      <.dm_flash_group flash={@flash} />
 
-        <%= if @show_form do %>
-          <%= if @selected_preset do %>
-            <div class="mb-6 bg-gray-900 rounded-lg p-6 border border-gray-800">
-              <div class="flex items-center gap-3 mb-4">
-                <button
-                  phx-click="back_to_presets"
-                  class="text-gray-400 hover:text-gray-200 text-sm"
-                >
-                  &larr; Back
-                </button>
-                <h2 class="text-lg font-semibold">Add {@selected_preset.name} LSP</h2>
-              </div>
-              <form phx-submit="create_config" class="space-y-3">
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1">Language</label>
-                  <div class="bg-gray-800 text-gray-400 rounded px-3 py-2 border border-gray-700">
-                    {@selected_preset.name}
-                  </div>
-                </div>
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1">Command</label>
-                  <input
-                    type="text"
-                    name="command"
-                    value={@selected_preset.command}
-                    readonly
-                    class="w-full bg-gray-800 text-gray-400 rounded px-3 py-2 border border-gray-700"
-                  />
-                </div>
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1">Args</label>
-                  <div class="bg-gray-800 text-gray-400 rounded px-3 py-2 border border-gray-700">
-                    {Enum.join(@selected_preset.args, " ")}
-                  </div>
-                </div>
-                <div>
-                  <label class="flex items-center gap-2">
-                    <input type="hidden" name="auto_start" value="false" />
-                    <input
-                      type="checkbox"
-                      name="auto_start"
-                      value="true"
-                      class="rounded bg-gray-800 border-gray-700"
-                    />
-                    <span class="text-sm">Auto-start</span>
-                  </label>
-                </div>
-                <button
-                  type="submit"
-                  class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                >
-                  Add LSP Server
-                </button>
-              </form>
+      <%= if @show_form do %>
+        <%= if @selected_preset do %>
+          <.dm_card variant="bordered" class="mb-6">
+            <div class="flex items-center gap-3 mb-4">
+              <.dm_btn variant="ghost" size="sm" phx-click="back_to_presets">
+                &larr; Back
+              </.dm_btn>
+              <h2 class="text-lg font-semibold">Add {@selected_preset.name} LSP</h2>
             </div>
-          <% else %>
-            <div class="mb-6">
-              <div class="flex items-center justify-between mb-4">
-                <h2 class="text-lg font-semibold">Select a Language Server</h2>
-                <.link
-                  navigate={~p"/settings/lsp"}
-                  class="text-gray-400 hover:text-gray-200 text-sm"
-                >
-                  Cancel
-                </.link>
+            <.dm_form for={%{}} phx-submit="create_config">
+              <.readonly_field label="Language" value={@selected_preset.name} />
+              <.dm_input
+                type="text"
+                name="command"
+                value={@selected_preset.command}
+                readonly
+                label="Command"
+              />
+              <.readonly_field label="Args" value={Enum.join(@selected_preset.args, " ")} />
+              <div>
+                <input type="hidden" name="auto_start" value="false" />
+                <.dm_checkbox
+                  name="auto_start"
+                  value="true"
+                  label="Auto-start"
+                />
               </div>
-              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                <button
-                  :for={preset <- @presets}
-                  phx-click="select_preset"
-                  phx-value-name={preset.name}
-                  disabled={preset.name in @configured_names}
+              <.dm_btn type="submit" variant="primary">
+                Add LSP Server
+              </.dm_btn>
+            </.dm_form>
+          </.dm_card>
+        <% else %>
+          <div class="mb-6">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-semibold">Select a Language Server</h2>
+              <.dm_link
+                navigate={~p"/settings/lsp"}
+                class="text-base-content/50 hover:text-base-content text-sm"
+              >
+                Cancel
+              </.dm_link>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              <button
+                :for={preset <- @presets}
+                phx-click="select_preset"
+                phx-value-name={preset.name}
+                disabled={preset.name in @configured_names}
+                class="w-full text-left"
+              >
+                <.dm_card
+                  variant="bordered"
                   class={[
-                    "w-full text-left rounded-lg p-4 border transition-colors",
                     if(preset.name in @configured_names,
-                      do:
-                        "bg-gray-900/50 border-gray-800 text-gray-600 cursor-not-allowed opacity-50",
-                      else:
-                        "bg-gray-900 border-gray-800 hover:border-blue-500 hover:bg-gray-800 cursor-pointer"
+                      do: "opacity-50 cursor-not-allowed",
+                      else: "cursor-pointer hover:border-primary"
                     )
                   ]}
                 >
                   <div class="font-medium">{preset.name}</div>
-                  <div class="text-xs text-gray-500 mt-1">{preset.command}</div>
-                  <div :if={preset.name in @configured_names} class="text-xs text-gray-600 mt-1">
+                  <div class="text-xs text-base-content/50 mt-1">{preset.command}</div>
+                  <div
+                    :if={preset.name in @configured_names}
+                    class="text-xs text-base-content/40 mt-1"
+                  >
                     Already configured
                   </div>
-                </button>
-              </div>
-            </div>
-          <% end %>
-        <% end %>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div
-            :for={config <- @configs}
-            class="bg-gray-900 rounded-lg p-4 border border-gray-800"
-          >
-            <div class="flex justify-between items-start mb-2">
-              <.link
-                navigate={~p"/settings/lsp/#{config.id}"}
-                class="font-medium hover:text-blue-400 transition-colors"
-              >
-                {config.name}
-              </.link>
-              <button
-                phx-click="delete_config"
-                phx-value-id={config.id}
-                data-confirm="Delete this LSP server?"
-                class="text-gray-600 hover:text-red-400 text-sm ml-2"
-              >
-                Delete
+                </.dm_card>
               </button>
             </div>
-            <div class="text-xs text-gray-500">{config.command}</div>
-            <div :if={config.args != []} class="text-xs text-gray-600 mt-1">
-              {Enum.join(config.args, " ")}
-            </div>
-            <div class="mt-2">
-              <span
-                :if={config.auto_start}
-                class="inline-block text-xs px-2 py-0.5 rounded bg-green-900/50 text-green-400"
-              >
-                Auto-start
-              </span>
-              <span
-                :if={!config.auto_start}
-                class="inline-block text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-500"
-              >
-                Manual
-              </span>
-            </div>
           </div>
-        </div>
+        <% end %>
+      <% end %>
 
-        <div :if={@configs == [] && !@show_form} class="text-center text-gray-600 py-12">
-          No LSP servers configured. Click "+ Add LSP Server" to get started.
-        </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <.dm_card
+          :for={config <- @configs}
+          variant="bordered"
+        >
+          <div class="flex justify-between items-start mb-2">
+            <.dm_link
+              navigate={~p"/settings/lsp/#{config.id}"}
+              class="font-medium hover:text-primary transition-colors"
+            >
+              {config.name}
+            </.dm_link>
+            <.dm_btn
+              variant="ghost"
+              size="xs"
+              class="text-error hover:text-error/80 ml-2"
+              confirm="Delete this LSP server?"
+              phx-click="delete_config"
+              phx-value-id={config.id}
+            >
+              Delete
+            </.dm_btn>
+          </div>
+          <div class="text-xs text-base-content/50">{config.command}</div>
+          <div :if={config.args != []} class="text-xs text-base-content/40 mt-1">
+            {Enum.join(config.args, " ")}
+          </div>
+          <div class="mt-2">
+            <.dm_badge :if={config.auto_start} color="success" size="sm">
+              Auto-start
+            </.dm_badge>
+            <.dm_badge :if={!config.auto_start} color="ghost" size="sm">
+              Manual
+            </.dm_badge>
+          </div>
+        </.dm_card>
+      </div>
+
+      <div :if={@configs == [] && !@show_form} class="text-center text-base-content/40 py-12">
+        No LSP servers configured. Click "+ Add LSP Server" to get started.
       </div>
     </div>
     """

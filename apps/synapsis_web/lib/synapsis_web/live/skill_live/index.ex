@@ -43,65 +43,69 @@ defmodule SynapsisWeb.SkillLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen bg-gray-950 text-gray-100">
-      <div class="max-w-4xl mx-auto p-6">
-        <div class="flex items-center gap-2 text-sm text-gray-500 mb-4">
-          <.link navigate={~p"/settings"} class="hover:text-gray-300">Settings</.link>
-          <span>/</span>
-          <span class="text-gray-300">Skills</span>
-        </div>
+    <div class="max-w-4xl mx-auto p-6">
+      <.dm_breadcrumb>
+        <:crumb to={~p"/settings"}>Settings</:crumb>
+        <:crumb>Skills</:crumb>
+      </.dm_breadcrumb>
 
-        <div class="flex justify-between items-center mb-6">
-          <h1 class="text-2xl font-bold">Skills</h1>
-        </div>
+      <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold">Skills</h1>
+      </div>
 
-        <.flash_group flash={@flash} />
-
-        <div class="mb-6 bg-gray-900 rounded-lg p-4 border border-gray-800">
-          <form phx-submit="create_skill" class="flex gap-2">
-            <input
+      <.dm_card variant="bordered" class="mb-6">
+        <:title>Create Skill</:title>
+        <.dm_form for={%{}} phx-submit="create_skill" class="flex gap-2 items-end">
+          <div class="flex-1">
+            <.dm_input
               type="text"
               name="name"
               placeholder="Skill name"
-              required
-              class="flex-1 bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none"
+              required={true}
+              label="Name"
             />
-            <select
+          </div>
+          <div>
+            <.dm_select
               name="scope"
-              class="bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none"
-            >
-              <option value="global">Global</option>
-              <option value="project">Project</option>
-            </select>
-            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-              Create
-            </button>
-          </form>
-        </div>
+              options={[{"global", "Global"}, {"project", "Project"}]}
+            />
+          </div>
+          <.dm_btn type="submit" variant="primary">
+            Create
+          </.dm_btn>
+        </.dm_form>
+      </.dm_card>
 
-        <div class="space-y-2">
-          <div
-            :for={skill <- @skills}
-            class="bg-gray-900 rounded-lg p-4 border border-gray-800 flex justify-between items-center"
-          >
-            <.link navigate={~p"/settings/skills/#{skill.id}"} class="flex-1">
+      <div class="space-y-2">
+        <.dm_card :for={skill <- @skills} variant="bordered">
+          <div class="flex justify-between items-center">
+            <.dm_link navigate={~p"/settings/skills/#{skill.id}"} class="flex-1">
               <div class="font-medium">{skill.name}</div>
-              <div class="text-xs text-gray-500 mt-1">
-                {skill.scope}
-                <span :if={skill.is_builtin} class="text-yellow-500"> · built-in</span>
+              <div class="flex gap-2 mt-1">
+                <.dm_badge
+                  color={if skill.scope == "global", do: "primary", else: "secondary"}
+                  size="sm"
+                >
+                  {skill.scope}
+                </.dm_badge>
+                <.dm_badge :if={skill.is_builtin} color="warning" size="sm">
+                  built-in
+                </.dm_badge>
               </div>
-            </.link>
-            <button
+            </.dm_link>
+            <.dm_btn
               :if={!skill.is_builtin}
+              variant="ghost"
+              size="sm"
               phx-click="delete_skill"
               phx-value-id={skill.id}
-              data-confirm="Delete this skill?"
-              class="text-gray-600 hover:text-red-400 text-sm"
+              confirm="Delete this skill?"
             >
               Delete
-            </button>
+            </.dm_btn>
           </div>
-        </div>
+        </.dm_card>
       </div>
     </div>
     """

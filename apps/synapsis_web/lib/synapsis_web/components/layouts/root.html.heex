@@ -1,15 +1,22 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en" data-theme="moonlight">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="csrf-token" content={get_csrf_token()} />
     <title>Synapsis</title>
     <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
+    <script>
+      // Restore saved theme before first paint to avoid flash
+      (function() {
+        var t = localStorage.getItem("theme");
+        if (t) document.documentElement.setAttribute("data-theme", t);
+      })();
+    </script>
     <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
     </script>
   </head>
-  <body class="bg-gray-950 text-gray-100">
+  <body class="bg-base-100 text-base-content min-h-screen overflow-x-hidden">
     {@inner_content}
   </body>
 </html>

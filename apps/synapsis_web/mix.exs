@@ -1,10 +1,12 @@
 defmodule SynapsisWeb.MixProject do
   use Mix.Project
 
+  @version "0.1.0"
+
   def project do
     [
       app: :synapsis_web,
-      version: "0.1.0",
+      version: @version,
       build_path: "../../_build",
       config_path: "../../config/config.exs",
       deps_path: "../../deps",
@@ -34,6 +36,7 @@ defmodule SynapsisWeb.MixProject do
       {:phoenix, "~> 1.8"},
       {:phoenix_html, "~> 4.2"},
       {:phoenix_live_view, "~> 1.0"},
+      {:phoenix_duskmoon, "~> 8.0"},
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.4"},
       {:bun, "~> 1.6", runtime: Mix.env() == :dev},

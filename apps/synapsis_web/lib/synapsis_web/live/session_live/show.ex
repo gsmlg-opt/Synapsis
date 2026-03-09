@@ -190,201 +190,156 @@ defmodule SynapsisWeb.SessionLive.Show do
     end
   end
 
+  defp provider_options(providers) do
+    Enum.map(providers, fn p -> {p.name, "#{p.name} (#{p.type})"} end)
+  end
+
+  defp selector_provider_options(providers) do
+    Enum.map(providers, fn p -> {p.name, p.name} end)
+  end
+
+  defp model_options(models) do
+    Enum.map(models, fn m -> {m.id, m[:name] || m.id} end)
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="flex h-full bg-gray-950 text-gray-100">
+    <div class="flex h-full bg-base-100 text-base-content">
       <%!-- Sidebar --%>
-      <aside class="w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
-        <div class="p-4 border-b border-gray-800">
-          <.link
-            navigate={~p"/projects/#{@project.id}"}
-            class="text-lg font-semibold hover:text-blue-400"
-          >
+      <aside class="w-64 bg-base-200 border-r border-base-300 flex flex-col">
+        <div class="p-4 border-b border-base-300">
+          <.dm_link navigate={~p"/projects/#{@project.id}"} class="text-lg font-semibold">
             {@project.slug}
-          </.link>
-          <button
-            phx-click="toggle_new_session_form"
-            class="mt-2 w-full px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
+          </.dm_link>
+          <.dm_btn variant="primary" class="mt-2 w-full" phx-click="toggle_new_session_form">
             + New Session
-          </button>
+          </.dm_btn>
           <div :if={@show_new_session_form} class="mt-3 space-y-2">
-            <div>
-              <label class="block text-xs text-gray-400 mb-1">Provider</label>
-              <select
-                phx-change="select_provider"
-                name="provider"
-                class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-200"
-              >
-                <option
-                  :for={p <- @providers}
-                  value={p.name}
-                  selected={p.name == @new_session_provider}
-                >
-                  {p.name} ({p.type})
-                </option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-xs text-gray-400 mb-1">Model</label>
-              <%= if @available_models != [] do %>
-                <select
-                  phx-change="select_model"
-                  name="model"
-                  class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-200"
-                >
-                  <option
-                    :for={m <- @available_models}
-                    value={m.id}
-                    selected={m.id == @new_session_model}
-                  >
-                    {m[:name] || m.id}
-                  </option>
-                </select>
-              <% else %>
-                <input
-                  type="text"
-                  name="model"
-                  value={@new_session_model}
-                  phx-blur="select_model"
-                  phx-keydown="select_model"
-                  phx-key="Enter"
-                  class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-200"
-                  placeholder="model id"
-                />
-              <% end %>
-            </div>
-            <button
-              phx-click="create_session"
-              class="w-full px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700"
-            >
+            <.dm_select
+              name="provider"
+              label="Provider"
+              options={provider_options(@providers)}
+              value={@new_session_provider}
+              size="sm"
+              phx-change="select_provider"
+            />
+            <%= if @available_models != [] do %>
+              <.dm_select
+                name="model"
+                label="Model"
+                options={model_options(@available_models)}
+                value={@new_session_model}
+                size="sm"
+                phx-change="select_model"
+              />
+            <% else %>
+              <.dm_input
+                type="text"
+                name="model"
+                value={@new_session_model}
+                label="Model"
+                placeholder="model id"
+                size="sm"
+                phx-blur="select_model"
+                phx-keydown="select_model"
+                phx-key="Enter"
+              />
+            <% end %>
+            <.dm_btn variant="primary" class="w-full" phx-click="create_session">
               Create
-            </button>
+            </.dm_btn>
           </div>
         </div>
         <div class="flex-1 overflow-y-auto">
-          <div
-            :for={s <- @sessions}
-            class={[
-              "px-4 py-3 cursor-pointer border-b border-gray-800 hover:bg-gray-800 flex justify-between items-center",
-              s.id == @session.id && "bg-gray-800"
-            ]}
-          >
-            <.link
-              navigate={~p"/projects/#{@project.id}/sessions/#{s.id}"}
-              class="min-w-0 flex-1"
+          <.dm_left_menu active={@session.id} size="sm">
+            <:title>Sessions</:title>
+            <:menu
+              :for={s <- @sessions}
+              id={s.id}
             >
-              <div class="text-sm truncate">
-                {s.title || "Session #{String.slice(s.id, 0, 8)}"}
+              <div class="flex justify-between items-center w-full">
+                <.link
+                  navigate={~p"/projects/#{@project.id}/sessions/#{s.id}"}
+                  class="min-w-0 flex-1"
+                >
+                  <div class="text-sm truncate">
+                    {s.title || "Session #{String.slice(s.id, 0, 8)}"}
+                  </div>
+                  <div class="text-xs text-base-content/50 mt-0.5">
+                    {s.provider}/{s.model}
+                  </div>
+                </.link>
+                <.dm_btn
+                  variant="ghost"
+                  size="xs"
+                  confirm="Delete this session?"
+                  confirm_title="Confirm Delete"
+                >
+                  <:confirm_action>
+                    <.dm_btn
+                      variant="error"
+                      size="sm"
+                      phx-click="delete_session"
+                      phx-value-id={s.id}
+                    >
+                      Delete
+                    </.dm_btn>
+                  </:confirm_action>
+                  &#10005;
+                </.dm_btn>
               </div>
-              <div class="text-xs text-gray-500 mt-0.5">
-                {s.provider}/{s.model}
-              </div>
-            </.link>
-            <button
-              phx-click="delete_session"
-              phx-value-id={s.id}
-              class="ml-2 text-gray-600 hover:text-red-400 text-xs"
-            >
-              &#10005;
-            </button>
-          </div>
+            </:menu>
+          </.dm_left_menu>
         </div>
       </aside>
 
       <%!-- Main content --%>
       <main class="flex-1 min-w-0 flex flex-col">
         <%!-- Session header --%>
-        <div class="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+        <div class="px-4 py-3 border-b border-base-300 flex items-center justify-between">
           <div class="flex items-center gap-3">
             <h2 class="font-semibold">{@session.title || "Session"}</h2>
-            <div class="relative">
-              <button
-                phx-click="toggle_model_selector"
-                class="flex items-center gap-1.5 px-2 py-1 text-xs bg-gray-800 border border-gray-700 rounded hover:border-gray-600 text-gray-300"
-              >
-                <span>{@session.provider}/{@session.model}</span>
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M19 9l-7 7-7-7"
+            <.dm_dropdown position="bottom" class="z-50">
+              <:trigger>
+                <.dm_btn variant="ghost" size="xs">
+                  {@session.provider}/{@session.model}
+                  <.dm_mdi name="chevron-down" class="w-3 h-3 ml-1" />
+                </.dm_btn>
+              </:trigger>
+              <:content class="w-80 p-3 space-y-3">
+                <div>
+                  <.dm_select
+                    name="provider"
+                    label="Provider"
+                    options={selector_provider_options(@providers)}
+                    value={@selector_provider}
+                    size="sm"
+                    phx-change="switch_provider"
                   />
-                </svg>
-              </button>
-
-              <div
-                :if={@show_model_selector}
-                class="absolute top-full left-0 mt-1 w-80 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 p-3 space-y-3"
-              >
-                <div>
-                  <label class="block text-xs text-gray-400 mb-1">Provider</label>
-                  <form phx-change="switch_provider" class="w-full">
-                    <select
-                      name="provider"
-                      class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-200"
-                    >
-                      <option
-                        :for={p <- @providers}
-                        value={p.name}
-                        selected={p.name == @selector_provider}
-                      >
-                        {p.name}
-                      </option>
-                    </select>
-                  </form>
                 </div>
-                <div>
-                  <label class="block text-xs text-gray-400 mb-1">Model</label>
-                  <div class="max-h-48 overflow-y-auto space-y-1">
-                    <button
-                      :for={m <- @session_models}
-                      phx-click="switch_model"
-                      phx-value-provider={@selector_provider}
-                      phx-value-model={m.id}
-                      class={[
-                        "w-full text-left px-2 py-1.5 rounded text-sm hover:bg-gray-800",
-                        if(m.id == @session.model,
-                          do: "bg-blue-900/40 text-blue-300",
-                          else: "text-gray-300"
-                        )
-                      ]}
-                    >
-                      <div class="font-medium">{m[:name] || m.id}</div>
-                      <div class="text-xs text-gray-500">{m.id}</div>
-                    </button>
-                  </div>
-                  <div :if={@session_models == []} class="text-xs text-gray-500 py-2">
-                    No models available for this provider
-                  </div>
-                </div>
-                <button
-                  phx-click="toggle_model_selector"
-                  class="w-full text-xs text-gray-500 hover:text-gray-300 pt-1"
+                <div class="text-xs text-base-content/60 font-semibold">Model</div>
+                <div
+                  :for={m <- @session_models}
+                  class={"p-2 rounded cursor-pointer hover:bg-base-200 transition-colors #{if(m.id == @session.model, do: "bg-primary/10 text-primary", else: "")}"}
+                  phx-click="switch_model"
+                  phx-value-provider={@selector_provider}
+                  phx-value-model={m.id}
                 >
-                  Close
-                </button>
-              </div>
-            </div>
+                  <div class="font-medium">{m[:name] || m.id}</div>
+                  <div class="text-xs text-base-content/50">{m.id}</div>
+                </div>
+                <div :if={@session_models == []} class="text-xs text-base-content/50 p-2">
+                  No models available
+                </div>
+              </:content>
+            </.dm_dropdown>
           </div>
-          <div class="flex gap-2">
-            <button
-              :for={mode <- ["build", "plan"]}
-              phx-click="switch_agent"
-              phx-value-mode={mode}
-              class={[
-                "px-3 py-1 text-sm rounded",
-                if(@agent_mode == mode,
-                  do: "bg-blue-600 text-white",
-                  else: "bg-gray-800 text-gray-400 hover:text-gray-200"
-                )
-              ]}
-            >
-              {mode}
-            </button>
-          </div>
+          <.mode_toggle
+            current_mode={@agent_mode}
+            modes={[{"build", "build"}, {"plan", "plan"}]}
+            on_change="switch_agent"
+          />
         </div>
 
         <%!-- React ChatApp --%>

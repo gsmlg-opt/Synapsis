@@ -1,7 +1,39 @@
 import "phoenix_html"
 import { Socket } from "phoenix"
 import { LiveSocket } from "phoenix_live_view"
-import { Hooks } from "@synapsis/hooks"
+import "@duskmoon-dev/elements/register"
+
+// Client-only theme switcher — upstream hook pushes "theme_changed" to the
+// server which has no handler, causing a disconnect flash. We handle
+// everything on the client: localStorage + data-theme on <html>.
+const ThemeSwitcher = {
+  mounted(this: { el: HTMLElement }) {
+    const saved = localStorage.getItem("theme")
+    if (saved) {
+      document.documentElement.setAttribute("data-theme", saved)
+    }
+
+    const controllers = this.el.querySelectorAll<HTMLInputElement>(".theme-controller")
+    const current = saved || this.el.dataset.theme || "default"
+
+    controllers.forEach((c) => {
+      c.checked = c.value === current
+      c.addEventListener("change", () => {
+        localStorage.setItem("theme", c.value)
+        document.documentElement.setAttribute("data-theme", c.value)
+      })
+    })
+  },
+
+  updated(this: { el: HTMLElement }) {
+    const saved = localStorage.getItem("theme")
+    if (saved) {
+      this.el.querySelectorAll<HTMLInputElement>(".theme-controller").forEach((c) => {
+        c.checked = c.value === saved
+      })
+    }
+  },
+}
 
 const csrfToken =
   document.querySelector("meta[name='csrf-token']")?.getAttribute("content") || ""
@@ -16,7 +48,7 @@ try {
 const liveSocket = new LiveSocket("/live", Socket, {
   transport: window.WebSocket,
   params: { _csrf_token: csrfToken },
-  hooks: Hooks,
+  hooks: { ThemeSwitcher },
 })
 
 liveSocket.connect()

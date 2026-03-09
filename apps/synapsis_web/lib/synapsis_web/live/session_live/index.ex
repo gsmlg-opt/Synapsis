@@ -97,106 +97,100 @@ defmodule SynapsisWeb.SessionLive.Index do
     end
   end
 
+  defp provider_options(providers) do
+    Enum.map(providers, fn p -> {p.name, "#{p.name} (#{p.type})"} end)
+  end
+
+  defp model_options(models) do
+    Enum.map(models, fn m -> {m.id, m[:name] || m.id} end)
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen bg-gray-950 text-gray-100">
-      <div class="max-w-4xl mx-auto p-6">
-        <div class="flex items-center gap-2 text-sm text-gray-500 mb-4">
-          <.link navigate={~p"/projects"} class="hover:text-gray-300">Projects</.link>
-          <span>/</span>
-          <.link navigate={~p"/projects/#{@project.id}"} class="hover:text-gray-300">
-            {@project.slug}
-          </.link>
-          <span>/</span>
-          <span class="text-gray-300">Sessions</span>
-        </div>
+    <div class="max-w-4xl mx-auto p-6">
+      <.dm_breadcrumb>
+        <:crumb to={~p"/projects"}>Projects</:crumb>
+        <:crumb to={~p"/projects/#{@project.id}"}>{@project.slug}</:crumb>
+        <:crumb>Sessions</:crumb>
+      </.dm_breadcrumb>
 
-        <div class="flex justify-between items-center mb-6">
-          <h1 class="text-2xl font-bold">Sessions</h1>
-          <button
-            phx-click="toggle_new_session_form"
-            class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            + New Session
-          </button>
-        </div>
-
-        <div
-          :if={@show_new_session_form}
-          class="mb-6 bg-gray-900 rounded-lg p-4 border border-gray-800 space-y-3"
-        >
-          <div>
-            <label class="block text-xs text-gray-400 mb-1">Provider</label>
-            <select
-              phx-change="select_provider"
-              name="provider"
-              class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-200"
-            >
-              <option
-                :for={p <- @providers}
-                value={p.name}
-                selected={p.name == @new_session_provider}
-              >
-                {p.name} ({p.type})
-              </option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs text-gray-400 mb-1">Model</label>
-            <%= if @available_models != [] do %>
-              <select
-                phx-change="select_model"
-                name="model"
-                class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-200"
-              >
-                <option
-                  :for={m <- @available_models}
-                  value={m.id}
-                  selected={m.id == @new_session_model}
-                >
-                  {m[:name] || m.id}
-                </option>
-              </select>
-            <% else %>
-              <input
-                type="text"
-                name="model"
-                value={@new_session_model}
-                phx-blur="select_model"
-                phx-keydown="select_model"
-                phx-key="Enter"
-                class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-200"
-                placeholder="model id"
-              />
-            <% end %>
-          </div>
-          <button
-            phx-click="create_session"
-            class="w-full px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700"
-          >
-            Create Session
-          </button>
-        </div>
-
-        <.flash_group flash={@flash} />
-
-        <div class="space-y-2">
-          <div
-            :for={session <- @sessions}
-            class="bg-gray-900 rounded-lg p-4 border border-gray-800 hover:border-gray-700"
-          >
-            <.link navigate={~p"/projects/#{@project.id}/sessions/#{session.id}"}>
-              <div class="font-medium">
-                {session.title || "Session #{String.slice(session.id, 0, 8)}"}
-              </div>
-              <div class="text-xs text-gray-500 mt-1">
-                {session.provider}/{session.model} · {session.agent}
-              </div>
-            </.link>
-          </div>
-        </div>
+      <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold">Sessions</h1>
+        <.dm_btn variant="primary" phx-click="toggle_new_session_form">
+          + New Session
+        </.dm_btn>
       </div>
+
+      <.dm_card :if={@show_new_session_form} variant="bordered" class="mb-6">
+        <:title>New Session</:title>
+        <div class="space-y-3">
+          <.dm_select
+            name="provider"
+            label="Provider"
+            options={provider_options(@providers)}
+            value={@new_session_provider}
+            size="sm"
+            phx-change="select_provider"
+          />
+          <%= if @available_models != [] do %>
+            <.dm_select
+              name="model"
+              label="Model"
+              options={model_options(@available_models)}
+              value={@new_session_model}
+              size="sm"
+              phx-change="select_model"
+            />
+          <% else %>
+            <.dm_input
+              type="text"
+              name="model"
+              value={@new_session_model}
+              label="Model"
+              placeholder="model id"
+              size="sm"
+              phx-blur="select_model"
+              phx-keydown="select_model"
+              phx-key="Enter"
+            />
+          <% end %>
+        </div>
+        <:action>
+          <.dm_btn variant="primary" class="w-full" phx-click="create_session">
+            Create Session
+          </.dm_btn>
+        </:action>
+      </.dm_card>
+
+      <div :if={@sessions != []} class="space-y-2">
+        <.dm_link
+          :for={session <- @sessions}
+          navigate={~p"/projects/#{@project.id}/sessions/#{session.id}"}
+        >
+          <.dm_card variant="bordered">
+            <div class="font-medium">
+              {session.title || "Session #{String.slice(session.id, 0, 8)}"}
+            </div>
+            <div class="text-xs text-base-content/50 mt-1">
+              {session.provider}/{session.model} · {session.agent}
+            </div>
+          </.dm_card>
+        </.dm_link>
+      </div>
+
+      <.empty_state
+        :if={@sessions == [] && !@show_new_session_form}
+        icon="chat-outline"
+        title="No sessions yet"
+        description="Create a new session to start chatting."
+      >
+        <:action>
+          <.dm_btn variant="primary" phx-click="toggle_new_session_form">
+            + New Session
+          </.dm_btn>
+        </:action>
+      </.empty_state>
     </div>
     """
   end

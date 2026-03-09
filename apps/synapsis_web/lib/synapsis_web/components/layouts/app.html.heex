@@ -1,29 +1,33 @@
 <div class="flex flex-col h-screen">
-  <nav class="shrink-0 h-12 border-b border-gray-800 bg-gray-900/80 backdrop-blur flex items-center px-4 gap-6 z-50">
-    <.link navigate={~p"/"} class="text-lg font-bold text-white hover:text-blue-400 mr-2">
-      Synapsis
-    </.link>
-    <.link navigate={~p"/assistant"} class="text-sm text-gray-400 hover:text-gray-200">
-      Assistant
-    </.link>
-    <.link navigate={~p"/projects"} class="text-sm text-gray-400 hover:text-gray-200">
-      Projects
-    </.link>
-    <.link navigate={~p"/settings/providers"} class="text-sm text-gray-400 hover:text-gray-200">
-      Providers
-    </.link>
-    <.link navigate={~p"/settings/mcp"} class="text-sm text-gray-400 hover:text-gray-200">
-      MCP
-    </.link>
-    <.link navigate={~p"/settings/lsp"} class="text-sm text-gray-400 hover:text-gray-200">
-      LSP
-    </.link>
-    <div class="flex-1" />
-    <.link navigate={~p"/settings"} class="text-sm text-gray-400 hover:text-gray-200">
-      Settings
-    </.link>
-  </nav>
-  <.flash_group flash={@flash} />
+  <.dm_simple_appbar title="" class="shrink-0 bg-base-200 border-b border-base-300">
+    <:logo>
+      <.dm_link navigate={~p"/"} class="text-lg font-bold">Synapsis</.dm_link>
+    </:logo>
+    <:menu to={~p"/assistant"}>
+      <.dm_mdi name="robot" class="w-4 h-4 inline mr-1" /> Assistant
+    </:menu>
+    <:menu to={~p"/projects"}>
+      <.dm_mdi name="folder-multiple" class="w-4 h-4 inline mr-1" /> Projects
+    </:menu>
+    <:menu to={~p"/settings/providers"}>
+      <.dm_mdi name="cloud" class="w-4 h-4 inline mr-1" /> Providers
+    </:menu>
+    <:menu to={~p"/settings/mcp"}>
+      <.dm_mdi name="puzzle" class="w-4 h-4 inline mr-1" /> MCP
+    </:menu>
+    <:menu to={~p"/settings/lsp"}>
+      <.dm_mdi name="code-braces" class="w-4 h-4 inline mr-1" /> LSP
+    </:menu>
+    <:user_profile>
+      <div class="flex items-center gap-2">
+        <.dm_theme_switcher id="theme-toggle" />
+        <.dm_link navigate={~p"/settings"}>
+          <.dm_mdi name="cog" class="w-5 h-5" />
+        </.dm_link>
+      </div>
+    </:user_profile>
+  </.dm_simple_appbar>
+  <.dm_flash_group flash={@flash} />
   <main class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
     {@inner_content}
   </main>
