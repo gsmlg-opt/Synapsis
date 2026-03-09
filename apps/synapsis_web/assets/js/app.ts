@@ -1,29 +1,37 @@
 import "phoenix_html"
 import { Socket } from "phoenix"
 import { LiveSocket } from "phoenix_live_view"
-// @ts-ignore — no type declarations for this JS module
-import { ThemeSwitcher as UpstreamThemeSwitcher } from "../../../../deps/phoenix_duskmoon/assets/js/hooks/theme_switcher.js"
 import "@duskmoon-dev/elements/register"
 
-// Wrap upstream hook to actually apply data-theme to <html>
+// Client-only theme switcher — upstream hook pushes "theme_changed" to the
+// server which has no handler, causing a disconnect flash. We handle
+// everything on the client: localStorage + data-theme on <html>.
 const ThemeSwitcher = {
-  ...UpstreamThemeSwitcher,
-  mounted() {
-    // Restore theme from localStorage before upstream init
+  mounted(this: { el: HTMLElement }) {
     const saved = localStorage.getItem("theme")
     if (saved) {
       document.documentElement.setAttribute("data-theme", saved)
     }
 
-    UpstreamThemeSwitcher.mounted.call(this)
+    const controllers = this.el.querySelectorAll<HTMLInputElement>(".theme-controller")
+    const current = saved || this.el.dataset.theme || "default"
 
-    // Listen for theme changes and apply to <html>
-    this.el.querySelectorAll(".theme-controller").forEach((controller: HTMLInputElement) => {
-      controller.addEventListener("change", () => {
-        const theme = controller.value
-        document.documentElement.setAttribute("data-theme", theme)
+    controllers.forEach((c) => {
+      c.checked = c.value === current
+      c.addEventListener("change", () => {
+        localStorage.setItem("theme", c.value)
+        document.documentElement.setAttribute("data-theme", c.value)
       })
     })
+  },
+
+  updated(this: { el: HTMLElement }) {
+    const saved = localStorage.getItem("theme")
+    if (saved) {
+      this.el.querySelectorAll<HTMLInputElement>(".theme-controller").forEach((c) => {
+        c.checked = c.value === saved
+      })
+    }
   },
 }
 
