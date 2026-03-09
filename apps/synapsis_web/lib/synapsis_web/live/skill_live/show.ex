@@ -41,68 +41,54 @@ defmodule SynapsisWeb.SkillLive.Show do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen bg-gray-950 text-gray-100">
-      <div class="max-w-4xl mx-auto p-6">
-        <div class="flex items-center gap-2 text-sm text-gray-500 mb-4">
-          <.link navigate={~p"/settings"} class="hover:text-gray-300">Settings</.link>
-          <span>/</span>
-          <.link navigate={~p"/settings/skills"} class="hover:text-gray-300">Skills</.link>
-          <span>/</span>
-          <span class="text-gray-300">{@skill.name}</span>
-        </div>
+    <div class="max-w-4xl mx-auto p-6">
+      <.dm_breadcrumb>
+        <:crumb to={~p"/settings"}>Settings</:crumb>
+        <:crumb to={~p"/settings/skills"}>Skills</:crumb>
+        <:crumb>{@skill.name}</:crumb>
+      </.dm_breadcrumb>
 
-        <h1 class="text-2xl font-bold mb-6">{@skill.name}</h1>
+      <.dm_card variant="bordered">
+        <:title>{@skill.name}</:title>
 
-        <.flash_group flash={@flash} />
+        <.dm_form for={to_form(%{})} as={:skill} phx-submit="update_skill" class="space-y-4">
+          <.dm_input
+            type="text"
+            name="name"
+            value={@skill.name}
+            required={true}
+            label="Name"
+          />
 
-        <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
-          <form phx-submit="update_skill" class="space-y-4">
-            <div>
-              <label class="block text-sm text-gray-400 mb-1">Name</label>
-              <input
-                type="text"
-                name="name"
-                value={@skill.name}
-                required
-                class="w-full bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none"
-              />
-            </div>
+          <.dm_select
+            name="scope"
+            options={[{"global", "Global"}, {"project", "Project"}]}
+            value={@skill.scope}
+          />
 
-            <div>
-              <label class="block text-sm text-gray-400 mb-1">Scope</label>
-              <select
-                name="scope"
-                class="w-full bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none"
-              >
-                <option value="global" selected={@skill.scope == "global"}>Global</option>
-                <option value="project" selected={@skill.scope == "project"}>Project</option>
-              </select>
-            </div>
+          <.dm_textarea
+            name="description"
+            value={@skill.description}
+            rows={2}
+            label="Description"
+            resize="none"
+          />
 
-            <div>
-              <label class="block text-sm text-gray-400 mb-1">Description</label>
-              <textarea
-                name="description"
-                rows="2"
-                class="w-full bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none resize-none"
-              >{@skill.description}</textarea>
-            </div>
+          <.dm_textarea
+            name="system_prompt_fragment"
+            value={@skill.system_prompt_fragment}
+            rows={10}
+            label="System Prompt Fragment"
+            resize="vertical"
+          />
 
-            <div>
-              <label class="block text-sm text-gray-400 mb-1">System Prompt Fragment</label>
-              <textarea
-                name="system_prompt_fragment"
-                rows="10"
-                class="w-full bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none font-mono text-sm resize-y"
-              >{@skill.system_prompt_fragment}</textarea>
-            </div>
-
-            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+          <:actions>
+            <.dm_btn type="submit" variant="primary">
               Save Changes
-            </button>
-          </form>
-        </div>
-      </div>
+            </.dm_btn>
+          </:actions>
+        </.dm_form>
+      </.dm_card>
     </div>
     """
   end

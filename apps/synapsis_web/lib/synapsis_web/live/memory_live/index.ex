@@ -63,64 +63,50 @@ defmodule SynapsisWeb.MemoryLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen bg-gray-950 text-gray-100">
-      <div class="max-w-4xl mx-auto p-6">
-        <div class="flex items-center gap-2 text-sm text-gray-500 mb-4">
-          <.link navigate={~p"/settings"} class="hover:text-gray-300">Settings</.link>
-          <span>/</span>
-          <span class="text-gray-300">Memory</span>
-        </div>
+    <div class="max-w-4xl mx-auto p-6">
+      <.dm_breadcrumb>
+        <:crumb to={~p"/settings"}>Settings</:crumb>
+        <:crumb>Memory</:crumb>
+      </.dm_breadcrumb>
 
-        <div class="flex items-center justify-between mb-6">
-          <h1 class="text-2xl font-bold">Memory</h1>
-          <div class="flex gap-2">
-            <%= if @editing do %>
-              <button
-                phx-click="cancel"
-                class="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded hover:bg-gray-700"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                form="memory-form"
-                class="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-              >
-                Save
-              </button>
-            <% else %>
-              <button
-                phx-click="edit"
-                class="px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded hover:bg-gray-700"
-              >
-                Edit
-              </button>
-            <% end %>
-          </div>
-        </div>
-
-        <.flash_group flash={@flash} />
-
-        <div class="bg-gray-900 rounded-lg border border-gray-800">
+      <.dm_card variant="bordered">
+        <:title>Memory</:title>
+        <:action>
           <%= if @editing do %>
-            <form id="memory-form" phx-submit="save" phx-change="update_draft">
-              <textarea
-                name="content"
-                rows="20"
-                class="w-full bg-gray-900 text-gray-100 font-mono text-sm p-4 rounded-lg border-0 focus:ring-0 focus:outline-none resize-y"
-              ><%= @draft %></textarea>
-            </form>
+            <.dm_btn variant="ghost" phx-click="cancel">
+              Cancel
+            </.dm_btn>
+            <button type="submit" form="memory-form" class="btn btn-primary btn-sm">
+              Save
+            </button>
           <% else %>
-            <%= if @content == "" do %>
-              <div class="p-8 text-center text-gray-500">
-                No memory content yet. Click Edit to start writing.
-              </div>
-            <% else %>
-              <div class="whitespace-pre-wrap font-mono text-sm text-gray-300 p-4">{@content}</div>
-            <% end %>
+            <.dm_btn variant="ghost" phx-click="edit">
+              Edit
+            </.dm_btn>
           <% end %>
-        </div>
-      </div>
+        </:action>
+
+        <%= if @editing do %>
+          <.dm_form for={%{}} id="memory-form" phx-submit="save" phx-change="update_draft">
+            <.dm_textarea
+              name="content"
+              value={@draft}
+              rows={20}
+              resize="vertical"
+            />
+          </.dm_form>
+        <% else %>
+          <%= if @content == "" do %>
+            <.empty_state
+              icon="brain"
+              title="No memory content yet"
+              description="Click Edit to start writing."
+            />
+          <% else %>
+            <.dm_markdown content={@content} />
+          <% end %>
+        <% end %>
+      </.dm_card>
     </div>
     """
   end

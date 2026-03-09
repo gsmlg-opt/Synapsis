@@ -3,14 +3,13 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@synapsis/hooks": "workspace:*",
+    "@duskmoon-dev/core": "^1.11.1",
+    "@duskmoon-dev/elements": "^0.7.0",
     "phoenix": "1.8.3",
     "phoenix_html": "4.3.0",
     "phoenix_live_view": "1.1.23"
   },
   "devDependencies": {
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
     "typescript": "^5.7.0"
   }
 }

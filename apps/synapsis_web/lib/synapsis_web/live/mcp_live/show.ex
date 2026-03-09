@@ -83,94 +83,70 @@ defmodule SynapsisWeb.MCPLive.Show do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen bg-gray-950 text-gray-100">
-      <div class="max-w-4xl mx-auto p-6">
-        <div class="flex items-center gap-2 text-sm text-gray-500 mb-4">
-          <.link navigate={~p"/settings"} class="hover:text-gray-300">Settings</.link>
-          <span>/</span>
-          <.link navigate={~p"/settings/mcp"} class="hover:text-gray-300">MCP Servers</.link>
-          <span>/</span>
-          <span class="text-gray-300">{@config.name}</span>
-        </div>
+    <div class="max-w-4xl mx-auto p-6">
+      <.dm_breadcrumb class="mb-4">
+        <:crumb to={~p"/settings"}>Settings</:crumb>
+        <:crumb to={~p"/settings/mcp"}>MCP Servers</:crumb>
+        <:crumb>{@config.name}</:crumb>
+      </.dm_breadcrumb>
 
-        <h1 class="text-2xl font-bold mb-6">{@config.name}</h1>
+      <h1 class="text-2xl font-bold mb-6">{@config.name}</h1>
 
-        <.flash_group flash={@flash} />
+      <.dm_flash_group flash={@flash} />
 
-        <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
-          <form phx-submit="update_config" class="space-y-4">
-            <div>
-              <label class="block text-sm text-gray-400 mb-1">Transport</label>
-              <select
-                name="transport"
-                class="w-full bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none"
-              >
-                <option value="stdio" selected={@config.transport == "stdio"}>stdio</option>
-                <option value="sse" selected={@config.transport == "sse"}>SSE</option>
-              </select>
-            </div>
+      <.dm_card variant="bordered">
+        <.dm_form for={%{}} phx-submit="update_config">
+          <.dm_select
+            name="transport"
+            label="Transport"
+            options={[{"stdio", "stdio"}, {"sse", "SSE"}]}
+            value={@config.transport}
+          />
 
-            <div>
-              <label class="block text-sm text-gray-400 mb-1">Command</label>
-              <input
-                type="text"
-                name="command"
-                value={@config.command}
-                class="w-full bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none"
-              />
-            </div>
+          <.dm_input
+            type="text"
+            name="command"
+            value={@config.command}
+            label="Command"
+          />
 
-            <div>
-              <label class="block text-sm text-gray-400 mb-1">Arguments (one per line)</label>
-              <textarea
-                name="args"
-                rows="3"
-                class="w-full bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none font-mono text-sm"
-              >{format_args(@config.args)}</textarea>
-            </div>
+          <.dm_textarea
+            name="args"
+            rows={3}
+            label="Arguments (one per line)"
+            value={format_args(@config.args)}
+          />
 
-            <div>
-              <label class="block text-sm text-gray-400 mb-1">URL</label>
-              <input
-                type="text"
-                name="url"
-                value={@config.url}
-                class="w-full bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none"
-              />
-            </div>
+          <.dm_input
+            type="text"
+            name="url"
+            value={@config.url}
+            label="URL"
+          />
 
-            <div>
-              <label class="block text-sm text-gray-400 mb-1">
-                Environment Variables (KEY=VALUE, one per line)
-              </label>
-              <textarea
-                name="env"
-                rows="4"
-                placeholder="GITHUB_TOKEN=ghp_xxx\nAPI_KEY=sk-xxx"
-                class="w-full bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none font-mono text-sm"
-              >{format_env(@config.env)}</textarea>
-            </div>
+          <.dm_textarea
+            name="env"
+            rows={4}
+            placeholder="GITHUB_TOKEN=ghp_xxx\nAPI_KEY=sk-xxx"
+            label="Environment Variables (KEY=VALUE, one per line)"
+            value={format_env(@config.env)}
+          />
 
-            <div>
-              <label class="flex items-center gap-2">
-                <input type="hidden" name="auto_start" value="false" />
-                <input
-                  type="checkbox"
-                  name="auto_start"
-                  value="true"
-                  checked={@config.auto_start}
-                  class="rounded bg-gray-800 border-gray-700"
-                />
-                <span class="text-sm">Auto-start on startup</span>
-              </label>
-            </div>
+          <div>
+            <input type="hidden" name="auto_start" value="false" />
+            <.dm_checkbox
+              name="auto_start"
+              value="true"
+              checked={@config.auto_start}
+              label="Auto-start on startup"
+            />
+          </div>
 
-            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-              Save Changes
-            </button>
-          </form>
-        </div>
-      </div>
+          <.dm_btn type="submit" variant="primary">
+            Save Changes
+          </.dm_btn>
+        </.dm_form>
+      </.dm_card>
     </div>
     """
   end

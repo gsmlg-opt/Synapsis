@@ -22,57 +22,97 @@ defmodule SynapsisWeb.DashboardLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="bg-gray-950 text-gray-100">
-      <div class="max-w-6xl mx-auto p-6">
-        <h1 class="text-2xl font-bold mb-6">Dashboard</h1>
+    <div class="max-w-6xl mx-auto p-6">
+      <h1 class="text-2xl font-bold mb-6">Dashboard</h1>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <%!-- Projects Section --%>
-          <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
-            <div class="flex justify-between items-center mb-4">
-              <h2 class="text-xl font-semibold">Projects</h2>
-              <.link
-                navigate={~p"/projects/new"}
-                class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-              >
-                + New
-              </.link>
-            </div>
-            <div :if={@projects == []} class="text-gray-500 text-sm">
-              No projects yet.
-            </div>
-            <div :for={project <- @projects} class="py-2 border-b border-gray-800 last:border-0">
-              <.link navigate={~p"/projects/#{project.id}"} class="hover:text-blue-400">
-                <div class="font-medium">{project.slug}</div>
-                <div class="text-xs text-gray-500">{project.path}</div>
-              </.link>
-            </div>
-          </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+        <.stat_card
+          icon="folder-outline"
+          value={to_string(length(@projects))}
+          label="Total projects"
+          color="primary"
+        />
+        <.stat_card
+          icon="chat-outline"
+          value={to_string(length(@recent_sessions))}
+          label="Recent sessions"
+          color="secondary"
+        />
+      </div>
 
-          <%!-- Recent Sessions Section --%>
-          <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
-            <h2 class="text-xl font-semibold mb-4">Recent Sessions</h2>
-            <div :if={@recent_sessions == []} class="text-gray-500 text-sm">
-              No sessions yet.
-            </div>
-            <div
-              :for={session <- @recent_sessions}
-              class="py-2 border-b border-gray-800 last:border-0"
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <.dm_card variant="bordered">
+          <:title>Projects</:title>
+          <:action>
+            <.dm_link navigate={~p"/projects/new"}>
+              <.dm_btn variant="primary" size="sm">
+                <.dm_mdi name="plus" class="mr-1" /> New
+              </.dm_btn>
+            </.dm_link>
+          </:action>
+
+          <.empty_state
+            :if={@projects == []}
+            icon="folder-open-outline"
+            title="No projects yet"
+            description="Create one to get started."
+          >
+            <:action>
+              <.dm_link navigate={~p"/projects/new"}>
+                <.dm_btn variant="primary" size="sm">Create Project</.dm_btn>
+              </.dm_link>
+            </:action>
+          </.empty_state>
+
+          <div :if={@projects != []} class="space-y-1">
+            <.dm_link
+              :for={project <- @projects}
+              navigate={~p"/projects/#{project.id}"}
+              class="flex items-center gap-3 w-full p-2 rounded hover:bg-base-200 transition-colors"
             >
-              <.link
-                navigate={~p"/projects/#{session.project_id}/sessions/#{session.id}"}
-                class="hover:text-blue-400"
-              >
+              <.dm_mdi name="folder" class="text-primary text-xl" />
+              <div class="flex-1 min-w-0">
+                <div class="font-medium">{project.slug}</div>
+                <div class="text-xs text-base-content/50 truncate">{project.path}</div>
+              </div>
+              <.dm_badge color="primary" outline size="sm">
+                project
+              </.dm_badge>
+            </.dm_link>
+          </div>
+        </.dm_card>
+
+        <.dm_card variant="bordered">
+          <:title>Recent Sessions</:title>
+
+          <.empty_state
+            :if={@recent_sessions == []}
+            icon="chat-outline"
+            title="No sessions yet"
+            description="Start a conversation from a project."
+          />
+
+          <div :if={@recent_sessions != []} class="space-y-1">
+            <.dm_link
+              :for={session <- @recent_sessions}
+              navigate={~p"/projects/#{session.project_id}/sessions/#{session.id}"}
+              class="flex items-center gap-3 w-full p-2 rounded hover:bg-base-200 transition-colors"
+            >
+              <.dm_mdi name="chat-processing-outline" class="text-secondary text-xl" />
+              <div class="flex-1 min-w-0">
                 <div class="font-medium">
                   {session.title || "Session #{String.slice(session.id, 0, 8)}"}
                 </div>
-                <div class="text-xs text-gray-500">
-                  {session.provider}/{session.model} · {session.agent}
+                <div class="text-xs text-base-content/50">
+                  {session.provider}/{session.model}
                 </div>
-              </.link>
-            </div>
+              </div>
+              <.dm_badge color="ghost" size="sm">
+                {session.agent}
+              </.dm_badge>
+            </.dm_link>
           </div>
-        </div>
+        </.dm_card>
       </div>
     </div>
     """

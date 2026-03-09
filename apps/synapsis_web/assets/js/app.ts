@@ -1,7 +1,8 @@
 import "phoenix_html"
 import { Socket } from "phoenix"
 import { LiveSocket } from "phoenix_live_view"
-import { Hooks } from "@synapsis/hooks"
+import * as DuskmoonHooks from "phoenix_duskmoon/hooks"
+import "@duskmoon-dev/elements/register"
 
 const csrfToken =
   document.querySelector("meta[name='csrf-token']")?.getAttribute("content") || ""
@@ -16,7 +17,7 @@ try {
 const liveSocket = new LiveSocket("/live", Socket, {
   transport: window.WebSocket,
   params: { _csrf_token: csrfToken },
-  hooks: Hooks,
+  hooks: { ...DuskmoonHooks },
 })
 
 liveSocket.connect()

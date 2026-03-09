@@ -28,7 +28,9 @@ Read every file in `docs/` before writing any code. These are the source of trut
 - Phoenix 1.8+ (Bandit, no LiveView, no Mailer, no HTML generators)
 - PostgreSQL 16+ via Ecto (UUID PKs, JSONB)
 - Bun (replaces esbuild as Phoenix asset bundler)
-- React + Tailwind CSS
+- Phoenix LiveView + Tailwind CSS v4
+- `phoenix_duskmoon` (Phoenix component library)
+- `@duskmoon-dev/core` (Tailwind CSS plugin)
 - Req + Finch for HTTP
 
 ## Critical Rules (from guardrails — never violate)
@@ -316,3 +318,53 @@ The `synapsis_data` package is responsible ONLY for:
 ### Failure Policy (Fail Closed)
 
 If a task requires changes outside `synapsis_data`, new cross-package abstractions, or architecture redesign — STOP and explain the required changes instead of implementing them.
+
+---
+
+## UI System Constitution
+
+### Technology Stack
+
+| Layer | Package | Repo |
+|-------|---------|------|
+| Tailwind CSS plugin | `@duskmoon-dev/core` | `duskmoon-dev/duskmoon-css` |
+| Web Components | `@aspect-build/duskmoon-elements` | `duskmoon-dev/duskmoon-elements` |
+| Phoenix Components | `phoenix_duskmoon` | `duskmoon-dev/phoenix-duskmoon-ui` |
+
+`phoenix_duskmoon` wraps `duskmoon-elements` (web components) into Phoenix LiveView function components. `@duskmoon-dev/core` provides the Tailwind CSS design tokens and theme.
+
+### Hard Rules
+
+- Do NOT use any other CSS component library (no DaisyUI, no Flowbite, no Headless UI, etc.)
+- Do NOT use React or any JS framework — all UI is Phoenix LiveView + HEEx templates
+- Do NOT write custom CSS components when `phoenix_duskmoon` or `@duskmoon-dev/core` provides an equivalent
+- Do NOT install additional Tailwind plugins beyond `@duskmoon-dev/core` without explicit approval
+- All UI components MUST use `phoenix_duskmoon` function components (e.g., `<DM.button>`, `<DM.card>`, etc.)
+- Tailwind utility classes are allowed for layout and spacing; use `@duskmoon-dev/core` theme tokens for colors, typography, and design system values
+
+### Upstream Issue Policy
+
+When encountering bugs or needing new features in the UI stack, create issues in the appropriate upstream repo:
+
+| Problem area | File issue at |
+|---|---|
+| CSS / Tailwind plugin / theme tokens | `duskmoon-dev/duskmoon-css` |
+| Web component behavior / rendering | `duskmoon-dev/duskmoon-elements` |
+| Phoenix component wrapper / HEEx | `duskmoon-dev/phoenix-duskmoon-ui` |
+
+**All upstream issues MUST include the label `internal request`.**
+
+Do NOT work around upstream bugs locally — file the issue and document the workaround as temporary with a link to the issue.
+
+### Scope
+
+- `phoenix_duskmoon` covers: buttons, cards, forms, modals, navigation, tables, alerts, badges, and other standard UI primitives
+- `@duskmoon-dev/core` covers: color palette, dark mode, typography scale, spacing tokens, and Tailwind theme configuration
+- Custom HEEx components are allowed for app-specific patterns not covered by `phoenix_duskmoon`
+
+## Active Technologies
+- Elixir 1.18+ / OTP 28+ + Phoenix 1.8+, Phoenix LiveView 1.0+, phoenix_duskmoon 8.0, @duskmoon-dev/core 1.11+, @duskmoon-dev/elements 0.7+ (001-duskmoon-web-refactor)
+- N/A (presentation-layer only, no schema changes) (001-duskmoon-web-refactor)
+
+## Recent Changes
+- 001-duskmoon-web-refactor: Added Elixir 1.18+ / OTP 28+ + Phoenix 1.8+, Phoenix LiveView 1.0+, phoenix_duskmoon 8.0, @duskmoon-dev/core 1.11+, @duskmoon-dev/elements 0.7+

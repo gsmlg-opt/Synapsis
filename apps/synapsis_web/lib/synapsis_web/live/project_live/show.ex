@@ -49,58 +49,75 @@ defmodule SynapsisWeb.ProjectLive.Show do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen bg-gray-950 text-gray-100">
-      <div class="max-w-4xl mx-auto p-6">
-        <div class="flex items-center gap-2 text-sm text-gray-500 mb-4">
-          <.link navigate={~p"/projects"} class="hover:text-gray-300">Projects</.link>
-          <span>/</span>
-          <span class="text-gray-300">{@project.slug}</span>
-        </div>
+    <div class="max-w-4xl mx-auto p-6">
+      <.dm_breadcrumb class="mb-4">
+        <:crumb to={~p"/projects"}>Projects</:crumb>
+        <:crumb>{@project.slug}</:crumb>
+      </.dm_breadcrumb>
 
-        <div class="flex justify-between items-center mb-6">
-          <div>
-            <h1 class="text-2xl font-bold">{@project.slug}</h1>
-            <p class="text-sm text-gray-500 mt-1">{@project.path}</p>
-          </div>
-          <button
-            phx-click="create_session"
-            class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
+      <.dm_card variant="bordered" class="mb-6">
+        <:title>{@project.slug}</:title>
+        <p class="text-sm text-base-content/50">{@project.path}</p>
+        <:action>
+          <.dm_btn variant="primary" size="sm" phx-click="create_session">
             + New Session
-          </button>
-        </div>
+          </.dm_btn>
+        </:action>
+      </.dm_card>
 
-        <.flash_group flash={@flash} />
-
-        <div class="space-y-2">
+      <.dm_card :if={@sessions != []} variant="bordered">
+        <:title>Sessions</:title>
+        <div class="space-y-1">
           <div
             :for={session <- @sessions}
-            class="bg-gray-900 rounded-lg p-4 border border-gray-800 hover:border-gray-700 flex justify-between items-center"
+            class="flex justify-between items-center w-full p-2 rounded hover:bg-base-200 transition-colors"
           >
-            <.link navigate={~p"/projects/#{@project.id}/sessions/#{session.id}"} class="flex-1">
+            <.dm_link
+              navigate={~p"/projects/#{@project.id}/sessions/#{session.id}"}
+              class="flex-1"
+            >
               <div class="font-medium">
                 {session.title || "Session #{String.slice(session.id, 0, 8)}"}
               </div>
-              <div class="text-xs text-gray-500 mt-1">
-                {session.provider}/{session.model} · {session.agent} · {session.status}
+              <div class="text-xs text-base-content/50 mt-1">
+                {session.provider}/{session.model} · {session.agent} ·
+                <.dm_badge color={status_color(session.status)} size="sm">
+                  {session.status}
+                </.dm_badge>
               </div>
-            </.link>
-            <button
+            </.dm_link>
+            <.dm_btn
+              variant="ghost"
+              size="sm"
+              confirm="Delete this session?"
               phx-click="delete_session"
               phx-value-id={session.id}
-              data-confirm="Delete this session?"
-              class="ml-2 text-gray-600 hover:text-red-400 text-sm"
+              class="ml-2 text-base-content/40 hover:text-error"
             >
               Delete
-            </button>
-          </div>
-
-          <div :if={@sessions == []} class="text-center text-gray-500 py-12">
-            No sessions yet. Create one to start chatting.
+            </.dm_btn>
           </div>
         </div>
-      </div>
+      </.dm_card>
+
+      <.empty_state
+        :if={@sessions == []}
+        icon="chat-outline"
+        title="No sessions yet"
+        description="Create one to start chatting."
+      >
+        <:action>
+          <.dm_btn variant="primary" size="sm" phx-click="create_session">
+            + New Session
+          </.dm_btn>
+        </:action>
+      </.empty_state>
     </div>
     """
   end
+
+  defp status_color("active"), do: "success"
+  defp status_color("streaming"), do: "warning"
+  defp status_color("error"), do: "error"
+  defp status_color(_), do: "ghost"
 end

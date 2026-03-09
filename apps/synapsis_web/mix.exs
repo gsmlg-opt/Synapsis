@@ -34,6 +34,7 @@ defmodule SynapsisWeb.MixProject do
       {:phoenix, "~> 1.8"},
       {:phoenix_html, "~> 4.2"},
       {:phoenix_live_view, "~> 1.0"},
+      {:phoenix_duskmoon, "~> 8.0"},
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.4"},
       {:bun, "~> 1.6", runtime: Mix.env() == :dev},

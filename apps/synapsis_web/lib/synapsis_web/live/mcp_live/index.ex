@@ -149,276 +149,233 @@ defmodule SynapsisWeb.MCPLive.Index do
       )
 
     ~H"""
-    <div class="min-h-screen bg-gray-950 text-gray-100">
-      <div class="max-w-5xl mx-auto p-6">
-        <div class="flex items-center gap-2 text-sm text-gray-500 mb-4">
-          <.link navigate={~p"/settings"} class="hover:text-gray-300">Settings</.link>
-          <span>/</span>
-          <span class="text-gray-300">MCP Servers</span>
-        </div>
+    <div class="max-w-5xl mx-auto p-6">
+      <.dm_breadcrumb class="mb-4">
+        <:crumb to={~p"/settings"}>Settings</:crumb>
+        <:crumb>MCP Servers</:crumb>
+      </.dm_breadcrumb>
 
-        <div class="flex justify-between items-center mb-6">
-          <h1 class="text-2xl font-bold">MCP Servers</h1>
-          <.link
-            :if={!@show_form}
-            navigate={~p"/settings/mcp/new"}
-            class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            + Add MCP Server
-          </.link>
-        </div>
+      <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold">MCP Servers</h1>
+        <.dm_link
+          :if={!@show_form}
+          navigate={~p"/settings/mcp/new"}
+        >
+          <.dm_btn variant="primary" size="sm">+ Add MCP Server</.dm_btn>
+        </.dm_link>
+      </div>
 
-        <.flash_group flash={@flash} />
+      <.dm_flash_group flash={@flash} />
 
-        <%= if @show_form do %>
-          <%= if @selected_preset do %>
-            <div class="mb-6 bg-gray-900 rounded-lg p-6 border border-gray-800">
-              <div class="flex items-center gap-3 mb-4">
-                <button
-                  phx-click="back_to_presets"
-                  class="text-gray-400 hover:text-gray-200 text-sm"
-                >
-                  &larr; Back
-                </button>
-                <h2 class="text-lg font-semibold">
-                  <%= if Map.get(@selected_preset, :custom) do %>
-                    New Custom MCP Server
-                  <% else %>
-                    Add {@selected_preset.name}
-                  <% end %>
-                </h2>
-              </div>
-              <form phx-submit="create_config" class="space-y-3">
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1">Name</label>
-                  <%= if Map.get(@selected_preset, :custom) do %>
-                    <input
-                      type="text"
-                      name="name"
-                      placeholder="Server name"
-                      required
-                      class="w-full bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none"
-                    />
-                  <% else %>
-                    <div class="bg-gray-800 text-gray-400 rounded px-3 py-2 border border-gray-700">
-                      {@selected_preset.name}
-                    </div>
-                  <% end %>
-                </div>
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1">Transport</label>
-                  <%= if Map.get(@selected_preset, :custom) do %>
-                    <select
-                      name="transport"
-                      class="w-full bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none"
-                    >
-                      <option value="stdio">stdio</option>
-                      <option value="sse">SSE</option>
-                    </select>
-                  <% else %>
-                    <div class="bg-gray-800 text-gray-400 rounded px-3 py-2 border border-gray-700">
-                      {@selected_preset.transport}
-                    </div>
-                  <% end %>
-                </div>
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1">Command</label>
-                  <%= if Map.get(@selected_preset, :custom) do %>
-                    <input
-                      type="text"
-                      name="command"
-                      placeholder="e.g. npx"
-                      class="w-full bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none"
-                    />
-                  <% else %>
-                    <input
-                      type="text"
-                      name="command"
-                      value={@selected_preset.command}
-                      readonly
-                      class="w-full bg-gray-800 text-gray-400 rounded px-3 py-2 border border-gray-700"
-                    />
-                  <% end %>
-                </div>
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1">Arguments (one per line)</label>
-                  <%= if Map.get(@selected_preset, :custom) do %>
-                    <textarea
-                      name="args"
-                      rows="3"
-                      placeholder="One argument per line"
-                      class="w-full bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none font-mono text-sm"
-                    ></textarea>
-                  <% else %>
-                    <div class="bg-gray-800 text-gray-400 rounded px-3 py-2 border border-gray-700 font-mono text-sm whitespace-pre-wrap">
-                      {Enum.join(@selected_preset.args, "\n")}
-                    </div>
-                  <% end %>
-                </div>
-                <div :if={Map.get(@selected_preset, :custom) || map_size(@selected_preset.env) > 0}>
-                  <label class="block text-xs text-gray-500 mb-1">
-                    Environment Variables (KEY=VALUE, one per line)
-                  </label>
-                  <textarea
-                    name="env"
-                    rows="3"
-                    placeholder="KEY=VALUE"
-                    class="w-full bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none font-mono text-sm"
-                  ><%= format_env_for_form(@selected_preset.env) %></textarea>
-                  <div
-                    :if={!Map.get(@selected_preset, :custom) && has_required_env?(@selected_preset)}
-                    class="text-xs text-yellow-500 mt-1"
-                  >
-                    Fill in the required environment variable values above
-                  </div>
-                </div>
-                <div>
-                  <label class="flex items-center gap-2">
-                    <input type="hidden" name="auto_start" value="false" />
-                    <input
-                      type="checkbox"
-                      name="auto_start"
-                      value="true"
-                      class="rounded bg-gray-800 border-gray-700"
-                    />
-                    <span class="text-sm">Auto-start on startup</span>
-                  </label>
-                </div>
-                <button
-                  type="submit"
-                  class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                >
-                  Add MCP Server
-                </button>
-              </form>
+      <%= if @show_form do %>
+        <%= if @selected_preset do %>
+          <.dm_card variant="bordered" class="mb-6">
+            <div class="flex items-center gap-3 mb-4">
+              <.dm_btn variant="ghost" size="sm" phx-click="back_to_presets">
+                &larr; Back
+              </.dm_btn>
+              <h2 class="text-lg font-semibold">
+                <%= if Map.get(@selected_preset, :custom) do %>
+                  New Custom MCP Server
+                <% else %>
+                  Add {@selected_preset.name}
+                <% end %>
+              </h2>
             </div>
-          <% else %>
-            <div class="mb-6">
-              <div class="flex items-center justify-between mb-4">
-                <h2 class="text-lg font-semibold">Select an MCP Server</h2>
-                <.link
-                  navigate={~p"/settings/mcp"}
-                  class="text-gray-400 hover:text-gray-200 text-sm"
+            <.dm_form for={%{}} phx-submit="create_config">
+              <%= if Map.get(@selected_preset, :custom) do %>
+                <.dm_input
+                  type="text"
+                  name="name"
+                  placeholder="Server name"
+                  required
+                  label="Name"
+                />
+              <% else %>
+                <.readonly_field label="Name" value={@selected_preset.name} />
+              <% end %>
+              <%= if Map.get(@selected_preset, :custom) do %>
+                <.dm_select
+                  name="transport"
+                  label="Transport"
+                  options={[{"stdio", "stdio"}, {"sse", "SSE"}]}
+                />
+              <% else %>
+                <.readonly_field label="Transport" value={@selected_preset.transport} />
+              <% end %>
+              <%= if Map.get(@selected_preset, :custom) do %>
+                <.dm_input
+                  type="text"
+                  name="command"
+                  placeholder="e.g. npx"
+                  label="Command"
+                />
+              <% else %>
+                <.dm_input
+                  type="text"
+                  name="command"
+                  value={@selected_preset.command}
+                  readonly
+                  label="Command"
+                />
+              <% end %>
+              <%= if Map.get(@selected_preset, :custom) do %>
+                <.dm_textarea
+                  name="args"
+                  rows={3}
+                  placeholder="One argument per line"
+                  label="Arguments (one per line)"
+                />
+              <% else %>
+                <.readonly_field
+                  label="Arguments (one per line)"
+                  value={Enum.join(@selected_preset.args, "\n")}
+                  monospace
+                />
+              <% end %>
+              <div :if={Map.get(@selected_preset, :custom) || map_size(@selected_preset.env) > 0}>
+                <.dm_textarea
+                  name="env"
+                  rows={3}
+                  placeholder="KEY=VALUE"
+                  label="Environment Variables (KEY=VALUE, one per line)"
+                  value={format_env_for_form(@selected_preset.env)}
+                />
+                <div
+                  :if={!Map.get(@selected_preset, :custom) && has_required_env?(@selected_preset)}
+                  class="text-xs text-warning mt-1"
                 >
-                  Cancel
-                </.link>
+                  Fill in the required environment variable values above
+                </div>
               </div>
-              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                <button
-                  :for={preset <- @presets}
-                  phx-click="select_preset"
-                  phx-value-name={preset.name}
-                  disabled={preset.name in @configured_names}
+              <div>
+                <input type="hidden" name="auto_start" value="false" />
+                <.dm_checkbox
+                  name="auto_start"
+                  value="true"
+                  label="Auto-start on startup"
+                />
+              </div>
+              <.dm_btn type="submit" variant="primary">
+                Add MCP Server
+              </.dm_btn>
+            </.dm_form>
+          </.dm_card>
+        <% else %>
+          <div class="mb-6">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-semibold">Select an MCP Server</h2>
+              <.dm_link
+                navigate={~p"/settings/mcp"}
+                class="text-base-content/50 hover:text-base-content text-sm"
+              >
+                Cancel
+              </.dm_link>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              <button
+                :for={preset <- @presets}
+                phx-click="select_preset"
+                phx-value-name={preset.name}
+                disabled={preset.name in @configured_names}
+                class="w-full text-left"
+              >
+                <.dm_card
+                  variant="bordered"
                   class={[
-                    "w-full text-left rounded-lg p-4 border transition-colors",
                     if(preset.name in @configured_names,
-                      do:
-                        "bg-gray-900/50 border-gray-800 text-gray-600 cursor-not-allowed opacity-50",
-                      else:
-                        "bg-gray-900 border-gray-800 hover:border-blue-500 hover:bg-gray-800 cursor-pointer"
+                      do: "opacity-50 cursor-not-allowed",
+                      else: "cursor-pointer hover:border-primary"
                     )
                   ]}
                 >
                   <div class="font-medium">{preset.name}</div>
-                  <div class="text-xs text-gray-500 mt-1">{preset.description}</div>
-                  <div class="text-xs text-gray-600 mt-1 font-mono">
+                  <div class="text-xs text-base-content/50 mt-1">{preset.description}</div>
+                  <div class="text-xs text-base-content/40 mt-1 font-mono">
                     {preset.command} {Enum.join(preset.args, " ")}
                   </div>
-                  <div :if={preset.name in @configured_names} class="text-xs text-gray-600 mt-1">
+                  <div
+                    :if={preset.name in @configured_names}
+                    class="text-xs text-base-content/40 mt-1"
+                  >
                     Already configured
                   </div>
-                </button>
-              </div>
+                </.dm_card>
+              </button>
+            </div>
 
-              <h3 class="text-sm font-semibold text-gray-400 mt-6 mb-3">Custom</h3>
-              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                <button
-                  phx-click="select_custom"
-                  class="w-full text-left bg-gray-900 rounded-lg p-4 border border-dashed border-gray-700 hover:border-blue-500 hover:bg-gray-800 transition-colors cursor-pointer"
-                >
+            <h3 class="text-sm font-semibold text-base-content/50 mt-6 mb-3">Custom</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              <button phx-click="select_custom" class="w-full text-left">
+                <.dm_card variant="bordered" class="cursor-pointer border-dashed hover:border-primary">
                   <div class="font-medium">Custom MCP Server</div>
-                  <div class="text-xs text-gray-500 mt-1">Configure a custom stdio or SSE server</div>
-                </button>
-              </div>
-            </div>
-          <% end %>
-        <% end %>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div
-            :for={config <- @configs}
-            class="bg-gray-900 rounded-lg p-4 border border-gray-800"
-          >
-            <div class="flex justify-between items-start mb-2">
-              <.link
-                navigate={~p"/settings/mcp/#{config.id}"}
-                class="font-medium hover:text-blue-400 transition-colors"
-              >
-                {config.name}
-              </.link>
-              <div class="flex items-center gap-2">
-                <button
-                  phx-click="toggle_enabled"
-                  phx-value-id={config.id}
-                  class={[
-                    "relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
-                    if(config.auto_start, do: "bg-blue-600", else: "bg-gray-700")
-                  ]}
-                  title={
-                    if(config.auto_start,
-                      do: "Enabled — click to disable",
-                      else: "Disabled — click to enable"
-                    )
-                  }
-                >
-                  <span class={[
-                    "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
-                    if(config.auto_start, do: "translate-x-4", else: "translate-x-0")
-                  ]} />
-                </button>
-                <button
-                  phx-click="delete_config"
-                  phx-value-id={config.id}
-                  data-confirm="Delete this MCP server?"
-                  class="text-gray-600 hover:text-red-400 text-sm ml-1"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-            <div class="text-xs text-gray-500">
-              {config.transport}
-              <span :if={config.command}>{" | #{config.command}"}</span>
-              <span :if={config.args != []}>
-                {" " <> Enum.join(config.args, " ")}
-              </span>
-            </div>
-            <div :if={config.url} class="text-xs text-gray-600 mt-1 truncate">
-              {config.url}
-            </div>
-            <div :if={map_size(config.env || %{}) > 0} class="text-xs text-yellow-600 mt-1">
-              {"#{map_size(config.env)} env var(s)"}
-            </div>
-            <div class="mt-2">
-              <span
-                :if={config.auto_start}
-                class="inline-block text-xs px-2 py-0.5 rounded bg-green-900/50 text-green-400"
-              >
-                Enabled
-              </span>
-              <span
-                :if={!config.auto_start}
-                class="inline-block text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-500"
-              >
-                Disabled
-              </span>
+                  <div class="text-xs text-base-content/50 mt-1">
+                    Configure a custom stdio or SSE server
+                  </div>
+                </.dm_card>
+              </button>
             </div>
           </div>
-        </div>
+        <% end %>
+      <% end %>
 
-        <div :if={@configs == [] && !@show_form} class="text-center text-gray-600 py-12">
-          No MCP servers configured. Click "+ Add MCP Server" to get started.
-        </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <.dm_card
+          :for={config <- @configs}
+          variant="bordered"
+        >
+          <div class="flex justify-between items-start mb-2">
+            <.dm_link
+              navigate={~p"/settings/mcp/#{config.id}"}
+              class="font-medium hover:text-primary transition-colors"
+            >
+              {config.name}
+            </.dm_link>
+            <div class="flex items-center gap-2">
+              <.dm_switch
+                name={"toggle_#{config.id}"}
+                checked={config.auto_start}
+                phx-click="toggle_enabled"
+                phx-value-id={config.id}
+              />
+              <.dm_btn
+                variant="ghost"
+                size="xs"
+                class="text-error hover:text-error/80 ml-1"
+                confirm="Delete this MCP server?"
+                phx-click="delete_config"
+                phx-value-id={config.id}
+              >
+                Delete
+              </.dm_btn>
+            </div>
+          </div>
+          <div class="text-xs text-base-content/50">
+            {config.transport}
+            <span :if={config.command}>{" | #{config.command}"}</span>
+            <span :if={config.args != []}>
+              {" " <> Enum.join(config.args, " ")}
+            </span>
+          </div>
+          <div :if={config.url} class="text-xs text-base-content/40 mt-1 truncate">
+            {config.url}
+          </div>
+          <div :if={map_size(config.env || %{}) > 0} class="text-xs text-warning mt-1">
+            {"#{map_size(config.env)} env var(s)"}
+          </div>
+          <div class="mt-2">
+            <.dm_badge :if={config.auto_start} color="success" size="sm">
+              Enabled
+            </.dm_badge>
+            <.dm_badge :if={!config.auto_start} color="ghost" size="sm">
+              Disabled
+            </.dm_badge>
+          </div>
+        </.dm_card>
+      </div>
+
+      <div :if={@configs == [] && !@show_form} class="text-center text-base-content/40 py-12">
+        No MCP servers configured. Click "+ Add MCP Server" to get started.
       </div>
     </div>
     """

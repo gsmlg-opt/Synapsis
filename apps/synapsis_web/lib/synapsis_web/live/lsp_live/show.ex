@@ -48,69 +48,50 @@ defmodule SynapsisWeb.LSPLive.Show do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen bg-gray-950 text-gray-100">
-      <div class="max-w-4xl mx-auto p-6">
-        <div class="flex items-center gap-2 text-sm text-gray-500 mb-4">
-          <.link navigate={~p"/settings"} class="hover:text-gray-300">Settings</.link>
-          <span>/</span>
-          <.link navigate={~p"/settings/lsp"} class="hover:text-gray-300">LSP Servers</.link>
-          <span>/</span>
-          <span class="text-gray-300">{@config.name}</span>
-        </div>
+    <div class="max-w-4xl mx-auto p-6">
+      <.dm_breadcrumb class="mb-4">
+        <:crumb to={~p"/settings"}>Settings</:crumb>
+        <:crumb to={~p"/settings/lsp"}>LSP Servers</:crumb>
+        <:crumb>{@config.name}</:crumb>
+      </.dm_breadcrumb>
 
-        <h1 class="text-2xl font-bold mb-6">{@config.name}</h1>
+      <h1 class="text-2xl font-bold mb-6">{@config.name}</h1>
 
-        <.flash_group flash={@flash} />
+      <.dm_flash_group flash={@flash} />
 
-        <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
-          <form phx-submit="update_config" class="space-y-4">
-            <div>
-              <label class="block text-sm text-gray-400 mb-1">Command</label>
-              <input
-                type="text"
-                name="command"
-                value={@config.command}
-                class="w-full bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none"
-              />
-            </div>
+      <.dm_card variant="bordered">
+        <.dm_form for={%{}} phx-submit="update_config">
+          <.dm_input
+            type="text"
+            name="command"
+            value={@config.command}
+            label="Command"
+          />
 
-            <div>
-              <label class="block text-sm text-gray-400 mb-1">Args</label>
-              <div class="bg-gray-800 text-gray-400 rounded px-3 py-2 border border-gray-700">
-                {Enum.join(@config.args || [], " ")}
-              </div>
-            </div>
+          <.readonly_field label="Args" value={Enum.join(@config.args || [], " ")} />
 
-            <div>
-              <label class="block text-sm text-gray-400 mb-1">Root Path</label>
-              <input
-                type="text"
-                name="root_path"
-                value={@config.root_path}
-                class="w-full bg-gray-800 text-gray-100 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 focus:outline-none"
-              />
-            </div>
+          <.dm_input
+            type="text"
+            name="root_path"
+            value={@config.root_path}
+            label="Root Path"
+          />
 
-            <div>
-              <label class="flex items-center gap-2">
-                <input type="hidden" name="auto_start" value="false" />
-                <input
-                  type="checkbox"
-                  name="auto_start"
-                  value="true"
-                  checked={@config.auto_start}
-                  class="rounded bg-gray-800 border-gray-700"
-                />
-                <span class="text-sm">Auto-start</span>
-              </label>
-            </div>
+          <div>
+            <input type="hidden" name="auto_start" value="false" />
+            <.dm_checkbox
+              name="auto_start"
+              value="true"
+              checked={@config.auto_start}
+              label="Auto-start"
+            />
+          </div>
 
-            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-              Save Changes
-            </button>
-          </form>
-        </div>
-      </div>
+          <.dm_btn type="submit" variant="primary">
+            Save Changes
+          </.dm_btn>
+        </.dm_form>
+      </.dm_card>
     </div>
     """
   end
