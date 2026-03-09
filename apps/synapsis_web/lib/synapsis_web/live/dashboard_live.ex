@@ -46,7 +46,7 @@ defmodule SynapsisWeb.DashboardLive do
           <:action>
             <.dm_link navigate={~p"/projects/new"}>
               <.dm_btn variant="primary" size="sm">
-                <.dm_mdi name="plus" class="mr-1" /> New
+                <.dm_mdi name="plus" class="w-4 h-4 inline mr-1" /> New
               </.dm_btn>
             </.dm_link>
           </:action>
@@ -70,7 +70,7 @@ defmodule SynapsisWeb.DashboardLive do
               navigate={~p"/projects/#{project.id}"}
               class="flex items-center gap-3 w-full p-2 rounded hover:bg-base-200 transition-colors"
             >
-              <.dm_mdi name="folder" class="text-primary text-xl" />
+              <.dm_mdi name="folder" class="w-5 h-5 text-primary" />
               <div class="flex-1 min-w-0">
                 <div class="font-medium">{project.slug}</div>
                 <div class="text-xs text-base-content/50 truncate">{project.path}</div>
@@ -98,7 +98,7 @@ defmodule SynapsisWeb.DashboardLive do
               navigate={~p"/projects/#{session.project_id}/sessions/#{session.id}"}
               class="flex items-center gap-3 w-full p-2 rounded hover:bg-base-200 transition-colors"
             >
-              <.dm_mdi name="chat-processing-outline" class="text-secondary text-xl" />
+              <.dm_mdi name="chat-processing-outline" class="w-5 h-5 text-secondary" />
               <div class="flex-1 min-w-0">
                 <div class="font-medium">
                   {session.title || "Session #{String.slice(session.id, 0, 8)}"}

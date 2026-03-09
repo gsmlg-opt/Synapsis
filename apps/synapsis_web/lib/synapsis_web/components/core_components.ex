@@ -28,7 +28,7 @@ defmodule SynapsisWeb.CoreComponents do
     <.dm_card variant="bordered" class={@class}>
       <div class="flex items-center gap-4">
         <div class={"text-#{@color}"}>
-          <.dm_mdi name={@icon} class="text-3xl" />
+          <.dm_mdi name={@icon} class="w-8 h-8" />
         </div>
         <div>
           <div class={"text-2xl font-bold text-#{@color}"}>{@value}</div>
@@ -51,7 +51,7 @@ defmodule SynapsisWeb.CoreComponents do
   def empty_state(assigns) do
     ~H"""
     <div class={["text-center py-12", @class]}>
-      <.dm_mdi name={@icon} class="text-5xl text-base-content/30 mx-auto mb-3" />
+      <.dm_mdi name={@icon} class="w-12 h-12 text-base-content/30 mx-auto mb-3" />
       <h3 class="text-lg font-medium text-base-content/60">{@title}</h3>
       <p :if={@description} class="text-sm text-base-content/40 mt-1">{@description}</p>
       <div :if={@action != []} class="mt-4">
