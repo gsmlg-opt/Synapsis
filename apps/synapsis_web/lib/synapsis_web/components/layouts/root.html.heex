@@ -6,6 +6,13 @@
     <meta name="csrf-token" content={get_csrf_token()} />
     <title>Synapsis</title>
     <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
+    <script>
+      // Restore saved theme before first paint to avoid flash
+      (function() {
+        var t = localStorage.getItem("theme");
+        if (t) document.documentElement.setAttribute("data-theme", t);
+      })();
+    </script>
     <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
     </script>
   </head>
