@@ -365,6 +365,8 @@ Do NOT work around upstream bugs locally — file the issue and document the wor
 ## Active Technologies
 - Elixir 1.18+ / OTP 28+ + Phoenix 1.8+, Phoenix LiveView 1.0+, phoenix_duskmoon 8.0, @duskmoon-dev/core 1.11+, @duskmoon-dev/elements 0.7+ (001-duskmoon-web-refactor)
 - N/A (presentation-layer only, no schema changes) (001-duskmoon-web-refactor)
+- Elixir 1.18+ / OTP 28+ + Phoenix 1.8+ (PubSub only in core), Ecto, Req + Finch (for web tools) (feature/tool-system)
+- PostgreSQL 16+ via Ecto (tool_calls table, session_permissions, session_todos) (feature/tool-system)
 
 ## Recent Changes
 - 001-duskmoon-web-refactor: Added Elixir 1.18+ / OTP 28+ + Phoenix 1.8+, Phoenix LiveView 1.0+, phoenix_duskmoon 8.0, @duskmoon-dev/core 1.11+, @duskmoon-dev/elements 0.7+

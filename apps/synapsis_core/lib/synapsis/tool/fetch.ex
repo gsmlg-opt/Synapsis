@@ -6,6 +6,12 @@ defmodule Synapsis.Tool.Fetch do
   def name, do: "fetch"
 
   @impl true
+  def permission_level, do: :read
+
+  @impl true
+  def category, do: :web
+
+  @impl true
   def description, do: "Fetch content from a URL for documentation or reference."
 
   @impl true

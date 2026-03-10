@@ -6,6 +6,12 @@ defmodule Synapsis.Tool.FileRead do
   def name, do: "file_read"
 
   @impl true
+  def permission_level, do: :read
+
+  @impl true
+  def category, do: :filesystem
+
+  @impl true
   def description, do: "Read the contents of a file at the given path."
 
   @impl true

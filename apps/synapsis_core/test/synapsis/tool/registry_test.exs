@@ -26,12 +26,18 @@ defmodule Synapsis.Tool.RegistryTest do
   describe "register_module/3" do
     test "registers a module-based tool" do
       assert :ok = Registry.register_module("test_tool", FakeTool)
-      assert {:ok, {:module, FakeTool, []}} = Registry.lookup("test_tool")
+      assert {:ok, {:module, FakeTool, opts}} = Registry.lookup("test_tool")
+      # Enriched opts include metadata resolved from module callbacks
+      assert opts[:category] == :filesystem
+      assert opts[:permission_level] == :read
+      assert opts[:enabled] == true
+      assert opts[:deferred] == false
     end
 
     test "registers with opts" do
       assert :ok = Registry.register_module("test_tool", FakeTool, timeout: 5_000)
-      assert {:ok, {:module, FakeTool, [timeout: 5_000]}} = Registry.lookup("test_tool")
+      assert {:ok, {:module, FakeTool, opts}} = Registry.lookup("test_tool")
+      assert opts[:timeout] == 5_000
     end
   end
 
@@ -142,6 +148,189 @@ defmodule Synapsis.Tool.RegistryTest do
       assert tool.description == "A process tool"
       assert tool.parameters == %{"type" => "object"}
       refute Map.has_key?(tool, :process)
+    end
+  end
+
+  # --- Extension tests (T031) ---
+
+  defmodule WriteTool do
+    use Synapsis.Tool
+
+    @impl true
+    def name, do: "write_tool"
+    @impl true
+    def description, do: "Writes things"
+    @impl true
+    def parameters, do: %{"type" => "object", "properties" => %{}}
+    @impl true
+    def execute(_input, _ctx), do: {:ok, "written"}
+    @impl true
+    def permission_level, do: :write
+    @impl true
+    def category, do: :filesystem
+  end
+
+  defmodule ExecuteTool do
+    use Synapsis.Tool
+
+    @impl true
+    def name, do: "exec_tool"
+    @impl true
+    def description, do: "Executes things"
+    @impl true
+    def parameters, do: %{"type" => "object", "properties" => %{}}
+    @impl true
+    def execute(_input, _ctx), do: {:ok, "executed"}
+    @impl true
+    def permission_level, do: :execute
+    @impl true
+    def category, do: :execution
+  end
+
+  defmodule DisabledTool do
+    use Synapsis.Tool
+
+    @impl true
+    def name, do: "disabled_tool"
+    @impl true
+    def description, do: "Disabled"
+    @impl true
+    def parameters, do: %{"type" => "object", "properties" => %{}}
+    @impl true
+    def execute(_input, _ctx), do: {:ok, "nope"}
+    @impl true
+    def enabled?, do: false
+  end
+
+  defmodule SearchTool do
+    use Synapsis.Tool
+
+    @impl true
+    def name, do: "search_tool"
+    @impl true
+    def description, do: "Searches"
+    @impl true
+    def parameters, do: %{"type" => "object", "properties" => %{}}
+    @impl true
+    def execute(_input, _ctx), do: {:ok, "found"}
+    @impl true
+    def category, do: :search
+  end
+
+  describe "list_for_llm/1 filtering" do
+    setup do
+      Registry.register_module("write_tool", WriteTool)
+      Registry.register_module("exec_tool", ExecuteTool)
+      Registry.register_module("disabled_tool", DisabledTool)
+      Registry.register_module("search_tool", SearchTool)
+
+      on_exit(fn ->
+        Registry.unregister("write_tool")
+        Registry.unregister("exec_tool")
+        Registry.unregister("disabled_tool")
+        Registry.unregister("search_tool")
+        Registry.unregister("deferred_tool")
+      end)
+
+      :ok
+    end
+
+    test "plan mode excludes write/execute/destructive tools" do
+      tools = Registry.list_for_llm(agent_mode: :plan)
+      names = Enum.map(tools, & &1.name)
+      refute "write_tool" in names
+      refute "exec_tool" in names
+      assert "search_tool" in names
+    end
+
+    test "build mode includes all permission levels" do
+      tools = Registry.list_for_llm(agent_mode: :build)
+      names = Enum.map(tools, & &1.name)
+      assert "write_tool" in names
+      assert "exec_tool" in names
+      assert "search_tool" in names
+    end
+
+    test "filters disabled tools" do
+      tools = Registry.list_for_llm(agent_mode: :build)
+      names = Enum.map(tools, & &1.name)
+      refute "disabled_tool" in names
+    end
+
+    test "filters by categories" do
+      tools = Registry.list_for_llm(categories: [:search])
+      names = Enum.map(tools, & &1.name)
+      assert "search_tool" in names
+      refute "write_tool" in names
+      refute "exec_tool" in names
+    end
+
+    test "excludes unloaded deferred tools by default" do
+      Registry.register_module("deferred_tool", FakeTool, deferred: true)
+      tools = Registry.list_for_llm([])
+      names = Enum.map(tools, & &1.name)
+      refute "deferred_tool" in names
+    end
+
+    test "includes deferred tools when include_deferred is true" do
+      Registry.register_module("deferred_tool", FakeTool, deferred: true)
+      tools = Registry.list_for_llm(include_deferred: true)
+      names = Enum.map(tools, & &1.name)
+      assert "deferred_tool" in names
+    end
+  end
+
+  describe "list_by_category/1" do
+    setup do
+      Registry.register_module("search_tool", SearchTool)
+      Registry.register_module("write_tool", WriteTool)
+
+      on_exit(fn ->
+        Registry.unregister("search_tool")
+        Registry.unregister("write_tool")
+      end)
+
+      :ok
+    end
+
+    test "returns tools matching the given category" do
+      tools = Registry.list_by_category(:search)
+      names = Enum.map(tools, & &1.name)
+      assert "search_tool" in names
+      refute "write_tool" in names
+    end
+  end
+
+  describe "mark_loaded/1" do
+    setup do
+      on_exit(fn ->
+        Registry.unregister("deferred_tool")
+      end)
+
+      :ok
+    end
+
+    test "activates a deferred tool" do
+      Registry.register_module("deferred_tool", FakeTool, deferred: true)
+
+      # Before mark_loaded, excluded from default list_for_llm/1
+      tools_before = Registry.list_for_llm([])
+      refute Enum.any?(tools_before, &(&1.name == "deferred_tool"))
+
+      assert :ok = Registry.mark_loaded("deferred_tool")
+
+      # After mark_loaded, included
+      tools_after = Registry.list_for_llm([])
+      assert Enum.any?(tools_after, &(&1.name == "deferred_tool"))
+    end
+
+    test "returns error for non-existent tool" do
+      assert {:error, :not_found} = Registry.mark_loaded("nonexistent_xyz")
+    end
+
+    test "no-op for non-deferred tool" do
+      Registry.register_module("deferred_tool", FakeTool)
+      assert :ok = Registry.mark_loaded("deferred_tool")
     end
   end
 
