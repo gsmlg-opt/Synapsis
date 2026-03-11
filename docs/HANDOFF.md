@@ -99,13 +99,28 @@ Completed:
 
 ### Phase 2: Tool System ✅
 
-**Goal**: AI can use tools to read/write files and run commands
+**Goal**: 27-tool system with 5-level permissions, parallel execution, and plugin integration
 
 Completed:
-- [x] Implemented Synapsis.Tool.Behaviour + Synapsis.Tool.Registry
-- [x] Implemented core tools: FileRead, FileEdit, FileWrite, Bash, Grep, Glob
-- [x] Implemented Synapsis.Tool.Permission — auto-approve vs ask
-- [x] Implemented Synapsis.Tool.Executor with Task.Supervisor
+- [x] Implemented `Synapsis.Tool` behaviour contract with `permission_level/0`, `category/0`, `version/0`, `enabled?/0` callbacks
+- [x] Implemented `Synapsis.Tool.Registry` (ETS-backed GenServer) with `list_for_llm/1` filtering by agent mode, category, deferred state
+- [x] Implemented `Synapsis.Tool.Executor` with parallel batch execution (`execute_batch/2`) via `Task.async_stream/3`
+- [x] Implemented `Synapsis.Tool.Permission` — 5-level model (`:none`, `:read`, `:write`, `:execute`, `:destructive`) with per-tool glob overrides and autonomous mode
+- [x] Implemented 27 built-in tools across 10 categories:
+  - Filesystem (7): file_read, file_write, file_edit, multi_edit, file_delete, file_move, list_dir
+  - Search (2): grep, glob
+  - Execution (1): bash_exec (persistent Port session)
+  - Web (2): web_fetch, web_search
+  - Planning (2): todo_write, todo_read
+  - Orchestration (3): task (sub-agents), tool_search (deferred loading), skill
+  - Interaction (1): ask_user (structured questions)
+  - Session (3): enter_plan_mode, exit_plan_mode, sleep
+  - Swarm (3): send_message, teammate, team_delete
+  - Disabled stubs (3): notebook_read, notebook_edit, computer
+- [x] Implemented side effect system — `:file_changed` broadcast via PubSub
+- [x] Implemented deferred tool loading for MCP/plugin tools
+- [x] Implemented plan mode tool filtering (read-only in `:plan` mode)
+- [x] Added 3 new database tables: `tool_calls`, `session_permissions`, `session_todos`
 - [x] Wired tool results back into the agent loop (Session.Worker)
 
 ### Phase 3: Provider System ✅
@@ -177,8 +192,13 @@ Tasks:
 - [x] Multi-provider support (Anthropic, OpenAI, Google, local/OpenAI-compat)
 - [x] Session management (create, list, continue, delete, fork)
 - [x] Agent modes (build, plan, custom with config override)
-- [x] Tool system (file read/edit/write, bash, grep, glob, diagnostics)
-- [x] Permission system (auto-approve, ask, deny — configurable per tool)
+- [x] Tool system (27 tools: filesystem, search, execution, web, planning, orchestration, interaction, session, swarm)
+- [x] Permission system (5-level: none/read/write/execute/destructive, per-tool glob overrides, autonomous mode)
+- [x] Parallel tool execution (batch with file-level serialization)
+- [x] Sub-agent support (foreground/background task tool)
+- [x] Plan mode (enter/exit, read-only tool filtering)
+- [x] Deferred tool loading (tool_search for MCP/plugin tools)
+- [x] Tool call persistence (audit trail in tool_calls table)
 - [x] Context compaction (summarize old messages when approaching window limit)
 - [x] Streaming responses (token-by-token to web + CLI clients)
 - [x] Web UI (LiveView + React — chat, tool display, session management, provider selector)

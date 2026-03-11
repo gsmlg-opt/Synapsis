@@ -13,7 +13,10 @@ PostgreSQL: synapsis_dev / synapsis_prod
 ├── memory_entries  (scoped key-value memory)
 ├── skills          (agent behavior extensions)
 ├── mcp_configs     (MCP server configurations)
-└── lsp_configs     (LSP server configurations)
+├── lsp_configs     (LSP server configurations)
+├── tool_calls      (tool invocation audit trail)
+├── session_permissions  (per-session permission config)
+└── session_todos   (session-scoped todo items)
 ```
 
 File-based storage (not in Postgres):
@@ -155,6 +158,56 @@ CREATE TABLE lsp_configs (
   inserted_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL
 );
+```
+
+### tool_calls
+
+```sql
+CREATE TABLE tool_calls (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
+  tool_name TEXT NOT NULL,
+  input JSONB NOT NULL DEFAULT '{}',
+  output JSONB,
+  status TEXT NOT NULL DEFAULT 'pending',  -- pending | approved | denied | completed | error
+  duration_ms INTEGER,
+  error_message TEXT,
+  inserted_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX idx_tool_calls_session ON tool_calls(session_id, inserted_at);
+CREATE INDEX idx_tool_calls_status ON tool_calls(session_id, status);
+```
+
+### session_permissions
+
+```sql
+CREATE TABLE session_permissions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  mode TEXT NOT NULL DEFAULT 'interactive',  -- interactive | autonomous
+  allow_write BOOLEAN NOT NULL DEFAULT true,
+  allow_execute BOOLEAN NOT NULL DEFAULT true,
+  allow_destructive TEXT NOT NULL DEFAULT 'ask',  -- allow | deny | ask
+  tool_overrides JSONB DEFAULT '{}',
+  inserted_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
+CREATE UNIQUE INDEX idx_session_permissions_session ON session_permissions(session_id);
+```
+
+### session_todos
+
+```sql
+CREATE TABLE session_todos (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  todos JSONB NOT NULL DEFAULT '[]',
+  inserted_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX idx_session_todos_session ON session_todos(session_id);
 ```
 
 > **Package note**: All Ecto schemas, Repo, and migrations live in the `synapsis_data` umbrella app. Other packages access persistence through `synapsis_data`'s public API. See CLAUDE.md for the package policy.
