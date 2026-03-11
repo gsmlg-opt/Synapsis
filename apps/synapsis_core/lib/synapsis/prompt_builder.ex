@@ -2,11 +2,12 @@ defmodule Synapsis.PromptBuilder do
   @moduledoc """
   Builds dynamic prompt context for system prompt injection.
 
-  Combines memory entries and failed attempts into context blocks that get
-  appended to the system prompt before each provider call.
+  Combines memory context (via Memory.ContextBuilder) and failed attempts into
+  context blocks that get appended to the system prompt before each provider call.
   """
 
-  alias Synapsis.{FailedAttempt, MemoryEntry, Session, Repo}
+  alias Synapsis.{FailedAttempt, Session, Repo}
+  alias Synapsis.Memory.ContextBuilder
   import Ecto.Query
 
   @max_entries 7
@@ -50,9 +51,10 @@ defmodule Synapsis.PromptBuilder do
   end
 
   @doc """
-  Builds memory context from global and project-scoped MemoryEntry records.
+  Builds memory context using Memory.ContextBuilder for XML-formatted,
+  scored retrieval with token budget allocation.
 
-  Returns nil if no memory entries exist for the session's scope.
+  Returns nil if no relevant memories found.
   """
   @spec build_memory_context(String.t()) :: String.t() | nil
   def build_memory_context(session_id) do
@@ -61,39 +63,17 @@ defmodule Synapsis.PromptBuilder do
         nil
 
       session ->
-        global_entries =
-          MemoryEntry
-          |> where([m], m.scope == "global")
-          |> where([m], is_nil(m.scope_id))
-          |> order_by([m], asc: m.inserted_at)
-          |> Repo.all()
+        context = %{
+          project_id: to_string(session.project_id),
+          agent_id: session.agent || "default",
+          agent_scope: :project
+        }
 
-        project_entries =
-          MemoryEntry
-          |> where([m], m.scope == "project" and m.scope_id == ^session.project_id)
-          |> order_by([m], asc: m.inserted_at)
-          |> Repo.all()
-
-        entries = global_entries ++ project_entries
-
-        case entries do
-          [] -> nil
-          entries -> format_memory_block(entries)
+        case ContextBuilder.build(context) do
+          "" -> nil
+          memory_xml -> memory_xml
         end
     end
-  end
-
-  defp format_memory_block(entries) do
-    formatted =
-      entries
-      |> Enum.map(fn entry -> "- **#{entry.key}**: #{entry.content}" end)
-      |> Enum.join("\n")
-
-    """
-    ## Memory
-
-    #{formatted}\
-    """
   end
 
   defp format_failure_block(entries) do

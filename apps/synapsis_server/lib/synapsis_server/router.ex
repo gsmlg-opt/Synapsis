@@ -15,6 +15,7 @@ defmodule SynapsisServer.Router do
               SynapsisWeb.ProviderLive.Index,
               SynapsisWeb.ProviderLive.Show,
               SynapsisWeb.MemoryLive.Index,
+              SynapsisWeb.MemoryLive.Show,
               SynapsisWeb.SkillLive.Index,
               SynapsisWeb.SkillLive.Show,
               SynapsisWeb.MCPLive.Index,
@@ -81,6 +82,8 @@ defmodule SynapsisServer.Router do
     live "/settings/models", ModelTierLive.Index, :index
 
     live "/settings/memory", MemoryLive.Index, :index
+    live "/settings/memory/new", MemoryLive.Index, :new
+    live "/settings/memory/:id", MemoryLive.Show, :show
 
     live "/settings/skills", SkillLive.Index, :index
     live "/settings/skills/:id", SkillLive.Show, :show

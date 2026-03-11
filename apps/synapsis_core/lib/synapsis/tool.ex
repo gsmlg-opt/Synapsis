@@ -48,6 +48,7 @@ defmodule Synapsis.Tool do
           | :notebook
           | :computer
           | :swarm
+          | :memory
           | :uncategorized
 
   @type context :: %{

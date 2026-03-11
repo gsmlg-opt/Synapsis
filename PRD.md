@@ -1,1137 +1,1111 @@
-# Synapsis Tools System — Product Requirements Document
+# Synapsis Memory System — Product Requirements Document
 
 ## 1. Executive Summary
 
-Synapsis is an AI coding agent designed to replace Claude Code, OpenCode, and similar CLI-based agentic coding tools. This PRD specifies the complete tool system — the set of capabilities the agent can invoke during a coding session. The tool system is the agent's interface to the real world: every file read, every shell command, every user interaction is a tool call.
+Synapsis is an AI coding agent with a persistent agent hierarchy: a Global Assistant, per-project Project Agents, and ephemeral Specialized Agents spawned for specific tasks. This PRD specifies the memory system — the mechanism by which agents remember what happened, recover from interruption, retrieve relevant prior work, and accumulate reusable knowledge.
 
-The tool system lives in `apps/synapsis_tool/` as a dedicated sub-application within the Synapsis umbrella. This separation isolates tool behaviour contracts, the tool registry, the executor pipeline, permission engine, and all built-in tool modules from the agent loop (`synapsis_core`) and the plugin host (`synapsis_plugin`). Both `synapsis_core` and `synapsis_plugin` depend on `synapsis_tool`.
+The memory system is not a chat transcript store. It is a structured, multi-layer system that separates execution state from knowledge, supports deterministic resumption, and enables selective retrieval for prompt construction.
 
 This document covers:
 
-- Complete built-in tool inventory with specifications
-- Tool behaviour contract and execution pipeline
-- Tool registry architecture
-- Permission model
-- Side effect propagation
-- Agent orchestration tools (sub-agents, planning)
-- User interaction tools
-- Web tools
-- Integration with the plugin system (MCP/LSP)
-- Competitive gap analysis against Claude Code, OpenCode, and Codex CLI
+- Four-layer memory model (Working, Episodic, Checkpoint, Semantic)
+- Memory scope model (Shared, Project, Agent, Session)
+- Storage schema and Ecto integration in `synapsis_data`
+- Domain logic placement in `synapsis_core`
+- Memory tools (`session_summarize`, `memory_save`, `memory_search`, `memory_update`)
+- Summarization pipeline
+- Retrieval and context construction
+- Integration with existing agent loop, tool executor, and UI
+- Migration path for existing `memory_entries` table
+- OTP supervision structure
 
 ---
 
-## 2. Competitive Landscape
+## 2. Design Principles
 
-### 2.1 Claude Code (v2.1.71, March 2026) — 20 Built-in Tools
+### 2.1 Memory is not chat history
 
-**Filesystem:** Read, Write, Edit, MultiEdit, Glob, Grep, LS
-**Execution:** Bash (persistent session)
-**Web:** WebFetch, WebSearch
-**Planning:** TodoWrite, TaskCreate
-**Orchestration:** Task (sub-agent launcher), ToolSearch (deferred tool loader), Skill (skill loader)
-**User Interaction:** AskUserQuestion (structured multi-select with HTML preview)
-**Mode Control:** EnterPlanMode, ExitPlanMode
-**Code Intelligence:** LSP (built-in, goToDefinition/findReferences/hover/symbols)
-**Notebook:** NotebookEdit
-**Utility:** Sleep (wait with early wake on user input)
-**Swarm (experimental):** SendMessageTool, TeammateTool, TeamDelete, Computer
+Raw message history is not a usable memory system. A real agent memory system needs: events for what happened, state snapshots for resumability, summaries for compression, retrieval for relevance, and promotion rules for long-term knowledge.
 
-### 2.2 OpenCode (Charm, v1.x) — 15+ Built-in Tools
+### 2.2 Separate execution state from knowledge
 
-**Filesystem:** read, write, edit, list, glob, grep, patch (apply diffs)
-**Execution:** bash
-**Web:** webfetch, websearch (Exa AI)
-**Planning:** todoread, todowrite
-**Orchestration:** task (sub-agent), skill (SKILL.md loader)
-**User Interaction:** question (structured prompts mid-execution)
-**Code Intelligence:** lsp (experimental, behind feature flag)
+Two things must not be mixed:
 
-### 2.3 Codex CLI (OpenAI) — Minimal Tool Surface
+**Execution state** — current task, current graph node, pending tools, retries, workflow status. For deterministic continuation.
 
-**Execution:** Sandboxed bash with configurable approval policies
-**File Editing:** apply_patch (unified diff format)
-**Web:** web_search (cache-first by default)
-**Orchestration:** MCP integration
+**Knowledge state** — facts learned, project decisions, recurring patterns, prior outcomes. For future reasoning.
 
-### 2.4 Design Principle
+### 2.3 Append-first, compress later
 
-Synapsis targets feature parity with Claude Code's tool surface while maintaining architectural clarity through the Elixir behaviour system. Where Claude Code and OpenCode blur the line between "tool" and "agent mode," Synapsis treats everything as a tool with a uniform `SynapsisTool` behaviour contract. All tool infrastructure lives in `apps/synapsis_tool/`, a dedicated sub-application that both `synapsis_core` (agent loop) and `synapsis_plugin` (MCP/LSP) depend on.
+At runtime, the system appends raw events, checkpoints state, and continues work. Asynchronous summarization converts raw data into compact memory later. This keeps the runtime simple and reliable.
+
+### 2.4 Retrieval must be selective
+
+The system never dumps all history into prompt context. Instead it ranks memory by relevance, prefers recent + important + successful items, provides compact summaries, and includes provenance.
+
+### 2.5 Memory as observer, not participant
+
+The memory system is a PubSub subscriber to existing domain events. The agent loop does not dual-write — it broadcasts tool effects via PubSub as it already does. `Synapsis.Memory.Writer` subscribes and persists. This keeps the agent loop unchanged.
 
 ---
 
-## 3. Architecture
+## 3. Agent Hierarchy and Memory Ownership
 
-### 3.1 Layers
+Synapsis has a pre-existing agent hierarchy:
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    Agent Loop                        │
-│  (synapsis_core — Synapsis.Agent.Loop)              │
-│                                                      │
-│  Gathers tools → builds LLM request → processes     │
-│  tool_use events → feeds results back to LLM        │
-├─────────────────────────────────────────────────────┤
-│                  Tool Executor                       │
-│  (synapsis_tool — SynapsisTool.Executor)            │
-│                                                      │
-│  Permission check → dispatch → side effect broadcast │
-├──────────────────────┬──────────────────────────────┤
-│   Tool Registry      │   Permission Engine          │
-│   (GenServer)        │   (SynapsisTool.Permissions) │
-│                      │                              │
-│   name → {type,      │   tool → level → session     │
-│           module/pid} │   config → allow/deny/ask    │
-├──────────────────────┴──────────────────────────────┤
-│                    Tool Modules                      │
-│                                                      │
-│  Built-in (synapsis_tool)    Plugin (synapsis_plugin)│
-│  ├── Filesystem              ├── MCP tools           │
-│  ├── Execution               ├── LSP tools           │
-│  ├── Search                  └── Custom plugins      │
-│  ├── Web                                             │
-│  ├── Planning                                        │
-│  ├── Orchestration                                   │
-│  ├── User Interaction                                │
-│  └── Session Control                                 │
-└─────────────────────────────────────────────────────┘
+Global Assistant (one)
+  └── Project Agent (one per project)
+        └── Specialized Agents (spawned per task — review, docs, etc.)
+              └── Sub-agents (via `task` tool — ephemeral)
 ```
 
-### 3.2 Tool Behaviour Contract
+Each agent level has a natural relationship with memory:
+
+| Agent | Reads | Writes | Summarizes |
+|---|---|---|---|
+| Global Assistant | shared + all project summaries (read-only) | shared | cross-project meta-learnings |
+| Project Agent | project + shared | project | session outcomes within project |
+| Specialized Agent | own agent scope + project + shared | agent (own) | task-level operational heuristics |
+| Sub-agent (via `task`) | inherits parent visibility | nothing persistent (ephemeral) | parent decides what to save |
+
+---
+
+## 4. Memory Scope Model
+
+### 4.1 Scopes
+
+```
+:shared     — visible to all agents, any agent can contribute
+:project    — visible to all agents within a project
+:agent      — private to one agent identity
+:session    — ephemeral, current run only
+```
+
+### 4.2 Scope semantics
+
+**Shared** is a commons pool, not a hierarchy level. No single owner. Any agent — Global Assistant, Project Agent, Specialist — can write shared memories. A `contributed_by` field tracks provenance.
+
+**Project** is bound to one project. The Project Agent is the primary contributor. Specialists can promote agent-scoped memories to project scope when the learning is broadly useful.
+
+**Agent** is private to one agent identity. Contains operational heuristics, specialization notes, performance signals specific to that agent's role.
+
+**Session** is ephemeral working memory and checkpoints for the current run. Not persisted as semantic memory — it is the raw material from which semantic memory is extracted.
+
+### 4.3 Retrieval hierarchy
+
+Retrieval walks **up** the scope chain. Never sideways.
+
+```
+Agent retrieval    = agent's own + project + shared
+Project retrieval  = project + shared
+Shared retrieval   = shared only
+```
+
+Agent A does not see Agent B's memories unless they are promoted to project or shared scope.
+
+### 4.4 No "global" scope
+
+There is no global scope. What other systems call "global" is the shared scope. The distinction: "global" implies ownership by one entity; "shared" implies a commons that any agent can read and contribute to.
+
+---
+
+## 5. Memory Model — Four Layers
+
+### 5.1 Layer A: Working Memory
+
+Short-lived memory for current execution. Held in-process, maps to the `context` accumulator in the agent loop.
+
+Contains: active messages, recent tool outputs, temporary notes, current plan, local scratch state.
+
+Properties: scope is session/run, storage is in-memory + optional short persistence, retention is short, retrieval is direct (no semantic search).
 
 ```elixir
-defmodule SynapsisTool do
-  @moduledoc """
-  Behaviour contract for all tools in the Synapsis agent system.
-  Lives in apps/synapsis_tool/.
-  """
-
-  @type context :: %{
-    session_id: String.t(),
-    project_path: String.t(),
-    working_dir: String.t(),
-    permissions: map(),
-    session_pid: pid() | nil,
-    agent_mode: :build | :plan,
-    parent_agent: pid() | nil
-  }
-
-  @type result :: {:ok, term()} | {:error, term()}
-
-  @callback name() :: String.t()
-  @callback description() :: String.t()
-  @callback parameters() :: map()
-  @callback execute(input :: map(), context()) :: result()
-
-  @callback permission_level() :: :read | :write | :execute | :destructive | :none
-  @callback side_effects() :: [atom()]
-  @callback category() :: :filesystem | :search | :execution | :web
-                         | :planning | :orchestration | :interaction | :session
-                         | :notebook | :computer | :swarm
-  @callback version() :: String.t()
-  @callback enabled?() :: boolean()
-
-  @optional_callbacks [side_effects: 0, permission_level: 0, category: 0, version: 0, enabled?: 0]
-end
-```
-
-Changes from the existing design doc:
-
-- Added `permission_level/0` callback — tools self-declare their risk level instead of a centralized pattern-match function. Keeps classification co-located with the tool.
-- Added `category/0` callback — enables UI grouping and selective tool loading.
-- Added `version/0` callback — tools declare a semantic version string. Required for MCP compatibility and future tool evolution. Built-in tools start at `"1.0.0"`. The registry includes version in tool definitions sent to the LLM.
-- Added `enabled?/0` callback — tools can be compiled but disabled by default. The registry skips disabled tools in `list_for_llm/1`. Used for future/experimental tools (notebook, computer use) that ship as code but are not activated until configuration enables them.
-- Extended `context` with `agent_mode`, `session_pid`, and `parent_agent` — required for orchestration tools and mode-aware behaviour.
-
-### 3.3 Tool Registry
-
-```elixir
-defmodule SynapsisTool.Registry do
-  use GenServer
-
-  @type registration :: {:module, module()} | {:process, pid(), module()}
-
-  def register(name, registration, opts \\ %{})
-  def unregister(name)
-  def lookup(name) :: {:ok, registration()} | :error
-  def list() :: [%{name: String.t(), description: String.t(), parameters: map()}]
-  def list_for_llm(opts \\ []) :: [map()]
-  def list_by_category(category) :: [map()]
-  def available_for_session(session_id) :: [map()]
-end
-```
-
-`list_for_llm/1` accepts options for filtering (by category, by permission level, by agent mode). In plan mode, write/execute tools are excluded. Sub-agents receive a scoped tool list based on their declared `tools` allowlist.
-
-### 3.4 Tool Executor Pipeline
-
-```
-tool_call from LLM
-  │
-  ▼
-┌─ ToolExecutor.execute/2 ─────────────────────────┐
-│                                                    │
-│  1. Registry lookup (tool exists?)                 │
-│  2. Permission check                               │
-│     ├─ :allowed → proceed                          │
-│     ├─ :ask → broadcast tool_permission event,     │
-│     │         block until user responds             │
-│     └─ :denied → return {:error, :permission_denied}│
-│  3. Dispatch                                        │
-│     ├─ {:module, mod} → mod.execute(input, ctx)    │
-│     └─ {:process, pid} → GenServer.call(pid, ...)  │
-│  4. Result handling                                 │
-│     ├─ {:ok, result} → log, broadcast side effects │
-│     └─ {:error, reason} → log, return error        │
-│  5. Side effect broadcast                           │
-│     └─ PubSub "tool_effects:{session_id}"          │
-│                                                    │
-└────────────────────────────────────────────────────┘
-```
-
-### 3.5 Parallel Tool Execution
-
-When the LLM returns multiple independent tool calls in a single response, the executor runs them concurrently using `Task.async_stream/3`. This matches Claude Code's behaviour and significantly reduces latency for common patterns like reading multiple files in parallel.
-
-```elixir
-defmodule SynapsisTool.Executor do
-  def execute_batch(tool_calls, context) when length(tool_calls) > 1 do
-    tool_calls
-    |> Task.async_stream(fn call -> execute(call, context) end,
-         max_concurrency: System.schedulers_online(),
-         timeout: 60_000
-       )
-    |> Enum.zip(tool_calls)
-    |> Enum.map(fn {{:ok, result}, call} -> {call.id, result}
-                   {{:exit, reason}, call} -> {call.id, {:error, reason}}
-                end)
-  end
-end
-```
-
-Constraints:
-- Tools with side effects (`:file_changed`) that target the same file are serialized to prevent write conflicts.
-- Permission checks (`ask` approval) are batched — all pending approvals are presented to the user simultaneously.
-- Sub-agent tools (`task`) are not parallelized with other tools in the same batch.
-
-### 3.6 Umbrella Placement and Dependency Direction
-
-`synapsis_tool` is a sub-application at `apps/synapsis_tool/` in the Synapsis umbrella. It owns:
-
-- `SynapsisTool` behaviour contract
-- `SynapsisTool.Registry` (GenServer)
-- `SynapsisTool.Executor` (pipeline + parallel dispatch)
-- `SynapsisTool.Permissions` (permission engine)
-- `SynapsisTool.Tools.*` (all 27 built-in tool modules)
-
-```
-apps/
-  synapsis_data/        # Ecto schemas, PostgreSQL persistence
-  synapsis_tool/        # Tool behaviour, registry, executor, built-in tools ← THIS PRD
-  synapsis_core/        # Agent loop, session management, domain logic
-  synapsis_plugin/      # MCP/LSP plugin host, dynamic tool registration
-  synapsis_provider/    # LLM translation boundary (req_llm)
-  synapsis_server/      # Phoenix Endpoint, Channels, REST
-  synapsis_web/         # Phoenix LiveView UI + React hooks
-```
-
-**Dependency direction:**
-
-```
-synapsis_data ← synapsis_tool ← synapsis_core ← synapsis_server ← synapsis_web
-                      ↑
-               synapsis_plugin
-```
-
-- `synapsis_tool` depends on `synapsis_data` (for permission configs, tool call persistence)
-- `synapsis_core` depends on `synapsis_tool` (agent loop calls `SynapsisTool.Registry.list_for_llm/1` and `SynapsisTool.Executor.execute/2`)
-- `synapsis_plugin` depends on `synapsis_tool` (registers plugin tools into `SynapsisTool.Registry`, implements `SynapsisTool` behaviour)
-- `synapsis_tool` has zero knowledge of `synapsis_core`, `synapsis_plugin`, `synapsis_server`, or `synapsis_web`
-
-On application start, `synapsis_tool` registers all built-in tools. `synapsis_plugin` registers/unregisters plugin tools dynamically at session lifecycle boundaries.
-
----
-
-## 4. Complete Tool Inventory
-
-### 4.1 Filesystem Tools (7 tools)
-
-#### `file_read`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.FileRead` |
-| Permission | `:read` |
-| Side Effects | none |
-| Description | Read file contents with optional line range. Supports text files, images (returns base64), PDFs (page range), and Jupyter notebooks (all cells with outputs). |
-
-Parameters:
-- `path` (required, string) — file path relative to project root
-- `offset` (optional, integer) — start line (0-indexed)
-- `limit` (optional, integer) — number of lines to return
-- `pages` (optional, string) — for PDFs, e.g. "1-5" (max 20 pages per request)
-
-Notes: The agent must read a file before editing it. Multiple reads should be batched in parallel. For large files (>500 lines), encourage use of offset/limit.
-
-#### `file_write`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.FileWrite` |
-| Permission | `:write` |
-| Side Effects | `[:file_changed]` |
-| Description | Create a new file or overwrite an existing file with the provided content. |
-
-Parameters:
-- `path` (required, string) — file path relative to project root
-- `content` (required, string) — full file content
-
-Notes: Creates parent directories if they don't exist. Use `file_edit` for modifying existing files to minimize token usage.
-
-#### `file_edit`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.FileEdit` |
-| Permission | `:write` |
-| Side Effects | `[:file_changed]` |
-| Description | Apply a targeted edit by replacing an exact string match. The old_text must appear exactly once in the file. |
-
-Parameters:
-- `path` (required, string)
-- `old_text` (required, string) — exact text to find (must be unique)
-- `new_text` (required, string) — replacement text
-
-Notes: Fails if old_text matches zero or multiple locations. This is the primary edit tool — prefer over `file_write` for existing files.
-
-#### `multi_edit`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.MultiEdit` |
-| Permission | `:write` |
-| Side Effects | `[:file_changed]` |
-| Description | Apply multiple edits to one or more files in a single tool call. Each edit is an exact string replacement. Edits are applied sequentially within each file. |
-
-Parameters:
-- `edits` (required, array of objects) — each with:
-  - `path` (required, string)
-  - `old_text` (required, string)
-  - `new_text` (required, string)
-
-Notes: All edits within a file are applied in order. If any edit fails, the entire operation is rolled back for that file. Cross-file edits are independent (partial success is possible). This addresses the common pattern of renaming a symbol across multiple files.
-
-#### `file_delete`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.FileDelete` |
-| Permission | `:destructive` |
-| Side Effects | `[:file_changed]` |
-| Description | Delete a file or empty directory. |
-
-Parameters:
-- `path` (required, string)
-
-Notes: Refuses to delete non-empty directories unless `recursive: true` is passed. First-class tool rather than routing through bash — enables proper permission gating.
-
-#### `file_move`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.FileMove` |
-| Permission | `:write` |
-| Side Effects | `[:file_changed]` |
-| Description | Move or rename a file or directory. |
-
-Parameters:
-- `source` (required, string)
-- `destination` (required, string)
-
-Notes: Creates destination parent directories if needed.
-
-#### `list_dir`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.ListDir` |
-| Permission | `:read` |
-| Side Effects | none |
-| Description | List directory contents with optional depth control. Returns file names, types, and sizes. Respects .gitignore by default. |
-
-Parameters:
-- `path` (required, string)
-- `depth` (optional, integer, default: 1) — max depth for recursive listing
-- `include_hidden` (optional, boolean, default: false)
-- `ignore_gitignore` (optional, boolean, default: false)
-
-### 4.2 Search Tools (2 tools)
-
-#### `grep`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.Grep` |
-| Permission | `:read` |
-| Side Effects | none |
-| Description | Recursive text/regex search across files. Powered by ripgrep internally. Respects .gitignore. |
-
-Parameters:
-- `pattern` (required, string) — search pattern (regex supported)
-- `path` (optional, string, default: project root) — directory to search
-- `glob` (optional, string) — filter files by glob pattern, e.g. "*.ex"
-- `type` (optional, string) — filter by file type, e.g. "elixir", "typescript"
-- `output_mode` (optional, enum: "content" | "files" | "count", default: "content")
-- `context_lines` (optional, integer, default: 0) — lines of context before/after match
-
-#### `glob`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.Glob` |
-| Permission | `:read` |
-| Side Effects | none |
-| Description | Find files matching a glob pattern. Returns paths sorted by modification time (newest first). |
-
-Parameters:
-- `pattern` (required, string) — glob pattern, e.g. "**/*.test.ts"
-- `path` (optional, string, default: project root)
-
-### 4.3 Execution Tools (1 tool)
-
-#### `bash_exec`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.BashExec` |
-| Permission | `:execute` |
-| Side Effects | none (side effects are unpredictable for shell commands) |
-| Description | Execute a shell command in a persistent bash session. The session maintains state (env vars, cwd) across calls within the same agent session. |
-
-Parameters:
-- `command` (required, string) — shell command to execute
-- `timeout` (optional, integer, default: 30000) — timeout in milliseconds
-- `working_dir` (optional, string) — override working directory for this command
-
-Notes: The persistent session is implemented as a Port with a long-running bash process. State (env vars, aliases, cwd) persists across calls. The agent should prefer built-in tools (grep, glob, list_dir) over bash equivalents (rg, find, ls) for permission efficiency. Commands that modify files do NOT emit `:file_changed` side effects — only built-in file tools do, since bash commands are opaque.
-
-### 4.4 Web Tools (2 tools)
-
-#### `web_fetch`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.WebFetch` |
-| Permission | `:read` |
-| Side Effects | none |
-| Description | Fetch the content of a web page at a given URL. Returns the page text content. Useful for reading documentation, API references, and online resources. |
-
-Parameters:
-- `url` (required, string) — full URL including scheme
-- `max_tokens` (optional, integer, default: 10000) — truncate response to approximately this many tokens
-
-Notes: Does not execute JavaScript. Returns text content extracted from HTML. Cannot access content behind authentication.
-
-#### `web_search`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.WebSearch` |
-| Permission | `:read` |
-| Side Effects | none |
-| Description | Search the web and return results with titles, URLs, and snippets. Use for finding documentation, current information, or researching unfamiliar APIs. |
-
-Parameters:
-- `query` (required, string) — search query (1-6 words for best results)
-- `max_results` (optional, integer, default: 5)
-
-Notes: Results include title, URL, and snippet. The agent should use `web_fetch` on specific result URLs to get full content. Today's date should be included in time-sensitive queries.
-
-### 4.5 Planning Tools (2 tools)
-
-#### `todo_write`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.TodoWrite` |
-| Permission | `:none` |
-| Side Effects | none |
-| Description | Create and manage a task checklist for the current session. The todo list is displayed in the UI and helps the agent track multi-step work. Each item has a status: pending, in_progress, or completed. |
-
-Parameters:
-- `todos` (required, array of objects) — each with:
-  - `id` (required, string) — stable identifier
-  - `content` (required, string) — task description
-  - `status` (required, enum: "pending" | "in_progress" | "completed")
-
-Notes: Each call replaces the entire todo list (not a delta). The agent should update todo status as it progresses through tasks. Displayed in the UI via PubSub broadcast to the session channel. This tool has no permission requirement — it is always available, including to sub-agents. Equivalent to Claude Code's TodoWrite.
-
-#### `todo_read`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.TodoRead` |
-| Permission | `:none` |
-| Side Effects | none |
-| Description | Read the current todo list state. Used by the agent to check what tasks are pending or completed. |
-
-Parameters: none
-
-Notes: Returns the current todo list as set by the most recent `todo_write` call. Disabled for sub-agents by default (sub-agents manage their own scope). Equivalent to Claude Code's TodoRead (implicit in TodoWrite) and OpenCode's todoread.
-
-### 4.6 Orchestration Tools (3 tools)
-
-#### `task`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.Task` |
-| Permission | `:none` |
-| Side Effects | none |
-| Description | Launch a sub-agent to autonomously handle a complex, multi-step task. The sub-agent runs in the same session with a scoped tool set and its own conversation context. Can run in foreground (blocks until complete) or background (returns immediately with a task ID). |
-
-Parameters:
-- `prompt` (required, string) — detailed instructions for the sub-agent
-- `tools` (optional, array of strings) — tool allowlist for the sub-agent. Defaults to read-only tools: ["file_read", "list_dir", "grep", "glob"]
-- `mode` (optional, enum: "foreground" | "background", default: "foreground")
-- `model` (optional, string) — override model for cost optimization (e.g. use a faster model for search tasks)
-
-Notes: Sub-agents inherit the session context (project path, working directory) but have their own conversation history. Background tasks run in a separate process and notify on completion via PubSub. Sub-agents cannot use `ask_user` or `enter_plan_mode` — only the primary agent can interact with the user. The `tools` parameter prevents sub-agents from accessing destructive operations unless explicitly granted. Equivalent to Claude Code's Task/Agent tool.
-
-#### `tool_search`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.ToolSearch` |
-| Permission | `:none` |
-| Side Effects | none |
-| Description | Search for and load deferred tools by keyword. MCP tools and other dynamically available tools are not loaded into context by default to save tokens. Use this tool to discover and activate them. |
-
-Parameters:
-- `query` (required, string) — search keywords
-- `limit` (optional, integer, default: 5)
-
-Notes: Returns tool names, descriptions, and parameter schemas. Once a deferred tool is loaded via tool_search, it becomes available for the remainder of the session. This prevents bloating the LLM context with tool definitions for MCP servers that expose dozens of tools. Equivalent to Claude Code's ToolSearch.
-
-#### `skill`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.Skill` |
-| Permission | `:none` |
-| Side Effects | none |
-| Description | Load a skill (a SKILL.md file) and inject its instructions into the current conversation. Skills provide domain-specific expertise, coding patterns, and workflow guidance. |
-
-Parameters:
-- `name` (required, string) — skill name to load
-
-Notes: Skills are discovered from project-local (`.synapsis/skills/`), user-global (`~/.config/synapsis/skills/`), and built-in locations. Each skill has a SKILL.md with frontmatter (name, description, tools, model) and markdown body. Loading a skill adds its content as a system message in the conversation. The agent can then follow the skill's instructions. Equivalent to Claude Code's Skill tool and OpenCode's skill tool.
-
-### 4.7 User Interaction Tools (1 tool)
-
-#### `ask_user`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.AskUser` |
-| Permission | `:none` |
-| Side Effects | none |
-| Description | Present structured questions to the user with selectable options. Use when the agent encounters ambiguity, needs to clarify requirements, or wants to offer implementation choices. |
-
-Parameters:
-- `questions` (required, array of objects) — each with:
-  - `question` (required, string) — the question text
-  - `options` (required, array of objects) — each with:
-    - `label` (required, string) — option text
-    - `description` (optional, string) — additional context
-  - `multi_select` (optional, boolean, default: false) — allow multiple selections
-
-Notes: Users can always provide free-text input instead of selecting an option. This tool blocks until the user responds. It is broadcast through the session channel as a `tool_permission` event variant. Sub-agents cannot use this tool — only the primary agent can interact with the user. If the recommended option is clear, place it first and append "(Recommended)" to the label. Equivalent to Claude Code's AskUserQuestion.
-
-### 4.8 Session Control Tools (2 tools)
-
-#### `enter_plan_mode`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.EnterPlanMode` |
-| Permission | `:none` |
-| Side Effects | none |
-| Description | Switch to plan mode. In plan mode, the agent explores the codebase and builds a plan without making changes. Write/execute tools are disabled. The agent uses ask_user to clarify requirements before finalizing the plan. |
-
-Parameters: none
-
-Notes: Calling this tool updates the session's `agent_mode` to `:plan`. The ToolRegistry filters out write/execute tools when `agent_mode` is `:plan`. The UI reflects the mode change. Equivalent to Claude Code's EnterPlanMode.
-
-#### `exit_plan_mode`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.ExitPlanMode` |
-| Permission | `:none` |
-| Side Effects | none |
-| Description | Exit plan mode and present the plan to the user for approval. The plan is displayed in the UI. If approved, the agent proceeds to execute with full tool access. |
-
-Parameters:
-- `plan` (required, string) — the finalized plan in markdown format
-
-Notes: The plan is broadcast to the session channel for UI display. The user can approve, reject, or provide feedback. On approval, `agent_mode` returns to `:build` and all tools become available again. Equivalent to Claude Code's ExitPlanMode.
-
-### 4.9 Utility Tools (1 tool)
-
-#### `sleep`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.Sleep` |
-| Permission | `:none` |
-| Side Effects | none |
-| Description | Wait for a specified duration or until the user provides input. Useful for polling-style workflows or waiting for external processes to complete. |
-
-Parameters:
-- `duration_ms` (required, integer) — maximum wait time in milliseconds
-- `reason` (optional, string) — displayed to user explaining the wait
-
-Notes: The sleep is interruptible — if the user sends a message, the sleep ends early and the agent receives the message. Implemented as a `receive` with timeout in the agent loop process. Equivalent to Claude Code's Sleep tool.
-
-### 4.10 Notebook Tools (2 tools, disabled by default)
-
-These tools ship as compiled modules but return `enabled?() -> false` by default. Enable via session or project configuration when Jupyter workflow support is needed.
-
-#### `notebook_read`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.NotebookRead` |
-| Permission | `:read` |
-| Side Effects | none |
-| Enabled | `false` (opt-in via config) |
-| Description | Read a Jupyter notebook (.ipynb) file and return all cells with their outputs — code, markdown, and visualizations. |
-
-Parameters:
-- `path` (required, string) — path to .ipynb file
-
-Notes: Disabled by default. Enable with `notebook_tools: true` in session or project config. Returns cells as structured data with cell type, source, and outputs. Equivalent to Claude Code's NotebookRead (bundled into Read tool).
-
-#### `notebook_edit`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.NotebookEdit` |
-| Permission | `:write` |
-| Side Effects | `[:file_changed]` |
-| Enabled | `false` (opt-in via config) |
-| Description | Replace the contents of a specific cell in a Jupyter notebook, or insert a new cell at a given position. |
-
-Parameters:
-- `path` (required, string) — path to .ipynb file
-- `cell_number` (required, integer) — 0-indexed cell position
-- `content` (required, string) — new cell source content
-- `cell_type` (optional, enum: "code" | "markdown", default: "code")
-- `edit_mode` (optional, enum: "replace" | "insert", default: "replace")
-
-Notes: Disabled by default. When `edit_mode` is "insert", a new cell is created at the specified position. Equivalent to Claude Code's NotebookEdit.
-
-### 4.11 Computer Use Tools (1 tool, disabled by default)
-
-Ships as a compiled module but returns `enabled?() -> false` by default. Enable when browser automation or visual verification is needed. Intended for future integration with Claude's computer use API or local browser automation.
-
-#### `computer`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.Computer` |
-| Permission | `:execute` |
-| Side Effects | none |
-| Enabled | `false` (opt-in via config) |
-| Description | Interact with a desktop environment or browser for visual verification, screenshot capture, and UI testing. Delegates to the Anthropic computer use API or a configured browser automation backend. |
-
-Parameters:
-- `action` (required, enum: "screenshot" | "click" | "type" | "scroll" | "key" | "navigate")
-- `coordinate` (optional, array of [x, y]) — for click/type actions
-- `text` (optional, string) — for type action
-- `key` (optional, string) — for key action
-- `url` (optional, string) — for navigate action
-
-Notes: Disabled by default. Enable with `computer_use: true` in session config. The backend is configurable — can delegate to Anthropic's computer use API, Puppeteer MCP, or a local Playwright instance. Equivalent to Claude Code's Computer tool (used in Chrome extension). Implementation is deferred; the behaviour contract and tool definition are reserved now for forward compatibility.
-
-### 4.12 Swarm Tools (3 tools)
-
-Multi-agent coordination tools for swarm-style parallel workflows. These enable agents to form teams, delegate to teammates, and communicate via structured message passing. Maps to Claude Code's experimental swarm system.
-
-#### `send_message`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.SendMessage` |
-| Permission | `:none` |
-| Side Effects | none |
-| Description | Send a structured message to a teammate agent in the current swarm. Used for inter-agent communication, delegation, and protocol request/response patterns. |
-
-Parameters:
-- `to` (required, string) — teammate agent identifier
-- `content` (required, string) — message content
-- `type` (optional, enum: "request" | "response" | "notify", default: "notify")
-- `in_reply_to` (optional, string) — message ID this responds to
-
-Notes: Messages are routed via PubSub through the swarm coordinator process. Only available when the session is part of a swarm (has a `swarm_id` in context). The receiving agent sees the message as a system injection in its next LLM iteration. Equivalent to Claude Code's SendMessageTool.
-
-#### `teammate`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.Teammate` |
-| Permission | `:none` |
-| Side Effects | none |
-| Description | Create, configure, or query teammate agents in the current swarm. Manages the swarm roster and agent capabilities. |
-
-Parameters:
-- `action` (required, enum: "create" | "list" | "get" | "update")
-- `name` (optional, string) — teammate name (for create/get/update)
-- `prompt` (optional, string) — system prompt for the teammate (for create/update)
-- `tools` (optional, array of strings) — tool allowlist for the teammate
-- `model` (optional, string) — model override for the teammate
-
-Notes: Created teammates are spawned as separate agent loop processes, each with their own conversation history and tool set. Teammates share the project workspace but can be isolated to separate git worktrees. Only the swarm coordinator (primary agent) should create teammates. Equivalent to Claude Code's TeammateTool.
-
-#### `team_delete`
-
-| Field | Value |
-|---|---|
-| Module | `SynapsisTool.Tools.TeamDelete` |
-| Permission | `:none` |
-| Side Effects | none |
-| Description | Dissolve the current swarm and terminate all teammate agents. |
-
-Parameters: none (or `team_id` if multiple swarms are supported)
-
-Notes: Terminates all teammate processes, collects their final outputs, and returns a summary. The primary agent's session continues after the swarm is dissolved. Equivalent to Claude Code's TeamDelete.
-
----
-
-## 5. Tool Inventory Summary
-
-| # | Tool | Name | Category | Permission | Side Effects | Enabled |
-|---|---|---|---|---|---|---|
-| 1 | FileRead | `file_read` | filesystem | `:read` | — | yes |
-| 2 | FileWrite | `file_write` | filesystem | `:write` | `[:file_changed]` | yes |
-| 3 | FileEdit | `file_edit` | filesystem | `:write` | `[:file_changed]` | yes |
-| 4 | MultiEdit | `multi_edit` | filesystem | `:write` | `[:file_changed]` | yes |
-| 5 | FileDelete | `file_delete` | filesystem | `:destructive` | `[:file_changed]` | yes |
-| 6 | FileMove | `file_move` | filesystem | `:write` | `[:file_changed]` | yes |
-| 7 | ListDir | `list_dir` | filesystem | `:read` | — | yes |
-| 8 | Grep | `grep` | search | `:read` | — | yes |
-| 9 | Glob | `glob` | search | `:read` | — | yes |
-| 10 | BashExec | `bash_exec` | execution | `:execute` | — | yes |
-| 11 | WebFetch | `web_fetch` | web | `:read` | — | yes |
-| 12 | WebSearch | `web_search` | web | `:read` | — | yes |
-| 13 | TodoWrite | `todo_write` | planning | `:none` | — | yes |
-| 14 | TodoRead | `todo_read` | planning | `:none` | — | yes |
-| 15 | Task | `task` | orchestration | `:none` | — | yes |
-| 16 | ToolSearch | `tool_search` | orchestration | `:none` | — | yes |
-| 17 | Skill | `skill` | orchestration | `:none` | — | yes |
-| 18 | AskUser | `ask_user` | interaction | `:none` | — | yes |
-| 19 | EnterPlanMode | `enter_plan_mode` | session | `:none` | — | yes |
-| 20 | ExitPlanMode | `exit_plan_mode` | session | `:none` | — | yes |
-| 21 | Sleep | `sleep` | session | `:none` | — | yes |
-| 22 | NotebookRead | `notebook_read` | notebook | `:read` | — | **no** |
-| 23 | NotebookEdit | `notebook_edit` | notebook | `:write` | `[:file_changed]` | **no** |
-| 24 | Computer | `computer` | computer | `:execute` | — | **no** |
-| 25 | SendMessage | `send_message` | swarm | `:none` | — | yes |
-| 26 | Teammate | `teammate` | swarm | `:none` | — | yes |
-| 27 | TeamDelete | `team_delete` | swarm | `:none` | — | yes |
-
-**Total: 27 tools (21 enabled by default, 3 disabled/future, 3 swarm)**
-
----
-
-## 6. Permission Model
-
-### 6.1 Permission Levels
-
-```
-:none        — always available, no approval needed (planning, interaction, orchestration)
-:read        — always allowed by default, can be restricted
-:write       — requires session-level opt-in or per-call approval
-:execute     — requires explicit session-level opt-in
-:destructive — requires per-call approval by default
-```
-
-### 6.2 Session Permission Configuration
-
-Each session has a permission configuration stored in `synapsis_data`:
-
-```elixir
-%{
-  mode: :interactive | :autonomous,
-  
-  # Level-based defaults
-  allow_write: true,
-  allow_execute: true,
-  allow_destructive: :ask,  # :allow | :deny | :ask
-  
-  # Per-tool overrides (glob patterns supported)
-  tool_overrides: %{
-    "bash_exec" => :ask,
-    "bash_exec(git *)" => :allow,
-    "bash_exec(rm *)" => :deny,
-    "file_write(src/**)" => :allow,
-    "file_write(production.*)" => :deny
-  }
+%Synapsis.Memory.WorkingMemory{
+  run_id: "run_123",
+  session_id: "session_456",
+  agent_id: "project_agent:synapsis",
+  current_goal: "Design memory schema",
+  recent_messages: [...],
+  tool_results: [...],
+  temporary_notes: [...],
+  current_plan: [...]
 }
 ```
 
-### 6.3 Permission Resolution Order
+### 5.2 Layer B: Episodic Memory
 
-1. Per-tool override (most specific glob match wins)
-2. Permission level default for the session
-3. Tool's declared `permission_level/0`
+Event-oriented append-only record of what happened. The foundation for debugging, replay, and summarization.
 
-### 6.4 Autonomous Mode
+Contains: task started, plan updated, tool invoked, tool failed, human approved, task completed, summary generated, memory promoted/updated/archived.
 
-In autonomous mode (`mode: :autonomous`), the agent does not pause for user approval. All tools at or below `:execute` level are auto-approved. `:destructive` tools follow the session's `allow_destructive` setting. This is the mode used for background/headless sessions where multiple Claude Code agents work in parallel via git worktrees.
+Properties: append-only, timestamped, replayable.
 
-### 6.5 Plan Mode Restrictions
+```elixir
+%Synapsis.Memory.Event{
+  id: "evt_001",
+  scope: :project,
+  scope_id: "synapsis",
+  agent_id: "project_agent:synapsis",
+  run_id: "run_123",
+  type: :task_completed,
+  importance: 0.7,
+  payload: %{
+    task: "Design memory system",
+    result: "accepted",
+    artifacts: ["memory_design_v1.md"]
+  },
+  causation_id: "evt_000",
+  correlation_id: "corr_abc",
+  inserted_at: ~U[2026-03-09 02:00:00Z]
+}
+```
 
-When `agent_mode` is `:plan`:
+`causation_id` links to the immediate preceding cause. `correlation_id` groups a whole workflow or request chain. Both are critical for replay and debugging.
 
-- Tools with permission level `:write`, `:execute`, `:destructive` are excluded from `list_for_llm/1`
-- Only `:read` and `:none` tools are available
-- The agent can use `ask_user` to clarify requirements
-- The agent must call `exit_plan_mode` to present a plan and return to `:build` mode
+### 5.3 Layer C: Checkpoint Memory
+
+Serializable execution state required for recovery after crash, deploy, or restart.
+
+Contains: workflow node position, pending edges, retry counters, task-local state, model/tool execution metadata.
+
+Properties: binary or structured snapshot, versioned, resumable, replaceable by newer checkpoints.
+
+```elixir
+%Synapsis.Memory.Checkpoint{
+  checkpoint_id: "ckpt_001",
+  run_id: "run_123",
+  session_id: "session_456",
+  workflow: "project_task_graph",
+  node: "quality_gate",
+  state_version: 1,
+  state_format: :json,
+  state_json: %{current_step: "finalize_doc", retries: 0},
+  inserted_at: ~U[2026-03-09 02:01:00Z]
+}
+```
+
+Checkpoint writes happen after each completed tool call cycle — the natural boundary in the agent loop's `reduce_while`. On session reconnect or crash recovery, the system loads the latest checkpoint, rebuilds the `context` accumulator, and resumes the loop.
+
+### 5.4 Layer D: Semantic Memory
+
+Stable, summarized, reusable knowledge. The long-term memory that agents retrieve for future reasoning.
+
+Contains: project facts, architectural decisions, successful patterns, failure lessons, user preferences, agent operating rules.
+
+Properties: compressed, tagged, retrievable, scored by importance/confidence/recency.
+
+```elixir
+%Synapsis.Memory.SemanticRecord{
+  id: "mem_001",
+  scope: :project,
+  scope_id: "synapsis",
+  kind: :decision,
+  title: "Memory architecture pattern",
+  summary: "Synapsis uses event log + checkpoint + semantic summary, not transcript-only memory.",
+  detail: %{},
+  tags: ["memory", "architecture", "agent_core"],
+  evidence_event_ids: ["evt_001", "evt_002"],
+  importance: 0.9,
+  confidence: 0.95,
+  freshness: 1.0,
+  source: :summarizer,
+  contributed_by: "project_agent:synapsis",
+  access_count: 0,
+  last_accessed_at: nil,
+  archived_at: nil,
+  inserted_at: ~U[2026-03-09 02:10:00Z]
+}
+```
+
+**Memory kinds:** `:fact`, `:decision`, `:lesson`, `:preference`, `:pattern`, `:warning`, `:summary`, `:policy`
+
+**Source types:** `:human` (user-authored via UI), `:summarizer` (generated by summarization pipeline), `:agent` (saved directly by agent via `memory_save` tool)
+
+**Size constraints.** Each memory record must be compact:
+
+- `title`: max ~10 words. A label, not a description.
+- `summary`: max 200 tokens (~1–3 sentences). The summarizer prompt enforces this. If a memory needs a paragraph to explain, it is not compressed enough.
+- `detail`: structured metadata only (JSONB) — file paths, related memory IDs, session references. Not prose. Not a second, longer summary.
+
+Memory is a **pointer with a summary**, not a **store with full content**. Large content stays in its source of truth: full conversation history in the `messages` table, raw event payloads in `memory_events`, tool outputs in `tool_calls`, documents in the filesystem. Semantic memory points to these via `evidence_event_ids`. If an agent needs the full context behind a memory, it follows the evidence trail — reads the original events or files via `file_read` or event queries.
+
+The ContextBuilder's token budget math assumes compact entries. Oversized memories break the budget allocation and degrade retrieval quality.
+
+**Promotion rules.** Not every event becomes semantic memory. Promote when: high importance, repeat occurrence, explicit human approval, task completed successfully, introduces project decision, identifies recurring failure pattern, user preference likely to matter again.
 
 ---
 
-## 7. Side Effect System
+## 6. Storage Schema
 
-### 7.1 Declared Side Effects
+PostgreSQL is the source of truth. ETS/Cachex for hot retrieval cache.
 
-Tools declare side effects as static data via the `side_effects/0` callback:
+### 6.1 `memory_events`
+
+```sql
+CREATE TABLE memory_events (
+  id          text PRIMARY KEY,
+  scope       text NOT NULL,        -- 'shared' | 'project' | 'agent' | 'session'
+  scope_id    text NOT NULL,
+  agent_id    text NOT NULL,
+  run_id      text,
+  type        text NOT NULL,
+  importance  double precision NOT NULL DEFAULT 0.5,
+  payload     jsonb NOT NULL,
+  causation_id  text,
+  correlation_id text,
+  inserted_at timestamptz NOT NULL
+);
+```
+
+Indexes: `(scope, scope_id, inserted_at DESC)`, `(run_id, inserted_at ASC)`, `(agent_id, inserted_at DESC)`, `(type, inserted_at DESC)`
+
+### 6.2 `memory_checkpoints`
+
+```sql
+CREATE TABLE memory_checkpoints (
+  checkpoint_id text PRIMARY KEY,
+  run_id        text NOT NULL,
+  session_id    text NOT NULL,
+  workflow      text NOT NULL,
+  node          text NOT NULL,
+  state_version integer NOT NULL,
+  state_format  text NOT NULL,       -- 'json' | 'binary'
+  state_bytea   bytea,
+  state_json    jsonb,
+  inserted_at   timestamptz NOT NULL
+);
+```
+
+Indexes: `(run_id, inserted_at DESC)`, `(session_id, inserted_at DESC)`, `(workflow, inserted_at DESC)`
+
+### 6.3 `semantic_memories`
+
+```sql
+CREATE TABLE semantic_memories (
+  id              text PRIMARY KEY,
+  scope           text NOT NULL,     -- 'shared' | 'project' | 'agent'
+  scope_id        text NOT NULL,
+  kind            text NOT NULL,
+  title           text NOT NULL,
+  summary         text NOT NULL,
+  detail          jsonb NOT NULL DEFAULT '{}',
+  tags            text[] NOT NULL DEFAULT '{}',
+  evidence_event_ids text[] NOT NULL DEFAULT '{}',
+  importance      double precision NOT NULL DEFAULT 0.5,
+  confidence      double precision NOT NULL DEFAULT 0.5,
+  freshness       double precision NOT NULL DEFAULT 1.0,
+  source          text NOT NULL DEFAULT 'agent',  -- 'human' | 'summarizer' | 'agent'
+  contributed_by  text,
+  access_count    integer NOT NULL DEFAULT 0,
+  last_accessed_at timestamptz,
+  archived_at     timestamptz,
+  inserted_at     timestamptz NOT NULL
+);
+```
+
+Indexes: `(scope, scope_id, archived_at, inserted_at DESC)`, GIN on `tags`, full-text index on `title + summary`
+
+### 6.4 Optional: `semantic_memory_embeddings`
+
+```sql
+CREATE TABLE semantic_memory_embeddings (
+  memory_id text PRIMARY KEY REFERENCES semantic_memories(id),
+  embedding vector(...)
+);
+```
+
+Only if vector retrieval is enabled. Deferred to Phase 3.
+
+### 6.5 Migration: `memory_entries` → `semantic_memories`
+
+The existing `memory_entries` table (key/value, scoped global/project/session) is migrated into `semantic_memories`:
+
+- `scope: :global` entries → `scope: :shared`
+- `scope: :project` entries → `scope: :project`
+- `scope: :session` entries → discarded or archived (session-scoped entries are ephemeral)
+- `key` → `title`
+- `content` → `summary`
+- `metadata` → `detail`
+- All migrated entries get `source: :human`, `confidence: 1.0`, `importance: 1.0`
+
+The `memory_entries` table is dropped after migration. One table, one retrieval path, one UI.
+
+---
+
+## 7. Module Architecture
+
+### 7.1 Umbrella placement
 
 ```
-:file_changed — a file was created, modified, moved, or deleted
+synapsis_data    — Ecto schemas, repos, queries
+  SynapsisData.Schema.MemoryEvent
+  SynapsisData.Schema.MemoryCheckpoint
+  SynapsisData.Schema.SemanticMemory
+  SynapsisData.Memory  (query functions)
+
+synapsis_core    — Domain logic, behaviours, OTP processes
+  Synapsis.Memory                    (public API facade)
+  Synapsis.Memory.Event              (struct)
+  Synapsis.Memory.Checkpoint         (struct)
+  Synapsis.Memory.SemanticRecord     (struct)
+  Synapsis.Memory.WorkingMemory      (struct)
+  Synapsis.Memory.Writer             (PubSub subscriber, persists events)
+  Synapsis.Memory.Retriever          (query + rank + filter)
+  Synapsis.Memory.Summarizer         (LLM-based event → semantic extraction)
+  Synapsis.Memory.ContextBuilder     (prompt packing)
+  Synapsis.Memory.Cache              (ETS hot cache for retrieval)
 ```
 
-Future side effects (not in initial implementation):
+### 7.2 Behaviour contract
+
+```elixir
+defmodule Synapsis.Memory do
+  @callback append_event(map()) :: {:ok, map()} | {:error, term()}
+  @callback write_checkpoint(map()) :: {:ok, map()} | {:error, term()}
+  @callback latest_checkpoint(String.t()) :: {:ok, map() | nil} | {:error, term()}
+  @callback store_semantic(map()) :: {:ok, map()} | {:error, term()}
+  @callback update_semantic(String.t(), map()) :: {:ok, map()} | {:error, term()}
+  @callback retrieve(map()) :: {:ok, [map()]} | {:error, term()}
+end
+```
+
+### 7.3 OTP supervision
 
 ```
-:dependency_changed — package.json, mix.exs, etc. was modified
-:config_changed — configuration file was modified
-:test_failed — a test execution produced failures
+SynapsisCore.Supervisor
+├── Synapsis.Memory.Supervisor
+│   ├── Synapsis.Memory.Writer           (PubSub subscriber GenServer)
+│   ├── Synapsis.Memory.Cache            (ETS-backed GenServer)
+│   └── Synapsis.Memory.SummarizerDispatcher  (Oban job enqueuer)
+├── Synapsis.Agent.Supervisor
+└── ...
 ```
 
-### 7.2 Side Effect Propagation
+Oban handles summarization jobs. `Synapsis.Memory.Writer` is a GenServer that subscribes to PubSub topics and persists events to Postgres. `Synapsis.Memory.Cache` holds hot retrieval metadata in ETS.
+
+---
+
+## 8. Memory Writer — Event Capture as Observer
+
+The agent loop already broadcasts tool effects via PubSub (`tool_effects:{session_id}`). The Memory Writer subscribes and persists, with no changes to the agent loop.
 
 ```
-ToolExecutor
-  → tool executes successfully
-  → reads tool.side_effects()
-  → broadcasts to PubSub topic "tool_effects:{session_id}"
-  → message: {:tool_effect, :file_changed, %{tool: name, input: input, result: result}}
+Agent Loop
+  → tool executes
+  → PubSub.broadcast("tool_effects:{session_id}", {:tool_effect, ...})
+
+Synapsis.Memory.Writer (subscriber)
+  → receives {:tool_effect, type, payload}
+  → maps to MemoryEvent struct
+  → inserts into memory_events table
+```
+
+Additional PubSub topics the Writer subscribes to:
+
+```
+"session:{session_id}"     — message_complete, status changes
+"tool_effects:{session_id}" — tool call/result events
+"memory:{scope}:{scope_id}" — memory_promoted, memory_updated, memory_archived
+```
+
+This observer pattern means adding memory does not change the existing ToolExecutor, SessionChannel, or Agent Loop code.
+
+---
+
+## 9. Checkpoint Integration
+
+Checkpoint writes happen at the natural boundary in the agent loop — after each completed tool call cycle.
+
+```elixir
+# In Synapsis.Agent.Loop, after processing tool results:
+defp maybe_checkpoint(context, tool_results) do
+  Synapsis.Memory.write_checkpoint(%{
+    run_id: context.run_id,
+    session_id: context.session_id,
+    workflow: "agent_loop",
+    node: "post_tool_cycle",
+    state_version: 1,
+    state_format: :json,
+    state_json: serialize_context(context)
+  })
+end
+```
+
+On crash recovery:
+
+1. Load latest checkpoint for the session
+2. Rebuild `context` / `WorkingMemory` from checkpoint state
+3. Resume the agent loop from the checkpoint node
+
+---
+
+## 10. Retrieval System
+
+### 10.1 Retrieval inputs
+
+The Retriever accepts:
+
+- `query` — current user request or task goal
+- `scope` — starting scope (defaults to calling agent's scope, walks up)
+- `agent_id` — calling agent identity
+- `project_id` — current project
+- `kinds` — filter by memory kind
+- `tags` — filter by tags
+- `limit` — max results (default 5)
+
+### 10.2 Retrieval stages
+
+**Stage 1: Hard filtering.** Filter by scope visibility (agent sees own + project + shared), archive status (`archived_at IS NULL`), kind, project.
+
+**Stage 2: Candidate generation.** Keyword search on title + summary, tag matching. Optional embedding search (Phase 3).
+
+**Stage 3: Reranking.** Weighted score:
+
+```
+score = keyword_match   * 0.30
+      + importance       * 0.25
+      + recency          * 0.15
+      + confidence       * 0.15
+      + freshness        * 0.10
+      + success_bias     * 0.05
+```
+
+When embedding search is enabled (Phase 3), add `semantic_similarity * 0.40` and rebalance.
+
+**Stage 4: Packing.** Select top memories within token budget. Update `access_count` and `last_accessed_at` on returned records.
+
+### 10.3 Cache
+
+ETS cache keyed by `{scope, scope_id, query_hash}`. Invalidated via PubSub on `memory_promoted`, `memory_updated`, `memory_archived` events.
+
+---
+
+## 11. Context Builder
+
+### 11.1 Injection mechanism
+
+Memory is **not** part of the static system prompt. The system prompt is set once at session start (agent identity, role instructions, tool definitions, skill fragments) and does not change between turns.
+
+Memory is injected as a **dynamic system message** rebuilt before each LLM request. Different turns in the same session retrieve different memories based on the current query.
+
+The agent loop builds the LLM request in this order:
+
+```
+1. System prompt        — static: agent role + skills + tool defs
+2. Memory context       — dynamic: ContextBuilder output, rebuilt per turn
+3. Conversation history — messages so far in this session
+4. Current user message — the latest input
+```
+
+```elixir
+defp build_messages(context) do
+  system_prompt = build_system_prompt(context)
+  memory_context = Synapsis.Memory.ContextBuilder.build(context)
+  history = context.messages
+
+  messages = [%{role: :system, content: system_prompt}]
+
+  messages = if memory_context != "" do
+    messages ++ [%{role: :system, content: memory_context}]
+  else
+    messages
+  end
+
+  messages ++ history
+end
+```
+
+If the Retriever returns no relevant results, the memory context message is omitted entirely. No empty block — the agent operates without memory context, same as a fresh session.
+
+### 11.2 Per-turn flow
+
+On every turn:
+
+1. Extract query signal from the latest user message (keywords, intent)
+2. Call `Synapsis.Memory.Retriever.retrieve/1` with query + agent scope
+3. Format retrieved memories into structured sections
+4. Enforce token budget — trim if total exceeds allocation
+5. Return formatted string
+
+Retrieval is cheap — keyword search + ETS cache hit in the common case. Cost is a few milliseconds per turn, not an LLM call.
+
+### 11.3 Injected format
+
+```xml
+<memory>
+<shared>
+- Retry flaky network tools up to 2 times
+- Prefer delegation over direct specialist execution
+</shared>
+
+<project context="synapsis">
+- Architecture: event log + checkpoint + semantic summary
+- User prefers concise markdown, skip basics
+- Use Ecto.Multi for transactional writes
+</project>
+
+<agent context="review_agent">
+- Prioritize correctness over style
+- Check test coverage before approving
+</agent>
+</memory>
+```
+
+XML tags give the LLM clear section boundaries. Each entry is one line (~1–2 sentences). No verbose descriptions. No raw event data.
+
+### 11.4 Token budget allocation
+
+| Section | Budget | Notes |
+|---|---|---|
+| Shared | ~5% | Short policies, few entries |
+| Project | ~50% | Richest knowledge, most relevant |
+| Agent | ~20% | Operational heuristics |
+| Session (working memory) | ~25% | Current context, fills remaining |
+
+### 11.5 Relationship to `memory_search` tool
+
+Two access patterns, both needed:
+
+**Push (ContextBuilder)** — automatic, every turn. The agent does not ask for it. Handles the common case where relevant memories exist and should inform the response. The agent sees relevant context appear in its system messages — it is invisible to the agent as a tool call.
+
+**Pull (`memory_search` tool)** — explicit, agent decides to search. Handles the case where the agent knows it needs specific prior knowledge that was not auto-retrieved. Returns results inline in the conversation as a tool result, not as a system message.
+
+The ContextBuilder handles breadth (general relevance). The `memory_search` tool handles depth (specific lookup). Both return the same compact memory records — `memory_search` exists because there are **many** memories across scopes (potentially hundreds per project), not because any single memory is large.
+
+---
+
+## 12. Summarization Pipeline
+
+### 12.1 Triggers
+
+Summarization runs on:
+
+- `message_complete` broadcast — if session has enough new events since last summary (threshold: configurable, default 10 events or 15 minutes)
+- Task/session completion
+- Explicit agent invocation via `session_summarize` tool
+- Scheduled compaction window (Oban cron)
+
+### 12.2 Pipeline
+
+```
+Trigger
+  → Oban job enqueued (Synapsis.Memory.SummarizerDispatcher)
+  → Worker loads event range for session/run
+  → Compress: strip redundant tool outputs, collapse streaming chunks
+  → LLM call via Synapsis.LLM.complete/2 (single-shot, no agent loop)
+     - Uses cheaper/faster model (configurable per project)
+     - System prompt instructs extraction of decisions, lessons, patterns, preferences
+     - Agent role included so output is scoped correctly
+  → Parse structured output into SemanticRecord candidates
+  → Apply promotion rules (importance threshold, kind filter)
+  → Insert into semantic_memories with appropriate scope
+  → Broadcast :memory_promoted via PubSub
+```
+
+### 12.3 Nested LLM call pattern
+
+`Synapsis.LLM.complete/2` is a simple request/response call through `synapsis_provider`, distinct from the `task` tool's full sub-agent loop. No tool use, no agent loop — just a single completion. This abstraction is reusable for future tools that need LLM reasoning without spawning a full agent (code review, commit message generation, etc.).
+
+### 12.4 Scope inference for summaries
+
+| Calling Agent | Default Candidate Scope | Promotion Path |
+|---|---|---|
+| Global Assistant | `:shared` | — |
+| Project Agent | `:project` | → `:shared` if cross-project |
+| Specialized Agent | `:agent` | → `:project` if broadly useful |
+| Sub-agent | not persisted | parent decides via `memory_save` |
+
+### 12.5 Summarizer extraction targets
+
+The summarizer should extract:
+
+- What goal was pursued
+- What was decided
+- What succeeded
+- What failed
+- What should be remembered
+- What scope the memory belongs to
+- How confident the system is
+
+---
+
+## 13. Forgetting, Archiving, and Compaction
+
+### 13.1 Raw event retention
+
+Hot storage: 30–90 days (configurable per project). Cold archive: compressed long-term storage. Delete only if retention policy allows.
+
+### 13.2 Semantic memory decay
+
+Freshness decays over time but importance persists. Architectural decisions: freshness falls slowly. Temporary issue summaries: freshness falls quickly. Decay function applied during retrieval scoring, not by modifying stored records.
+
+### 13.3 Archive conditions
+
+Archive semantic memory when: superseded by newer memory, repeatedly low relevance, low confidence and old, explicitly invalidated by user or agent. Never hard-delete critical decisions without policy support. Archived memories are soft-deleted via `archived_at` timestamp.
+
+---
+
+## 14. Memory Tools
+
+Four tools added to the Synapsis tools system under a new `:memory` category.
+
+### 14.1 `session_summarize`
+
+| Field | Value |
+|---|---|
+| Module | `Synapsis.Tools.SessionSummarize` |
+| Permission | `:read` |
+| Side Effects | none |
+| Category | `:memory` |
+| Description | Compress current session context into candidate semantic memory records. Returns candidates for review — does not persist. |
+
+Parameters:
+- `scope` (optional, enum: `"full" | "recent" | "range"`, default: `"full"`) — what portion to summarize
+- `message_range` (optional, `[start, end]`) — for `"range"` scope
+- `focus` (optional, string) — hint to summarizer (e.g. "focus on architectural decisions")
+- `kinds` (optional, array of strings) — which memory kinds to extract
+
+Execution:
+1. Load session messages + tool call history from `synapsis_data`
+2. Compress representation (strip redundant outputs, collapse chunks)
+3. Call `Synapsis.LLM.complete/2` with summarization prompt + compressed context + focus hint
+4. Parse structured output into candidate SemanticRecord structs
+5. Return candidates — agent or user reviews before saving
+
+### 14.2 `memory_save`
+
+| Field | Value |
+|---|---|
+| Module | `Synapsis.Tools.MemorySave` |
+| Permission | `:write` |
+| Side Effects | `[:memory_promoted]` |
+| Category | `:memory` |
+| Description | Persist one or more semantic memory records. Scope defaults to the calling agent's natural scope. |
+
+Parameters:
+- `memories` (required, array of objects) — each with:
+  - `scope` (optional, enum: `"shared" | "project" | "agent"`, default: inferred from calling agent)
+  - `kind` (required, enum: `"fact" | "decision" | "lesson" | "preference" | "pattern" | "warning"`)
+  - `title` (required, string)
+  - `summary` (required, string)
+  - `tags` (optional, array of strings)
+  - `importance` (optional, float, default: 0.7)
+
+Scope inference: Global Assistant → `:shared`, Project Agent → `:project`, Specialist → `:agent`. Explicit `scope` parameter overrides for promotion (e.g. specialist saving to `:project`).
+
+`contributed_by` is auto-populated from `context.agent_id`. `evidence_event_ids` are auto-populated from the session's event log. `source` is set to `:agent`.
+
+### 14.3 `memory_search`
+
+| Field | Value |
+|---|---|
+| Module | `Synapsis.Tools.MemorySearch` |
+| Permission | `:read` |
+| Side Effects | none |
+| Category | `:memory` |
+| Description | Search semantic memory. Retrieval walks up the scope hierarchy from the calling agent's scope. |
+
+Parameters:
+- `query` (required, string) — search query
+- `scope` (optional, enum: `"shared" | "project" | "agent"`) — starting scope, defaults to agent's scope (walks up)
+- `kinds` (optional, array of strings)
+- `tags` (optional, array of strings)
+- `limit` (optional, integer, default: 5)
+
+Returns ranked results with id, kind, title, summary, score, scope, contributed_by.
+
+This gives pull-based memory access in addition to the push-based context injection from ContextBuilder. ContextBuilder handles the common case; `memory_search` handles "I know I've seen this before, let me look it up."
+
+### 14.4 `memory_update`
+
+| Field | Value |
+|---|---|
+| Module | `Synapsis.Tools.MemoryUpdate` |
+| Permission | `:write` |
+| Side Effects | `[:memory_updated]` |
+| Category | `:memory` |
+| Description | Update, archive, or restore a semantic memory record. Used for correcting mistakes or managing memory lifecycle. |
+
+Parameters:
+- `action` (required, enum: `"update" | "archive" | "restore"`)
+- `memory_id` (required, string)
+- `changes` (optional, map) — for `"update"` action:
+  - `title` (optional, string)
+  - `summary` (optional, string)
+  - `kind` (optional, string)
+  - `tags` (optional, array of strings)
+  - `importance` (optional, float)
+  - `confidence` (optional, float)
+
+Every update appends a `memory_updated` event to `memory_events` with the previous values, creating a full audit trail.
+
+### 14.5 Tool inventory addition
+
+| # | Tool | Name | Category | Permission | Side Effects | Enabled |
+|---|---|---|---|---|---|---|
+| 28 | SessionSummarize | `session_summarize` | memory | `:read` | — | yes |
+| 29 | MemorySave | `memory_save` | memory | `:write` | `[:memory_promoted]` | yes |
+| 30 | MemorySearch | `memory_search` | memory | `:read` | — | yes |
+| 31 | MemoryUpdate | `memory_update` | memory | `:write` | `[:memory_updated]` | yes |
+
+These are Phase 2 tools in the tools system PRD (alongside `todo_write`, `ask_user`, plan mode). They depend on the memory tables from Phase 1.
+
+### 14.6 Tool context extension
+
+The tool `context` struct gains memory-related fields:
+
+```elixir
+@type context :: %{
+  # ... existing fields ...
+  agent_id: String.t(),
+  agent_scope: :shared | :project | :agent
+}
+```
+
+The agent loop populates these from the session's bound agent. Memory tools use them for default scope inference.
+
+---
+
+## 15. Interaction Patterns
+
+### 15.1 Agent-initiated save
+
+Agent decides the session has valuable knowledge (heuristics: long session, successful complex task, user said "remember this"). Agent calls `session_summarize`, reviews candidates, calls `memory_save`.
+
+### 15.2 User-initiated save
+
+User says "save this session to memory." Agent calls `session_summarize`, optionally uses `ask_user` to let user pick candidates, calls `memory_save`.
+
+### 15.3 User explicit memory
+
+User says "remember: always use tabs in this project." Agent skips `session_summarize` entirely. Calls `memory_save` directly with a single preference record. No LLM summarization needed.
+
+### 15.4 User correction
+
+User says "that's wrong, we decided to use GenStage not Broadway."
+
+1. Agent calls `memory_search` to find the record
+2. Agent shows current memory to user (inline in chat)
+3. Agent calls `memory_update` with corrections
+4. Side effect `[:memory_updated]` broadcasts via PubSub → MemoryLive updates if open
+
+### 15.5 Direct UI edit
+
+User sees wrong memory in MemoryLive, clicks edit, fixes summary, saves. Standard LiveView `phx-submit` → `Synapsis.Memory.update_semantic/2`. No agent involved.
+
+---
+
+## 16. Side Effect System
+
+Two new side effects:
+
+- `[:memory_promoted]` — new semantic memory created
+- `[:memory_updated]` — existing semantic memory modified or archived
+
+PubSub topic: `memory:{scope}:{scope_id}`
 
 Subscribers:
-  → SynapsisPlugin.Server (LSP) — sends didChange, collects diagnostics
-  → SynapsisPlugin.Server (MCP) — any interested MCP servers
-  → SessionChannel — UI notifications (file tree refresh, etc.)
+
+| Subscriber | On `memory_promoted` | On `memory_updated` |
+|---|---|---|
+| MemoryLive | Real-time list refresh | Real-time list refresh |
+| Memory.Cache | Cache invalidation | Cache invalidation |
+| ContextBuilder | (no action, fetches fresh) | Bust cached context for affected scope |
+
+---
+
+## 17. Event Types
+
+Complete event type inventory:
+
+```
+run_created
+task_received
+plan_created
+plan_updated
+message_added
+tool_called
+tool_succeeded
+tool_failed
+handoff_requested
+handoff_completed
+human_feedback_received
+checkpoint_written
+task_completed
+task_failed
+run_paused
+run_resumed
+summary_created
+memory_promoted
+memory_updated
+memory_archived
 ```
 
-### 7.3 Diagnostic Injection
-
-When an LSP plugin receives a `:file_changed` effect and produces diagnostics:
-
-**Passive mode** (default for interactive sessions): Diagnostics are broadcast to the session channel for UI display only.
-
-**Active mode** (default for autonomous sessions): Diagnostics are injected as a system message into the session context. The agent sees them before its next LLM request and can self-correct.
-
 ---
 
-## 8. Plugin Tool Integration
+## 18. UI Integration
 
-### 8.1 Plugin Tools via synapsis_plugin
+### 18.1 MemoryLive evolution
 
-Plugin tools are dynamically registered into `SynapsisTool.Registry` by `SynapsisPlugin.Server` processes. They follow the same execution pipeline as built-in tools but dispatch via `GenServer.call/3` instead of direct module invocation.
+The existing `MemoryLive.Index` (flat key/value CRUD for `memory_entries`) evolves to three tabs:
 
-### 8.2 MCP Tools
+**Tab: Knowledge** (`semantic_memories`) — primary view. Filterable by scope, kind, tags, agent. Each card shows: title, summary, kind badge, importance/confidence scores, source badge (`:human | :summarizer | :agent`), `contributed_by` label, timestamps. Inline edit. Archive button. Create button for human-authored memories. Agent filter dropdown alongside scope/kind filters.
 
-MCP tools are namespaced with `mcp_` prefix. They are discovered via MCP `tools/list` at plugin initialization. The `tool_search` built-in tool enables lazy loading — MCP tool definitions are not included in every LLM request by default.
+**Tab: Events** (`memory_events`) — read-only audit log. Filterable by run/session, type, agent. Paginated, newest first. Expandable payload. Inspection only.
 
-### 8.3 LSP Tools
+**Tab: Checkpoints** (`memory_checkpoints`) — read-only. Grouped by run/session. Shows workflow, node, state_version, timestamp. Expandable state view (JSON via CodeEditor hook, read-only).
 
-LSP tools are namespaced with `lsp_` prefix. They expose a fixed set of operations:
+### 18.2 MemoryLive.Show (new)
 
-- `lsp_diagnostics` — get diagnostics for a file
-- `lsp_definition` — go to definition (accepts symbol name, not line:col)
-- `lsp_references` — find all references to a symbol
-- `lsp_hover` — get type/doc info for a symbol
-- `lsp_symbols` — list symbols in a file or workspace
+Detail view for a single semantic memory:
 
-The decision to accept symbol names instead of line:column positions is a key design choice — LLMs are unreliable with exact positions, so the plugin resolves positions internally by searching the file for the symbol name.
+- Editable fields: title, summary, kind, tags, importance, confidence
+- **History section** — query `memory_events` where `type: :memory_updated` and `payload.memory_id` matches. Shows change log with diffs of previous values.
+- **Evidence section** — links to source events via `evidence_event_ids`
+- **Source badge** — `:human`, `:summarizer`, `:agent`
+- **Contributed by** — agent identity that created/last updated
 
-### 8.4 Deferred Tool Loading
+### 18.3 Scope visibility in UI
 
-To avoid bloating LLM context with dozens of MCP tool definitions:
+When viewing from an agent context, the knowledge tab shows:
 
-1. On session start, only built-in tools are included in `list_for_llm/1`
-2. MCP/plugin tools are registered in the ToolRegistry but marked as `deferred: true`
-3. The agent uses `tool_search` to discover relevant deferred tools
-4. Once loaded, deferred tools are included in subsequent `list_for_llm/1` calls for the session
+- Agent's own memories (primary, full edit)
+- Inherited project memories (dimmed, read-only in agent context)
+- Inherited shared memories (dimmed, read-only)
 
----
+When viewing shared memories, `contributed_by` badge shows which agent added it. Any user can edit shared memories from the UI.
 
-## 9. Agent Loop Integration
-
-### 9.1 Tool Gathering
+### 18.4 Routes
 
 ```elixir
-def gather_tools(session, context) do
-  SynapsisTool.Registry.list_for_llm(
-    agent_mode: context.agent_mode,
-    session_id: session.id,
-    include_deferred: false  # only loaded tools
-  )
-end
+live "/settings/memory", MemoryLive.Index, :index          # replaces existing
+live "/settings/memory/:id", MemoryLive.Show, :show         # new detail view
+live "/settings/memory/new", MemoryLive.Index, :new          # create human-authored
 ```
 
-### 9.2 Tool Call Processing
+### 18.5 Channel events
 
-```elixir
-case event do
-  {:tool_use, %{name: name, id: id, input: input}} ->
-    tool_call = %{name: name, id: id, input: input}
-    
-    broadcast_tool_use(session.id, tool_call)
-    
-    case SynapsisTool.Executor.execute(tool_call, context) do
-      {:ok, result} ->
-        broadcast_tool_result(session.id, id, result)
-        {:cont, append_tool_result(context, id, result)}
-      
-      {:error, :permission_denied} ->
-        broadcast_tool_result(session.id, id, %{error: "Permission denied"})
-        {:cont, append_tool_result(context, id, %{error: "Permission denied"})}
-      
-      {:pending_approval, ref} ->
-        # Block until approval via channel
-        receive do
-          {:tool_approved, ^ref} ->
-            result = SynapsisTool.Executor.execute_approved(tool_call, context)
-            broadcast_tool_result(session.id, id, result)
-            {:cont, append_tool_result(context, id, result)}
-          
-          {:tool_denied, ^ref} ->
-            broadcast_tool_result(session.id, id, %{error: "User denied"})
-            {:cont, append_tool_result(context, id, %{error: "User denied tool use"})}
-        end
-    end
-end
+Memory activity flows through existing PubSub → SessionChannel path:
+
+```
+← broadcast("memory_update", %{type, memory_id, ...})
 ```
 
-### 9.3 Sub-Agent Execution
-
-The `task` tool launches a sub-agent by spawning a new agent loop process:
-
-```elixir
-defmodule SynapsisTool.Tools.Task do
-  def execute(%{"prompt" => prompt} = input, ctx) do
-    tools = Map.get(input, "tools", ["file_read", "list_dir", "grep", "glob"])
-    mode = Map.get(input, "mode", "foreground")
-    
-    sub_context = %{ctx |
-      parent_agent: self(),
-      agent_mode: :build,
-      permissions: restrict_permissions(ctx.permissions, tools)
-    }
-    
-    case mode do
-      "foreground" ->
-        # Synchronous — blocks until sub-agent completes
-        Synapsis.Agent.SubAgent.run(prompt, tools, sub_context)
-      
-      "background" ->
-        # Async — returns task_id immediately
-        {:ok, task_id} = Synapsis.Agent.SubAgent.start_background(prompt, tools, sub_context)
-        {:ok, %{task_id: task_id, status: "running"}}
-    end
-  end
-end
-```
+The React chat UI does not render memory events directly — they are not chat messages. Memory updates are surfaced in MemoryLive only.
 
 ---
 
-## 10. UI Integration
+## 19. Consistency Model
 
-### 10.1 Channel Events for Tools
+### 19.1 Event writes
 
-All tool activity flows through `SessionChannel` to the React chat UI:
+Event append is strongly reliable relative to task progress. If a task step commits, the event must exist. If a checkpoint advances, related events must exist. The Writer is a synchronous subscriber for critical events.
 
-```
-← broadcast("tool_use", %{id, name, input})           # tool call started
-← broadcast("tool_result", %{id, output, status})      # tool call completed
-← broadcast("tool_permission", %{id, name, input,      # approval needed
-                                  questions: [...]})
-← broadcast("todo_update", %{todos: [...]})             # todo list changed
-← broadcast("plan_submitted", %{plan: "..."})           # plan mode exit
-← broadcast("task_status", %{task_id, status, result})  # background task update
-```
+### 19.2 Summaries
 
-### 10.2 React Components for Tools
+Summaries are eventually consistent. A task completes; the summary appears seconds later via Oban. Acceptable.
 
-The `@synapsis/ui` package includes components for rendering tool interactions:
+### 19.3 Retrieval staleness
 
-- `ToolCallCard` — displays tool name, input, approve/deny buttons
-- `ToolResultCard` — displays tool output (formatted per tool type)
-- `AskUserCard` — renders structured questions with selectable options
-- `TodoList` — displays the current todo checklist with status indicators
-- `PlanView` — displays a submitted plan with approve/reject/feedback controls
-- `DiffViewer` — renders file edit diffs (for file_edit, multi_edit results)
-- `TerminalOutput` — renders bash_exec output with ANSI support
+Retriever tolerates brief lag. Critical execution state uses checkpoints, not summaries. ETS cache TTL is short (30 seconds default).
 
 ---
 
-## 11. Data Model
+## 20. Memory Access Policy
 
-### 11.1 Tool Calls in synapsis_data
+### 20.1 Visibility rules
 
-Tool calls are persisted as part of the message history:
+Default to minimum necessary memory visibility:
 
+- Global Assistant: reads shared + project summaries (not raw project events)
+- Project Agent: reads project + shared
+- Specialized Agent: reads own agent scope + project + shared
+- Sub-agents: inherit parent's read visibility, no write
+- Raw event access: restricted to orchestration/debug agents
+
+### 20.2 Agent memory policy
+
+The agent's configuration includes a `memory_policy` map:
+
+```json
+{
+  "read_scopes": ["agent", "project", "shared"],
+  "write_scopes": ["agent"],
+  "promote_to_project": true,
+  "promote_to_shared": false,
+  "max_memories": 500,
+  "auto_summarize": true
+}
 ```
-tool_calls: id (ULID), message_id, session_id,
-            tool_name, input (JSONB), output (JSONB),
-            status (pending | approved | denied | completed | error),
-            duration_ms, timestamps
-```
 
-### 11.2 Session Permissions
-
-```
-session_permissions: id, session_id,
-                     mode (interactive | autonomous),
-                     allow_write (boolean),
-                     allow_execute (boolean),
-                     allow_destructive (enum: allow | deny | ask),
-                     tool_overrides (JSONB),
-                     timestamps
-```
-
-### 11.3 Todo Items
-
-```
-session_todos: id, session_id,
-               content, status (pending | in_progress | completed),
-               sort_order, timestamps
-```
+Most agents read up the full hierarchy but write only to their own scope. `promote_to_project: true` allows `memory_save` with `scope: "project"`. Restrictive agents might only read project scope, never shared.
 
 ---
 
-## 12. Differences from Existing Design Document
+## 21. Failure Modes and Recovery
 
-This PRD extends `plugin-and-tools-design.md` with the following additions:
+### 21.1 Crash before checkpoint
 
-1. **18 new built-in tools** — multi_edit, web_fetch, web_search, todo_write, todo_read, task, tool_search, skill, ask_user, enter_plan_mode, exit_plan_mode, sleep, notebook_read, notebook_edit, computer, send_message, teammate, team_delete
-2. **Self-declared permission levels** — tools declare their own level via `permission_level/0` callback instead of a centralized pattern-match
-3. **Category system** — `category/0` callback for UI grouping and selective loading
-4. **Tool versioning** — `version/0` callback returning semver strings for MCP compatibility
-5. **Enabled flag** — `enabled?/0` callback for tools that ship disabled (notebook, computer use)
-6. **Deferred tool loading** — `tool_search` for lazy-loading MCP tools
-7. **Plan mode integration** — mode-aware tool filtering in the registry
-8. **Session permission model** — glob-pattern tool overrides, autonomous mode
-9. **Persistent bash sessions** — bash_exec uses a long-running Port, not one-shot commands
-10. **Background sub-agents** — task tool supports foreground and background execution
-11. **Parallel tool execution** — `Task.async_stream/3` for concurrent independent tool calls
-12. **Swarm tools** — send_message, teammate, team_delete for within-session multi-agent coordination
-13. **Extended context** — agent_mode, session_pid, parent_agent in tool context
+If event exists but checkpoint does not, replay from last checkpoint and re-derive step from events.
 
----
+### 21.2 Checkpoint exists without semantic summary
 
-## 13. Implementation Phases
+Fine. Summary is asynchronous. No data loss.
 
-### Phase 1: Core Filesystem + Search + Execution
+### 21.3 Summary conflicts with newer decision
 
-- file_read, file_write, file_edit, file_delete, file_move, list_dir
-- grep, glob
-- bash_exec (persistent session)
-- Tool behaviour, ToolRegistry, ToolExecutor, Permission engine
-- Side effect system with PubSub broadcasting
+Mark older semantic memory as superseded via `memory_update(action: "archive")`. The audit trail in `memory_events` preserves history.
 
-**Deliverable:** Agent can navigate, read, edit, and execute commands against a codebase.
+### 21.4 Retrieval returns stale memory
 
-### Phase 2: Planning + User Interaction
+Freshness + evidence + recency scoring handles this. Prefer memories tied to approved outcomes.
 
-- todo_write, todo_read
-- ask_user
-- enter_plan_mode, exit_plan_mode
-- Plan mode tool filtering in registry
-- Session permission configuration
+### 21.5 Duplicate summarization
 
-**Deliverable:** Agent supports plan-then-execute workflows with user interaction.
-
-### Phase 3: Orchestration + Web
-
-- task (foreground sub-agents)
-- web_fetch, web_search
-- skill
-- multi_edit
-
-**Deliverable:** Agent can launch sub-agents, search the web, and load skills.
-
-### Phase 4: Advanced Features
-
-- task (background sub-agents with notifications)
-- tool_search (deferred tool loading)
-- sleep
-- Plugin tool integration (MCP/LSP via synapsis_plugin)
-- Autonomous mode support
-- Parallel tool execution (Task.async_stream)
-
-**Deliverable:** Full tool parity with Claude Code. Ready for multi-agent autonomous workflows.
-
-### Phase 5: Swarm + Future Tools
-
-- send_message, teammate, team_delete (swarm coordination)
-- Swarm coordinator process in synapsis_core (tool modules in synapsis_tool)
-- Git worktree isolation per teammate agent
-- notebook_read, notebook_edit (disabled by default, API reserved)
-- computer (disabled by default, API reserved)
-- Tool versioning in registry and LLM definitions
-
-**Deliverable:** Multi-agent swarm support within a single Synapsis instance. Notebook and computer use APIs reserved for future activation.
+Oban's unique job constraint prevents duplicate runs. If two summaries produce conflicting records, the more recent one wins (higher freshness score).
 
 ---
 
-## 14. Resolved Decisions
+## 22. Observability
 
-1. **27 tools total** — 21 enabled by default, 3 disabled/future (notebook, computer), 3 swarm tools. Comprehensive surface matching Claude Code while maintaining Elixir behaviour uniformity.
+### 22.1 Metrics
 
-2. **Self-declared permissions** — tools declare `permission_level/0` instead of a centralized classification function. Co-locates the permission decision with the tool implementation.
+- Events written per run
+- Checkpoint size and write latency
+- Summarization queue lag (Oban job wait time)
+- Semantic memory count per scope
+- Retrieval latency and hit rate
+- Stale memory usage rate (memories accessed that were later archived)
 
-3. **Persistent bash sessions** — bash_exec maintains a long-running Port process per session. State (env, cwd) persists across calls. Matches Claude Code and OpenCode behaviour.
+### 22.2 Logging context
 
-4. **Deferred tool loading** — MCP tools are not included in LLM context by default. The `tool_search` tool enables demand-driven loading. Prevents context bloat with large MCP server tool sets.
-
-5. **Plan mode is tool-based** — enter/exit plan mode are tools, not out-of-band commands. The LLM decides when to enter plan mode based on task complexity.
-
-6. **Sub-agents cannot interact with users** — `ask_user` is restricted to the primary agent. Sub-agents that encounter ambiguity must make reasonable decisions or return to the parent with questions.
-
-7. **Todo is session-scoped** — todo lists are per-session, persisted in the database, and visible in the UI. Sub-agents get independent todo state.
-
-8. **Side effects remain data-only** — no change from existing design. Tools declare `[:file_changed]` statically. The executor broadcasts. No hook framework.
-
-9. **Web tools are built-in** — web_fetch and web_search are core tools, not plugins. They are essential for documentation lookup and are available in every session.
-
-10. **Sleep tool included** — enables polling workflows and prevents busy-waiting in autonomous sessions. The early-wake-on-user-input pattern is implemented via selective receive.
-
-11. **Tool versioning** — all tools declare `version/0` returning a semver string. Built-in tools start at `"1.0.0"`. The registry includes version in tool definitions. This is required for MCP compatibility (MCP tools carry version from their server) and enables future tool evolution without breaking consumers. Version is informational — the registry does not enforce compatibility checks.
-
-12. **Parallel tool calls** — when the LLM returns multiple independent tool calls in a single response, the executor runs them concurrently via `Task.async_stream/3`. Write tools targeting the same file are serialized. Permission approvals are batched. This matches Claude Code's behaviour and is critical for performance (e.g., reading 5 files in parallel instead of sequentially).
-
-13. **Swarm tools are built-in** — `send_message`, `teammate`, and `team_delete` are core tools in `synapsis_tool`, not deferred to Samgita. The swarm coordinator process lives in `synapsis_core` alongside the agent loop, but tool modules live in `synapsis_tool`. Samgita orchestrates *across* Synapsis instances (multi-repo, multi-machine); Synapsis swarm tools handle *within-session* multi-agent coordination (same project, same machine, parallel worktrees). Clear boundary: swarm = local parallelism, Samgita = distributed orchestration.
-
-14. **Notebook tools ship disabled** — `notebook_read` and `notebook_edit` are compiled modules with `enabled?() -> false`. Enable via `notebook_tools: true` in session or project config. The behaviour contract and parameters are finalized now; implementation is deferred to a future release. This reserves the tool names and API surface for forward compatibility.
-
-15. **Computer use ships disabled** — `computer` is a compiled module with `enabled?() -> false`. Enable via `computer_use: true` in session config. Backend is configurable (Anthropic computer use API, Puppeteer MCP, local Playwright). The tool definition and parameter schema are reserved now; full implementation is deferred. This ensures the tool surface is stable when the feature ships.
+All memory operations log with: `run_id`, `agent_id`, `correlation_id`, `scope`, `scope_id`.
 
 ---
 
-## 15. Open Questions
+## 23. Security and Privacy
 
-None. All previously open questions have been resolved as decisions #11–#15 above.
+Even in a single-user system, memory should support:
+
+- Scope isolation (agents cannot read across scope boundaries without policy)
+- Explicit retention policy per project
+- Redaction of sensitive tool outputs (API keys, secrets) before summarization
+- Metadata-only summaries where needed
+- Human invalidation of incorrect memories via UI or `memory_update` tool
+
+Never blindly promote secrets from tool outputs into semantic memory. The summarizer prompt explicitly instructs redaction of credentials, tokens, and secrets.
+
+---
+
+## 24. Implementation Phases
+
+### Phase 1: Operational Memory
+
+Build:
+- `memory_events` table + Ecto schema
+- `memory_checkpoints` table + Ecto schema
+- `Synapsis.Memory.Writer` as PubSub subscriber
+- Checkpoint write in agent loop after tool cycles
+- Migrate `memory_entries` into `semantic_memories` with `source` field
+- Keyword retrieval + `Synapsis.Memory.ContextBuilder`
+- Update `MemoryLive` UI to tabbed layout (knowledge + events + checkpoints)
+
+Deliverable: agents can be resumed after crash, events are captured, existing memories are preserved.
+
+### Phase 2: Semantic Memory + Tools
+
+Build:
+- `session_summarize` tool (nested LLM call via `Synapsis.LLM.complete/2`)
+- `memory_save` tool
+- `memory_search` tool
+- `memory_update` tool
+- Summarization pipeline via Oban
+- `MemoryLive.Show` detail view with edit history
+- Scope inference from agent identity
+
+Deliverable: agents can save, search, and correct memories. Users can review and edit via UI or conversation.
+
+### Phase 3: Smart Retrieval
+
+Build:
+- Hybrid ranking with tuned weights
+- Optional embedding generation and vector search
+- Usage feedback loop (track which retrieved memories were useful)
+- Freshness decay function
+- Memory archival automation
+
+Deliverable: retrieval quality improves over time, stale memories fade.
+
+### Phase 4: Multi-Agent Memory Policy
+
+Build:
+- Per-agent memory visibility policies
+- Delegation memory (cross-agent task handoff records)
+- Cross-project pattern extraction (shared scope mining)
+- Agent-scoped memory UI in AgentLive.Show
+
+Deliverable: full multi-agent memory isolation and sharing.
+
+---
+
+## 25. Resolved Decisions
+
+1. **Four layers, not transcript.** Event log + checkpoint + semantic memory + retrieval. Not infinite transcript + vector search.
+
+2. **Shared scope, not global.** Shared is a commons any agent can contribute to. No single owner. `contributed_by` tracks provenance.
+
+3. **Memory as observer.** Writer subscribes to PubSub. No changes to agent loop for event capture. Checkpoints are the one integration point.
+
+4. **Merge `memory_entries` into `semantic_memories`.** One table, one retrieval path, one UI. Human-authored entries get `source: :human`, `confidence: 1.0`.
+
+5. **Scope inference from agent identity.** Memory tools default to the calling agent's natural scope. Explicit scope parameter only for promotion.
+
+6. **Nested LLM call for summarization.** `Synapsis.LLM.complete/2` — single-shot completion, not a full agent loop. Reusable abstraction.
+
+7. **Four memory tools.** `session_summarize` (read, returns candidates), `memory_save` (write, persists), `memory_search` (read, retrieves), `memory_update` (write, corrects). Separation of summarize vs save preserves human-in-the-loop.
+
+8. **Provenance on all mutations.** Every update to semantic memory appends a `memory_updated` event with previous values. Full audit trail.
+
+9. **Keyword-first retrieval.** Start with keyword + tags + recency + importance. Add embeddings in Phase 3 only if needed.
+
+10. **Oban for summarization.** Background jobs with unique constraints prevent duplicates. Configurable trigger thresholds.
+
+11. **ETS cache with PubSub invalidation.** Hot retrieval cache, busted on `memory_promoted` / `memory_updated` / `memory_archived` events.
+
+12. **ContextBuilder token budgets.** Shared ~5%, Project ~50%, Agent ~20%, Session ~25%. Project knowledge gets the most space.
+
+13. **User correction via tool and UI.** Both paths: conversational (`memory_update` tool) and direct (MemoryLive edit form). Both produce audit trail events.
+
+14. **Memory injected as dynamic system message, not system prompt.** System prompt is static (agent role, skills, tools). Memory context is rebuilt per turn by the ContextBuilder and injected as a separate system message between the system prompt and conversation history. Omitted entirely when no relevant memories are found.
+
+15. **Compact memory records only.** `title` max ~10 words, `summary` max 200 tokens. `detail` is structured metadata (JSONB), not prose. Memory is a pointer with a summary — large content stays in source-of-truth tables (messages, events, tool_calls, filesystem). Agents follow `evidence_event_ids` to get full context.
+
+16. **Two retrieval paths: push and pull.** ContextBuilder auto-injects ~5–10 memories per turn (push, invisible to agent). `memory_search` tool lets the agent explicitly query when auto-retrieval misses something (pull, visible as tool result). Both return the same compact records.
+
+---
+
+## 26. Data Model Summary
+
+```
+memory_events          — append-only event log (Layer B)
+memory_checkpoints     — resumable execution state (Layer C)
+semantic_memories      — stable reusable knowledge (Layer D)
+  ↑ migrated from memory_entries (dropped after migration)
+```
+
+Working memory (Layer A) is in-process only — the `context` accumulator in the agent loop, formalized as `%Synapsis.Memory.WorkingMemory{}`.
+
+---
+
+## 27. Tool Inventory Update
+
+Updated tools system total: **31 tools** (25 enabled by default, 3 disabled/future, 3 swarm).
+
+| # | Tool | Name | Category | Permission | Side Effects | Enabled |
+|---|---|---|---|---|---|---|
+| 1–27 | (existing) | ... | ... | ... | ... | ... |
+| 28 | SessionSummarize | `session_summarize` | memory | `:read` | — | yes |
+| 29 | MemorySave | `memory_save` | memory | `:write` | `[:memory_promoted]` | yes |
+| 30 | MemorySearch | `memory_search` | memory | `:read` | — | yes |
+| 31 | MemoryUpdate | `memory_update` | memory | `:write` | `[:memory_updated]` | yes |

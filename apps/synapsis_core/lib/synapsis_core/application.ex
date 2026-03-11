@@ -20,6 +20,7 @@ defmodule SynapsisCore.Application do
         {Registry, keys: :unique, name: Synapsis.Session.Registry},
         {Registry, keys: :unique, name: Synapsis.Session.SupervisorRegistry},
         {Registry, keys: :unique, name: Synapsis.FileWatcher.Registry},
+        Synapsis.Memory.Supervisor,
         Synapsis.Session.DynamicSupervisor
       ] ++ optional_children
 

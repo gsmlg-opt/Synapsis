@@ -7,7 +7,7 @@ defmodule Synapsis.Session.Worker do
   use GenServer
   require Logger
 
-  alias Synapsis.{Repo, Session, Message, ContextWindow}
+  alias Synapsis.{Repo, Session, Message, ContextWindow, Memory}
   alias Synapsis.Session.Stream, as: SessionStream
   alias Synapsis.Session.{Monitor, Orchestrator, WorkspaceManager}
 
@@ -147,6 +147,8 @@ defmodule Synapsis.Session.Worker do
     }
 
     Logger.info("session_worker_started", session_id: session_id)
+    write_checkpoint(state, "init")
+    Synapsis.Memory.Writer.subscribe_session(session_id)
     {:ok, state, @inactivity_timeout}
   end
 
@@ -502,6 +504,7 @@ defmodule Synapsis.Session.Worker do
       update_session_status(state.session_id, "idle")
       broadcast(state.session_id, "done", %{})
       broadcast(state.session_id, "session_status", %{status: "idle"})
+      write_checkpoint(state, "stream_complete")
       {:noreply, %{state | status: :idle, stream_ref: nil}, @inactivity_timeout}
     else
       update_session_status(state.session_id, "tool_executing")
@@ -848,7 +851,10 @@ defmodule Synapsis.Session.Worker do
         Synapsis.Tool.Executor.execute(tool_use.tool, tool_use.input, %{
           project_path: effective_path,
           session_id: state.session_id,
-          working_dir: effective_path
+          working_dir: effective_path,
+          agent_id: state.agent[:name] || state.session.agent || "default",
+          agent_scope: :project,
+          project_id: to_string(state.session.project_id)
         })
 
       case result do
@@ -890,6 +896,7 @@ defmodule Synapsis.Session.Worker do
 
       :pause ->
         execute_orchestrator_actions(applied.actions, state)
+        write_checkpoint(state, "orchestrator_pause")
 
         {:noreply, %{state | status: :idle, stream_ref: nil, tool_uses: []}}
 
@@ -1160,4 +1167,29 @@ defmodule Synapsis.Session.Worker do
   end
 
   defp retriable_error?(_), do: false
+
+  defp write_checkpoint(state, node) do
+    Memory.write_checkpoint(%{
+      run_id: state.session_id,
+      session_id: state.session_id,
+      workflow: "session",
+      node: node,
+      state_version: state.iteration_count + 1,
+      state_format: "json",
+      state_json: %{
+        "status" => to_string(state.status),
+        "iteration_count" => state.iteration_count,
+        "retry_count" => state.retry_count,
+        "agent" => inspect(state.agent[:name] || "default"),
+        "model" => state.session.model,
+        "provider" => state.session.provider
+      }
+    })
+  rescue
+    e ->
+      Logger.warning("checkpoint_write_failed",
+        session_id: state.session_id,
+        error: Exception.message(e)
+      )
+  end
 end
