@@ -406,18 +406,32 @@ defmodule Synapsis.Session.Worker do
       |> Repo.update()
 
     # Update permission config
-    Synapsis.Tool.Permission.update_config(state.session_id, config.permission)
+    case Synapsis.Tool.Permission.update_config(state.session_id, config.permission) do
+      {:ok, _} ->
+        session = %{state.session | agent: agent_name}
 
-    session = %{state.session | agent: agent_name}
+        broadcast(state.session_id, "mode_switched", %{mode: mode_name, agent: agent_name})
 
-    broadcast(state.session_id, "mode_switched", %{mode: mode_name, agent: agent_name})
+        Logger.info("session_mode_switched",
+          session_id: state.session_id,
+          mode: mode_name
+        )
 
-    Logger.info("session_mode_switched",
-      session_id: state.session_id,
-      mode: mode_name
-    )
+        {:reply, :ok, %{state | agent: agent, session: session}}
 
-    {:reply, :ok, %{state | agent: agent, session: session}}
+      {:error, changeset} ->
+        Logger.error("session_mode_switch_permission_failed",
+          session_id: state.session_id,
+          mode: mode_name,
+          errors: inspect(changeset.errors)
+        )
+
+        {:reply, {:error, :permission_update_failed}, state}
+    end
+  end
+
+  def handle_call({:switch_mode, _mode_name}, _from, %{status: :idle} = state) do
+    {:reply, {:error, :invalid_mode}, state}
   end
 
   def handle_call({:switch_mode, _mode_name}, _from, state) do
@@ -796,6 +810,9 @@ defmodule Synapsis.Session.Worker do
             tool_use_id: tool_use.tool_use_id,
             input: tool_use.input
           })
+
+        :denied ->
+          send(self(), {:tool_result, tool_use.tool_use_id, "Tool denied by permission policy.", true})
       end
     end
 
