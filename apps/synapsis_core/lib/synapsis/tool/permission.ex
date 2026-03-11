@@ -74,6 +74,9 @@ defmodule Synapsis.Tool.Permission do
       row ->
         SessionConfig.from_db(row)
     end
+  rescue
+    _ ->
+      %SessionConfig{SessionConfig.default() | session_id: session_id}
   end
 
   @doc """
@@ -287,6 +290,7 @@ defmodule Synapsis.Tool.Permission do
     |> Map.put(:decision, :allowed)
   end
 
+  defp extract_session_id(id) when is_binary(id), do: id
   defp extract_session_id(%{id: id}) when is_binary(id), do: id
   defp extract_session_id(%{session_id: id}) when is_binary(id), do: id
   defp extract_session_id(_), do: nil
