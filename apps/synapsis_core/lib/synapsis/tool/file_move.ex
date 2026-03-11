@@ -41,6 +41,12 @@ defmodule Synapsis.Tool.FileMove do
   end
 
   @impl true
+  def permission_level, do: :write
+
+  @impl true
+  def category, do: :filesystem
+
+  @impl true
   def side_effects, do: [:file_changed]
 
   defp resolve_path(path, project_path) do

@@ -2,6 +2,12 @@ defmodule Synapsis.Tool.Bash do
   @moduledoc "Execute shell commands via Port (not System.cmd)."
   use Synapsis.Tool
 
+  @impl true
+  def permission_level, do: :execute
+
+  @impl true
+  def category, do: :execution
+
   @default_timeout 30_000
   @max_timeout 300_000
   @max_output_bytes 10_000_000

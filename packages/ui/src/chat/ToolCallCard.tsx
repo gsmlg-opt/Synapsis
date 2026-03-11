@@ -12,25 +12,25 @@ export function ToolCallCard({ toolCall, permissionRequest }: ToolCallCardProps)
   const dispatch = useDispatch()
 
   const statusColors: Record<string, string> = {
-    pending: "border-yellow-700 bg-yellow-900/20",
-    approved: "border-blue-700 bg-blue-900/20",
-    completed: "border-green-700 bg-green-900/20",
-    error: "border-red-700 bg-red-900/20",
-    denied: "border-gray-700 bg-gray-900/20",
+    pending: "border-warning/50 bg-warning/10",
+    approved: "border-primary/50 bg-primary/10",
+    completed: "border-success/50 bg-success/10",
+    error: "border-error/50 bg-error/10",
+    denied: "border-base-300 bg-base-200",
   }
 
   return (
-    <div className={`border rounded-lg p-3 ${statusColors[toolCall.status] || "border-gray-700"}`}>
+    <div className={`border rounded-lg p-3 ${statusColors[toolCall.status] || "border-base-300"}`}>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-blue-400 font-mono text-sm font-bold">
+        <span className="text-primary font-mono text-sm font-bold">
           {toolCall.tool}
         </span>
-        <span className="text-xs text-gray-500 capitalize">
+        <span className="text-xs text-base-content/50 capitalize">
           {toolCall.status}
         </span>
       </div>
 
-      <pre className="text-gray-400 text-xs overflow-x-auto mb-2">
+      <pre className="text-base-content/60 text-xs overflow-x-auto mb-2">
         {JSON.stringify(toolCall.input, null, 2)}
       </pre>
 
@@ -38,13 +38,13 @@ export function ToolCallCard({ toolCall, permissionRequest }: ToolCallCardProps)
         <div className="flex gap-2 mt-2">
           <button
             onClick={() => dispatch(chatActions.approveToolCall(toolCall.tool_use_id))}
-            className="px-3 py-1 text-sm bg-green-700 hover:bg-green-600 text-white rounded"
+            className="px-3 py-1 text-sm bg-success hover:bg-success/80 text-success-content rounded"
           >
             Approve
           </button>
           <button
             onClick={() => dispatch(chatActions.denyToolCall(toolCall.tool_use_id))}
-            className="px-3 py-1 text-sm bg-red-700 hover:bg-red-600 text-white rounded"
+            className="px-3 py-1 text-sm bg-error hover:bg-error/80 text-error-content rounded"
           >
             Deny
           </button>
@@ -53,7 +53,7 @@ export function ToolCallCard({ toolCall, permissionRequest }: ToolCallCardProps)
 
       {toolCall.result && (
         <div className={`mt-2 p-2 rounded text-xs ${
-          toolCall.status === "error" ? "bg-red-900/30 text-red-300" : "bg-green-900/30 text-green-300"
+          toolCall.status === "error" ? "bg-error/20 text-error" : "bg-success/20 text-success"
         }`}>
           <pre className="whitespace-pre-wrap overflow-x-auto">{toolCall.result}</pre>
         </div>

@@ -60,6 +60,7 @@ defmodule SynapsisWeb.SkillLive.Index do
             <.dm_input
               type="text"
               name="name"
+              value=""
               placeholder="Skill name"
               required={true}
               label="Name"
@@ -69,6 +70,7 @@ defmodule SynapsisWeb.SkillLive.Index do
             <.dm_select
               name="scope"
               options={[{"global", "Global"}, {"project", "Project"}]}
+              value="global"
             />
           </div>
           <.dm_btn type="submit" variant="primary">

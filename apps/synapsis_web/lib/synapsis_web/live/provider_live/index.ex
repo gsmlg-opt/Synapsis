@@ -148,6 +148,7 @@ defmodule SynapsisWeb.ProviderLive.Index do
                 <.dm_input
                   type="text"
                   name="base_url"
+                  value=""
                   placeholder="https://api.example.com"
                   label="Base URL"
                   required
@@ -158,6 +159,7 @@ defmodule SynapsisWeb.ProviderLive.Index do
               <.dm_input
                 type="password"
                 name="api_key"
+                value=""
                 placeholder="Enter API key"
                 label="API Key"
                 required

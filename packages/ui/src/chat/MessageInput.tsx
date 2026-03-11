@@ -60,7 +60,7 @@ export function MessageInput({ disabled }: MessageInputProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="border-t border-gray-800 p-4">
+    <form onSubmit={handleSubmit} className="border-t border-base-300 p-4">
       {images.length > 0 && (
         <div className="flex gap-2 mb-2 flex-wrap">
           {images.map((img, i) => (
@@ -68,12 +68,12 @@ export function MessageInput({ disabled }: MessageInputProps) {
               <img
                 src={`data:${img.media_type};base64,${img.data}`}
                 alt={img.name}
-                className="h-16 w-16 object-cover rounded-lg border border-gray-700"
+                className="h-16 w-16 object-cover rounded-lg border border-base-300"
               />
               <button
                 type="button"
                 onClick={() => removeImage(i)}
-                className="absolute -top-1 -right-1 w-5 h-5 bg-red-600 text-white rounded-full text-xs
+                className="absolute -top-1 -right-1 w-5 h-5 bg-error text-error-content rounded-full text-xs
                            opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
               >
                 x
@@ -88,8 +88,8 @@ export function MessageInput({ disabled }: MessageInputProps) {
           type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={disabled}
-          className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded-lg text-sm
-                     border border-gray-700 disabled:opacity-50"
+          className="px-3 py-2 bg-base-200 hover:bg-base-300 text-base-content/60 rounded-lg text-sm
+                     border border-base-300 disabled:opacity-50"
           title="Attach image"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -112,15 +112,15 @@ export function MessageInput({ disabled }: MessageInputProps) {
           placeholder="Type a message..."
           disabled={disabled}
           rows={1}
-          className="flex-1 bg-gray-800 text-gray-100 rounded-lg px-4 py-2 resize-none
-                     border border-gray-700 focus:border-blue-500 focus:outline-none
-                     placeholder-gray-500 disabled:opacity-50"
+          className="flex-1 bg-base-200 text-base-content rounded-lg px-4 py-2 resize-none
+                     border border-base-300 focus:border-primary focus:outline-none
+                     placeholder-base-content/40 disabled:opacity-50"
         />
         {status === "streaming" || status === "tool_wait" ? (
           <button
             type="button"
             onClick={() => dispatch(chatActions.cancel())}
-            className="px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded-lg text-sm"
+            className="px-4 py-2 bg-error hover:bg-error/80 text-error-content rounded-lg text-sm"
           >
             Stop
           </button>
@@ -128,7 +128,7 @@ export function MessageInput({ disabled }: MessageInputProps) {
           <button
             type="submit"
             disabled={!text.trim() || disabled}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm
+            className="px-4 py-2 bg-primary hover:bg-primary/80 text-primary-content rounded-lg text-sm
                        disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Send

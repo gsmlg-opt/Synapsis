@@ -103,8 +103,6 @@ defmodule SynapsisWeb.LSPLive.Index do
         </.dm_link>
       </div>
 
-      <.dm_flash_group flash={@flash} />
-
       <%= if @show_form do %>
         <%= if @selected_preset do %>
           <.dm_card variant="bordered" class="mb-6">

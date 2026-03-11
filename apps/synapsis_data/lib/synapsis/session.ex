@@ -18,6 +18,9 @@ defmodule Synapsis.Session do
     has_many(:messages, Synapsis.Message)
     has_many(:failed_attempts, Synapsis.FailedAttempt)
     has_many(:patches, Synapsis.Patch)
+    has_many :tool_calls, Synapsis.ToolCall
+    has_one :permission, Synapsis.SessionPermission
+    has_many :todos, Synapsis.SessionTodo
 
     timestamps(type: :utc_datetime_usec)
   end

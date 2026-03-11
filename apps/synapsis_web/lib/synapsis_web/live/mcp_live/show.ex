@@ -92,8 +92,6 @@ defmodule SynapsisWeb.MCPLive.Show do
 
       <h1 class="text-2xl font-bold mb-6">{@config.name}</h1>
 
-      <.dm_flash_group flash={@flash} />
-
       <.dm_card variant="bordered">
         <.dm_form for={%{}} phx-submit="update_config">
           <.dm_select

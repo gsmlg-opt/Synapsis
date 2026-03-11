@@ -38,16 +38,16 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
       return (
         <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-          <div className="bg-red-900/30 border border-red-700 rounded-lg p-6 max-w-md">
-            <h2 className="text-red-300 text-lg font-semibold mb-2">
+          <div className="bg-error/20 border border-error/50 rounded-lg p-6 max-w-md">
+            <h2 className="text-error text-lg font-semibold mb-2">
               Something went wrong
             </h2>
-            <p className="text-red-400 text-sm mb-4">
+            <p className="text-error/80 text-sm mb-4">
               {this.state.error?.message || "An unexpected error occurred in the UI."}
             </p>
             <button
               onClick={this.handleRetry}
-              className="px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded text-sm"
+              className="px-4 py-2 bg-error hover:bg-error/80 text-error-content rounded text-sm"
             >
               Retry
             </button>
@@ -94,7 +94,7 @@ export class MessageErrorBoundary extends Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="p-3 bg-red-900/20 border border-red-800 rounded text-red-400 text-sm">
+        <div className="p-3 bg-error/10 border border-error/30 rounded text-error text-sm">
           Failed to render message. Error: {this.state.error?.message}
         </div>
       )

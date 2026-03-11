@@ -2,6 +2,7 @@ import "phoenix_html"
 import { Socket } from "phoenix"
 import { LiveSocket } from "phoenix_live_view"
 import "@duskmoon-dev/elements/register"
+import { Hooks } from "@synapsis/hooks"
 
 // Client-only theme switcher — upstream hook pushes "theme_changed" to the
 // server which has no handler, causing a disconnect flash. We handle
@@ -48,7 +49,7 @@ try {
 const liveSocket = new LiveSocket("/live", Socket, {
   transport: window.WebSocket,
   params: { _csrf_token: csrfToken },
-  hooks: { ThemeSwitcher },
+  hooks: { ThemeSwitcher, ...Hooks },
 })
 
 liveSocket.connect()

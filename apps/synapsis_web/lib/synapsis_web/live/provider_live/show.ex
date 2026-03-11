@@ -68,7 +68,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
   end
 
   def handle_event("save_models", params, socket) do
-    selected = params["models"] || []
+    selected = (params["models"] || []) |> Enum.reject(&(&1 == ""))
     provider = socket.assigns.provider
     config = Map.merge(provider.config || %{}, %{"enabled_models" => selected})
 
@@ -283,6 +283,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
             <.dm_input
               type="password"
               name="api_key"
+              value=""
               placeholder="Leave empty to keep current key"
               label="API Key"
             />
@@ -323,15 +324,20 @@ defmodule SynapsisWeb.ProviderLive.Show do
 
         <%= if @editing_models do %>
           <.dm_form for={to_form(%{})} phx-submit="save_models">
+            <input type="hidden" name="models[]" value="" />
             <div class="space-y-2">
               <div :for={model <- @all_models} class="flex items-center gap-3">
-                <.dm_checkbox
-                  name="models[]"
-                  value={model.id}
-                  checked={model_enabled?(model.id, @enabled_models)}
-                  label={model.name}
-                  id={"model-#{model.id}"}
-                />
+                <label class="flex items-center gap-2 text-sm leading-6">
+                  <input
+                    type="checkbox"
+                    name="models[]"
+                    value={model.id}
+                    checked={model_enabled?(model.id, @enabled_models)}
+                    class="checkbox"
+                    id={"model-#{model.id}"}
+                  />
+                  {model.name}
+                </label>
                 <span class="text-xs text-base-content/40">{model.id}</span>
               </div>
             </div>
@@ -438,6 +444,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
             <.dm_input
               type="text"
               name="message"
+              value=""
               placeholder="Type a test message..."
               autocomplete="off"
               disabled={@chat_streaming}

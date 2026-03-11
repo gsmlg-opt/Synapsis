@@ -130,6 +130,136 @@ defmodule Synapsis.Tool.ExecutorTest do
     end
   end
 
+  # --- Extension tests (T032) ---
+
+  defmodule DisabledExecTool do
+    use Synapsis.Tool
+
+    @impl true
+    def name, do: "disabled_exec_test"
+    @impl true
+    def description, do: "Disabled tool"
+    @impl true
+    def parameters, do: %{}
+    @impl true
+    def execute(_input, _ctx), do: {:ok, "should not run"}
+    @impl true
+    def enabled?, do: false
+  end
+
+  defmodule TimedTool do
+    use Synapsis.Tool
+
+    @impl true
+    def name, do: "timed_tool"
+    @impl true
+    def description, do: "Sleeps configurable ms"
+    @impl true
+    def parameters, do: %{"type" => "object", "properties" => %{}}
+
+    @impl true
+    def execute(%{"sleep_ms" => ms}, _ctx) do
+      Process.sleep(ms)
+      {:ok, "slept #{ms}ms"}
+    end
+
+    def execute(_input, _ctx), do: {:ok, "instant"}
+  end
+
+  describe "execute/3 enabled check" do
+    setup do
+      Registry.register_module("disabled_exec_test", DisabledExecTool)
+      on_exit(fn -> Registry.unregister("disabled_exec_test") end)
+      :ok
+    end
+
+    test "returns tool_disabled for disabled tool" do
+      assert {:error, :tool_disabled} = Executor.execute("disabled_exec_test", %{}, %{})
+    end
+  end
+
+  describe "execute/2 map form" do
+    test "accepts tool_call map" do
+      assert {:ok, "result"} = Executor.execute(%{name: "exec_success", input: %{}}, %{})
+    end
+  end
+
+  describe "execute_approved/2" do
+    test "skips permission check and executes" do
+      assert {:ok, "result"} =
+               Executor.execute_approved(%{name: "exec_success", input: %{}}, %{})
+    end
+
+    test "still checks enabled status" do
+      Registry.register_module("disabled_exec_test", DisabledExecTool)
+      on_exit(fn -> Registry.unregister("disabled_exec_test") end)
+
+      assert {:error, :tool_disabled} =
+               Executor.execute_approved(%{name: "disabled_exec_test", input: %{}}, %{})
+    end
+  end
+
+  describe "execute_batch/2" do
+    setup do
+      Registry.register_module("timed_tool", TimedTool, timeout: 5_000)
+      on_exit(fn -> Registry.unregister("timed_tool") end)
+      :ok
+    end
+
+    test "executes multiple calls and returns results in order" do
+      calls = [
+        %{id: "c1", name: "exec_success", input: %{}},
+        %{id: "c2", name: "exec_success", input: %{}},
+        %{id: "c3", name: "exec_error", input: %{}}
+      ]
+
+      results = Executor.execute_batch(calls, %{})
+      assert [{"c1", {:ok, "result"}}, {"c2", {:ok, "result"}}, {"c3", {:error, _}}] = results
+    end
+
+    test "runs independent calls in parallel" do
+      calls = [
+        %{id: "a", name: "timed_tool", input: %{"sleep_ms" => 100}},
+        %{id: "b", name: "timed_tool", input: %{"sleep_ms" => 100}}
+      ]
+
+      start = System.monotonic_time(:millisecond)
+      results = Executor.execute_batch(calls, %{})
+      elapsed = System.monotonic_time(:millisecond) - start
+
+      assert length(results) == 2
+      # Parallel: should complete in ~100ms, not ~200ms
+      assert elapsed < 180
+    end
+
+    test "serializes calls targeting the same file path" do
+      calls = [
+        %{id: "a", name: "timed_tool", input: %{"path" => "/tmp/same.txt", "sleep_ms" => 50}},
+        %{id: "b", name: "timed_tool", input: %{"path" => "/tmp/same.txt", "sleep_ms" => 50}}
+      ]
+
+      start = System.monotonic_time(:millisecond)
+      results = Executor.execute_batch(calls, %{})
+      elapsed = System.monotonic_time(:millisecond) - start
+
+      assert length(results) == 2
+      # Serialized: should take ~100ms
+      assert elapsed >= 90
+    end
+
+    test "returns results in original input order" do
+      calls = [
+        %{id: "first", name: "timed_tool", input: %{"sleep_ms" => 50}},
+        %{id: "second", name: "exec_success", input: %{}},
+        %{id: "third", name: "exec_success", input: %{}}
+      ]
+
+      results = Executor.execute_batch(calls, %{})
+      ids = Enum.map(results, fn {id, _} -> id end)
+      assert ids == ["first", "second", "third"]
+    end
+  end
+
   defmodule FakeToolServer do
     use GenServer
 

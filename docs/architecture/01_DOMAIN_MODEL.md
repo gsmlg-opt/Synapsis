@@ -79,15 +79,72 @@ LLM provider connection configuration.
 
 ### Tool
 
-A capability the AI can invoke.
+A capability the AI can invoke. 27 built-in tools across 10 categories. Each tool implements the `Synapsis.Tool` behaviour.
 
 ```elixir
 %Tool{
-  name: atom(),                    # :file_edit, :bash, :file_search, :grep, :diagnostics
+  name: String.t(),                # "file_edit", "bash_exec", "grep", "task", etc.
   description: String,
   parameters: map(),               # JSON Schema for input validation
-  requires_permission: boolean(),
-  timeout_ms: integer()
+  permission_level: :none | :read | :write | :execute | :destructive,
+  category: :filesystem | :search | :execution | :web | :planning
+          | :orchestration | :interaction | :session | :notebook
+          | :computer | :swarm,
+  side_effects: [atom()],          # e.g. [:file_changed]
+  version: String.t(),             # semver, e.g. "1.0.0"
+  enabled?: boolean()              # false for notebook, computer use
+}
+```
+
+### ToolCall
+
+A persisted record of a tool invocation for audit and replay.
+
+```elixir
+%ToolCall{
+  id: UUID,
+  session_id: UUID,
+  message_id: UUID | nil,
+  tool_name: String,
+  input: map(),                    # JSONB — tool input parameters
+  output: map() | nil,             # JSONB — tool result
+  status: :pending | :approved | :denied | :completed | :error,
+  duration_ms: integer(),
+  error_message: String | nil,
+  inserted_at: DateTime,
+  updated_at: DateTime
+}
+```
+
+### SessionPermission
+
+Per-session permission configuration for the tool system.
+
+```elixir
+%SessionPermission{
+  id: UUID,
+  session_id: UUID,                # unique per session
+  mode: :interactive | :autonomous,
+  allow_write: boolean(),          # default: true
+  allow_execute: boolean(),        # default: true
+  allow_destructive: :allow | :deny | :ask,
+  tool_overrides: map(),           # JSONB — per-tool glob pattern overrides
+  inserted_at: DateTime,
+  updated_at: DateTime
+}
+```
+
+### SessionTodo
+
+Session-scoped todo list managed by the `todo_write`/`todo_read` tools.
+
+```elixir
+%SessionTodo{
+  id: UUID,
+  session_id: UUID,
+  todos: [map()],                  # JSONB — list of {id, content, status} items
+  inserted_at: DateTime,
+  updated_at: DateTime
 }
 ```
 
@@ -176,6 +233,9 @@ Agent   1──*  Tool (config ref)
 Project 1──*  Skill (optional, project-scoped)
 Project 1──*  MemoryEntry (via scope_id, when scope = project)
 Session 1──*  MemoryEntry (via scope_id, when scope = session)
+Session 1──*  ToolCall (tool invocation audit trail)
+Session 1──1  SessionPermission (per-session permission config)
+Session 1──*  SessionTodo (session-scoped todo list)
 ```
 
 ## State Machines

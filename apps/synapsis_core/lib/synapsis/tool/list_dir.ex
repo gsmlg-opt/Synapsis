@@ -6,6 +6,12 @@ defmodule Synapsis.Tool.ListDir do
   def name, do: "list_dir"
 
   @impl true
+  def permission_level, do: :read
+
+  @impl true
+  def category, do: :filesystem
+
+  @impl true
   def description, do: "List files and directories at the given path."
 
   @impl true

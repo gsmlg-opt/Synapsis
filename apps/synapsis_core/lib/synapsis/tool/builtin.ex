@@ -2,6 +2,7 @@ defmodule Synapsis.Tool.Builtin do
   @moduledoc "Registers all built-in tools on startup."
 
   @tools [
+    # Original tools
     Synapsis.Tool.FileRead,
     Synapsis.Tool.FileEdit,
     Synapsis.Tool.FileWrite,
@@ -12,7 +13,32 @@ defmodule Synapsis.Tool.Builtin do
     Synapsis.Tool.Diagnostics,
     Synapsis.Tool.ListDir,
     Synapsis.Tool.FileDelete,
-    Synapsis.Tool.FileMove
+    Synapsis.Tool.FileMove,
+    # Phase 5: Multi-edit
+    Synapsis.Tool.MultiEdit,
+    # Phase 7: Planning & session
+    Synapsis.Tool.TodoWrite,
+    Synapsis.Tool.TodoRead,
+    Synapsis.Tool.EnterPlanMode,
+    Synapsis.Tool.ExitPlanMode,
+    # Phase 8: Web search
+    Synapsis.Tool.WebSearch,
+    # Phase 9: User interaction
+    Synapsis.Tool.AskUser,
+    # Phase 10: Sub-agent tools
+    Synapsis.Tool.Task,
+    Synapsis.Tool.Skill,
+    Synapsis.Tool.Sleep,
+    Synapsis.Tool.SendMessage,
+    # Phase 11: Tool search
+    Synapsis.Tool.ToolSearch,
+    # Phase 12: Swarm tools
+    Synapsis.Tool.Teammate,
+    Synapsis.Tool.TeamDelete,
+    # Phase 13: Disabled stubs
+    Synapsis.Tool.NotebookEdit,
+    Synapsis.Tool.NotebookRead,
+    Synapsis.Tool.Computer
   ]
 
   def register_all do
@@ -29,6 +55,9 @@ defmodule Synapsis.Tool.Builtin do
 
   defp default_timeout("bash"), do: 30_000
   defp default_timeout("fetch"), do: 15_000
+  defp default_timeout("web_search"), do: 15_000
+  defp default_timeout("multi_edit"), do: 15_000
+  defp default_timeout("task"), do: 600_000
   defp default_timeout("grep"), do: 10_000
   defp default_timeout("file_edit"), do: 10_000
   defp default_timeout("file_write"), do: 10_000
@@ -37,5 +66,7 @@ defmodule Synapsis.Tool.Builtin do
   defp default_timeout("list_dir"), do: 5_000
   defp default_timeout("file_delete"), do: 5_000
   defp default_timeout("file_move"), do: 5_000
+  defp default_timeout("ask_user"), do: 300_000
+  defp default_timeout("sleep"), do: 600_000
   defp default_timeout(_), do: 10_000
 end

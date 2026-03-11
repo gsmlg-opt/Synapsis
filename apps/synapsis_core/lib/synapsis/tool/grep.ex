@@ -6,6 +6,12 @@ defmodule Synapsis.Tool.Grep do
   def name, do: "grep"
 
   @impl true
+  def permission_level, do: :read
+
+  @impl true
+  def category, do: :search
+
+  @impl true
   def description,
     do: "Search for a pattern in files. Uses ripgrep (rg) if available, otherwise grep."
 

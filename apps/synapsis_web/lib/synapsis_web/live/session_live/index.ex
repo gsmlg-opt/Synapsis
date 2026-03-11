@@ -117,7 +117,7 @@ defmodule SynapsisWeb.SessionLive.Index do
 
       <div class="flex justify-between items-center mb-6">
         <h1 class="text-2xl font-bold">Sessions</h1>
-        <.dm_btn variant="primary" phx-click="toggle_new_session_form">
+        <.dm_btn id="new-session-btn" variant="primary" phx-click="toggle_new_session_form">
           + New Session
         </.dm_btn>
       </div>

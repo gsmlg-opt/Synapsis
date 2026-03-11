@@ -113,23 +113,31 @@ Implement the process-per-session architecture per `docs/architecture/00_SYSTEM_
 
 ## Phase 4: Tool System
 
-Implement tools per `docs/architecture/05_TOOLS.md`:
+Implement the 27-tool system per `docs/architecture/05_TOOLS.md` and `PRD.md`:
 
-1. Define `Synapsis.Tool.Behaviour` (callbacks: `name/0`, `description/0`, `parameters/0`, `call/2`)
-2. Implement `Synapsis.Tool.Registry` — register/lookup tools by name
-3. Implement `Synapsis.Tool.Executor` — permission check → Task.Supervisor execution → timeout handling
-4. Implement `Synapsis.Tool.Permission` — auto-approve vs ask (configurable)
-5. Implement built-in tools:
-   - `Synapsis.Tool.FileRead` — read file contents
-   - `Synapsis.Tool.FileEdit` — search/replace edits (validate path within project root)
-   - `Synapsis.Tool.FileWrite` — write new files
-   - `Synapsis.Tool.Bash` — execute shell via Port with streaming output + timeout
-   - `Synapsis.Tool.Grep` — ripgrep-style search (shell out to `rg` if available, fallback to `grep`)
-   - `Synapsis.Tool.Glob` — file pattern matching
-6. Wire tool results back into Session.Worker agent loop (tool_use → execute → tool_result → feed back to provider)
-7. Write tests: tool execution, permission checks, path validation, timeout handling, full agent loop with tool use
+1. Define `Synapsis.Tool` behaviour (callbacks: `name/0`, `description/0`, `parameters/0`, `execute/2`, plus optional `permission_level/0`, `category/0`, `version/0`, `enabled?/0`, `side_effects/0`)
+2. Implement `Synapsis.Tool.Registry` — ETS-backed GenServer with `list_for_llm/1` filtering by agent mode, category, deferred state
+3. Implement `Synapsis.Tool.Executor` — permission check → dispatch → persistence → side effect broadcast. Parallel batch execution via `Task.async_stream/3` with file-level serialization
+4. Implement `Synapsis.Tool.Permission` — 5-level model (`:none`, `:read`, `:write`, `:execute`, `:destructive`) with per-tool glob overrides and autonomous mode
+5. Implement 27 built-in tools across 10 categories:
+   - **Filesystem** (7): `file_read`, `file_write`, `file_edit`, `multi_edit`, `file_delete`, `file_move`, `list_dir`
+   - **Search** (2): `grep`, `glob`
+   - **Execution** (1): `bash_exec` (persistent Port session)
+   - **Web** (2): `web_fetch`, `web_search`
+   - **Planning** (2): `todo_write`, `todo_read`
+   - **Orchestration** (3): `task` (sub-agents, foreground/background), `tool_search` (deferred loading), `skill`
+   - **Interaction** (1): `ask_user` (structured questions with options)
+   - **Session** (3): `enter_plan_mode`, `exit_plan_mode`, `sleep`
+   - **Swarm** (3): `send_message`, `teammate`, `team_delete`
+   - **Disabled stubs** (3): `notebook_read`, `notebook_edit`, `computer`
+6. Implement side effect system — `:file_changed` broadcast via PubSub to `"tool_effects:#{session_id}"`
+7. Implement deferred tool loading for MCP/plugin tools via `tool_search`
+8. Implement plan mode tool filtering (read-only tools only in `:plan` mode)
+9. Add 3 new database tables: `tool_calls` (audit trail), `session_permissions`, `session_todos`
+10. Wire tool results back into Session.Worker agent loop
+11. Write tests: tool execution, permission checks, parallel execution, plan mode filtering, path validation, timeout handling, full agent loop with tool use
 
-**Checkpoint**: `mix test` — AI can propose file edits, bash commands. Tool results feed back into conversation. Permission system works.
+**Checkpoint**: `mix test` — 27 tools registered. AI can read/edit files, run commands, launch sub-agents, manage todos. Permission system works with 5 levels. Parallel execution achieves 2x+ speedup.
 
 ## Phase 5: Phoenix Server
 
@@ -235,8 +243,13 @@ Do not stop until every item is checked:
 - [ ] Multi-provider support (Anthropic, OpenAI, Google, local/OpenAI-compat)
 - [ ] Session management (create, list, continue, delete, fork)
 - [ ] Agent modes (build, plan, custom with config override)
-- [ ] Tool system (file read/edit/write, bash, grep, glob, diagnostics)
-- [ ] Permission system (auto-approve, ask, deny — configurable per tool)
+- [ ] Tool system (27 tools: filesystem, search, execution, web, planning, orchestration, interaction, session, swarm)
+- [ ] Permission system (5-level: none/read/write/execute/destructive, per-tool glob overrides, autonomous mode)
+- [ ] Parallel tool execution (batch with file-level serialization)
+- [ ] Sub-agent support (foreground/background task tool)
+- [ ] Plan mode (enter/exit, read-only tool filtering)
+- [ ] Deferred tool loading (tool_search for MCP/plugin tools)
+- [ ] Tool call persistence (audit trail in tool_calls table)
 - [ ] Context compaction (summarize old messages when approaching window limit)
 - [ ] LSP integration (diagnostics for go, typescript, elixir)
 - [ ] MCP support (discover + call tools from configured MCP servers)
@@ -365,6 +378,8 @@ Do NOT work around upstream bugs locally — file the issue and document the wor
 ## Active Technologies
 - Elixir 1.18+ / OTP 28+ + Phoenix 1.8+, Phoenix LiveView 1.0+, phoenix_duskmoon 8.0, @duskmoon-dev/core 1.11+, @duskmoon-dev/elements 0.7+ (001-duskmoon-web-refactor)
 - N/A (presentation-layer only, no schema changes) (001-duskmoon-web-refactor)
+- Elixir 1.18+ / OTP 28+ + Phoenix 1.8+ (PubSub only in core), Ecto, Req + Finch (for web tools) (feature/tool-system)
+- PostgreSQL 16+ via Ecto (tool_calls table, session_permissions, session_todos) (feature/tool-system)
 
 ## Recent Changes
 - 001-duskmoon-web-refactor: Added Elixir 1.18+ / OTP 28+ + Phoenix 1.8+, Phoenix LiveView 1.0+, phoenix_duskmoon 8.0, @duskmoon-dev/core 1.11+, @duskmoon-dev/elements 0.7+

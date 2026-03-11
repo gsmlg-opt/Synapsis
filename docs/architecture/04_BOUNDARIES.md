@@ -146,6 +146,7 @@ Synapsis.LSP.stop_server(project_path, language)       # => :ok
 "session:#{session_id}"          # all events for a session
 "sessions:#{project_path_hash}"  # session lifecycle events (create/delete)
 "config:#{project_path_hash}"    # config change notifications
+"tool_effects:#{session_id}"     # tool side effect broadcasts (:file_changed, etc.)
 ```
 
 ## Behaviour Contracts
@@ -164,10 +165,36 @@ end
 ### Tool Behaviour
 
 ```elixir
-defmodule Synapsis.Tool.Behaviour do
-  @callback name() :: atom()
+defmodule Synapsis.Tool do
+  @callback name() :: String.t()
   @callback description() :: String.t()
   @callback parameters() :: map()  # JSON Schema
-  @callback call(input :: map(), context :: map()) :: {:ok, term()} | {:error, term()}
+  @callback execute(input :: map(), context :: map()) :: {:ok, term()} | {:error, term()}
+
+  # Optional callbacks with defaults
+  @callback permission_level() :: :none | :read | :write | :execute | :destructive
+  @callback side_effects() :: [atom()]
+  @callback category() :: atom()
+  @callback version() :: String.t()
+  @callback enabled?() :: boolean()
+
+  @optional_callbacks [side_effects: 0, permission_level: 0, category: 0, version: 0, enabled?: 0]
 end
+```
+
+### Tool System Public API
+
+```elixir
+# Registry
+Synapsis.Tool.Registry.list_for_llm(opts)              # => [tool_map] (filtered by agent_mode, category)
+Synapsis.Tool.Registry.lookup(name)                     # => {:ok, entry} | {:error, :not_found}
+Synapsis.Tool.Registry.list_by_category(category)       # => [tool_map]
+
+# Executor
+Synapsis.Tool.Executor.execute(tool_call, context)      # => {:ok, result} | {:error, reason}
+Synapsis.Tool.Executor.execute_batch(tool_calls, ctx)   # => [{call_id, result}]
+Synapsis.Tool.Executor.execute_approved(tool_call, ctx) # => {:ok, result}
+
+# Permission
+Synapsis.Tool.Permission.check(tool, context)           # => :allowed | :denied | :requires_approval
 ```

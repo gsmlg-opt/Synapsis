@@ -6,6 +6,12 @@ defmodule Synapsis.Tool.Glob do
   def name, do: "glob"
 
   @impl true
+  def permission_level, do: :read
+
+  @impl true
+  def category, do: :search
+
+  @impl true
   def description, do: "Find files matching a glob pattern."
 
   @impl true

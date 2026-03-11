@@ -21,9 +21,11 @@ defmodule SynapsisWeb.ModelTierLive.IndexTest do
 
     test "shows all three tiers", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/settings/models")
-      assert html =~ "default"
-      assert html =~ "fast"
-      assert html =~ "expert"
+      # Tier names are inside dm_badge which uses <slot /> (renders empty)
+      # but descriptions contain the tier names as text
+      assert html =~ "build agent"
+      assert html =~ "speed"
+      assert html =~ "plan agent"
     end
 
     test "shows tier descriptions", %{conn: conn} do

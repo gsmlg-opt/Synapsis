@@ -11,9 +11,9 @@ export function DiffViewer({ oldContent, newContent, filename }: DiffViewerProps
   const newLines = newContent.split("\n")
 
   return (
-    <div className="border border-gray-700 rounded-lg overflow-hidden text-sm font-mono">
+    <div className="border border-base-300 rounded-lg overflow-hidden text-sm font-mono">
       {filename && (
-        <div className="bg-gray-800 px-3 py-1.5 text-gray-400 text-xs border-b border-gray-700">
+        <div className="bg-base-200 px-3 py-1.5 text-base-content/60 text-xs border-b border-base-300">
           {filename}
         </div>
       )}
@@ -21,15 +21,15 @@ export function DiffViewer({ oldContent, newContent, filename }: DiffViewerProps
         <table className="w-full">
           <tbody>
             {oldLines.map((line, i) => (
-              <tr key={`old-${i}`} className="bg-red-900/20">
-                <td className="px-2 py-0.5 text-red-500 select-none w-8 text-right">-</td>
-                <td className="px-2 py-0.5 text-red-300 whitespace-pre">{line}</td>
+              <tr key={`old-${i}`} className="bg-error/10">
+                <td className="px-2 py-0.5 text-error select-none w-8 text-right">-</td>
+                <td className="px-2 py-0.5 text-error/80 whitespace-pre">{line}</td>
               </tr>
             ))}
             {newLines.map((line, i) => (
-              <tr key={`new-${i}`} className="bg-green-900/20">
-                <td className="px-2 py-0.5 text-green-500 select-none w-8 text-right">+</td>
-                <td className="px-2 py-0.5 text-green-300 whitespace-pre">{line}</td>
+              <tr key={`new-${i}`} className="bg-success/10">
+                <td className="px-2 py-0.5 text-success select-none w-8 text-right">+</td>
+                <td className="px-2 py-0.5 text-success/80 whitespace-pre">{line}</td>
               </tr>
             ))}
           </tbody>

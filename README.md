@@ -8,7 +8,7 @@ Phoenix umbrella project with a client/server architecture:
 
 ```
 apps/
-├── synapsis_core/     # Domain logic: sessions, agents, providers, tools
+├── synapsis_core/     # Domain logic: sessions, agents, providers, 27-tool system
 ├── synapsis_server/   # Phoenix API: WebSocket channels, SSE, REST
 ├── synapsis_cli/      # CLI escript for terminal interaction
 ├── synapsis_lsp/      # LSP client manager (GenServer per language server)
@@ -33,8 +33,8 @@ Each app maps to a deployment boundary — `synapsis_core` + `synapsis_server` r
 - **Process-per-session**: Each coding session is a supervised GenServer tree
 - **Provider-agnostic**: Behaviour-based provider abstraction (Anthropic, OpenAI, Google, local)
 - **Event bus**: Phoenix.PubSub for internal event propagation (replaces OpenCode's custom bus)
-- **Tool execution**: Sandboxed via Ports, permission-controlled
-- **MCP support**: JSON-RPC over stdio/SSE, GenServer per MCP server connection
+- **27-tool system**: Filesystem, search, execution, web, planning, orchestration, interaction, session control, and swarm tools — all implementing a uniform `Synapsis.Tool` behaviour with 5-level permission model (`:none` → `:read` → `:write` → `:execute` → `:destructive`), parallel batch execution, deferred loading for plugins, and plan mode filtering
+- **MCP support**: JSON-RPC over stdio/SSE, GenServer per MCP server connection, tools registered via deferred loading
 
 ## Getting Started
 

@@ -6,6 +6,12 @@ defmodule Synapsis.Tool.Diagnostics do
   def name, do: "diagnostics"
 
   @impl true
+  def permission_level, do: :read
+
+  @impl true
+  def category, do: :search
+
+  @impl true
   def description, do: "Get current diagnostics (errors, warnings) from language servers."
 
   @impl true

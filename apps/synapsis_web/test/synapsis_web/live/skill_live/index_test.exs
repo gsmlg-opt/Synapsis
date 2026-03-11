@@ -42,7 +42,7 @@ defmodule SynapsisWeb.SkillLive.IndexTest do
       assert html =~ "to-delete"
 
       view
-      |> element(~s(button[phx-click="delete_skill"][phx-value-id="#{skill.id}"]))
+      |> element(~s(button[id^="btn-"][phx-click="delete_skill"][phx-value-id="#{skill.id}"]))
       |> render_click()
 
       html = render(view)
@@ -65,7 +65,7 @@ defmodule SynapsisWeb.SkillLive.IndexTest do
     end
 
     test "built-in skill does not show delete button", %{conn: conn} do
-      {:ok, _skill} =
+      {:ok, skill} =
         %Synapsis.Skill{}
         |> Synapsis.Skill.changeset(%{
           name: "builtin-skill",
@@ -74,11 +74,10 @@ defmodule SynapsisWeb.SkillLive.IndexTest do
         })
         |> Synapsis.Repo.insert()
 
-      {:ok, _view, html} = live(conn, ~p"/settings/skills")
+      {:ok, view, html} = live(conn, ~p"/settings/skills")
       assert html =~ "builtin-skill"
-      assert html =~ "built-in"
       # Built-in skills should not have a delete button
-      # The delete button uses phx-click="delete_skill" and is conditional on !skill.is_builtin
+      refute has_element?(view, ~s(button[phx-click="delete_skill"][phx-value-id="#{skill.id}"]))
     end
 
     test "scope selector has global and project options", %{conn: conn} do

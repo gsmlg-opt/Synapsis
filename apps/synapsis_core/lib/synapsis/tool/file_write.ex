@@ -6,6 +6,12 @@ defmodule Synapsis.Tool.FileWrite do
   def name, do: "file_write"
 
   @impl true
+  def permission_level, do: :write
+
+  @impl true
+  def category, do: :filesystem
+
+  @impl true
   def description, do: "Write content to a file, creating it if it doesn't exist."
 
   @impl true
