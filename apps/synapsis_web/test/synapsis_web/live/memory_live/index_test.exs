@@ -7,10 +7,21 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
     |> Synapsis.Repo.insert!()
   end
 
+  defp clean_memory_entries do
+    import Ecto.Query
+    Synapsis.Repo.delete_all(from(m in Synapsis.MemoryEntry, where: m.scope == "global" and m.key == "CLAUDE.md"))
+  end
+
+  setup do
+    clean_memory_entries()
+    :ok
+  end
+
   describe "memory page" do
     test "mounts and renders heading", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings/memory")
-      assert has_element?(view, "h1", "Memory")
+      # dm_card :title renders as div.card-title, not h1
+      assert has_element?(view, ".card-title", "Memory")
     end
 
     test "shows breadcrumb navigation", %{conn: conn} do
@@ -34,10 +45,11 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
       assert html =~ "Hello from memory"
     end
 
-    test "content displayed with whitespace preserved", %{conn: conn} do
+    test "content displayed via markdown component", %{conn: conn} do
       create_memory_entry("line one\nline two")
       {:ok, _view, html} = live(conn, ~p"/settings/memory")
-      assert html =~ "whitespace-pre-wrap"
+      # Content is rendered via dm_markdown (remark-element), not whitespace-pre-wrap
+      assert html =~ "remark-element"
       assert html =~ "line one\nline two"
     end
 

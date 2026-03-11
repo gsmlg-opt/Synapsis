@@ -69,23 +69,23 @@ defmodule SynapsisWeb.SessionLive.IndexTest do
       {:ok, view, html} = live(conn, ~p"/projects/#{project.id}/sessions")
       refute html =~ "Create Session"
 
-      view |> element("button", "+ New Session") |> render_click()
+      view |> element("#new-session-btn") |> render_click()
       assert render(view) =~ "Create Session"
     end
 
     test "toggle_new_session_form hides form when toggled twice", %{conn: conn, project: project} do
       {:ok, view, _html} = live(conn, ~p"/projects/#{project.id}/sessions")
 
-      view |> element("button", "+ New Session") |> render_click()
+      view |> element("#new-session-btn") |> render_click()
       assert render(view) =~ "Create Session"
 
-      view |> element("button", "+ New Session") |> render_click()
+      view |> element("#new-session-btn") |> render_click()
       refute render(view) =~ "Create Session"
     end
 
     test "select_model via value key updates model", %{conn: conn, project: project} do
       {:ok, view, _html} = live(conn, ~p"/projects/#{project.id}/sessions")
-      view |> element("button", "+ New Session") |> render_click()
+      view |> element("#new-session-btn") |> render_click()
 
       # Use a model from the default provider's model list (anthropic)
       render_hook(view, "select_model", %{"value" => "claude-opus-4-6"})
@@ -94,7 +94,7 @@ defmodule SynapsisWeb.SessionLive.IndexTest do
 
     test "select_model via model key updates model", %{conn: conn, project: project} do
       {:ok, view, _html} = live(conn, ~p"/projects/#{project.id}/sessions")
-      view |> element("button", "+ New Session") |> render_click()
+      view |> element("#new-session-btn") |> render_click()
 
       # Use a model from the default provider's model list (anthropic)
       render_hook(view, "select_model", %{"model" => "claude-sonnet-4-6"})
@@ -103,7 +103,7 @@ defmodule SynapsisWeb.SessionLive.IndexTest do
 
     test "create_session creates a session and navigates", %{conn: conn, project: project} do
       {:ok, view, _html} = live(conn, ~p"/projects/#{project.id}/sessions")
-      view |> element("button", "+ New Session") |> render_click()
+      view |> element("#new-session-btn") |> render_click()
 
       assert {:error, {:live_redirect, %{to: "/projects/" <> _}}} =
                view |> element("button", "Create Session") |> render_click()
@@ -111,7 +111,7 @@ defmodule SynapsisWeb.SessionLive.IndexTest do
 
     test "select_provider updates provider and model in socket", %{conn: conn, project: project} do
       {:ok, view, _html} = live(conn, ~p"/projects/#{project.id}/sessions")
-      view |> element("button", "+ New Session") |> render_click()
+      view |> element("#new-session-btn") |> render_click()
       render_hook(view, "select_provider", %{"provider" => "anthropic"})
       html = render(view)
       assert html =~ "Create Session"
@@ -124,7 +124,7 @@ defmodule SynapsisWeb.SessionLive.IndexTest do
       project: project
     } do
       {:ok, view, _html} = live(conn, ~p"/projects/#{project.id}/sessions")
-      view |> element("button", "+ New Session") |> render_click()
+      view |> element("#new-session-btn") |> render_click()
       render_hook(view, "select_provider", %{"provider" => "openai"})
       html = render(view)
       assert html =~ Synapsis.Providers.default_model("openai")
@@ -181,7 +181,7 @@ defmodule SynapsisWeb.SessionLive.IndexTest do
       project: project
     } do
       {:ok, view, _html} = live(conn, ~p"/projects/#{project.id}/sessions")
-      view |> element("button", "+ New Session") |> render_click()
+      view |> element("#new-session-btn") |> render_click()
       # Sending a non-existent provider name should not crash
       html = render_hook(view, "select_provider", %{"provider" => "nonexistent_provider"})
       assert is_binary(html)

@@ -63,12 +63,12 @@ defmodule SynapsisWeb.SettingsLiveTest do
 
     test "each card has a heading and description", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings")
-      assert has_element?(view, "h2", "Providers")
-      assert has_element?(view, "h2", "Default Model")
-      assert has_element?(view, "h2", "Memory")
-      assert has_element?(view, "h2", "Skills")
-      assert has_element?(view, "h2", "MCP Servers")
-      assert has_element?(view, "h2", "LSP Servers")
+      assert has_element?(view, ".card-title", "Providers")
+      assert has_element?(view, ".card-title", "Default Model")
+      assert has_element?(view, ".card-title", "Memory")
+      assert has_element?(view, ".card-title", "Skills")
+      assert has_element?(view, ".card-title", "MCP Servers")
+      assert has_element?(view, ".card-title", "LSP Servers")
     end
   end
 end

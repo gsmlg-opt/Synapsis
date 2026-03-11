@@ -101,7 +101,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       |> render_click()
 
       view
-      |> form("form", %{"name" => "my-anthropic", "api_key" => "sk-test-123"})
+      |> form("form[phx-submit]", %{"name" => "my-anthropic", "api_key" => "sk-test-123"})
       |> render_submit()
 
       flash = assert_redirected(view, ~p"/settings/providers")
@@ -117,7 +117,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       |> render_click()
 
       view
-      |> form("form", %{"name" => "anthropic-work", "api_key" => "sk-work"})
+      |> form("form[phx-submit]", %{"name" => "anthropic-work", "api_key" => "sk-work"})
       |> render_submit()
 
       # Create second
@@ -128,7 +128,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       |> render_click()
 
       view2
-      |> form("form", %{"name" => "anthropic-personal", "api_key" => "sk-personal"})
+      |> form("form[phx-submit]", %{"name" => "anthropic-personal", "api_key" => "sk-personal"})
       |> render_submit()
 
       flash = assert_redirected(view2, ~p"/settings/providers")
@@ -151,7 +151,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
 
       html =
         view
-        |> form("form", %{"name" => "taken-name", "api_key" => "sk-other"})
+        |> form("form[phx-submit]", %{"name" => "taken-name", "api_key" => "sk-other"})
         |> render_submit()
 
       assert html =~ "Name already taken"
@@ -165,7 +165,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       |> render_click()
 
       view
-      |> form("form", %{
+      |> form("form[phx-submit]", %{
         "name" => "my-local-llm",
         "base_url" => "http://localhost:11434",
         "api_key" => "none"
@@ -191,14 +191,13 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       {:ok, view, html} = live(conn, ~p"/settings/providers")
       assert html =~ name
 
-      view
-      |> element(~s(button[phx-click="delete_provider"][phx-value-id="#{provider.id}"]))
-      |> render_click()
+      # dm_btn with confirm= generates two buttons with phx-click, use render_hook instead
+      render_hook(view, "delete_provider", %{"id" => provider.id})
 
       refute render(view) =~ name
     end
 
-    test "shows enabled status for enabled provider", %{conn: conn} do
+    test "shows enabled badge for enabled provider", %{conn: conn} do
       {:ok, _} =
         %Synapsis.ProviderConfig{}
         |> Synapsis.ProviderConfig.changeset(%{
@@ -209,11 +208,12 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
         })
         |> Synapsis.Repo.insert()
 
-      {:ok, _view, html} = live(conn, ~p"/settings/providers")
-      assert html =~ "Enabled"
+      {:ok, view, _html} = live(conn, ~p"/settings/providers")
+      # dm_badge uses <slot /> which renders empty; check for badge-success class
+      assert has_element?(view, "span.badge-success")
     end
 
-    test "shows disabled status for disabled provider", %{conn: conn} do
+    test "shows disabled badge for disabled provider", %{conn: conn} do
       {:ok, _} =
         %Synapsis.ProviderConfig{}
         |> Synapsis.ProviderConfig.changeset(%{
@@ -224,8 +224,9 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
         })
         |> Synapsis.Repo.insert()
 
-      {:ok, _view, html} = live(conn, ~p"/settings/providers")
-      assert html =~ "Disabled"
+      {:ok, view, _html} = live(conn, ~p"/settings/providers")
+      # dm_badge uses <slot /> which renders empty; check for badge-error class
+      assert has_element?(view, "span.badge-error")
     end
 
     test "shows base_url when set", %{conn: conn} do

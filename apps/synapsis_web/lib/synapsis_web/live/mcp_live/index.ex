@@ -165,8 +165,6 @@ defmodule SynapsisWeb.MCPLive.Index do
         </.dm_link>
       </div>
 
-      <.dm_flash_group flash={@flash} />
-
       <%= if @show_form do %>
         <%= if @selected_preset do %>
           <.dm_card variant="bordered" class="mb-6">
@@ -187,6 +185,7 @@ defmodule SynapsisWeb.MCPLive.Index do
                 <.dm_input
                   type="text"
                   name="name"
+                  value=""
                   placeholder="Server name"
                   required
                   label="Name"
@@ -199,6 +198,7 @@ defmodule SynapsisWeb.MCPLive.Index do
                   name="transport"
                   label="Transport"
                   options={[{"stdio", "stdio"}, {"sse", "SSE"}]}
+                  value="stdio"
                 />
               <% else %>
                 <.readonly_field label="Transport" value={@selected_preset.transport} />
@@ -207,6 +207,7 @@ defmodule SynapsisWeb.MCPLive.Index do
                 <.dm_input
                   type="text"
                   name="command"
+                  value=""
                   placeholder="e.g. npx"
                   label="Command"
                 />
@@ -222,6 +223,7 @@ defmodule SynapsisWeb.MCPLive.Index do
               <%= if Map.get(@selected_preset, :custom) do %>
                 <.dm_textarea
                   name="args"
+                  value=""
                   rows={3}
                   placeholder="One argument per line"
                   label="Arguments (one per line)"

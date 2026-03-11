@@ -308,8 +308,8 @@ defmodule SynapsisWeb.SessionLive.ShowTest do
       {:ok, _view, html} =
         live(conn, ~p"/projects/#{project.id}/sessions/#{session.id}")
 
-      # The current session should have bg-gray-800 (active indicator)
-      assert html =~ "bg-gray-800"
+      # dm_left_menu uses menu-active class (not bg-gray-800)
+      assert html =~ "menu-active"
     end
 
     test "project slug link in sidebar points to project page", %{
@@ -374,21 +374,17 @@ defmodule SynapsisWeb.SessionLive.ShowTest do
       assert html =~ "anthropic/claude-sonnet-4-20250514"
     end
 
-    test "toggle_model_selector opens and closes the dropdown", %{
+    test "model selector dropdown contains switch_model options", %{
       conn: conn,
       project: project,
       session: session
     } do
-      {:ok, view, html} =
+      {:ok, _view, html} =
         live(conn, ~p"/projects/#{project.id}/sessions/#{session.id}")
 
-      refute html =~ "switch_model"
-
-      html = render_hook(view, "toggle_model_selector", %{})
+      # dm_dropdown always renders its content in the DOM
       assert html =~ "switch_model"
-
-      html = render_hook(view, "toggle_model_selector", %{})
-      refute html =~ "switch_model"
+      assert html =~ "switch_provider"
     end
 
     test "switch_model updates the session model", %{
@@ -399,12 +395,7 @@ defmodule SynapsisWeb.SessionLive.ShowTest do
       {:ok, view, _html} =
         live(conn, ~p"/projects/#{project.id}/sessions/#{session.id}")
 
-      # Open model selector
-      view
-      |> element(~s(button[phx-click="toggle_model_selector"]))
-      |> render_click()
-
-      # Click on a different model
+      # Use render_hook since the dropdown content is always in DOM
       html =
         render_hook(view, "switch_model", %{
           "provider" => "anthropic",
@@ -422,10 +413,6 @@ defmodule SynapsisWeb.SessionLive.ShowTest do
     } do
       {:ok, view, _html} =
         live(conn, ~p"/projects/#{project.id}/sessions/#{session.id}")
-
-      view
-      |> element(~s(button[phx-click="toggle_model_selector"]))
-      |> render_click()
 
       html = render_hook(view, "switch_provider", %{"provider" => "anthropic"})
       assert html =~ "Claude"

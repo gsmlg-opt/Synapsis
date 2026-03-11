@@ -104,7 +104,7 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
       assert html =~ "deletable"
 
       view
-      |> element(~s(button[phx-click="delete_config"][phx-value-id="#{config.id}"]))
+      |> element(~s(button[id^="btn-"][phx-click="delete_config"][phx-value-id="#{config.id}"]))
       |> render_click()
 
       html = render(view)

@@ -42,7 +42,7 @@ defmodule SynapsisWeb.SkillLive.IndexTest do
       assert html =~ "to-delete"
 
       view
-      |> element(~s(button[phx-click="delete_skill"][phx-value-id="#{skill.id}"]))
+      |> element(~s(button[id^="btn-"][phx-click="delete_skill"][phx-value-id="#{skill.id}"]))
       |> render_click()
 
       html = render(view)

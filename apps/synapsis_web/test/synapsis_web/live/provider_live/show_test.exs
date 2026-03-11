@@ -223,14 +223,14 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
 
       html =
         view
-        |> element(~s(button[phx-click="toggle_chat"]))
+        |> element(~s(div[phx-click="toggle_chat"]))
         |> render_click()
 
       assert html =~ "Send a message to test"
 
       html =
         view
-        |> element(~s(button[phx-click="toggle_chat"]))
+        |> element(~s(div[phx-click="toggle_chat"]))
         |> render_click()
 
       refute html =~ "Send a message to test"
@@ -241,7 +241,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
 
       html =
         view
-        |> element(~s(button[phx-click="toggle_chat"]))
+        |> element(~s(div[phx-click="toggle_chat"]))
         |> render_click()
 
       assert html =~ "Claude"
@@ -252,7 +252,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
 
       view
-      |> element(~s(button[phx-click="toggle_chat"]))
+      |> element(~s(div[phx-click="toggle_chat"]))
       |> render_click()
 
       html = render_hook(view, "chat_select_model", %{"model" => "claude-haiku-3-5-20241022"})
@@ -263,7 +263,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
 
       view
-      |> element(~s(button[phx-click="toggle_chat"]))
+      |> element(~s(div[phx-click="toggle_chat"]))
       |> render_click()
 
       html = render_hook(view, "chat_send", %{"message" => ""})
@@ -277,7 +277,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
 
       view
-      |> element(~s(button[phx-click="toggle_chat"]))
+      |> element(~s(div[phx-click="toggle_chat"]))
       |> render_click()
 
       html = render_hook(view, "chat_send", %{"message" => "hello"})
@@ -288,7 +288,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
 
       view
-      |> element(~s(button[phx-click="toggle_chat"]))
+      |> element(~s(div[phx-click="toggle_chat"]))
       |> render_click()
 
       render_hook(view, "chat_clear", %{})
@@ -303,7 +303,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
 
       view
-      |> element(~s(button[phx-click="toggle_chat"]))
+      |> element(~s(div[phx-click="toggle_chat"]))
       |> render_click()
 
       # Simulate streaming lifecycle via handle_info
@@ -323,7 +323,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
 
       view
-      |> element(~s(button[phx-click="toggle_chat"]))
+      |> element(~s(div[phx-click="toggle_chat"]))
       |> render_click()
 
       send(view.pid, {:provider_error, "HTTP 401: Invalid API key"})
