@@ -206,6 +206,9 @@ defmodule Synapsis.Tool.Registry do
   @impl true
   def init(:ok) do
     table = :ets.new(@table, [:named_table, :set, :public, read_concurrency: true])
+    # Create the swarm ETS table here so the long-lived Registry process owns it,
+    # preventing table loss when transient Task processes exit.
+    Synapsis.Tool.Teammate.ensure_table()
     {:ok, table}
   end
 
@@ -231,7 +234,7 @@ defmodule Synapsis.Tool.Registry do
   defp resolve_category(module, opts) do
     opts[:category] ||
       (function_exported?(module, :category, 0) && module.category()) ||
-      :filesystem
+      :uncategorized
   end
 
   defp resolve_permission_level(module, opts) do
@@ -369,10 +372,10 @@ defmodule Synapsis.Tool.Registry do
   defp resolve_category_from_entry({:module, module, opts}) do
     opts[:category] ||
       (function_exported?(module, :category, 0) && module.category()) ||
-      :filesystem
+      :uncategorized
   end
 
   defp resolve_category_from_entry({:process, _pid, opts}) do
-    Keyword.get(opts, :category, :filesystem)
+    Keyword.get(opts, :category, :uncategorized)
   end
 end

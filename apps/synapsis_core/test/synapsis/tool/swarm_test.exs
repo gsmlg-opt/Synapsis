@@ -8,8 +8,9 @@ defmodule Synapsis.Tool.SwarmTest do
   @session_id "test-session-#{:erlang.unique_integer([:positive])}"
 
   setup do
-    # Clean up process dictionary between tests
-    Process.delete({:swarm_teammates, @session_id})
+    # Clean up ETS swarm state between tests
+    Teammate.ensure_table()
+    Teammate.delete_all(@session_id)
     :ok
   end
 

@@ -28,7 +28,7 @@ defmodule Synapsis.Tool.RegistryTest do
       assert :ok = Registry.register_module("test_tool", FakeTool)
       assert {:ok, {:module, FakeTool, opts}} = Registry.lookup("test_tool")
       # Enriched opts include metadata resolved from module callbacks
-      assert opts[:category] == :filesystem
+      assert opts[:category] == :uncategorized
       assert opts[:permission_level] == :read
       assert opts[:enabled] == true
       assert opts[:deferred] == false
