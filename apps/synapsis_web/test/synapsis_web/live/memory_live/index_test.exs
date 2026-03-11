@@ -117,7 +117,7 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
       {:ok, view, _html} = live(conn, ~p"/settings/memory")
       assert render(view) =~ "To Archive"
 
-      view |> element("button[phx-click=archive][phx-value-id=#{mem.id}]") |> render_click()
+      view |> element("[phx-click=\"archive\"][phx-value-id=\"#{mem.id}\"]") |> render_click()
       html = render(view)
       assert html =~ "Memory archived"
       refute html =~ "To Archive"
