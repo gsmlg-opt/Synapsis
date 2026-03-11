@@ -9,7 +9,10 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
 
   defp clean_memory_entries do
     import Ecto.Query
-    Synapsis.Repo.delete_all(from(m in Synapsis.MemoryEntry, where: m.scope == "global" and m.key == "CLAUDE.md"))
+
+    Synapsis.Repo.delete_all(
+      from(m in Synapsis.MemoryEntry, where: m.scope == "global" and m.key == "CLAUDE.md")
+    )
   end
 
   setup do

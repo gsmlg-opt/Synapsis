@@ -812,7 +812,10 @@ defmodule Synapsis.Session.Worker do
           })
 
         :denied ->
-          send(self(), {:tool_result, tool_use.tool_use_id, "Tool denied by permission policy.", true})
+          send(
+            self(),
+            {:tool_result, tool_use.tool_use_id, "Tool denied by permission policy.", true}
+          )
       end
     end
 
