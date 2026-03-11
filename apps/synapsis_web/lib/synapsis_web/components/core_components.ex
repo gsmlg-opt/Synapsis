@@ -203,6 +203,61 @@ defmodule SynapsisWeb.CoreComponents do
     """
   end
 
+  @doc """
+  Bottom status bar with 4-mode selector and session status indicator.
+
+  Modes: bypass_permissions, ask_before_edits, edit_automatically, plan_mode.
+  """
+  attr :current_mode, :string, required: true
+  attr :session_status, :string, default: "idle"
+  attr :on_mode_change, :string, required: true
+  attr :class, :string, default: nil
+
+  @session_modes [
+    {"bypass_permissions", "Bypass", "shield-off-outline"},
+    {"ask_before_edits", "Ask", "shield-check-outline"},
+    {"edit_automatically", "Auto-edit", "pencil-outline"},
+    {"plan_mode", "Plan", "file-document-outline"}
+  ]
+
+  def session_status_bar(assigns) do
+    assigns = assign(assigns, :modes, @session_modes)
+
+    ~H"""
+    <div class={[
+      "flex items-center justify-between bg-base-200 border-t border-base-300 px-3 py-1",
+      @class
+    ]}>
+      <div class="flex gap-0 bg-base-300 rounded-lg p-0.5">
+        <.dm_btn
+          :for={{value, label, icon} <- @modes}
+          variant={if(@current_mode == value, do: "primary", else: "ghost")}
+          size="xs"
+          phx-click={@on_mode_change}
+          phx-value-mode={value}
+        >
+          <.dm_mdi name={icon} class="w-3.5 h-3.5" />
+          <span class="hidden sm:inline">{label}</span>
+        </.dm_btn>
+      </div>
+      <div class="flex items-center gap-1.5 text-xs text-base-content/50">
+        <span class={[
+          "inline-block w-2 h-2 rounded-full",
+          status_dot_color(@session_status)
+        ]}>
+        </span>
+        {@session_status}
+      </div>
+    </div>
+    """
+  end
+
+  defp status_dot_color("idle"), do: "bg-success"
+  defp status_dot_color("streaming"), do: "bg-info animate-pulse"
+  defp status_dot_color("tool_executing"), do: "bg-warning animate-pulse"
+  defp status_dot_color("error"), do: "bg-error"
+  defp status_dot_color(_), do: "bg-base-content/30"
+
   defp active_menu_id(current_path, items) do
     Enum.find_value(items, fn item ->
       if String.starts_with?(current_path, item.to), do: item.to

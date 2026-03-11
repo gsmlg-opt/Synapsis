@@ -16,8 +16,8 @@ defmodule Synapsis.Tool.Permission.SessionConfig do
           session_id: binary() | nil,
           mode: :interactive | :autonomous,
           allow_read: boolean(),
-          allow_write: boolean() | :ask,
-          allow_execute: boolean() | :ask,
+          allow_write: :allow | :deny | :ask,
+          allow_execute: :allow | :deny | :ask,
           allow_destructive: :allow | :deny | :ask,
           overrides: list()
         }
@@ -27,8 +27,8 @@ defmodule Synapsis.Tool.Permission.SessionConfig do
     :session_id,
     mode: :interactive,
     allow_read: true,
-    allow_write: true,
-    allow_execute: false,
+    allow_write: :allow,
+    allow_execute: :ask,
     allow_destructive: :ask,
     overrides: []
   ]

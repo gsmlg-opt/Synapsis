@@ -129,8 +129,8 @@ defmodule Synapsis.Tool.PermissionTest do
       assert config.session_id == nil
       assert config.mode == :interactive
       assert config.allow_read == true
-      assert config.allow_write == true
-      assert config.allow_execute == false
+      assert config.allow_write == :allow
+      assert config.allow_execute == :ask
       assert config.allow_destructive == :ask
       assert config.overrides == []
     end
@@ -322,10 +322,10 @@ defmodule Synapsis.Tool.PermissionTest do
       assert :approved = Permission.check("list_dir", nil)
     end
 
-    test "returns :denied for tool that exceeds session permission level" do
-      # With default config, allow_execute is false so bash is denied
+    test "returns :requires_approval for execute tools with default config" do
+      # With default config, allow_execute is :ask so bash requires approval
       result = Permission.check("bash", nil)
-      assert result == :denied
+      assert result == :requires_approval
     end
   end
 

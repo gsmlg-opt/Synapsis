@@ -10,8 +10,8 @@ defmodule Synapsis.SessionPermission do
     belongs_to :session, Synapsis.Session
 
     field :mode, Ecto.Enum, values: [:interactive, :autonomous], default: :interactive
-    field :allow_write, :boolean, default: true
-    field :allow_execute, :boolean, default: true
+    field :allow_write, Ecto.Enum, values: [:allow, :deny, :ask], default: :allow
+    field :allow_execute, Ecto.Enum, values: [:allow, :deny, :ask], default: :allow
     field :allow_destructive, Ecto.Enum, values: [:allow, :deny, :ask], default: :ask
     field :tool_overrides, :map, default: %{}
 

@@ -20,13 +20,17 @@ defmodule SynapsisWeb.SessionLive.Show do
         # Models for the current session's provider
         session_models = fetch_provider_models(session.provider)
 
+        agent_mode = session.agent || "build"
+        session_mode = derive_mode(session)
+
         {:ok,
          assign(socket,
            project: project,
            session: session,
            sessions: sessions,
            providers: providers,
-           agent_mode: session.agent || "build",
+           agent_mode: agent_mode,
+           session_mode: session_mode,
            page_title: session.title || "Session",
            show_new_session_form: false,
            new_session_provider: default_provider,
@@ -50,9 +54,26 @@ defmodule SynapsisWeb.SessionLive.Show do
     {:noreply, socket}
   end
 
+  @valid_session_modes ~w(bypass_permissions ask_before_edits edit_automatically plan_mode)
+
   @impl true
-  def handle_event("switch_agent", %{"mode" => mode}, socket) when mode in ["build", "plan"] do
-    {:noreply, assign(socket, agent_mode: mode)}
+  def handle_event("switch_mode", %{"mode" => mode}, socket) when mode in @valid_session_modes do
+    session = socket.assigns.session
+
+    case Synapsis.Sessions.switch_mode(session.id, mode) do
+      :ok ->
+        agent_mode = if mode == "plan_mode", do: "plan", else: "build"
+
+        {:noreply,
+         socket
+         |> assign(session_mode: mode, agent_mode: agent_mode)}
+
+      {:error, :not_idle} ->
+        {:noreply, put_flash(socket, :error, "Cannot switch mode while session is active")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Failed to switch mode")}
+    end
   end
 
   def handle_event("toggle_model_selector", _params, socket) do
@@ -202,6 +223,18 @@ defmodule SynapsisWeb.SessionLive.Show do
     Enum.map(models, fn m -> {m.id, m[:name] || m.id} end)
   end
 
+  defp derive_mode(%{agent: "plan"}), do: "plan_mode"
+
+  defp derive_mode(%{id: session_id}) do
+    case Synapsis.Tool.Permission.session_config(session_id) do
+      %{mode: :autonomous, allow_destructive: :allow} -> "bypass_permissions"
+      %{mode: :autonomous} -> "edit_automatically"
+      _ -> "ask_before_edits"
+    end
+  end
+
+  defp derive_mode(_), do: "ask_before_edits"
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -335,11 +368,6 @@ defmodule SynapsisWeb.SessionLive.Show do
               </:content>
             </.dm_dropdown>
           </div>
-          <.mode_toggle
-            current_mode={@agent_mode}
-            modes={[{"build", "build"}, {"plan", "plan"}]}
-            on_change="switch_agent"
-          />
         </div>
 
         <%!-- React ChatApp --%>
@@ -352,6 +380,13 @@ defmodule SynapsisWeb.SessionLive.Show do
           class="flex-1 overflow-hidden"
         >
         </div>
+
+        <%!-- Bottom status bar --%>
+        <.session_status_bar
+          current_mode={@session_mode}
+          session_status={@session.status}
+          on_mode_change="switch_mode"
+        />
       </main>
     </div>
     """

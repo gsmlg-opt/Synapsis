@@ -67,6 +67,10 @@ defmodule Synapsis.Session.Worker do
     GenServer.call(via(session_id), {:switch_model, provider_name, model})
   end
 
+  def switch_mode(session_id, mode_name) do
+    GenServer.call(via(session_id), {:switch_mode, mode_name})
+  end
+
   def get_status(session_id) do
     GenServer.call(via(session_id), :get_status)
   end
@@ -330,6 +334,93 @@ defmodule Synapsis.Session.Worker do
   end
 
   def handle_call({:switch_model, _provider, _model}, _from, state) do
+    {:reply, {:error, :not_idle}, state}
+  end
+
+  @valid_modes ~w(bypass_permissions ask_before_edits edit_automatically plan_mode)
+  @mode_configs %{
+    "bypass_permissions" => %{
+      agent: "build",
+      permission: %{
+        mode: :autonomous,
+        allow_write: :allow,
+        allow_execute: :allow,
+        allow_destructive: :allow
+      }
+    },
+    "ask_before_edits" => %{
+      agent: "build",
+      permission: %{
+        mode: :interactive,
+        allow_write: :ask,
+        allow_execute: :ask,
+        allow_destructive: :ask
+      }
+    },
+    "edit_automatically" => %{
+      agent: "build",
+      permission: %{
+        mode: :autonomous,
+        allow_write: :allow,
+        allow_execute: :allow,
+        allow_destructive: :ask
+      }
+    },
+    "plan_mode" => %{
+      agent: "plan",
+      permission: %{
+        mode: :interactive,
+        allow_write: :deny,
+        allow_execute: :deny,
+        allow_destructive: :deny
+      }
+    }
+  }
+
+  def handle_call({:switch_mode, mode_name}, _from, %{status: :idle} = state)
+      when mode_name in @valid_modes do
+    config = @mode_configs[mode_name]
+    agent_name = config.agent
+
+    # Resolve agent config
+    agent = Synapsis.Agent.Resolver.resolve(agent_name, state.session.config)
+
+    agent =
+      cond do
+        not is_nil(agent[:model]) ->
+          agent
+
+        not is_nil(state.session.model) ->
+          Map.put(agent, :model, state.session.model)
+
+        true ->
+          tier = agent[:model_tier] || :default
+          provider = agent[:provider] || state.session.provider
+          Map.put(agent, :model, Synapsis.Providers.model_for_tier(provider, tier))
+      end
+
+    # Update session agent in DB
+    {:ok, _} =
+      state.session
+      |> Session.changeset(%{agent: agent_name})
+      |> Repo.update()
+
+    # Update permission config
+    Synapsis.Tool.Permission.update_config(state.session_id, config.permission)
+
+    session = %{state.session | agent: agent_name}
+
+    broadcast(state.session_id, "mode_switched", %{mode: mode_name, agent: agent_name})
+
+    Logger.info("session_mode_switched",
+      session_id: state.session_id,
+      mode: mode_name
+    )
+
+    {:reply, :ok, %{state | agent: agent, session: session}}
+  end
+
+  def handle_call({:switch_mode, _mode_name}, _from, state) do
     {:reply, {:error, :not_idle}, state}
   end
 

@@ -134,6 +134,11 @@ defmodule Synapsis.Sessions do
     Synapsis.Session.Worker.switch_model(session_id, provider_name, model)
   end
 
+  def switch_mode(session_id, mode_name) do
+    ensure_session_running(session_id)
+    Synapsis.Session.Worker.switch_mode(session_id, mode_name)
+  end
+
   def approve_tool(session_id, tool_use_id) do
     Synapsis.Session.Worker.approve_tool(session_id, tool_use_id)
   end

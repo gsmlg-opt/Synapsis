@@ -20,8 +20,8 @@ defmodule Synapsis.SessionPermissionTest do
       attrs = %{
         session_id: Ecto.UUID.generate(),
         mode: :autonomous,
-        allow_write: false,
-        allow_execute: false,
+        allow_write: :deny,
+        allow_execute: :deny,
         allow_destructive: :deny,
         tool_overrides: %{"bash(git *)" => "allow", "bash(rm *)" => "deny"}
       }
@@ -34,8 +34,8 @@ defmodule Synapsis.SessionPermissionTest do
       attrs = %{session_id: Ecto.UUID.generate()}
       changeset = SessionPermission.changeset(%SessionPermission{}, attrs)
       assert Ecto.Changeset.get_field(changeset, :mode) == :interactive
-      assert Ecto.Changeset.get_field(changeset, :allow_write) == true
-      assert Ecto.Changeset.get_field(changeset, :allow_execute) == true
+      assert Ecto.Changeset.get_field(changeset, :allow_write) == :allow
+      assert Ecto.Changeset.get_field(changeset, :allow_execute) == :allow
       assert Ecto.Changeset.get_field(changeset, :allow_destructive) == :ask
       assert Ecto.Changeset.get_field(changeset, :tool_overrides) == %{}
     end
