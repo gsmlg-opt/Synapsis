@@ -1,8 +1,16 @@
 defmodule Synapsis.Memory.ContextBuilderTest do
-  use Synapsis.DataCase, async: true
+  use Synapsis.DataCase, async: false
 
   alias Synapsis.Memory.ContextBuilder
   alias Synapsis.{SemanticMemory, Repo}
+
+  setup do
+    Synapsis.Memory.Cache.clear()
+    import Ecto.Query
+    Repo.delete_all(from(m in SemanticMemory, where: m.scope == "shared"))
+    Repo.delete_all(from(m in SemanticMemory, where: m.scope == "project"))
+    :ok
+  end
 
   describe "build/1" do
     test "returns empty string when no memories exist" do

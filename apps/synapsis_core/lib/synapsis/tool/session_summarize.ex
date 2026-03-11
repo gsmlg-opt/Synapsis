@@ -2,9 +2,13 @@ defmodule Synapsis.Tool.SessionSummarize do
   @moduledoc """
   Compress current session context into candidate semantic memory records.
   Returns candidates for review — does not persist.
+
+  Uses LLM-based extraction when a provider is available, with heuristic
+  fallback when LLM calls fail or are unavailable.
   """
   use Synapsis.Tool
 
+  require Logger
   import Ecto.Query
 
   @impl true
@@ -44,10 +48,34 @@ defmodule Synapsis.Tool.SessionSummarize do
           "type" => "array",
           "items" => %{"type" => "string"},
           "description" => "Which memory kinds to extract"
+        },
+        "use_llm" => %{
+          "type" => "boolean",
+          "description" => "Use LLM for extraction (default: true, falls back to heuristic)"
         }
       }
     }
   end
+
+  @summarizer_system_prompt """
+  You are a memory extraction assistant. Analyze the conversation and extract structured memory records.
+
+  For each memory, output a JSON array of objects with these fields:
+  - "kind": one of "fact", "decision", "lesson", "preference", "pattern", "warning"
+  - "title": concise title (max 10 words)
+  - "summary": one-sentence summary (max 200 tokens)
+  - "tags": array of 1-5 relevant tags
+  - "importance": float 0.0-1.0 (how important to remember)
+
+  Focus on:
+  - What goal was pursued
+  - What was decided
+  - What succeeded or failed
+  - What should be remembered for future sessions
+
+  NEVER include secrets, API keys, tokens, or credentials.
+  Output ONLY valid JSON array. No markdown, no explanation.
+  """
 
   @impl true
   def execute(input, context) do
@@ -59,15 +87,31 @@ defmodule Synapsis.Tool.SessionSummarize do
       scope = Map.get(input, "scope", "full")
       focus = Map.get(input, "focus")
       kinds = Map.get(input, "kinds", ["fact", "decision", "lesson", "preference", "pattern"])
+      use_llm = Map.get(input, "use_llm", true)
 
-      # Load session messages
       messages = load_messages(session_id, scope, Map.get(input, "message_range"))
 
       if messages == [] do
         {:ok, Jason.encode!(%{candidates: [], message: "No messages to summarize"})}
       else
-        # Extract candidates using heuristic summarization (no LLM call in Phase 1)
-        candidates = extract_candidates(messages, focus, kinds)
+        candidates =
+          if use_llm do
+            case extract_via_llm(messages, focus, context) do
+              {:ok, llm_candidates} ->
+                llm_candidates
+
+              {:error, reason} ->
+                Logger.info("session_summarize_llm_fallback",
+                  session_id: session_id,
+                  reason: inspect(reason)
+                )
+
+                extract_heuristic(messages, focus, kinds)
+            end
+          else
+            extract_heuristic(messages, focus, kinds)
+          end
+
         {:ok, Jason.encode!(%{candidates: candidates, message_count: length(messages)})}
       end
     end
@@ -93,26 +137,108 @@ defmodule Synapsis.Tool.SessionSummarize do
     Synapsis.Repo.all(query)
   end
 
-  defp extract_candidates(messages, focus, kinds) do
-    # Heuristic extraction: analyze message content for key patterns
-    # This is a simplified version; Phase 2 adds LLM-based summarization
-    text =
-      messages
-      |> Enum.flat_map(fn msg ->
-        case msg.parts do
-          parts when is_list(parts) ->
-            Enum.flat_map(parts, fn
-              %Synapsis.Part.Text{content: c} when is_binary(c) -> [c]
-              %{type: "text", content: c} when is_binary(c) -> [c]
-              %{"type" => "text", "content" => c} when is_binary(c) -> [c]
-              _ -> []
-            end)
+  defp extract_text(messages) do
+    messages
+    |> Enum.flat_map(fn msg ->
+      case msg.parts do
+        parts when is_list(parts) ->
+          Enum.flat_map(parts, fn
+            %Synapsis.Part.Text{content: c} when is_binary(c) -> [c]
+            %{type: "text", content: c} when is_binary(c) -> [c]
+            %{"type" => "text", "content" => c} when is_binary(c) -> [c]
+            _ -> []
+          end)
 
-          _ ->
-            []
-        end
+        _ ->
+          []
+      end
+    end)
+    |> Enum.join("\n")
+  end
+
+  defp extract_via_llm(messages, focus, context) do
+    compressed =
+      messages
+      |> Enum.map(fn msg ->
+        text =
+          case msg.parts do
+            parts when is_list(parts) ->
+              parts
+              |> Enum.flat_map(fn
+                %Synapsis.Part.Text{content: c} when is_binary(c) -> [c]
+                %{type: "text", content: c} when is_binary(c) -> [c]
+                %{"type" => "text", "content" => c} when is_binary(c) -> [c]
+                _ -> []
+              end)
+              |> Enum.join(" ")
+
+            _ ->
+              ""
+          end
+
+        "#{msg.role}: #{String.slice(text, 0, 500)}"
       end)
-      |> Enum.join("\n")
+      |> Enum.join("\n\n")
+      |> String.slice(0, 8000)
+
+    focus_instruction =
+      if focus, do: "\n\nFocus especially on: #{focus}", else: ""
+
+    llm_messages = [
+      %{role: "user", content: "#{compressed}#{focus_instruction}"}
+    ]
+
+    # Resolve provider from session context
+    session_id = context[:session_id]
+
+    provider =
+      case Synapsis.Repo.get(Synapsis.Session, session_id) do
+        nil -> "anthropic"
+        session -> session.provider || "anthropic"
+      end
+
+    case Synapsis.LLM.complete(llm_messages,
+           provider: provider,
+           system: @summarizer_system_prompt,
+           max_tokens: 2048
+         ) do
+      {:ok, text} -> parse_llm_candidates(text)
+      {:error, _} = err -> err
+    end
+  end
+
+  defp parse_llm_candidates(text) do
+    json_text =
+      case Regex.run(~r/\[[\s\S]*\]/, text) do
+        [match] -> match
+        _ -> text
+      end
+
+    case Jason.decode(json_text) do
+      {:ok, candidates} when is_list(candidates) ->
+        valid =
+          candidates
+          |> Enum.filter(&is_map/1)
+          |> Enum.filter(&(Map.has_key?(&1, "kind") and Map.has_key?(&1, "title")))
+          |> Enum.map(fn c ->
+            %{
+              kind: c["kind"],
+              title: c["title"],
+              summary: c["summary"] || c["title"],
+              tags: c["tags"] || [],
+              importance: c["importance"] || 0.6
+            }
+          end)
+
+        {:ok, valid}
+
+      _ ->
+        {:error, "failed to parse LLM response as JSON array"}
+    end
+  end
+
+  defp extract_heuristic(messages, focus, kinds) do
+    text = extract_text(messages)
 
     candidates = []
 
