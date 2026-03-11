@@ -42,7 +42,7 @@ function ChatContent({ onNavigate }: { onNavigate?: (path: string) => void }) {
         ))}
 
         {error && (
-          <div className="p-3 bg-red-900/50 text-red-200 rounded text-sm">
+          <div className="p-3 bg-error/20 text-error rounded text-sm">
             {error}
           </div>
         )}

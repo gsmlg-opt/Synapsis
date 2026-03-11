@@ -5,6 +5,7 @@
   "dependencies": {
     "@duskmoon-dev/core": "^1.11.1",
     "@duskmoon-dev/elements": "^0.7.0",
+    "@synapsis/hooks": "workspace:*",
     "phoenix": "1.8.3",
     "phoenix_html": "4.3.0",
     "phoenix_live_view": "1.1.23"
