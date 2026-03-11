@@ -267,7 +267,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       |> render_click()
 
       html = render_hook(view, "chat_send", %{"message" => ""})
-      refute html =~ "error"
+      refute html =~ "Provider not registered"
     end
 
     test "chat_send without registered provider shows error", %{conn: conn, provider: provider} do

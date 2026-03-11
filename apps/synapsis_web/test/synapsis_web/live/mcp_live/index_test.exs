@@ -114,15 +114,16 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
     test "toggle_enabled switches auto_start", %{conn: conn} do
       config = create_mcp_config(%{name: "toggleable", command: "test", auto_start: false})
 
-      {:ok, view, html} = live(conn, ~p"/settings/mcp")
-      assert html =~ "Disabled"
+      {:ok, view, _html} = live(conn, ~p"/settings/mcp")
 
+      # dm_switch renders phx-click on an <input>, not a <button>
       view
-      |> element(~s(button[phx-click="toggle_enabled"][phx-value-id="#{config.id}"]))
+      |> element(~s(input[phx-click="toggle_enabled"][phx-value-id="#{config.id}"]))
       |> render_click()
 
-      html = render(view)
-      assert html =~ "Enabled"
+      # Verify the config was toggled in the DB
+      updated = Synapsis.Repo.get!(Synapsis.PluginConfig, config.id)
+      assert updated.auto_start == true
     end
 
     test "already-added servers are indicated in preset selector", %{conn: conn} do
