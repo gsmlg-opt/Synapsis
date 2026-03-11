@@ -57,8 +57,8 @@ defmodule Synapsis.Tool.BehaviourTest do
       assert DefaultTool.permission_level() == :read
     end
 
-    test "category defaults to :filesystem" do
-      assert DefaultTool.category() == :filesystem
+    test "category defaults to :uncategorized" do
+      assert DefaultTool.category() == :uncategorized
     end
 
     test "version defaults to 1.0.0" do

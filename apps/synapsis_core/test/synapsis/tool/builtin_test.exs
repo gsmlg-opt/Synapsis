@@ -35,7 +35,7 @@ defmodule Synapsis.Tool.BuiltinTest do
     "computer"
   ]
 
-  @disabled_tool_names ["notebook_edit", "notebook_read", "computer"]
+  @disabled_tool_names ["notebook_edit", "notebook_read", "computer", "task"]
   @enabled_tool_names @all_expected_tools -- @disabled_tool_names
 
   @expected_timeouts %{
@@ -84,7 +84,7 @@ defmodule Synapsis.Tool.BuiltinTest do
           not (function_exported?(mod, :enabled?, 0) and not mod.enabled?())
         end)
 
-      assert enabled_count == 25
+      assert enabled_count == 24
     end
 
     test "all expected enabled tools respond to enabled? as true or default" do
@@ -105,7 +105,7 @@ defmodule Synapsis.Tool.BuiltinTest do
   end
 
   describe "disabled tools" do
-    test "exactly 3 tools are disabled: notebook_edit, notebook_read, computer" do
+    test "exactly 4 tools are disabled: notebook_edit, notebook_read, computer, task" do
       disabled =
         @all_expected_tools
         |> Enum.filter(fn name ->
@@ -114,7 +114,7 @@ defmodule Synapsis.Tool.BuiltinTest do
         end)
 
       assert Enum.sort(disabled) == Enum.sort(@disabled_tool_names)
-      assert length(disabled) == 3
+      assert length(disabled) == 4
     end
   end
 

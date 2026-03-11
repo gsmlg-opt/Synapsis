@@ -42,14 +42,14 @@ defmodule Synapsis.Tool.Permission do
   Delegates to `check/3` by extracting a session_id when possible and using
   an empty input map.
   """
-  @spec check(String.t(), term()) :: :approved | :requires_approval
+  @spec check(String.t(), term()) :: :approved | :denied | :requires_approval
   def check(tool_name, session) do
     session_id = extract_session_id(session)
     config = session_config(session_id)
 
     case do_check(tool_name, %{}, config) do
       :allowed -> :approved
-      :denied -> :requires_approval
+      :denied -> :denied
       :requires_approval -> :requires_approval
     end
   end

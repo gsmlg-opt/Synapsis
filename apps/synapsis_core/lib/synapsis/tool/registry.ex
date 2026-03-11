@@ -310,7 +310,14 @@ defmodule Synapsis.Tool.Registry do
     end)
   end
 
-  defp filter_agent_mode(entries, _build), do: entries
+  defp filter_agent_mode(entries, :build), do: entries
+  defp filter_agent_mode(entries, :all), do: entries
+
+  defp filter_agent_mode(entries, mode) do
+    require Logger
+    Logger.warning("tool_registry_unknown_agent_mode", mode: mode)
+    entries
+  end
 
   defp filter_categories(entries, nil), do: entries
   defp filter_categories(entries, []), do: entries

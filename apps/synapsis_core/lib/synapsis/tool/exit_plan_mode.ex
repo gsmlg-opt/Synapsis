@@ -39,25 +39,33 @@ defmodule Synapsis.Tool.ExitPlanMode do
       session_id ->
         plan = input["plan"]
 
-        session = Synapsis.Repo.get!(Synapsis.Session, session_id)
+        case Synapsis.Repo.get(Synapsis.Session, session_id) do
+          nil ->
+            {:error, "Session not found: #{session_id}"}
 
-        session
-        |> Synapsis.Session.changeset(%{agent: "build"})
-        |> Synapsis.Repo.update!()
+          session ->
+            case session
+                 |> Synapsis.Session.changeset(%{agent: "build"})
+                 |> Synapsis.Repo.update() do
+              {:ok, _updated} ->
+                Phoenix.PubSub.broadcast(
+                  Synapsis.PubSub,
+                  "session:#{session_id}",
+                  {:plan_submitted, plan}
+                )
 
-        Phoenix.PubSub.broadcast(
-          Synapsis.PubSub,
-          "session:#{session_id}",
-          {:plan_submitted, plan}
-        )
+                Phoenix.PubSub.broadcast(
+                  Synapsis.PubSub,
+                  "session:#{session_id}",
+                  {:agent_mode_changed, :build}
+                )
 
-        Phoenix.PubSub.broadcast(
-          Synapsis.PubSub,
-          "session:#{session_id}",
-          {:agent_mode_changed, :build}
-        )
+                {:ok, "Exited plan mode"}
 
-        {:ok, "Exited plan mode"}
+              {:error, changeset} ->
+                {:error, "Failed to exit plan mode: #{inspect(changeset.errors)}"}
+            end
+        end
     end
   end
 

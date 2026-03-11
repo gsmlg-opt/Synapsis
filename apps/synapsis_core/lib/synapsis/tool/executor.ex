@@ -64,6 +64,7 @@ defmodule Synapsis.Tool.Executor do
 
     max_concurrency = System.schedulers_online()
 
+    # Zip work units with their items so we can recover call IDs on crash
     results =
       work_units
       |> Task.async_stream(
@@ -78,9 +79,17 @@ defmodule Synapsis.Tool.Executor do
         timeout: :infinity,
         on_timeout: :kill_task
       )
+      |> Enum.zip(work_units)
       |> Enum.flat_map(fn
-        {:ok, results} -> results
-        {:exit, _reason} -> []
+        {{:ok, results}, _items} ->
+          results
+
+        {{:exit, reason}, items} ->
+          Logger.warning("tool_batch_task_crashed", reason: inspect(reason))
+
+          Enum.map(items, fn {call, idx} ->
+            {call.id, {:error, {:exit, reason}}, idx}
+          end)
       end)
       |> Enum.sort_by(fn {_id, _result, idx} -> idx end)
       |> Enum.map(fn {id, result, _idx} -> {id, result} end)
@@ -108,11 +117,12 @@ defmodule Synapsis.Tool.Executor do
   defp check_enabled({:process, _pid, _opts}), do: :ok
 
   defp check_permission(tool_name, context) do
-    session = context[:session]
+    session = context[:session] || context[:session_id]
 
     if session do
       case Synapsis.Tool.Permission.check(tool_name, session) do
         :approved -> :ok
+        :denied -> {:error, :denied}
         :requires_approval -> {:error, :requires_approval}
       end
     else

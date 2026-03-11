@@ -48,6 +48,7 @@ defmodule Synapsis.Tool do
           | :notebook
           | :computer
           | :swarm
+          | :uncategorized
 
   @type context :: %{
           optional(:project_path) => String.t(),
@@ -93,7 +94,7 @@ defmodule Synapsis.Tool do
       def permission_level, do: :read
 
       @impl Synapsis.Tool
-      def category, do: :filesystem
+      def category, do: :uncategorized
 
       @impl Synapsis.Tool
       def version, do: "1.0.0"

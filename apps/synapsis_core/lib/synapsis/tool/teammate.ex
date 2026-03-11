@@ -61,7 +61,7 @@ defmodule Synapsis.Tool.Teammate do
   end
 
   defp create_teammate(input, session_id) do
-    name = input["name"] || "teammate_#{:rand.uniform(9999)}"
+    name = input["name"] || "teammate_#{Ecto.UUID.generate()}"
     teammate_id = Ecto.UUID.generate()
 
     teammate = %{
@@ -73,21 +73,19 @@ defmodule Synapsis.Tool.Teammate do
       status: "active"
     }
 
-    teammates = Process.get({:swarm_teammates, session_id}, %{})
-    Process.put({:swarm_teammates, session_id}, Map.put(teammates, name, teammate))
-
+    store_teammate(session_id, name, teammate)
     {:ok, Jason.encode!(teammate)}
   end
 
   defp list_teammates(session_id) do
-    teammates = Process.get({:swarm_teammates, session_id}, %{})
+    teammates = load_teammates(session_id)
     {:ok, Jason.encode!(Map.values(teammates))}
   end
 
   defp get_teammate(nil, _), do: {:error, "Teammate name is required for 'get' action"}
 
   defp get_teammate(name, session_id) do
-    teammates = Process.get({:swarm_teammates, session_id}, %{})
+    teammates = load_teammates(session_id)
 
     case Map.get(teammates, name) do
       nil -> {:error, "Teammate '#{name}' not found"}
@@ -101,7 +99,7 @@ defmodule Synapsis.Tool.Teammate do
     if is_nil(name) do
       {:error, "Teammate name is required for 'update' action"}
     else
-      teammates = Process.get({:swarm_teammates, session_id}, %{})
+      teammates = load_teammates(session_id)
 
       case Map.get(teammates, name) do
         nil ->
@@ -114,7 +112,7 @@ defmodule Synapsis.Tool.Teammate do
             |> maybe_update(:tools, input["tools"])
             |> maybe_update(:model, input["model"])
 
-          Process.put({:swarm_teammates, session_id}, Map.put(teammates, name, updated))
+          store_teammate(session_id, name, updated)
           {:ok, Jason.encode!(updated)}
       end
     end
@@ -122,4 +120,43 @@ defmodule Synapsis.Tool.Teammate do
 
   defp maybe_update(map, _key, nil), do: map
   defp maybe_update(map, key, value), do: Map.put(map, key, value)
+
+  # --- ETS-backed persistence ---
+  # Uses an ETS table owned by the Registry GenServer for swarm state,
+  # so state persists across tool invocations within a session.
+
+  @swarm_table :synapsis_swarm_teammates
+
+  @doc false
+  def ensure_table do
+    if :ets.whereis(@swarm_table) == :undefined do
+      :ets.new(@swarm_table, [:named_table, :set, :public, read_concurrency: true])
+    end
+
+    :ok
+  end
+
+  defp load_teammates(session_id) do
+    ensure_table()
+
+    case :ets.lookup(@swarm_table, session_id) do
+      [{^session_id, teammates}] -> teammates
+      [] -> %{}
+    end
+  end
+
+  defp store_teammate(session_id, name, teammate) do
+    ensure_table()
+    teammates = load_teammates(session_id)
+    :ets.insert(@swarm_table, {session_id, Map.put(teammates, name, teammate)})
+    :ok
+  end
+
+  @doc "Delete all teammates for a session."
+  def delete_all(session_id) do
+    ensure_table()
+    count = map_size(load_teammates(session_id))
+    :ets.delete(@swarm_table, session_id)
+    count
+  end
 end

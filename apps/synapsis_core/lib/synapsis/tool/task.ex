@@ -39,6 +39,9 @@ defmodule Synapsis.Tool.Task do
   def category, do: :orchestration
 
   @impl true
+  def enabled?, do: false
+
+  @impl true
   def execute(input, context) do
     prompt = input["prompt"]
     mode = input["mode"] || "foreground"
@@ -50,8 +53,8 @@ defmodule Synapsis.Tool.Task do
     if is_nil(session_id) do
       {:error, "No session context available for sub-agent"}
     else
-      # Create sub-agent context
-      _sub_context = Map.put(context, :parent_agent, self())
+      # TODO: Wire up actual sub-agent session creation and execution.
+      # Currently a stub — returns placeholder responses.
       task_id = Ecto.UUID.generate()
 
       case mode do

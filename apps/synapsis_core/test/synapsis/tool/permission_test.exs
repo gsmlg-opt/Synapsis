@@ -322,11 +322,10 @@ defmodule Synapsis.Tool.PermissionTest do
       assert :approved = Permission.check("list_dir", nil)
     end
 
-    test "returns :requires_approval for unknown session" do
-      # With default config, allow_execute is false so bash requires approval
-      # (The old code returned :requires_approval, new code maps :denied to :requires_approval)
+    test "returns :denied for tool that exceeds session permission level" do
+      # With default config, allow_execute is false so bash is denied
       result = Permission.check("bash", nil)
-      assert result == :requires_approval
+      assert result == :denied
     end
   end
 

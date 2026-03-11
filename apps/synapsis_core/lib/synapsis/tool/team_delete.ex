@@ -30,10 +30,7 @@ defmodule Synapsis.Tool.TeamDelete do
     if is_nil(session_id) do
       {:error, "No session context for team deletion"}
     else
-      teammates = Process.get({:swarm_teammates, session_id}, %{})
-      count = map_size(teammates)
-      Process.delete({:swarm_teammates, session_id})
-
+      count = Synapsis.Tool.Teammate.delete_all(session_id)
       {:ok, "Team dissolved. #{count} teammate(s) terminated."}
     end
   end

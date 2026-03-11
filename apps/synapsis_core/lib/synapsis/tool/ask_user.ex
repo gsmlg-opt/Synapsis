@@ -50,16 +50,16 @@ defmodule Synapsis.Tool.AskUser do
       else
         question = input["question"]
         options = input["options"]
-        ref = make_ref()
+        ref = Ecto.UUID.generate()
 
-        # Subscribe to response topic
+        # Subscribe to response topic before broadcasting to avoid race condition
         Phoenix.PubSub.subscribe(Synapsis.PubSub, "ask_user_response:#{session_id}")
 
-        # Broadcast question to session
+        # Broadcast question to session — include ref so clients can echo it back
         Phoenix.PubSub.broadcast(
           Synapsis.PubSub,
           "session:#{session_id}",
-          {:ask_user, ref, %{question: question, options: options}}
+          {:ask_user, ref, %{ref: ref, question: question, options: options}}
         )
 
         # Wait for user response (with timeout)
