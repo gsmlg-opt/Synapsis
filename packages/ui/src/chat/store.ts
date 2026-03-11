@@ -1,4 +1,4 @@
-import { configureStore, createSlice, type PayloadAction, type Middleware } from "@reduxjs/toolkit"
+import { combineReducers, configureStore, createSlice, type PayloadAction, type Middleware } from "@reduxjs/toolkit"
 
 /** Generate a UUID v4 that works in non-secure contexts (HTTP). */
 function generateUUID(): string {
@@ -287,18 +287,20 @@ interface StoreOptions {
   middleware?: Middleware[]
 }
 
+const rootReducer = combineReducers({
+  chat: chatSlice.reducer,
+  ui: uiSlice.reducer,
+  session: sessionSlice.reducer,
+})
+
 export function createChatStore(options: StoreOptions = {}) {
   return configureStore({
-    reducer: {
-      chat: chatSlice.reducer,
-      ui: uiSlice.reducer,
-      session: sessionSlice.reducer,
-    },
+    reducer: rootReducer,
     preloadedState: options.preloadedState as any,
     middleware: (getDefaultMiddleware) => {
       const mw = getDefaultMiddleware({ serializableCheck: false })
       if (options.middleware) {
-        return mw.concat(options.middleware)
+        return mw.concat(options.middleware) as any
       }
       return mw
     },
