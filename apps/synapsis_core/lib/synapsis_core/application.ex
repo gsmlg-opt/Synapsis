@@ -9,6 +9,22 @@ defmodule SynapsisCore.Application do
       [Synapsis.Agent.Supervisor, SynapsisPlugin.Supervisor, SynapsisServer.Supervisor]
       |> Enum.filter(&Code.ensure_loaded?/1)
 
+    oban_child =
+      case Application.fetch_env!(:synapsis_core, Oban) do
+        false ->
+          []
+
+        oban_config ->
+          case Application.ensure_all_started(:oban) do
+            {:ok, _} ->
+              [{Oban, oban_config}]
+
+            {:error, _} ->
+              Logger.warning("oban_start_skipped", reason: "oban application not available")
+              []
+          end
+      end
+
     children =
       [
         Synapsis.Repo,
@@ -20,8 +36,8 @@ defmodule SynapsisCore.Application do
         {Registry, keys: :unique, name: Synapsis.Session.Registry},
         {Registry, keys: :unique, name: Synapsis.Session.SupervisorRegistry},
         {Registry, keys: :unique, name: Synapsis.FileWatcher.Registry},
-        Synapsis.Session.DynamicSupervisor
-      ] ++ optional_children
+        Synapsis.Memory.Supervisor
+      ] ++ oban_child ++ [Synapsis.Session.DynamicSupervisor] ++ optional_children
 
     opts = [strategy: :one_for_one, name: SynapsisCore.Supervisor]
     result = Supervisor.start_link(children, opts)

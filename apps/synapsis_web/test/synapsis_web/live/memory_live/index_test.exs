@@ -1,150 +1,126 @@
 defmodule SynapsisWeb.MemoryLive.IndexTest do
   use SynapsisWeb.ConnCase
 
-  defp create_memory_entry(content) do
-    %Synapsis.MemoryEntry{}
-    |> Synapsis.MemoryEntry.changeset(%{scope: "global", key: "CLAUDE.md", content: content})
-    |> Synapsis.Repo.insert!()
+  alias Synapsis.{SemanticMemory, Repo}
+
+  defp create_semantic_memory(attrs) do
+    defaults = %{
+      scope: "shared",
+      scope_id: "",
+      kind: "fact",
+      title: "Test Memory",
+      summary: "Test summary content",
+      tags: ["test"],
+      source: "human",
+      importance: 1.0,
+      confidence: 1.0,
+      freshness: 1.0
+    }
+
+    %SemanticMemory{}
+    |> SemanticMemory.changeset(Map.merge(defaults, attrs))
+    |> Repo.insert!()
   end
 
-  defp clean_memory_entries do
-    import Ecto.Query
-
-    Synapsis.Repo.delete_all(
-      from(m in Synapsis.MemoryEntry, where: m.scope == "global" and m.key == "CLAUDE.md")
-    )
+  defp clean_semantic_memories do
+    Repo.delete_all(SemanticMemory)
   end
 
   setup do
-    clean_memory_entries()
+    clean_semantic_memories()
     :ok
   end
 
   describe "memory page" do
-    test "mounts and renders heading", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/settings/memory")
-      # dm_card :title renders as div.card-title, not h1
-      assert has_element?(view, ".card-title", "Memory")
-    end
-
-    test "shows breadcrumb navigation", %{conn: conn} do
+    test "mounts and renders breadcrumb", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/settings/memory")
       assert html =~ "Settings"
+      assert html =~ "Memory"
     end
 
-    test "shows Edit button by default", %{conn: conn} do
+    test "shows Knowledge tab by default", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/settings/memory")
-      assert html =~ "Edit"
+      assert html =~ "Knowledge"
+      assert html =~ "Events"
+      assert html =~ "Checkpoints"
     end
 
-    test "shows empty state when no entry", %{conn: conn} do
+    test "shows empty state when no memories", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/settings/memory")
-      assert html =~ "No memory content yet"
+      assert html =~ "No memories yet"
     end
 
-    test "displays existing content readonly", %{conn: conn} do
-      create_memory_entry("Hello from memory")
+    test "displays existing memories", %{conn: conn} do
+      create_semantic_memory(%{
+        title: "My Test Fact",
+        summary: "Important fact about the project"
+      })
+
       {:ok, _view, html} = live(conn, ~p"/settings/memory")
-      assert html =~ "Hello from memory"
+      assert html =~ "My Test Fact"
+      assert html =~ "Important fact about the project"
     end
 
-    test "content displayed via markdown component", %{conn: conn} do
-      create_memory_entry("line one\nline two")
+    test "shows New Memory button", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/settings/memory")
-      # Content is rendered via dm_markdown (remark-element), not whitespace-pre-wrap
-      assert html =~ "remark-element"
-      assert html =~ "line one\nline two"
+      assert html =~ "New Memory"
     end
 
-    test "clicking Edit shows textarea", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/settings/memory")
-
-      view |> element("button", "Edit") |> render_click()
-
-      assert has_element?(view, "textarea[name=content]")
+    test "shows kind and scope badges on memories", %{conn: conn} do
+      create_semantic_memory(%{kind: "decision", scope: "project", scope_id: "proj1"})
+      {:ok, _view, html} = live(conn, ~p"/settings/memory")
+      assert html =~ "decision"
+      assert html =~ "project"
     end
 
-    test "clicking Edit hides Edit button", %{conn: conn} do
+    test "clicking New Memory shows create form", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings/memory")
-
-      view |> element("button", "Edit") |> render_click()
-
-      html = render(view)
-      refute html =~ ~r/<button[^>]*>.*Edit.*<\/button>/s
-      assert html =~ "Save"
+      view |> element("button", "New Memory") |> render_click()
+      assert has_element?(view, "#create-memory-form")
     end
 
-    test "edit mode shows Save and Cancel buttons", %{conn: conn} do
+    test "create form can save a new memory", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings/memory")
-
-      view |> element("button", "Edit") |> render_click()
-
-      assert has_element?(view, "button", "Save")
-      assert has_element?(view, "button", "Cancel")
-    end
-
-    test "cancel returns to readonly without saving", %{conn: conn} do
-      create_memory_entry("original content")
-      {:ok, view, _html} = live(conn, ~p"/settings/memory")
-
-      view |> element("button", "Edit") |> render_click()
-      view |> element("button", "Cancel") |> render_click()
-
-      html = render(view)
-      assert html =~ "original content"
-      refute has_element?(view, "textarea")
-    end
-
-    test "save persists new content", %{conn: conn} do
-      create_memory_entry("old content")
-      {:ok, view, _html} = live(conn, ~p"/settings/memory")
-
-      view |> element("button", "Edit") |> render_click()
+      view |> element("button", "New Memory") |> render_click()
 
       view
-      |> form("#memory-form", %{"content" => "new content"})
+      |> form("#create-memory-form", %{
+        "scope" => "shared",
+        "kind" => "fact",
+        "title" => "New fact",
+        "summary" => "This is a new fact",
+        "tags" => "tag1, tag2"
+      })
       |> render_submit()
 
       html = render(view)
-      assert html =~ "new content"
-      refute has_element?(view, "textarea")
+      assert html =~ "Memory saved"
+      assert html =~ "New fact"
     end
 
-    test "save shows success flash", %{conn: conn} do
+    test "switching to Events tab shows events section", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings/memory")
-
-      view |> element("button", "Edit") |> render_click()
-
-      view
-      |> form("#memory-form", %{"content" => "some content"})
-      |> render_submit()
-
-      assert render(view) =~ "Memory saved"
-    end
-
-    test "save creates entry when none exists", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/settings/memory")
-
-      view |> element("button", "Edit") |> render_click()
-
-      view
-      |> form("#memory-form", %{"content" => "brand new content"})
-      |> render_submit()
-
+      view |> element("button", "Events") |> render_click()
       html = render(view)
-      assert html =~ "brand new content"
-      refute html =~ "No memory content yet"
+      assert html =~ "No events yet"
     end
 
-    test "edit mode textarea contains current content", %{conn: conn} do
-      create_memory_entry("pre-existing text")
+    test "switching to Checkpoints tab shows checkpoints section", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings/memory")
-
-      view |> element("button", "Edit") |> render_click()
-
+      view |> element("button", "Checkpoints") |> render_click()
       html = render(view)
-      assert html =~ "pre-existing text"
-      assert has_element?(view, "textarea[name=content]")
+      assert html =~ "No checkpoints yet"
+    end
+
+    test "archive button removes memory from list", %{conn: conn} do
+      mem = create_semantic_memory(%{title: "To Archive"})
+      {:ok, view, _html} = live(conn, ~p"/settings/memory")
+      assert render(view) =~ "To Archive"
+
+      view |> element("[phx-click=\"archive\"][phx-value-id=\"#{mem.id}\"]") |> render_click()
+      html = render(view)
+      assert html =~ "Memory archived"
+      refute html =~ "To Archive"
     end
   end
 end

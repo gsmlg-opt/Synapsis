@@ -7,7 +7,11 @@ defmodule SynapsisWeb.AssistantLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    Agent.start_project(@global_project_id, %{kind: :global_assistant})
+    try do
+      Agent.start_project(@global_project_id, %{kind: :global_assistant})
+    catch
+      :exit, _ -> :ok
+    end
 
     {:ok,
      assign(socket,
@@ -32,13 +36,17 @@ defmodule SynapsisWeb.AssistantLive.Index do
       work_id = "global-" <> Integer.to_string(System.unique_integer([:positive, :monotonic]))
 
       dispatch_result =
-        Agent.dispatch_work(%{
-          work_id: work_id,
-          project_id: @global_project_id,
-          task_type: :ad_hoc_prompt,
-          payload: %{prompt: prompt},
-          origin: :user
-        })
+        try do
+          Agent.dispatch_work(%{
+            work_id: work_id,
+            project_id: @global_project_id,
+            task_type: :ad_hoc_prompt,
+            payload: %{prompt: prompt},
+            origin: :user
+          })
+        catch
+          :exit, reason -> {:error, reason}
+        end
 
       status = build_status_message(dispatch_result, work_id)
 

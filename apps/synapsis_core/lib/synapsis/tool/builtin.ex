@@ -35,6 +35,11 @@ defmodule Synapsis.Tool.Builtin do
     # Phase 12: Swarm tools
     Synapsis.Tool.Teammate,
     Synapsis.Tool.TeamDelete,
+    # Phase 14: Memory tools
+    Synapsis.Tool.SessionSummarize,
+    Synapsis.Tool.MemorySave,
+    Synapsis.Tool.MemorySearch,
+    Synapsis.Tool.MemoryUpdate,
     # Phase 13: Disabled stubs
     Synapsis.Tool.NotebookEdit,
     Synapsis.Tool.NotebookRead,

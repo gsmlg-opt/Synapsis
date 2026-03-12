@@ -44,6 +44,7 @@ defmodule SynapsisCore.MixProject do
       {:req, "~> 0.5"},
       {:finch, "~> 0.18"},
       {:jason, "~> 1.4"},
+      {:oban, "~> 2.19"},
       {:file_system, "~> 1.0"},
       {:bypass, "~> 2.1", only: :test}
     ]

@@ -1,12 +1,16 @@
 defmodule Synapsis.PromptBuilderTest do
-  use Synapsis.DataCase, async: true
+  use Synapsis.DataCase, async: false
 
-  alias Synapsis.{PromptBuilder, FailedAttempt, MemoryEntry, Repo}
+  alias Synapsis.{PromptBuilder, FailedAttempt, SemanticMemory, Repo}
 
   setup do
-    # Clear any pre-existing global memory entries to isolate tests
+    # Clear ETS cache to avoid stale retrieval results between tests
+    Synapsis.Memory.Cache.clear()
+
+    # Clear any pre-existing shared semantic memories to isolate tests
     import Ecto.Query
-    Repo.delete_all(from(m in MemoryEntry, where: m.scope == "global"))
+    Repo.delete_all(from(m in SemanticMemory, where: m.scope == "shared"))
+    Repo.delete_all(from(m in SemanticMemory, where: m.scope == "project"))
 
     {:ok, project} =
       %Synapsis.Project{}
@@ -118,7 +122,6 @@ defmodule Synapsis.PromptBuilderTest do
 
       result = PromptBuilder.build_failure_context(session.id)
 
-      # The format_entry joins: "- **Attempt 1**: compile error -> Lesson: Use correct module name"
       assert result =~ "Lesson: Use correct module name"
     end
 
@@ -213,31 +216,31 @@ defmodule Synapsis.PromptBuilderTest do
       assert PromptBuilder.build_memory_context(session.id) == nil
     end
 
-    test "returns global memory content", %{session: session} do
-      insert_memory("global", nil, "preference", "Always use snake_case")
+    test "returns shared memory content in XML format", %{session: session} do
+      insert_memory("shared", "", "fact", "Always use snake_case", "Naming convention for Elixir")
 
       result = PromptBuilder.build_memory_context(session.id)
-      assert result =~ "## Memory"
-      assert result =~ "**preference**"
-      assert result =~ "Always use snake_case"
+      assert result =~ "<memory>"
+      assert result =~ "<shared>"
+      assert result =~ "Naming convention for Elixir"
     end
 
     test "returns project-scoped memory content", %{session: session, project: project} do
-      insert_memory("project", project.id, "stack", "Elixir + Phoenix")
+      insert_memory("project", to_string(project.id), "fact", "Elixir + Phoenix", "Tech stack")
 
       result = PromptBuilder.build_memory_context(session.id)
-      assert result =~ "## Memory"
-      assert result =~ "**stack**"
-      assert result =~ "Elixir + Phoenix"
+      assert result =~ "<memory>"
+      assert result =~ "<project"
+      assert result =~ "Tech stack"
     end
 
-    test "combines global and project entries", %{session: session, project: project} do
-      insert_memory("global", nil, "style", "Be concise")
-      insert_memory("project", project.id, "framework", "Phoenix 1.8")
+    test "combines shared and project entries", %{session: session, project: project} do
+      insert_memory("shared", "", "preference", "Be concise", "Communication style")
+      insert_memory("project", to_string(project.id), "fact", "Phoenix 1.8", "Framework version")
 
       result = PromptBuilder.build_memory_context(session.id)
-      assert result =~ "Be concise"
-      assert result =~ "Phoenix 1.8"
+      assert result =~ "Communication style"
+      assert result =~ "Framework version"
     end
 
     test "does not include entries from other projects", %{session: session} do
@@ -249,7 +252,13 @@ defmodule Synapsis.PromptBuilderTest do
         })
         |> Repo.insert()
 
-      insert_memory("project", other_project.id, "secret", "Should not appear")
+      insert_memory(
+        "project",
+        to_string(other_project.id),
+        "fact",
+        "Should not appear",
+        "Secret info"
+      )
 
       assert PromptBuilder.build_memory_context(session.id) == nil
     end
@@ -266,11 +275,11 @@ defmodule Synapsis.PromptBuilderTest do
     end
 
     test "returns only memory when no failures", %{session: session} do
-      insert_memory("global", nil, "note", "Remember this")
+      insert_memory("shared", "", "lesson", "Remember this", "Important lesson")
 
       result = PromptBuilder.build_prompt_context(session.id)
-      assert result =~ "## Memory"
-      assert result =~ "Remember this"
+      assert result =~ "<memory>"
+      assert result =~ "Important lesson"
       refute result =~ "Failed Approaches"
     end
 
@@ -280,29 +289,30 @@ defmodule Synapsis.PromptBuilderTest do
       result = PromptBuilder.build_prompt_context(session.id)
       assert result =~ "## Failed Approaches"
       assert result =~ "Compile error"
-      refute result =~ "## Memory"
+      refute result =~ "<memory>"
     end
 
     test "combines both when both exist", %{session: session} do
-      insert_memory("global", nil, "note", "Use pattern matching")
+      insert_memory("shared", "", "pattern", "Use pattern matching", "Elixir best practice")
       insert_attempt(session.id, 1, "Timeout error", "Add timeout option")
 
       result = PromptBuilder.build_prompt_context(session.id)
-      assert result =~ "## Memory"
-      assert result =~ "Use pattern matching"
+      assert result =~ "<memory>"
+      assert result =~ "Elixir best practice"
       assert result =~ "## Failed Approaches"
       assert result =~ "Timeout error"
     end
   end
 
-  defp insert_memory(scope, scope_id, key, content) do
+  defp insert_memory(scope, scope_id, kind, title, summary) do
     {:ok, _} =
-      %MemoryEntry{}
-      |> MemoryEntry.changeset(%{
+      %SemanticMemory{}
+      |> SemanticMemory.changeset(%{
         scope: scope,
         scope_id: scope_id,
-        key: key,
-        content: content
+        kind: kind,
+        title: title,
+        summary: summary
       })
       |> Repo.insert()
   end

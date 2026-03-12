@@ -1,80 +1,167 @@
-defmodule Synapsis.MemoryEntryTest do
+defmodule Synapsis.SemanticMemoryTest do
   use Synapsis.DataCase
 
-  alias Synapsis.{MemoryEntry, Repo}
+  alias Synapsis.{SemanticMemory, Repo}
 
   describe "changeset/2" do
     test "valid with required fields" do
-      cs = %MemoryEntry{} |> MemoryEntry.changeset(%{scope: "global", key: "test", content: "value"})
+      cs =
+        %SemanticMemory{}
+        |> SemanticMemory.changeset(%{
+          scope: "shared",
+          scope_id: "",
+          kind: "fact",
+          title: "test",
+          summary: "value"
+        })
+
       assert cs.valid?
     end
 
     test "invalid without scope" do
-      cs = %MemoryEntry{} |> MemoryEntry.changeset(%{key: "test", content: "value"})
+      cs =
+        %SemanticMemory{}
+        |> SemanticMemory.changeset(%{scope_id: "", kind: "fact", title: "t", summary: "s"})
+
       refute cs.valid?
       assert %{scope: ["can't be blank"]} = errors_on(cs)
     end
 
-    test "invalid without key" do
-      cs = %MemoryEntry{} |> MemoryEntry.changeset(%{scope: "global", content: "value"})
-      refute cs.valid?
-      assert %{key: ["can't be blank"]} = errors_on(cs)
-    end
+    test "invalid without title" do
+      cs =
+        %SemanticMemory{}
+        |> SemanticMemory.changeset(%{scope: "shared", scope_id: "", kind: "fact", summary: "s"})
 
-    test "invalid without content" do
-      cs = %MemoryEntry{} |> MemoryEntry.changeset(%{scope: "global", key: "test"})
       refute cs.valid?
-      assert %{content: ["can't be blank"]} = errors_on(cs)
+      assert %{title: ["can't be blank"]} = errors_on(cs)
     end
 
     test "validates scope inclusion" do
-      cs = %MemoryEntry{} |> MemoryEntry.changeset(%{scope: "invalid", key: "k", content: "c"})
+      cs =
+        %SemanticMemory{}
+        |> SemanticMemory.changeset(%{
+          scope: "invalid",
+          scope_id: "",
+          kind: "fact",
+          title: "t",
+          summary: "s"
+        })
+
       refute cs.valid?
       assert %{scope: [_]} = errors_on(cs)
     end
 
+    test "validates kind inclusion" do
+      cs =
+        %SemanticMemory{}
+        |> SemanticMemory.changeset(%{
+          scope: "shared",
+          scope_id: "",
+          kind: "invalid",
+          title: "t",
+          summary: "s"
+        })
+
+      refute cs.valid?
+      assert %{kind: [_]} = errors_on(cs)
+    end
+
     test "allows valid scopes" do
-      for scope <- ~w(global project session) do
-        cs = %MemoryEntry{} |> MemoryEntry.changeset(%{scope: scope, key: "k", content: "c"})
+      for scope <- ~w(shared project agent) do
+        cs =
+          %SemanticMemory{}
+          |> SemanticMemory.changeset(%{
+            scope: scope,
+            scope_id: "",
+            kind: "fact",
+            title: "t",
+            summary: "s"
+          })
+
         assert cs.valid?, "Expected scope #{scope} to be valid"
       end
     end
 
-    test "sets default metadata" do
-      cs = %MemoryEntry{} |> MemoryEntry.changeset(%{scope: "global", key: "k", content: "c"})
-      assert get_field(cs, :metadata) == %{}
+    test "allows valid kinds" do
+      for kind <- ~w(fact decision lesson preference pattern warning summary policy) do
+        cs =
+          %SemanticMemory{}
+          |> SemanticMemory.changeset(%{
+            scope: "shared",
+            scope_id: "",
+            kind: kind,
+            title: "t",
+            summary: "s"
+          })
+
+        assert cs.valid?, "Expected kind #{kind} to be valid"
+      end
+    end
+
+    test "sets defaults" do
+      cs =
+        %SemanticMemory{}
+        |> SemanticMemory.changeset(%{
+          scope: "shared",
+          scope_id: "",
+          kind: "fact",
+          title: "t",
+          summary: "s"
+        })
+
+      assert get_field(cs, :importance) == 0.5
+      assert get_field(cs, :confidence) == 0.5
+      assert get_field(cs, :freshness) == 1.0
+      assert get_field(cs, :source) == "agent"
+      assert get_field(cs, :tags) == []
     end
   end
 
   describe "persistence" do
-    test "inserts and retrieves entry" do
-      {:ok, entry} =
-        %MemoryEntry{}
-        |> MemoryEntry.changeset(%{scope: "global", key: "test-key", content: "test-value"})
+    test "inserts and retrieves semantic memory" do
+      {:ok, memory} =
+        %SemanticMemory{}
+        |> SemanticMemory.changeset(%{
+          scope: "shared",
+          scope_id: "",
+          kind: "fact",
+          title: "test-title",
+          summary: "test-summary",
+          tags: ["tag1", "tag2"]
+        })
         |> Repo.insert()
 
-      found = Repo.get!(MemoryEntry, entry.id)
-      assert found.key == "test-key"
-      assert found.content == "test-value"
-      assert found.scope == "global"
+      found = Repo.get!(SemanticMemory, memory.id)
+      assert found.title == "test-title"
+      assert found.summary == "test-summary"
+      assert found.scope == "shared"
+      assert found.tags == ["tag1", "tag2"]
     end
 
-    test "allows duplicate scope+key when scope_id is NULL (NULL is distinct)" do
-      # PostgreSQL treats NULL as distinct in unique indexes
-      attrs = %{scope: "global", key: "unique-key", content: "value"}
+    test "update_changeset updates allowed fields" do
+      {:ok, memory} =
+        %SemanticMemory{}
+        |> SemanticMemory.changeset(%{
+          scope: "project",
+          scope_id: "proj1",
+          kind: "decision",
+          title: "old title",
+          summary: "old summary"
+        })
+        |> Repo.insert()
 
-      {:ok, _} = %MemoryEntry{} |> MemoryEntry.changeset(attrs) |> Repo.insert()
-      {:ok, _} = %MemoryEntry{} |> MemoryEntry.changeset(attrs) |> Repo.insert()
-    end
+      {:ok, updated} =
+        memory
+        |> SemanticMemory.update_changeset(%{
+          title: "new title",
+          summary: "new summary",
+          importance: 0.9
+        })
+        |> Repo.update()
 
-    test "enforces unique constraint when scope_id is set" do
-      scope_id = Ecto.UUID.generate()
-      attrs = %{scope: "project", scope_id: scope_id, key: "unique-key", content: "value"}
-
-      {:ok, _} = %MemoryEntry{} |> MemoryEntry.changeset(attrs) |> Repo.insert()
-
-      {:error, cs} = %MemoryEntry{} |> MemoryEntry.changeset(attrs) |> Repo.insert()
-      assert %{scope: ["has already been taken"]} = errors_on(cs)
+      assert updated.title == "new title"
+      assert updated.summary == "new summary"
+      assert updated.importance == 0.9
     end
   end
 end
