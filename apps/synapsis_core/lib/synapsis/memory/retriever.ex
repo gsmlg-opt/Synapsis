@@ -49,7 +49,16 @@ defmodule Synapsis.Memory.Retriever do
 
         # Touch access stats in background
         ids = Enum.map(results, & &1.id)
-        if ids != [], do: Task.start(fn -> Synapsis.Memory.touch_accessed(ids) end)
+
+        if ids != [] do
+          Task.Supervisor.start_child(Synapsis.Tool.TaskSupervisor, fn ->
+            try do
+              Synapsis.Memory.touch_accessed(ids)
+            rescue
+              _ -> :ok
+            end
+          end)
+        end
 
         results
     end
@@ -66,8 +75,10 @@ defmodule Synapsis.Memory.Retriever do
         Synapsis.Memory.list_semantic(filters ++ [active: true, limit: limit * 3])
       end
 
+    now = DateTime.utc_now()
+
     candidates
-    |> Enum.map(&score_candidate(&1, query))
+    |> Enum.map(&score_candidate(&1, query, now))
     |> Enum.sort_by(& &1.score, :desc)
     |> Enum.take(limit)
   end
@@ -114,9 +125,7 @@ defmodule Synapsis.Memory.Retriever do
     end
   end
 
-  defp score_candidate(memory, query) do
-    now = DateTime.utc_now()
-
+  defp score_candidate(memory, query, now) do
     keyword_score = keyword_match_score(memory, query)
     importance_score = memory.importance || 0.5
     recency_score = recency_score(memory.inserted_at, now)

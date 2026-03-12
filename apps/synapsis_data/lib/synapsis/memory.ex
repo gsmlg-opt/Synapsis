@@ -52,6 +52,13 @@ defmodule Synapsis.Memory do
     query |> where([e], e.type == ^to_string(val)) |> apply_event_filters(rest)
   end
 
+  defp apply_event_filters(query, [{:payload_key, {key, val}} | rest])
+       when is_binary(key) and is_binary(val) do
+    query
+    |> where([e], fragment("? ->> ? = ?", e.payload, ^key, ^val))
+    |> apply_event_filters(rest)
+  end
+
   defp apply_event_filters(query, [_ | rest]), do: apply_event_filters(query, rest)
 
   # ── Checkpoints ─────────────────────────────────────────────────────

@@ -27,7 +27,7 @@ defmodule SynapsisWeb.MemoryLive.Index do
        create_form:
          to_form(%{
            "kind" => "fact",
-           "scope" => "project",
+           "scope" => "shared",
            "title" => "",
            "summary" => "",
            "tags" => ""
@@ -82,9 +82,11 @@ defmodule SynapsisWeb.MemoryLive.Index do
       |> String.split(",", trim: true)
       |> Enum.map(&String.trim/1)
 
+    scope = params["scope"] || "shared"
+
     attrs = %{
-      scope: params["scope"] || "project",
-      scope_id: "",
+      scope: scope,
+      scope_id: if(scope == "shared", do: "", else: params["scope_id"] || ""),
       kind: params["kind"] || "fact",
       title: params["title"] || "",
       summary: params["summary"] || "",

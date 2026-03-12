@@ -5,13 +5,17 @@ defmodule SynapsisWeb.MemoryLive.Show do
   def mount(%{"id" => id}, _session, socket) do
     case Synapsis.Memory.get_semantic(id) do
       {:ok, memory} ->
-        # Load history events for this memory
+        if connected?(socket) do
+          Phoenix.PubSub.subscribe(Synapsis.PubSub, "memory:#{memory.scope}:#{memory.scope_id}")
+        end
+
+        # Load history events for this memory via JSONB key filter
         history =
-          Synapsis.Memory.list_events(type: "memory_updated", limit: 20)
-          |> Enum.filter(fn evt ->
-            get_in(evt.payload, ["memory_id"]) == id or
-              get_in(evt.payload, [:memory_id]) == id
-          end)
+          Synapsis.Memory.list_events(
+            type: "memory_updated",
+            payload_key: {"memory_id", id},
+            limit: 20
+          )
 
         {:ok,
          assign(socket,
@@ -103,6 +107,28 @@ defmodule SynapsisWeb.MemoryLive.Show do
         {:noreply, put_flash(socket, :error, "Failed to archive")}
     end
   end
+
+  @impl true
+  def handle_info({:memory_promoted, _mem_id}, socket) do
+    # Refresh the memory on any promotion event in this scope
+    case Synapsis.Memory.get_semantic(socket.assigns.memory.id) do
+      {:ok, updated} ->
+        history =
+          Synapsis.Memory.list_events(
+            type: "memory_updated",
+            payload_key: {"memory_id", updated.id},
+            limit: 20
+          )
+
+        {:noreply,
+         assign(socket, memory: updated, history: history, edit_form: build_edit_form(updated))}
+
+      {:error, _} ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_info(_msg, socket), do: {:noreply, socket}
 
   defp build_edit_form(memory) do
     to_form(%{

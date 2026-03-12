@@ -13,11 +13,12 @@ defmodule Synapsis.Memory.ContextBuilder do
   alias Synapsis.Memory.Retriever
 
   @default_max_tokens 1000
+  # Token budget allocation per scope (must sum to 1.0).
+  # Session-scope working memory is injected separately by WorkingMemory module.
   @budget %{
-    shared: 0.05,
-    project: 0.50,
-    agent: 0.20,
-    session: 0.25
+    shared: 0.10,
+    project: 0.60,
+    agent: 0.30
   }
 
   @doc """
@@ -124,7 +125,10 @@ defmodule Synapsis.Memory.ContextBuilder do
 
     memories
     |> Enum.reduce_while({[], 0}, fn mem, {acc, used} ->
-      line = "- #{mem.summary}"
+      kind_label = if mem[:kind], do: "[#{mem.kind}] ", else: ""
+      title_label = if mem[:title], do: "#{mem.title}: ", else: ""
+      summary = xml_escape(mem.summary || "")
+      line = "- #{kind_label}#{title_label}#{summary}"
       line_chars = String.length(line)
 
       if used + line_chars <= budget_chars do
@@ -136,5 +140,12 @@ defmodule Synapsis.Memory.ContextBuilder do
     |> elem(0)
     |> Enum.reverse()
     |> Enum.join("\n")
+  end
+
+  defp xml_escape(text) do
+    text
+    |> String.replace("&", "&amp;")
+    |> String.replace("<", "&lt;")
+    |> String.replace(">", "&gt;")
   end
 end

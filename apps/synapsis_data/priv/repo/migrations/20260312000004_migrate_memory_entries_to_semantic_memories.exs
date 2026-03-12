@@ -2,8 +2,17 @@ defmodule Synapsis.Repo.Migrations.MigrateMemoryEntriesToSemanticMemories do
   use Ecto.Migration
 
   def up do
-    # Migrate existing memory_entries into semantic_memories
-    # Cast scope_id from uuid to text, handle NULL as empty string
+    # Migrate existing memory_entries into semantic_memories.
+    # NOTE: Session-scoped entries are intentionally excluded — they are ephemeral
+    # working data that belongs in working memory, not in long-term semantic storage.
+    # Cast scope_id from uuid to text, handle NULL as empty string.
+
+    # Archive session-scoped entries to a backup table before dropping
+    execute("""
+    CREATE TABLE IF NOT EXISTS memory_entries_session_archive AS
+    SELECT * FROM memory_entries WHERE scope = 'session'
+    """)
+
     execute("""
     INSERT INTO semantic_memories (id, scope, scope_id, kind, title, summary, detail, tags,
       evidence_event_ids, importance, confidence, freshness, source, contributed_by,

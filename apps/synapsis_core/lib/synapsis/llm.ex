@@ -116,8 +116,7 @@ defmodule Synapsis.LLM do
 
             %{
               api_key: api_key,
-              base_url:
-                Synapsis.Providers.default_base_url(provider_name) || "https://api.openai.com",
+              base_url: Synapsis.Providers.default_base_url(provider_name),
               type: provider_name
             }
         end
