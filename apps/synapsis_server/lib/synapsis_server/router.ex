@@ -22,7 +22,8 @@ defmodule SynapsisServer.Router do
               SynapsisWeb.MCPLive.Show,
               SynapsisWeb.LSPLive.Index,
               SynapsisWeb.LSPLive.Show,
-              SynapsisWeb.ModelTierLive.Index
+              SynapsisWeb.ModelTierLive.Index,
+              SynapsisWeb.WorkspaceLive.Explorer
             ]}
 
   pipeline :browser do
@@ -72,6 +73,8 @@ defmodule SynapsisServer.Router do
     live "/projects/:project_id/sessions", SessionLive.Index, :index
     live "/projects/:project_id/sessions/new", SessionLive.Index, :new
     live "/projects/:project_id/sessions/:id", SessionLive.Show, :show
+
+    live "/workspace", WorkspaceLive.Explorer, :index
 
     live "/settings", SettingsLive, :index
 

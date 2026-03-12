@@ -47,6 +47,12 @@ defmodule SynapsisCore.Application do
         Synapsis.Tool.Builtin.register_all()
 
         try do
+          apply(Synapsis.Workspace.Tools, :register_all, [])
+        rescue
+          e -> Logger.warning("workspace_tools_register_failed", error: Exception.message(e))
+        end
+
+        try do
           Synapsis.Providers.load_all_into_registry()
         rescue
           e -> Logger.warning("provider_registry_load_failed", error: Exception.message(e))

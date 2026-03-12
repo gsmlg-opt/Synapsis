@@ -1,0 +1,84 @@
+defmodule Synapsis.Workspace.Tools.WorkspaceWrite do
+  @moduledoc "Write content to the shared workspace."
+  use Synapsis.Tool
+
+  @impl true
+  def name, do: "workspace_write"
+
+  @impl true
+  def permission_level, do: :write
+
+  @impl true
+  def category, do: :workspace
+
+  @impl true
+  def description do
+    "Write a document to the shared workspace. Creates or updates plans, todos, notes, handoffs, and other workspace artifacts. Auto-creates parent directories."
+  end
+
+  @impl true
+  def parameters do
+    %{
+      "type" => "object",
+      "properties" => %{
+        "path" => %{
+          "type" => "string",
+          "description" =>
+            "Workspace path (e.g. /projects/myapp/plans/auth-redesign.md)"
+        },
+        "content" => %{
+          "type" => "string",
+          "description" => "Content to write"
+        },
+        "metadata" => %{
+          "type" => "object",
+          "description" => "Optional metadata (title, tags, etc.)"
+        },
+        "content_format" => %{
+          "type" => "string",
+          "enum" => ["markdown", "yaml", "json", "text"],
+          "description" => "Content format (default: markdown)"
+        }
+      },
+      "required" => ["path", "content"]
+    }
+  end
+
+  @impl true
+  def execute(input, context) do
+    path = input["path"]
+    content = input["content"]
+    author = context[:agent_id] || context[:session_id] || "agent"
+
+    opts =
+      %{author: author}
+      |> maybe_put(:metadata, input["metadata"])
+      |> maybe_put(:content_format, parse_format(input["content_format"]))
+
+    case Synapsis.Workspace.write(path, content, opts) do
+      {:ok, resource} ->
+        {:ok,
+         Jason.encode!(%{
+           id: resource.id,
+           path: resource.path,
+           version: resource.version,
+           lifecycle: resource.lifecycle
+         })}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:error, "Write failed: #{inspect(changeset.errors)}"}
+
+      {:error, reason} ->
+        {:error, "Write failed: #{inspect(reason)}"}
+    end
+  end
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
+
+  defp parse_format("markdown"), do: :markdown
+  defp parse_format("yaml"), do: :yaml
+  defp parse_format("json"), do: :json
+  defp parse_format("text"), do: :text
+  defp parse_format(_), do: nil
+end

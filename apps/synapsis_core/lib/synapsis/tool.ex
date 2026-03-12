@@ -49,6 +49,7 @@ defmodule Synapsis.Tool do
           | :computer
           | :swarm
           | :memory
+          | :workspace
           | :uncategorized
 
   @type context :: %{
