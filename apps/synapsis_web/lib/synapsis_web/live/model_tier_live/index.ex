@@ -29,10 +29,10 @@ defmodule SynapsisWeb.ModelTierLive.Index do
   def render(assigns) do
     ~H"""
     <div class="max-w-4xl mx-auto p-6">
-      <.dm_breadcrumb>
+      <.breadcrumb class="mb-4">
         <:crumb to={~p"/settings"}>Settings</:crumb>
         <:crumb>Default Model</:crumb>
-      </.dm_breadcrumb>
+      </.breadcrumb>
 
       <h1 class="text-2xl font-bold mb-6">Default Model</h1>
 

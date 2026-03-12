@@ -6,15 +6,17 @@ defmodule SynapsisWeb.MCPLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, configs: [], page_title: "MCP Servers")}
+    {:ok, assign(socket, configs: [], page_title: "MCP Servers", plugin_states: %{})}
   end
 
   @impl true
   def handle_params(params, _uri, socket) do
     configs = list_configs()
+    plugin_states = load_plugin_states(configs)
 
     {:noreply,
-     apply_action(socket, socket.assigns.live_action, params) |> assign(configs: configs)}
+     apply_action(socket, socket.assigns.live_action, params)
+     |> assign(configs: configs, plugin_states: plugin_states)}
   end
 
   defp apply_action(socket, :new, _params) do
@@ -103,15 +105,105 @@ defmodule SynapsisWeb.MCPLive.Index do
 
   def handle_event("delete_config", %{"id" => id}, socket) do
     case Repo.get(PluginConfig, id) do
-      nil -> :ok
-      config -> Repo.delete(config)
+      nil ->
+        :ok
+
+      config ->
+        SynapsisPlugin.stop_plugin(config.name)
+        Repo.delete(config)
     end
 
-    {:noreply, assign(socket, configs: list_configs())}
+    configs = list_configs()
+    {:noreply, assign(socket, configs: configs, plugin_states: load_plugin_states(configs))}
+  end
+
+  def handle_event("start_plugin", %{"name" => name}, socket) do
+    case Repo.get_by(PluginConfig, name: name, type: "mcp") do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Config not found")}
+
+      config ->
+        plugin_config = %{
+          name: config.name,
+          command: config.command,
+          args: config.args || [],
+          env: config.env || %{}
+        }
+
+        result =
+          try do
+            SynapsisPlugin.start_plugin(SynapsisPlugin.MCP, config.name, plugin_config)
+          rescue
+            e -> {:error, Exception.message(e)}
+          catch
+            _, reason -> {:error, inspect(reason)}
+          end
+
+        case result do
+          {:ok, _pid} ->
+            Process.send_after(self(), :refresh_plugin_states, 3000)
+
+            {:noreply,
+             socket
+             |> refresh_states()
+             |> put_flash(:info, "MCP server '#{name}' starting...")}
+
+          {:error, reason} ->
+            {:noreply, put_flash(socket, :error, "Failed to start: #{inspect(reason)}")}
+        end
+    end
+  end
+
+  def handle_event("stop_plugin", %{"name" => name}, socket) do
+    SynapsisPlugin.stop_plugin(name)
+    configs = list_configs()
+
+    {:noreply,
+     socket
+     |> assign(configs: configs, plugin_states: load_plugin_states(configs))
+     |> put_flash(:info, "MCP server '#{name}' stopped")}
+  end
+
+  @impl true
+  def handle_info(:refresh_plugin_states, socket) do
+    {:noreply, refresh_states(socket)}
+  end
+
+  defp refresh_states(socket) do
+    configs = list_configs()
+    assign(socket, configs: configs, plugin_states: load_plugin_states(configs))
   end
 
   defp list_configs do
     Repo.all(from(p in PluginConfig, where: p.type == "mcp", order_by: [asc: p.name]))
+  end
+
+  defp load_plugin_states(configs) do
+    stopped = %{running: false, initialized: false, server_info: nil, tools: []}
+
+    for config <- configs, into: %{} do
+      info =
+        try do
+          case SynapsisPlugin.get_plugin_state(config.name) do
+            {:ok, %SynapsisPlugin.MCP{} = state} ->
+              %{
+                running: true,
+                initialized: state.initialized || false,
+                server_info: state.server_info,
+                tools: state.tools || []
+              }
+
+            _ ->
+              stopped
+          end
+        rescue
+          _ -> stopped
+        catch
+          _, _ -> stopped
+        end
+
+      {config.name, info}
+    end
   end
 
   defp parse_args(nil), do: []
@@ -150,10 +242,10 @@ defmodule SynapsisWeb.MCPLive.Index do
 
     ~H"""
     <div class="max-w-5xl mx-auto p-6">
-      <.dm_breadcrumb class="mb-4">
+      <.breadcrumb class="mb-4">
         <:crumb to={~p"/settings"}>Settings</:crumb>
         <:crumb>MCP Servers</:crumb>
-      </.dm_breadcrumb>
+      </.breadcrumb>
 
       <div class="flex justify-between items-center mb-6">
         <h1 class="text-2xl font-bold">MCP Servers</h1>
@@ -326,6 +418,7 @@ defmodule SynapsisWeb.MCPLive.Index do
           :for={config <- @configs}
           variant="bordered"
         >
+          <% ps = Map.get(@plugin_states, config.name, %{running: false}) %>
           <div class="flex justify-between items-start mb-2">
             <.dm_link
               navigate={~p"/settings/mcp/#{config.id}"}
@@ -365,13 +458,98 @@ defmodule SynapsisWeb.MCPLive.Index do
           <div :if={map_size(config.env || %{}) > 0} class="text-xs text-warning mt-1">
             {"#{map_size(config.env)} env var(s)"}
           </div>
-          <div class="mt-2">
-            <.dm_badge :if={config.auto_start} color="success" size="sm">
-              Enabled
-            </.dm_badge>
-            <.dm_badge :if={!config.auto_start} color="ghost" size="sm">
-              Disabled
-            </.dm_badge>
+          <%!-- Server info from initialize response --%>
+          <div :if={ps[:running] && ps[:server_info]} class="mt-2 p-2 bg-base-200 rounded text-xs">
+            <div class="font-semibold text-base-content/70 mb-1">Server Info</div>
+            <div :if={ps[:server_info]["serverInfo"]} class="text-base-content/60">
+              {ps[:server_info]["serverInfo"]["name"]}
+              <span :if={ps[:server_info]["serverInfo"]["version"]}>
+                v{ps[:server_info]["serverInfo"]["version"]}
+              </span>
+            </div>
+            <div :if={ps[:server_info]["protocolVersion"]} class="text-base-content/40">
+              Protocol: {ps[:server_info]["protocolVersion"]}
+            </div>
+            <div :if={ps[:server_info]["capabilities"]} class="text-base-content/40">
+              Capabilities: {ps[:server_info]["capabilities"] |> Map.keys() |> Enum.join(", ")}
+            </div>
+          </div>
+          <div class="mt-2 flex items-center gap-2 flex-wrap">
+            <span :if={config.auto_start} class="badge badge-sm badge-success">
+              Auto-start
+            </span>
+            <span :if={!config.auto_start} class="badge badge-sm badge-ghost">
+              Manual
+            </span>
+            <span :if={ps[:running] && ps[:initialized]} class="badge badge-sm badge-info">
+              Running
+            </span>
+            <span :if={ps[:running] && !ps[:initialized]} class="badge badge-sm badge-warning">
+              Initializing
+            </span>
+            <span :if={!ps[:running]} class="badge badge-sm badge-ghost">
+              Stopped
+            </span>
+            <.dm_btn
+              :if={!ps[:running]}
+              variant="primary"
+              size="xs"
+              phx-click="start_plugin"
+              phx-value-name={config.name}
+            >
+              Start
+            </.dm_btn>
+            <.dm_btn
+              :if={ps[:running]}
+              variant="ghost"
+              size="xs"
+              phx-click="stop_plugin"
+              phx-value-name={config.name}
+            >
+              Stop
+            </.dm_btn>
+            <%!-- Tools button with count --%>
+            <.dm_modal
+              :if={ps[:running] && ps[:tools] != []}
+              id={"tools-modal-#{config.id}"}
+              size="large"
+              backdrop
+            >
+              <:trigger :let={dialog_id}>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs text-primary"
+                  onclick={"var d=document.getElementById('#{dialog_id}');d.showModal();d.classList.add('modal-open');d.addEventListener('close',function(){d.classList.remove('modal-open')},{once:true})"}
+                >
+                  <.dm_mdi name="puzzle-outline" class="w-3 h-3 mr-1" />
+                  {length(ps[:tools])} tool(s)
+                </button>
+              </:trigger>
+              <:title>Tools — {config.name}</:title>
+              <:body>
+                <div class="w-full overflow-y-auto max-h-96">
+                  <div
+                    :for={tool <- ps[:tools]}
+                    class="border-b border-base-300 last:border-b-0 py-3"
+                  >
+                    <div class="font-mono text-sm font-semibold text-primary">
+                      {tool["name"]}
+                    </div>
+                    <div :if={tool["description"]} class="text-sm text-base-content/60 mt-1">
+                      {tool["description"]}
+                    </div>
+                    <div :if={tool["inputSchema"]} class="mt-2">
+                      <details class="cursor-pointer">
+                        <summary class="text-xs text-base-content/40 hover:text-base-content/60">
+                          Input Schema
+                        </summary>
+                        <pre class="text-xs bg-base-200 p-2 rounded mt-1 overflow-x-auto"><code>{Jason.encode!(tool["inputSchema"], pretty: true)}</code></pre>
+                      </details>
+                    </div>
+                  </div>
+                </div>
+              </:body>
+            </.dm_modal>
           </div>
         </.dm_card>
       </div>

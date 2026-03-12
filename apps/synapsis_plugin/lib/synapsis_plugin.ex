@@ -20,4 +20,19 @@ defmodule SynapsisPlugin do
   def list_plugins do
     SynapsisPlugin.Supervisor.list_plugins()
   end
+
+  @doc "Get the internal state of a running plugin by name."
+  def get_plugin_state(name) do
+    case Registry.lookup(SynapsisPlugin.Registry, name) do
+      [{pid, _}] ->
+        try do
+          {:ok, GenServer.call(pid, :get_state)}
+        catch
+          :exit, _ -> {:error, :not_available}
+        end
+
+      [] ->
+        {:error, :not_running}
+    end
+  end
 end

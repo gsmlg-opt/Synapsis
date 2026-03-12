@@ -109,11 +109,11 @@ defmodule SynapsisWeb.SessionLive.Index do
   def render(assigns) do
     ~H"""
     <div class="max-w-4xl mx-auto p-6">
-      <.dm_breadcrumb>
+      <.breadcrumb class="mb-4">
         <:crumb to={~p"/projects"}>Projects</:crumb>
         <:crumb to={~p"/projects/#{@project.id}"}>{@project.slug}</:crumb>
         <:crumb>Sessions</:crumb>
-      </.dm_breadcrumb>
+      </.breadcrumb>
 
       <div class="flex justify-between items-center mb-6">
         <h1 class="text-2xl font-bold">Sessions</h1>

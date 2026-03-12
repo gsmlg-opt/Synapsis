@@ -50,10 +50,10 @@ defmodule SynapsisWeb.ProjectLive.Show do
   def render(assigns) do
     ~H"""
     <div class="max-w-4xl mx-auto p-6">
-      <.dm_breadcrumb class="mb-4">
+      <.breadcrumb class="mb-4">
         <:crumb to={~p"/projects"}>Projects</:crumb>
         <:crumb>{@project.slug}</:crumb>
-      </.dm_breadcrumb>
+      </.breadcrumb>
 
       <.dm_card variant="bordered" class="mb-6">
         <:title>{@project.slug}</:title>

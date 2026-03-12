@@ -258,6 +258,36 @@ defmodule SynapsisWeb.CoreComponents do
   defp status_dot_color("error"), do: "bg-error"
   defp status_dot_color(_), do: "bg-base-content/30"
 
+  @doc """
+  Breadcrumb navigation with proper link support.
+
+  Replaces `dm_breadcrumb` which uses unstyled DaisyUI `breadcrumbs` class
+  and doesn't render the `to` attribute as links.
+  """
+  attr :class, :string, default: nil
+
+  slot :crumb, required: true do
+    attr :to, :string
+  end
+
+  def breadcrumb(assigns) do
+    ~H"""
+    <nav aria-label="Breadcrumb" class={["text-sm", @class]}>
+      <ol class="flex items-center gap-1 text-base-content/60">
+        <li :for={{crumb, idx} <- Enum.with_index(@crumb)} class="flex items-center gap-1">
+          <.dm_mdi :if={idx > 0} name="chevron-right" class="w-4 h-4 text-base-content/30" />
+          <.dm_link :if={crumb[:to]} navigate={crumb.to} class="hover:text-base-content transition-colors">
+            {render_slot(crumb)}
+          </.dm_link>
+          <span :if={!crumb[:to]} class="text-base-content">
+            {render_slot(crumb)}
+          </span>
+        </li>
+      </ol>
+    </nav>
+    """
+  end
+
   defp active_menu_id(current_path, items) do
     Enum.find_value(items, fn item ->
       if String.starts_with?(current_path, item.to), do: item.to

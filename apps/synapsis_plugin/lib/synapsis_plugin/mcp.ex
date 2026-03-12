@@ -18,7 +18,8 @@ defmodule SynapsisPlugin.MCP do
     :pending,
     :buffer,
     :tools,
-    :initialized
+    :initialized,
+    :server_info
   ]
 
   @impl Synapsis.Plugin
@@ -142,7 +143,7 @@ defmodule SynapsisPlugin.MCP do
           {:error, _} -> :ok
         end
 
-        state = %{state | pending: pending, initialized: true}
+        state = %{state | pending: pending, initialized: true, server_info: result}
         send_request(state, "tools/list", %{})
 
       {{:tools_list, _from}, pending} ->
@@ -187,7 +188,7 @@ defmodule SynapsisPlugin.MCP do
         Logger.warning("mcp_encode_failed", method: method, reason: inspect(reason))
     end
 
-    from = state[:_pending_from]
+    from = Map.get(state, :_pending_from)
 
     request_type =
       case tag || method do

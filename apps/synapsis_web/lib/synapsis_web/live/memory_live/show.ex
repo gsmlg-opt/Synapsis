@@ -155,11 +155,11 @@ defmodule SynapsisWeb.MemoryLive.Show do
   def render(assigns) do
     ~H"""
     <div class="max-w-4xl mx-auto p-6">
-      <.dm_breadcrumb>
+      <.breadcrumb class="mb-4">
         <:crumb to={~p"/settings"}>Settings</:crumb>
         <:crumb to={~p"/settings/memory"}>Memory</:crumb>
         <:crumb>{@memory.title}</:crumb>
-      </.dm_breadcrumb>
+      </.breadcrumb>
 
       <.dm_card variant="bordered">
         <:title>

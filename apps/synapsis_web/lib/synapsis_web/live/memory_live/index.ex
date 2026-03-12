@@ -186,10 +186,10 @@ defmodule SynapsisWeb.MemoryLive.Index do
   def render(assigns) do
     ~H"""
     <div class="max-w-6xl mx-auto p-6">
-      <.dm_breadcrumb>
+      <.breadcrumb class="mb-4">
         <:crumb to={~p"/settings"}>Settings</:crumb>
         <:crumb>Memory</:crumb>
-      </.dm_breadcrumb>
+      </.breadcrumb>
 
       <%!-- Tab navigation --%>
       <div class="flex gap-2 mb-4">

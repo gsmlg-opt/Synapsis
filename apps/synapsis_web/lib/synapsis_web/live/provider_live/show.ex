@@ -257,11 +257,11 @@ defmodule SynapsisWeb.ProviderLive.Show do
 
     ~H"""
     <div class="max-w-4xl mx-auto p-6">
-      <.dm_breadcrumb class="mb-4">
+      <.breadcrumb class="mb-4">
         <:crumb to={~p"/settings"}>Settings</:crumb>
         <:crumb to={~p"/settings/providers"}>Providers</:crumb>
         <:crumb>{@provider.name}</:crumb>
-      </.dm_breadcrumb>
+      </.breadcrumb>
 
       <h1 class="text-2xl font-bold mb-6">{@provider.name}</h1>
 
