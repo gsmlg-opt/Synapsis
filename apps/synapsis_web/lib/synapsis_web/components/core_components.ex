@@ -276,7 +276,11 @@ defmodule SynapsisWeb.CoreComponents do
       <ol class="flex items-center gap-1 text-base-content/60">
         <li :for={{crumb, idx} <- Enum.with_index(@crumb)} class="flex items-center gap-1">
           <.dm_mdi :if={idx > 0} name="chevron-right" class="w-4 h-4 text-base-content/30" />
-          <.dm_link :if={crumb[:to]} navigate={crumb.to} class="hover:text-base-content transition-colors">
+          <.dm_link
+            :if={crumb[:to]}
+            navigate={crumb.to}
+            class="hover:text-base-content transition-colors"
+          >
             {render_slot(crumb)}
           </.dm_link>
           <span :if={!crumb[:to]} class="text-base-content">
