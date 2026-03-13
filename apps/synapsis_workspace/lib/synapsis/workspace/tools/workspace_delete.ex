@@ -32,15 +32,25 @@ defmodule Synapsis.Workspace.Tools.WorkspaceDelete do
   end
 
   @impl true
-  def execute(input, _context) do
+  def execute(input, context) do
     path = input["path"]
 
-    case Synapsis.Workspace.delete(path) do
-      :ok ->
-        {:ok, Jason.encode!(%{deleted: path, status: "ok"})}
+    agent_ctx = %{
+      role: context[:role] || :user,
+      project_id: context[:project_id],
+      session_id: context[:session_id]
+    }
 
-      {:error, :not_found} ->
-        {:error, "Workspace document not found: #{path}"}
+    with :allowed <- Synapsis.Workspace.Permissions.check(agent_ctx, path, :write) do
+      case Synapsis.Workspace.delete(path) do
+        :ok ->
+          {:ok, Jason.encode!(%{deleted: path, status: "ok"})}
+
+        {:error, :not_found} ->
+          {:error, "Workspace document not found: #{path}"}
+      end
+    else
+      :denied -> {:error, "Permission denied: cannot delete #{path}"}
     end
   end
 end

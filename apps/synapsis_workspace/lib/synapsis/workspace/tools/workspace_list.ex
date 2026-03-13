@@ -50,31 +50,41 @@ defmodule Synapsis.Workspace.Tools.WorkspaceList do
   end
 
   @impl true
-  def execute(input, _context) do
+  def execute(input, context) do
     path = input["path"]
 
-    opts =
-      []
-      |> maybe_add(:depth, input["depth"])
-      |> maybe_add(:kind, parse_kind(input["kind"]))
-      |> maybe_add(:sort, parse_sort(input["sort"]))
-      |> maybe_add(:limit, input["limit"])
+    agent_ctx = %{
+      role: context[:role] || :user,
+      project_id: context[:project_id],
+      session_id: context[:session_id]
+    }
 
-    case Synapsis.Workspace.list(path, opts) do
-      {:ok, resources} ->
-        entries =
-          Enum.map(resources, fn r ->
-            %{
-              id: r.id,
-              path: r.path,
-              kind: r.kind,
-              lifecycle: r.lifecycle,
-              version: r.version,
-              updated_at: r.updated_at
-            }
-          end)
+    with :allowed <- Synapsis.Workspace.Permissions.check(agent_ctx, path, :read) do
+      opts =
+        []
+        |> maybe_add(:depth, input["depth"])
+        |> maybe_add(:kind, parse_kind(input["kind"]))
+        |> maybe_add(:sort, parse_sort(input["sort"]))
+        |> maybe_add(:limit, input["limit"])
 
-        {:ok, Jason.encode!(entries)}
+      case Synapsis.Workspace.list(path, opts) do
+        {:ok, resources} ->
+          entries =
+            Enum.map(resources, fn r ->
+              %{
+                id: r.id,
+                path: r.path,
+                kind: r.kind,
+                lifecycle: r.lifecycle,
+                version: r.version,
+                updated_at: r.updated_at
+              }
+            end)
+
+          {:ok, Jason.encode!(entries)}
+      end
+    else
+      :denied -> {:error, "Permission denied: cannot list #{path}"}
     end
   end
 

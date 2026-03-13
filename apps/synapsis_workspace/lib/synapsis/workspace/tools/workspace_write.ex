@@ -50,12 +50,15 @@ defmodule Synapsis.Workspace.Tools.WorkspaceWrite do
     content = input["content"]
     author = context[:agent_id] || context[:session_id] || "agent"
 
-    opts =
-      %{author: author}
-      |> maybe_put(:metadata, input["metadata"])
-      |> maybe_put(:content_format, parse_format(input["content_format"]))
+    agent_ctx = build_agent_context(context)
 
-    case Synapsis.Workspace.write(path, content, opts) do
+    with :allowed <- Synapsis.Workspace.Permissions.check(agent_ctx, path, :write) do
+      opts =
+        %{author: author}
+        |> maybe_put(:metadata, input["metadata"])
+        |> maybe_put(:content_format, parse_format(input["content_format"]))
+
+      case Synapsis.Workspace.write(path, content, opts) do
       {:ok, resource} ->
         {:ok,
          Jason.encode!(%{
@@ -78,7 +81,18 @@ defmodule Synapsis.Workspace.Tools.WorkspaceWrite do
 
       {:error, reason} ->
         {:error, "Write failed: #{inspect(reason)}"}
+      end
+    else
+      :denied -> {:error, "Permission denied: cannot write to #{path}"}
     end
+  end
+
+  defp build_agent_context(context) do
+    %{
+      role: context[:role] || :user,
+      project_id: context[:project_id],
+      session_id: context[:session_id]
+    }
   end
 
   defp maybe_put(map, _key, nil), do: map

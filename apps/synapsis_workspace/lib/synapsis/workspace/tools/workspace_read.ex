@@ -32,10 +32,17 @@ defmodule Synapsis.Workspace.Tools.WorkspaceRead do
   end
 
   @impl true
-  def execute(input, _context) do
+  def execute(input, context) do
     path = input["path"]
 
-    case Synapsis.Workspace.read(path) do
+    agent_ctx = %{
+      role: context[:role] || :user,
+      project_id: context[:project_id],
+      session_id: context[:session_id]
+    }
+
+    with :allowed <- Synapsis.Workspace.Permissions.check(agent_ctx, path, :read) do
+      case Synapsis.Workspace.read(path) do
       {:ok, resource} ->
         result =
           Jason.encode!(%{
@@ -53,6 +60,9 @@ defmodule Synapsis.Workspace.Tools.WorkspaceRead do
 
       {:error, :not_found} ->
         {:error, "Workspace document not found: #{path}"}
+      end
+    else
+      :denied -> {:error, "Permission denied: cannot read #{path}"}
     end
   end
 end

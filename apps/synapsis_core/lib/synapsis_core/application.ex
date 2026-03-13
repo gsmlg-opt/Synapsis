@@ -37,7 +37,11 @@ defmodule SynapsisCore.Application do
         {Registry, keys: :unique, name: Synapsis.Session.SupervisorRegistry},
         {Registry, keys: :unique, name: Synapsis.FileWatcher.Registry},
         Synapsis.Memory.Supervisor
-      ] ++ oban_child ++ [Synapsis.Session.DynamicSupervisor] ++ optional_children
+      ] ++
+        oban_child ++
+        [Synapsis.Session.DynamicSupervisor] ++
+        maybe_child(Synapsis.Workspace.GC) ++
+        optional_children
 
     opts = [strategy: :one_for_one, name: SynapsisCore.Supervisor]
     result = Supervisor.start_link(children, opts)
@@ -66,6 +70,14 @@ defmodule SynapsisCore.Application do
   end
 
   @env_provider_names ~w(anthropic openai openai-sub google moonshot-ai moonshot-cn zhipu-ai zhipu-cn zhipu-coding minimax-io minimax-cn openrouter)
+
+  defp maybe_child(mod) do
+    if Code.ensure_loaded?(mod) do
+      [mod]
+    else
+      []
+    end
+  end
 
   defp maybe_apply(mod, fun, args) do
     if Code.ensure_loaded?(mod) and function_exported?(mod, fun, length(args)) do
