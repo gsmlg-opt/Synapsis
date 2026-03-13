@@ -64,6 +64,70 @@ defmodule SynapsisWeb.WorkspaceLive.ExplorerTest do
       assert html =~ "searchable-phoenix.md"
     end
 
+    test "edit button shows editor with document content", %{conn: conn} do
+      {:ok, resource} =
+        Synapsis.Workspace.write("/shared/notes/edit-btn-test.md", "Editable content", %{
+          author: "test"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/workspace?path=/shared/notes")
+
+      view
+      |> element("[phx-click=select][phx-value-id=\"#{resource.id}\"]")
+      |> render_click()
+
+      html =
+        view
+        |> element("[phx-click=edit]")
+        |> render_click()
+
+      assert html =~ "Editable content"
+      assert html =~ "Save"
+      assert html =~ "Cancel"
+    end
+
+    test "save edit updates document content", %{conn: conn} do
+      {:ok, resource} =
+        Synapsis.Workspace.write("/shared/notes/save-edit-test.md", "Original", %{author: "test"})
+
+      {:ok, view, _html} = live(conn, ~p"/workspace?path=/shared/notes")
+
+      view
+      |> element("[phx-click=select][phx-value-id=\"#{resource.id}\"]")
+      |> render_click()
+
+      view
+      |> element("[phx-click=edit]")
+      |> render_click()
+
+      html =
+        view
+        |> element("form[phx-submit=save_edit]")
+        |> render_submit(%{content: "Updated content"})
+
+      assert html =~ "Updated content"
+    end
+
+    test "delete removes document from list", %{conn: conn} do
+      {:ok, resource} =
+        Synapsis.Workspace.write("/shared/notes/delete-test.md", "To be deleted", %{
+          author: "test"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/workspace?path=/shared/notes")
+
+      view
+      |> element("[phx-click=select][phx-value-id=\"#{resource.id}\"]")
+      |> render_click()
+
+      html =
+        view
+        |> element("[phx-click=delete][phx-value-id=\"#{resource.id}\"]")
+        |> render_click()
+
+      refute html =~ "delete-test.md"
+    end
+
     test "clear search returns to browsing mode", %{conn: conn} do
       Synapsis.Workspace.write("/shared/notes/clear-test.md", "content", %{author: "test"})
 

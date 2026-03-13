@@ -108,6 +108,33 @@ defmodule Synapsis.WorkspaceTest do
     end
   end
 
+  describe "delete/1" do
+    test "deletes a document by path" do
+      {:ok, _} = Workspace.write("/shared/notes/del-by-path.md", "content", %{author: "test"})
+      assert :ok = Workspace.delete("/shared/notes/del-by-path.md")
+      assert {:error, :not_found} = Workspace.read("/shared/notes/del-by-path.md")
+    end
+
+    test "deletes a document by ID" do
+      {:ok, resource} =
+        Workspace.write("/shared/notes/del-by-id.md", "content", %{author: "test"})
+
+      assert :ok = Workspace.delete(resource.id)
+      assert {:error, :not_found} = Workspace.read(resource.id)
+    end
+
+    test "returns not_found for missing document" do
+      assert {:error, :not_found} = Workspace.delete("/shared/notes/nonexistent.md")
+    end
+
+    test "deleted documents do not appear in list" do
+      {:ok, _} = Workspace.write("/shared/notes/del-list.md", "content", %{author: "test"})
+      :ok = Workspace.delete("/shared/notes/del-list.md")
+      {:ok, resources} = Workspace.list("/shared/notes")
+      refute Enum.any?(resources, fn r -> r.path == "/shared/notes/del-list.md" end)
+    end
+  end
+
   describe "version history" do
     test "creates version history for non-scratch documents" do
       path = "/shared/plans/versioned.md"

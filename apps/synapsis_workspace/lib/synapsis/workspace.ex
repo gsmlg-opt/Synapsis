@@ -9,6 +9,7 @@ defmodule Synapsis.Workspace do
 
     * `read/1` — read content by path or id
     * `write/3` — create or update a document at a path
+    * `delete/1` — soft-delete a document by path or id
     * `list/2` — list documents under a path prefix
     * `search/2` — full-text search across documents
   """
@@ -63,6 +64,28 @@ defmodule Synapsis.Workspace do
       {:ok, doc} ->
         doc = if blob_ref, do: %{doc | blob_ref: blob_ref}, else: doc
         {:ok, Resource.from_document(doc)}
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  @doc """
+  Soft-delete a workspace resource by path or ID.
+  """
+  @spec delete(String.t()) :: :ok | {:error, :not_found}
+  def delete(path_or_id) do
+    result =
+      if uuid?(path_or_id) do
+        Resources.get_by_id(path_or_id)
+      else
+        Resources.get_by_path(path_or_id)
+      end
+
+    case result do
+      {:ok, doc} ->
+        {:ok, _} = Resources.soft_delete(doc)
+        :ok
 
       {:error, _} = error ->
         error

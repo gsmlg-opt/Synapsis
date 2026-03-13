@@ -13,14 +13,18 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
        resources: resources,
        search_query: "",
        search_results: nil,
-       selected: nil
+       selected: nil,
+       editing: false,
+       edit_content: ""
      )}
   end
 
   @impl true
   def handle_params(%{"path" => path}, _uri, socket) do
     {:ok, resources} = Synapsis.Workspace.list(path, sort: :path, limit: 200)
-    {:noreply, assign(socket, current_path: path, resources: resources, selected: nil)}
+
+    {:noreply,
+     assign(socket, current_path: path, resources: resources, selected: nil, editing: false)}
   end
 
   def handle_params(_params, _uri, socket), do: {:noreply, socket}
@@ -33,7 +37,7 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
   def handle_event("select", %{"id" => id}, socket) do
     case Synapsis.Workspace.read(id) do
       {:ok, resource} ->
-        {:noreply, assign(socket, selected: resource)}
+        {:noreply, assign(socket, selected: resource, editing: false)}
 
       {:error, _} ->
         {:noreply, put_flash(socket, :error, "Document not found")}
@@ -51,6 +55,49 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
 
   def handle_event("clear_search", _params, socket) do
     {:noreply, assign(socket, search_query: "", search_results: nil)}
+  end
+
+  def handle_event("edit", _params, socket) do
+    content = (socket.assigns.selected && socket.assigns.selected.content) || ""
+    {:noreply, assign(socket, editing: true, edit_content: content)}
+  end
+
+  def handle_event("cancel_edit", _params, socket) do
+    {:noreply, assign(socket, editing: false)}
+  end
+
+  def handle_event("save_edit", %{"content" => content}, socket) do
+    selected = socket.assigns.selected
+
+    case Synapsis.Workspace.write(selected.path, content, %{author: "user"}) do
+      {:ok, updated} ->
+        {:ok, resources} =
+          Synapsis.Workspace.list(socket.assigns.current_path, sort: :path, limit: 200)
+
+        {:noreply,
+         socket
+         |> assign(selected: updated, editing: false, resources: resources)
+         |> put_flash(:info, "Document saved")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Failed to save document")}
+    end
+  end
+
+  def handle_event("delete", %{"id" => id}, socket) do
+    case Synapsis.Workspace.delete(id) do
+      :ok ->
+        {:ok, resources} =
+          Synapsis.Workspace.list(socket.assigns.current_path, sort: :path, limit: 200)
+
+        {:noreply,
+         socket
+         |> assign(selected: nil, resources: resources, editing: false)
+         |> put_flash(:info, "Document deleted")}
+
+      {:error, :not_found} ->
+        {:noreply, put_flash(socket, :error, "Document not found")}
+    end
   end
 
   @impl true
@@ -152,13 +199,34 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
           </.dm_card>
         </div>
 
-        <%!-- Preview panel --%>
+        <%!-- Preview/Edit panel --%>
         <div :if={@selected} class="lg:col-span-2">
           <.dm_card variant="bordered">
             <:title>
-              <div class="flex items-center gap-2">
-                <.dm_mdi name={kind_icon(@selected.kind)} class="w-5 h-5" />
-                <span class="font-mono text-sm">{filename(@selected.path)}</span>
+              <div class="flex items-center justify-between w-full">
+                <div class="flex items-center gap-2">
+                  <.dm_mdi name={kind_icon(@selected.kind)} class="w-5 h-5" />
+                  <span class="font-mono text-sm">{filename(@selected.path)}</span>
+                </div>
+                <div class="flex gap-1">
+                  <.dm_btn
+                    :if={!@editing}
+                    variant="ghost"
+                    size="sm"
+                    phx-click="edit"
+                  >
+                    <.dm_mdi name="pencil" class="w-4 h-4" />
+                  </.dm_btn>
+                  <.dm_btn
+                    variant="ghost"
+                    size="sm"
+                    phx-click="delete"
+                    phx-value-id={@selected.id}
+                    data-confirm="Delete this document?"
+                  >
+                    <.dm_mdi name="delete-outline" class="w-4 h-4 text-error" />
+                  </.dm_btn>
+                </div>
               </div>
             </:title>
 
@@ -172,7 +240,30 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
               </span>
             </div>
 
-            <div class="prose prose-sm max-w-none bg-base-200 rounded p-4 overflow-auto max-h-[60vh]">
+            <%!-- Edit mode --%>
+            <div :if={@editing}>
+              <.dm_form for={%{}} phx-submit="save_edit">
+                <textarea
+                  name="content"
+                  rows="20"
+                  class="w-full font-mono text-sm bg-base-200 rounded p-4 border border-base-300 focus:border-primary focus:outline-none"
+                >{@edit_content}</textarea>
+                <div class="flex gap-2 mt-3">
+                  <.dm_btn type="submit" variant="primary" size="sm">
+                    Save
+                  </.dm_btn>
+                  <.dm_btn type="button" variant="ghost" size="sm" phx-click="cancel_edit">
+                    Cancel
+                  </.dm_btn>
+                </div>
+              </.dm_form>
+            </div>
+
+            <%!-- Read-only mode --%>
+            <div
+              :if={!@editing}
+              class="prose prose-sm max-w-none bg-base-200 rounded p-4 overflow-auto max-h-[60vh]"
+            >
               <pre class="whitespace-pre-wrap text-sm">{@selected.content || "(empty)"}</pre>
             </div>
           </.dm_card>
