@@ -18,16 +18,16 @@ defmodule SynapsisPlugin.LSP.ManagerTest do
       assert Manager.detect_languages(dir) == []
     end
 
-    test "detects elixir from .ex files", %{dir: dir} do
+    test "detects elixir-ls from .ex files", %{dir: dir} do
       File.write!(Path.join(dir, "module.ex"), "defmodule Foo do\nend")
       langs = Manager.detect_languages(dir)
-      assert "elixir" in langs
+      assert "elixir-ls" in langs
     end
 
-    test "detects elixir from .exs files", %{dir: dir} do
+    test "detects elixir-ls from .exs files", %{dir: dir} do
       File.write!(Path.join(dir, "script.exs"), "IO.puts \"hello\"")
       langs = Manager.detect_languages(dir)
-      assert "elixir" in langs
+      assert "elixir-ls" in langs
     end
 
     test "detects typescript from .ts files", %{dir: dir} do
@@ -42,52 +42,52 @@ defmodule SynapsisPlugin.LSP.ManagerTest do
       assert "typescript" in langs
     end
 
-    test "detects go from .go files", %{dir: dir} do
+    test "detects gopls from .go files", %{dir: dir} do
       File.write!(Path.join(dir, "main.go"), "package main")
       langs = Manager.detect_languages(dir)
-      assert "go" in langs
+      assert "gopls" in langs
     end
 
-    test "detects python from .py files", %{dir: dir} do
+    test "detects pyright from .py files", %{dir: dir} do
       File.write!(Path.join(dir, "main.py"), "print('hello')")
       langs = Manager.detect_languages(dir)
-      assert "python" in langs
+      assert "pyright" in langs
     end
 
-    test "detects rust from .rs files", %{dir: dir} do
+    test "detects rust-analyzer from .rs files", %{dir: dir} do
       File.write!(Path.join(dir, "main.rs"), "fn main() {}")
       langs = Manager.detect_languages(dir)
-      assert "rust" in langs
+      assert "rust-analyzer" in langs
     end
 
-    test "detects c_cpp from .c files", %{dir: dir} do
+    test "detects clangd from .c files", %{dir: dir} do
       File.write!(Path.join(dir, "main.c"), "int main() { return 0; }")
       langs = Manager.detect_languages(dir)
-      assert "c_cpp" in langs
+      assert "clangd" in langs
     end
 
-    test "detects c_cpp from .cpp files", %{dir: dir} do
+    test "detects clangd from .cpp files", %{dir: dir} do
       File.write!(Path.join(dir, "main.cpp"), "int main() { return 0; }")
       langs = Manager.detect_languages(dir)
-      assert "c_cpp" in langs
+      assert "clangd" in langs
     end
 
     test "detects multiple languages when files exist", %{dir: dir} do
       File.write!(Path.join(dir, "module.ex"), "defmodule Foo do\nend")
       File.write!(Path.join(dir, "main.go"), "package main")
       langs = Manager.detect_languages(dir)
-      assert "elixir" in langs
-      assert "go" in langs
+      assert "elixir-ls" in langs
+      assert "gopls" in langs
     end
 
     test "does not detect non-present languages", %{dir: dir} do
       File.write!(Path.join(dir, "module.ex"), "defmodule Foo do\nend")
       langs = Manager.detect_languages(dir)
-      refute "go" in langs
+      refute "gopls" in langs
       refute "typescript" in langs
-      refute "python" in langs
-      refute "rust" in langs
-      refute "c_cpp" in langs
+      refute "pyright" in langs
+      refute "rust-analyzer" in langs
+      refute "clangd" in langs
     end
   end
 end

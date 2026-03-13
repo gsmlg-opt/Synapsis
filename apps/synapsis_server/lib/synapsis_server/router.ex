@@ -7,6 +7,8 @@ defmodule SynapsisServer.Router do
             [
               SynapsisWeb.DashboardLive,
               SynapsisWeb.AssistantLive.Index,
+              SynapsisWeb.AssistantLive.Show,
+              SynapsisWeb.AssistantLive.Setting,
               SynapsisWeb.ProjectLive.Index,
               SynapsisWeb.ProjectLive.Show,
               SynapsisWeb.SessionLive.Index,
@@ -64,6 +66,9 @@ defmodule SynapsisServer.Router do
 
     live "/", DashboardLive, :index
     live "/assistant", AssistantLive.Index, :index
+    live "/assistant/:name/sessions", AssistantLive.Show, :sessions
+    live "/assistant/:name/sessions/:session_id", AssistantLive.Show, :session
+    live "/assistant/:name/setting", AssistantLive.Setting, :index
 
     live "/projects", ProjectLive.Index, :index
     live "/projects/new", ProjectLive.Index, :new

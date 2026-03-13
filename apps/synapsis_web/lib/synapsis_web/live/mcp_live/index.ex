@@ -20,14 +20,48 @@ defmodule SynapsisWeb.MCPLive.Index do
   end
 
   defp apply_action(socket, :new, _params) do
-    assign(socket, show_form: true, selected_preset: nil)
+    assign(socket, show_form: true, selected_preset: nil, show_import: false)
   end
 
   defp apply_action(socket, :index, _params) do
-    assign(socket, show_form: false, selected_preset: nil)
+    assign(socket, show_form: false, selected_preset: nil, show_import: false)
   end
 
   @impl true
+  def handle_event("show_import", _params, socket) do
+    {:noreply, assign(socket, show_import: true, import_json: "")}
+  end
+
+  def handle_event("hide_import", _params, socket) do
+    {:noreply, assign(socket, show_import: false)}
+  end
+
+  def handle_event("import_json", %{"json" => json}, socket) do
+    case parse_mcp_json(json) do
+      {:ok, servers} when map_size(servers) == 0 ->
+        {:noreply, put_flash(socket, :error, "No MCP servers found in JSON")}
+
+      {:ok, servers} ->
+        configured = Enum.map(socket.assigns.configs, & &1.name) |> MapSet.new()
+        {imported, skipped} = import_mcp_servers(servers, configured)
+
+        msg =
+          case {imported, skipped} do
+            {0, s} -> "No new servers imported (#{s} already configured)"
+            {i, 0} -> "Imported #{i} MCP server(s)"
+            {i, s} -> "Imported #{i} MCP server(s), skipped #{s} already configured"
+          end
+
+        {:noreply,
+         socket
+         |> assign(show_import: false, configs: list_configs())
+         |> put_flash(:info, msg)}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Invalid JSON: #{reason}")}
+    end
+  end
+
   def handle_event("select_preset", %{"name" => name}, socket) do
     preset =
       SynapsisPlugin.MCP.Presets.all()
@@ -206,6 +240,50 @@ defmodule SynapsisWeb.MCPLive.Index do
     end
   end
 
+  defp parse_mcp_json(json) do
+    case Jason.decode(json) do
+      {:ok, %{"mcpServers" => servers}} when is_map(servers) ->
+        {:ok, servers}
+
+      {:ok, data} when is_map(data) ->
+        # Support bare format without mcpServers wrapper if all values look like server configs
+        if Enum.all?(data, fn {_k, v} -> is_map(v) and is_binary(Map.get(v, "command", nil)) end) do
+          {:ok, data}
+        else
+          {:error, "expected {\"mcpServers\": {...}} format"}
+        end
+
+      {:ok, _} ->
+        {:error, "expected a JSON object"}
+
+      {:error, %Jason.DecodeError{} = err} ->
+        {:error, Exception.message(err)}
+    end
+  end
+
+  defp import_mcp_servers(servers, configured) do
+    Enum.reduce(servers, {0, 0}, fn {name, config}, {imported, skipped} ->
+      if MapSet.member?(configured, name) do
+        {imported, skipped + 1}
+      else
+        attrs = %{
+          type: "mcp",
+          name: name,
+          transport: Map.get(config, "transport", "stdio"),
+          command: Map.get(config, "command", ""),
+          args: Map.get(config, "args", []),
+          env: Map.get(config, "env", %{}),
+          auto_start: Map.get(config, "autoStart", false)
+        }
+
+        case Repo.insert(PluginConfig.changeset(%PluginConfig{}, attrs)) do
+          {:ok, _} -> {imported + 1, skipped}
+          {:error, _} -> {imported, skipped + 1}
+        end
+      end
+    end)
+  end
+
   defp parse_args(nil), do: []
   defp parse_args(""), do: []
 
@@ -249,13 +327,50 @@ defmodule SynapsisWeb.MCPLive.Index do
 
       <div class="flex justify-between items-center mb-6">
         <h1 class="text-2xl font-bold">MCP Servers</h1>
-        <.dm_link
-          :if={!@show_form}
-          navigate={~p"/settings/mcp/new"}
-        >
-          <.dm_btn variant="primary" size="sm">+ Add MCP Server</.dm_btn>
-        </.dm_link>
+        <div :if={!@show_form} class="flex gap-2">
+          <.dm_btn variant="ghost" size="sm" phx-click="show_import">
+            <.dm_mdi name="code-json" class="w-4 h-4 mr-1" /> Import JSON
+          </.dm_btn>
+          <.dm_link navigate={~p"/settings/mcp/new"}>
+            <.dm_btn variant="primary" size="sm">+ Add MCP Server</.dm_btn>
+          </.dm_link>
+        </div>
       </div>
+
+      <%!-- Import JSON form --%>
+      <.dm_card :if={@show_import} variant="bordered" class="mb-6">
+        <div class="flex items-center gap-3 mb-4">
+          <.dm_btn variant="ghost" size="sm" phx-click="hide_import">
+            &larr; Back
+          </.dm_btn>
+          <h2 class="text-lg font-semibold">Import MCP Servers from JSON</h2>
+        </div>
+        <p class="text-sm text-base-content/60 mb-3">
+          Paste JSON in Claude Code <code class="text-xs bg-base-200 px-1 rounded">mcp.json</code>
+          format.
+          Supports both <code class="text-xs bg-base-200 px-1 rounded">mcpServers</code>
+          wrapper and bare server objects.
+        </p>
+        <details class="mb-3">
+          <summary class="text-xs text-base-content/40 cursor-pointer hover:text-base-content/60">
+            Example format
+          </summary>
+          <pre class="text-xs bg-base-200 p-3 rounded mt-1 overflow-x-auto"><code>{mcp_import_example()}</code></pre>
+        </details>
+        <.dm_form for={%{}} phx-submit="import_json">
+          <.dm_textarea
+            name="json"
+            value=""
+            rows={10}
+            placeholder={mcp_import_placeholder()}
+            label="JSON"
+          />
+          <div class="flex gap-2 mt-3">
+            <.dm_btn type="submit" variant="primary">Import</.dm_btn>
+            <.dm_btn type="button" variant="ghost" phx-click="hide_import">Cancel</.dm_btn>
+          </div>
+        </.dm_form>
+      </.dm_card>
 
       <%= if @show_form do %>
         <%= if @selected_preset do %>
@@ -572,4 +687,23 @@ defmodule SynapsisWeb.MCPLive.Index do
   end
 
   defp has_required_env?(_), do: false
+
+  defp mcp_import_example do
+    Jason.encode!(
+      %{
+        "mcpServers" => %{
+          "filesystem" => %{
+            "command" => "npx",
+            "args" => ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+            "env" => %{}
+          }
+        }
+      },
+      pretty: true
+    )
+  end
+
+  defp mcp_import_placeholder do
+    ~s|{"mcpServers": {"server-name": {"command": "npx", "args": [...]}}}|
+  end
 end
