@@ -18,9 +18,9 @@ end
 db_config = [
   username: System.get_env("PGUSER", "postgres"),
   database:
-    System.get_env(
-      "PGDATABASE",
-      if(config_env() == :test, do: "synapsis_test", else: "synapsis_dev")
+    if(config_env() == :test,
+      do: "synapsis_test#{System.get_env("MIX_TEST_PARTITION")}",
+      else: System.get_env("PGDATABASE", "synapsis_dev")
     )
 ]
 
