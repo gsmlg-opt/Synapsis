@@ -4,6 +4,7 @@ defmodule Synapsis.Workspace.Tools do
   @tools [
     Synapsis.Workspace.Tools.WorkspaceRead,
     Synapsis.Workspace.Tools.WorkspaceWrite,
+    Synapsis.Workspace.Tools.WorkspaceDelete,
     Synapsis.Workspace.Tools.WorkspaceList,
     Synapsis.Workspace.Tools.WorkspaceSearch
   ]

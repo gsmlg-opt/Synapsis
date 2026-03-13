@@ -106,7 +106,13 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
     <div class="max-w-6xl mx-auto p-6">
       <.breadcrumb class="mb-4">
         <:crumb to={~p"/"}>Home</:crumb>
-        <:crumb>Workspace</:crumb>
+        <:crumb to={~p"/workspace"}>Workspace</:crumb>
+        <:crumb
+          :for={{segment, path} <- path_segments(@current_path)}
+          to={~p"/workspace?path=#{path}"}
+        >
+          {segment}
+        </:crumb>
       </.breadcrumb>
 
       <div class="flex justify-between items-center mb-6">
@@ -280,6 +286,19 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
 
   defp parent_path(path) do
     Synapsis.Workspace.PathResolver.parent(path)
+  end
+
+  defp path_segments("/"), do: []
+
+  defp path_segments(path) do
+    segments = path |> String.trim("/") |> String.split("/")
+
+    segments
+    |> Enum.with_index()
+    |> Enum.map(fn {segment, idx} ->
+      prefix = "/" <> Enum.join(Enum.take(segments, idx + 1), "/")
+      {segment, prefix}
+    end)
   end
 
   defp filename(path) do

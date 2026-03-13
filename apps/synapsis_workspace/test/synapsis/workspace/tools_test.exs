@@ -1,7 +1,13 @@
 defmodule Synapsis.Workspace.ToolsTest do
   use ExUnit.Case
 
-  alias Synapsis.Workspace.Tools.{WorkspaceRead, WorkspaceWrite, WorkspaceList, WorkspaceSearch}
+  alias Synapsis.Workspace.Tools.{
+    WorkspaceRead,
+    WorkspaceWrite,
+    WorkspaceDelete,
+    WorkspaceList,
+    WorkspaceSearch
+  }
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Synapsis.Repo)
@@ -36,6 +42,13 @@ defmodule Synapsis.Workspace.ToolsTest do
       assert WorkspaceList.name() == "workspace_list"
       assert WorkspaceList.permission_level() == :none
       assert WorkspaceList.parameters()["required"] == ["path"]
+    end
+
+    test "workspace_delete has correct metadata" do
+      assert WorkspaceDelete.name() == "workspace_delete"
+      assert WorkspaceDelete.permission_level() == :write
+      assert WorkspaceDelete.category() == :workspace
+      assert WorkspaceDelete.parameters()["required"] == ["path"]
     end
 
     test "workspace_search has correct metadata" do
@@ -159,6 +172,25 @@ defmodule Synapsis.Workspace.ToolsTest do
       input = %{"path" => "/shared/limit-tool", "limit" => 2}
       assert {:ok, json} = WorkspaceList.execute(input, %{})
       assert length(Jason.decode!(json)) == 2
+    end
+  end
+
+  describe "workspace_delete execute/2" do
+    test "deletes an existing document" do
+      Synapsis.Workspace.write("/shared/notes/del-tool.md", "to delete", %{author: "test"})
+
+      input = %{"path" => "/shared/notes/del-tool.md"}
+      assert {:ok, json} = WorkspaceDelete.execute(input, %{})
+      result = Jason.decode!(json)
+      assert result["status"] == "ok"
+
+      assert {:error, :not_found} = Synapsis.Workspace.read("/shared/notes/del-tool.md")
+    end
+
+    test "returns error for missing document" do
+      input = %{"path" => "/shared/notes/nonexistent-del.md"}
+      assert {:error, msg} = WorkspaceDelete.execute(input, %{})
+      assert msg =~ "not found"
     end
   end
 
