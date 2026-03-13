@@ -33,7 +33,14 @@ defmodule Synapsis.Tool.Diagnostics do
     project_path = context[:project_path] || "."
 
     # Use apply/3 to avoid cross-umbrella compile-time reference warning
-    case apply(SynapsisPlugin.LSP.Manager, :get_all_diagnostics, [project_path]) do
+    result =
+      try do
+        apply(SynapsisPlugin.LSP.Manager, :get_all_diagnostics, [project_path])
+      rescue
+        UndefinedFunctionError -> {:error, :lsp_manager_not_available}
+      end
+
+    case result do
       {:ok, diagnostics} ->
         filtered =
           case input["path"] do
