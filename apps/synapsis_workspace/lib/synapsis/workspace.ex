@@ -271,18 +271,18 @@ defmodule Synapsis.Workspace do
   # Domain-backed path rejection (WS-4.3)
   # ---------------------------------------------------------------------------
 
-  @domain_patterns [
-    ~r{^/shared/skills/},
-    ~r{^/projects/[^/]+/skills/},
-    ~r{^/shared/memory/},
-    ~r{^/projects/[^/]+/memory/},
-    ~r{^/projects/[^/]+/sessions/[^/]+/todo\.md$}
-  ]
-
   defp reject_domain_path(path) do
     path = PathResolver.normalize_path(path)
 
-    if Enum.any?(@domain_patterns, &Regex.match?(&1, path)) do
+    domain_patterns = [
+      ~r{^/shared/skills/},
+      ~r{^/projects/[^/]+/skills/},
+      ~r{^/shared/memory/},
+      ~r{^/projects/[^/]+/memory/},
+      ~r{^/projects/[^/]+/sessions/[^/]+/todo\.md$}
+    ]
+
+    if Enum.any?(domain_patterns, &Regex.match?(&1, path)) do
       {:error, "cannot write to domain-backed path — use the domain context instead"}
     else
       :ok
