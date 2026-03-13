@@ -6,7 +6,7 @@ defmodule Synapsis.Workspace.Projection do
   Domain schemas are not replicated — this module queries them at read time
   and returns transient Resource structs with paths derived from domain fields.
 
-  All database access is delegated to `Synapsis.WorkspaceDocuments`.
+  All database access is delegated to named functions in `Synapsis.WorkspaceDocuments`.
 
   ## Path conventions
 
@@ -23,8 +23,6 @@ defmodule Synapsis.Workspace.Projection do
   isolated tests), the functions return empty lists or `:error` rather than
   raising.
   """
-
-  import Ecto.Query
 
   alias Synapsis.WorkspaceDocuments
   alias Synapsis.Workspace.Resource
@@ -54,12 +52,12 @@ defmodule Synapsis.Workspace.Projection do
       content: content,
       content_format: :markdown,
       metadata: %{
-          "scope" => skill.scope,
-          "project_id" => skill.project_id,
-          "tool_allowlist" => skill.tool_allowlist,
-          "config_overrides" => skill.config_overrides,
-          "is_builtin" => skill.is_builtin
-        },
+        "scope" => skill.scope,
+        "project_id" => skill.project_id,
+        "tool_allowlist" => skill.tool_allowlist,
+        "config_overrides" => skill.config_overrides,
+        "is_builtin" => skill.is_builtin
+      },
       visibility: skill_visibility(skill),
       lifecycle: :shared,
       version: 1,
@@ -283,27 +281,14 @@ defmodule Synapsis.Workspace.Projection do
   defp dispatch_find(_segments), do: {:error, :not_found}
 
   # ---------------------------------------------------------------------------
-  # Private — skills queries
+  # Private — skills queries (delegated to WorkspaceDocuments)
   # ---------------------------------------------------------------------------
 
   defp list_skills(scope, project_id, limit) do
     if Code.ensure_loaded?(Synapsis.Skill) do
-      scope_str = to_string(scope)
-
-      query =
-        from s in Synapsis.Skill,
-          where: s.scope == ^scope_str,
-          limit: ^limit
-
-      query =
-        if project_id do
-          where(query, [s], s.project_id == ^project_id)
-        else
-          where(query, [s], is_nil(s.project_id))
-        end
-
-      query
-      |> WorkspaceDocuments.query_all()
+      scope
+      |> to_string()
+      |> WorkspaceDocuments.list_skills(project_id, limit)
       |> Enum.map(&project_skill/1)
     else
       []
@@ -312,21 +297,7 @@ defmodule Synapsis.Workspace.Projection do
 
   defp find_skill(scope, project_id, name) do
     if Code.ensure_loaded?(Synapsis.Skill) do
-      scope_str = to_string(scope)
-
-      query =
-        from s in Synapsis.Skill,
-          where: s.scope == ^scope_str and s.name == ^name,
-          limit: 1
-
-      query =
-        if project_id do
-          where(query, [s], s.project_id == ^project_id)
-        else
-          where(query, [s], is_nil(s.project_id))
-        end
-
-      case WorkspaceDocuments.query_one(query) do
+      case WorkspaceDocuments.find_skill(to_string(scope), project_id, name) do
         nil -> {:error, :not_found}
         skill -> {:ok, project_skill(skill)}
       end
@@ -336,27 +307,14 @@ defmodule Synapsis.Workspace.Projection do
   end
 
   # ---------------------------------------------------------------------------
-  # Private — memory queries
+  # Private — memory queries (delegated to WorkspaceDocuments)
   # ---------------------------------------------------------------------------
 
   defp list_memory(scope, scope_id, limit) do
     if Code.ensure_loaded?(Synapsis.MemoryEntry) do
-      scope_str = to_string(scope)
-
-      query =
-        from m in Synapsis.MemoryEntry,
-          where: m.scope == ^scope_str,
-          limit: ^limit
-
-      query =
-        if scope_id do
-          where(query, [m], m.scope_id == ^scope_id)
-        else
-          where(query, [m], is_nil(m.scope_id))
-        end
-
-      query
-      |> WorkspaceDocuments.query_all()
+      scope
+      |> to_string()
+      |> WorkspaceDocuments.list_memory_entries(scope_id, limit)
       |> Enum.map(&project_memory/1)
     else
       []
@@ -365,21 +323,7 @@ defmodule Synapsis.Workspace.Projection do
 
   defp find_memory(scope, scope_id, key) do
     if Code.ensure_loaded?(Synapsis.MemoryEntry) do
-      scope_str = to_string(scope)
-
-      query =
-        from m in Synapsis.MemoryEntry,
-          where: m.scope == ^scope_str and m.key == ^key,
-          limit: 1
-
-      query =
-        if scope_id do
-          where(query, [m], m.scope_id == ^scope_id)
-        else
-          where(query, [m], is_nil(m.scope_id))
-        end
-
-      case WorkspaceDocuments.query_one(query) do
+      case WorkspaceDocuments.find_memory_entry(to_string(scope), scope_id, key) do
         nil -> {:error, :not_found}
         entry -> {:ok, project_memory(entry)}
       end
@@ -389,22 +333,14 @@ defmodule Synapsis.Workspace.Projection do
   end
 
   # ---------------------------------------------------------------------------
-  # Private — todo queries
+  # Private — todo queries (delegated to WorkspaceDocuments)
   # ---------------------------------------------------------------------------
 
   defp list_todos_for_session(project_id, session_id, _limit) do
     if Code.ensure_loaded?(Synapsis.SessionTodo) do
-      todos =
-        from(t in Synapsis.SessionTodo,
-          where: t.session_id == ^session_id,
-          order_by: [asc: t.sort_order, asc: t.inserted_at]
-        )
-        |> WorkspaceDocuments.query_all()
-
-      if todos == [] do
-        []
-      else
-        [build_todo_resource(project_id, session_id, todos)]
+      case WorkspaceDocuments.list_todos_for_session(session_id) do
+        [] -> []
+        todos -> [build_todo_resource(project_id, session_id, todos)]
       end
     else
       []
@@ -413,15 +349,8 @@ defmodule Synapsis.Workspace.Projection do
 
   defp list_todos_for_project(project_id, limit) do
     if Code.ensure_loaded?(Synapsis.SessionTodo) and Code.ensure_loaded?(Synapsis.Session) do
-      session_ids =
-        from(s in Synapsis.Session,
-          where: s.project_id == ^project_id,
-          select: s.id,
-          limit: ^limit
-        )
-        |> WorkspaceDocuments.query_all()
-
-      session_ids
+      project_id
+      |> WorkspaceDocuments.list_session_ids_for_project(limit)
       |> Enum.flat_map(fn sid ->
         list_todos_for_session(project_id, sid, limit)
       end)
@@ -433,14 +362,7 @@ defmodule Synapsis.Workspace.Projection do
 
   defp find_todo(project_id, session_id) do
     if Code.ensure_loaded?(Synapsis.SessionTodo) do
-      todos =
-        from(t in Synapsis.SessionTodo,
-          where: t.session_id == ^session_id,
-          order_by: [asc: t.sort_order, asc: t.inserted_at]
-        )
-        |> WorkspaceDocuments.query_all()
-
-      case todos do
+      case WorkspaceDocuments.list_todos_for_session(session_id) do
         [] -> {:error, :not_found}
         items -> {:ok, build_todo_resource(project_id, session_id, items)}
       end
@@ -592,10 +514,7 @@ defmodule Synapsis.Workspace.Projection do
 
   defp resolve_session_project_id(session_id) do
     if Code.ensure_loaded?(Synapsis.Session) do
-      case WorkspaceDocuments.get_record(Synapsis.Session, session_id) do
-        %{project_id: pid} when is_binary(pid) -> pid
-        _ -> "unknown"
-      end
+      WorkspaceDocuments.get_session_project_id(session_id) || "unknown"
     else
       "unknown"
     end

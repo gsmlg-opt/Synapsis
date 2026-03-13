@@ -61,6 +61,10 @@ defmodule Synapsis.WorkspaceDocument do
     |> optimistic_lock(:version)
   end
 
+  def soft_delete_changeset(document) do
+    change(document, deleted_at: DateTime.utc_now())
+  end
+
   defp validate_path(changeset) do
     changeset
     |> validate_format(:path, ~r|^/|, message: "must start with /")

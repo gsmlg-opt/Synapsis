@@ -296,24 +296,135 @@ defmodule Synapsis.WorkspaceDocuments do
   end
 
   # ---------------------------------------------------------------------------
-  # Domain projection queries
+  # Soft-delete
   # ---------------------------------------------------------------------------
 
-  @doc "Query domain schema records via Repo. Returns results or empty list if schema not loaded."
-  @spec query_all(Ecto.Queryable.t()) :: [any()]
-  def query_all(queryable) do
-    Repo.all(queryable)
+  @doc "Build and persist a soft-delete changeset for a document."
+  @spec soft_delete(WorkspaceDocument.t()) ::
+          {:ok, WorkspaceDocument.t()} | {:error, Ecto.Changeset.t()}
+  def soft_delete(document) do
+    document
+    |> WorkspaceDocument.soft_delete_changeset()
+    |> Repo.update()
   end
 
-  @doc "Query a single domain schema record via Repo."
-  @spec query_one(Ecto.Queryable.t()) :: any() | nil
-  def query_one(queryable) do
-    Repo.one(queryable)
+  # ---------------------------------------------------------------------------
+  # Domain projection queries — Skills
+  # ---------------------------------------------------------------------------
+
+  @doc "List skills by scope, optionally filtered by project_id."
+  @spec list_skills(String.t(), String.t() | nil, non_neg_integer()) :: [struct()]
+  def list_skills(scope, project_id, limit) do
+    query =
+      from s in Synapsis.Skill,
+        where: s.scope == ^scope,
+        limit: ^limit
+
+    query =
+      if project_id do
+        where(query, [s], s.project_id == ^project_id)
+      else
+        where(query, [s], is_nil(s.project_id))
+      end
+
+    Repo.all(query)
   end
 
-  @doc "Get a record by ID from any schema."
-  @spec get_record(module(), String.t()) :: any() | nil
-  def get_record(schema, id) do
-    Repo.get(schema, id)
+  @doc "Find a single skill by scope, optional project_id, and name."
+  @spec find_skill(String.t(), String.t() | nil, String.t()) :: struct() | nil
+  def find_skill(scope, project_id, name) do
+    query =
+      from s in Synapsis.Skill,
+        where: s.scope == ^scope and s.name == ^name,
+        limit: 1
+
+    query =
+      if project_id do
+        where(query, [s], s.project_id == ^project_id)
+      else
+        where(query, [s], is_nil(s.project_id))
+      end
+
+    Repo.one(query)
+  end
+
+  # ---------------------------------------------------------------------------
+  # Domain projection queries — Memory entries
+  # ---------------------------------------------------------------------------
+
+  @doc "List memory entries by scope, optionally filtered by scope_id."
+  @spec list_memory_entries(String.t(), String.t() | nil, non_neg_integer()) :: [struct()]
+  def list_memory_entries(scope, scope_id, limit) do
+    query =
+      from m in Synapsis.MemoryEntry,
+        where: m.scope == ^scope,
+        limit: ^limit
+
+    query =
+      if scope_id do
+        where(query, [m], m.scope_id == ^scope_id)
+      else
+        where(query, [m], is_nil(m.scope_id))
+      end
+
+    Repo.all(query)
+  end
+
+  @doc "Find a single memory entry by scope, optional scope_id, and key."
+  @spec find_memory_entry(String.t(), String.t() | nil, String.t()) :: struct() | nil
+  def find_memory_entry(scope, scope_id, key) do
+    query =
+      from m in Synapsis.MemoryEntry,
+        where: m.scope == ^scope and m.key == ^key,
+        limit: 1
+
+    query =
+      if scope_id do
+        where(query, [m], m.scope_id == ^scope_id)
+      else
+        where(query, [m], is_nil(m.scope_id))
+      end
+
+    Repo.one(query)
+  end
+
+  # ---------------------------------------------------------------------------
+  # Domain projection queries — Session todos
+  # ---------------------------------------------------------------------------
+
+  @doc "List todos for a session, ordered by sort_order and inserted_at."
+  @spec list_todos_for_session(String.t()) :: [struct()]
+  def list_todos_for_session(session_id) do
+    from(t in Synapsis.SessionTodo,
+      where: t.session_id == ^session_id,
+      order_by: [asc: t.sort_order, asc: t.inserted_at]
+    )
+    |> Repo.all()
+  end
+
+  @doc "List session IDs for a project."
+  @spec list_session_ids_for_project(String.t(), non_neg_integer()) :: [String.t()]
+  def list_session_ids_for_project(project_id, limit) do
+    from(s in Synapsis.Session,
+      where: s.project_id == ^project_id,
+      select: s.id,
+      limit: ^limit
+    )
+    |> Repo.all()
+  end
+
+  # ---------------------------------------------------------------------------
+  # Domain projection queries — Session lookup
+  # ---------------------------------------------------------------------------
+
+  @doc "Get the project_id for a session."
+  @spec get_session_project_id(String.t()) :: String.t() | nil
+  def get_session_project_id(session_id) do
+    from(s in Synapsis.Session,
+      where: s.id == ^session_id,
+      select: s.project_id,
+      limit: 1
+    )
+    |> Repo.one()
   end
 end

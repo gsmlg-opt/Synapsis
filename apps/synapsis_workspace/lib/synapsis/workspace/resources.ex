@@ -138,9 +138,7 @@ defmodule Synapsis.Workspace.Resources do
   @spec soft_delete(WorkspaceDocument.t()) ::
           {:ok, WorkspaceDocument.t()} | {:error, Ecto.Changeset.t()}
   def soft_delete(doc) do
-    doc
-    |> Ecto.Changeset.change(deleted_at: DateTime.utc_now())
-    |> WorkspaceDocuments.update()
+    WorkspaceDocuments.soft_delete(doc)
   end
 
   @doc """
