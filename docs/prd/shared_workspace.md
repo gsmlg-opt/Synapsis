@@ -1,12 +1,50 @@
-# Synapsis Shared Workspace — Design Document
+# synapsis_workspace — Product Requirements Document
 
-## 1. Why the Workspace Exists
+## 1. Overview
 
-Agents do work. That work produces artifacts — plans, todos, research notes, handoffs between agents. **Without the workspace, that work is invisible to the user.** It lives buried in conversation history, scattered across agent memory, or lost when a session ends.
+**Application:** `synapsis_workspace`
+**Module namespace:** `SynapsisWorkspace`
+**Location:** `apps/synapsis_workspace` within the Synapsis umbrella
+**Target:** Elixir >= 1.18 / OTP 28+
 
-The workspace exists so that **users can see and control what agents are doing, without reading conversation history.**
+synapsis_workspace is the shared collaboration layer for Synapsis. It provides a database-backed, path-addressed storage system where agents write their work products and users browse, edit, and control them through the web UI.
 
-### 1.1 The Visibility Problem
+**The problem it solves:** Agents produce artifacts — plans, todos, research notes, handoffs — that are invisible to the user without a dedicated collaboration surface. Without the workspace, agent work is buried in conversation history, scattered across agent memory, or lost when sessions end. The workspace makes agent work visible and controllable.
+
+**One-line definition:** The workspace is the agent's desk that the user can see into.
+
+This document covers:
+
+- Motivation and value proposition
+- Directory schema and path semantics
+- Canonical data model and projection architecture
+- Workspace tools for agent interaction (4 tools)
+- Blob storage and search
+- Lifecycle, versioning, and garbage collection
+- Web UI integration
+- Permissions model
+
+### Dependency Position
+
+```
+synapsis_data (schemas — owns workspace_documents table)
+    ↑
+synapsis_core (domain contexts: Skills, Sessions, Projects)
+    ↑
+synapsis_workspace (path resolution, projection, versioning, search, blob store)
+    ↑
+synapsis_agent (consumes workspace via tools)
+    ↑
+synapsis_server / synapsis_web (web explorer, API)
+```
+
+synapsis_workspace depends on synapsis_data (queries) and synapsis_core (domain contexts for projection). It does NOT depend on synapsis_agent, synapsis_server, or synapsis_web. Communication to the UI layer is via PubSub.
+
+---
+
+## 2. Motivation
+
+### 2.1 The Visibility Problem
 
 Consider a typical multi-agent workflow:
 
@@ -29,9 +67,9 @@ With the workspace, every step produces a visible artifact:
 /projects/synapsis/handoffs/architect-to-splitter.json    ← handoff record
 ```
 
-The user opens the app and sees the entire pipeline at a glance. "What did the architect decide?" — read the plan. "What's implementer 2 stuck on?" — read their todo. "Did the spec get correctly interpreted?" — compare the attachment to the plan. No message archaeology required.
+The user opens the app and sees the entire pipeline at a glance.
 
-### 1.2 Why Not Text Files in the Repo
+### 2.2 Why Not Text Files in the Repo
 
 Text files in the repo work fine for a single agent editing code. They fail for multi-agent collaboration:
 
@@ -43,13 +81,7 @@ Text files in the repo work fine for a single agent editing code. They fail for 
 
 **No structure for browsing.** A flat directory of markdown files gives no indication of what's a plan vs. a todo vs. a handoff. The workspace provides typed, scoped, browsable organization that the web UI can render appropriately — todos as checklists, plans as documents, handoffs with sender/receiver metadata.
 
-### 1.3 What the Workspace Is
-
-The workspace is the **agent's desk that the user can see into.**
-
-It is a database-backed, path-addressed shared storage layer where agents write their work products and users browse, edit, and control them through the web UI. It uses file-like semantics (paths, directories, markdown content) because that's the natural interaction model for both agents and humans — but the canonical data lives in the database, not the filesystem.
-
-### 1.4 Core Value Propositions
+### 2.3 Value Propositions
 
 **For users:**
 - See what every agent is doing, right now, without reading chat logs
@@ -69,77 +101,29 @@ It is a database-backed, path-addressed shared storage layer where agents write 
 - Searchable, indexed, versioned content
 - Clean separation: Git owns code, workspace owns coordination
 
----
+### 2.4 Scenarios
 
-## 2. Design Principles
-
-### 2.1 Visibility First
-
-Every design decision serves the primary goal: making agent work visible and controllable by the user. If an artifact is produced by an agent and might matter to the user, it belongs in the workspace.
-
-### 2.2 Out-of-Repo by Default
-
-Anything that is not source code but needs to be shared belongs in the workspace, not the Git repository.
-
-### 2.3 File Semantics, Not Filesystem Emulation
-
-The system should feel like a project file tree — paths, directories, markdown files — without requiring full POSIX behavior. No FUSE, no kernel mounts, no inode semantics.
-
-### 2.4 Database as Source of Truth
-
-Canonical state lives in the database and blob storage. Local file projections are caches, not authority.
-
-### 2.5 Workspace Is a Projection Layer
-
-The workspace presents a unified file-like view over both structured domain records (skills, todos, memory entries) and unstructured documents (notes, plans, ideas, scratch). The user and agent experience is identical regardless of the backing store.
-
-### 2.6 Shared but Scoped
-
-Resources are scoped by path prefix: global (`/shared/`), project (`/projects/:id/`), or session (`/projects/:id/sessions/:sid/`). Scope is derived from path, never stored redundantly.
-
-### 2.7 Lifecycle-Aware
-
-Temporary session scratch is not the same as a published plan. The workspace tracks lifecycle state (scratch → draft → shared → published → archived) and treats each differently for versioning, garbage collection, and visibility.
-
----
-
-## 3. Scenarios
-
-These scenarios ground the design in concrete user and agent workflows.
-
-### 3.1 Agent Writes a Todo, User Views It
+#### Scenario A: Agent Writes a Todo, User Views It
 
 **Without workspace:** Agent writes a todo list into its conversation context. User sees it only if they scroll to that message. If the agent updates the todo, the user must find the latest version among potentially dozens of messages.
 
-**With workspace:** Agent calls `workspace_write("/projects/myapp/todos/current.md", content)`. The web UI has a Todos view that reads from workspace. User opens the app, sees the todo list rendered as a checklist, can check items off, add notes, reprioritize. Agent sees user's changes on next read. Shared, live, zero friction.
+**With workspace:** Agent calls `workspace_write("/projects/myapp/todos/current.md", content)`. The web UI has a Todos view that reads from workspace. User opens the app, sees the todo list rendered as a checklist, can check items off, add notes, reprioritize. Agent sees user's changes on next read.
 
-### 3.2 Design Doc Pipeline
+#### Scenario B: Design Doc Pipeline
 
 **User action:** Uploads `design-spec.pdf` and says "implement this."
 
-**Agent pipeline:**
-1. Global Agent receives the message, stores the attachment: `workspace_write("/projects/myapp/attachments/user/design-spec.pdf", blob)`
+1. Global Agent stores attachment: `workspace_write("/projects/myapp/attachments/user/design-spec.pdf", blob)`
 2. Global Agent delegates to Project Agent with reference to the attachment path.
-3. Project Agent spawns an architect General Agent. Architect reads the spec, produces a plan: `workspace_write("/projects/myapp/plans/auth-redesign.md", plan_content)`
-4. Project Agent reads the plan, splits into tasks: `workspace_write("/projects/myapp/todos/auth-redesign-tasks.md", task_list)`
-5. Project Agent spawns implementer General Agents, each with their task slice.
-6. Each implementer writes their own session todo: `workspace_write("/projects/myapp/sessions/<sid>/todo.md", my_tasks)`
-7. As implementers complete tasks, they update their session todos.
+3. Project Agent spawns architect. Architect reads spec, produces plan: `workspace_write("/projects/myapp/plans/auth-redesign.md", plan_content)`
+4. Project Agent reads plan, splits into tasks: `workspace_write("/projects/myapp/todos/auth-redesign-tasks.md", task_list)`
+5. Project Agent spawns implementers, each writes session todo: `workspace_write("/projects/myapp/sessions/<sid>/todo.md", my_tasks)`
 
-**User experience at any point:**
-- Opens the Workspace Explorer → sees all artifacts organized by type
-- Opens Plans → reads the architect's plan
-- Opens Todos → sees the task breakdown with status
-- Opens a session → sees what that specific implementer is working on
-- Can annotate the plan, reprioritize tasks, or add constraints — agents see the changes
+User can see every artifact at every step — plans, task breakdowns, per-implementer checklists — and edit any of them.
 
-### 3.3 Agent-to-Agent Handoff
+#### Scenario C: Agent-to-Agent Handoff
 
-An architect agent completes a design and needs to hand it to a task-splitting agent.
-
-**Without workspace:** The architect writes a long message to its parent. The parent extracts relevant parts, reformats them, and passes them as context to the next agent. Information is lost in translation, and the user never sees the intermediate artifact.
-
-**With workspace:** The architect writes the plan to workspace. The handoff is a structured message (using the existing agent messaging system, §AS-7) that references the workspace path:
+Architect writes plan to workspace. Handoff is a structured message (agent-system-prd §AS-7) referencing workspace paths:
 
 ```elixir
 %{type: :handoff, payload: %{
@@ -149,36 +133,26 @@ An architect agent completes a design and needs to hand it to a task-splitting a
 }}
 ```
 
-The receiving agent reads the referenced artifact from workspace. The user can see the handoff record, the plan it references, and the tasks it produced — full audit trail of the agent pipeline.
+Receiving agent reads referenced artifact from workspace. User sees handoff record, the plan it references, and tasks it produced.
 
-### 3.4 Research Agent Shares Findings
+#### Scenario D: User Adds Context Mid-Workflow
 
-A Special Agent is spawned to research a library's API before the coding agent starts work.
-
-**Without workspace:** Research results exist only in the Special Agent's conversation history. When it reports back to the parent, the full context is compressed into a summary message.
-
-**With workspace:** The research agent writes findings to workspace: `workspace_write("/projects/myapp/notes/stripe-api-research.md", findings)`. The coding agent reads this file directly. The user can review the research independently. The findings persist after the research agent terminates.
-
-### 3.5 User Adds Context Mid-Workflow
-
-User notices the agents are heading in the wrong direction. They want to add a constraint.
-
-**Without workspace:** User types a message into the chat and hopes the right agent sees it.
-
-**With workspace:** User opens the plan in the workspace, adds a note: "Do NOT use JWT — we're using session tokens." Saves. The next time any agent reads the plan, the constraint is there. The user has directly edited the agent's working document.
+User notices agents are heading in the wrong direction. Opens the plan in workspace, adds: "Do NOT use JWT — we're using session tokens." Saves. Next time any agent reads the plan, the constraint is there.
 
 ---
 
-## 4. Repo vs. Workspace Boundary
+## 3. Repo vs. Workspace Boundary
 
-### 4.1 Git Repository Contains
+### 3.1 The Rule
 
-- Source code
-- Tests
-- Build configuration
+If an artifact is primarily part of **runtime collaboration or agent coordination**, it belongs in the workspace. If it is part of the **deliverable product**, it belongs in the repo.
+
+### 3.2 Git Repository Contains
+
+- Source code, tests, build configuration
 - Project-owned docs that version with code (README, CHANGELOG)
 
-### 4.2 Workspace Contains
+### 3.3 Workspace Contains
 
 - Agent-produced plans, todos, notes, ideas
 - User-uploaded attachments and reference materials
@@ -187,13 +161,59 @@ User notices the agents are heading in the wrong direction. They want to add a c
 - Persistent memory artifacts extracted from completed work
 - Shared and project-scoped skills (SKILL.md bundles)
 
-### 4.3 The Rule
-
-If an artifact is primarily part of **runtime collaboration or agent coordination**, it belongs in the workspace. If it is part of the **deliverable product**, it belongs in the repo.
-
 ---
 
-## 5. Directory Schema
+## 4. Architecture
+
+### WS-1: Projection Layer
+
+The workspace is a projection layer, not a replacement for domain schemas.
+
+**WS-1.1** — Two backing stores:
+
+1. **Existing domain schemas** in `synapsis_data` (skills, memory_entries, session_todos) — projected as virtual files at their conventional paths.
+2. **`workspace_documents` table** — stores genuinely unstructured content (notes, plans, ideas, scratch, handoffs) that has no existing domain schema.
+
+**WS-1.2** — Uniform resource struct:
+
+```elixir
+defmodule SynapsisWorkspace.Resource do
+  @type t :: %__MODULE__{
+    id: binary(),
+    path: String.t(),
+    kind: :document | :skill | :todo | :attachment | :handoff | :memory | :session_scratch,
+    content: String.t() | binary(),
+    content_format: :markdown | :yaml | :json | :text | :binary,
+    metadata: map(),
+    visibility: :private | :project_shared | :global_shared | :published,
+    lifecycle: :scratch | :draft | :shared | :published | :archived,
+    version: integer(),
+    created_by: String.t(),
+    updated_by: String.t(),
+    created_at: DateTime.t(),
+    updated_at: DateTime.t()
+  }
+end
+```
+
+**WS-1.3** — The caller never knows whether a resource came from `skills`, `session_todos`, `memory_entries`, or `workspace_documents`. Path resolution dispatches to the correct backing store transparently.
+
+**WS-1.4** — For domain-backed resources, paths are computed from domain fields:
+- Skill with `scope: :project, project_id: "abc", name: "elixir-patterns"` → `/projects/abc/skills/elixir-patterns/SKILL.md`
+- Memory entry with `scope: :project, project_id: "abc", key: "auth-patterns"` → `/projects/abc/memory/semantic/auth-patterns.md`
+- Session todo for session `sid` in project `pid` → `/projects/pid/sessions/sid/todo.md`
+
+For `workspace_documents`, the path is stored directly as a mutable indexed column.
+
+### WS-2: Identity Model
+
+**WS-2.1** — `id` (ULID) is the stable identity. Paths are mutable, indexed, and can change via rename/move without breaking references.
+
+**WS-2.2** — Cross-references (handoffs, agent messages) use `id` for resolution and `path` for human readability. Both are stored in handoff payloads; resolution always prefers `id`.
+
+**WS-2.3** — Domain-backed resources use the domain record's existing `id`. `workspace_documents` generate their own ULID on creation.
+
+### WS-3: Directory Schema
 
 ```
 /shared/
@@ -222,142 +242,119 @@ If an artifact is primarily part of **runtime collaboration or agent coordinatio
     handoff.md                      # session draft handoff
 ```
 
-### 5.1 Path Semantics
+**WS-3.1** — Scope is derived from path prefix, never stored as a separate field:
+- `/shared/**` → global scope, default visibility `:global_shared`
+- `/projects/:id/**` → project scope, default visibility `:project_shared`
+- `/projects/:id/sessions/:sid/**` → session scope, default visibility `:private`
 
-Paths are human-readable, agent-discoverable, and scoped by convention:
+**WS-3.2** — Only `visibility` is stored as an explicit field. No redundant `scope` column.
 
-- `/shared/**` → global scope, default visibility `global_shared`
-- `/projects/:id/**` → project scope, default visibility `project_shared`
-- `/projects/:id/sessions/:sid/**` → session scope, default visibility `private`
-
-Scope is derived from path prefix. Only `visibility` is stored as an explicit field, never `scope`.
-
----
-
-## 6. Architecture
-
-### 6.1 Workspace Is a Projection Layer
-
-The workspace presents a uniform file-like interface over two backing stores:
-
-1. **Existing domain schemas** in `synapsis_data` (skills, memory_entries, session_todos) — projected as virtual files at their conventional paths
-2. **`workspace_documents` table** — stores genuinely unstructured content (notes, plans, ideas, scratch, handoffs) that has no existing domain schema
-
-The caller receives a uniform `%Workspace.Resource{}` struct regardless of source:
+### WS-4: Path Resolver
 
 ```elixir
-%Workspace.Resource{
-  id: ulid,
-  path: "/projects/synapsis/plans/auth-redesign.md",
-  kind: :document,
-  content: "# Auth Redesign Plan\n...",
-  metadata: %{},
-  visibility: :project_shared,
-  lifecycle: :shared,
-  version: 3
-}
-```
+defmodule SynapsisWorkspace.PathResolver do
+  @type scope :: :global | :project | :session
+  @type resolved :: {:document, document_id}
+                  | {:skill, skill_id}
+                  | {:memory, memory_entry_id}
+                  | {:todo, session_todo_id}
+                  | :not_found
 
-For domain-backed resources, the path is computed from domain fields (a skill with `scope: :project, project_id: "abc", name: "elixir-patterns"` resolves to `/projects/abc/skills/elixir-patterns/SKILL.md`). For `workspace_documents`, the path is stored directly.
-
-### 6.2 Identity Model
-
-`id` (ULID) is the stable identity. Paths are mutable, indexed, and can change via rename/move without breaking references. Handoffs and cross-references use `id` for resolution and `path` for human readability.
-
-### 6.3 Umbrella Placement
-
-New app: `synapsis_workspace`.
-
-```
-synapsis_data (schemas — owns workspace_documents table)
-    ↑
-synapsis_core (domain contexts: Skills, Sessions, Projects)
-    ↑
-synapsis_workspace (path resolution, projection, versioning, search, blob store)
-    ↑
-synapsis_agent (consumes workspace via tools)
-    ↑
-synapsis_server / synapsis_web (web explorer, API)
-```
-
-`synapsis_workspace` depends on `synapsis_data` (queries) and `synapsis_core` (domain contexts for projection). It does not depend on agent, server, or web layers.
-
-### 6.4 Canonical Data Model
-
-#### workspace_documents table
-
-```
-id              ULID, primary key
-path            text, unique index, not null
-kind            enum (document | attachment | handoff | session_scratch)
-project_id      references projects, nullable (null for /shared/)
-session_id      references sessions, nullable
-visibility      enum (private | project_shared | global_shared | published)
-lifecycle       enum (scratch | draft | shared | published | archived)
-content_format  enum (markdown | yaml | json | text | binary)
-content_body    text, nullable (inline for small content, <64KB)
-blob_ref        text, nullable (content-addressable hash for large/binary)
-metadata        jsonb, default '{}'
-version         integer, default 1
-created_by      text (agent_id or "user")
-updated_by      text
-search_vector   tsvector, generated (weighted: path A, metadata.title B, content_body C)
-created_at      utc_datetime_usec
-updated_at      utc_datetime_usec
-last_accessed_at utc_datetime_usec, nullable
-deleted_at      utc_datetime_usec, nullable (soft delete)
-```
-
-GIN index on `search_vector`. Unique index on `path` where `deleted_at IS NULL`.
-
-#### workspace_document_versions table
-
-```
-id              ULID, primary key
-document_id     references workspace_documents
-version         integer
-content_body    text, nullable
-blob_ref        text, nullable
-content_hash    text
-changed_by      text
-created_at      utc_datetime_usec
-```
-
-Version history is lifecycle-gated:
-
-| Lifecycle | Version Policy |
-|---|---|
-| `scratch` | No history. Overwrites in place. |
-| `draft` | Last 5 versions. Older pruned by GC. |
-| `shared` | Full history. |
-| `published` | Full history. Immutable (new version = new resource). |
-| `archived` | History frozen. No new writes. |
-
-### 6.5 Blob Storage
-
-Small text documents (<64KB) store content inline in `content_body`. Larger content and binary attachments use a content-addressable local filesystem:
-
-```
-~/.config/synapsis/blobs/
-  ab/cd/abcdef1234567890...    # SHA-256 path segments
-```
-
-Adapter boundary:
-
-```elixir
-defmodule Synapsis.Workspace.BlobStore do
-  @callback put(content :: binary()) :: {:ok, ref :: binary()}
-  @callback get(ref :: binary()) :: {:ok, binary()} | {:error, :not_found}
-  @callback delete(ref :: binary()) :: :ok
-  @callback exists?(ref :: binary()) :: boolean()
+  @spec resolve(path :: String.t()) :: resolved()
+  @spec scope(path :: String.t()) :: scope()
+  @spec project_id(path :: String.t()) :: binary() | nil
+  @spec session_id(path :: String.t()) :: binary() | nil
+  @spec kind(path :: String.t()) :: atom()
+  @spec validate(path :: String.t()) :: :ok | {:error, reason :: term()}
 end
 ```
 
-`BlobStore.Local` for v1. `BlobStore.S3` adapter boundary reserved for future.
+**WS-4.1** — Path validation rules:
+- Must start with `/shared/` or `/projects/`
+- Path segments are lowercase, alphanumeric, hyphens, underscores
+- No `.`, `..`, or empty segments
+- Maximum depth: 10 segments
+- Maximum path length: 1024 bytes
 
-### 6.6 Search
+**WS-4.2** — Resolution order for read operations:
+1. Try domain schema dispatch (skills, memory, todos) based on path pattern
+2. Fall back to `workspace_documents` table lookup by path
+3. Return `:not_found`
 
-PostgreSQL `tsvector` from day one:
+**WS-4.3** — Resolution for write operations:
+- Paths matching domain schema patterns (`/projects/:id/skills/**`) are rejected — domain records are written through their own contexts (`Synapsis.Skills`, `Synapsis.Sessions`)
+- All other paths write to `workspace_documents`
+
+### WS-5: Canonical Data Model
+
+#### workspace_documents
+
+```elixir
+defmodule SynapsisData.WorkspaceDocument do
+  use Ecto.Schema
+
+  @primary_key {:id, SynapsisData.ULID, autogenerate: true}
+
+  schema "workspace_documents" do
+    field :path, :string
+    field :kind, Ecto.Enum, values: [:document, :attachment, :handoff, :session_scratch]
+    field :visibility, Ecto.Enum, values: [:private, :project_shared, :global_shared, :published]
+    field :lifecycle, Ecto.Enum, values: [:scratch, :draft, :shared, :published, :archived]
+    field :content_format, Ecto.Enum, values: [:markdown, :yaml, :json, :text, :binary]
+    field :content_body, :string
+    field :blob_ref, :string
+    field :metadata, :map, default: %{}
+    field :version, :integer, default: 1
+    field :created_by, :string
+    field :updated_by, :string
+    field :last_accessed_at, :utc_datetime_usec
+    field :deleted_at, :utc_datetime_usec
+
+    belongs_to :project, SynapsisData.Project, type: SynapsisData.ULID
+    belongs_to :session, SynapsisData.Session, type: SynapsisData.ULID
+
+    timestamps(type: :utc_datetime_usec)
+  end
+end
+```
+
+**WS-5.1** — Indexes:
+- Unique index on `path` where `deleted_at IS NULL`
+- GIN index on `search_vector`
+- Index on `project_id`
+- Index on `session_id`
+- Index on `kind`
+- Index on `updated_at` (for recent items)
+
+**WS-5.2** — Content storage strategy:
+- Small text documents (<64KB): inline in `content_body`, `blob_ref` is null
+- Large content or binary attachments: `content_body` is null, content stored in blob store, `blob_ref` holds content-addressable hash
+
+**WS-5.3** — Soft delete via `deleted_at` timestamp. Hard delete by GC after retention period.
+
+#### workspace_document_versions
+
+```elixir
+defmodule SynapsisData.WorkspaceDocumentVersion do
+  use Ecto.Schema
+
+  @primary_key {:id, SynapsisData.ULID, autogenerate: true}
+
+  schema "workspace_document_versions" do
+    field :version, :integer
+    field :content_body, :string
+    field :blob_ref, :string
+    field :content_hash, :string
+    field :changed_by, :string
+
+    belongs_to :document, SynapsisData.WorkspaceDocument, type: SynapsisData.ULID
+
+    timestamps(type: :utc_datetime_usec, updated_at: false)
+  end
+end
+```
+
+**WS-5.4** — Search vector (PostgreSQL generated column):
 
 ```sql
 search_vector tsvector GENERATED ALWAYS AS (
@@ -367,30 +364,233 @@ search_vector tsvector GENERATED ALWAYS AS (
 ) STORED;
 ```
 
-The `workspace_search` tool translates agent queries to `websearch_to_tsquery`. Search fans out across both `workspace_documents` and projected domain records (skills by name, memory by content).
+### WS-6: Blob Storage
 
-Phase 3 adds `embedding vector(1536)` column + pgvector for semantic search.
+**WS-6.1** — Behaviour:
+
+```elixir
+defmodule SynapsisWorkspace.BlobStore do
+  @callback put(content :: binary()) :: {:ok, ref :: binary()} | {:error, term()}
+  @callback get(ref :: binary()) :: {:ok, binary()} | {:error, :not_found}
+  @callback delete(ref :: binary()) :: :ok | {:error, term()}
+  @callback exists?(ref :: binary()) :: boolean()
+end
+```
+
+**WS-6.2** — `BlobStore.Local` adapter: content-addressable local filesystem using SHA-256 hashing.
+
+```
+~/.config/synapsis/blobs/
+  ab/cd/abcdef1234567890...    # first 2 bytes as directory sharding
+```
+
+**WS-6.3** — Deduplication: identical content produces identical refs. Multiple documents can reference the same blob.
+
+**WS-6.4** — `BlobStore.S3` adapter boundary reserved for future. Not implemented in v1.
+
+### WS-7: Search
+
+**WS-7.1** — PostgreSQL `tsvector` full-text search from day one. Queries use `websearch_to_tsquery` for natural language input from agents.
+
+**WS-7.2** — Search fans out across backing stores:
+- `workspace_documents.search_vector` for unstructured content
+- `skills` table by name and description
+- `memory_entries` table by key and content
+
+Results are merged, deduplicated by `id`, and ranked by relevance.
+
+**WS-7.3** — Search accepts scope filtering:
+- `:global` — `/shared/**` + projected global records
+- `:project` with `project_id` — `/projects/:id/**` + projected project records
+- `:session` with `session_id` — `/projects/:id/sessions/:sid/**`
+- `:all` — everything accessible to the caller
+
+**WS-7.4** — Phase 3 adds `embedding vector(1536)` column + pgvector for semantic search.
+
+### WS-8: Lifecycle
+
+**WS-8.1** — States:
+
+```
+scratch → draft → shared → published → archived
+```
+
+**WS-8.2** — Lifecycle determines version history policy:
+
+| Lifecycle | Version Policy |
+|---|---|
+| `scratch` | No history. Overwrites in place. |
+| `draft` | Last 5 versions. Older pruned by GC. |
+| `shared` | Full history. |
+| `published` | Full history. Immutable (new version = new resource). |
+| `archived` | History frozen. No new writes. |
+
+**WS-8.3** — Auto-promotion rules on write:
+- Writing to `/projects/:id/sessions/:sid/**` → lifecycle defaults to `:scratch`
+- Writing to `/projects/:id/{notes,plans,todos,ideas}/**` → lifecycle defaults to `:shared`
+- Writing to `/shared/**` → lifecycle defaults to `:shared`
+- Explicit lifecycle override available via opts
+
+**WS-8.4** — Promotion is also explicit: user can promote session scratch to project level via web UI "Promote to Project" action, which copies the document to a non-session path and updates lifecycle.
+
+### WS-9: Garbage Collection
+
+**WS-9.1** — `SynapsisWorkspace.GC` is a GenServer running on configurable interval (default: 24 hours).
+
+**WS-9.2** — GC tasks:
+1. Delete session scratch documents where session completed > `session_scratch_retention_days` ago (default: 7)
+2. Prune draft version history beyond `draft_version_retention` count (default: 5)
+3. Delete orphaned blobs with no referencing document
+4. Hard-delete soft-deleted documents past retention period
+
+**WS-9.3** — Promoted documents (lifecycle ≥ `:shared`) are excluded from session scratch GC regardless of `session_id` association.
+
+**WS-9.4** — Configuration:
+
+```elixir
+config :synapsis_workspace, :gc,
+  session_scratch_retention_days: 7,
+  draft_version_retention: 5,
+  gc_interval_hours: 24,
+  soft_delete_retention_days: 30
+```
 
 ---
 
-## 7. Agent Interaction
+## 5. Public API
 
-### 7.1 Workspace Tools (4 tools)
+### WS-10: Workspace API
 
+```elixir
+defmodule SynapsisWorkspace do
+  @type path :: String.t()
+  @type opts :: keyword()
+
+  @spec read(path) :: {:ok, Resource.t()} | {:error, :not_found}
+  @spec read!(path) :: Resource.t()
+
+  @spec write(path, content :: String.t() | binary(), opts) :: {:ok, Resource.t()} | {:error, term()}
+  # opts: :metadata, :content_format, :visibility, :lifecycle, :created_by
+
+  @spec list(path, opts) :: {:ok, [Resource.t()]} | {:error, term()}
+  # opts: :depth (default 1), :sort (:name | :recent | :kind), :kind, :lifecycle
+
+  @spec search(query :: String.t(), opts) :: {:ok, [Resource.t()]}
+  # opts: :scope, :project_id, :kind, :limit (default 20)
+
+  @spec delete(path) :: :ok | {:error, term()}
+
+  @spec move(from :: path, to :: path) :: {:ok, Resource.t()} | {:error, term()}
+
+  @spec stat(path) :: {:ok, Resource.t()} | {:error, :not_found}
+  # Returns resource without content (metadata only)
+
+  @spec exists?(path) :: boolean()
+end
 ```
-workspace_read(path)                 — read content by path or id
-workspace_write(path, content, opts) — create or update; auto-creates parent dirs
-workspace_list(path, opts)           — list dir; opts: sort, depth, kind, recent
-workspace_search(query, opts)        — full-text + path search; opts: scope, kind
-```
 
-These register in `Synapsis.ToolRegistry` alongside the 27 existing tools. Permission level `:none` for read/list/search, `:write` for write.
+**WS-10.1** — `write/3` auto-creates parent directory entries. Directories are implicit — they exist when any child document exists.
 
-No `workspace_stat` (covered by `workspace_list` with `depth: 0`). No `workspace_recent` (covered by `workspace_list` with `sort: :recent`). No `workspace_publish` (write to a non-scratch path auto-promotes lifecycle). No `workspace_handoff` (handoffs are agent messages that reference workspace paths).
+**WS-10.2** — `write/3` checks lifecycle before creating version history entry. Scratch documents skip versioning.
 
-### 7.2 Handoffs Through Agent Messaging
+**WS-10.3** — `write/3` validates path via `PathResolver.validate/1` and rejects writes to domain-backed paths (skills, memory, todos).
 
-Handoffs use the existing agent message envelope (agent PRD §AS-7) with type `:handoff`:
+**WS-10.4** — `list/2` returns resources at the given path prefix. For mixed backing stores (e.g., `/projects/:id/` contains both domain-projected skills and workspace documents), results are merged.
+
+**WS-10.5** — All write operations broadcast `{:workspace_changed, path, action}` via PubSub to `"workspace:{project_id}"` for UI updates.
+
+---
+
+## 6. Workspace Tools
+
+Four tools for agent interaction, registered in `Synapsis.ToolRegistry` alongside the 27 existing tools from `synapsis_tool`.
+
+### WS-11: workspace_read
+
+| Field | Value |
+|---|---|
+| Module | `SynapsisTool.WorkspaceRead` |
+| Permission | `:read` |
+| Side Effects | none |
+| Description | Read a workspace resource by path. Returns content and metadata. Supports text, markdown, yaml, json, and binary content. |
+
+Parameters:
+- `path` (required, string) — workspace path, e.g. "/projects/myapp/plans/auth-redesign.md"
+
+Notes: Also accepts `id` as path for direct ID-based lookup. Returns content inline for text, base64 for binary.
+
+### WS-12: workspace_write
+
+| Field | Value |
+|---|---|
+| Module | `SynapsisTool.WorkspaceWrite` |
+| Permission | `:write` |
+| Side Effects | `[:workspace_changed]` |
+| Description | Create or update a workspace document. Auto-creates parent directories. Lifecycle and visibility default based on path prefix. |
+
+Parameters:
+- `path` (required, string) — workspace path
+- `content` (required, string) — file content
+- `content_format` (optional, enum: "markdown" | "yaml" | "json" | "text", default: inferred from extension)
+- `metadata` (optional, object) — arbitrary metadata (title, tags, etc.)
+
+Notes: Rejects writes to domain-backed paths (skills, memory, todos). Those must be created through their domain contexts. Broadcasts `:workspace_changed` side effect.
+
+### WS-13: workspace_list
+
+| Field | Value |
+|---|---|
+| Module | `SynapsisTool.WorkspaceList` |
+| Permission | `:read` |
+| Side Effects | none |
+| Description | List workspace directory contents. Returns resource names, kinds, and metadata. Supports depth, sorting, and filtering. |
+
+Parameters:
+- `path` (required, string) — directory path to list
+- `depth` (optional, integer, default: 1) — max depth for recursive listing
+- `sort` (optional, enum: "name" | "recent" | "kind", default: "name")
+- `kind` (optional, string) — filter by resource kind
+
+Notes: Merges results from domain-backed and document-backed resources transparently. `sort: "recent"` with `depth: 0` at a project root provides a "recent items" view.
+
+### WS-14: workspace_search
+
+| Field | Value |
+|---|---|
+| Module | `SynapsisTool.WorkspaceSearch` |
+| Permission | `:read` |
+| Side Effects | none |
+| Description | Full-text search across workspace resources. Searches path, title, and content with weighted ranking. |
+
+Parameters:
+- `query` (required, string) — search query (natural language)
+- `scope` (optional, enum: "global" | "project" | "session", default: "project")
+- `project_id` (optional, string) — required when scope is "project" or "session"
+- `kind` (optional, string) — filter by resource kind
+- `limit` (optional, integer, default: 20)
+
+Notes: Fans out across `workspace_documents` and projected domain records. Uses `websearch_to_tsquery` for natural language input.
+
+### Tool Inventory Addition
+
+| # | Tool | Name | Category | Permission | Side Effects | Enabled |
+|---|---|---|---|---|---|---|
+| 28 | WorkspaceRead | `workspace_read` | workspace | `:read` | — | yes |
+| 29 | WorkspaceWrite | `workspace_write` | workspace | `:write` | `[:workspace_changed]` | yes |
+| 30 | WorkspaceList | `workspace_list` | workspace | `:read` | — | yes |
+| 31 | WorkspaceSearch | `workspace_search` | workspace | `:read` | — | yes |
+
+Total Synapsis tool count: **31 tools** (27 from tools-system-prd + 4 workspace).
+
+---
+
+## 7. Handoff Integration
+
+### WS-15: Handoffs Through Agent Messaging
+
+**WS-15.1** — Handoffs are NOT a workspace tool. They are a message type (`:handoff`) in the existing agent message bus (agent-system-prd §AS-7).
+
+**WS-15.2** — Handoff message envelope:
 
 ```elixir
 %{
@@ -402,134 +602,133 @@ Handoffs use the existing agent message envelope (agent PRD §AS-7) with type `:
     artifact_ids: ["01JXYZ..."],
     summary: "Auth redesign plan ready for task splitting",
     instructions: "Break into implementable tasks, one per module"
-  }
+  },
+  timestamp: ~U[2026-03-13 10:00:00Z]
 }
 ```
 
-Handoff metadata is persisted as a `workspace_document` at `/projects/:id/handoffs/:ref.json` by the agent messaging layer after delivery. This provides both searchability and audit trail without a separate tool.
+**WS-15.3** — After delivery, the agent messaging layer persists handoff metadata as a `workspace_document` at `/projects/:id/handoffs/:ref.json` with `kind: :handoff`. This provides searchability and audit trail.
 
-### 7.3 Workspace vs. Repo Tool Boundary
-
-Clear rule for agents:
-
-- **Repo files** (source code, tests, configs) → use `file_read`, `file_write`, `file_edit`, `grep`, `glob`, `bash_exec`
-- **Workspace files** (plans, todos, notes, handoffs, skills, memory) → use `workspace_read`, `workspace_write`, `workspace_list`, `workspace_search`
-
-Agents should never use `file_write` to create plans in the repo, and should never use `workspace_write` to create source code.
+**WS-15.4** — The receiving agent uses `workspace_read` to access referenced artifacts by `id`.
 
 ---
 
-## 8. Web UI Integration
+## 8. Side Effect Integration
 
-The web UI is the primary surface for user visibility and control.
+### WS-16: Workspace Side Effects
 
-### 8.1 Core Views
+**WS-16.1** — New side effect type: `:workspace_changed`
 
-| View | Source | Rendering |
-|---|---|---|
-| Workspace Explorer | `workspace_list` tree traversal | LiveView — folder tree + file preview |
-| Plans | `/projects/:id/plans/**` | LiveView — markdown rendering, inline edit |
-| Todos | `/projects/:id/todos/**` + `session_todos` | LiveView — checklist with status toggles |
-| Notes | `/projects/:id/notes/**` + `/shared/notes/**` | LiveView — markdown editor |
-| Ideas | `/projects/:id/ideas/**` | LiveView — card view with promote action |
-| Skills | projected from `skills` schema | LiveView — existing SkillLive views |
-| Handoffs | `/projects/:id/handoffs/**` | LiveView — sender/receiver/status/artifacts |
-| Attachments | `/projects/:id/attachments/**` | LiveView — file list with preview |
-| Memory | projected from `memory_entries` + `/projects/:id/memory/**` | LiveView — categorized knowledge base |
-| Recent | `workspace_list(sort: :recent)` | LiveView — timeline of recent changes |
-
-### 8.2 User Editing
-
-Users can edit workspace documents directly in the web UI. Edits go through `Synapsis.Workspace.write/3` with `updated_by: "user"`. Agents see user changes on their next `workspace_read`. No real-time collaborative editing for v1 — optimistic concurrency with version checks on write.
-
-### 8.3 Integration with Existing LiveViews
-
-The workspace explorer is a new LiveView (`WorkspaceLive.Explorer`). Existing views (SkillLive, MemoryLive) continue to work against domain schemas directly — workspace projection is additive, not a replacement for existing CRUD. The explorer provides a unified browsing alternative.
-
----
-
-## 9. Lifecycle and Garbage Collection
-
-### 9.1 Lifecycle States
-
-```
-scratch → draft → shared → published → archived
-```
-
-Session scratch is temporary. Published is durable. The lifecycle determines version history retention, GC eligibility, and default visibility.
-
-### 9.2 Promotion
-
-Promotion is explicit: writing a scratch artifact to a non-session path promotes it automatically.
-
-```
-# Agent promotes session scratch to project plan:
-workspace_write("/projects/myapp/plans/auth-redesign.md", content)
-# lifecycle auto-set to :shared based on target path
-```
-
-Users can also promote via the web UI — a "Promote to Project" action on any session-scoped artifact.
-
-### 9.3 Session Scratch GC
-
-A periodic `Synapsis.Workspace.GC` GenServer cleans up:
-
-1. Session scratch documents where the session completed more than 7 days ago (configurable)
-2. Draft version history beyond the 5-version retention window
-3. Orphaned blobs with no referencing document
-
-Promoted documents (lifecycle ≥ `shared`) are excluded from GC regardless of session association.
+**WS-16.2** — `workspace_write` and `workspace_delete` broadcast to PubSub topic `"workspace:{project_id}"`:
 
 ```elixir
-config :synapsis_workspace, :gc,
-  session_scratch_retention_days: 7,
-  draft_version_retention: 5,
-  gc_interval_hours: 24
+{:workspace_changed, %{path: path, action: :created | :updated | :deleted, resource_id: id}}
 ```
 
----
-
-## 10. Permissions Model
-
-### 10.1 Scope Rules
-
-- Global Agent may access `/shared/**` and any `/projects/:id/**` it is delegated to
-- Project Agent may access its own `/projects/:id/**` and `/shared/**` (read-only)
-- Session-scoped agents may access their session path and promoted project-shared materials
-- Users may browse and edit all workspace content (single-user tool, no auth)
-
-### 10.2 Path-Based Access
-
-Permission checks operate on path prefixes:
-
-- Project Agent for `synapsis` can read/write `/projects/synapsis/**`
-- Project Agent cannot write `/projects/other-project/**`
-- Session Agent can write `/projects/synapsis/sessions/<own-session>/**`
-
-### 10.3 Future Multi-User
-
-Current design assumes single-user (per design-v2.md: "No auth. Access = admin. Single-user local tool"). Permission model is designed to support future multi-user scenarios without schema changes — the `visibility` field and path-based checks are sufficient.
+**WS-16.3** — Subscribers:
+- `SessionChannel` → UI notifications (workspace explorer refresh, todo updates)
+- `SynapsisAgent.ContextBuilder` → invalidate cached project context when workspace changes
+- `WorkspaceLive.Explorer` → LiveView update via `handle_info`
 
 ---
 
-## 11. Module Boundaries
+## 9. Permissions Model
+
+### WS-17: Access Rules
+
+**WS-17.1** — Current design assumes single-user (per design-v2.md). Permission checks are agent-scoped, not user-scoped.
+
+**WS-17.2** — Agent access rules:
+- Global Agent: read/write `/shared/**`, read/write any `/projects/:id/**` it is delegated to
+- Project Agent: read/write own `/projects/:id/**`, read-only `/shared/**`
+- Session Agent (General/Special): read/write `/projects/:id/sessions/<own-session>/**`, read project-shared content
+- All agents: read access to resources with visibility ≥ `:project_shared` within their project scope
+
+**WS-17.3** — Permission checks operate on path prefix matching. Implemented in `SynapsisWorkspace.Permissions`:
+
+```elixir
+defmodule SynapsisWorkspace.Permissions do
+  @spec check(agent_id :: binary(), path :: String.t(), action :: :read | :write) ::
+    :allowed | :denied
+end
+```
+
+**WS-17.4** — Users have unrestricted read/write access to all workspace content (single-user tool). The `visibility` field and path-based checks are designed to support future multi-user scenarios without schema changes.
+
+---
+
+## 10. Web UI Integration
+
+### WS-18: Views
+
+**WS-18.1** — New LiveView: `WorkspaceLive.Explorer` — folder tree with file preview and inline editing. Mounts at `/projects/:project_id/workspace`.
+
+**WS-18.2** — Dedicated views per resource type:
+
+| View | Route | Source | Rendering |
+|---|---|---|---|
+| Workspace Explorer | `/projects/:id/workspace` | `workspace_list` tree | LiveView — tree + preview |
+| Plans | `/projects/:id/workspace/plans` | `/projects/:id/plans/**` | LiveView — markdown + edit |
+| Todos | `/projects/:id/workspace/todos` | `/projects/:id/todos/**` + `session_todos` | LiveView — checklist |
+| Notes | `/projects/:id/workspace/notes` | `/projects/:id/notes/**` | LiveView — markdown editor |
+| Handoffs | `/projects/:id/workspace/handoffs` | `/projects/:id/handoffs/**` | LiveView — sender/receiver/status |
+| Attachments | `/projects/:id/workspace/attachments` | `/projects/:id/attachments/**` | LiveView — file list |
+
+**WS-18.3** — Existing LiveViews (`SkillLive`, `MemoryLive`) continue to work against domain schemas directly. Workspace projection is additive — the explorer provides a unified browsing alternative, not a replacement.
+
+**WS-18.4** — User edits go through `SynapsisWorkspace.write/3` with `updated_by: "user"`. Agents see user changes on next `workspace_read`. Optimistic concurrency with version checks on write (no real-time collaborative editing in v1).
+
+**WS-18.5** — PubSub-driven updates: workspace changes broadcast to `"workspace:{project_id}"`, LiveView subscribes and updates explorer tree in real-time as agents write.
+
+---
+
+## 11. Module Layout
 
 ```
 apps/synapsis_workspace/
-├── lib/synapsis_workspace/
-│   ├── workspace.ex                # Public API: read, write, list, search
-│   ├── path_resolver.ex            # Path parsing, scope derivation, domain dispatch
-│   ├── resources.ex                # workspace_documents CRUD + versioning
-│   ├── projection.ex               # Domain schema → Workspace.Resource mapping
-│   ├── blob_store.ex               # Behaviour
-│   ├── blob_store/
-│   │   └── local.ex                # Content-addressable local FS
-│   ├── search.ex                   # tsvector queries + cross-schema fan-out
-│   ├── gc.ex                       # Periodic cleanup GenServer
-│   └── resource.ex                 # %Workspace.Resource{} struct
+├── lib/
+│   ├── synapsis_workspace.ex                      # Public API facade
+│   └── synapsis_workspace/
+│       ├── application.ex                         # Supervision tree (GC)
+│       ├── resource.ex                            # %Resource{} struct
+│       ├── path_resolver.ex                       # Path parsing, validation, dispatch
+│       ├── resources.ex                           # workspace_documents CRUD + versioning
+│       ├── projection.ex                          # Domain schema → Resource mapping
+│       ├── permissions.ex                         # Path-based access checks
+│       ├── search.ex                              # tsvector queries + cross-schema fan-out
+│       ├── gc.ex                                  # Periodic cleanup GenServer
+│       ├── blob_store.ex                          # Behaviour
+│       └── blob_store/
+│           └── local.ex                           # Content-addressable local FS
+│
+├── test/
+│   ├── test_helper.exs
+│   ├── support/
+│   │   ├── workspace_case.ex                      # Shared test helpers
+│   │   └── blob_store_case.ex                     # Shared blob store tests
+│   ├── synapsis_workspace/
+│   │   ├── resource_test.exs
+│   │   ├── path_resolver_test.exs
+│   │   ├── resources_test.exs
+│   │   ├── projection_test.exs
+│   │   ├── permissions_test.exs
+│   │   ├── search_test.exs
+│   │   ├── gc_test.exs
+│   │   └── blob_store/
+│   │       └── local_test.exs
+│   └── integration/
+│       ├── workspace_api_test.exs
+│       ├── projection_roundtrip_test.exs
+│       ├── lifecycle_promotion_test.exs
+│       ├── search_fanout_test.exs
+│       └── gc_cleanup_test.exs
+│
+└── mix.exs
 ```
 
-Schemas (`workspace_documents`, `workspace_document_versions`) live in `synapsis_data` per umbrella convention.
+Schemas (`SynapsisData.WorkspaceDocument`, `SynapsisData.WorkspaceDocumentVersion`) live in `apps/synapsis_data/` per umbrella convention.
+
+Tool modules (`SynapsisTool.WorkspaceRead`, etc.) live in `apps/synapsis_tool/` per tool system convention.
 
 ---
 
@@ -537,42 +736,277 @@ Schemas (`workspace_documents`, `workspace_document_versions`) live in `synapsis
 
 ### Phase 1: Core Workspace
 
-- `workspace_documents` schema + migrations
-- `Workspace.Resource` struct
-- `Workspace` public API (read, write, list, search)
-- `PathResolver` — path parsing, scope derivation
-- `Resources` — CRUD for `workspace_documents` with version history
-- `BlobStore.Local` — content-addressable local storage
-- `Search` — tsvector full-text search
-- 4 workspace agent tools registered in ToolRegistry
-- Basic `WorkspaceLive.Explorer` in web UI
+**Goal:** Agents can write and read workspace documents. Users can browse in web UI.
 
-**Deliverable:** Agents can write plans/todos/notes to workspace. Users can browse and edit them in the web UI.
+**Modules:** `Resource`, `PathResolver`, `Resources`, `BlobStore.Local`, `SynapsisWorkspace` (API)
 
-### Phase 2: Projection + Lifecycle
+**Migrations:** `workspace_documents`, `workspace_document_versions` tables with indexes and search vector.
 
-- `Projection` — domain schema mapping (skills, memory, todos as workspace resources)
-- Lifecycle state machine with auto-promotion rules
-- `GC` GenServer for session scratch cleanup
-- Version history lifecycle gating
-- Handoff persistence in workspace from agent messaging layer
-- Attachments with blob storage for binary files
+**Tests:**
 
-**Deliverable:** Unified workspace view over both domain schemas and documents. Full lifecycle management.
+```
+test/synapsis_workspace/resource_test.exs
+├── describe "new/1"
+│   ├── creates resource with valid fields
+│   ├── validates required fields (path, kind)
+│   └── defaults lifecycle from path prefix
 
-### Phase 3: Search + Sync
+test/synapsis_workspace/path_resolver_test.exs
+├── describe "validate/1"
+│   ├── accepts valid /shared/ paths
+│   ├── accepts valid /projects/:id/ paths
+│   ├── accepts valid session paths
+│   ├── rejects empty segments
+│   ├── rejects .. traversal
+│   ├── rejects paths exceeding max depth
+│   └── rejects paths exceeding max length
+├── describe "scope/1"
+│   ├── returns :global for /shared/**
+│   ├── returns :project for /projects/:id/**
+│   └── returns :session for session paths
+├── describe "resolve/1"
+│   ├── resolves skill paths to {:skill, id}
+│   ├── resolves memory paths to {:memory, id}
+│   ├── resolves document paths to {:document, id}
+│   └── returns :not_found for nonexistent paths
+├── describe "kind/1"
+│   ├── infers :document for notes/plans/ideas
+│   ├── infers :attachment for attachments/**
+│   ├── infers :handoff for handoffs/**
+│   └── infers :session_scratch for session scratch/**
 
-- Semantic search with pgvector embeddings
-- Cross-schema fan-out search (documents + skills + memory)
-- Recent items view with access tracking
-- Optional local read-only cache projection at `<repo>/.synapsis-cache/workspace/`
-- Richer permissions for multi-user scenarios (future)
+test/synapsis_workspace/resources_test.exs
+├── describe "create/2"
+│   ├── creates document with inline content
+│   ├── creates document with blob ref for large content
+│   ├── auto-sets lifecycle from path
+│   ├── auto-sets visibility from path
+│   ├── increments version on update
+│   ├── creates version entry for non-scratch lifecycle
+│   ├── skips version entry for scratch lifecycle
+│   ├── rejects duplicate path
+│   └── validates content format
+├── describe "get_by_path/1"
+│   ├── returns document by path
+│   ├── returns nil for nonexistent
+│   └── excludes soft-deleted documents
+├── describe "update/3"
+│   ├── updates content and version
+│   ├── checks optimistic concurrency (version match)
+│   ├── rejects stale version
+│   └── creates version history entry per lifecycle rules
+├── describe "delete/1"
+│   ├── soft-deletes document
+│   └── frees path for reuse
+├── describe "list_by_prefix/2"
+│   ├── returns children at depth 1
+│   ├── returns recursive children with depth option
+│   ├── filters by kind
+│   └── sorts by name, recent, kind
 
-**Deliverable:** Workspace is fully searchable, including semantic similarity. Optional shell-friendly local projection.
+test/synapsis_workspace/blob_store/local_test.exs
+├── describe "put/1"
+│   ├── stores content and returns SHA-256 ref
+│   ├── deduplicates identical content
+│   └── creates directory structure
+├── describe "get/1"
+│   ├── retrieves content by ref
+│   └── returns error for nonexistent ref
+├── describe "delete/1"
+│   ├── removes blob file
+│   └── handles nonexistent ref gracefully
+├── describe "exists?/1"
+│   ├── returns true for stored blob
+│   └── returns false for nonexistent
+```
+
+### Phase 2: Search + Tools
+
+**Goal:** Full-text search. Agent tools registered and functional.
+
+**Modules:** `Search`, workspace tools in `synapsis_tool`
+
+**Tests:**
+
+```
+test/synapsis_workspace/search_test.exs
+├── describe "query/2"
+│   ├── finds documents by content match
+│   ├── finds documents by path match (weighted higher)
+│   ├── finds documents by metadata title match
+│   ├── filters by scope
+│   ├── filters by kind
+│   ├── limits results
+│   ├── returns empty for no matches
+│   └── ranks path matches above content matches
+
+test/integration/workspace_api_test.exs
+├── describe "read/1"
+│   ├── reads workspace document by path
+│   ├── returns :not_found for nonexistent
+│   └── returns domain-projected resource (skill by path)
+├── describe "write/3"
+│   ├── creates new document
+│   ├── updates existing document
+│   ├── rejects write to domain-backed path
+│   ├── broadcasts :workspace_changed event
+│   └── auto-creates parent directories implicitly
+├── describe "list/2"
+│   ├── lists mixed domain + document resources
+│   ├── sorts by recent
+│   └── filters by kind
+├── describe "search/2"
+│   ├── searches across workspace documents
+│   ├── searches across projected domain records
+│   └── merges and deduplicates results
+```
+
+### Phase 3: Projection + Lifecycle
+
+**Goal:** Domain schemas projected as workspace resources. Lifecycle management. GC.
+
+**Modules:** `Projection`, `GC`, `Permissions`
+
+**Tests:**
+
+```
+test/synapsis_workspace/projection_test.exs
+├── describe "project_skill/1"
+│   ├── maps skill to Resource with computed path
+│   ├── sets kind to :skill
+│   ├── includes SKILL.md content
+│   └── handles global vs project scope
+├── describe "project_memory/1"
+│   ├── maps memory entry to Resource
+│   ├── computes path from scope and category
+│   └── includes content as markdown
+├── describe "project_todo/1"
+│   ├── maps session todo to Resource
+│   └── computes path from session
+
+test/synapsis_workspace/gc_test.exs
+├── describe "cleanup_session_scratch/0"
+│   ├── deletes scratch for completed sessions past retention
+│   ├── preserves scratch for active sessions
+│   ├── preserves promoted documents regardless of session
+│   └── respects retention configuration
+├── describe "prune_draft_versions/0"
+│   ├── keeps last N versions for draft documents
+│   ├── preserves all versions for shared/published
+│   └── skips scratch documents (no versions to prune)
+├── describe "cleanup_orphaned_blobs/0"
+│   ├── deletes blobs with no referencing document
+│   └── preserves blobs with active references
+
+test/synapsis_workspace/permissions_test.exs
+├── describe "check/3"
+│   ├── allows project agent to write own project
+│   ├── denies project agent writing other project
+│   ├── allows session agent to write own session path
+│   ├── allows global agent to write any project
+│   └── allows read for project_shared visibility
+
+test/integration/projection_roundtrip_test.exs
+├── create skill via domain context → read via workspace path
+├── create memory entry → read via workspace path
+├── list project workspace → includes both domain and documents
+└── search finds both domain records and workspace documents
+
+test/integration/lifecycle_promotion_test.exs
+├── write to session path → lifecycle is scratch
+├── write to project path → lifecycle is shared
+├── session scratch excluded from search by default
+├── promote session scratch to project → lifecycle changes
+└── GC deletes expired session scratch
+
+test/integration/search_fanout_test.exs
+├── search matches workspace document content
+├── search matches skill name/description
+├── search matches memory entry content
+├── results deduplicated by id
+└── scope filtering works across backing stores
+
+test/integration/gc_cleanup_test.exs
+├── full GC cycle: scratch + versions + blobs
+├── concurrent GC with writes (no race conditions)
+└── configurable retention periods respected
+```
+
+### Phase 4: Web UI
+
+**Goal:** Workspace explorer LiveView. User can browse and edit.
+
+**Modules:** `WorkspaceLive.Explorer` and related LiveViews in `synapsis_web`
+
+**Tests:**
+
+```
+# LiveView tests in apps/synapsis_web/test/
+test/synapsis_web/live/workspace_live/explorer_test.exs
+├── renders folder tree
+├── navigates into subdirectories
+├── displays document preview
+├── inline edit and save
+├── reflects real-time workspace changes via PubSub
+├── promote action on session scratch
+└── delete action with confirmation
+```
 
 ---
 
-## 13. Resolved Decisions
+## 13. Acceptance Criteria
+
+### Core Workspace (Phase 1-2)
+
+- [ ] Agents can write documents to workspace via `workspace_write` tool
+- [ ] Agents can read documents via `workspace_read` tool
+- [ ] Agents can list directory contents via `workspace_list` tool
+- [ ] Agents can search workspace via `workspace_search` tool
+- [ ] Full-text search returns ranked results across workspace documents
+- [ ] Blob store handles large content and binary attachments
+- [ ] Version history created per lifecycle rules
+- [ ] Path validation rejects malformed paths
+- [ ] PubSub broadcasts on workspace changes
+- [ ] >= 90% test coverage, Dialyzer clean
+
+### Projection + Lifecycle (Phase 3)
+
+- [ ] Skills, memory entries, and session todos projected as workspace resources
+- [ ] `workspace_list` returns mixed domain + document results
+- [ ] `workspace_search` fans out across all backing stores
+- [ ] Lifecycle auto-promotion based on path prefix
+- [ ] GC cleans up expired session scratch
+- [ ] GC prunes draft version history
+- [ ] GC removes orphaned blobs
+- [ ] Permission checks enforce agent scope boundaries
+
+### Web UI (Phase 4)
+
+- [ ] Workspace explorer renders folder tree with preview
+- [ ] User can edit workspace documents inline
+- [ ] Real-time updates via PubSub when agents write
+- [ ] Promote action moves session scratch to project level
+- [ ] Existing SkillLive/MemoryLive unaffected by workspace addition
+
+---
+
+## 14. Synapsis Integration Points
+
+**synapsis_data provides:** `WorkspaceDocument` and `WorkspaceDocumentVersion` Ecto schemas. Migrations. Existing domain schemas (`Skill`, `MemoryEntry`, `SessionTodo`, `Project`, `Session`) for projection.
+
+**synapsis_core provides:** Domain contexts (`Synapsis.Skills`, `Synapsis.Sessions`, `Synapsis.Projects`, `Synapsis.Memory`) consumed by `Projection` module.
+
+**synapsis_tool provides:** Host application for the 4 workspace tool modules (`SynapsisTool.WorkspaceRead`, etc.). Tools follow the `Synapsis.Tool` behaviour contract.
+
+**synapsis_agent consumes:** Workspace tools via `ToolRegistry`. `ContextBuilder` subscribes to `"workspace:{project_id}"` for cache invalidation. Handoff messages reference workspace paths.
+
+**synapsis_server consumes:** PubSub events from workspace for `SessionChannel` UI notifications.
+
+**synapsis_web consumes:** `SynapsisWorkspace` API for `WorkspaceLive.Explorer` and related views. Subscribes to workspace PubSub for real-time updates.
+
+---
+
+## 15. Resolved Decisions
 
 1. **Workspace is a projection layer**, not a replacement for domain schemas. Structured domain records (skills, todos, memory) stay in their Ecto schemas. Unstructured content (notes, plans, ideas, scratch) lives in `workspace_documents`. The workspace API presents a uniform view over both.
 
@@ -582,9 +1016,9 @@ Schemas (`workspace_documents`, `workspace_document_versions`) live in `synapsis
 
 4. **Scope derived from path, only visibility stored.** No redundant `scope` field. Path prefix determines scope. `visibility` is the only explicit access-control field.
 
-5. **4 workspace tools.** `workspace_read`, `workspace_write`, `workspace_list`, `workspace_search`. No separate stat/recent/publish/handoff tools. Covered by existing tools with options.
+5. **4 workspace tools.** `workspace_read`, `workspace_write`, `workspace_list`, `workspace_search`. No separate stat/recent/publish/handoff tools — covered by existing tools with options.
 
-6. **Handoffs through agent messaging.** Handoffs are `:handoff` type messages in the existing agent message bus (agent PRD §AS-7), referencing workspace paths. Handoff metadata persisted as workspace documents for audit.
+6. **Handoffs through agent messaging.** Handoffs are `:handoff` type messages in the existing agent message bus (agent-system-prd §AS-7), referencing workspace paths. Handoff metadata persisted as workspace documents for audit.
 
 7. **Version history is lifecycle-gated.** Scratch: none. Draft: last 5. Shared/published: full. Prevents unbounded history growth from high-frequency agent writes to scratch.
 
@@ -594,5 +1028,14 @@ Schemas (`workspace_documents`, `workspace_document_versions`) live in `synapsis
 
 10. **PostgreSQL tsvector from day one.** Weighted search across path, title, and content. pgvector for semantic search in Phase 3.
 
-11. **No FUSE, no kernel filesystem.** The workspace needs path-based addressing, directory browsing, and file-like content access — not POSIX semantics. A shared workspace layer, not a virtual filesystem.
+11. **No FUSE, no kernel filesystem.** The workspace needs path-based addressing, directory browsing, and file-like content access — not POSIX semantics.
 
+12. **Domain-backed paths are read-only through workspace.** Writing to paths matching skill/memory/todo patterns is rejected. Domain records are created and modified through their own contexts. Workspace only projects them for unified browsing.
+
+13. **Directories are implicit.** No directory records in the database. A directory "exists" when any child document exists under that path prefix. `workspace_list` synthesizes directory entries from path prefixes.
+
+---
+
+## 16. Open Questions
+
+None. All architectural questions resolved during design review.
