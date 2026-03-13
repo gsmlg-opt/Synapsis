@@ -66,7 +66,15 @@ defmodule Synapsis.Workspace.Tools.WorkspaceWrite do
          })}
 
       {:error, %Ecto.Changeset{} = changeset} ->
-        {:error, "Write failed: #{inspect(changeset.errors)}"}
+        errors =
+          Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+            Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
+              opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
+            end)
+          end)
+          |> Enum.map_join("; ", fn {field, msgs} -> "#{field}: #{Enum.join(msgs, ", ")}" end)
+
+        {:error, "Write failed: #{errors}"}
 
       {:error, reason} ->
         {:error, "Write failed: #{inspect(reason)}"}
