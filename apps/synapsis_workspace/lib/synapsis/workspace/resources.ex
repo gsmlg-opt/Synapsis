@@ -1,12 +1,12 @@
 defmodule Synapsis.Workspace.Resources do
   @moduledoc """
   CRUD operations for `workspace_documents` with version history management.
+
+  All database access is delegated to `Synapsis.WorkspaceDocuments`.
   """
 
-  import Ecto.Query
-  alias Synapsis.Repo
   alias Synapsis.WorkspaceDocument
-  alias Synapsis.WorkspaceDocumentVersion
+  alias Synapsis.WorkspaceDocuments
   alias Synapsis.Workspace.PathResolver
 
   @doc """
@@ -16,11 +16,7 @@ defmodule Synapsis.Workspace.Resources do
   def get_by_path(path) do
     path = PathResolver.normalize_path(path)
 
-    query =
-      from d in WorkspaceDocument,
-        where: d.path == ^path and is_nil(d.deleted_at)
-
-    case Repo.one(query) do
+    case WorkspaceDocuments.get_by_path(path) do
       nil -> {:error, :not_found}
       doc -> {:ok, doc}
     end
@@ -31,9 +27,8 @@ defmodule Synapsis.Workspace.Resources do
   """
   @spec get_by_id(String.t()) :: {:ok, WorkspaceDocument.t()} | {:error, :not_found}
   def get_by_id(id) do
-    case Repo.get(WorkspaceDocument, id) do
+    case WorkspaceDocuments.get(id) do
       nil -> {:error, :not_found}
-      %{deleted_at: deleted_at} = _doc when not is_nil(deleted_at) -> {:error, :not_found}
       doc -> {:ok, doc}
     end
   end
@@ -83,7 +78,7 @@ defmodule Synapsis.Workspace.Resources do
 
       %WorkspaceDocument{}
       |> WorkspaceDocument.create_changeset(attrs)
-      |> Repo.insert()
+      |> WorkspaceDocuments.insert()
     end
   end
 
@@ -94,25 +89,24 @@ defmodule Synapsis.Workspace.Resources do
           {:ok, WorkspaceDocument.t()} | {:error, Ecto.Changeset.t()}
   def update_document(doc, content, opts \\ %{}) do
     author = Map.get(opts, :author, "system")
-    new_version = doc.version + 1
 
-    Repo.transaction(fn ->
+    WorkspaceDocuments.transaction(fn ->
       maybe_create_version(doc)
 
+      # Note: version is managed by optimistic_lock in update_changeset
       attrs =
         %{
           content_body: content,
-          updated_by: author,
-          version: new_version
+          updated_by: author
         }
         |> maybe_put(:metadata, opts)
         |> maybe_put(:visibility, opts)
         |> maybe_put(:lifecycle, opts)
         |> maybe_put(:content_format, opts)
 
-      case doc |> WorkspaceDocument.changeset(attrs) |> Repo.update() do
+      case doc |> WorkspaceDocument.update_changeset(attrs) |> WorkspaceDocuments.update() do
         {:ok, updated} -> updated
-        {:error, changeset} -> Repo.rollback(changeset)
+        {:error, changeset} -> WorkspaceDocuments.rollback(changeset)
       end
     end)
   end
@@ -134,7 +128,7 @@ defmodule Synapsis.Workspace.Resources do
 
       doc
       |> WorkspaceDocument.changeset(attrs)
-      |> Repo.update()
+      |> WorkspaceDocuments.update()
     end
   end
 
@@ -146,7 +140,7 @@ defmodule Synapsis.Workspace.Resources do
   def soft_delete(doc) do
     doc
     |> Ecto.Changeset.change(deleted_at: DateTime.utc_now())
-    |> Repo.update()
+    |> WorkspaceDocuments.update()
   end
 
   @doc """
@@ -156,45 +150,7 @@ defmodule Synapsis.Workspace.Resources do
   def list(path_prefix, opts \\ []) do
     path_prefix = PathResolver.normalize_path(path_prefix)
     prefix = if String.ends_with?(path_prefix, "/"), do: path_prefix, else: path_prefix <> "/"
-    depth = Keyword.get(opts, :depth)
-    kind = Keyword.get(opts, :kind)
-    sort = Keyword.get(opts, :sort, :path)
-    limit = Keyword.get(opts, :limit, 100)
-
-    query =
-      from d in WorkspaceDocument,
-        where: like(d.path, ^"#{prefix}%") and is_nil(d.deleted_at),
-        limit: ^limit
-
-    query = if kind, do: where(query, [d], d.kind == ^kind), else: query
-
-    query =
-      if depth do
-        # Count path segments after prefix to limit depth
-        segment_count = prefix |> String.split("/", trim: true) |> length()
-        max_segments = segment_count + depth
-
-        where(
-          query,
-          [d],
-          fragment(
-            "array_length(string_to_array(trim(both '/' from ?), '/'), 1) <= ?",
-            d.path,
-            ^max_segments
-          )
-        )
-      else
-        query
-      end
-
-    query =
-      case sort do
-        :recent -> order_by(query, [d], desc: d.updated_at)
-        :name -> order_by(query, [d], asc: d.path)
-        _ -> order_by(query, [d], asc: d.path)
-      end
-
-    Repo.all(query)
+    WorkspaceDocuments.list_by_prefix(prefix, opts)
   end
 
   # Version history management based on lifecycle
@@ -203,8 +159,7 @@ defmodule Synapsis.Workspace.Resources do
   defp maybe_create_version(%WorkspaceDocument{} = doc) do
     content_hash = hash_content(doc.content_body || "")
 
-    %WorkspaceDocumentVersion{}
-    |> WorkspaceDocumentVersion.changeset(%{
+    WorkspaceDocuments.insert_version!(%{
       document_id: doc.id,
       version: doc.version,
       content_body: doc.content_body,
@@ -212,26 +167,18 @@ defmodule Synapsis.Workspace.Resources do
       content_hash: content_hash,
       changed_by: doc.updated_by
     })
-    |> Repo.insert!()
 
-    # Prune old versions for drafts (keep last 5)
+    # Prune old versions for drafts (configurable retention)
     if doc.lifecycle == :draft do
-      prune_draft_versions(doc.id, 5)
+      keep = draft_version_retention()
+      WorkspaceDocuments.prune_versions(doc.id, keep)
     end
   end
 
-  defp prune_draft_versions(document_id, keep) do
-    versions_to_keep =
-      from v in WorkspaceDocumentVersion,
-        where: v.document_id == ^document_id,
-        order_by: [desc: v.version],
-        limit: ^keep,
-        select: v.id
-
-    from(v in WorkspaceDocumentVersion,
-      where: v.document_id == ^document_id and v.id not in subquery(versions_to_keep)
-    )
-    |> Repo.delete_all()
+  defp draft_version_retention do
+    :synapsis_workspace
+    |> Application.get_env(:gc, [])
+    |> Keyword.get(:draft_version_retention, 5)
   end
 
   defp hash_content(content) do

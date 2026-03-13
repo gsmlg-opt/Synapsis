@@ -6,6 +6,8 @@ defmodule Synapsis.Workspace.Projection do
   Domain schemas are not replicated — this module queries them at read time
   and returns transient Resource structs with paths derived from domain fields.
 
+  All database access is delegated to `Synapsis.WorkspaceDocuments`.
+
   ## Path conventions
 
     - Global skill     → `/shared/skills/:name/SKILL.md`
@@ -24,7 +26,7 @@ defmodule Synapsis.Workspace.Projection do
 
   import Ecto.Query
 
-  alias Synapsis.Repo
+  alias Synapsis.WorkspaceDocuments
   alias Synapsis.Workspace.Resource
 
   # ---------------------------------------------------------------------------
@@ -301,7 +303,7 @@ defmodule Synapsis.Workspace.Projection do
         end
 
       query
-      |> Repo.all()
+      |> WorkspaceDocuments.query_all()
       |> Enum.map(&project_skill/1)
     else
       []
@@ -324,7 +326,7 @@ defmodule Synapsis.Workspace.Projection do
           where(query, [s], is_nil(s.project_id))
         end
 
-      case Repo.one(query) do
+      case WorkspaceDocuments.query_one(query) do
         nil -> {:error, :not_found}
         skill -> {:ok, project_skill(skill)}
       end
@@ -354,7 +356,7 @@ defmodule Synapsis.Workspace.Projection do
         end
 
       query
-      |> Repo.all()
+      |> WorkspaceDocuments.query_all()
       |> Enum.map(&project_memory/1)
     else
       []
@@ -377,7 +379,7 @@ defmodule Synapsis.Workspace.Projection do
           where(query, [m], is_nil(m.scope_id))
         end
 
-      case Repo.one(query) do
+      case WorkspaceDocuments.query_one(query) do
         nil -> {:error, :not_found}
         entry -> {:ok, project_memory(entry)}
       end
@@ -397,7 +399,7 @@ defmodule Synapsis.Workspace.Projection do
           where: t.session_id == ^session_id,
           order_by: [asc: t.sort_order, asc: t.inserted_at]
         )
-        |> Repo.all()
+        |> WorkspaceDocuments.query_all()
 
       if todos == [] do
         []
@@ -417,7 +419,7 @@ defmodule Synapsis.Workspace.Projection do
           select: s.id,
           limit: ^limit
         )
-        |> Repo.all()
+        |> WorkspaceDocuments.query_all()
 
       session_ids
       |> Enum.flat_map(fn sid ->
@@ -436,7 +438,7 @@ defmodule Synapsis.Workspace.Projection do
           where: t.session_id == ^session_id,
           order_by: [asc: t.sort_order, asc: t.inserted_at]
         )
-        |> Repo.all()
+        |> WorkspaceDocuments.query_all()
 
       case todos do
         [] -> {:error, :not_found}
@@ -470,7 +472,8 @@ defmodule Synapsis.Workspace.Projection do
   defp memory_path(%{scope: "session", scope_id: scope_id, key: key} = entry) do
     # Session-scoped memory is surfaced under the session path
     category = memory_category(entry)
-    "/projects/unknown/sessions/#{scope_id}/memory/#{category}/#{key}.md"
+    project_id = resolve_session_project_id(scope_id)
+    "/projects/#{project_id}/sessions/#{scope_id}/memory/#{category}/#{key}.md"
   end
 
   defp todo_path(project_id, session_id),
@@ -580,10 +583,21 @@ defmodule Synapsis.Workspace.Projection do
   end
 
   # ---------------------------------------------------------------------------
-  # Private — resolve project_id from todo struct
+  # Private — resolve project_id from todo/session structs
   # ---------------------------------------------------------------------------
 
   defp resolve_todo_project_id(%{session: %{project_id: pid}}) when is_binary(pid), do: pid
   defp resolve_todo_project_id(%{project_id: pid}) when is_binary(pid), do: pid
   defp resolve_todo_project_id(_), do: "unknown"
+
+  defp resolve_session_project_id(session_id) do
+    if Code.ensure_loaded?(Synapsis.Session) do
+      case WorkspaceDocuments.get_record(Synapsis.Session, session_id) do
+        %{project_id: pid} when is_binary(pid) -> pid
+        _ -> "unknown"
+      end
+    else
+      "unknown"
+    end
+  end
 end

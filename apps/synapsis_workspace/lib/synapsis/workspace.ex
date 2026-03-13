@@ -17,6 +17,7 @@ defmodule Synapsis.Workspace do
     * `exists?/1` — check if a path exists
   """
 
+  require Logger
   alias Synapsis.Workspace.{Resources, Search, BlobStore, Resource, PathResolver, Projection}
 
   @doc """
@@ -119,9 +120,14 @@ defmodule Synapsis.Workspace do
 
     case result do
       {:ok, doc} ->
-        {:ok, _} = Resources.soft_delete(doc)
-        broadcast_change(doc.path, :deleted, doc.id, doc.project_id)
-        :ok
+        case Resources.soft_delete(doc) do
+          {:ok, _} ->
+            broadcast_change(doc.path, :deleted, doc.id, doc.project_id)
+            :ok
+
+          {:error, _} = error ->
+            error
+        end
 
       {:error, _} = error ->
         error
@@ -147,9 +153,12 @@ defmodule Synapsis.Workspace do
 
     projected = Projection.list_projected(path_prefix, opts)
 
+    sort = Keyword.get(opts, :sort, :path)
+
     merged =
       (doc_resources ++ projected)
       |> Enum.uniq_by(& &1.id)
+      |> sort_resources(sort)
       |> Enum.take(limit)
 
     {:ok, merged}
@@ -310,6 +319,12 @@ defmodule Synapsis.Workspace do
   # Private helpers
   # ---------------------------------------------------------------------------
 
+  defp sort_resources(resources, :recent),
+    do: Enum.sort_by(resources, & &1.updated_at, {:desc, DateTime})
+
+  defp sort_resources(resources, _),
+    do: Enum.sort_by(resources, & &1.path)
+
   defp uuid?(string) do
     case Ecto.UUID.cast(string) do
       {:ok, _} -> true
@@ -321,8 +336,12 @@ defmodule Synapsis.Workspace do
     blob_store = blob_store_module()
 
     case blob_store.get(ref) do
-      {:ok, content} -> %{doc | content_body: content}
-      {:error, _} -> doc
+      {:ok, content} ->
+        %{doc | content_body: content}
+
+      {:error, reason} ->
+        Logger.warning("blob_load_failed", blob_ref: ref, document_id: doc.id, reason: inspect(reason))
+        doc
     end
   end
 

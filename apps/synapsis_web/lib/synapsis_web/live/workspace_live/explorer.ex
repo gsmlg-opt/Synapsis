@@ -7,7 +7,7 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
     {:ok, resources} = Synapsis.Workspace.list(path, sort: :path, limit: 200)
 
     # Subscribe to workspace changes for real-time updates
-    if connected?(socket), do: subscribe_workspace_changes()
+    if connected?(socket), do: subscribe_workspace_changes(path)
 
     {:ok,
      assign(socket,
@@ -415,7 +415,12 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
     "/projects/#{project_id}/notes/#{filename}"
   end
 
-  defp subscribe_workspace_changes do
+  defp subscribe_workspace_changes(path) do
     Phoenix.PubSub.subscribe(Synapsis.PubSub, "workspace:global")
+
+    case extract_project_id(path) do
+      nil -> :ok
+      project_id -> Phoenix.PubSub.subscribe(Synapsis.PubSub, "workspace:#{project_id}")
+    end
   end
 end

@@ -16,6 +16,8 @@ defmodule Synapsis.Workspace.GC do
     4. **Expired soft-delete cleanup** — hard-deletes documents that were
        soft-deleted more than `soft_delete_retention_days` ago.
 
+  All database access is delegated to `Synapsis.WorkspaceDocuments`.
+
   ## Configuration
 
       config :synapsis_workspace, :gc,
@@ -27,11 +29,8 @@ defmodule Synapsis.Workspace.GC do
 
   use GenServer
   require Logger
-  import Ecto.Query
 
-  alias Synapsis.Repo
-  alias Synapsis.WorkspaceDocument
-  alias Synapsis.WorkspaceDocumentVersion
+  alias Synapsis.WorkspaceDocuments
 
   @default_session_scratch_retention_days 7
   @default_draft_version_retention 5
@@ -130,36 +129,8 @@ defmodule Synapsis.Workspace.GC do
     retention_days = gc_config(:session_scratch_retention_days, @default_session_scratch_retention_days)
     cutoff = DateTime.add(DateTime.utc_now(), -retention_days, :day)
 
-    # Find IDs of documents of kind :session_scratch whose session updated_at is past cutoff.
-    # Documents with no session_id are also cleaned up based on the document's own updated_at.
-    stale_with_session =
-      from d in WorkspaceDocument,
-        join: s in Synapsis.Session,
-        on: d.session_id == s.id,
-        where: d.kind == :session_scratch and s.updated_at < ^cutoff,
-        select: d.id
-
-    stale_without_session =
-      from d in WorkspaceDocument,
-        where: d.kind == :session_scratch and is_nil(d.session_id) and d.updated_at < ^cutoff,
-        select: d.id
-
-    ids = Repo.all(stale_with_session) ++ Repo.all(stale_without_session)
-
-    if ids == [] do
-      0
-    else
-      # Delete versions first (FK constraint)
-      {_, _} =
-        from(v in WorkspaceDocumentVersion, where: v.document_id in ^ids)
-        |> Repo.delete_all()
-
-      {count, _} =
-        from(d in WorkspaceDocument, where: d.id in ^ids)
-        |> Repo.delete_all()
-
-      count
-    end
+    ids = WorkspaceDocuments.stale_session_scratch_ids(cutoff)
+    WorkspaceDocuments.hard_delete_by_ids(ids)
   end
 
   # ---------------------------------------------------------------------------
@@ -169,36 +140,12 @@ defmodule Synapsis.Workspace.GC do
   @doc """
   For every document in the `:draft` lifecycle, keeps only the
   `draft_version_retention` most-recent versions and deletes the rest.
+
+  Uses a single batch query with a window function to avoid N+1.
   """
   def prune_draft_versions do
     keep = gc_config(:draft_version_retention, @default_draft_version_retention)
-
-    # Collect IDs of all draft documents that have version history.
-    draft_doc_ids =
-      from(d in WorkspaceDocument,
-        where: d.lifecycle == :draft and is_nil(d.deleted_at),
-        select: d.id
-      )
-      |> Repo.all()
-
-    Enum.reduce(draft_doc_ids, 0, fn doc_id, acc ->
-      {pruned, _} = prune_versions_for_doc(doc_id, keep)
-      acc + pruned
-    end)
-  end
-
-  defp prune_versions_for_doc(document_id, keep) do
-    versions_to_keep =
-      from v in WorkspaceDocumentVersion,
-        where: v.document_id == ^document_id,
-        order_by: [desc: v.version],
-        limit: ^keep,
-        select: v.id
-
-    from(v in WorkspaceDocumentVersion,
-      where: v.document_id == ^document_id and v.id not in subquery(versions_to_keep)
-    )
-    |> Repo.delete_all()
+    WorkspaceDocuments.prune_all_draft_versions(keep)
   end
 
   # ---------------------------------------------------------------------------
@@ -223,8 +170,8 @@ defmodule Synapsis.Workspace.GC do
       all_refs ->
         referenced =
           MapSet.union(
-            referenced_doc_blobs(),
-            referenced_version_blobs()
+            WorkspaceDocuments.referenced_doc_blob_refs(),
+            WorkspaceDocuments.referenced_version_blob_refs()
           )
 
         orphaned = Enum.reject(all_refs, &MapSet.member?(referenced, &1))
@@ -254,24 +201,6 @@ defmodule Synapsis.Workspace.GC do
     end
   end
 
-  defp referenced_doc_blobs do
-    from(d in WorkspaceDocument,
-      where: not is_nil(d.blob_ref),
-      select: d.blob_ref
-    )
-    |> Repo.all()
-    |> MapSet.new()
-  end
-
-  defp referenced_version_blobs do
-    from(v in WorkspaceDocumentVersion,
-      where: not is_nil(v.blob_ref),
-      select: v.blob_ref
-    )
-    |> Repo.all()
-    |> MapSet.new()
-  end
-
   # ---------------------------------------------------------------------------
   # Task 4: Hard-delete soft-deleted documents past retention
   # ---------------------------------------------------------------------------
@@ -284,26 +213,8 @@ defmodule Synapsis.Workspace.GC do
     retention_days = gc_config(:soft_delete_retention_days, @default_soft_delete_retention_days)
     cutoff = DateTime.add(DateTime.utc_now(), -retention_days, :day)
 
-    expired_ids =
-      from(d in WorkspaceDocument,
-        where: not is_nil(d.deleted_at) and d.deleted_at < ^cutoff,
-        select: d.id
-      )
-      |> Repo.all()
-
-    if expired_ids == [] do
-      0
-    else
-      {_, _} =
-        from(v in WorkspaceDocumentVersion, where: v.document_id in ^expired_ids)
-        |> Repo.delete_all()
-
-      {count, _} =
-        from(d in WorkspaceDocument, where: d.id in ^expired_ids)
-        |> Repo.delete_all()
-
-      count
-    end
+    ids = WorkspaceDocuments.expired_soft_deleted_ids(cutoff)
+    WorkspaceDocuments.hard_delete_by_ids(ids)
   end
 
   # ---------------------------------------------------------------------------
