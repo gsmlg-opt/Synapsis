@@ -118,6 +118,27 @@ defmodule Synapsis.Workspace.Resources do
   end
 
   @doc """
+  Move a document to a new path.
+  """
+  @spec move(WorkspaceDocument.t(), String.t()) ::
+          {:ok, WorkspaceDocument.t()} | {:error, Ecto.Changeset.t()}
+  def move(doc, new_path) do
+    new_path = PathResolver.normalize_path(new_path)
+
+    with {:ok, resolved} <- PathResolver.resolve(new_path) do
+      attrs = %{
+        path: new_path,
+        project_id: resolved.project_id,
+        session_id: resolved.session_id
+      }
+
+      doc
+      |> WorkspaceDocument.changeset(attrs)
+      |> Repo.update()
+    end
+  end
+
+  @doc """
   Soft-delete a document.
   """
   @spec soft_delete(WorkspaceDocument.t()) ::

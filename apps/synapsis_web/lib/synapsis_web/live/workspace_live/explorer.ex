@@ -6,6 +6,9 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
     path = params["path"] || "/"
     {:ok, resources} = Synapsis.Workspace.list(path, sort: :path, limit: 200)
 
+    # Subscribe to workspace changes for real-time updates
+    if connected?(socket), do: subscribe_workspace_changes()
+
     {:ok,
      assign(socket,
        page_title: "Workspace",
@@ -99,6 +102,58 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
         {:noreply, put_flash(socket, :error, "Document not found")}
     end
   end
+
+  def handle_event("promote", _params, socket) do
+    selected = socket.assigns.selected
+
+    if selected && promotable?(selected) do
+      project_id = extract_project_id(selected.path)
+      new_path = promote_path(selected.path, project_id)
+
+      case Synapsis.Workspace.write(new_path, selected.content || "", %{
+             author: "user",
+             lifecycle: :shared,
+             visibility: :project_shared,
+             metadata: Map.put(selected.metadata, "promoted_from", selected.path)
+           }) do
+        {:ok, promoted} ->
+          {:ok, resources} =
+            Synapsis.Workspace.list(socket.assigns.current_path, sort: :path, limit: 200)
+
+          {:noreply,
+           socket
+           |> assign(selected: promoted, resources: resources)
+           |> put_flash(:info, "Promoted to project level")}
+
+        {:error, reason} ->
+          {:noreply, put_flash(socket, :error, "Failed to promote: #{inspect(reason)}")}
+      end
+    else
+      {:noreply, put_flash(socket, :error, "Document cannot be promoted")}
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # PubSub handler — real-time updates when agents write (WS-18.5)
+  # ---------------------------------------------------------------------------
+
+  @impl true
+  def handle_info({:workspace_changed, _payload}, socket) do
+    {:ok, resources} =
+      Synapsis.Workspace.list(socket.assigns.current_path, sort: :path, limit: 200)
+
+    selected =
+      if socket.assigns.selected do
+        case Synapsis.Workspace.read(socket.assigns.selected.id) do
+          {:ok, resource} -> resource
+          {:error, _} -> nil
+        end
+      end
+
+    {:noreply, assign(socket, resources: resources, selected: selected)}
+  end
+
+  def handle_info(_msg, socket), do: {:noreply, socket}
 
   @impl true
   def render(assigns) do
@@ -216,6 +271,15 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
                 </div>
                 <div class="flex gap-1">
                   <.dm_btn
+                    :if={promotable?(@selected)}
+                    variant="ghost"
+                    size="sm"
+                    phx-click="promote"
+                    title="Promote to project level"
+                  >
+                    <.dm_mdi name="arrow-up-bold" class="w-4 h-4 text-success" />
+                  </.dm_btn>
+                  <.dm_btn
                     :if={!@editing}
                     variant="ghost"
                     size="sm"
@@ -279,7 +343,9 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
     """
   end
 
+  # ---------------------------------------------------------------------------
   # Helpers
+  # ---------------------------------------------------------------------------
 
   defp display_resources(%{search_results: results}) when is_list(results), do: results
   defp display_resources(%{resources: resources}), do: resources
@@ -309,12 +375,18 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
   defp kind_icon(:attachment), do: "paperclip"
   defp kind_icon(:handoff), do: "swap-horizontal"
   defp kind_icon(:session_scratch), do: "pencil-outline"
+  defp kind_icon(:skill), do: "lightning-bolt"
+  defp kind_icon(:memory), do: "brain"
+  defp kind_icon(:todo), do: "checkbox-marked-outline"
   defp kind_icon(_), do: "file-outline"
 
   defp kind_color(:document), do: "text-primary"
   defp kind_color(:attachment), do: "text-warning"
   defp kind_color(:handoff), do: "text-info"
   defp kind_color(:session_scratch), do: "text-base-content/50"
+  defp kind_color(:skill), do: "text-secondary"
+  defp kind_color(:memory), do: "text-accent"
+  defp kind_color(:todo), do: "text-success"
   defp kind_color(_), do: "text-base-content/60"
 
   defp lifecycle_color(:scratch), do: "ghost"
@@ -323,4 +395,27 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
   defp lifecycle_color(:published), do: "success"
   defp lifecycle_color(:archived), do: "ghost"
   defp lifecycle_color(_), do: "ghost"
+
+  defp promotable?(%{lifecycle: lifecycle, path: path})
+       when lifecycle in [:scratch, :draft] do
+    String.contains?(path, "/sessions/")
+  end
+
+  defp promotable?(_), do: false
+
+  defp extract_project_id(path) do
+    case String.split(path, "/", trim: true) do
+      ["projects", project_id | _] -> project_id
+      _ -> nil
+    end
+  end
+
+  defp promote_path(session_path, project_id) do
+    filename = session_path |> String.split("/") |> List.last()
+    "/projects/#{project_id}/notes/#{filename}"
+  end
+
+  defp subscribe_workspace_changes do
+    Phoenix.PubSub.subscribe(Synapsis.PubSub, "workspace:global")
+  end
 end
