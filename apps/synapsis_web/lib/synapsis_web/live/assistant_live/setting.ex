@@ -3,22 +3,21 @@ defmodule SynapsisWeb.AssistantLive.Setting do
   use SynapsisWeb, :live_view
 
   @impl true
-  def mount(%{"name" => name}, _session, socket) do
+  def mount(_params, _session, socket) do
+    {:ok, assign(socket, page_title: "Assistant Settings")}
+  end
+
+  @impl true
+  def handle_params(%{"name" => name}, _uri, socket) do
     agent_config = Synapsis.Agent.Resolver.resolve(name)
+    memories = Synapsis.Memory.list_semantic(scope: "agent", scope_id: name, active: true, limit: 50)
 
-    providers =
-      case Synapsis.Providers.list(enabled: true) do
-        {:ok, list} -> list
-        list when is_list(list) -> list
-        _ -> []
-      end
-
-    {:ok,
+    {:noreply,
      assign(socket,
        page_title: "#{String.capitalize(name)} Settings",
        assistant_name: name,
        agent_config: agent_config,
-       providers: providers
+       memories: memories
      )}
   end
 
@@ -52,6 +51,58 @@ defmodule SynapsisWeb.AssistantLive.Setting do
       <.dm_card variant="bordered" class="mb-4">
         <:title>System Prompt</:title>
         <pre class="text-sm text-base-content/70 whitespace-pre-wrap bg-base-200 rounded-lg p-3 max-h-64 overflow-y-auto">{@agent_config.system_prompt}</pre>
+      </.dm_card>
+
+      <%!-- Agent Memories --%>
+      <.dm_card variant="bordered" class="mb-4">
+        <:title>
+          <div class="flex items-center gap-2">
+            <span>Memories</span>
+            <.dm_badge size="xs" color="ghost">{length(@memories)}</.dm_badge>
+          </div>
+        </:title>
+        <%= if @memories == [] do %>
+          <div class="text-sm text-base-content/50 py-4 text-center">
+            No memories for this agent yet. Memories are created during sessions.
+          </div>
+        <% else %>
+          <div class="space-y-3">
+            <%= for memory <- @memories do %>
+              <div class="border border-base-300 rounded-lg p-3">
+                <div class="flex items-center gap-2 mb-1 flex-wrap">
+                  <.dm_link
+                    navigate={~p"/settings/memory/#{memory.id}"}
+                    class="font-semibold text-sm text-base-content hover:text-primary"
+                  >
+                    {memory.title}
+                  </.dm_link>
+                  <.dm_badge size="xs" color={kind_color(memory.kind)}>
+                    {memory.kind}
+                  </.dm_badge>
+                </div>
+                <p class="text-sm text-base-content/70">{memory.summary}</p>
+                <%= if memory.tags != [] do %>
+                  <div class="flex gap-1 mt-1.5 flex-wrap">
+                    <span
+                      :for={tag <- memory.tags}
+                      class="text-xs bg-base-300 text-base-content/60 px-1.5 py-0.5 rounded"
+                    >
+                      {tag}
+                    </span>
+                  </div>
+                <% end %>
+              </div>
+            <% end %>
+          </div>
+        <% end %>
+        <:action>
+          <.dm_link
+            navigate={~p"/settings/memory"}
+            class="text-xs text-base-content/50 hover:text-primary"
+          >
+            Manage all memories
+          </.dm_link>
+        </:action>
       </.dm_card>
 
       <%!-- Tools --%>
@@ -94,4 +145,12 @@ defmodule SynapsisWeb.AssistantLive.Setting do
     </div>
     """
   end
+
+  defp kind_color("fact"), do: "info"
+  defp kind_color("decision"), do: "primary"
+  defp kind_color("lesson"), do: "success"
+  defp kind_color("preference"), do: "secondary"
+  defp kind_color("pattern"), do: "accent"
+  defp kind_color("warning"), do: "warning"
+  defp kind_color(_), do: "ghost"
 end

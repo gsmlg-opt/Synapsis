@@ -63,6 +63,10 @@ defmodule SynapsisServer.SessionChannel do
         Logger.warning("session_channel_error", event: "session:retry", reason: inspect(reason))
         {:reply, {:error, %{reason: format_error(reason)}}, socket}
     end
+  catch
+    :exit, _ ->
+      Logger.warning("session_channel_error", event: "session:retry", reason: "worker_unavailable")
+      {:reply, {:error, %{reason: "worker_unavailable"}}, socket}
   end
 
   def handle_in("session:tool_approve", %{"tool_use_id" => tool_use_id}, socket) do
