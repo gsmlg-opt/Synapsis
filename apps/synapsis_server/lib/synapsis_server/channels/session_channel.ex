@@ -65,7 +65,11 @@ defmodule SynapsisServer.SessionChannel do
     end
   catch
     :exit, _ ->
-      Logger.warning("session_channel_error", event: "session:retry", reason: "worker_unavailable")
+      Logger.warning("session_channel_error",
+        event: "session:retry",
+        reason: "worker_unavailable"
+      )
+
       {:reply, {:error, %{reason: "worker_unavailable"}}, socket}
   end
 

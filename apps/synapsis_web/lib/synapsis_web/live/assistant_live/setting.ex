@@ -10,7 +10,9 @@ defmodule SynapsisWeb.AssistantLive.Setting do
   @impl true
   def handle_params(%{"name" => name}, _uri, socket) do
     agent_config = Synapsis.Agent.Resolver.resolve(name)
-    memories = Synapsis.Memory.list_semantic(scope: "agent", scope_id: name, active: true, limit: 50)
+
+    memories =
+      Synapsis.Memory.list_semantic(scope: "agent", scope_id: name, active: true, limit: 50)
 
     {:noreply,
      assign(socket,
