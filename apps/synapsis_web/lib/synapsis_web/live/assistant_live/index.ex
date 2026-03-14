@@ -1,89 +1,34 @@
 defmodule SynapsisWeb.AssistantLive.Index do
+  @moduledoc "Lists available assistants (agent profiles)."
   use SynapsisWeb, :live_view
 
-  alias Synapsis.Agent
-
-  @global_project_id "__global__"
+  @default_assistants [
+    %{
+      name: "build",
+      label: "Build",
+      icon: "hammer-wrench",
+      description:
+        "Full-featured coding assistant with file editing, shell execution, and search tools."
+    },
+    %{
+      name: "plan",
+      label: "Plan",
+      icon: "file-document-outline",
+      description:
+        "Read-only planning assistant for analyzing code and creating implementation plans."
+    }
+  ]
 
   @impl true
   def mount(_params, _session, socket) do
-    try do
-      Agent.start_project(@global_project_id, %{kind: :global_assistant})
-    catch
-      :exit, _ -> :ok
-    end
+    config = Synapsis.Config.resolve("__global__")
+    custom_agents = get_custom_agents(config)
 
     {:ok,
      assign(socket,
-       page_title: "Assistant",
-       prompt: "",
-       messages: [
-         %{
-           role: :assistant,
-           content: "Global assistant is online. Ask about system status or dispatch work."
-         }
-       ]
+       page_title: "Assistants",
+       assistants: @default_assistants ++ custom_agents
      )}
-  end
-
-  @impl true
-  def handle_event("send", %{"prompt" => prompt}, socket) do
-    prompt = String.trim(prompt || "")
-
-    if prompt == "" do
-      {:noreply, socket}
-    else
-      work_id = "global-" <> Integer.to_string(System.unique_integer([:positive, :monotonic]))
-
-      dispatch_result =
-        try do
-          Agent.dispatch_work(%{
-            work_id: work_id,
-            project_id: @global_project_id,
-            task_type: :ad_hoc_prompt,
-            payload: %{prompt: prompt},
-            origin: :user
-          })
-        catch
-          :exit, reason -> {:error, reason}
-        end
-
-      status = build_status_message(dispatch_result, work_id)
-
-      {:noreply,
-       assign(socket,
-         prompt: "",
-         messages:
-           socket.assigns.messages ++
-             [
-               %{role: :user, content: prompt},
-               %{role: :assistant, content: status}
-             ]
-       )}
-    end
-  end
-
-  defp build_status_message(:ok, work_id) do
-    active_projects = Agent.list_projects() |> Enum.count()
-    recent_events = Agent.list_events(project_id: @global_project_id) |> Enum.take(-3)
-
-    """
-    Received. Work item `#{work_id}` has been dispatched.
-    Active project assistants: #{active_projects}.
-    Recent global events: #{format_events(recent_events)}.
-    """
-    |> String.trim()
-  end
-
-  defp build_status_message({:error, reason}, _work_id) do
-    "Dispatch failed: #{inspect(reason)}"
-  end
-
-  defp format_events([]), do: "none"
-
-  defp format_events(events) do
-    events
-    |> Enum.map_join(", ", fn event -> Atom.to_string(event.event_type) end)
   end
 
   @impl true
@@ -91,42 +36,54 @@ defmodule SynapsisWeb.AssistantLive.Index do
     ~H"""
     <div class="max-w-4xl mx-auto p-6">
       <div class="flex items-center justify-between mb-6">
-        <h1 class="text-2xl font-bold">Assistant</h1>
-        <.dm_badge color="success" size="sm">
-          Global Assistant Online
-        </.dm_badge>
+        <h1 class="text-2xl font-bold">Assistants</h1>
       </div>
 
-      <.dm_card variant="bordered" class="min-h-64">
-        <:title>Conversation</:title>
-        <div class="space-y-3">
-          <.chat_bubble
-            :for={message <- @messages}
-            role={to_string(message.role)}
-          >
-            <p class="whitespace-pre-wrap leading-relaxed">{message.content}</p>
-          </.chat_bubble>
-        </div>
-        <:action>
-          <.dm_form for={to_form(%{})} as={:assistant} phx-submit="send" class="w-full">
-            <div class="flex gap-3 w-full">
-              <div class="flex-1">
-                <.dm_input
-                  type="text"
-                  name="prompt"
-                  value={@prompt}
-                  label=""
-                  placeholder="Ask global assistant to summarize system status..."
-                />
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <.dm_link
+          :for={assistant <- @assistants}
+          navigate={~p"/assistant/#{assistant.name}/sessions"}
+          class="block"
+        >
+          <.dm_card variant="bordered" class="hover:border-primary/50 transition-colors h-full">
+            <div class="flex items-start gap-3">
+              <div class="bg-primary/10 rounded-lg p-2">
+                <.dm_mdi name={assistant.icon} class="w-6 h-6 text-primary" />
               </div>
-              <.dm_btn type="submit" variant="primary">
-                Send
-              </.dm_btn>
+              <div class="flex-1 min-w-0">
+                <h3 class="font-medium text-base-content">{assistant.label}</h3>
+                <p class="text-xs text-base-content/50 mt-1">{assistant.description}</p>
+              </div>
             </div>
-          </.dm_form>
-        </:action>
-      </.dm_card>
+            <:action>
+              <div class="flex items-center justify-between">
+                <.dm_badge color="ghost" size="sm">{assistant.name}</.dm_badge>
+                <.dm_mdi name="chevron-right" class="w-4 h-4 text-base-content/30" />
+              </div>
+            </:action>
+          </.dm_card>
+        </.dm_link>
+      </div>
     </div>
     """
+  end
+
+  defp get_custom_agents(config) do
+    case config["agents"] do
+      agents when is_map(agents) ->
+        agents
+        |> Enum.reject(fn {name, _} -> name in ~w(build plan) end)
+        |> Enum.map(fn {name, _agent_config} ->
+          %{
+            name: name,
+            label: String.capitalize(name),
+            icon: "robot-outline",
+            description: "Custom agent: #{name}"
+          }
+        end)
+
+      _ ->
+        []
+    end
   end
 end

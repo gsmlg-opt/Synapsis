@@ -24,6 +24,7 @@ defmodule Synapsis.MixProject do
           synapsis_core: :permanent,
           synapsis_server: :permanent,
           synapsis_plugin: :permanent,
+          synapsis_workspace: :permanent,
           synapsis_web: :permanent
         ],
         steps: [:assemble, :tar]

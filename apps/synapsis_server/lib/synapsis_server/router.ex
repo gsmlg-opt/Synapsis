@@ -7,6 +7,8 @@ defmodule SynapsisServer.Router do
             [
               SynapsisWeb.DashboardLive,
               SynapsisWeb.AssistantLive.Index,
+              SynapsisWeb.AssistantLive.Show,
+              SynapsisWeb.AssistantLive.Setting,
               SynapsisWeb.ProjectLive.Index,
               SynapsisWeb.ProjectLive.Show,
               SynapsisWeb.SessionLive.Index,
@@ -22,7 +24,8 @@ defmodule SynapsisServer.Router do
               SynapsisWeb.MCPLive.Show,
               SynapsisWeb.LSPLive.Index,
               SynapsisWeb.LSPLive.Show,
-              SynapsisWeb.ModelTierLive.Index
+              SynapsisWeb.ModelTierLive.Index,
+              SynapsisWeb.WorkspaceLive.Explorer
             ]}
 
   pipeline :browser do
@@ -63,6 +66,9 @@ defmodule SynapsisServer.Router do
 
     live "/", DashboardLive, :index
     live "/assistant", AssistantLive.Index, :index
+    live "/assistant/:name/sessions", AssistantLive.Show, :sessions
+    live "/assistant/:name/sessions/:session_id", AssistantLive.Show, :session
+    live "/assistant/:name/setting", AssistantLive.Setting, :index
 
     live "/projects", ProjectLive.Index, :index
     live "/projects/new", ProjectLive.Index, :new
@@ -72,6 +78,8 @@ defmodule SynapsisServer.Router do
     live "/projects/:project_id/sessions", SessionLive.Index, :index
     live "/projects/:project_id/sessions/new", SessionLive.Index, :new
     live "/projects/:project_id/sessions/:id", SessionLive.Show, :show
+
+    live "/workspace", WorkspaceLive.Explorer, :index
 
     live "/settings", SettingsLive, :index
 

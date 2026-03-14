@@ -37,7 +37,11 @@ defmodule SynapsisCore.Application do
         {Registry, keys: :unique, name: Synapsis.Session.SupervisorRegistry},
         {Registry, keys: :unique, name: Synapsis.FileWatcher.Registry},
         Synapsis.Memory.Supervisor
-      ] ++ oban_child ++ [Synapsis.Session.DynamicSupervisor] ++ optional_children
+      ] ++
+        oban_child ++
+        [Synapsis.Session.DynamicSupervisor] ++
+        maybe_child(Synapsis.Workspace.GC) ++
+        optional_children
 
     opts = [strategy: :one_for_one, name: SynapsisCore.Supervisor]
     result = Supervisor.start_link(children, opts)
@@ -45,6 +49,8 @@ defmodule SynapsisCore.Application do
     case result do
       {:ok, _pid} ->
         Synapsis.Tool.Builtin.register_all()
+
+        maybe_apply(Synapsis.Workspace.Tools, :register_all, [])
 
         try do
           Synapsis.Providers.load_all_into_registry()
@@ -54,11 +60,7 @@ defmodule SynapsisCore.Application do
 
         register_env_providers()
 
-        try do
-          apply(SynapsisPlugin.Loader, :start_auto_plugins, [])
-        rescue
-          e -> Logger.warning("plugin_auto_start_failed", error: Exception.message(e))
-        end
+        maybe_apply(SynapsisPlugin.Loader, :start_auto_plugins, [])
 
         result
 
@@ -68,6 +70,20 @@ defmodule SynapsisCore.Application do
   end
 
   @env_provider_names ~w(anthropic openai openai-sub google moonshot-ai moonshot-cn zhipu-ai zhipu-cn zhipu-coding minimax-io minimax-cn openrouter)
+
+  defp maybe_child(mod) do
+    if Code.ensure_loaded?(mod) do
+      [mod]
+    else
+      []
+    end
+  end
+
+  defp maybe_apply(mod, fun, args) do
+    if Code.ensure_loaded?(mod) and function_exported?(mod, fun, length(args)) do
+      apply(mod, fun, args)
+    end
+  end
 
   defp register_env_providers do
     Enum.each(@env_provider_names, fn name ->
