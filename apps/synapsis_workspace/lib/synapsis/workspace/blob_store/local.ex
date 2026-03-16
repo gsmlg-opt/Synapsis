@@ -38,8 +38,16 @@ defmodule Synapsis.Workspace.BlobStore.Local do
   @impl true
   def delete(ref) when is_binary(ref) do
     path = ref_to_path(ref)
-    File.rm(path)
-    :ok
+
+    case File.rm(path) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        require Logger
+        Logger.warning("blob_delete_failed", ref: ref, reason: reason)
+        :ok
+    end
   end
 
   @impl true

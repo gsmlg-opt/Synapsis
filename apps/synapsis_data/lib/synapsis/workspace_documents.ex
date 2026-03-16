@@ -71,9 +71,17 @@ defmodule Synapsis.WorkspaceDocuments do
     sort = Keyword.get(opts, :sort, :path)
     limit = Keyword.get(opts, :limit, 100)
 
+    escaped_prefix =
+      prefix
+      |> String.replace("~", "~~")
+      |> String.replace("%", "~%")
+      |> String.replace("_", "~_")
+
     query =
       from d in WorkspaceDocument,
-        where: like(d.path, ^"#{prefix}%") and is_nil(d.deleted_at),
+        where:
+          fragment("? LIKE ? ESCAPE '~'", d.path, ^"#{escaped_prefix}%") and
+            is_nil(d.deleted_at),
         limit: ^limit
 
     query = if kind, do: where(query, [d], d.kind == ^kind), else: query
@@ -222,19 +230,16 @@ defmodule Synapsis.WorkspaceDocuments do
   @doc "Find stale session scratch document IDs."
   @spec stale_session_scratch_ids(DateTime.t()) :: [String.t()]
   def stale_session_scratch_ids(cutoff) do
-    stale_with_session =
-      from d in WorkspaceDocument,
-        join: s in Synapsis.Session,
-        on: d.session_id == s.id,
-        where: d.kind == :session_scratch and s.updated_at < ^cutoff,
-        select: d.id
-
-    stale_without_session =
-      from d in WorkspaceDocument,
-        where: d.kind == :session_scratch and is_nil(d.session_id) and d.updated_at < ^cutoff,
-        select: d.id
-
-    Repo.all(stale_with_session) ++ Repo.all(stale_without_session)
+    from(d in WorkspaceDocument,
+      left_join: s in Synapsis.Session,
+      on: d.session_id == s.id,
+      where:
+        d.kind == :session_scratch and
+          (is_nil(d.session_id) and d.updated_at < ^cutoff or
+             (not is_nil(d.session_id) and s.updated_at < ^cutoff)),
+      select: d.id
+    )
+    |> Repo.all()
   end
 
   @doc "Hard-delete documents and their versions by IDs."
@@ -411,6 +416,20 @@ defmodule Synapsis.WorkspaceDocuments do
       limit: ^limit
     )
     |> Repo.all()
+  end
+
+  @doc "List all todos for a project in a single JOIN query, grouped by session_id."
+  @spec list_todos_for_project(String.t(), non_neg_integer()) :: %{String.t() => [struct()]}
+  def list_todos_for_project(project_id, limit) do
+    from(t in Synapsis.SessionTodo,
+      join: s in Synapsis.Session,
+      on: t.session_id == s.id,
+      where: s.project_id == ^project_id,
+      order_by: [asc: t.sort_order, asc: t.inserted_at],
+      limit: ^limit
+    )
+    |> Repo.all()
+    |> Enum.group_by(& &1.session_id)
   end
 
   # ---------------------------------------------------------------------------

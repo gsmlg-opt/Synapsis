@@ -65,6 +65,7 @@ defmodule Synapsis.Workspace.Resources do
         path: path,
         kind: kind,
         content_body: content,
+        blob_ref: Map.get(opts, :blob_ref),
         content_format: Map.get(opts, :content_format, :markdown),
         visibility: Map.get(opts, :visibility, resolved.default_visibility),
         lifecycle: Map.get(opts, :lifecycle, resolved.default_lifecycle),
@@ -99,6 +100,7 @@ defmodule Synapsis.Workspace.Resources do
           content_body: content,
           updated_by: author
         }
+        |> maybe_put(:blob_ref, opts)
         |> maybe_put(:metadata, opts)
         |> maybe_put(:visibility, opts)
         |> maybe_put(:lifecycle, opts)

@@ -176,11 +176,27 @@ defmodule Synapsis.Workspace.GC do
 
         orphaned = Enum.reject(all_refs, &MapSet.member?(referenced, &1))
 
-        Enum.each(orphaned, fn ref ->
+        # Grace period: only delete blobs older than gc_interval_hours to avoid
+        # TOCTOU race where a newly written blob is deleted before its document
+        # row is committed.
+        grace_hours = gc_config(:gc_interval_hours, @default_gc_interval_hours)
+        grace_cutoff = System.os_time(:second) - grace_hours * 3600
+
+        aged_orphans =
+          Enum.filter(orphaned, fn ref ->
+            path = blob_ref_to_path(blob_root, ref)
+
+            case File.stat(path, time: :posix) do
+              {:ok, %{mtime: mtime}} -> mtime < grace_cutoff
+              _ -> false
+            end
+          end)
+
+        Enum.each(aged_orphans, fn ref ->
           blob_store.delete(ref)
         end)
 
-        length(orphaned)
+        length(aged_orphans)
     end
   end
 
@@ -247,6 +263,11 @@ defmodule Synapsis.Workspace.GC do
       :blob_store_root,
       Path.expand("~/.config/synapsis/blobs")
     )
+  end
+
+  defp blob_ref_to_path(root, ref) do
+    <<a::binary-size(2), b::binary-size(2), rest::binary>> = ref
+    Path.join([root, a, b, rest])
   end
 
   defp repo_available? do

@@ -350,9 +350,9 @@ defmodule Synapsis.Workspace.Projection do
   defp list_todos_for_project(project_id, limit) do
     if Code.ensure_loaded?(Synapsis.SessionTodo) and Code.ensure_loaded?(Synapsis.Session) do
       project_id
-      |> WorkspaceDocuments.list_session_ids_for_project(limit)
-      |> Enum.flat_map(fn sid ->
-        list_todos_for_session(project_id, sid, limit)
+      |> WorkspaceDocuments.list_todos_for_project(limit)
+      |> Enum.flat_map(fn {session_id, todos} ->
+        [build_todo_resource(project_id, session_id, todos)]
       end)
       |> Enum.take(limit)
     else

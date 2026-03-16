@@ -104,7 +104,7 @@ defmodule Synapsis.Workspace.Permissions do
   # has unrestricted access to all project trees.
   defp delegated_to?(%{project_id: nil}, _path_pid), do: true
   defp delegated_to?(%{project_id: ctx_pid}, path_pid) when is_binary(ctx_pid), do: ctx_pid == path_pid
-  defp delegated_to?(_ctx, _path_pid), do: true
+  defp delegated_to?(_ctx, _path_pid), do: false
 
   # Enforce read-only access: read stays :allowed, write becomes :denied.
   defp gate_action(:read), do: :allowed

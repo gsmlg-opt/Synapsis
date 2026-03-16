@@ -26,6 +26,8 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
   def handle_params(%{"path" => path}, _uri, socket) do
     {:ok, resources} = Synapsis.Workspace.list(path, sort: :path, limit: 200)
 
+    if connected?(socket), do: subscribe_workspace_changes(path)
+
     {:noreply,
      assign(socket, current_path: path, resources: resources, selected: nil, editing: false)}
   end
@@ -411,7 +413,7 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
   end
 
   defp promote_path(session_path, project_id) do
-    filename = session_path |> String.split("/") |> List.last()
+    filename = session_path |> String.split("/") |> List.last() |> String.downcase()
     "/projects/#{project_id}/notes/#{filename}"
   end
 

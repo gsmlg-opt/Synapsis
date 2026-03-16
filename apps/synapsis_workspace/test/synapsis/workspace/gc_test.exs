@@ -439,6 +439,10 @@ defmodule Synapsis.Workspace.GCTest do
       File.mkdir_p!(Path.dirname(blob_path))
       File.write!(blob_path, "orphaned content")
 
+      # Backdate mtime so the blob passes the GC grace period filter
+      old_time = {{2020, 1, 1}, {0, 0, 0}}
+      File.touch!(blob_path, old_time)
+
       # No document references this blob
       result = GC.cleanup_orphaned_blobs()
 
