@@ -342,7 +342,7 @@ defmodule SynapsisPlugin.LSPTest do
 
     test "returns error when LSP binary not found" do
       # elixir-ls is often not installed in CI
-      config = %{name: "elixir", root_path: "/tmp"}
+      config = %{name: "elixir-ls", root_path: "/tmp"}
 
       case SynapsisPlugin.LSP.init(config) do
         {:error, {:no_lsp_binary, "elixir-ls"}} ->
@@ -410,7 +410,7 @@ defmodule SynapsisPlugin.LSPTest do
       languages =
         SynapsisPlugin.LSP.Manager.detect_languages(Path.expand("../../..", __DIR__))
 
-      assert "elixir" in languages
+      assert "elixir-ls" in languages
     end
 
     test "returns empty for nonexistent directory" do

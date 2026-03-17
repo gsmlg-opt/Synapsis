@@ -71,7 +71,7 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
       |> render_click()
 
       view
-      |> form("form")
+      |> form(~s(form[phx-submit="create_config"]))
       |> render_submit()
 
       flash = assert_redirect(view, "/settings/mcp")
@@ -86,7 +86,7 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
       |> render_click()
 
       view
-      |> form("form", %{
+      |> form(~s(form[phx-submit="create_config"]), %{
         "name" => "custom-test",
         "command" => "npx -y test-server",
         "transport" => "stdio"
