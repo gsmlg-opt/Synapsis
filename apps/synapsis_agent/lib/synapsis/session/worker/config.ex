@@ -90,6 +90,25 @@ defmodule Synapsis.Session.Worker.Config do
     end
   end
 
+  def do_switch_agent(agent_name, session) do
+    name_str = to_string(agent_name)
+    agent = resolve_agent(%{session | agent: name_str})
+    {:ok, _} = session |> Session.changeset(%{agent: name_str}) |> Repo.update()
+    {agent, %{session | agent: name_str}}
+  end
+
+  def do_switch_model(provider_name, model, state) do
+    {:ok, _} =
+      state.session
+      |> Session.changeset(%{provider: provider_name, model: model})
+      |> Repo.update()
+
+    session = %{state.session | provider: provider_name, model: model}
+    provider_config = resolve_provider_config(provider_name)
+    agent = Map.put(state.agent, :model, model)
+    {session, provider_config, agent}
+  end
+
   def apply_mode(mode_name, state) when mode_name in @valid_modes do
     config = @mode_configs[mode_name]
     agent = Synapsis.Agent.Resolver.resolve(config.agent, state.session.config)
