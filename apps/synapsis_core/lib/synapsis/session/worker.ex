@@ -10,6 +10,7 @@ defmodule Synapsis.Session.Worker do
   alias Synapsis.{Repo, Session, Message, ContextWindow, Memory}
   alias Synapsis.Session.Stream, as: SessionStream
   alias Synapsis.Session.{Monitor, Orchestrator, WorkspaceManager}
+  alias Synapsis.Agent.{StreamAccumulator, ResponseFlusher, ToolDispatcher}
 
   @max_tool_iterations 25
   @inactivity_timeout :timer.minutes(30)
@@ -493,8 +494,14 @@ defmodule Synapsis.Session.Worker do
 
   @impl true
   def handle_info({:provider_chunk, event}, %{status: :streaming} = state) do
-    state = handle_stream_event(event, state)
-    {:noreply, state}
+    acc = extract_acc(state)
+    {broadcasts, new_acc} = StreamAccumulator.accumulate(event, acc)
+
+    for {event_name, payload} <- broadcasts do
+      broadcast(state.session_id, event_name, payload)
+    end
+
+    {:noreply, merge_acc(state, new_acc)}
   end
 
   def handle_info(:provider_done, %{status: :streaming} = state) do
@@ -576,18 +583,7 @@ defmodule Synapsis.Session.Worker do
   end
 
   def handle_info({:tool_result, tool_use_id, result, is_error}, state) do
-    result_part = %Synapsis.Part.ToolResult{
-      tool_use_id: tool_use_id,
-      content: result,
-      is_error: is_error
-    }
-
-    safe_insert_message(state.session_id, %{
-      session_id: state.session_id,
-      role: "user",
-      parts: [result_part],
-      token_count: ContextWindow.estimate_tokens(result)
-    })
+    ResponseFlusher.flush_tool_result(state.session_id, tool_use_id, result, is_error)
 
     broadcast(state.session_id, "tool_result", %{
       tool_use_id: tool_use_id,
@@ -651,133 +647,32 @@ defmodule Synapsis.Session.Worker do
     :ok
   end
 
-  # Stream event handlers
-  defp handle_stream_event({:text_delta, text}, state) do
-    broadcast(state.session_id, "text_delta", %{text: text})
-    %{state | pending_text: state.pending_text <> text}
-  end
-
-  defp handle_stream_event(:text_start, state), do: state
-
-  defp handle_stream_event({:tool_use_start, name, id}, state) do
-    broadcast(state.session_id, "tool_use", %{tool: name, tool_use_id: id})
-    %{state | pending_tool_use: %{tool: name, tool_use_id: id}, pending_tool_input: ""}
-  end
-
-  defp handle_stream_event({:tool_input_delta, json}, state) do
-    %{state | pending_tool_input: state.pending_tool_input <> json}
-  end
-
-  defp handle_stream_event({:tool_use_complete, name, args}, state) do
-    tool_use = %Synapsis.Part.ToolUse{
-      tool: name,
-      tool_use_id: "tu_#{System.unique_integer([:positive])}",
-      input: args,
-      status: :pending
+  # Accumulator extraction/merge helpers for StreamAccumulator/ResponseFlusher
+  defp extract_acc(state) do
+    %{
+      pending_text: state.pending_text,
+      pending_tool_use: state.pending_tool_use,
+      pending_tool_input: state.pending_tool_input,
+      pending_reasoning: state.pending_reasoning,
+      tool_uses: state.tool_uses
     }
-
-    %{state | tool_uses: state.tool_uses ++ [tool_use]}
   end
 
-  defp handle_stream_event(:content_block_stop, state) do
-    case state.pending_tool_use do
-      nil ->
-        state
-
-      %{tool: name, tool_use_id: id} ->
-        input =
-          case Jason.decode(state.pending_tool_input) do
-            {:ok, parsed} -> parsed
-            _ -> %{}
-          end
-
-        tool_use = %Synapsis.Part.ToolUse{
-          tool: name,
-          tool_use_id: id,
-          input: input,
-          status: :pending
-        }
-
-        %{
-          state
-          | pending_tool_use: nil,
-            pending_tool_input: "",
-            tool_uses: state.tool_uses ++ [tool_use]
-        }
-    end
-  end
-
-  defp handle_stream_event(:reasoning_start, state), do: state
-
-  defp handle_stream_event({:reasoning_delta, text}, state) do
-    broadcast(state.session_id, "reasoning", %{text: text})
-    %{state | pending_reasoning: state.pending_reasoning <> text}
-  end
-
-  defp handle_stream_event(:message_start, state), do: state
-  defp handle_stream_event({:message_delta, _delta}, state), do: state
-  defp handle_stream_event(:done, state), do: state
-  defp handle_stream_event(:ignore, state), do: state
-
-  defp handle_stream_event({:error, error}, state) do
-    Logger.warning("stream_error_event", session_id: state.session_id, error: inspect(error))
-    error_msg = if is_map(error), do: error["message"] || inspect(error), else: inspect(error)
-    broadcast(state.session_id, "error", %{message: error_msg})
-    state
+  defp merge_acc(state, acc) do
+    %{
+      state
+      | pending_text: acc.pending_text,
+        pending_tool_use: acc.pending_tool_use,
+        pending_tool_input: acc.pending_tool_input,
+        pending_reasoning: acc.pending_reasoning,
+        tool_uses: acc.tool_uses
+    }
   end
 
   defp flush_pending(state) do
-    parts = build_assistant_parts(state)
-
-    if parts != [] do
-      token_count =
-        parts
-        |> Enum.map(fn
-          %Synapsis.Part.Text{content: c} -> ContextWindow.estimate_tokens(c)
-          _ -> 10
-        end)
-        |> Enum.sum()
-
-      safe_insert_message(state.session_id, %{
-        session_id: state.session_id,
-        role: "assistant",
-        parts: parts,
-        token_count: token_count
-      })
-    end
-
-    %{
-      state
-      | pending_text: "",
-        pending_reasoning: "",
-        pending_tool_use: nil,
-        pending_tool_input: ""
-    }
-  end
-
-  defp build_assistant_parts(state) do
-    parts = []
-
-    parts =
-      if state.pending_reasoning != "" do
-        parts ++ [%Synapsis.Part.Reasoning{content: state.pending_reasoning}]
-      else
-        parts
-      end
-
-    parts =
-      if state.pending_text != "" do
-        parts ++ [%Synapsis.Part.Text{content: state.pending_text}]
-      else
-        parts
-      end
-
-    parts =
-      Enum.reduce(state.tool_uses, parts, fn tu, acc ->
-        acc ++ [tu]
-      end)
-
-    parts
+    acc = extract_acc(state)
+    flushed = ResponseFlusher.flush(state.session_id, acc)
+    merge_acc(state, flushed)
   end
 
   defp process_tool_uses(%{tool_uses: []} = state) do
@@ -785,95 +680,36 @@ defmodule Synapsis.Session.Worker do
   end
 
   defp process_tool_uses(state) do
-    # Record tool call hashes for loop detection
-    new_hashes =
-      Enum.reduce(state.tool_uses, state.tool_call_hashes, fn tu, acc ->
-        MapSet.put(acc, :erlang.phash2({tu.tool, tu.input}))
-      end)
+    {classified, monitor} = ToolDispatcher.classify(state.tool_uses, state.session, state.monitor)
 
-    # Feed tool calls to Monitor for cross-iteration tracking
-    monitor =
-      Enum.reduce(state.tool_uses, state.monitor, fn tu, mon ->
-        {_signal, mon} = Monitor.record_tool_call(mon, tu.tool, tu.input)
-        mon
-      end)
+    dispatch_opts = %{
+      project_path: state.session.project.path,
+      effective_path: state.worktree_path || state.session.project.path,
+      session_id: state.session_id,
+      agent_id: state.agent[:name] || state.session.agent || "default",
+      project_id: to_string(state.session.project_id),
+      tool_call_hashes: state.tool_call_hashes,
+      worktree_path: state.worktree_path
+    }
 
-    state = %{state | tool_call_hashes: new_hashes, monitor: monitor}
+    new_hashes = ToolDispatcher.dispatch_all(classified, self(), state.session_id, dispatch_opts)
 
-    for tool_use <- state.tool_uses do
-      permission = Synapsis.Tool.Permission.check(tool_use.tool, state.session)
-
-      case permission do
-        :approved ->
-          execute_tool_async(tool_use, state)
-
-        :requires_approval ->
-          broadcast(state.session_id, "permission_request", %{
-            tool: tool_use.tool,
-            tool_use_id: tool_use.tool_use_id,
-            input: tool_use.input
-          })
-
-        :denied ->
-          send(
-            self(),
-            {:tool_result, tool_use.tool_use_id, "Tool denied by permission policy.", true}
-          )
-      end
-    end
-
-    {:noreply, state}
+    {:noreply, %{state | tool_call_hashes: new_hashes, monitor: monitor}}
   end
 
   defp execute_tool(tool_use, state) do
-    execute_tool_async(tool_use, state)
+    dispatch_opts = %{
+      project_path: state.session.project.path,
+      effective_path: state.worktree_path || state.session.project.path,
+      session_id: state.session_id,
+      agent_id: state.agent[:name] || state.session.agent || "default",
+      project_id: to_string(state.session.project_id),
+      tool_call_hashes: state.tool_call_hashes,
+      worktree_path: state.worktree_path
+    }
+
+    ToolDispatcher.execute_async(tool_use, self(), dispatch_opts)
     {:noreply, state}
-  end
-
-  defp execute_tool_async(tool_use, state) do
-    worker_pid = self()
-    project_path = state.session.project.path
-    # Use worktree for file/shell operations when available; fallback to project root
-    effective_path = state.worktree_path || project_path
-
-    # Check for duplicate tool calls within the same turn
-    call_hash = :erlang.phash2({tool_use.tool, tool_use.input})
-    is_duplicate = MapSet.member?(state.tool_call_hashes, call_hash)
-
-    # Auto-checkpoint before write operations (only on main tree — worktree tracks via git)
-    if is_nil(state.worktree_path) and tool_use.tool in ["file_edit", "file_write", "bash"] and
-         Synapsis.Git.is_repo?(project_path) do
-      Synapsis.Git.checkpoint(project_path, "synapsis pre-#{tool_use.tool}")
-    end
-
-    Task.Supervisor.async_nolink(Synapsis.Tool.TaskSupervisor, fn ->
-      result =
-        Synapsis.Tool.Executor.execute(tool_use.tool, tool_use.input, %{
-          project_path: effective_path,
-          session_id: state.session_id,
-          working_dir: effective_path,
-          agent_id: state.agent[:name] || state.session.agent || "default",
-          agent_scope: :project,
-          project_id: to_string(state.session.project_id)
-        })
-
-      case result do
-        {:ok, output} ->
-          final_output =
-            if is_duplicate do
-              output <>
-                "\n\nWarning: This exact tool call was already made in this conversation turn. The same approach may not work. Try a different approach."
-            else
-              output
-            end
-
-          send(worker_pid, {:tool_result, tool_use.tool_use_id, final_output, false})
-
-        {:error, reason} ->
-          error_msg = if is_binary(reason), do: reason, else: "Tool execution failed"
-          send(worker_pid, {:tool_result, tool_use.tool_use_id, error_msg, true})
-      end
-    end)
   end
 
   defp continue_after_tools([], state) do
