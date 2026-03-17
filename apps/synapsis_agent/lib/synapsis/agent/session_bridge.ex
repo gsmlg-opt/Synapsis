@@ -5,6 +5,9 @@ defmodule Synapsis.Agent.SessionBridge do
   and monitoring completion.
   """
 
+  # LSP.Manager lives in synapsis_lsp (optional dependency)
+  @compile {:no_warn_undefined, Synapsis.LSP.Manager}
+
   require Logger
 
   alias Synapsis.{Repo, Session, Project}

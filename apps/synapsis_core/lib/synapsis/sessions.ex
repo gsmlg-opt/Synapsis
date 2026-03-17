@@ -1,6 +1,9 @@
 defmodule Synapsis.Sessions do
   @moduledoc "Public API for session management."
 
+  # Worker lives in synapsis_agent (compiled after synapsis_core)
+  @compile {:no_warn_undefined, Synapsis.Session.Worker}
+
   alias Synapsis.{Repo, Project, Session, Message}
   import Ecto.Query
 
