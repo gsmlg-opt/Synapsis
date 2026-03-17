@@ -6,7 +6,7 @@ defmodule SynapsisCore.Application do
   @impl true
   def start(_type, _args) do
     optional_children =
-      [Synapsis.Agent.Supervisor, SynapsisPlugin.Supervisor, SynapsisServer.Supervisor]
+      [SynapsisPlugin.Supervisor, SynapsisServer.Supervisor]
       |> Enum.filter(&Code.ensure_loaded?/1)
 
     oban_child =
@@ -33,13 +33,10 @@ defmodule SynapsisCore.Application do
         Synapsis.Provider.Registry,
         {Task.Supervisor, name: Synapsis.Tool.TaskSupervisor},
         Synapsis.Tool.Registry,
-        {Registry, keys: :unique, name: Synapsis.Session.Registry},
-        {Registry, keys: :unique, name: Synapsis.Session.SupervisorRegistry},
         {Registry, keys: :unique, name: Synapsis.FileWatcher.Registry},
         Synapsis.Memory.Supervisor
       ] ++
         oban_child ++
-        [Synapsis.Session.DynamicSupervisor] ++
         maybe_child(Synapsis.Workspace.GC) ++
         optional_children
 
@@ -48,10 +45,6 @@ defmodule SynapsisCore.Application do
 
     case result do
       {:ok, _pid} ->
-        Synapsis.Tool.Builtin.register_all()
-
-        maybe_apply(Synapsis.Workspace.Tools, :register_all, [])
-
         try do
           Synapsis.Providers.load_all_into_registry()
         rescue

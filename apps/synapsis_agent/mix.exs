@@ -20,7 +20,8 @@ defmodule SynapsisAgent.MixProject do
 
   def application do
     [
-      extra_applications: [:logger]
+      extra_applications: [:logger],
+      mod: {SynapsisAgent.Application, []}
     ]
   end
 
@@ -29,7 +30,9 @@ defmodule SynapsisAgent.MixProject do
 
   defp deps do
     [
-      {:synapsis_data, in_umbrella: true}
+      {:synapsis_data, in_umbrella: true},
+      {:synapsis_core, in_umbrella: true},
+      {:synapsis_provider, in_umbrella: true}
     ]
   end
 end

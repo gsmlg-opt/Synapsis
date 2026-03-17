@@ -1,7 +1,7 @@
 defmodule Synapsis.Agent.Supervisor do
   @moduledoc """
   Supervision tree for the agent subsystem.
-  Started by SynapsisCore.Application — synapsis_agent is a pure library.
+  Started by SynapsisAgent.Application.
   """
 
   use Supervisor

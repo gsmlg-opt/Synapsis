@@ -19,7 +19,7 @@ defmodule Synapsis.MixProject do
       synapsis: [
         applications: [
           synapsis_data: :permanent,
-          synapsis_agent: :load,
+          synapsis_agent: :permanent,
           synapsis_provider: :permanent,
           synapsis_core: :permanent,
           synapsis_server: :permanent,
