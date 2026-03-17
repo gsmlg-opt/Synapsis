@@ -2,6 +2,8 @@ defmodule Synapsis.Agent.Nodes.ToolExecute do
   @moduledoc "Executes approved tools via Worker dispatch. Pauses while tools run."
   @behaviour Synapsis.Agent.Runtime.Node
 
+  import Synapsis.Agent.Nodes.Helpers, only: [worker_pid: 1]
+
   alias Synapsis.Agent.ResponseFlusher
 
   @impl true
@@ -60,13 +62,6 @@ defmodule Synapsis.Agent.Nodes.ToolExecute do
 
         {:wait, Map.put(state, :awaiting_tools, true)}
       end
-    end
-  end
-
-  defp worker_pid(session_id) do
-    case Registry.lookup(Synapsis.Session.Registry, session_id) do
-      [{pid, _}] -> pid
-      [] -> nil
     end
   end
 end

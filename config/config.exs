@@ -30,9 +30,6 @@ config :logger, :default_formatter,
   format: "$time $metadata[$level] $message\n",
   metadata: [:request_id, :session_id]
 
-# Graph-driven execution (convergence). Set to false to revert to legacy Worker.
-config :synapsis_agent, :use_graph_worker, true
-
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 

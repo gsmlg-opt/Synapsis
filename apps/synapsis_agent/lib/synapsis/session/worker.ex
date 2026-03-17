@@ -186,8 +186,13 @@ defmodule Synapsis.Session.Worker do
   @impl true
   def handle_cast(:cancel, state) do
     if state.stream_ref, do: SessionStream.cancel_stream(state.stream_ref, state.session.provider)
+
+    if state.runner_pid && Process.alive?(state.runner_pid) do
+      GenServer.stop(state.runner_pid, :normal)
+    end
+
     set_status(state, "idle")
-    {:noreply, %{state | stream_ref: nil}, @inactivity_timeout}
+    {:noreply, %{state | stream_ref: nil, runner_pid: nil}, @inactivity_timeout}
   end
 
   def handle_cast({:approve_tool, tool_use_id}, state) do
@@ -235,7 +240,8 @@ defmodule Synapsis.Session.Worker do
     do: {:noreply, %{state | pending_approvals: MapSet.new(tool_ids), approval_decisions: %{}}}
 
   def handle_info({:node_request, :start_auditor, params}, state) do
-    Auditor.start_async(params, state)
+    task = Auditor.start_async(params, state)
+    Process.monitor(task.pid)
     {:noreply, state}
   end
 
@@ -395,7 +401,13 @@ defmodule Synapsis.Session.Worker do
       session -> session |> Session.status_changeset(status) |> Repo.update()
     end
   rescue
-    _ -> :ok
+    error ->
+      Logger.warning("update_session_status_failed",
+        session_id: session_id,
+        error: inspect(error)
+      )
+
+      :ok
   end
 
   defp setup_worktree(session, session_id) do

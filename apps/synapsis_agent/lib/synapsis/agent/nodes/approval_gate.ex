@@ -5,6 +5,8 @@ defmodule Synapsis.Agent.Nodes.ApprovalGate do
   """
   @behaviour Synapsis.Agent.Runtime.Node
 
+  import Synapsis.Agent.Nodes.Helpers, only: [worker_pid: 1]
+
   @impl true
   def run(state, ctx) do
     if state[:awaiting_approval] do
@@ -55,13 +57,6 @@ defmodule Synapsis.Agent.Nodes.ApprovalGate do
       )
 
       {:wait, Map.put(state, :awaiting_approval, true)}
-    end
-  end
-
-  defp worker_pid(session_id) do
-    case Registry.lookup(Synapsis.Session.Registry, session_id) do
-      [{pid, _}] -> pid
-      [] -> nil
     end
   end
 end

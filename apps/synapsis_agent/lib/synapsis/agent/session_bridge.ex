@@ -96,7 +96,7 @@ defmodule Synapsis.Agent.SessionBridge do
     attrs = %{
       project_id: project.id,
       provider: opts[:provider] || "anthropic",
-      model: opts[:model] || "claude-sonnet-4-20250514",
+      model: opts[:model] || Synapsis.Providers.default_model(opts[:provider] || "anthropic"),
       agent: opts[:agent] || "build"
     }
 
@@ -119,7 +119,7 @@ defmodule Synapsis.Agent.SessionBridge do
        when is_pid(pid) do
     Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session_id}")
 
-    spawn(fn ->
+    Task.Supervisor.start_child(Synapsis.Tool.TaskSupervisor, fn ->
       receive do
         {"session_status", %{status: "idle"}} ->
           send(pid, {:coding_session_completed, ref, session_id})
@@ -139,10 +139,8 @@ defmodule Synapsis.Agent.SessionBridge do
 
   defp build_file_tree(project_path) do
     if File.dir?(project_path) do
-      case System.cmd("find", [project_path, "-maxdepth", "3", "-not", "-path", "*/.*"],
-             stderr_to_stdout: true
-           ) do
-        {output, 0} ->
+      case run_command("find", [project_path, "-maxdepth", "3", "-not", "-path", "*/.*"]) do
+        {:ok, output} ->
           lines =
             output
             |> String.split("\n", trim: true)
@@ -152,7 +150,7 @@ defmodule Synapsis.Agent.SessionBridge do
 
           if lines == "", do: nil, else: lines
 
-        _ ->
+        {:error, _} ->
           nil
       end
     end
@@ -160,12 +158,44 @@ defmodule Synapsis.Agent.SessionBridge do
 
   defp build_git_log(project_path) do
     if Synapsis.Git.is_repo?(project_path) do
-      case System.cmd("git", ["-C", project_path, "log", "--oneline", "-10"],
-             stderr_to_stdout: true
-           ) do
-        {output, 0} -> if output == "", do: nil, else: String.trim(output)
-        _ -> nil
+      case run_command("git", ["-C", project_path, "log", "--oneline", "-10"]) do
+        {:ok, output} -> if output == "", do: nil, else: String.trim(output)
+        {:error, _} -> nil
       end
+    end
+  end
+
+  defp run_command(cmd, args) do
+    full_cmd = Enum.join([cmd | args], " ")
+
+    port =
+      Port.open({:spawn, full_cmd}, [
+        :binary,
+        :exit_status,
+        :stderr_to_stdout,
+        {:line, 4096}
+      ])
+
+    collect_port_output(port, [])
+  end
+
+  defp collect_port_output(port, acc) do
+    receive do
+      {^port, {:data, {:eol, line}}} ->
+        collect_port_output(port, [line | acc])
+
+      {^port, {:data, {:noeol, line}}} ->
+        collect_port_output(port, [line | acc])
+
+      {^port, {:exit_status, 0}} ->
+        {:ok, acc |> Enum.reverse() |> Enum.join("\n")}
+
+      {^port, {:exit_status, _code}} ->
+        {:error, acc |> Enum.reverse() |> Enum.join("\n")}
+    after
+      10_000 ->
+        Port.close(port)
+        {:error, :timeout}
     end
   end
 

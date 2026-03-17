@@ -25,7 +25,7 @@ defmodule Synapsis.Agent.Graphs.CodingLoop do
       edges: %{
         receive: :build_prompt,
         build_prompt: :llm_stream,
-        llm_stream: :process_response,
+        llm_stream: %{default: :process_response, error: :complete},
         process_response: %{has_tools: :tool_dispatch, no_tools: :complete},
         tool_dispatch: %{all_approved: :tool_execute, needs_approval: :approval_gate},
         approval_gate: %{approved: :tool_execute, denied: :build_prompt},

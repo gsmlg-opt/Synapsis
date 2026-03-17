@@ -2,6 +2,8 @@ defmodule Synapsis.Agent.Nodes.Escalate do
   @moduledoc "Invokes AuditorTask with LLM call for escalation analysis. Pauses while auditor runs."
   @behaviour Synapsis.Agent.Runtime.Node
 
+  import Synapsis.Agent.Nodes.Helpers, only: [worker_pid: 1]
+
   require Logger
 
   @impl true
@@ -35,13 +37,6 @@ defmodule Synapsis.Agent.Nodes.Escalate do
       end
 
       {:wait, Map.put(state, :awaiting_auditor, true)}
-    end
-  end
-
-  defp worker_pid(session_id) do
-    case Registry.lookup(Synapsis.Session.Registry, session_id) do
-      [{pid, _}] -> pid
-      [] -> nil
     end
   end
 end
