@@ -49,11 +49,11 @@ defmodule Synapsis.Agent.Graphs.CodingLoopTest do
       assert graph.start == :receive
     end
 
-    test "has all 10 nodes" do
+    test "has all 11 nodes" do
       {:ok, graph} = CodingLoop.build()
-      assert map_size(graph.nodes) == 10
+      assert map_size(graph.nodes) == 11
 
-      expected = ~w(receive build_prompt llm_stream process_response tool_dispatch
+      expected = ~w(receive compact_context build_prompt llm_stream process_response tool_dispatch
                     approval_gate tool_execute orchestrate escalate complete)a
 
       for name <- expected do

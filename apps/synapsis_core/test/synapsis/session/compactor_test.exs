@@ -52,7 +52,8 @@ defmodule Synapsis.Session.CompactorTest do
       # 5 * 1000 = 5k total, well under 160k
       insert_messages(session.id, 5, token_count: 1_000)
 
-      assert Compactor.maybe_compact(session.id, "claude-sonnet-4-20250514") == :ok
+      assert Compactor.maybe_compact(session.id, "claude-sonnet-4-20250514") ==
+               {:ok, :no_compaction_needed}
 
       # Verify no messages were deleted or added
       assert length(load_messages(session.id)) == 5
@@ -64,7 +65,9 @@ defmodule Synapsis.Session.CompactorTest do
       # 3 messages with 30k each = 90k, under 160k threshold
       insert_messages(session.id, 3, token_count: 30_000)
 
-      assert Compactor.maybe_compact(session.id, "claude-sonnet-4-20250514") == :ok
+      assert Compactor.maybe_compact(session.id, "claude-sonnet-4-20250514") ==
+               {:ok, :no_compaction_needed}
+
       assert length(load_messages(session.id)) == 3
     end
 
@@ -72,7 +75,8 @@ defmodule Synapsis.Session.CompactorTest do
       # 15 * 12k = 180k > 160k (80% of 200k) -> triggers compaction
       insert_messages(session.id, 15, token_count: 12_000)
 
-      assert Compactor.maybe_compact(session.id, "claude-sonnet-4-20250514") == :compacted
+      assert {:ok, %{removed: _, kept: _}} =
+               Compactor.maybe_compact(session.id, "claude-sonnet-4-20250514")
 
       remaining = load_messages(session.id)
       # 5 old messages compacted into 1 summary + 10 kept = 11
@@ -85,10 +89,13 @@ defmodule Synapsis.Session.CompactorTest do
       # With 20k extra_tokens: 170k > 160k threshold -> compaction
       insert_messages(session.id, 15, token_count: 10_000)
 
-      assert Compactor.maybe_compact(session.id, "claude-sonnet-4-20250514") == :ok
+      assert Compactor.maybe_compact(session.id, "claude-sonnet-4-20250514") ==
+               {:ok, :no_compaction_needed}
 
-      assert Compactor.maybe_compact(session.id, "claude-sonnet-4-20250514", extra_tokens: 20_000) ==
-               :compacted
+      assert {:ok, %{removed: _, kept: _}} =
+               Compactor.maybe_compact(session.id, "claude-sonnet-4-20250514",
+                 extra_tokens: 20_000
+               )
     end
 
     test "uses default 128k limit for unknown model", %{session: session} do
@@ -96,7 +103,8 @@ defmodule Synapsis.Session.CompactorTest do
       # 15 * 8k = 120k > 102.4k -> triggers compaction
       insert_messages(session.id, 15, token_count: 8_000)
 
-      assert Compactor.maybe_compact(session.id, "unknown-model-xyz") == :compacted
+      assert {:ok, %{removed: _, kept: _}} =
+               Compactor.maybe_compact(session.id, "unknown-model-xyz")
     end
 
     test "does nothing for unknown model when under default threshold", %{session: session} do
@@ -104,12 +112,15 @@ defmodule Synapsis.Session.CompactorTest do
       # 5 * 1k = 5k, well under 102.4k
       insert_messages(session.id, 5, token_count: 1_000)
 
-      assert Compactor.maybe_compact(session.id, "unknown-model-xyz") == :ok
+      assert Compactor.maybe_compact(session.id, "unknown-model-xyz") ==
+               {:ok, :no_compaction_needed}
+
       assert length(load_messages(session.id)) == 5
     end
 
     test "returns :ok when session has no messages", %{session: session} do
-      assert Compactor.maybe_compact(session.id, "claude-sonnet-4-20250514") == :ok
+      assert Compactor.maybe_compact(session.id, "claude-sonnet-4-20250514") ==
+               {:ok, :no_compaction_needed}
     end
   end
 
@@ -123,8 +134,7 @@ defmodule Synapsis.Session.CompactorTest do
       messages = load_messages(session.id)
       assert length(messages) == 15
 
-      result = Compactor.compact(session.id, messages)
-      assert result == :compacted
+      assert {:ok, %{removed: _, kept: _}} = Compactor.compact(session.id, messages)
 
       remaining = load_messages(session.id)
       # 15 - 10 kept = 5 compacted, replaced by 1 summary => 10 + 1 = 11
@@ -174,7 +184,7 @@ defmodule Synapsis.Session.CompactorTest do
       insert_messages(session.id, 5, token_count: 100)
 
       messages = load_messages(session.id)
-      assert Compactor.compact(session.id, messages) == :ok
+      assert Compactor.compact(session.id, messages) == {:ok, :no_compaction_needed}
 
       # No messages removed, no summary added
       assert length(load_messages(session.id)) == 5
@@ -184,12 +194,12 @@ defmodule Synapsis.Session.CompactorTest do
       insert_messages(session.id, 10)
 
       messages = load_messages(session.id)
-      assert Compactor.compact(session.id, messages) == :ok
+      assert Compactor.compact(session.id, messages) == {:ok, :no_compaction_needed}
       assert length(load_messages(session.id)) == 10
     end
 
     test "does nothing with empty message list", %{session: session} do
-      assert Compactor.compact(session.id, []) == :ok
+      assert Compactor.compact(session.id, []) == {:ok, :no_compaction_needed}
     end
 
     test "handles ToolUse, ToolResult, Reasoning, and unknown part types", %{session: session} do
@@ -221,7 +231,7 @@ defmodule Synapsis.Session.CompactorTest do
       end
 
       messages = load_messages(session.id)
-      assert Compactor.compact(session.id, messages) == :compacted
+      assert {:ok, %{removed: _, kept: _}} = Compactor.compact(session.id, messages)
 
       remaining = load_messages(session.id)
       summary_msg = Enum.find(remaining, fn m -> m.role == "system" end)

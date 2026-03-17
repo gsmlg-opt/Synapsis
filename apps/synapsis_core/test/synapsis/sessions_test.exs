@@ -472,10 +472,10 @@ defmodule Synapsis.SessionsTest do
         |> Repo.insert!()
       end
 
-      assert Sessions.compact(session.id) == :ok
+      assert Sessions.compact(session.id) == {:ok, :no_compaction_needed}
     end
 
-    test "returns :compacted when tokens exceed 80% of model limit" do
+    test "returns structured result when tokens exceed 80% of model limit" do
       # claude-sonnet limit 200k * 80% = 160k threshold
       # 15 * 12k = 180k > 160k -> compaction triggered
       {:ok, session} =
@@ -495,7 +495,7 @@ defmodule Synapsis.SessionsTest do
         |> Repo.insert!()
       end
 
-      assert Sessions.compact(session.id) == :compacted
+      assert {:ok, %{removed: _, kept: _}} = Sessions.compact(session.id)
     end
 
     test "returns error for unknown session" do

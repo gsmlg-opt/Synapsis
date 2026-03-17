@@ -1,8 +1,14 @@
 defmodule Synapsis.Agent.Nodes.BuildPrompt do
-  @moduledoc "Loads messages from DB, builds provider request via MessageBuilder."
+  @moduledoc """
+  Loads messages from DB, builds provider request via MessageBuilder.
+
+  Uses the full context assembly pipeline (AI-2) to build the system prompt
+  with identity files, skills manifest, memory context, and project context.
+  """
   @behaviour Synapsis.Agent.Runtime.Node
 
   alias Synapsis.{Repo, Message}
+  alias Synapsis.Agent.ContextBuilder
   import Ecto.Query
   require Logger
 
@@ -12,9 +18,6 @@ defmodule Synapsis.Agent.Nodes.BuildPrompt do
     agent_config = state.agent_config
     provider = ctx[:provider] || agent_config[:provider] || "anthropic"
 
-    # Compact if needed
-    Synapsis.Session.Compactor.maybe_compact(session_id, ctx[:model] || agent_config[:model])
-
     # Load messages from DB
     messages =
       Message
@@ -22,21 +25,57 @@ defmodule Synapsis.Agent.Nodes.BuildPrompt do
       |> order_by([m], asc: m.inserted_at)
       |> Repo.all()
 
-    # Build failure context for injection
-    prompt_context = Synapsis.PromptBuilder.build_prompt_context(session_id)
+    # Extract latest user message for memory search
+    user_message = extract_latest_user_message(messages)
+
+    # Build full system prompt via ContextBuilder (AI-2)
+    system_prompt =
+      ContextBuilder.build_system_prompt(:coding, [
+        {:project_id, agent_config[:project_id]},
+        {:session_id, session_id},
+        {:user_message, user_message},
+        {:agent_config, agent_config}
+      ])
+
+    # Build failure context and append
+    failure_context = Synapsis.PromptBuilder.build_failure_context(session_id)
+
+    full_prompt =
+      if failure_context do
+        system_prompt <> "\n\n" <> failure_context
+      else
+        system_prompt
+      end
+
+    # Override agent config with assembled system prompt
+    enriched_config = Map.put(agent_config, :system_prompt, full_prompt)
 
     # Build the request
     request =
       Synapsis.MessageBuilder.build_request(
         messages,
-        agent_config,
-        provider,
-        prompt_context
+        enriched_config,
+        provider
       )
 
     new_state = %{state | messages: messages, user_input: nil}
     new_state = Map.put(new_state, :request, request)
 
     {:next, :default, new_state}
+  end
+
+  defp extract_latest_user_message(messages) do
+    messages
+    |> Enum.reverse()
+    |> Enum.find_value("", fn
+      %{role: "user", parts: parts} when is_list(parts) ->
+        Enum.find_value(parts, fn
+          %Synapsis.Part.Text{content: c} when is_binary(c) -> c
+          _ -> nil
+        end)
+
+      _ ->
+        nil
+    end)
   end
 end

@@ -112,13 +112,13 @@ defmodule Synapsis.Agent.Nodes.NodeTest do
   end
 
   describe "ApprovalGate" do
-    test "pauses on first call and sets awaiting_approval" do
+    test "auto-approves when no tools need user approval" do
       state =
         CodingLoop.initial_state(%{session_id: Ecto.UUID.generate()})
         |> Map.put(:classified_tools, [])
 
-      assert {:wait, new_state} = Nodes.ApprovalGate.run(state, %{})
-      assert new_state[:awaiting_approval] == true
+      # With empty tools, all are "auto-approved" (nothing to ask about)
+      assert {:next, :approved, _new_state} = Nodes.ApprovalGate.run(state, %{})
     end
 
     test "routes to :approved on resume with approval decisions" do

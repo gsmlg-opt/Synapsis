@@ -15,38 +15,46 @@ defmodule Synapsis.Session.Compactor do
     if ContextWindow.needs_compaction?(messages, limit, extra_tokens: extra_tokens) do
       compact(session_id, messages)
     else
-      :ok
+      {:ok, :no_compaction_needed}
     end
   end
 
   def compact(session_id, messages) do
-    {to_compact, _to_keep} = ContextWindow.partition_for_compaction(messages, keep_recent: 10)
+    {to_compact, to_keep} = ContextWindow.partition_for_compaction(messages, keep_recent: 10)
 
     if to_compact == [] do
-      :ok
+      {:ok, :no_compaction_needed}
     else
       summary = summarize_messages(to_compact)
+      summary_tokens = ContextWindow.estimate_tokens(summary)
 
-      Repo.transaction(fn ->
-        # Delete old messages
-        ids = Enum.map(to_compact, & &1.id)
+      case Repo.transaction(fn ->
+             ids = Enum.map(to_compact, & &1.id)
 
-        from(m in Message, where: m.id in ^ids)
-        |> Repo.delete_all()
+             from(m in Message, where: m.id in ^ids)
+             |> Repo.delete_all()
 
-        # Insert summary message
-        {:ok, _msg} =
-          %Message{}
-          |> Message.changeset(%{
-            session_id: session_id,
-            role: "system",
-            parts: [%Synapsis.Part.Text{content: summary}],
-            token_count: ContextWindow.estimate_tokens(summary)
-          })
-          |> Repo.insert()
-      end)
+             {:ok, _msg} =
+               %Message{}
+               |> Message.changeset(%{
+                 session_id: session_id,
+                 role: "system",
+                 parts: [%Synapsis.Part.Text{content: summary}],
+                 token_count: summary_tokens
+               })
+               |> Repo.insert()
+           end) do
+        {:ok, _} ->
+          {:ok,
+           %{
+             removed: length(to_compact),
+             kept: length(to_keep),
+             summary_tokens: summary_tokens
+           }}
 
-      :compacted
+        {:error, reason} ->
+          {:error, reason}
+      end
     end
   end
 

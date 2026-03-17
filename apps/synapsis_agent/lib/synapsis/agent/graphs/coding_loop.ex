@@ -12,6 +12,7 @@ defmodule Synapsis.Agent.Graphs.CodingLoop do
     Graph.new(%{
       nodes: %{
         receive: Nodes.ReceiveMessage,
+        compact_context: Nodes.CompactContext,
         build_prompt: Nodes.BuildPrompt,
         llm_stream: Nodes.LLMStream,
         process_response: Nodes.ProcessResponse,
@@ -23,7 +24,8 @@ defmodule Synapsis.Agent.Graphs.CodingLoop do
         complete: Nodes.Complete
       },
       edges: %{
-        receive: :build_prompt,
+        receive: :compact_context,
+        compact_context: :build_prompt,
         build_prompt: :llm_stream,
         llm_stream: %{default: :process_response, error: :complete},
         process_response: %{has_tools: :tool_dispatch, no_tools: :complete},

@@ -120,11 +120,11 @@ defmodule SynapsisServer.SessionController do
 
   def compact(conn, %{"id" => id}) do
     case Sessions.compact(id) do
-      :ok ->
+      {:ok, :no_compaction_needed} ->
         json(conn, %{status: "ok", compacted: false})
 
-      :compacted ->
-        json(conn, %{status: "ok", compacted: true})
+      {:ok, %{removed: removed, kept: kept}} ->
+        json(conn, %{status: "ok", compacted: true, removed: removed, kept: kept})
 
       {:error, reason} ->
         conn |> put_status(422) |> json(%{error: format_error(reason)})
