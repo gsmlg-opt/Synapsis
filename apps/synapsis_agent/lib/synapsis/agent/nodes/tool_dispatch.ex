@@ -3,10 +3,14 @@ defmodule Synapsis.Agent.Nodes.ToolDispatch do
   @behaviour Synapsis.Agent.Runtime.Node
 
   alias Synapsis.Agent.ToolDispatcher
+  alias Synapsis.{Repo, Session}
 
   @impl true
-  def run(state, ctx) do
-    session = ctx[:session]
+  def run(state, _ctx) do
+    session =
+      Repo.get(Session, state.session_id)
+      |> Repo.preload(:project)
+
     {classified, monitor} = ToolDispatcher.classify(state.tool_uses, session, state.monitor)
 
     needs_approval = Enum.any?(classified, fn {status, _} -> status == :requires_approval end)

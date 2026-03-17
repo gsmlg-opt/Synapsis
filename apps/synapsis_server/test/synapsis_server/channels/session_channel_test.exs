@@ -147,49 +147,46 @@ defmodule SynapsisServer.SessionChannelTest do
     refute payload.reason =~ "%{"
   end
 
-  test "session:message returns error when session is not idle (streaming state)", %{
+  test "session:message returns error when runner is not waiting (busy state)", %{
     socket: socket,
     session: session
   } do
-    # Put the session worker into :streaming state using :sys.replace_state
-    # so that send_message hits the non-idle clause
+    # Put the Runner into :running state so Runner.resume returns {:error, :not_waiting}
     [{worker_pid, _}] = Registry.lookup(Synapsis.Session.Registry, session.id)
-    :sys.replace_state(worker_pid, fn state -> %{state | status: :streaming} end)
+    %{runner_pid: runner_pid} = :sys.get_state(worker_pid)
+    :sys.replace_state(runner_pid, fn state -> %{state | status: :running} end)
 
     ref = push(socket, "session:message", %{"content" => "hello"})
     assert_reply ref, :error, payload
-    assert payload.reason == "not_idle"
+    assert payload.reason == "not_waiting"
 
-    # Restore idle so teardown doesn't crash
-    :sys.replace_state(worker_pid, fn state -> %{state | status: :idle} end)
+    # Restore waiting so teardown doesn't crash
+    :sys.replace_state(runner_pid, fn state -> %{state | status: :waiting} end)
   end
 
-  test "session:message with images returns error when session is not idle", %{
+  test "session:message with images returns error when runner is not waiting", %{
     socket: socket,
     session: session
   } do
     [{worker_pid, _}] = Registry.lookup(Synapsis.Session.Registry, session.id)
-    :sys.replace_state(worker_pid, fn state -> %{state | status: :streaming} end)
+    %{runner_pid: runner_pid} = :sys.get_state(worker_pid)
+    :sys.replace_state(runner_pid, fn state -> %{state | status: :running} end)
 
     ref = push(socket, "session:message", %{"content" => "hello", "images" => []})
     assert_reply ref, :error, payload
-    assert payload.reason == "not_idle"
+    assert payload.reason == "not_waiting"
 
-    :sys.replace_state(worker_pid, fn state -> %{state | status: :idle} end)
+    :sys.replace_state(runner_pid, fn state -> %{state | status: :waiting} end)
   end
 
-  test "session:switch_agent returns error when session is not idle", %{
+  test "session:switch_agent returns error when runner is not waiting", %{
     socket: socket,
     session: session
   } do
-    [{worker_pid, _}] = Registry.lookup(Synapsis.Session.Registry, session.id)
-    :sys.replace_state(worker_pid, fn state -> %{state | status: :streaming} end)
-
-    ref = push(socket, "session:switch_agent", %{"agent" => "plan"})
-    assert_reply ref, :error, payload
-    assert payload.reason == "not_idle"
-
-    :sys.replace_state(worker_pid, fn state -> %{state | status: :idle} end)
+    # switch_agent doesn't go through Runner, it works directly on Worker state.
+    # It should succeed regardless of Runner status since it's a config change.
+    ref = push(socket, "session:switch_agent", %{"agent" => "build"})
+    assert_reply ref, :ok, _payload
   end
 
   test "format_error returns 'Operation failed' for non-atom reason", %{

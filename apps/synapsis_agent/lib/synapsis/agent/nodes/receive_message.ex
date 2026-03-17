@@ -3,15 +3,22 @@ defmodule Synapsis.Agent.Nodes.ReceiveMessage do
   @behaviour Synapsis.Agent.Runtime.Node
 
   @impl true
-  def run(state, _ctx) do
-    case state[:user_input] do
-      nil ->
-        # No input yet -- pause and wait for external resume with user_input
-        {:wait, state}
+  def run(state, ctx) do
+    if state[:awaiting_input] do
+      # Resumed with user input via ctx
+      input = ctx[:user_input]
+      image_parts = ctx[:image_parts] || []
 
-      _input ->
-        # Input provided via resume -- proceed to build_prompt
-        {:next, :default, state}
+      new_state =
+        state
+        |> Map.put(:user_input, input)
+        |> Map.put(:image_parts, image_parts)
+        |> Map.delete(:awaiting_input)
+
+      {:next, :default, new_state}
+    else
+      # No input yet — pause and wait for external resume
+      {:wait, Map.put(state, :awaiting_input, true)}
     end
   end
 end

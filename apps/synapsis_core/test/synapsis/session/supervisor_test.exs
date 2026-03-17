@@ -56,7 +56,8 @@ defmodule Synapsis.Session.SupervisorTest do
       allow_process(worker_pid)
 
       # Worker should report idle status
-      assert Worker.get_status(session.id) == :idle
+      # Graph-driven Worker starts waiting at receive_message node
+      assert Worker.get_status(session.id) == :waiting
 
       # Cleanup
       DynamicSupervisor.stop_session(session.id)
@@ -125,9 +126,10 @@ defmodule Synapsis.Session.SupervisorTest do
       end
 
       # All report idle independently
-      assert Worker.get_status(session_a.id) == :idle
-      assert Worker.get_status(session_b.id) == :idle
-      assert Worker.get_status(session_c.id) == :idle
+      # Graph-driven Worker starts waiting at receive_message node
+      assert Worker.get_status(session_a.id) == :waiting
+      assert Worker.get_status(session_b.id) == :waiting
+      assert Worker.get_status(session_c.id) == :waiting
 
       # Stopping one doesn't affect the others
       DynamicSupervisor.stop_session(session_b.id)
