@@ -10,6 +10,7 @@ defmodule Synapsis.Workspace.BlobStore do
   @callback get(ref :: String.t()) :: {:ok, binary()} | {:error, :not_found}
   @callback delete(ref :: String.t()) :: :ok
   @callback exists?(ref :: String.t()) :: boolean()
+  @callback path_for_ref(ref :: String.t()) :: String.t()
 
   @inline_threshold 64 * 1024
 

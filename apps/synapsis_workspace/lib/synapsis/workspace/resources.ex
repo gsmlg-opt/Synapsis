@@ -87,7 +87,8 @@ defmodule Synapsis.Workspace.Resources do
   Update an existing document, creating a version snapshot if warranted by lifecycle.
   """
   @spec update_document(WorkspaceDocument.t(), String.t() | nil, map()) ::
-          {:ok, WorkspaceDocument.t()} | {:error, Ecto.Changeset.t()}
+          {:ok, WorkspaceDocument.t()}
+          | {:error, Ecto.Changeset.t() | :stale | :version_insert_failed}
   def update_document(doc, content, opts \\ %{}) do
     author = Map.get(opts, :author, "system")
 
@@ -106,9 +107,13 @@ defmodule Synapsis.Workspace.Resources do
         |> maybe_put(:lifecycle, opts)
         |> maybe_put(:content_format, opts)
 
-      case doc |> WorkspaceDocument.update_changeset(attrs) |> WorkspaceDocuments.update() do
-        {:ok, updated} -> updated
-        {:error, changeset} -> WorkspaceDocuments.rollback(changeset)
+      try do
+        case doc |> WorkspaceDocument.update_changeset(attrs) |> WorkspaceDocuments.update() do
+          {:ok, updated} -> updated
+          {:error, changeset} -> WorkspaceDocuments.rollback(changeset)
+        end
+      rescue
+        Ecto.StaleEntryError -> WorkspaceDocuments.rollback(:stale)
       end
     end)
   end
@@ -159,19 +164,23 @@ defmodule Synapsis.Workspace.Resources do
   defp maybe_create_version(%WorkspaceDocument{} = doc) do
     content_hash = hash_content(doc.content_body || "")
 
-    WorkspaceDocuments.insert_version!(%{
-      document_id: doc.id,
-      version: doc.version,
-      content_body: doc.content_body,
-      blob_ref: doc.blob_ref,
-      content_hash: content_hash,
-      changed_by: doc.updated_by
-    })
+    case WorkspaceDocuments.insert_version(%{
+           document_id: doc.id,
+           version: doc.version,
+           content_body: doc.content_body,
+           blob_ref: doc.blob_ref,
+           content_hash: content_hash,
+           changed_by: doc.updated_by
+         }) do
+      {:ok, _version} ->
+        # Prune old versions for drafts (configurable retention)
+        if doc.lifecycle == :draft do
+          keep = draft_version_retention()
+          WorkspaceDocuments.prune_versions(doc.id, keep)
+        end
 
-    # Prune old versions for drafts (configurable retention)
-    if doc.lifecycle == :draft do
-      keep = draft_version_retention()
-      WorkspaceDocuments.prune_versions(doc.id, keep)
+      {:error, _changeset} ->
+        WorkspaceDocuments.rollback(:version_insert_failed)
     end
   end
 

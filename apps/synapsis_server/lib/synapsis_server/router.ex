@@ -79,6 +79,7 @@ defmodule SynapsisServer.Router do
     live "/projects/:project_id/sessions/new", SessionLive.Index, :new
     live "/projects/:project_id/sessions/:id", SessionLive.Show, :show
 
+    # TODO: add authentication guard (on_mount hook or pipeline plug) before production
     live "/workspace", WorkspaceLive.Explorer, :index
 
     live "/settings", SettingsLive, :index

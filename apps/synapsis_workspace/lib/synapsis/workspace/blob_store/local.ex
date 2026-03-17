@@ -7,6 +7,8 @@ defmodule Synapsis.Workspace.BlobStore.Local do
   """
   @behaviour Synapsis.Workspace.BlobStore
 
+  require Logger
+
   @default_root Path.expand("~/.config/synapsis/blobs")
 
   defp root_dir do
@@ -26,34 +28,52 @@ defmodule Synapsis.Workspace.BlobStore.Local do
 
   @impl true
   def get(ref) when is_binary(ref) do
-    path = ref_to_path(ref)
+    with :ok <- validate_ref(ref) do
+      path = ref_to_path(ref)
 
-    case File.read(path) do
-      {:ok, content} -> {:ok, content}
-      {:error, :enoent} -> {:error, :not_found}
-      {:error, reason} -> {:error, reason}
+      case File.read(path) do
+        {:ok, content} -> {:ok, content}
+        {:error, :enoent} -> {:error, :not_found}
+        {:error, reason} -> {:error, reason}
+      end
     end
   end
 
   @impl true
   def delete(ref) when is_binary(ref) do
-    path = ref_to_path(ref)
+    with :ok <- validate_ref(ref) do
+      path = ref_to_path(ref)
 
-    case File.rm(path) do
-      :ok ->
-        :ok
+      case File.rm(path) do
+        :ok ->
+          :ok
 
-      {:error, reason} ->
-        require Logger
-        Logger.warning("blob_delete_failed", ref: ref, reason: reason)
-        :ok
+        {:error, reason} ->
+          Logger.warning("blob_delete_failed", ref: ref, reason: reason)
+          :ok
+      end
     end
   end
 
   @impl true
   def exists?(ref) when is_binary(ref) do
-    ref |> ref_to_path() |> File.exists?()
+    match?(:ok, validate_ref(ref)) and ref |> ref_to_path() |> File.exists?()
   end
+
+  @impl true
+  @doc "Return the filesystem path for a given blob ref."
+  @spec path_for_ref(String.t()) :: String.t()
+  def path_for_ref(ref) when is_binary(ref) do
+    :ok = validate_ref(ref)
+    ref_to_path(ref)
+  end
+
+  # Validate that a blob ref is a valid SHA-256 hex string (prevents directory traversal).
+  defp validate_ref(ref) when byte_size(ref) >= 5 do
+    if Regex.match?(~r/^[a-f0-9]+$/, ref), do: :ok, else: {:error, :invalid_ref}
+  end
+
+  defp validate_ref(_), do: {:error, :invalid_ref}
 
   defp hash(content) do
     :crypto.hash(:sha256, content) |> Base.encode16(case: :lower)

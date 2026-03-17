@@ -15,24 +15,24 @@ defmodule Synapsis.WorkspaceDocument do
   @content_format_values ~w(markdown yaml json text binary)a
 
   schema "workspace_documents" do
-    field :path, :string
-    field :kind, Ecto.Enum, values: @kind_values, default: :document
-    field :visibility, Ecto.Enum, values: @visibility_values, default: :private
-    field :lifecycle, Ecto.Enum, values: @lifecycle_values, default: :draft
-    field :content_format, Ecto.Enum, values: @content_format_values, default: :markdown
-    field :content_body, :string
-    field :blob_ref, :string
-    field :metadata, :map, default: %{}
-    field :version, :integer, default: 1
-    field :created_by, :string
-    field :updated_by, :string
-    field :last_accessed_at, :utc_datetime_usec
-    field :deleted_at, :utc_datetime_usec
+    field(:path, :string)
+    field(:kind, Ecto.Enum, values: @kind_values, default: :document)
+    field(:visibility, Ecto.Enum, values: @visibility_values, default: :private)
+    field(:lifecycle, Ecto.Enum, values: @lifecycle_values, default: :draft)
+    field(:content_format, Ecto.Enum, values: @content_format_values, default: :markdown)
+    field(:content_body, :string)
+    field(:blob_ref, :string)
+    field(:metadata, :map, default: %{})
+    field(:version, :integer, default: 1)
+    field(:created_by, :string)
+    field(:updated_by, :string)
+    field(:last_accessed_at, :utc_datetime_usec)
+    field(:deleted_at, :utc_datetime_usec)
 
-    belongs_to :project, Synapsis.Project
-    belongs_to :session, Synapsis.Session
+    belongs_to(:project, Synapsis.Project)
+    belongs_to(:session, Synapsis.Session)
 
-    has_many :versions, Synapsis.WorkspaceDocumentVersion, foreign_key: :document_id
+    has_many(:versions, Synapsis.WorkspaceDocumentVersion, foreign_key: :document_id)
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -58,7 +58,28 @@ defmodule Synapsis.WorkspaceDocument do
   def update_changeset(document, attrs) do
     document
     |> changeset(attrs)
+    |> validate_lifecycle_transition()
     |> optimistic_lock(:version)
+  end
+
+  @lifecycle_order %{scratch: 0, draft: 1, shared: 2, published: 3, archived: 4}
+
+  defp validate_lifecycle_transition(changeset) do
+    case get_change(changeset, :lifecycle) do
+      nil ->
+        changeset
+
+      new_lifecycle ->
+        current = get_field(changeset, :lifecycle) || :scratch
+        current_idx = Map.get(@lifecycle_order, current, 0)
+        new_idx = Map.get(@lifecycle_order, new_lifecycle, 0)
+
+        if new_idx >= current_idx do
+          changeset
+        else
+          add_error(changeset, :lifecycle, "cannot demote from #{current} to #{new_lifecycle}")
+        end
+    end
   end
 
   def soft_delete_changeset(document) do

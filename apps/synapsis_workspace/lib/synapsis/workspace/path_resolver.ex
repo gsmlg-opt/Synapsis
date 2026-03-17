@@ -48,7 +48,8 @@ defmodule Synapsis.Workspace.PathResolver do
          }}
 
       ["projects", project_id, "sessions", session_id | rest] ->
-        lifecycle = if rest == [] or hd(rest) == "scratch", do: :scratch, else: :draft
+        # WS-8.3: all session paths default to :scratch
+        lifecycle = :scratch
 
         {:ok,
          %{

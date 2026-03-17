@@ -78,11 +78,12 @@ defmodule Synapsis.WorkspaceDocuments do
       |> String.replace("_", "~_")
 
     query =
-      from d in WorkspaceDocument,
+      from(d in WorkspaceDocument,
         where:
           fragment("? LIKE ? ESCAPE '~'", d.path, ^"#{escaped_prefix}%") and
             is_nil(d.deleted_at),
         limit: ^limit
+      )
 
     query = if kind, do: where(query, [d], d.kind == ^kind), else: query
 
@@ -127,7 +128,7 @@ defmodule Synapsis.WorkspaceDocuments do
     scope = Keyword.get(opts, :scope)
 
     query =
-      from d in WorkspaceDocument,
+      from(d in WorkspaceDocument,
         where:
           is_nil(d.deleted_at) and
             fragment(
@@ -142,6 +143,7 @@ defmodule Synapsis.WorkspaceDocuments do
             ^query_text
           ),
         limit: ^limit
+      )
 
     query = if project_id, do: where(query, [d], d.project_id == ^project_id), else: query
     query = if kind, do: where(query, [d], d.kind == ^kind), else: query
@@ -162,11 +164,12 @@ defmodule Synapsis.WorkspaceDocuments do
   # ---------------------------------------------------------------------------
 
   @doc "Insert a version snapshot."
-  @spec insert_version!(map()) :: WorkspaceDocumentVersion.t()
-  def insert_version!(attrs) do
+  @spec insert_version(map()) ::
+          {:ok, WorkspaceDocumentVersion.t()} | {:error, Ecto.Changeset.t()}
+  def insert_version(attrs) do
     %WorkspaceDocumentVersion{}
     |> WorkspaceDocumentVersion.changeset(attrs)
-    |> Repo.insert!()
+    |> Repo.insert()
   end
 
   @doc """
@@ -175,11 +178,12 @@ defmodule Synapsis.WorkspaceDocuments do
   @spec prune_versions(String.t(), non_neg_integer()) :: {non_neg_integer(), nil}
   def prune_versions(document_id, keep) do
     versions_to_keep =
-      from v in WorkspaceDocumentVersion,
+      from(v in WorkspaceDocumentVersion,
         where: v.document_id == ^document_id,
         order_by: [desc: v.version],
         limit: ^keep,
         select: v.id
+      )
 
     from(v in WorkspaceDocumentVersion,
       where: v.document_id == ^document_id and v.id not in subquery(versions_to_keep)
@@ -194,7 +198,7 @@ defmodule Synapsis.WorkspaceDocuments do
   @spec prune_all_draft_versions(non_neg_integer()) :: non_neg_integer()
   def prune_all_draft_versions(keep) do
     ranked =
-      from v in WorkspaceDocumentVersion,
+      from(v in WorkspaceDocumentVersion,
         join: d in WorkspaceDocument,
         on: v.document_id == d.id,
         where: d.lifecycle == :draft and is_nil(d.deleted_at),
@@ -207,6 +211,7 @@ defmodule Synapsis.WorkspaceDocuments do
               v.version
             )
         }
+      )
 
     ids_to_delete =
       from(r in subquery(ranked),
@@ -227,7 +232,10 @@ defmodule Synapsis.WorkspaceDocuments do
   # Bulk delete operations (for GC)
   # ---------------------------------------------------------------------------
 
-  @doc "Find stale session scratch document IDs."
+  @doc """
+  Find stale session scratch document IDs.
+  Excludes promoted documents (lifecycle >= :shared) per WS-9.3.
+  """
   @spec stale_session_scratch_ids(DateTime.t()) :: [String.t()]
   def stale_session_scratch_ids(cutoff) do
     from(d in WorkspaceDocument,
@@ -235,7 +243,8 @@ defmodule Synapsis.WorkspaceDocuments do
       on: d.session_id == s.id,
       where:
         d.kind == :session_scratch and
-          (is_nil(d.session_id) and d.updated_at < ^cutoff or
+          d.lifecycle in [:scratch, :draft] and
+          ((is_nil(d.session_id) and d.updated_at < ^cutoff) or
              (not is_nil(d.session_id) and s.updated_at < ^cutoff)),
       select: d.id
     )
@@ -321,9 +330,10 @@ defmodule Synapsis.WorkspaceDocuments do
   @spec list_skills(String.t(), String.t() | nil, non_neg_integer()) :: [struct()]
   def list_skills(scope, project_id, limit) do
     query =
-      from s in Synapsis.Skill,
+      from(s in Synapsis.Skill,
         where: s.scope == ^scope,
         limit: ^limit
+      )
 
     query =
       if project_id do
@@ -339,9 +349,10 @@ defmodule Synapsis.WorkspaceDocuments do
   @spec find_skill(String.t(), String.t() | nil, String.t()) :: struct() | nil
   def find_skill(scope, project_id, name) do
     query =
-      from s in Synapsis.Skill,
+      from(s in Synapsis.Skill,
         where: s.scope == ^scope and s.name == ^name,
         limit: 1
+      )
 
     query =
       if project_id do
@@ -361,9 +372,10 @@ defmodule Synapsis.WorkspaceDocuments do
   @spec list_memory_entries(String.t(), String.t() | nil, non_neg_integer()) :: [struct()]
   def list_memory_entries(scope, scope_id, limit) do
     query =
-      from m in Synapsis.MemoryEntry,
+      from(m in Synapsis.MemoryEntry,
         where: m.scope == ^scope,
         limit: ^limit
+      )
 
     query =
       if scope_id do
@@ -379,9 +391,10 @@ defmodule Synapsis.WorkspaceDocuments do
   @spec find_memory_entry(String.t(), String.t() | nil, String.t()) :: struct() | nil
   def find_memory_entry(scope, scope_id, key) do
     query =
-      from m in Synapsis.MemoryEntry,
+      from(m in Synapsis.MemoryEntry,
         where: m.scope == ^scope and m.key == ^key,
         limit: 1
+      )
 
     query =
       if scope_id do

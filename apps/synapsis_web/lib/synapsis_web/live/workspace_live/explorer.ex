@@ -18,7 +18,8 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
        search_results: nil,
        selected: nil,
        editing: false,
-       edit_content: ""
+       edit_content: "",
+       subscribed_project: extract_project_id(path)
      )}
   end
 
@@ -26,7 +27,12 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
   def handle_params(%{"path" => path}, _uri, socket) do
     {:ok, resources} = Synapsis.Workspace.list(path, sort: :path, limit: 200)
 
-    if connected?(socket), do: subscribe_workspace_changes(path)
+    socket =
+      if connected?(socket) do
+        resubscribe_workspace_changes(socket, path)
+      else
+        socket
+      end
 
     {:noreply,
      assign(socket, current_path: path, resources: resources, selected: nil, editing: false)}
@@ -424,5 +430,21 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
       nil -> :ok
       project_id -> Phoenix.PubSub.subscribe(Synapsis.PubSub, "workspace:#{project_id}")
     end
+  end
+
+  # Unsubscribe from old project topic, subscribe to new one, update tracking assign
+  defp resubscribe_workspace_changes(socket, path) do
+    old_project = socket.assigns[:subscribed_project]
+    new_project = extract_project_id(path)
+
+    if old_project && old_project != new_project do
+      Phoenix.PubSub.unsubscribe(Synapsis.PubSub, "workspace:#{old_project}")
+    end
+
+    if new_project && new_project != old_project do
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "workspace:#{new_project}")
+    end
+
+    assign(socket, :subscribed_project, new_project)
   end
 end
