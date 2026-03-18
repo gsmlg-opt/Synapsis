@@ -6,8 +6,7 @@ defmodule Synapsis.Agent.Approval do
   Resolution order: project-scoped → global → most specific pattern → default :ask.
   """
 
-  alias Synapsis.{Repo, ToolApproval}
-  import Ecto.Query
+  alias Synapsis.ToolApproval
   require Logger
 
   @doc """
@@ -26,7 +25,7 @@ defmodule Synapsis.Agent.Approval do
   def check_approval(tool_name, input, opts \\ []) do
     project_id = Keyword.get(opts, :project_id)
 
-    approvals = load_approvals(project_id)
+    approvals = ToolApproval.load_for_check(project_id)
 
     matching =
       approvals
@@ -66,24 +65,7 @@ defmodule Synapsis.Agent.Approval do
       created_by: created_by
     }
 
-    existing =
-      ToolApproval
-      |> where([a], a.scope == ^scope and a.pattern == ^pattern)
-      |> maybe_filter_project(project_id)
-      |> Repo.one()
-
-    result =
-      case existing do
-        nil ->
-          %ToolApproval{}
-          |> ToolApproval.changeset(attrs)
-          |> Repo.insert()
-
-        existing ->
-          existing
-          |> ToolApproval.changeset(%{policy: policy})
-          |> Repo.update()
-      end
+    result = ToolApproval.upsert(attrs)
 
     case result do
       {:ok, approval} ->
@@ -105,23 +87,18 @@ defmodule Synapsis.Agent.Approval do
   def list_approvals(opts \\ []) do
     scope = Keyword.get(opts, :scope)
     project_id = Keyword.get(opts, :project_id)
-
-    ToolApproval
-    |> maybe_filter_scope(scope)
-    |> maybe_filter_project(project_id)
-    |> order_by([a], asc: a.pattern)
-    |> Repo.all()
+    ToolApproval.list_by_scope(scope, project_id)
   end
 
   @doc "Delete an approval by ID."
   @spec delete_approval(String.t()) :: :ok | {:error, :not_found}
   def delete_approval(approval_id) do
-    case Repo.get(ToolApproval, approval_id) do
+    case ToolApproval.get(approval_id) do
       nil ->
         {:error, :not_found}
 
       approval ->
-        Repo.delete(approval)
+        ToolApproval.delete(approval)
 
         Phoenix.PubSub.broadcast(
           Synapsis.PubSub,
@@ -132,29 +109,4 @@ defmodule Synapsis.Agent.Approval do
         :ok
     end
   end
-
-  # -- Private --
-
-  defp load_approvals(nil) do
-    ToolApproval
-    |> where([a], a.scope == :global)
-    |> Repo.all()
-  end
-
-  defp load_approvals(project_id) do
-    # Project-scoped first, then global
-    ToolApproval
-    |> where(
-      [a],
-      (a.scope == :project and a.project_id == ^project_id) or a.scope == :global
-    )
-    |> order_by([a], asc: a.scope)
-    |> Repo.all()
-  end
-
-  defp maybe_filter_scope(query, nil), do: query
-  defp maybe_filter_scope(query, scope), do: where(query, [a], a.scope == ^scope)
-
-  defp maybe_filter_project(query, nil), do: query
-  defp maybe_filter_project(query, pid), do: where(query, [a], a.project_id == ^pid)
 end

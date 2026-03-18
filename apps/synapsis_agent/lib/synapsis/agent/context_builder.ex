@@ -110,7 +110,9 @@ defmodule Synapsis.Agent.ContextBuilder do
         "Available skills:\n#{lines}"
     end
   rescue
-    _ -> nil
+    error ->
+      Logger.warning("skills_manifest_failed", error: Exception.message(error))
+      nil
   end
 
   @doc """
@@ -133,7 +135,9 @@ defmodule Synapsis.Agent.ContextBuilder do
       content -> content
     end
   rescue
-    _ -> nil
+    error ->
+      Logger.warning("memory_context_failed", error: Exception.message(error))
+      nil
   end
 
   @doc "Load project-specific context from workspace."
@@ -187,7 +191,7 @@ defmodule Synapsis.Agent.ContextBuilder do
   defp wrap_layer(:skills, content),
     do: "<available_skills>\n#{content}\n</available_skills>"
 
-  defp wrap_layer(:memory, content), do: content
+  defp wrap_layer(:memory, content), do: "<memory>\n#{content}\n</memory>"
   defp wrap_layer(:bootstrap, content), do: "<environment>\n#{content}\n</environment>"
   defp wrap_layer(:project, content), do: "<project>\n#{content}\n</project>"
 

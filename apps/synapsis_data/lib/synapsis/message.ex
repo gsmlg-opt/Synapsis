@@ -25,4 +25,15 @@ defmodule Synapsis.Message do
     |> validate_inclusion(:role, @valid_roles)
     |> foreign_key_constraint(:session_id)
   end
+
+  @doc "List all messages for a session, ordered by insertion time."
+  @spec list_by_session(String.t()) :: [%__MODULE__{}]
+  def list_by_session(session_id) do
+    import Ecto.Query
+
+    __MODULE__
+    |> where([m], m.session_id == ^session_id)
+    |> order_by([m], asc: m.inserted_at)
+    |> Synapsis.Repo.all()
+  end
 end

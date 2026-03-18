@@ -8,8 +8,7 @@ defmodule Synapsis.Agent.Heartbeat.Scheduler do
 
   require Logger
 
-  alias Synapsis.{Repo, HeartbeatConfig}
-  import Ecto.Query
+  alias Synapsis.HeartbeatConfig
 
   @doc """
   Sync all enabled heartbeat configs to Oban job queue.
@@ -55,9 +54,7 @@ defmodule Synapsis.Agent.Heartbeat.Scheduler do
   @doc "Load all enabled heartbeat configs from the database."
   @spec load_enabled_configs() :: [HeartbeatConfig.t()]
   def load_enabled_configs do
-    HeartbeatConfig
-    |> where([c], c.enabled == true)
-    |> Repo.all()
+    HeartbeatConfig.list_enabled()
   end
 
   # Simple next-run calculation — for production, use a proper cron parser.

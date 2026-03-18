@@ -30,7 +30,9 @@
       </div>
     </:user_profile>
   </.dm_simple_appbar>
-  <.dm_flash_group flash={@flash} />
+  <div class="fixed top-4 right-4 z-[1000]">
+    <.dm_flash_group flash={@flash} />
+  </div>
   <main class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
     {@inner_content}
   </main>

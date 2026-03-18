@@ -6,7 +6,7 @@ defmodule Synapsis.Agent.Heartbeat.Templates do
   disabled by default — users enable via settings UI.
   """
 
-  alias Synapsis.{Repo, HeartbeatConfig}
+  alias Synapsis.HeartbeatConfig
 
   @templates [
     %{
@@ -48,10 +48,8 @@ defmodule Synapsis.Agent.Heartbeat.Templates do
   @spec seed_defaults() :: :ok
   def seed_defaults do
     Enum.each(@templates, fn template ->
-      unless Repo.get_by(HeartbeatConfig, name: template.name) do
-        %HeartbeatConfig{}
-        |> HeartbeatConfig.changeset(template)
-        |> Repo.insert()
+      unless HeartbeatConfig.get_by_name(template.name) do
+        HeartbeatConfig.create(template)
       end
     end)
 

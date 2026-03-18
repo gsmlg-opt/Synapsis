@@ -10,13 +10,13 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
     max_attempts: 3,
     priority: 3
 
-  alias Synapsis.{Repo, HeartbeatConfig}
+  alias Synapsis.HeartbeatConfig
   alias Synapsis.Workspace
   require Logger
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"heartbeat_id" => heartbeat_id}}) do
-    case Repo.get(HeartbeatConfig, heartbeat_id) do
+    case HeartbeatConfig.get(heartbeat_id) do
       nil ->
         Logger.warning("heartbeat_config_not_found", heartbeat_id: heartbeat_id)
         {:error, :config_not_found}

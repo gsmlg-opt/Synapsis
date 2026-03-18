@@ -7,6 +7,9 @@ defmodule Synapsis.HeartbeatConfig do
   """
   use Ecto.Schema
   import Ecto.Changeset
+  import Ecto.Query
+
+  @type t :: %__MODULE__{}
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -41,6 +44,32 @@ defmodule Synapsis.HeartbeatConfig do
     |> validate_required([:name, :schedule, :prompt])
     |> validate_cron_expression(:schedule)
     |> unique_constraint(:name)
+  end
+
+  # -- Context API --
+
+  @doc "Get a heartbeat config by ID."
+  @spec get(String.t()) :: t() | nil
+  def get(id), do: Synapsis.Repo.get(__MODULE__, id)
+
+  @doc "Get a heartbeat config by name."
+  @spec get_by_name(String.t()) :: t() | nil
+  def get_by_name(name), do: Synapsis.Repo.get_by(__MODULE__, name: name)
+
+  @doc "List all enabled heartbeat configs."
+  @spec list_enabled() :: [t()]
+  def list_enabled do
+    __MODULE__
+    |> where([c], c.enabled == true)
+    |> Synapsis.Repo.all()
+  end
+
+  @doc "Insert a new heartbeat config."
+  @spec create(map()) :: {:ok, t()} | {:error, Ecto.Changeset.t()}
+  def create(attrs) do
+    %__MODULE__{}
+    |> changeset(attrs)
+    |> Synapsis.Repo.insert()
   end
 
   defp validate_cron_expression(changeset, field) do

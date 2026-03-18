@@ -17,8 +17,16 @@ defmodule SynapsisWeb.SessionLive.Show do
             do: hd(available_models).id,
             else: Synapsis.Providers.default_model(default_type)
 
-        # Models for the current session's provider
+        # Models for the current session's provider (fallback to first enabled if not found)
         session_models = fetch_provider_models(session.provider)
+
+        {selector_provider, session_models} =
+          if session_models == [] and providers != [] do
+            fallback = hd(providers).name
+            {fallback, fetch_provider_models(fallback)}
+          else
+            {session.provider, session_models}
+          end
 
         agent_mode = session.agent || "build"
         session_mode = derive_mode(session)
@@ -38,7 +46,7 @@ defmodule SynapsisWeb.SessionLive.Show do
            available_models: available_models,
            session_models: session_models,
            show_model_selector: false,
-           selector_provider: session.provider
+           selector_provider: selector_provider
          )}
 
       _ ->
@@ -81,12 +89,22 @@ defmodule SynapsisWeb.SessionLive.Show do
 
     socket =
       if opening do
-        # Reset to current session's provider when opening
-        session_models = fetch_provider_models(socket.assigns.session.provider)
+        providers = socket.assigns.providers
+        session_provider = socket.assigns.session.provider
+
+        # Use session's provider if it's in enabled list, otherwise first enabled provider
+        effective_provider =
+          if Enum.any?(providers, &(&1.name == session_provider)) do
+            session_provider
+          else
+            if providers != [], do: hd(providers).name, else: session_provider
+          end
+
+        session_models = fetch_provider_models(effective_provider)
 
         assign(socket,
           show_model_selector: true,
-          selector_provider: socket.assigns.session.provider,
+          selector_provider: effective_provider,
           session_models: session_models
         )
       else

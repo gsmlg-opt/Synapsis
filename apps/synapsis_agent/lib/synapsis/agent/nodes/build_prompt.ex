@@ -7,9 +7,8 @@ defmodule Synapsis.Agent.Nodes.BuildPrompt do
   """
   @behaviour Synapsis.Agent.Runtime.Node
 
-  alias Synapsis.{Repo, Message}
+  alias Synapsis.Message
   alias Synapsis.Agent.ContextBuilder
-  import Ecto.Query
   require Logger
 
   @impl true
@@ -19,11 +18,7 @@ defmodule Synapsis.Agent.Nodes.BuildPrompt do
     provider = ctx[:provider] || agent_config[:provider] || "anthropic"
 
     # Load messages from DB
-    messages =
-      Message
-      |> where([m], m.session_id == ^session_id)
-      |> order_by([m], asc: m.inserted_at)
-      |> Repo.all()
+    messages = Message.list_by_session(session_id)
 
     # Extract latest user message for memory search
     user_message = extract_latest_user_message(messages)

@@ -9,18 +9,18 @@ defmodule Synapsis.Workspace.Identity do
 
   | File             | Path                           | Scope   |
   |------------------|--------------------------------|---------|
-  | Soul             | `/shared/soul.md`              | Global  |
-  | Identity         | `/shared/identity.md`          | Global  |
-  | Bootstrap        | `/shared/bootstrap.md`         | Global  |
+  | Soul             | `/global/soul.md`              | Global  |
+  | Identity         | `/global/identity.md`          | Global  |
+  | Bootstrap        | `/global/bootstrap.md`         | Global  |
   | Project Soul     | `/projects/<id>/soul.md`       | Project |
   | Project Context  | `/projects/<id>/context.md`    | Project |
   """
 
   alias Synapsis.Workspace
 
-  @global_soul_path "/shared/soul.md"
-  @global_identity_path "/shared/identity.md"
-  @global_bootstrap_path "/shared/bootstrap.md"
+  @global_soul_path "/global/soul.md"
+  @global_identity_path "/global/identity.md"
+  @global_bootstrap_path "/global/bootstrap.md"
 
   @default_soul """
   # Soul
