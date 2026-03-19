@@ -28,7 +28,27 @@ defmodule Synapsis.Agent.Nodes.CompactContext do
           summary_tokens: summary_tokens
         )
 
-        # Broadcast compaction event for UI notification (RD-2)
+        metadata = %{
+          messages_removed: removed,
+          messages_kept: kept,
+          summary_tokens: summary_tokens
+        }
+
+        # Telemetry (AI-5.6)
+        :telemetry.execute(
+          [:synapsis_agent, :compaction, :complete],
+          %{removed: removed, kept: kept, summary_tokens: summary_tokens},
+          %{session_id: session_id}
+        )
+
+        # Broadcast session_compacted event (AI-5.6)
+        Phoenix.PubSub.broadcast(
+          Synapsis.PubSub,
+          "session:#{session_id}",
+          {:session_compacted, session_id, metadata}
+        )
+
+        # Broadcast system_message for inline chat notification (RD-2)
         Phoenix.PubSub.broadcast(
           Synapsis.PubSub,
           "session:#{session_id}",
@@ -37,11 +57,7 @@ defmodule Synapsis.Agent.Nodes.CompactContext do
              type: :compaction,
              text:
                "Context compacted: #{removed} messages summarized, #{kept} recent messages preserved",
-             metadata: %{
-               messages_removed: removed,
-               messages_kept: kept,
-               summary_tokens: summary_tokens
-             }
+             metadata: metadata
            }}
         )
 

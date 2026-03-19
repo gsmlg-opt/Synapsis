@@ -30,7 +30,7 @@ defmodule Synapsis.Agent.Approval do
     matching =
       approvals
       |> Enum.filter(fn approval ->
-        ToolApproval.matches?(approval, tool_name, input)
+        matches?(approval.pattern, tool_name, input)
       end)
       |> Enum.sort_by(fn a ->
         # Sort by: 1) project-scoped first, 2) longest pattern first
@@ -41,6 +41,61 @@ defmodule Synapsis.Agent.Approval do
     case matching do
       [best | _] -> best.policy
       [] -> :ask
+    end
+  end
+
+  @doc """
+  Check if a tool invocation matches an approval pattern.
+
+  Pattern syntax:
+  - `tool_name` — exact tool match, any input
+  - `tool_name:arg_pattern` — tool match with argument glob
+  - `shell_exec:git *` — any git command
+  - `file_read:*` — all file reads
+  """
+  @spec matches?(String.t(), String.t(), map()) :: boolean()
+  def matches?(pattern, tool_name, input) do
+    case String.split(pattern, ":", parts: 2) do
+      [name_pattern] ->
+        glob_match?(name_pattern, tool_name)
+
+      [name_pattern, arg_pattern] ->
+        glob_match?(name_pattern, tool_name) and arg_matches?(arg_pattern, input)
+    end
+  end
+
+  defp glob_match?("*", _value), do: true
+  defp glob_match?(pattern, value), do: pattern == value
+
+  defp arg_matches?("*", _input), do: true
+
+  defp arg_matches?(pattern, input) when is_map(input) do
+    input_str =
+      input
+      |> Map.values()
+      |> Enum.map(&to_string/1)
+      |> Enum.join(" ")
+
+    simple_glob_match?(pattern, input_str)
+  end
+
+  defp arg_matches?(pattern, input) when is_binary(input) do
+    simple_glob_match?(pattern, input)
+  end
+
+  defp arg_matches?(_pattern, _input), do: false
+
+  defp simple_glob_match?(pattern, value) do
+    regex_str =
+      pattern
+      |> String.replace("**", "<<<DOUBLESTAR>>>")
+      |> String.replace("*", "[^/]*")
+      |> String.replace("<<<DOUBLESTAR>>>", ".*")
+      |> then(&("^" <> &1 <> "$"))
+
+    case Regex.compile(regex_str) do
+      {:ok, regex} -> Regex.match?(regex, value)
+      _ -> false
     end
   end
 

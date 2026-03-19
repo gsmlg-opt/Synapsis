@@ -42,10 +42,10 @@ defmodule Synapsis.Agent.Heartbeat.Scheduler do
 
     :ok
   rescue
-    error ->
+    e in [RuntimeError, Ecto.QueryError, DBConnection.ConnectionError] ->
       Logger.warning("heartbeat_schedule_failed",
         name: config.name,
-        error: Exception.message(error)
+        error: Exception.message(e)
       )
 
       :ok

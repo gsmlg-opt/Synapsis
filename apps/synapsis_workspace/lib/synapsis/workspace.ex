@@ -247,8 +247,9 @@ defmodule Synapsis.Workspace do
         {:error, "path exceeds maximum length of #{@max_path_length} bytes"}
 
       not String.starts_with?(path, "/shared/") and
-          not String.starts_with?(path, "/projects/") ->
-        {:error, "path must start with /shared/ or /projects/"}
+          not String.starts_with?(path, "/projects/") and
+          not String.starts_with?(path, "/global/") ->
+        {:error, "path must start with /shared/, /projects/, or /global/"}
 
       true ->
         segments = path |> String.trim_leading("/") |> String.split("/", trim: true)

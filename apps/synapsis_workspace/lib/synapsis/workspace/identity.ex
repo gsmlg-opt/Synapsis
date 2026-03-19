@@ -161,7 +161,7 @@ defmodule Synapsis.Workspace.Identity do
   defp read_content(path) do
     case Workspace.read(path) do
       {:ok, resource} -> resource.content
-      {:error, :not_found} -> nil
+      {:error, _reason} -> nil
     end
   end
 

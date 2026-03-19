@@ -29,6 +29,9 @@ defmodule Synapsis.Workspace.PathResolver do
 
       iex> PathResolver.resolve("/projects/abc/plans/auth.md")
       {:ok, %{scope: :project, project_id: "abc", session_id: nil, ...}}
+
+      iex> PathResolver.resolve("/global/soul.md")
+      {:ok, %{scope: :global, project_id: nil, session_id: nil, ...}}
   """
   @spec resolve(String.t()) :: {:ok, resolved()} | {:error, String.t()}
   def resolve(path) when is_binary(path) do
@@ -37,6 +40,17 @@ defmodule Synapsis.Workspace.PathResolver do
 
     case segments do
       ["shared" | rest] ->
+        {:ok,
+         %{
+           scope: :global,
+           project_id: nil,
+           session_id: nil,
+           default_visibility: :global_shared,
+           default_lifecycle: :shared,
+           segments: rest
+         }}
+
+      ["global" | rest] ->
         {:ok,
          %{
            scope: :global,
@@ -76,7 +90,7 @@ defmodule Synapsis.Workspace.PathResolver do
         {:error, "empty path"}
 
       _ ->
-        {:error, "path must start with /shared/ or /projects/"}
+        {:error, "path must start with /shared/, /global/, or /projects/"}
     end
   end
 

@@ -78,13 +78,13 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
 
     :ok
   rescue
-    error ->
+    e in [RuntimeError, Ecto.QueryError, DBConnection.ConnectionError, MatchError] ->
       Logger.error("heartbeat_failed",
         name: config.name,
         heartbeat_id: config.id,
-        error: Exception.message(error)
+        error: Exception.message(e)
       )
 
-      {:error, Exception.message(error)}
+      {:error, Exception.message(e)}
   end
 end

@@ -34,9 +34,9 @@ defmodule Synapsis.WorkspaceAPITest do
       assert :ok = Workspace.validate_path("shared/notes/test.md")
     end
 
-    test "rejects path not starting with /shared/ or /projects/" do
+    test "rejects path not starting with /shared/, /projects/, or /global/" do
       assert {:error, msg} = Workspace.validate_path("/other/stuff/file.md")
-      assert msg =~ "must start with /shared/ or /projects/"
+      assert msg =~ "must start with /shared/"
     end
 
     test "rejects path exceeding max length" do

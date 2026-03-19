@@ -110,8 +110,8 @@ defmodule Synapsis.Agent.ContextBuilder do
         "Available skills:\n#{lines}"
     end
   rescue
-    error ->
-      Logger.warning("skills_manifest_failed", error: Exception.message(error))
+    e in [RuntimeError, Ecto.QueryError, DBConnection.ConnectionError] ->
+      Logger.warning("skills_manifest_failed", error: Exception.message(e))
       nil
   end
 
@@ -135,8 +135,8 @@ defmodule Synapsis.Agent.ContextBuilder do
       content -> content
     end
   rescue
-    error ->
-      Logger.warning("memory_context_failed", error: Exception.message(error))
+    e in [RuntimeError, Ecto.QueryError, DBConnection.ConnectionError] ->
+      Logger.warning("memory_context_failed", error: Exception.message(e))
       nil
   end
 
@@ -195,10 +195,12 @@ defmodule Synapsis.Agent.ContextBuilder do
   defp wrap_layer(:bootstrap, content), do: "<environment>\n#{content}\n</environment>"
   defp wrap_layer(:project, content), do: "<project>\n#{content}\n</project>"
 
-  defp truncate_description(desc, max_len) when byte_size(desc) <= max_len, do: desc
-
   defp truncate_description(desc, max_len) do
-    String.slice(desc, 0, max_len - 1) <> "…"
+    if String.length(desc) <= max_len do
+      desc
+    else
+      String.slice(desc, 0, max_len - 1) <> "…"
+    end
   end
 
   defp default_base_prompt do

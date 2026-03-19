@@ -123,6 +123,40 @@ defmodule Synapsis.Agent.ApprovalTest do
     end
   end
 
+  describe "matches?/3" do
+    test "exact tool name matches" do
+      assert Approval.matches?("file_read", "file_read", %{})
+    end
+
+    test "exact tool name does not match different tool" do
+      refute Approval.matches?("file_read", "file_write", %{})
+    end
+
+    test "wildcard tool matches any tool" do
+      assert Approval.matches?("*", "anything", %{})
+    end
+
+    test "tool with argument glob matches" do
+      assert Approval.matches?("shell_exec:git *", "shell_exec", %{"cmd" => "git push"})
+    end
+
+    test "tool with argument glob does not match non-matching args" do
+      refute Approval.matches?("shell_exec:git *", "shell_exec", %{"cmd" => "rm -rf /"})
+    end
+
+    test "wildcard argument matches any input" do
+      assert Approval.matches?("file_read:*", "file_read", %{"path" => "/any/path"})
+    end
+
+    test "double-star glob matches nested paths" do
+      assert Approval.matches?(
+               "file_write:/projects/**/src/**",
+               "file_write",
+               %{"path" => "/projects/foo/src/bar.ex"}
+             )
+    end
+  end
+
   describe "delete_approval/1" do
     test "deletes an existing approval" do
       approval =
