@@ -8,6 +8,10 @@ defmodule SynapsisServer.Supervisor do
 
   @impl true
   def init(_init_arg) do
+    # synapsis_server owns the :phoenix dep but has no OTP application of its own
+    # (single-app rule), so we must ensure :phoenix is started before the endpoint.
+    Application.ensure_all_started(:phoenix)
+
     children = [
       SynapsisServer.Telemetry,
       {DNSCluster, query: Application.get_env(:synapsis_server, :dns_cluster_query) || :ignore},
