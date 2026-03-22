@@ -4,7 +4,7 @@
 
 Synapsis is an AI coding agent designed to replace Claude Code, OpenCode, and similar CLI-based agentic coding tools. This PRD specifies the complete tool system — the set of capabilities the agent can invoke during a coding session. The tool system is the agent's interface to the real world: every file read, every shell command, every user interaction is a tool call.
 
-The tool system lives in `apps/synapsis_tool/` as a dedicated sub-application within the Synapsis umbrella. This separation isolates tool behaviour contracts, the tool registry, the executor pipeline, permission engine, and all built-in tool modules from the agent loop (`synapsis_core`) and the plugin host (`synapsis_plugin`). Both `synapsis_core` and `synapsis_plugin` depend on `synapsis_tool`.
+The tool system lives in `apps/synapsis_core/lib/synapsis/tool/` within the `synapsis_core` umbrella sub-app. Per the Constitution, `synapsis_core` is the single application with a supervision tree. Tools share the same process tree as sessions, agents, and config. Both the agent loop (`synapsis_agent`) and the plugin host depend on `synapsis_core`.
 
 This document covers:
 
@@ -17,7 +17,6 @@ This document covers:
 - User interaction tools
 - Web tools
 - Integration with the plugin system (MCP/LSP)
-- Competitive gap analysis against Claude Code, OpenCode, and Codex CLI
 
 ---
 
@@ -56,7 +55,7 @@ This document covers:
 
 ### 2.4 Design Principle
 
-Synapsis targets feature parity with Claude Code's tool surface while maintaining architectural clarity through the Elixir behaviour system. Where Claude Code and OpenCode blur the line between "tool" and "agent mode," Synapsis treats everything as a tool with a uniform `SynapsisTool` behaviour contract. All tool infrastructure lives in `apps/synapsis_tool/`, a dedicated sub-application that both `synapsis_core` (agent loop) and `synapsis_plugin` (MCP/LSP) depend on.
+Synapsis targets feature parity with Claude Code's tool surface while maintaining architectural clarity through the Elixir behaviour system. Where Claude Code and OpenCode blur the line between "tool" and "agent mode," Synapsis treats everything as a tool with a uniform `Synapsis.Tool` behaviour contract. All tool infrastructure lives in `apps/synapsis_core/lib/synapsis/tool/`, co-located with the agent and session systems in the `synapsis_core` sub-app.
 
 ---
 
@@ -67,101 +66,148 @@ Synapsis targets feature parity with Claude Code's tool surface while maintainin
 ```
 ┌─────────────────────────────────────────────────────┐
 │                    Agent Loop                        │
-│  (synapsis_core — Synapsis.Agent.Loop)              │
+│  (synapsis_agent — graph-based CodingLoop)          │
 │                                                      │
 │  Gathers tools → builds LLM request → processes     │
 │  tool_use events → feeds results back to LLM        │
 ├─────────────────────────────────────────────────────┤
 │                  Tool Executor                       │
-│  (synapsis_tool — SynapsisTool.Executor)            │
+│  (synapsis_core — Synapsis.Tool.Executor)           │
 │                                                      │
 │  Permission check → dispatch → side effect broadcast │
 ├──────────────────────┬──────────────────────────────┤
 │   Tool Registry      │   Permission Engine          │
-│   (GenServer)        │   (SynapsisTool.Permissions) │
+│   (GenServer + ETS)  │   (Synapsis.Tool.Permission) │
 │                      │                              │
 │   name → {type,      │   tool → level → session     │
-│           module/pid} │   config → allow/deny/ask    │
+│           module/pid, │   config → allow/deny/ask    │
+│           opts}       │                              │
 ├──────────────────────┴──────────────────────────────┤
 │                    Tool Modules                      │
 │                                                      │
-│  Built-in (synapsis_tool)    Plugin (synapsis_plugin)│
-│  ├── Filesystem              ├── MCP tools           │
-│  ├── Execution               ├── LSP tools           │
-│  ├── Search                  └── Custom plugins      │
+│  Built-in (synapsis_core)      Plugin (MCP/custom)  │
+│  ├── Filesystem                ├── MCP tools         │
+│  ├── Execution                 ├── LSP tools         │
+│  ├── Search                    └── Custom plugins    │
 │  ├── Web                                             │
 │  ├── Planning                                        │
 │  ├── Orchestration                                   │
 │  ├── User Interaction                                │
-│  └── Session Control                                 │
+│  ├── Session Control                                 │
+│  ├── Memory                                          │
+│  └── Swarm                                           │
 └─────────────────────────────────────────────────────┘
 ```
 
 ### 3.2 Tool Behaviour Contract
 
 ```elixir
-defmodule SynapsisTool do
+defmodule Synapsis.Tool do
   @moduledoc """
-  Behaviour contract for all tools in the Synapsis agent system.
-  Lives in apps/synapsis_tool/.
+  Canonical behaviour for tool implementations.
+  Lives in apps/synapsis_core/lib/synapsis/tool.ex.
   """
 
+  @type permission_level :: :none | :read | :write | :execute | :destructive
+
+  @type category ::
+          :filesystem | :search | :execution | :web | :planning
+          | :orchestration | :interaction | :session | :notebook
+          | :computer | :swarm | :memory | :workspace | :uncategorized
+
   @type context :: %{
-    session_id: String.t(),
-    project_path: String.t(),
-    working_dir: String.t(),
-    permissions: map(),
-    session_pid: pid() | nil,
-    agent_mode: :build | :plan,
-    parent_agent: pid() | nil
+    optional(:project_path) => String.t(),
+    optional(:session_id) => String.t(),
+    optional(:working_dir) => String.t(),
+    optional(:permissions) => map(),
+    optional(:session_pid) => pid(),
+    optional(:agent_mode) => :build | :plan,
+    optional(:parent_agent) => pid() | nil,
+    optional(atom()) => term()
   }
 
-  @type result :: {:ok, term()} | {:error, term()}
-
+  # Required callbacks
   @callback name() :: String.t()
   @callback description() :: String.t()
   @callback parameters() :: map()
-  @callback execute(input :: map(), context()) :: result()
+  @callback execute(input :: map(), context :: context()) ::
+              {:ok, String.t()} | {:error, term()}
 
-  @callback permission_level() :: :read | :write | :execute | :destructive | :none
-  @callback side_effects() :: [atom()]
-  @callback category() :: :filesystem | :search | :execution | :web
-                         | :planning | :orchestration | :interaction | :session
-                         | :notebook | :computer | :swarm
-  @callback version() :: String.t()
-  @callback enabled?() :: boolean()
-
-  @optional_callbacks [side_effects: 0, permission_level: 0, category: 0, version: 0, enabled?: 0]
+  # Optional callbacks (defaults provided by `use Synapsis.Tool`)
+  @callback side_effects() :: [atom()]          # default: []
+  @callback permission_level() :: permission_level()  # default: :read
+  @callback category() :: category()            # default: :uncategorized
+  @callback version() :: String.t()             # default: "1.0.0"
+  @callback enabled?() :: boolean()             # default: true
 end
 ```
 
-Changes from the existing design doc:
+Usage with the `use` macro:
 
-- Added `permission_level/0` callback — tools self-declare their risk level instead of a centralized pattern-match function. Keeps classification co-located with the tool.
-- Added `category/0` callback — enables UI grouping and selective tool loading.
-- Added `version/0` callback — tools declare a semantic version string. Required for MCP compatibility and future tool evolution. Built-in tools start at `"1.0.0"`. The registry includes version in tool definitions sent to the LLM.
-- Added `enabled?/0` callback — tools can be compiled but disabled by default. The registry skips disabled tools in `list_for_llm/1`. Used for future/experimental tools (notebook, computer use) that ship as code but are not activated until configuration enables them.
-- Extended `context` with `agent_mode`, `session_pid`, and `parent_agent` — required for orchestration tools and mode-aware behaviour.
+```elixir
+defmodule Synapsis.Tool.FileRead do
+  use Synapsis.Tool
+
+  @impl true
+  def name, do: "file_read"
+
+  @impl true
+  def permission_level, do: :read
+
+  @impl true
+  def category, do: :filesystem
+
+  @impl true
+  def description, do: "Read the contents of a file at the given path."
+
+  @impl true
+  def parameters, do: %{...}
+
+  @impl true
+  def execute(input, context), do: {:ok, "file content"}
+end
+```
+
+The `use Synapsis.Tool` macro injects `@behaviour Synapsis.Tool` and provides overridable defaults for all optional callbacks.
 
 ### 3.3 Tool Registry
 
 ```elixir
-defmodule SynapsisTool.Registry do
+defmodule Synapsis.Tool.Registry do
   use GenServer
 
-  @type registration :: {:module, module()} | {:process, pid(), module()}
+  # ETS table: :synapsis_tools
+  # Entry format: {name, {:module, module, opts}} or {name, {:process, pid, opts}}
 
-  def register(name, registration, opts \\ %{})
-  def unregister(name)
-  def lookup(name) :: {:ok, registration()} | :error
-  def list() :: [%{name: String.t(), description: String.t(), parameters: map()}]
-  def list_for_llm(opts \\ []) :: [map()]
+  # Registration
+  def register_module(name, module, opts \\ [])
+  def register_process(name, pid, opts \\ [])
+  def register(tool) when is_map(tool)      # backward-compatible map format
+
+  # Lookup
+  def lookup(name) :: {:ok, entry} | {:error, :not_found}
+  def get(name) :: {:ok, map()} | {:error, :not_found}
+
+  # Listing
+  def list() :: [map()]
+  def list_for_llm() :: [map()]              # unfiltered, backward-compatible
+  def list_for_llm(opts) :: [map()]          # filtered by agent_mode, deferred, categories
   def list_by_category(category) :: [map()]
-  def available_for_session(session_id) :: [map()]
+
+  # Deferred loading
+  def mark_loaded(name) :: :ok | {:error, :not_found}
+
+  # Unregister
+  def unregister(name) :: :ok
 end
 ```
 
-`list_for_llm/1` accepts options for filtering (by category, by permission level, by agent mode). In plan mode, write/execute tools are excluded. Sub-agents receive a scoped tool list based on their declared `tools` allowlist.
+`list_for_llm/1` accepts options for filtering:
+- `:agent_mode` — `:plan` excludes tools with permission level in `[:write, :execute, :destructive]`; `:build` (default) includes all.
+- `:include_deferred` — when `false` (default), excludes tools registered with `deferred: true` that have not been `mark_loaded/1`-ed.
+- `:categories` — list of category atoms to include. `nil` means no filter.
+
+Registration enriches opts from module callbacks (category, permission_level, version, enabled) when not explicitly provided.
 
 ### 3.4 Tool Executor Pipeline
 
@@ -169,86 +215,64 @@ end
 tool_call from LLM
   │
   ▼
-┌─ ToolExecutor.execute/2 ─────────────────────────┐
-│                                                    │
-│  1. Registry lookup (tool exists?)                 │
-│  2. Permission check                               │
-│     ├─ :allowed → proceed                          │
-│     ├─ :ask → broadcast tool_permission event,     │
-│     │         block until user responds             │
-│     └─ :denied → return {:error, :permission_denied}│
-│  3. Dispatch                                        │
-│     ├─ {:module, mod} → mod.execute(input, ctx)    │
-│     └─ {:process, pid} → GenServer.call(pid, ...)  │
-│  4. Result handling                                 │
-│     ├─ {:ok, result} → log, broadcast side effects │
-│     └─ {:error, reason} → log, return error        │
-│  5. Side effect broadcast                           │
-│     └─ PubSub "tool_effects:{session_id}"          │
-│                                                    │
-└────────────────────────────────────────────────────┘
+┌─ Synapsis.Tool.Executor.execute/2 ─────────────────┐
+│                                                      │
+│  1. Registry lookup (tool exists?)                   │
+│  2. Enabled check (module.enabled?())                │
+│  3. Permission check                                 │
+│     ├─ :allowed → proceed                            │
+│     ├─ :requires_approval → return error             │
+│     └─ :denied → return {:error, :denied}            │
+│  4. Dispatch                                         │
+│     ├─ {:module, mod, opts} → Task.Supervisor        │
+│     │   (async_nolink with timeout)                  │
+│     └─ {:process, pid, opts} → GenServer.call        │
+│  5. Result handling                                  │
+│     ├─ {:ok, result} → persist, broadcast side fx    │
+│     └─ {:error, reason} → persist, return error      │
+│  6. Persistence (tool_calls table)                   │
+│     └─ Synapsis.ToolCall → Synapsis.Repo.insert      │
+│                                                      │
+└──────────────────────────────────────────────────────┘
 ```
 
 ### 3.5 Parallel Tool Execution
 
-When the LLM returns multiple independent tool calls in a single response, the executor runs them concurrently using `Task.async_stream/3`. This matches Claude Code's behaviour and significantly reduces latency for common patterns like reading multiple files in parallel.
+When the LLM returns multiple independent tool calls in a single response, the executor runs them concurrently using `Task.async_stream/3`. This matches Claude Code's behaviour and significantly reduces latency.
 
 ```elixir
-defmodule SynapsisTool.Executor do
-  def execute_batch(tool_calls, context) when length(tool_calls) > 1 do
-    tool_calls
-    |> Task.async_stream(fn call -> execute(call, context) end,
-         max_concurrency: System.schedulers_online(),
-         timeout: 60_000
-       )
-    |> Enum.zip(tool_calls)
-    |> Enum.map(fn {{:ok, result}, call} -> {call.id, result}
-                   {{:exit, reason}, call} -> {call.id, {:error, reason}}
-                end)
+defmodule Synapsis.Tool.Executor do
+  def execute_batch(tool_calls, context) when is_list(tool_calls) do
+    # Group by file path — calls sharing a path are serialized
+    # Groups keyed by nil (no file path) can each run independently
+    # Uses Task.async_stream with max_concurrency: System.schedulers_online()
   end
 end
 ```
 
 Constraints:
-- Tools with side effects (`:file_changed`) that target the same file are serialized to prevent write conflicts.
-- Permission checks (`ask` approval) are batched — all pending approvals are presented to the user simultaneously.
+- Tools with side effects (`:file_changed`) that target the same file are serialized to prevent write conflicts (grouped by `input["path"]`, `input["file_path"]`, or `input["source"]`).
 - Sub-agent tools (`task`) are not parallelized with other tools in the same batch.
 
 ### 3.6 Umbrella Placement and Dependency Direction
 
-`synapsis_tool` is a sub-application at `apps/synapsis_tool/` in the Synapsis umbrella. It owns:
-
-- `SynapsisTool` behaviour contract
-- `SynapsisTool.Registry` (GenServer)
-- `SynapsisTool.Executor` (pipeline + parallel dispatch)
-- `SynapsisTool.Permissions` (permission engine)
-- `SynapsisTool.Tools.*` (all 27 built-in tool modules)
+Tools live in `apps/synapsis_core/lib/synapsis/tool/` as part of the `synapsis_core` sub-app. Per the Constitution:
 
 ```
-apps/
-  synapsis_data/        # Ecto schemas, PostgreSQL persistence
-  synapsis_tool/        # Tool behaviour, registry, executor, built-in tools ← THIS PRD
-  synapsis_core/        # Agent loop, session management, domain logic
-  synapsis_plugin/      # MCP/LSP plugin host, dynamic tool registration
-  synapsis_provider/    # LLM translation boundary (req_llm)
-  synapsis_server/      # Phoenix Endpoint, Channels, REST
-  synapsis_web/         # Phoenix LiveView UI + React hooks
+synapsis_data        (schemas, Repo, migrations — no umbrella deps, no application)
+  ↑
+synapsis_provider    (provider behaviour + implementations — depends on synapsis_data)
+  ↑
+synapsis_core        (sessions, tools, agents, config — THE application, starts all supervision)
+  ↑
+synapsis_web/lsp/server/cli (presentation layers — depend on synapsis_core)
 ```
 
-**Dependency direction:**
+- `synapsis_core` depends on `synapsis_data` (for permission configs, tool call persistence via `Synapsis.ToolCall`, `Synapsis.SessionPermission`)
+- `synapsis_agent` depends on `synapsis_core` (agent loop calls `Synapsis.Tool.Registry.list_for_llm/1` and `Synapsis.Tool.Executor.execute/2`)
+- Plugin tools register into `Synapsis.Tool.Registry` and dispatch via `GenServer.call/3`
 
-```
-synapsis_data ← synapsis_tool ← synapsis_core ← synapsis_server ← synapsis_web
-                      ↑
-               synapsis_plugin
-```
-
-- `synapsis_tool` depends on `synapsis_data` (for permission configs, tool call persistence)
-- `synapsis_core` depends on `synapsis_tool` (agent loop calls `SynapsisTool.Registry.list_for_llm/1` and `SynapsisTool.Executor.execute/2`)
-- `synapsis_plugin` depends on `synapsis_tool` (registers plugin tools into `SynapsisTool.Registry`, implements `SynapsisTool` behaviour)
-- `synapsis_tool` has zero knowledge of `synapsis_core`, `synapsis_plugin`, `synapsis_server`, or `synapsis_web`
-
-On application start, `synapsis_tool` registers all built-in tools. `synapsis_plugin` registers/unregisters plugin tools dynamically at session lifecycle boundaries.
+On application start, `Synapsis.Tool.Builtin.register_all/0` registers all built-in tools.
 
 ---
 
@@ -260,86 +284,85 @@ On application start, `synapsis_tool` registers all built-in tools. `synapsis_pl
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.FileRead` |
+| Module | `Synapsis.Tool.FileRead` |
 | Permission | `:read` |
 | Side Effects | none |
-| Description | Read file contents with optional line range. Supports text files, images (returns base64), PDFs (page range), and Jupyter notebooks (all cells with outputs). |
+| Description | Read file contents with optional line range. Text files only (no PDF parsing). |
 
 Parameters:
-- `path` (required, string) — file path relative to project root
+- `path` (required, string) — absolute or relative path to the file
 - `offset` (optional, integer) — start line (0-indexed)
 - `limit` (optional, integer) — number of lines to return
-- `pages` (optional, string) — for PDFs, e.g. "1-5" (max 20 pages per request)
 
-Notes: The agent must read a file before editing it. Multiple reads should be batched in parallel. For large files (>500 lines), encourage use of offset/limit.
+Notes: The agent must read a file before editing it. Multiple reads should be batched in parallel. For large files (>500 lines), encourage use of offset/limit. Does NOT support PDF or Jupyter notebook parsing.
 
 #### `file_write`
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.FileWrite` |
+| Module | `Synapsis.Tool.FileWrite` |
 | Permission | `:write` |
 | Side Effects | `[:file_changed]` |
 | Description | Create a new file or overwrite an existing file with the provided content. |
 
 Parameters:
-- `path` (required, string) — file path relative to project root
+- `path` (required, string)
 - `content` (required, string) — full file content
 
-Notes: Creates parent directories if they don't exist. Use `file_edit` for modifying existing files to minimize token usage.
+Notes: Creates parent directories if they don't exist. Use `file_edit` for modifying existing files to minimize token usage. Returns `{:ok, "Successfully wrote N bytes to path"}`.
 
 #### `file_edit`
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.FileEdit` |
+| Module | `Synapsis.Tool.FileEdit` |
 | Permission | `:write` |
 | Side Effects | `[:file_changed]` |
-| Description | Apply a targeted edit by replacing an exact string match. The old_text must appear exactly once in the file. |
+| Description | Apply a targeted edit by replacing an exact string match. |
 
 Parameters:
 - `path` (required, string)
-- `old_text` (required, string) — exact text to find (must be unique)
-- `new_text` (required, string) — replacement text
+- `old_string` (required, string) — exact text to find
+- `new_string` (required, string) — replacement text
 
-Notes: Fails if old_text matches zero or multiple locations. This is the primary edit tool — prefer over `file_write` for existing files.
+Notes: If `old_string` matches multiple locations, replaces only the first occurrence and warns in the result JSON. Returns `{:ok, json_string}` where JSON contains `status`, `path`, `message`, and `diff` fields. This is the primary edit tool — prefer over `file_write` for existing files.
 
 #### `multi_edit`
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.MultiEdit` |
+| Module | `Synapsis.Tool.MultiEdit` |
 | Permission | `:write` |
 | Side Effects | `[:file_changed]` |
-| Description | Apply multiple edits to one or more files in a single tool call. Each edit is an exact string replacement. Edits are applied sequentially within each file. |
+| Description | Apply multiple edits to one or more files in a single tool call. Each edit is an exact string replacement. |
 
 Parameters:
 - `edits` (required, array of objects) — each with:
   - `path` (required, string)
-  - `old_text` (required, string)
-  - `new_text` (required, string)
+  - `old_string` (required, string)
+  - `new_string` (required, string)
 
-Notes: All edits within a file are applied in order. If any edit fails, the entire operation is rolled back for that file. Cross-file edits are independent (partial success is possible). This addresses the common pattern of renaming a symbol across multiple files.
+Notes: All edits within a file are applied in order. Cross-file edits are independent. This addresses the common pattern of renaming a symbol across multiple files.
 
 #### `file_delete`
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.FileDelete` |
+| Module | `Synapsis.Tool.FileDelete` |
 | Permission | `:destructive` |
 | Side Effects | `[:file_changed]` |
-| Description | Delete a file or empty directory. |
+| Description | Delete a file. |
 
 Parameters:
 - `path` (required, string)
 
-Notes: Refuses to delete non-empty directories unless `recursive: true` is passed. First-class tool rather than routing through bash — enables proper permission gating.
+Notes: Returns `{:ok, "Successfully deleted path"}`. First-class tool rather than routing through bash — enables proper permission gating.
 
 #### `file_move`
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.FileMove` |
+| Module | `Synapsis.Tool.FileMove` |
 | Permission | `:write` |
 | Side Effects | `[:file_changed]` |
 | Description | Move or rename a file or directory. |
@@ -348,22 +371,20 @@ Parameters:
 - `source` (required, string)
 - `destination` (required, string)
 
-Notes: Creates destination parent directories if needed.
+Notes: Creates destination parent directories if needed. Returns `{:ok, "Moved src to dst"}`.
 
 #### `list_dir`
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.ListDir` |
+| Module | `Synapsis.Tool.ListDir` |
 | Permission | `:read` |
 | Side Effects | none |
-| Description | List directory contents with optional depth control. Returns file names, types, and sizes. Respects .gitignore by default. |
+| Description | List directory contents with optional depth control. |
 
 Parameters:
 - `path` (required, string)
 - `depth` (optional, integer, default: 1) — max depth for recursive listing
-- `include_hidden` (optional, boolean, default: false)
-- `ignore_gitignore` (optional, boolean, default: false)
 
 ### 4.2 Search Tools (2 tools)
 
@@ -371,81 +392,77 @@ Parameters:
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.Grep` |
+| Module | `Synapsis.Tool.Grep` |
 | Permission | `:read` |
 | Side Effects | none |
-| Description | Recursive text/regex search across files. Powered by ripgrep internally. Respects .gitignore. |
+| Description | Recursive text/regex search across files. Powered by ripgrep internally. |
 
 Parameters:
 - `pattern` (required, string) — search pattern (regex supported)
 - `path` (optional, string, default: project root) — directory to search
-- `glob` (optional, string) — filter files by glob pattern, e.g. "*.ex"
-- `type` (optional, string) — filter by file type, e.g. "elixir", "typescript"
-- `output_mode` (optional, enum: "content" | "files" | "count", default: "content")
-- `context_lines` (optional, integer, default: 0) — lines of context before/after match
+- `include` (optional, string) — filter files by glob pattern, e.g. `"*.ex"`
+
+Notes: Returns `{:ok, "match output"}` or `{:ok, "No matches found."}`. The filter parameter is named `include` (not `glob`).
 
 #### `glob`
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.Glob` |
+| Module | `Synapsis.Tool.Glob` |
 | Permission | `:read` |
 | Side Effects | none |
-| Description | Find files matching a glob pattern. Returns paths sorted by modification time (newest first). |
+| Description | Find files matching a glob pattern. |
 
 Parameters:
-- `pattern` (required, string) — glob pattern, e.g. "**/*.test.ts"
+- `pattern` (required, string) — glob pattern, e.g. `"**/*.test.ts"`
 - `path` (optional, string, default: project root)
+
+Notes: Returns `{:ok, "file1\nfile2\n..."}` or `{:ok, "No files matched..."}`.
 
 ### 4.3 Execution Tools (1 tool)
 
-#### `bash_exec`
+#### `bash`
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.BashExec` |
+| Module | `Synapsis.Tool.Bash` |
 | Permission | `:execute` |
 | Side Effects | none (side effects are unpredictable for shell commands) |
-| Description | Execute a shell command in a persistent bash session. The session maintains state (env vars, cwd) across calls within the same agent session. |
+| Description | Execute a shell command. Each invocation uses an ephemeral Port (not a persistent session). |
 
 Parameters:
 - `command` (required, string) — shell command to execute
 - `timeout` (optional, integer, default: 30000) — timeout in milliseconds
-- `working_dir` (optional, string) — override working directory for this command
 
-Notes: The persistent session is implemented as a Port with a long-running bash process. State (env vars, aliases, cwd) persists across calls. The agent should prefer built-in tools (grep, glob, list_dir) over bash equivalents (rg, find, ls) for permission efficiency. Commands that modify files do NOT emit `:file_changed` side effects — only built-in file tools do, since bash commands are opaque.
+Notes: Each command runs in a fresh Port process. State (env vars, cwd) does NOT persist across calls. Exit code 0 returns `{:ok, "output"}`. Non-zero returns `{:ok, "Exit code: N\noutput"}`. Timeout returns `{:error, "Command timed out..."}`. The agent should prefer built-in tools (grep, glob, list_dir) over bash equivalents for permission efficiency.
 
 ### 4.4 Web Tools (2 tools)
 
-#### `web_fetch`
+#### `fetch`
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.WebFetch` |
+| Module | `Synapsis.Tool.Fetch` |
 | Permission | `:read` |
 | Side Effects | none |
-| Description | Fetch the content of a web page at a given URL. Returns the page text content. Useful for reading documentation, API references, and online resources. |
+| Description | Fetch the content of a web page at a given URL. Returns the page text content. |
 
 Parameters:
 - `url` (required, string) — full URL including scheme
-- `max_tokens` (optional, integer, default: 10000) — truncate response to approximately this many tokens
 
-Notes: Does not execute JavaScript. Returns text content extracted from HTML. Cannot access content behind authentication.
+Notes: The tool name is `fetch` (not `web_fetch`). Does not execute JavaScript. Returns text content extracted from HTML.
 
 #### `web_search`
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.WebSearch` |
+| Module | `Synapsis.Tool.WebSearch` |
 | Permission | `:read` |
 | Side Effects | none |
-| Description | Search the web and return results with titles, URLs, and snippets. Use for finding documentation, current information, or researching unfamiliar APIs. |
+| Description | Search the web and return results with titles, URLs, and snippets. |
 
 Parameters:
-- `query` (required, string) — search query (1-6 words for best results)
-- `max_results` (optional, integer, default: 5)
-
-Notes: Results include title, URL, and snippet. The agent should use `web_fetch` on specific result URLs to get full content. Today's date should be included in time-sensitive queries.
+- `query` (required, string) — search query
 
 ### 4.5 Planning Tools (2 tools)
 
@@ -453,31 +470,28 @@ Notes: Results include title, URL, and snippet. The agent should use `web_fetch`
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.TodoWrite` |
+| Module | `Synapsis.Tool.TodoWrite` |
 | Permission | `:none` |
 | Side Effects | none |
-| Description | Create and manage a task checklist for the current session. The todo list is displayed in the UI and helps the agent track multi-step work. Each item has a status: pending, in_progress, or completed. |
+| Description | Create and manage a task checklist for the current session. |
 
 Parameters:
 - `todos` (required, array of objects) — each with:
-  - `id` (required, string) — stable identifier
   - `content` (required, string) — task description
   - `status` (required, enum: "pending" | "in_progress" | "completed")
 
-Notes: Each call replaces the entire todo list (not a delta). The agent should update todo status as it progresses through tasks. Displayed in the UI via PubSub broadcast to the session channel. This tool has no permission requirement — it is always available, including to sub-agents. Equivalent to Claude Code's TodoWrite.
+Notes: Each call replaces the entire todo list (not a delta). Displayed in the UI via PubSub broadcast.
 
 #### `todo_read`
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.TodoRead` |
+| Module | `Synapsis.Tool.TodoRead` |
 | Permission | `:none` |
 | Side Effects | none |
-| Description | Read the current todo list state. Used by the agent to check what tasks are pending or completed. |
+| Description | Read the current todo list state. |
 
 Parameters: none
-
-Notes: Returns the current todo list as set by the most recent `todo_write` call. Disabled for sub-agents by default (sub-agents manage their own scope). Equivalent to Claude Code's TodoRead (implicit in TodoWrite) and OpenCode's todoread.
 
 ### 4.6 Orchestration Tools (3 tools)
 
@@ -485,47 +499,42 @@ Notes: Returns the current todo list as set by the most recent `todo_write` call
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.Task` |
+| Module | `Synapsis.Tool.Task` |
 | Permission | `:none` |
 | Side Effects | none |
-| Description | Launch a sub-agent to autonomously handle a complex, multi-step task. The sub-agent runs in the same session with a scoped tool set and its own conversation context. Can run in foreground (blocks until complete) or background (returns immediately with a task ID). |
+| Enabled | **false** (currently stubbed) |
+| Description | Launch a sub-agent to autonomously handle a complex, multi-step task. |
 
 Parameters:
 - `prompt` (required, string) — detailed instructions for the sub-agent
-- `tools` (optional, array of strings) — tool allowlist for the sub-agent. Defaults to read-only tools: ["file_read", "list_dir", "grep", "glob"]
-- `mode` (optional, enum: "foreground" | "background", default: "foreground")
-- `model` (optional, string) — override model for cost optimization (e.g. use a faster model for search tasks)
 
-Notes: Sub-agents inherit the session context (project path, working directory) but have their own conversation history. Background tasks run in a separate process and notify on completion via PubSub. Sub-agents cannot use `ask_user` or `enter_plan_mode` — only the primary agent can interact with the user. The `tools` parameter prevents sub-agents from accessing destructive operations unless explicitly granted. Equivalent to Claude Code's Task/Agent tool.
+Notes: Currently stubbed with `enabled? = false`. Cannot be wired to the agent runtime from `synapsis_core` because `synapsis_core` cannot depend on `synapsis_agent` per the Constitution's dependency graph. Implementing the task tool requires either: (a) a callback/behaviour injected at runtime, or (b) moving the tool to `synapsis_agent`. This is tracked as a separate architectural decision.
 
 #### `tool_search`
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.ToolSearch` |
+| Module | `Synapsis.Tool.ToolSearch` |
 | Permission | `:none` |
 | Side Effects | none |
-| Description | Search for and load deferred tools by keyword. MCP tools and other dynamically available tools are not loaded into context by default to save tokens. Use this tool to discover and activate them. |
+| Description | Search for and load deferred tools by keyword. |
 
 Parameters:
 - `query` (required, string) — search keywords
-- `limit` (optional, integer, default: 5)
 
-Notes: Returns tool names, descriptions, and parameter schemas. Once a deferred tool is loaded via tool_search, it becomes available for the remainder of the session. This prevents bloating the LLM context with tool definitions for MCP servers that expose dozens of tools. Equivalent to Claude Code's ToolSearch.
+Notes: Returns tool names, descriptions, and parameter schemas. Once a deferred tool is loaded via tool_search, it becomes available for the remainder of the session.
 
 #### `skill`
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.Skill` |
+| Module | `Synapsis.Tool.Skill` |
 | Permission | `:none` |
 | Side Effects | none |
-| Description | Load a skill (a SKILL.md file) and inject its instructions into the current conversation. Skills provide domain-specific expertise, coding patterns, and workflow guidance. |
+| Description | Load a skill and inject its instructions into the current conversation. |
 
 Parameters:
 - `name` (required, string) — skill name to load
-
-Notes: Skills are discovered from project-local (`.synapsis/skills/`), user-global (`~/.config/synapsis/skills/`), and built-in locations. Each skill has a SKILL.md with frontmatter (name, description, tools, model) and markdown body. Loading a skill adds its content as a system message in the conversation. The agent can then follow the skill's instructions. Equivalent to Claude Code's Skill tool and OpenCode's skill tool.
 
 ### 4.7 User Interaction Tools (1 tool)
 
@@ -533,185 +542,160 @@ Notes: Skills are discovered from project-local (`.synapsis/skills/`), user-glob
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.AskUser` |
+| Module | `Synapsis.Tool.AskUser` |
 | Permission | `:none` |
 | Side Effects | none |
-| Description | Present structured questions to the user with selectable options. Use when the agent encounters ambiguity, needs to clarify requirements, or wants to offer implementation choices. |
+| Description | Present structured questions to the user with selectable options. |
 
 Parameters:
-- `questions` (required, array of objects) — each with:
-  - `question` (required, string) — the question text
-  - `options` (required, array of objects) — each with:
-    - `label` (required, string) — option text
-    - `description` (optional, string) — additional context
-  - `multi_select` (optional, boolean, default: false) — allow multiple selections
+- `question` (required, string) — the question text
+- `options` (optional, array of strings) — selectable options
 
-Notes: Users can always provide free-text input instead of selecting an option. This tool blocks until the user responds. It is broadcast through the session channel as a `tool_permission` event variant. Sub-agents cannot use this tool — only the primary agent can interact with the user. If the recommended option is clear, place it first and append "(Recommended)" to the label. Equivalent to Claude Code's AskUserQuestion.
-
-### 4.8 Session Control Tools (2 tools)
+### 4.8 Session Control Tools (3 tools)
 
 #### `enter_plan_mode`
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.EnterPlanMode` |
+| Module | `Synapsis.Tool.EnterPlanMode` |
 | Permission | `:none` |
 | Side Effects | none |
-| Description | Switch to plan mode. In plan mode, the agent explores the codebase and builds a plan without making changes. Write/execute tools are disabled. The agent uses ask_user to clarify requirements before finalizing the plan. |
+| Description | Switch to plan mode. Write/execute tools are disabled. |
 
 Parameters: none
-
-Notes: Calling this tool updates the session's `agent_mode` to `:plan`. The ToolRegistry filters out write/execute tools when `agent_mode` is `:plan`. The UI reflects the mode change. Equivalent to Claude Code's EnterPlanMode.
 
 #### `exit_plan_mode`
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.ExitPlanMode` |
+| Module | `Synapsis.Tool.ExitPlanMode` |
 | Permission | `:none` |
 | Side Effects | none |
-| Description | Exit plan mode and present the plan to the user for approval. The plan is displayed in the UI. If approved, the agent proceeds to execute with full tool access. |
+| Description | Exit plan mode and present the plan to the user. |
 
 Parameters:
-- `plan` (required, string) — the finalized plan in markdown format
-
-Notes: The plan is broadcast to the session channel for UI display. The user can approve, reject, or provide feedback. On approval, `agent_mode` returns to `:build` and all tools become available again. Equivalent to Claude Code's ExitPlanMode.
-
-### 4.9 Utility Tools (1 tool)
+- `plan` (optional, string) — the finalized plan in markdown format
 
 #### `sleep`
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.Sleep` |
+| Module | `Synapsis.Tool.Sleep` |
 | Permission | `:none` |
 | Side Effects | none |
-| Description | Wait for a specified duration or until the user provides input. Useful for polling-style workflows or waiting for external processes to complete. |
+| Description | Wait for a specified duration. Useful for polling-style workflows. |
 
 Parameters:
 - `duration_ms` (required, integer) — maximum wait time in milliseconds
-- `reason` (optional, string) — displayed to user explaining the wait
 
-Notes: The sleep is interruptible — if the user sends a message, the sleep ends early and the agent receives the message. Implemented as a `receive` with timeout in the agent loop process. Equivalent to Claude Code's Sleep tool.
+### 4.9 Memory Tools (4 tools)
 
-### 4.10 Notebook Tools (2 tools, disabled by default)
-
-These tools ship as compiled modules but return `enabled?() -> false` by default. Enable via session or project configuration when Jupyter workflow support is needed.
-
-#### `notebook_read`
+#### `memory_save`
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.NotebookRead` |
+| Module | `Synapsis.Tool.MemorySave` |
+| Permission | `:write` |
+| Side Effects | none |
+| Description | Save a memory entry for the current session/project. |
+
+#### `memory_search`
+
+| Field | Value |
+|---|---|
+| Module | `Synapsis.Tool.MemorySearch` |
 | Permission | `:read` |
 | Side Effects | none |
-| Enabled | `false` (opt-in via config) |
-| Description | Read a Jupyter notebook (.ipynb) file and return all cells with their outputs — code, markdown, and visualizations. |
+| Description | Search existing memory entries. |
 
-Parameters:
-- `path` (required, string) — path to .ipynb file
-
-Notes: Disabled by default. Enable with `notebook_tools: true` in session or project config. Returns cells as structured data with cell type, source, and outputs. Equivalent to Claude Code's NotebookRead (bundled into Read tool).
-
-#### `notebook_edit`
+#### `memory_update`
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.NotebookEdit` |
+| Module | `Synapsis.Tool.MemoryUpdate` |
 | Permission | `:write` |
-| Side Effects | `[:file_changed]` |
-| Enabled | `false` (opt-in via config) |
-| Description | Replace the contents of a specific cell in a Jupyter notebook, or insert a new cell at a given position. |
+| Side Effects | none |
+| Description | Update an existing memory entry. |
 
-Parameters:
-- `path` (required, string) — path to .ipynb file
-- `cell_number` (required, integer) — 0-indexed cell position
-- `content` (required, string) — new cell source content
-- `cell_type` (optional, enum: "code" | "markdown", default: "code")
-- `edit_mode` (optional, enum: "replace" | "insert", default: "replace")
-
-Notes: Disabled by default. When `edit_mode` is "insert", a new cell is created at the specified position. Equivalent to Claude Code's NotebookEdit.
-
-### 4.11 Computer Use Tools (1 tool, disabled by default)
-
-Ships as a compiled module but returns `enabled?() -> false` by default. Enable when browser automation or visual verification is needed. Intended for future integration with Claude's computer use API or local browser automation.
-
-#### `computer`
+#### `session_summarize`
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.Computer` |
-| Permission | `:execute` |
+| Module | `Synapsis.Tool.SessionSummarize` |
+| Permission | `:none` |
 | Side Effects | none |
-| Enabled | `false` (opt-in via config) |
-| Description | Interact with a desktop environment or browser for visual verification, screenshot capture, and UI testing. Delegates to the Anthropic computer use API or a configured browser automation backend. |
+| Description | Summarize the current session conversation for context compaction. |
 
-Parameters:
-- `action` (required, enum: "screenshot" | "click" | "type" | "scroll" | "key" | "navigate")
-- `coordinate` (optional, array of [x, y]) — for click/type actions
-- `text` (optional, string) — for type action
-- `key` (optional, string) — for key action
-- `url` (optional, string) — for navigate action
-
-Notes: Disabled by default. Enable with `computer_use: true` in session config. The backend is configurable — can delegate to Anthropic's computer use API, Puppeteer MCP, or a local Playwright instance. Equivalent to Claude Code's Computer tool (used in Chrome extension). Implementation is deferred; the behaviour contract and tool definition are reserved now for forward compatibility.
-
-### 4.12 Swarm Tools (3 tools)
-
-Multi-agent coordination tools for swarm-style parallel workflows. These enable agents to form teams, delegate to teammates, and communicate via structured message passing. Maps to Claude Code's experimental swarm system.
+### 4.10 Swarm Tools (3 tools)
 
 #### `send_message`
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.SendMessage` |
+| Module | `Synapsis.Tool.SendMessage` |
 | Permission | `:none` |
 | Side Effects | none |
-| Description | Send a structured message to a teammate agent in the current swarm. Used for inter-agent communication, delegation, and protocol request/response patterns. |
-
-Parameters:
-- `to` (required, string) — teammate agent identifier
-- `content` (required, string) — message content
-- `type` (optional, enum: "request" | "response" | "notify", default: "notify")
-- `in_reply_to` (optional, string) — message ID this responds to
-
-Notes: Messages are routed via PubSub through the swarm coordinator process. Only available when the session is part of a swarm (has a `swarm_id` in context). The receiving agent sees the message as a system injection in its next LLM iteration. Equivalent to Claude Code's SendMessageTool.
+| Description | Send a structured message to a teammate agent in the current swarm. |
 
 #### `teammate`
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.Teammate` |
+| Module | `Synapsis.Tool.Teammate` |
 | Permission | `:none` |
 | Side Effects | none |
-| Description | Create, configure, or query teammate agents in the current swarm. Manages the swarm roster and agent capabilities. |
-
-Parameters:
-- `action` (required, enum: "create" | "list" | "get" | "update")
-- `name` (optional, string) — teammate name (for create/get/update)
-- `prompt` (optional, string) — system prompt for the teammate (for create/update)
-- `tools` (optional, array of strings) — tool allowlist for the teammate
-- `model` (optional, string) — model override for the teammate
-
-Notes: Created teammates are spawned as separate agent loop processes, each with their own conversation history and tool set. Teammates share the project workspace but can be isolated to separate git worktrees. Only the swarm coordinator (primary agent) should create teammates. Equivalent to Claude Code's TeammateTool.
+| Description | Create, configure, or query teammate agents in the current swarm. |
 
 #### `team_delete`
 
 | Field | Value |
 |---|---|
-| Module | `SynapsisTool.Tools.TeamDelete` |
+| Module | `Synapsis.Tool.TeamDelete` |
 | Permission | `:none` |
 | Side Effects | none |
 | Description | Dissolve the current swarm and terminate all teammate agents. |
 
-Parameters: none (or `team_id` if multiple swarms are supported)
+### 4.11 Special Tools (1 tool)
 
-Notes: Terminates all teammate processes, collects their final outputs, and returns a summary. The primary agent's session continues after the swarm is dissolved. Equivalent to Claude Code's TeamDelete.
+#### `diagnostics`
+
+| Field | Value |
+|---|---|
+| Module | `Synapsis.Tool.Diagnostics` |
+| Permission | `:read` |
+| Side Effects | none |
+| Description | Query LSP diagnostics for current project files. |
+
+### 4.12 Disabled Stubs (3 tools)
+
+These tools ship as compiled modules but return `enabled?() -> false` by default.
+
+#### `notebook_read`
+
+| Field | Value |
+|---|---|
+| Module | `Synapsis.Tool.NotebookRead` |
+| Enabled | **false** |
+
+#### `notebook_edit`
+
+| Field | Value |
+|---|---|
+| Module | `Synapsis.Tool.NotebookEdit` |
+| Enabled | **false** |
+
+#### `computer`
+
+| Field | Value |
+|---|---|
+| Module | `Synapsis.Tool.Computer` |
+| Enabled | **false** |
 
 ---
 
 ## 5. Tool Inventory Summary
 
-| # | Tool | Name | Category | Permission | Side Effects | Enabled |
+| # | Module | Name | Category | Permission | Side Effects | Enabled |
 |---|---|---|---|---|---|---|
 | 1 | FileRead | `file_read` | filesystem | `:read` | — | yes |
 | 2 | FileWrite | `file_write` | filesystem | `:write` | `[:file_changed]` | yes |
@@ -722,26 +706,31 @@ Notes: Terminates all teammate processes, collects their final outputs, and retu
 | 7 | ListDir | `list_dir` | filesystem | `:read` | — | yes |
 | 8 | Grep | `grep` | search | `:read` | — | yes |
 | 9 | Glob | `glob` | search | `:read` | — | yes |
-| 10 | BashExec | `bash_exec` | execution | `:execute` | — | yes |
-| 11 | WebFetch | `web_fetch` | web | `:read` | — | yes |
+| 10 | Bash | `bash` | execution | `:execute` | — | yes |
+| 11 | Fetch | `fetch` | web | `:read` | — | yes |
 | 12 | WebSearch | `web_search` | web | `:read` | — | yes |
 | 13 | TodoWrite | `todo_write` | planning | `:none` | — | yes |
 | 14 | TodoRead | `todo_read` | planning | `:none` | — | yes |
-| 15 | Task | `task` | orchestration | `:none` | — | yes |
+| 15 | Task | `task` | orchestration | `:none` | — | **no** (stubbed) |
 | 16 | ToolSearch | `tool_search` | orchestration | `:none` | — | yes |
 | 17 | Skill | `skill` | orchestration | `:none` | — | yes |
 | 18 | AskUser | `ask_user` | interaction | `:none` | — | yes |
 | 19 | EnterPlanMode | `enter_plan_mode` | session | `:none` | — | yes |
 | 20 | ExitPlanMode | `exit_plan_mode` | session | `:none` | — | yes |
 | 21 | Sleep | `sleep` | session | `:none` | — | yes |
-| 22 | NotebookRead | `notebook_read` | notebook | `:read` | — | **no** |
-| 23 | NotebookEdit | `notebook_edit` | notebook | `:write` | `[:file_changed]` | **no** |
-| 24 | Computer | `computer` | computer | `:execute` | — | **no** |
-| 25 | SendMessage | `send_message` | swarm | `:none` | — | yes |
-| 26 | Teammate | `teammate` | swarm | `:none` | — | yes |
-| 27 | TeamDelete | `team_delete` | swarm | `:none` | — | yes |
+| 22 | SendMessage | `send_message` | swarm | `:none` | — | yes |
+| 23 | Teammate | `teammate` | swarm | `:none` | — | yes |
+| 24 | TeamDelete | `team_delete` | swarm | `:none` | — | yes |
+| 25 | SessionSummarize | `session_summarize` | memory | `:none` | — | yes |
+| 26 | MemorySave | `memory_save` | memory | `:write` | — | yes |
+| 27 | MemorySearch | `memory_search` | memory | `:read` | — | yes |
+| 28 | MemoryUpdate | `memory_update` | memory | `:write` | — | yes |
+| 29 | Diagnostics | `diagnostics` | uncategorized | `:read` | — | yes |
+| 30 | NotebookRead | `notebook_read` | notebook | `:read` | — | **no** |
+| 31 | NotebookEdit | `notebook_edit` | notebook | `:write` | `[:file_changed]` | **no** |
+| 32 | Computer | `computer` | computer | `:execute` | — | **no** |
 
-**Total: 27 tools (21 enabled by default, 3 disabled/future, 3 swarm)**
+**Total: 32 tools registered (28 enabled by default, 3 disabled stubs, 1 stubbed orchestration)**
 
 ---
 
@@ -759,46 +748,41 @@ Notes: Terminates all teammate processes, collects their final outputs, and retu
 
 ### 6.2 Session Permission Configuration
 
-Each session has a permission configuration stored in `synapsis_data`:
+Each session has a permission configuration stored in `Synapsis.SessionPermission` (in `synapsis_data`):
 
 ```elixir
-%{
+# Synapsis.Tool.Permission.SessionConfig struct
+%Synapsis.Tool.Permission.SessionConfig{
+  session_id: "uuid",
   mode: :interactive | :autonomous,
-  
-  # Level-based defaults
-  allow_write: true,
-  allow_execute: true,
-  allow_destructive: :ask,  # :allow | :deny | :ask
-  
-  # Per-tool overrides (glob patterns supported)
-  tool_overrides: %{
-    "bash_exec" => :ask,
-    "bash_exec(git *)" => :allow,
-    "bash_exec(rm *)" => :deny,
-    "file_write(src/**)" => :allow,
-    "file_write(production.*)" => :deny
-  }
+  allow_read: true,                    # always true
+  allow_write: :allow | :deny | :ask,  # default: :allow
+  allow_execute: :allow | :deny | :ask, # default: :ask
+  allow_destructive: :allow | :deny | :ask, # default: :ask
+  overrides: [
+    %{tool: "bash", pattern: "git *", decision: :allowed},
+    %{tool: "bash", pattern: "rm *", decision: :denied},
+    %{tool: "file_write", pattern: "src/**", decision: :allowed}
+  ]
 }
 ```
 
-### 6.3 Permission Resolution Order
+### 6.3 Permission Resolution Order (3 steps)
 
-1. Per-tool override (most specific glob match wins)
-2. Permission level default for the session
-3. Tool's declared `permission_level/0`
+1. **Per-tool glob overrides** — if a matching override exists in the session config, its decision wins immediately. Overrides match tool name + glob pattern against the tool's primary input field (e.g., `command` for bash, `path` for file tools, `pattern` for grep/glob).
+2. **Permission level vs session config** — the tool's permission level is checked against the session's mode and allow_* settings.
+3. **Default policy** — `:requires_approval`.
 
 ### 6.4 Autonomous Mode
 
-In autonomous mode (`mode: :autonomous`), the agent does not pause for user approval. All tools at or below `:execute` level are auto-approved. `:destructive` tools follow the session's `allow_destructive` setting. This is the mode used for background/headless sessions where multiple Claude Code agents work in parallel via git worktrees.
+In autonomous mode (`mode: :autonomous`), all tools at or below `:execute` level are auto-approved. `:destructive` tools follow the session's `allow_destructive` setting.
 
 ### 6.5 Plan Mode Restrictions
 
 When `agent_mode` is `:plan`:
-
 - Tools with permission level `:write`, `:execute`, `:destructive` are excluded from `list_for_llm/1`
 - Only `:read` and `:none` tools are available
-- The agent can use `ask_user` to clarify requirements
-- The agent must call `exit_plan_mode` to present a plan and return to `:build` mode
+- The agent must call `exit_plan_mode` to return to `:build` mode
 
 ---
 
@@ -812,196 +796,82 @@ Tools declare side effects as static data via the `side_effects/0` callback:
 :file_changed — a file was created, modified, moved, or deleted
 ```
 
-Future side effects (not in initial implementation):
-
-```
-:dependency_changed — package.json, mix.exs, etc. was modified
-:config_changed — configuration file was modified
-:test_failed — a test execution produced failures
-```
-
 ### 7.2 Side Effect Propagation
 
 ```
-ToolExecutor
+Synapsis.Tool.Executor
   → tool executes successfully
-  → reads tool.side_effects()
+  → reads module.side_effects()
   → broadcasts to PubSub topic "tool_effects:{session_id}"
-  → message: {:tool_effect, :file_changed, %{tool: name, input: input, result: result}}
-
-Subscribers:
-  → SynapsisPlugin.Server (LSP) — sends didChange, collects diagnostics
-  → SynapsisPlugin.Server (MCP) — any interested MCP servers
-  → SessionChannel — UI notifications (file tree refresh, etc.)
+  → message: {:tool_effect, :file_changed, %{session_id: session_id}}
 ```
 
-### 7.3 Diagnostic Injection
-
-When an LSP plugin receives a `:file_changed` effect and produces diagnostics:
-
-**Passive mode** (default for interactive sessions): Diagnostics are broadcast to the session channel for UI display only.
-
-**Active mode** (default for autonomous sessions): Diagnostics are injected as a system message into the session context. The agent sees them before its next LLM request and can self-correct.
+Only module-based tools with non-empty `side_effects/0` trigger broadcasts. Process-based tools (plugins) do not automatically broadcast side effects.
 
 ---
 
 ## 8. Plugin Tool Integration
 
-### 8.1 Plugin Tools via synapsis_plugin
+### 8.1 Plugin Tools
 
-Plugin tools are dynamically registered into `SynapsisTool.Registry` by `SynapsisPlugin.Server` processes. They follow the same execution pipeline as built-in tools but dispatch via `GenServer.call/3` instead of direct module invocation.
+Plugin tools are dynamically registered into `Synapsis.Tool.Registry` via `register_process/3`. They follow the same execution pipeline as built-in tools but dispatch via `GenServer.call/3` instead of direct module invocation.
 
 ### 8.2 MCP Tools
 
-MCP tools are namespaced with `mcp_` prefix. They are discovered via MCP `tools/list` at plugin initialization. The `tool_search` built-in tool enables lazy loading — MCP tool definitions are not included in every LLM request by default.
+MCP tools are discovered via MCP `tools/list` at plugin initialization. The `tool_search` built-in tool enables lazy loading — MCP tool definitions are not included in every LLM request by default.
 
-### 8.3 LSP Tools
-
-LSP tools are namespaced with `lsp_` prefix. They expose a fixed set of operations:
-
-- `lsp_diagnostics` — get diagnostics for a file
-- `lsp_definition` — go to definition (accepts symbol name, not line:col)
-- `lsp_references` — find all references to a symbol
-- `lsp_hover` — get type/doc info for a symbol
-- `lsp_symbols` — list symbols in a file or workspace
-
-The decision to accept symbol names instead of line:column positions is a key design choice — LLMs are unreliable with exact positions, so the plugin resolves positions internally by searching the file for the symbol name.
-
-### 8.4 Deferred Tool Loading
+### 8.3 Deferred Tool Loading
 
 To avoid bloating LLM context with dozens of MCP tool definitions:
 
 1. On session start, only built-in tools are included in `list_for_llm/1`
-2. MCP/plugin tools are registered in the ToolRegistry but marked as `deferred: true`
+2. MCP/plugin tools are registered in the Registry but marked as `deferred: true`
 3. The agent uses `tool_search` to discover relevant deferred tools
-4. Once loaded, deferred tools are included in subsequent `list_for_llm/1` calls for the session
+4. Once loaded via `mark_loaded/1`, deferred tools are included in subsequent `list_for_llm/1` calls
 
 ---
 
 ## 9. Agent Loop Integration
 
-### 9.1 Tool Gathering
+### 9.1 Graph-Based Agent Runner
+
+The agent loop is implemented as a graph-based runner in `synapsis_agent`, not a simple sequential loop. Key nodes:
+
+- `Synapsis.Agent.Nodes.ToolDispatch` — receives tool_use events from the LLM stream, dispatches to the executor
+- `Synapsis.Agent.Nodes.ToolExecute` — executes tool calls and feeds results back
+- `Synapsis.Agent.Nodes.Complete` — handles completion and response flushing
+
+### 9.2 Tool Gathering
 
 ```elixir
-def gather_tools(session, context) do
-  SynapsisTool.Registry.list_for_llm(
-    agent_mode: context.agent_mode,
-    session_id: session.id,
-    include_deferred: false  # only loaded tools
-  )
-end
+Synapsis.Tool.Registry.list_for_llm(
+  agent_mode: context.agent_mode,
+  include_deferred: false
+)
 ```
 
-### 9.2 Tool Call Processing
+### 9.3 Tool Call Processing
 
-```elixir
-case event do
-  {:tool_use, %{name: name, id: id, input: input}} ->
-    tool_call = %{name: name, id: id, input: input}
-    
-    broadcast_tool_use(session.id, tool_call)
-    
-    case SynapsisTool.Executor.execute(tool_call, context) do
-      {:ok, result} ->
-        broadcast_tool_result(session.id, id, result)
-        {:cont, append_tool_result(context, id, result)}
-      
-      {:error, :permission_denied} ->
-        broadcast_tool_result(session.id, id, %{error: "Permission denied"})
-        {:cont, append_tool_result(context, id, %{error: "Permission denied"})}
-      
-      {:pending_approval, ref} ->
-        # Block until approval via channel
-        receive do
-          {:tool_approved, ^ref} ->
-            result = SynapsisTool.Executor.execute_approved(tool_call, context)
-            broadcast_tool_result(session.id, id, result)
-            {:cont, append_tool_result(context, id, result)}
-          
-          {:tool_denied, ^ref} ->
-            broadcast_tool_result(session.id, id, %{error: "User denied"})
-            {:cont, append_tool_result(context, id, %{error: "User denied tool use"})}
-        end
-    end
-end
-```
-
-### 9.3 Sub-Agent Execution
-
-The `task` tool launches a sub-agent by spawning a new agent loop process:
-
-```elixir
-defmodule SynapsisTool.Tools.Task do
-  def execute(%{"prompt" => prompt} = input, ctx) do
-    tools = Map.get(input, "tools", ["file_read", "list_dir", "grep", "glob"])
-    mode = Map.get(input, "mode", "foreground")
-    
-    sub_context = %{ctx |
-      parent_agent: self(),
-      agent_mode: :build,
-      permissions: restrict_permissions(ctx.permissions, tools)
-    }
-    
-    case mode do
-      "foreground" ->
-        # Synchronous — blocks until sub-agent completes
-        Synapsis.Agent.SubAgent.run(prompt, tools, sub_context)
-      
-      "background" ->
-        # Async — returns task_id immediately
-        {:ok, task_id} = Synapsis.Agent.SubAgent.start_background(prompt, tools, sub_context)
-        {:ok, %{task_id: task_id, status: "running"}}
-    end
-  end
-end
-```
+The executor handles dispatch, persistence, and side effect broadcasting. Results are fed back into the graph runner for the next LLM iteration.
 
 ---
 
-## 10. UI Integration
+## 10. Data Persistence
 
-### 10.1 Channel Events for Tools
+### 10.1 Tool Calls
 
-All tool activity flows through `SessionChannel` to the React chat UI:
-
-```
-← broadcast("tool_use", %{id, name, input})           # tool call started
-← broadcast("tool_result", %{id, output, status})      # tool call completed
-← broadcast("tool_permission", %{id, name, input,      # approval needed
-                                  questions: [...]})
-← broadcast("todo_update", %{todos: [...]})             # todo list changed
-← broadcast("plan_submitted", %{plan: "..."})           # plan mode exit
-← broadcast("task_status", %{task_id, status, result})  # background task update
-```
-
-### 10.2 React Components for Tools
-
-The `@synapsis/ui` package includes components for rendering tool interactions:
-
-- `ToolCallCard` — displays tool name, input, approve/deny buttons
-- `ToolResultCard` — displays tool output (formatted per tool type)
-- `AskUserCard` — renders structured questions with selectable options
-- `TodoList` — displays the current todo checklist with status indicators
-- `PlanView` — displays a submitted plan with approve/reject/feedback controls
-- `DiffViewer` — renders file edit diffs (for file_edit, multi_edit results)
-- `TerminalOutput` — renders bash_exec output with ANSI support
-
----
-
-## 11. Data Model
-
-### 11.1 Tool Calls in synapsis_data
-
-Tool calls are persisted as part of the message history:
+Tool calls are persisted in the `tool_calls` table:
 
 ```
-tool_calls: id (ULID), message_id, session_id,
+tool_calls: id (UUID), message_id (nullable), session_id,
             tool_name, input (JSONB), output (JSONB),
-            status (pending | approved | denied | completed | error),
-            duration_ms, timestamps
+            status (pending | completed | error),
+            duration_ms, error_message, timestamps
 ```
 
-### 11.2 Session Permissions
+Persistence happens in the executor after each tool call completes. Errors during persistence are logged but do not fail the tool call.
+
+### 10.2 Session Permissions
 
 ```
 session_permissions: id, session_id,
@@ -1013,7 +883,7 @@ session_permissions: id, session_id,
                      timestamps
 ```
 
-### 11.3 Todo Items
+### 10.3 Todo Items
 
 ```
 session_todos: id, session_id,
@@ -1023,115 +893,42 @@ session_todos: id, session_id,
 
 ---
 
-## 12. Differences from Existing Design Document
+## 11. Resolved Decisions
 
-This PRD extends `plugin-and-tools-design.md` with the following additions:
-
-1. **18 new built-in tools** — multi_edit, web_fetch, web_search, todo_write, todo_read, task, tool_search, skill, ask_user, enter_plan_mode, exit_plan_mode, sleep, notebook_read, notebook_edit, computer, send_message, teammate, team_delete
-2. **Self-declared permission levels** — tools declare their own level via `permission_level/0` callback instead of a centralized pattern-match
-3. **Category system** — `category/0` callback for UI grouping and selective loading
-4. **Tool versioning** — `version/0` callback returning semver strings for MCP compatibility
-5. **Enabled flag** — `enabled?/0` callback for tools that ship disabled (notebook, computer use)
-6. **Deferred tool loading** — `tool_search` for lazy-loading MCP tools
-7. **Plan mode integration** — mode-aware tool filtering in the registry
-8. **Session permission model** — glob-pattern tool overrides, autonomous mode
-9. **Persistent bash sessions** — bash_exec uses a long-running Port, not one-shot commands
-10. **Background sub-agents** — task tool supports foreground and background execution
-11. **Parallel tool execution** — `Task.async_stream/3` for concurrent independent tool calls
-12. **Swarm tools** — send_message, teammate, team_delete for within-session multi-agent coordination
-13. **Extended context** — agent_mode, session_pid, parent_agent in tool context
-
----
-
-## 13. Implementation Phases
-
-### Phase 1: Core Filesystem + Search + Execution
-
-- file_read, file_write, file_edit, file_delete, file_move, list_dir
-- grep, glob
-- bash_exec (persistent session)
-- Tool behaviour, ToolRegistry, ToolExecutor, Permission engine
-- Side effect system with PubSub broadcasting
-
-**Deliverable:** Agent can navigate, read, edit, and execute commands against a codebase.
-
-### Phase 2: Planning + User Interaction
-
-- todo_write, todo_read
-- ask_user
-- enter_plan_mode, exit_plan_mode
-- Plan mode tool filtering in registry
-- Session permission configuration
-
-**Deliverable:** Agent supports plan-then-execute workflows with user interaction.
-
-### Phase 3: Orchestration + Web
-
-- task (foreground sub-agents)
-- web_fetch, web_search
-- skill
-- multi_edit
-
-**Deliverable:** Agent can launch sub-agents, search the web, and load skills.
-
-### Phase 4: Advanced Features
-
-- task (background sub-agents with notifications)
-- tool_search (deferred tool loading)
-- sleep
-- Plugin tool integration (MCP/LSP via synapsis_plugin)
-- Autonomous mode support
-- Parallel tool execution (Task.async_stream)
-
-**Deliverable:** Full tool parity with Claude Code. Ready for multi-agent autonomous workflows.
-
-### Phase 5: Swarm + Future Tools
-
-- send_message, teammate, team_delete (swarm coordination)
-- Swarm coordinator process in synapsis_core (tool modules in synapsis_tool)
-- Git worktree isolation per teammate agent
-- notebook_read, notebook_edit (disabled by default, API reserved)
-- computer (disabled by default, API reserved)
-- Tool versioning in registry and LLM definitions
-
-**Deliverable:** Multi-agent swarm support within a single Synapsis instance. Notebook and computer use APIs reserved for future activation.
-
----
-
-## 14. Resolved Decisions
-
-1. **27 tools total** — 21 enabled by default, 3 disabled/future (notebook, computer), 3 swarm tools. Comprehensive surface matching Claude Code while maintaining Elixir behaviour uniformity.
+1. **32 tools total** — 28 enabled by default, 3 disabled/future (notebook, computer), 1 stubbed (task). Comprehensive surface matching Claude Code while maintaining Elixir behaviour uniformity.
 
 2. **Self-declared permissions** — tools declare `permission_level/0` instead of a centralized classification function. Co-locates the permission decision with the tool implementation.
 
-3. **Persistent bash sessions** — bash_exec maintains a long-running Port process per session. State (env, cwd) persists across calls. Matches Claude Code and OpenCode behaviour.
+3. **Ephemeral bash** — `bash` uses a fresh Port per command. State does NOT persist across calls. This differs from Claude Code's persistent bash session.
 
-4. **Deferred tool loading** — MCP tools are not included in LLM context by default. The `tool_search` tool enables demand-driven loading. Prevents context bloat with large MCP server tool sets.
+4. **Deferred tool loading** — MCP tools are not included in LLM context by default. The `tool_search` tool enables demand-driven loading.
 
-5. **Plan mode is tool-based** — enter/exit plan mode are tools, not out-of-band commands. The LLM decides when to enter plan mode based on task complexity.
+5. **Plan mode is tool-based** — enter/exit plan mode are tools, not out-of-band commands.
 
-6. **Sub-agents cannot interact with users** — `ask_user` is restricted to the primary agent. Sub-agents that encounter ambiguity must make reasonable decisions or return to the parent with questions.
+6. **Todo is session-scoped** — todo lists are per-session, persisted in the database, and visible in the UI.
 
-7. **Todo is session-scoped** — todo lists are per-session, persisted in the database, and visible in the UI. Sub-agents get independent todo state.
+7. **Side effects remain data-only** — tools declare `[:file_changed]` statically. The executor broadcasts. No hook framework.
 
-8. **Side effects remain data-only** — no change from existing design. Tools declare `[:file_changed]` statically. The executor broadcasts. No hook framework.
+8. **Web tools are built-in** — `fetch` and `web_search` are core tools, not plugins.
 
-9. **Web tools are built-in** — web_fetch and web_search are core tools, not plugins. They are essential for documentation lookup and are available in every session.
+9. **Sleep tool included** — enables polling workflows.
 
-10. **Sleep tool included** — enables polling workflows and prevents busy-waiting in autonomous sessions. The early-wake-on-user-input pattern is implemented via selective receive.
+10. **Tool versioning** — all tools declare `version/0` returning a semver string. Built-in tools start at `"1.0.0"`.
 
-11. **Tool versioning** — all tools declare `version/0` returning a semver string. Built-in tools start at `"1.0.0"`. The registry includes version in tool definitions. This is required for MCP compatibility (MCP tools carry version from their server) and enables future tool evolution without breaking consumers. Version is informational — the registry does not enforce compatibility checks.
+11. **Parallel tool calls** — `Task.async_stream/3` for concurrent independent tool calls with file-level serialization.
 
-12. **Parallel tool calls** — when the LLM returns multiple independent tool calls in a single response, the executor runs them concurrently via `Task.async_stream/3`. Write tools targeting the same file are serialized. Permission approvals are batched. This matches Claude Code's behaviour and is critical for performance (e.g., reading 5 files in parallel instead of sequentially).
+12. **Swarm tools are built-in** — `send_message`, `teammate`, and `team_delete` are core tools for within-session multi-agent coordination.
 
-13. **Swarm tools are built-in** — `send_message`, `teammate`, and `team_delete` are core tools in `synapsis_tool`, not deferred to Samgita. The swarm coordinator process lives in `synapsis_core` alongside the agent loop, but tool modules live in `synapsis_tool`. Samgita orchestrates *across* Synapsis instances (multi-repo, multi-machine); Synapsis swarm tools handle *within-session* multi-agent coordination (same project, same machine, parallel worktrees). Clear boundary: swarm = local parallelism, Samgita = distributed orchestration.
+13. **Memory tools** — `memory_save`, `memory_search`, `memory_update`, and `session_summarize` support persistent session memory.
 
-14. **Notebook tools ship disabled** — `notebook_read` and `notebook_edit` are compiled modules with `enabled?() -> false`. Enable via `notebook_tools: true` in session or project config. The behaviour contract and parameters are finalized now; implementation is deferred to a future release. This reserves the tool names and API surface for forward compatibility.
+14. **file_edit uses old_string/new_string** — parameter names are `old_string` and `new_string` (not `old_text`/`new_text`).
 
-15. **Computer use ships disabled** — `computer` is a compiled module with `enabled?() -> false`. Enable via `computer_use: true` in session config. Backend is configurable (Anthropic computer use API, Puppeteer MCP, local Playwright). The tool definition and parameter schema are reserved now; full implementation is deferred. This ensures the tool surface is stable when the feature ships.
+15. **grep uses include for filtering** — the glob filter parameter is named `include` (not `glob`).
+
+16. **Tool name is fetch, not web_fetch** — the web page fetching tool is registered as `fetch`.
 
 ---
 
-## 15. Open Questions
+## 12. Open Questions
 
-None. All previously open questions have been resolved as decisions #11–#15 above.
+None. All previously open questions have been resolved as decisions above.
