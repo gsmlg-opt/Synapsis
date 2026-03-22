@@ -126,6 +126,47 @@ defmodule Synapsis.Config do
     Map.put(map, key, put_in_nested(inner, rest, value))
   end
 
+  @doc """
+  Save agent configuration to the database.
+  Upserts the agent config by name.
+  """
+  def save_agent(agent_name, agent_config) when is_map(agent_config) do
+    attrs =
+      agent_config
+      |> normalize_agent_attrs()
+
+    case Synapsis.AgentConfigs.upsert(to_string(agent_name), attrs) do
+      {:ok, _} -> :ok
+      :ok -> :ok
+      {:error, changeset} -> {:error, changeset}
+    end
+  end
+
+  defp normalize_agent_attrs(config) do
+    mapping = %{
+      "provider" => :provider,
+      "model" => :model,
+      "systemPrompt" => :system_prompt,
+      "tools" => :tools,
+      "reasoningEffort" => :reasoning_effort,
+      "readOnly" => :read_only,
+      "maxTokens" => :max_tokens,
+      "modelTier" => :model_tier,
+      "fallbackModels" => :fallback_models,
+      "label" => :label,
+      "icon" => :icon,
+      "description" => :description,
+      "enabled" => :enabled
+    }
+
+    Enum.reduce(config, %{}, fn {key, value}, acc ->
+      case Map.get(mapping, key) do
+        nil -> acc
+        atom_key -> Map.put(acc, atom_key, value)
+      end
+    end)
+  end
+
   defp default_system_prompt do
     """
     You are Synapsis, an AI coding assistant. You help developers write, edit, and understand code.

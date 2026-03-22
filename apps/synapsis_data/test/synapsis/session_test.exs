@@ -57,18 +57,17 @@ defmodule Synapsis.SessionTest do
       assert %{status: [_]} = errors_on(cs)
     end
 
-    test "validates agent inclusion", %{project: project} do
+    test "allows any agent name", %{project: project} do
       cs =
         %Session{}
         |> Session.changeset(%{
           provider: "anthropic",
           model: "test",
           project_id: project.id,
-          agent: "nonexistent_agent"
+          agent: "custom-agent"
         })
 
-      refute cs.valid?
-      assert %{agent: [_]} = errors_on(cs)
+      assert cs.valid?
     end
 
     test "allows valid statuses", %{project: project} do

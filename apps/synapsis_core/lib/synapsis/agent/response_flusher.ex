@@ -76,7 +76,8 @@ defmodule Synapsis.Agent.ResponseFlusher do
   end
 
   @doc """
-  Flush tool results: persist a tool_result message and broadcast the event.
+  Flush tool results: persist a tool_result message, update the ToolUse part
+  status in the original assistant message, and broadcast the event.
   """
   @spec flush_tool_result(String.t(), String.t(), String.t(), boolean()) :: :ok
   def flush_tool_result(session_id, tool_use_id, result, is_error) do
@@ -93,7 +94,48 @@ defmodule Synapsis.Agent.ResponseFlusher do
       token_count: ContextWindow.estimate_tokens(result)
     })
 
+    # Update the ToolUse part status in the original assistant message
+    update_tool_use_status(session_id, tool_use_id, if(is_error, do: :error, else: :completed))
+
     :ok
+  end
+
+  defp update_tool_use_status(session_id, tool_use_id, new_status) do
+    import Ecto.Query, only: [from: 2]
+
+    # Find the assistant message containing this tool_use_id
+    query =
+      from(m in Message,
+        where: m.session_id == ^session_id and m.role == "assistant",
+        order_by: [desc: m.inserted_at],
+        limit: 5
+      )
+
+    messages = Repo.all(query)
+
+    Enum.find_value(messages, fn msg ->
+      updated_parts =
+        Enum.map(msg.parts, fn
+          %Synapsis.Part.ToolUse{tool_use_id: ^tool_use_id} = tu ->
+            %{tu | status: new_status}
+
+          part ->
+            part
+        end)
+
+      if updated_parts != msg.parts do
+        msg
+        |> Ecto.Changeset.change(parts: updated_parts)
+        |> Repo.update()
+      end
+    end)
+  rescue
+    e ->
+      Logger.warning("update_tool_use_status_failed",
+        session_id: session_id,
+        tool_use_id: tool_use_id,
+        error: Exception.message(e)
+      )
   end
 
   defp safe_insert_message(session_id, attrs) do

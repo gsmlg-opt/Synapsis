@@ -326,6 +326,8 @@ defmodule Synapsis.Workspace do
   defp sort_resources(resources, _),
     do: Enum.sort_by(resources, & &1.path)
 
+  defp uuid?("/" <> _), do: false
+
   defp uuid?(string) do
     case Ecto.UUID.cast(string) do
       {:ok, _} -> true

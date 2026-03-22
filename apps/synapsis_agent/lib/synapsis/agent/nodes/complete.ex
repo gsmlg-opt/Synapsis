@@ -8,6 +8,9 @@ defmodule Synapsis.Agent.Nodes.Complete do
   def run(state, _ctx) do
     session_id = state.session_id
 
+    # Persist idle status to DB so page reloads show correct state
+    Synapsis.Session.Worker.Persistence.update_session_status(session_id, "idle")
+
     Phoenix.PubSub.broadcast(
       Synapsis.PubSub,
       "session:#{session_id}",

@@ -12,9 +12,7 @@ defmodule SynapsisWeb.AssistantLive.IndexTest do
       {:ok, _view, html} = live(conn, ~p"/assistant")
 
       assert html =~ "Build"
-      assert html =~ "Plan"
-      assert html =~ "Full-featured coding assistant"
-      assert html =~ "Read-only planning assistant"
+      assert html =~ "Workspace-driven coding assistant"
     end
   end
 end

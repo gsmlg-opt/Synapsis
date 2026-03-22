@@ -21,6 +21,22 @@ defmodule Synapsis.Workspace.Identity do
   @global_soul_path "/global/soul.md"
   @global_identity_path "/global/identity.md"
   @global_bootstrap_path "/global/bootstrap.md"
+  @global_agents_path "/global/agents.md"
+  @global_tools_path "/global/tools.md"
+  @global_user_path "/global/user.md"
+  @global_heartbeat_path "/global/heartbeat.md"
+  @global_memory_path "/global/memory.md"
+
+  @core_files [
+    %{name: "AGENTS.md", path: @global_agents_path},
+    %{name: "SOUL.md", path: @global_soul_path},
+    %{name: "TOOLS.md", path: @global_tools_path},
+    %{name: "IDENTITY.md", path: @global_identity_path},
+    %{name: "USER.md", path: @global_user_path},
+    %{name: "HEARTBEAT.md", path: @global_heartbeat_path},
+    %{name: "BOOTSTRAP.md", path: @global_bootstrap_path},
+    %{name: "MEMORY.md", path: @global_memory_path}
+  ]
 
   @default_soul """
   # Soul
@@ -66,6 +82,73 @@ defmodule Synapsis.Workspace.Identity do
 
   ## Conventions
   - (Add project-wide conventions here)
+  """
+
+  @default_agents """
+  # Agents
+
+  Configure agent profiles and routing rules.
+
+  ## Default Agent
+  - Mode: build
+  - Reasoning: medium
+  - Read-only: no
+
+  ## Custom Agents
+  (Define custom agent profiles in .opencode.json or here.)
+  """
+
+  @default_tools """
+  # Tools
+
+  Tool access preferences and guidance for the assistant.
+
+  ## Enabled Categories
+  - Filesystem: read, write, edit, delete, move
+  - Search: grep, glob
+  - Execution: bash
+  - Web: fetch, search
+
+  ## Guidance
+  (Add tool usage preferences and constraints here.)
+  """
+
+  @default_user """
+  # User Profile
+
+  (Edit this file to describe yourself to the assistant.)
+
+  ## Name
+  (Your name)
+
+  ## Role
+  (Your role — developer, designer, data scientist, etc.)
+
+  ## Working Style
+  (How you prefer to work — e.g., TDD, prototype-first, etc.)
+  """
+
+  @default_heartbeat """
+  # Heartbeat
+
+  Proactive execution schedules and configuration.
+
+  ## Schedules
+  (Configure heartbeat schedules here or via the Cron Jobs tab.)
+
+  ## Templates
+  - morning-briefing: Summarize overnight activity (disabled)
+  - stale-pr-check: Check for stale PRs (disabled)
+  - daily-summary: End-of-day summary (disabled)
+  """
+
+  @default_memory """
+  # Memory
+
+  Long-term memory notes and preferences for the assistant.
+
+  (The assistant will automatically load relevant memories into context.
+  You can also manually add notes here for the assistant to reference.)
   """
 
   @doc """
@@ -132,6 +215,10 @@ defmodule Synapsis.Workspace.Identity do
     }
   end
 
+  @doc "Returns the list of core identity files with name and path."
+  @spec core_files() :: [%{name: String.t(), path: String.t()}]
+  def core_files, do: @core_files
+
   @doc """
   Seed default identity files on first run. Idempotent — does not overwrite
   existing files.
@@ -141,6 +228,11 @@ defmodule Synapsis.Workspace.Identity do
     seed_if_missing(@global_soul_path, @default_soul)
     seed_if_missing(@global_identity_path, @default_identity)
     seed_if_missing(@global_bootstrap_path, @default_bootstrap)
+    seed_if_missing(@global_agents_path, @default_agents)
+    seed_if_missing(@global_tools_path, @default_tools)
+    seed_if_missing(@global_user_path, @default_user)
+    seed_if_missing(@global_heartbeat_path, @default_heartbeat)
+    seed_if_missing(@global_memory_path, @default_memory)
     :ok
   end
 

@@ -6,21 +6,18 @@ defmodule SynapsisWeb.AssistantLive.Show do
 
   @impl true
   def mount(%{"name" => name}, _session, socket) do
-    providers =
-      case Synapsis.Providers.list(enabled: true) do
-        {:ok, list} -> list
-        list when is_list(list) -> list
-        _ -> []
-      end
+    agent_config = Synapsis.Agent.Resolver.resolve(name)
+    provider_configured? = not is_nil(agent_config.provider)
 
     {:ok,
      assign(socket,
        page_title: "#{String.capitalize(name)} Assistant",
        assistant_name: name,
+       agent_config: agent_config,
+       provider_configured: provider_configured?,
        sessions: [],
        current_session: nil,
        messages: [],
-       providers: providers,
        streaming_text: "",
        streaming_reasoning: "",
        tool_calls: %{},
@@ -28,8 +25,6 @@ defmodule SynapsisWeb.AssistantLive.Show do
        session_status: "idle",
        show_new_session: false,
        show_sidebar: true,
-       selected_provider: nil,
-       available_models: [],
        current_mode: name
      )}
   end
@@ -114,20 +109,12 @@ defmodule SynapsisWeb.AssistantLive.Show do
     {:noreply, assign(socket, :show_sidebar, !socket.assigns.show_sidebar)}
   end
 
-  def handle_event("select_provider", %{"provider" => provider_name}, socket) do
-    models =
-      case Synapsis.Providers.models_for(provider_name) do
-        {:ok, models} -> models
-        _ -> []
-      end
-
-    {:noreply, assign(socket, selected_provider: provider_name, available_models: models)}
-  end
-
-  def handle_event("create_session", params, socket) do
+  def handle_event("create_session", _params, socket) do
     name = socket.assigns.assistant_name
-    provider = params["provider"] || "anthropic"
-    model = params["model"] || Synapsis.Providers.default_model(provider)
+    # Re-resolve to pick up any config changes saved from the setting page
+    agent_config = Synapsis.Agent.Resolver.resolve(name)
+    provider = agent_config.provider || "anthropic"
+    model = agent_config.model || Synapsis.Providers.default_model(provider)
 
     case Sessions.create("__global__", %{provider: provider, model: model, agent: name}) do
       {:ok, session} ->
@@ -344,38 +331,27 @@ defmodule SynapsisWeb.AssistantLive.Show do
               <.dm_mdi name="cog-outline" class="w-3.5 h-3.5" />
             </.dm_link>
           </div>
-          <.dm_btn variant="primary" class="w-full" phx-click="toggle_new_session">
-            <.dm_mdi name="plus" class="w-4 h-4" /> New Session
-          </.dm_btn>
+          <%= if @provider_configured do %>
+            <.dm_btn variant="primary" class="w-full" phx-click="toggle_new_session">
+              <.dm_mdi name="plus" class="w-4 h-4" /> New Session
+            </.dm_btn>
+          <% else %>
+            <.dm_tooltip content="Set a provider in assistant settings first" position="bottom" color="warning">
+              <.dm_btn variant="primary" class="w-full opacity-50 cursor-not-allowed" disabled>
+                <.dm_mdi name="plus" class="w-4 h-4" /> New Session
+              </.dm_btn>
+            </.dm_tooltip>
+          <% end %>
         </div>
 
-        <%!-- New session form --%>
-        <div :if={@show_new_session} class="p-3 border-b border-base-300 bg-base-100">
-          <form phx-submit="create_session" class="space-y-2">
-            <div>
-              <label class="text-xs text-base-content/60">Provider</label>
-              <select
-                name="provider"
-                phx-change="select_provider"
-                class="w-full bg-base-200 border border-base-300 rounded px-2 py-1 text-sm"
-              >
-                <option value="">Select provider...</option>
-                <option :for={p <- @providers} value={p.name}>{p.name}</option>
-              </select>
-            </div>
-            <div :if={@available_models != []}>
-              <label class="text-xs text-base-content/60">Model</label>
-              <select
-                name="model"
-                class="w-full bg-base-200 border border-base-300 rounded px-2 py-1 text-sm"
-              >
-                <option :for={m <- @available_models} value={model_id(m)}>{model_label(m)}</option>
-              </select>
-            </div>
-            <.dm_btn type="submit" variant="primary" size="sm" class="w-full">
-              Create
-            </.dm_btn>
-          </form>
+        <%!-- New session confirm --%>
+        <div :if={@show_new_session && @provider_configured} class="p-3 border-b border-base-300 bg-base-100">
+          <div class="text-xs text-base-content/50 mb-2">
+            {@agent_config.provider} / {@agent_config.model || Synapsis.Providers.default_model(@agent_config.provider)}
+          </div>
+          <.dm_btn variant="primary" size="sm" class="w-full" phx-click="create_session">
+            Create Session
+          </.dm_btn>
         </div>
 
         <%!-- Session list --%>
@@ -494,12 +470,20 @@ defmodule SynapsisWeb.AssistantLive.Show do
             <.empty_state
               icon="robot-outline"
               title={"#{String.capitalize(@assistant_name)} Assistant"}
-              description="Create or select a session to start chatting"
+              description={if @provider_configured, do: "Create or select a session to start chatting", else: "Configure a provider in settings to start chatting"}
             >
               <:action>
-                <.dm_btn variant="primary" phx-click="toggle_new_session">
-                  <.dm_mdi name="plus" class="w-4 h-4" /> New Session
-                </.dm_btn>
+                <%= if @provider_configured do %>
+                  <.dm_btn variant="primary" phx-click="toggle_new_session">
+                    <.dm_mdi name="plus" class="w-4 h-4" /> New Session
+                  </.dm_btn>
+                <% else %>
+                  <.dm_link navigate={~p"/assistant/#{@assistant_name}/setting"}>
+                    <.dm_btn variant="primary">
+                      <.dm_mdi name="cog-outline" class="w-4 h-4" /> Go to Settings
+                    </.dm_btn>
+                  </.dm_link>
+                <% end %>
               </:action>
             </.empty_state>
           </div>
@@ -516,15 +500,4 @@ defmodule SynapsisWeb.AssistantLive.Show do
     |> Enum.filter(&(&1.agent == agent_name))
   end
 
-  defp model_id(model) when is_binary(model), do: model
-  defp model_id(%{id: id}), do: id
-  defp model_id(%{"id" => id}), do: id
-  defp model_id(model), do: to_string(model)
-
-  defp model_label(model) when is_binary(model), do: model
-  defp model_label(%{name: name}), do: name
-  defp model_label(%{"name" => name}), do: name
-  defp model_label(%{id: id}), do: id
-  defp model_label(%{"id" => id}), do: id
-  defp model_label(model), do: to_string(model)
 end

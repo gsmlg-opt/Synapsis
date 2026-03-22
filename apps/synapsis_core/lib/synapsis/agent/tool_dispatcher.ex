@@ -122,7 +122,7 @@ defmodule Synapsis.Agent.ToolDispatcher do
     for {classification, tool_use} <- classified_tools do
       case classification do
         :approved ->
-          execute_async(tool_use, caller_pid, Map.put(opts, :tool_call_hashes, new_hashes))
+          execute_async(tool_use, caller_pid, Map.put(opts, :tool_call_hashes, hashes))
 
         :requires_approval ->
           Phoenix.PubSub.broadcast(

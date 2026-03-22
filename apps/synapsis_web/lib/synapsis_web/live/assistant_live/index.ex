@@ -1,33 +1,42 @@
 defmodule SynapsisWeb.AssistantLive.Index do
-  @moduledoc "Lists available assistants (agent profiles)."
+  @moduledoc "Lists available assistants (agent profiles) from the database."
   use SynapsisWeb, :live_view
 
-  @default_assistants [
-    %{
-      name: "build",
-      label: "Build",
-      icon: "hammer-wrench",
-      description:
-        "Full-featured coding assistant with file editing, shell execution, and search tools."
-    },
-    %{
-      name: "plan",
-      label: "Plan",
-      icon: "file-document-outline",
-      description:
-        "Read-only planning assistant for analyzing code and creating implementation plans."
-    }
-  ]
+  alias Synapsis.AgentConfigs
 
   @impl true
   def mount(_params, _session, socket) do
-    config = Synapsis.Config.resolve("__global__")
-    custom_agents = get_custom_agents(config)
+    agents = AgentConfigs.list_enabled()
+
+    assistants =
+      Enum.map(agents, fn ac ->
+        %{
+          name: ac.name,
+          label: ac.label || String.capitalize(ac.name),
+          icon: ac.icon || "robot-outline",
+          description: ac.description || "Agent: #{ac.name}"
+        }
+      end)
+
+    # If no agents in DB yet, show hardcoded defaults
+    assistants =
+      if assistants == [] do
+        [
+          %{
+            name: "build",
+            label: "Build",
+            icon: "hammer-wrench",
+            description: "Workspace-driven coding assistant with identity, tools, and memory."
+          }
+        ]
+      else
+        assistants
+      end
 
     {:ok,
      assign(socket,
        page_title: "Assistants",
-       assistants: @default_assistants ++ custom_agents
+       assistants: assistants
      )}
   end
 
@@ -66,24 +75,5 @@ defmodule SynapsisWeb.AssistantLive.Index do
       </div>
     </div>
     """
-  end
-
-  defp get_custom_agents(config) do
-    case config["agents"] do
-      agents when is_map(agents) ->
-        agents
-        |> Enum.reject(fn {name, _} -> name in ~w(build plan) end)
-        |> Enum.map(fn {name, _agent_config} ->
-          %{
-            name: name,
-            label: String.capitalize(name),
-            icon: "robot-outline",
-            description: "Custom agent: #{name}"
-          }
-        end)
-
-      _ ->
-        []
-    end
   end
 end

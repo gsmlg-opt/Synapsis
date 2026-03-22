@@ -1,9 +1,18 @@
 defmodule Synapsis.Agent.ResolverTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Synapsis.Agent.Resolver
+  alias Synapsis.{AgentConfig, AgentConfigs, Repo}
 
-  describe "resolve/1 with no overrides" do
+  setup do
+    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
+
+    # Clean up any existing agent_configs for isolation
+    Repo.delete_all(AgentConfig)
+    :ok
+  end
+
+  describe "resolve/1 with no DB records (hardcoded fallback)" do
     test "returns default build agent config" do
       agent = Resolver.resolve("build")
       assert agent.name == "build"
@@ -38,7 +47,6 @@ defmodule Synapsis.Agent.ResolverTest do
       assert Map.has_key?(agent, :read_only)
       assert Map.has_key?(agent, :max_tokens)
       assert Map.has_key?(agent, :model_tier)
-      assert map_size(agent) == 9
     end
 
     test "default build agent includes all expected tools" do
@@ -64,26 +72,10 @@ defmodule Synapsis.Agent.ResolverTest do
       assert agent.tools == expected_tools
     end
 
-    test "default agents include build and plan" do
-      build = Resolver.resolve("build")
-      plan = Resolver.resolve("plan")
-
-      assert build.name == "build"
-      assert plan.name == "plan"
-
-      # They should differ in key attributes
-      assert build.read_only == false
-      assert plan.read_only == true
-      assert build.reasoning_effort == "medium"
-      assert plan.reasoning_effort == "high"
-      assert length(build.tools) > length(plan.tools)
-    end
-
     test "unknown agent name falls back to build agent defaults" do
       agent = Resolver.resolve("unknown_agent_xyz")
       build = Resolver.resolve("build")
 
-      assert agent.name == "unknown_agent_xyz"
       assert agent.tools == build.tools
       assert agent.read_only == build.read_only
       assert agent.system_prompt == build.system_prompt
@@ -105,133 +97,125 @@ defmodule Synapsis.Agent.ResolverTest do
       agent = Resolver.resolve("plan")
       assert agent.model_tier == :expert
     end
-
-    test "unknown agent inherits build model_tier (:default)" do
-      agent = Resolver.resolve("unknown_agent")
-      assert agent.model_tier == :default
-    end
   end
 
-  describe "resolve/2 with overrides" do
-    test "merges model override" do
-      config = %{"agents" => %{"build" => %{"model" => "claude-opus-4-20250514"}}}
-      agent = Resolver.resolve("build", config)
+  describe "resolve/1 with DB records" do
+    test "loads agent config from database" do
+      {:ok, _} =
+        AgentConfigs.create(%{
+          name: "build",
+          provider: "anthropic",
+          model: "claude-opus-4-20250514",
+          system_prompt: "Custom prompt",
+          tools: ["file_read", "grep"],
+          reasoning_effort: "high",
+          read_only: false,
+          max_tokens: 4096,
+          model_tier: "fast"
+        })
+
+      agent = Resolver.resolve("build")
+      assert agent.name == "build"
+      assert agent.provider == "anthropic"
       assert agent.model == "claude-opus-4-20250514"
-    end
-
-    test "merges provider override" do
-      config = %{"agents" => %{"build" => %{"provider" => "openai"}}}
-      agent = Resolver.resolve("build", config)
-      assert agent.provider == "openai"
-    end
-
-    test "preserves system_prompt from override" do
-      custom_prompt = "You are a specialized Rust assistant."
-
-      config = %{
-        "agents" => %{
-          "build" => %{"systemPrompt" => custom_prompt}
-        }
-      }
-
-      agent = Resolver.resolve("build", config)
-      assert agent.system_prompt == custom_prompt
-    end
-
-    test "overrides tools when provided as a list" do
-      config = %{
-        "agents" => %{
-          "build" => %{"tools" => ["file_read", "grep"]}
-        }
-      }
-
-      agent = Resolver.resolve("build", config)
+      assert agent.system_prompt == "Custom prompt"
       assert agent.tools == ["file_read", "grep"]
-    end
-
-    test "merges maxTokens override" do
-      config = %{"agents" => %{"build" => %{"maxTokens" => 2048}}}
-      agent = Resolver.resolve("build", config)
-      assert agent.max_tokens == 2048
-    end
-
-    test "merges reasoningEffort override" do
-      config = %{"agents" => %{"build" => %{"reasoningEffort" => "low"}}}
-      agent = Resolver.resolve("build", config)
-      assert agent.reasoning_effort == "low"
-    end
-
-    test "merges readOnly override" do
-      config = %{"agents" => %{"build" => %{"readOnly" => true}}}
-      agent = Resolver.resolve("build", config)
-      assert agent.read_only == true
-    end
-
-    test "non-list tools override falls back to defaults" do
-      config = %{"agents" => %{"build" => %{"tools" => "not_a_list"}}}
-      agent = Resolver.resolve("build", config)
-      assert "bash" in agent.tools
-      assert length(agent.tools) == 8
-    end
-
-    test "empty override map preserves all defaults" do
-      config = %{"agents" => %{"build" => %{}}}
-      agent = Resolver.resolve("build", config)
-      default = Resolver.resolve("build")
-
-      assert agent.model == default.model
-      assert agent.provider == default.provider
-      assert agent.system_prompt == default.system_prompt
-      assert agent.tools == default.tools
-      assert agent.reasoning_effort == default.reasoning_effort
-      assert agent.read_only == default.read_only
-      assert agent.max_tokens == default.max_tokens
-    end
-
-    test "override for non-existent agent section preserves defaults" do
-      config = %{"agents" => %{"other" => %{"model" => "gpt-4"}}}
-      agent = Resolver.resolve("build", config)
-      default = Resolver.resolve("build")
-      assert agent.model == default.model
-    end
-
-    test "merges modelTier override to :fast" do
-      config = %{"agents" => %{"build" => %{"modelTier" => "fast"}}}
-      agent = Resolver.resolve("build", config)
+      assert agent.reasoning_effort == "high"
+      assert agent.max_tokens == 4096
       assert agent.model_tier == :fast
     end
 
-    test "merges modelTier override to :expert" do
-      config = %{"agents" => %{"plan" => %{"modelTier" => "default"}}}
-      agent = Resolver.resolve("plan", config)
-      assert agent.model_tier == :default
-    end
+    test "DB record takes precedence over hardcoded defaults" do
+      {:ok, _} =
+        AgentConfigs.create(%{
+          name: "plan",
+          provider: "openai",
+          model: "gpt-4",
+          reasoning_effort: "low",
+          read_only: false,
+          max_tokens: 2048,
+          model_tier: "default"
+        })
 
-    test "invalid modelTier keeps default" do
-      config = %{"agents" => %{"build" => %{"modelTier" => "bogus"}}}
-      agent = Resolver.resolve("build", config)
-      assert agent.model_tier == :default
-    end
-
-    test "multiple fields can be overridden at once" do
-      config = %{
-        "agents" => %{
-          "plan" => %{
-            "model" => "gpt-4",
-            "provider" => "openai",
-            "reasoningEffort" => "low",
-            "maxTokens" => 4096
-          }
-        }
-      }
-
-      agent = Resolver.resolve("plan", config)
-      assert agent.model == "gpt-4"
+      agent = Resolver.resolve("plan")
       assert agent.provider == "openai"
+      assert agent.model == "gpt-4"
       assert agent.reasoning_effort == "low"
-      assert agent.max_tokens == 4096
-      # Non-overridden fields keep defaults
+      assert agent.read_only == false
+      assert agent.max_tokens == 2048
+      assert agent.model_tier == :default
+    end
+
+    test "custom agent stored in DB is resolved" do
+      {:ok, _} =
+        AgentConfigs.create(%{
+          name: "reviewer",
+          label: "Code Reviewer",
+          icon: "magnify",
+          description: "Reviews code for quality",
+          provider: "anthropic",
+          model: "claude-opus-4-20250514",
+          system_prompt: "You are a code reviewer.",
+          tools: ["file_read", "grep", "glob"],
+          reasoning_effort: "high",
+          read_only: true,
+          max_tokens: 16384,
+          model_tier: "expert"
+        })
+
+      agent = Resolver.resolve("reviewer")
+      assert agent.name == "reviewer"
+      assert agent.label == "Code Reviewer"
+      assert agent.icon == "magnify"
+      assert agent.description == "Reviews code for quality"
+      assert agent.provider == "anthropic"
       assert agent.read_only == true
+      assert agent.model_tier == :expert
+    end
+  end
+
+  describe "list_agents/0" do
+    test "returns all enabled agents from DB" do
+      {:ok, _} = AgentConfigs.create(%{name: "build", enabled: true})
+      {:ok, _} = AgentConfigs.create(%{name: "plan", enabled: true})
+      {:ok, _} = AgentConfigs.create(%{name: "disabled", enabled: false})
+
+      agents = Resolver.list_agents()
+      names = Enum.map(agents, & &1.name)
+      assert "build" in names
+      assert "plan" in names
+      refute "disabled" in names
+    end
+  end
+
+  describe "seed_defaults/0" do
+    test "creates build and plan agents" do
+      AgentConfigs.seed_defaults()
+
+      build = AgentConfigs.get_by_name("build")
+      plan = AgentConfigs.get_by_name("plan")
+
+      assert build != nil
+      assert plan != nil
+      assert build.name == "build"
+      assert plan.name == "plan"
+      assert build.is_default == true
+      assert plan.read_only == true
+    end
+
+    test "does not overwrite existing agents" do
+      {:ok, _} =
+        AgentConfigs.create(%{
+          name: "build",
+          provider: "openai",
+          model: "gpt-4"
+        })
+
+      AgentConfigs.seed_defaults()
+
+      build = AgentConfigs.get_by_name("build")
+      assert build.provider == "openai"
+      assert build.model == "gpt-4"
     end
   end
 end

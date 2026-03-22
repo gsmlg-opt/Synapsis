@@ -26,14 +26,13 @@ defmodule Synapsis.Session do
   end
 
   @valid_statuses ~w(idle streaming tool_executing error)
-  @valid_agents ~w(build plan custom)
 
   def changeset(session, attrs) do
     session
     |> cast(attrs, [:title, :agent, :provider, :model, :status, :config, :project_id])
     |> validate_required([:provider, :model, :project_id])
     |> validate_inclusion(:status, @valid_statuses)
-    |> validate_inclusion(:agent, @valid_agents)
+    |> validate_length(:agent, min: 1, max: 255)
     |> foreign_key_constraint(:project_id)
   end
 

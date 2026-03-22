@@ -52,6 +52,7 @@ defmodule SynapsisCore.Application do
         end
 
         register_env_providers()
+        seed_default_agents()
 
         maybe_apply(SynapsisPlugin.Loader, :start_auto_plugins, [])
 
@@ -75,6 +76,14 @@ defmodule SynapsisCore.Application do
   defp maybe_apply(mod, fun, args) do
     if Code.ensure_loaded?(mod) and function_exported?(mod, fun, length(args)) do
       apply(mod, fun, args)
+    end
+  end
+
+  defp seed_default_agents do
+    try do
+      Synapsis.AgentConfigs.seed_defaults()
+    rescue
+      e -> Logger.warning("agent_config_seed_failed", error: Exception.message(e))
     end
   end
 
