@@ -30,6 +30,10 @@ defmodule Synapsis.Tool.BuiltinTest do
     "tool_search",
     "teammate",
     "team_delete",
+    "session_summarize",
+    "memory_save",
+    "memory_search",
+    "memory_update",
     "notebook_edit",
     "notebook_read",
     "computer"
@@ -71,12 +75,12 @@ defmodule Synapsis.Tool.BuiltinTest do
       end
 
       builtin_tools = Enum.filter(all_tools, &(&1.name in @all_expected_tools))
-      assert length(builtin_tools) == 28
+      assert length(builtin_tools) == 32
     end
   end
 
   describe "enabled tools" do
-    test "25 tools are enabled" do
+    test "28 tools are enabled" do
       enabled_count =
         @all_expected_tools
         |> Enum.count(fn name ->
@@ -84,7 +88,7 @@ defmodule Synapsis.Tool.BuiltinTest do
           not (function_exported?(mod, :enabled?, 0) and not mod.enabled?())
         end)
 
-      assert enabled_count == 24
+      assert enabled_count == 28
     end
 
     test "all expected enabled tools respond to enabled? as true or default" do
@@ -196,7 +200,7 @@ defmodule Synapsis.Tool.BuiltinTest do
       # Count should still be 28
       all_tools = Registry.list()
       builtin_tools = Enum.filter(all_tools, &(&1.name in @all_expected_tools))
-      assert length(builtin_tools) == 28
+      assert length(builtin_tools) == 32
     end
   end
 end
