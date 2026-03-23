@@ -151,6 +151,112 @@ defmodule SynapsisServer.ProviderController do
     |> json(%{error: "api_key is required"})
   end
 
+  @doc "Start OAuth device code flow for a provider."
+  def oauth_device_start(conn, %{"id" => id}) do
+    case Providers.get(id) do
+      {:ok, _provider} ->
+        case Synapsis.Provider.OAuth.OpenAI.request_user_code() do
+          {:ok, device_info} ->
+            json(conn, %{
+              data: %{
+                device_auth_id: device_info.device_auth_id,
+                user_code: device_info.user_code,
+                interval: device_info.interval,
+                verification_url: Synapsis.Provider.OAuth.OpenAI.verification_url()
+              }
+            })
+
+          {:error, :device_auth_not_enabled} ->
+            conn
+            |> put_status(:unprocessable_entity)
+            |> json(%{
+              error:
+                "Device code authentication is not enabled for your OpenAI account. Enable it in ChatGPT Settings > Security."
+            })
+
+          {:error, reason} ->
+            Logger.warning("oauth_device_start_error", provider_id: id, reason: inspect(reason))
+            conn |> put_status(500) |> json(%{error: "Failed to start OAuth flow"})
+        end
+
+      {:error, :not_found} ->
+        conn |> put_status(:not_found) |> json(%{error: "Provider not found"})
+    end
+  end
+
+  @doc "Poll OAuth device authorization status and exchange for tokens if authorized."
+  def oauth_device_poll(conn, %{
+        "id" => id,
+        "device_auth_id" => device_auth_id,
+        "user_code" => user_code
+      }) do
+    case Providers.get(id) do
+      {:ok, _provider} ->
+        case Synapsis.Provider.OAuth.OpenAI.poll_device_token(device_auth_id, user_code) do
+          {:ok, auth_result} ->
+            case Synapsis.Provider.OAuth.OpenAI.exchange_code(
+                   auth_result.authorization_code,
+                   auth_result.code_verifier
+                 ) do
+              {:ok, tokens} ->
+                case Providers.save_oauth_tokens(id, tokens) do
+                  {:ok, provider} ->
+                    json(conn, %{
+                      data: %{status: "authorized", provider: serialize_provider(provider)}
+                    })
+
+                  {:error, reason} ->
+                    Logger.warning("oauth_token_save_error",
+                      provider_id: id,
+                      reason: inspect(reason)
+                    )
+
+                    conn |> put_status(500) |> json(%{error: "Failed to save tokens"})
+                end
+
+              {:error, reason} ->
+                Logger.warning("oauth_token_exchange_error",
+                  provider_id: id,
+                  reason: inspect(reason)
+                )
+
+                conn |> put_status(500) |> json(%{error: "Token exchange failed"})
+            end
+
+          {:pending, :authorization_pending} ->
+            json(conn, %{data: %{status: "pending"}})
+
+          {:error, reason} ->
+            Logger.warning("oauth_device_poll_error", provider_id: id, reason: inspect(reason))
+            conn |> put_status(500) |> json(%{error: "Polling failed"})
+        end
+
+      {:error, :not_found} ->
+        conn |> put_status(:not_found) |> json(%{error: "Provider not found"})
+    end
+  end
+
+  @doc "Refresh OAuth tokens for a provider."
+  def oauth_refresh(conn, %{"id" => id}) do
+    case Providers.refresh_oauth(id) do
+      {:ok, provider} ->
+        json(conn, %{data: serialize_provider(provider)})
+
+      {:error, :not_found} ->
+        conn |> put_status(:not_found) |> json(%{error: "Provider not found"})
+
+      {:error, :not_oauth_provider} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "Not an OAuth provider"})
+
+      {:error, :oauth_reauth_required} ->
+        conn |> put_status(:unauthorized) |> json(%{error: "Re-authentication required"})
+
+      {:error, reason} ->
+        Logger.warning("oauth_refresh_error", provider_id: id, reason: inspect(reason))
+        conn |> put_status(500) |> json(%{error: "Token refresh failed"})
+    end
+  end
+
   defp serialize_provider(%Synapsis.ProviderConfig{} = p) do
     %{
       id: p.id,

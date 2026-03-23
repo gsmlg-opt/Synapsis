@@ -13,6 +13,7 @@ defmodule Synapsis.Session do
     field(:model, :string)
     field(:status, :string, default: "idle")
     field(:config, :map, default: %{})
+    field(:debug, :boolean, default: false)
 
     belongs_to(:project, Synapsis.Project)
     has_many(:messages, Synapsis.Message)
@@ -29,7 +30,7 @@ defmodule Synapsis.Session do
 
   def changeset(session, attrs) do
     session
-    |> cast(attrs, [:title, :agent, :provider, :model, :status, :config, :project_id])
+    |> cast(attrs, [:title, :agent, :provider, :model, :status, :config, :project_id, :debug])
     |> validate_required([:provider, :model, :project_id])
     |> validate_inclusion(:status, @valid_statuses)
     |> validate_length(:agent, min: 1, max: 255)

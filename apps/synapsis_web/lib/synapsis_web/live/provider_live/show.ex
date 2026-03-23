@@ -22,7 +22,14 @@ defmodule SynapsisWeb.ProviderLive.Show do
            chat_messages: [],
            chat_streaming: false,
            chat_stream_text: "",
-           chat_stream_ref: nil
+           chat_stream_ref: nil,
+           # OAuth device flow state
+           oauth_state: :idle,
+           oauth_user_code: nil,
+           oauth_verification_url: nil,
+           oauth_device_auth_id: nil,
+           oauth_error: nil,
+           oauth_poll_timer: nil
          )}
 
       {:error, :not_found} ->
@@ -137,6 +144,72 @@ defmodule SynapsisWeb.ProviderLive.Show do
     {:noreply, assign(socket, chat_messages: [], chat_stream_text: "", chat_streaming: false)}
   end
 
+  # -- OAuth Device Flow Events --
+
+  def handle_event("oauth_start", _params, socket) do
+    case Synapsis.Provider.OAuth.OpenAI.request_user_code() do
+      {:ok, device_info} ->
+        timer = Process.send_after(self(), :oauth_poll, device_info.interval * 1000)
+
+        {:noreply,
+         assign(socket,
+           oauth_state: :waiting_for_user,
+           oauth_user_code: device_info.user_code,
+           oauth_verification_url: Synapsis.Provider.OAuth.OpenAI.verification_url(),
+           oauth_device_auth_id: device_info.device_auth_id,
+           oauth_error: nil,
+           oauth_poll_timer: timer,
+           oauth_poll_interval: device_info.interval,
+           oauth_poll_started_at: System.monotonic_time(:millisecond)
+         )}
+
+      {:error, :device_auth_not_enabled} ->
+        {:noreply,
+         assign(socket,
+           oauth_state: :error,
+           oauth_error: "Device code auth not enabled. Enable it in ChatGPT Settings > Security."
+         )}
+
+      {:error, reason} ->
+        {:noreply,
+         assign(socket,
+           oauth_state: :error,
+           oauth_error: "Failed to start OAuth: #{inspect(reason)}"
+         )}
+    end
+  end
+
+  def handle_event("oauth_cancel", _params, socket) do
+    if socket.assigns.oauth_poll_timer, do: Process.cancel_timer(socket.assigns.oauth_poll_timer)
+
+    {:noreply,
+     assign(socket,
+       oauth_state: :idle,
+       oauth_user_code: nil,
+       oauth_device_auth_id: nil,
+       oauth_error: nil,
+       oauth_poll_timer: nil
+     )}
+  end
+
+  def handle_event("oauth_refresh", _params, socket) do
+    provider = socket.assigns.provider
+
+    case Synapsis.Providers.refresh_oauth(provider.id) do
+      {:ok, updated} ->
+        {:noreply,
+         socket
+         |> assign(provider: updated)
+         |> put_flash(:info, "OAuth tokens refreshed")}
+
+      {:error, :oauth_reauth_required} ->
+        {:noreply, put_flash(socket, :error, "Token expired — please sign in again")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Refresh failed: #{inspect(reason)}")}
+    end
+  end
+
   # -- Streaming handle_info --
 
   @impl true
@@ -186,7 +259,85 @@ defmodule SynapsisWeb.ProviderLive.Show do
     {:noreply, socket}
   end
 
+  # -- OAuth polling handle_info --
+
+  def handle_info(:oauth_poll, socket) do
+    elapsed = System.monotonic_time(:millisecond) - socket.assigns.oauth_poll_started_at
+
+    if elapsed > Synapsis.Provider.OAuth.OpenAI.max_poll_duration_ms() do
+      {:noreply,
+       assign(socket,
+         oauth_state: :error,
+         oauth_error: "Authorization timed out (15 minutes). Please try again.",
+         oauth_poll_timer: nil
+       )}
+    else
+      case Synapsis.Provider.OAuth.OpenAI.poll_device_token(
+             socket.assigns.oauth_device_auth_id,
+             socket.assigns.oauth_user_code
+           ) do
+        {:ok, auth_result} ->
+          handle_oauth_authorized(socket, auth_result)
+
+        {:pending, :authorization_pending} ->
+          timer =
+            Process.send_after(self(), :oauth_poll, socket.assigns.oauth_poll_interval * 1000)
+
+          {:noreply, assign(socket, oauth_poll_timer: timer)}
+
+        {:error, reason} ->
+          {:noreply,
+           assign(socket,
+             oauth_state: :error,
+             oauth_error: "Polling error: #{inspect(reason)}",
+             oauth_poll_timer: nil
+           )}
+      end
+    end
+  end
+
   # -- Private helpers --
+
+  defp handle_oauth_authorized(socket, auth_result) do
+    case Synapsis.Provider.OAuth.OpenAI.exchange_code(
+           auth_result.authorization_code,
+           auth_result.code_verifier
+         ) do
+      {:ok, tokens} ->
+        case Synapsis.Providers.save_oauth_tokens(socket.assigns.provider.id, tokens) do
+          {:ok, provider} ->
+            all_models = fetch_models(provider)
+
+            {:noreply,
+             socket
+             |> assign(
+               provider: provider,
+               all_models: all_models,
+               oauth_state: :authorized,
+               oauth_poll_timer: nil,
+               oauth_user_code: nil,
+               oauth_device_auth_id: nil
+             )
+             |> put_flash(:info, "OAuth login successful")}
+
+          {:error, reason} ->
+            {:noreply,
+             assign(socket,
+               oauth_state: :error,
+               oauth_error: "Failed to save tokens: #{inspect(reason)}",
+               oauth_poll_timer: nil
+             )}
+        end
+
+      {:error, reason} ->
+        {:noreply,
+         assign(socket,
+           oauth_state: :error,
+           oauth_error: "Token exchange failed: #{inspect(reason)}",
+           oauth_poll_timer: nil
+         )}
+    end
+  end
 
   defp fetch_models(provider) do
     case Synapsis.Providers.models_by_id(provider.id) do
@@ -309,6 +460,79 @@ defmodule SynapsisWeb.ProviderLive.Show do
             </.dm_btn>
           </:actions>
         </.dm_form>
+      </.dm_card>
+
+      <%!-- OAuth Login Section (openai-sub only) --%>
+      <.dm_card :if={@provider.name == "openai-sub"} variant="bordered" class="mb-6">
+        <:title>OAuth Authentication</:title>
+
+        <%= if Synapsis.Providers.oauth_provider?(@provider) do %>
+          <div class="flex items-center gap-3">
+            <span class="w-2 h-2 rounded-full bg-success"></span>
+            <span class="text-sm text-base-content">Authenticated via OAuth</span>
+            <.dm_btn variant="ghost" size="xs" phx-click="oauth_refresh">
+              Refresh Token
+            </.dm_btn>
+            <.dm_btn variant="ghost" size="xs" phx-click="oauth_start">
+              Re-authenticate
+            </.dm_btn>
+          </div>
+        <% else %>
+          <%= case @oauth_state do %>
+            <% :idle -> %>
+              <div class="space-y-3">
+                <p class="text-sm text-base-content/70">
+                  Sign in with your ChatGPT account using the OAuth device flow.
+                  This uses the same authentication as OpenAI Codex CLI.
+                </p>
+                <.dm_btn variant="primary" phx-click="oauth_start">
+                  <.dm_mdi name="login" class="mr-2" /> Sign in with ChatGPT
+                </.dm_btn>
+              </div>
+            <% :waiting_for_user -> %>
+              <div class="space-y-4">
+                <p class="text-sm text-base-content/70">
+                  Visit the link below and enter this code:
+                </p>
+                <div class="flex items-center gap-4">
+                  <code class="text-2xl font-mono font-bold tracking-widest bg-base-200 px-4 py-2 rounded-lg select-all">
+                    {@oauth_user_code}
+                  </code>
+                  <.dm_loading_spinner size="sm" />
+                </div>
+                <div class="text-sm">
+                  <a
+                    href={@oauth_verification_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-primary underline"
+                  >
+                    {@oauth_verification_url}
+                  </a>
+                </div>
+                <p class="text-xs text-base-content/50">
+                  Waiting for authorization... This will expire in 15 minutes.
+                </p>
+                <.dm_btn variant="ghost" size="sm" phx-click="oauth_cancel">
+                  Cancel
+                </.dm_btn>
+              </div>
+            <% :authorized -> %>
+              <div class="flex items-center gap-3">
+                <span class="w-2 h-2 rounded-full bg-success"></span>
+                <span class="text-sm text-success">Successfully authenticated!</span>
+              </div>
+            <% :error -> %>
+              <div class="space-y-3">
+                <div class="bg-error/10 border border-error/30 rounded-lg px-3 py-2 text-sm text-error">
+                  {@oauth_error}
+                </div>
+                <.dm_btn variant="primary" size="sm" phx-click="oauth_start">
+                  Try Again
+                </.dm_btn>
+              </div>
+          <% end %>
+        <% end %>
       </.dm_card>
 
       <%!-- Models Section --%>

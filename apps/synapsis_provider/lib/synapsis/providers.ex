@@ -123,6 +123,65 @@ defmodule Synapsis.Providers do
     update(id, %{api_key_encrypted: api_key})
   end
 
+  @doc "Store OAuth tokens in the provider's config JSONB and set the access_token as api_key."
+  def save_oauth_tokens(id, tokens) do
+    with {:ok, provider} <- get(id) do
+      oauth_config = Synapsis.Provider.OAuth.OpenAI.build_token_config(tokens)
+      merged_config = Map.merge(provider.config || %{}, oauth_config)
+
+      update(id, %{
+        api_key_encrypted: tokens.access_token,
+        config: merged_config
+      })
+    end
+  end
+
+  @doc "Refresh OAuth tokens for a provider if needed. Returns {:ok, provider} or {:error, reason}."
+  def refresh_oauth_if_needed(id) do
+    with {:ok, provider} <- get(id),
+         true <- oauth_provider?(provider),
+         true <- Synapsis.Provider.OAuth.OpenAI.needs_refresh?(provider.config) do
+      do_refresh_oauth(provider)
+    else
+      false -> get(id)
+      other -> other
+    end
+  end
+
+  @doc "Force refresh OAuth tokens for a provider."
+  def refresh_oauth(id) do
+    with {:ok, provider} <- get(id),
+         true <- oauth_provider?(provider) do
+      do_refresh_oauth(provider)
+    else
+      false -> {:error, :not_oauth_provider}
+      other -> other
+    end
+  end
+
+  @doc "Check if a provider uses OAuth authentication."
+  def oauth_provider?(%ProviderConfig{config: %{"auth_mode" => "oauth_device"}}), do: true
+  def oauth_provider?(_), do: false
+
+  defp do_refresh_oauth(provider) do
+    case Synapsis.Provider.OAuth.OpenAI.refresh_token_from_config(provider.config) do
+      nil ->
+        {:error, :no_refresh_token}
+
+      refresh_token ->
+        case Synapsis.Provider.OAuth.OpenAI.refresh_token(refresh_token) do
+          {:ok, new_tokens} ->
+            save_oauth_tokens(provider.id, new_tokens)
+
+          {:error, {:token_expired, _code}} ->
+            {:error, :oauth_reauth_required}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
+    end
+  end
+
   @default_providers [
     %{name: "anthropic", type: "anthropic", base_url: "https://api.anthropic.com"},
     %{name: "openai", type: "openai", base_url: "https://api.openai.com"},
@@ -175,9 +234,17 @@ defmodule Synapsis.Providers do
   end
 
   defp build_runtime_config(%ProviderConfig{} = provider) do
+    # For OAuth providers, prefer the access_token from config (may be fresher)
+    api_key =
+      case Synapsis.Provider.OAuth.OpenAI.access_token_from_config(provider.config) do
+        nil -> provider.api_key_encrypted
+        token -> token
+      end
+
     base = %{
-      api_key: provider.api_key_encrypted,
-      type: provider.type
+      api_key: api_key,
+      type: provider.type,
+      provider_id: provider.id
     }
 
     base =
@@ -185,6 +252,14 @@ defmodule Synapsis.Providers do
         Map.put(base, :base_url, provider.base_url)
       else
         Map.put(base, :base_url, default_base_url(provider.type))
+      end
+
+    # Mark OAuth providers so transport can attempt refresh on 401
+    base =
+      if oauth_provider?(provider) do
+        Map.put(base, :oauth, true)
+      else
+        base
       end
 
     Map.merge(base, atomize_keys(provider.config || %{}))

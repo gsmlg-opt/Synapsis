@@ -31,6 +31,13 @@ defmodule SynapsisWeb.SessionLive.Show do
         agent_mode = session.agent || "build"
         session_mode = derive_mode(session)
 
+        # Subscribe to debug events for this session
+        if connected?(socket) do
+          Phoenix.PubSub.subscribe(Synapsis.PubSub, "debug:#{session_id}")
+        end
+
+        debug_entries = load_debug_entries(session)
+
         {:ok,
          assign(socket,
            project: project,
@@ -46,7 +53,11 @@ defmodule SynapsisWeb.SessionLive.Show do
            available_models: available_models,
            session_models: session_models,
            show_model_selector: false,
-           selector_provider: selector_provider
+           selector_provider: selector_provider,
+           new_session_debug: false,
+           debug_enabled: session.debug || false,
+           debug_entries: debug_entries,
+           debug_panel_open: false
          )}
 
       _ ->
@@ -200,10 +211,15 @@ defmodule SynapsisWeb.SessionLive.Show do
     {:noreply, assign(socket, new_session_model: model)}
   end
 
+  def handle_event("toggle_new_session_debug", _params, socket) do
+    {:noreply, assign(socket, new_session_debug: !socket.assigns.new_session_debug)}
+  end
+
   def handle_event("create_session", _params, socket) do
     opts = %{
       provider: socket.assigns.new_session_provider,
-      model: socket.assigns.new_session_model
+      model: socket.assigns.new_session_model,
+      debug: socket.assigns.new_session_debug
     }
 
     case Synapsis.Sessions.create(socket.assigns.project.path, opts) do
@@ -220,6 +236,76 @@ defmodule SynapsisWeb.SessionLive.Show do
 
   def handle_event("navigate", %{"path" => path}, socket) do
     {:noreply, push_navigate(socket, to: path)}
+  end
+
+  def handle_event("open_debug_panel", _params, socket) do
+    entries = load_debug_entries_from_store(socket.assigns.session.id)
+    {:noreply, assign(socket, debug_panel_open: true, debug_entries: entries)}
+  end
+
+  def handle_event("close_debug_panel", _params, socket) do
+    {:noreply, assign(socket, debug_panel_open: false)}
+  end
+
+  def handle_event("toggle_debug_entry", %{"id" => request_id}, socket) do
+    entries =
+      Enum.map(socket.assigns.debug_entries, fn entry ->
+        if entry[:request_id] == request_id do
+          Map.update(entry, :expanded, true, &(!&1))
+        else
+          entry
+        end
+      end)
+
+    {:noreply, assign(socket, debug_entries: entries)}
+  end
+
+  @impl true
+  def handle_info({"debug_request", payload}, socket) do
+    if socket.assigns.debug_enabled do
+      entry = Map.merge(payload, %{expanded: false, type: :request})
+      entries = socket.assigns.debug_entries ++ [entry]
+      {:noreply, assign(socket, debug_entries: entries)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info({"debug_response", payload}, socket) do
+    if socket.assigns.debug_enabled do
+      request_id = payload["request_id"] || payload[:request_id]
+
+      entries =
+        Enum.map(socket.assigns.debug_entries, fn entry ->
+          if (entry["request_id"] || entry[:request_id]) == request_id do
+            Map.merge(entry, payload)
+          else
+            entry
+          end
+        end)
+
+      {:noreply, assign(socket, debug_entries: entries)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info(_msg, socket), do: {:noreply, socket}
+
+  defp load_debug_entries(%{debug: true} = session) do
+    load_debug_entries_from_store(session.id)
+  end
+
+  defp load_debug_entries(_), do: []
+
+  defp load_debug_entries_from_store(session_id) do
+    if Code.ensure_loaded?(SynapsisServer.DebugStore) and
+         Process.whereis(SynapsisServer.DebugStore) != nil do
+      SynapsisServer.DebugStore.list_entries(session_id)
+      |> Enum.map(&Map.put(&1, :expanded, false))
+    else
+      []
+    end
   end
 
   defp fetch_provider_models(provider_name) do
@@ -252,6 +338,78 @@ defmodule SynapsisWeb.SessionLive.Show do
   end
 
   defp derive_mode(_), do: "ask_before_edits"
+
+  # -- Debug panel helpers --
+
+  defp debug_method(entry),
+    do: (entry[:method] || entry["method"] || "POST") |> to_string() |> String.upcase()
+
+  defp debug_provider(entry), do: entry[:provider] || entry["provider"] || ""
+
+  defp debug_model(entry), do: entry[:model] || entry["model"] || ""
+
+  defp debug_status(entry) do
+    s = entry[:status] || entry["status"]
+    if s && s != 0, do: to_string(s), else: nil
+  end
+
+  defp debug_duration(entry) do
+    entry[:duration_ms] || entry["duration_ms"]
+  end
+
+  defp debug_status_dot(entry) do
+    status = entry[:status] || entry["status"]
+    complete = entry[:complete] || entry["complete"]
+
+    cond do
+      is_nil(status) or status == 0 -> "bg-base-content/30"
+      status == 429 -> "bg-warning"
+      status >= 400 -> "bg-error"
+      complete == false -> "bg-warning"
+      status >= 200 and status < 300 -> "bg-success"
+      true -> "bg-base-content/30"
+    end
+  end
+
+  defp debug_status_class(entry) do
+    status = entry[:status] || entry["status"]
+    complete = entry[:complete] || entry["complete"]
+
+    cond do
+      is_nil(status) or status == 0 -> ""
+      status == 429 -> "border-l-2 border-warning"
+      status >= 400 -> "border-l-2 border-error"
+      complete == false -> "border-l-2 border-warning"
+      status >= 200 and status < 300 -> "border-l-2 border-success"
+      true -> ""
+    end
+  end
+
+  defp inspect_headers(headers) when is_list(headers) do
+    headers
+    |> Enum.map(fn
+      {k, v} -> "#{k}: #{v}"
+      other -> inspect(other)
+    end)
+    |> Enum.join("\n")
+  end
+
+  defp inspect_headers(_), do: ""
+
+  defp format_body(body) when is_binary(body) do
+    case Jason.decode(body) do
+      {:ok, decoded} -> Jason.encode!(decoded, pretty: true)
+      _ -> body
+    end
+  end
+
+  defp format_body(body) when is_map(body) do
+    Jason.encode!(body, pretty: true)
+  rescue
+    _ -> inspect(body)
+  end
+
+  defp format_body(body), do: inspect(body)
 
   @impl true
   def render(assigns) do
@@ -297,6 +455,13 @@ defmodule SynapsisWeb.SessionLive.Show do
                 phx-key="Enter"
               />
             <% end %>
+            <.dm_checkbox
+              name="debug"
+              label="Enable Debug"
+              checked={@new_session_debug}
+              size="sm"
+              phx-click="toggle_new_session_debug"
+            />
             <.dm_btn variant="primary" class="w-full" phx-click="create_session">
               Create
             </.dm_btn>
@@ -386,7 +551,112 @@ defmodule SynapsisWeb.SessionLive.Show do
               </:content>
             </.dm_dropdown>
           </div>
+          <div :if={@debug_enabled} class="flex items-center gap-2">
+            <.dm_btn
+              variant="warning"
+              size="xs"
+              phx-click="open_debug_panel"
+            >
+              <.dm_mdi name="bug-outline" class="w-4 h-4" />
+              <span class="hidden sm:inline ml-1">Debug</span>
+            </.dm_btn>
+          </div>
         </div>
+
+        <%!-- Debug Dialog (fullscreen) --%>
+        <.dm_modal
+          :if={@debug_enabled}
+          id="debug-dialog"
+          size="huge"
+          class={if @debug_panel_open, do: "modal-open", else: ""}
+          hide_close
+        >
+          <:title class="flex items-center justify-between w-full">
+            <div class="flex items-center gap-2">
+              <.dm_mdi name="bug-outline" class="w-5 h-5" /> Debug Log
+            </div>
+            <.dm_btn variant="ghost" size="sm" phx-click="close_debug_panel">
+              <.dm_mdi name="close" class="w-5 h-5" />
+            </.dm_btn>
+          </:title>
+          <:body>
+            <div class="flex flex-col w-full overflow-y-auto max-h-[80vh]">
+              <div :if={@debug_entries == []} class="text-sm text-base-content/50 p-6 text-center">
+                No debug entries yet. Send a message to capture API calls.
+              </div>
+              <div :for={entry <- @debug_entries} class="mb-2">
+                <div
+                  class={"flex items-center gap-2 px-3 py-2 rounded cursor-pointer hover:bg-base-300 text-sm font-mono #{debug_status_class(entry)}"}
+                  phx-click="toggle_debug_entry"
+                  phx-value-id={entry[:request_id] || entry["request_id"]}
+                >
+                  <span class={"w-2 h-2 rounded-full #{debug_status_dot(entry)}"}></span>
+                  <span class="font-semibold">{debug_method(entry)}</span>
+                  <span class="truncate flex-1 text-base-content/70">{debug_provider(entry)}</span>
+                  <span class="text-base-content/50">{debug_model(entry)}</span>
+                  <span :if={debug_status(entry)} class="font-semibold">
+                    &rarr; {debug_status(entry)}
+                  </span>
+                  <span :if={debug_duration(entry)} class="text-base-content/50">
+                    ({debug_duration(entry)}ms)
+                  </span>
+                </div>
+                <div :if={entry[:expanded]} class="mt-1 mx-3 space-y-2">
+                  <%!-- Request --%>
+                  <div :if={entry[:url] || entry["url"]} class="bg-base-200 rounded p-3">
+                    <div class="text-xs font-semibold text-base-content/60 mb-1">Request</div>
+                    <div class="text-xs font-mono break-all text-base-content/80 mb-2">
+                      {entry[:url] || entry["url"]}
+                    </div>
+                    <div :if={entry[:headers] || entry["headers"]} class="text-xs mb-2">
+                      <details>
+                        <summary class="cursor-pointer text-base-content/50">Headers</summary>
+                        <pre class="mt-1 text-xs overflow-x-auto"><%= inspect_headers(entry[:headers] || entry["headers"]) %></pre>
+                      </details>
+                    </div>
+                    <div :if={entry[:body] || entry["body"]} class="text-xs">
+                      <details>
+                        <summary class="cursor-pointer text-base-content/50">Body</summary>
+                        <pre class="mt-1 text-xs overflow-x-auto max-h-60"><%= format_body(entry[:body] || entry["body"]) %></pre>
+                      </details>
+                    </div>
+                  </div>
+                  <%!-- Response --%>
+                  <div
+                    :if={
+                      entry[:response_body] || entry["response_body"] || entry[:status] ||
+                        entry["status"]
+                    }
+                    class="bg-base-200 rounded p-3"
+                  >
+                    <div class="text-xs font-semibold text-base-content/60 mb-1">Response</div>
+                    <div
+                      :if={entry[:response_headers] || entry["response_headers"]}
+                      class="text-xs mb-2"
+                    >
+                      <details>
+                        <summary class="cursor-pointer text-base-content/50">Headers</summary>
+                        <pre class="mt-1 text-xs overflow-x-auto"><%= inspect_headers(entry[:response_headers] || entry["response_headers"]) %></pre>
+                      </details>
+                    </div>
+                    <div :if={entry[:response_body] || entry["response_body"]} class="text-xs">
+                      <details>
+                        <summary class="cursor-pointer text-base-content/50">Body</summary>
+                        <pre class="mt-1 text-xs overflow-x-auto max-h-60"><%= format_body(entry[:response_body] || entry["response_body"]) %></pre>
+                      </details>
+                    </div>
+                    <div
+                      :if={entry[:error] || entry["error"]}
+                      class="mt-2 text-xs text-error"
+                    >
+                      Error: {inspect(entry[:error] || entry["error"])}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </:body>
+        </.dm_modal>
 
         <%!-- React ChatApp --%>
         <div

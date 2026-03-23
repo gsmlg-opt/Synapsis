@@ -139,20 +139,36 @@ defmodule Synapsis.Agent.SessionBridge do
 
   defp build_file_tree(project_path) do
     if File.dir?(project_path) do
-      case run_command("find", [project_path, "-maxdepth", "3", "-not", "-path", "*/.*"]) do
-        {:ok, output} ->
-          lines =
-            output
-            |> String.split("\n", trim: true)
-            |> Enum.take(50)
-            |> Enum.map(&String.replace(&1, project_path <> "/", ""))
-            |> Enum.join("\n")
+      lines =
+        list_files_recursive(project_path, project_path, 3)
+        |> Enum.take(50)
+        |> Enum.join("\n")
 
-          if lines == "", do: nil, else: lines
+      if lines == "", do: nil, else: lines
+    end
+  end
 
-        {:error, _} ->
-          nil
-      end
+  defp list_files_recursive(_base, _dir, 0), do: []
+
+  defp list_files_recursive(base, dir, depth) do
+    case File.ls(dir) do
+      {:ok, entries} ->
+        entries
+        |> Enum.reject(&String.starts_with?(&1, "."))
+        |> Enum.sort()
+        |> Enum.flat_map(fn entry ->
+          full = Path.join(dir, entry)
+          rel = Path.relative_to(full, base)
+
+          if File.dir?(full) do
+            [rel | list_files_recursive(base, full, depth - 1)]
+          else
+            [rel]
+          end
+        end)
+
+      {:error, _} ->
+        []
     end
   end
 

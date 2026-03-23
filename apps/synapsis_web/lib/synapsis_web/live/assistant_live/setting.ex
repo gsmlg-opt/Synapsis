@@ -5,7 +5,6 @@ defmodule SynapsisWeb.AssistantLive.Setting do
   alias Synapsis.Workspace
   alias Synapsis.Workspace.Identity
 
-
   @tool_categories [
     {:filesystem, "Files"},
     {:execution, "Runtime"},
@@ -40,7 +39,10 @@ defmodule SynapsisWeb.AssistantLive.Setting do
     providers = load_providers()
     current_provider = agent_config.provider || List.first(Enum.map(providers, & &1.name))
     available_models = load_models(current_provider)
-    current_model = agent_config.model || Synapsis.Providers.default_model(current_provider || "anthropic")
+
+    current_model =
+      agent_config.model || Synapsis.Providers.default_model(current_provider || "anthropic")
+
     fallbacks = agent_config[:fallback_models] || ""
 
     {:noreply,
@@ -225,7 +227,8 @@ defmodule SynapsisWeb.AssistantLive.Setting do
        providers: providers,
        available_models: available_models,
        selected_provider: current_provider,
-       selected_model: agent_config.model || Synapsis.Providers.default_model(current_provider || "anthropic"),
+       selected_model:
+         agent_config.model || Synapsis.Providers.default_model(current_provider || "anthropic"),
        fallbacks: agent_config[:fallback_models] || "",
        overview_dirty: false
      )}
@@ -691,7 +694,10 @@ defmodule SynapsisWeb.AssistantLive.Setting do
         description={"Skills for the #{@assistant_name} agent will appear here once configured."}
       />
       <:action>
-        <.dm_link navigate={~p"/settings/skills"} class="text-xs text-base-content/50 hover:text-primary">
+        <.dm_link
+          navigate={~p"/settings/skills"}
+          class="text-xs text-base-content/50 hover:text-primary"
+        >
           Manage skills
         </.dm_link>
       </:action>
@@ -799,7 +805,11 @@ defmodule SynapsisWeb.AssistantLive.Setting do
   defp count_fallbacks(""), do: 0
 
   defp count_fallbacks(fallbacks) when is_binary(fallbacks) do
-    fallbacks |> String.split(",") |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == "")) |> length()
+    fallbacks
+    |> String.split(",")
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+    |> length()
   end
 
   defp count_fallbacks(_), do: 0

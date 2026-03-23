@@ -2,7 +2,8 @@ defmodule Synapsis.Sessions do
   @moduledoc "Public API for session management."
 
   # Worker lives in synapsis_agent (compiled after synapsis_core)
-  @compile {:no_warn_undefined, Synapsis.Session.Worker}
+  # DebugStore lives in synapsis_server (compiled after synapsis_core)
+  @compile {:no_warn_undefined, [Synapsis.Session.Worker, SynapsisServer.DebugStore]}
 
   alias Synapsis.{Repo, Project, Session, Message}
   import Ecto.Query
@@ -21,7 +22,8 @@ defmodule Synapsis.Sessions do
       model: model,
       agent: agent,
       title: opts[:title],
-      config: config
+      config: config,
+      debug: opts[:debug] || false
     }
 
     with {:ok, session} <- %Session{} |> Session.changeset(attrs) |> Repo.insert(),
@@ -81,11 +83,45 @@ defmodule Synapsis.Sessions do
   end
 
   def delete(session_id) do
+    # Delete from DB first, then stop the session process.
+    # Stopping the session first can disrupt pooled DB connections in test sandbox mode.
+    result =
+      case Repo.get(Session, session_id) do
+        nil -> {:error, :not_found}
+        session -> Repo.delete(session)
+      end
+
     Synapsis.Session.DynamicSupervisor.stop_session(session_id)
 
+    if Code.ensure_loaded?(SynapsisServer.DebugStore) and
+         Process.whereis(SynapsisServer.DebugStore) != nil do
+      SynapsisServer.DebugStore.clear_entries(session_id)
+    end
+
+    result
+  end
+
+  def update_debug(session_id, enabled) when is_boolean(enabled) do
     case Repo.get(Session, session_id) do
-      nil -> {:error, :not_found}
-      session -> Repo.delete(session)
+      nil ->
+        {:error, :not_found}
+
+      session ->
+        session
+        |> Ecto.Changeset.change(debug: enabled)
+        |> Repo.update()
+        |> tap(fn
+          {:ok, _} ->
+            unless enabled do
+              if Code.ensure_loaded?(SynapsisServer.DebugStore) and
+                   Process.whereis(SynapsisServer.DebugStore) != nil do
+                SynapsisServer.DebugStore.clear_entries(session_id)
+              end
+            end
+
+          _ ->
+            :ok
+        end)
     end
   end
 

@@ -336,7 +336,11 @@ defmodule SynapsisWeb.AssistantLive.Show do
               <.dm_mdi name="plus" class="w-4 h-4" /> New Session
             </.dm_btn>
           <% else %>
-            <.dm_tooltip content="Set a provider in assistant settings first" position="bottom" color="warning">
+            <.dm_tooltip
+              content="Set a provider in assistant settings first"
+              position="bottom"
+              color="warning"
+            >
               <.dm_btn variant="primary" class="w-full opacity-50 cursor-not-allowed" disabled>
                 <.dm_mdi name="plus" class="w-4 h-4" /> New Session
               </.dm_btn>
@@ -345,9 +349,13 @@ defmodule SynapsisWeb.AssistantLive.Show do
         </div>
 
         <%!-- New session confirm --%>
-        <div :if={@show_new_session && @provider_configured} class="p-3 border-b border-base-300 bg-base-100">
+        <div
+          :if={@show_new_session && @provider_configured}
+          class="p-3 border-b border-base-300 bg-base-100"
+        >
           <div class="text-xs text-base-content/50 mb-2">
-            {@agent_config.provider} / {@agent_config.model || Synapsis.Providers.default_model(@agent_config.provider)}
+            {@agent_config.provider} / {@agent_config.model ||
+              Synapsis.Providers.default_model(@agent_config.provider)}
           </div>
           <.dm_btn variant="primary" size="sm" class="w-full" phx-click="create_session">
             Create Session
@@ -470,7 +478,11 @@ defmodule SynapsisWeb.AssistantLive.Show do
             <.empty_state
               icon="robot-outline"
               title={"#{String.capitalize(@assistant_name)} Assistant"}
-              description={if @provider_configured, do: "Create or select a session to start chatting", else: "Configure a provider in settings to start chatting"}
+              description={
+                if @provider_configured,
+                  do: "Create or select a session to start chatting",
+                  else: "Configure a provider in settings to start chatting"
+              }
             >
               <:action>
                 <%= if @provider_configured do %>
@@ -499,5 +511,4 @@ defmodule SynapsisWeb.AssistantLive.Show do
     Sessions.recent(limit: 50)
     |> Enum.filter(&(&1.agent == agent_name))
   end
-
 end

@@ -19,7 +19,17 @@ defmodule SynapsisServer.SessionChannel do
       |> Synapsis.Sessions.get_messages()
       |> Enum.map(&serialize_message/1)
 
-    {:ok, %{messages: messages}, socket}
+    # Load debug state from session
+    {debug_enabled, debug_entries} = load_debug_state(session_id)
+    socket = assign(socket, :debug, debug_enabled)
+
+    reply = %{
+      messages: messages,
+      debug: debug_enabled,
+      debug_entries: debug_entries
+    }
+
+    {:ok, reply, socket}
   end
 
   @impl true
@@ -98,19 +108,65 @@ defmodule SynapsisServer.SessionChannel do
     end
   end
 
+  def handle_in("toggle_debug", %{"enabled" => enabled}, socket) do
+    session_id = socket.assigns.session_id
+
+    case Synapsis.Sessions.update_debug(session_id, enabled) do
+      {:ok, _session} ->
+        broadcast!(socket, "debug_toggled", %{enabled: enabled})
+        {:noreply, assign(socket, :debug, enabled)}
+
+      {:error, _reason} ->
+        {:reply, {:error, %{reason: "Failed to toggle debug"}}, socket}
+    end
+  end
+
   def handle_in(_event, _payload, socket) do
     {:noreply, socket}
   end
 
   @impl true
   def handle_info({event, payload}, socket) when is_binary(event) do
-    push(socket, event, payload)
+    # Filter debug events based on debug flag
+    case event do
+      "debug_request" ->
+        if socket.assigns[:debug], do: push(socket, event, payload)
+
+      "debug_response" ->
+        if socket.assigns[:debug], do: push(socket, event, payload)
+
+      _ ->
+        push(socket, event, payload)
+    end
+
     {:noreply, socket}
   end
 
   def handle_info(_msg, socket) do
     {:noreply, socket}
   end
+
+  # -- Debug state loading --
+
+  defp load_debug_state(session_id) do
+    case Synapsis.Repo.get(Synapsis.Session, session_id) do
+      %{debug: true} ->
+        entries =
+          if Code.ensure_loaded?(SynapsisServer.DebugStore) and
+               Process.whereis(SynapsisServer.DebugStore) != nil do
+            SynapsisServer.DebugStore.list_entries(session_id)
+          else
+            []
+          end
+
+        {true, entries}
+
+      _ ->
+        {false, []}
+    end
+  end
+
+  # -- Serialization --
 
   defp serialize_message(message) do
     %{
