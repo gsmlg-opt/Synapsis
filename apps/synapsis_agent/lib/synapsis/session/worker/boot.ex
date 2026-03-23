@@ -20,7 +20,8 @@ defmodule Synapsis.Session.Worker.Boot do
     agent = Config.resolve_agent(session)
     provider = agent[:provider] || session.provider
     provider_config = Config.resolve_provider_config(provider)
-    worktree_path = setup_worktree(session, session_id)
+    project_path = normalize_project_path(session.project.path)
+    worktree_path = setup_worktree(project_path, session_id)
 
     {:ok, graph} = CodingLoop.build()
 
@@ -35,7 +36,7 @@ defmodule Synapsis.Session.Worker.Boot do
     ctx = %{
       provider: provider,
       model: agent[:model] || session.model,
-      project_path: session.project.path,
+      project_path: project_path,
       project_id: to_string(session.project_id)
     }
 
@@ -44,12 +45,17 @@ defmodule Synapsis.Session.Worker.Boot do
 
     Synapsis.Memory.Writer.subscribe_session(session_id)
 
-    {session, agent, provider_config, runner_pid, worktree_path}
+    {session, agent, provider_config, runner_pid, worktree_path, project_path}
   end
 
-  defp setup_worktree(session, session_id) do
-    if Synapsis.Git.is_repo?(session.project.path) do
-      case WorkspaceManager.setup(session.project.path, session_id) do
+  # "__global__" is a sentinel for sessions not tied to a specific project directory.
+  # Normalize it to the actual CWD so tools resolve relative paths correctly.
+  defp normalize_project_path("__global__"), do: File.cwd!()
+  defp normalize_project_path(path), do: path
+
+  defp setup_worktree(project_path, session_id) do
+    if Synapsis.Git.is_repo?(project_path) do
+      case WorkspaceManager.setup(project_path, session_id) do
         {:ok, path} -> path
         {:error, _} -> nil
       end

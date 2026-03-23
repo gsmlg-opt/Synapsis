@@ -17,6 +17,7 @@ defmodule Synapsis.Session.Worker do
     :provider_config,
     :runner_pid,
     :stream_ref,
+    :project_path,
     worktree_path: nil,
     stream_acc: Synapsis.Agent.StreamAccumulator.new(),
     pending_tool_count: 0,
@@ -49,7 +50,7 @@ defmodule Synapsis.Session.Worker do
       {:stop, reason} ->
         {:stop, reason}
 
-      {session, agent, pc, runner, wt} ->
+      {session, agent, pc, runner, wt, project_path} ->
         Logger.info("session_worker_started", session_id: session.id)
 
         {:ok,
@@ -59,7 +60,8 @@ defmodule Synapsis.Session.Worker do
            agent: agent,
            provider_config: pc,
            runner_pid: runner,
-           worktree_path: wt
+           worktree_path: wt,
+           project_path: project_path
          }, @timeout}
     end
   end
@@ -172,7 +174,7 @@ defmodule Synapsis.Session.Worker do
     )
 
     if state.worktree_path,
-      do: WorkspaceManager.teardown(state.session.project.path, state.session_id)
+      do: WorkspaceManager.teardown(state.project_path, state.session_id)
 
     :ok
   end
