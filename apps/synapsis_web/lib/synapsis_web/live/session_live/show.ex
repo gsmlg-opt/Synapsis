@@ -54,6 +54,7 @@ defmodule SynapsisWeb.SessionLive.Show do
            session_models: session_models,
            show_model_selector: false,
            selector_provider: selector_provider,
+           new_session_debug: false,
            debug_enabled: session.debug || false,
            debug_entries: debug_entries,
            debug_panel_open: false
@@ -210,10 +211,15 @@ defmodule SynapsisWeb.SessionLive.Show do
     {:noreply, assign(socket, new_session_model: model)}
   end
 
+  def handle_event("toggle_new_session_debug", _params, socket) do
+    {:noreply, assign(socket, new_session_debug: !socket.assigns.new_session_debug)}
+  end
+
   def handle_event("create_session", _params, socket) do
     opts = %{
       provider: socket.assigns.new_session_provider,
-      model: socket.assigns.new_session_model
+      model: socket.assigns.new_session_model,
+      debug: socket.assigns.new_session_debug
     }
 
     case Synapsis.Sessions.create(socket.assigns.project.path, opts) do
@@ -232,28 +238,13 @@ defmodule SynapsisWeb.SessionLive.Show do
     {:noreply, push_navigate(socket, to: path)}
   end
 
-  def handle_event("toggle_debug", _params, socket) do
-    new_enabled = !socket.assigns.debug_enabled
-    session_id = socket.assigns.session.id
-
-    case Synapsis.Sessions.update_debug(session_id, new_enabled) do
-      {:ok, _} ->
-        entries = if new_enabled, do: load_debug_entries_from_store(session_id), else: []
-
-        {:noreply,
-         assign(socket,
-           debug_enabled: new_enabled,
-           debug_entries: entries,
-           debug_panel_open: new_enabled
-         )}
-
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Failed to toggle debug mode")}
-    end
+  def handle_event("open_debug_panel", _params, socket) do
+    entries = load_debug_entries_from_store(socket.assigns.session.id)
+    {:noreply, assign(socket, debug_panel_open: true, debug_entries: entries)}
   end
 
-  def handle_event("toggle_debug_panel", _params, socket) do
-    {:noreply, assign(socket, debug_panel_open: !socket.assigns.debug_panel_open)}
+  def handle_event("close_debug_panel", _params, socket) do
+    {:noreply, assign(socket, debug_panel_open: false)}
   end
 
   def handle_event("toggle_debug_entry", %{"id" => request_id}, socket) do
@@ -464,6 +455,13 @@ defmodule SynapsisWeb.SessionLive.Show do
                 phx-key="Enter"
               />
             <% end %>
+            <.dm_checkbox
+              name="debug"
+              label="Enable Debug"
+              checked={@new_session_debug}
+              size="sm"
+              phx-click="toggle_new_session_debug"
+            />
             <.dm_btn variant="primary" class="w-full" phx-click="create_session">
               Create
             </.dm_btn>
@@ -553,37 +551,38 @@ defmodule SynapsisWeb.SessionLive.Show do
               </:content>
             </.dm_dropdown>
           </div>
-          <div class="flex items-center gap-2">
-            <%!-- Debug toggle --%>
+          <div :if={@debug_enabled} class="flex items-center gap-2">
             <.dm_btn
-              variant={if @debug_enabled, do: "warning", else: "ghost"}
+              variant="warning"
               size="xs"
-              phx-click="toggle_debug"
+              phx-click="open_debug_panel"
             >
               <.dm_mdi name="bug-outline" class="w-4 h-4" />
               <span class="hidden sm:inline ml-1">Debug</span>
             </.dm_btn>
-            <.dm_btn
-              :if={@debug_enabled}
-              variant="ghost"
-              size="xs"
-              phx-click="toggle_debug_panel"
-            >
-              <.dm_mdi
-                name={if @debug_panel_open, do: "chevron-down", else: "chevron-right"}
-                class="w-4 h-4"
-              />
-            </.dm_btn>
           </div>
         </div>
 
-        <%!-- Debug Panel --%>
-        <div
-          :if={@debug_enabled && @debug_panel_open}
-          class="border-b border-base-300 bg-base-200 max-h-80 overflow-y-auto"
+        <%!-- Debug Dialog (fullscreen) --%>
+        <.dm_modal
+          :if={@debug_enabled}
+          id="debug-dialog"
+          size="huge"
+          class={if @debug_panel_open, do: "modal-open", else: ""}
+          hide_close
         >
-          <div class="p-2">
-            <div :if={@debug_entries == []} class="text-sm text-base-content/50 p-3 text-center">
+          <:title class="flex items-center justify-between w-full">
+            <div class="flex items-center gap-2">
+              <.dm_mdi name="bug-outline" class="w-5 h-5" />
+              Debug Log
+            </div>
+            <.dm_btn variant="ghost" size="sm" phx-click="close_debug_panel">
+              <.dm_mdi name="close" class="w-5 h-5" />
+            </.dm_btn>
+          </:title>
+          <:body>
+            <div class="flex flex-col w-full overflow-y-auto max-h-[80vh]">
+            <div :if={@debug_entries == []} class="text-sm text-base-content/50 p-6 text-center">
               No debug entries yet. Send a message to capture API calls.
             </div>
             <div :for={entry <- @debug_entries} class="mb-2">
@@ -605,7 +604,7 @@ defmodule SynapsisWeb.SessionLive.Show do
               </div>
               <div :if={entry[:expanded]} class="mt-1 mx-3 space-y-2">
                 <%!-- Request --%>
-                <div :if={entry[:url] || entry["url"]} class="bg-base-100 rounded p-3">
+                <div :if={entry[:url] || entry["url"]} class="bg-base-200 rounded p-3">
                   <div class="text-xs font-semibold text-base-content/60 mb-1">Request</div>
                   <div class="text-xs font-mono break-all text-base-content/80 mb-2">
                     {entry[:url] || entry["url"]}
@@ -619,7 +618,7 @@ defmodule SynapsisWeb.SessionLive.Show do
                   <div :if={entry[:body] || entry["body"]} class="text-xs">
                     <details>
                       <summary class="cursor-pointer text-base-content/50">Body</summary>
-                      <pre class="mt-1 text-xs overflow-x-auto max-h-40"><%= format_body(entry[:body] || entry["body"]) %></pre>
+                      <pre class="mt-1 text-xs overflow-x-auto max-h-60"><%= format_body(entry[:body] || entry["body"]) %></pre>
                     </details>
                   </div>
                 </div>
@@ -629,7 +628,7 @@ defmodule SynapsisWeb.SessionLive.Show do
                     entry[:response_body] || entry["response_body"] || entry[:status] ||
                       entry["status"]
                   }
-                  class="bg-base-100 rounded p-3"
+                  class="bg-base-200 rounded p-3"
                 >
                   <div class="text-xs font-semibold text-base-content/60 mb-1">Response</div>
                   <div
@@ -644,7 +643,7 @@ defmodule SynapsisWeb.SessionLive.Show do
                   <div :if={entry[:response_body] || entry["response_body"]} class="text-xs">
                     <details>
                       <summary class="cursor-pointer text-base-content/50">Body</summary>
-                      <pre class="mt-1 text-xs overflow-x-auto max-h-40"><%= format_body(entry[:response_body] || entry["response_body"]) %></pre>
+                      <pre class="mt-1 text-xs overflow-x-auto max-h-60"><%= format_body(entry[:response_body] || entry["response_body"]) %></pre>
                     </details>
                   </div>
                   <div
@@ -656,8 +655,9 @@ defmodule SynapsisWeb.SessionLive.Show do
                 </div>
               </div>
             </div>
-          </div>
-        </div>
+            </div>
+          </:body>
+        </.dm_modal>
 
         <%!-- React ChatApp --%>
         <div

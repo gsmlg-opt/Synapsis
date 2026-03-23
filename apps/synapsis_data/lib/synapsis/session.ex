@@ -30,7 +30,7 @@ defmodule Synapsis.Session do
 
   def changeset(session, attrs) do
     session
-    |> cast(attrs, [:title, :agent, :provider, :model, :status, :config, :project_id])
+    |> cast(attrs, [:title, :agent, :provider, :model, :status, :config, :project_id, :debug])
     |> validate_required([:provider, :model, :project_id])
     |> validate_inclusion(:status, @valid_statuses)
     |> validate_length(:agent, min: 1, max: 255)

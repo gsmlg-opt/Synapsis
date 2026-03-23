@@ -22,7 +22,8 @@ defmodule Synapsis.Sessions do
       model: model,
       agent: agent,
       title: opts[:title],
-      config: config
+      config: config,
+      debug: opts[:debug] || false
     }
 
     with {:ok, session} <- %Session{} |> Session.changeset(attrs) |> Repo.insert(),
