@@ -59,7 +59,5 @@ defmodule Synapsis.Session.DebugTelemetry do
     end
   end
 
-  defp store_available? do
-    Synapsis.Debug.Store.available?()
-  end
+  defp store_available?, do: Synapsis.Debug.Store.available?()
 end

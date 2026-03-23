@@ -5,8 +5,8 @@ defmodule Synapsis.Debug.Store do
   on server restart. No database persistence — debug payloads are large
   and ephemeral.
 
-  All mutations are serialized through the GenServer to avoid race conditions
-  on eviction. Reads go directly to ETS for concurrency.
+  All operations are serialized through the GenServer. The ETS table is
+  `:protected` so only the owning GenServer process can write directly.
   """
   use GenServer
 
@@ -54,7 +54,7 @@ defmodule Synapsis.Debug.Store do
     GenServer.call(__MODULE__, {:clear_entries, session_id})
   end
 
-  # -- GenServer callbacks (serialized mutations) --
+  # -- GenServer callbacks --
 
   @impl true
   def handle_call({:put_request, session_id, sanitized_request}, _from, state) do
