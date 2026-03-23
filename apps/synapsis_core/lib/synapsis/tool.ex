@@ -50,6 +50,7 @@ defmodule Synapsis.Tool do
           | :swarm
           | :memory
           | :workspace
+          | :communication
           | :uncategorized
 
   @type context :: %{

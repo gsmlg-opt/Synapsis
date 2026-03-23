@@ -40,6 +40,13 @@ defmodule Synapsis.Tool.Builtin do
     Synapsis.Tool.MemorySave,
     Synapsis.Tool.MemorySearch,
     Synapsis.Tool.MemoryUpdate,
+    # Phase 15: Agent communication tools
+    Synapsis.Tool.AgentSend,
+    Synapsis.Tool.AgentAsk,
+    Synapsis.Tool.AgentReply,
+    Synapsis.Tool.AgentHandoff,
+    Synapsis.Tool.AgentDiscover,
+    Synapsis.Tool.AgentInbox,
     # Phase 13: Disabled stubs
     Synapsis.Tool.NotebookEdit,
     Synapsis.Tool.NotebookRead,
@@ -73,5 +80,7 @@ defmodule Synapsis.Tool.Builtin do
   defp default_timeout("file_move"), do: 5_000
   defp default_timeout("ask_user"), do: 300_000
   defp default_timeout("sleep"), do: 600_000
+  defp default_timeout("agent_ask"), do: 300_000
+  defp default_timeout("agent_handoff"), do: 30_000
   defp default_timeout(_), do: 10_000
 end
