@@ -19,6 +19,7 @@ defmodule Synapsis.Session.Worker do
     :stream_ref,
     :project_path,
     :debug_handler_id,
+    debug: false,
     worktree_path: nil,
     stream_acc: Synapsis.Agent.StreamAccumulator.new(),
     pending_tool_count: 0,
@@ -62,7 +63,8 @@ defmodule Synapsis.Session.Worker do
            provider_config: pc,
            runner_pid: runner,
            worktree_path: wt,
-           project_path: project_path
+           project_path: project_path,
+           debug: session.debug || false
          }, @timeout}
     end
   end
@@ -173,6 +175,10 @@ defmodule Synapsis.Session.Worker do
       session_id: state.session_id,
       reason: inspect(reason)
     )
+
+    if state.debug_handler_id do
+      IOHandler.detach_debug(state.debug_handler_id)
+    end
 
     if state.worktree_path,
       do: WorkspaceManager.teardown(state.project_path, state.session_id)

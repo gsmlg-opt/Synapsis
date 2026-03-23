@@ -14,7 +14,6 @@ defmodule SynapsisServer.Supervisor do
 
     children = [
       SynapsisServer.Telemetry,
-      SynapsisServer.DebugStore,
       {DNSCluster, query: Application.get_env(:synapsis_server, :dns_cluster_query) || :ignore},
       SynapsisServer.Endpoint
     ]

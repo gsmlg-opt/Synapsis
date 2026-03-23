@@ -1,9 +1,12 @@
-defmodule SynapsisServer.DebugStore do
+defmodule Synapsis.Debug.Store do
   @moduledoc """
   ETS-backed store for debug entries scoped per session.
   Entries survive page refresh (channel rejoin reads from ETS) but vanish
   on server restart. No database persistence — debug payloads are large
   and ephemeral.
+
+  All mutations are serialized through the GenServer to avoid race conditions
+  on eviction. Reads go directly to ETS for concurrency.
   """
   use GenServer
 
@@ -14,13 +17,17 @@ defmodule SynapsisServer.DebugStore do
     GenServer.start_link(__MODULE__, [], name: __MODULE__)
   end
 
+  @doc "Returns true if the Debug.Store process is running."
+  @spec available?() :: boolean()
+  def available?, do: Process.whereis(__MODULE__) != nil
+
   @impl true
   def init(_) do
     table =
       :ets.new(@table, [
         :named_table,
         :ordered_set,
-        :public,
+        :protected,
         read_concurrency: true
       ])
 
@@ -29,6 +36,28 @@ defmodule SynapsisServer.DebugStore do
 
   @spec put_request(String.t(), map()) :: true
   def put_request(session_id, sanitized_request) do
+    GenServer.call(__MODULE__, {:put_request, session_id, sanitized_request})
+  end
+
+  @spec put_response(String.t(), map()) :: true
+  def put_response(session_id, sanitized_response) do
+    GenServer.call(__MODULE__, {:put_response, session_id, sanitized_response})
+  end
+
+  @spec list_entries(String.t()) :: [map()]
+  def list_entries(session_id) do
+    GenServer.call(__MODULE__, {:list_entries, session_id})
+  end
+
+  @spec clear_entries(String.t()) :: non_neg_integer()
+  def clear_entries(session_id) do
+    GenServer.call(__MODULE__, {:clear_entries, session_id})
+  end
+
+  # -- GenServer callbacks (serialized mutations) --
+
+  @impl true
+  def handle_call({:put_request, session_id, sanitized_request}, _from, state) do
     entry =
       Map.merge(sanitized_request, %{
         request_timestamp: sanitized_request.timestamp,
@@ -42,12 +71,11 @@ defmodule SynapsisServer.DebugStore do
       })
 
     :ets.insert(@table, {{session_id, sanitized_request.request_id}, entry})
-    maybe_evict(session_id)
-    true
+    do_evict(session_id)
+    {:reply, true, state}
   end
 
-  @spec put_response(String.t(), map()) :: true
-  def put_response(session_id, sanitized_response) do
+  def handle_call({:put_response, session_id, sanitized_response}, _from, state) do
     key = {session_id, sanitized_response.request_id}
 
     case :ets.lookup(@table, key) do
@@ -69,22 +97,26 @@ defmodule SynapsisServer.DebugStore do
         :ets.insert(@table, {key, sanitized_response})
     end
 
-    true
+    {:reply, true, state}
   end
 
-  @spec list_entries(String.t()) :: [map()]
-  def list_entries(session_id) do
+  def handle_call({:list_entries, session_id}, _from, state) do
     match_spec = [{{{session_id, :_}, :"$1"}, [], [:"$1"]}]
-    :ets.select(@table, match_spec)
+
+    entries =
+      :ets.select(@table, match_spec)
+      |> Enum.sort_by(&(&1[:request_timestamp] || &1[:timestamp]))
+
+    {:reply, entries, state}
   end
 
-  @spec clear_entries(String.t()) :: non_neg_integer()
-  def clear_entries(session_id) do
+  def handle_call({:clear_entries, session_id}, _from, state) do
     match_spec = [{{{session_id, :_}, :_}, [], [true]}]
-    :ets.select_delete(@table, match_spec)
+    count = :ets.select_delete(@table, match_spec)
+    {:reply, count, state}
   end
 
-  defp maybe_evict(session_id) do
+  defp do_evict(session_id) do
     entries = :ets.select(@table, [{{{session_id, :_}, :_}, [], [:"$_"]}])
 
     if length(entries) > @max_entries_per_session do

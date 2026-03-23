@@ -1,6 +1,8 @@
 defmodule SynapsisWeb.SessionLive.Show do
   use SynapsisWeb, :live_view
 
+  @max_debug_entries 100
+
   @impl true
   def mount(%{"id" => session_id, "project_id" => project_id}, _session, socket) do
     case {Synapsis.Projects.get(project_id), Synapsis.Sessions.get(session_id)} do
@@ -31,8 +33,8 @@ defmodule SynapsisWeb.SessionLive.Show do
         agent_mode = session.agent || "build"
         session_mode = derive_mode(session)
 
-        # Subscribe to debug events for this session
-        if connected?(socket) do
+        # Subscribe to debug events only for debug-enabled sessions
+        if connected?(socket) and (session.debug || false) do
           Phoenix.PubSub.subscribe(Synapsis.PubSub, "debug:#{session_id}")
         end
 
@@ -264,7 +266,11 @@ defmodule SynapsisWeb.SessionLive.Show do
   def handle_info({"debug_request", payload}, socket) do
     if socket.assigns.debug_enabled do
       entry = Map.merge(payload, %{expanded: false, type: :request})
-      entries = socket.assigns.debug_entries ++ [entry]
+
+      entries =
+        (socket.assigns.debug_entries ++ [entry])
+        |> Enum.take(-@max_debug_entries)
+
       {:noreply, assign(socket, debug_entries: entries)}
     else
       {:noreply, socket}
@@ -273,11 +279,11 @@ defmodule SynapsisWeb.SessionLive.Show do
 
   def handle_info({"debug_response", payload}, socket) do
     if socket.assigns.debug_enabled do
-      request_id = payload["request_id"] || payload[:request_id]
+      request_id = payload[:request_id]
 
       entries =
         Enum.map(socket.assigns.debug_entries, fn entry ->
-          if (entry["request_id"] || entry[:request_id]) == request_id do
+          if entry[:request_id] == request_id do
             Map.merge(entry, payload)
           else
             entry
@@ -299,9 +305,8 @@ defmodule SynapsisWeb.SessionLive.Show do
   defp load_debug_entries(_), do: []
 
   defp load_debug_entries_from_store(session_id) do
-    if Code.ensure_loaded?(SynapsisServer.DebugStore) and
-         Process.whereis(SynapsisServer.DebugStore) != nil do
-      SynapsisServer.DebugStore.list_entries(session_id)
+    if Synapsis.Debug.Store.available?() do
+      Synapsis.Debug.Store.list_entries(session_id)
       |> Enum.map(&Map.put(&1, :expanded, false))
     else
       []
@@ -339,27 +344,27 @@ defmodule SynapsisWeb.SessionLive.Show do
 
   defp derive_mode(_), do: "ask_before_edits"
 
-  # -- Debug panel helpers --
+  # -- Debug panel helpers (atom keys only — PubSub sends atom-keyed maps) --
 
   defp debug_method(entry),
-    do: (entry[:method] || entry["method"] || "POST") |> to_string() |> String.upcase()
+    do: (entry[:method] || "POST") |> to_string() |> String.upcase()
 
-  defp debug_provider(entry), do: entry[:provider] || entry["provider"] || ""
+  defp debug_provider(entry), do: entry[:provider] || ""
 
-  defp debug_model(entry), do: entry[:model] || entry["model"] || ""
+  defp debug_model(entry), do: entry[:model] || ""
 
   defp debug_status(entry) do
-    s = entry[:status] || entry["status"]
+    s = entry[:status]
     if s && s != 0, do: to_string(s), else: nil
   end
 
   defp debug_duration(entry) do
-    entry[:duration_ms] || entry["duration_ms"]
+    entry[:duration_ms]
   end
 
   defp debug_status_dot(entry) do
-    status = entry[:status] || entry["status"]
-    complete = entry[:complete] || entry["complete"]
+    status = entry[:status]
+    complete = entry[:complete]
 
     cond do
       is_nil(status) or status == 0 -> "bg-base-content/30"
@@ -372,8 +377,8 @@ defmodule SynapsisWeb.SessionLive.Show do
   end
 
   defp debug_status_class(entry) do
-    status = entry[:status] || entry["status"]
-    complete = entry[:complete] || entry["complete"]
+    status = entry[:status]
+    complete = entry[:complete]
 
     cond do
       is_nil(status) or status == 0 -> ""
@@ -581,79 +586,73 @@ defmodule SynapsisWeb.SessionLive.Show do
           </:title>
           <:body>
             <div class="flex flex-col w-full overflow-y-auto max-h-[80vh]">
-              <div :if={@debug_entries == []} class="text-sm text-base-content/50 p-6 text-center">
-                No debug entries yet. Send a message to capture API calls.
+            <div :if={@debug_entries == []} class="text-sm text-base-content/50 p-6 text-center">
+              No debug entries yet. Send a message to capture API calls.
+            </div>
+            <div :for={entry <- @debug_entries} class="mb-2">
+              <div
+                class={"flex items-center gap-2 px-3 py-2 rounded cursor-pointer hover:bg-base-300 text-sm font-mono #{debug_status_class(entry)}"}
+                phx-click="toggle_debug_entry"
+                phx-value-id={entry[:request_id]}
+              >
+                <span class={"w-2 h-2 rounded-full #{debug_status_dot(entry)}"}></span>
+                <span class="font-semibold">{debug_method(entry)}</span>
+                <span class="truncate flex-1 text-base-content/70">{debug_provider(entry)}</span>
+                <span class="text-base-content/50">{debug_model(entry)}</span>
+                <span :if={debug_status(entry)} class="font-semibold">
+                  &rarr; {debug_status(entry)}
+                </span>
+                <span :if={debug_duration(entry)} class="text-base-content/50">
+                  ({debug_duration(entry)}ms)
+                </span>
               </div>
-              <div :for={entry <- @debug_entries} class="mb-2">
+              <div :if={entry[:expanded]} class="mt-1 mx-3 space-y-2">
+                <%!-- Request --%>
+                <div :if={entry[:url]} class="bg-base-200 rounded p-3">
+                  <div class="text-xs font-semibold text-base-content/60 mb-1">Request</div>
+                  <div class="text-xs font-mono break-all text-base-content/80 mb-2">
+                    {entry[:url]}
+                  </div>
+                  <div :if={entry[:headers]} class="text-xs mb-2">
+                    <details>
+                      <summary class="cursor-pointer text-base-content/50">Headers</summary>
+                      <pre class="mt-1 text-xs overflow-x-auto"><%= inspect_headers(entry[:headers]) %></pre>
+                    </details>
+                  </div>
+                  <div :if={entry[:body]} class="text-xs">
+                    <details>
+                      <summary class="cursor-pointer text-base-content/50">Body</summary>
+                      <pre class="mt-1 text-xs overflow-x-auto max-h-60"><%= format_body(entry[:body]) %></pre>
+                    </details>
+                  </div>
+                </div>
+                <%!-- Response --%>
                 <div
-                  class={"flex items-center gap-2 px-3 py-2 rounded cursor-pointer hover:bg-base-300 text-sm font-mono #{debug_status_class(entry)}"}
-                  phx-click="toggle_debug_entry"
-                  phx-value-id={entry[:request_id] || entry["request_id"]}
+                  :if={entry[:response_body] || entry[:status]}
+                  class="bg-base-200 rounded p-3"
                 >
-                  <span class={"w-2 h-2 rounded-full #{debug_status_dot(entry)}"}></span>
-                  <span class="font-semibold">{debug_method(entry)}</span>
-                  <span class="truncate flex-1 text-base-content/70">{debug_provider(entry)}</span>
-                  <span class="text-base-content/50">{debug_model(entry)}</span>
-                  <span :if={debug_status(entry)} class="font-semibold">
-                    &rarr; {debug_status(entry)}
-                  </span>
-                  <span :if={debug_duration(entry)} class="text-base-content/50">
-                    ({debug_duration(entry)}ms)
-                  </span>
-                </div>
-                <div :if={entry[:expanded]} class="mt-1 mx-3 space-y-2">
-                  <%!-- Request --%>
-                  <div :if={entry[:url] || entry["url"]} class="bg-base-200 rounded p-3">
-                    <div class="text-xs font-semibold text-base-content/60 mb-1">Request</div>
-                    <div class="text-xs font-mono break-all text-base-content/80 mb-2">
-                      {entry[:url] || entry["url"]}
-                    </div>
-                    <div :if={entry[:headers] || entry["headers"]} class="text-xs mb-2">
-                      <details>
-                        <summary class="cursor-pointer text-base-content/50">Headers</summary>
-                        <pre class="mt-1 text-xs overflow-x-auto"><%= inspect_headers(entry[:headers] || entry["headers"]) %></pre>
-                      </details>
-                    </div>
-                    <div :if={entry[:body] || entry["body"]} class="text-xs">
-                      <details>
-                        <summary class="cursor-pointer text-base-content/50">Body</summary>
-                        <pre class="mt-1 text-xs overflow-x-auto max-h-60"><%= format_body(entry[:body] || entry["body"]) %></pre>
-                      </details>
-                    </div>
+                  <div class="text-xs font-semibold text-base-content/60 mb-1">Response</div>
+                  <div :if={entry[:response_headers]} class="text-xs mb-2">
+                    <details>
+                      <summary class="cursor-pointer text-base-content/50">Headers</summary>
+                      <pre class="mt-1 text-xs overflow-x-auto"><%= inspect_headers(entry[:response_headers]) %></pre>
+                    </details>
                   </div>
-                  <%!-- Response --%>
+                  <div :if={entry[:response_body]} class="text-xs">
+                    <details>
+                      <summary class="cursor-pointer text-base-content/50">Body</summary>
+                      <pre class="mt-1 text-xs overflow-x-auto max-h-60"><%= format_body(entry[:response_body]) %></pre>
+                    </details>
+                  </div>
                   <div
-                    :if={
-                      entry[:response_body] || entry["response_body"] || entry[:status] ||
-                        entry["status"]
-                    }
-                    class="bg-base-200 rounded p-3"
+                    :if={entry[:error]}
+                    class="mt-2 text-xs text-error"
                   >
-                    <div class="text-xs font-semibold text-base-content/60 mb-1">Response</div>
-                    <div
-                      :if={entry[:response_headers] || entry["response_headers"]}
-                      class="text-xs mb-2"
-                    >
-                      <details>
-                        <summary class="cursor-pointer text-base-content/50">Headers</summary>
-                        <pre class="mt-1 text-xs overflow-x-auto"><%= inspect_headers(entry[:response_headers] || entry["response_headers"]) %></pre>
-                      </details>
-                    </div>
-                    <div :if={entry[:response_body] || entry["response_body"]} class="text-xs">
-                      <details>
-                        <summary class="cursor-pointer text-base-content/50">Body</summary>
-                        <pre class="mt-1 text-xs overflow-x-auto max-h-60"><%= format_body(entry[:response_body] || entry["response_body"]) %></pre>
-                      </details>
-                    </div>
-                    <div
-                      :if={entry[:error] || entry["error"]}
-                      class="mt-2 text-xs text-error"
-                    >
-                      Error: {inspect(entry[:error] || entry["error"])}
-                    </div>
+                    Error: {inspect(entry[:error])}
                   </div>
                 </div>
               </div>
+            </div>
             </div>
           </:body>
         </.dm_modal>

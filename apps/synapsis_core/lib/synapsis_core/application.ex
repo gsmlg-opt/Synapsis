@@ -29,6 +29,7 @@ defmodule SynapsisCore.Application do
       [
         Synapsis.Repo,
         {Phoenix.PubSub, name: Synapsis.PubSub},
+        Synapsis.Debug.Store,
         {Task.Supervisor, name: Synapsis.Provider.TaskSupervisor},
         Synapsis.Provider.Registry,
         {Task.Supervisor, name: Synapsis.Tool.TaskSupervisor},

@@ -23,6 +23,11 @@ defmodule SynapsisServer.SessionChannel do
     {debug_enabled, debug_entries} = load_debug_state(session_id)
     socket = assign(socket, :debug, debug_enabled)
 
+    # Subscribe to debug topic if debug is enabled
+    if debug_enabled do
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "debug:#{session_id}")
+    end
+
     reply = %{
       messages: messages,
       debug: debug_enabled,
@@ -108,32 +113,19 @@ defmodule SynapsisServer.SessionChannel do
     end
   end
 
-  def handle_in("toggle_debug", %{"enabled" => enabled}, socket) do
-    session_id = socket.assigns.session_id
-
-    case Synapsis.Sessions.update_debug(session_id, enabled) do
-      {:ok, _session} ->
-        broadcast!(socket, "debug_toggled", %{enabled: enabled})
-        {:noreply, assign(socket, :debug, enabled)}
-
-      {:error, _reason} ->
-        {:reply, {:error, %{reason: "Failed to toggle debug"}}, socket}
-    end
-  end
-
   def handle_in(_event, _payload, socket) do
     {:noreply, socket}
   end
 
   @impl true
   def handle_info({event, payload}, socket) when is_binary(event) do
-    # Filter debug events based on debug flag
+    # Debug events arrive from the debug:* PubSub topic (only subscribed if debug enabled)
     case event do
       "debug_request" ->
-        if socket.assigns[:debug], do: push(socket, event, payload)
+        push(socket, event, serialize_debug_payload(payload))
 
       "debug_response" ->
-        if socket.assigns[:debug], do: push(socket, event, payload)
+        push(socket, event, serialize_debug_payload(payload))
 
       _ ->
         push(socket, event, payload)
@@ -152,9 +144,8 @@ defmodule SynapsisServer.SessionChannel do
     case Synapsis.Repo.get(Synapsis.Session, session_id) do
       %{debug: true} ->
         entries =
-          if Code.ensure_loaded?(SynapsisServer.DebugStore) and
-               Process.whereis(SynapsisServer.DebugStore) != nil do
-            SynapsisServer.DebugStore.list_entries(session_id)
+          if Synapsis.Debug.Store.available?() do
+            Synapsis.Debug.Store.list_entries(session_id)
           else
             []
           end
@@ -164,6 +155,18 @@ defmodule SynapsisServer.SessionChannel do
       _ ->
         {false, []}
     end
+  end
+
+  defp serialize_debug_payload(payload) when is_map(payload) do
+    payload
+    |> Enum.map(fn
+      {k, %DateTime{} = v} -> {to_string(k), DateTime.to_iso8601(v)}
+      {k, nil} -> {to_string(k), nil}
+      {k, v} when is_boolean(v) -> {to_string(k), v}
+      {k, v} when is_atom(v) -> {to_string(k), to_string(v)}
+      {k, v} -> {to_string(k), v}
+    end)
+    |> Map.new()
   end
 
   # -- Serialization --

@@ -35,7 +35,8 @@ defmodule Synapsis.Session.Fork do
       model: session.model,
       agent: session.agent,
       title: title,
-      config: session.config
+      config: session.config,
+      debug: session.debug
     }
 
     Repo.transaction(fn ->

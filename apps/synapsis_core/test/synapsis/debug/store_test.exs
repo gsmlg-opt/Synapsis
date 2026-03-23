@@ -1,11 +1,15 @@
-defmodule SynapsisServer.DebugStoreTest do
+defmodule Synapsis.Debug.StoreTest do
   use ExUnit.Case, async: false
 
-  alias SynapsisServer.DebugStore
+  alias Synapsis.Debug.Store
 
   setup do
-    # Clear all entries before each test
-    :ets.delete_all_objects(:debug_entries)
+    # Clear all entries before each test via the GenServer API
+    # (ETS table is :protected, only the owning process can write)
+    for session <- ~w(sess-1 sess-2 sess-3 sess-list sess-a sess-b sess-clear sess-keep sess-delete sess-orphan sess-merge) do
+      Store.clear_entries(session)
+    end
+
     :ok
   end
 
@@ -22,9 +26,9 @@ defmodule SynapsisServer.DebugStoreTest do
         timestamp: DateTime.utc_now()
       }
 
-      assert true == DebugStore.put_request("sess-1", request)
+      assert true == Store.put_request("sess-1", request)
 
-      entries = DebugStore.list_entries("sess-1")
+      entries = Store.list_entries("sess-1")
       assert length(entries) == 1
       [entry] = entries
       assert entry.request_id == "req-1"
@@ -44,8 +48,8 @@ defmodule SynapsisServer.DebugStoreTest do
         timestamp: DateTime.utc_now()
       }
 
-      DebugStore.put_request("sess-2", request)
-      [entry] = DebugStore.list_entries("sess-2")
+      Store.put_request("sess-2", request)
+      [entry] = Store.list_entries("sess-2")
 
       assert entry.status == nil
       assert entry.response_body == nil
@@ -67,7 +71,7 @@ defmodule SynapsisServer.DebugStoreTest do
         timestamp: DateTime.utc_now()
       }
 
-      DebugStore.put_request("sess-3", request)
+      Store.put_request("sess-3", request)
 
       response = %{
         request_id: "req-3",
@@ -80,9 +84,9 @@ defmodule SynapsisServer.DebugStoreTest do
         timestamp: DateTime.utc_now()
       }
 
-      assert true == DebugStore.put_response("sess-3", response)
+      assert true == Store.put_response("sess-3", response)
 
-      [entry] = DebugStore.list_entries("sess-3")
+      [entry] = Store.list_entries("sess-3")
       assert entry.request_id == "req-3"
       assert entry.method == :post
       assert entry.status == 200
@@ -102,15 +106,15 @@ defmodule SynapsisServer.DebugStoreTest do
         timestamp: DateTime.utc_now()
       }
 
-      DebugStore.put_response("sess-orphan", response)
-      entries = DebugStore.list_entries("sess-orphan")
+      Store.put_response("sess-orphan", response)
+      entries = Store.list_entries("sess-orphan")
       assert length(entries) == 1
     end
 
     test "preserves request fields when merging response" do
       now = DateTime.utc_now()
 
-      DebugStore.put_request("sess-merge", %{
+      Store.put_request("sess-merge", %{
         request_id: "req-merge",
         method: :post,
         url: "https://api.example.com/v1/messages",
@@ -121,7 +125,7 @@ defmodule SynapsisServer.DebugStoreTest do
         timestamp: now
       })
 
-      DebugStore.put_response("sess-merge", %{
+      Store.put_response("sess-merge", %{
         request_id: "req-merge",
         status: 200,
         headers: [],
@@ -132,7 +136,7 @@ defmodule SynapsisServer.DebugStoreTest do
         timestamp: DateTime.utc_now()
       })
 
-      [entry] = DebugStore.list_entries("sess-merge")
+      [entry] = Store.list_entries("sess-merge")
       # Request fields preserved
       assert entry.method == :post
       assert entry.url == "https://api.example.com/v1/messages"
@@ -144,9 +148,9 @@ defmodule SynapsisServer.DebugStoreTest do
   end
 
   describe "list_entries/1" do
-    test "returns all entries for session" do
+    test "returns all entries for session sorted by timestamp" do
       for i <- 1..3 do
-        DebugStore.put_request("sess-list", %{
+        Store.put_request("sess-list", %{
           request_id: "req-#{i}",
           method: :post,
           url: "https://api.example.com",
@@ -154,19 +158,24 @@ defmodule SynapsisServer.DebugStoreTest do
           body: "{}",
           provider: :anthropic,
           model: "claude",
-          timestamp: DateTime.utc_now()
+          timestamp: DateTime.add(DateTime.utc_now(), i, :second)
         })
       end
 
-      assert length(DebugStore.list_entries("sess-list")) == 3
+      entries = Store.list_entries("sess-list")
+      assert length(entries) == 3
+
+      # Verify sorted by timestamp
+      timestamps = Enum.map(entries, & &1[:request_timestamp])
+      assert timestamps == Enum.sort(timestamps, DateTime)
     end
 
     test "returns empty list for unknown session" do
-      assert [] = DebugStore.list_entries("nonexistent")
+      assert [] = Store.list_entries("nonexistent")
     end
 
     test "does not return entries from other sessions" do
-      DebugStore.put_request("sess-a", %{
+      Store.put_request("sess-a", %{
         request_id: "req-a",
         method: :post,
         url: "https://api.example.com",
@@ -177,7 +186,7 @@ defmodule SynapsisServer.DebugStoreTest do
         timestamp: DateTime.utc_now()
       })
 
-      DebugStore.put_request("sess-b", %{
+      Store.put_request("sess-b", %{
         request_id: "req-b",
         method: :post,
         url: "https://api.example.com",
@@ -188,7 +197,7 @@ defmodule SynapsisServer.DebugStoreTest do
         timestamp: DateTime.utc_now()
       })
 
-      entries_a = DebugStore.list_entries("sess-a")
+      entries_a = Store.list_entries("sess-a")
       assert length(entries_a) == 1
       assert hd(entries_a).request_id == "req-a"
     end
@@ -197,7 +206,7 @@ defmodule SynapsisServer.DebugStoreTest do
   describe "clear_entries/1" do
     test "removes all entries for session" do
       for i <- 1..3 do
-        DebugStore.put_request("sess-clear", %{
+        Store.put_request("sess-clear", %{
           request_id: "req-#{i}",
           method: :post,
           url: "https://api.example.com",
@@ -209,13 +218,13 @@ defmodule SynapsisServer.DebugStoreTest do
         })
       end
 
-      count = DebugStore.clear_entries("sess-clear")
+      count = Store.clear_entries("sess-clear")
       assert count == 3
-      assert [] = DebugStore.list_entries("sess-clear")
+      assert [] = Store.list_entries("sess-clear")
     end
 
     test "does not affect other sessions" do
-      DebugStore.put_request("sess-keep", %{
+      Store.put_request("sess-keep", %{
         request_id: "req-keep",
         method: :post,
         url: "https://api.example.com",
@@ -226,7 +235,7 @@ defmodule SynapsisServer.DebugStoreTest do
         timestamp: DateTime.utc_now()
       })
 
-      DebugStore.put_request("sess-delete", %{
+      Store.put_request("sess-delete", %{
         request_id: "req-del",
         method: :post,
         url: "https://api.example.com",
@@ -237,13 +246,13 @@ defmodule SynapsisServer.DebugStoreTest do
         timestamp: DateTime.utc_now()
       })
 
-      DebugStore.clear_entries("sess-delete")
-      assert length(DebugStore.list_entries("sess-keep")) == 1
-      assert [] = DebugStore.list_entries("sess-delete")
+      Store.clear_entries("sess-delete")
+      assert length(Store.list_entries("sess-keep")) == 1
+      assert [] = Store.list_entries("sess-delete")
     end
 
     test "returns count of deleted entries" do
-      assert 0 = DebugStore.clear_entries("nonexistent")
+      assert 0 = Store.clear_entries("nonexistent")
     end
   end
 end

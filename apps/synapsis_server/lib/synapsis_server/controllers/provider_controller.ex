@@ -264,7 +264,7 @@ defmodule SynapsisServer.ProviderController do
       type: p.type,
       base_url: p.base_url,
       has_api_key: not is_nil(p.api_key_encrypted),
-      config: p.config,
+      config: redact_config(p.config),
       enabled: p.enabled,
       model_tiers: Providers.model_tiers(p.name),
       inserted_at: p.inserted_at,
@@ -291,6 +291,16 @@ defmodule SynapsisServer.ProviderController do
       end)
     end)
   end
+
+  defp redact_config(nil), do: nil
+
+  defp redact_config(config) when is_map(config) do
+    config
+    |> Map.drop(["oauth_tokens"])
+    |> Map.reject(fn {k, _} -> String.contains?(k, "token") or String.contains?(k, "secret") end)
+  end
+
+  defp redact_config(config), do: config
 
   defp detect_env_providers do
     providers = []

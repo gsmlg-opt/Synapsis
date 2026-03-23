@@ -14,7 +14,8 @@ defmodule Synapsis.Provider.OAuth.OpenAI do
 
   require Logger
 
-  @client_id "app_EMoamEEZ73f0CkXaXp7hrann"
+  # Default client ID from OpenAI Codex CLI (configurable via :synapsis_provider, :openai_oauth_client_id)
+  @default_client_id "app_EMoamEEZ73f0CkXaXp7hrann"
   @auth_base_url "https://auth.openai.com"
   @verification_url "https://auth.openai.com/codex/device"
   @device_callback_uri "https://auth.openai.com/deviceauth/callback"
@@ -28,7 +29,9 @@ defmodule Synapsis.Provider.OAuth.OpenAI do
   def verification_url, do: @verification_url
 
   @doc "Return the OAuth client ID."
-  def client_id, do: @client_id
+  def client_id do
+    Application.get_env(:synapsis_provider, :openai_oauth_client_id, @default_client_id)
+  end
 
   @doc """
   Step 1: Request a device user code.
@@ -40,7 +43,7 @@ defmodule Synapsis.Provider.OAuth.OpenAI do
     url = "#{@auth_base_url}/api/accounts/deviceauth/usercode"
 
     case Req.post(url,
-           json: %{client_id: @client_id},
+           json: %{client_id: client_id()},
            headers: [{"content-type", "application/json"}]
          ) do
       {:ok, %{status: 200, body: body}} ->
@@ -107,7 +110,7 @@ defmodule Synapsis.Provider.OAuth.OpenAI do
     body =
       URI.encode_query(%{
         "grant_type" => "authorization_code",
-        "client_id" => @client_id,
+        "client_id" => client_id(),
         "code" => authorization_code,
         "code_verifier" => code_verifier,
         "redirect_uri" => @device_callback_uri
@@ -145,7 +148,7 @@ defmodule Synapsis.Provider.OAuth.OpenAI do
 
     case Req.post(url,
            json: %{
-             client_id: @client_id,
+             client_id: client_id(),
              grant_type: "refresh_token",
              refresh_token: refresh_token
            },

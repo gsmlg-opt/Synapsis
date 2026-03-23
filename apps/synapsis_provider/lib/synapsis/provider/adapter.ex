@@ -163,7 +163,13 @@ defmodule Synapsis.Provider.Adapter do
       {:retry_auth, _resp} ->
         case maybe_refresh_oauth(config) do
           {:ok, new_config} ->
-            do_openai_stream(request, new_config, caller)
+            case do_openai_stream(request, new_config, caller) do
+              {:retry_auth, _} ->
+                send(caller, {:provider_error, "HTTP 401: Authentication failed after token refresh"})
+
+              _ ->
+                :ok
+            end
 
           _ ->
             send(caller, {:provider_error, "HTTP 401: Authentication failed"})
@@ -338,8 +344,14 @@ defmodule Synapsis.Provider.Adapter do
     case do_openai_complete(request, config) do
       {:retry_auth, _} ->
         case maybe_refresh_oauth(config) do
-          {:ok, new_config} -> do_openai_complete(request, new_config)
-          _ -> {:error, "HTTP 401: Authentication failed"}
+          {:ok, new_config} ->
+            case do_openai_complete(request, new_config) do
+              {:retry_auth, _} -> {:error, "HTTP 401: Authentication failed after token refresh"}
+              result -> result
+            end
+
+          _ ->
+            {:error, "HTTP 401: Authentication failed"}
         end
 
       result ->

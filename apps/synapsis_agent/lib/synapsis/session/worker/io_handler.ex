@@ -93,21 +93,14 @@ defmodule Synapsis.Session.Worker.IOHandler do
   # -- Debug telemetry helpers --
 
   defp maybe_attach_debug(state) do
-    if session_debug_enabled?(state.session_id) do
+    if state.debug do
       Synapsis.Session.DebugTelemetry.attach(state.session_id)
     end
   end
 
-  defp detach_debug(nil), do: :ok
+  def detach_debug(nil), do: :ok
 
-  defp detach_debug(handler_id) do
+  def detach_debug(handler_id) do
     Synapsis.Session.DebugTelemetry.detach(handler_id)
-  end
-
-  defp session_debug_enabled?(session_id) do
-    case Synapsis.Repo.get(Synapsis.Session, session_id) do
-      %{debug: true} -> true
-      _ -> false
-    end
   end
 end
