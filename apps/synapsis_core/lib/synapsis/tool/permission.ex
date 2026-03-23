@@ -77,6 +77,9 @@ defmodule Synapsis.Tool.Permission do
   rescue
     _ ->
       %SessionConfig{SessionConfig.default() | session_id: session_id}
+  catch
+    :exit, _ ->
+      %SessionConfig{SessionConfig.default() | session_id: session_id}
   end
 
   @doc """
