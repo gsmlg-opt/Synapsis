@@ -58,6 +58,10 @@ defmodule SynapsisServer.Router do
 
     post "/auth/:provider", ProviderController, :authenticate
 
+    post "/providers/:id/oauth/device/start", ProviderController, :oauth_device_start
+    post "/providers/:id/oauth/device/poll", ProviderController, :oauth_device_poll
+    post "/providers/:id/oauth/refresh", ProviderController, :oauth_refresh
+
     get "/config", ConfigController, :show
   end
 

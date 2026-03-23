@@ -55,15 +55,31 @@ defmodule SynapsisWeb.ProviderLive.Index do
       api_key_encrypted: params["api_key"]
     }
 
+    # For OAuth providers, api_key is optional
+    attrs =
+      if attrs.api_key_encrypted in [nil, ""] do
+        Map.delete(attrs, :api_key_encrypted)
+      else
+        attrs
+      end
+
     case Synapsis.Providers.create(attrs) do
-      {:ok, _provider} ->
+      {:ok, provider} ->
         {:ok, providers} = Synapsis.Providers.list()
+
+        # Redirect OAuth providers to show page for OAuth login
+        redirect_to =
+          if preset.name == "openai-sub" do
+            ~p"/settings/providers/#{provider.id}"
+          else
+            ~p"/settings/providers"
+          end
 
         {:noreply,
          socket
          |> assign(providers: providers, show_form: false, selected_preset: nil)
          |> put_flash(:info, "Provider created")
-         |> push_navigate(to: ~p"/settings/providers")}
+         |> push_navigate(to: redirect_to)}
 
       {:error, %Ecto.Changeset{errors: errors}} ->
         msg =
@@ -156,17 +172,28 @@ defmodule SynapsisWeb.ProviderLive.Index do
               <% else %>
                 <.readonly_field label="Base URL" value={@selected_preset.base_url} />
               <% end %>
-              <.dm_input
-                type="password"
-                name="api_key"
-                value=""
-                placeholder="Enter API key"
-                label="API Key"
-                required
-              />
+              <%= if @selected_preset.name == "openai-sub" do %>
+                <div class="bg-info/10 border border-info/30 rounded-lg px-3 py-2 text-sm text-info">
+                  This provider uses OAuth authentication. After creating, you'll be redirected
+                  to sign in with your ChatGPT account.
+                </div>
+              <% else %>
+                <.dm_input
+                  type="password"
+                  name="api_key"
+                  value=""
+                  placeholder="Enter API key"
+                  label="API Key"
+                  required
+                />
+              <% end %>
               <:actions>
                 <.dm_btn type="submit" variant="primary">
-                  Add Provider
+                  <%= if @selected_preset.name == "openai-sub" do %>
+                    Create & Sign In
+                  <% else %>
+                    Add Provider
+                  <% end %>
                 </.dm_btn>
               </:actions>
             </.dm_form>
