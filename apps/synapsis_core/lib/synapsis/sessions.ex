@@ -83,6 +83,14 @@ defmodule Synapsis.Sessions do
   end
 
   def delete(session_id) do
+    # Delete from DB first, then stop the session process.
+    # Stopping the session first can disrupt pooled DB connections in test sandbox mode.
+    result =
+      case Repo.get(Session, session_id) do
+        nil -> {:error, :not_found}
+        session -> Repo.delete(session)
+      end
+
     Synapsis.Session.DynamicSupervisor.stop_session(session_id)
 
     if Code.ensure_loaded?(SynapsisServer.DebugStore) and
@@ -90,10 +98,7 @@ defmodule Synapsis.Sessions do
       SynapsisServer.DebugStore.clear_entries(session_id)
     end
 
-    case Repo.get(Session, session_id) do
-      nil -> {:error, :not_found}
-      session -> Repo.delete(session)
-    end
+    result
   end
 
   def update_debug(session_id, enabled) when is_boolean(enabled) do

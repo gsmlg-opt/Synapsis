@@ -573,8 +573,7 @@ defmodule SynapsisWeb.SessionLive.Show do
         >
           <:title class="flex items-center justify-between w-full">
             <div class="flex items-center gap-2">
-              <.dm_mdi name="bug-outline" class="w-5 h-5" />
-              Debug Log
+              <.dm_mdi name="bug-outline" class="w-5 h-5" /> Debug Log
             </div>
             <.dm_btn variant="ghost" size="sm" phx-click="close_debug_panel">
               <.dm_mdi name="close" class="w-5 h-5" />
@@ -582,79 +581,79 @@ defmodule SynapsisWeb.SessionLive.Show do
           </:title>
           <:body>
             <div class="flex flex-col w-full overflow-y-auto max-h-[80vh]">
-            <div :if={@debug_entries == []} class="text-sm text-base-content/50 p-6 text-center">
-              No debug entries yet. Send a message to capture API calls.
-            </div>
-            <div :for={entry <- @debug_entries} class="mb-2">
-              <div
-                class={"flex items-center gap-2 px-3 py-2 rounded cursor-pointer hover:bg-base-300 text-sm font-mono #{debug_status_class(entry)}"}
-                phx-click="toggle_debug_entry"
-                phx-value-id={entry[:request_id] || entry["request_id"]}
-              >
-                <span class={"w-2 h-2 rounded-full #{debug_status_dot(entry)}"}></span>
-                <span class="font-semibold">{debug_method(entry)}</span>
-                <span class="truncate flex-1 text-base-content/70">{debug_provider(entry)}</span>
-                <span class="text-base-content/50">{debug_model(entry)}</span>
-                <span :if={debug_status(entry)} class="font-semibold">
-                  &rarr; {debug_status(entry)}
-                </span>
-                <span :if={debug_duration(entry)} class="text-base-content/50">
-                  ({debug_duration(entry)}ms)
-                </span>
+              <div :if={@debug_entries == []} class="text-sm text-base-content/50 p-6 text-center">
+                No debug entries yet. Send a message to capture API calls.
               </div>
-              <div :if={entry[:expanded]} class="mt-1 mx-3 space-y-2">
-                <%!-- Request --%>
-                <div :if={entry[:url] || entry["url"]} class="bg-base-200 rounded p-3">
-                  <div class="text-xs font-semibold text-base-content/60 mb-1">Request</div>
-                  <div class="text-xs font-mono break-all text-base-content/80 mb-2">
-                    {entry[:url] || entry["url"]}
-                  </div>
-                  <div :if={entry[:headers] || entry["headers"]} class="text-xs mb-2">
-                    <details>
-                      <summary class="cursor-pointer text-base-content/50">Headers</summary>
-                      <pre class="mt-1 text-xs overflow-x-auto"><%= inspect_headers(entry[:headers] || entry["headers"]) %></pre>
-                    </details>
-                  </div>
-                  <div :if={entry[:body] || entry["body"]} class="text-xs">
-                    <details>
-                      <summary class="cursor-pointer text-base-content/50">Body</summary>
-                      <pre class="mt-1 text-xs overflow-x-auto max-h-60"><%= format_body(entry[:body] || entry["body"]) %></pre>
-                    </details>
-                  </div>
-                </div>
-                <%!-- Response --%>
+              <div :for={entry <- @debug_entries} class="mb-2">
                 <div
-                  :if={
-                    entry[:response_body] || entry["response_body"] || entry[:status] ||
-                      entry["status"]
-                  }
-                  class="bg-base-200 rounded p-3"
+                  class={"flex items-center gap-2 px-3 py-2 rounded cursor-pointer hover:bg-base-300 text-sm font-mono #{debug_status_class(entry)}"}
+                  phx-click="toggle_debug_entry"
+                  phx-value-id={entry[:request_id] || entry["request_id"]}
                 >
-                  <div class="text-xs font-semibold text-base-content/60 mb-1">Response</div>
-                  <div
-                    :if={entry[:response_headers] || entry["response_headers"]}
-                    class="text-xs mb-2"
-                  >
-                    <details>
-                      <summary class="cursor-pointer text-base-content/50">Headers</summary>
-                      <pre class="mt-1 text-xs overflow-x-auto"><%= inspect_headers(entry[:response_headers] || entry["response_headers"]) %></pre>
-                    </details>
+                  <span class={"w-2 h-2 rounded-full #{debug_status_dot(entry)}"}></span>
+                  <span class="font-semibold">{debug_method(entry)}</span>
+                  <span class="truncate flex-1 text-base-content/70">{debug_provider(entry)}</span>
+                  <span class="text-base-content/50">{debug_model(entry)}</span>
+                  <span :if={debug_status(entry)} class="font-semibold">
+                    &rarr; {debug_status(entry)}
+                  </span>
+                  <span :if={debug_duration(entry)} class="text-base-content/50">
+                    ({debug_duration(entry)}ms)
+                  </span>
+                </div>
+                <div :if={entry[:expanded]} class="mt-1 mx-3 space-y-2">
+                  <%!-- Request --%>
+                  <div :if={entry[:url] || entry["url"]} class="bg-base-200 rounded p-3">
+                    <div class="text-xs font-semibold text-base-content/60 mb-1">Request</div>
+                    <div class="text-xs font-mono break-all text-base-content/80 mb-2">
+                      {entry[:url] || entry["url"]}
+                    </div>
+                    <div :if={entry[:headers] || entry["headers"]} class="text-xs mb-2">
+                      <details>
+                        <summary class="cursor-pointer text-base-content/50">Headers</summary>
+                        <pre class="mt-1 text-xs overflow-x-auto"><%= inspect_headers(entry[:headers] || entry["headers"]) %></pre>
+                      </details>
+                    </div>
+                    <div :if={entry[:body] || entry["body"]} class="text-xs">
+                      <details>
+                        <summary class="cursor-pointer text-base-content/50">Body</summary>
+                        <pre class="mt-1 text-xs overflow-x-auto max-h-60"><%= format_body(entry[:body] || entry["body"]) %></pre>
+                      </details>
+                    </div>
                   </div>
-                  <div :if={entry[:response_body] || entry["response_body"]} class="text-xs">
-                    <details>
-                      <summary class="cursor-pointer text-base-content/50">Body</summary>
-                      <pre class="mt-1 text-xs overflow-x-auto max-h-60"><%= format_body(entry[:response_body] || entry["response_body"]) %></pre>
-                    </details>
-                  </div>
+                  <%!-- Response --%>
                   <div
-                    :if={entry[:error] || entry["error"]}
-                    class="mt-2 text-xs text-error"
+                    :if={
+                      entry[:response_body] || entry["response_body"] || entry[:status] ||
+                        entry["status"]
+                    }
+                    class="bg-base-200 rounded p-3"
                   >
-                    Error: {inspect(entry[:error] || entry["error"])}
+                    <div class="text-xs font-semibold text-base-content/60 mb-1">Response</div>
+                    <div
+                      :if={entry[:response_headers] || entry["response_headers"]}
+                      class="text-xs mb-2"
+                    >
+                      <details>
+                        <summary class="cursor-pointer text-base-content/50">Headers</summary>
+                        <pre class="mt-1 text-xs overflow-x-auto"><%= inspect_headers(entry[:response_headers] || entry["response_headers"]) %></pre>
+                      </details>
+                    </div>
+                    <div :if={entry[:response_body] || entry["response_body"]} class="text-xs">
+                      <details>
+                        <summary class="cursor-pointer text-base-content/50">Body</summary>
+                        <pre class="mt-1 text-xs overflow-x-auto max-h-60"><%= format_body(entry[:response_body] || entry["response_body"]) %></pre>
+                      </details>
+                    </div>
+                    <div
+                      :if={entry[:error] || entry["error"]}
+                      class="mt-2 text-xs text-error"
+                    >
+                      Error: {inspect(entry[:error] || entry["error"])}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
             </div>
           </:body>
         </.dm_modal>
