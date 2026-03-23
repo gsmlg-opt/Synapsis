@@ -15,7 +15,7 @@ defmodule Synapsis.Tool.NotebookRead do
   def category, do: :notebook
 
   @impl true
-  def enabled?, do: false
+  def enabled?, do: Application.get_env(:synapsis_core, :notebook_tools_enabled, false)
 
   @impl true
   def parameters do

@@ -18,7 +18,7 @@ defmodule Synapsis.Tool.NotebookEdit do
   def side_effects, do: [:file_changed]
 
   @impl true
-  def enabled?, do: false
+  def enabled?, do: Application.get_env(:synapsis_core, :notebook_tools_enabled, false)
 
   @impl true
   def parameters do
