@@ -14,6 +14,8 @@ defmodule Synapsis.Provider.Adapter do
   alias Synapsis.Provider.{EventMapper, MessageMapper, ModelRegistry}
   alias Synapsis.Provider.Transport
 
+  require Logger
+
   # ---------------------------------------------------------------------------
   # Public API
   # ---------------------------------------------------------------------------
@@ -120,6 +122,12 @@ defmodule Synapsis.Provider.Adapter do
         {"content-type", "application/json"}
       ] ++ anthropic_auth_headers(config[:api_key])
 
+    request_id = Ecto.UUID.generate()
+    session_id = config[:session_id]
+    start_time = System.monotonic_time()
+
+    emit_request_telemetry(session_id, request_id, :post, url, headers, request, :anthropic, request[:model])
+
     try do
       resp =
         Req.post!(url,
@@ -141,14 +149,81 @@ defmodule Synapsis.Provider.Adapter do
           end
         )
 
+      emit_response_telemetry(session_id, request_id, resp, start_time)
       handle_stream_response(resp, caller)
     rescue
       e ->
+        emit_error_telemetry(session_id, request_id, e, start_time)
         send(caller, {:provider_error, Exception.message(e)})
     end
   end
 
   defp do_stream(:openai, request, config, caller) do
+    case do_openai_stream(request, config, caller) do
+      {:retry_auth, _resp} ->
+        case maybe_refresh_oauth(config) do
+          {:ok, new_config} ->
+            do_openai_stream(request, new_config, caller)
+
+          _ ->
+            send(caller, {:provider_error, "HTTP 401: Authentication failed"})
+        end
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp do_stream(:google, request, config, caller) do
+    base_url = config[:base_url] || Transport.Google.default_base_url()
+    model = request[:model] || "gemini-2.5-flash"
+
+    url = "#{base_url}/v1beta/models/#{model}:streamGenerateContent?alt=sse"
+
+    headers = [{"content-type", "application/json"}, {"x-goog-api-key", config[:api_key]}]
+    body = Map.drop(request, [:model, :stream])
+
+    request_id = Ecto.UUID.generate()
+    session_id = config[:session_id]
+    start_time = System.monotonic_time()
+
+    emit_request_telemetry(session_id, request_id, :post, url, headers, body, :google, model)
+
+    try do
+      resp =
+        Req.post!(url,
+          headers: headers,
+          json: body,
+          receive_timeout: 300_000,
+          compressed: false,
+          retry: false,
+          redirect: false,
+          into: fn {:data, data}, {req, resp} ->
+            {events, buffer} = Transport.SSE.accumulate_and_parse(data, resp.body || "")
+
+            for chunk <- events do
+              event = EventMapper.map_event(:google, chunk)
+              send(caller, {:provider_chunk, event})
+            end
+
+            {:cont, {req, %{resp | body: buffer}}}
+          end
+        )
+
+      emit_response_telemetry(session_id, request_id, resp, start_time)
+      handle_stream_response(resp, caller)
+    rescue
+      e ->
+        emit_error_telemetry(session_id, request_id, e, start_time)
+        send(caller, {:provider_error, Exception.message(e)})
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # OpenAI stream/complete with 401 retry support
+  # ---------------------------------------------------------------------------
+
+  defp do_openai_stream(request, config, caller) do
     base_url = config[:base_url] || Transport.OpenAI.default_base_url()
 
     {url, headers, body} =
@@ -173,6 +248,12 @@ defmodule Synapsis.Provider.Adapter do
         {"#{base_url}/v1/chat/completions", headers, request}
       end
 
+    request_id = Ecto.UUID.generate()
+    session_id = config[:session_id]
+    start_time = System.monotonic_time()
+
+    emit_request_telemetry(session_id, request_id, :post, url, headers, body, :openai, request[:model])
+
     try do
       resp =
         Req.post!(url,
@@ -194,45 +275,16 @@ defmodule Synapsis.Provider.Adapter do
           end
         )
 
-      handle_stream_response(resp, caller)
+      emit_response_telemetry(session_id, request_id, resp, start_time)
+
+      if resp.status == 401 and config[:oauth] do
+        {:retry_auth, resp}
+      else
+        handle_stream_response(resp, caller)
+      end
     rescue
       e ->
-        send(caller, {:provider_error, Exception.message(e)})
-    end
-  end
-
-  defp do_stream(:google, request, config, caller) do
-    base_url = config[:base_url] || Transport.Google.default_base_url()
-    model = request[:model] || "gemini-2.5-flash"
-
-    url = "#{base_url}/v1beta/models/#{model}:streamGenerateContent?alt=sse"
-
-    body = Map.drop(request, [:model, :stream])
-
-    try do
-      resp =
-        Req.post!(url,
-          headers: [{"content-type", "application/json"}, {"x-goog-api-key", config[:api_key]}],
-          json: body,
-          receive_timeout: 300_000,
-          compressed: false,
-          retry: false,
-          redirect: false,
-          into: fn {:data, data}, {req, resp} ->
-            {events, buffer} = Transport.SSE.accumulate_and_parse(data, resp.body || "")
-
-            for chunk <- events do
-              event = EventMapper.map_event(:google, chunk)
-              send(caller, {:provider_chunk, event})
-            end
-
-            {:cont, {req, %{resp | body: buffer}}}
-          end
-        )
-
-      handle_stream_response(resp, caller)
-    rescue
-      e ->
+        emit_error_telemetry(session_id, request_id, e, start_time)
         send(caller, {:provider_error, Exception.message(e)})
     end
   end
@@ -283,29 +335,16 @@ defmodule Synapsis.Provider.Adapter do
   end
 
   defp do_complete(:openai, request, config) do
-    base_url = config[:base_url] || Transport.OpenAI.default_base_url()
-    url = "#{base_url}/v1/chat/completions"
+    case do_openai_complete(request, config) do
+      {:retry_auth, _} ->
+        case maybe_refresh_oauth(config) do
+          {:ok, new_config} -> do_openai_complete(request, new_config)
+          _ -> {:error, "HTTP 401: Authentication failed"}
+        end
 
-    body = Map.merge(request, %{stream: false})
-
-    headers =
-      [{"content-type", "application/json"}] ++
-        if(config[:api_key], do: [{"authorization", "Bearer #{config[:api_key]}"}], else: [])
-
-    response = Req.post!(url, headers: headers, json: body, receive_timeout: 60_000)
-
-    case response.body do
-      %{"choices" => [%{"message" => %{"content" => text}} | _]} ->
-        {:ok, text}
-
-      %{"error" => %{"message" => msg}} ->
-        {:error, msg}
-
-      other ->
-        {:error, "unexpected response: #{inspect(other)}"}
+      result ->
+        result
     end
-  rescue
-    e -> {:error, Exception.message(e)}
   end
 
   defp do_complete(:google, request, config) do
@@ -328,6 +367,40 @@ defmodule Synapsis.Provider.Adapter do
 
       other ->
         {:error, "unexpected response: #{inspect(other)}"}
+    end
+  rescue
+    e -> {:error, Exception.message(e)}
+  end
+
+  # ---------------------------------------------------------------------------
+  # OpenAI complete with 401 retry support
+  # ---------------------------------------------------------------------------
+
+  defp do_openai_complete(request, config) do
+    base_url = config[:base_url] || Transport.OpenAI.default_base_url()
+    url = "#{base_url}/v1/chat/completions"
+
+    body = Map.merge(request, %{stream: false})
+
+    headers =
+      [{"content-type", "application/json"}] ++
+        if(config[:api_key], do: [{"authorization", "Bearer #{config[:api_key]}"}], else: [])
+
+    response = Req.post!(url, headers: headers, json: body, receive_timeout: 60_000)
+
+    if response.status == 401 and config[:oauth] do
+      {:retry_auth, response}
+    else
+      case response.body do
+        %{"choices" => [%{"message" => %{"content" => text}} | _]} ->
+          {:ok, text}
+
+        %{"error" => %{"message" => msg}} ->
+          {:error, msg}
+
+        other ->
+          {:error, "unexpected response: #{inspect(other)}"}
+      end
     end
   rescue
     e -> {:error, Exception.message(e)}
@@ -360,6 +433,93 @@ defmodule Synapsis.Provider.Adapter do
       {"authorization", "Bearer #{api_key}"}
     ]
   end
+
+  # ---------------------------------------------------------------------------
+  # OAuth token refresh
+  # ---------------------------------------------------------------------------
+
+  defp maybe_refresh_oauth(%{oauth: true, provider_id: provider_id}) do
+    case Synapsis.Providers.refresh_oauth(provider_id) do
+      {:ok, provider} ->
+        # Rebuild the runtime config with fresh tokens
+        new_key =
+          Synapsis.Provider.OAuth.OpenAI.access_token_from_config(provider.config) ||
+            provider.api_key_encrypted
+
+        {:ok, %{api_key: new_key, oauth: true, provider_id: provider_id}}
+
+      error ->
+        error
+    end
+  end
+
+  defp maybe_refresh_oauth(_config), do: {:error, :not_oauth}
+
+  # ---------------------------------------------------------------------------
+  # Telemetry emission — unconditional, zero overhead when no handler attached
+  # ---------------------------------------------------------------------------
+
+  defp emit_request_telemetry(session_id, request_id, method, url, headers, body, provider, model) do
+    :telemetry.execute(
+      [:synapsis, :provider, :request],
+      %{system_time: System.system_time()},
+      %{
+        session_id: session_id,
+        request_id: request_id,
+        method: method,
+        url: url,
+        headers: headers,
+        body: body,
+        provider: provider,
+        model: model
+      }
+    )
+  end
+
+  defp emit_response_telemetry(session_id, request_id, resp, start_time) do
+    duration = System.monotonic_time() - start_time
+
+    :telemetry.execute(
+      [:synapsis, :provider, :response],
+      %{duration: duration, system_time: System.system_time()},
+      %{
+        session_id: session_id,
+        request_id: request_id,
+        status: resp.status,
+        headers: resp_headers(resp),
+        body: resp_body(resp),
+        complete: resp.status < 400
+      }
+    )
+  end
+
+  defp emit_error_telemetry(session_id, request_id, exception, start_time) do
+    duration = System.monotonic_time() - start_time
+
+    :telemetry.execute(
+      [:synapsis, :provider, :response],
+      %{duration: duration, system_time: System.system_time()},
+      %{
+        session_id: session_id,
+        request_id: request_id,
+        status: 0,
+        headers: [],
+        body: nil,
+        complete: false,
+        error: %{reason: :exception, message: Exception.message(exception)}
+      }
+    )
+  end
+
+  defp resp_headers(%{headers: headers}) when is_list(headers), do: headers
+  defp resp_headers(%{headers: headers}) when is_map(headers) do
+    Enum.flat_map(headers, fn {k, v} when is_list(v) -> Enum.map(v, &{k, &1}); {k, v} -> [{k, v}] end)
+  end
+  defp resp_headers(_), do: []
+
+  defp resp_body(%{body: body}) when is_binary(body), do: body
+  defp resp_body(%{body: body}) when is_map(body), do: Jason.encode!(body)
+  defp resp_body(_), do: nil
 
   # ---------------------------------------------------------------------------
   # Transport resolution

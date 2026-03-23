@@ -18,6 +18,7 @@ defmodule Synapsis.Session.Worker do
     :runner_pid,
     :stream_ref,
     :project_path,
+    :debug_handler_id,
     worktree_path: nil,
     stream_acc: Synapsis.Agent.StreamAccumulator.new(),
     pending_tool_count: 0,

@@ -13,6 +13,7 @@ defmodule Synapsis.Session do
     field(:model, :string)
     field(:status, :string, default: "idle")
     field(:config, :map, default: %{})
+    field(:debug, :boolean, default: false)
 
     belongs_to(:project, Synapsis.Project)
     has_many(:messages, Synapsis.Message)
