@@ -32,7 +32,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
 
     test "shows save button", %{conn: conn, provider: provider} do
       {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
-      assert has_element?(view, "button[type='submit']", "Save Changes")
+      assert has_element?(view, "el-dm-button[type='submit']", "Save Changes")
     end
 
     test "redirects for unknown provider id", %{conn: conn} do
@@ -162,7 +162,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
 
       html =
         view
-        |> element(~s(button[phx-click="toggle_edit_models"]))
+        |> element(~s(el-dm-button[phx-click="toggle_edit_models"]))
         |> render_click()
 
       assert html =~ "Save Models"
@@ -174,7 +174,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
 
       # Enter edit mode
       view
-      |> element(~s(button[phx-click="toggle_edit_models"]))
+      |> element(~s(el-dm-button[phx-click="toggle_edit_models"]))
       |> render_click()
 
       # Submit with specific models selected

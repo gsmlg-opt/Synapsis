@@ -34,7 +34,7 @@ defmodule SynapsisWeb.SkillLive.ShowTest do
 
     test "shows save button", %{conn: conn, skill: skill} do
       {:ok, view, _html} = live(conn, ~p"/settings/skills/#{skill.id}")
-      assert has_element?(view, "button[type='submit']", "Save Changes")
+      assert has_element?(view, "el-dm-button[type='submit']", "Save Changes")
     end
 
     test "shows Settings / Skills breadcrumb", %{conn: conn, skill: skill} do
@@ -74,8 +74,8 @@ defmodule SynapsisWeb.SkillLive.ShowTest do
 
     test "heading displays the skill name", %{conn: conn, skill: skill} do
       {:ok, view, _html} = live(conn, ~p"/settings/skills/#{skill.id}")
-      # dm_card :title renders as div.card-title, not h1
-      assert has_element?(view, ".card-title", skill.name)
+      # dm_card header renders in [slot="header"] inside el-dm-card
+      assert has_element?(view, "el-dm-card [slot=\"header\"]", skill.name)
     end
 
     test "form shows name input with current value", %{conn: conn, skill: skill} do

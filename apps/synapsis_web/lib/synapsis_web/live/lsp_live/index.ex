@@ -360,8 +360,8 @@ defmodule SynapsisWeb.LSPLive.Index do
             <div>
               <div class="font-medium flex items-center gap-2">
                 {preset.name}
-                <.dm_badge :if={enabled} color="success" size="sm">Enabled</.dm_badge>
-                <.dm_badge :if={!enabled} color="ghost" size="sm">Disabled</.dm_badge>
+                <.dm_badge :if={enabled} variant="success" size="sm">Enabled</.dm_badge>
+                <.dm_badge :if={!enabled} variant="ghost" size="sm">Disabled</.dm_badge>
               </div>
               <div class="text-xs text-base-content/50 mt-1">{preset.description}</div>
             </div>

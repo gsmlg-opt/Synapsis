@@ -75,13 +75,13 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
 
     test "clicking New Memory shows create form", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings/memory")
-      view |> element("button", "New Memory") |> render_click()
+      view |> element("el-dm-button", "New Memory") |> render_click()
       assert has_element?(view, "#create-memory-form")
     end
 
     test "create form can save a new memory", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings/memory")
-      view |> element("button", "New Memory") |> render_click()
+      view |> element("el-dm-button", "New Memory") |> render_click()
 
       view
       |> form("#create-memory-form", %{
@@ -100,14 +100,14 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
 
     test "switching to Events tab shows events section", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings/memory")
-      view |> element("button", "Events") |> render_click()
+      view |> element("el-dm-button", "Events") |> render_click()
       html = render(view)
       assert html =~ "No events yet"
     end
 
     test "switching to Checkpoints tab shows checkpoints section", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings/memory")
-      view |> element("button", "Checkpoints") |> render_click()
+      view |> element("el-dm-button", "Checkpoints") |> render_click()
       html = render(view)
       assert html =~ "No checkpoints yet"
     end

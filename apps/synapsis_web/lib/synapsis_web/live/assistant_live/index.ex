@@ -66,7 +66,7 @@ defmodule SynapsisWeb.AssistantLive.Index do
             </div>
             <:action>
               <div class="flex items-center justify-between">
-                <.dm_badge color="ghost" size="sm">{assistant.name}</.dm_badge>
+                <.dm_badge variant="ghost" size="sm">{assistant.name}</.dm_badge>
                 <.dm_mdi name="chevron-right" class="w-4 h-4 text-base-content/30" />
               </div>
             </:action>

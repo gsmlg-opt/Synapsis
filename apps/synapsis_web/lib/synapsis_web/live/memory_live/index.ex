@@ -343,13 +343,13 @@ defmodule SynapsisWeb.MemoryLive.Index do
                       >
                         {memory.title}
                       </.dm_link>
-                      <.dm_badge size="xs" color={kind_color(memory.kind)}>
+                      <.dm_badge size="xs" variant={kind_color(memory.kind)}>
                         {memory.kind}
                       </.dm_badge>
-                      <.dm_badge size="xs" color={scope_color(memory.scope)}>
+                      <.dm_badge size="xs" variant={scope_color(memory.scope)}>
                         {memory.scope}
                       </.dm_badge>
-                      <.dm_badge size="xs" color={source_color(memory.source)}>
+                      <.dm_badge size="xs" variant={source_color(memory.source)}>
                         {memory.source}
                       </.dm_badge>
                     </div>

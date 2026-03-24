@@ -75,7 +75,7 @@ defmodule SynapsisWeb.DashboardLive do
                 <div class="font-medium">{project.slug}</div>
                 <div class="text-xs text-base-content/50 truncate">{project.path}</div>
               </div>
-              <.dm_badge color="primary" outline size="sm">
+              <.dm_badge variant="primary" outline size="sm">
                 project
               </.dm_badge>
             </.dm_link>
@@ -107,7 +107,7 @@ defmodule SynapsisWeb.DashboardLive do
                   {session.provider}/{session.model}
                 </div>
               </div>
-              <.dm_badge color="ghost" size="sm">
+              <.dm_badge variant="ghost" size="sm">
                 {session.agent}
               </.dm_badge>
             </.dm_link>

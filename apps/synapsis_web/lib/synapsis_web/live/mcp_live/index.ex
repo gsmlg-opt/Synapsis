@@ -627,7 +627,7 @@ defmodule SynapsisWeb.MCPLive.Index do
             <.dm_modal
               :if={ps[:running] && ps[:tools] != []}
               id={"tools-modal-#{config.id}"}
-              size="large"
+              size="lg"
               backdrop
             >
               <:trigger :let={dialog_id}>

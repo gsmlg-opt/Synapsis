@@ -278,10 +278,10 @@ defmodule SynapsisWeb.ProviderLive.Index do
             {provider.base_url}
           </div>
           <div class="mt-2">
-            <.dm_badge :if={provider.enabled} color="success">
+            <.dm_badge :if={provider.enabled} variant="success">
               Enabled
             </.dm_badge>
-            <.dm_badge :if={!provider.enabled} color="error">
+            <.dm_badge :if={!provider.enabled} variant="error">
               Disabled
             </.dm_badge>
           </div>

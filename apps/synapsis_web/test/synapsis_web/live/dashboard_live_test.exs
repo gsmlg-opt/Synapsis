@@ -10,14 +10,14 @@ defmodule SynapsisWeb.DashboardLiveTest do
 
     test "shows projects section heading", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
-      # dm_card :title renders as div.card-title, not h2
-      assert has_element?(view, ".card-title", "Projects")
+      # dm_card header slot renders as [slot="header"] inside el-dm-card
+      assert has_element?(view, "[slot=\"header\"]", "Projects")
     end
 
     test "shows recent sessions section heading", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
-      # dm_card :title renders as div.card-title, not h2
-      assert has_element?(view, ".card-title", "Recent Sessions")
+      # dm_card header slot renders as [slot="header"] inside el-dm-card
+      assert has_element?(view, "[slot=\"header\"]", "Recent Sessions")
     end
 
     test "renders appbar navigation links", %{conn: conn} do
@@ -70,18 +70,18 @@ defmodule SynapsisWeb.DashboardLiveTest do
 
     test "renders empty state text in projects section when no projects inserted", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
-      assert has_element?(view, ".card-title", "Projects")
+      assert has_element?(view, "[slot=\"header\"]", "Projects")
     end
 
     test "renders empty state text in sessions section when no sessions inserted", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
-      assert has_element?(view, ".card-title", "Recent Sessions")
+      assert has_element?(view, "[slot=\"header\"]", "Recent Sessions")
     end
 
     test "renders New project button", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
-      # The button text is "New" with an MDI plus icon, not "+ New"
-      assert has_element?(view, "button", "New")
+      # dm_btn renders as el-dm-button custom element
+      assert has_element?(view, "el-dm-button", "New")
     end
 
     test "session without title shows truncated id fallback", %{conn: conn} do
@@ -126,9 +126,9 @@ defmodule SynapsisWeb.DashboardLiveTest do
         |> Synapsis.Repo.insert()
 
       {:ok, view, _html} = live(conn, ~p"/")
-      # Agent name is inside a dm_badge which uses <slot /> (renders empty)
-      # Verify the badge element exists with the ghost color class instead
-      assert has_element?(view, "span.badge-ghost")
+      # Agent name is inside a dm_badge which renders as el-dm-badge
+      # The component maps variant="ghost" to color="ghost" on the element
+      assert has_element?(view, "el-dm-badge[color=\"ghost\"]")
     end
 
     test "renders Synapsis in the page title", %{conn: conn} do

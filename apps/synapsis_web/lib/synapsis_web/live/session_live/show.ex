@@ -472,7 +472,6 @@ defmodule SynapsisWeb.SessionLive.Show do
             <:title>Sessions</:title>
             <:menu
               :for={s <- @sessions}
-              id={s.id}
             >
               <div class="flex justify-between items-center w-full">
                 <.link
@@ -487,6 +486,7 @@ defmodule SynapsisWeb.SessionLive.Show do
                   </div>
                 </.link>
                 <.dm_btn
+                  id={"delete-session-#{s.id}"}
                   variant="ghost"
                   size="xs"
                   confirm="Delete this session?"
@@ -567,7 +567,7 @@ defmodule SynapsisWeb.SessionLive.Show do
         <.dm_modal
           :if={@debug_enabled}
           id="debug-dialog"
-          size="huge"
+          size="xl"
           class={if @debug_panel_open, do: "modal-open", else: ""}
           hide_close
         >

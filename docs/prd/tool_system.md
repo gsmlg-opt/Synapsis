@@ -2,933 +2,475 @@
 
 ## 1. Executive Summary
 
-Synapsis is an AI coding agent designed to replace Claude Code, OpenCode, and similar CLI-based agentic coding tools. This PRD specifies the complete tool system — the set of capabilities the agent can invoke during a coding session. The tool system is the agent's interface to the real world: every file read, every shell command, every user interaction is a tool call.
+The tool system is the agent's interface to the real world. Every file read, shell command, workspace write, agent-to-agent message, and user interaction is a tool call flowing through a uniform behaviour contract and execution pipeline.
 
-The tool system lives in `apps/synapsis_core/lib/synapsis/tool/` within the `synapsis_core` umbrella sub-app. Per the Constitution, `synapsis_core` is the single application with a supervision tree. Tools share the same process tree as sessions, agents, and config. Both the agent loop (`synapsis_agent`) and the plugin host depend on `synapsis_core`.
-
-This document covers:
-
-- Complete built-in tool inventory with specifications
-- Tool behaviour contract and execution pipeline
-- Tool registry architecture
-- Permission model
-- Side effect propagation
-- Agent orchestration tools (sub-agents, planning)
-- User interaction tools
-- Web tools
-- Integration with the plugin system (MCP/LSP)
+This PRD specifies the complete tool surface: 38 tools across 12 categories, covering filesystem operations, code search, shell execution, web access, workspace virtual files, agent communication, planning, orchestration, user interaction, session control, memory, and reserved future capabilities.
 
 ---
 
 ## 2. Competitive Landscape
 
-### 2.1 Claude Code (v2.1.71, March 2026) — 20 Built-in Tools
+### Claude Code (v2.1.71) — 20 Built-in Tools
 
-**Filesystem:** Read, Write, Edit, MultiEdit, Glob, Grep, LS
-**Execution:** Bash (persistent session)
-**Web:** WebFetch, WebSearch
-**Planning:** TodoWrite, TaskCreate
-**Orchestration:** Task (sub-agent launcher), ToolSearch (deferred tool loader), Skill (skill loader)
-**User Interaction:** AskUserQuestion (structured multi-select with HTML preview)
-**Mode Control:** EnterPlanMode, ExitPlanMode
-**Code Intelligence:** LSP (built-in, goToDefinition/findReferences/hover/symbols)
-**Notebook:** NotebookEdit
-**Utility:** Sleep (wait with early wake on user input)
-**Swarm (experimental):** SendMessageTool, TeammateTool, TeamDelete, Computer
+Filesystem (7), Execution (1), Web (2), Planning (2), Orchestration (3), User Interaction (1), Mode Control (2), Code Intelligence (1), Notebook (1), Utility (1), Swarm experimental (4).
 
-### 2.2 OpenCode (Charm, v1.x) — 15+ Built-in Tools
+### OpenCode (Charm, v1.x) — 15+ Built-in Tools
 
-**Filesystem:** read, write, edit, list, glob, grep, patch (apply diffs)
-**Execution:** bash
-**Web:** webfetch, websearch (Exa AI)
-**Planning:** todoread, todowrite
-**Orchestration:** task (sub-agent), skill (SKILL.md loader)
-**User Interaction:** question (structured prompts mid-execution)
-**Code Intelligence:** lsp (experimental, behind feature flag)
+Filesystem (7), Execution (1), Web (2), Planning (2), Orchestration (2), User Interaction (1), Code Intelligence (1 experimental).
 
-### 2.3 Codex CLI (OpenAI) — Minimal Tool Surface
+### Codex CLI (OpenAI) — Minimal Surface
 
-**Execution:** Sandboxed bash with configurable approval policies
-**File Editing:** apply_patch (unified diff format)
-**Web:** web_search (cache-first by default)
-**Orchestration:** MCP integration
+Execution (1 sandboxed), File Editing (1 apply_patch), Web (1 cache-first), MCP integration.
 
-### 2.4 Design Principle
+### Synapsis Differentiation
 
-Synapsis targets feature parity with Claude Code's tool surface while maintaining architectural clarity through the Elixir behaviour system. Where Claude Code and OpenCode blur the line between "tool" and "agent mode," Synapsis treats everything as a tool with a uniform `Synapsis.Tool` behaviour contract. All tool infrastructure lives in `apps/synapsis_core/lib/synapsis/tool/`, co-located with the agent and session systems in the `synapsis_core` sub-app.
+- **Workspace virtual files** (`@synapsis/` prefix) — DB-backed document storage addressable through the same file tools. No CLI tool has this.
+- **Agent communication** — Typed envelopes with persistence, request/response blocking, structured handoffs with workspace artifacts. Claude Code's swarm tools are fire-and-forget with no persistence.
+- **SQL-backed search** — Grep and glob over workspace documents via PostgreSQL regex and LIKE queries. Not filesystem-dependent.
+- **Unified interface** — Everything is a tool with the same behaviour contract. Where Claude Code and OpenCode blur tools and agent modes, Synapsis treats everything uniformly.
 
 ---
 
-## 3. Architecture
+## 3. Tool Inventory
 
-### 3.1 Layers
+### 3.1 Filesystem Tools (7 tools)
 
-```
-┌─────────────────────────────────────────────────────┐
-│                    Agent Loop                        │
-│  (synapsis_agent — graph-based CodingLoop)          │
-│                                                      │
-│  Gathers tools → builds LLM request → processes     │
-│  tool_use events → feeds results back to LLM        │
-├─────────────────────────────────────────────────────┤
-│                  Tool Executor                       │
-│  (synapsis_core — Synapsis.Tool.Executor)           │
-│                                                      │
-│  Permission check → dispatch → side effect broadcast │
-├──────────────────────┬──────────────────────────────┤
-│   Tool Registry      │   Permission Engine          │
-│   (GenServer + ETS)  │   (Synapsis.Tool.Permission) │
-│                      │                              │
-│   name → {type,      │   tool → level → session     │
-│           module/pid, │   config → allow/deny/ask    │
-│           opts}       │                              │
-├──────────────────────┴──────────────────────────────┤
-│                    Tool Modules                      │
-│                                                      │
-│  Built-in (synapsis_core)      Plugin (MCP/custom)  │
-│  ├── Filesystem                ├── MCP tools         │
-│  ├── Execution                 ├── LSP tools         │
-│  ├── Search                    └── Custom plugins    │
-│  ├── Web                                             │
-│  ├── Planning                                        │
-│  ├── Orchestration                                   │
-│  ├── User Interaction                                │
-│  ├── Session Control                                 │
-│  ├── Memory                                          │
-│  └── Swarm                                           │
-└─────────────────────────────────────────────────────┘
-```
+| # | Name | Permission | Side Effects | Description |
+|---|---|---|---|---|
+| 1 | `file_read` | `:read` | — | Read file contents with optional line offset/limit |
+| 2 | `file_write` | `:write` | `file_changed` | Write content, create parent directories |
+| 3 | `file_edit` | `:write` | `file_changed` | Search/replace exact string in file |
+| 4 | `multi_edit` | `:write` | `file_changed` | Batch edits across files with per-file rollback |
+| 5 | `file_delete` | `:destructive` | `file_changed` | Delete a file |
+| 6 | `file_move` | `:write` | `file_changed` | Move/rename with parent dir creation |
+| 7 | `list_dir` | `:read` | — | Directory listing with depth control |
 
-### 3.2 Tool Behaviour Contract
+All filesystem tools support the `@synapsis/` virtual prefix. When a path starts with `@synapsis/`, the tool transparently routes to `Synapsis.Workspace` instead of the real filesystem. See §4.
 
-```elixir
-defmodule Synapsis.Tool do
-  @moduledoc """
-  Canonical behaviour for tool implementations.
-  Lives in apps/synapsis_core/lib/synapsis/tool.ex.
-  """
+**Parameters per tool**:
 
-  @type permission_level :: :none | :read | :write | :execute | :destructive
-
-  @type category ::
-          :filesystem | :search | :execution | :web | :planning
-          | :orchestration | :interaction | :session | :notebook
-          | :computer | :swarm | :memory | :workspace | :uncategorized
-
-  @type context :: %{
-    optional(:project_path) => String.t(),
-    optional(:session_id) => String.t(),
-    optional(:working_dir) => String.t(),
-    optional(:permissions) => map(),
-    optional(:session_pid) => pid(),
-    optional(:agent_mode) => :build | :plan,
-    optional(:parent_agent) => pid() | nil,
-    optional(atom()) => term()
-  }
-
-  # Required callbacks
-  @callback name() :: String.t()
-  @callback description() :: String.t()
-  @callback parameters() :: map()
-  @callback execute(input :: map(), context :: context()) ::
-              {:ok, String.t()} | {:error, term()}
-
-  # Optional callbacks (defaults provided by `use Synapsis.Tool`)
-  @callback side_effects() :: [atom()]          # default: []
-  @callback permission_level() :: permission_level()  # default: :read
-  @callback category() :: category()            # default: :uncategorized
-  @callback version() :: String.t()             # default: "1.0.0"
-  @callback enabled?() :: boolean()             # default: true
-end
-```
-
-Usage with the `use` macro:
-
-```elixir
-defmodule Synapsis.Tool.FileRead do
-  use Synapsis.Tool
-
-  @impl true
-  def name, do: "file_read"
-
-  @impl true
-  def permission_level, do: :read
-
-  @impl true
-  def category, do: :filesystem
-
-  @impl true
-  def description, do: "Read the contents of a file at the given path."
-
-  @impl true
-  def parameters, do: %{...}
-
-  @impl true
-  def execute(input, context), do: {:ok, "file content"}
-end
-```
-
-The `use Synapsis.Tool` macro injects `@behaviour Synapsis.Tool` and provides overridable defaults for all optional callbacks.
-
-### 3.3 Tool Registry
-
-```elixir
-defmodule Synapsis.Tool.Registry do
-  use GenServer
-
-  # ETS table: :synapsis_tools
-  # Entry format: {name, {:module, module, opts}} or {name, {:process, pid, opts}}
-
-  # Registration
-  def register_module(name, module, opts \\ [])
-  def register_process(name, pid, opts \\ [])
-  def register(tool) when is_map(tool)      # backward-compatible map format
-
-  # Lookup
-  def lookup(name) :: {:ok, entry} | {:error, :not_found}
-  def get(name) :: {:ok, map()} | {:error, :not_found}
-
-  # Listing
-  def list() :: [map()]
-  def list_for_llm() :: [map()]              # unfiltered, backward-compatible
-  def list_for_llm(opts) :: [map()]          # filtered by agent_mode, deferred, categories
-  def list_by_category(category) :: [map()]
-
-  # Deferred loading
-  def mark_loaded(name) :: :ok | {:error, :not_found}
-
-  # Unregister
-  def unregister(name) :: :ok
-end
-```
-
-`list_for_llm/1` accepts options for filtering:
-- `:agent_mode` — `:plan` excludes tools with permission level in `[:write, :execute, :destructive]`; `:build` (default) includes all.
-- `:include_deferred` — when `false` (default), excludes tools registered with `deferred: true` that have not been `mark_loaded/1`-ed.
-- `:categories` — list of category atoms to include. `nil` means no filter.
-
-Registration enriches opts from module callbacks (category, permission_level, version, enabled) when not explicitly provided.
-
-### 3.4 Tool Executor Pipeline
-
-```
-tool_call from LLM
-  │
-  ▼
-┌─ Synapsis.Tool.Executor.execute/2 ─────────────────┐
-│                                                      │
-│  1. Registry lookup (tool exists?)                   │
-│  2. Enabled check (module.enabled?())                │
-│  3. Permission check                                 │
-│     ├─ :allowed → proceed                            │
-│     ├─ :requires_approval → return error             │
-│     └─ :denied → return {:error, :denied}            │
-│  4. Dispatch                                         │
-│     ├─ {:module, mod, opts} → Task.Supervisor        │
-│     │   (async_nolink with timeout)                  │
-│     └─ {:process, pid, opts} → GenServer.call        │
-│  5. Result handling                                  │
-│     ├─ {:ok, result} → persist, broadcast side fx    │
-│     └─ {:error, reason} → persist, return error      │
-│  6. Persistence (tool_calls table)                   │
-│     └─ Synapsis.ToolCall → Synapsis.Repo.insert      │
-│                                                      │
-└──────────────────────────────────────────────────────┘
-```
-
-### 3.5 Parallel Tool Execution
-
-When the LLM returns multiple independent tool calls in a single response, the executor runs them concurrently using `Task.async_stream/3`. This matches Claude Code's behaviour and significantly reduces latency.
-
-```elixir
-defmodule Synapsis.Tool.Executor do
-  def execute_batch(tool_calls, context) when is_list(tool_calls) do
-    # Group by file path — calls sharing a path are serialized
-    # Groups keyed by nil (no file path) can each run independently
-    # Uses Task.async_stream with max_concurrency: System.schedulers_online()
-  end
-end
-```
-
-Constraints:
-- Tools with side effects (`:file_changed`) that target the same file are serialized to prevent write conflicts (grouped by `input["path"]`, `input["file_path"]`, or `input["source"]`).
-- Sub-agent tools (`task`) are not parallelized with other tools in the same batch.
-
-### 3.6 Umbrella Placement and Dependency Direction
-
-Tools live in `apps/synapsis_core/lib/synapsis/tool/` as part of the `synapsis_core` sub-app. Per the Constitution:
-
-```
-synapsis_data        (schemas, Repo, migrations — no umbrella deps, no application)
-  ↑
-synapsis_provider    (provider behaviour + implementations — depends on synapsis_data)
-  ↑
-synapsis_core        (sessions, tools, agents, config — THE application, starts all supervision)
-  ↑
-synapsis_web/lsp/server/cli (presentation layers — depend on synapsis_core)
-```
-
-- `synapsis_core` depends on `synapsis_data` (for permission configs, tool call persistence via `Synapsis.ToolCall`, `Synapsis.SessionPermission`)
-- `synapsis_agent` depends on `synapsis_core` (agent loop calls `Synapsis.Tool.Registry.list_for_llm/1` and `Synapsis.Tool.Executor.execute/2`)
-- Plugin tools register into `Synapsis.Tool.Registry` and dispatch via `GenServer.call/3`
-
-On application start, `Synapsis.Tool.Builtin.register_all/0` registers all built-in tools.
+- **file_read**: `path` (required), `offset` (optional int, 0-indexed start line), `limit` (optional int, max lines)
+- **file_write**: `path` (required), `content` (required)
+- **file_edit**: `path` (required), `old_string` (required, exact match), `new_string` (required). Replaces first occurrence only when multiple matches exist.
+- **multi_edit**: `edits` (required array of `{path, old_string, new_string}`). Groups by file, applies sequentially within each file, rolls back entire file on any failure. Cross-file edits are independent — partial success is possible.
+- **file_delete**: `path` (required)
+- **file_move**: `source` (required), `destination` (required). Validates both paths. Cross-boundary moves (real ↔ virtual) are rejected.
+- **list_dir**: `path` (required), `depth` (optional int, default 1), `include_hidden` (optional bool), `ignore_gitignore` (optional bool)
 
 ---
 
-## 4. Complete Tool Inventory
-
-### 4.1 Filesystem Tools (7 tools)
-
-#### `file_read`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.FileRead` |
-| Permission | `:read` |
-| Side Effects | none |
-| Description | Read file contents with optional line range. Text files only (no PDF parsing). |
-
-Parameters:
-- `path` (required, string) — absolute or relative path to the file
-- `offset` (optional, integer) — start line (0-indexed)
-- `limit` (optional, integer) — number of lines to return
-
-Notes: The agent must read a file before editing it. Multiple reads should be batched in parallel. For large files (>500 lines), encourage use of offset/limit. Does NOT support PDF or Jupyter notebook parsing.
-
-#### `file_write`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.FileWrite` |
-| Permission | `:write` |
-| Side Effects | `[:file_changed]` |
-| Description | Create a new file or overwrite an existing file with the provided content. |
-
-Parameters:
-- `path` (required, string)
-- `content` (required, string) — full file content
-
-Notes: Creates parent directories if they don't exist. Use `file_edit` for modifying existing files to minimize token usage. Returns `{:ok, "Successfully wrote N bytes to path"}`.
-
-#### `file_edit`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.FileEdit` |
-| Permission | `:write` |
-| Side Effects | `[:file_changed]` |
-| Description | Apply a targeted edit by replacing an exact string match. |
-
-Parameters:
-- `path` (required, string)
-- `old_string` (required, string) — exact text to find
-- `new_string` (required, string) — replacement text
-
-Notes: If `old_string` matches multiple locations, replaces only the first occurrence and warns in the result JSON. Returns `{:ok, json_string}` where JSON contains `status`, `path`, `message`, and `diff` fields. This is the primary edit tool — prefer over `file_write` for existing files.
-
-#### `multi_edit`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.MultiEdit` |
-| Permission | `:write` |
-| Side Effects | `[:file_changed]` |
-| Description | Apply multiple edits to one or more files in a single tool call. Each edit is an exact string replacement. |
-
-Parameters:
-- `edits` (required, array of objects) — each with:
-  - `path` (required, string)
-  - `old_string` (required, string)
-  - `new_string` (required, string)
-
-Notes: All edits within a file are applied in order. Cross-file edits are independent. This addresses the common pattern of renaming a symbol across multiple files.
-
-#### `file_delete`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.FileDelete` |
-| Permission | `:destructive` |
-| Side Effects | `[:file_changed]` |
-| Description | Delete a file. |
-
-Parameters:
-- `path` (required, string)
-
-Notes: Returns `{:ok, "Successfully deleted path"}`. First-class tool rather than routing through bash — enables proper permission gating.
-
-#### `file_move`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.FileMove` |
-| Permission | `:write` |
-| Side Effects | `[:file_changed]` |
-| Description | Move or rename a file or directory. |
-
-Parameters:
-- `source` (required, string)
-- `destination` (required, string)
-
-Notes: Creates destination parent directories if needed. Returns `{:ok, "Moved src to dst"}`.
-
-#### `list_dir`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.ListDir` |
-| Permission | `:read` |
-| Side Effects | none |
-| Description | List directory contents with optional depth control. |
-
-Parameters:
-- `path` (required, string)
-- `depth` (optional, integer, default: 1) — max depth for recursive listing
-
-### 4.2 Search Tools (2 tools)
-
-#### `grep`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.Grep` |
-| Permission | `:read` |
-| Side Effects | none |
-| Description | Recursive text/regex search across files. Powered by ripgrep internally. |
-
-Parameters:
-- `pattern` (required, string) — search pattern (regex supported)
-- `path` (optional, string, default: project root) — directory to search
-- `include` (optional, string) — filter files by glob pattern, e.g. `"*.ex"`
-
-Notes: Returns `{:ok, "match output"}` or `{:ok, "No matches found."}`. The filter parameter is named `include` (not `glob`).
-
-#### `glob`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.Glob` |
-| Permission | `:read` |
-| Side Effects | none |
-| Description | Find files matching a glob pattern. |
-
-Parameters:
-- `pattern` (required, string) — glob pattern, e.g. `"**/*.test.ts"`
-- `path` (optional, string, default: project root)
-
-Notes: Returns `{:ok, "file1\nfile2\n..."}` or `{:ok, "No files matched..."}`.
-
-### 4.3 Execution Tools (1 tool)
-
-#### `bash`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.Bash` |
-| Permission | `:execute` |
-| Side Effects | none (side effects are unpredictable for shell commands) |
-| Description | Execute a shell command. Each invocation uses an ephemeral Port (not a persistent session). |
-
-Parameters:
-- `command` (required, string) — shell command to execute
-- `timeout` (optional, integer, default: 30000) — timeout in milliseconds
-
-Notes: Each command runs in a fresh Port process. State (env vars, cwd) does NOT persist across calls. Exit code 0 returns `{:ok, "output"}`. Non-zero returns `{:ok, "Exit code: N\noutput"}`. Timeout returns `{:error, "Command timed out..."}`. The agent should prefer built-in tools (grep, glob, list_dir) over bash equivalents for permission efficiency.
-
-### 4.4 Web Tools (2 tools)
-
-#### `fetch`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.Fetch` |
-| Permission | `:read` |
-| Side Effects | none |
-| Description | Fetch the content of a web page at a given URL. Returns the page text content. |
-
-Parameters:
-- `url` (required, string) — full URL including scheme
-
-Notes: The tool name is `fetch` (not `web_fetch`). Does not execute JavaScript. Returns text content extracted from HTML.
-
-#### `web_search`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.WebSearch` |
-| Permission | `:read` |
-| Side Effects | none |
-| Description | Search the web and return results with titles, URLs, and snippets. |
-
-Parameters:
-- `query` (required, string) — search query
-
-### 4.5 Planning Tools (2 tools)
-
-#### `todo_write`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.TodoWrite` |
-| Permission | `:none` |
-| Side Effects | none |
-| Description | Create and manage a task checklist for the current session. |
-
-Parameters:
-- `todos` (required, array of objects) — each with:
-  - `content` (required, string) — task description
-  - `status` (required, enum: "pending" | "in_progress" | "completed")
-
-Notes: Each call replaces the entire todo list (not a delta). Displayed in the UI via PubSub broadcast.
-
-#### `todo_read`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.TodoRead` |
-| Permission | `:none` |
-| Side Effects | none |
-| Description | Read the current todo list state. |
-
-Parameters: none
-
-### 4.6 Orchestration Tools (3 tools)
-
-#### `task`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.Task` |
-| Permission | `:none` |
-| Side Effects | none |
-| Enabled | **false** (currently stubbed) |
-| Description | Launch a sub-agent to autonomously handle a complex, multi-step task. |
-
-Parameters:
-- `prompt` (required, string) — detailed instructions for the sub-agent
-
-Notes: Currently stubbed with `enabled? = false`. Cannot be wired to the agent runtime from `synapsis_core` because `synapsis_core` cannot depend on `synapsis_agent` per the Constitution's dependency graph. Implementing the task tool requires either: (a) a callback/behaviour injected at runtime, or (b) moving the tool to `synapsis_agent`. This is tracked as a separate architectural decision.
-
-#### `tool_search`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.ToolSearch` |
-| Permission | `:none` |
-| Side Effects | none |
-| Description | Search for and load deferred tools by keyword. |
-
-Parameters:
-- `query` (required, string) — search keywords
-
-Notes: Returns tool names, descriptions, and parameter schemas. Once a deferred tool is loaded via tool_search, it becomes available for the remainder of the session.
-
-#### `skill`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.Skill` |
-| Permission | `:none` |
-| Side Effects | none |
-| Description | Load a skill and inject its instructions into the current conversation. |
-
-Parameters:
-- `name` (required, string) — skill name to load
-
-### 4.7 User Interaction Tools (1 tool)
-
-#### `ask_user`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.AskUser` |
-| Permission | `:none` |
-| Side Effects | none |
-| Description | Present structured questions to the user with selectable options. |
-
-Parameters:
-- `question` (required, string) — the question text
-- `options` (optional, array of strings) — selectable options
-
-### 4.8 Session Control Tools (3 tools)
-
-#### `enter_plan_mode`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.EnterPlanMode` |
-| Permission | `:none` |
-| Side Effects | none |
-| Description | Switch to plan mode. Write/execute tools are disabled. |
-
-Parameters: none
-
-#### `exit_plan_mode`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.ExitPlanMode` |
-| Permission | `:none` |
-| Side Effects | none |
-| Description | Exit plan mode and present the plan to the user. |
-
-Parameters:
-- `plan` (optional, string) — the finalized plan in markdown format
-
-#### `sleep`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.Sleep` |
-| Permission | `:none` |
-| Side Effects | none |
-| Description | Wait for a specified duration. Useful for polling-style workflows. |
-
-Parameters:
-- `duration_ms` (required, integer) — maximum wait time in milliseconds
-
-### 4.9 Memory Tools (4 tools)
-
-#### `memory_save`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.MemorySave` |
-| Permission | `:write` |
-| Side Effects | none |
-| Description | Save a memory entry for the current session/project. |
-
-#### `memory_search`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.MemorySearch` |
-| Permission | `:read` |
-| Side Effects | none |
-| Description | Search existing memory entries. |
-
-#### `memory_update`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.MemoryUpdate` |
-| Permission | `:write` |
-| Side Effects | none |
-| Description | Update an existing memory entry. |
-
-#### `session_summarize`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.SessionSummarize` |
-| Permission | `:none` |
-| Side Effects | none |
-| Description | Summarize the current session conversation for context compaction. |
-
-### 4.10 Swarm Tools (3 tools)
-
-#### `send_message`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.SendMessage` |
-| Permission | `:none` |
-| Side Effects | none |
-| Description | Send a structured message to a teammate agent in the current swarm. |
-
-#### `teammate`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.Teammate` |
-| Permission | `:none` |
-| Side Effects | none |
-| Description | Create, configure, or query teammate agents in the current swarm. |
-
-#### `team_delete`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.TeamDelete` |
-| Permission | `:none` |
-| Side Effects | none |
-| Description | Dissolve the current swarm and terminate all teammate agents. |
-
-### 4.11 Special Tools (1 tool)
-
-#### `diagnostics`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.Diagnostics` |
-| Permission | `:read` |
-| Side Effects | none |
-| Description | Query LSP diagnostics for current project files. |
-
-### 4.12 Disabled Stubs (3 tools)
-
-These tools ship as compiled modules but return `enabled?() -> false` by default.
-
-#### `notebook_read`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.NotebookRead` |
-| Enabled | **false** |
-
-#### `notebook_edit`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.NotebookEdit` |
-| Enabled | **false** |
-
-#### `computer`
-
-| Field | Value |
-|---|---|
-| Module | `Synapsis.Tool.Computer` |
-| Enabled | **false** |
+### 3.2 Search Tools (3 tools)
+
+| # | Name | Permission | Description |
+|---|---|---|---|
+| 8 | `grep` | `:read` | Regex content search via ripgrep (real files) or PostgreSQL regex (workspace) |
+| 9 | `glob` | `:read` | Path pattern matching via `Path.wildcard` (real) or SQL LIKE (workspace) |
+| 10 | `diagnostics` | `:read` | LSP-style diagnostics for a file |
+
+Search tools support `@synapsis/` paths. When the `path` parameter starts with `@synapsis/`, search runs against PostgreSQL instead of the filesystem:
+- **grep** uses `content_body ~ pattern` (POSIX regex on the `workspace_documents` content column)
+- **glob** converts glob syntax to SQL LIKE pattern and queries the `path` column
+
+**Parameters**:
+
+- **grep**: `pattern` (required, regex), `path` (optional, default project root), `include` (optional, filename glob filter), `output_mode` (optional: content/files/count), `context_lines` (optional int)
+- **glob**: `pattern` (required, e.g. `"**/*.md"`), `path` (optional base directory)
+- **diagnostics**: `path` (required)
 
 ---
 
-## 5. Tool Inventory Summary
+### 3.3 Execution Tools (1 tool)
 
-| # | Module | Name | Category | Permission | Side Effects | Enabled |
-|---|---|---|---|---|---|---|
-| 1 | FileRead | `file_read` | filesystem | `:read` | — | yes |
-| 2 | FileWrite | `file_write` | filesystem | `:write` | `[:file_changed]` | yes |
-| 3 | FileEdit | `file_edit` | filesystem | `:write` | `[:file_changed]` | yes |
-| 4 | MultiEdit | `multi_edit` | filesystem | `:write` | `[:file_changed]` | yes |
-| 5 | FileDelete | `file_delete` | filesystem | `:destructive` | `[:file_changed]` | yes |
-| 6 | FileMove | `file_move` | filesystem | `:write` | `[:file_changed]` | yes |
-| 7 | ListDir | `list_dir` | filesystem | `:read` | — | yes |
-| 8 | Grep | `grep` | search | `:read` | — | yes |
-| 9 | Glob | `glob` | search | `:read` | — | yes |
-| 10 | Bash | `bash` | execution | `:execute` | — | yes |
-| 11 | Fetch | `fetch` | web | `:read` | — | yes |
-| 12 | WebSearch | `web_search` | web | `:read` | — | yes |
-| 13 | TodoWrite | `todo_write` | planning | `:none` | — | yes |
-| 14 | TodoRead | `todo_read` | planning | `:none` | — | yes |
-| 15 | Task | `task` | orchestration | `:none` | — | **no** (stubbed) |
-| 16 | ToolSearch | `tool_search` | orchestration | `:none` | — | yes |
-| 17 | Skill | `skill` | orchestration | `:none` | — | yes |
-| 18 | AskUser | `ask_user` | interaction | `:none` | — | yes |
-| 19 | EnterPlanMode | `enter_plan_mode` | session | `:none` | — | yes |
-| 20 | ExitPlanMode | `exit_plan_mode` | session | `:none` | — | yes |
-| 21 | Sleep | `sleep` | session | `:none` | — | yes |
-| 22 | SendMessage | `send_message` | swarm | `:none` | — | yes |
-| 23 | Teammate | `teammate` | swarm | `:none` | — | yes |
-| 24 | TeamDelete | `team_delete` | swarm | `:none` | — | yes |
-| 25 | SessionSummarize | `session_summarize` | memory | `:none` | — | yes |
-| 26 | MemorySave | `memory_save` | memory | `:write` | — | yes |
-| 27 | MemorySearch | `memory_search` | memory | `:read` | — | yes |
-| 28 | MemoryUpdate | `memory_update` | memory | `:write` | — | yes |
-| 29 | Diagnostics | `diagnostics` | uncategorized | `:read` | — | yes |
-| 30 | NotebookRead | `notebook_read` | notebook | `:read` | — | **no** |
-| 31 | NotebookEdit | `notebook_edit` | notebook | `:write` | `[:file_changed]` | **no** |
-| 32 | Computer | `computer` | computer | `:execute` | — | **no** |
+| # | Name | Permission | Description |
+|---|---|---|---|
+| 11 | `bash` | `:execute` | Shell execution with project directory as cwd |
 
-**Total: 32 tools registered (28 enabled by default, 3 disabled stubs, 1 stubbed orchestration)**
+**Parameters**: `command` (required), `timeout` (optional, default 30000ms, max 300000ms), `working_dir` (optional override).
+
+**Behaviour**: Uses `System.cmd("bash", ["-c", command])`. Output truncated at 10MB. Non-zero exit returns `{:ok, output}` with exit code appended (not an error — the LLM needs to see the output). Timeout returns `{:error, "timed out"}`.
 
 ---
 
-## 6. Permission Model
+### 3.4 Web Tools (2 tools)
 
-### 6.1 Permission Levels
+| # | Name | Permission | Description |
+|---|---|---|---|
+| 12 | `fetch` | `:read` | HTTP GET with SSRF protection |
+| 13 | `web_search` | `:read` | Brave Search API |
 
-```
-:none        — always available, no approval needed (planning, interaction, orchestration)
-:read        — always allowed by default, can be restricted
-:write       — requires session-level opt-in or per-call approval
-:execute     — requires explicit session-level opt-in
-:destructive — requires per-call approval by default
-```
+**Parameters**:
 
-### 6.2 Session Permission Configuration
-
-Each session has a permission configuration stored in `Synapsis.SessionPermission` (in `synapsis_data`):
-
-```elixir
-# Synapsis.Tool.Permission.SessionConfig struct
-%Synapsis.Tool.Permission.SessionConfig{
-  session_id: "uuid",
-  mode: :interactive | :autonomous,
-  allow_read: true,                    # always true
-  allow_write: :allow | :deny | :ask,  # default: :allow
-  allow_execute: :allow | :deny | :ask, # default: :ask
-  allow_destructive: :allow | :deny | :ask, # default: :ask
-  overrides: [
-    %{tool: "bash", pattern: "git *", decision: :allowed},
-    %{tool: "bash", pattern: "rm *", decision: :denied},
-    %{tool: "file_write", pattern: "src/**", decision: :allowed}
-  ]
-}
-```
-
-### 6.3 Permission Resolution Order (3 steps)
-
-1. **Per-tool glob overrides** — if a matching override exists in the session config, its decision wins immediately. Overrides match tool name + glob pattern against the tool's primary input field (e.g., `command` for bash, `path` for file tools, `pattern` for grep/glob).
-2. **Permission level vs session config** — the tool's permission level is checked against the session's mode and allow_* settings.
-3. **Default policy** — `:requires_approval`.
-
-### 6.4 Autonomous Mode
-
-In autonomous mode (`mode: :autonomous`), all tools at or below `:execute` level are auto-approved. `:destructive` tools follow the session's `allow_destructive` setting.
-
-### 6.5 Plan Mode Restrictions
-
-When `agent_mode` is `:plan`:
-- Tools with permission level `:write`, `:execute`, `:destructive` are excluded from `list_for_llm/1`
-- Only `:read` and `:none` tools are available
-- The agent must call `exit_plan_mode` to return to `:build` mode
+- **fetch**: `url` (required, http/https only). Blocks localhost, private IPs, metadata endpoints, DNS rebinding. Body truncated at 50KB.
+- **web_search**: `query` (required), `max_results` (optional, default 5). Requires `BRAVE_SEARCH_API_KEY`. Returns JSON array of `{title, url, snippet}`.
 
 ---
 
-## 7. Side Effect System
+### 3.5 Planning Tools (2 tools)
 
-### 7.1 Declared Side Effects
+| # | Name | Permission | Description |
+|---|---|---|---|
+| 14 | `todo_write` | `:none` | Create/replace session todo list (full replacement, not delta) |
+| 15 | `todo_read` | `:none` | Read current session todo list |
 
-Tools declare side effects as static data via the `side_effects/0` callback:
+**Parameters**:
 
-```
-:file_changed — a file was created, modified, moved, or deleted
-```
-
-### 7.2 Side Effect Propagation
-
-```
-Synapsis.Tool.Executor
-  → tool executes successfully
-  → reads module.side_effects()
-  → broadcasts to PubSub topic "tool_effects:{session_id}"
-  → message: {:tool_effect, :file_changed, %{session_id: session_id}}
-```
-
-Only module-based tools with non-empty `side_effects/0` trigger broadcasts. Process-based tools (plugins) do not automatically broadcast side effects.
+- **todo_write**: `todos` (required array of `{id, content, status}`). Status enum: pending/in_progress/completed. Deletes all existing todos for session, inserts new set. Broadcasts `{:todo_update}` via PubSub. Persists to `session_todos` table.
+- **todo_read**: none. Returns ordered list.
 
 ---
 
-## 8. Plugin Tool Integration
+### 3.6 Orchestration Tools (3 tools)
 
-### 8.1 Plugin Tools
+| # | Name | Permission | Enabled | Description |
+|---|---|---|---|---|
+| 16 | `task` | `:none` | **no** (stub) | Launch sub-agent, foreground or background |
+| 17 | `tool_search` | `:none` | yes | Discover and activate deferred/MCP tools by keyword |
+| 18 | `skill` | `:none` | yes | Load SKILL.md file into conversation context |
 
-Plugin tools are dynamically registered into `Synapsis.Tool.Registry` via `register_process/3`. They follow the same execution pipeline as built-in tools but dispatch via `GenServer.call/3` instead of direct module invocation.
+**Parameters**:
 
-### 8.2 MCP Tools
-
-MCP tools are discovered via MCP `tools/list` at plugin initialization. The `tool_search` built-in tool enables lazy loading — MCP tool definitions are not included in every LLM request by default.
-
-### 8.3 Deferred Tool Loading
-
-To avoid bloating LLM context with dozens of MCP tool definitions:
-
-1. On session start, only built-in tools are included in `list_for_llm/1`
-2. MCP/plugin tools are registered in the Registry but marked as `deferred: true`
-3. The agent uses `tool_search` to discover relevant deferred tools
-4. Once loaded via `mark_loaded/1`, deferred tools are included in subsequent `list_for_llm/1` calls
+- **task**: `prompt` (required), `tools` (optional array, default read-only set), `mode` (foreground/background), `model` (optional override). Sub-agents inherit session context but have own conversation history. Cannot use `ask_user` or `enter_plan_mode`.
+- **tool_search**: `query` (required), `limit` (optional, default 5). Scores by name/description relevance. Side effect: calls `Registry.mark_loaded/1` on matched tools, activating deferred MCP tools.
+- **skill**: `name` (required). Searches `.synapsis/skills/{name}.md` then `~/.config/synapsis/skills/{name}.md`.
 
 ---
 
-## 9. Agent Loop Integration
+### 3.7 User Interaction Tools (1 tool)
 
-### 9.1 Graph-Based Agent Runner
+| # | Name | Permission | Description |
+|---|---|---|---|
+| 19 | `ask_user` | `:none` | Present structured questions, block until user responds |
 
-The agent loop is implemented as a graph-based runner in `synapsis_agent`, not a simple sequential loop. Key nodes:
+**Parameters**: `question` (required), `options` (optional array of `{label, description?}`).
 
-- `Synapsis.Agent.Nodes.ToolDispatch` — receives tool_use events from the LLM stream, dispatches to the executor
-- `Synapsis.Agent.Nodes.ToolExecute` — executes tool calls and feeds results back
-- `Synapsis.Agent.Nodes.Complete` — handles completion and response flushing
-
-### 9.2 Tool Gathering
-
-```elixir
-Synapsis.Tool.Registry.list_for_llm(
-  agent_mode: context.agent_mode,
-  include_deferred: false
-)
-```
-
-### 9.3 Tool Call Processing
-
-The executor handles dispatch, persistence, and side effect broadcasting. Results are fed back into the graph runner for the next LLM iteration.
+**Constraints**: Blocks via selective receive (5 min timeout). Sub-agents cannot use (returns error if `context.parent_agent` is set). Race-safe: subscribes to response topic before broadcasting question.
 
 ---
 
-## 10. Data Persistence
+### 3.8 Session Control Tools (3 tools)
 
-### 10.1 Tool Calls
+| # | Name | Permission | Description |
+|---|---|---|---|
+| 20 | `enter_plan_mode` | `:none` | Switch to plan mode, restricts to read-only tools |
+| 21 | `exit_plan_mode` | `:none` | Submit plan and return to build mode |
+| 22 | `sleep` | `:none` | Interruptible pause, early wake on user input |
 
-Tool calls are persisted in the `tool_calls` table:
+**Parameters**:
 
-```
-tool_calls: id (UUID), message_id (nullable), session_id,
-            tool_name, input (JSONB), output (JSONB),
-            status (pending | completed | error),
-            duration_ms, error_message, timestamps
-```
-
-Persistence happens in the executor after each tool call completes. Errors during persistence are logged but do not fail the tool call.
-
-### 10.2 Session Permissions
-
-```
-session_permissions: id, session_id,
-                     mode (interactive | autonomous),
-                     allow_write (boolean),
-                     allow_execute (boolean),
-                     allow_destructive (enum: allow | deny | ask),
-                     tool_overrides (JSONB),
-                     timestamps
-```
-
-### 10.3 Todo Items
-
-```
-session_todos: id, session_id,
-               content, status (pending | in_progress | completed),
-               sort_order, timestamps
-```
+- **enter_plan_mode**: none. Updates session agent mode. Registry excludes write/execute/destructive tools.
+- **exit_plan_mode**: `plan` (optional string). Broadcasts `{:plan_submitted}` then `{:agent_mode_changed, :build}`.
+- **sleep**: `duration_ms` (required, capped at 600000), `reason` (optional). Selective receive wakes early on `{:user_input, _}`.
 
 ---
 
-## 11. Resolved Decisions
+### 3.9 Memory Tools (4 tools)
 
-1. **32 tools total** — 28 enabled by default, 3 disabled/future (notebook, computer), 1 stubbed (task). Comprehensive surface matching Claude Code while maintaining Elixir behaviour uniformity.
+| # | Name | Permission | Side Effects | Description |
+|---|---|---|---|---|
+| 23 | `session_summarize` | `:read` | — | Extract memory candidates from session (LLM or heuristic) |
+| 24 | `memory_save` | `:write` | `memory_promoted` | Persist semantic memory records |
+| 25 | `memory_search` | `:read` | — | Search memory with scope hierarchy walk |
+| 26 | `memory_update` | `:write` | `memory_updated` | Update/archive/restore memory with audit trail |
 
-2. **Self-declared permissions** — tools declare `permission_level/0` instead of a centralized classification function. Co-locates the permission decision with the tool implementation.
+**Parameters**:
 
-3. **Ephemeral bash** — `bash` uses a fresh Port per command. State does NOT persist across calls. This differs from Claude Code's persistent bash session.
-
-4. **Deferred tool loading** — MCP tools are not included in LLM context by default. The `tool_search` tool enables demand-driven loading.
-
-5. **Plan mode is tool-based** — enter/exit plan mode are tools, not out-of-band commands.
-
-6. **Todo is session-scoped** — todo lists are per-session, persisted in the database, and visible in the UI.
-
-7. **Side effects remain data-only** — tools declare `[:file_changed]` statically. The executor broadcasts. No hook framework.
-
-8. **Web tools are built-in** — `fetch` and `web_search` are core tools, not plugins.
-
-9. **Sleep tool included** — enables polling workflows.
-
-10. **Tool versioning** — all tools declare `version/0` returning a semver string. Built-in tools start at `"1.0.0"`.
-
-11. **Parallel tool calls** — `Task.async_stream/3` for concurrent independent tool calls with file-level serialization.
-
-12. **Swarm tools are built-in** — `send_message`, `teammate`, and `team_delete` are core tools for within-session multi-agent coordination.
-
-13. **Memory tools** — `memory_save`, `memory_search`, `memory_update`, and `session_summarize` support persistent session memory.
-
-14. **file_edit uses old_string/new_string** — parameter names are `old_string` and `new_string` (not `old_text`/`new_text`).
-
-15. **grep uses include for filtering** — the glob filter parameter is named `include` (not `glob`).
-
-16. **Tool name is fetch, not web_fetch** — the web page fetching tool is registered as `fetch`.
+- **session_summarize**: `scope` (full/recent/range), `message_range` (for range), `focus` (hint string), `kinds` (array), `use_llm` (bool, default true with heuristic fallback)
+- **memory_save**: `memories` (required array of `{scope?, kind, title, summary, tags?, importance?}`). Kinds: fact, decision, lesson, preference, pattern, warning.
+- **memory_search**: `query` (required), `scope` (shared/project/agent), `kinds` (array filter), `tags` (array filter), `limit` (default 5)
+- **memory_update**: `action` (update/archive/restore), `memory_id` (required), `changes` (for update: title, summary, kind, tags, importance, confidence)
 
 ---
 
-## 12. Open Questions
+### 3.10 Communication Tools (6 tools)
 
-None. All previously open questions have been resolved as decisions above.
+Replace the 3 hollow swarm tools. All bridge to `Agent.Messaging` envelope system.
+
+| # | Name | Permission | Side Effects | Description |
+|---|---|---|---|---|
+| 27 | `agent_send` | `:none` | — | Fire-and-forget message to another agent |
+| 28 | `agent_ask` | `:none` | — | Request/response with blocking wait |
+| 29 | `agent_reply` | `:none` | — | Reply to a received request |
+| 30 | `agent_handoff` | `:none` | `workspace_changed` | Delegate work with workspace artifacts |
+| 31 | `agent_discover` | `:none` | — | Query running agents from OTP registry |
+| 32 | `agent_inbox` | `:none` | — | Read message history, unread, threads |
+
+**Parameters**:
+
+- **agent_send**: `to` (required), `content` (required), `type` (optional: notification/info/warning), `metadata` (optional map)
+- **agent_ask**: `to` (required), `question` (required), `context` (optional map), `timeout_ms` (optional, default 120000, max 300000). Sub-agents cannot use (deadlock prevention).
+- **agent_reply**: `ref` (required, from incoming request), `content` (required), `status` (optional: success/error/partial/declined)
+- **agent_handoff**: `to` (required), `summary` (required), `instructions` (required), `artifacts` (optional array of `@synapsis/` paths), `priority` (optional: low/normal/high/critical), `constraints` (optional map)
+- **agent_discover**: `action` (list/get/find_by_project), `agent_id` (for get), `project_id` (for find_by_project), `type` (optional filter)
+- **agent_inbox**: `action` (unread/history/thread), `ref` (for thread), `limit` (default 20), `since` (ISO datetime for history), `type` (filter)
+
+**Agent name resolution**: `"global"`, `"project:{id}"`, `"session:{id}"`, `"parent"`, or UUID/ULID direct lookup.
+
+---
+
+### 3.11 Workspace Tools (4 tools)
+
+Explicit workspace operations for metadata-rich access. Complement the `@synapsis/` VFS routing through filesystem tools.
+
+| # | Name | Permission | Side Effects | Description |
+|---|---|---|---|---|
+| 33 | `workspace_read` | `:read` | — | Read workspace resource with full metadata |
+| 34 | `workspace_write` | `:write` | `workspace_changed` | Write workspace document with metadata, format, lifecycle |
+| 35 | `workspace_list` | `:read` | — | List directory with kind/sort filtering, mixed domain+document results |
+| 36 | `workspace_search` | `:read` | — | Full-text search via PostgreSQL tsvector (ranked) |
+
+---
+
+### 3.12 Disabled/Future Tools (2 tools)
+
+| # | Name | Permission | Enabled | Description |
+|---|---|---|---|---|
+| 37 | `notebook_read` | `:read` | **no** | Jupyter notebook cell reading (API reserved) |
+| 38 | `notebook_edit` | `:write` | **no** | Jupyter notebook cell editing (API reserved) |
+
+Compiled modules with `enabled?() → false`. Return error on execute. Enable via config. The `computer` tool previously listed is subsumed by MCP plugin integration (Puppeteer MCP, Playwright MCP).
+
+---
+
+## 4. Workspace Virtual Files — `@synapsis/` Prefix
+
+### 4.1 Concept
+
+The `@synapsis/` prefix unifies workspace documents and real files under the same tool surface. The LLM uses `file_read`, `file_write`, `file_edit`, `grep`, `glob` for both — no separate API to learn.
+
+### 4.2 Path Mapping
+
+`@synapsis/{workspace_path}` → strips prefix → workspace path `/{workspace_path}`.
+
+Examples:
+- `@synapsis/projects/myapp/plans/auth.md` → `/projects/myapp/plans/auth.md`
+- `@synapsis/shared/notes/ideas.md` → `/shared/notes/ideas.md`
+- `@synapsis/global/soul.md` → `/global/soul.md`
+
+### 4.3 Prefix Rules
+
+- Case-sensitive: only `@synapsis/` is recognized
+- `@` prevents POSIX collision — zero risk of matching real filesystem paths
+- Virtual paths bypass `PathValidator` — workspace has its own path validation (traversal, depth, segment rules)
+
+### 4.4 Tool Routing
+
+| Tool | Real Files | `@synapsis/` Virtual Files |
+|---|---|---|
+| `file_read` | `File.read/1` | `Workspace.read/1` |
+| `file_write` | `File.write/2` | `Workspace.write/3` |
+| `file_edit` | Read → replace → write on disk | Read → replace → write via workspace API |
+| `multi_edit` | Same, grouped by file | Same, with VFS-aware read/write helpers |
+| `file_delete` | `File.rm/1` | `Workspace.delete/1` |
+| `file_move` | `File.rename/2` | `Workspace.move/2` |
+| `list_dir` | `File.ls/1` | `Workspace.list/2` (prefix query) |
+| `grep` | ripgrep Port process | `content_body ~ pattern` (PostgreSQL regex) |
+| `glob` | `Path.wildcard/2` | `path LIKE` (glob→SQL conversion) |
+| `bash` | No change | N/A — shell operates on real filesystem |
+
+### 4.5 Search Over Workspace
+
+Since workspace documents are PostgreSQL rows, search is SQL — no filesystem crawl.
+
+- **Grep**: PostgreSQL POSIX regex operator on `content_body`. Supports path prefix filtering, output modes (content/files/count), context lines, filename include filter.
+- **Glob**: Converts glob syntax (`**`, `*`, `?`) to SQL LIKE pattern on the `path` column. Results sorted by `updated_at` descending.
+- **Full-text**: `workspace_search` tool uses `tsvector` with `websearch_to_tsquery` — ranked, natural language input.
+
+### 4.6 Cross-Boundary Rules
+
+- Moving between real filesystem and `@synapsis/` is rejected
+- Grep/glob results from workspace are `@synapsis/`-prefixed so the LLM can chain them into subsequent `file_read` calls
+- Domain-backed paths (`@synapsis/projects/x/skills/...`, `@synapsis/projects/x/memory/...`) are write-rejected by workspace API — those records are managed through their domain contexts
+
+---
+
+## 5. Agent Communication
+
+### 5.1 Problem
+
+`Agent.Messaging` (synapsis_agent) has proper typed envelopes with correlation refs. The old swarm tools bypass it entirely with separate PubSub topics and ETS. Two messaging systems that don't connect.
+
+### 5.2 Solution
+
+Six communication tools (§3.10) that bridge LLM tool calls to `Agent.Messaging.send_envelope/1`. One messaging system, not two.
+
+### 5.3 Message Flow Patterns
+
+**Fire-and-forget**: Agent A → `agent_send` → Agent B sees it as injected message in next graph iteration.
+
+**Request/response**: Agent A → `agent_ask` (blocks on selective receive) → Agent B receives, reasons, calls `agent_reply` → Agent A wakes with response.
+
+**Handoff chain**: Global → `agent_handoff` with workspace artifacts → Project Agent reads plan via `file_read @synapsis/...` → spawns General Agents with `task` → they work → `agent_send` completion → Project collects via `agent_inbox`.
+
+**Inbox-driven async**: Messages persist in `agent_messages` table. Agent checks `agent_inbox action="unread"` between graph iterations or on restart. No blocking required for async patterns.
+
+### 5.4 Persistence & Delivery
+
+At-least-once: persist to `agent_messages` BEFORE PubSub broadcast. Crashed agents recover unread messages from DB on restart. Requests expire via `expires_at` TTL.
+
+### 5.5 Handoff as Workspace Document
+
+`agent_handoff` writes a JSON record to `@synapsis/projects/{id}/handoffs/{ref}.json`. This makes handoffs: browsable in workspace explorer, readable via `file_read`, searchable via `workspace_search`, versioned by workspace lifecycle.
+
+---
+
+## 6. Data Model
+
+### 6.1 Existing Tables (from original PRD)
+
+**tool_calls**: id (ULID), message_id, session_id, tool_name, input (JSONB), output (JSONB), status (pending/approved/denied/completed/error), duration_ms, error_message, timestamps.
+
+**session_permissions**: id, session_id (unique), mode (interactive/autonomous), allow_write (bool), allow_execute (bool), allow_destructive (allow/deny/ask), tool_overrides (JSONB), timestamps.
+
+**session_todos**: id, session_id, todo_id, content, status (pending/in_progress/completed), sort_order, timestamps.
+
+### 6.2 Workspace Tables (from workspace PRD)
+
+**workspace_documents**: id (ULID), path (unique indexed), kind, content_body, blob_ref, content_format, visibility, lifecycle, metadata (JSONB), project_id, session_id, version, created_by, updated_by, deleted_at, search_vector (tsvector), timestamps.
+
+**workspace_document_versions**: id, document_id (FK), version, content_body, blob_ref, content_hash, changed_by, timestamps.
+
+### 6.3 New Table — Agent Messages
+
+**agent_messages**: id (ULID), ref (correlation string), from_agent_id, to_agent_id, type (request/response/notification/delegation/handoff/completion), in_reply_to (FK to self), payload (JSONB), status (delivered/read/acknowledged/expired), project_id (FK nullable), session_id (FK nullable), expires_at, timestamps.
+
+**Indexes**: `(to_agent_id, inserted_at)`, `(from_agent_id, inserted_at)`, `(ref)`, `(in_reply_to)`, `(project_id, inserted_at)`, `(type)`.
+
+---
+
+## 7. Implementation Phases
+
+### Phase 1: Core Filesystem + Search + Execution (done)
+
+file_read, file_write, file_edit, file_delete, file_move, list_dir, grep, glob, bash. Tool behaviour, Registry, Executor, Permission engine, side effect broadcasting.
+
+### Phase 2: Planning + User Interaction (done)
+
+todo_write, todo_read, ask_user, enter_plan_mode, exit_plan_mode. Plan mode tool filtering. Session permission config.
+
+### Phase 3: Orchestration + Web (done)
+
+task (stub), web_search, fetch, skill, multi_edit, tool_search, sleep.
+
+### Phase 4: Memory Tools (done)
+
+session_summarize, memory_save, memory_search, memory_update.
+
+### Phase 5: Workspace Virtual Files
+
+VFS router module. `@synapsis/` guard in all filesystem tools. VFS.Search for SQL-backed grep and glob. Workspace tools (workspace_read, workspace_write, workspace_list, workspace_search).
+
+### Phase 6: Agent Communication
+
+`agent_messages` migration and schema. agent_send, agent_ask, agent_reply, agent_handoff, agent_discover, agent_inbox. Agent name resolution. Deprecate old swarm tools.
+
+### Phase 7: Sub-Agent Wiring
+
+Wire `task` tool to actual `Agent.SubAgent` process spawning (currently stub). Background task notifications. Git worktree isolation per sub-agent.
+
+### Phase 8: Disabled Tool Activation
+
+notebook_read, notebook_edit behind config flags. Computer use via MCP plugin.
+
+---
+
+## 8. Acceptance Criteria
+
+### Core Tools (Phase 1-4)
+- Agent can navigate, read, edit, and execute commands against a codebase
+- Agent supports plan-then-execute workflows with user interaction
+- Agent can launch sub-agents, search the web, and load skills
+- Agent can save, search, and update semantic memory
+- All tool calls persisted to `tool_calls` table with duration tracking
+- Permission engine resolves 5 levels with glob overrides and autonomous mode
+- Parallel tool execution via batch when LLM returns multiple independent calls
+- ≥90% test coverage on all tool modules, Dialyzer clean
+
+### Workspace Virtual Files (Phase 5)
+- `file_read path="@synapsis/..."` reads workspace document content
+- `file_write path="@synapsis/..."` creates/updates workspace document
+- `file_edit path="@synapsis/..."` performs search/replace on workspace content
+- `grep pattern="TODO" path="@synapsis/projects/myapp/"` searches via SQL regex
+- `glob pattern="**/*.md" path="@synapsis/projects/myapp/"` matches via SQL LIKE
+- Results from workspace grep/glob are `@synapsis/`-prefixed for LLM chaining
+- Cross-boundary moves (real ↔ virtual) rejected
+- Domain-backed paths write-rejected through workspace
+
+### Agent Communication (Phase 6)
+- `agent_send` persists then delivers via Agent.Messaging
+- `agent_ask` → `agent_reply` round-trip completes with correlated response
+- `agent_ask` times out and marks expired when no reply
+- Sub-agents cannot use `agent_ask` (deadlock prevention)
+- `agent_handoff` writes handoff record to workspace, readable via `file_read`
+- `agent_discover` returns live OTP process state
+- `agent_inbox` returns unread messages, marks as read
+- `agent_inbox action="thread"` follows full conversation by ref
+- Messages survive agent crashes (persist-before-broadcast)
+- Restarted agents recover unread from DB
+
+---
+
+## 9. Tool Inventory Summary
+
+| # | Name | Category | Permission | Side Effects | Enabled |
+|---|---|---|---|---|---|
+| 1 | `file_read` | filesystem | `:read` | — | yes |
+| 2 | `file_write` | filesystem | `:write` | `file_changed` | yes |
+| 3 | `file_edit` | filesystem | `:write` | `file_changed` | yes |
+| 4 | `multi_edit` | filesystem | `:write` | `file_changed` | yes |
+| 5 | `file_delete` | filesystem | `:destructive` | `file_changed` | yes |
+| 6 | `file_move` | filesystem | `:write` | `file_changed` | yes |
+| 7 | `list_dir` | filesystem | `:read` | — | yes |
+| 8 | `grep` | search | `:read` | — | yes |
+| 9 | `glob` | search | `:read` | — | yes |
+| 10 | `diagnostics` | search | `:read` | — | yes |
+| 11 | `bash` | execution | `:execute` | — | yes |
+| 12 | `fetch` | web | `:read` | — | yes |
+| 13 | `web_search` | web | `:read` | — | yes |
+| 14 | `todo_write` | planning | `:none` | — | yes |
+| 15 | `todo_read` | planning | `:none` | — | yes |
+| 16 | `task` | orchestration | `:none` | — | **no** (stub) |
+| 17 | `tool_search` | orchestration | `:none` | — | yes |
+| 18 | `skill` | orchestration | `:none` | — | yes |
+| 19 | `ask_user` | interaction | `:none` | — | yes |
+| 20 | `enter_plan_mode` | session | `:none` | — | yes |
+| 21 | `exit_plan_mode` | session | `:none` | — | yes |
+| 22 | `sleep` | session | `:none` | — | yes |
+| 23 | `session_summarize` | memory | `:read` | — | yes |
+| 24 | `memory_save` | memory | `:write` | `memory_promoted` | yes |
+| 25 | `memory_search` | memory | `:read` | — | yes |
+| 26 | `memory_update` | memory | `:write` | `memory_updated` | yes |
+| 27 | `agent_send` | communication | `:none` | — | yes |
+| 28 | `agent_ask` | communication | `:none` | — | yes |
+| 29 | `agent_reply` | communication | `:none` | — | yes |
+| 30 | `agent_handoff` | communication | `:none` | `workspace_changed` | yes |
+| 31 | `agent_discover` | communication | `:none` | — | yes |
+| 32 | `agent_inbox` | communication | `:none` | — | yes |
+| 33 | `workspace_read` | workspace | `:read` | — | yes |
+| 34 | `workspace_write` | workspace | `:write` | `workspace_changed` | yes |
+| 35 | `workspace_list` | workspace | `:read` | — | yes |
+| 36 | `workspace_search` | workspace | `:read` | — | yes |
+| 37 | `notebook_read` | notebook | `:read` | — | **no** |
+| 38 | `notebook_edit` | notebook | `:write` | `file_changed` | **no** |
+
+**Total: 38 tools** (34 enabled, 2 disabled/future, 1 stub, 1 deprecated-computer-removed)
+
+---
+
+## 10. Resolved Decisions
+
+1. **`@synapsis/` prefix over separate workspace tools** — filesystem tools route to workspace transparently. Agents don't learn two APIs.
+2. **SQL-backed search for workspace** — grep uses PostgreSQL regex, glob uses LIKE. No filesystem crawl for DB-resident content.
+3. **Communication tools bridge to Agent.Messaging** — one messaging system. Old swarm tools deprecated.
+4. **Persist-before-broadcast for agent messages** — at-least-once delivery. Messages survive crashes.
+5. **Sub-agents cannot `agent_ask`** — deadlock prevention. Use `agent_send` and let parent coordinate.
+6. **Handoffs are messages + workspace documents** — delegation envelope via PubSub, audit record as `@synapsis/` doc. Two systems reinforce each other.
+7. **Agent names not UUIDs** — `"global"`, `"project:{id}"`, `"session:{id}"`, `"parent"` for common operations.
+8. **Cross-boundary moves rejected** — cannot move between real filesystem and `@synapsis/`. Clean separation.
+9. **Domain-backed workspace paths are read-only** — skills, memory, todos created through their own contexts. Workspace only projects them.
+10. **`computer` tool removed** — subsumed by MCP plugin integration (Puppeteer, Playwright). No need for a built-in stub.
+
+---
+
+## 11. Open Questions
+
+None.

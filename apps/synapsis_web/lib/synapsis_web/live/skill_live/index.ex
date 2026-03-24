@@ -86,12 +86,12 @@ defmodule SynapsisWeb.SkillLive.Index do
               <div class="font-medium">{skill.name}</div>
               <div class="flex gap-2 mt-1">
                 <.dm_badge
-                  color={if skill.scope == "global", do: "primary", else: "secondary"}
+                  variant={if skill.scope == "global", do: "primary", else: "secondary"}
                   size="sm"
                 >
                   {skill.scope}
                 </.dm_badge>
-                <.dm_badge :if={skill.is_builtin} color="warning" size="sm">
+                <.dm_badge :if={skill.is_builtin} variant="warning" size="sm">
                   built-in
                 </.dm_badge>
               </div>

@@ -81,12 +81,13 @@ defmodule SynapsisWeb.ProjectLive.Show do
               </div>
               <div class="text-xs text-base-content/50 mt-1">
                 {session.provider}/{session.model} · {session.agent} ·
-                <.dm_badge color={status_color(session.status)} size="sm">
+                <.dm_badge variant={status_color(session.status)} size="sm">
                   {session.status}
                 </.dm_badge>
               </div>
             </.dm_link>
             <.dm_btn
+              id={"delete-session-#{session.id}"}
               variant="ghost"
               size="sm"
               confirm="Delete this session?"

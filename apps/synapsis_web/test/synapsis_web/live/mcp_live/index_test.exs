@@ -104,7 +104,7 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
       assert html =~ "deletable"
 
       view
-      |> element(~s(button[id^="btn-"][phx-click="delete_config"][phx-value-id="#{config.id}"]))
+      |> element(~s(el-dm-button[phx-click="delete_config"][phx-value-id="#{config.id}"]))
       |> render_click()
 
       html = render(view)
@@ -184,7 +184,7 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
 
       html =
         view
-        |> element(~s(button[phx-click="back_to_presets"]))
+        |> element(~s(el-dm-button[phx-click="back_to_presets"]))
         |> render_click()
 
       assert html =~ "Select an MCP Server"

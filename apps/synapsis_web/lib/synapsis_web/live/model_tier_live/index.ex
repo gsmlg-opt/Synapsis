@@ -42,7 +42,7 @@ defmodule SynapsisWeb.ModelTierLive.Index do
 
       <.dm_table data={@tiers}>
         <:col :let={tier} label="Tier">
-          <.dm_badge color={tier.color} size="sm">
+          <.dm_badge variant={tier.color} size="sm">
             {tier.name}
           </.dm_badge>
         </:col>

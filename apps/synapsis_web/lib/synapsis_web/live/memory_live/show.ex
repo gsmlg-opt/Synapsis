@@ -165,9 +165,9 @@ defmodule SynapsisWeb.MemoryLive.Show do
         <:title>
           <div class="flex items-center gap-2">
             {@memory.title}
-            <.dm_badge size="sm" color={kind_color(@memory.kind)}>{@memory.kind}</.dm_badge>
-            <.dm_badge size="sm" color={scope_color(@memory.scope)}>{@memory.scope}</.dm_badge>
-            <.dm_badge size="sm" color={source_color(@memory.source)}>{@memory.source}</.dm_badge>
+            <.dm_badge size="sm" variant={kind_color(@memory.kind)}>{@memory.kind}</.dm_badge>
+            <.dm_badge size="sm" variant={scope_color(@memory.scope)}>{@memory.scope}</.dm_badge>
+            <.dm_badge size="sm" variant={source_color(@memory.source)}>{@memory.source}</.dm_badge>
           </div>
         </:title>
         <:action>

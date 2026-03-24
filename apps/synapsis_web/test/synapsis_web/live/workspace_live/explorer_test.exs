@@ -28,7 +28,7 @@ defmodule SynapsisWeb.WorkspaceLive.ExplorerTest do
       Synapsis.Workspace.write("/shared/notes/nav-test.md", "content", %{author: "test"})
 
       {:ok, view, _html} = live(conn, ~p"/workspace?path=/shared/notes")
-      assert has_element?(view, "button", "Up")
+      assert has_element?(view, "el-dm-button", "Up")
     end
 
     test "selects a document and shows preview", %{conn: conn} do

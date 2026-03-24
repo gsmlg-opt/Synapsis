@@ -40,8 +40,7 @@ defmodule SynapsisWeb do
 
       use Gettext, backend: SynapsisWeb.Gettext
       use PhoenixDuskmoon.Component
-      use PhoenixDuskmoon.Fun
-      import PhoenixDuskmoon.Component.Navbar
+      use PhoenixDuskmoon.ArtComponent
 
       import SynapsisWeb.CoreComponents
 

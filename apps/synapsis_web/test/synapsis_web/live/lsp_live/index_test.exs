@@ -47,14 +47,14 @@ defmodule SynapsisWeb.LSPLive.IndexTest do
 
     test "built-in presets show Enable button when not configured", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings/lsp")
-      assert has_element?(view, ~s(button[phx-click="enable_builtin"][phx-value-name="gopls"]))
+      assert has_element?(view, ~s(el-dm-button[phx-click="enable_builtin"][phx-value-name="gopls"]))
     end
 
     test "enable_builtin creates config in database", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings/lsp")
 
       view
-      |> element(~s(button[phx-click="enable_builtin"][phx-value-name="gopls"]))
+      |> element(~s(el-dm-button[phx-click="enable_builtin"][phx-value-name="gopls"]))
       |> render_click()
 
       assert Repo.get_by(PluginConfig, name: "gopls", type: "lsp")
@@ -64,7 +64,7 @@ defmodule SynapsisWeb.LSPLive.IndexTest do
       config = create_lsp_config(%{name: "gopls", command: "gopls", auto_start: true})
 
       {:ok, view, html} = live(conn, ~p"/settings/lsp")
-      assert has_element?(view, ~s(button[phx-click="disable_builtin"][phx-value-name="gopls"]))
+      assert has_element?(view, ~s(el-dm-button[phx-click="disable_builtin"][phx-value-name="gopls"]))
       assert html =~ "/settings/lsp/#{config.id}"
     end
 
@@ -74,7 +74,7 @@ defmodule SynapsisWeb.LSPLive.IndexTest do
       {:ok, view, _html} = live(conn, ~p"/settings/lsp")
 
       view
-      |> element(~s(button[id^="btn-"][phx-click="disable_builtin"][phx-value-name="gopls"]))
+      |> element(~s(el-dm-button[phx-click="disable_builtin"][phx-value-name="gopls"]))
       |> render_click()
 
       refute Repo.get_by(PluginConfig, name: "gopls", type: "lsp")
@@ -139,7 +139,7 @@ defmodule SynapsisWeb.LSPLive.IndexTest do
       {:ok, view, _html} = live(conn, ~p"/settings/lsp")
 
       view
-      |> element(~s(button[id^="btn-"][phx-click="delete_config"][phx-value-id="#{config.id}"]))
+      |> element(~s(el-dm-button[phx-click="delete_config"][phx-value-id="#{config.id}"]))
       |> render_click()
 
       refute Repo.get(PluginConfig, config.id)
@@ -154,7 +154,7 @@ defmodule SynapsisWeb.LSPLive.IndexTest do
     test "import_json creates LSP configs from JSON", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings/lsp")
 
-      view |> element(~s(button[phx-click="show_import"])) |> render_click()
+      view |> element(~s(el-dm-button[phx-click="show_import"])) |> render_click()
 
       json =
         Jason.encode!(%{
@@ -174,7 +174,7 @@ defmodule SynapsisWeb.LSPLive.IndexTest do
       create_lsp_config(%{name: "gopls", command: "gopls"})
 
       {:ok, view, _html} = live(conn, ~p"/settings/lsp")
-      view |> element(~s(button[phx-click="show_import"])) |> render_click()
+      view |> element(~s(el-dm-button[phx-click="show_import"])) |> render_click()
 
       json = Jason.encode!(%{"gopls" => %{"command" => "gopls"}})
 
@@ -188,7 +188,7 @@ defmodule SynapsisWeb.LSPLive.IndexTest do
 
     test "import_json shows error for invalid JSON", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings/lsp")
-      view |> element(~s(button[phx-click="show_import"])) |> render_click()
+      view |> element(~s(el-dm-button[phx-click="show_import"])) |> render_click()
 
       html =
         view

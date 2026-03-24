@@ -105,7 +105,7 @@ defmodule SynapsisWeb.CoreComponents do
       <div class="flex items-center gap-2 mb-1">
         <.dm_mdi name="wrench" class="w-4 h-4 text-base-content/60" />
         <span class="font-medium">{@name}</span>
-        <.dm_badge color={tool_status_color(@status)} size="sm">
+        <.dm_badge variant={tool_status_color(@status)} size="sm">
           {@status}
         </.dm_badge>
       </div>
@@ -192,7 +192,7 @@ defmodule SynapsisWeb.CoreComponents do
     <nav class={["hidden md:block w-56 shrink-0 border-r border-base-300 py-4 pr-4", @class]}>
       <.dm_left_menu active={active_menu_id(@current_path, @items)} size="sm">
         <:title>Settings</:title>
-        <:menu :for={item <- @items} id={item.to}>
+        <:menu :for={item <- @items}>
           <.dm_link navigate={item.to} class="flex items-center gap-2 w-full">
             <.dm_mdi name={item.icon} class="w-4 h-4" />
             {item.label}
@@ -438,7 +438,7 @@ defmodule SynapsisWeb.CoreComponents do
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 mb-1">
             <span class="font-medium text-sm">{@tool}</span>
-            <.dm_badge color="warning" size="sm">{@level}</.dm_badge>
+            <.dm_badge variant="warning" size="sm">{@level}</.dm_badge>
           </div>
           <pre class="text-xs text-base-content/50 max-h-24 overflow-y-auto mb-2">{Jason.encode!(@input || %{}, pretty: true)}</pre>
           <div class="flex gap-2">

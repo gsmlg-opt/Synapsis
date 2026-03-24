@@ -258,7 +258,7 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
                   <div class="text-xs text-base-content/50 truncate">{resource.path}</div>
                 </div>
                 <.dm_badge
-                  color={lifecycle_color(resource.lifecycle)}
+                  variant={lifecycle_color(resource.lifecycle)}
                   size="sm"
                 >
                   {resource.lifecycle}
@@ -309,10 +309,10 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
             </:title>
 
             <div class="flex gap-2 mb-4 text-xs text-base-content/60">
-              <.dm_badge color={lifecycle_color(@selected.lifecycle)} size="sm">
+              <.dm_badge variant={lifecycle_color(@selected.lifecycle)} size="sm">
                 {@selected.lifecycle}
               </.dm_badge>
-              <.dm_badge color="ghost" size="sm">v{@selected.version}</.dm_badge>
+              <.dm_badge variant="ghost" size="sm">v{@selected.version}</.dm_badge>
               <span :if={@selected.updated_at}>
                 Updated: {Calendar.strftime(@selected.updated_at, "%Y-%m-%d %H:%M")}
               </span>

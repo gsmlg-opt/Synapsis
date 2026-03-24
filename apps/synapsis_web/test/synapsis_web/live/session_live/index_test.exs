@@ -39,7 +39,7 @@ defmodule SynapsisWeb.SessionLive.IndexTest do
 
     test "renders new session button", %{conn: conn, project: project} do
       {:ok, view, _html} = live(conn, ~p"/projects/#{project.id}/sessions")
-      assert has_element?(view, "button", "+ New Session")
+      assert has_element?(view, "el-dm-button", "+ New Session")
     end
 
     test "lists sessions for the project", %{conn: conn, project: project} do
@@ -106,7 +106,7 @@ defmodule SynapsisWeb.SessionLive.IndexTest do
       view |> element("#new-session-btn") |> render_click()
 
       assert {:error, {:live_redirect, %{to: "/projects/" <> _}}} =
-               view |> element("button", "Create Session") |> render_click()
+               view |> element("el-dm-button", "Create Session") |> render_click()
     end
 
     test "select_provider updates provider and model in socket", %{conn: conn, project: project} do

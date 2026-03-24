@@ -66,7 +66,7 @@ defmodule SynapsisWeb.LSPLive.ShowTest do
 
   test "shows save button", %{conn: conn, config: config} do
     {:ok, view, _html} = live(conn, ~p"/settings/lsp/#{config.id}")
-    assert has_element?(view, "button[type='submit']", "Save Changes")
+    assert has_element?(view, "el-dm-button[type='submit']", "Save Changes")
   end
 
   test "heading displays the name", %{conn: conn, config: config} do

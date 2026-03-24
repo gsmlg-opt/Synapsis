@@ -22,7 +22,7 @@ defmodule SynapsisWeb.ProjectLive.ShowTest do
 
     test "shows new session button", %{conn: conn, project: project} do
       {:ok, view, _html} = live(conn, ~p"/projects/#{project.id}")
-      assert has_element?(view, "button", "+ New Session")
+      assert has_element?(view, "el-dm-button", "+ New Session")
     end
 
     test "shows empty state when no sessions", %{conn: conn, project: project} do
@@ -61,7 +61,7 @@ defmodule SynapsisWeb.ProjectLive.ShowTest do
       # There are two "+ New Session" buttons (one in card action, one in empty state)
       # Use the first one by targeting card-actions container
       assert {:error, {:live_redirect, %{to: "/projects/" <> _}}} =
-               view |> element(".card-actions button", "+ New Session") |> render_click()
+               view |> element("el-dm-card el-dm-button", "+ New Session") |> render_click()
     end
 
     test "delete_session event removes session", %{conn: conn, project: project} do
@@ -86,8 +86,8 @@ defmodule SynapsisWeb.ProjectLive.ShowTest do
 
     test "heading displays the project slug", %{conn: conn, project: project} do
       {:ok, view, _html} = live(conn, ~p"/projects/#{project.id}")
-      # dm_card :title renders as div.card-title, not h1
-      assert has_element?(view, ".card-title", project.slug)
+      # dm_card header renders in [slot="header"] inside el-dm-card
+      assert has_element?(view, "[slot=\"header\"]", project.slug)
     end
 
     test "breadcrumb links back to /projects", %{conn: conn, project: project} do
@@ -125,7 +125,7 @@ defmodule SynapsisWeb.ProjectLive.ShowTest do
       {:ok, view, _html} = live(conn, ~p"/projects/#{project.id}")
       # Status is inside a dm_badge which uses <slot /> (renders empty)
       # Check that the badge element exists with ghost color (for "idle" status)
-      assert has_element?(view, "span.badge")
+      assert has_element?(view, "el-dm-badge")
     end
 
     test "delete_session with invalid id shows error flash", %{conn: conn, project: project} do

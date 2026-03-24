@@ -76,7 +76,7 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
 
   test "shows save button", %{conn: conn, config: config} do
     {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
-    assert has_element?(view, "button[type='submit']", "Save Changes")
+    assert has_element?(view, "el-dm-button[type='submit']", "Save Changes")
   end
 
   test "shows URL field", %{conn: conn, config: config} do
