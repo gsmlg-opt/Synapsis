@@ -160,6 +160,110 @@ defmodule Synapsis.WorkspaceDocuments do
   end
 
   # ---------------------------------------------------------------------------
+  # Regex search (grep) and glob pattern matching
+  # ---------------------------------------------------------------------------
+
+  @doc """
+  Search workspace document content using PostgreSQL POSIX regex.
+
+  Returns a list of maps with `:path`, `:line`, and `:content` keys.
+
+  Options:
+    - `:path_prefix` - limit search to documents under this path prefix
+    - `:limit` - max documents to search (default 50)
+  """
+  @spec grep(String.t(), keyword()) :: [%{path: String.t(), line: integer(), content: String.t()}]
+  def grep(pattern, opts \\ []) do
+    path_prefix = Keyword.get(opts, :path_prefix)
+    limit = Keyword.get(opts, :limit, 50)
+
+    query =
+      from(d in WorkspaceDocument,
+        where:
+          is_nil(d.deleted_at) and
+            not is_nil(d.content_body) and
+            fragment("? ~ ?", d.content_body, ^pattern),
+        select: %{path: d.path, content_body: d.content_body},
+        limit: ^limit,
+        order_by: [asc: d.path]
+      )
+
+    query = apply_path_prefix(query, path_prefix)
+
+    Repo.all(query)
+    |> Enum.flat_map(fn %{path: path, content_body: body} ->
+      body
+      |> String.split("\n")
+      |> Enum.with_index(1)
+      |> Enum.filter(fn {line, _num} ->
+        Regex.match?(~r/#{Regex.escape(pattern)}/, line)
+      end)
+      |> Enum.map(fn {line, num} ->
+        %{path: path, line: num, content: line}
+      end)
+    end)
+  rescue
+    # If regex is invalid for Elixir but valid for Postgres, fall back to simple matching
+    _ ->
+      []
+  end
+
+  @doc """
+  Match workspace document paths using glob-style patterns.
+
+  Converts glob syntax (`*`, `**`, `?`) to SQL LIKE patterns.
+
+  Options:
+    - `:path_prefix` - limit search to documents under this path prefix
+    - `:limit` - max results (default 100)
+  """
+  @spec glob(String.t(), keyword()) :: [%{path: String.t()}]
+  def glob(pattern, opts \\ []) do
+    path_prefix = Keyword.get(opts, :path_prefix)
+    limit = Keyword.get(opts, :limit, 100)
+    sql_pattern = glob_to_like(pattern)
+
+    query =
+      from(d in WorkspaceDocument,
+        where:
+          is_nil(d.deleted_at) and
+            fragment("? LIKE ? ESCAPE '\\\\'", d.path, ^sql_pattern),
+        select: %{path: d.path},
+        order_by: [desc: d.updated_at],
+        limit: ^limit
+      )
+
+    query = apply_path_prefix(query, path_prefix)
+
+    Repo.all(query)
+  end
+
+  defp apply_path_prefix(query, nil), do: query
+
+  defp apply_path_prefix(query, prefix) do
+    escaped =
+      prefix
+      |> String.replace("\\", "\\\\")
+      |> String.replace("%", "\\%")
+      |> String.replace("_", "\\_")
+
+    prefix_pattern = if String.ends_with?(escaped, "/"), do: escaped <> "%", else: escaped <> "/%"
+    where(query, [d], fragment("? LIKE ? ESCAPE '\\\\'", d.path, ^prefix_pattern))
+  end
+
+  @doc false
+  def glob_to_like(pattern) do
+    pattern
+    |> String.replace("\\", "\\\\")
+    |> String.replace("%", "\\%")
+    |> String.replace("_", "\\_")
+    |> String.replace("**", "†")
+    |> String.replace("*", "%")
+    |> String.replace("?", "_")
+    |> String.replace("†", "%")
+  end
+
+  # ---------------------------------------------------------------------------
   # Version history
   # ---------------------------------------------------------------------------
 

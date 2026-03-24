@@ -31,15 +31,21 @@ defmodule Synapsis.Tool.ListDir do
 
   @impl true
   def execute(input, context) do
-    path = resolve_path(input["path"], context[:project_path])
-    depth = input["depth"] || 1
+    path = input["path"]
 
-    with :ok <- Synapsis.Tool.PathValidator.validate(path, context[:project_path]) do
-      if File.dir?(path) do
-        entries = list_entries(path, depth, 0)
-        {:ok, Enum.join(entries, "\n")}
-      else
-        {:error, "Directory does not exist: #{path}"}
+    if Synapsis.Tool.VFS.virtual?(path) do
+      Synapsis.Tool.VFS.list_dir(path, depth: input["depth"] || 1)
+    else
+      resolved = resolve_path(path, context[:project_path])
+      depth = input["depth"] || 1
+
+      with :ok <- Synapsis.Tool.PathValidator.validate(resolved, context[:project_path]) do
+        if File.dir?(resolved) do
+          entries = list_entries(resolved, depth, 0)
+          {:ok, Enum.join(entries, "\n")}
+        else
+          {:error, "Directory does not exist: #{resolved}"}
+        end
       end
     end
   end

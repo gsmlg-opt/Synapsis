@@ -59,8 +59,12 @@ defmodule Synapsis.Tool.MultiEdit do
       # Process each file independently
       results =
         Enum.map(grouped, fn {path, file_edits} ->
-          resolved = resolve_path(path, project_path)
-          apply_edits_to_file(resolved, file_edits, project_path)
+          if Synapsis.Tool.VFS.virtual?(path) do
+            apply_vfs_edits(path, file_edits)
+          else
+            resolved = resolve_path(path, project_path)
+            apply_edits_to_file(resolved, file_edits, project_path)
+          end
         end)
 
       # Collect successes and failures
@@ -85,6 +89,46 @@ defmodule Synapsis.Tool.MultiEdit do
 
   defp resolve_path(path, project_path) do
     if Path.type(path) == :absolute, do: path, else: Path.join(project_path || ".", path)
+  end
+
+  defp apply_vfs_edits(path, edits) do
+    case Synapsis.Tool.VFS.read(path) do
+      {:ok, content} ->
+        result =
+          Enum.reduce_while(edits, {:ok, content, 0}, fn edit, {:ok, c, count} ->
+            old = edit["old_string"]
+            new = edit["new_string"]
+
+            if String.contains?(c, old) do
+              [before | _] = :binary.split(c, old)
+
+              rest =
+                :binary.part(
+                  c,
+                  byte_size(before) + byte_size(old),
+                  byte_size(c) - byte_size(before) - byte_size(old)
+                )
+
+              {:cont, {:ok, before <> new <> rest, count + 1}}
+            else
+              {:halt, {:error, "Edit #{count + 1} failed: string not found in #{path}"}}
+            end
+          end)
+
+        case result do
+          {:ok, final, count} ->
+            case Synapsis.Tool.VFS.write(path, final) do
+              {:ok, _} -> {:ok, "Applied #{count} edit(s) to #{path}"}
+              {:error, reason} -> {:error, reason}
+            end
+
+          {:error, msg} ->
+            {:error, msg}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   defp apply_edits_to_file(path, edits, project_path) do

@@ -28,14 +28,22 @@ defmodule Synapsis.Tool.FileWrite do
 
   @impl true
   def execute(input, context) do
-    path = resolve_path(input["path"], context[:project_path])
+    path = input["path"]
 
-    with :ok <- Synapsis.Tool.PathValidator.validate(path, context[:project_path]),
-         :ok <- File.mkdir_p(Path.dirname(path)),
-         :ok <- File.write(path, input["content"]) do
-      {:ok, "Successfully wrote #{byte_size(input["content"])} bytes to #{path}"}
+    if Synapsis.Tool.VFS.virtual?(path) do
+      Synapsis.Tool.VFS.write(path, input["content"], %{
+        author: context[:agent_id] || context[:session_id] || "system"
+      })
     else
-      {:error, reason} -> {:error, "Failed to write #{path}: #{inspect(reason)}"}
+      resolved = resolve_path(path, context[:project_path])
+
+      with :ok <- Synapsis.Tool.PathValidator.validate(resolved, context[:project_path]),
+           :ok <- File.mkdir_p(Path.dirname(resolved)),
+           :ok <- File.write(resolved, input["content"]) do
+        {:ok, "Successfully wrote #{byte_size(input["content"])} bytes to #{resolved}"}
+      else
+        {:error, reason} -> {:error, "Failed to write #{resolved}: #{inspect(reason)}"}
+      end
     end
   end
 

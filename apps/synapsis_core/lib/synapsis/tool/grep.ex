@@ -37,16 +37,22 @@ defmodule Synapsis.Tool.Grep do
   @impl true
   def execute(input, context) do
     pattern = input["pattern"]
-    raw_path = input["path"] || "."
+    raw_path = input["path"]
     cwd = context[:project_path] || "."
     include = input["include"]
 
-    # Resolve relative to project root before path validation
-    search_path =
-      if Path.type(raw_path) == :absolute, do: raw_path, else: Path.join(cwd, raw_path)
+    if raw_path && Synapsis.Tool.VFS.virtual?(raw_path) do
+      Synapsis.Tool.VFS.grep(pattern, raw_path)
+    else
+      search_path =
+        case raw_path do
+          nil -> cwd
+          p -> if Path.type(p) == :absolute, do: p, else: Path.join(cwd, p)
+        end
 
-    with :ok <- Synapsis.Tool.PathValidator.validate(search_path, cwd) do
-      execute_search(pattern, search_path, cwd, include)
+      with :ok <- Synapsis.Tool.PathValidator.validate(search_path, cwd) do
+        execute_search(pattern, search_path, cwd, include)
+      end
     end
   end
 

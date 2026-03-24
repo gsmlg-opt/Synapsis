@@ -21,16 +21,25 @@ defmodule Synapsis.Tool.FileDelete do
 
   @impl true
   def execute(input, context) do
-    path = resolve_path(input["path"], context[:project_path])
+    path = input["path"]
 
-    with :ok <- Synapsis.Tool.PathValidator.validate(path, context[:project_path]) do
-      if File.exists?(path) do
-        case File.rm(path) do
-          :ok -> {:ok, "Successfully deleted #{path}"}
-          {:error, reason} -> {:error, "Failed to delete #{path}: #{inspect(reason)}"}
+    if Synapsis.Tool.VFS.virtual?(path) do
+      case Synapsis.Tool.VFS.delete(path) do
+        :ok -> {:ok, "Successfully deleted #{path}"}
+        {:error, reason} -> {:error, reason}
+      end
+    else
+      resolved = resolve_path(path, context[:project_path])
+
+      with :ok <- Synapsis.Tool.PathValidator.validate(resolved, context[:project_path]) do
+        if File.exists?(resolved) do
+          case File.rm(resolved) do
+            :ok -> {:ok, "Successfully deleted #{resolved}"}
+            {:error, reason} -> {:error, "Failed to delete #{resolved}: #{inspect(reason)}"}
+          end
+        else
+          {:error, "File does not exist: #{resolved}"}
         end
-      else
-        {:error, "File does not exist: #{path}"}
       end
     end
   end

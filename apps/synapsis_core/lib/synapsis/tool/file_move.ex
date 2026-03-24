@@ -22,21 +22,37 @@ defmodule Synapsis.Tool.FileMove do
 
   @impl true
   def execute(input, context) do
-    source = resolve_path(input["source"], context[:project_path])
-    dest = resolve_path(input["destination"], context[:project_path])
+    source = input["source"]
+    dest = input["destination"]
 
-    with :ok <- Synapsis.Tool.PathValidator.validate(source, context[:project_path]),
-         :ok <- Synapsis.Tool.PathValidator.validate(dest, context[:project_path]) do
-      if File.exists?(source) do
-        with :ok <- File.mkdir_p(Path.dirname(dest)),
-             :ok <- File.rename(source, dest) do
-          {:ok, "Moved #{source} to #{dest}"}
-        else
-          {:error, reason} -> {:error, "Failed to move #{source} to #{dest}: #{inspect(reason)}"}
+    src_virtual = Synapsis.Tool.VFS.virtual?(source)
+    dst_virtual = Synapsis.Tool.VFS.virtual?(dest)
+
+    cond do
+      src_virtual != dst_virtual ->
+        {:error, "Cannot move between real filesystem and @synapsis/ workspace"}
+
+      src_virtual and dst_virtual ->
+        Synapsis.Tool.VFS.move(source, dest)
+
+      true ->
+        resolved_src = resolve_path(source, context[:project_path])
+        resolved_dst = resolve_path(dest, context[:project_path])
+
+        with :ok <- Synapsis.Tool.PathValidator.validate(resolved_src, context[:project_path]),
+             :ok <- Synapsis.Tool.PathValidator.validate(resolved_dst, context[:project_path]) do
+          if File.exists?(resolved_src) do
+            with :ok <- File.mkdir_p(Path.dirname(resolved_dst)),
+                 :ok <- File.rename(resolved_src, resolved_dst) do
+              {:ok, "Moved #{resolved_src} to #{resolved_dst}"}
+            else
+              {:error, reason} ->
+                {:error, "Failed to move #{resolved_src} to #{resolved_dst}: #{inspect(reason)}"}
+            end
+          else
+            {:error, "Source file does not exist: #{resolved_src}"}
+          end
         end
-      else
-        {:error, "Source file does not exist: #{source}"}
-      end
     end
   end
 

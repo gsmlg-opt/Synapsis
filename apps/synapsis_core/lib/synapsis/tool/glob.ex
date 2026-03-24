@@ -32,21 +32,25 @@ defmodule Synapsis.Tool.Glob do
   @impl true
   def execute(input, context) do
     pattern = input["pattern"]
-    base_path = input["path"] || context[:project_path] || "."
+    base_path = input["path"]
     project_path = context[:project_path]
 
-    with :ok <- Synapsis.Tool.PathValidator.validate(base_path, project_path) do
-      full_pattern = Path.join(base_path, pattern)
-      files = Path.wildcard(full_pattern)
+    if base_path && Synapsis.Tool.VFS.virtual?(base_path) do
+      Synapsis.Tool.VFS.glob(pattern, base_path)
+    else
+      base_path = base_path || project_path || "."
 
-      # Filter results to stay within project root
-      files = filter_within_project(files, project_path)
+      with :ok <- Synapsis.Tool.PathValidator.validate(base_path, project_path) do
+        full_pattern = Path.join(base_path, pattern)
+        files = Path.wildcard(full_pattern)
+        files = filter_within_project(files, project_path)
 
-      if Enum.empty?(files) do
-        {:ok, "No files matched pattern: #{pattern}"}
-      else
-        result = Enum.join(files, "\n")
-        {:ok, result}
+        if Enum.empty?(files) do
+          {:ok, "No files matched pattern: #{pattern}"}
+        else
+          result = Enum.join(files, "\n")
+          {:ok, result}
+        end
       end
     end
   end

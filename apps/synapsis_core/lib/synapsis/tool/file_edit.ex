@@ -26,10 +26,60 @@ defmodule Synapsis.Tool.FileEdit do
 
   @impl true
   def execute(input, context) do
-    path = resolve_path(input["path"], context[:project_path])
+    path = input["path"]
 
-    with :ok <- Synapsis.Tool.PathValidator.validate(path, context[:project_path]),
-         {:ok, content} <- File.read(path) do
+    if Synapsis.Tool.VFS.virtual?(path) do
+      execute_vfs_edit(path, input, context)
+    else
+      execute_fs_edit(path, input, context)
+    end
+  end
+
+  defp execute_vfs_edit(path, input, _context) do
+    old_string = input["old_string"]
+    new_string = input["new_string"]
+
+    case Synapsis.Tool.VFS.read(path) do
+      {:ok, content} ->
+        if String.contains?(content, old_string) do
+          [before | _] = :binary.split(content, old_string)
+
+          rest =
+            :binary.part(
+              content,
+              byte_size(before) + byte_size(old_string),
+              byte_size(content) - byte_size(before) - byte_size(old_string)
+            )
+
+          new_content = before <> new_string <> rest
+
+          case Synapsis.Tool.VFS.write(path, new_content) do
+            {:ok, _} ->
+              {:ok,
+               Jason.encode!(%{
+                 status: "ok",
+                 path: path,
+                 message: "Successfully edited #{path}",
+                 diff: %{old: old_string, new: new_string}
+               })}
+
+            {:error, reason} ->
+              {:error, reason}
+          end
+        else
+          {:error, "String not found in file: #{inspect(String.slice(old_string, 0..50))}"}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp execute_fs_edit(path, input, context) do
+    resolved = resolve_path(path, context[:project_path])
+
+    with :ok <- Synapsis.Tool.PathValidator.validate(resolved, context[:project_path]),
+         {:ok, content} <- File.read(resolved) do
       old_string = input["old_string"]
       new_string = input["new_string"]
 
@@ -40,12 +90,12 @@ defmodule Synapsis.Tool.FileEdit do
         [before, after_part] ->
           new_content = before <> new_string <> after_part
 
-          case File.write(path, new_content) do
+          case File.write(resolved, new_content) do
             :ok ->
               result_map = %{
                 status: "ok",
-                path: path,
-                message: "Successfully edited #{path}",
+                path: resolved,
+                message: "Successfully edited #{resolved}",
                 diff: %{old: old_string, new: new_string}
               }
 
@@ -58,7 +108,7 @@ defmodule Synapsis.Tool.FileEdit do
               end
 
             {:error, reason} ->
-              {:error, "Failed to write #{path}: #{inspect(reason)}"}
+              {:error, "Failed to write #{resolved}: #{inspect(reason)}"}
           end
 
         _multiple ->
@@ -74,12 +124,12 @@ defmodule Synapsis.Tool.FileEdit do
 
           new_content = before <> new_string <> rest
 
-          case File.write(path, new_content) do
+          case File.write(resolved, new_content) do
             :ok ->
               result_map = %{
                 status: "ok",
-                path: path,
-                message: "Successfully edited #{path} (replaced first occurrence)",
+                path: resolved,
+                message: "Successfully edited #{resolved} (replaced first occurrence)",
                 diff: %{old: old_string, new: new_string}
               }
 
@@ -92,11 +142,11 @@ defmodule Synapsis.Tool.FileEdit do
               end
 
             {:error, reason} ->
-              {:error, "Failed to write #{path}: #{inspect(reason)}"}
+              {:error, "Failed to write #{resolved}: #{inspect(reason)}"}
           end
       end
     else
-      {:error, :enoent} -> {:error, "File not found: #{path}"}
+      {:error, :enoent} -> {:error, "File not found: #{resolved}"}
       {:error, reason} -> {:error, inspect(reason)}
     end
   end

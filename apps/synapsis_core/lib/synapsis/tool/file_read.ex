@@ -32,20 +32,26 @@ defmodule Synapsis.Tool.FileRead do
 
   @impl true
   def execute(input, context) do
-    path = resolve_path(input["path"], context[:project_path])
+    path = input["path"]
 
-    with :ok <- Synapsis.Tool.PathValidator.validate(path, context[:project_path]),
-         {:ok, content} <- File.read(path) do
-      content =
-        content
-        |> maybe_offset(input["offset"])
-        |> maybe_limit(input["limit"])
-
-      {:ok, content}
+    if Synapsis.Tool.VFS.virtual?(path) do
+      Synapsis.Tool.VFS.read(path, offset: input["offset"], limit: input["limit"])
     else
-      {:error, :enoent} -> {:error, "File not found: #{path}"}
-      {:error, :eacces} -> {:error, "Permission denied: #{path}"}
-      {:error, reason} -> {:error, "Error reading file: #{inspect(reason)}"}
+      resolved = resolve_path(path, context[:project_path])
+
+      with :ok <- Synapsis.Tool.PathValidator.validate(resolved, context[:project_path]),
+           {:ok, content} <- File.read(resolved) do
+        content =
+          content
+          |> maybe_offset(input["offset"])
+          |> maybe_limit(input["limit"])
+
+        {:ok, content}
+      else
+        {:error, :enoent} -> {:error, "File not found: #{resolved}"}
+        {:error, :eacces} -> {:error, "Permission denied: #{resolved}"}
+        {:error, reason} -> {:error, "Error reading file: #{inspect(reason)}"}
+      end
     end
   end
 
