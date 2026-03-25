@@ -47,7 +47,11 @@ defmodule SynapsisWeb.LSPLive.IndexTest do
 
     test "built-in presets show Enable button when not configured", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings/lsp")
-      assert has_element?(view, ~s(el-dm-button[phx-click="enable_builtin"][phx-value-name="gopls"]))
+
+      assert has_element?(
+               view,
+               ~s(el-dm-button[phx-click="enable_builtin"][phx-value-name="gopls"])
+             )
     end
 
     test "enable_builtin creates config in database", %{conn: conn} do
@@ -64,7 +68,12 @@ defmodule SynapsisWeb.LSPLive.IndexTest do
       config = create_lsp_config(%{name: "gopls", command: "gopls", auto_start: true})
 
       {:ok, view, html} = live(conn, ~p"/settings/lsp")
-      assert has_element?(view, ~s(el-dm-button[phx-click="disable_builtin"][phx-value-name="gopls"]))
+
+      assert has_element?(
+               view,
+               ~s(el-dm-button[phx-click="disable_builtin"][phx-value-name="gopls"])
+             )
+
       assert html =~ "/settings/lsp/#{config.id}"
     end
 

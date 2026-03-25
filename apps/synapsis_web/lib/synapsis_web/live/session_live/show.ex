@@ -470,9 +470,7 @@ defmodule SynapsisWeb.SessionLive.Show do
         <div class="flex-1 overflow-y-auto">
           <.dm_left_menu active={@session.id} size="sm">
             <:title>Sessions</:title>
-            <:menu
-              :for={s <- @sessions}
-            >
+            <:menu :for={s <- @sessions}>
               <div class="flex justify-between items-center w-full">
                 <.link
                   navigate={~p"/projects/#{@project.id}/sessions/#{s.id}"}
