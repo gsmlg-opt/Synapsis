@@ -132,7 +132,11 @@ defmodule SynapsisPlugin.LSPTest do
             %{"range" => %{"start" => %{"line" => 0}}, "severity" => 1, "message" => "error in A"}
           ],
           "file:///tmp/b.ex" => [
-            %{"range" => %{"start" => %{"line" => 0}}, "severity" => 2, "message" => "warning in B"}
+            %{
+              "range" => %{"start" => %{"line" => 0}},
+              "severity" => 2,
+              "message" => "warning in B"
+            }
           ]
         },
         pending_requests: %{}
@@ -268,7 +272,8 @@ defmodule SynapsisPlugin.LSPTest do
       # Fake a port reference for the exit_status test — we use a self reference
       # since we can't easily mock Port. The handle_info clause matches on port identity.
       # Without a real port we test the fallback clause (unrelated message).
-      assert {:ok, ^state} = SynapsisPlugin.LSP.handle_info({make_ref(), {:exit_status, 1}}, state)
+      assert {:ok, ^state} =
+               SynapsisPlugin.LSP.handle_info({make_ref(), {:exit_status, 1}}, state)
     end
   end
 
@@ -341,7 +346,12 @@ defmodule SynapsisPlugin.LSPTest do
     end
 
     test "returns error when LSP binary not found" do
-      # elixir-ls is often not installed in CI
+      # Use a language whose binary definitely doesn't exist
+      config = %{name: "nonexistent-lsp-#{:rand.uniform(100_000)}", root_path: "/tmp"}
+      assert {:error, {:no_lsp_for_language, _}} = SynapsisPlugin.LSP.init(config)
+    end
+
+    test "init with real language returns ok or error depending on binary availability" do
       config = %{name: "elixir-ls", root_path: "/tmp"}
 
       case SynapsisPlugin.LSP.init(config) do
@@ -349,8 +359,18 @@ defmodule SynapsisPlugin.LSPTest do
           assert true
 
         {:ok, state} ->
-          # Binary found — clean up the port
-          if is_port(state.port), do: Port.close(state.port)
+          # Binary found — kill the OS process via port info, then close the port
+          if is_port(state.port) do
+            case Port.info(state.port, :os_pid) do
+              {:os_pid, os_pid} ->
+                Port.close(state.port)
+                System.cmd("kill", ["-9", "#{os_pid}"], stderr_to_stdout: true)
+
+              nil ->
+                Port.close(state.port)
+            end
+          end
+
           assert true
       end
     end
@@ -380,27 +400,37 @@ defmodule SynapsisPlugin.LSPTest do
     end
 
     test "severity 1 labeled as 'error'" do
-      {:ok, result, _} = SynapsisPlugin.LSP.execute("lsp_diagnostics", %{}, state_with_diagnostic(1))
+      {:ok, result, _} =
+        SynapsisPlugin.LSP.execute("lsp_diagnostics", %{}, state_with_diagnostic(1))
+
       assert result =~ "error"
     end
 
     test "severity 2 labeled as 'warning'" do
-      {:ok, result, _} = SynapsisPlugin.LSP.execute("lsp_diagnostics", %{}, state_with_diagnostic(2))
+      {:ok, result, _} =
+        SynapsisPlugin.LSP.execute("lsp_diagnostics", %{}, state_with_diagnostic(2))
+
       assert result =~ "warning"
     end
 
     test "severity 3 labeled as 'info'" do
-      {:ok, result, _} = SynapsisPlugin.LSP.execute("lsp_diagnostics", %{}, state_with_diagnostic(3))
+      {:ok, result, _} =
+        SynapsisPlugin.LSP.execute("lsp_diagnostics", %{}, state_with_diagnostic(3))
+
       assert result =~ "info"
     end
 
     test "severity 4 labeled as 'hint'" do
-      {:ok, result, _} = SynapsisPlugin.LSP.execute("lsp_diagnostics", %{}, state_with_diagnostic(4))
+      {:ok, result, _} =
+        SynapsisPlugin.LSP.execute("lsp_diagnostics", %{}, state_with_diagnostic(4))
+
       assert result =~ "hint"
     end
 
     test "unknown severity labeled as 'unknown'" do
-      {:ok, result, _} = SynapsisPlugin.LSP.execute("lsp_diagnostics", %{}, state_with_diagnostic(99))
+      {:ok, result, _} =
+        SynapsisPlugin.LSP.execute("lsp_diagnostics", %{}, state_with_diagnostic(99))
+
       assert result =~ "unknown"
     end
   end
@@ -415,9 +445,7 @@ defmodule SynapsisPlugin.LSPTest do
 
     test "returns empty for nonexistent directory" do
       languages =
-        SynapsisPlugin.LSP.Manager.detect_languages(
-          "/tmp/nonexistent_#{:rand.uniform(100_000)}"
-        )
+        SynapsisPlugin.LSP.Manager.detect_languages("/tmp/nonexistent_#{:rand.uniform(100_000)}")
 
       assert languages == []
     end

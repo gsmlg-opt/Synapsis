@@ -44,6 +44,10 @@ defmodule SynapsisServer.UserSocketTest do
         })
         |> Synapsis.Repo.insert()
 
+      on_exit(fn ->
+        Synapsis.Session.DynamicSupervisor.stop_session(session.id)
+      end)
+
       %{session: session}
     end
 

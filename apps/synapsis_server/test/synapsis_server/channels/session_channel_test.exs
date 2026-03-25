@@ -26,6 +26,12 @@ defmodule SynapsisServer.SessionChannelTest do
       |> socket("user_id", %{})
       |> subscribe_and_join(SynapsisServer.SessionChannel, "session:#{session.id}")
 
+    on_exit(fn ->
+      # Stop session worker processes before sandbox connection is released
+      # to prevent DBConnection errors from orphaned GenServer processes.
+      Synapsis.Session.DynamicSupervisor.stop_session(session.id)
+    end)
+
     %{socket: socket, session: session}
   end
 
