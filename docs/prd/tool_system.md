@@ -355,21 +355,21 @@ task (stub), web_search, fetch, skill, multi_edit, tool_search, sleep.
 
 session_summarize, memory_save, memory_search, memory_update.
 
-### Phase 5: Workspace Virtual Files
+### Phase 5: Workspace Virtual Files (done)
 
 VFS router module. `@synapsis/` guard in all filesystem tools. VFS.Search for SQL-backed grep and glob. Workspace tools (workspace_read, workspace_write, workspace_list, workspace_search).
 
-### Phase 6: Agent Communication
+### Phase 6: Agent Communication (done)
 
 `agent_messages` migration and schema. agent_send, agent_ask, agent_reply, agent_handoff, agent_discover, agent_inbox. Agent name resolution. Deprecate old swarm tools.
 
-### Phase 7: Sub-Agent Wiring
+### Phase 7: Sub-Agent Wiring (done)
 
-Wire `task` tool to actual `Agent.SubAgent` process spawning (currently stub). Background task notifications. Git worktree isolation per sub-agent.
+Wire `task` tool to actual `Agent.SessionBridge` process spawning. Foreground mode blocks until completion. Background mode returns immediately with task_id and sends completion notification. Session result collection from last assistant message.
 
-### Phase 8: Disabled Tool Activation
+### Phase 8: Disabled Tool Activation (done)
 
-notebook_read, notebook_edit behind config flags. Computer use via MCP plugin.
+notebook_read, notebook_edit behind config flags (`notebook_tools_enabled`). Computer use via MCP plugin.
 
 ---
 

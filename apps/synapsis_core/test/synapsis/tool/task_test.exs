@@ -27,38 +27,9 @@ defmodule Synapsis.Tool.TaskTest do
     test "category is :orchestration" do
       assert Task.category() == :orchestration
     end
-  end
 
-  describe "execute/2 — foreground mode" do
-    test "returns result with task id" do
-      input = %{"prompt" => "Analyze the codebase", "mode" => "foreground"}
-      context = %{session_id: "test-session-123"}
-
-      assert {:ok, result} = Task.execute(input, context)
-      assert result =~ "Sub-agent task"
-      assert result =~ "completed for:"
-      assert result =~ "Analyze the codebase"
-    end
-
-    test "defaults to foreground mode when mode not specified" do
-      input = %{"prompt" => "Do something"}
-      context = %{session_id: "test-session-123"}
-
-      assert {:ok, result} = Task.execute(input, context)
-      assert result =~ "completed for:"
-    end
-  end
-
-  describe "execute/2 — background mode" do
-    test "returns task_id and running status" do
-      input = %{"prompt" => "Long running task", "mode" => "background"}
-      context = %{session_id: "test-session-123"}
-
-      assert {:ok, json} = Task.execute(input, context)
-      decoded = Jason.decode!(json)
-      assert is_binary(decoded["task_id"])
-      assert decoded["status"] == "running"
-      assert decoded["prompt"] =~ "Long running task"
+    test "is enabled" do
+      assert Task.enabled?() == true
     end
   end
 
@@ -71,9 +42,17 @@ defmodule Synapsis.Tool.TaskTest do
                Task.execute(input, context)
     end
 
+    test "returns error without project_id" do
+      input = %{"prompt" => "Do something"}
+      context = %{session_id: "test-session-123"}
+
+      assert {:error, "No project context available for sub-agent"} =
+               Task.execute(input, context)
+    end
+
     test "returns error for invalid mode" do
       input = %{"prompt" => "Do something", "mode" => "invalid"}
-      context = %{session_id: "test-session-123"}
+      context = %{session_id: "test-session-123", project_id: "test-project-456"}
 
       assert {:error, msg} = Task.execute(input, context)
       assert msg =~ "Invalid mode"

@@ -2,6 +2,14 @@ defmodule Synapsis.Tool.Task do
   @moduledoc "Launch a sub-agent to handle a task autonomously."
   use Synapsis.Tool
 
+  # SessionBridge lives in synapsis_agent (higher-layer dependency)
+  @compile {:no_warn_undefined, Synapsis.Agent.SessionBridge}
+
+  require Logger
+
+  @foreground_timeout :timer.minutes(10)
+  @background_timeout :timer.minutes(30)
+
   @impl true
   def name, do: "task"
 
@@ -39,43 +47,160 @@ defmodule Synapsis.Tool.Task do
   def category, do: :orchestration
 
   @impl true
-  def enabled?, do: false
+  def enabled?, do: true
 
   @impl true
   def execute(input, context) do
     prompt = input["prompt"]
     mode = input["mode"] || "foreground"
-    _tools = input["tools"] || default_tools()
-    _model = input["model"]
+    model = input["model"]
 
     session_id = context[:session_id]
+    project_id = context[:project_id]
 
-    if is_nil(session_id) do
-      {:error, "No session context available for sub-agent"}
-    else
-      # TODO: Wire up actual sub-agent session creation and execution.
-      # Currently a stub — returns placeholder responses.
-      task_id = Ecto.UUID.generate()
+    cond do
+      is_nil(session_id) ->
+        {:error, "No session context available for sub-agent"}
 
-      case mode do
-        "foreground" ->
-          {:ok, "Sub-agent task #{task_id} completed for: #{String.slice(prompt, 0..100)}"}
+      is_nil(project_id) ->
+        {:error, "No project context available for sub-agent"}
 
-        "background" ->
-          {:ok,
-           Jason.encode!(%{
-             "task_id" => task_id,
-             "status" => "running",
-             "prompt" => String.slice(prompt, 0..100)
-           })}
+      true ->
+        spawn_opts =
+          %{
+            agent: "build",
+            notify_pid: self(),
+            notify_ref: Ecto.UUID.generate()
+          }
+          |> maybe_put(:model, model)
 
-        _ ->
-          {:error, "Invalid mode: #{mode}. Use 'foreground' or 'background'."}
-      end
+        case mode do
+          "foreground" ->
+            execute_foreground(project_id, prompt, spawn_opts)
+
+          "background" ->
+            execute_background(project_id, prompt, spawn_opts)
+
+          _ ->
+            {:error, "Invalid mode: #{mode}. Use 'foreground' or 'background'."}
+        end
     end
   end
 
-  defp default_tools do
-    ~w(file_read list_dir grep glob diagnostics)
+  defp execute_foreground(project_id, prompt, opts) do
+    ref = opts.notify_ref
+
+    case Synapsis.Agent.SessionBridge.spawn_coding_session(project_id, prompt, opts) do
+      {:ok, sub_session_id} ->
+        Logger.info("sub_agent_foreground_started",
+          sub_session_id: sub_session_id,
+          ref: ref
+        )
+
+        receive do
+          {:coding_session_completed, ^ref, ^sub_session_id} ->
+            result = collect_session_result(sub_session_id)
+            {:ok, result}
+
+          {:coding_session_failed, ^ref, ^sub_session_id} ->
+            {:error, "Sub-agent task failed for session #{sub_session_id}"}
+
+          {:coding_session_timeout, ^ref, ^sub_session_id} ->
+            {:error, "Sub-agent task timed out for session #{sub_session_id}"}
+        after
+          @foreground_timeout ->
+            {:error, "Sub-agent task timed out after #{div(@foreground_timeout, 60_000)} minutes"}
+        end
+
+      {:error, reason} ->
+        {:error, "Failed to spawn sub-agent: #{inspect(reason)}"}
+    end
   end
+
+  defp execute_background(project_id, prompt, opts) do
+    ref = opts.notify_ref
+    caller = self()
+
+    Task.Supervisor.start_child(Synapsis.Tool.TaskSupervisor, fn ->
+      case Synapsis.Agent.SessionBridge.spawn_coding_session(project_id, prompt, opts) do
+        {:ok, sub_session_id} ->
+          Logger.info("sub_agent_background_started",
+            sub_session_id: sub_session_id,
+            ref: ref
+          )
+
+          receive do
+            {:coding_session_completed, ^ref, ^sub_session_id} ->
+              result = collect_session_result(sub_session_id)
+
+              Phoenix.PubSub.broadcast(
+                Synapsis.PubSub,
+                "session:#{sub_session_id}",
+                {"background_task_completed", %{ref: ref, result: result}}
+              )
+
+              send(caller, {:background_task_done, ref, {:ok, result}})
+
+            {:coding_session_failed, ^ref, ^sub_session_id} ->
+              send(caller, {:background_task_done, ref, {:error, "Sub-agent task failed"}})
+
+            {:coding_session_timeout, ^ref, ^sub_session_id} ->
+              send(caller, {:background_task_done, ref, {:error, "Sub-agent task timed out"}})
+          after
+            @background_timeout ->
+              send(
+                caller,
+                {:background_task_done, ref, {:error, "Sub-agent task timed out"}}
+              )
+          end
+
+        {:error, reason} ->
+          send(caller, {:background_task_done, ref, {:error, inspect(reason)}})
+      end
+    end)
+
+    {:ok,
+     Jason.encode!(%{
+       "task_id" => ref,
+       "status" => "running",
+       "prompt" => String.slice(prompt, 0..100)
+     })}
+  end
+
+  defp collect_session_result(session_id) do
+    case Synapsis.Sessions.get(session_id) do
+      {:ok, session} ->
+        last_assistant =
+          session.messages
+          |> Enum.filter(&(&1.role == "assistant"))
+          |> List.last()
+
+        case last_assistant do
+          nil -> "Sub-agent completed with no output."
+          msg -> extract_text(msg)
+        end
+
+      {:error, _} ->
+        "Sub-agent completed (session #{session_id})."
+    end
+  end
+
+  defp extract_text(%{parts: parts}) when is_list(parts) do
+    parts
+    |> Enum.filter(fn
+      %Synapsis.Part.Text{} -> true
+      _ -> false
+    end)
+    |> Enum.map(& &1.text)
+    |> Enum.join("\n")
+    |> case do
+      "" -> "Sub-agent completed with no text output."
+      text -> text
+    end
+  end
+
+  defp extract_text(_), do: "Sub-agent completed."
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 end
