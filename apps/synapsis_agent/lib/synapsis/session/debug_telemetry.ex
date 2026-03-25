@@ -89,8 +89,19 @@ defmodule Synapsis.Session.DebugTelemetry do
     |> Enum.map(fn
       {k, %DateTime{} = v} -> {to_string(k), DateTime.to_iso8601(v)}
       {k, v} when is_atom(v) -> {to_string(k), to_string(v)}
+      {k, v} when is_list(v) -> {to_string(k), serialize_list(v)}
       {k, v} -> {to_string(k), v}
     end)
     |> Map.new()
+  end
+
+  defp serialize_list(list) do
+    Enum.map(list, fn
+      {key, value} when is_binary(key) and is_binary(value) ->
+        %{"name" => key, "value" => value}
+
+      other ->
+        other
+    end)
   end
 end
