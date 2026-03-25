@@ -2,7 +2,6 @@ defmodule Synapsis.Workspace.Integration.LifecyclePromotionTest do
   use ExUnit.Case
 
   alias Synapsis.Workspace
-  alias Synapsis.Workspace.Resource
   alias Synapsis.Repo
 
   setup do
