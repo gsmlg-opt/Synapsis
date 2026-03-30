@@ -101,6 +101,13 @@ defmodule Synapsis.Sessions do
     result
   end
 
+  def update_title(session_id, title) when is_binary(title) do
+    case Repo.get(Session, session_id) do
+      nil -> {:error, :not_found}
+      session -> session |> Ecto.Changeset.change(title: title) |> Repo.update()
+    end
+  end
+
   def update_debug(session_id, enabled) when is_boolean(enabled) do
     case Repo.get(Session, session_id) do
       nil ->

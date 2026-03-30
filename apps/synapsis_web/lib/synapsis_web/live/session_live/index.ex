@@ -25,6 +25,7 @@ defmodule SynapsisWeb.SessionLive.Index do
            show_new_session_form: false,
            new_session_provider: default_provider,
            new_session_model: default_model,
+           new_session_title: "",
            available_models: available_models
          )}
 
@@ -72,11 +73,19 @@ defmodule SynapsisWeb.SessionLive.Index do
     {:noreply, assign(socket, new_session_model: model)}
   end
 
+  def handle_event("update_title", %{"value" => title}, socket) do
+    {:noreply, assign(socket, new_session_title: title)}
+  end
+
   def handle_event("create_session", _params, socket) do
-    opts = %{
-      provider: socket.assigns.new_session_provider,
-      model: socket.assigns.new_session_model
-    }
+    title = String.trim(socket.assigns.new_session_title)
+
+    opts =
+      %{
+        provider: socket.assigns.new_session_provider,
+        model: socket.assigns.new_session_model
+      }
+      |> then(fn opts -> if title != "", do: Map.put(opts, :title, title), else: opts end)
 
     case Synapsis.Sessions.create(socket.assigns.project.path, opts) do
       {:ok, session} ->
@@ -125,6 +134,15 @@ defmodule SynapsisWeb.SessionLive.Index do
       <.dm_card :if={@show_new_session_form} variant="bordered" class="mb-6">
         <:title>New Session</:title>
         <div class="space-y-3">
+          <.dm_input
+            type="text"
+            name="title"
+            value={@new_session_title}
+            label="Name (optional)"
+            placeholder="e.g. Fix login bug"
+            size="sm"
+            phx-change="update_title"
+          />
           <.dm_select
             name="provider"
             label="Provider"

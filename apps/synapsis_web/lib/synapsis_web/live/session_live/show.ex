@@ -50,6 +50,7 @@ defmodule SynapsisWeb.SessionLive.Show do
            show_new_session_form: false,
            new_session_provider: default_provider,
            new_session_model: default_model,
+           new_session_title: "",
            available_models: available_models,
            session_models: session_models,
            show_model_selector: false,
@@ -57,7 +58,9 @@ defmodule SynapsisWeb.SessionLive.Show do
            new_session_debug: false,
            debug_enabled: session.debug || false,
            debug_entries: debug_entries,
-           debug_panel_open: false
+           debug_panel_open: false,
+           editing_title: false,
+           title_form: to_form(%{"title" => session.title || ""})
          )}
 
       _ ->
@@ -215,12 +218,20 @@ defmodule SynapsisWeb.SessionLive.Show do
     {:noreply, assign(socket, new_session_debug: !socket.assigns.new_session_debug)}
   end
 
+  def handle_event("update_title", %{"value" => title}, socket) do
+    {:noreply, assign(socket, new_session_title: title)}
+  end
+
   def handle_event("create_session", _params, socket) do
-    opts = %{
-      provider: socket.assigns.new_session_provider,
-      model: socket.assigns.new_session_model,
-      debug: socket.assigns.new_session_debug
-    }
+    title = String.trim(socket.assigns.new_session_title)
+
+    opts =
+      %{
+        provider: socket.assigns.new_session_provider,
+        model: socket.assigns.new_session_model,
+        debug: socket.assigns.new_session_debug
+      }
+      |> then(fn opts -> if title != "", do: Map.put(opts, :title, title), else: opts end)
 
     case Synapsis.Sessions.create(socket.assigns.project.path, opts) do
       {:ok, session} ->
@@ -232,6 +243,42 @@ defmodule SynapsisWeb.SessionLive.Show do
       {:error, _} ->
         {:noreply, put_flash(socket, :error, "Failed to create session")}
     end
+  end
+
+  def handle_event("start_editing_title", _params, socket) do
+    title = socket.assigns.session.title || ""
+    {:noreply, assign(socket, editing_title: true, title_form: to_form(%{"title" => title}))}
+  end
+
+  def handle_event("save_title", %{"title" => title}, socket) do
+    title = String.trim(title)
+    session = socket.assigns.session
+
+    case Synapsis.Sessions.update_title(session.id, title) do
+      {:ok, updated} ->
+        sessions =
+          Enum.map(socket.assigns.sessions, fn s ->
+            if s.id == updated.id, do: %{s | title: updated.title}, else: s
+          end)
+
+        {:noreply,
+         assign(socket,
+           session: %{session | title: updated.title},
+           sessions: sessions,
+           editing_title: false,
+           page_title: if(title != "", do: title, else: "Session")
+         )}
+
+      {:error, _} ->
+        {:noreply,
+         socket
+         |> assign(editing_title: false)
+         |> put_flash(:error, "Failed to update title")}
+    end
+  end
+
+  def handle_event("cancel_editing_title", _params, socket) do
+    {:noreply, assign(socket, editing_title: false)}
   end
 
   def handle_event("navigate", %{"path" => path}, socket) do
@@ -425,6 +472,15 @@ defmodule SynapsisWeb.SessionLive.Show do
             + New Session
           </.dm_btn>
           <div :if={@show_new_session_form} class="mt-3 space-y-2">
+            <.dm_input
+              type="text"
+              name="title"
+              value={@new_session_title}
+              label="Name"
+              placeholder="e.g. Fix login bug"
+              size="sm"
+              phx-change="update_title"
+            />
             <.dm_select
               name="provider"
               label="Provider"
@@ -513,7 +569,33 @@ defmodule SynapsisWeb.SessionLive.Show do
         <%!-- Session header --%>
         <div class="px-4 py-3 border-b border-base-300 flex items-center justify-between">
           <div class="flex items-center gap-3">
-            <h2 class="font-semibold">{@session.title || "Session"}</h2>
+            <%= if @editing_title do %>
+              <form phx-submit="save_title" class="flex items-center gap-2">
+                <.dm_input
+                  type="text"
+                  name="title"
+                  value={@session.title || ""}
+                  placeholder="Session name"
+                  size="sm"
+                  phx-mounted={Phoenix.LiveView.JS.dispatch("focus", to: "[name=title]")}
+                  phx-keydown="cancel_editing_title"
+                  phx-key="Escape"
+                />
+                <.dm_btn type="submit" variant="primary" size="xs">Save</.dm_btn>
+                <.dm_btn variant="ghost" size="xs" phx-click="cancel_editing_title">
+                  Cancel
+                </.dm_btn>
+              </form>
+            <% else %>
+              <h2
+                class="font-semibold cursor-pointer hover:text-primary transition-colors"
+                phx-click="start_editing_title"
+                title="Click to rename"
+              >
+                {@session.title || "Session"}
+                <.dm_mdi name="pencil-outline" class="w-3.5 h-3.5 inline opacity-50 ml-1" />
+              </h2>
+            <% end %>
             <.dm_dropdown position="bottom" class="z-50">
               <:trigger>
                 <.dm_btn variant="ghost" size="xs">
