@@ -54,7 +54,7 @@ config :tailwind,
 # Oban configuration for background job processing
 config :synapsis_core, Oban,
   repo: Synapsis.Repo,
-  queues: [memory: 5],
+  queues: [memory: 5, heartbeat: 2],
   plugins: [
     {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
     Oban.Plugins.Reindexer

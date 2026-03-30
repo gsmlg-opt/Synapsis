@@ -3,7 +3,8 @@ defmodule Synapsis.Agent.Heartbeat.Scheduler do
   Syncs heartbeat configurations from the database to Oban cron jobs (AI-6.3).
 
   On startup and on PubSub config change events, loads enabled heartbeat configs
-  from the database and schedules them via Oban.
+  from the database and schedules them via Oban. Uses Oban's cron expression
+  parser for accurate next-run-time calculation.
   """
 
   require Logger
@@ -14,7 +15,7 @@ defmodule Synapsis.Agent.Heartbeat.Scheduler do
   Sync all enabled heartbeat configs to Oban job queue.
 
   Inserts scheduled Oban jobs for each enabled heartbeat. Existing jobs for
-  the same heartbeat are replaced.
+  the same heartbeat are replaced via uniqueness constraints.
   """
   @spec sync_crontab() :: :ok
   def sync_crontab do
@@ -33,14 +34,30 @@ defmodule Synapsis.Agent.Heartbeat.Scheduler do
   @doc "Schedule a single heartbeat config as an Oban job."
   @spec schedule_heartbeat(HeartbeatConfig.t()) :: :ok
   def schedule_heartbeat(%HeartbeatConfig{} = config) do
-    %{"heartbeat_id" => config.id}
-    |> Synapsis.Agent.Heartbeat.Worker.new(
-      scheduled_at: next_run_time(config.schedule),
-      unique: [period: 60, keys: [:heartbeat_id]]
-    )
-    |> Oban.insert()
+    case next_run_time(config.schedule) do
+      {:ok, scheduled_at} ->
+        %{"heartbeat_id" => config.id}
+        |> Synapsis.Agent.Heartbeat.Worker.new(
+          scheduled_at: scheduled_at,
+          unique: [period: 60, keys: [:heartbeat_id]]
+        )
+        |> Oban.insert()
 
-    :ok
+        Logger.info("heartbeat_scheduled",
+          name: config.name,
+          next_run: DateTime.to_iso8601(scheduled_at)
+        )
+
+        :ok
+
+      {:error, reason} ->
+        Logger.warning("heartbeat_schedule_failed",
+          name: config.name,
+          error: reason
+        )
+
+        :ok
+    end
   rescue
     e in [RuntimeError, Ecto.QueryError, DBConnection.ConnectionError] ->
       Logger.warning("heartbeat_schedule_failed",
@@ -57,9 +74,18 @@ defmodule Synapsis.Agent.Heartbeat.Scheduler do
     HeartbeatConfig.list_enabled()
   end
 
-  # Simple next-run calculation — for production, use a proper cron parser.
-  # For now, schedule 1 minute from now as a placeholder.
-  defp next_run_time(_schedule) do
-    DateTime.utc_now() |> DateTime.add(60, :second)
+  @doc """
+  Calculate next run time from a 5-field cron expression using Oban's parser.
+  Returns `{:ok, DateTime.t()}` or `{:error, String.t()}`.
+  """
+  @spec next_run_time(String.t()) :: {:ok, DateTime.t()} | {:error, String.t()}
+  def next_run_time(schedule) do
+    case Oban.Cron.Expression.parse(schedule) do
+      {:ok, expr} ->
+        {:ok, Oban.Cron.Expression.next_at(expr)}
+
+      {:error, reason} ->
+        {:error, "invalid cron expression: #{inspect(reason)}"}
+    end
   end
 end

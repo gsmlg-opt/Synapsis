@@ -64,12 +64,44 @@ defmodule Synapsis.HeartbeatConfig do
     |> Synapsis.Repo.all()
   end
 
+  @doc "List all heartbeat configs."
+  @spec list_all() :: [t()]
+  def list_all do
+    __MODULE__
+    |> order_by([c], asc: c.name)
+    |> Synapsis.Repo.all()
+  end
+
   @doc "Insert a new heartbeat config."
   @spec create(map()) :: {:ok, t()} | {:error, Ecto.Changeset.t()}
   def create(attrs) do
     %__MODULE__{}
     |> changeset(attrs)
     |> Synapsis.Repo.insert()
+  end
+
+  @doc "Update an existing heartbeat config."
+  @spec update_config(t(), map()) :: {:ok, t()} | {:error, Ecto.Changeset.t()}
+  def update_config(%__MODULE__{} = config, attrs) do
+    config
+    |> changeset(attrs)
+    |> Synapsis.Repo.update()
+  end
+
+  @doc "Delete a heartbeat config."
+  @spec delete_config(t()) :: {:ok, t()} | {:error, Ecto.Changeset.t()}
+  def delete_config(%__MODULE__{} = config) do
+    Synapsis.Repo.delete(config)
+  end
+
+  @doc "Toggle enabled status of a heartbeat config."
+  @spec toggle_enabled(t()) :: {:ok, t()} | {:error, Ecto.Changeset.t()}
+  def toggle_enabled(%__MODULE__{enabled: enabled} = config) do
+    new_enabled = not enabled
+
+    config
+    |> Ecto.Changeset.change(enabled: new_enabled)
+    |> Synapsis.Repo.update()
   end
 
   defp validate_cron_expression(changeset, field) do

@@ -53,6 +53,8 @@ defmodule SynapsisCore.Application do
 
         register_env_providers()
         seed_default_agents()
+        seed_heartbeat_templates()
+        sync_heartbeat_scheduler()
 
         maybe_apply(SynapsisPlugin.Loader, :start_auto_plugins, [])
 
@@ -85,6 +87,18 @@ defmodule SynapsisCore.Application do
     rescue
       e -> Logger.warning("agent_config_seed_failed", error: Exception.message(e))
     end
+  end
+
+  defp seed_heartbeat_templates do
+    maybe_apply(Synapsis.Agent.Heartbeat.Templates, :seed_defaults, [])
+  rescue
+    e -> Logger.warning("heartbeat_seed_failed", error: Exception.message(e))
+  end
+
+  defp sync_heartbeat_scheduler do
+    maybe_apply(Synapsis.Agent.Heartbeat.Scheduler, :sync_crontab, [])
+  rescue
+    e -> Logger.warning("heartbeat_sync_failed", error: Exception.message(e))
   end
 
   defp register_env_providers do

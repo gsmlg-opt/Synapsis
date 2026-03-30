@@ -4,7 +4,7 @@ defmodule Synapsis.HeartbeatConfigTest do
   alias Synapsis.HeartbeatConfig
 
   @valid_attrs %{
-    name: "morning-briefing",
+    name: "test-heartbeat",
     schedule: "30 7 * * 1-5",
     prompt: "Summarize overnight activity."
   }
@@ -56,22 +56,121 @@ defmodule Synapsis.HeartbeatConfigTest do
         |> HeartbeatConfig.changeset(@valid_attrs)
         |> Repo.insert()
 
-      assert config.name == "morning-briefing"
+      assert config.name == "test-heartbeat"
       assert config.schedule == "30 7 * * 1-5"
       assert config.enabled == false
     end
 
     test "requires name uniqueness" do
       %HeartbeatConfig{}
-      |> HeartbeatConfig.changeset(@valid_attrs)
+      |> HeartbeatConfig.changeset(%{
+        @valid_attrs
+        | name: "unique-test-#{System.unique_integer([:positive])}"
+      })
+      |> Repo.insert!()
+
+      # Insert same name again
+      name = "dup-name-#{System.unique_integer([:positive])}"
+
+      %HeartbeatConfig{}
+      |> HeartbeatConfig.changeset(%{@valid_attrs | name: name})
       |> Repo.insert!()
 
       assert {:error, changeset} =
                %HeartbeatConfig{}
-               |> HeartbeatConfig.changeset(@valid_attrs)
+               |> HeartbeatConfig.changeset(%{@valid_attrs | name: name})
                |> Repo.insert()
 
       assert errors_on(changeset)[:name]
+    end
+  end
+
+  describe "create/1" do
+    test "inserts config with valid attrs" do
+      name = "create-test-#{System.unique_integer([:positive])}"
+      assert {:ok, config} = HeartbeatConfig.create(%{@valid_attrs | name: name})
+      assert config.name == name
+    end
+  end
+
+  describe "update_config/2" do
+    test "updates config fields" do
+      name = "update-test-#{System.unique_integer([:positive])}"
+      {:ok, config} = HeartbeatConfig.create(%{@valid_attrs | name: name})
+      assert {:ok, updated} = HeartbeatConfig.update_config(config, %{enabled: true})
+      assert updated.enabled == true
+    end
+  end
+
+  describe "toggle_enabled/1" do
+    test "toggles from false to true" do
+      name = "toggle-test-#{System.unique_integer([:positive])}"
+      {:ok, config} = HeartbeatConfig.create(%{@valid_attrs | name: name})
+      assert config.enabled == false
+
+      {:ok, toggled} = HeartbeatConfig.toggle_enabled(config)
+      assert toggled.enabled == true
+    end
+
+    test "toggles from true to false" do
+      name = "toggle-test-#{System.unique_integer([:positive])}"
+
+      {:ok, config} =
+        HeartbeatConfig.create(Map.merge(@valid_attrs, %{name: name, enabled: true}))
+
+      assert config.enabled == true
+
+      {:ok, toggled} = HeartbeatConfig.toggle_enabled(config)
+      assert toggled.enabled == false
+    end
+  end
+
+  describe "list_all/0" do
+    test "returns configs ordered by name" do
+      # Create test-specific configs and verify ordering
+      name_z = "zzz-test-#{System.unique_integer([:positive])}"
+      name_a = "aaa-test-#{System.unique_integer([:positive])}"
+
+      HeartbeatConfig.create(%{name: name_z, schedule: "0 9 * * *", prompt: "Z"})
+      HeartbeatConfig.create(%{name: name_a, schedule: "0 10 * * *", prompt: "A"})
+
+      configs = HeartbeatConfig.list_all()
+      names = Enum.map(configs, & &1.name)
+
+      # Verify our test configs exist and are ordered
+      z_idx = Enum.find_index(names, &(&1 == name_z))
+      a_idx = Enum.find_index(names, &(&1 == name_a))
+      assert a_idx < z_idx
+    end
+  end
+
+  describe "list_enabled/0" do
+    test "returns only enabled configs" do
+      name_on = "enabled-test-#{System.unique_integer([:positive])}"
+      name_off = "disabled-test-#{System.unique_integer([:positive])}"
+
+      HeartbeatConfig.create(%{name: name_on, schedule: "0 9 * * *", prompt: "T", enabled: true})
+
+      HeartbeatConfig.create(%{
+        name: name_off,
+        schedule: "0 10 * * *",
+        prompt: "T",
+        enabled: false
+      })
+
+      enabled = HeartbeatConfig.list_enabled()
+      enabled_names = Enum.map(enabled, & &1.name)
+      assert name_on in enabled_names
+      refute name_off in enabled_names
+    end
+  end
+
+  describe "delete_config/1" do
+    test "removes config from database" do
+      name = "delete-test-#{System.unique_integer([:positive])}"
+      {:ok, config} = HeartbeatConfig.create(%{@valid_attrs | name: name})
+      assert {:ok, _} = HeartbeatConfig.delete_config(config)
+      assert HeartbeatConfig.get(config.id) == nil
     end
   end
 end
