@@ -28,7 +28,7 @@ defmodule SynapsisServer.DebugStoreTest do
       assert length(entries) == 1
       [entry] = entries
       assert entry.request_id == "req-1"
-      assert entry.method == :post
+      assert entry.method == "post"
       assert entry.status == nil
     end
 
@@ -84,7 +84,7 @@ defmodule SynapsisServer.DebugStoreTest do
 
       [entry] = DebugStore.list_entries("sess-3")
       assert entry.request_id == "req-3"
-      assert entry.method == :post
+      assert entry.method == "post"
       assert entry.status == 200
       assert entry.complete == true
       assert entry.duration_ms == 3400
@@ -133,10 +133,10 @@ defmodule SynapsisServer.DebugStoreTest do
       })
 
       [entry] = DebugStore.list_entries("sess-merge")
-      # Request fields preserved
-      assert entry.method == :post
+      # Request fields preserved (atoms serialized to strings for JSON safety)
+      assert entry.method == "post"
       assert entry.url == "https://api.example.com/v1/messages"
-      assert entry.provider == :anthropic
+      assert entry.provider == "anthropic"
       # Response fields merged
       assert entry.status == 200
       assert entry.duration_ms == 500

@@ -30,7 +30,7 @@ defmodule SynapsisServer.DebugStore do
   @spec put_request(String.t(), map()) :: true
   def put_request(session_id, sanitized_request) do
     entry =
-      Map.merge(sanitized_request, %{
+      Map.merge(sanitize_for_json(sanitized_request), %{
         request_timestamp: sanitized_request.timestamp,
         status: nil,
         response_headers: nil,
@@ -52,15 +52,17 @@ defmodule SynapsisServer.DebugStore do
 
     case :ets.lookup(@table, key) do
       [{^key, existing}] ->
+        safe = sanitize_for_json(sanitized_response)
+
         merged =
           Map.merge(existing, %{
-            status: sanitized_response.status,
-            response_headers: sanitized_response.headers,
-            response_body: sanitized_response.body,
-            complete: sanitized_response.complete,
-            error: sanitized_response.error,
-            duration_ms: sanitized_response.duration_ms,
-            response_timestamp: sanitized_response.timestamp
+            status: safe.status,
+            response_headers: safe[:headers],
+            response_body: safe[:body],
+            complete: safe.complete,
+            error: safe[:error],
+            duration_ms: safe.duration_ms,
+            response_timestamp: safe[:timestamp]
           })
 
         :ets.insert(@table, {key, merged})
@@ -82,6 +84,28 @@ defmodule SynapsisServer.DebugStore do
   def clear_entries(session_id) do
     match_spec = [{{{session_id, :_}, :_}, [], [true]}]
     :ets.select_delete(@table, match_spec)
+  end
+
+  # Convert all values to JSON-safe types (tuples → maps, atoms → strings, DateTimes → ISO8601)
+  defp sanitize_for_json(map) when is_map(map) do
+    Map.new(map, fn
+      {k, %DateTime{} = v} -> {k, DateTime.to_iso8601(v)}
+      {k, v} when is_boolean(v) -> {k, v}
+      {k, nil} -> {k, nil}
+      {k, v} when is_atom(v) -> {k, to_string(v)}
+      {k, v} when is_list(v) -> {k, sanitize_list(v)}
+      {k, v} -> {k, v}
+    end)
+  end
+
+  defp sanitize_list(list) do
+    Enum.map(list, fn
+      {key, value} when is_binary(key) and is_binary(value) ->
+        %{"name" => key, "value" => value}
+
+      other ->
+        other
+    end)
   end
 
   defp maybe_evict(session_id) do
