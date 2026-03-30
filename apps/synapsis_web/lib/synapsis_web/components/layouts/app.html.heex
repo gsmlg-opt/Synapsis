@@ -1,7 +1,7 @@
 <div class="flex flex-col h-screen">
-  <.dm_simple_appbar title="" class="shrink-0 bg-base-200 border-b border-base-300">
+  <.dm_appbar title="Synapsis" title_to={~p"/"} class="shrink-0 bg-base-200 border-b border-base-300">
     <:logo>
-      <.dm_link navigate={~p"/"} class="text-lg font-bold">Synapsis</.dm_link>
+      <.dm_mdi name="brain" class="w-6 h-6" />
     </:logo>
     <:menu to={~p"/assistant"}>
       <.dm_mdi name="robot" class="w-4 h-4 inline mr-1" /> Assistant
@@ -29,7 +29,7 @@
         </.dm_link>
       </div>
     </:user_profile>
-  </.dm_simple_appbar>
+  </.dm_appbar>
   <div class="fixed top-4 right-4 z-[1000]">
     <.dm_flash_group flash={@flash} />
   </div>
