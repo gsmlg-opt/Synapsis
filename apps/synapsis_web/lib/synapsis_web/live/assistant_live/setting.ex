@@ -64,7 +64,10 @@ defmodule SynapsisWeb.AssistantLive.Setting do
        selected_provider: current_provider,
        selected_model: current_model,
        fallbacks: fallbacks,
-       overview_dirty: false
+       overview_dirty: false,
+       show_heartbeat_form: false,
+       editing_heartbeat_id: nil,
+       heartbeat_form: %{}
      )}
   end
 
@@ -234,6 +237,142 @@ defmodule SynapsisWeb.AssistantLive.Setting do
      )}
   end
 
+  # --- Heartbeat Events ---
+
+  def handle_event("show_new_heartbeat", _params, socket) do
+    {:noreply,
+     assign(socket,
+       show_heartbeat_form: true,
+       editing_heartbeat_id: nil,
+       heartbeat_form: %{}
+     )}
+  end
+
+  def handle_event("cancel_heartbeat_form", _params, socket) do
+    {:noreply,
+     assign(socket,
+       show_heartbeat_form: false,
+       editing_heartbeat_id: nil,
+       heartbeat_form: %{}
+     )}
+  end
+
+  def handle_event("edit_heartbeat", %{"id" => id}, socket) do
+    case Synapsis.HeartbeatConfig.get(id) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Heartbeat not found")}
+
+      hb ->
+        form = %{
+          name: hb.name,
+          schedule: hb.schedule,
+          prompt: hb.prompt,
+          agent_type: to_string(hb.agent_type),
+          session_isolation: to_string(hb.session_isolation),
+          notify_user: to_string(hb.notify_user),
+          keep_history: to_string(hb.keep_history)
+        }
+
+        {:noreply,
+         assign(socket,
+           show_heartbeat_form: true,
+           editing_heartbeat_id: id,
+           heartbeat_form: form
+         )}
+    end
+  end
+
+  def handle_event("save_heartbeat", params, socket) do
+    attrs = %{
+      name: params["name"],
+      schedule: params["schedule"],
+      prompt: params["prompt"],
+      agent_type: String.to_existing_atom(params["agent_type"] || "global"),
+      session_isolation: String.to_existing_atom(params["session_isolation"] || "isolated"),
+      notify_user: params["notify_user"] == "true",
+      keep_history: params["keep_history"] == "true"
+    }
+
+    result =
+      case params["heartbeat_id"] do
+        "" ->
+          Synapsis.HeartbeatConfig.create(attrs)
+
+        id when is_binary(id) ->
+          case Synapsis.HeartbeatConfig.get(id) do
+            nil -> {:error, :not_found}
+            hb -> Synapsis.HeartbeatConfig.update_config(hb, attrs)
+          end
+      end
+
+    case result do
+      {:ok, config} ->
+        if config.enabled do
+          Synapsis.Agent.Heartbeat.Scheduler.schedule_heartbeat(config)
+        end
+
+        {:noreply,
+         socket
+         |> assign(show_heartbeat_form: false, editing_heartbeat_id: nil, heartbeat_form: %{})
+         |> put_flash(:info, "Heartbeat saved")}
+
+      {:error, %Ecto.Changeset{} = cs} ->
+        msg =
+          Ecto.Changeset.traverse_errors(cs, fn {msg, _opts} -> msg end)
+          |> Enum.map(fn {k, v} -> "#{k}: #{Enum.join(v, ", ")}" end)
+          |> Enum.join("; ")
+
+        {:noreply, put_flash(socket, :error, "Validation error: #{msg}")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Failed: #{inspect(reason)}")}
+    end
+  end
+
+  def handle_event("toggle_heartbeat", %{"id" => id}, socket) do
+    case Synapsis.HeartbeatConfig.get(id) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Heartbeat not found")}
+
+      hb ->
+        case Synapsis.HeartbeatConfig.toggle_enabled(hb) do
+          {:ok, updated} ->
+            if updated.enabled do
+              Synapsis.Agent.Heartbeat.Scheduler.schedule_heartbeat(updated)
+            end
+
+            Synapsis.Agent.Heartbeat.Scheduler.sync_crontab()
+
+            {:noreply,
+             put_flash(
+               socket,
+               :info,
+               "Heartbeat #{if updated.enabled, do: "enabled", else: "disabled"}"
+             )}
+
+          {:error, reason} ->
+            {:noreply, put_flash(socket, :error, "Toggle failed: #{inspect(reason)}")}
+        end
+    end
+  end
+
+  def handle_event("delete_heartbeat", %{"id" => id}, socket) do
+    case Synapsis.HeartbeatConfig.get(id) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Heartbeat not found")}
+
+      hb ->
+        case Synapsis.HeartbeatConfig.delete_config(hb) do
+          {:ok, _} ->
+            Synapsis.Agent.Heartbeat.Scheduler.sync_crontab()
+            {:noreply, put_flash(socket, :info, "Heartbeat deleted")}
+
+          {:error, reason} ->
+            {:noreply, put_flash(socket, :error, "Delete failed: #{inspect(reason)}")}
+        end
+    end
+  end
+
   def handle_event("reload_tools", _params, socket) do
     tools_by_category = load_tools_by_category()
     agent_config = Synapsis.Agent.Resolver.resolve(socket.assigns.assistant_name)
@@ -324,7 +463,13 @@ defmodule SynapsisWeb.AssistantLive.Setting do
         tool_profile={@tool_profile}
       />
       <.tab_skills :if={@active_tab == "skills"} assistant_name={@assistant_name} />
-      <.tab_cron_jobs :if={@active_tab == "cron_jobs"} assistant_name={@assistant_name} />
+      <.tab_cron_jobs
+        :if={@active_tab == "cron_jobs"}
+        assistant_name={@assistant_name}
+        show_heartbeat_form={@show_heartbeat_form}
+        editing_heartbeat_id={@editing_heartbeat_id}
+        heartbeat_form={@heartbeat_form}
+      />
     </div>
     """
   end
@@ -708,15 +853,217 @@ defmodule SynapsisWeb.AssistantLive.Setting do
   # --- Cron Jobs Tab ---
 
   defp tab_cron_jobs(assigns) do
+    heartbeats = Synapsis.HeartbeatConfig.list_all()
+    assigns = assign(assigns, :heartbeats, heartbeats)
+
     ~H"""
     <.dm_card variant="bordered">
-      <:title>Cron Jobs</:title>
+      <:title>
+        <div class="flex items-center justify-between w-full">
+          <div>
+            <div>Heartbeat Schedules</div>
+            <p class="text-xs text-base-content/50 font-normal mt-0.5">
+              Proactive agent invocations on cron schedules.
+            </p>
+          </div>
+          <.dm_btn variant="primary" size="sm" phx-click="show_new_heartbeat">
+            <.dm_mdi name="plus" class="w-4 h-4" /> New Heartbeat
+          </.dm_btn>
+        </div>
+      </:title>
+
+      <%!-- New heartbeat form --%>
+      <div :if={@show_heartbeat_form} class="border border-primary/30 rounded-lg p-4 mb-4 bg-base-200">
+        <h4 class="text-sm font-medium mb-3">
+          {if @editing_heartbeat_id, do: "Edit Heartbeat", else: "New Heartbeat"}
+        </h4>
+        <form phx-submit="save_heartbeat" class="space-y-3">
+          <input type="hidden" name="heartbeat_id" value={@editing_heartbeat_id || ""} />
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs text-base-content/50 mb-1 block">Name</label>
+              <input
+                type="text"
+                name="name"
+                value={@heartbeat_form[:name] || ""}
+                placeholder="my-custom-check"
+                required
+                class="w-full bg-base-100 border border-base-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
+              />
+            </div>
+            <div>
+              <label class="text-xs text-base-content/50 mb-1 block">
+                Cron Schedule
+                <span class="text-base-content/30">(5-field: min hour dom mon dow)</span>
+              </label>
+              <input
+                type="text"
+                name="schedule"
+                value={@heartbeat_form[:schedule] || ""}
+                placeholder="0 9 * * 1-5"
+                required
+                class="w-full bg-base-100 border border-base-300 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:border-primary/50"
+              />
+            </div>
+          </div>
+          <div>
+            <label class="text-xs text-base-content/50 mb-1 block">Prompt</label>
+            <textarea
+              name="prompt"
+              rows="3"
+              required
+              placeholder="Describe what this heartbeat should do..."
+              class="w-full bg-base-100 border border-base-300 rounded px-3 py-2 text-sm resize-y focus:outline-none focus:border-primary/50"
+            >{@heartbeat_form[:prompt] || ""}</textarea>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div>
+              <label class="text-xs text-base-content/50 mb-1 block">Agent Type</label>
+              <select
+                name="agent_type"
+                class="w-full bg-base-100 border border-base-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
+              >
+                <option
+                  value="global"
+                  selected={(@heartbeat_form[:agent_type] || "global") == "global"}
+                >
+                  Global
+                </option>
+                <option
+                  value="project"
+                  selected={(@heartbeat_form[:agent_type] || "global") == "project"}
+                >
+                  Project
+                </option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-base-content/50 mb-1 block">Isolation</label>
+              <select
+                name="session_isolation"
+                class="w-full bg-base-100 border border-base-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
+              >
+                <option
+                  value="isolated"
+                  selected={(@heartbeat_form[:session_isolation] || "isolated") == "isolated"}
+                >
+                  Isolated
+                </option>
+                <option
+                  value="main"
+                  selected={(@heartbeat_form[:session_isolation] || "isolated") == "main"}
+                >
+                  Main
+                </option>
+              </select>
+            </div>
+            <div class="flex items-end gap-4">
+              <label class="flex items-center gap-2 text-xs cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="notify_user"
+                  value="true"
+                  checked={@heartbeat_form[:notify_user] != "false"}
+                  class="accent-primary"
+                /> Notify
+              </label>
+              <label class="flex items-center gap-2 text-xs cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="keep_history"
+                  value="true"
+                  checked={@heartbeat_form[:keep_history] == "true"}
+                  class="accent-primary"
+                /> History
+              </label>
+            </div>
+          </div>
+          <div class="flex gap-2 pt-1">
+            <.dm_btn variant="primary" size="sm" type="submit">
+              {if @editing_heartbeat_id, do: "Update", else: "Create"}
+            </.dm_btn>
+            <.dm_btn variant="ghost" size="sm" type="button" phx-click="cancel_heartbeat_form">
+              Cancel
+            </.dm_btn>
+          </div>
+        </form>
+      </div>
+
+      <%!-- Heartbeat list --%>
+      <div :if={@heartbeats != []} class="space-y-2">
+        <.heartbeat_row :for={hb <- @heartbeats} heartbeat={hb} />
+      </div>
       <.empty_state
+        :if={@heartbeats == []}
         icon="clock-outline"
-        title="No Cron Jobs"
-        description="Heartbeat schedules and recurring tasks will appear here."
+        title="No Heartbeats"
+        description="Create a heartbeat to schedule proactive agent invocations."
       />
     </.dm_card>
+    """
+  end
+
+  defp heartbeat_row(assigns) do
+    next_run =
+      case Synapsis.Agent.Heartbeat.Scheduler.next_run_time(assigns.heartbeat.schedule) do
+        {:ok, dt} -> Calendar.strftime(dt, "%b %d %H:%M UTC")
+        _ -> "-"
+      end
+
+    assigns = assign(assigns, :next_run, next_run)
+
+    ~H"""
+    <div class="flex items-center gap-3 p-3 rounded-lg border border-base-300 hover:border-base-content/20 transition-colors">
+      <button
+        phx-click="toggle_heartbeat"
+        phx-value-id={@heartbeat.id}
+        class="shrink-0"
+        aria-label={"Toggle #{@heartbeat.name}"}
+      >
+        <div class={[
+          "w-9 h-5 rounded-full relative transition-colors",
+          if(@heartbeat.enabled, do: "bg-success", else: "bg-base-content/20")
+        ]}>
+          <div class={[
+            "absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all",
+            if(@heartbeat.enabled, do: "left-[18px]", else: "left-0.5")
+          ]} />
+        </div>
+      </button>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+          <span class="font-medium text-sm">{@heartbeat.name}</span>
+          <span class="font-mono text-xs px-1.5 py-0.5 rounded bg-base-300 text-base-content/50">
+            {@heartbeat.schedule}
+          </span>
+          <.dm_badge
+            :if={@heartbeat.enabled}
+            variant="success"
+            size="sm"
+          >
+            active
+          </.dm_badge>
+        </div>
+        <div class="text-xs text-base-content/40 truncate mt-0.5">{@heartbeat.prompt}</div>
+        <div :if={@heartbeat.enabled} class="text-xs text-base-content/30 mt-0.5">
+          Next run: {@next_run}
+        </div>
+      </div>
+      <div class="flex items-center gap-1 shrink-0">
+        <.dm_btn variant="ghost" size="xs" phx-click="edit_heartbeat" phx-value-id={@heartbeat.id}>
+          <.dm_mdi name="pencil-outline" class="w-3.5 h-3.5" />
+        </.dm_btn>
+        <.dm_btn
+          variant="ghost"
+          size="xs"
+          phx-click="delete_heartbeat"
+          phx-value-id={@heartbeat.id}
+          data-confirm="Delete this heartbeat?"
+        >
+          <.dm_mdi name="delete-outline" class="w-3.5 h-3.5" />
+        </.dm_btn>
+      </div>
+    </div>
     """
   end
 

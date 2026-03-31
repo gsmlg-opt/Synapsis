@@ -9,6 +9,10 @@ defmodule SynapsisWeb.AssistantLive.Show do
     agent_config = Synapsis.Agent.Resolver.resolve(name)
     provider_configured? = not is_nil(agent_config.provider)
 
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "heartbeat:notifications")
+    end
+
     {:ok,
      assign(socket,
        page_title: "#{String.capitalize(name)} Assistant",
@@ -22,6 +26,7 @@ defmodule SynapsisWeb.AssistantLive.Show do
        streaming_reasoning: "",
        tool_calls: %{},
        permission_requests: [],
+       heartbeat_notifications: [],
        session_status: "idle",
        show_new_session: false,
        show_sidebar: true,
@@ -184,6 +189,15 @@ defmodule SynapsisWeb.AssistantLive.Show do
     {:noreply, assign(socket, :permission_requests, requests)}
   end
 
+  def handle_event("dismiss_heartbeat", %{"id" => id_str}, socket) do
+    id = String.to_integer(id_str)
+
+    {:noreply,
+     update(socket, :heartbeat_notifications, fn notifs ->
+       Enum.reject(notifs, &(&1.id == id))
+     end)}
+  end
+
   def handle_event("switch_mode", %{"mode" => mode}, socket) do
     if session = socket.assigns.current_session do
       Sessions.switch_mode(session.id, mode)
@@ -293,6 +307,24 @@ defmodule SynapsisWeb.AssistantLive.Show do
   end
 
   def handle_info({"auditing", _payload}, socket), do: {:noreply, socket}
+
+  def handle_info(
+        {:heartbeat_completed, _config_id, %{name: name, executed_at: ts, result: result}},
+        socket
+      ) do
+    notification = %{
+      name: name,
+      timestamp: ts,
+      result: result,
+      id: System.unique_integer([:positive])
+    }
+
+    {:noreply,
+     update(socket, :heartbeat_notifications, fn notifs ->
+       [notification | notifs] |> Enum.take(10)
+     end)}
+  end
+
   def handle_info(_msg, socket), do: {:noreply, socket}
 
   # --- Render ---
@@ -438,6 +470,22 @@ defmodule SynapsisWeb.AssistantLive.Show do
             </div>
 
             <.permission_card :for={req <- @permission_requests} {req} />
+
+            <%!-- Heartbeat notification cards --%>
+            <div :for={notif <- @heartbeat_notifications} class="relative">
+              <.heartbeat_card name={notif.name} timestamp={notif.timestamp}>
+                <p class="whitespace-pre-wrap leading-relaxed text-sm">
+                  {String.slice(notif.result || "", 0, 500)}
+                </p>
+              </.heartbeat_card>
+              <button
+                phx-click="dismiss_heartbeat"
+                phx-value-id={notif.id}
+                class="absolute top-1 right-1 text-base-content/30 hover:text-base-content/60"
+              >
+                <.dm_mdi name="close" class="w-3.5 h-3.5" />
+              </button>
+            </div>
 
             <.chat_bubble
               :if={@streaming_text != "" || @session_status == "streaming"}

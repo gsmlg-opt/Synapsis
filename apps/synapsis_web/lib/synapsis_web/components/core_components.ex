@@ -62,9 +62,9 @@ defmodule SynapsisWeb.CoreComponents do
   end
 
   @doc """
-  Chat message bubble — right-aligned for user, left-aligned for assistant.
+  Chat message bubble — right-aligned for user, left-aligned for assistant/system.
   """
-  attr :role, :string, required: true, values: ~w(user assistant)
+  attr :role, :string, required: true, values: ~w(user assistant system)
   attr :class, :string, default: nil
 
   slot :inner_block, required: true
@@ -85,6 +85,77 @@ defmodule SynapsisWeb.CoreComponents do
       ]}>
         {render_slot(@inner_block)}
       </div>
+    </div>
+    """
+  end
+
+  @doc """
+  Compaction marker — visual indicator that messages were compacted/summarized.
+  Shows a collapsible summary of the compacted content.
+  """
+  attr :count, :integer, required: true
+  attr :summary, :string, required: true
+  attr :class, :string, default: nil
+
+  def compaction_marker(assigns) do
+    ~H"""
+    <div class={["flex justify-center my-3", @class]}>
+      <details class="group w-full max-w-[90%]">
+        <summary class="flex items-center gap-2 cursor-pointer text-xs text-base-content/50 hover:text-base-content/70 py-2">
+          <div class="flex-1 border-t border-base-300" />
+          <.dm_mdi name="archive-outline" class="w-4 h-4 shrink-0" />
+          <span class="shrink-0">{@count} messages compacted</span>
+          <.dm_mdi
+            name="chevron-down"
+            class="w-3.5 h-3.5 transition-transform group-open:rotate-180 shrink-0"
+          />
+          <div class="flex-1 border-t border-base-300" />
+        </summary>
+        <div class="mt-2 mx-4 p-3 rounded-lg bg-base-200 text-xs text-base-content/60 max-h-48 overflow-y-auto whitespace-pre-wrap">
+          {@summary}
+        </div>
+      </details>
+    </div>
+    """
+  end
+
+  @doc """
+  Heartbeat notification card — displayed when a heartbeat runs and produces results.
+  """
+  attr :name, :string, required: true
+  attr :timestamp, :string, default: nil
+  attr :class, :string, default: nil
+
+  slot :inner_block, required: true
+
+  def heartbeat_card(assigns) do
+    ~H"""
+    <div class={["flex justify-start", @class]}>
+      <div class="rounded-lg px-3 py-2 max-w-[80%] text-sm bg-secondary/10 border border-secondary/20">
+        <div class="flex items-center gap-2 mb-1 text-xs text-secondary">
+          <.dm_mdi name="heart-pulse" class="w-3.5 h-3.5" />
+          <span class="font-medium">{@name}</span>
+          <span :if={@timestamp} class="text-base-content/40">{@timestamp}</span>
+        </div>
+        <div class="text-base-content whitespace-pre-wrap">
+          {render_slot(@inner_block)}
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
+  Memory indicator — shows when context was recalled from a previous session or workspace.
+  """
+  attr :source, :string, default: "previous session"
+  attr :class, :string, default: nil
+
+  def memory_indicator(assigns) do
+    ~H"""
+    <div class={["flex items-center gap-1.5 text-xs text-info/70 py-1", @class]}>
+      <.dm_mdi name="brain" class="w-3.5 h-3.5" />
+      <span class="italic">Recalled from {@source}</span>
     </div>
     """
   end
@@ -363,9 +434,20 @@ defmodule SynapsisWeb.CoreComponents do
     <div :for={part <- @message.parts || []} class={@class}>
       <%= case part do %>
         <% %Synapsis.Part.Text{content: content} -> %>
-          <.chat_bubble role={@message.role}>
-            <p class="whitespace-pre-wrap leading-relaxed">{content}</p>
-          </.chat_bubble>
+          <%= cond do %>
+            <% @message.role == "system" and compaction_summary?(content) -> %>
+              <% {count, summary} = parse_compaction(content) %>
+              <.compaction_marker count={count} summary={summary} />
+            <% @message.role == "system" and memory_recall?(content) -> %>
+              <.memory_indicator source={detect_memory_source(content)} />
+              <.chat_bubble role="system">
+                <p class="whitespace-pre-wrap leading-relaxed">{content}</p>
+              </.chat_bubble>
+            <% true -> %>
+              <.chat_bubble role={@message.role}>
+                <p class="whitespace-pre-wrap leading-relaxed">{content}</p>
+              </.chat_bubble>
+          <% end %>
         <% %Synapsis.Part.Reasoning{content: content} -> %>
           <.reasoning_block content={content} />
         <% %Synapsis.Part.ToolUse{tool: tool, tool_use_id: _id, input: input, status: status} -> %>
@@ -394,6 +476,46 @@ defmodule SynapsisWeb.CoreComponents do
       <% end %>
     </div>
     """
+  end
+
+  defp compaction_summary?(content) when is_binary(content) do
+    String.starts_with?(String.trim(content), "[Context Summary -")
+  end
+
+  defp compaction_summary?(_), do: false
+
+  defp parse_compaction(content) do
+    case Regex.run(
+           ~r/\[Context Summary - (\d+) messages compacted\]\n(.*)\n\[End Summary\]/s,
+           content
+         ) do
+      [_, count_str, summary] -> {String.to_integer(count_str), String.trim(summary)}
+      _ -> {0, content}
+    end
+  end
+
+  defp memory_recall?(content) when is_binary(content) do
+    String.contains?(content, "[Memory:") or
+      String.contains?(content, "[Workspace Context]") or
+      String.contains?(content, "[Recalled from")
+  end
+
+  defp memory_recall?(_), do: false
+
+  defp detect_memory_source(content) do
+    cond do
+      String.contains?(content, "[Workspace Context]") ->
+        "workspace"
+
+      String.contains?(content, "[Recalled from") ->
+        case Regex.run(~r/\[Recalled from (.+?)\]/, content) do
+          [_, source] -> source
+          _ -> "previous session"
+        end
+
+      true ->
+        "memory"
+    end
   end
 
   @doc """
