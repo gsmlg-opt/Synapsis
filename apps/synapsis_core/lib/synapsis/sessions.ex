@@ -193,11 +193,22 @@ defmodule Synapsis.Sessions do
     Synapsis.Session.Worker.deny_tool(session_id, tool_use_id)
   end
 
-  def get_messages(session_id) do
-    Message
-    |> where([m], m.session_id == ^session_id)
-    |> order_by([m], asc: m.inserted_at)
-    |> Repo.all()
+  def get_messages(session_id, opts \\ []) do
+    limit = Keyword.get(opts, :limit)
+
+    query =
+      Message
+      |> where([m], m.session_id == ^session_id)
+      |> order_by([m], asc: m.inserted_at)
+
+    query =
+      if limit do
+        query |> limit(^limit)
+      else
+        query
+      end
+
+    Repo.all(query)
   end
 
   def fork(session_id, opts \\ []) do

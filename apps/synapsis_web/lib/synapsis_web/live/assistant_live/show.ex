@@ -315,7 +315,7 @@ defmodule SynapsisWeb.AssistantLive.Show do
   def handle_info({:session_compacted, _session_id, _metadata}, socket) do
     messages =
       if session = socket.assigns.current_session do
-        Sessions.get_messages(session.id)
+        Sessions.get_messages(session.id, limit: 200)
       else
         []
       end
