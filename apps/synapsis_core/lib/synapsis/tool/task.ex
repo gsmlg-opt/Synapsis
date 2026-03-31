@@ -76,7 +76,7 @@ defmodule Synapsis.Tool.Task do
 
         case mode do
           "foreground" ->
-            execute_foreground(project_id, prompt, spawn_opts)
+            execute_foreground(project_id, prompt, spawn_opts, session_id)
 
           "background" ->
             execute_background(project_id, prompt, spawn_opts)
@@ -87,7 +87,7 @@ defmodule Synapsis.Tool.Task do
     end
   end
 
-  defp execute_foreground(project_id, prompt, opts) do
+  defp execute_foreground(project_id, prompt, opts, parent_session_id) do
     ref = opts.notify_ref
 
     case Synapsis.Agent.SessionBridge.spawn_coding_session(project_id, prompt, opts) do
@@ -97,23 +97,65 @@ defmodule Synapsis.Tool.Task do
           ref: ref
         )
 
-        receive do
-          {:coding_session_completed, ^ref, ^sub_session_id} ->
-            result = collect_session_result(sub_session_id)
-            {:ok, result}
+        Phoenix.PubSub.broadcast(
+          Synapsis.PubSub,
+          "session:#{parent_session_id}",
+          {"code_agent_spawned", %{sub_session_id: sub_session_id, prompt: prompt, ref: ref}}
+        )
 
-          {:coding_session_failed, ^ref, ^sub_session_id} ->
-            {:error, "Sub-agent task failed for session #{sub_session_id}"}
+        relay_pid = start_event_relay(sub_session_id, parent_session_id)
 
-          {:coding_session_timeout, ^ref, ^sub_session_id} ->
-            {:error, "Sub-agent task timed out for session #{sub_session_id}"}
-        after
-          @foreground_timeout ->
-            {:error, "Sub-agent task timed out after #{div(@foreground_timeout, 60_000)} minutes"}
-        end
+        result =
+          receive do
+            {:coding_session_completed, ^ref, ^sub_session_id} ->
+              result = collect_session_result(sub_session_id)
+              {:ok, result}
 
-      {:error, reason} ->
-        {:error, "Failed to spawn sub-agent: #{inspect(reason)}"}
+            {:coding_session_failed, ^ref, ^sub_session_id} ->
+              {:error, "Sub-agent task failed for session #{sub_session_id}"}
+
+            {:coding_session_timeout, ^ref, ^sub_session_id} ->
+              {:error, "Sub-agent task timed out for session #{sub_session_id}"}
+          after
+            @foreground_timeout ->
+              {:error,
+               "Sub-agent task timed out after #{div(@foreground_timeout, 60_000)} minutes"}
+          end
+
+        Process.exit(relay_pid, :kill)
+        result
+
+      {:error, _reason} ->
+        {:error, "Failed to spawn sub-agent"}
+    end
+  end
+
+  # Relay sub-session PubSub events to the parent session topic tagged with sub_session_id.
+  # This lets the parent LiveView track Code Agent activity without subscribing directly.
+  defp start_event_relay(sub_session_id, parent_session_id) do
+    spawn(fn ->
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{sub_session_id}")
+      relay_events(sub_session_id, parent_session_id)
+    end)
+  end
+
+  @relayed_events ~w[text_delta tool_use tool_result reasoning done]
+
+  defp relay_events(sub_session_id, parent_session_id) do
+    receive do
+      {event, payload} when event in @relayed_events ->
+        Phoenix.PubSub.broadcast(
+          Synapsis.PubSub,
+          "session:#{parent_session_id}",
+          {"code_agent_event", %{sub_session_id: sub_session_id, event: event, payload: payload}}
+        )
+
+        if event != "done", do: relay_events(sub_session_id, parent_session_id)
+
+      _ ->
+        relay_events(sub_session_id, parent_session_id)
+    after
+      @foreground_timeout -> :ok
     end
   end
 
@@ -154,8 +196,8 @@ defmodule Synapsis.Tool.Task do
               )
           end
 
-        {:error, reason} ->
-          send(caller, {:background_task_done, ref, {:error, inspect(reason)}})
+        {:error, _reason} ->
+          send(caller, {:background_task_done, ref, {:error, "Failed to spawn sub-agent"}})
       end
     end)
 
@@ -191,7 +233,7 @@ defmodule Synapsis.Tool.Task do
       %Synapsis.Part.Text{} -> true
       _ -> false
     end)
-    |> Enum.map(& &1.text)
+    |> Enum.map(& &1.content)
     |> Enum.join("\n")
     |> case do
       "" -> "Sub-agent completed with no text output."

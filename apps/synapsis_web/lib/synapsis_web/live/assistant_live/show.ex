@@ -1,6 +1,7 @@
 defmodule SynapsisWeb.AssistantLive.Show do
   @moduledoc "Chat interface for a named assistant with session sidebar and PubSub streaming."
   use SynapsisWeb, :live_view
+  require Logger
 
   alias Synapsis.Sessions
 
@@ -27,6 +28,7 @@ defmodule SynapsisWeb.AssistantLive.Show do
        tool_calls: %{},
        permission_requests: [],
        heartbeat_notifications: [],
+       code_agent_sessions: %{},
        session_status: "idle",
        show_new_session: false,
        show_sidebar: true,
@@ -59,6 +61,7 @@ defmodule SynapsisWeb.AssistantLive.Show do
            streaming_reasoning: "",
            tool_calls: %{},
            permission_requests: [],
+           code_agent_sessions: %{},
            session_status: session.status || "idle",
            current_mode: session.agent || name
          )}
@@ -95,14 +98,21 @@ defmodule SynapsisWeb.AssistantLive.Show do
   # --- Events ---
 
   @impl true
+  @max_content_bytes 256_000
+
   def handle_event("send_message", %{"content" => content}, socket) do
     content = String.trim(content)
 
-    if content == "" or is_nil(socket.assigns.current_session) do
-      {:noreply, socket}
-    else
-      Sessions.send_message(socket.assigns.current_session.id, content)
-      {:noreply, socket}
+    cond do
+      content == "" or is_nil(socket.assigns.current_session) ->
+        {:noreply, socket}
+
+      byte_size(content) > @max_content_bytes ->
+        {:noreply, put_flash(socket, :error, "Message too large")}
+
+      true ->
+        Sessions.send_message(socket.assigns.current_session.id, content)
+        {:noreply, socket}
     end
   end
 
@@ -131,7 +141,8 @@ defmodule SynapsisWeb.AssistantLive.Show do
          |> push_patch(to: ~p"/assistant/#{name}/sessions/#{session.id}")}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Failed to create session: #{inspect(reason)}")}
+        Logger.warning("session_create_failed", reason: inspect(reason))
+        {:noreply, put_flash(socket, :error, "Failed to create session")}
     end
   end
 
@@ -344,6 +355,21 @@ defmodule SynapsisWeb.AssistantLive.Show do
      end)}
   end
 
+  def handle_info(
+        {"code_agent_spawned", %{sub_session_id: sub_id, prompt: prompt}},
+        socket
+      ) do
+    entry = %{prompt: prompt, status: "running", tool_calls: [], completion: nil}
+    {:noreply, update(socket, :code_agent_sessions, &Map.put(&1, sub_id, entry))}
+  end
+
+  def handle_info(
+        {"code_agent_event", %{sub_session_id: sub_id, event: event, payload: payload}},
+        socket
+      ) do
+    {:noreply, update_code_agent(socket, sub_id, event, payload)}
+  end
+
   def handle_info(_msg, socket), do: {:noreply, socket}
 
   # --- Render ---
@@ -513,6 +539,15 @@ defmodule SynapsisWeb.AssistantLive.Show do
               </button>
             </div>
 
+            <%!-- Embedded Code Agent panels --%>
+            <.code_agent_panel
+              :for={{_sub_id, agent} <- @code_agent_sessions}
+              prompt={agent.prompt}
+              status={agent.status}
+              tool_calls={agent.tool_calls}
+              completion={agent.completion}
+            />
+
             <.chat_bubble
               :if={@streaming_text != "" || @session_status == "streaming"}
               role="assistant"
@@ -593,4 +628,40 @@ defmodule SynapsisWeb.AssistantLive.Show do
     Sessions.recent(limit: 50)
     |> Enum.filter(&(&1.agent == agent_name))
   end
+
+  defp update_code_agent(socket, sub_id, "tool_use", %{tool: name}) do
+    update(socket, :code_agent_sessions, fn sessions ->
+      Map.update(sessions, sub_id, %{}, fn entry ->
+        tc = %{name: name, status: "running"}
+        %{entry | tool_calls: entry.tool_calls ++ [tc]}
+      end)
+    end)
+  end
+
+  defp update_code_agent(socket, sub_id, "tool_result", %{tool_use_id: _id} = payload) do
+    status = if payload[:is_error], do: "error", else: "complete"
+
+    update(socket, :code_agent_sessions, fn sessions ->
+      Map.update(sessions, sub_id, %{}, fn entry ->
+        # Mark last tool_call as complete
+        calls =
+          case Enum.reverse(entry.tool_calls) do
+            [last | rest] -> Enum.reverse([%{last | status: status} | rest])
+            [] -> []
+          end
+
+        %{entry | tool_calls: calls}
+      end)
+    end)
+  end
+
+  defp update_code_agent(socket, sub_id, "done", _payload) do
+    update(socket, :code_agent_sessions, fn sessions ->
+      Map.update(sessions, sub_id, %{}, fn entry ->
+        %{entry | status: "complete"}
+      end)
+    end)
+  end
+
+  defp update_code_agent(socket, _sub_id, _event, _payload), do: socket
 end

@@ -152,6 +152,52 @@ defmodule SynapsisWeb.CoreComponents do
   end
 
   @doc """
+  Embedded Code Agent panel — shown inline in chat when the Assistant spawns a sub-agent.
+  Displays task description, live tool calls, and completion summary.
+  """
+  attr :prompt, :string, required: true
+  attr :status, :string, default: "running", values: ~w(running complete error)
+  attr :tool_calls, :list, default: []
+  attr :completion, :string, default: nil
+  attr :class, :string, default: nil
+
+  def code_agent_panel(assigns) do
+    ~H"""
+    <div class={["border border-primary/20 rounded-lg overflow-hidden text-sm", @class]}>
+      <div class="bg-base-200 px-3 py-2 flex items-center gap-2">
+        <.dm_mdi name="robot-outline" class="w-4 h-4 text-primary shrink-0" />
+        <span class="font-medium text-xs text-primary">Code Agent</span>
+        <span class="flex-1" />
+        <span :if={@status == "running"} class="text-xs text-base-content/40 animate-pulse">
+          Running…
+        </span>
+        <.dm_badge :if={@status == "complete"} variant="success" size="sm">done</.dm_badge>
+        <.dm_badge :if={@status == "error"} variant="error" size="sm">failed</.dm_badge>
+      </div>
+      <div class="p-3 space-y-2">
+        <p class="text-xs text-base-content/60 italic truncate" title={@prompt}>{@prompt}</p>
+        <details :if={@tool_calls != []}>
+          <summary class="text-xs cursor-pointer text-base-content/40 hover:text-base-content/70 select-none">
+            {length(@tool_calls)} tool call{if length(@tool_calls) != 1, do: "s", else: ""}
+          </summary>
+          <div class="mt-2 space-y-1">
+            <div :for={tc <- @tool_calls}>
+              <.tool_call_display name={tc.name} status={tc.status} />
+            </div>
+          </div>
+        </details>
+        <div
+          :if={@completion}
+          class="text-xs text-base-content/80 border-t border-base-300 pt-2 whitespace-pre-wrap"
+        >
+          {@completion}
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
   Memory indicator — shows when context was recalled from a previous session or workspace.
   """
   attr :source, :string, default: "previous session"
