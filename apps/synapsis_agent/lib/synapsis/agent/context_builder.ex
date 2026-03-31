@@ -57,6 +57,35 @@ defmodule Synapsis.Agent.ContextBuilder do
     |> Enum.join("\n\n")
   end
 
+  @doc """
+  Assemble the context injection payload for spawning a Code Agent.
+
+  Returns a map with the task description and system context so the spawned
+  Code Agent can pick up work without re-loading identity files.
+
+  ## Options
+
+    * `:project_id` — project the agent will work in
+    * `:session_id` — parent session ID for correlation
+    * `:task` — natural-language task description
+    * `:agent_config` — agent configuration to pass to the child
+
+  """
+  @spec build_coding_context(keyword()) :: map()
+  def build_coding_context(opts \\ []) do
+    project_id = Keyword.get(opts, :project_id)
+    task = Keyword.get(opts, :task, "")
+    agent_config = Keyword.get(opts, :agent_config, %{})
+
+    %{
+      task: task,
+      project_id: project_id,
+      agent_config: agent_config,
+      soul: load_soul(project_id),
+      project_context: load_project_context(project_id)
+    }
+  end
+
   @doc "Load the base prompt for an agent type."
   @spec load_base_prompt(atom(), map()) :: String.t()
   def load_base_prompt(_agent_type, agent_config) do

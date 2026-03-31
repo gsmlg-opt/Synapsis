@@ -8,6 +8,7 @@ defmodule SynapsisAgent.Application do
     children = [
       {Registry, keys: :unique, name: Synapsis.Session.Registry},
       {Registry, keys: :unique, name: Synapsis.Session.SupervisorRegistry},
+      {Registry, keys: :unique, name: Synapsis.Agent.Registry},
       Synapsis.Session.DynamicSupervisor,
       Synapsis.Agent.Supervisor
     ]

@@ -16,6 +16,7 @@ defmodule Synapsis.Agent.Supervisor do
       {Registry, keys: :unique, name: Synapsis.Agent.ProjectRegistry},
       {Registry, keys: :unique, name: Synapsis.Agent.Runtime.RunRegistry},
       {DynamicSupervisor, strategy: :one_for_one, name: Synapsis.Agent.ProjectSupervisor},
+      Synapsis.Agent.AgentRegistry,
       Synapsis.Agent.GlobalAssistant
     ]
 
