@@ -321,16 +321,14 @@ defmodule Synapsis.Session.StreamTest do
       assert_receive {:DOWN, ^ref, :process, _, _}, 2000
     end
 
-    test "cancel with ref from start_stream raises FunctionClauseError (ref != pid)" do
+    test "cancel with invalid ref returns :ok gracefully" do
       provider_name = unique_provider_name()
       ProviderRegistry.register(provider_name, %{type: "anthropic"})
       on_exit(fn -> ProviderRegistry.unregister(provider_name) end)
 
       # Adapter.cancel/1 calls Task.Supervisor.terminate_child which requires a PID.
-      # Passing a reference (as returned by Adapter.stream/2) is currently not supported.
-      assert_raise FunctionClauseError, fn ->
-        Stream.cancel_stream(make_ref(), provider_name)
-      end
+      # Passing a reference should be handled gracefully instead of crashing.
+      assert :ok = Stream.cancel_stream(make_ref(), provider_name)
     end
   end
 

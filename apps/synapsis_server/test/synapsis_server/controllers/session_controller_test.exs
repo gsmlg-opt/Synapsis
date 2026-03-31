@@ -193,6 +193,82 @@ defmodule SynapsisServer.SessionControllerTest do
     end
   end
 
+  describe "input validation" do
+    test "rejects project_path exceeding 4096 bytes on create", %{conn: conn} do
+      long_path = String.duplicate("a", 4097)
+      conn = post(conn, "/api/sessions", %{project_path: long_path})
+      assert %{"error" => "project_path too long"} = json_response(conn, 400)
+    end
+
+    test "rejects project_path exceeding 4096 bytes on index", %{conn: conn} do
+      long_path = String.duplicate("a", 4097)
+      conn = get(conn, "/api/sessions", %{project_path: long_path})
+      assert %{"error" => "project_path too long"} = json_response(conn, 400)
+    end
+
+    test "rejects content exceeding 256KB", %{conn: conn} do
+      create_conn =
+        post(conn, "/api/sessions", %{
+          project_path: "/tmp/test_ctrl_big_#{:rand.uniform(100_000)}",
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      %{"data" => %{"id" => id}} = json_response(create_conn, 201)
+      big_content = String.duplicate("x", 256_001)
+
+      conn = post(conn, "/api/sessions/#{id}/messages", %{content: big_content})
+      assert %{"error" => "content too large"} = json_response(conn, 413)
+    end
+
+    test "rejects more than 20 images", %{conn: conn} do
+      create_conn =
+        post(conn, "/api/sessions", %{
+          project_path: "/tmp/test_ctrl_imgs_#{:rand.uniform(100_000)}",
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      %{"data" => %{"id" => id}} = json_response(create_conn, 201)
+      images = for i <- 1..21, do: "/tmp/img_#{i}.png"
+
+      conn =
+        post(conn, "/api/sessions/#{id}/messages", %{content: "describe", images: images})
+
+      assert %{"error" => "too many images"} = json_response(conn, 400)
+    end
+
+    test "rejects non-string images", %{conn: conn} do
+      create_conn =
+        post(conn, "/api/sessions", %{
+          project_path: "/tmp/test_ctrl_imgtype_#{:rand.uniform(100_000)}",
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      %{"data" => %{"id" => id}} = json_response(create_conn, 201)
+
+      conn =
+        post(conn, "/api/sessions/#{id}/messages", %{content: "describe", images: [123]})
+
+      assert %{"error" => "each image must be a file path string"} = json_response(conn, 400)
+    end
+
+    test "rejects non-string at_message in fork", %{conn: conn} do
+      create_conn =
+        post(conn, "/api/sessions", %{
+          project_path: "/tmp/test_ctrl_fork_v_#{:rand.uniform(100_000)}",
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      %{"data" => %{"id" => id}} = json_response(create_conn, 201)
+
+      conn = post(conn, "/api/sessions/#{id}/fork", %{at_message: 123})
+      assert %{"error" => "at_message must be a string"} = json_response(conn, 400)
+    end
+  end
+
   describe "POST /api/sessions/:id/messages with images" do
     test "accepts images list and returns ok", %{conn: conn} do
       create_conn =
@@ -210,7 +286,7 @@ defmodule SynapsisServer.SessionControllerTest do
   end
 
   describe "POST /api/sessions/:id/fork with at_message" do
-    test "passes at_message option to fork", %{conn: conn} do
+    test "returns error for non-existent at_message", %{conn: conn} do
       create_conn =
         post(conn, "/api/sessions", %{
           project_path: "/tmp/test_ctrl_fork_atm_#{:rand.uniform(100_000)}",
@@ -224,8 +300,7 @@ defmodule SynapsisServer.SessionControllerTest do
       conn =
         post(conn, "/api/sessions/#{original_id}/fork", %{at_message: fake_msg_id})
 
-      assert %{"data" => %{"id" => forked_id}} = json_response(conn, 201)
-      assert forked_id != original_id
+      assert %{"error" => _} = json_response(conn, 422)
     end
   end
 

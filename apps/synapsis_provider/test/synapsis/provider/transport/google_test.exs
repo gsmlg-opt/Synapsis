@@ -9,13 +9,20 @@ defmodule Synapsis.Provider.Transport.GoogleTest do
   end
 
   describe "stream/3" do
-    test "sends API key in URL query parameter", %{bypass: bypass, port: port} do
+    test "sends API key in x-goog-api-key header", %{bypass: bypass, port: port} do
       Bypass.expect_once(
         bypass,
         "POST",
         "/v1beta/models/gemini-2.0-flash:streamGenerateContent",
         fn conn ->
-          assert conn.query_string =~ "key=test-google-key"
+          api_key_header =
+            Enum.find_value(conn.req_headers, fn
+              {"x-goog-api-key", val} -> val
+              _ -> nil
+            end)
+
+          assert api_key_header == "test-google-key"
+          refute conn.query_string =~ "key="
 
           conn
           |> Plug.Conn.put_resp_content_type("text/event-stream")
@@ -57,7 +64,13 @@ defmodule Synapsis.Provider.Transport.GoogleTest do
       )
 
       config = %{api_key: "key", base_url: "http://localhost:#{port}"}
-      request = %{model: "gemini-2.0-flash", contents: [%{role: "user", parts: [%{text: "Hi"}]}], stream: true}
+
+      request = %{
+        model: "gemini-2.0-flash",
+        contents: [%{role: "user", parts: [%{text: "Hi"}]}],
+        stream: true
+      }
+
       caller = self()
 
       Task.start(fn -> Google.stream(request, config, caller) end)
@@ -72,7 +85,7 @@ defmodule Synapsis.Provider.Transport.GoogleTest do
 
       Task.start(fn -> Google.stream(request, config, caller) end)
 
-      assert_receive {:stream_error, _reason}, 10_000
+      assert_receive {:stream_error, "Google stream failed"}, 10_000
     end
   end
 

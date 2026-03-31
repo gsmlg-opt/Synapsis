@@ -320,19 +320,35 @@ defmodule SynapsisServer.ProviderControllerTest do
     end
   end
 
-  describe "normalize_attrs with unknown keys" do
-    test "POST with unknown key in params does not crash (rescue branch)", %{conn: conn} do
-      # "non_existent_atom_key_xyz_987" does not exist as an atom, triggering rescue
+  describe "normalize_attrs allowlist" do
+    test "unknown keys are silently dropped", %{conn: conn} do
       params = %{
         "name" => "edge-provider",
         "type" => "anthropic",
-        "non_existent_atom_key_xyz_987" => "value"
+        "api_key" => "sk-test",
+        "non_existent_key" => "should be dropped",
+        "__proto__" => "injection attempt"
       }
 
       conn = post(conn, "/api/providers", params)
-      # It may succeed (422 if attrs incomplete) or create the provider
-      # The key assertion is no crash (500 error)
-      assert conn.status in [201, 422]
+      assert %{"data" => %{"name" => "edge-provider"}} = json_response(conn, 201)
+    end
+
+    test "only allowed keys reach the changeset", %{conn: conn} do
+      params = %{
+        "name" => "allowed-test",
+        "type" => "anthropic",
+        "base_url" => "https://custom.test",
+        "enabled" => true,
+        "config" => %{"extra" => true},
+        "evil_field" => "dropped"
+      }
+
+      conn = post(conn, "/api/providers", params)
+      %{"data" => data} = json_response(conn, 201)
+      assert data["name"] == "allowed-test"
+      assert data["base_url"] == "https://custom.test"
+      refute Map.has_key?(data, "evil_field")
     end
   end
 
