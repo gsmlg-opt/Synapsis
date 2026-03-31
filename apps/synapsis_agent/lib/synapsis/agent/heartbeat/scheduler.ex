@@ -9,6 +9,7 @@ defmodule Synapsis.Agent.Heartbeat.Scheduler do
   require Logger
 
   alias Synapsis.HeartbeatConfig
+  alias Synapsis.Heartbeats
 
   @doc """
   Sync all enabled heartbeat configs to Oban job queue.
@@ -80,7 +81,7 @@ defmodule Synapsis.Agent.Heartbeat.Scheduler do
   @doc "Load all enabled heartbeat configs from the database."
   @spec load_enabled_configs() :: [HeartbeatConfig.t()]
   def load_enabled_configs do
-    HeartbeatConfig.list_enabled()
+    Heartbeats.list_enabled()
   end
 
   @doc """
@@ -90,22 +91,18 @@ defmodule Synapsis.Agent.Heartbeat.Scheduler do
   """
   @spec next_run_time(String.t()) :: {:ok, DateTime.t()} | {:error, String.t()}
   def next_run_time(schedule) do
-    if length(String.split(schedule)) != 5 do
-      {:error, "invalid cron expression: must have exactly 5 fields"}
-    else
-      case Crontab.CronExpression.Parser.parse(schedule) do
-        {:ok, expr} ->
-          case Crontab.Scheduler.get_next_run_date(expr) do
-            {:ok, naive} ->
-              {:ok, DateTime.from_naive!(naive, "Etc/UTC")}
+    case Crontab.CronExpression.Parser.parse(schedule) do
+      {:ok, expr} ->
+        case Crontab.Scheduler.get_next_run_date(expr) do
+          {:ok, naive} ->
+            {:ok, DateTime.from_naive!(naive, "Etc/UTC")}
 
-            {:error, reason} ->
-              {:error, "cannot compute next run: #{inspect(reason)}"}
-          end
+          {:error, reason} ->
+            {:error, "cannot compute next run: #{inspect(reason)}"}
+        end
 
-        {:error, reason} ->
-          {:error, "invalid cron expression: #{inspect(reason)}"}
-      end
+      {:error, reason} ->
+        {:error, "invalid cron expression: #{inspect(reason)}"}
     end
   end
 end

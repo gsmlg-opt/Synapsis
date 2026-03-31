@@ -12,12 +12,13 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
     priority: 3
 
   alias Synapsis.HeartbeatConfig
+  alias Synapsis.Heartbeats
   alias Synapsis.Workspace
   require Logger
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"heartbeat_id" => heartbeat_id}}) do
-    case HeartbeatConfig.get(heartbeat_id) do
+    case Heartbeats.get(heartbeat_id) do
       nil ->
         Logger.warning("heartbeat_config_not_found", heartbeat_id: heartbeat_id)
         {:error, :config_not_found}
@@ -149,7 +150,7 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
     topic = "session:#{session_id}"
     Phoenix.PubSub.subscribe(Synapsis.PubSub, topic)
 
-    try do
+    result =
       receive do
         {:session_completed, ^session_id, _result} ->
           fetch_last_assistant_response(session_id)
@@ -160,12 +161,23 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
         timeout_ms ->
           # Fallback: check messages directly before declaring timeout
           case fetch_last_assistant_response(session_id) do
-            {:ok, _} = result -> result
+            {:ok, _} = ok -> ok
             _ -> {:timeout, "heartbeat session timed out after #{div(timeout_ms, 1_000)}s"}
           end
       end
+
+    Phoenix.PubSub.unsubscribe(Synapsis.PubSub, topic)
+    flush_mailbox(session_id)
+    result
+  end
+
+  # Drain any remaining PubSub messages for this session from the process mailbox
+  # to prevent mailbox pollution in the Oban worker process.
+  defp flush_mailbox(session_id) do
+    receive do
+      {_, ^session_id, _} -> flush_mailbox(session_id)
     after
-      Phoenix.PubSub.unsubscribe(Synapsis.PubSub, topic)
+      0 -> :ok
     end
   end
 

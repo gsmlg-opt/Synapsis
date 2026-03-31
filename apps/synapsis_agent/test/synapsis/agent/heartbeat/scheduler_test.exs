@@ -26,8 +26,8 @@ defmodule Synapsis.Agent.Heartbeat.SchedulerTest do
       assert {:error, _reason} = Scheduler.next_run_time("invalid")
     end
 
-    test "returns error for expression with wrong field count" do
-      assert {:error, _reason} = Scheduler.next_run_time("* * *")
+    test "returns error for completely invalid expression" do
+      assert {:error, _reason} = Scheduler.next_run_time("not a cron at all!")
     end
   end
 

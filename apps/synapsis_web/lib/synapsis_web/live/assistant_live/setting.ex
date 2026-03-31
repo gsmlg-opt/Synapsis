@@ -68,7 +68,7 @@ defmodule SynapsisWeb.AssistantLive.Setting do
        show_heartbeat_form: false,
        editing_heartbeat_id: nil,
        heartbeat_form: %{},
-       heartbeats: Synapsis.HeartbeatConfig.list_all()
+       heartbeats: Synapsis.Heartbeats.list_all()
      )}
   end
 
@@ -77,7 +77,7 @@ defmodule SynapsisWeb.AssistantLive.Setting do
   @impl true
   def handle_event("switch_tab", %{"tab" => "cron_jobs"}, socket) do
     {:noreply,
-     assign(socket, active_tab: "cron_jobs", heartbeats: Synapsis.HeartbeatConfig.list_all())}
+     assign(socket, active_tab: "cron_jobs", heartbeats: Synapsis.Heartbeats.list_all())}
   end
 
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
@@ -264,7 +264,7 @@ defmodule SynapsisWeb.AssistantLive.Setting do
   end
 
   def handle_event("edit_heartbeat", %{"id" => id}, socket) do
-    case Synapsis.HeartbeatConfig.get(id) do
+    case Synapsis.Heartbeats.get(id) do
       nil ->
         {:noreply, put_flash(socket, :error, "Heartbeat not found")}
 
@@ -302,14 +302,14 @@ defmodule SynapsisWeb.AssistantLive.Setting do
 
     result =
       case params["heartbeat_id"] do
-        "" ->
-          Synapsis.HeartbeatConfig.create(attrs)
-
-        id when is_binary(id) ->
-          case Synapsis.HeartbeatConfig.get(id) do
+        id when is_binary(id) and id != "" ->
+          case Synapsis.Heartbeats.get(id) do
             nil -> {:error, :not_found}
-            hb -> Synapsis.HeartbeatConfig.update_config(hb, attrs)
+            hb -> Synapsis.Heartbeats.update(hb, attrs)
           end
+
+        _ ->
+          Synapsis.Heartbeats.create(attrs)
       end
 
     case result do
@@ -324,7 +324,7 @@ defmodule SynapsisWeb.AssistantLive.Setting do
            show_heartbeat_form: false,
            editing_heartbeat_id: nil,
            heartbeat_form: %{},
-           heartbeats: Synapsis.HeartbeatConfig.list_all()
+           heartbeats: Synapsis.Heartbeats.list_all()
          )
          |> put_flash(:info, "Heartbeat saved")}
 
@@ -342,22 +342,16 @@ defmodule SynapsisWeb.AssistantLive.Setting do
   end
 
   def handle_event("toggle_heartbeat", %{"id" => id}, socket) do
-    case Synapsis.HeartbeatConfig.get(id) do
+    case Synapsis.Heartbeats.get(id) do
       nil ->
         {:noreply, put_flash(socket, :error, "Heartbeat not found")}
 
       hb ->
-        case Synapsis.HeartbeatConfig.update_config(hb, %{enabled: not hb.enabled}) do
+        case Synapsis.Heartbeats.toggle_enabled(hb) do
           {:ok, updated} ->
-            if updated.enabled do
-              Synapsis.Agent.Heartbeat.Scheduler.schedule_heartbeat(updated)
-            end
-
-            Synapsis.Agent.Heartbeat.Scheduler.sync_crontab()
-
             {:noreply,
              socket
-             |> assign(heartbeats: Synapsis.HeartbeatConfig.list_all())
+             |> assign(heartbeats: Synapsis.Heartbeats.list_all())
              |> put_flash(
                :info,
                "Heartbeat #{if updated.enabled, do: "enabled", else: "disabled"}"
@@ -370,18 +364,18 @@ defmodule SynapsisWeb.AssistantLive.Setting do
   end
 
   def handle_event("delete_heartbeat", %{"id" => id}, socket) do
-    case Synapsis.HeartbeatConfig.get(id) do
+    case Synapsis.Heartbeats.get(id) do
       nil ->
         {:noreply, put_flash(socket, :error, "Heartbeat not found")}
 
       hb ->
-        case Synapsis.HeartbeatConfig.delete_config(hb) do
+        case Synapsis.Heartbeats.delete(hb) do
           {:ok, _} ->
             Synapsis.Agent.Heartbeat.Scheduler.sync_crontab()
 
             {:noreply,
              socket
-             |> assign(heartbeats: Synapsis.HeartbeatConfig.list_all())
+             |> assign(heartbeats: Synapsis.Heartbeats.list_all())
              |> put_flash(:info, "Heartbeat deleted")}
 
           {:error, reason} ->
