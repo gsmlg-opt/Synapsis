@@ -334,7 +334,7 @@ defmodule SynapsisWeb.AssistantLive.Show do
     notification = %{
       name: name,
       timestamp: ts,
-      result: result,
+      result: String.slice(result || "", 0, 500),
       id: System.unique_integer([:positive])
     }
 

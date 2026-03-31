@@ -889,102 +889,62 @@ defmodule SynapsisWeb.AssistantLive.Setting do
         <form phx-submit="save_heartbeat" class="space-y-3">
           <input type="hidden" name="heartbeat_id" value={@editing_heartbeat_id || ""} />
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label class="text-xs text-base-content/50 mb-1 block">Name</label>
-              <input
-                type="text"
-                name="name"
-                value={@heartbeat_form[:name] || ""}
-                placeholder="my-custom-check"
-                required
-                class="w-full bg-base-100 border border-base-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
-              />
-            </div>
-            <div>
-              <label class="text-xs text-base-content/50 mb-1 block">
-                Cron Schedule
-                <span class="text-base-content/30">(5-field: min hour dom mon dow)</span>
-              </label>
-              <input
-                type="text"
-                name="schedule"
-                value={@heartbeat_form[:schedule] || ""}
-                placeholder="0 9 * * 1-5"
-                required
-                class="w-full bg-base-100 border border-base-300 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:border-primary/50"
-              />
-            </div>
-          </div>
-          <div>
-            <label class="text-xs text-base-content/50 mb-1 block">Prompt</label>
-            <textarea
-              name="prompt"
-              rows="3"
+            <.dm_input
+              type="text"
+              name="name"
+              label="Name"
+              value={@heartbeat_form[:name] || ""}
+              placeholder="my-custom-check"
               required
-              placeholder="Describe what this heartbeat should do..."
-              class="w-full bg-base-100 border border-base-300 rounded px-3 py-2 text-sm resize-y focus:outline-none focus:border-primary/50"
-            >{@heartbeat_form[:prompt] || ""}</textarea>
+            />
+            <.dm_input
+              type="text"
+              name="schedule"
+              label="Cron Schedule (5-field: min hour dom mon dow)"
+              value={@heartbeat_form[:schedule] || ""}
+              placeholder="0 9 * * 1-5"
+              required
+              class="font-mono"
+            />
           </div>
+          <.dm_input
+            type="textarea"
+            name="prompt"
+            label="Prompt"
+            value={@heartbeat_form[:prompt] || ""}
+            placeholder="Describe what this heartbeat should do..."
+            required
+          />
           <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div>
-              <label class="text-xs text-base-content/50 mb-1 block">Agent Type</label>
-              <select
-                name="agent_type"
-                class="w-full bg-base-100 border border-base-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
-              >
-                <option
-                  value="global"
-                  selected={(@heartbeat_form[:agent_type] || "global") == "global"}
-                >
-                  Global
-                </option>
-                <option
-                  value="project"
-                  selected={(@heartbeat_form[:agent_type] || "global") == "project"}
-                >
-                  Project
-                </option>
-              </select>
-            </div>
-            <div>
-              <label class="text-xs text-base-content/50 mb-1 block">Isolation</label>
-              <select
-                name="session_isolation"
-                class="w-full bg-base-100 border border-base-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
-              >
-                <option
-                  value="isolated"
-                  selected={(@heartbeat_form[:session_isolation] || "isolated") == "isolated"}
-                >
-                  Isolated
-                </option>
-                <option
-                  value="main"
-                  selected={(@heartbeat_form[:session_isolation] || "isolated") == "main"}
-                >
-                  Main
-                </option>
-              </select>
-            </div>
+            <.dm_input
+              type="select"
+              name="agent_type"
+              label="Agent Type"
+              value={@heartbeat_form[:agent_type] || "global"}
+              options={[{"Global", "global"}, {"Project", "project"}]}
+            />
+            <.dm_input
+              type="select"
+              name="session_isolation"
+              label="Isolation"
+              value={@heartbeat_form[:session_isolation] || "isolated"}
+              options={[{"Isolated", "isolated"}, {"Main", "main"}]}
+            />
             <div class="flex items-end gap-4">
-              <label class="flex items-center gap-2 text-xs cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="notify_user"
-                  value="true"
-                  checked={@heartbeat_form[:notify_user] != "false"}
-                  class="accent-primary"
-                /> Notify
-              </label>
-              <label class="flex items-center gap-2 text-xs cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="keep_history"
-                  value="true"
-                  checked={@heartbeat_form[:keep_history] == "true"}
-                  class="accent-primary"
-                /> History
-              </label>
+              <.dm_input
+                type="checkbox"
+                name="notify_user"
+                label="Notify"
+                value="true"
+                checked={@heartbeat_form[:notify_user] != "false"}
+              />
+              <.dm_input
+                type="checkbox"
+                name="keep_history"
+                label="History"
+                value="true"
+                checked={@heartbeat_form[:keep_history] == "true"}
+              />
             </div>
           </div>
           <div class="flex gap-2 pt-1">

@@ -8,6 +8,8 @@ defmodule SynapsisWeb.CoreComponents do
   use Phoenix.Component
   use PhoenixDuskmoon.Component
 
+  import SynapsisWeb.MessageHelpers
+
   use Phoenix.VerifiedRoutes,
     endpoint: SynapsisServer.Endpoint,
     router: SynapsisServer.Router,
@@ -481,11 +483,6 @@ defmodule SynapsisWeb.CoreComponents do
     </div>
     """
   end
-
-  defdelegate compaction_summary?(content), to: SynapsisWeb.MessageHelpers
-  defdelegate parse_compaction(content), to: SynapsisWeb.MessageHelpers
-  defdelegate memory_recall?(content), to: SynapsisWeb.MessageHelpers
-  defdelegate detect_memory_source(content), to: SynapsisWeb.MessageHelpers
 
   @doc """
   Collapsible reasoning/thinking trace block.

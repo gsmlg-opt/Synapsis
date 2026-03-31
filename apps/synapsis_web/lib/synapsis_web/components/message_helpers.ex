@@ -6,6 +6,8 @@ defmodule SynapsisWeb.MessageHelpers do
   appropriate rendering sub-component.
   """
 
+  @compaction_regex ~r/\[Context Summary - (\d+) messages compacted\]\n(.*)\n\[End Summary\]/s
+
   @doc "Returns true if the content looks like a compaction summary."
   @spec compaction_summary?(any()) :: boolean()
   def compaction_summary?(content) when is_binary(content) do
@@ -17,10 +19,7 @@ defmodule SynapsisWeb.MessageHelpers do
   @doc "Parses a compaction summary into {message_count, summary_text}."
   @spec parse_compaction(String.t()) :: {non_neg_integer(), String.t()}
   def parse_compaction(content) do
-    case Regex.run(
-           ~r/\[Context Summary - (\d+) messages compacted\]\n(.*)\n\[End Summary\]/s,
-           content
-         ) do
+    case Regex.run(@compaction_regex, content) do
       [_, count_str, summary] -> {String.to_integer(count_str), String.trim(summary)}
       _ -> {0, content}
     end

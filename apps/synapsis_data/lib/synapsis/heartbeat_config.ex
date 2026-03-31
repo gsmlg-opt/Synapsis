@@ -101,10 +101,7 @@ defmodule Synapsis.HeartbeatConfig do
       if length(parts) != 5 do
         [{field, "must be a valid cron expression with 5 fields"}]
       else
-        case Crontab.CronExpression.Parser.parse(value) do
-          {:ok, _} -> []
-          {:error, reason} -> [{field, "invalid cron syntax: #{inspect(reason)}"}]
-        end
+        []
       end
     end)
   end

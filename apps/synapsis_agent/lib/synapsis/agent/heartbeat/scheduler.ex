@@ -26,13 +26,24 @@ defmodule Synapsis.Agent.Heartbeat.Scheduler do
       names: Enum.map(configs, & &1.name)
     )
 
-    Enum.each(configs, &schedule_heartbeat/1)
+    Enum.each(configs, fn config ->
+      case schedule_heartbeat(config) do
+        :ok ->
+          :ok
+
+        {:error, reason} ->
+          Logger.warning("heartbeat_sync_skip",
+            name: config.name,
+            reason: inspect(reason)
+          )
+      end
+    end)
 
     :ok
   end
 
   @doc "Schedule a single heartbeat config as an Oban job."
-  @spec schedule_heartbeat(HeartbeatConfig.t()) :: :ok
+  @spec schedule_heartbeat(HeartbeatConfig.t()) :: :ok | {:error, term()}
   def schedule_heartbeat(%HeartbeatConfig{} = config) do
     case next_run_time(config.schedule) do
       {:ok, scheduled_at} ->
@@ -51,14 +62,16 @@ defmodule Synapsis.Agent.Heartbeat.Scheduler do
               next_run: DateTime.to_iso8601(scheduled_at)
             )
 
+            :ok
+
           {:error, changeset} ->
             Logger.warning("heartbeat_insert_failed",
               name: config.name,
               error: inspect(changeset)
             )
-        end
 
-        :ok
+            {:error, {:insert_failed, changeset}}
+        end
 
       {:error, reason} ->
         Logger.warning("heartbeat_schedule_failed",
@@ -66,16 +79,16 @@ defmodule Synapsis.Agent.Heartbeat.Scheduler do
           error: reason
         )
 
-        :ok
+        {:error, {:invalid_schedule, reason}}
     end
   rescue
-    e ->
+    e in [RuntimeError, ArgumentError] ->
       Logger.warning("heartbeat_schedule_failed",
         name: config.name,
         error: Exception.message(e)
       )
 
-      :ok
+      {:error, {:runtime_error, Exception.message(e)}}
   end
 
   @doc "Load all enabled heartbeat configs from the database."

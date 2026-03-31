@@ -30,8 +30,18 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
       config ->
         case execute_heartbeat(config) do
           :ok ->
-            Synapsis.Agent.Heartbeat.Scheduler.schedule_heartbeat(config)
-            :ok
+            case Synapsis.Agent.Heartbeat.Scheduler.schedule_heartbeat(config) do
+              :ok ->
+                :ok
+
+              {:error, reason} ->
+                Logger.warning("heartbeat_reschedule_failed",
+                  heartbeat_id: heartbeat_id,
+                  reason: inspect(reason)
+                )
+
+                :ok
+            end
 
           {:error, _} = error ->
             Logger.warning("heartbeat_skipping_reschedule",
@@ -86,7 +96,15 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
 
     :ok
   rescue
-    e ->
+    e in [
+      RuntimeError,
+      ArgumentError,
+      KeyError,
+      FunctionClauseError,
+      MatchError,
+      Ecto.QueryError,
+      DBConnection.ConnectionError
+    ] ->
       Logger.error("heartbeat_failed",
         name: config.name,
         heartbeat_id: config.id,
