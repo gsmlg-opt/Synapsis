@@ -19,6 +19,8 @@ defmodule SynapsisAgent.Application do
       {:ok, _pid} ->
         Synapsis.Tool.Builtin.register_all()
         maybe_apply(Synapsis.Workspace.Tools, :register_all, [])
+        Synapsis.Agent.Heartbeat.Templates.seed_defaults()
+        Synapsis.Agent.Heartbeat.Scheduler.sync_crontab()
         result
 
       other ->
