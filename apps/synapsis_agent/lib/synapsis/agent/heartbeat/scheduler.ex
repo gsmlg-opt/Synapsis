@@ -35,17 +35,27 @@ defmodule Synapsis.Agent.Heartbeat.Scheduler do
   def schedule_heartbeat(%HeartbeatConfig{} = config) do
     case next_run_time(config.schedule) do
       {:ok, scheduled_at} ->
-        %{"heartbeat_id" => config.id}
-        |> Synapsis.Agent.Heartbeat.Worker.new(
-          scheduled_at: scheduled_at,
-          unique: [period: 60, keys: [:heartbeat_id]]
-        )
-        |> Oban.insert()
+        result =
+          %{"heartbeat_id" => config.id}
+          |> Synapsis.Agent.Heartbeat.Worker.new(
+            scheduled_at: scheduled_at,
+            unique: [period: 60, keys: [:heartbeat_id]]
+          )
+          |> Oban.insert()
 
-        Logger.info("heartbeat_scheduled",
-          name: config.name,
-          next_run: DateTime.to_iso8601(scheduled_at)
-        )
+        case result do
+          {:ok, _job} ->
+            Logger.info("heartbeat_scheduled",
+              name: config.name,
+              next_run: DateTime.to_iso8601(scheduled_at)
+            )
+
+          {:error, changeset} ->
+            Logger.warning("heartbeat_insert_failed",
+              name: config.name,
+              error: inspect(changeset)
+            )
+        end
 
         :ok
 

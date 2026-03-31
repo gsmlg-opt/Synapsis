@@ -27,12 +27,19 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
         :ok
 
       config ->
-        result = execute_heartbeat(config)
+        case execute_heartbeat(config) do
+          :ok ->
+            Synapsis.Agent.Heartbeat.Scheduler.schedule_heartbeat(config)
+            :ok
 
-        # Reschedule for next cron window
-        Synapsis.Agent.Heartbeat.Scheduler.schedule_heartbeat(config)
+          {:error, _} = error ->
+            Logger.warning("heartbeat_skipping_reschedule",
+              heartbeat_id: heartbeat_id,
+              reason: "execution failed"
+            )
 
-        result
+            error
+        end
     end
   end
 
@@ -78,11 +85,12 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
 
     :ok
   rescue
-    e in [RuntimeError, Ecto.QueryError, DBConnection.ConnectionError, MatchError] ->
+    e ->
       Logger.error("heartbeat_failed",
         name: config.name,
         heartbeat_id: config.id,
-        error: Exception.message(e)
+        error: Exception.message(e),
+        stacktrace: Exception.format_stacktrace(__STACKTRACE__)
       )
 
       {:error, Exception.message(e)}
@@ -118,9 +126,9 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
 
   defp resolve_project_path(%HeartbeatConfig{agent_type: :project, project_id: pid})
        when is_binary(pid) do
-    case Synapsis.Repo.get(Synapsis.Project, pid) do
-      %Synapsis.Project{path: path} -> path
-      nil -> System.user_home() || "/"
+    case Synapsis.Projects.get(pid) do
+      {:ok, %Synapsis.Project{path: path}} -> path
+      {:error, _} -> System.user_home() || "/"
     end
   end
 
@@ -136,30 +144,40 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
     })
   end
 
-  # Poll session messages until we see an assistant response or timeout
+  # Wait for session completion via PubSub subscription instead of polling.
   defp await_session_completion(session_id, timeout_ms \\ 120_000) do
-    deadline = System.monotonic_time(:millisecond) + timeout_ms
-    poll_for_response(session_id, deadline)
+    topic = "session:#{session_id}"
+    Phoenix.PubSub.subscribe(Synapsis.PubSub, topic)
+
+    try do
+      receive do
+        {:session_completed, ^session_id, _result} ->
+          fetch_last_assistant_response(session_id)
+
+        {:session_error, ^session_id, reason} ->
+          {:timeout, "session error: #{inspect(reason)}"}
+      after
+        timeout_ms ->
+          # Fallback: check messages directly before declaring timeout
+          case fetch_last_assistant_response(session_id) do
+            {:ok, _} = result -> result
+            _ -> {:timeout, "heartbeat session timed out after #{div(timeout_ms, 1_000)}s"}
+          end
+      end
+    after
+      Phoenix.PubSub.unsubscribe(Synapsis.PubSub, topic)
+    end
   end
 
-  defp poll_for_response(session_id, deadline) do
-    if System.monotonic_time(:millisecond) > deadline do
-      {:timeout, "heartbeat session timed out after 120s"}
-    else
-      messages = Synapsis.Sessions.get_messages(session_id)
+  defp fetch_last_assistant_response(session_id) do
+    messages = Synapsis.Sessions.get_messages(session_id)
 
-      assistant_messages =
-        Enum.filter(messages, fn msg -> msg.role == :assistant end)
-
-      case assistant_messages do
-        [] ->
-          Process.sleep(1_000)
-          poll_for_response(session_id, deadline)
-
-        msgs ->
-          last = List.last(msgs)
-          {:ok, extract_text_content(last)}
-      end
+    messages
+    |> Enum.filter(fn msg -> msg.role == :assistant end)
+    |> List.last()
+    |> case do
+      nil -> {:timeout, "no assistant response"}
+      msg -> {:ok, extract_text_content(msg)}
     end
   end
 

@@ -190,12 +190,16 @@ defmodule SynapsisWeb.AssistantLive.Show do
   end
 
   def handle_event("dismiss_heartbeat", %{"id" => id_str}, socket) do
-    id = String.to_integer(id_str)
+    case Integer.parse(id_str) do
+      {id, ""} ->
+        {:noreply,
+         update(socket, :heartbeat_notifications, fn notifs ->
+           Enum.reject(notifs, &(&1.id == id))
+         end)}
 
-    {:noreply,
-     update(socket, :heartbeat_notifications, fn notifs ->
-       Enum.reject(notifs, &(&1.id == id))
-     end)}
+      _ ->
+        {:noreply, socket}
+    end
   end
 
   def handle_event("switch_mode", %{"mode" => mode}, socket) do

@@ -478,45 +478,10 @@ defmodule SynapsisWeb.CoreComponents do
     """
   end
 
-  defp compaction_summary?(content) when is_binary(content) do
-    String.starts_with?(String.trim(content), "[Context Summary -")
-  end
-
-  defp compaction_summary?(_), do: false
-
-  defp parse_compaction(content) do
-    case Regex.run(
-           ~r/\[Context Summary - (\d+) messages compacted\]\n(.*)\n\[End Summary\]/s,
-           content
-         ) do
-      [_, count_str, summary] -> {String.to_integer(count_str), String.trim(summary)}
-      _ -> {0, content}
-    end
-  end
-
-  defp memory_recall?(content) when is_binary(content) do
-    String.contains?(content, "[Memory:") or
-      String.contains?(content, "[Workspace Context]") or
-      String.contains?(content, "[Recalled from")
-  end
-
-  defp memory_recall?(_), do: false
-
-  defp detect_memory_source(content) do
-    cond do
-      String.contains?(content, "[Workspace Context]") ->
-        "workspace"
-
-      String.contains?(content, "[Recalled from") ->
-        case Regex.run(~r/\[Recalled from (.+?)\]/, content) do
-          [_, source] -> source
-          _ -> "previous session"
-        end
-
-      true ->
-        "memory"
-    end
-  end
+  defdelegate compaction_summary?(content), to: SynapsisWeb.MessageHelpers
+  defdelegate parse_compaction(content), to: SynapsisWeb.MessageHelpers
+  defdelegate memory_recall?(content), to: SynapsisWeb.MessageHelpers
+  defdelegate detect_memory_source(content), to: SynapsisWeb.MessageHelpers
 
   @doc """
   Collapsible reasoning/thinking trace block.

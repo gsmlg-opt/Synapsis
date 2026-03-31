@@ -102,17 +102,17 @@ defmodule Synapsis.HeartbeatConfigTest do
     end
   end
 
-  describe "toggle_enabled/1" do
-    test "toggles from false to true" do
+  describe "update_config/2 toggle enabled" do
+    test "updates enabled from false to true" do
       name = "toggle-test-#{System.unique_integer([:positive])}"
       {:ok, config} = HeartbeatConfig.create(%{@valid_attrs | name: name})
       assert config.enabled == false
 
-      {:ok, toggled} = HeartbeatConfig.toggle_enabled(config)
-      assert toggled.enabled == true
+      {:ok, updated} = HeartbeatConfig.update_config(config, %{enabled: true})
+      assert updated.enabled == true
     end
 
-    test "toggles from true to false" do
+    test "updates enabled from true to false" do
       name = "toggle-test-#{System.unique_integer([:positive])}"
 
       {:ok, config} =
@@ -120,8 +120,8 @@ defmodule Synapsis.HeartbeatConfigTest do
 
       assert config.enabled == true
 
-      {:ok, toggled} = HeartbeatConfig.toggle_enabled(config)
-      assert toggled.enabled == false
+      {:ok, updated} = HeartbeatConfig.update_config(config, %{enabled: false})
+      assert updated.enabled == false
     end
   end
 

@@ -67,13 +67,19 @@ defmodule SynapsisWeb.AssistantLive.Setting do
        overview_dirty: false,
        show_heartbeat_form: false,
        editing_heartbeat_id: nil,
-       heartbeat_form: %{}
+       heartbeat_form: %{},
+       heartbeats: Synapsis.HeartbeatConfig.list_all()
      )}
   end
 
   # --- Events ---
 
   @impl true
+  def handle_event("switch_tab", %{"tab" => "cron_jobs"}, socket) do
+    {:noreply,
+     assign(socket, active_tab: "cron_jobs", heartbeats: Synapsis.HeartbeatConfig.list_all())}
+  end
+
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
     {:noreply, assign(socket, :active_tab, tab)}
   end
@@ -287,8 +293,9 @@ defmodule SynapsisWeb.AssistantLive.Setting do
       name: params["name"],
       schedule: params["schedule"],
       prompt: params["prompt"],
-      agent_type: String.to_existing_atom(params["agent_type"] || "global"),
-      session_isolation: String.to_existing_atom(params["session_isolation"] || "isolated"),
+      agent_type: validated_atom(params["agent_type"], ~w(global project), :global),
+      session_isolation:
+        validated_atom(params["session_isolation"], ~w(isolated main), :isolated),
       notify_user: params["notify_user"] == "true",
       keep_history: params["keep_history"] == "true"
     }
@@ -313,7 +320,12 @@ defmodule SynapsisWeb.AssistantLive.Setting do
 
         {:noreply,
          socket
-         |> assign(show_heartbeat_form: false, editing_heartbeat_id: nil, heartbeat_form: %{})
+         |> assign(
+           show_heartbeat_form: false,
+           editing_heartbeat_id: nil,
+           heartbeat_form: %{},
+           heartbeats: Synapsis.HeartbeatConfig.list_all()
+         )
          |> put_flash(:info, "Heartbeat saved")}
 
       {:error, %Ecto.Changeset{} = cs} ->
@@ -335,7 +347,7 @@ defmodule SynapsisWeb.AssistantLive.Setting do
         {:noreply, put_flash(socket, :error, "Heartbeat not found")}
 
       hb ->
-        case Synapsis.HeartbeatConfig.toggle_enabled(hb) do
+        case Synapsis.HeartbeatConfig.update_config(hb, %{enabled: not hb.enabled}) do
           {:ok, updated} ->
             if updated.enabled do
               Synapsis.Agent.Heartbeat.Scheduler.schedule_heartbeat(updated)
@@ -344,8 +356,9 @@ defmodule SynapsisWeb.AssistantLive.Setting do
             Synapsis.Agent.Heartbeat.Scheduler.sync_crontab()
 
             {:noreply,
-             put_flash(
-               socket,
+             socket
+             |> assign(heartbeats: Synapsis.HeartbeatConfig.list_all())
+             |> put_flash(
                :info,
                "Heartbeat #{if updated.enabled, do: "enabled", else: "disabled"}"
              )}
@@ -365,7 +378,11 @@ defmodule SynapsisWeb.AssistantLive.Setting do
         case Synapsis.HeartbeatConfig.delete_config(hb) do
           {:ok, _} ->
             Synapsis.Agent.Heartbeat.Scheduler.sync_crontab()
-            {:noreply, put_flash(socket, :info, "Heartbeat deleted")}
+
+            {:noreply,
+             socket
+             |> assign(heartbeats: Synapsis.HeartbeatConfig.list_all())
+             |> put_flash(:info, "Heartbeat deleted")}
 
           {:error, reason} ->
             {:noreply, put_flash(socket, :error, "Delete failed: #{inspect(reason)}")}
@@ -469,6 +486,7 @@ defmodule SynapsisWeb.AssistantLive.Setting do
         show_heartbeat_form={@show_heartbeat_form}
         editing_heartbeat_id={@editing_heartbeat_id}
         heartbeat_form={@heartbeat_form}
+        heartbeats={@heartbeats}
       />
     </div>
     """
@@ -853,9 +871,6 @@ defmodule SynapsisWeb.AssistantLive.Setting do
   # --- Cron Jobs Tab ---
 
   defp tab_cron_jobs(assigns) do
-    heartbeats = Synapsis.HeartbeatConfig.list_all()
-    assigns = assign(assigns, :heartbeats, heartbeats)
-
     ~H"""
     <.dm_card variant="bordered">
       <:title>
@@ -1165,4 +1180,10 @@ defmodule SynapsisWeb.AssistantLive.Setting do
 
   defp format_size(bytes) when bytes < 1024, do: "#{bytes} B"
   defp format_size(bytes), do: "#{Float.round(bytes / 1024, 1)} KB"
+
+  defp validated_atom(value, allowed, default) when is_binary(value) do
+    if value in allowed, do: String.to_existing_atom(value), else: default
+  end
+
+  defp validated_atom(_, _allowed, default), do: default
 end

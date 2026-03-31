@@ -94,24 +94,17 @@ defmodule Synapsis.HeartbeatConfig do
     Synapsis.Repo.delete(config)
   end
 
-  @doc "Toggle enabled status of a heartbeat config."
-  @spec toggle_enabled(t()) :: {:ok, t()} | {:error, Ecto.Changeset.t()}
-  def toggle_enabled(%__MODULE__{enabled: enabled} = config) do
-    new_enabled = not enabled
-
-    config
-    |> Ecto.Changeset.change(enabled: new_enabled)
-    |> Synapsis.Repo.update()
-  end
-
   defp validate_cron_expression(changeset, field) do
     validate_change(changeset, field, fn _field, value ->
       parts = String.split(value, " ", trim: true)
 
-      if length(parts) == 5 do
-        []
-      else
+      if length(parts) != 5 do
         [{field, "must be a valid cron expression with 5 fields"}]
+      else
+        case Crontab.CronExpression.Parser.parse(value) do
+          {:ok, _} -> []
+          {:error, reason} -> [{field, "invalid cron syntax: #{inspect(reason)}"}]
+        end
       end
     end)
   end
