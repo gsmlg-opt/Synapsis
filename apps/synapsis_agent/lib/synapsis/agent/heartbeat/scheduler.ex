@@ -3,8 +3,7 @@ defmodule Synapsis.Agent.Heartbeat.Scheduler do
   Syncs heartbeat configurations from the database to Oban cron jobs (AI-6.3).
 
   On startup and on PubSub config change events, loads enabled heartbeat configs
-  from the database and schedules them via Oban. Uses Oban's cron expression
-  parser for accurate next-run-time calculation.
+  from the database and schedules them via Oban.
   """
 
   require Logger
@@ -59,7 +58,7 @@ defmodule Synapsis.Agent.Heartbeat.Scheduler do
         :ok
     end
   rescue
-    e in [RuntimeError, Ecto.QueryError, DBConnection.ConnectionError] ->
+    e ->
       Logger.warning("heartbeat_schedule_failed",
         name: config.name,
         error: Exception.message(e)
@@ -75,17 +74,28 @@ defmodule Synapsis.Agent.Heartbeat.Scheduler do
   end
 
   @doc """
-  Calculate next run time from a 5-field cron expression using Oban's parser.
+  Calculate next run time from a 5-field cron expression.
+  Uses Crontab library for parsing and next-run calculation.
   Returns `{:ok, DateTime.t()}` or `{:error, String.t()}`.
   """
   @spec next_run_time(String.t()) :: {:ok, DateTime.t()} | {:error, String.t()}
   def next_run_time(schedule) do
-    case Oban.Cron.Expression.parse(schedule) do
-      {:ok, expr} ->
-        {:ok, Oban.Cron.Expression.next_at(expr)}
+    if length(String.split(schedule)) != 5 do
+      {:error, "invalid cron expression: must have exactly 5 fields"}
+    else
+      case Crontab.CronExpression.Parser.parse(schedule) do
+        {:ok, expr} ->
+          case Crontab.Scheduler.get_next_run_date(expr) do
+            {:ok, naive} ->
+              {:ok, DateTime.from_naive!(naive, "Etc/UTC")}
 
-      {:error, reason} ->
-        {:error, "invalid cron expression: #{inspect(reason)}"}
+            {:error, reason} ->
+              {:error, "cannot compute next run: #{inspect(reason)}"}
+          end
+
+        {:error, reason} ->
+          {:error, "invalid cron expression: #{inspect(reason)}"}
+      end
     end
   end
 end
