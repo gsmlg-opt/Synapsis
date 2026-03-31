@@ -4,16 +4,16 @@ defmodule Synapsis.Agent.Nodes.Act do
 
   Flushes accumulated text/reasoning/tools to DB, then selects the next node:
 
-  - `:respond`  — no tool calls; reply directly to the user (Phase 1 only path)
-  - `:spawn`    — tool calls requesting a Code Agent (Phase 3+)
-  - `:delegate` — routing to a Project Agent (Phase 3+)
-
-  Phase 1: always routes to `:respond`. The routing logic is a stub that will
-  be expanded in Phase 3 when `agent_send` and `spawn_coding_agent` tools land.
+  - `:respond`  — no tool calls; reply directly to the user
+  - `:spawn`    — tool calls requesting a Code Agent (`task` tool detected)
+  - `:delegate` — routing to a Project Agent (future)
   """
   @behaviour Synapsis.Agent.Runtime.Node
 
   alias Synapsis.Agent.ResponseFlusher
+
+  # Tool names that trigger Code Agent spawning
+  @spawn_tools ~w[task spawn_coding_agent]
 
   @impl true
   @spec run(map(), map()) :: {:next, atom(), map()}
@@ -38,8 +38,15 @@ defmodule Synapsis.Agent.Nodes.Act do
         pending_reasoning: flushed.pending_reasoning
     }
 
-    # Phase 1: all responses are direct. Phase 3+ will inspect tool_uses to
-    # detect agent-spawn intent and route to :spawn or :delegate.
-    {:next, :respond, new_state}
+    route = determine_route(new_state.tool_uses)
+    {:next, route, new_state}
   end
+
+  # If any tool_use is a spawn tool, route to :spawn. Otherwise :respond.
+  defp determine_route(tool_uses) when is_list(tool_uses) do
+    spawn? = Enum.any?(tool_uses, fn tu -> Map.get(tu, :name) in @spawn_tools end)
+    if spawn?, do: :spawn, else: :respond
+  end
+
+  defp determine_route(_), do: :respond
 end

@@ -4,17 +4,19 @@ defmodule Synapsis.Agent.Graphs.ConversationalLoop do
 
   Runs the persistent assistant conversation:
 
-      receive_message → compact_context → build_prompt → reason → act → respond
-                ↑                                                        │
-                └────────────────────────── loop ───────────────────────┘
+      receive_message → compact_context → build_prompt → reason → act ──────────> respond
+                ↑                                                   │                │
+                │                                                   └──> spawn_agent ┘
+                └──────────────────────────── loop ─────────────────────────────────┘
 
   Key differences from CodingLoop:
   - `act` is an intent router, not a tool dispatcher.
   - The loop is persistent — `respond` returns to `receive_message` rather
     than terminating the graph.
   - `reason` streams the full conversational LLM response (like `llm_stream`),
-    and `act` decides whether to respond directly, delegate, or spawn a
-    Code Agent (Phase 3+).
+    and `act` decides whether to respond directly or spawn a Code Agent.
+  - When spawning, `spawn_agent` calls `SessionBridge`, registers the child,
+    broadcasts `code_agent_spawned`, then routes to `respond`.
 
   Error path from `reason` routes to `respond` so the loop continues even
   when the LLM call fails — the error is already logged upstream.
@@ -32,6 +34,7 @@ defmodule Synapsis.Agent.Graphs.ConversationalLoop do
         build_prompt: Nodes.BuildPrompt,
         reason: Nodes.Reason,
         act: Nodes.Act,
+        spawn_agent: Nodes.SpawnAgent,
         respond: Nodes.Respond
       },
       edges: %{
@@ -39,7 +42,8 @@ defmodule Synapsis.Agent.Graphs.ConversationalLoop do
         compact_context: :build_prompt,
         build_prompt: :reason,
         reason: %{default: :act, error: :respond},
-        act: %{respond: :respond},
+        act: %{respond: :respond, spawn: :spawn_agent},
+        spawn_agent: :respond,
         respond: %{loop: :receive}
       },
       start: :receive

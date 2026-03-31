@@ -32,6 +32,7 @@ defmodule Synapsis.Agent.GlobalAgent do
   use GenServer
 
   alias Synapsis.Agent.Runtime.Runner
+  alias Synapsis.Agent.{AgentRegistry, Memory.EventStore}
   alias Synapsis.Session.Worker.{Boot, IOHandler, Persistence}
   alias Synapsis.Session.Stream, as: SessionStream
 
@@ -183,6 +184,55 @@ defmodule Synapsis.Agent.GlobalAgent do
     |> noreply_from_io(s)
   end
 
+  # Code Agent completion — save facts to memory (AC-20)
+  def handle_info({:coding_session_completed, _ref, child_session_id}, state) do
+    AgentRegistry.update_status(child_session_id, :complete)
+
+    summary = fetch_session_summary(child_session_id)
+
+    EventStore.append(%{
+      event_type: :code_agent_completed,
+      project_id: nil,
+      work_id: child_session_id,
+      payload: %{
+        parent_session_id: state.session_id,
+        child_session_id: child_session_id,
+        summary: summary
+      }
+    })
+
+    Phoenix.PubSub.broadcast(
+      Synapsis.PubSub,
+      "session:#{state.session_id}",
+      {"code_agent_event",
+       %{sub_session_id: child_session_id, event: "done", payload: %{summary: summary}}}
+    )
+
+    Logger.info("code_agent_completed",
+      parent_session_id: state.session_id,
+      child_session_id: child_session_id
+    )
+
+    {:noreply, state, @timeout}
+  end
+
+  def handle_info({:coding_session_failed, _ref, child_session_id}, state) do
+    AgentRegistry.update_status(child_session_id, :failed)
+
+    Phoenix.PubSub.broadcast(
+      Synapsis.PubSub,
+      "session:#{state.session_id}",
+      {"code_agent_event", %{sub_session_id: child_session_id, event: "error", payload: %{}}}
+    )
+
+    {:noreply, state, @timeout}
+  end
+
+  def handle_info({:coding_session_timeout, _ref, child_session_id}, state) do
+    AgentRegistry.update_status(child_session_id, :failed)
+    {:noreply, state, @timeout}
+  end
+
   def handle_info({:EXIT, pid, _reason}, %{runner_pid: pid} = s) do
     Logger.warning("global_agent_runner_exit", session_id: s.session_id)
     Persistence.set_status(s.session_id, "idle")
@@ -201,6 +251,23 @@ defmodule Synapsis.Agent.GlobalAgent do
   # ------------------------------------------------------------------
 
   defp via(session_id), do: {:via, Registry, {Synapsis.Agent.Registry, {__MODULE__, session_id}}}
+
+  # Fetch a short summary of the last assistant message from a completed session.
+  defp fetch_session_summary(session_id) do
+    try do
+      messages = Synapsis.Sessions.get_messages(session_id, limit: 5)
+
+      messages
+      |> Enum.filter(&(&1.role == "assistant"))
+      |> List.last()
+      |> case do
+        nil -> nil
+        msg -> String.slice(to_string(msg.content), 0, 500)
+      end
+    rescue
+      _ -> nil
+    end
+  end
 
   # IOHandler returns `{:noreply, state}` or `{:noreply, state, timeout}`.
   # Normalize to always include the module's timeout.
