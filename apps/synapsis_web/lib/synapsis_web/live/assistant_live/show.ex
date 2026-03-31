@@ -436,13 +436,18 @@ defmodule SynapsisWeb.AssistantLive.Show do
           <%!-- Session header --%>
           <div class="flex items-center justify-between border-b border-base-300 px-4 py-2 bg-base-100">
             <div class="flex items-center gap-3 min-w-0">
-              <.dm_mdi name="robot-happy-outline" class="w-5 h-5 text-primary shrink-0" />
+              <.dm_mdi
+                name={@agent_config.icon || "robot-happy-outline"}
+                class="w-5 h-5 text-primary shrink-0"
+              />
               <div class="min-w-0">
                 <h2 class="font-medium text-sm truncate">
                   {@current_session.title || "Session #{String.slice(@current_session.id, 0..7)}"}
                 </h2>
                 <div class="text-xs text-base-content/40">
-                  <span class="text-primary/70">{String.capitalize(@assistant_name)}</span>
+                  <span class="text-primary/70">
+                    {@agent_config.label || String.capitalize(@assistant_name)}
+                  </span>
                   <span class="mx-1">&middot;</span>
                   {@current_session.provider}/{@current_session.model}
                 </div>
@@ -541,6 +546,14 @@ defmodule SynapsisWeb.AssistantLive.Show do
               />
             </div>
           </div>
+
+          <%!-- Status bar --%>
+          <.session_status_bar
+            current_mode={@current_mode}
+            session_status={@session_status}
+            on_mode_change="switch_mode"
+            has_session={true}
+          />
         <% else %>
           <%!-- Empty state --%>
           <div class="flex-1 flex items-center justify-center">

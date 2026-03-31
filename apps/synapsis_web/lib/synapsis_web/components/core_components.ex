@@ -584,7 +584,7 @@ defmodule SynapsisWeb.CoreComponents do
       phx-click="switch_session"
       phx-value-id={@session.id}
       class={[
-        "flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors text-sm",
+        "group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors text-sm",
         if(@active,
           do: "bg-primary/10 text-primary border-r-2 border-primary",
           else: "text-base-content/70 hover:bg-base-300"
