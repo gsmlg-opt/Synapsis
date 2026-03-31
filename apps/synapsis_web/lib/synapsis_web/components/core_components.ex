@@ -163,19 +163,23 @@ defmodule SynapsisWeb.CoreComponents do
 
   def code_agent_panel(assigns) do
     ~H"""
-    <div class={["border border-primary/20 rounded-lg overflow-hidden text-sm", @class]}>
-      <div class="bg-base-200 px-3 py-2 flex items-center gap-2">
+    <details
+      class={["border border-primary/20 rounded-lg overflow-hidden text-sm", @class]}
+      open={@status == "running"}
+    >
+      <summary class="bg-base-200 px-3 py-2 flex items-center gap-2 cursor-pointer select-none list-none">
         <.dm_mdi name="robot-outline" class="w-4 h-4 text-primary shrink-0" />
         <span class="font-medium text-xs text-primary">Code Agent</span>
-        <span class="flex-1" />
+        <span class="flex-1 text-xs text-base-content/50 italic truncate pl-1" title={@prompt}>
+          {String.slice(@prompt, 0, 60)}{if String.length(@prompt) > 60, do: "…", else: ""}
+        </span>
         <span :if={@status == "running"} class="text-xs text-base-content/40 animate-pulse">
           Running…
         </span>
         <.dm_badge :if={@status == "complete"} variant="success" size="sm">done</.dm_badge>
         <.dm_badge :if={@status == "error"} variant="error" size="sm">failed</.dm_badge>
-      </div>
+      </summary>
       <div class="p-3 space-y-2">
-        <p class="text-xs text-base-content/60 italic truncate" title={@prompt}>{@prompt}</p>
         <details :if={@tool_calls != []}>
           <summary class="text-xs cursor-pointer text-base-content/40 hover:text-base-content/70 select-none">
             {length(@tool_calls)} tool call{if length(@tool_calls) != 1, do: "s", else: ""}
@@ -193,7 +197,7 @@ defmodule SynapsisWeb.CoreComponents do
           {@completion}
         </div>
       </div>
-    </div>
+    </details>
     """
   end
 
