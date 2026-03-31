@@ -32,31 +32,84 @@ defmodule SynapsisServer.SessionChannel do
     {:ok, reply, socket}
   end
 
+  # Max message content size: 256 KB
+  @max_content_bytes 256_000
+  # Max images per message
+  @max_images 20
+
   @impl true
   def handle_in("session:message", %{"content" => content, "images" => images}, socket)
       when is_list(images) do
-    case Synapsis.Sessions.send_message(socket.assigns.session_id, %{
-           content: content,
-           images: images
-         }) do
-      :ok ->
-        {:reply, :ok, socket}
+    cond do
+      not is_binary(content) ->
+        {:reply, {:error, %{reason: "content must be a string"}}, socket}
 
-      {:error, reason} ->
-        Logger.warning("session_channel_error", event: "session:message", reason: inspect(reason))
-        {:reply, {:error, %{reason: format_error(reason)}}, socket}
+      byte_size(content) > @max_content_bytes ->
+        {:reply, {:error, %{reason: "content too large"}}, socket}
+
+      length(images) > @max_images ->
+        {:reply, {:error, %{reason: "too many images"}}, socket}
+
+      not Enum.all?(images, &is_binary/1) ->
+        {:reply, {:error, %{reason: "each image must be a file path string"}}, socket}
+
+      true ->
+        case Synapsis.Sessions.send_message(socket.assigns.session_id, %{
+               content: content,
+               images: images
+             }) do
+          :ok ->
+            {:reply, :ok, socket}
+
+          {:error, reason} ->
+            Logger.warning("session_channel_error",
+              event: "session:message",
+              reason: inspect(reason)
+            )
+
+            {:reply, {:error, %{reason: format_error(reason)}}, socket}
+        end
     end
+  catch
+    :exit, _ ->
+      Logger.warning("session_channel_error",
+        event: "session:message",
+        reason: "worker_unavailable"
+      )
+
+      {:reply, {:error, %{reason: "worker_unavailable"}}, socket}
   end
 
   def handle_in("session:message", %{"content" => content}, socket) do
-    case Synapsis.Sessions.send_message(socket.assigns.session_id, content) do
-      :ok ->
-        {:reply, :ok, socket}
+    cond do
+      not is_binary(content) ->
+        {:reply, {:error, %{reason: "content must be a string"}}, socket}
 
-      {:error, reason} ->
-        Logger.warning("session_channel_error", event: "session:message", reason: inspect(reason))
-        {:reply, {:error, %{reason: format_error(reason)}}, socket}
+      byte_size(content) > @max_content_bytes ->
+        {:reply, {:error, %{reason: "content too large"}}, socket}
+
+      true ->
+        case Synapsis.Sessions.send_message(socket.assigns.session_id, content) do
+          :ok ->
+            {:reply, :ok, socket}
+
+          {:error, reason} ->
+            Logger.warning("session_channel_error",
+              event: "session:message",
+              reason: inspect(reason)
+            )
+
+            {:reply, {:error, %{reason: format_error(reason)}}, socket}
+        end
     end
+  catch
+    :exit, _ ->
+      Logger.warning("session_channel_error",
+        event: "session:message",
+        reason: "worker_unavailable"
+      )
+
+      {:reply, {:error, %{reason: "worker_unavailable"}}, socket}
   end
 
   def handle_in("session:cancel", _payload, socket) do
@@ -83,17 +136,47 @@ defmodule SynapsisServer.SessionChannel do
       {:reply, {:error, %{reason: "worker_unavailable"}}, socket}
   end
 
-  def handle_in("session:tool_approve", %{"tool_use_id" => tool_use_id}, socket) do
+  def handle_in("session:tool_approve", %{"tool_use_id" => tool_use_id}, socket)
+      when is_binary(tool_use_id) do
     Synapsis.Sessions.approve_tool(socket.assigns.session_id, tool_use_id)
     {:reply, :ok, socket}
   end
 
-  def handle_in("session:tool_deny", %{"tool_use_id" => tool_use_id}, socket) do
+  def handle_in("session:tool_approve", _payload, socket) do
+    {:reply, {:error, %{reason: "tool_use_id must be a string"}}, socket}
+  end
+
+  def handle_in("session:tool_deny", %{"tool_use_id" => tool_use_id}, socket)
+      when is_binary(tool_use_id) do
     Synapsis.Sessions.deny_tool(socket.assigns.session_id, tool_use_id)
     {:reply, :ok, socket}
   end
 
-  def handle_in("session:switch_agent", %{"agent" => agent}, socket) do
+  def handle_in("session:tool_deny", _payload, socket) do
+    {:reply, {:error, %{reason: "tool_use_id must be a string"}}, socket}
+  end
+
+  def handle_in(
+        "session:ask_user_response",
+        %{"ref" => ref, "response" => response},
+        socket
+      )
+      when is_binary(ref) and is_binary(response) do
+    Phoenix.PubSub.broadcast(
+      Synapsis.PubSub,
+      "ask_user_response:#{socket.assigns.session_id}",
+      {:user_response, ref, response}
+    )
+
+    {:reply, :ok, socket}
+  end
+
+  def handle_in("session:ask_user_response", _payload, socket) do
+    {:reply, {:error, %{reason: "ref and response must be strings"}}, socket}
+  end
+
+  def handle_in("session:switch_agent", %{"agent" => agent}, socket)
+      when is_binary(agent) do
     case Synapsis.Sessions.switch_agent(socket.assigns.session_id, agent) do
       :ok ->
         {:reply, :ok, socket}
@@ -106,9 +189,22 @@ defmodule SynapsisServer.SessionChannel do
 
         {:reply, {:error, %{reason: format_error(reason)}}, socket}
     end
+  catch
+    :exit, _ ->
+      Logger.warning("session_channel_error",
+        event: "session:switch_agent",
+        reason: "worker_unavailable"
+      )
+
+      {:reply, {:error, %{reason: "worker_unavailable"}}, socket}
   end
 
-  def handle_in("toggle_debug", %{"enabled" => enabled}, socket) do
+  def handle_in("session:switch_agent", _payload, socket) do
+    {:reply, {:error, %{reason: "agent must be a string"}}, socket}
+  end
+
+  def handle_in("toggle_debug", %{"enabled" => enabled}, socket)
+      when is_boolean(enabled) do
     session_id = socket.assigns.session_id
 
     case Synapsis.Sessions.update_debug(session_id, enabled) do
@@ -121,11 +217,35 @@ defmodule SynapsisServer.SessionChannel do
     end
   end
 
+  def handle_in("toggle_debug", _payload, socket) do
+    {:reply, {:error, %{reason: "enabled must be a boolean"}}, socket}
+  end
+
   def handle_in(_event, _payload, socket) do
     {:noreply, socket}
   end
 
   @impl true
+  def handle_info({:ask_user, _ref, payload}, socket) do
+    push(socket, "ask_user", payload)
+    {:noreply, socket}
+  end
+
+  def handle_info({:agent_mode_changed, mode}, socket) do
+    push(socket, "agent_mode_changed", %{mode: to_string(mode)})
+    {:noreply, socket}
+  end
+
+  def handle_info({:plan_submitted, plan}, socket) do
+    push(socket, "plan_submitted", %{plan: plan})
+    {:noreply, socket}
+  end
+
+  def handle_info({:todo_update, _session_id, todos}, socket) do
+    push(socket, "todo_update", %{todos: todos})
+    {:noreply, socket}
+  end
+
   def handle_info({event, payload}, socket) when is_binary(event) do
     # Filter debug events based on debug flag
     case event do

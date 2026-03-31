@@ -28,11 +28,15 @@ defmodule SynapsisWeb.SkillLive.Index do
 
   def handle_event("delete_skill", %{"id" => id}, socket) do
     case Synapsis.Repo.get(Synapsis.Skill, id) do
-      nil -> :ok
-      skill -> Synapsis.Repo.delete(skill)
-    end
+      nil ->
+        {:noreply, socket}
 
-    {:noreply, assign(socket, skills: list_skills())}
+      skill ->
+        case Synapsis.Repo.delete(skill) do
+          {:ok, _} -> {:noreply, assign(socket, skills: list_skills())}
+          {:error, _} -> {:noreply, put_flash(socket, :error, "Failed to delete skill")}
+        end
+    end
   end
 
   defp list_skills do

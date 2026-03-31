@@ -35,7 +35,7 @@ defmodule SynapsisPlugin.Server do
 
         # Subscribe to tool effects if the plugin handles them
         if function_exported?(plugin_module, :handle_effect, 3) do
-          Phoenix.PubSub.subscribe(Synapsis.PubSub, "tool_effects:*")
+          Phoenix.PubSub.subscribe(Synapsis.PubSub, "tool_effects:global")
         end
 
         Logger.info("plugin_started", name: name, tools: length(registered))
@@ -128,7 +128,7 @@ defmodule SynapsisPlugin.Server do
       Phoenix.PubSub.broadcast(
         Synapsis.PubSub,
         "plugin_events",
-        {:plugin_crashed, %{name: state.name, reason: inspect(reason)}}
+        {:plugin_crashed, %{name: state.name, reason: "plugin process terminated"}}
       )
     end
 
@@ -142,12 +142,14 @@ defmodule SynapsisPlugin.Server do
   defp register_tools(plugin_name, tools) do
     for tool <- tools do
       full_name = tool.name
+
       Synapsis.Tool.Registry.register_process(full_name, self(),
         description: tool.description,
         parameters: tool.parameters,
         timeout: Map.get(tool, :timeout, 30_000),
         plugin: plugin_name
       )
+
       full_name
     end
   end

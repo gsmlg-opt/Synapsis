@@ -49,8 +49,8 @@ defmodule Synapsis.Tool.EnterPlanMode do
 
                 {:ok, "Entered plan mode"}
 
-              {:error, changeset} ->
-                {:error, "Failed to enter plan mode: #{inspect(changeset.errors)}"}
+              {:error, _changeset} ->
+                {:error, "Failed to enter plan mode"}
             end
         end
     end

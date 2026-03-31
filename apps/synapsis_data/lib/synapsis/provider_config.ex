@@ -9,12 +9,12 @@ defmodule Synapsis.ProviderConfig do
   @name_format ~r/^[a-z0-9][a-z0-9_-]*$/
 
   schema "provider_configs" do
-    field :name, :string
-    field :type, :string
-    field :base_url, :string
-    field :api_key_encrypted, Synapsis.Encrypted.Binary
-    field :config, :map, default: %{}
-    field :enabled, :boolean, default: true
+    field(:name, :string)
+    field(:type, :string)
+    field(:base_url, :string)
+    field(:api_key_encrypted, Synapsis.Encrypted.Binary)
+    field(:config, :map, default: %{})
+    field(:enabled, :boolean, default: true)
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -24,7 +24,12 @@ defmodule Synapsis.ProviderConfig do
     |> cast(attrs, [:name, :type, :base_url, :api_key_encrypted, :config, :enabled])
     |> validate_required([:name, :type])
     |> validate_inclusion(:type, @valid_types)
-    |> validate_format(:name, @name_format, message: "must start with a letter or digit and contain only lowercase letters, digits, hyphens, or underscores")
+    |> validate_length(:name, max: 255)
+    |> validate_length(:base_url, max: 2_048)
+    |> validate_format(:name, @name_format,
+      message:
+        "must start with a letter or digit and contain only lowercase letters, digits, hyphens, or underscores"
+    )
     |> validate_base_url()
     |> unique_constraint(:name)
   end
@@ -33,7 +38,12 @@ defmodule Synapsis.ProviderConfig do
     provider_config
     |> cast(attrs, [:name, :type, :base_url, :api_key_encrypted, :config, :enabled])
     |> validate_inclusion(:type, @valid_types)
-    |> validate_format(:name, @name_format, message: "must start with a letter or digit and contain only lowercase letters, digits, hyphens, or underscores")
+    |> validate_length(:name, max: 255)
+    |> validate_length(:base_url, max: 2_048)
+    |> validate_format(:name, @name_format,
+      message:
+        "must start with a letter or digit and contain only lowercase letters, digits, hyphens, or underscores"
+    )
     |> validate_base_url()
     |> unique_constraint(:name)
   end

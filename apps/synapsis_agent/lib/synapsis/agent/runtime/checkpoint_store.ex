@@ -93,7 +93,7 @@ defmodule Synapsis.Agent.Runtime.CheckpointStore do
       run_id: row.run_id,
       graph: deserialize_graph(row.graph),
       node: safe_to_existing_atom(row.node),
-      status: String.to_existing_atom(row.status),
+      status: try_to_existing_atom(row.status),
       state: deserialize_map_keys(row.state || %{}),
       ctx: deserialize_map_keys(row.ctx || %{}),
       error: deserialize_error(row.error),
@@ -111,22 +111,22 @@ defmodule Synapsis.Agent.Runtime.CheckpointStore do
 
   defp deserialize_nodes(nodes) when is_map(nodes) do
     Map.new(nodes, fn {name, module} ->
-      {String.to_existing_atom(name), String.to_existing_atom(module)}
+      {try_to_existing_atom(name), try_to_existing_atom(module)}
     end)
   end
 
   defp deserialize_edges(edges) when is_map(edges) do
     Map.new(edges, fn
       {from, dest} when is_binary(dest) ->
-        {String.to_existing_atom(from), safe_to_existing_atom(dest)}
+        {try_to_existing_atom(from), safe_to_existing_atom(dest)}
 
       {from, branches} when is_map(branches) ->
         deserialized =
           Map.new(branches, fn {sel, dest} ->
-            {String.to_existing_atom(sel), safe_to_existing_atom(dest)}
+            {try_to_existing_atom(sel), safe_to_existing_atom(dest)}
           end)
 
-        {String.to_existing_atom(from), deserialized}
+        {try_to_existing_atom(from), deserialized}
     end)
   end
 
@@ -147,7 +147,7 @@ defmodule Synapsis.Agent.Runtime.CheckpointStore do
 
   defp safe_to_existing_atom(nil), do: nil
   defp safe_to_existing_atom("end"), do: :end
-  defp safe_to_existing_atom(str) when is_binary(str), do: String.to_existing_atom(str)
+  defp safe_to_existing_atom(str) when is_binary(str), do: try_to_existing_atom(str)
   defp safe_to_existing_atom(atom) when is_atom(atom), do: atom
 
   defp try_to_existing_atom(str) do

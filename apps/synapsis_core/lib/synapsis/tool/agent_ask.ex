@@ -93,9 +93,9 @@ defmodule Synapsis.Tool.AgentAsk do
             {:error, "Request timed out after #{timeout}ms"}
         end
 
-      {:error, changeset} ->
+      {:error, _changeset} ->
         Phoenix.PubSub.unsubscribe(Synapsis.PubSub, "agent_reply:#{ref}")
-        {:error, "Failed to send request: #{inspect(changeset.errors)}"}
+        {:error, "Failed to send request"}
     end
   end
 end

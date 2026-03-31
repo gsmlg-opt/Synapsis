@@ -92,43 +92,49 @@ defmodule Synapsis.Session.Worker.Config do
 
   def do_switch_agent(agent_name, session) do
     name_str = to_string(agent_name)
-    agent = resolve_agent(%{session | agent: name_str})
-    {:ok, _} = session |> Session.changeset(%{agent: name_str}) |> Repo.update()
-    {agent, %{session | agent: name_str}}
+
+    case session |> Session.changeset(%{agent: name_str}) |> Repo.update() do
+      {:ok, updated_session} ->
+        agent = resolve_agent(updated_session)
+        {:ok, agent, updated_session}
+
+      {:error, _changeset} ->
+        {:error, :db_update_failed}
+    end
   end
 
   def do_switch_model(provider_name, model, state) do
-    {:ok, _} =
-      state.session
-      |> Session.changeset(%{provider: provider_name, model: model})
-      |> Repo.update()
+    case state.session
+         |> Session.changeset(%{provider: provider_name, model: model})
+         |> Repo.update() do
+      {:ok, updated_session} ->
+        provider_config = resolve_provider_config(provider_name)
+        agent = Map.put(state.agent, :model, model)
+        {:ok, updated_session, provider_config, agent}
 
-    session = %{state.session | provider: provider_name, model: model}
-    provider_config = resolve_provider_config(provider_name)
-    agent = Map.put(state.agent, :model, model)
-    {session, provider_config, agent}
+      {:error, _changeset} ->
+        {:error, :db_update_failed}
+    end
   end
 
   def apply_mode(mode_name, state) when mode_name in @valid_modes do
     config = @mode_configs[mode_name]
     agent = Synapsis.Agent.Resolver.resolve(config.agent, state.session.config)
     agent = ensure_agent_model(agent, state.session)
-    {:ok, _} = state.session |> Session.changeset(%{agent: config.agent}) |> Repo.update()
 
-    case Synapsis.Tool.Permission.update_config(state.session_id, config.permission) do
-      {:ok, _} ->
-        session = %{state.session | agent: config.agent}
+    with {:ok, updated_session} <-
+           state.session |> Session.changeset(%{agent: config.agent}) |> Repo.update(),
+         {:ok, _} <-
+           Synapsis.Tool.Permission.update_config(state.session_id, config.permission) do
+      Phoenix.PubSub.broadcast(
+        Synapsis.PubSub,
+        "session:#{state.session_id}",
+        {"mode_switched", %{mode: mode_name, agent: config.agent}}
+      )
 
-        Phoenix.PubSub.broadcast(
-          Synapsis.PubSub,
-          "session:#{state.session_id}",
-          {"mode_switched", %{mode: mode_name, agent: config.agent}}
-        )
-
-        {:ok, %{state | agent: agent, session: session}}
-
-      {:error, _} ->
-        {:error, :permission_update_failed}
+      {:ok, %{state | agent: agent, session: updated_session}}
+    else
+      {:error, _} -> {:error, :mode_switch_failed}
     end
   end
 

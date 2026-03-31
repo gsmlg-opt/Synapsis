@@ -35,10 +35,10 @@ defmodule Synapsis.Tool.FileDelete do
         if File.exists?(resolved) do
           case File.rm(resolved) do
             :ok -> {:ok, "Successfully deleted #{resolved}"}
-            {:error, reason} -> {:error, "Failed to delete #{resolved}: #{inspect(reason)}"}
+            {:error, reason} -> {:error, "Failed to delete file: #{inspect(reason)}"}
           end
         else
-          {:error, "File does not exist: #{resolved}"}
+          {:error, "File does not exist"}
         end
       end
     end

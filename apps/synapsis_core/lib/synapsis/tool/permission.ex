@@ -75,7 +75,7 @@ defmodule Synapsis.Tool.Permission do
         SessionConfig.from_db(row)
     end
   rescue
-    _ ->
+    _e in [Ecto.QueryError, DBConnection.ConnectionError, DBConnection.OwnershipError] ->
       %SessionConfig{SessionConfig.default() | session_id: session_id}
   catch
     :exit, _ ->
@@ -92,18 +92,15 @@ defmodule Synapsis.Tool.Permission do
           {:ok, Synapsis.SessionPermission.t()} | {:error, Ecto.Changeset.t()}
   def update_config(session_id, attrs) do
     attrs = Map.put(attrs, :session_id, session_id)
+    updatable = [:mode, :allow_write, :allow_execute, :allow_destructive, :tool_overrides]
 
-    case Synapsis.Repo.get_by(Synapsis.SessionPermission, session_id: session_id) do
-      nil ->
-        %Synapsis.SessionPermission{}
-        |> Synapsis.SessionPermission.changeset(attrs)
-        |> Synapsis.Repo.insert()
-
-      existing ->
-        existing
-        |> Synapsis.SessionPermission.changeset(attrs)
-        |> Synapsis.Repo.update()
-    end
+    %Synapsis.SessionPermission{}
+    |> Synapsis.SessionPermission.changeset(attrs)
+    |> Synapsis.Repo.insert(
+      on_conflict: {:replace, updatable},
+      conflict_target: :session_id,
+      returning: true
+    )
   end
 
   # ---------------------------------------------------------------------------
@@ -216,8 +213,6 @@ defmodule Synapsis.Tool.Permission do
     end
   end
 
-  defp resolve_allow_setting(true), do: :allowed
-  defp resolve_allow_setting(false), do: :denied
   defp resolve_allow_setting(:allow), do: :allowed
   defp resolve_allow_setting(:deny), do: :denied
   defp resolve_allow_setting(:ask), do: :requires_approval

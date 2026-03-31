@@ -204,7 +204,7 @@ defmodule Synapsis.WorkspaceDocuments do
     end)
   rescue
     # If regex is invalid for Elixir but valid for Postgres, fall back to simple matching
-    _ ->
+    _e in [Regex.CompileError, ArgumentError] ->
       []
   end
 
@@ -360,15 +360,21 @@ defmodule Synapsis.WorkspaceDocuments do
   def hard_delete_by_ids([]), do: 0
 
   def hard_delete_by_ids(ids) do
-    # Delete versions first (FK constraint)
-    from(v in WorkspaceDocumentVersion, where: v.document_id in ^ids)
-    |> Repo.delete_all()
-
-    {count, _} =
-      from(d in WorkspaceDocument, where: d.id in ^ids)
+    Repo.transaction(fn ->
+      # Delete versions first (FK constraint)
+      from(v in WorkspaceDocumentVersion, where: v.document_id in ^ids)
       |> Repo.delete_all()
 
-    count
+      {count, _} =
+        from(d in WorkspaceDocument, where: d.id in ^ids)
+        |> Repo.delete_all()
+
+      count
+    end)
+    |> case do
+      {:ok, count} -> count
+      {:error, _} -> 0
+    end
   end
 
   @doc "Find IDs of expired soft-deleted documents."

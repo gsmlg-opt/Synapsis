@@ -1,4 +1,5 @@
 defmodule SynapsisWeb.SettingsLive do
+  @moduledoc "Application settings page for user preferences and configuration."
   use SynapsisWeb, :live_view
 
   @impl true

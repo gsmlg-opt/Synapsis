@@ -28,12 +28,28 @@ defmodule Synapsis.Agent.Memory.SummaryStore do
 
   defp to_summary(%Synapsis.AgentSummary{} = row) do
     %Summary{
-      scope: String.to_existing_atom(row.scope),
+      scope: safe_to_atom(row.scope),
       scope_id: row.scope_id,
-      kind: String.to_existing_atom(row.kind),
+      kind: safe_to_atom(row.kind),
       content: row.content,
       metadata: row.metadata || %{},
       updated_at: row.updated_at
     }
+  end
+
+  @known_atoms %{
+    "global" => :global,
+    "project" => :project,
+    "task" => :task,
+    "progress" => :progress,
+    "decisions" => :decisions,
+    "context" => :context,
+    "summary" => :summary
+  }
+
+  defp safe_to_atom(str) when is_binary(str) do
+    Map.get_lazy(@known_atoms, str, fn -> String.to_existing_atom(str) end)
+  rescue
+    ArgumentError -> str
   end
 end

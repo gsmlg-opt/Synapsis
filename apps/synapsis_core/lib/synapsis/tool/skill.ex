@@ -42,7 +42,9 @@ defmodule Synapsis.Tool.Skill do
   end
 
   defp find_skill(name, paths) do
-    filename = "#{name}.md"
+    # Sanitize: strip path separators and traversal sequences
+    safe_name = name |> Path.basename() |> String.replace(~r/[^a-zA-Z0-9_\-.]/, "")
+    filename = "#{safe_name}.md"
 
     Enum.find_value(paths, :not_found, fn dir ->
       path = Path.join(dir, filename)

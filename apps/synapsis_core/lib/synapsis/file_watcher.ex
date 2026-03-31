@@ -61,7 +61,7 @@ defmodule Synapsis.FileWatcher do
     Process.exit(pid, :normal)
     :ok
   rescue
-    _ -> :ok
+    _e in [ArgumentError] -> :ok
   end
 
   def terminate(_reason, _state), do: :ok

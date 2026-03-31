@@ -208,21 +208,29 @@ defmodule SynapsisPlugin.LSP do
 
   @impl Synapsis.Plugin
   def handle_effect(:file_changed, %{path: path}, state) when is_port(state.port) do
-    uri = "file://#{Path.expand(to_string(path), state.root_path)}"
+    resolved = Path.expand(to_string(path), state.root_path)
+    root = Path.expand(state.root_path)
 
-    case File.read(Path.expand(to_string(path), state.root_path)) do
-      {:ok, content} ->
-        case SynapsisPlugin.LSP.Protocol.encode_notification("textDocument/didChange", %{
-               "textDocument" => %{"uri" => uri, "version" => 1},
-               "contentChanges" => [%{"text" => content}]
-             }) do
-          {:ok, notification} -> Port.command(state.port, notification)
-          {:error, _} -> :ok
-        end
-        {:ok, state}
+    if resolved != root and not String.starts_with?(resolved, root <> "/") do
+      {:ok, state}
+    else
+      uri = "file://#{resolved}"
 
-      {:error, _} ->
-        {:ok, state}
+      case File.read(resolved) do
+        {:ok, content} ->
+          case SynapsisPlugin.LSP.Protocol.encode_notification("textDocument/didChange", %{
+                 "textDocument" => %{"uri" => uri, "version" => 1},
+                 "contentChanges" => [%{"text" => content}]
+               }) do
+            {:ok, notification} -> Port.command(state.port, notification)
+            {:error, _} -> :ok
+          end
+
+          {:ok, state}
+
+        {:error, _} ->
+          {:ok, state}
+      end
     end
   end
 
@@ -247,7 +255,7 @@ defmodule SynapsisPlugin.LSP do
     Port.close(port)
     :ok
   rescue
-    _ -> :ok
+    _e in [ArgumentError] -> :ok
   end
 
   def terminate(_reason, _state), do: :ok
@@ -315,7 +323,7 @@ defmodule SynapsisPlugin.LSP do
 
   defp send_initialized(state) do
     case SynapsisPlugin.LSP.Protocol.encode_notification("initialized", %{}) do
-      {:ok, data} -> Port.command(state.port, data)
+      {:ok, data} -> if is_port(state.port), do: Port.command(state.port, data)
       {:error, _} -> :ok
     end
   end
@@ -331,7 +339,7 @@ defmodule SynapsisPlugin.LSP do
 
     case SynapsisPlugin.LSP.Protocol.encode_request(id, method, params) do
       {:ok, data} ->
-        Port.command(state.port, data)
+        if is_port(state.port), do: Port.command(state.port, data)
 
       {:error, reason} ->
         Logger.warning("lsp_encode_failed", method: method, reason: inspect(reason))
@@ -399,7 +407,7 @@ defmodule SynapsisPlugin.LSP do
   end
 
   defp format_lsp_result(_method, nil), do: "No results."
-  defp format_lsp_result(_method, result), do: inspect(result)
+  defp format_lsp_result(_method, _result), do: "[unsupported LSP result format]"
 
   defp severity_label(1), do: "error"
   defp severity_label(2), do: "warning"
@@ -414,5 +422,4 @@ defmodule SynapsisPlugin.LSP do
   defp symbol_kind(12), do: "function"
   defp symbol_kind(13), do: "variable"
   defp symbol_kind(_), do: "symbol"
-
 end

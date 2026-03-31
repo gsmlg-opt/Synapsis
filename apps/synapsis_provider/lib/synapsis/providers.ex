@@ -408,7 +408,7 @@ defmodule Synapsis.Providers do
   defp safe_to_atom(k) when is_binary(k) do
     String.to_existing_atom(k)
   rescue
-    ArgumentError -> k
+    _e in [ArgumentError] -> k
   end
 
   defp safe_to_atom(k), do: k

@@ -66,13 +66,16 @@ defmodule Synapsis.Tool.TodoWrite do
                 session_id: session_id,
                 todo_id: todo["id"],
                 content: todo["content"],
-                status: String.to_existing_atom(todo["status"]),
+                status: safe_status_atom(todo["status"]),
                 sort_order: index
               }
 
-              %Synapsis.SessionTodo{}
-              |> Synapsis.SessionTodo.changeset(attrs)
-              |> Synapsis.Repo.insert!()
+              case %Synapsis.SessionTodo{}
+                   |> Synapsis.SessionTodo.changeset(attrs)
+                   |> Synapsis.Repo.insert() do
+                {:ok, todo} -> todo
+                {:error, changeset} -> Synapsis.Repo.rollback(changeset)
+              end
             end)
 
           inserted
@@ -87,11 +90,17 @@ defmodule Synapsis.Tool.TodoWrite do
 
             {:ok, "Updated #{length(inserted)} todo(s)."}
 
-          {:error, reason} ->
-            {:error, "Failed to update todos: #{inspect(reason)}"}
+          {:error, _reason} ->
+            {:error, "Failed to update todos"}
         end
     end
   end
+
+  defp safe_status_atom(status) when status in ["pending", "in_progress", "completed"],
+    do: String.to_existing_atom(status)
+
+  defp safe_status_atom(nil), do: :pending
+  defp safe_status_atom(_), do: :pending
 
   defp get_in_struct(%{session_id: id}, :session_id), do: id
   defp get_in_struct(_, _), do: nil

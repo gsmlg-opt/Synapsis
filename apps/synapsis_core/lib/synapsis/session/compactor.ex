@@ -6,6 +6,7 @@ defmodule Synapsis.Session.Compactor do
   import Ecto.Query
 
   @default_limit 128_000
+  @summary_char_cap 4_000
 
   def maybe_compact(session_id, model, opts \\ []) do
     messages = load_messages(session_id)
@@ -34,15 +35,17 @@ defmodule Synapsis.Session.Compactor do
              from(m in Message, where: m.id in ^ids)
              |> Repo.delete_all()
 
-             {:ok, _msg} =
-               %Message{}
-               |> Message.changeset(%{
-                 session_id: session_id,
-                 role: "system",
-                 parts: [%Synapsis.Part.Text{content: summary}],
-                 token_count: summary_tokens
-               })
-               |> Repo.insert()
+             case %Message{}
+                  |> Message.changeset(%{
+                    session_id: session_id,
+                    role: "system",
+                    parts: [%Synapsis.Part.Text{content: summary}],
+                    token_count: summary_tokens
+                  })
+                  |> Repo.insert() do
+               {:ok, msg} -> msg
+               {:error, changeset} -> Repo.rollback(changeset)
+             end
            end) do
         {:ok, _} ->
           {:ok,
@@ -70,7 +73,7 @@ defmodule Synapsis.Session.Compactor do
 
     """
     [Context Summary - #{length(messages)} messages compacted]
-    #{String.slice(parts, 0, 4000)}
+    #{String.slice(parts, 0, @summary_char_cap)}
     [End Summary]
     """
   end
@@ -80,8 +83,8 @@ defmodule Synapsis.Session.Compactor do
     |> Enum.map(fn
       %Synapsis.Part.Text{content: c} -> c
       %Synapsis.Part.ToolUse{tool: t, input: i} -> "[tool_use: #{t}(#{inspect(i)})]"
-      %Synapsis.Part.ToolResult{content: c} -> "[tool_result: #{String.slice(c, 0, 200)}]"
-      %Synapsis.Part.Reasoning{content: c} -> "[reasoning: #{String.slice(c, 0, 200)}]"
+      %Synapsis.Part.ToolResult{content: c} -> "[tool_result: #{String.slice(c || "", 0, 200)}]"
+      %Synapsis.Part.Reasoning{content: c} -> "[reasoning: #{String.slice(c || "", 0, 200)}]"
       _ -> ""
     end)
     |> Enum.join(" ")

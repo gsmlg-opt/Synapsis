@@ -71,8 +71,8 @@ defmodule Synapsis.Tool.Diagnostics do
           {:ok, result}
         end
 
-      {:error, reason} ->
-        {:error, inspect(reason)}
+      {:error, _reason} ->
+        {:error, "Failed to fetch diagnostics"}
     end
   end
 

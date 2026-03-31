@@ -26,8 +26,21 @@ defmodule Synapsis.Tool.FileWrite do
     }
   end
 
+  # 10 MB — prevents disk exhaustion from unbounded writes
+  @max_content_bytes 10 * 1024 * 1024
+
   @impl true
   def execute(input, context) do
+    content = input["content"]
+
+    if byte_size(content) > @max_content_bytes do
+      {:error, "Content exceeds maximum size of 10 MB"}
+    else
+      execute_write(input, context)
+    end
+  end
+
+  defp execute_write(input, context) do
     path = input["path"]
 
     if Synapsis.Tool.VFS.virtual?(path) do
@@ -42,7 +55,7 @@ defmodule Synapsis.Tool.FileWrite do
            :ok <- File.write(resolved, input["content"]) do
         {:ok, "Successfully wrote #{byte_size(input["content"])} bytes to #{resolved}"}
       else
-        {:error, reason} -> {:error, "Failed to write #{resolved}: #{inspect(reason)}"}
+        {:error, reason} -> {:error, "Failed to write file: #{inspect(reason)}"}
       end
     end
   end

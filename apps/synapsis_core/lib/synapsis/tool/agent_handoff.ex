@@ -97,17 +97,21 @@ defmodule Synapsis.Tool.AgentHandoff do
 
         # Broadcast side effect
         if context[:session_id] do
+          payload = {:tool_effect, :workspace_changed, %{ref: ref, type: "handoff"}}
+
           Phoenix.PubSub.broadcast(
             Synapsis.PubSub,
             "tool_effects:#{context[:session_id]}",
-            {:tool_effect, :workspace_changed, %{ref: ref, type: "handoff"}}
+            payload
           )
+
+          Phoenix.PubSub.broadcast(Synapsis.PubSub, "tool_effects:global", payload)
         end
 
         {:ok, Jason.encode!(%{message_id: message.id, ref: ref, status: "delegated", to: to})}
 
-      {:error, changeset} ->
-        {:error, "Failed to create handoff: #{inspect(changeset.errors)}"}
+      {:error, _changeset} ->
+        {:error, "Failed to create handoff"}
     end
   end
 

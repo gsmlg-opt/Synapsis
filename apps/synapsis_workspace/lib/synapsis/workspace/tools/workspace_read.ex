@@ -43,23 +43,26 @@ defmodule Synapsis.Workspace.Tools.WorkspaceRead do
 
     with :allowed <- Synapsis.Workspace.Permissions.check(agent_ctx, path, :read) do
       case Synapsis.Workspace.read(path) do
-      {:ok, resource} ->
-        result =
-          Jason.encode!(%{
-            id: resource.id,
-            path: resource.path,
-            kind: resource.kind,
-            content: resource.content,
-            metadata: resource.metadata,
-            visibility: resource.visibility,
-            lifecycle: resource.lifecycle,
-            version: resource.version
-          })
+        {:ok, resource} ->
+          result =
+            Jason.encode!(%{
+              id: resource.id,
+              path: resource.path,
+              kind: resource.kind,
+              content: resource.content,
+              metadata: resource.metadata,
+              visibility: resource.visibility,
+              lifecycle: resource.lifecycle,
+              version: resource.version
+            })
 
-        {:ok, result}
+          {:ok, result}
 
-      {:error, :not_found} ->
-        {:error, "Workspace document not found: #{path}"}
+        {:error, :not_found} ->
+          {:error, "Workspace document not found: #{path}"}
+
+        {:error, _reason} ->
+          {:error, "Failed to read workspace document"}
       end
     else
       :denied -> {:error, "Permission denied: cannot read #{path}"}

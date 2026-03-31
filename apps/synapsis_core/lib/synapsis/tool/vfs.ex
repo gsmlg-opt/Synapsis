@@ -49,12 +49,12 @@ defmodule Synapsis.Tool.VFS do
         {:ok, content}
 
       {:error, :not_found} ->
-        {:error, "Workspace document not found: #{path}"}
+        {:error, "Workspace document not found"}
 
       nil ->
         # Fallback to direct DB query
         case Synapsis.WorkspaceDocuments.get_by_path(ws_path) do
-          nil -> {:error, "Workspace document not found: #{path}"}
+          nil -> {:error, "Workspace document not found"}
           doc -> {:ok, apply_offset_limit(doc.content_body || "", opts[:offset], opts[:limit])}
         end
     end
@@ -72,8 +72,8 @@ defmodule Synapsis.Tool.VFS do
       {:error, reason} when is_binary(reason) ->
         {:error, reason}
 
-      {:error, reason} ->
-        {:error, "Failed to write workspace document: #{inspect(reason)}"}
+      {:error, _reason} ->
+        {:error, "Failed to write workspace document"}
 
       nil ->
         {:error, "Workspace module not available — cannot write virtual files"}
@@ -87,8 +87,8 @@ defmodule Synapsis.Tool.VFS do
 
     case workspace_call(:delete, [ws_path]) do
       :ok -> :ok
-      {:error, :not_found} -> {:error, "Workspace document not found: #{path}"}
-      {:error, reason} -> {:error, "Failed to delete: #{inspect(reason)}"}
+      {:error, :not_found} -> {:error, "Workspace document not found"}
+      {:error, _reason} -> {:error, "Failed to delete workspace document"}
       nil -> {:error, "Workspace module not available — cannot delete virtual files"}
     end
   end
@@ -110,7 +110,7 @@ defmodule Synapsis.Tool.VFS do
         case workspace_call(:move, [ws_from, ws_to]) do
           {:ok, _resource} -> {:ok, "Moved #{source} to #{destination}"}
           {:error, reason} when is_binary(reason) -> {:error, reason}
-          {:error, reason} -> {:error, "Failed to move: #{inspect(reason)}"}
+          {:error, _reason} -> {:error, "Failed to move workspace document"}
           nil -> {:error, "Workspace module not available"}
         end
 

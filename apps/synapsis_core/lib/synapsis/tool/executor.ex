@@ -151,8 +151,8 @@ defmodule Synapsis.Tool.Executor do
       case Task.yield(task, timeout) || Task.shutdown(task) do
         {:ok, {:ok, result}} ->
           duration_ms = System.monotonic_time(:millisecond) - start_time
-          broadcast_side_effects(tool_name, module, context)
           persist_tool_call(tool_name, input, {:ok, result}, :completed, duration_ms, context)
+          broadcast_side_effects(tool_name, module, context)
           {:ok, result}
 
         {:ok, {:error, reason}} ->
@@ -180,7 +180,7 @@ defmodule Synapsis.Tool.Executor do
           {:error, {:exit, reason}}
       end
     rescue
-      e ->
+      e in [RuntimeError, ArgumentError, FunctionClauseError] ->
         duration_ms = System.monotonic_time(:millisecond) - start_time
         msg = Exception.message(e)
         persist_tool_call(tool_name, input, {:error, msg}, :error, duration_ms, context)
@@ -232,10 +232,18 @@ defmodule Synapsis.Tool.Executor do
 
     if effects != [] and session_id do
       for effect <- effects do
+        payload = {:tool_effect, effect, %{session_id: session_id}}
+
         Phoenix.PubSub.broadcast(
           Synapsis.PubSub,
           "tool_effects:#{session_id}",
-          {:tool_effect, effect, %{session_id: session_id}}
+          payload
+        )
+
+        Phoenix.PubSub.broadcast(
+          Synapsis.PubSub,
+          "tool_effects:global",
+          payload
         )
       end
     end
@@ -272,7 +280,12 @@ defmodule Synapsis.Tool.Executor do
         |> Synapsis.ToolCall.changeset(attrs)
         |> Synapsis.Repo.insert()
       rescue
-        e ->
+        e in [
+          Ecto.QueryError,
+          DBConnection.ConnectionError,
+          DBConnection.OwnershipError,
+          RuntimeError
+        ] ->
           Logger.warning("tool_call_persist_failed",
             tool_name: tool_name,
             error: Exception.message(e)
@@ -285,9 +298,25 @@ defmodule Synapsis.Tool.Executor do
 
   defp encode_result({:ok, result}) when is_map(result), do: {result, nil}
   defp encode_result({:ok, result}) when is_binary(result), do: {%{"result" => result}, nil}
-  defp encode_result({:ok, result}), do: {%{"result" => inspect(result)}, nil}
+  defp encode_result({:ok, result}), do: {%{"result" => safe_inspect(result)}, nil}
   defp encode_result({:error, reason}) when is_binary(reason), do: {nil, reason}
-  defp encode_result({:error, reason}), do: {nil, inspect(reason)}
+
+  defp encode_result({:error, reason}) when is_atom(reason),
+    do: {nil, "tool execution failed: #{reason}"}
+
+  defp encode_result({:error, _reason}), do: {nil, "tool execution failed"}
+
+  defp safe_inspect(value) when is_atom(value), do: Atom.to_string(value)
+  defp safe_inspect(value) when is_number(value), do: to_string(value)
+
+  defp safe_inspect(value) when is_list(value) do
+    case Jason.encode(value) do
+      {:ok, json} -> json
+      {:error, _} -> "list result"
+    end
+  end
+
+  defp safe_inspect(_value), do: "non-serializable result"
 
   # --- Batch helpers ---
 

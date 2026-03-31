@@ -32,7 +32,7 @@ defmodule Synapsis.Tool.WebSearch do
   @impl true
   def execute(input, _context) do
     query = input["query"]
-    max_results = input["max_results"] || 5
+    max_results = min(input["max_results"] || 5, 20)
 
     api_key =
       System.get_env("BRAVE_SEARCH_API_KEY") ||
@@ -77,8 +77,8 @@ defmodule Synapsis.Tool.WebSearch do
       {:ok, %{status: status}} ->
         {:error, "Search API returned HTTP #{status}"}
 
-      {:error, reason} ->
-        {:error, "Search request failed: #{inspect(reason)}"}
+      {:error, _reason} ->
+        {:error, "Search request failed"}
     end
   end
 

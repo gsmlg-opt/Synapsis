@@ -314,7 +314,6 @@ defmodule Synapsis.Tool.Registry do
   end
 
   defp filter_agent_mode(entries, :build), do: entries
-  defp filter_agent_mode(entries, :all), do: entries
 
   defp filter_agent_mode(entries, mode) do
     require Logger

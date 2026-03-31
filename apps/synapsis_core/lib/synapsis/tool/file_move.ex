@@ -47,10 +47,10 @@ defmodule Synapsis.Tool.FileMove do
               {:ok, "Moved #{resolved_src} to #{resolved_dst}"}
             else
               {:error, reason} ->
-                {:error, "Failed to move #{resolved_src} to #{resolved_dst}: #{inspect(reason)}"}
+                {:error, "Failed to move file: #{inspect(reason)}"}
             end
           else
-            {:error, "Source file does not exist: #{resolved_src}"}
+            {:error, "Source file does not exist"}
           end
         end
     end

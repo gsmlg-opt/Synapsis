@@ -73,8 +73,8 @@ defmodule Synapsis.GitWorktree do
           File.rm(tmp_path)
         end
 
-      {:error, reason} ->
-        {:error, "Failed to write patch file: #{inspect(reason)}"}
+      {:error, _reason} ->
+        {:error, "Failed to write patch file"}
     end
   end
 
@@ -118,7 +118,8 @@ defmodule Synapsis.GitWorktree do
         collect_output(port, "")
     end
   rescue
-    e -> {:error, "git error: #{Exception.message(e)}"}
+    e in [RuntimeError, ArgumentError, ErlangError] ->
+      {:error, "git error: #{Exception.message(e)}"}
   end
 
   defp collect_output(port, acc) do

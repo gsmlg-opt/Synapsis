@@ -89,7 +89,7 @@ defmodule Synapsis.Agent.StreamAccumulator do
   def accumulate(:ignore, acc), do: {[], acc}
 
   def accumulate({:error, error}, acc) do
-    error_msg = if is_map(error), do: error["message"] || inspect(error), else: inspect(error)
+    error_msg = if is_map(error), do: error["message"] || "provider error", else: "provider error"
     {[{"error", %{message: error_msg}}], acc}
   end
 

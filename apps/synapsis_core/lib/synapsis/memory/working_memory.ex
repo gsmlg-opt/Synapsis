@@ -60,17 +60,23 @@ defmodule Synapsis.Memory.WorkingMemory do
   @doc """
   Records a tool result from the current iteration.
   """
+  @max_tool_results 100
+
   @spec push_tool_result(t(), map()) :: t()
   def push_tool_result(%__MODULE__{} = wm, result) do
-    %{wm | tool_results: [result | wm.tool_results]}
+    results = Enum.take([result | wm.tool_results], @max_tool_results)
+    %{wm | tool_results: results}
   end
 
   @doc """
   Adds a temporary note (ephemeral insight for current iteration).
   """
+  @max_notes 50
+
   @spec add_note(t(), String.t()) :: t()
   def add_note(%__MODULE__{} = wm, note) do
-    %{wm | temporary_notes: [note | wm.temporary_notes]}
+    notes = Enum.take([note | wm.temporary_notes], @max_notes)
+    %{wm | temporary_notes: notes}
   end
 
   @doc """

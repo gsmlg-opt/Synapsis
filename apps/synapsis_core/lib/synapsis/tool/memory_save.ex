@@ -98,8 +98,8 @@ defmodule Synapsis.Tool.MemorySave do
             broadcast_memory_promoted(scope, scope_id, record.id)
             %{id: record.id, title: record.title, status: "saved"}
 
-          {:error, changeset} ->
-            %{title: Map.get(mem, "title"), status: "error", error: inspect(changeset.errors)}
+          {:error, _changeset} ->
+            %{title: Map.get(mem, "title"), status: "error", error: "validation failed"}
         end
       end)
 

@@ -1,6 +1,7 @@
 defmodule Synapsis.Tool.MultiEdit do
   @moduledoc "Apply multiple edits across one or more files in a single operation."
   use Synapsis.Tool
+  require Logger
 
   @impl true
   def name, do: "multi_edit"
@@ -111,7 +112,7 @@ defmodule Synapsis.Tool.MultiEdit do
 
               {:cont, {:ok, before <> new <> rest, count + 1}}
             else
-              {:halt, {:error, "Edit #{count + 1} failed: string not found in #{path}"}}
+              {:halt, {:error, "Edit #{count + 1} failed: string not found"}}
             end
           end)
 
@@ -136,9 +137,9 @@ defmodule Synapsis.Tool.MultiEdit do
          {:ok, original_content} <- File.read(path) do
       apply_edits_sequentially(path, original_content, edits)
     else
-      {:error, :enoent} -> {:error, "File not found: #{path}"}
+      {:error, :enoent} -> {:error, "File not found"}
       {:error, reason} when is_binary(reason) -> {:error, reason}
-      {:error, reason} -> {:error, "Error reading #{path}: #{inspect(reason)}"}
+      {:error, reason} -> {:error, "Error reading file: #{inspect(reason)}"}
     end
   end
 
@@ -162,7 +163,7 @@ defmodule Synapsis.Tool.MultiEdit do
           updated = before <> new <> rest
           {:cont, {:ok, updated, count + 1}}
         else
-          {:halt, {:error, "Edit #{count + 1} failed: string not found in #{path}"}}
+          {:halt, {:error, "Edit #{count + 1} failed: string not found"}}
         end
       end)
 
@@ -173,14 +174,22 @@ defmodule Synapsis.Tool.MultiEdit do
             {:ok, "Applied #{count} edit(s) to #{path}"}
 
           {:error, reason} ->
-            # Rollback
-            File.write(path, original_content)
-            {:error, "Failed to write #{path}: #{inspect(reason)}"}
+            # Rollback — log if rollback itself fails
+            case File.write(path, original_content) do
+              :ok ->
+                :ok
+
+              {:error, rb_reason} ->
+                Logger.warning("multi_edit_rollback_failed",
+                  path: path,
+                  reason: inspect(rb_reason)
+                )
+            end
+
+            {:error, "Failed to write file: #{inspect(reason)}"}
         end
 
       {:error, msg} ->
-        # Rollback - restore original
-        File.write(path, original_content)
         {:error, msg}
     end
   end

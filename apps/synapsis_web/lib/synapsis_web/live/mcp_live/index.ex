@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.MCPLive.Index do
   use SynapsisWeb, :live_view
+  require Logger
 
   alias Synapsis.{Repo, PluginConfig}
   import Ecto.Query, only: [from: 2]
@@ -58,7 +59,8 @@ defmodule SynapsisWeb.MCPLive.Index do
          |> put_flash(:info, msg)}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Invalid JSON: #{reason}")}
+        Logger.warning("mcp_import_invalid_json", reason: inspect(reason))
+        {:noreply, put_flash(socket, :error, "Invalid JSON format")}
     end
   end
 
@@ -129,11 +131,12 @@ defmodule SynapsisWeb.MCPLive.Index do
         {:noreply, socket}
 
       config ->
-        config
-        |> PluginConfig.changeset(%{auto_start: !config.auto_start})
-        |> Repo.update()
-
-        {:noreply, assign(socket, configs: list_configs())}
+        case config
+             |> PluginConfig.changeset(%{auto_start: !config.auto_start})
+             |> Repo.update() do
+          {:ok, _} -> {:noreply, assign(socket, configs: list_configs())}
+          {:error, _} -> {:noreply, put_flash(socket, :error, "Failed to update config")}
+        end
     end
   end
 
@@ -168,9 +171,9 @@ defmodule SynapsisWeb.MCPLive.Index do
           try do
             SynapsisPlugin.start_plugin(SynapsisPlugin.MCP, config.name, plugin_config)
           rescue
-            e -> {:error, Exception.message(e)}
+            e in [RuntimeError, ArgumentError] -> {:error, Exception.message(e)}
           catch
-            _, reason -> {:error, inspect(reason)}
+            _, _reason -> {:error, "plugin start failed"}
           end
 
         case result do
@@ -183,7 +186,8 @@ defmodule SynapsisWeb.MCPLive.Index do
              |> put_flash(:info, "MCP server '#{name}' starting...")}
 
           {:error, reason} ->
-            {:noreply, put_flash(socket, :error, "Failed to start: #{inspect(reason)}")}
+            Logger.warning("mcp_start_failed", name: name, reason: inspect(reason))
+            {:noreply, put_flash(socket, :error, "Failed to start MCP server")}
         end
     end
   end
@@ -202,6 +206,8 @@ defmodule SynapsisWeb.MCPLive.Index do
   def handle_info(:refresh_plugin_states, socket) do
     {:noreply, refresh_states(socket)}
   end
+
+  def handle_info(_msg, socket), do: {:noreply, socket}
 
   defp refresh_states(socket) do
     configs = list_configs()
@@ -231,7 +237,7 @@ defmodule SynapsisWeb.MCPLive.Index do
               stopped
           end
         rescue
-          _ -> stopped
+          _e in [RuntimeError, ArgumentError] -> stopped
         catch
           _, _ -> stopped
         end

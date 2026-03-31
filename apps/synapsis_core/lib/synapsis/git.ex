@@ -65,7 +65,8 @@ defmodule Synapsis.Git do
         collect_output(port, "")
     end
   rescue
-    e -> {:error, "git error: #{Exception.message(e)}"}
+    e in [RuntimeError, ArgumentError, ErlangError] ->
+      {:error, "git error: #{Exception.message(e)}"}
   end
 
   defp collect_output(port, acc) do

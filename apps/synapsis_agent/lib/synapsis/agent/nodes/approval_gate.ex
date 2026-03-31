@@ -12,6 +12,7 @@ defmodule Synapsis.Agent.Nodes.ApprovalGate do
   import Synapsis.Agent.Nodes.Helpers, only: [worker_pid: 1]
 
   @impl true
+  @spec run(map(), map()) :: {:next, atom(), map()} | {:wait, map()}
   def run(state, ctx) do
     if state[:awaiting_approval] do
       handle_resumed(state, ctx)

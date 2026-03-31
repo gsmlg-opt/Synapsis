@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.ProviderLive.Show do
   use SynapsisWeb, :live_view
+  require Logger
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
@@ -171,10 +172,12 @@ defmodule SynapsisWeb.ProviderLive.Show do
          )}
 
       {:error, reason} ->
+        Logger.warning("oauth_start_failed", reason: inspect(reason))
+
         {:noreply,
          assign(socket,
            oauth_state: :error,
-           oauth_error: "Failed to start OAuth: #{inspect(reason)}"
+           oauth_error: "Failed to start OAuth flow"
          )}
     end
   end
@@ -206,7 +209,8 @@ defmodule SynapsisWeb.ProviderLive.Show do
         {:noreply, put_flash(socket, :error, "Token expired — please sign in again")}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Refresh failed: #{inspect(reason)}")}
+        Logger.warning("oauth_refresh_failed", reason: inspect(reason))
+        {:noreply, put_flash(socket, :error, "Refresh failed")}
     end
   end
 
@@ -261,7 +265,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
 
   # -- OAuth polling handle_info --
 
-  def handle_info(:oauth_poll, socket) do
+  def handle_info(:oauth_poll, %{assigns: %{oauth_state: :waiting_for_user}} = socket) do
     elapsed = System.monotonic_time(:millisecond) - socket.assigns.oauth_poll_started_at
 
     if elapsed > Synapsis.Provider.OAuth.OpenAI.max_poll_duration_ms() do
@@ -286,14 +290,30 @@ defmodule SynapsisWeb.ProviderLive.Show do
           {:noreply, assign(socket, oauth_poll_timer: timer)}
 
         {:error, reason} ->
+          Logger.warning("oauth_poll_error", reason: inspect(reason))
+
           {:noreply,
            assign(socket,
              oauth_state: :error,
-             oauth_error: "Polling error: #{inspect(reason)}",
+             oauth_error: "Polling failed",
              oauth_poll_timer: nil
            )}
       end
     end
+  end
+
+  # Stale poll timer fired after oauth_cancel — ignore
+  def handle_info(:oauth_poll, socket), do: {:noreply, socket}
+
+  def handle_info(_msg, socket), do: {:noreply, socket}
+
+  @impl true
+  def terminate(_reason, socket) do
+    if timer = socket.assigns[:oauth_poll_timer] do
+      Process.cancel_timer(timer)
+    end
+
+    :ok
   end
 
   # -- Private helpers --
@@ -320,20 +340,20 @@ defmodule SynapsisWeb.ProviderLive.Show do
              )
              |> put_flash(:info, "OAuth login successful")}
 
-          {:error, reason} ->
+          {:error, _reason} ->
             {:noreply,
              assign(socket,
                oauth_state: :error,
-               oauth_error: "Failed to save tokens: #{inspect(reason)}",
+               oauth_error: "Failed to save tokens",
                oauth_poll_timer: nil
              )}
         end
 
-      {:error, reason} ->
+      {:error, _reason} ->
         {:noreply,
          assign(socket,
            oauth_state: :error,
-           oauth_error: "Token exchange failed: #{inspect(reason)}",
+           oauth_error: "Token exchange failed",
            oauth_poll_timer: nil
          )}
     end

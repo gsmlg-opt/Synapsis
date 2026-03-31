@@ -60,28 +60,26 @@ defmodule Synapsis.Session.WorkspaceManager do
     worktree_path = worktree_path(project_path, session_id)
 
     with {:ok, _} <- GitWorktree.apply_patch(worktree_path, diff_text),
-         {test_output, test_exit} <- run_test(worktree_path, test_command) do
-      test_status = if test_exit == 0, do: "passed", else: "failed"
-
-      {:ok, patch} =
-        %Patch{}
-        |> Patch.changeset(%{
-          session_id: session_id,
-          file_path: extract_file_path(diff_text),
-          diff_text: diff_text,
-          test_status: test_status,
-          test_output: truncate(test_output, 10_000)
-        })
-        |> Repo.insert()
-
+         {test_output, test_exit} <- run_test(worktree_path, test_command),
+         {:ok, patch} <-
+           %Patch{}
+           |> Patch.changeset(%{
+             session_id: session_id,
+             file_path: extract_file_path(diff_text),
+             diff_text: diff_text,
+             test_status: if(test_exit == 0, do: "passed", else: "failed"),
+             test_output: truncate(test_output, 10_000)
+           })
+           |> Repo.insert() do
       Logger.info("patch_tested",
         session_id: session_id,
         patch_id: patch.id,
-        test_status: test_status
+        test_status: patch.test_status
       )
 
       {:ok, patch}
     else
+      {:error, %Ecto.Changeset{}} -> {:error, "Patch persist failed"}
       {:error, reason} -> {:error, "Patch apply failed: #{reason}"}
     end
   end
@@ -237,7 +235,8 @@ defmodule Synapsis.Session.WorkspaceManager do
         collect_port_output(port, "")
     end
   rescue
-    e -> {"Test execution error: #{Exception.message(e)}", 1}
+    e in [RuntimeError, ArgumentError, ErlangError] ->
+      {"Test execution error: #{Exception.message(e)}", 1}
   end
 
   defp run_in_dir(dir, git_args) do
@@ -261,13 +260,26 @@ defmodule Synapsis.Session.WorkspaceManager do
         end
     end
   rescue
-    e -> {:error, "git error: #{Exception.message(e)}"}
+    e in [RuntimeError, ArgumentError, ErlangError] ->
+      {:error, "git error: #{Exception.message(e)}"}
   end
+
+  @max_port_output 5_000_000
 
   defp collect_port_output(port, acc) do
     receive do
-      {^port, {:data, data}} -> collect_port_output(port, acc <> data)
-      {^port, {:exit_status, code}} -> {acc, code}
+      {^port, {:data, data}} ->
+        acc = acc <> data
+
+        if byte_size(acc) > @max_port_output do
+          Port.close(port)
+          {binary_part(acc, 0, @max_port_output) <> "\n[output truncated at 5MB]", 1}
+        else
+          collect_port_output(port, acc)
+        end
+
+      {^port, {:exit_status, code}} ->
+        {acc, code}
     after
       60_000 ->
         Port.close(port)

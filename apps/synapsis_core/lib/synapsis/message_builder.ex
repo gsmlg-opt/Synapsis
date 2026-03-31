@@ -1,6 +1,8 @@
 defmodule Synapsis.MessageBuilder do
   @moduledoc "Builds provider-specific requests from session history."
 
+  @default_max_tokens 8_192
+
   def build_request(messages, agent, provider_name, prompt_context \\ nil) do
     provider_module = provider_module!(provider_name)
 
@@ -11,7 +13,7 @@ defmodule Synapsis.MessageBuilder do
     opts = %{
       model: agent[:model],
       system_prompt: system_prompt,
-      max_tokens: agent[:max_tokens] || 8192,
+      max_tokens: agent[:max_tokens] || @default_max_tokens,
       provider_type: resolve_provider_type(provider_name),
       provider_name: provider_name
     }

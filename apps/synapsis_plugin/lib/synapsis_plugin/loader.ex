@@ -23,7 +23,7 @@ defmodule SynapsisPlugin.Loader do
 
       :ok
     rescue
-      e ->
+      e in [RuntimeError, Ecto.QueryError, DBConnection.ConnectionError] ->
         Logger.warning("plugin_loader_error", error: Exception.message(e))
         :ok
     end
@@ -33,7 +33,7 @@ defmodule SynapsisPlugin.Loader do
     import Ecto.Query
     Synapsis.Repo.all(from(p in Synapsis.PluginConfig, where: p.auto_start == true))
   rescue
-    _ -> []
+    _e in [Ecto.QueryError, DBConnection.ConnectionError] -> []
   end
 
   defp module_for_type("mcp"), do: SynapsisPlugin.MCP

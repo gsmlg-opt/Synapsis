@@ -21,7 +21,7 @@ defmodule Synapsis.Session.Sharing do
             agent: session.agent,
             provider: session.provider,
             model: session.model,
-            project_path: session.project.path,
+            project_path: (session.project && session.project.path) || "__global__",
             created_at: session.inserted_at |> DateTime.to_iso8601()
           },
           messages: Enum.map(messages, &export_message/1)
@@ -29,18 +29,21 @@ defmodule Synapsis.Session.Sharing do
 
         case Jason.encode(data, pretty: true) do
           {:ok, json} -> {:ok, json}
-          {:error, reason} -> {:error, "Failed to encode session data: #{inspect(reason)}"}
+          {:error, _reason} -> {:error, "Failed to encode session data"}
         end
     end
   end
 
   def export_to_file(session_id, path) do
-    case export(session_id) do
-      {:ok, json} ->
-        File.write(path, json)
+    if String.contains?(path, "..") do
+      {:error, "path traversal not allowed"}
+    else
+      expanded = Path.expand(path)
 
-      error ->
-        error
+      case export(session_id) do
+        {:ok, json} -> File.write(expanded, json)
+        error -> error
+      end
     end
   end
 
@@ -52,8 +55,8 @@ defmodule Synapsis.Session.Sharing do
       {:ok, _} ->
         {:error, "invalid session export format"}
 
-      {:error, reason} ->
-        {:error, "invalid JSON: #{inspect(reason)}"}
+      {:error, _reason} ->
+        {:error, "invalid JSON format"}
     end
   end
 
@@ -63,46 +66,56 @@ defmodule Synapsis.Session.Sharing do
     project =
       case Repo.get_by(Synapsis.Project, path: project_path) do
         nil ->
-          {:ok, p} =
-            %Synapsis.Project{}
-            |> Synapsis.Project.changeset(%{path: project_path, slug: slug})
-            |> Repo.insert()
-
-          p
+          case %Synapsis.Project{}
+               |> Synapsis.Project.changeset(%{path: project_path, slug: slug})
+               |> Repo.insert() do
+            {:ok, p} -> p
+            {:error, _} -> nil
+          end
 
         p ->
           p
       end
 
-    attrs = %{
-      project_id: project.id,
-      provider: session_data["provider"] || "anthropic",
-      model: session_data["model"] || Synapsis.Providers.default_model("anthropic"),
-      agent: session_data["agent"] || "build",
-      title: "[Imported] #{session_data["title"] || "session"}"
-    }
+    if is_nil(project) do
+      {:error, "Failed to create project for import"}
+    else
+      attrs = %{
+        project_id: project.id,
+        provider: session_data["provider"] || "anthropic",
+        model: session_data["model"] || Synapsis.Providers.default_model("anthropic"),
+        agent: session_data["agent"] || "build",
+        title: "[Imported] #{session_data["title"] || "session"}"
+      }
 
-    Repo.transaction(fn ->
-      {:ok, session} =
-        %Session{}
-        |> Session.changeset(attrs)
-        |> Repo.insert()
+      Repo.transaction(fn ->
+        session =
+          case %Session{}
+               |> Session.changeset(attrs)
+               |> Repo.insert() do
+            {:ok, s} -> s
+            {:error, changeset} -> Repo.rollback(changeset)
+          end
 
-      for msg_data <- messages_data do
-        parts = import_parts(msg_data["parts"] || [])
+        for msg_data <- messages_data do
+          parts = import_parts(msg_data["parts"] || [])
 
-        %Message{}
-        |> Message.changeset(%{
-          session_id: session.id,
-          role: msg_data["role"] || "user",
-          parts: parts,
-          token_count: msg_data["token_count"] || 0
-        })
-        |> Repo.insert!()
-      end
+          case %Message{}
+               |> Message.changeset(%{
+                 session_id: session.id,
+                 role: msg_data["role"] || "user",
+                 parts: parts,
+                 token_count: msg_data["token_count"] || 0
+               })
+               |> Repo.insert() do
+            {:ok, _} -> :ok
+            {:error, changeset} -> Repo.rollback(changeset)
+          end
+        end
 
-      Repo.preload(session, :project)
-    end)
+        Repo.preload(session, :project)
+      end)
+    end
   end
 
   defp export_message(message) do

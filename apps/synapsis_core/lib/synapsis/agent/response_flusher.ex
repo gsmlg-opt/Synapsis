@@ -124,13 +124,14 @@ defmodule Synapsis.Agent.ResponseFlusher do
         end)
 
       if updated_parts != msg.parts do
-        msg
-        |> Ecto.Changeset.change(parts: updated_parts)
-        |> Repo.update()
+        case msg |> Ecto.Changeset.change(parts: updated_parts) |> Repo.update() do
+          {:ok, _} -> true
+          {:error, _} -> nil
+        end
       end
     end)
   rescue
-    e ->
+    e in [Ecto.QueryError, Ecto.StaleEntryError, DBConnection.ConnectionError] ->
       Logger.warning("update_tool_use_status_failed",
         session_id: session_id,
         tool_use_id: tool_use_id,

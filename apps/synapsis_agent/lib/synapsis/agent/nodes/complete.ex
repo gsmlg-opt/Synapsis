@@ -5,6 +5,7 @@ defmodule Synapsis.Agent.Nodes.Complete do
   require Logger
 
   @impl true
+  @spec run(map(), map()) :: {:end, map()}
   def run(state, _ctx) do
     session_id = state.session_id
 

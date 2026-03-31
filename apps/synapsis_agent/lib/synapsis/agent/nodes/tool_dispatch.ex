@@ -6,11 +6,20 @@ defmodule Synapsis.Agent.Nodes.ToolDispatch do
   alias Synapsis.{Repo, Session}
 
   @impl true
+  @spec run(map(), map()) :: {:next, atom(), map()}
   def run(state, _ctx) do
-    session =
-      Repo.get(Session, state.session_id)
-      |> Repo.preload(:project)
+    case Repo.get(Session, state.session_id) do
+      nil ->
+        {:next, :all_approved,
+         Map.put(state, :classified_tools, Enum.map(state.tool_uses, &{:approved, &1}))}
 
+      session ->
+        session = Repo.preload(session, :project)
+        run_with_session(state, session)
+    end
+  end
+
+  defp run_with_session(state, session) do
     {classified, monitor} = ToolDispatcher.classify(state.tool_uses, session, state.monitor)
 
     needs_approval = Enum.any?(classified, fn {status, _} -> status == :requires_approval end)

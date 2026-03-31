@@ -96,15 +96,7 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
 
     :ok
   rescue
-    e in [
-      RuntimeError,
-      ArgumentError,
-      KeyError,
-      FunctionClauseError,
-      MatchError,
-      Ecto.QueryError,
-      DBConnection.ConnectionError
-    ] ->
+    e ->
       Logger.error("heartbeat_failed",
         name: config.name,
         heartbeat_id: config.id,
@@ -133,13 +125,13 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
 
             format_result(config, timestamp, result)
 
-          {:error, reason} ->
+          {:error, _reason} ->
             Synapsis.Sessions.delete(session.id)
-            format_error(config, timestamp, "send_message failed: #{inspect(reason)}")
+            format_error(config, timestamp, "send_message failed")
         end
 
-      {:error, reason} ->
-        format_error(config, timestamp, "session creation failed: #{inspect(reason)}")
+      {:error, _reason} ->
+        format_error(config, timestamp, "session creation failed")
     end
   end
 
@@ -173,8 +165,8 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
         {:session_completed, ^session_id, _result} ->
           fetch_last_assistant_response(session_id)
 
-        {:session_error, ^session_id, reason} ->
-          {:timeout, "session error: #{inspect(reason)}"}
+        {:session_error, ^session_id, _reason} ->
+          {:timeout, "session error"}
       after
         timeout_ms ->
           # Fallback: check messages directly before declaring timeout

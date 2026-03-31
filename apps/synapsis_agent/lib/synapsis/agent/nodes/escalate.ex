@@ -7,6 +7,7 @@ defmodule Synapsis.Agent.Nodes.Escalate do
   require Logger
 
   @impl true
+  @spec run(map(), map()) :: {:next, atom(), map()} | {:wait, map()}
   def run(state, _ctx) do
     if state[:awaiting_auditor] do
       # Auditor completed (resumed after async task) — proceed back to build_prompt

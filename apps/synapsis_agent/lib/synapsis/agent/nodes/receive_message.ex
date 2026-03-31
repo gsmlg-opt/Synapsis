@@ -3,6 +3,7 @@ defmodule Synapsis.Agent.Nodes.ReceiveMessage do
   @behaviour Synapsis.Agent.Runtime.Node
 
   @impl true
+  @spec run(map(), map()) :: {:next, atom(), map()} | {:wait, map()}
   def run(state, ctx) do
     if state[:awaiting_input] do
       # Resumed with user input via ctx

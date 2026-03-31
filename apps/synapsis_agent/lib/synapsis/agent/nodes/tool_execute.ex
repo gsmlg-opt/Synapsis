@@ -7,6 +7,7 @@ defmodule Synapsis.Agent.Nodes.ToolExecute do
   alias Synapsis.Agent.ResponseFlusher
 
   @impl true
+  @spec run(map(), map()) :: {:next, atom(), map()} | {:wait, map()}
   def run(state, ctx) do
     if state[:awaiting_tools] do
       # Tools completed — proceed to orchestrator

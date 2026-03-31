@@ -59,22 +59,21 @@ defmodule Synapsis.Workspace.Tools.WorkspaceSearch do
       |> maybe_add(:kind, parse_kind(input["kind"]))
       |> maybe_add(:limit, input["limit"])
 
-    case Synapsis.Workspace.search(query, opts) do
-      {:ok, resources} ->
-        results =
-          Enum.map(resources, fn r ->
-            %{
-              id: r.id,
-              path: r.path,
-              kind: r.kind,
-              content_preview: String.slice(r.content || "", 0, 200),
-              version: r.version,
-              updated_at: r.updated_at
-            }
-          end)
+    {:ok, resources} = Synapsis.Workspace.search(query, opts)
 
-        {:ok, Jason.encode!(results)}
-    end
+    results =
+      Enum.map(resources, fn r ->
+        %{
+          id: r.id,
+          path: r.path,
+          kind: r.kind,
+          content_preview: String.slice(r.content || "", 0, 200),
+          version: r.version,
+          updated_at: r.updated_at
+        }
+      end)
+
+    {:ok, Jason.encode!(results)}
   end
 
   defp maybe_add(opts, _key, nil), do: opts

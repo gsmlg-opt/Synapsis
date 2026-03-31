@@ -42,6 +42,9 @@ defmodule Synapsis.HeartbeatConfig do
       :keep_history
     ])
     |> validate_required([:name, :schedule, :prompt])
+    |> validate_length(:name, max: 255)
+    |> validate_length(:schedule, max: 255)
+    |> validate_length(:prompt, max: 50_000)
     |> validate_cron_expression(:schedule)
     |> unique_constraint(:name)
   end

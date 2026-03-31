@@ -2,6 +2,8 @@ defmodule Synapsis.Tool.Grep do
   @moduledoc "Search file contents using ripgrep or grep."
   use Synapsis.Tool
 
+  @max_output_bytes 5_000_000
+
   @impl true
   def name, do: "grep"
 
@@ -96,7 +98,14 @@ defmodule Synapsis.Tool.Grep do
   defp collect_output(port, acc, timeout) do
     receive do
       {^port, {:data, data}} ->
-        collect_output(port, acc <> data, timeout)
+        acc = acc <> data
+
+        if byte_size(acc) > @max_output_bytes do
+          Port.close(port)
+          {:ok, String.slice(acc, 0, @max_output_bytes) <> "\n\n[Output truncated at 5MB]"}
+        else
+          collect_output(port, acc, timeout)
+        end
 
       {^port, {:exit_status, 0}} ->
         {:ok, String.trim_trailing(acc)}

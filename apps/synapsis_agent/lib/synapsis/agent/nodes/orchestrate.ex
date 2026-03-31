@@ -7,6 +7,7 @@ defmodule Synapsis.Agent.Nodes.Orchestrate do
   @max_tool_iterations 25
 
   @impl true
+  @spec run(map(), map()) :: {:next, atom(), map()}
   def run(state, _ctx) do
     iteration_count = state.iteration_count + 1
     has_output = state.pending_text != "" or length(state.tool_uses) > 0

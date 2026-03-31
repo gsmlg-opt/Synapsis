@@ -98,8 +98,8 @@ defmodule Synapsis.Tool.AgentReply do
                status: "sent"
              })}
 
-          {:error, changeset} ->
-            {:error, "Failed to send reply: #{inspect(changeset.errors)}"}
+          {:error, _changeset} ->
+            {:error, "Failed to send reply"}
         end
     end
   end

@@ -10,19 +10,19 @@ defmodule Synapsis.PluginConfig do
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
   schema "plugin_configs" do
-    field :type, :string
-    field :name, :string
-    field :transport, :string, default: "stdio"
-    field :command, :string
-    field :args, {:array, :string}, default: []
-    field :url, :string
-    field :root_path, :string
-    field :env, :map, default: %{}
-    field :settings, :map, default: %{}
-    field :auto_start, :boolean, default: false
-    field :scope, :string, default: "project"
+    field(:type, :string)
+    field(:name, :string)
+    field(:transport, :string, default: "stdio")
+    field(:command, :string)
+    field(:args, {:array, :string}, default: [])
+    field(:url, :string)
+    field(:root_path, :string)
+    field(:env, :map, default: %{})
+    field(:settings, :map, default: %{})
+    field(:auto_start, :boolean, default: false)
+    field(:scope, :string, default: "project")
 
-    belongs_to :project, Synapsis.Project
+    belongs_to(:project, Synapsis.Project)
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -47,6 +47,10 @@ defmodule Synapsis.PluginConfig do
     |> validate_inclusion(:type, @valid_types)
     |> validate_inclusion(:transport, @valid_transports)
     |> validate_inclusion(:scope, @valid_scopes)
+    |> validate_length(:name, max: 255)
+    |> validate_length(:command, max: 4_096)
+    |> validate_length(:url, max: 2_048)
+    |> validate_length(:root_path, max: 4_096)
     |> unique_constraint([:name, :scope, :project_id])
   end
 end

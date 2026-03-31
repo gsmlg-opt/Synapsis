@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.WorkspaceLive.Explorer do
   use SynapsisWeb, :live_view
+  require Logger
 
   @impl true
   def mount(params, _session, socket) do
@@ -55,9 +56,17 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
     end
   end
 
-  def handle_event("search", %{"query" => query}, socket) when byte_size(query) > 0 do
+  @max_search_query_bytes 1_000
+
+  def handle_event("search", %{"query" => query}, socket)
+      when byte_size(query) > 0 and byte_size(query) <= @max_search_query_bytes do
     {:ok, results} = Synapsis.Workspace.search(query, limit: 20)
     {:noreply, assign(socket, search_query: query, search_results: results)}
+  end
+
+  def handle_event("search", %{"query" => query}, socket)
+      when byte_size(query) > @max_search_query_bytes do
+    {:noreply, put_flash(socket, :error, "Search query too long")}
   end
 
   def handle_event("search", _params, socket) do
@@ -77,21 +86,32 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
     {:noreply, assign(socket, editing: false)}
   end
 
+  @max_content_bytes 1_000_000
+
+  def handle_event("save_edit", %{"content" => content}, socket)
+      when byte_size(content) > @max_content_bytes do
+    {:noreply, put_flash(socket, :error, "Content too large")}
+  end
+
   def handle_event("save_edit", %{"content" => content}, socket) do
-    selected = socket.assigns.selected
+    case socket.assigns.selected do
+      nil ->
+        {:noreply, put_flash(socket, :error, "No document selected")}
 
-    case Synapsis.Workspace.write(selected.path, content, %{author: "user"}) do
-      {:ok, updated} ->
-        {:ok, resources} =
-          Synapsis.Workspace.list(socket.assigns.current_path, sort: :path, limit: 200)
+      selected ->
+        case Synapsis.Workspace.write(selected.path, content, %{author: "user"}) do
+          {:ok, updated} ->
+            {:ok, resources} =
+              Synapsis.Workspace.list(socket.assigns.current_path, sort: :path, limit: 200)
 
-        {:noreply,
-         socket
-         |> assign(selected: updated, editing: false, resources: resources)
-         |> put_flash(:info, "Document saved")}
+            {:noreply,
+             socket
+             |> assign(selected: updated, editing: false, resources: resources)
+             |> put_flash(:info, "Document saved")}
 
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Failed to save document")}
+          {:error, _} ->
+            {:noreply, put_flash(socket, :error, "Failed to save document")}
+        end
     end
   end
 
@@ -134,7 +154,8 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
            |> put_flash(:info, "Promoted to project level")}
 
         {:error, reason} ->
-          {:noreply, put_flash(socket, :error, "Failed to promote: #{inspect(reason)}")}
+          Logger.warning("workspace_promote_failed", reason: inspect(reason))
+          {:noreply, put_flash(socket, :error, "Failed to promote document")}
       end
     else
       {:noreply, put_flash(socket, :error, "Document cannot be promoted")}
@@ -419,8 +440,8 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
   end
 
   defp promote_path(session_path, project_id) do
-    filename = session_path |> String.split("/") |> List.last() |> String.downcase()
-    "/projects/#{project_id}/notes/#{filename}"
+    filename = session_path |> String.split("/") |> List.last() || "untitled"
+    "/projects/#{project_id}/notes/#{String.downcase(filename)}"
   end
 
   defp subscribe_workspace_changes(path) do

@@ -128,7 +128,7 @@ defmodule SynapsisPlugin.MCP do
     Port.close(port)
     :ok
   rescue
-    _ -> :ok
+    _e in [ArgumentError] -> :ok
   end
 
   def terminate(_reason, _state), do: :ok
@@ -138,9 +138,11 @@ defmodule SynapsisPlugin.MCP do
   defp handle_mcp_message(%{"id" => id, "result" => result}, state) do
     case Map.pop(state.pending, id) do
       {{:initialize, _from}, pending} ->
-        case SynapsisPlugin.MCP.Protocol.encode_notification("notifications/initialized") do
-          {:ok, notification} -> Port.command(state.port, notification)
-          {:error, _} -> :ok
+        if is_port(state.port) do
+          case SynapsisPlugin.MCP.Protocol.encode_notification("notifications/initialized") do
+            {:ok, notification} -> Port.command(state.port, notification)
+            {:error, _} -> :ok
+          end
         end
 
         state = %{state | pending: pending, initialized: true, server_info: result}
@@ -167,7 +169,7 @@ defmodule SynapsisPlugin.MCP do
   defp handle_mcp_message(%{"id" => id, "error" => error}, state) do
     case Map.pop(state.pending, id) do
       {{_type, from}, pending} when not is_nil(from) ->
-        GenServer.reply(from, {:error, error["message"] || inspect(error)})
+        GenServer.reply(from, {:error, error["message"] || "MCP tool call failed"})
         %{state | pending: pending}
 
       _ ->
@@ -182,7 +184,7 @@ defmodule SynapsisPlugin.MCP do
 
     case SynapsisPlugin.MCP.Protocol.encode_request(id, method, params) do
       {:ok, data} ->
-        Port.command(state.port, data)
+        if is_port(state.port), do: Port.command(state.port, data)
 
       {:error, reason} ->
         Logger.warning("mcp_encode_failed", method: method, reason: inspect(reason))
@@ -207,11 +209,12 @@ defmodule SynapsisPlugin.MCP do
     content
     |> Enum.map(fn
       %{"type" => "text", "text" => text} -> text
-      other -> inspect(other)
+      %{"type" => type} -> "[unsupported content type: #{type}]"
+      _ -> "[unsupported content format]"
     end)
     |> Enum.join("\n")
   end
 
   defp extract_tool_content(%{"content" => content}) when is_binary(content), do: content
-  defp extract_tool_content(result), do: inspect(result)
+  defp extract_tool_content(_result), do: "[no content in MCP response]"
 end

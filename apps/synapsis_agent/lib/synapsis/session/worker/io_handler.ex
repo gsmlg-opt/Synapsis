@@ -27,7 +27,7 @@ defmodule Synapsis.Session.Worker.IOHandler do
 
       {:error, reason} ->
         detach_debug(debug_handler)
-        Runner.resume(state.runner_pid, %{stream_error: reason})
+        safe_resume(state.runner_pid, %{stream_error: reason})
         {:noreply, state}
     end
   end
@@ -57,14 +57,14 @@ defmodule Synapsis.Session.Worker.IOHandler do
 
   def handle_provider_done(state) do
     detach_debug(state.debug_handler_id)
-    Runner.resume(state.runner_pid, %{stream_acc: state.stream_acc})
+    safe_resume(state.runner_pid, %{stream_acc: state.stream_acc})
     {:noreply, %{state | stream_ref: nil, debug_handler_id: nil}}
   end
 
   def handle_provider_error(reason, state) do
     detach_debug(state.debug_handler_id)
     Logger.warning("provider_error", session_id: state.session_id, reason: inspect(reason))
-    Runner.resume(state.runner_pid, %{stream_error: reason})
+    safe_resume(state.runner_pid, %{stream_error: reason})
     {:noreply, %{state | stream_ref: nil, debug_handler_id: nil}}
   end
 
@@ -78,7 +78,7 @@ defmodule Synapsis.Session.Worker.IOHandler do
     })
 
     remaining = state.pending_tool_count - 1
-    if remaining <= 0, do: Runner.resume(state.runner_pid, %{tools_completed: true})
+    if remaining <= 0, do: safe_resume(state.runner_pid, %{tools_completed: true})
     {:noreply, %{state | pending_tool_count: remaining}}
   end
 
@@ -89,6 +89,10 @@ defmodule Synapsis.Session.Worker.IOHandler do
     Persistence.broadcast(state.session_id, "session_status", %{status: "error"})
     {:noreply, %{state | runner_pid: nil}}
   end
+
+  # After cancel, runner_pid is nil but in-flight messages may still arrive.
+  defp safe_resume(nil, _ctx), do: :ok
+  defp safe_resume(pid, ctx), do: Runner.resume(pid, ctx)
 
   # -- Debug telemetry helpers --
 

@@ -23,8 +23,7 @@ defmodule Synapsis.Workspace.Tools.WorkspaceWrite do
       "properties" => %{
         "path" => %{
           "type" => "string",
-          "description" =>
-            "Workspace path (e.g. /projects/myapp/plans/auth-redesign.md)"
+          "description" => "Workspace path (e.g. /projects/myapp/plans/auth-redesign.md)"
         },
         "content" => %{
           "type" => "string",
@@ -59,28 +58,35 @@ defmodule Synapsis.Workspace.Tools.WorkspaceWrite do
         |> maybe_put(:content_format, parse_format(input["content_format"]))
 
       case Synapsis.Workspace.write(path, content, opts) do
-      {:ok, resource} ->
-        {:ok,
-         Jason.encode!(%{
-           id: resource.id,
-           path: resource.path,
-           version: resource.version,
-           lifecycle: resource.lifecycle
-         })}
+        {:ok, resource} ->
+          {:ok,
+           Jason.encode!(%{
+             id: resource.id,
+             path: resource.path,
+             version: resource.version,
+             lifecycle: resource.lifecycle
+           })}
 
-      {:error, %Ecto.Changeset{} = changeset} ->
-        errors =
-          Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
-            Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
-              opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
+        {:error, %Ecto.Changeset{} = changeset} ->
+          errors =
+            Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+              Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
+                atom_key =
+                  try do
+                    String.to_existing_atom(key)
+                  rescue
+                    ArgumentError -> nil
+                  end
+
+                (if(atom_key, do: Keyword.get(opts, atom_key), else: nil) || key) |> to_string()
+              end)
             end)
-          end)
-          |> Enum.map_join("; ", fn {field, msgs} -> "#{field}: #{Enum.join(msgs, ", ")}" end)
+            |> Enum.map_join("; ", fn {field, msgs} -> "#{field}: #{Enum.join(msgs, ", ")}" end)
 
-        {:error, "Write failed: #{errors}"}
+          {:error, "Write failed: #{errors}"}
 
-      {:error, reason} ->
-        {:error, "Write failed: #{inspect(reason)}"}
+        {:error, _reason} ->
+          {:error, "Write failed"}
       end
     else
       :denied -> {:error, "Permission denied: cannot write to #{path}"}

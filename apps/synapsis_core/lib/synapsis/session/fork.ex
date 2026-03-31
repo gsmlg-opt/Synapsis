@@ -19,44 +19,57 @@ defmodule Synapsis.Session.Fork do
 
     messages_to_copy =
       if message_id do
-        # Copy up to and including the specified message
-        (Enum.take_while(messages, fn m -> m.id != message_id end) ++
-           [Enum.find(messages, fn m -> m.id == message_id end)])
-        |> Enum.reject(&is_nil/1)
+        target = Enum.find(messages, fn m -> m.id == message_id end)
+
+        if is_nil(target) do
+          :message_not_found
+        else
+          Enum.take_while(messages, fn m -> m.id != message_id end) ++ [target]
+        end
       else
         messages
       end
 
-    title = "Fork of #{session.title || session.id}"
+    if messages_to_copy == :message_not_found do
+      {:error, :message_not_found}
+    else
+      title = "Fork of #{session.title || session.id}"
 
-    attrs = %{
-      project_id: session.project_id,
-      provider: session.provider,
-      model: session.model,
-      agent: session.agent,
-      title: title,
-      config: session.config
-    }
+      attrs = %{
+        project_id: session.project_id,
+        provider: session.provider,
+        model: session.model,
+        agent: session.agent,
+        title: title,
+        config: session.config
+      }
 
-    Repo.transaction(fn ->
-      {:ok, new_session} =
-        %Session{}
-        |> Session.changeset(attrs)
-        |> Repo.insert()
+      Repo.transaction(fn ->
+        new_session =
+          case %Session{}
+               |> Session.changeset(attrs)
+               |> Repo.insert() do
+            {:ok, s} -> s
+            {:error, changeset} -> Repo.rollback(changeset)
+          end
 
-      for msg <- messages_to_copy do
-        %Message{}
-        |> Message.changeset(%{
-          session_id: new_session.id,
-          role: msg.role,
-          parts: msg.parts,
-          token_count: msg.token_count
-        })
-        |> Repo.insert!()
-      end
+        for msg <- messages_to_copy do
+          case %Message{}
+               |> Message.changeset(%{
+                 session_id: new_session.id,
+                 role: msg.role,
+                 parts: msg.parts,
+                 token_count: msg.token_count
+               })
+               |> Repo.insert() do
+            {:ok, _} -> :ok
+            {:error, changeset} -> Repo.rollback(changeset)
+          end
+        end
 
-      Repo.preload(new_session, :project)
-    end)
+        Repo.preload(new_session, :project)
+      end)
+    end
   end
 
   defp load_messages(session_id) do

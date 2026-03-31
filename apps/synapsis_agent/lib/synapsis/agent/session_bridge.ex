@@ -10,6 +10,9 @@ defmodule Synapsis.Agent.SessionBridge do
 
   require Logger
 
+  @port_line_buffer 4_096
+  @max_output_lines 5_000
+
   alias Synapsis.{Repo, Session, Project}
   alias Synapsis.Session.DynamicSupervisor, as: SessionDynSup
 
@@ -182,14 +185,15 @@ defmodule Synapsis.Agent.SessionBridge do
   end
 
   defp run_command(cmd, args) do
-    full_cmd = Enum.join([cmd | args], " ")
+    executable = System.find_executable(cmd) || cmd
 
     port =
-      Port.open({:spawn, full_cmd}, [
+      Port.open({:spawn_executable, executable}, [
+        {:args, args},
         :binary,
         :exit_status,
         :stderr_to_stdout,
-        {:line, 4096}
+        {:line, @port_line_buffer}
       ])
 
     collect_port_output(port, [])
@@ -198,7 +202,14 @@ defmodule Synapsis.Agent.SessionBridge do
   defp collect_port_output(port, acc) do
     receive do
       {^port, {:data, {:eol, line}}} ->
-        collect_port_output(port, [line | acc])
+        acc = [line | acc]
+
+        if length(acc) > @max_output_lines do
+          Port.close(port)
+          {:ok, acc |> Enum.reverse() |> Enum.join("\n")}
+        else
+          collect_port_output(port, acc)
+        end
 
       {^port, {:data, {:noeol, line}}} ->
         collect_port_output(port, [line | acc])
@@ -229,7 +240,7 @@ defmodule Synapsis.Agent.SessionBridge do
         nil
     end
   rescue
-    _ -> nil
+    _e in [RuntimeError, UndefinedFunctionError, ArgumentError] -> nil
   end
 
   defp build_memory_context(opts) do
@@ -240,6 +251,6 @@ defmodule Synapsis.Agent.SessionBridge do
       if context == "", do: nil, else: context
     end
   rescue
-    _ -> nil
+    _e in [RuntimeError, UndefinedFunctionError, ArgumentError] -> nil
   end
 end

@@ -108,8 +108,8 @@ defmodule Synapsis.Tool.MemoryUpdate do
 
             {:ok, Jason.encode!(%{id: memory_id, action: action, status: "success"})}
 
-          {:error, changeset} when is_struct(changeset) ->
-            {:error, "Update failed: #{inspect(changeset.errors)}"}
+          {:error, %{} = _changeset} ->
+            {:error, "Update failed"}
 
           {:error, reason} ->
             {:error, to_string(reason)}

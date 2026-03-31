@@ -7,12 +7,7 @@ defmodule SynapsisServer.ProviderController do
 
   def index(conn, _params) do
     {:ok, db_providers} = Providers.list()
-
-    db_data =
-      Enum.map(db_providers, fn p ->
-        serialize_provider(p)
-      end)
-
+    db_data = Enum.map(db_providers, &serialize_provider/1)
     db_names = MapSet.new(db_data, & &1.name)
 
     env_providers =
@@ -272,16 +267,28 @@ defmodule SynapsisServer.ProviderController do
     }
   end
 
+  @allowed_provider_keys %{
+    "name" => :name,
+    "type" => :type,
+    "base_url" => :base_url,
+    "api_key" => :api_key_encrypted,
+    "config" => :config,
+    "enabled" => :enabled
+  }
+
   defp normalize_attrs(params) do
     params
     |> Map.drop(["id"])
-    |> Map.new(fn
-      {"api_key", v} -> {:api_key_encrypted, v}
-      {k, v} when is_binary(k) -> {String.to_existing_atom(k), v}
-      {k, v} -> {k, v}
+    |> Enum.reduce(%{}, fn
+      {k, v}, acc when is_binary(k) ->
+        case Map.fetch(@allowed_provider_keys, k) do
+          {:ok, atom_key} -> Map.put(acc, atom_key, v)
+          :error -> acc
+        end
+
+      _kv, acc ->
+        acc
     end)
-  rescue
-    ArgumentError -> params |> Map.drop(["id"])
   end
 
   defp format_errors(changeset) do

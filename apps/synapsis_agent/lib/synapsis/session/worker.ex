@@ -38,10 +38,15 @@ defmodule Synapsis.Session.Worker do
   def retry(session_id), do: GenServer.call(via(session_id), :retry, 30_000)
   def approve_tool(session_id, id), do: GenServer.cast(via(session_id), {:approve_tool, id})
   def deny_tool(session_id, id), do: GenServer.cast(via(session_id), {:deny_tool, id})
-  def switch_agent(session_id, n), do: GenServer.call(via(session_id), {:switch_agent, n})
-  def switch_model(session_id, p, m), do: GenServer.call(via(session_id), {:switch_model, p, m})
-  def switch_mode(session_id, mode), do: GenServer.call(via(session_id), {:switch_mode, mode})
-  def get_status(session_id), do: GenServer.call(via(session_id), :get_status)
+  def switch_agent(session_id, n), do: GenServer.call(via(session_id), {:switch_agent, n}, 10_000)
+
+  def switch_model(session_id, p, m),
+    do: GenServer.call(via(session_id), {:switch_model, p, m}, 10_000)
+
+  def switch_mode(session_id, mode),
+    do: GenServer.call(via(session_id), {:switch_mode, mode}, 10_000)
+
+  def get_status(session_id), do: GenServer.call(via(session_id), :get_status, 10_000)
 
   defp via(id), do: {:via, Registry, {Synapsis.Session.Registry, id}}
 
@@ -85,23 +90,39 @@ defmodule Synapsis.Session.Worker do
 
   def handle_call(:get_status, _from, state) do
     s =
-      if state.runner_pid,
-        do: Runner.snapshot(state.runner_pid)[:status] || :unknown,
-        else: :unknown
+      if state.runner_pid do
+        try do
+          Runner.snapshot(state.runner_pid)[:status] || :unknown
+        catch
+          :exit, _ -> :unknown
+        end
+      else
+        :unknown
+      end
 
     {:reply, s, state, @timeout}
   end
 
   def handle_call({:switch_agent, name}, _from, state) do
-    {agent, session} = Config.do_switch_agent(name, state.session)
-    Persistence.broadcast(state.session_id, "agent_switched", %{agent: to_string(name)})
-    {:reply, :ok, %{state | agent: agent, session: session}, @timeout}
+    case Config.do_switch_agent(name, state.session) do
+      {:ok, agent, session} ->
+        Persistence.broadcast(state.session_id, "agent_switched", %{agent: to_string(name)})
+        {:reply, :ok, %{state | agent: agent, session: session}, @timeout}
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state, @timeout}
+    end
   end
 
   def handle_call({:switch_model, prov, model}, _from, state) do
-    {session, pc, agent} = Config.do_switch_model(prov, model, state)
-    Persistence.broadcast(state.session_id, "model_switched", %{provider: prov, model: model})
-    {:reply, :ok, %{state | session: session, agent: agent, provider_config: pc}, @timeout}
+    case Config.do_switch_model(prov, model, state) do
+      {:ok, session, pc, agent} ->
+        Persistence.broadcast(state.session_id, "model_switched", %{provider: prov, model: model})
+        {:reply, :ok, %{state | session: session, agent: agent, provider_config: pc}, @timeout}
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state, @timeout}
+    end
   end
 
   def handle_call({:switch_mode, mode}, _from, state) do
@@ -115,8 +136,13 @@ defmodule Synapsis.Session.Worker do
   def handle_cast(:cancel, state) do
     if state.stream_ref, do: SessionStream.cancel_stream(state.stream_ref, state.session.provider)
 
-    if state.runner_pid && Process.alive?(state.runner_pid),
-      do: GenServer.stop(state.runner_pid, :normal)
+    if state.runner_pid do
+      try do
+        GenServer.stop(state.runner_pid, :normal)
+      catch
+        :exit, _ -> :ok
+      end
+    end
 
     Persistence.set_status(state.session_id, "idle")
     {:noreply, %{state | stream_ref: nil, runner_pid: nil}, @timeout}
@@ -144,7 +170,7 @@ defmodule Synapsis.Session.Worker do
     do: IOHandler.handle_tool_result(id, res, err, s)
 
   def handle_info({:auditor_completed, _}, s) do
-    Runner.resume(s.runner_pid, %{auditor_completed: true})
+    if s.runner_pid, do: Runner.resume(s.runner_pid, %{auditor_completed: true})
     {:noreply, s}
   end
 
@@ -177,13 +203,22 @@ defmodule Synapsis.Session.Worker do
     if state.worktree_path,
       do: WorkspaceManager.teardown(state.project_path, state.session_id)
 
+    if Code.ensure_loaded?(Synapsis.Tool.Teammate) and
+         function_exported?(Synapsis.Tool.Teammate, :delete_all, 1) do
+      Synapsis.Tool.Teammate.delete_all(state.session_id)
+    end
+
     :ok
   end
 
   defp resume_reply(state, ctx) do
-    case Runner.resume(state.runner_pid, ctx) do
-      :ok -> {:reply, :ok, state, @timeout}
-      {:error, r} -> {:reply, {:error, r}, state, @timeout}
+    if state.runner_pid do
+      case Runner.resume(state.runner_pid, ctx) do
+        :ok -> {:reply, :ok, state, @timeout}
+        {:error, r} -> {:reply, {:error, r}, state, @timeout}
+      end
+    else
+      {:reply, {:error, :no_runner}, state, @timeout}
     end
   end
 
@@ -191,7 +226,7 @@ defmodule Synapsis.Session.Worker do
     decisions = Map.put(state.approval_decisions, tool_use_id, decision)
     state = %{state | approval_decisions: decisions}
 
-    if MapSet.size(state.pending_approvals) > 0 and
+    if state.runner_pid && MapSet.size(state.pending_approvals) > 0 &&
          Enum.all?(state.pending_approvals, &Map.has_key?(decisions, &1)) do
       Runner.resume(state.runner_pid, %{approval_decisions: decisions})
       {:noreply, %{state | pending_approvals: MapSet.new(), approval_decisions: %{}}, @timeout}

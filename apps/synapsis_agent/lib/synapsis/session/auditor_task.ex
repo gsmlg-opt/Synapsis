@@ -31,6 +31,8 @@ defmodule Synapsis.Session.AuditorTask do
   alias Synapsis.{FailedAttempt, Repo, PromptBuilder}
   alias Synapsis.Session.Monitor
 
+  @auditor_max_tokens 1_024
+
   @default_auditor_prompt """
   You are a code review auditor. An AI coding agent has been looping or
   making the same mistakes repeatedly. Analyze the failure context below
@@ -68,7 +70,7 @@ defmodule Synapsis.Session.AuditorTask do
       config: %{
         provider: auditor_provider,
         model: auditor_model,
-        max_tokens: 1024
+        max_tokens: @auditor_max_tokens
       }
     }
   end

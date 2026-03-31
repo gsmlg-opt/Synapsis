@@ -5,9 +5,13 @@ defmodule Synapsis.Session.Worker.Persistence do
 
   alias Synapsis.{Repo, Session, Message, ContextWindow}
 
+  @image_token_estimate 1_000
+
   def persist_user_message(session_id, content, image_parts) do
     parts = [%Synapsis.Part.Text{content: content} | image_parts]
-    token_count = ContextWindow.estimate_tokens(content) + length(image_parts) * 1000
+
+    token_count =
+      ContextWindow.estimate_tokens(content) + length(image_parts) * @image_token_estimate
 
     case %Message{}
          |> Message.changeset(%{
@@ -25,6 +29,8 @@ defmodule Synapsis.Session.Worker.Persistence do
           session_id: session_id,
           errors: inspect(cs.errors)
         )
+
+        {:error, cs}
     end
   end
 
@@ -34,10 +40,10 @@ defmodule Synapsis.Session.Worker.Persistence do
       session -> session |> Session.status_changeset(status) |> Repo.update()
     end
   rescue
-    error ->
+    e in [Ecto.QueryError, DBConnection.ConnectionError, DBConnection.OwnershipError] ->
       Logger.warning("update_session_status_failed",
         session_id: session_id,
-        error: inspect(error)
+        error: Exception.message(e)
       )
 
       :ok
@@ -49,8 +55,11 @@ defmodule Synapsis.Session.Worker.Persistence do
   end
 
   def set_status(session_id, status) do
-    update_session_status(session_id, status)
-    broadcast(session_id, "session_status", %{status: status})
+    case update_session_status(session_id, status) do
+      {:ok, _} -> broadcast(session_id, "session_status", %{status: status})
+      :ok -> broadcast(session_id, "session_status", %{status: status})
+      {:error, _} = err -> err
+    end
   end
 
   def broadcast(session_id, event, payload),

@@ -67,7 +67,7 @@ defmodule Synapsis.Tool.FileEdit do
               {:error, reason}
           end
         else
-          {:error, "String not found in file: #{inspect(String.slice(old_string, 0..50))}"}
+          {:error, "String not found in file"}
         end
 
       {:error, reason} ->
@@ -85,7 +85,7 @@ defmodule Synapsis.Tool.FileEdit do
 
       case String.split(content, old_string) do
         [_only] ->
-          {:error, "String not found in file: #{inspect(String.slice(old_string, 0..50))}"}
+          {:error, "String not found in file"}
 
         [before, after_part] ->
           new_content = before <> new_string <> after_part
@@ -108,7 +108,7 @@ defmodule Synapsis.Tool.FileEdit do
               end
 
             {:error, reason} ->
-              {:error, "Failed to write #{resolved}: #{inspect(reason)}"}
+              {:error, "Failed to write file: #{inspect(reason)}"}
           end
 
         _multiple ->
@@ -142,12 +142,12 @@ defmodule Synapsis.Tool.FileEdit do
               end
 
             {:error, reason} ->
-              {:error, "Failed to write #{resolved}: #{inspect(reason)}"}
+              {:error, "Failed to write file: #{inspect(reason)}"}
           end
       end
     else
-      {:error, :enoent} -> {:error, "File not found: #{resolved}"}
-      {:error, reason} -> {:error, inspect(reason)}
+      {:error, :enoent} -> {:error, "File not found"}
+      {:error, reason} -> {:error, "File read failed: #{inspect(reason)}"}
     end
   end
 

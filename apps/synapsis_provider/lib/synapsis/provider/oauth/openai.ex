@@ -54,8 +54,8 @@ defmodule Synapsis.Provider.OAuth.OpenAI do
       {:ok, %{status: 404}} ->
         {:error, :device_auth_not_enabled}
 
-      {:ok, %{status: status, body: body}} ->
-        {:error, "HTTP #{status}: #{inspect(body)}"}
+      {:ok, %{status: status}} ->
+        {:error, "HTTP #{status}"}
 
       {:error, reason} ->
         {:error, reason}
@@ -87,8 +87,8 @@ defmodule Synapsis.Provider.OAuth.OpenAI do
       {:ok, %{status: status}} when status in [403, 404] ->
         {:pending, :authorization_pending}
 
-      {:ok, %{status: status, body: body}} ->
-        {:error, "HTTP #{status}: #{inspect(body)}"}
+      {:ok, %{status: status}} ->
+        {:error, "HTTP #{status}"}
 
       {:error, reason} ->
         {:error, reason}
@@ -126,8 +126,8 @@ defmodule Synapsis.Provider.OAuth.OpenAI do
            expires_in: body["expires_in"]
          }}
 
-      {:ok, %{status: status, body: body}} ->
-        {:error, "HTTP #{status}: #{inspect(body)}"}
+      {:ok, %{status: status}} ->
+        {:error, "HTTP #{status}"}
 
       {:error, reason} ->
         {:error, reason}
@@ -162,8 +162,8 @@ defmodule Synapsis.Provider.OAuth.OpenAI do
       {:ok, %{status: 401, body: %{"error" => error_code}}} ->
         {:error, {:token_expired, error_code}}
 
-      {:ok, %{status: status, body: body}} ->
-        {:error, "HTTP #{status}: #{inspect(body)}"}
+      {:ok, %{status: status}} ->
+        {:error, "HTTP #{status}"}
 
       {:error, reason} ->
         {:error, reason}

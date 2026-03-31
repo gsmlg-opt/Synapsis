@@ -19,6 +19,8 @@ defmodule Synapsis.Session.Monitor do
   @max_duplicate_threshold 3
   @stagnation_threshold 3
   @iteration_warn_at 20
+  @max_signals 100
+  @max_tool_hashes 500
 
   defstruct tool_call_counts: %{},
             iteration_count: 0,
@@ -59,10 +61,12 @@ defmodule Synapsis.Session.Monitor do
     count = Map.get(monitor.tool_call_counts, hash, 0) + 1
     updated = %{monitor | tool_call_counts: Map.put(monitor.tool_call_counts, hash, count)}
 
+    updated = trim_tool_counts(updated)
+
     if count >= @max_duplicate_threshold do
       signal = {:duplicate_tool_call, hash, count}
       Logger.warning("duplicate_tool_call", hash: hash, count: count, tool: tool_name)
-      {signal, %{updated | signals: [signal | updated.signals]}}
+      {signal, %{updated | signals: cap_signals([signal | updated.signals])}}
     else
       {:ok, updated}
     end
@@ -111,7 +115,7 @@ defmodule Synapsis.Session.Monitor do
         signals
       end
 
-    {signals, %{updated | signals: updated.signals ++ signals}}
+    {signals, %{updated | signals: cap_signals(updated.signals ++ signals)}}
   end
 
   @doc """
@@ -135,7 +139,7 @@ defmodule Synapsis.Session.Monitor do
           monitor
           | last_test_status: status,
             test_regressions: regressions,
-            signals: [signal | monitor.signals]
+            signals: cap_signals([signal | monitor.signals])
         }
 
         {signal, updated}
@@ -160,23 +164,25 @@ defmodule Synapsis.Session.Monitor do
     }
   end
 
-  @doc """
-  Returns the highest severity signal from the monitor, or `:ok`.
-  """
-  @spec worst_signal(t()) :: signal()
-  def worst_signal(%__MODULE__{signals: []}), do: :ok
-
-  def worst_signal(%__MODULE__{signals: signals}) do
-    signals
-    |> Enum.max_by(&signal_severity/1)
-  end
-
-  defp signal_severity(:ok), do: 0
-  defp signal_severity({:iteration_warning, _}), do: 1
-  defp signal_severity({:stagnation, _}), do: 2
-  defp signal_severity({:duplicate_tool_call, _, _}), do: 3
-  defp signal_severity({:test_regression, _}), do: 4
-
   defp max_duplicate(counts) when map_size(counts) == 0, do: 0
   defp max_duplicate(counts), do: counts |> Map.values() |> Enum.max()
+
+  defp cap_signals(signals) when length(signals) > @max_signals do
+    Enum.take(signals, @max_signals)
+  end
+
+  defp cap_signals(signals), do: signals
+
+  defp trim_tool_counts(%{tool_call_counts: counts} = monitor)
+       when map_size(counts) > @max_tool_hashes do
+    trimmed =
+      counts
+      |> Enum.sort_by(fn {_k, v} -> v end, :desc)
+      |> Enum.take(@max_tool_hashes)
+      |> Map.new()
+
+    %{monitor | tool_call_counts: trimmed}
+  end
+
+  defp trim_tool_counts(monitor), do: monitor
 end

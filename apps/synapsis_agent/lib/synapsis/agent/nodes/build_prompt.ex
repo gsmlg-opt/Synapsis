@@ -12,6 +12,7 @@ defmodule Synapsis.Agent.Nodes.BuildPrompt do
   require Logger
 
   @impl true
+  @spec run(map(), map()) :: {:next, atom(), map()}
   def run(state, ctx) do
     session_id = state.session_id
     agent_config = state.agent_config

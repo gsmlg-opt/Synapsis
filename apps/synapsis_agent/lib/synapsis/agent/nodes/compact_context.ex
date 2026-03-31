@@ -10,6 +10,7 @@ defmodule Synapsis.Agent.Nodes.CompactContext do
   require Logger
 
   @impl true
+  @spec run(map(), map()) :: {:next, atom(), map()}
   def run(state, _ctx) do
     session_id = state.session_id
     agent_config = state.agent_config || %{}

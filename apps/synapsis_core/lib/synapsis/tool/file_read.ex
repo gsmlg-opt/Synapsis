@@ -48,8 +48,8 @@ defmodule Synapsis.Tool.FileRead do
 
         {:ok, content}
       else
-        {:error, :enoent} -> {:error, "File not found: #{resolved}"}
-        {:error, :eacces} -> {:error, "Permission denied: #{resolved}"}
+        {:error, :enoent} -> {:error, "File not found"}
+        {:error, :eacces} -> {:error, "Permission denied"}
         {:error, reason} -> {:error, "Error reading file: #{inspect(reason)}"}
       end
     end

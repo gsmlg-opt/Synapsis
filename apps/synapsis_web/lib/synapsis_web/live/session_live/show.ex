@@ -453,7 +453,7 @@ defmodule SynapsisWeb.SessionLive.Show do
   defp format_body(body) when is_map(body) do
     Jason.encode!(body, pretty: true)
   rescue
-    _ -> inspect(body)
+    _e in [Jason.EncodeError, Protocol.UndefinedError] -> inspect(body)
   end
 
   defp format_body(body), do: inspect(body)

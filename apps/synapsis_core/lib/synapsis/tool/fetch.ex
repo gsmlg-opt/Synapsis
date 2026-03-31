@@ -84,8 +84,8 @@ defmodule Synapsis.Tool.Fetch do
       {:ok, %{status: status}} ->
         {:error, "HTTP #{status}"}
 
-      {:error, reason} ->
-        {:error, inspect(reason)}
+      {:error, _reason} ->
+        {:error, "Request failed"}
     end
   end
 end

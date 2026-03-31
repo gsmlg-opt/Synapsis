@@ -27,10 +27,15 @@ defmodule Synapsis.Image do
              "image too large (#{div(size, 1024 * 1024)}MB, max #{div(@max_size, 1024 * 1024)}MB)"}
 
           {:ok, _} ->
-            data = File.read!(path)
-            base64 = Base.encode64(data)
-            media_type = media_type(ext)
-            {:ok, %{type: "image", media_type: media_type, data: base64}}
+            case File.read(path) do
+              {:ok, data} ->
+                base64 = Base.encode64(data)
+                media_type = media_type(ext)
+                {:ok, %{type: "image", media_type: media_type, data: base64}}
+
+              {:error, reason} ->
+                {:error, "cannot read file: #{reason}"}
+            end
 
           {:error, reason} ->
             {:error, "cannot read file: #{reason}"}

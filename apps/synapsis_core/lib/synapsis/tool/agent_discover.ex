@@ -63,7 +63,8 @@ defmodule Synapsis.Tool.AgentDiscover do
 
     {:ok, Jason.encode!(%{agents: agents, count: length(agents)})}
   rescue
-    _ -> {:ok, Jason.encode!(%{agents: [], count: 0, note: "Registry not available"})}
+    _e in [ArgumentError, RuntimeError] ->
+      {:ok, Jason.encode!(%{agents: [], count: 0, note: "Registry not available"})}
   end
 
   defp get_agent(nil), do: {:error, "agent_id is required for 'get' action"}
@@ -100,7 +101,8 @@ defmodule Synapsis.Tool.AgentDiscover do
 
     {:ok, Jason.encode!(%{agents: agents, count: length(agents), project_id: project_id})}
   rescue
-    _ -> {:ok, Jason.encode!(%{agents: [], count: 0, project_id: project_id})}
+    _e in [ArgumentError, RuntimeError] ->
+      {:ok, Jason.encode!(%{agents: [], count: 0, project_id: project_id})}
   end
 
   defp format_value(value) when is_map(value), do: inspect(value)

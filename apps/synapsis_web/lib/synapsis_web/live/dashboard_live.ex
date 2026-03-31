@@ -1,4 +1,5 @@
 defmodule SynapsisWeb.DashboardLive do
+  @moduledoc "Main dashboard showing project and session summaries."
   use SynapsisWeb, :live_view
 
   @impl true

@@ -7,6 +7,7 @@ defmodule Synapsis.Memory.Cache do
 
   @table __MODULE__
   @ttl_ms 30_000
+  @sweep_interval_ms 60_000
   @pubsub Synapsis.PubSub
 
   def start_link(opts \\ []) do
@@ -18,6 +19,7 @@ defmodule Synapsis.Memory.Cache do
     :ets.new(@table, [:named_table, :set, :public, read_concurrency: true])
 
     Phoenix.PubSub.subscribe(@pubsub, "memory:cache_invalidation")
+    schedule_sweep()
     {:ok, %{}}
   end
 
@@ -65,11 +67,19 @@ defmodule Synapsis.Memory.Cache do
 
   @impl true
   def handle_info({:invalidate_scope, _scope, _scope_id}, state) do
-    # Simple approach: clear entire cache on any invalidation
-    # More granular invalidation can be added later if needed
     :ets.delete_all_objects(@table)
     {:noreply, state}
   end
 
+  def handle_info(:sweep_expired, state) do
+    now = System.monotonic_time(:millisecond)
+    match_spec = [{{:_, :_, :"$1"}, [{:<, :"$1", now}], [true]}]
+    :ets.select_delete(@table, match_spec)
+    schedule_sweep()
+    {:noreply, state}
+  end
+
   def handle_info(_msg, state), do: {:noreply, state}
+
+  defp schedule_sweep, do: Process.send_after(self(), :sweep_expired, @sweep_interval_ms)
 end

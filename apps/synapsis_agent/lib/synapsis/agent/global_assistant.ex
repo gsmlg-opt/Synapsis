@@ -27,7 +27,7 @@ defmodule Synapsis.Agent.GlobalAssistant do
 
   @spec start_project(String.t(), map()) :: {:ok, pid()} | {:error, term()}
   def start_project(project_id, metadata \\ %{}) do
-    GenServer.call(@name, {:start_project, project_id, metadata})
+    GenServer.call(@name, {:start_project, project_id, metadata}, 10_000)
   end
 
   @spec dispatch_work(WorkItem.t()) :: :ok | {:error, term()}

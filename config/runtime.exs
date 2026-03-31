@@ -49,10 +49,19 @@ db_config =
 config :synapsis_data, Synapsis.Repo, db_config
 
 # Encryption key for provider API keys (AES-256-GCM)
-config :synapsis_data,
-  encryption_key:
+encryption_key =
+  if config_env() == :prod do
     System.get_env("SYNAPSIS_ENCRYPTION_KEY") ||
-      "dev-only-encryption-key-32bytes!"
+      raise """
+      environment variable SYNAPSIS_ENCRYPTION_KEY is missing.
+      This key encrypts provider API keys stored in the database.
+      Generate a 32-byte key: :crypto.strong_rand_bytes(32) |> Base.encode64()
+      """
+  else
+    System.get_env("SYNAPSIS_ENCRYPTION_KEY") || "dev-only-encryption-key-32bytes!"
+  end
+
+config :synapsis_data, encryption_key: encryption_key
 
 if config_env() == :prod do
   secret_key_base =

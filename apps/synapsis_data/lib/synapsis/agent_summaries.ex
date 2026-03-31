@@ -37,9 +37,12 @@ defmodule Synapsis.AgentSummaries do
 
   @spec list(keyword()) :: [AgentSummary.t()]
   def list(filters \\ []) do
+    {limit, filters} = Keyword.pop(filters, :limit, 200)
+
     AgentSummary
     |> apply_filters(filters)
     |> order_by([s], desc: s.updated_at)
+    |> limit(^limit)
     |> Repo.all()
   end
 

@@ -150,6 +150,8 @@ defmodule Synapsis.Sessions do
 
     ensure_session_running(session_id)
     Synapsis.Session.Worker.send_message(session_id, content, image_parts)
+  catch
+    :exit, reason -> {:error, exit_reason(reason)}
   end
 
   def send_message(session_id, %{content: content}) do
@@ -159,6 +161,8 @@ defmodule Synapsis.Sessions do
   def send_message(session_id, content) when is_binary(content) do
     ensure_session_running(session_id)
     Synapsis.Session.Worker.send_message(session_id, content)
+  catch
+    :exit, reason -> {:error, exit_reason(reason)}
   end
 
   def cancel(session_id) do
@@ -168,21 +172,29 @@ defmodule Synapsis.Sessions do
   def retry(session_id) do
     ensure_session_running(session_id)
     Synapsis.Session.Worker.retry(session_id)
+  catch
+    :exit, reason -> {:error, exit_reason(reason)}
   end
 
   def switch_agent(session_id, agent_name) do
     ensure_session_running(session_id)
     Synapsis.Session.Worker.switch_agent(session_id, agent_name)
+  catch
+    :exit, reason -> {:error, exit_reason(reason)}
   end
 
   def switch_model(session_id, provider_name, model) do
     ensure_session_running(session_id)
     Synapsis.Session.Worker.switch_model(session_id, provider_name, model)
+  catch
+    :exit, reason -> {:error, exit_reason(reason)}
   end
 
   def switch_mode(session_id, mode_name) do
     ensure_session_running(session_id)
     Synapsis.Session.Worker.switch_mode(session_id, mode_name)
+  catch
+    :exit, reason -> {:error, exit_reason(reason)}
   end
 
   def approve_tool(session_id, tool_use_id) do
@@ -248,19 +260,9 @@ defmodule Synapsis.Sessions do
   end
 
   defp ensure_project(project_path) do
-    slug = Project.slug_from_path(project_path)
-
-    case Repo.get_by(Project, path: project_path) do
-      nil ->
-        {:ok, project} =
-          %Project{}
-          |> Project.changeset(%{path: project_path, slug: slug})
-          |> Repo.insert()
-
-        project
-
-      project ->
-        project
+    case Synapsis.Projects.find_or_create(project_path) do
+      {:ok, project} -> project
+      {:error, _changeset} -> Repo.get_by(Project, path: project_path)
     end
   end
 
@@ -295,4 +297,8 @@ defmodule Synapsis.Sessions do
   end
 
   defp default_model(_config, provider), do: Synapsis.Providers.default_model(provider)
+
+  defp exit_reason({:timeout, _}), do: :worker_timeout
+  defp exit_reason({:noproc, _}), do: :worker_not_running
+  defp exit_reason(_), do: :worker_unavailable
 end

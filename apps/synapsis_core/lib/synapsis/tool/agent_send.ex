@@ -67,7 +67,7 @@ defmodule Synapsis.Tool.AgentSend do
              from: from,
              to: to,
              ref: ref,
-             type: String.to_atom(msg_type),
+             type: safe_msg_type(msg_type),
              payload: message.payload,
              timestamp: message.inserted_at
            }}
@@ -75,10 +75,17 @@ defmodule Synapsis.Tool.AgentSend do
 
         {:ok, Jason.encode!(%{message_id: message.id, ref: ref, status: "sent", to: to})}
 
-      {:error, changeset} ->
-        {:error, "Failed to send message: #{inspect(changeset.errors)}"}
+      {:error, _changeset} ->
+        {:error, "Failed to send message"}
     end
   end
+
+  @valid_msg_types ~w(notification request response)
+
+  defp safe_msg_type(type) when type in @valid_msg_types,
+    do: String.to_existing_atom(type)
+
+  defp safe_msg_type(_), do: :notification
 
   defp resolve_agent_id(context) do
     context[:agent_id] || context[:session_id] || "unknown"

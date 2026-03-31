@@ -16,9 +16,12 @@ defmodule Synapsis.AgentEvents do
 
   @spec list(keyword()) :: [AgentEvent.t()]
   def list(filters \\ []) do
+    {limit, filters} = Keyword.pop(filters, :limit, 500)
+
     AgentEvent
     |> apply_filters(filters)
     |> order_by([e], asc: e.inserted_at)
+    |> limit(^limit)
     |> Repo.all()
   end
 

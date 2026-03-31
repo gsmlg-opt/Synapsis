@@ -20,14 +20,12 @@ defmodule Synapsis.Projects do
   def find_or_create(path) do
     slug = Project.slug_from_path(path)
 
-    case Repo.get_by(Project, path: path) do
-      nil ->
-        %Project{}
-        |> Project.changeset(%{path: path, slug: slug})
-        |> Repo.insert()
-
-      project ->
-        {:ok, project}
-    end
+    %Project{}
+    |> Project.changeset(%{path: path, slug: slug})
+    |> Repo.insert(
+      on_conflict: {:replace, [:updated_at]},
+      conflict_target: :path,
+      returning: true
+    )
   end
 end

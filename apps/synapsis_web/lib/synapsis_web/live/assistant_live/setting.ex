@@ -1,6 +1,7 @@
 defmodule SynapsisWeb.AssistantLive.Setting do
   @moduledoc "Settings page for a named assistant — tabbed layout with Overview, Files, Tools, Skills, and Cron Jobs."
   use SynapsisWeb, :live_view
+  require Logger
 
   alias Synapsis.Workspace
   alias Synapsis.Workspace.Identity
@@ -110,7 +111,8 @@ defmodule SynapsisWeb.AssistantLive.Setting do
          |> put_flash(:info, "File saved")}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Save failed: #{inspect(reason)}")}
+        Logger.warning("file_save_failed", reason: inspect(reason))
+        {:noreply, put_flash(socket, :error, "Save failed")}
     end
   end
 
@@ -219,7 +221,8 @@ defmodule SynapsisWeb.AssistantLive.Setting do
          |> put_flash(:info, "Agent config saved")}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Save failed: #{inspect(reason)}")}
+        Logger.warning("config_save_failed", reason: inspect(reason))
+        {:noreply, put_flash(socket, :error, "Save failed")}
     end
   end
 
@@ -337,7 +340,8 @@ defmodule SynapsisWeb.AssistantLive.Setting do
         {:noreply, put_flash(socket, :error, "Validation error: #{msg}")}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Failed: #{inspect(reason)}")}
+        Logger.warning("heartbeat_save_failed", reason: inspect(reason))
+        {:noreply, put_flash(socket, :error, "Failed to save heartbeat")}
     end
   end
 
@@ -358,7 +362,8 @@ defmodule SynapsisWeb.AssistantLive.Setting do
              )}
 
           {:error, reason} ->
-            {:noreply, put_flash(socket, :error, "Toggle failed: #{inspect(reason)}")}
+            Logger.warning("heartbeat_toggle_failed", reason: inspect(reason))
+            {:noreply, put_flash(socket, :error, "Toggle failed")}
         end
     end
   end
@@ -379,7 +384,8 @@ defmodule SynapsisWeb.AssistantLive.Setting do
              |> put_flash(:info, "Heartbeat deleted")}
 
           {:error, reason} ->
-            {:noreply, put_flash(socket, :error, "Delete failed: #{inspect(reason)}")}
+            Logger.warning("heartbeat_delete_failed", reason: inspect(reason))
+            {:noreply, put_flash(socket, :error, "Delete failed")}
         end
     end
   end

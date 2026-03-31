@@ -4,11 +4,17 @@ defmodule SynapsisServer.SessionController do
 
   alias Synapsis.Sessions
 
+  @max_path_bytes 4_096
+
   def index(conn, params) do
     project_path = params["project_path"] || "."
 
-    {:ok, sessions} = Sessions.list(project_path)
-    json(conn, %{data: Enum.map(sessions, &serialize_session/1)})
+    if byte_size(project_path) > @max_path_bytes do
+      conn |> put_status(400) |> json(%{error: "project_path too long"})
+    else
+      {:ok, sessions} = Sessions.list(project_path)
+      json(conn, %{data: Enum.map(sessions, &serialize_session/1)})
+    end
   end
 
   def show(conn, %{"id" => id}) do
@@ -24,6 +30,14 @@ defmodule SynapsisServer.SessionController do
   def create(conn, params) do
     project_path = params["project_path"] || "."
 
+    if byte_size(project_path) > @max_path_bytes do
+      conn |> put_status(400) |> json(%{error: "project_path too long"})
+    else
+      create_session(conn, project_path, params)
+    end
+  end
+
+  defp create_session(conn, project_path, params) do
     opts =
       %{
         provider: params["provider"],
@@ -64,24 +78,51 @@ defmodule SynapsisServer.SessionController do
     end
   end
 
+  @max_content_bytes 256_000
+  @max_images 20
+
   def send_message(conn, %{"id" => id, "content" => content, "images" => images})
       when is_list(images) do
-    case Sessions.send_message(id, %{content: content, images: images}) do
-      :ok ->
-        json(conn, %{status: "ok"})
+    cond do
+      not is_binary(content) ->
+        conn |> put_status(400) |> json(%{error: "content must be a string"})
 
-      {:error, reason} ->
-        conn |> put_status(422) |> json(%{error: format_error(reason)})
+      byte_size(content) > @max_content_bytes ->
+        conn |> put_status(413) |> json(%{error: "content too large"})
+
+      length(images) > @max_images ->
+        conn |> put_status(400) |> json(%{error: "too many images"})
+
+      not Enum.all?(images, &is_binary/1) ->
+        conn |> put_status(400) |> json(%{error: "each image must be a file path string"})
+
+      true ->
+        case Sessions.send_message(id, %{content: content, images: images}) do
+          :ok ->
+            json(conn, %{status: "ok"})
+
+          {:error, reason} ->
+            conn |> put_status(422) |> json(%{error: format_error(reason)})
+        end
     end
   end
 
   def send_message(conn, %{"id" => id, "content" => content}) do
-    case Sessions.send_message(id, content) do
-      :ok ->
-        json(conn, %{status: "ok"})
+    cond do
+      not is_binary(content) ->
+        conn |> put_status(400) |> json(%{error: "content must be a string"})
 
-      {:error, reason} ->
-        conn |> put_status(422) |> json(%{error: format_error(reason)})
+      byte_size(content) > @max_content_bytes ->
+        conn |> put_status(413) |> json(%{error: "content too large"})
+
+      true ->
+        case Sessions.send_message(id, content) do
+          :ok ->
+            json(conn, %{status: "ok"})
+
+          {:error, reason} ->
+            conn |> put_status(422) |> json(%{error: format_error(reason)})
+        end
     end
   end
 
@@ -93,9 +134,18 @@ defmodule SynapsisServer.SessionController do
     opts =
       case params["at_message"] do
         nil -> []
-        msg_id -> [at_message: msg_id]
+        msg_id when is_binary(msg_id) -> [at_message: msg_id]
+        _ -> :invalid
       end
 
+    if opts == :invalid do
+      conn |> put_status(400) |> json(%{error: "at_message must be a string"})
+    else
+      fork_session(conn, id, opts)
+    end
+  end
+
+  defp fork_session(conn, id, opts) do
     case Sessions.fork(id, opts) do
       {:ok, new_session} ->
         conn |> put_status(201) |> json(%{data: serialize_session(new_session)})

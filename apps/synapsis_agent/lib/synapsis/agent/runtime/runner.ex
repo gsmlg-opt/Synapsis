@@ -144,7 +144,7 @@ defmodule Synapsis.Agent.Runtime.Runner do
   end
 
   @spec snapshot(pid() | String.t()) :: snapshot() | {:error, term()}
-  def snapshot(pid) when is_pid(pid), do: GenServer.call(pid, :snapshot)
+  def snapshot(pid) when is_pid(pid), do: GenServer.call(pid, :snapshot, 10_000)
 
   def snapshot(run_id) when is_binary(run_id) do
     case whereis(run_id) do
@@ -162,7 +162,7 @@ defmodule Synapsis.Agent.Runtime.Runner do
   def resume(target, ctx_updates \\ %{})
 
   def resume(pid, ctx_updates) when is_pid(pid) and is_map(ctx_updates) do
-    GenServer.call(pid, {:resume, ctx_updates})
+    GenServer.call(pid, {:resume, ctx_updates}, 15_000)
   end
 
   def resume(run_id, ctx_updates) when is_binary(run_id) and is_map(ctx_updates) do
@@ -393,7 +393,7 @@ defmodule Synapsis.Agent.Runtime.Runner do
       _ = fun.()
       :ok
     rescue
-      _ -> :ok
+      _e in [RuntimeError, FunctionClauseError, MatchError, ArgumentError] -> :ok
     catch
       _, _ -> :ok
     end

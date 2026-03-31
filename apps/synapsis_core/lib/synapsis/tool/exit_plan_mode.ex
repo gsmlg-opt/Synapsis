@@ -62,8 +62,8 @@ defmodule Synapsis.Tool.ExitPlanMode do
 
                 {:ok, "Exited plan mode"}
 
-              {:error, changeset} ->
-                {:error, "Failed to exit plan mode: #{inspect(changeset.errors)}"}
+              {:error, _changeset} ->
+                {:error, "Failed to exit plan mode"}
             end
         end
     end

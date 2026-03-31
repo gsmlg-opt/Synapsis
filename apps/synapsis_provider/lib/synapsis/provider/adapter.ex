@@ -13,6 +13,11 @@ defmodule Synapsis.Provider.Adapter do
 
   alias Synapsis.Provider.{EventMapper, MessageMapper, ModelRegistry}
   alias Synapsis.Provider.Transport
+  alias SynapsisProvider.Sanitizer
+
+  @anthropic_api_version "2023-06-01"
+  @stream_timeout_ms 300_000
+  @request_timeout_ms 60_000
 
   require Logger
 
@@ -102,6 +107,7 @@ defmodule Synapsis.Provider.Adapter do
 
     case Task.yield(task, 60_000) || Task.shutdown(task) do
       {:ok, result} -> result
+      {:exit, _reason} -> {:error, "completion failed"}
       nil -> {:error, "auditor timeout"}
     end
   end
@@ -118,7 +124,7 @@ defmodule Synapsis.Provider.Adapter do
     # compatible proxies (MiniMax, Moonshot, ZhipuAI) require Bearer.
     headers =
       [
-        {"anthropic-version", "2023-06-01"},
+        {"anthropic-version", @anthropic_api_version},
         {"content-type", "application/json"}
       ] ++ anthropic_auth_headers(config[:api_key])
 
@@ -126,14 +132,23 @@ defmodule Synapsis.Provider.Adapter do
     session_id = config[:session_id]
     start_time = System.monotonic_time()
 
-    emit_request_telemetry(session_id, request_id, :post, url, headers, request, :anthropic, request[:model])
+    emit_request_telemetry(
+      session_id,
+      request_id,
+      :post,
+      url,
+      headers,
+      request,
+      :anthropic,
+      request[:model]
+    )
 
     try do
       resp =
         Req.post!(url,
           headers: headers,
           json: request,
-          receive_timeout: 300_000,
+          receive_timeout: @stream_timeout_ms,
           compressed: false,
           retry: false,
           redirect: false,
@@ -152,7 +167,7 @@ defmodule Synapsis.Provider.Adapter do
       emit_response_telemetry(session_id, request_id, resp, start_time)
       handle_stream_response(resp, caller)
     rescue
-      e ->
+      e in [Req.TransportError, RuntimeError, Jason.DecodeError] ->
         emit_error_telemetry(session_id, request_id, e, start_time)
         send(caller, {:provider_error, Exception.message(e)})
     end
@@ -194,7 +209,7 @@ defmodule Synapsis.Provider.Adapter do
         Req.post!(url,
           headers: headers,
           json: body,
-          receive_timeout: 300_000,
+          receive_timeout: @stream_timeout_ms,
           compressed: false,
           retry: false,
           redirect: false,
@@ -213,7 +228,7 @@ defmodule Synapsis.Provider.Adapter do
       emit_response_telemetry(session_id, request_id, resp, start_time)
       handle_stream_response(resp, caller)
     rescue
-      e ->
+      e in [Req.TransportError, RuntimeError, Jason.DecodeError] ->
         emit_error_telemetry(session_id, request_id, e, start_time)
         send(caller, {:provider_error, Exception.message(e)})
     end
@@ -252,14 +267,23 @@ defmodule Synapsis.Provider.Adapter do
     session_id = config[:session_id]
     start_time = System.monotonic_time()
 
-    emit_request_telemetry(session_id, request_id, :post, url, headers, body, :openai, request[:model])
+    emit_request_telemetry(
+      session_id,
+      request_id,
+      :post,
+      url,
+      headers,
+      body,
+      :openai,
+      request[:model]
+    )
 
     try do
       resp =
         Req.post!(url,
           headers: headers,
           json: body,
-          receive_timeout: 300_000,
+          receive_timeout: @stream_timeout_ms,
           compressed: false,
           retry: false,
           redirect: false,
@@ -283,7 +307,7 @@ defmodule Synapsis.Provider.Adapter do
         handle_stream_response(resp, caller)
       end
     rescue
-      e ->
+      e in [Req.TransportError, RuntimeError, Jason.DecodeError] ->
         emit_error_telemetry(session_id, request_id, e, start_time)
         send(caller, {:provider_error, Exception.message(e)})
     end
@@ -314,24 +338,26 @@ defmodule Synapsis.Provider.Adapter do
 
     headers =
       [
-        {"anthropic-version", "2023-06-01"},
+        {"anthropic-version", @anthropic_api_version},
         {"content-type", "application/json"}
       ] ++ anthropic_auth_headers(config[:api_key])
 
-    response = Req.post!(url, headers: headers, json: body, receive_timeout: 60_000)
+    case Req.post(url, headers: headers, json: body, receive_timeout: @request_timeout_ms) do
+      {:ok, response} ->
+        case response.body do
+          %{"content" => [%{"text" => text} | _]} ->
+            {:ok, text}
 
-    case response.body do
-      %{"content" => [%{"text" => text} | _]} ->
-        {:ok, text}
+          %{"error" => %{"message" => msg}} ->
+            {:error, msg}
 
-      %{"error" => %{"message" => msg}} ->
-        {:error, msg}
+          _other ->
+            {:error, "unexpected provider response format"}
+        end
 
-      other ->
-        {:error, "unexpected response: #{inspect(other)}"}
+      {:error, exception} ->
+        {:error, Exception.message(exception)}
     end
-  rescue
-    e -> {:error, Exception.message(e)}
   end
 
   defp do_complete(:openai, request, config) do
@@ -354,22 +380,23 @@ defmodule Synapsis.Provider.Adapter do
 
     body = Map.drop(request, [:model, :stream])
 
-    response =
-      Req.post!(url,
-        headers: [{"content-type", "application/json"}, {"x-goog-api-key", config[:api_key]}],
-        json: body,
-        receive_timeout: 60_000
-      )
+    case Req.post(url,
+           headers: [{"content-type", "application/json"}, {"x-goog-api-key", config[:api_key]}],
+           json: body,
+           receive_timeout: @request_timeout_ms
+         ) do
+      {:ok, response} ->
+        case response.body do
+          %{"candidates" => [%{"content" => %{"parts" => [%{"text" => text} | _]}} | _]} ->
+            {:ok, text}
 
-    case response.body do
-      %{"candidates" => [%{"content" => %{"parts" => [%{"text" => text} | _]}} | _]} ->
-        {:ok, text}
+          _other ->
+            {:error, "unexpected provider response format"}
+        end
 
-      other ->
-        {:error, "unexpected response: #{inspect(other)}"}
+      {:error, exception} ->
+        {:error, Exception.message(exception)}
     end
-  rescue
-    e -> {:error, Exception.message(e)}
   end
 
   # ---------------------------------------------------------------------------
@@ -386,24 +413,26 @@ defmodule Synapsis.Provider.Adapter do
       [{"content-type", "application/json"}] ++
         if(config[:api_key], do: [{"authorization", "Bearer #{config[:api_key]}"}], else: [])
 
-    response = Req.post!(url, headers: headers, json: body, receive_timeout: 60_000)
+    case Req.post(url, headers: headers, json: body, receive_timeout: @request_timeout_ms) do
+      {:ok, response} ->
+        if response.status == 401 and config[:oauth] do
+          {:retry_auth, response}
+        else
+          case response.body do
+            %{"choices" => [%{"message" => %{"content" => text}} | _]} ->
+              {:ok, text}
 
-    if response.status == 401 and config[:oauth] do
-      {:retry_auth, response}
-    else
-      case response.body do
-        %{"choices" => [%{"message" => %{"content" => text}} | _]} ->
-          {:ok, text}
+            %{"error" => %{"message" => msg}} ->
+              {:error, msg}
 
-        %{"error" => %{"message" => msg}} ->
-          {:error, msg}
+            _other ->
+              {:error, "unexpected provider response format"}
+          end
+        end
 
-        other ->
-          {:error, "unexpected response: #{inspect(other)}"}
-      end
+      {:error, exception} ->
+        {:error, Exception.message(exception)}
     end
-  rescue
-    e -> {:error, Exception.message(e)}
   end
 
   # ---------------------------------------------------------------------------
@@ -412,15 +441,18 @@ defmodule Synapsis.Provider.Adapter do
 
   defp extract_error(%{body: body}) when is_binary(body) do
     case Jason.decode(body) do
-      {:ok, %{"error" => %{"message" => msg}}} -> msg
-      {:ok, %{"error" => msg}} when is_binary(msg) -> msg
-      _ -> String.slice(body, 0, 200)
+      {:ok, %{"error" => %{"message" => msg}}} -> String.slice(msg, 0, 200)
+      {:ok, %{"error" => msg}} when is_binary(msg) -> String.slice(msg, 0, 200)
+      _ -> "API request failed"
     end
   end
 
-  defp extract_error(%{body: %{"error" => %{"message" => msg}}}), do: msg
-  defp extract_error(%{body: %{"error" => msg}}) when is_binary(msg), do: msg
-  defp extract_error(%{body: body}) when is_map(body), do: inspect(body) |> String.slice(0, 200)
+  defp extract_error(%{body: %{"error" => %{"message" => msg}}}), do: String.slice(msg, 0, 200)
+
+  defp extract_error(%{body: %{"error" => msg}}) when is_binary(msg),
+    do: String.slice(msg, 0, 200)
+
+  defp extract_error(%{body: _body}), do: "API request failed"
   defp extract_error(_), do: "unknown error"
 
   # Sends both x-api-key (official Anthropic) and Authorization: Bearer
@@ -468,7 +500,7 @@ defmodule Synapsis.Provider.Adapter do
         request_id: request_id,
         method: method,
         url: url,
-        headers: headers,
+        headers: Sanitizer.redact_headers(headers),
         body: body,
         provider: provider,
         model: model
@@ -486,7 +518,7 @@ defmodule Synapsis.Provider.Adapter do
         session_id: session_id,
         request_id: request_id,
         status: resp.status,
-        headers: resp_headers(resp),
+        headers: Sanitizer.redact_headers(resp_headers(resp)),
         body: resp_body(resp),
         complete: resp.status < 400
       }
@@ -512,9 +544,14 @@ defmodule Synapsis.Provider.Adapter do
   end
 
   defp resp_headers(%{headers: headers}) when is_list(headers), do: headers
+
   defp resp_headers(%{headers: headers}) when is_map(headers) do
-    Enum.flat_map(headers, fn {k, v} when is_list(v) -> Enum.map(v, &{k, &1}); {k, v} -> [{k, v}] end)
+    Enum.flat_map(headers, fn
+      {k, v} when is_list(v) -> Enum.map(v, &{k, &1})
+      {k, v} -> [{k, v}]
+    end)
   end
+
   defp resp_headers(_), do: []
 
   defp resp_body(%{body: body}) when is_binary(body), do: body

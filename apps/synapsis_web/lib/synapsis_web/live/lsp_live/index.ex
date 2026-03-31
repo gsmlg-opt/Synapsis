@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.LSPLive.Index do
   use SynapsisWeb, :live_view
+  require Logger
 
   alias Synapsis.{Repo, PluginConfig}
   import Ecto.Query, only: [from: 2]
@@ -59,7 +60,8 @@ defmodule SynapsisWeb.LSPLive.Index do
          |> put_flash(:info, msg)}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Invalid JSON: #{reason}")}
+        Logger.warning("lsp_import_invalid_json", reason: inspect(reason))
+        {:noreply, put_flash(socket, :error, "Invalid JSON format")}
     end
   end
 
@@ -98,12 +100,16 @@ defmodule SynapsisWeb.LSPLive.Index do
         {:noreply, socket}
 
       config ->
-        Repo.delete(config)
+        case Repo.delete(config) do
+          {:ok, _} ->
+            {:noreply,
+             socket
+             |> assign(configs: list_configs())
+             |> put_flash(:info, "#{name} LSP disabled")}
 
-        {:noreply,
-         socket
-         |> assign(configs: list_configs())
-         |> put_flash(:info, "#{name} LSP disabled")}
+          {:error, _} ->
+            {:noreply, put_flash(socket, :error, "Failed to disable #{name}")}
+        end
     end
   end
 
@@ -113,11 +119,12 @@ defmodule SynapsisWeb.LSPLive.Index do
         {:noreply, socket}
 
       config ->
-        config
-        |> PluginConfig.changeset(%{auto_start: !config.auto_start})
-        |> Repo.update()
-
-        {:noreply, assign(socket, configs: list_configs())}
+        case config
+             |> PluginConfig.changeset(%{auto_start: !config.auto_start})
+             |> Repo.update() do
+          {:ok, _} -> {:noreply, assign(socket, configs: list_configs())}
+          {:error, _} -> {:noreply, put_flash(socket, :error, "Failed to update config")}
+        end
     end
   end
 
@@ -162,6 +169,7 @@ defmodule SynapsisWeb.LSPLive.Index do
     end
 
     {:noreply, assign(socket, configs: list_configs())}
+    # Note: delete failure here is non-critical — list refresh shows current state
   end
 
   # -- Helpers -----------------------------------------------------------------
@@ -184,8 +192,8 @@ defmodule SynapsisWeb.LSPLive.Index do
       {:ok, _} ->
         {:error, "expected a JSON object"}
 
-      {:error, %Jason.DecodeError{} = err} ->
-        {:error, Exception.message(err)}
+      {:error, %Jason.DecodeError{}} ->
+        {:error, "invalid JSON format"}
     end
   end
 

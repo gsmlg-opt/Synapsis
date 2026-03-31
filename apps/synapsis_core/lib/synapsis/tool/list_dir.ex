@@ -44,7 +44,7 @@ defmodule Synapsis.Tool.ListDir do
           entries = list_entries(resolved, depth, 0)
           {:ok, Enum.join(entries, "\n")}
         else
-          {:error, "Directory does not exist: #{resolved}"}
+          {:error, "Directory does not exist"}
         end
       end
     end

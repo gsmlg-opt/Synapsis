@@ -10,6 +10,7 @@ defmodule Synapsis.Agent.Nodes.LLMStream do
   require Logger
 
   @impl true
+  @spec run(map(), map()) :: {:next, atom(), map()} | {:wait, map()}
   def run(state, ctx) do
     if state[:awaiting_stream] do
       # Resumed after stream completed — read accumulated data from ctx
