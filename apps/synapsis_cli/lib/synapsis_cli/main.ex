@@ -29,6 +29,16 @@ defmodule SynapsisCli.Main do
         IO.puts("Starting Synapsis server...")
         IO.puts("Run `mix phx.server` from the project root instead.")
 
+      match?(["code" | _], rest) ->
+        prompt = rest |> Enum.drop(1) |> Enum.join(" ")
+
+        if prompt == "" do
+          IO.puts(:stderr, "Usage: synapsis code <prompt>")
+          System.halt(1)
+        else
+          run_oneshot(prompt, Keyword.put(opts, :mode, "code"))
+        end
+
       opts[:prompt] ->
         run_oneshot(opts[:prompt], opts)
 
@@ -106,19 +116,19 @@ defmodule SynapsisCli.Main do
       {:ok, %{status: 201, body: %{"data" => %{"id" => id}}}} ->
         {:ok, id}
 
-      {:ok, %{status: status, body: body}} ->
-        {:error, "HTTP #{status}: #{inspect(body)}"}
+      {:ok, %{status: status}} ->
+        {:error, "HTTP #{status}"}
 
-      {:error, reason} ->
-        {:error, inspect(reason)}
+      {:error, _reason} ->
+        {:error, "connection failed"}
     end
   end
 
   defp send_message(host, session_id, content) do
     case Req.post("#{host}/api/sessions/#{session_id}/messages", json: %{content: content}) do
       {:ok, %{status: 200}} -> :ok
-      {:ok, %{body: body}} -> IO.puts(:stderr, "Warning: #{inspect(body)}")
-      {:error, reason} -> IO.puts(:stderr, "Error: #{inspect(reason)}")
+      {:ok, %{body: _body}} -> IO.puts(:stderr, "Warning: unexpected response")
+      {:error, _reason} -> IO.puts(:stderr, "Error: message send failed")
     end
   end
 
@@ -135,7 +145,7 @@ defmodule SynapsisCli.Main do
         end
       )
     rescue
-      _ -> :ok
+      _e in [Req.TransportError, RuntimeError, Jason.DecodeError] -> :ok
     end
   end
 
