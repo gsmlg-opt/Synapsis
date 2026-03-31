@@ -312,6 +312,21 @@ defmodule SynapsisWeb.AssistantLive.Show do
 
   def handle_info({"auditing", _payload}, socket), do: {:noreply, socket}
 
+  def handle_info({:session_compacted, _session_id, _metadata}, socket) do
+    messages =
+      if session = socket.assigns.current_session do
+        Sessions.get_messages(session.id)
+      else
+        []
+      end
+
+    {:noreply, assign(socket, :messages, messages)}
+  end
+
+  def handle_info({:system_message, %{type: :compaction} = payload}, socket) do
+    {:noreply, put_flash(socket, :info, payload.text)}
+  end
+
   def handle_info(
         {:heartbeat_completed, _config_id, %{name: name, executed_at: ts, result: result}},
         socket
@@ -421,12 +436,14 @@ defmodule SynapsisWeb.AssistantLive.Show do
           <%!-- Session header --%>
           <div class="flex items-center justify-between border-b border-base-300 px-4 py-2 bg-base-100">
             <div class="flex items-center gap-3 min-w-0">
-              <.dm_mdi name="chat-outline" class="w-5 h-5 text-base-content/50 shrink-0" />
+              <.dm_mdi name="robot-happy-outline" class="w-5 h-5 text-primary shrink-0" />
               <div class="min-w-0">
                 <h2 class="font-medium text-sm truncate">
                   {@current_session.title || "Session #{String.slice(@current_session.id, 0..7)}"}
                 </h2>
                 <div class="text-xs text-base-content/40">
+                  <span class="text-primary/70">{String.capitalize(@assistant_name)}</span>
+                  <span class="mx-1">&middot;</span>
                   {@current_session.provider}/{@current_session.model}
                 </div>
               </div>

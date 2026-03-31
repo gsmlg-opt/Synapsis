@@ -65,6 +65,7 @@ defmodule SynapsisWeb.CoreComponents do
   Chat message bubble — right-aligned for user, left-aligned for assistant/system.
   """
   attr :role, :string, required: true, values: ~w(user assistant system)
+  attr :label, :string, default: nil
   attr :class, :string, default: nil
 
   slot :inner_block, required: true
@@ -83,6 +84,9 @@ defmodule SynapsisWeb.CoreComponents do
           else: "bg-base-300 text-base-content whitespace-pre-wrap"
         )
       ]}>
+        <div :if={@label && @role == "assistant"} class="text-xs font-medium text-primary/70 mb-1">
+          {@label}
+        </div>
         {render_slot(@inner_block)}
       </div>
     </div>
