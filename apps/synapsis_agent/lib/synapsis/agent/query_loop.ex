@@ -6,7 +6,7 @@ defmodule Synapsis.Agent.QueryLoop do
   """
 
   require Logger
-  alias __MODULE__.{State, Context}
+  alias __MODULE__.{State, Context, Executor}
 
   @type terminal_reason :: :completed | :max_turns | :aborted | :model_error
 
@@ -56,10 +56,51 @@ defmodule Synapsis.Agent.QueryLoop do
     end
   end
 
-  # Placeholder for Task 6 -- will execute tools and return {:continue, state} with
-  # tool result messages appended. Only called when tool_blocks is non-empty.
-  defp execute_and_continue(state, _tool_blocks, _ctx) do
-    {:continue, state}
+  defp execute_and_continue(state, tool_blocks, ctx) do
+    tool_modules = ctx.agent_config[:tool_modules] || build_tool_map(ctx.tools)
+
+    # Notify tool starts
+    Enum.each(tool_blocks, fn %{id: id, name: name, input: input} ->
+      notify(ctx, {:tool_start, id, name, input})
+    end)
+
+    # Execute with concurrency partitioning
+    results = Executor.run(tool_blocks, tool_modules, %{
+      session_id: ctx.session_id,
+      project_path: ctx.project_path,
+      working_dir: ctx.working_dir
+    })
+
+    # Notify tool results
+    Enum.each(results, fn result ->
+      notify(ctx, {:tool_result, result.tool_use_id, result})
+    end)
+
+    # Build tool_result user message
+    tool_result_msg = %{
+      role: "user",
+      content: Enum.map(results, fn r ->
+        %{
+          type: "tool_result",
+          tool_use_id: r.tool_use_id,
+          content: r.content,
+          is_error: r.is_error
+        }
+      end)
+    }
+
+    new_state = State.append_messages(state, [tool_result_msg])
+    {:continue, new_state}
+  end
+
+  defp build_tool_map(tools) do
+    Enum.reduce(tools, %{}, fn tool, acc ->
+      name = tool[:name] || Map.get(tool, "name")
+      case name && Synapsis.Tool.Registry.lookup(name) do
+        {:ok, {:module, mod, _opts}} -> Map.put(acc, name, mod)
+        _ -> acc
+      end
+    end)
   end
 
   defp stream_model(state, ctx) do

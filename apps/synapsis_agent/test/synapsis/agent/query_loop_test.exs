@@ -239,4 +239,154 @@ defmodule Synapsis.Agent.QueryLoopTest do
       assert {:ok, :model_error, _} = QueryLoop.run(state, ctx)
     end
   end
+
+  describe "run/2 — tool execution loop" do
+    defmodule EchoTool do
+      use Synapsis.Tool
+      def name, do: "echo"
+      def description, do: "echoes input"
+      def parameters, do: %{"type" => "object", "properties" => %{"text" => %{"type" => "string"}}}
+      def permission_level, do: :read
+      def execute(%{"text" => t}, _ctx), do: {:ok, t}
+      def execute(_input, _ctx), do: {:ok, "no text"}
+    end
+
+    test "loops when LLM returns tool_use, executes tool, sends result back" do
+      test_pid = self()
+      turn = :counters.new(1, [:atomics])
+
+      mock_stream = fn _request, _config ->
+        count = :counters.get(turn, 1)
+        :counters.add(turn, 1, 1)
+
+        if count == 0 do
+          # First turn: LLM calls a tool
+          send(test_pid, {:provider_chunk, {:text_delta, "Let me check."}})
+          send(test_pid, {:provider_chunk, :content_block_stop})
+          send(test_pid, {:provider_chunk, {:tool_use_start, "echo", "tu_1"}})
+          send(test_pid, {:provider_chunk, {:tool_use_complete, "echo", %{"text" => "hello"}}})
+          send(test_pid, {:provider_chunk, :content_block_stop})
+          send(test_pid, {:provider_chunk, :done})
+        else
+          # Second turn: LLM completes with text only
+          send(test_pid, {:provider_chunk, {:text_delta, "The echo says hello."}})
+          send(test_pid, {:provider_chunk, :content_block_stop})
+          send(test_pid, {:provider_chunk, :done})
+        end
+
+        :ok
+      end
+
+      tool_defs = [%{name: "echo", description: "echoes", parameters: %{}}]
+
+      ctx = Context.new(
+        session_id: "test",
+        system_prompt: "test",
+        tools: tool_defs,
+        model: "test",
+        provider_config: %{type: "test"},
+        subscriber: test_pid,
+        agent_config: %{
+          stream_fn: mock_stream,
+          tool_modules: %{"echo" => EchoTool}
+        }
+      )
+
+      state = State.new(messages: [%{role: "user", content: "echo hello"}])
+
+      assert {:ok, :completed, final_state} = QueryLoop.run(state, ctx)
+      assert final_state.turn_count == 2
+
+      # Messages: user, assistant (tool_use), user (tool_result), assistant (text)
+      assert length(final_state.messages) == 4
+
+      # Verify tool events were sent
+      assert_received {:query_event, {:tool_start, "tu_1", "echo", _}}
+      assert_received {:query_event, {:tool_result, "tu_1", _}}
+    end
+
+    test "respects max_turns limit during tool loop" do
+      test_pid = self()
+
+      # Always return tool_use to force infinite loop
+      mock_stream = fn _request, _config ->
+        id = "tu_#{System.unique_integer([:positive])}"
+        send(test_pid, {:provider_chunk, {:tool_use_start, "echo", id}})
+        send(test_pid, {:provider_chunk, {:tool_use_complete, "echo", %{"text" => "x"}}})
+        send(test_pid, {:provider_chunk, :content_block_stop})
+        send(test_pid, {:provider_chunk, :done})
+        :ok
+      end
+
+      ctx = Context.new(
+        session_id: "test",
+        system_prompt: "test",
+        tools: [%{name: "echo", description: "echoes", parameters: %{}}],
+        model: "test",
+        provider_config: %{type: "test"},
+        subscriber: test_pid,
+        agent_config: %{stream_fn: mock_stream, tool_modules: %{"echo" => EchoTool}}
+      )
+
+      state = State.new(messages: [%{role: "user", content: "loop forever"}], max_turns: 3)
+
+      assert {:ok, :max_turns, final_state} = QueryLoop.run(state, ctx)
+      assert final_state.turn_count >= 3
+    end
+
+    test "tool error is formatted as is_error and loop continues" do
+      test_pid = self()
+      turn = :counters.new(1, [:atomics])
+
+      defmodule FailTool do
+        use Synapsis.Tool
+        def name, do: "fail"
+        def description, do: "fails"
+        def parameters, do: %{}
+        def permission_level, do: :read
+        def execute(_input, _ctx), do: {:error, "boom"}
+      end
+
+      mock_stream = fn _request, _config ->
+        count = :counters.get(turn, 1)
+        :counters.add(turn, 1, 1)
+
+        if count == 0 do
+          send(test_pid, {:provider_chunk, {:tool_use_start, "fail", "tu_f1"}})
+          send(test_pid, {:provider_chunk, {:tool_use_complete, "fail", %{}}})
+          send(test_pid, {:provider_chunk, :content_block_stop})
+          send(test_pid, {:provider_chunk, :done})
+        else
+          send(test_pid, {:provider_chunk, {:text_delta, "Sorry, the tool failed."}})
+          send(test_pid, {:provider_chunk, :content_block_stop})
+          send(test_pid, {:provider_chunk, :done})
+        end
+        :ok
+      end
+
+      ctx = Context.new(
+        session_id: "test",
+        system_prompt: "test",
+        tools: [%{name: "fail", description: "fails", parameters: %{}}],
+        model: "test",
+        provider_config: %{type: "test"},
+        subscriber: test_pid,
+        agent_config: %{stream_fn: mock_stream, tool_modules: %{"fail" => FailTool}}
+      )
+
+      state = State.new(messages: [%{role: "user", content: "try fail"}])
+      assert {:ok, :completed, final} = QueryLoop.run(state, ctx)
+      assert final.turn_count == 2
+
+      # tool_result message should have is_error: true
+      tool_result_msg = Enum.find(final.messages, fn m ->
+        m.role == "user" and is_list(m.content) and
+          Enum.any?(m.content, &(Map.get(&1, :type) == "tool_result"))
+      end)
+      assert tool_result_msg
+      [result_block] = tool_result_msg.content
+      assert result_block.is_error == true
+      assert result_block.content == "boom"
+    end
+  end
 end
