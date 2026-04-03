@@ -177,8 +177,6 @@ defmodule Synapsis.Agent.StreamingExecutor do
     %{exec | tools: tools}
   end
 
-  defp wait_for_tool(%TrackedTool{status: :completed} = t), do: t
-
   defp wait_for_tool(%TrackedTool{task_ref: ref, id: id} = t) do
     receive do
       {:streaming_tool_done, ^ref, ^id, result} ->
