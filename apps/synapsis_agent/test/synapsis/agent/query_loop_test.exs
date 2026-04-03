@@ -240,6 +240,72 @@ defmodule Synapsis.Agent.QueryLoopTest do
     end
   end
 
+  describe "run/2 — context assembly" do
+    # Uses DB (via ContextBuilder -> load_soul) so needs sandbox ownership
+    setup do
+      pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Synapsis.Repo, shared: false)
+      on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
+      :ok
+    end
+
+    test "uses static system_prompt when provided as string" do
+      test_pid = self()
+
+      mock_stream = fn request, _config ->
+        send(test_pid, {:captured_system, request.system})
+        send(test_pid, {:provider_chunk, {:text_delta, "ok"}})
+        send(test_pid, {:provider_chunk, :content_block_stop})
+        send(test_pid, {:provider_chunk, :done})
+        :ok
+      end
+
+      ctx = Context.new(
+        session_id: "test",
+        system_prompt: "I am a static prompt.",
+        tools: [],
+        model: "test",
+        provider_config: %{type: "test"},
+        subscriber: test_pid,
+        agent_config: %{stream_fn: mock_stream}
+      )
+
+      state = State.new(messages: [%{role: "user", content: "hi"}])
+      {:ok, :completed, _} = QueryLoop.run(state, ctx)
+
+      assert_received {:captured_system, "I am a static prompt."}
+    end
+
+    test "calls ContextBuilder when system_prompt is :dynamic" do
+      test_pid = self()
+
+      mock_stream = fn request, _config ->
+        send(test_pid, {:captured_system, request.system})
+        send(test_pid, {:provider_chunk, {:text_delta, "ok"}})
+        send(test_pid, {:provider_chunk, :content_block_stop})
+        send(test_pid, {:provider_chunk, :done})
+        :ok
+      end
+
+      ctx = Context.new(
+        session_id: "test",
+        system_prompt: :dynamic,
+        tools: [],
+        model: "test",
+        provider_config: %{type: "test"},
+        subscriber: test_pid,
+        agent_config: %{stream_fn: mock_stream, agent_type: :conversational}
+      )
+
+      state = State.new(messages: [%{role: "user", content: "hello world"}])
+      {:ok, :completed, _} = QueryLoop.run(state, ctx)
+
+      assert_received {:captured_system, system_prompt}
+      assert is_binary(system_prompt)
+      # ContextBuilder produces a non-trivial string with XML sections
+      assert String.length(system_prompt) > 10
+    end
+  end
+
   describe "run/2 — abort handling" do
     test "aborts when subscriber process is dead before first turn" do
       # Start and immediately stop a process
