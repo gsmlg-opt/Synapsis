@@ -7,6 +7,7 @@ defmodule Synapsis.Agent.QueryLoop do
 
   require Logger
   alias __MODULE__.{State, Context, Executor}
+  alias Synapsis.Agent.StreamingExecutor
 
   @type terminal_reason :: :completed | :max_turns | :aborted | :model_error
 
@@ -73,20 +74,58 @@ defmodule Synapsis.Agent.QueryLoop do
     notify(ctx, {:stream_start})
 
     case stream_model(state, ctx) do
-      {:ok, assistant_msg, tool_blocks} ->
+      {:ok, assistant_msg, tool_blocks, pre_results} when pre_results != [] ->
+        # Streaming executor already ran the tools
         new_state = State.append_messages(state, [assistant_msg])
         notify(ctx, {:stream_end, assistant_msg})
 
         if tool_blocks == [] do
           {:terminal, :completed, new_state}
         else
-          # Tool execution placeholder -- Task 6 implements this
-          execute_and_continue(new_state, tool_blocks, ctx)
+          # Notify tool results from streaming executor
+          Enum.each(pre_results, fn result ->
+            notify(ctx, {:tool_result, result.tool_use_id, result})
+          end)
+
+          tool_result_msg = %{
+            role: "user",
+            content:
+              Enum.map(pre_results, fn r ->
+                %{
+                  type: "tool_result",
+                  tool_use_id: r.tool_use_id,
+                  content: r.content,
+                  is_error: r.is_error
+                }
+              end)
+          }
+
+          new_state = State.append_messages(new_state, [tool_result_msg])
+          {:continue, new_state}
         end
+
+      {:ok, assistant_msg, tool_blocks, []} ->
+        # Streaming path but no pre-results — fall through to batch
+        handle_batch_result(state, assistant_msg, tool_blocks, ctx)
+
+      {:ok, assistant_msg, tool_blocks} ->
+        # Batch path (streaming_tools_enabled = false)
+        handle_batch_result(state, assistant_msg, tool_blocks, ctx)
 
       {:error, reason} ->
         Logger.warning("query_loop_model_error", reason: inspect(reason))
         {:terminal, :model_error, state}
+    end
+  end
+
+  defp handle_batch_result(state, assistant_msg, tool_blocks, ctx) do
+    new_state = State.append_messages(state, [assistant_msg])
+    notify(ctx, {:stream_end, assistant_msg})
+
+    if tool_blocks == [] do
+      {:terminal, :completed, new_state}
+    else
+      execute_and_continue(new_state, tool_blocks, ctx)
     end
   end
 
@@ -167,8 +206,8 @@ defmodule Synapsis.Agent.QueryLoop do
     stream_fn = ctx.agent_config[:stream_fn] || (&default_stream/2)
 
     case stream_fn.(request, ctx.provider_config) do
-      :ok -> collect_stream_events(ctx)
-      {:ok, _ref} -> collect_stream_events(ctx)
+      :ok -> collect_with_streaming(ctx)
+      {:ok, _ref} -> collect_with_streaming(ctx)
       {:error, reason} -> {:error, reason}
     end
   end
@@ -177,10 +216,24 @@ defmodule Synapsis.Agent.QueryLoop do
     Synapsis.Provider.Adapter.stream(request, config)
   end
 
-  # Collect stream events from mailbox. Accumulates text and tool_use blocks.
-  # Returns {:ok, assistant_message, tool_blocks} or {:error, reason}
-  defp collect_stream_events(ctx) do
-    collect_loop(ctx, %{text: "", tools: [], building_tool: nil})
+  # Dispatches to streaming or batch collect loop based on ctx.streaming_tools_enabled.
+  # Streaming path returns {:ok, msg, blocks, results} (4-tuple).
+  # Batch path returns {:ok, msg, blocks} (3-tuple).
+  defp collect_with_streaming(ctx) do
+    if ctx.streaming_tools_enabled do
+      tool_modules = ctx.agent_config[:tool_modules] || build_tool_map(ctx.tools)
+
+      executor =
+        StreamingExecutor.new(tool_modules, %{
+          session_id: ctx.session_id,
+          project_path: ctx.project_path,
+          working_dir: ctx.working_dir
+        })
+
+      collect_loop_streaming(ctx, %{text: "", tools: [], building_tool: nil}, executor)
+    else
+      collect_loop(ctx, %{text: "", tools: [], building_tool: nil})
+    end
   end
 
   defp collect_loop(ctx, acc) do
@@ -242,6 +295,77 @@ defmodule Synapsis.Agent.QueryLoop do
 
       {:provider_chunk, _other} ->
         collect_loop(ctx, acc)
+    after
+      300_000 -> {:error, :stream_timeout}
+    end
+  end
+
+  # Streaming collect loop — same as collect_loop but feeds completed tool blocks
+  # to a StreamingExecutor for eager dispatch. Returns 4-tuple.
+  defp collect_loop_streaming(ctx, acc, executor) do
+    receive do
+      {:provider_chunk, :done} ->
+        flush_provider_done()
+        # Wait for all in-flight tools to complete
+        {results, _exec} = StreamingExecutor.get_remaining_results(executor)
+        assistant_msg = build_assistant_message(acc.text, acc.tools)
+        {:ok, assistant_msg, acc.tools, results}
+
+      :provider_done ->
+        {results, _exec} = StreamingExecutor.get_remaining_results(executor)
+        assistant_msg = build_assistant_message(acc.text, acc.tools)
+        {:ok, assistant_msg, acc.tools, results}
+
+      {:provider_chunk, {:text_delta, text}} ->
+        notify(ctx, {:stream_chunk, {:text_delta, text}})
+        collect_loop_streaming(ctx, %{acc | text: acc.text <> text}, executor)
+
+      {:provider_chunk, {:tool_use_start, name, id}} ->
+        notify(ctx, {:stream_chunk, {:tool_use_start, name, id}})
+        collect_loop_streaming(ctx, %{acc | building_tool: %{name: name, id: id, json: ""}}, executor)
+
+      {:provider_chunk, {:tool_input_delta, json}} ->
+        case acc.building_tool do
+          nil -> collect_loop_streaming(ctx, acc, executor)
+          tool -> collect_loop_streaming(ctx, %{acc | building_tool: %{tool | json: tool.json <> json}}, executor)
+        end
+
+      {:provider_chunk, {:tool_use_complete, name, args}} ->
+        tool_id =
+          if acc.building_tool,
+            do: acc.building_tool.id,
+            else: "tu_#{System.unique_integer([:positive])}"
+
+        block = %{id: tool_id, name: name, input: args}
+        executor = StreamingExecutor.add_tool(executor, block)
+        collect_loop_streaming(ctx, %{acc | tools: acc.tools ++ [block], building_tool: nil}, executor)
+
+      {:provider_chunk, :content_block_stop} ->
+        case acc.building_tool do
+          nil ->
+            collect_loop_streaming(ctx, acc, executor)
+
+          %{name: name, id: id, json: json} ->
+            if Enum.any?(acc.tools, &(&1.id == id)) do
+              collect_loop_streaming(ctx, %{acc | building_tool: nil}, executor)
+            else
+              args =
+                case Jason.decode(json) do
+                  {:ok, parsed} -> parsed
+                  _ -> %{}
+                end
+
+              block = %{id: id, name: name, input: args}
+              executor = StreamingExecutor.add_tool(executor, block)
+              collect_loop_streaming(ctx, %{acc | tools: acc.tools ++ [block], building_tool: nil}, executor)
+            end
+        end
+
+      {:provider_chunk, {:error, reason}} ->
+        {:error, reason}
+
+      {:provider_chunk, _other} ->
+        collect_loop_streaming(ctx, acc, executor)
     after
       300_000 -> {:error, :stream_timeout}
     end

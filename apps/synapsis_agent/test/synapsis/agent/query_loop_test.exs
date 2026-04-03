@@ -428,6 +428,7 @@ defmodule Synapsis.Agent.QueryLoopTest do
         model: "test",
         provider_config: %{type: "test"},
         subscriber: test_pid,
+        streaming_tools_enabled: false,
         agent_config: %{
           stream_fn: mock_stream,
           tool_modules: %{"echo" => EchoTool}
@@ -442,7 +443,7 @@ defmodule Synapsis.Agent.QueryLoopTest do
       # Messages: user, assistant (tool_use), user (tool_result), assistant (text)
       assert length(final_state.messages) == 4
 
-      # Verify tool events were sent
+      # Verify tool events were sent (batch path sends tool_start)
       assert_received {:query_event, {:tool_start, "tu_1", "echo", _}}
       assert_received {:query_event, {:tool_result, "tu_1", _}}
     end
@@ -474,6 +475,154 @@ defmodule Synapsis.Agent.QueryLoopTest do
 
       assert {:ok, :max_turns, final_state} = QueryLoop.run(state, ctx)
       assert final_state.turn_count >= 3
+    end
+
+    test "tool execution overlaps with streaming when streaming_tools_enabled" do
+      test_pid = self()
+      turn = :counters.new(1, [:atomics])
+
+      mock_stream = fn _request, _config ->
+        count = :counters.get(turn, 1)
+        :counters.add(turn, 1, 1)
+
+        if count == 0 do
+          # First turn: emit tool_use then more text, executor runs tool eagerly
+          send(test_pid, {:provider_chunk, {:tool_use_start, "echo", "tu_1"}})
+          send(test_pid, {:provider_chunk, {:tool_use_complete, "echo", %{"text" => "hello"}}})
+          send(test_pid, {:provider_chunk, :content_block_stop})
+          send(test_pid, {:provider_chunk, {:text_delta, "Checking..."}})
+          send(test_pid, {:provider_chunk, :content_block_stop})
+          send(test_pid, {:provider_chunk, :done})
+        else
+          # Second turn: LLM completes with text only
+          send(test_pid, {:provider_chunk, {:text_delta, "All done."}})
+          send(test_pid, {:provider_chunk, :content_block_stop})
+          send(test_pid, {:provider_chunk, :done})
+        end
+
+        :ok
+      end
+
+      ctx =
+        Context.new(
+          session_id: "test",
+          system_prompt: "test",
+          tools: [%{name: "echo", description: "echoes", parameters: %{}, permission_level: :read}],
+          model: "test",
+          provider_config: %{type: "test"},
+          subscriber: test_pid,
+          streaming_tools_enabled: true,
+          agent_config: %{
+            stream_fn: mock_stream,
+            tool_modules: %{"echo" => EchoTool}
+          }
+        )
+
+      state = State.new(messages: [%{role: "user", content: "echo hello"}])
+      assert {:ok, :completed, final} = QueryLoop.run(state, ctx)
+      assert final.turn_count == 2
+
+      # Messages: user, assistant (tool_use), user (tool_result), assistant (text)
+      assert length(final.messages) == 4
+
+      # Verify tool result was delivered
+      assert_received {:query_event, {:tool_result, "tu_1", %{content: "hello", is_error: false}}}
+    end
+
+    test "streaming executor handles multiple tools eagerly" do
+      test_pid = self()
+      turn = :counters.new(1, [:atomics])
+
+      mock_stream = fn _request, _config ->
+        count = :counters.get(turn, 1)
+        :counters.add(turn, 1, 1)
+
+        if count == 0 do
+          send(test_pid, {:provider_chunk, {:tool_use_start, "echo", "tu_a"}})
+          send(test_pid, {:provider_chunk, {:tool_use_complete, "echo", %{"text" => "first"}}})
+          send(test_pid, {:provider_chunk, :content_block_stop})
+          send(test_pid, {:provider_chunk, {:tool_use_start, "echo", "tu_b"}})
+          send(test_pid, {:provider_chunk, {:tool_use_complete, "echo", %{"text" => "second"}}})
+          send(test_pid, {:provider_chunk, :content_block_stop})
+          send(test_pid, {:provider_chunk, :done})
+        else
+          send(test_pid, {:provider_chunk, {:text_delta, "Done."}})
+          send(test_pid, {:provider_chunk, :content_block_stop})
+          send(test_pid, {:provider_chunk, :done})
+        end
+
+        :ok
+      end
+
+      ctx =
+        Context.new(
+          session_id: "test",
+          system_prompt: "test",
+          tools: [%{name: "echo", description: "echoes", parameters: %{}, permission_level: :read}],
+          model: "test",
+          provider_config: %{type: "test"},
+          subscriber: test_pid,
+          streaming_tools_enabled: true,
+          agent_config: %{
+            stream_fn: mock_stream,
+            tool_modules: %{"echo" => EchoTool}
+          }
+        )
+
+      state = State.new(messages: [%{role: "user", content: "echo both"}])
+      assert {:ok, :completed, final} = QueryLoop.run(state, ctx)
+      assert final.turn_count == 2
+      assert length(final.messages) == 4
+
+      # Both results delivered
+      assert_received {:query_event, {:tool_result, "tu_a", %{content: "first"}}}
+      assert_received {:query_event, {:tool_result, "tu_b", %{content: "second"}}}
+    end
+
+    test "falls back to batch executor when streaming_tools_enabled is false" do
+      test_pid = self()
+      turn = :counters.new(1, [:atomics])
+
+      mock_stream = fn _request, _config ->
+        count = :counters.get(turn, 1)
+        :counters.add(turn, 1, 1)
+
+        if count == 0 do
+          send(test_pid, {:provider_chunk, {:tool_use_start, "echo", "tu_batch"}})
+          send(test_pid, {:provider_chunk, {:tool_use_complete, "echo", %{"text" => "batch"}}})
+          send(test_pid, {:provider_chunk, :content_block_stop})
+          send(test_pid, {:provider_chunk, :done})
+        else
+          send(test_pid, {:provider_chunk, {:text_delta, "Batch done."}})
+          send(test_pid, {:provider_chunk, :content_block_stop})
+          send(test_pid, {:provider_chunk, :done})
+        end
+
+        :ok
+      end
+
+      ctx =
+        Context.new(
+          session_id: "test",
+          system_prompt: "test",
+          tools: [%{name: "echo", description: "echoes", parameters: %{}}],
+          model: "test",
+          provider_config: %{type: "test"},
+          subscriber: test_pid,
+          streaming_tools_enabled: false,
+          agent_config: %{
+            stream_fn: mock_stream,
+            tool_modules: %{"echo" => EchoTool}
+          }
+        )
+
+      state = State.new(messages: [%{role: "user", content: "echo batch"}])
+      assert {:ok, :completed, final} = QueryLoop.run(state, ctx)
+      assert final.turn_count == 2
+
+      # Batch path uses tool_start notification (from execute_and_continue)
+      assert_received {:query_event, {:tool_start, "tu_batch", "echo", _}}
+      assert_received {:query_event, {:tool_result, "tu_batch", _}}
     end
 
     test "tool error is formatted as is_error and loop continues" do
