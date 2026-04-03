@@ -4,6 +4,12 @@ defmodule Synapsis.Tool.Task do
 
   # SessionBridge lives in synapsis_agent (higher-layer dependency)
   @compile {:no_warn_undefined, Synapsis.Agent.SessionBridge}
+  @compile {:no_warn_undefined,
+            [
+              Synapsis.Agent.QueryLoop,
+              Synapsis.Agent.QueryLoop.State,
+              Synapsis.Agent.QueryLoop.Context
+            ]}
 
   require Logger
 
@@ -52,13 +58,17 @@ defmodule Synapsis.Tool.Task do
   @impl true
   def execute(input, context) do
     prompt = input["prompt"]
-    mode = input["mode"] || "foreground"
-    model = input["model"]
 
-    session_id = context[:session_id]
-    project_id = context[:project_id]
+    if context[:query_context] do
+      execute_via_query_loop(prompt, input, context)
+    else
+      mode = input["mode"] || "foreground"
+      model = input["model"]
 
-    cond do
+      session_id = context[:session_id]
+      project_id = context[:project_id]
+
+      cond do
       is_nil(session_id) ->
         {:error, "No session context available for sub-agent"}
 
@@ -84,6 +94,83 @@ defmodule Synapsis.Tool.Task do
           _ ->
             {:error, "Invalid mode: #{mode}. Use 'foreground' or 'background'."}
         end
+      end
+    end
+  end
+
+  defp execute_via_query_loop(prompt, input, context) do
+    query_ctx = context[:query_context]
+
+    unless Synapsis.Agent.QueryLoop.can_fork?(query_ctx) do
+      {:error, "Maximum subagent depth (#{query_ctx.depth}) reached"}
+    else
+      tool_names =
+        case input["tools"] do
+          nil -> :read_only
+          list when is_list(list) -> list
+          _ -> :read_only
+        end
+
+      child_ctx =
+        Synapsis.Agent.QueryLoop.fork(query_ctx,
+          system_prompt: build_subagent_prompt(prompt),
+          subscriber: self(),
+          tool_names: tool_names,
+          model: input["model"]
+        )
+
+      child_state =
+        struct!(Synapsis.Agent.QueryLoop.State,
+          messages: [%{role: "user", content: prompt}],
+          max_turns: 50
+        )
+
+      # Run synchronously — the parent loop is blocked on this tool call
+      case Synapsis.Agent.QueryLoop.run(child_state, child_ctx) do
+        {:ok, :completed, final_state} ->
+          summary = extract_subagent_response(final_state.messages)
+          {:ok, summary}
+
+        {:ok, reason, _state} ->
+          {:error, "Subagent terminated: #{reason}"}
+      end
+    end
+  end
+
+  defp build_subagent_prompt(task) do
+    """
+    You are a subagent for Synapsis. Given the task below, use available tools to complete it.
+    Complete the task fully. When done, respond with a concise report.
+
+    Your strengths:
+    - Searching for code, configurations, and patterns across codebases
+    - Analyzing multiple files to understand system architecture
+    - Performing multi-step research tasks
+
+    Guidelines:
+    - Search broadly when you don't know where something lives
+    - Be thorough: check multiple locations, consider different naming conventions
+    - NEVER create files unless absolutely necessary
+
+    Task: #{task}
+    """
+  end
+
+  defp extract_subagent_response(messages) do
+    messages
+    |> Enum.reverse()
+    |> Enum.find(&(&1.role == "assistant"))
+    |> case do
+      %{content: content} when is_binary(content) ->
+        content
+
+      %{content: blocks} when is_list(blocks) ->
+        blocks
+        |> Enum.filter(&(is_map(&1) and &1[:type] == "text"))
+        |> Enum.map_join("\n", & &1[:text])
+
+      _ ->
+        "Subagent completed without response."
     end
   end
 
