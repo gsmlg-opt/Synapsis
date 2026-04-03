@@ -2,6 +2,7 @@ defmodule Synapsis.Agent.QueryLoopTest do
   use ExUnit.Case, async: true
 
   alias Synapsis.Agent.QueryLoop.State
+  alias Synapsis.Agent.QueryLoop.Context
 
   describe "State.new/1" do
     test "creates state with defaults" do
@@ -47,6 +48,31 @@ defmodule Synapsis.Agent.QueryLoopTest do
     test "returns true when at limit" do
       state = %{State.new(max_turns: 1) | turn_count: 1}
       assert State.max_turns_reached?(state) == true
+    end
+  end
+
+  describe "Context.new/1" do
+    test "creates context with required fields" do
+      ctx = Context.new(
+        session_id: "sess_1",
+        system_prompt: "You are helpful.",
+        tools: [],
+        model: "claude-sonnet-4-5-20250514",
+        provider_config: %{type: "anthropic", api_key: "test"},
+        subscriber: self()
+      )
+
+      assert ctx.session_id == "sess_1"
+      assert ctx.model == "claude-sonnet-4-5-20250514"
+      assert ctx.subscriber == self()
+      assert ctx.depth == 0
+      assert ctx.streaming_tools_enabled == true
+    end
+
+    test "raises on missing required field" do
+      assert_raise ArgumentError, fn ->
+        Context.new(session_id: "sess_1")
+      end
     end
   end
 end
