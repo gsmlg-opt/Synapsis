@@ -23,7 +23,9 @@ defmodule Synapsis.Session.Worker do
     stream_acc: Synapsis.Agent.StreamAccumulator.new(),
     pending_tool_count: 0,
     pending_approvals: MapSet.new(),
-    approval_decisions: %{}
+    approval_decisions: %{},
+    execution_mode: :graph,
+    query_loop_task: nil
   ]
 
   def start_link(opts) do
@@ -76,7 +78,15 @@ defmodule Synapsis.Session.Worker do
   def handle_call({:send_message, content, image_parts}, _from, state) do
     Persistence.persist_user_message(state.session_id, content, image_parts)
     Persistence.set_status(state.session_id, "streaming")
-    resume_reply(state, %{user_input: content, image_parts: image_parts})
+
+    case state.execution_mode do
+      :query_loop ->
+        new_state = start_query_loop(content, state)
+        {:reply, :ok, new_state, @timeout}
+
+      :graph ->
+        resume_reply(state, %{user_input: content, image_parts: image_parts})
+    end
   end
 
   def handle_call(:retry, _from, state) do
@@ -134,18 +144,27 @@ defmodule Synapsis.Session.Worker do
 
   @impl true
   def handle_cast(:cancel, state) do
-    if state.stream_ref, do: SessionStream.cancel_stream(state.stream_ref, state.session.provider)
+    case state.execution_mode do
+      :query_loop ->
+        if state.query_loop_task, do: Task.shutdown(state.query_loop_task, :brutal_kill)
+        Persistence.set_status(state.session_id, "idle")
+        {:noreply, %{state | query_loop_task: nil}, @timeout}
 
-    if state.runner_pid do
-      try do
-        GenServer.stop(state.runner_pid, :normal)
-      catch
-        :exit, _ -> :ok
-      end
+      :graph ->
+        if state.stream_ref,
+          do: SessionStream.cancel_stream(state.stream_ref, state.session.provider)
+
+        if state.runner_pid do
+          try do
+            GenServer.stop(state.runner_pid, :normal)
+          catch
+            :exit, _ -> :ok
+          end
+        end
+
+        Persistence.set_status(state.session_id, "idle")
+        {:noreply, %{state | stream_ref: nil, runner_pid: nil}, @timeout}
     end
-
-    Persistence.set_status(state.session_id, "idle")
-    {:noreply, %{state | stream_ref: nil, runner_pid: nil}, @timeout}
   end
 
   def handle_cast({:approve_tool, id}, state), do: collect_approval(state, id, :approved)
@@ -172,6 +191,30 @@ defmodule Synapsis.Session.Worker do
   def handle_info({:auditor_completed, _}, s) do
     if s.runner_pid, do: Runner.resume(s.runner_pid, %{auditor_completed: true})
     {:noreply, s}
+  end
+
+  # QueryLoop events
+  def handle_info({:query_event, event}, %{execution_mode: :query_loop} = s),
+    do: IOHandler.handle_query_loop_event(event, s)
+
+  # QueryLoop Task completion (success)
+  def handle_info({ref, {:ok, _reason, _final_state}}, %{query_loop_task: %Task{ref: task_ref}} = s)
+      when ref == task_ref do
+    Process.demonitor(ref, [:flush])
+    Persistence.set_status(s.session_id, "idle")
+    {:noreply, %{s | query_loop_task: nil}, @timeout}
+  end
+
+  # QueryLoop Task DOWN (crash or shutdown)
+  def handle_info({:DOWN, ref, :process, _pid, reason}, %{query_loop_task: %Task{ref: task_ref}} = s)
+      when ref == task_ref do
+    Logger.warning("query_loop_task_down",
+      session_id: s.session_id,
+      reason: inspect(reason)
+    )
+
+    Persistence.set_status(s.session_id, "idle")
+    {:noreply, %{s | query_loop_task: nil}, @timeout}
   end
 
   def handle_info({:EXIT, pid, reason}, %{runner_pid: pid} = s),
@@ -219,6 +262,69 @@ defmodule Synapsis.Session.Worker do
       end
     else
       {:reply, {:error, :no_runner}, state, @timeout}
+    end
+  end
+
+  # -- QueryLoop helpers --
+
+  defp start_query_loop(content, state) do
+    messages = build_query_loop_messages(state.session_id)
+    messages = messages ++ [%{role: "user", content: content}]
+
+    loop_state = %Synapsis.Agent.QueryLoop.State{
+      messages: messages,
+      max_turns: Map.get(state.agent || %{}, :max_turns, 50)
+    }
+
+    loop_ctx = %Synapsis.Agent.QueryLoop.Context{
+      session_id: state.session_id,
+      system_prompt: :dynamic,
+      tools: Synapsis.Tool.Registry.list_for_llm(),
+      model: (state.agent || %{})[:model] || "claude-sonnet-4-5-20250514",
+      provider_config: state.provider_config,
+      subscriber: self(),
+      project_path: state.project_path,
+      working_dir: state.worktree_path || state.project_path,
+      agent_config: %{
+        agent_type: :conversational,
+        project_id: state.session && state.session.project_id
+      }
+    }
+
+    task = Task.async(fn -> Synapsis.Agent.QueryLoop.run(loop_state, loop_ctx) end)
+    %{state | query_loop_task: task}
+  end
+
+  defp build_query_loop_messages(session_id) do
+    Synapsis.Message.list_by_session(session_id)
+    |> Enum.map(fn msg ->
+      %{role: msg.role, content: format_message_content(msg)}
+    end)
+  rescue
+    _ -> []
+  end
+
+  defp format_message_content(msg) do
+    case msg.parts do
+      parts when is_list(parts) and length(parts) > 0 ->
+        parts
+        |> Enum.map(fn
+          %Synapsis.Part.Text{content: t} ->
+            %{type: "text", text: t || ""}
+
+          %Synapsis.Part.ToolUse{tool: name, tool_use_id: id, input: input} ->
+            %{type: "tool_use", id: id, name: name, input: input || %{}}
+
+          %Synapsis.Part.ToolResult{tool_use_id: id, content: c, is_error: e} ->
+            %{type: "tool_result", tool_use_id: id, content: c || "", is_error: e || false}
+
+          _ ->
+            nil
+        end)
+        |> Enum.reject(&is_nil/1)
+
+      _ ->
+        ""
     end
   end
 

@@ -90,6 +90,69 @@ defmodule Synapsis.Session.Worker.IOHandler do
     {:noreply, %{state | runner_pid: nil}}
   end
 
+  # -- QueryLoop event handlers --
+
+  def handle_query_loop_event({:stream_start}, state) do
+    {:noreply, state}
+  end
+
+  def handle_query_loop_event({:stream_chunk, chunk}, state) do
+    case chunk do
+      {:text_delta, text} ->
+        Persistence.broadcast(state.session_id, "text_delta", %{text: text})
+
+      {:tool_use_start, name, id} ->
+        Persistence.broadcast(state.session_id, "tool_use", %{tool: name, tool_use_id: id})
+
+      _ ->
+        :ok
+    end
+
+    {:noreply, state}
+  end
+
+  def handle_query_loop_event({:stream_end, _assistant_msg}, state) do
+    {:noreply, state}
+  end
+
+  def handle_query_loop_event({:tool_start, id, name, input}, state) do
+    Persistence.broadcast(state.session_id, "tool_start", %{
+      tool_use_id: id,
+      tool: name,
+      input: input
+    })
+
+    {:noreply, state}
+  end
+
+  def handle_query_loop_event({:tool_result, id, result}, state) do
+    Persistence.broadcast(state.session_id, "tool_result", %{
+      tool_use_id: id,
+      content: result.content,
+      is_error: result.is_error
+    })
+
+    {:noreply, state}
+  end
+
+  def handle_query_loop_event({:turn_complete, _turn}, state) do
+    {:noreply, state}
+  end
+
+  def handle_query_loop_event({:terminal, reason, _final_state}, state) do
+    status = if reason == :completed, do: "idle", else: "error"
+    Persistence.update_session_status(state.session_id, status)
+
+    Persistence.broadcast(state.session_id, "session_status", %{
+      status: status,
+      reason: to_string(reason)
+    })
+
+    {:noreply, state}
+  end
+
+  def handle_query_loop_event(_event, state), do: {:noreply, state}
+
   # After cancel, runner_pid is nil but in-flight messages may still arrive.
   defp safe_resume(nil, _ctx), do: :ok
   defp safe_resume(pid, ctx), do: Runner.resume(pid, ctx)
