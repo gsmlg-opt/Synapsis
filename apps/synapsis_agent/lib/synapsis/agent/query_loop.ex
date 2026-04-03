@@ -141,7 +141,8 @@ defmodule Synapsis.Agent.QueryLoop do
     results = Executor.run(tool_blocks, tool_modules, %{
       session_id: ctx.session_id,
       project_path: ctx.project_path,
-      working_dir: ctx.working_dir
+      working_dir: ctx.working_dir,
+      query_context: ctx
     })
 
     # Notify tool results
