@@ -16,15 +16,16 @@ defmodule Synapsis.Agent.QueryLoopContextTest do
         :ok
       end
 
-      ctx = Context.new(
-        session_id: "test",
-        system_prompt: :dynamic,
-        tools: [%{name: "file_read", description: "Reads a file", parameters: %{}}],
-        model: "test",
-        provider_config: %{type: "test"},
-        subscriber: test_pid,
-        agent_config: %{stream_fn: mock_stream, agent_type: :conversational}
-      )
+      ctx =
+        Context.new(
+          session_id: "test",
+          system_prompt: :dynamic,
+          tools: [%{name: "file_read", description: "Reads a file", parameters: %{}}],
+          model: "test",
+          provider_config: %{type: "test"},
+          subscriber: test_pid,
+          agent_config: %{stream_fn: mock_stream, agent_type: :conversational}
+        )
 
       state = State.new(messages: [%{role: "user", content: "read a file for me"}])
       {:ok, :completed, _} = QueryLoop.run(state, ctx)
@@ -46,15 +47,16 @@ defmodule Synapsis.Agent.QueryLoopContextTest do
         :ok
       end
 
-      ctx = Context.new(
-        session_id: "test",
-        system_prompt: "You are a static test prompt.",
-        tools: [],
-        model: "test",
-        provider_config: %{type: "test"},
-        subscriber: test_pid,
-        agent_config: %{stream_fn: mock_stream}
-      )
+      ctx =
+        Context.new(
+          session_id: "test",
+          system_prompt: "You are a static test prompt.",
+          tools: [],
+          model: "test",
+          provider_config: %{type: "test"},
+          subscriber: test_pid,
+          agent_config: %{stream_fn: mock_stream}
+        )
 
       state = State.new(messages: [%{role: "user", content: "hi"}])
       {:ok, :completed, _} = QueryLoop.run(state, ctx)

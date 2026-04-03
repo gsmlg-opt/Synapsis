@@ -198,7 +198,10 @@ defmodule Synapsis.Session.Worker do
     do: IOHandler.handle_query_loop_event(event, s)
 
   # QueryLoop Task completion (success)
-  def handle_info({ref, {:ok, _reason, _final_state}}, %{query_loop_task: %Task{ref: task_ref}} = s)
+  def handle_info(
+        {ref, {:ok, _reason, _final_state}},
+        %{query_loop_task: %Task{ref: task_ref}} = s
+      )
       when ref == task_ref do
     Process.demonitor(ref, [:flush])
     Persistence.set_status(s.session_id, "idle")
@@ -206,7 +209,10 @@ defmodule Synapsis.Session.Worker do
   end
 
   # QueryLoop Task DOWN (crash or shutdown)
-  def handle_info({:DOWN, ref, :process, _pid, reason}, %{query_loop_task: %Task{ref: task_ref}} = s)
+  def handle_info(
+        {:DOWN, ref, :process, _pid, reason},
+        %{query_loop_task: %Task{ref: task_ref}} = s
+      )
       when ref == task_ref do
     Logger.warning("query_loop_task_down",
       session_id: s.session_id,

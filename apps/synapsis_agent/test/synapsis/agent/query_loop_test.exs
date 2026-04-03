@@ -259,15 +259,16 @@ defmodule Synapsis.Agent.QueryLoopTest do
         :ok
       end
 
-      ctx = Context.new(
-        session_id: "test",
-        system_prompt: "I am a static prompt.",
-        tools: [],
-        model: "test",
-        provider_config: %{type: "test"},
-        subscriber: test_pid,
-        agent_config: %{stream_fn: mock_stream}
-      )
+      ctx =
+        Context.new(
+          session_id: "test",
+          system_prompt: "I am a static prompt.",
+          tools: [],
+          model: "test",
+          provider_config: %{type: "test"},
+          subscriber: test_pid,
+          agent_config: %{stream_fn: mock_stream}
+        )
 
       state = State.new(messages: [%{role: "user", content: "hi"}])
       {:ok, :completed, _} = QueryLoop.run(state, ctx)
@@ -286,15 +287,16 @@ defmodule Synapsis.Agent.QueryLoopTest do
         :ok
       end
 
-      ctx = Context.new(
-        session_id: "test",
-        system_prompt: :dynamic,
-        tools: [],
-        model: "test",
-        provider_config: %{type: "test"},
-        subscriber: test_pid,
-        agent_config: %{stream_fn: mock_stream, agent_type: :conversational}
-      )
+      ctx =
+        Context.new(
+          session_id: "test",
+          system_prompt: :dynamic,
+          tools: [],
+          model: "test",
+          provider_config: %{type: "test"},
+          subscriber: test_pid,
+          agent_config: %{stream_fn: mock_stream, agent_type: :conversational}
+        )
 
       state = State.new(messages: [%{role: "user", content: "hello world"}])
       {:ok, :completed, _} = QueryLoop.run(state, ctx)
@@ -387,7 +389,10 @@ defmodule Synapsis.Agent.QueryLoopTest do
       use Synapsis.Tool
       def name, do: "echo"
       def description, do: "echoes input"
-      def parameters, do: %{"type" => "object", "properties" => %{"text" => %{"type" => "string"}}}
+
+      def parameters,
+        do: %{"type" => "object", "properties" => %{"text" => %{"type" => "string"}}}
+
       def permission_level, do: :read
       def execute(%{"text" => t}, _ctx), do: {:ok, t}
       def execute(_input, _ctx), do: {:ok, "no text"}
@@ -421,19 +426,20 @@ defmodule Synapsis.Agent.QueryLoopTest do
 
       tool_defs = [%{name: "echo", description: "echoes", parameters: %{}}]
 
-      ctx = Context.new(
-        session_id: "test",
-        system_prompt: "test",
-        tools: tool_defs,
-        model: "test",
-        provider_config: %{type: "test"},
-        subscriber: test_pid,
-        streaming_tools_enabled: false,
-        agent_config: %{
-          stream_fn: mock_stream,
-          tool_modules: %{"echo" => EchoTool}
-        }
-      )
+      ctx =
+        Context.new(
+          session_id: "test",
+          system_prompt: "test",
+          tools: tool_defs,
+          model: "test",
+          provider_config: %{type: "test"},
+          subscriber: test_pid,
+          streaming_tools_enabled: false,
+          agent_config: %{
+            stream_fn: mock_stream,
+            tool_modules: %{"echo" => EchoTool}
+          }
+        )
 
       state = State.new(messages: [%{role: "user", content: "echo hello"}])
 
@@ -461,15 +467,16 @@ defmodule Synapsis.Agent.QueryLoopTest do
         :ok
       end
 
-      ctx = Context.new(
-        session_id: "test",
-        system_prompt: "test",
-        tools: [%{name: "echo", description: "echoes", parameters: %{}}],
-        model: "test",
-        provider_config: %{type: "test"},
-        subscriber: test_pid,
-        agent_config: %{stream_fn: mock_stream, tool_modules: %{"echo" => EchoTool}}
-      )
+      ctx =
+        Context.new(
+          session_id: "test",
+          system_prompt: "test",
+          tools: [%{name: "echo", description: "echoes", parameters: %{}}],
+          model: "test",
+          provider_config: %{type: "test"},
+          subscriber: test_pid,
+          agent_config: %{stream_fn: mock_stream, tool_modules: %{"echo" => EchoTool}}
+        )
 
       state = State.new(messages: [%{role: "user", content: "loop forever"}], max_turns: 3)
 
@@ -507,7 +514,9 @@ defmodule Synapsis.Agent.QueryLoopTest do
         Context.new(
           session_id: "test",
           system_prompt: "test",
-          tools: [%{name: "echo", description: "echoes", parameters: %{}, permission_level: :read}],
+          tools: [
+            %{name: "echo", description: "echoes", parameters: %{}, permission_level: :read}
+          ],
           model: "test",
           provider_config: %{type: "test"},
           subscriber: test_pid,
@@ -558,7 +567,9 @@ defmodule Synapsis.Agent.QueryLoopTest do
         Context.new(
           session_id: "test",
           system_prompt: "test",
-          tools: [%{name: "echo", description: "echoes", parameters: %{}, permission_level: :read}],
+          tools: [
+            %{name: "echo", description: "echoes", parameters: %{}, permission_level: :read}
+          ],
           model: "test",
           provider_config: %{type: "test"},
           subscriber: test_pid,
@@ -652,28 +663,32 @@ defmodule Synapsis.Agent.QueryLoopTest do
           send(test_pid, {:provider_chunk, :content_block_stop})
           send(test_pid, {:provider_chunk, :done})
         end
+
         :ok
       end
 
-      ctx = Context.new(
-        session_id: "test",
-        system_prompt: "test",
-        tools: [%{name: "fail", description: "fails", parameters: %{}}],
-        model: "test",
-        provider_config: %{type: "test"},
-        subscriber: test_pid,
-        agent_config: %{stream_fn: mock_stream, tool_modules: %{"fail" => FailTool}}
-      )
+      ctx =
+        Context.new(
+          session_id: "test",
+          system_prompt: "test",
+          tools: [%{name: "fail", description: "fails", parameters: %{}}],
+          model: "test",
+          provider_config: %{type: "test"},
+          subscriber: test_pid,
+          agent_config: %{stream_fn: mock_stream, tool_modules: %{"fail" => FailTool}}
+        )
 
       state = State.new(messages: [%{role: "user", content: "try fail"}])
       assert {:ok, :completed, final} = QueryLoop.run(state, ctx)
       assert final.turn_count == 2
 
       # tool_result message should have is_error: true
-      tool_result_msg = Enum.find(final.messages, fn m ->
-        m.role == "user" and is_list(m.content) and
-          Enum.any?(m.content, &(Map.get(&1, :type) == "tool_result"))
-      end)
+      tool_result_msg =
+        Enum.find(final.messages, fn m ->
+          m.role == "user" and is_list(m.content) and
+            Enum.any?(m.content, &(Map.get(&1, :type) == "tool_result"))
+        end)
+
       assert tool_result_msg
       [result_block] = tool_result_msg.content
       assert result_block.is_error == true

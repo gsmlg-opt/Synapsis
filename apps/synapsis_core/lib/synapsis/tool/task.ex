@@ -69,31 +69,31 @@ defmodule Synapsis.Tool.Task do
       project_id = context[:project_id]
 
       cond do
-      is_nil(session_id) ->
-        {:error, "No session context available for sub-agent"}
+        is_nil(session_id) ->
+          {:error, "No session context available for sub-agent"}
 
-      is_nil(project_id) ->
-        {:error, "No project context available for sub-agent"}
+        is_nil(project_id) ->
+          {:error, "No project context available for sub-agent"}
 
-      true ->
-        spawn_opts =
-          %{
-            agent: "build",
-            notify_pid: self(),
-            notify_ref: Ecto.UUID.generate()
-          }
-          |> maybe_put(:model, model)
+        true ->
+          spawn_opts =
+            %{
+              agent: "build",
+              notify_pid: self(),
+              notify_ref: Ecto.UUID.generate()
+            }
+            |> maybe_put(:model, model)
 
-        case mode do
-          "foreground" ->
-            execute_foreground(project_id, prompt, spawn_opts, session_id)
+          case mode do
+            "foreground" ->
+              execute_foreground(project_id, prompt, spawn_opts, session_id)
 
-          "background" ->
-            execute_background(project_id, prompt, spawn_opts)
+            "background" ->
+              execute_background(project_id, prompt, spawn_opts)
 
-          _ ->
-            {:error, "Invalid mode: #{mode}. Use 'foreground' or 'background'."}
-        end
+            _ ->
+              {:error, "Invalid mode: #{mode}. Use 'foreground' or 'background'."}
+          end
       end
     end
   end

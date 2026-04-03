@@ -138,9 +138,7 @@ defmodule Synapsis.Agent.QueryLoopForkTest do
             )
 
           child_state =
-            Synapsis.Agent.QueryLoop.State.new(
-              messages: [%{role: "user", content: prompt}]
-            )
+            Synapsis.Agent.QueryLoop.State.new(messages: [%{role: "user", content: prompt}])
 
           case QueryLoop.run(child_state, child_ctx) do
             {:ok, :completed, final} ->

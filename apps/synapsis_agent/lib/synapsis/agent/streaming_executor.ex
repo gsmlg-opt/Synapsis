@@ -166,8 +166,12 @@ defmodule Synapsis.Agent.StreamingExecutor do
   defp wait_all(%__MODULE__{} = exec) do
     tools =
       Enum.map(exec.tools, fn
-        %TrackedTool{status: :executing} = t -> wait_for_tool(t)
-        %TrackedTool{status: :completed} = t -> t
+        %TrackedTool{status: :executing} = t ->
+          wait_for_tool(t)
+
+        %TrackedTool{status: :completed} = t ->
+          t
+
         %TrackedTool{status: :queued} = t ->
           # Shouldn't happen after start_all_queued, but handle gracefully
           started = start_tool(t, exec)

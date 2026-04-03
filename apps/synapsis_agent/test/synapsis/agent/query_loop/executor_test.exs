@@ -40,6 +40,7 @@ defmodule Synapsis.Agent.QueryLoop.ExecutorTest do
         %{@read_block | id: "r2"},
         %{@read_block | id: "r3"}
       ]
+
       tool_map = %{"read_tool" => ReadTool}
 
       assert [{:concurrent, ids}] = Executor.partition(blocks, tool_map)
@@ -51,6 +52,7 @@ defmodule Synapsis.Agent.QueryLoop.ExecutorTest do
         %{@write_block | id: "w1"},
         %{@write_block | id: "w2"}
       ]
+
       tool_map = %{"write_tool" => WriteTool}
 
       result = Executor.partition(blocks, tool_map)
@@ -65,6 +67,7 @@ defmodule Synapsis.Agent.QueryLoop.ExecutorTest do
         %{@read_block | id: "r3"},
         %{@write_block | id: "w2"}
       ]
+
       tool_map = %{"read_tool" => ReadTool, "write_tool" => WriteTool}
 
       result = Executor.partition(blocks, tool_map)
@@ -98,6 +101,7 @@ defmodule Synapsis.Agent.QueryLoop.ExecutorTest do
         %{id: "r1", name: "read_tool", input: %{}},
         %{id: "r2", name: "read_tool", input: %{}}
       ]
+
       tool_map = %{"read_tool" => ReadTool}
       ctx = %{session_id: "test", project_path: nil}
 
@@ -114,6 +118,7 @@ defmodule Synapsis.Agent.QueryLoop.ExecutorTest do
         %{id: "w1", name: "write_tool", input: %{}},
         %{id: "w2", name: "write_tool", input: %{}}
       ]
+
       tool_map = %{"write_tool" => WriteTool}
       ctx = %{session_id: "test", project_path: nil}
 

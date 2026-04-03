@@ -83,8 +83,11 @@ defmodule Synapsis.Agent.QueryLoop.Executor do
           on_timeout: :kill_task
         )
         |> Enum.map(fn
-          {:ok, {id, result}} -> format_result(id, result)
-          {:exit, {id, _reason}} -> %{tool_use_id: id, content: "Tool execution timed out", is_error: true}
+          {:ok, {id, result}} ->
+            format_result(id, result)
+
+          {:exit, {id, _reason}} ->
+            %{tool_use_id: id, content: "Tool execution timed out", is_error: true}
         end)
 
       {:serial, items} ->

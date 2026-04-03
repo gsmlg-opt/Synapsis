@@ -138,12 +138,13 @@ defmodule Synapsis.Agent.QueryLoop do
     end)
 
     # Execute with concurrency partitioning
-    results = Executor.run(tool_blocks, tool_modules, %{
-      session_id: ctx.session_id,
-      project_path: ctx.project_path,
-      working_dir: ctx.working_dir,
-      query_context: ctx
-    })
+    results =
+      Executor.run(tool_blocks, tool_modules, %{
+        session_id: ctx.session_id,
+        project_path: ctx.project_path,
+        working_dir: ctx.working_dir,
+        query_context: ctx
+      })
 
     # Notify tool results
     Enum.each(results, fn result ->
@@ -153,14 +154,15 @@ defmodule Synapsis.Agent.QueryLoop do
     # Build tool_result user message
     tool_result_msg = %{
       role: "user",
-      content: Enum.map(results, fn r ->
-        %{
-          type: "tool_result",
-          tool_use_id: r.tool_use_id,
-          content: r.content,
-          is_error: r.is_error
-        }
-      end)
+      content:
+        Enum.map(results, fn r ->
+          %{
+            type: "tool_result",
+            tool_use_id: r.tool_use_id,
+            content: r.content,
+            is_error: r.is_error
+          }
+        end)
     }
 
     new_state = State.append_messages(state, [tool_result_msg])
@@ -168,16 +170,17 @@ defmodule Synapsis.Agent.QueryLoop do
   end
 
   defp prepare_context(state, %Context{system_prompt: :dynamic} = ctx) do
-    user_message = state.messages |> Enum.reverse() |> Enum.find(& &1.role == "user")
+    user_message = state.messages |> Enum.reverse() |> Enum.find(&(&1.role == "user"))
     user_text = if user_message, do: extract_text(user_message.content), else: ""
 
-    prompt = Synapsis.Agent.ContextBuilder.build_system_prompt(
-      ctx.agent_config[:agent_type] || :conversational,
-      project_id: ctx.agent_config[:project_id],
-      session_id: ctx.session_id,
-      user_message: user_text,
-      agent_config: ctx.agent_config
-    )
+    prompt =
+      Synapsis.Agent.ContextBuilder.build_system_prompt(
+        ctx.agent_config[:agent_type] || :conversational,
+        project_id: ctx.agent_config[:project_id],
+        session_id: ctx.session_id,
+        user_message: user_text,
+        agent_config: ctx.agent_config
+      )
 
     %{ctx | system_prompt: prompt}
   end
@@ -185,16 +188,19 @@ defmodule Synapsis.Agent.QueryLoop do
   defp prepare_context(_state, ctx), do: ctx
 
   defp extract_text(content) when is_binary(content), do: content
+
   defp extract_text(content) when is_list(content) do
     content
     |> Enum.filter(&(is_map(&1) and &1[:type] == "text"))
     |> Enum.map_join(" ", & &1[:text])
   end
+
   defp extract_text(_), do: ""
 
   defp build_tool_map(tools) do
     Enum.reduce(tools, %{}, fn tool, acc ->
       name = tool[:name] || Map.get(tool, "name")
+
       case name && Synapsis.Tool.Registry.lookup(name) do
         {:ok, {:module, mod, _opts}} -> Map.put(acc, name, mod)
         _ -> acc
@@ -323,12 +329,24 @@ defmodule Synapsis.Agent.QueryLoop do
 
       {:provider_chunk, {:tool_use_start, name, id}} ->
         notify(ctx, {:stream_chunk, {:tool_use_start, name, id}})
-        collect_loop_streaming(ctx, %{acc | building_tool: %{name: name, id: id, json: ""}}, executor)
+
+        collect_loop_streaming(
+          ctx,
+          %{acc | building_tool: %{name: name, id: id, json: ""}},
+          executor
+        )
 
       {:provider_chunk, {:tool_input_delta, json}} ->
         case acc.building_tool do
-          nil -> collect_loop_streaming(ctx, acc, executor)
-          tool -> collect_loop_streaming(ctx, %{acc | building_tool: %{tool | json: tool.json <> json}}, executor)
+          nil ->
+            collect_loop_streaming(ctx, acc, executor)
+
+          tool ->
+            collect_loop_streaming(
+              ctx,
+              %{acc | building_tool: %{tool | json: tool.json <> json}},
+              executor
+            )
         end
 
       {:provider_chunk, {:tool_use_complete, name, args}} ->
@@ -339,7 +357,12 @@ defmodule Synapsis.Agent.QueryLoop do
 
         block = %{id: tool_id, name: name, input: args}
         executor = StreamingExecutor.add_tool(executor, block)
-        collect_loop_streaming(ctx, %{acc | tools: acc.tools ++ [block], building_tool: nil}, executor)
+
+        collect_loop_streaming(
+          ctx,
+          %{acc | tools: acc.tools ++ [block], building_tool: nil},
+          executor
+        )
 
       {:provider_chunk, :content_block_stop} ->
         case acc.building_tool do
@@ -358,7 +381,12 @@ defmodule Synapsis.Agent.QueryLoop do
 
               block = %{id: id, name: name, input: args}
               executor = StreamingExecutor.add_tool(executor, block)
-              collect_loop_streaming(ctx, %{acc | tools: acc.tools ++ [block], building_tool: nil}, executor)
+
+              collect_loop_streaming(
+                ctx,
+                %{acc | tools: acc.tools ++ [block], building_tool: nil},
+                executor
+              )
             end
         end
 
