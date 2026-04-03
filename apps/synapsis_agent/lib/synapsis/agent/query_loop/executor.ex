@@ -57,4 +57,75 @@ defmodule Synapsis.Agent.QueryLoop.Executor do
   defp append_to_batches(acc, block, false) do
     [{:serial, [block]} | acc]
   end
+
+  @type tool_result :: %{
+          tool_use_id: String.t(),
+          content: String.t(),
+          is_error: boolean()
+        }
+
+  @doc """
+  Execute tool blocks with concurrency partitioning.
+  Returns tool_result maps in the original block order.
+  """
+  @spec run([tool_block()], map(), map()) :: [tool_result()]
+  def run(blocks, tool_map, context) do
+    batches = partition(blocks, tool_map)
+
+    Enum.flat_map(batches, fn
+      {:concurrent, items} ->
+        items
+        |> Task.async_stream(
+          fn block -> {block.id, run_one(block, tool_map, context)} end,
+          max_concurrency: System.schedulers_online(),
+          ordered: true,
+          timeout: 60_000,
+          on_timeout: :kill_task
+        )
+        |> Enum.map(fn
+          {:ok, {id, result}} -> format_result(id, result)
+          {:exit, {id, _reason}} -> %{tool_use_id: id, content: "Tool execution timed out", is_error: true}
+        end)
+
+      {:serial, items} ->
+        Enum.map(items, fn block ->
+          result = run_one(block, tool_map, context)
+          format_result(block.id, result)
+        end)
+    end)
+  end
+
+  @doc "Execute a single tool call."
+  @spec run_one(tool_block(), map(), map()) :: {:ok, term()} | {:error, term()}
+  def run_one(%{name: name, input: input}, tool_map, context) do
+    case Map.get(tool_map, name) do
+      nil ->
+        {:error, "Unknown tool: #{name}"}
+
+      mod ->
+        try do
+          mod.execute(input, context)
+        rescue
+          e -> {:error, Exception.message(e)}
+        catch
+          :exit, reason -> {:error, "Tool exited: #{inspect(reason)}"}
+        end
+    end
+  end
+
+  defp format_result(id, {:ok, result}) when is_binary(result) do
+    %{tool_use_id: id, content: result, is_error: false}
+  end
+
+  defp format_result(id, {:ok, result}) do
+    %{tool_use_id: id, content: inspect(result), is_error: false}
+  end
+
+  defp format_result(id, {:error, reason}) when is_binary(reason) do
+    %{tool_use_id: id, content: reason, is_error: true}
+  end
+
+  defp format_result(id, {:error, reason}) do
+    %{tool_use_id: id, content: inspect(reason), is_error: true}
+  end
 end
