@@ -10,6 +10,39 @@ defmodule Synapsis.Agent.QueryLoop do
 
   @type terminal_reason :: :completed | :max_turns | :aborted | :model_error
 
+  @max_depth 3
+  @read_only_levels [:none, :read]
+
+  @doc """
+  Creates a scoped child context for subagent execution.
+  Inherits project/working dir, gets restricted tools, custom prompt.
+  """
+  @spec fork(Context.t(), keyword()) :: Context.t()
+  def fork(%Context{} = parent, opts) do
+    subscriber = Keyword.fetch!(opts, :subscriber)
+    system_prompt = Keyword.fetch!(opts, :system_prompt)
+    tools = filter_fork_tools(parent.tools, Keyword.get(opts, :tool_names, :read_only))
+
+    %Context{
+      session_id: parent.session_id,
+      system_prompt: system_prompt,
+      tools: tools,
+      model: Keyword.get(opts, :model, parent.model),
+      provider_config: parent.provider_config,
+      subscriber: subscriber,
+      abort_ref: make_ref(),
+      project_path: parent.project_path,
+      working_dir: parent.working_dir,
+      depth: parent.depth + 1,
+      streaming_tools_enabled: parent.streaming_tools_enabled,
+      agent_config: parent.agent_config
+    }
+  end
+
+  @doc "Returns true if depth allows spawning subagents."
+  @spec can_fork?(Context.t()) :: boolean()
+  def can_fork?(%Context{depth: d}), do: d < @max_depth
+
   @spec run(State.t(), Context.t()) :: {:ok, terminal_reason(), State.t()}
   def run(%State{} = state, %Context{} = ctx) do
     cond do
@@ -36,6 +69,7 @@ defmodule Synapsis.Agent.QueryLoop do
   end
 
   defp do_turn(state, ctx) do
+    ctx = prepare_context(state, ctx)
     notify(ctx, {:stream_start})
 
     case stream_model(state, ctx) do
@@ -92,6 +126,31 @@ defmodule Synapsis.Agent.QueryLoop do
     new_state = State.append_messages(state, [tool_result_msg])
     {:continue, new_state}
   end
+
+  defp prepare_context(state, %Context{system_prompt: :dynamic} = ctx) do
+    user_message = state.messages |> Enum.reverse() |> Enum.find(& &1.role == "user")
+    user_text = if user_message, do: extract_text(user_message.content), else: ""
+
+    prompt = Synapsis.Agent.ContextBuilder.build_system_prompt(
+      ctx.agent_config[:agent_type] || :conversational,
+      project_id: ctx.agent_config[:project_id],
+      session_id: ctx.session_id,
+      user_message: user_text,
+      agent_config: ctx.agent_config
+    )
+
+    %{ctx | system_prompt: prompt}
+  end
+
+  defp prepare_context(_state, ctx), do: ctx
+
+  defp extract_text(content) when is_binary(content), do: content
+  defp extract_text(content) when is_list(content) do
+    content
+    |> Enum.filter(&(is_map(&1) and &1[:type] == "text"))
+    |> Enum.map_join(" ", & &1[:text])
+  end
+  defp extract_text(_), do: ""
 
   defp build_tool_map(tools) do
     Enum.reduce(tools, %{}, fn tool, acc ->
@@ -227,6 +286,22 @@ defmodule Synapsis.Agent.QueryLoop do
       max_tokens: 8192,
       stream: true
     }
+  end
+
+  defp filter_fork_tools(tools, :read_only) do
+    Enum.filter(tools, fn tool ->
+      level = tool[:permission_level] || Map.get(tool, "permission_level", :write)
+      level in @read_only_levels
+    end)
+  end
+
+  defp filter_fork_tools(tools, names) when is_list(names) do
+    name_set = MapSet.new(names)
+
+    Enum.filter(tools, fn tool ->
+      name = tool[:name] || Map.get(tool, "name")
+      name in name_set
+    end)
   end
 
   defp notify(%Context{subscriber: pid}, event) do
