@@ -240,6 +240,82 @@ defmodule Synapsis.Agent.QueryLoopTest do
     end
   end
 
+  describe "run/2 — abort handling" do
+    test "aborts when subscriber process is dead before first turn" do
+      # Start and immediately stop a process
+      {:ok, pid} = Agent.start(fn -> :ok end)
+      Agent.stop(pid)
+
+      ctx =
+        Context.new(
+          session_id: "test",
+          system_prompt: "test",
+          tools: [],
+          model: "test",
+          provider_config: %{type: "test"},
+          subscriber: pid,
+          agent_config: %{}
+        )
+
+      state = State.new(messages: [%{role: "user", content: "hi"}])
+      assert {:ok, :aborted, _} = QueryLoop.run(state, ctx)
+    end
+
+    test "aborts between turns when subscriber dies mid-execution" do
+      test_pid = self()
+      {:ok, subscriber} = Agent.start(fn -> :ok end)
+      turn = :counters.new(1, [:atomics])
+
+      mock_stream = fn _request, _config ->
+        count = :counters.get(turn, 1)
+        :counters.add(turn, 1, 1)
+
+        if count == 0 do
+          # First turn: return tool_use to force another turn
+          send(test_pid, {:provider_chunk, {:tool_use_start, "echo", "tu_1"}})
+          send(test_pid, {:provider_chunk, {:tool_use_complete, "echo", %{"text" => "x"}}})
+          send(test_pid, {:provider_chunk, :content_block_stop})
+          send(test_pid, {:provider_chunk, :done})
+          # Kill subscriber between turns (after first turn completes)
+          Agent.stop(subscriber)
+        else
+          send(test_pid, {:provider_chunk, {:text_delta, "done"}})
+          send(test_pid, {:provider_chunk, :content_block_stop})
+          send(test_pid, {:provider_chunk, :done})
+        end
+
+        :ok
+      end
+
+      defmodule AbortEchoTool do
+        use Synapsis.Tool
+        def name, do: "echo"
+        def description, do: "echoes"
+        def parameters, do: %{}
+        def permission_level, do: :read
+        def execute(%{"text" => t}, _ctx), do: {:ok, t}
+        def execute(_, _), do: {:ok, "ok"}
+      end
+
+      ctx =
+        Context.new(
+          session_id: "test",
+          system_prompt: "test",
+          tools: [%{name: "echo", description: "echoes", parameters: %{}}],
+          model: "test",
+          provider_config: %{type: "test"},
+          subscriber: subscriber,
+          agent_config: %{stream_fn: mock_stream, tool_modules: %{"echo" => AbortEchoTool}}
+        )
+
+      state = State.new(messages: [%{role: "user", content: "loop"}])
+      assert {:ok, :aborted, final} = QueryLoop.run(state, ctx)
+      # The first turn completes (tool executed), then on re-entry to run/2 the dead
+      # subscriber is detected and the loop aborts.
+      assert final.turn_count >= 1
+    end
+  end
+
   describe "run/2 — tool execution loop" do
     defmodule EchoTool do
       use Synapsis.Tool
