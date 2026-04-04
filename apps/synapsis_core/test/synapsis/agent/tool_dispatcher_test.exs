@@ -8,7 +8,7 @@ defmodule Synapsis.Agent.ToolDispatcherTest do
   setup do
     project =
       %Synapsis.Project{}
-      |> Synapsis.Project.changeset(%{path: "/tmp/td-test", slug: "td-test"})
+      |> Synapsis.Project.changeset(%{path: "/tmp/td-test", slug: "td-test", name: "td-test"})
       |> Repo.insert!()
 
     session =

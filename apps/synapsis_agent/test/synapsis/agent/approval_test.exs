@@ -73,7 +73,11 @@ defmodule Synapsis.Agent.ApprovalTest do
     test "project-scoped patterns checked first" do
       {:ok, project} =
         %Synapsis.Project{}
-        |> Synapsis.Project.changeset(%{path: "/tmp/approval-test", slug: "approval-test"})
+        |> Synapsis.Project.changeset(%{
+          path: "/tmp/approval-test",
+          slug: "approval-test",
+          name: "approval-test"
+        })
         |> Repo.insert()
 
       insert_approval(%{

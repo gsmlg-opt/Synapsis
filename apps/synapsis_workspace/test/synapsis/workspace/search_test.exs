@@ -10,7 +10,8 @@ defmodule Synapsis.Workspace.SearchTest do
     {:ok, project} =
       Synapsis.Repo.insert(%Synapsis.Project{
         slug: "search-test",
-        path: "/tmp/search-test"
+        path: "/tmp/search-test",
+        name: "search-test"
       })
 
     {:ok, session} =

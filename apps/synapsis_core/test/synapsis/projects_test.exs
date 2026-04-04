@@ -10,11 +10,11 @@ defmodule Synapsis.ProjectsTest do
 
     test "returns projects ordered by updated_at desc" do
       %Project{}
-      |> Project.changeset(%{path: "/tmp/proj_list_1", slug: "proj-list-1"})
+      |> Project.changeset(%{path: "/tmp/proj_list_1", slug: "proj-list-1", name: "proj-list-1"})
       |> Repo.insert!()
 
       %Project{}
-      |> Project.changeset(%{path: "/tmp/proj_list_2", slug: "proj-list-2"})
+      |> Project.changeset(%{path: "/tmp/proj_list_2", slug: "proj-list-2", name: "proj-list-2"})
       |> Repo.insert!()
 
       projects = Projects.list()
@@ -30,7 +30,7 @@ defmodule Synapsis.ProjectsTest do
     test "returns project by id" do
       {:ok, project} =
         %Project{}
-        |> Project.changeset(%{path: "/tmp/proj_get", slug: "proj-get"})
+        |> Project.changeset(%{path: "/tmp/proj_get", slug: "proj-get", name: "proj-get"})
         |> Repo.insert()
 
       assert {:ok, found} = Projects.get(project.id)

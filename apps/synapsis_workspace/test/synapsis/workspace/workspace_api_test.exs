@@ -11,7 +11,8 @@ defmodule Synapsis.WorkspaceAPITest do
     {:ok, project} =
       Repo.insert(%Synapsis.Project{
         slug: "api-test-project",
-        path: "/tmp/api-test-project"
+        path: "/tmp/api-test-project",
+        name: "api-test-project"
       })
 
     %{project: project}
@@ -153,8 +154,11 @@ defmodule Synapsis.WorkspaceAPITest do
       {:ok, _} =
         Workspace.move("/shared/move/broadcast-src.md", "/shared/move/broadcast-dst.md")
 
-      assert_receive {:workspace_changed, %{path: "/shared/move/broadcast-src.md", action: :deleted, resource_id: _}}
-      assert_receive {:workspace_changed, %{path: "/shared/move/broadcast-dst.md", action: :created, resource_id: _}}
+      assert_receive {:workspace_changed,
+                      %{path: "/shared/move/broadcast-src.md", action: :deleted, resource_id: _}}
+
+      assert_receive {:workspace_changed,
+                      %{path: "/shared/move/broadcast-dst.md", action: :created, resource_id: _}}
     end
   end
 
@@ -324,8 +328,7 @@ defmodule Synapsis.WorkspaceAPITest do
 
       {:ok, resource} = Workspace.write(path, "content", %{author: "test"})
 
-      assert_receive {:workspace_changed,
-                      %{path: ^path, action: :created, resource_id: id}}
+      assert_receive {:workspace_changed, %{path: ^path, action: :created, resource_id: id}}
 
       assert id == resource.id
     end
@@ -378,8 +381,7 @@ defmodule Synapsis.WorkspaceAPITest do
 
       :ok = Workspace.delete(path)
 
-      assert_receive {:workspace_changed,
-                      %{path: ^path, action: :deleted, resource_id: id}}
+      assert_receive {:workspace_changed, %{path: ^path, action: :deleted, resource_id: id}}
 
       assert id == resource.id
     end

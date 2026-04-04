@@ -11,7 +11,8 @@ defmodule Synapsis.Workspace.Integration.ProjectionRoundtripTest do
     {:ok, project} =
       Repo.insert(%Synapsis.Project{
         slug: "proj-rt-#{System.unique_integer([:positive])}",
-        path: "/tmp/proj-roundtrip"
+        path: "/tmp/proj-roundtrip",
+        name: "proj-roundtrip"
       })
 
     {:ok, session} =

@@ -12,7 +12,8 @@ defmodule SynapsisWeb.ProjectLive.IndexTest do
       %Synapsis.Project{}
       |> Synapsis.Project.changeset(%{
         path: "/tmp/proj_test_#{:rand.uniform(100_000)}",
-        slug: "proj-list-test"
+        slug: "proj-list-test",
+        name: "proj-list-test"
       })
       |> Synapsis.Repo.insert!()
 
@@ -78,7 +79,8 @@ defmodule SynapsisWeb.ProjectLive.IndexTest do
       %Synapsis.Project{}
       |> Synapsis.Project.changeset(%{
         path: "/home/user/my-great-project",
-        slug: "my-great-project"
+        slug: "my-great-project",
+        name: "my-great-project"
       })
       |> Synapsis.Repo.insert!()
 
@@ -92,7 +94,8 @@ defmodule SynapsisWeb.ProjectLive.IndexTest do
         %Synapsis.Project{}
         |> Synapsis.Project.changeset(%{
           path: "/tmp/multi_proj_#{i}_#{:rand.uniform(100_000)}",
-          slug: "multi-proj-#{i}"
+          slug: "multi-proj-#{i}",
+          name: "multi-proj-#{i}"
         })
         |> Synapsis.Repo.insert!()
       end

@@ -6,7 +6,8 @@ defmodule SynapsisWeb.ProjectLive.ShowTest do
       %Synapsis.Project{}
       |> Synapsis.Project.changeset(%{
         path: "/tmp/show-test-#{:rand.uniform(100_000)}",
-        slug: "show-test-project"
+        slug: "show-test-project",
+        name: "show-test-project"
       })
       |> Synapsis.Repo.insert()
 

@@ -11,7 +11,8 @@ defmodule Synapsis.Workspace.ProjectionTest do
     {:ok, project} =
       Repo.insert(%Synapsis.Project{
         slug: "proj-test-#{System.unique_integer([:positive])}",
-        path: "/tmp/proj-test"
+        path: "/tmp/proj-test",
+        name: "proj-test"
       })
 
     {:ok, session} =
@@ -277,6 +278,7 @@ defmodule Synapsis.Workspace.ProjectionTest do
       resource = Projection.project_memory(entry)
 
       assert resource.visibility == :private
+
       assert resource.path =~
                "/projects/unknown/sessions/#{session_id}/memory/scratch/context-note.md"
     end
@@ -483,7 +485,10 @@ defmodule Synapsis.Workspace.ProjectionTest do
       assert is_list(results)
       assert length(results) >= 1
       assert Enum.all?(results, fn r -> r.kind == :skill end)
-      assert Enum.all?(results, fn r -> String.contains?(r.path, "/projects/#{project.id}/skills/") end)
+
+      assert Enum.all?(results, fn r ->
+               String.contains?(r.path, "/projects/#{project.id}/skills/")
+             end)
     end
 
     @tag :skip

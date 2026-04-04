@@ -18,7 +18,8 @@ defmodule SynapsisWeb.SessionLive.ShowTest do
       %Synapsis.Project{}
       |> Synapsis.Project.changeset(%{
         path: "/tmp/sess_show_#{:rand.uniform(100_000)}",
-        slug: "sess-show"
+        slug: "sess-show",
+        name: "sess-show"
       })
       |> Synapsis.Repo.insert()
 

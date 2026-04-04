@@ -6,7 +6,11 @@ defmodule Synapsis.Session.SharingTest do
   setup do
     {:ok, project} =
       %Project{}
-      |> Project.changeset(%{path: "/tmp/sharing-test", slug: "sharing-test"})
+      |> Project.changeset(%{
+        path: "/tmp/sharing-test",
+        slug: "sharing-test",
+        name: "sharing-test"
+      })
       |> Repo.insert()
 
     {:ok, session} =

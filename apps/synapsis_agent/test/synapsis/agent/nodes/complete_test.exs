@@ -6,7 +6,11 @@ defmodule Synapsis.Agent.Nodes.CompleteTest do
   setup do
     project =
       %Synapsis.Project{}
-      |> Synapsis.Project.changeset(%{path: "/tmp/test-comp", slug: "test-comp"})
+      |> Synapsis.Project.changeset(%{
+        path: "/tmp/test-comp",
+        slug: "test-comp",
+        name: "test-comp"
+      })
       |> Repo.insert!()
 
     session =

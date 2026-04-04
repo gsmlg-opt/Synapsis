@@ -31,7 +31,8 @@ defmodule SynapsisServer.UserSocketTest do
         %Synapsis.Project{}
         |> Synapsis.Project.changeset(%{
           path: "/tmp/user_socket_test_#{:rand.uniform(100_000)}",
-          slug: "user-socket-test-#{:rand.uniform(100_000)}"
+          slug: "user-socket-test-#{:rand.uniform(100_000)}",
+          name: "user-socket-test"
         })
         |> Synapsis.Repo.insert()
 

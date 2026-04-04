@@ -7,7 +7,7 @@ defmodule Synapsis.Agent.Nodes.CompactContextTest do
   setup do
     project =
       %Synapsis.Project{}
-      |> Synapsis.Project.changeset(%{path: "/tmp/test-cc", slug: "test-cc"})
+      |> Synapsis.Project.changeset(%{path: "/tmp/test-cc", slug: "test-cc", name: "test-cc"})
       |> Repo.insert!()
 
     session =

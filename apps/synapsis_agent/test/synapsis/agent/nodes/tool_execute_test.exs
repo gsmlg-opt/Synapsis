@@ -47,7 +47,7 @@ defmodule Synapsis.Agent.Nodes.ToolExecuteTest do
       # Create session for ResponseFlusher
       project =
         %Synapsis.Project{}
-        |> Synapsis.Project.changeset(%{path: "/tmp/test-te", slug: "test-te"})
+        |> Synapsis.Project.changeset(%{path: "/tmp/test-te", slug: "test-te", name: "test-te"})
         |> Repo.insert!()
 
       %Synapsis.Session{}

@@ -6,7 +6,7 @@ defmodule Synapsis.Session.ForkTest do
   setup do
     {:ok, project} =
       %Project{}
-      |> Project.changeset(%{path: "/tmp/fork-test", slug: "fork-test"})
+      |> Project.changeset(%{path: "/tmp/fork-test", slug: "fork-test", name: "fork-test"})
       |> Repo.insert()
 
     {:ok, session} =

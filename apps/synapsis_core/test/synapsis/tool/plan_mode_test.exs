@@ -6,7 +6,11 @@ defmodule Synapsis.Tool.PlanModeTest do
   setup do
     {:ok, project} =
       %Synapsis.Project{}
-      |> Synapsis.Project.changeset(%{path: "/tmp/plan_mode_test", slug: "plan-mode-test"})
+      |> Synapsis.Project.changeset(%{
+        path: "/tmp/plan_mode_test",
+        slug: "plan-mode-test",
+        name: "plan-mode-test"
+      })
       |> Repo.insert()
 
     {:ok, session} =

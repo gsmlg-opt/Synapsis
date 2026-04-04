@@ -7,7 +7,11 @@ defmodule Synapsis.Tool.TodoTest do
     # Create project and session for FK constraints
     {:ok, project} =
       %Synapsis.Project{}
-      |> Synapsis.Project.changeset(%{path: "/tmp/todo_test", slug: "todo-test"})
+      |> Synapsis.Project.changeset(%{
+        path: "/tmp/todo_test",
+        slug: "todo-test",
+        name: "todo-test"
+      })
       |> Repo.insert()
 
     {:ok, session} =

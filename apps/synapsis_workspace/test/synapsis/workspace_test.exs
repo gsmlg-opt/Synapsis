@@ -10,7 +10,8 @@ defmodule Synapsis.WorkspaceTest do
     {:ok, project} =
       Synapsis.Repo.insert(%Synapsis.Project{
         slug: "test-project",
-        path: "/tmp/test-project"
+        path: "/tmp/test-project",
+        name: "test-project"
       })
 
     %{project: project}
@@ -147,8 +148,9 @@ defmodule Synapsis.WorkspaceTest do
 
       versions =
         Synapsis.Repo.all(
-          from v in Synapsis.WorkspaceDocumentVersion,
+          from(v in Synapsis.WorkspaceDocumentVersion,
             order_by: [asc: v.version]
+          )
         )
 
       assert length(versions) >= 2

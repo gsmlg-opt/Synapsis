@@ -6,7 +6,7 @@ defmodule Synapsis.Agent.Nodes.ProcessResponseTest do
   setup do
     project =
       %Synapsis.Project{}
-      |> Synapsis.Project.changeset(%{path: "/tmp/test-pr", slug: "test-pr"})
+      |> Synapsis.Project.changeset(%{path: "/tmp/test-pr", slug: "test-pr", name: "test-pr"})
       |> Repo.insert!()
 
     session =

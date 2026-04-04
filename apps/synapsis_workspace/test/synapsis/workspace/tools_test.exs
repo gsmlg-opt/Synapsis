@@ -15,7 +15,8 @@ defmodule Synapsis.Workspace.ToolsTest do
     {:ok, project} =
       Synapsis.Repo.insert(%Synapsis.Project{
         slug: "tool-test",
-        path: "/tmp/tool-test"
+        path: "/tmp/tool-test",
+        name: "tool-test"
       })
 
     %{project: project}

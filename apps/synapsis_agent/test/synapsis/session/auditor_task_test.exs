@@ -9,7 +9,8 @@ defmodule Synapsis.Session.AuditorTaskTest do
       %Synapsis.Project{}
       |> Synapsis.Project.changeset(%{
         path: "/tmp/auditor_test_#{System.unique_integer([:positive])}",
-        slug: "auditor-test-#{System.unique_integer([:positive])}"
+        slug: "auditor-test-#{System.unique_integer([:positive])}",
+        name: "auditor-test"
       })
       |> Repo.insert()
 

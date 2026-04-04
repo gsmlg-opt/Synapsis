@@ -17,7 +17,8 @@ defmodule Synapsis.Workspace.TestCase do
     {:ok, project} =
       Synapsis.Repo.insert(%Synapsis.Project{
         slug: "ws-test-#{System.unique_integer([:positive])}",
-        path: "/tmp/ws-test"
+        path: "/tmp/ws-test",
+        name: "ws-test"
       })
 
     {:ok, session} =

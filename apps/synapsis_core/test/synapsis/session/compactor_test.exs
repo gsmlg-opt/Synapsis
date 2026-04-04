@@ -6,7 +6,11 @@ defmodule Synapsis.Session.CompactorTest do
   setup do
     {:ok, project} =
       %Project{}
-      |> Project.changeset(%{path: "/tmp/compact-test", slug: "compact-test"})
+      |> Project.changeset(%{
+        path: "/tmp/compact-test",
+        slug: "compact-test",
+        name: "compact-test"
+      })
       |> Repo.insert()
 
     {:ok, session} =

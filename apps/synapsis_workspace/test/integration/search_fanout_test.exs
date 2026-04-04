@@ -10,7 +10,8 @@ defmodule Synapsis.Workspace.Integration.SearchFanoutTest do
     {:ok, project} =
       Repo.insert(%Synapsis.Project{
         slug: "proj-sf-#{System.unique_integer([:positive])}",
-        path: "/tmp/proj-search-fanout"
+        path: "/tmp/proj-search-fanout",
+        name: "proj-search-fanout"
       })
 
     %{project: project}

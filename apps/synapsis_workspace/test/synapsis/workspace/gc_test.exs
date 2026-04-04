@@ -14,7 +14,8 @@ defmodule Synapsis.Workspace.GCTest do
     {:ok, project} =
       Repo.insert(%Synapsis.Project{
         slug: "gc-test-project",
-        path: "/tmp/gc-test-project"
+        path: "/tmp/gc-test-project",
+        name: "gc-test-project"
       })
 
     %{project: project}
@@ -129,9 +130,10 @@ defmodule Synapsis.Workspace.GCTest do
 
       version_count =
         Repo.one(
-          from v in WorkspaceDocumentVersion,
+          from(v in WorkspaceDocumentVersion,
             where: v.document_id == ^doc.id,
             select: count(v.id)
+          )
         )
 
       assert version_count == 0
@@ -223,9 +225,10 @@ defmodule Synapsis.Workspace.GCTest do
 
       remaining =
         Repo.all(
-          from v in WorkspaceDocumentVersion,
+          from(v in WorkspaceDocumentVersion,
             where: v.document_id == ^doc.id,
             order_by: [desc: v.version]
+          )
         )
 
       # Default retention is 5; should keep at most 5
@@ -246,10 +249,11 @@ defmodule Synapsis.Workspace.GCTest do
 
       remaining_versions =
         Repo.all(
-          from v in WorkspaceDocumentVersion,
+          from(v in WorkspaceDocumentVersion,
             where: v.document_id == ^doc.id,
             order_by: [desc: v.version],
             select: v.version
+          )
         )
 
       # The highest version numbers should be kept
@@ -273,8 +277,9 @@ defmodule Synapsis.Workspace.GCTest do
 
       remaining =
         Repo.all(
-          from v in WorkspaceDocumentVersion,
+          from(v in WorkspaceDocumentVersion,
             where: v.document_id == ^doc.id
+          )
         )
 
       assert length(remaining) == 3
@@ -294,8 +299,9 @@ defmodule Synapsis.Workspace.GCTest do
 
       remaining =
         Repo.all(
-          from v in WorkspaceDocumentVersion,
+          from(v in WorkspaceDocumentVersion,
             where: v.document_id == ^doc.id
+          )
         )
 
       # GC only targets :draft lifecycle — should leave shared doc versions alone
@@ -320,8 +326,9 @@ defmodule Synapsis.Workspace.GCTest do
 
       remaining =
         Repo.all(
-          from v in WorkspaceDocumentVersion,
+          from(v in WorkspaceDocumentVersion,
             where: v.document_id == ^doc.id
+          )
         )
 
       # GC skips deleted docs; all 8 versions remain
@@ -371,9 +378,10 @@ defmodule Synapsis.Workspace.GCTest do
 
       version_count =
         Repo.one(
-          from v in WorkspaceDocumentVersion,
+          from(v in WorkspaceDocumentVersion,
             where: v.document_id == ^doc.id,
             select: count(v.id)
+          )
         )
 
       assert version_count == 0
@@ -419,7 +427,11 @@ defmodule Synapsis.Workspace.GCTest do
 
   describe "cleanup_orphaned_blobs/0" do
     test "returns 0 when blob root directory does not exist" do
-      Application.put_env(:synapsis_workspace, :blob_store_root, "/tmp/synapsis-gc-test-nonexistent-#{System.unique_integer([:positive])}")
+      Application.put_env(
+        :synapsis_workspace,
+        :blob_store_root,
+        "/tmp/synapsis-gc-test-nonexistent-#{System.unique_integer([:positive])}"
+      )
 
       result = GC.cleanup_orphaned_blobs()
 
@@ -429,7 +441,12 @@ defmodule Synapsis.Workspace.GCTest do
     end
 
     test "deletes blob files not referenced by any document" do
-      tmp_root = Path.join(System.tmp_dir!(), "synapsis-gc-blob-test-#{System.unique_integer([:positive])}")
+      tmp_root =
+        Path.join(
+          System.tmp_dir!(),
+          "synapsis-gc-blob-test-#{System.unique_integer([:positive])}"
+        )
+
       Application.put_env(:synapsis_workspace, :blob_store_root, tmp_root)
 
       # Create an orphaned blob file in shard structure: <aa>/<bb>/<rest>
@@ -453,7 +470,12 @@ defmodule Synapsis.Workspace.GCTest do
     end
 
     test "does not delete blobs referenced by a document" do
-      tmp_root = Path.join(System.tmp_dir!(), "synapsis-gc-blob-ref-test-#{System.unique_integer([:positive])}")
+      tmp_root =
+        Path.join(
+          System.tmp_dir!(),
+          "synapsis-gc-blob-ref-test-#{System.unique_integer([:positive])}"
+        )
+
       Application.put_env(:synapsis_workspace, :blob_store_root, tmp_root)
 
       ref = "1122334455667788990011223344556677889900112233445566778899001122"
@@ -480,7 +502,12 @@ defmodule Synapsis.Workspace.GCTest do
     end
 
     test "does not delete blobs referenced by a document version" do
-      tmp_root = Path.join(System.tmp_dir!(), "synapsis-gc-blob-ver-test-#{System.unique_integer([:positive])}")
+      tmp_root =
+        Path.join(
+          System.tmp_dir!(),
+          "synapsis-gc-blob-ver-test-#{System.unique_integer([:positive])}"
+        )
+
       Application.put_env(:synapsis_workspace, :blob_store_root, tmp_root)
 
       ref = "aabbccddeeff0011223344556677889900112233445566778899aabbccddeeff11"

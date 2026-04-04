@@ -19,7 +19,8 @@ defmodule Synapsis.Session.SupervisorTest do
       %Synapsis.Project{}
       |> Synapsis.Project.changeset(%{
         path: tmp_dir,
-        slug: "sup-test-#{System.unique_integer([:positive])}"
+        slug: "sup-test-#{System.unique_integer([:positive])}",
+        name: "sup-test-#{System.unique_integer([:positive])}"
       })
       |> Repo.insert()
 

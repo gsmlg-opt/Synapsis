@@ -18,7 +18,8 @@ defmodule SynapsisWeb.SessionLive.IndexTest do
       %Synapsis.Project{}
       |> Synapsis.Project.changeset(%{
         path: "/tmp/sess_idx_#{:rand.uniform(100_000)}",
-        slug: "sess-idx"
+        slug: "sess-idx",
+        name: "sess-idx"
       })
       |> Synapsis.Repo.insert()
 

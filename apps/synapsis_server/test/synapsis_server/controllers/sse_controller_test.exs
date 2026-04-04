@@ -6,7 +6,7 @@ defmodule SynapsisServer.SSEControllerTest do
   setup do
     {:ok, project} =
       %Project{}
-      |> Project.changeset(%{path: "/tmp/sse-test", slug: "sse-test"})
+      |> Project.changeset(%{path: "/tmp/sse-test", slug: "sse-test", name: "sse-test"})
       |> Repo.insert()
 
     {:ok, session} =

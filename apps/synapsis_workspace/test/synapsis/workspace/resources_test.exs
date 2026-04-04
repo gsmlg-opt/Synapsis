@@ -14,7 +14,8 @@ defmodule Synapsis.Workspace.ResourcesTest do
     {:ok, project} =
       Repo.insert(%Synapsis.Project{
         slug: "res-test-project",
-        path: "/tmp/res-test-project"
+        path: "/tmp/res-test-project",
+        name: "res-test-project"
       })
 
     %{project: project}
@@ -125,7 +126,9 @@ defmodule Synapsis.Workspace.ResourcesTest do
 
   describe "upsert/3" do
     test "creates when path does not exist" do
-      assert {:ok, doc} = Resources.upsert("/shared/notes/upsert-new.md", "content", %{author: "a"})
+      assert {:ok, doc} =
+               Resources.upsert("/shared/notes/upsert-new.md", "content", %{author: "a"})
+
       assert doc.version == 1
     end
 
@@ -248,9 +251,10 @@ defmodule Synapsis.Workspace.ResourcesTest do
 
       versions =
         Repo.all(
-          from v in WorkspaceDocumentVersion,
+          from(v in WorkspaceDocumentVersion,
             where: v.document_id == ^doc.id,
             order_by: [asc: v.version]
+          )
         )
 
       assert length(versions) == 1
@@ -272,8 +276,9 @@ defmodule Synapsis.Workspace.ResourcesTest do
 
       versions =
         Repo.all(
-          from v in WorkspaceDocumentVersion,
+          from(v in WorkspaceDocumentVersion,
             where: v.document_id == ^doc.id
+          )
         )
 
       assert versions == []
@@ -291,9 +296,10 @@ defmodule Synapsis.Workspace.ResourcesTest do
 
       versions =
         Repo.all(
-          from v in WorkspaceDocumentVersion,
+          from(v in WorkspaceDocumentVersion,
             where: v.document_id == ^doc.id,
             order_by: [desc: v.version]
+          )
         )
 
       assert length(versions) <= 5
@@ -305,9 +311,10 @@ defmodule Synapsis.Workspace.ResourcesTest do
 
       version =
         Repo.one(
-          from v in WorkspaceDocumentVersion,
+          from(v in WorkspaceDocumentVersion,
             where: v.document_id == ^doc.id,
             limit: 1
+          )
         )
 
       assert is_binary(version.content_hash)

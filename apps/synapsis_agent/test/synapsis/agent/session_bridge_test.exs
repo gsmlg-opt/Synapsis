@@ -19,7 +19,8 @@ defmodule Synapsis.Agent.SessionBridgeTest do
       %Synapsis.Project{}
       |> Synapsis.Project.changeset(%{
         path: tmp_dir,
-        slug: "bridge-test-#{System.unique_integer([:positive])}"
+        slug: "bridge-test-#{System.unique_integer([:positive])}",
+        name: "bridge-test"
       })
       |> Repo.insert()
 

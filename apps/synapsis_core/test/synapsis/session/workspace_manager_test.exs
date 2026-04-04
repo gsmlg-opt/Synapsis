@@ -22,7 +22,8 @@ defmodule Synapsis.Session.WorkspaceManagerTest do
       %Synapsis.Project{}
       |> Synapsis.Project.changeset(%{
         path: tmp_dir,
-        slug: "wm-test-#{System.unique_integer([:positive])}"
+        slug: "wm-test-#{System.unique_integer([:positive])}",
+        name: "wm-test-#{System.unique_integer([:positive])}"
       })
       |> Repo.insert()
 

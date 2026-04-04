@@ -13,7 +13,8 @@ defmodule Synapsis.Workspace.Integration.GCCleanupTest do
     {:ok, project} =
       Repo.insert(%Synapsis.Project{
         slug: "proj-gc-#{System.unique_integer([:positive])}",
-        path: "/tmp/proj-gc-cleanup"
+        path: "/tmp/proj-gc-cleanup",
+        name: "proj-gc-cleanup"
       })
 
     {:ok, session} =

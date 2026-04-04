@@ -16,7 +16,8 @@ defmodule Synapsis.PromptBuilderTest do
       %Synapsis.Project{}
       |> Synapsis.Project.changeset(%{
         path: "/tmp/pb_test_#{System.unique_integer([:positive])}",
-        slug: "pb-test-#{System.unique_integer([:positive])}"
+        slug: "pb-test-#{System.unique_integer([:positive])}",
+        name: "pb-test-#{System.unique_integer([:positive])}"
       })
       |> Repo.insert()
 
@@ -175,7 +176,8 @@ defmodule Synapsis.PromptBuilderTest do
         %Synapsis.Project{}
         |> Synapsis.Project.changeset(%{
           path: "/tmp/pb_test_other_#{System.unique_integer([:positive])}",
-          slug: "pb-test-other-#{System.unique_integer([:positive])}"
+          slug: "pb-test-other-#{System.unique_integer([:positive])}",
+          name: "pb-test-other-#{System.unique_integer([:positive])}"
         })
         |> Repo.insert()
 
@@ -248,7 +250,8 @@ defmodule Synapsis.PromptBuilderTest do
         %Synapsis.Project{}
         |> Synapsis.Project.changeset(%{
           path: "/tmp/other_#{System.unique_integer([:positive])}",
-          slug: "other-#{System.unique_integer([:positive])}"
+          slug: "other-#{System.unique_integer([:positive])}",
+          name: "other-#{System.unique_integer([:positive])}"
         })
         |> Repo.insert()
 

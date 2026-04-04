@@ -10,7 +10,8 @@ defmodule Synapsis.Workspace.Integration.LifecyclePromotionTest do
     {:ok, project} =
       Repo.insert(%Synapsis.Project{
         slug: "proj-lc-#{System.unique_integer([:positive])}",
-        path: "/tmp/proj-lifecycle"
+        path: "/tmp/proj-lifecycle",
+        name: "proj-lifecycle"
       })
 
     {:ok, session} =

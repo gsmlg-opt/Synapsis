@@ -6,7 +6,11 @@ defmodule Synapsis.Memory.SummarizerDispatcherTest do
 
   defp create_project do
     %Project{}
-    |> Project.changeset(%{slug: "test-project", path: "/tmp/test-summarizer"})
+    |> Project.changeset(%{
+      slug: "test-project",
+      path: "/tmp/test-summarizer",
+      name: "test-project"
+    })
     |> Repo.insert!()
   end
 

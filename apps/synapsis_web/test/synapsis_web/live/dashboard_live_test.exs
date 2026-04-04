@@ -35,7 +35,8 @@ defmodule SynapsisWeb.DashboardLiveTest do
         %Synapsis.Project{}
         |> Synapsis.Project.changeset(%{
           path: "/tmp/dash_proj_#{:rand.uniform(100_000)}",
-          slug: "dash-proj"
+          slug: "dash-proj",
+          name: "dash-proj"
         })
         |> Synapsis.Repo.insert()
 
@@ -49,7 +50,8 @@ defmodule SynapsisWeb.DashboardLiveTest do
         %Synapsis.Project{}
         |> Synapsis.Project.changeset(%{
           path: "/tmp/dash_sess_#{:rand.uniform(100_000)}",
-          slug: "dash-sess"
+          slug: "dash-sess",
+          name: "dash-sess"
         })
         |> Synapsis.Repo.insert()
 
@@ -89,7 +91,8 @@ defmodule SynapsisWeb.DashboardLiveTest do
         %Synapsis.Project{}
         |> Synapsis.Project.changeset(%{
           path: "/tmp/dash_notitle_#{:rand.uniform(100_000)}",
-          slug: "dash-notitle"
+          slug: "dash-notitle",
+          name: "dash-notitle"
         })
         |> Synapsis.Repo.insert()
 
@@ -111,7 +114,8 @@ defmodule SynapsisWeb.DashboardLiveTest do
         %Synapsis.Project{}
         |> Synapsis.Project.changeset(%{
           path: "/tmp/dash_agent_#{:rand.uniform(100_000)}",
-          slug: "dash-agent"
+          slug: "dash-agent",
+          name: "dash-agent"
         })
         |> Synapsis.Repo.insert()
 

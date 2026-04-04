@@ -7,7 +7,7 @@ defmodule Synapsis.Agent.Nodes.BuildPromptTest do
   setup do
     project =
       %Synapsis.Project{}
-      |> Synapsis.Project.changeset(%{path: "/tmp/test-bp", slug: "test-bp"})
+      |> Synapsis.Project.changeset(%{path: "/tmp/test-bp", slug: "test-bp", name: "test-bp"})
       |> Repo.insert!()
 
     session =

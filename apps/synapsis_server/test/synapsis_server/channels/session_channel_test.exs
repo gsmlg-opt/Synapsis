@@ -8,7 +8,8 @@ defmodule SynapsisServer.SessionChannelTest do
       %Synapsis.Project{}
       |> Synapsis.Project.changeset(%{
         path: "/tmp/channel_test_#{:rand.uniform(100_000)}",
-        slug: "channel-test-#{:rand.uniform(100_000)}"
+        slug: "channel-test-#{:rand.uniform(100_000)}",
+        name: "channel-test"
       })
       |> Synapsis.Repo.insert()
 

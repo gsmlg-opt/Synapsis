@@ -18,7 +18,8 @@ defmodule Synapsis.Agent.Nodes.EscalateIntegrationTest do
       %Synapsis.Project{}
       |> Synapsis.Project.changeset(%{
         path: "/tmp/escalate_test_#{System.unique_integer([:positive])}",
-        slug: "escalate-test-#{System.unique_integer([:positive])}"
+        slug: "escalate-test-#{System.unique_integer([:positive])}",
+        name: "escalate-test"
       })
       |> Repo.insert()
 

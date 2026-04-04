@@ -11,7 +11,8 @@ defmodule Synapsis.Tool.MemoryToolsTest do
       %Synapsis.Project{}
       |> Synapsis.Project.changeset(%{
         path: "/tmp/mem_tool_test_#{System.unique_integer([:positive])}",
-        slug: "mem-tool-test-#{System.unique_integer([:positive])}"
+        slug: "mem-tool-test-#{System.unique_integer([:positive])}",
+        name: "mem-tool-test-#{System.unique_integer([:positive])}"
       })
       |> Repo.insert()
 
