@@ -50,7 +50,20 @@ defmodule Synapsis.Tool.Builtin do
     # Phase 13: Disabled stubs
     Synapsis.Tool.NotebookEdit,
     Synapsis.Tool.NotebookRead,
-    Synapsis.Tool.Computer
+    Synapsis.Tool.Computer,
+    # Phase N: Workflow tools
+    Synapsis.Tool.BoardRead,
+    Synapsis.Tool.BoardUpdate,
+    Synapsis.Tool.DevlogRead,
+    Synapsis.Tool.DevlogWrite,
+    Synapsis.Tool.RepoLink,
+    Synapsis.Tool.RepoSync,
+    Synapsis.Tool.RepoStatus,
+    Synapsis.Tool.WorktreeCreate,
+    Synapsis.Tool.WorktreeList,
+    Synapsis.Tool.WorktreeRemove,
+    Synapsis.Tool.AgentSpawn,
+    Synapsis.Tool.AgentStatus
   ]
 
   def register_all do

@@ -51,6 +51,7 @@ defmodule Synapsis.Tool do
           | :memory
           | :workspace
           | :communication
+          | :workflow
           | :uncategorized
 
   @type context :: %{
