@@ -6,7 +6,7 @@ defmodule Synapsis.SessionTest do
   setup do
     {:ok, project} =
       %Project{}
-      |> Project.changeset(%{path: "/tmp/session_test_#{:rand.uniform(100_000)}", slug: "session-test-#{:rand.uniform(100_000)}"})
+      |> Project.changeset(%{path: "/tmp/session_test_#{:rand.uniform(100_000)}", slug: "session-test-#{:rand.uniform(100_000)}", name: "session-test-#{:rand.uniform(100_000)}"})
       |> Repo.insert()
 
     %{project: project}

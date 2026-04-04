@@ -8,7 +8,8 @@ defmodule Synapsis.MessageTest do
       %Project{}
       |> Project.changeset(%{
         path: "/tmp/msg_test_#{:rand.uniform(100_000)}",
-        slug: "msg-test-#{:rand.uniform(100_000)}"
+        slug: "msg-test-#{:rand.uniform(100_000)}",
+        name: "msg-test-#{:rand.uniform(100_000)}"
       })
       |> Repo.insert()
 

@@ -79,7 +79,8 @@ defmodule Synapsis.PluginConfigTest do
         %Synapsis.Project{}
         |> Synapsis.Project.changeset(%{
           path: "/tmp/plugin-unique-#{:rand.uniform(100_000)}",
-          slug: "plugin-unique-#{:rand.uniform(100_000)}"
+          slug: "plugin-unique-#{:rand.uniform(100_000)}",
+          name: "plugin-unique-#{:rand.uniform(100_000)}"
         })
         |> Repo.insert()
 

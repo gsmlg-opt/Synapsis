@@ -5,7 +5,9 @@ defmodule Synapsis.SchemaTest do
 
   describe "Project" do
     test "valid changeset" do
-      changeset = Project.changeset(%Project{}, %{path: "/tmp/myproject", slug: "myproject"})
+      changeset =
+        Project.changeset(%Project{}, %{path: "/tmp/myproject", slug: "myproject", name: "myproject"})
+
       assert changeset.valid?
     end
 
@@ -18,7 +20,7 @@ defmodule Synapsis.SchemaTest do
     test "inserts and queries" do
       {:ok, project} =
         %Project{}
-        |> Project.changeset(%{path: "/tmp/test_project", slug: "test-project"})
+        |> Project.changeset(%{path: "/tmp/test_project", slug: "test-project", name: "test-project"})
         |> Repo.insert()
 
       assert project.id
@@ -37,7 +39,7 @@ defmodule Synapsis.SchemaTest do
     setup do
       {:ok, project} =
         %Project{}
-        |> Project.changeset(%{path: "/tmp/sess_test", slug: "sess-test"})
+        |> Project.changeset(%{path: "/tmp/sess_test", slug: "sess-test", name: "sess-test"})
         |> Repo.insert()
 
       %{project: project}
@@ -81,7 +83,7 @@ defmodule Synapsis.SchemaTest do
     setup do
       {:ok, project} =
         %Project{}
-        |> Project.changeset(%{path: "/tmp/msg_test", slug: "msg-test"})
+        |> Project.changeset(%{path: "/tmp/msg_test", slug: "msg-test", name: "msg-test"})
         |> Repo.insert()
 
       {:ok, session} =

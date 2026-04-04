@@ -8,7 +8,8 @@ defmodule Synapsis.FailedAttemptTest do
       %Synapsis.Project{}
       |> Synapsis.Project.changeset(%{
         path: "/tmp/fa_test_#{System.unique_integer([:positive])}",
-        slug: "fa-test-#{System.unique_integer([:positive])}"
+        slug: "fa-test-#{System.unique_integer([:positive])}",
+        name: "fa-test-#{System.unique_integer([:positive])}"
       })
       |> Repo.insert()
 

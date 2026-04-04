@@ -8,7 +8,8 @@ defmodule Synapsis.PatchTest do
       %Synapsis.Project{}
       |> Synapsis.Project.changeset(%{
         path: "/tmp/patch_test_#{System.unique_integer([:positive])}",
-        slug: "patch-test-#{System.unique_integer([:positive])}"
+        slug: "patch-test-#{System.unique_integer([:positive])}",
+        name: "patch-test-#{System.unique_integer([:positive])}"
       })
       |> Repo.insert()
 
