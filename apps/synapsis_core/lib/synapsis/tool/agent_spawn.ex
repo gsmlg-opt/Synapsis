@@ -49,6 +49,7 @@ defmodule Synapsis.Tool.AgentSpawn do
 
   @impl true
   def execute(_input, _context) do
-    {:error, "Build Agent system not yet implemented. Agent spawning will be available in Phase 5."}
+    {:error,
+     "Build Agent system not yet implemented. Agent spawning will be available in Phase 5."}
   end
 end

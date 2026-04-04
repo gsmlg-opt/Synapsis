@@ -25,7 +25,9 @@ defmodule Synapsis.Git.RunnerTest do
   end
 
   test "run/2 returns error for invalid working directory" do
-    assert {:error, reason} = Runner.run("/nonexistent_path_#{System.unique_integer()}", ["--version"])
+    assert {:error, reason} =
+             Runner.run("/nonexistent_path_#{System.unique_integer()}", ["--version"])
+
     assert is_binary(reason)
   end
 

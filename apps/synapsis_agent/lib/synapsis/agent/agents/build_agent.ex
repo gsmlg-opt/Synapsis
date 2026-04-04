@@ -2,7 +2,15 @@ defmodule Synapsis.Agent.Agents.BuildAgent do
   @moduledoc "Ephemeral Build Agent — executes a single task in a git worktree."
   use GenServer, restart: :temporary
 
-  defstruct [:session_id, :repo_id, :worktree_id, :worktree_path, :task, :parent_agent_id, :status]
+  defstruct [
+    :session_id,
+    :repo_id,
+    :worktree_id,
+    :worktree_path,
+    :task,
+    :parent_agent_id,
+    :status
+  ]
 
   def start_link(config) do
     GenServer.start_link(__MODULE__, config)

@@ -35,7 +35,8 @@ defmodule Synapsis.Tool.WorktreeCreate do
         },
         "base_branch" => %{
           "type" => "string",
-          "description" => "Base branch to create the new branch from (defaults to default_branch)"
+          "description" =>
+            "Base branch to create the new branch from (defaults to default_branch)"
         },
         "task_id" => %{
           "type" => "string",

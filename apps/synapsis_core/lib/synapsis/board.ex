@@ -240,8 +240,10 @@ defmodule Synapsis.Board do
         "design_refs" => card["design_refs"] || card[:design_refs] || [],
         "priority" => card["priority"] || card[:priority] || 0,
         "labels" => card["labels"] || card[:labels] || [],
-        "created_at" => card["created_at"] || card[:created_at] || DateTime.utc_now() |> DateTime.to_iso8601(),
-        "updated_at" => card["updated_at"] || card[:updated_at] || DateTime.utc_now() |> DateTime.to_iso8601()
+        "created_at" =>
+          card["created_at"] || card[:created_at] || DateTime.utc_now() |> DateTime.to_iso8601(),
+        "updated_at" =>
+          card["updated_at"] || card[:updated_at] || DateTime.utc_now() |> DateTime.to_iso8601()
       }
     end)
   end

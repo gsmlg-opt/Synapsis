@@ -24,7 +24,8 @@ defmodule Synapsis.Tool.BoardRead do
       "properties" => %{
         "column" => %{
           "type" => "string",
-          "description" => "Filter cards by column (e.g. backlog, ready, in_progress, review, done)"
+          "description" =>
+            "Filter cards by column (e.g. backlog, ready, in_progress, review, done)"
         },
         "repo_id" => %{
           "type" => "string",

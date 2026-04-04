@@ -268,9 +268,7 @@ defmodule Synapsis.Tool.WorkflowToolsTest do
       assert msg =~ "progress"
 
       doc =
-        Synapsis.WorkspaceDocuments.get_by_path(
-          "/projects/#{project.id}/logs/devlog.md"
-        )
+        Synapsis.WorkspaceDocuments.get_by_path("/projects/#{project.id}/logs/devlog.md")
 
       assert doc != nil
       assert doc.content_body =~ "Implemented feature X"
@@ -286,15 +284,18 @@ defmodule Synapsis.Tool.WorkflowToolsTest do
       assert {:ok, _} = Synapsis.Tool.DevlogWrite.execute(input, context)
 
       doc =
-        Synapsis.WorkspaceDocuments.get_by_path(
-          "/projects/#{project.id}/logs/devlog.md"
-        )
+        Synapsis.WorkspaceDocuments.get_by_path("/projects/#{project.id}/logs/devlog.md")
 
       assert doc.content_body =~ "Chose GenServer"
     end
 
     test "returns error when project_id missing" do
-      assert {:error, msg} = Synapsis.Tool.DevlogWrite.execute(%{"category" => "progress", "content" => "x"}, %{})
+      assert {:error, msg} =
+               Synapsis.Tool.DevlogWrite.execute(
+                 %{"category" => "progress", "content" => "x"},
+                 %{}
+               )
+
       assert msg =~ "project_id"
     end
   end
@@ -341,8 +342,15 @@ defmodule Synapsis.Tool.WorkflowToolsTest do
       project = make_project()
       context = %{project_id: project.id}
 
-      Synapsis.Tool.DevlogWrite.execute(%{"category" => "progress", "content" => "Progress"}, context)
-      Synapsis.Tool.DevlogWrite.execute(%{"category" => "decision", "content" => "Decision"}, context)
+      Synapsis.Tool.DevlogWrite.execute(
+        %{"category" => "progress", "content" => "Progress"},
+        context
+      )
+
+      Synapsis.Tool.DevlogWrite.execute(
+        %{"category" => "decision", "content" => "Decision"},
+        context
+      )
 
       assert {:ok, json} =
                Synapsis.Tool.DevlogRead.execute(%{"category" => "decision"}, context)

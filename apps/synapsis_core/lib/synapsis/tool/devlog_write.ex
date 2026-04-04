@@ -27,8 +27,15 @@ defmodule Synapsis.Tool.DevlogWrite do
       "properties" => %{
         "category" => %{
           "type" => "string",
-          "enum" => ["decision", "progress", "blocker", "insight", "error", "completion",
-                     "user-note"],
+          "enum" => [
+            "decision",
+            "progress",
+            "blocker",
+            "insight",
+            "error",
+            "completion",
+            "user-note"
+          ],
           "description" => "Entry category"
         },
         "content" => %{
