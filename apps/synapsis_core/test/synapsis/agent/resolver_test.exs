@@ -52,18 +52,21 @@ defmodule Synapsis.Agent.ResolverTest do
     test "default build agent includes all expected tools" do
       agent = Resolver.resolve("build")
 
-      expected_tools = [
-        "file_read",
-        "file_edit",
-        "file_write",
-        "bash",
-        "grep",
-        "glob",
-        "diagnostics",
-        "fetch"
-      ]
-
-      assert agent.tools == expected_tools
+      # Filesystem + Search + Execution + Web + Planning + Orchestration +
+      # Interaction + Session + Memory + Workflow + Repo/Worktree + Diagnostics
+      for tool <- ~w(
+        file_read file_edit file_write multi_edit file_delete file_move list_dir
+        grep glob bash fetch web_search
+        todo_read todo_write enter_plan_mode exit_plan_mode
+        task skill tool_search ask_user sleep
+        memory_save memory_search memory_update session_summarize
+        board_read board_update devlog_read devlog_write
+        repo_link repo_status repo_sync
+        worktree_create worktree_list worktree_remove
+        diagnostics
+      ) do
+        assert tool in agent.tools, "expected #{tool} in build agent tools"
+      end
     end
 
     test "default plan agent includes only read-only tools" do

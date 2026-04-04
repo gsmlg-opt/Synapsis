@@ -124,14 +124,54 @@ defmodule Synapsis.AgentConfigs do
         Always explain your reasoning before making changes. Be concise and precise.
         """,
         tools: [
+          # Filesystem
           "file_read",
           "file_edit",
           "file_write",
-          "bash",
+          "multi_edit",
+          "file_delete",
+          "file_move",
+          "list_dir",
+          # Search
           "grep",
           "glob",
-          "diagnostics",
-          "fetch"
+          # Execution
+          "bash",
+          # Web
+          "fetch",
+          "web_search",
+          # Planning
+          "todo_read",
+          "todo_write",
+          "enter_plan_mode",
+          "exit_plan_mode",
+          # Orchestration
+          "task",
+          "skill",
+          "tool_search",
+          # Interaction
+          "ask_user",
+          # Session
+          "sleep",
+          # Memory
+          "memory_save",
+          "memory_search",
+          "memory_update",
+          "session_summarize",
+          # Workflow
+          "board_read",
+          "board_update",
+          "devlog_read",
+          "devlog_write",
+          # Repo & Worktree
+          "repo_link",
+          "repo_status",
+          "repo_sync",
+          "worktree_create",
+          "worktree_list",
+          "worktree_remove",
+          # Diagnostics
+          "diagnostics"
         ],
         reasoning_effort: "medium",
         read_only: false,
