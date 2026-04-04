@@ -100,6 +100,11 @@ defmodule Synapsis.Workspace.PathResolver do
   @spec derive_kind([String.t()]) :: atom()
   def derive_kind(segments) do
     case segments do
+      ["board.yaml"] -> :board
+      ["plans" | _] -> :plan
+      ["design" | _] -> :design_doc
+      ["logs", "devlog.md"] -> :devlog
+      ["repos", _repo_id, "config.yaml"] -> :repo_config
       ["attachments" | _] -> :attachment
       ["handoffs" | _] -> :handoff
       ["scratch" | _] -> :session_scratch
