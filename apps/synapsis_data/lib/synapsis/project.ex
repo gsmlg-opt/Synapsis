@@ -38,7 +38,8 @@ defmodule Synapsis.Project do
     path
     |> Path.basename()
     |> String.downcase()
-    |> String.replace(~r/[^a-z0-9_-]/, "-")
+    |> String.replace(~r/[^a-z0-9-]/, "-")
+    |> String.replace(~r/-+/, "-")
     |> String.trim("-")
   end
 end
