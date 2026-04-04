@@ -4,11 +4,11 @@ defmodule SynapsisWeb.ProjectLive.Show do
   @impl true
   def mount(%{"id" => id}, _session, socket) do
     case Synapsis.Projects.get(id) do
-      {:ok, project} ->
+      %Synapsis.Project{} = project ->
         sessions = Synapsis.Sessions.list_by_project(project.id)
         {:ok, assign(socket, project: project, sessions: sessions, page_title: project.slug)}
 
-      {:error, :not_found} ->
+      nil ->
         {:ok,
          socket
          |> put_flash(:error, "Project not found")

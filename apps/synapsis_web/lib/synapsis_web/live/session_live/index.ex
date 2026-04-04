@@ -4,7 +4,7 @@ defmodule SynapsisWeb.SessionLive.Index do
   @impl true
   def mount(%{"project_id" => project_id}, _session, socket) do
     case Synapsis.Projects.get(project_id) do
-      {:ok, project} ->
+      %Synapsis.Project{} = project ->
         sessions = Synapsis.Sessions.list_by_project(project.id)
         {:ok, providers} = Synapsis.Providers.list(enabled: true)
         default_provider = if providers != [], do: hd(providers).name, else: "anthropic"
@@ -29,7 +29,7 @@ defmodule SynapsisWeb.SessionLive.Index do
            available_models: available_models
          )}
 
-      {:error, :not_found} ->
+      nil ->
         {:ok,
          socket
          |> put_flash(:error, "Project not found")

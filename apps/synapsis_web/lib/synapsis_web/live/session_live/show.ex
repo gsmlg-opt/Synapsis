@@ -4,7 +4,7 @@ defmodule SynapsisWeb.SessionLive.Show do
   @impl true
   def mount(%{"id" => session_id, "project_id" => project_id}, _session, socket) do
     case {Synapsis.Projects.get(project_id), Synapsis.Sessions.get(session_id)} do
-      {{:ok, project}, {:ok, session}} ->
+      {%Synapsis.Project{} = project, {:ok, session}} ->
         sessions = Synapsis.Sessions.list_by_project(project.id)
         {:ok, providers} = Synapsis.Providers.list(enabled: true)
 
