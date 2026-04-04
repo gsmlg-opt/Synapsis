@@ -82,6 +82,33 @@ defmodule Synapsis.Agent.ResolverTest do
       assert agent.max_tokens == build.max_tokens
     end
 
+    test "returns default assistant agent config" do
+      agent = Resolver.resolve("assistant")
+      assert agent.name == "assistant"
+      assert agent.read_only == false
+      assert agent.reasoning_effort == "high"
+      assert agent.max_tokens == 8192
+      assert agent.model_tier == :expert
+      assert "task" in agent.tools
+      assert "ask_user" in agent.tools
+      refute "file_read" in agent.tools
+      refute "file_edit" in agent.tools
+      refute "bash" in agent.tools
+    end
+
+    test "assistant config includes orchestration tools but no filesystem tools" do
+      agent = Resolver.resolve("assistant")
+      # Should have these
+      for tool <- ~w(task ask_user web_search todo_read todo_write enter_plan_mode exit_plan_mode) do
+        assert tool in agent.tools, "expected #{tool} in assistant tools"
+      end
+
+      # Should NOT have these
+      for tool <- ~w(file_read file_edit file_write bash grep glob) do
+        refute tool in agent.tools, "did not expect #{tool} in assistant tools"
+      end
+    end
+
     test "accepts atom agent names" do
       agent = Resolver.resolve(:build)
       assert agent.name == "build"
@@ -189,14 +216,18 @@ defmodule Synapsis.Agent.ResolverTest do
   end
 
   describe "seed_defaults/0" do
-    test "creates build and plan agents" do
+    test "creates assistant, build, and plan agents" do
       AgentConfigs.seed_defaults()
 
+      assistant = AgentConfigs.get_by_name("assistant")
       build = AgentConfigs.get_by_name("build")
       plan = AgentConfigs.get_by_name("plan")
 
+      assert assistant != nil
       assert build != nil
       assert plan != nil
+      assert assistant.name == "assistant"
+      assert assistant.is_default == false
       assert build.name == "build"
       assert plan.name == "plan"
       assert build.is_default == true

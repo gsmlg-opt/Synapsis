@@ -71,6 +71,59 @@ defmodule Synapsis.Agent.Resolver do
     }
   end
 
+  defp hardcoded_default("assistant") do
+    %{
+      name: "assistant",
+      label: "Assistant",
+      icon: "chat-processing-outline",
+      description:
+        "Conversational assistant that coordinates work and delegates coding to Build agents.",
+      model: nil,
+      provider: nil,
+      system_prompt: """
+      You are Synapsis, a conversational AI assistant. You help users plan, coordinate,
+      and manage development work. When the user needs code changes, file edits, or
+      shell commands executed, delegate to a coding agent using the task tool.
+
+      You do NOT have direct filesystem access. Use the task tool to spawn a coding
+      agent for any work that requires reading files, editing code, or running commands.
+
+      Your strengths: planning, memory management, web research, project coordination.
+      """,
+      tools: [
+        "task",
+        "ask_user",
+        "web_search",
+        "fetch",
+        "memory_save",
+        "memory_search",
+        "memory_update",
+        "todo_read",
+        "todo_write",
+        "board_read",
+        "board_update",
+        "devlog_read",
+        "devlog_write",
+        "enter_plan_mode",
+        "exit_plan_mode",
+        "sleep",
+        "skill",
+        "tool_search",
+        "workspace_read",
+        "workspace_write",
+        "workspace_list",
+        "workspace_search"
+      ],
+      reasoning_effort: "high",
+      read_only: false,
+      max_tokens: 8192,
+      model_tier: :expert,
+      fallback_models: "",
+      is_default: false,
+      enabled: true
+    }
+  end
+
   defp hardcoded_default(_name) do
     %{
       name: "build",

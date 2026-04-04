@@ -280,6 +280,65 @@ defmodule Synapsis.Tool.RegistryTest do
     end
   end
 
+  describe "list_for_query_loop/1" do
+    setup do
+      Registry.register_module("write_tool", WriteTool)
+      Registry.register_module("exec_tool", ExecuteTool)
+      Registry.register_module("disabled_tool", DisabledTool)
+      Registry.register_module("search_tool", SearchTool)
+
+      on_exit(fn ->
+        Registry.unregister("write_tool")
+        Registry.unregister("exec_tool")
+        Registry.unregister("disabled_tool")
+        Registry.unregister("search_tool")
+        Registry.unregister("deferred_tool")
+      end)
+
+      :ok
+    end
+
+    test "returns all enabled tools when no names filter" do
+      tools = Registry.list_for_query_loop()
+      names = Enum.map(tools, & &1.name)
+      assert "write_tool" in names
+      assert "exec_tool" in names
+      assert "search_tool" in names
+    end
+
+    test "filters by names when names option provided" do
+      tools = Registry.list_for_query_loop(names: ["write_tool", "search_tool"])
+      names = Enum.map(tools, & &1.name)
+      assert "write_tool" in names
+      assert "search_tool" in names
+      refute "exec_tool" in names
+    end
+
+    test "includes permission_level in returned maps" do
+      tools = Registry.list_for_query_loop(names: ["write_tool"])
+      [tool] = Enum.filter(tools, &(&1.name == "write_tool"))
+      assert tool.permission_level == :write
+    end
+
+    test "excludes disabled tools" do
+      tools = Registry.list_for_query_loop()
+      names = Enum.map(tools, & &1.name)
+      refute "disabled_tool" in names
+    end
+
+    test "excludes deferred unloaded tools" do
+      Registry.register_module("deferred_tool", FakeTool, deferred: true)
+      tools = Registry.list_for_query_loop()
+      names = Enum.map(tools, & &1.name)
+      refute "deferred_tool" in names
+    end
+
+    test "returns empty list when names filter matches nothing" do
+      tools = Registry.list_for_query_loop(names: ["nonexistent_xyz"])
+      assert tools == []
+    end
+  end
+
   describe "list_by_category/1" do
     setup do
       Registry.register_module("search_tool", SearchTool)

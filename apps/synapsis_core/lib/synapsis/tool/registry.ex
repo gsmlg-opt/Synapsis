@@ -153,6 +153,25 @@ defmodule Synapsis.Tool.Registry do
     |> Enum.map(&entry_to_llm_map/1)
   end
 
+  @doc """
+  List tools enriched with `permission_level`, suitable for QueryLoop and fork.
+
+  ## Options
+
+  - `:names` — optional list of tool name strings. When present, only tools
+    whose name is in the list are returned. When `nil` (default), all enabled
+    tools are returned.
+  """
+  def list_for_query_loop(opts \\ []) do
+    names = Keyword.get(opts, :names, nil)
+
+    :ets.tab2list(@table)
+    |> filter_enabled()
+    |> filter_deferred(false)
+    |> filter_names(names)
+    |> Enum.map(&entry_to_query_loop_map/1)
+  end
+
   @doc "List all registered tools matching a given category."
   def list_by_category(category) do
     :ets.tab2list(@table)
@@ -277,6 +296,11 @@ defmodule Synapsis.Tool.Registry do
     end
   end
 
+  defp entry_to_query_loop_map({name, entry}) do
+    base = entry_to_llm_map({name, entry})
+    Map.put(base, :permission_level, resolve_permission_level_from_entry(entry))
+  end
+
   defp entry_to_full_map({name, entry}) do
     case entry do
       {:module, module, opts} ->
@@ -330,6 +354,13 @@ defmodule Synapsis.Tool.Registry do
     Enum.filter(entries, fn {_name, entry} ->
       MapSet.member?(cat_set, resolve_category_from_entry(entry))
     end)
+  end
+
+  defp filter_names(entries, nil), do: entries
+
+  defp filter_names(entries, names) when is_list(names) do
+    name_set = MapSet.new(names)
+    Enum.filter(entries, fn {name, _} -> MapSet.member?(name_set, name) end)
   end
 
   defp filter_deferred(entries, true), do: entries
