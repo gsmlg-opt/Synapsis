@@ -3,7 +3,7 @@ defmodule Synapsis.Session.Worker.Config do
 
   alias Synapsis.{Repo, Session}
 
-  @valid_modes ~w(bypass_permissions ask_before_edits edit_automatically plan_mode)
+  @valid_modes ~w(bypass_permissions ask_before_edits edit_automatically plan_mode assistant_mode)
   @mode_configs %{
     "bypass_permissions" => %{
       agent: "build",
@@ -34,6 +34,15 @@ defmodule Synapsis.Session.Worker.Config do
     },
     "plan_mode" => %{
       agent: "plan",
+      permission: %{
+        mode: :interactive,
+        allow_write: :deny,
+        allow_execute: :deny,
+        allow_destructive: :deny
+      }
+    },
+    "assistant_mode" => %{
+      agent: "assistant",
       permission: %{
         mode: :interactive,
         allow_write: :deny,
@@ -122,6 +131,12 @@ defmodule Synapsis.Session.Worker.Config do
     agent = Synapsis.Agent.Resolver.resolve(config.agent, state.session.config)
     agent = ensure_agent_model(agent, state.session)
 
+    execution_mode =
+      case config.agent do
+        "assistant" -> :query_loop
+        _ -> state.execution_mode
+      end
+
     with {:ok, updated_session} <-
            state.session |> Session.changeset(%{agent: config.agent}) |> Repo.update(),
          {:ok, _} <-
@@ -132,7 +147,7 @@ defmodule Synapsis.Session.Worker.Config do
         {"mode_switched", %{mode: mode_name, agent: config.agent}}
       )
 
-      {:ok, %{state | agent: agent, session: updated_session}}
+      {:ok, %{state | agent: agent, session: updated_session, execution_mode: execution_mode}}
     else
       {:error, _} -> {:error, :mode_switch_failed}
     end

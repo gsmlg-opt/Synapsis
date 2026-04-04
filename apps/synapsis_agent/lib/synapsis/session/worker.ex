@@ -285,15 +285,16 @@ defmodule Synapsis.Session.Worker do
     loop_ctx = %Synapsis.Agent.QueryLoop.Context{
       session_id: state.session_id,
       system_prompt: :dynamic,
-      tools: Synapsis.Tool.Registry.list_for_llm(),
+      tools: resolve_agent_tools(state.agent),
       model: (state.agent || %{})[:model] || "claude-sonnet-4-5-20250514",
       provider_config: state.provider_config,
       subscriber: self(),
       project_path: state.project_path,
       working_dir: state.worktree_path || state.project_path,
       agent_config: %{
-        agent_type: :conversational,
-        project_id: state.session && state.session.project_id
+        agent_type: agent_type_from_name((state.agent || %{})[:name]),
+        project_id: state.session && state.session.project_id,
+        name: (state.agent || %{})[:name]
       }
     }
 
@@ -333,6 +334,20 @@ defmodule Synapsis.Session.Worker do
         ""
     end
   end
+
+  defp resolve_agent_tools(agent) do
+    case (agent || %{})[:tools] do
+      names when is_list(names) and names != [] ->
+        Synapsis.Tool.Registry.list_for_query_loop(names: names)
+
+      _ ->
+        Synapsis.Tool.Registry.list_for_query_loop()
+    end
+  end
+
+  defp agent_type_from_name("assistant"), do: :conversational
+  defp agent_type_from_name("plan"), do: :planning
+  defp agent_type_from_name(_), do: :coding
 
   defp collect_approval(state, tool_use_id, decision) do
     decisions = Map.put(state.approval_decisions, tool_use_id, decision)

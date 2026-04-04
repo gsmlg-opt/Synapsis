@@ -106,9 +106,14 @@ defmodule Synapsis.Tool.Task do
     else
       tool_names =
         case input["tools"] do
-          nil -> :read_only
-          list when is_list(list) -> list
-          _ -> :read_only
+          list when is_list(list) and list != [] ->
+            list
+
+          _ ->
+            case Synapsis.Agent.Resolver.resolve("build") do
+              %{tools: names} when is_list(names) and names != [] -> names
+              _ -> :read_only
+            end
         end
 
       child_ctx =
