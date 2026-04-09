@@ -267,6 +267,10 @@ defmodule SynapsisWeb.AssistantLive.Show do
     {:noreply, update(socket, :permission_requests, &[payload | &1])}
   end
 
+  def handle_info({"permission_requests", %{tools: tools}}, socket) when is_list(tools) do
+    {:noreply, update(socket, :permission_requests, &(tools ++ &1))}
+  end
+
   def handle_info({"done", _}, socket) do
     name = socket.assigns.assistant_name
 
@@ -552,13 +556,12 @@ defmodule SynapsisWeb.AssistantLive.Show do
               :if={@streaming_text != "" || @session_status == "streaming"}
               role="assistant"
             >
-              <p
+              <.dm_markdown
                 id="streaming-output"
                 phx-hook="StreamingText"
-                class="whitespace-pre-wrap leading-relaxed"
-              >
-                {@streaming_text}
-              </p>
+                content={@streaming_text}
+                theme="auto"
+              />
             </.chat_bubble>
 
             <.streaming_indicator :if={@session_status == "streaming" && @streaming_text == ""} />
@@ -567,17 +570,18 @@ defmodule SynapsisWeb.AssistantLive.Show do
           <%!-- Input area --%>
           <div class="border-t border-base-300 p-3 bg-base-100">
             <div class="flex gap-2 items-end">
-              <textarea
+              <.dm_markdown_input
                 id="message-input"
-                phx-hook="TextareaSubmit"
-                placeholder="Send a message... (Enter to send, Shift+Enter for newline)"
+                name="content"
+                value=""
+                phx-hook="MarkdownSubmit"
+                placeholder="Send a message... (Ctrl+Enter to send)"
                 disabled={@session_status not in ~w(idle error)}
+                theme="auto"
                 class={[
-                  "flex-1 bg-base-200 border border-base-300 rounded-lg px-3 py-2 text-sm resize-none",
-                  "focus:outline-none focus:border-primary/50",
+                  "flex-1 min-h-[80px] max-h-[200px]",
                   if(@session_status not in ~w(idle error), do: "opacity-50 cursor-not-allowed")
                 ]}
-                rows="2"
               />
             </div>
           </div>

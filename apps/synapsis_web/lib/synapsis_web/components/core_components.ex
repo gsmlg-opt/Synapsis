@@ -83,7 +83,7 @@ defmodule SynapsisWeb.CoreComponents do
         "rounded-lg px-3 py-2 max-w-[80%] text-sm",
         if(@role == "user",
           do: "bg-primary/20 text-base-content",
-          else: "bg-base-300 text-base-content whitespace-pre-wrap"
+          else: "bg-base-300 text-base-content"
         )
       ]}>
         <div :if={@label && @role == "assistant"} class="text-xs font-medium text-primary/70 mb-1">
@@ -497,11 +497,11 @@ defmodule SynapsisWeb.CoreComponents do
             <% @message.role == "system" and memory_recall?(content) -> %>
               <.memory_indicator source={detect_memory_source(content)} />
               <.chat_bubble role="system">
-                <p class="whitespace-pre-wrap leading-relaxed">{content}</p>
+                <.dm_markdown content={content} theme="auto" />
               </.chat_bubble>
             <% true -> %>
               <.chat_bubble role={@message.role}>
-                <p class="whitespace-pre-wrap leading-relaxed">{content}</p>
+                <.dm_markdown content={content} theme="auto" />
               </.chat_bubble>
           <% end %>
         <% %Synapsis.Part.Reasoning{content: content} -> %>
