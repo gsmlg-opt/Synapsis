@@ -305,6 +305,28 @@ defmodule Synapsis.Provider.ModelRegistry do
 
   @zhipu_models [
     %{
+      id: "glm-5.1",
+      name: "GLM-5.1",
+      provider: "zhipu",
+      context_window: 200_000,
+      max_output_tokens: 163_840,
+      supports_tools: true,
+      supports_thinking: true,
+      supports_images: false,
+      supports_streaming: true
+    },
+    %{
+      id: "glm-5",
+      name: "GLM-5",
+      provider: "zhipu",
+      context_window: 200_000,
+      max_output_tokens: 96_000,
+      supports_tools: true,
+      supports_thinking: false,
+      supports_images: false,
+      supports_streaming: true
+    },
+    %{
       id: "glm-4.7",
       name: "GLM-4.7",
       provider: "zhipu",
@@ -347,21 +369,21 @@ defmodule Synapsis.Provider.ModelRegistry do
       supports_thinking: false,
       supports_images: false,
       supports_streaming: true
-    },
-    %{
-      id: "glm-5",
-      name: "GLM-5",
-      provider: "zhipu",
-      context_window: 200_000,
-      max_output_tokens: 96_000,
-      supports_tools: true,
-      supports_thinking: false,
-      supports_images: false,
-      supports_streaming: true
     }
   ]
 
   @minimax_models [
+    %{
+      id: "MiniMax-M2.7",
+      name: "MiniMax M2.7",
+      provider: "minimax",
+      context_window: 204_800,
+      max_output_tokens: 131_072,
+      supports_tools: true,
+      supports_thinking: true,
+      supports_images: false,
+      supports_streaming: true
+    },
     %{
       id: "MiniMax-M2.5",
       name: "MiniMax M2.5",

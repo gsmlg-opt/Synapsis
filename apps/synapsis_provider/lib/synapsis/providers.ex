@@ -293,11 +293,11 @@ defmodule Synapsis.Providers do
   def default_model("google"), do: "gemini-2.5-flash"
   def default_model("moonshot-ai"), do: "kimi-k2.5"
   def default_model("moonshot-cn"), do: "kimi-k2.5"
-  def default_model("zhipu-ai"), do: "glm-4.7"
-  def default_model("zhipu-cn"), do: "glm-4.7"
-  def default_model("zhipu-coding"), do: "glm-4.7"
-  def default_model("minimax-io"), do: "MiniMax-M2.5"
-  def default_model("minimax-cn"), do: "MiniMax-M2.5"
+  def default_model("zhipu-ai"), do: "glm-5.1"
+  def default_model("zhipu-cn"), do: "glm-5.1"
+  def default_model("zhipu-coding"), do: "glm-5.1"
+  def default_model("minimax-io"), do: "MiniMax-M2.7"
+  def default_model("minimax-cn"), do: "MiniMax-M2.7"
 
   def default_model(provider_name) do
     # For custom-named providers, look up their config and infer default model from base_url
@@ -310,10 +310,10 @@ defmodule Synapsis.Providers do
             "kimi-k2.5"
 
           String.contains?(base_url, "bigmodel") or String.contains?(base_url, "z.ai") ->
-            "glm-4.7"
+            "glm-5.1"
 
           String.contains?(base_url, "minimax") ->
-            "MiniMax-M2.5"
+            "MiniMax-M2.7"
 
           String.contains?(base_url, "anthropic.com") ->
             "claude-sonnet-4-6"
@@ -367,11 +367,11 @@ defmodule Synapsis.Providers do
       "google" -> "gemini-2.5-pro"
       "moonshot-ai" -> "kimi-k2-thinking"
       "moonshot-cn" -> "kimi-k2-thinking"
-      "zhipu-ai" -> "glm-4.7"
-      "zhipu-cn" -> "glm-4.7"
-      "zhipu-coding" -> "glm-4.7"
-      "minimax-io" -> "MiniMax-M2.5"
-      "minimax-cn" -> "MiniMax-M2.5"
+      "zhipu-ai" -> "glm-5.1"
+      "zhipu-cn" -> "glm-5.1"
+      "zhipu-coding" -> "glm-5.1"
+      "minimax-io" -> "MiniMax-M2.7"
+      "minimax-cn" -> "MiniMax-M2.7"
       "openrouter" -> "anthropic/claude-opus-4-6"
       _ -> infer_expert_from_registry(provider_name)
     end
@@ -459,10 +459,10 @@ defmodule Synapsis.Providers do
             "kimi-k2-thinking"
 
           String.contains?(base_url, "bigmodel") or String.contains?(base_url, "z.ai") ->
-            "glm-4.7"
+            "glm-5.1"
 
           String.contains?(base_url, "minimax") ->
-            "MiniMax-M2.5"
+            "MiniMax-M2.7"
 
           String.contains?(base_url, "anthropic.com") ->
             "claude-opus-4-6"

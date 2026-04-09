@@ -418,9 +418,9 @@ defmodule Synapsis.ProvidersTest do
       assert Providers.model_for_tier("openai-sub", :expert) == "o3"
       assert Providers.model_for_tier("google", :expert) == "gemini-2.5-pro"
       assert Providers.model_for_tier("moonshot-ai", :expert) == "kimi-k2-thinking"
-      assert Providers.model_for_tier("zhipu-ai", :expert) == "glm-4.7"
-      assert Providers.model_for_tier("zhipu-coding", :expert) == "glm-4.7"
-      assert Providers.model_for_tier("minimax-io", :expert) == "MiniMax-M2.5"
+      assert Providers.model_for_tier("zhipu-ai", :expert) == "glm-5.1"
+      assert Providers.model_for_tier("zhipu-coding", :expert) == "glm-5.1"
+      assert Providers.model_for_tier("minimax-io", :expert) == "MiniMax-M2.7"
       assert Providers.model_for_tier("openrouter", :expert) == "anthropic/claude-opus-4-6"
     end
 
