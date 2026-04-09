@@ -29,9 +29,9 @@ in
   languages.javascript.bun.enable = true;
   languages.javascript.bun.package = pkgs-stable.bun;
 
-  # processes.synapsis = {
-  #   exec = "mix phx.server";
-  # };
+  processes.synapsis = {
+    exec = "mix phx.server";
+  };
 
   # PostgreSQL database service
   services.postgres = {
