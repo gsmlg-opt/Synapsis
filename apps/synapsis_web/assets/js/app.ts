@@ -2,6 +2,8 @@ import "phoenix_html"
 import { Socket } from "phoenix"
 import { LiveSocket } from "phoenix_live_view"
 import "@duskmoon-dev/elements/register"
+import "@duskmoon-dev/el-markdown/register"
+import "@duskmoon-dev/el-markdown-input/register"
 import { Hooks } from "@synapsis/hooks"
 
 // Client-only theme switcher — upstream hook pushes "theme_changed" to the
