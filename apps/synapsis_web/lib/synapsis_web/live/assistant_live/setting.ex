@@ -573,10 +573,9 @@ defmodule SynapsisWeb.AssistantLive.Setting do
       <div class="border-t border-base-300 pt-4">
         <div class="text-xs text-base-content/50 mb-3">Model Selection</div>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
+          <form phx-change="select_provider">
             <label class="text-xs text-base-content/50 mb-1 block">Provider</label>
             <select
-              phx-change="select_provider"
               name="provider"
               class="w-full bg-base-200 border border-base-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
             >
@@ -588,11 +587,10 @@ defmodule SynapsisWeb.AssistantLive.Setting do
                 {p.name}
               </option>
             </select>
-          </div>
-          <div>
+          </form>
+          <form phx-change="select_model">
             <label class="text-xs text-base-content/50 mb-1 block">Primary model (default)</label>
             <select
-              phx-change="select_model"
               name="model"
               class="w-full bg-base-200 border border-base-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
             >
@@ -604,19 +602,18 @@ defmodule SynapsisWeb.AssistantLive.Setting do
                 {model_label(model)}
               </option>
             </select>
-          </div>
-          <div>
+          </form>
+          <form phx-change="update_fallbacks">
             <label class="text-xs text-base-content/50 mb-1 block">Fallbacks (comma-separated)</label>
             <input
               type="text"
               name="fallbacks"
               value={@fallbacks}
-              phx-change="update_fallbacks"
               phx-debounce="300"
               placeholder="model-1, model-2, ..."
               class="w-full bg-base-200 border border-base-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
             />
-          </div>
+          </form>
         </div>
       </div>
 
