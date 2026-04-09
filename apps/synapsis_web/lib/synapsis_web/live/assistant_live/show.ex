@@ -583,6 +583,16 @@ defmodule SynapsisWeb.AssistantLive.Show do
                   if(@session_status not in ~w(idle error), do: "opacity-50 cursor-not-allowed")
                 ]}
               />
+              <.dm_btn
+                id="send-btn"
+                variant="primary"
+                size="md"
+                disabled={@session_status not in ~w(idle error)}
+                phx-hook="SendButton"
+                class="self-end mb-1"
+              >
+                <.dm_mdi name="send" class="w-5 h-5" />
+              </.dm_btn>
             </div>
           </div>
 
