@@ -67,57 +67,10 @@ defmodule Synapsis.AgentConfigs do
   def seed_defaults do
     defaults = [
       %{
-        name: "assistant",
-        label: "Assistant",
-        icon: "chat-processing-outline",
-        description:
-          "Conversational assistant that coordinates work and delegates coding to Build agents.",
-        system_prompt: """
-        You are Synapsis, a conversational AI assistant. You help users plan, coordinate,
-        and manage development work. When the user needs code changes, file edits, or
-        shell commands executed, delegate to a coding agent using the task tool.
-
-        You do NOT have direct filesystem access. Use the task tool to spawn a coding
-        agent for any work that requires reading files, editing code, or running commands.
-
-        Your strengths: planning, memory management, web research, project coordination.
-        """,
-        tools: [
-          "task",
-          "ask_user",
-          "web_search",
-          "fetch",
-          "memory_save",
-          "memory_search",
-          "memory_update",
-          "todo_read",
-          "todo_write",
-          "board_read",
-          "board_update",
-          "devlog_read",
-          "devlog_write",
-          "enter_plan_mode",
-          "exit_plan_mode",
-          "sleep",
-          "skill",
-          "tool_search",
-          "workspace_read",
-          "workspace_write",
-          "workspace_list",
-          "workspace_search"
-        ],
-        reasoning_effort: "high",
-        read_only: false,
-        max_tokens: 8192,
-        model_tier: "expert",
-        is_default: false,
-        enabled: true
-      },
-      %{
-        name: "build",
-        label: "Build",
-        icon: "hammer-wrench",
-        description: "Workspace-driven coding assistant with identity, tools, and memory.",
+        name: "main",
+        label: "Main",
+        icon: "robot-outline",
+        description: "AI coding assistant with full workspace access, tools, and memory.",
         system_prompt: """
         You are Synapsis, an AI coding assistant. You help developers write, edit, and understand code.
         You have access to tools for reading files, editing files, running shell commands, and searching code.
@@ -170,6 +123,11 @@ defmodule Synapsis.AgentConfigs do
           "worktree_create",
           "worktree_list",
           "worktree_remove",
+          # Workspace
+          "workspace_read",
+          "workspace_write",
+          "workspace_list",
+          "workspace_search",
           # Diagnostics
           "diagnostics"
         ],
@@ -179,24 +137,16 @@ defmodule Synapsis.AgentConfigs do
         model_tier: "default",
         is_default: true,
         enabled: true
-      },
-      %{
-        name: "plan",
-        label: "Plan",
-        icon: "clipboard-text-outline",
-        description:
-          "Planning assistant that analyzes codebases and creates implementation plans.",
-        system_prompt:
-          "You are a planning assistant. Analyze the codebase and create implementation plans. Do NOT make changes.",
-        tools: ["file_read", "grep", "glob", "diagnostics"],
-        reasoning_effort: "high",
-        read_only: true,
-        max_tokens: 8192,
-        model_tier: "expert",
-        is_default: false,
-        enabled: true
       }
     ]
+
+    # Remove legacy agents that are no longer used
+    for name <- ~w(assistant build plan default) do
+      case get_by_name(name) do
+        nil -> :ok
+        agent -> delete(agent)
+      end
+    end
 
     for attrs <- defaults do
       case get_by_name(attrs.name) do

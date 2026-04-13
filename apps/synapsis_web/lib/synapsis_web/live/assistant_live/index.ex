@@ -23,10 +23,10 @@ defmodule SynapsisWeb.AssistantLive.Index do
       if assistants == [] do
         [
           %{
-            name: "build",
-            label: "Build",
-            icon: "hammer-wrench",
-            description: "Workspace-driven coding assistant with identity, tools, and memory."
+            name: "main",
+            label: "Main",
+            icon: "robot-outline",
+            description: "AI coding assistant with full workspace access, tools, and memory."
           }
         ]
       else
