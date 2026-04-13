@@ -5,6 +5,25 @@
 @import "@duskmoon-dev/core/themes/moonlight";
 @import "@duskmoon-dev/core/components";
 
+/* Custom font stack using CSS variables for consistent typography */
+:root {
+  --font-display: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", "Fira Code", monospace;
+}
+
+body {
+  font-family: var(--font-body);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+}
+
+code, pre, kbd, samp {
+  font-family: var(--font-mono);
+}
+
 /* Workaround: phoenix_duskmoon dm_theme_switcher uses .theme-controller
    but @duskmoon-dev/core only defines .theme-controller-item.
    TODO: file upstream issue at duskmoon-dev/duskmoon-css with label "internal request" */
@@ -23,13 +42,22 @@
     content: attr(aria-label);
   }
   input.theme-controller:checked {
-    background-color: var(--color-secondary, oklch(0.65 0.15 250));
-    color: var(--color-secondary-content, #fff);
+    background-color: var(--color-secondary);
+    color: var(--color-secondary-content);
   }
   input.theme-controller:hover {
-    background-color: var(--color-base-300, oklch(0.25 0.02 260));
+    background-color: var(--color-surface-container-high);
   }
   input.theme-controller:checked:hover {
-    background-color: var(--color-secondary, oklch(0.65 0.15 250));
+    background-color: var(--color-secondary);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

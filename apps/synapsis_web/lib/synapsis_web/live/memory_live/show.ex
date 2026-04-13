@@ -173,7 +173,7 @@ defmodule SynapsisWeb.MemoryLive.Show do
         <:action>
           <%= if @editing do %>
             <.dm_btn variant="ghost" size="sm" phx-click="cancel_edit">Cancel</.dm_btn>
-            <button type="submit" form="edit-memory-form" class="btn btn-primary btn-sm">Save</button>
+            <.dm_btn type="submit" form="edit-memory-form" variant="primary" size="sm">Save</.dm_btn>
           <% else %>
             <.dm_btn variant="ghost" size="sm" phx-click="edit">
               <.dm_mdi name="pencil" /> Edit
@@ -188,10 +188,10 @@ defmodule SynapsisWeb.MemoryLive.Show do
           <.dm_form for={@edit_form} id="edit-memory-form" phx-submit="save">
             <div class="grid grid-cols-2 gap-4 mb-4">
               <div>
-                <label class="label text-base-content/60 text-sm">Kind</label>
+                <label class="label text-on-surface-variant text-sm">Kind</label>
                 <select
                   name="kind"
-                  class="select select-bordered w-full bg-base-200 text-base-content"
+                  class="select select-bordered w-full bg-surface-container text-on-surface"
                 >
                   <%= for kind <- ~w(fact decision lesson preference pattern warning) do %>
                     <option value={kind} selected={@memory.kind == kind}>{kind}</option>
@@ -200,7 +200,7 @@ defmodule SynapsisWeb.MemoryLive.Show do
               </div>
               <div class="grid grid-cols-2 gap-2">
                 <div>
-                  <label class="label text-base-content/60 text-sm">Importance</label>
+                  <label class="label text-on-surface-variant text-sm">Importance</label>
                   <.dm_input
                     name="importance"
                     value={to_string(@memory.importance || 0.5)}
@@ -211,7 +211,7 @@ defmodule SynapsisWeb.MemoryLive.Show do
                   />
                 </div>
                 <div>
-                  <label class="label text-base-content/60 text-sm">Confidence</label>
+                  <label class="label text-on-surface-variant text-sm">Confidence</label>
                   <.dm_input
                     name="confidence"
                     value={to_string(@memory.confidence || 0.5)}
@@ -224,31 +224,31 @@ defmodule SynapsisWeb.MemoryLive.Show do
               </div>
             </div>
             <div class="mb-4">
-              <label class="label text-base-content/60 text-sm">Title</label>
+              <label class="label text-on-surface-variant text-sm">Title</label>
               <.dm_input name="title" value={@memory.title} />
             </div>
             <div class="mb-4">
-              <label class="label text-base-content/60 text-sm">Summary</label>
+              <label class="label text-on-surface-variant text-sm">Summary</label>
               <.dm_textarea name="summary" value={@memory.summary} rows={4} />
             </div>
             <div class="mb-4">
-              <label class="label text-base-content/60 text-sm">Tags (comma separated)</label>
+              <label class="label text-on-surface-variant text-sm">Tags (comma separated)</label>
               <.dm_input name="tags" value={Enum.join(@memory.tags || [], ", ")} />
             </div>
           </.dm_form>
         <% else %>
           <div class="space-y-4">
             <div>
-              <h4 class="text-sm text-base-content/50 mb-1">Summary</h4>
-              <p class="text-base-content">{@memory.summary}</p>
+              <h4 class="text-sm text-on-surface-variant mb-1">Summary</h4>
+              <p class="text-on-surface">{@memory.summary}</p>
             </div>
 
             <%= if @memory.tags != [] do %>
               <div>
-                <h4 class="text-sm text-base-content/50 mb-1">Tags</h4>
+                <h4 class="text-sm text-on-surface-variant mb-1">Tags</h4>
                 <div class="flex gap-1 flex-wrap">
                   <%= for tag <- @memory.tags do %>
-                    <span class="text-xs bg-base-300 text-base-content/60 px-2 py-0.5 rounded">
+                    <span class="text-xs bg-surface-container-high text-on-surface-variant px-2 py-0.5 rounded">
                       {tag}
                     </span>
                   <% end %>
@@ -282,10 +282,10 @@ defmodule SynapsisWeb.MemoryLive.Show do
             <%!-- Evidence section --%>
             <%= if @memory.evidence_event_ids != [] do %>
               <div>
-                <h4 class="text-sm text-base-content/50 mb-1">Evidence Events</h4>
+                <h4 class="text-sm text-on-surface-variant mb-1">Evidence Events</h4>
                 <div class="flex gap-1 flex-wrap">
                   <%= for id <- @memory.evidence_event_ids do %>
-                    <span class="text-xs bg-base-300 text-base-content/60 px-2 py-0.5 rounded font-mono">
+                    <span class="text-xs bg-surface-container-high text-on-surface-variant px-2 py-0.5 rounded font-mono">
                       {String.slice(id, 0..7)}..
                     </span>
                   <% end %>
@@ -302,11 +302,11 @@ defmodule SynapsisWeb.MemoryLive.Show do
           <:title>Change History</:title>
           <div class="space-y-2">
             <%= for event <- @history do %>
-              <div class="border-l-2 border-base-300 pl-3 py-1">
+              <div class="border-l-2 border-outline-variant pl-3 py-1">
                 <div class="flex items-center gap-2 text-sm">
                   <.dm_badge size="xs">{get_in(event.payload, ["action"]) || "update"}</.dm_badge>
-                  <span class="text-base-content/50">by {event.agent_id}</span>
-                  <span class="text-base-content/40">
+                  <span class="text-on-surface-variant">by {event.agent_id}</span>
+                  <span class="text-on-surface-variant">
                     {Calendar.strftime(event.inserted_at, "%Y-%m-%d %H:%M")}
                   </span>
                 </div>

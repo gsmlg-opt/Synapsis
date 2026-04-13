@@ -383,31 +383,32 @@ defmodule SynapsisWeb.AssistantLive.Show do
     ~H"""
     <div class="flex h-full">
       <%!-- Mobile sidebar toggle --%>
-      <button
+      <.dm_btn
+        variant="ghost"
         phx-click="toggle_sidebar"
-        class="md:hidden fixed top-16 left-2 z-20 p-1.5 rounded-lg bg-base-200 border border-base-300"
+        class="md:hidden fixed top-16 left-2 z-20"
       >
         <.dm_mdi name={if(@show_sidebar, do: "close", else: "menu")} class="w-5 h-5" />
-      </button>
+      </.dm_btn>
 
       <%!-- Sidebar --%>
       <aside class={[
-        "w-64 bg-base-200 border-r border-base-300 flex flex-col shrink-0 transition-transform",
+        "w-64 bg-secondary text-secondary-content border-r border-outline-variant flex flex-col shrink-0 transition-transform",
         "fixed md:relative inset-y-0 left-0 z-10 md:z-auto md:translate-x-0 pt-16 md:pt-0",
         if(@show_sidebar, do: "translate-x-0", else: "-translate-x-full")
       ]}>
         <%!-- Assistant header --%>
-        <div class="p-3 border-b border-base-300">
+        <div class="p-3 border-b border-outline-variant">
           <div class="flex items-center justify-between mb-2">
             <.dm_link
               navigate={~p"/assistant"}
-              class="text-xs text-base-content/50 hover:text-base-content"
+              class="text-xs text-secondary-content/70 hover:text-secondary-content"
             >
               <.dm_mdi name="chevron-left" class="w-3.5 h-3.5 inline" /> Assistants
             </.dm_link>
             <.dm_link
               navigate={~p"/assistant/#{@assistant_name}/setting"}
-              class="text-xs text-base-content/50 hover:text-base-content"
+              class="text-xs text-secondary-content/70 hover:text-secondary-content"
             >
               <.dm_mdi name="cog-outline" class="w-3.5 h-3.5" />
             </.dm_link>
@@ -432,9 +433,9 @@ defmodule SynapsisWeb.AssistantLive.Show do
         <%!-- New session confirm --%>
         <div
           :if={@show_new_session && @provider_configured}
-          class="p-3 border-b border-base-300 bg-base-100"
+          class="p-3 border-b border-outline-variant bg-surface"
         >
-          <div class="text-xs text-base-content/50 mb-2">
+          <div class="text-xs text-on-surface-variant mb-2">
             {@agent_config.provider} / {@agent_config.model ||
               Synapsis.Providers.default_model(@agent_config.provider)}
           </div>
@@ -464,7 +465,7 @@ defmodule SynapsisWeb.AssistantLive.Show do
       <main class="flex-1 min-w-0 flex flex-col">
         <%= if @current_session do %>
           <%!-- Session header --%>
-          <div class="flex items-center justify-between border-b border-base-300 px-4 py-2 bg-base-100">
+          <div class="flex items-center justify-between border-b border-outline-variant px-4 py-2 bg-surface">
             <div class="flex items-center gap-3 min-w-0">
               <.dm_mdi
                 name={@agent_config.icon || "robot-happy-outline"}
@@ -474,7 +475,7 @@ defmodule SynapsisWeb.AssistantLive.Show do
                 <h2 class="font-medium text-sm truncate">
                   {@current_session.title || "Session #{String.slice(@current_session.id, 0..7)}"}
                 </h2>
-                <div class="text-xs text-base-content/40">
+                <div class="text-xs text-on-surface-variant">
                   <span class="text-primary/70">
                     {@agent_config.label || String.capitalize(@assistant_name)}
                   </span>
@@ -534,13 +535,15 @@ defmodule SynapsisWeb.AssistantLive.Show do
                   {String.slice(notif.result || "", 0, 500)}
                 </p>
               </.heartbeat_card>
-              <button
+              <.dm_btn
+                variant="ghost"
+                size="xs"
                 phx-click="dismiss_heartbeat"
                 phx-value-id={notif.id}
-                class="absolute top-1 right-1 text-base-content/30 hover:text-base-content/60"
+                class="absolute top-1 right-1 text-on-surface-variant/50 hover:text-on-surface-variant"
               >
                 <.dm_mdi name="close" class="w-3.5 h-3.5" />
-              </button>
+              </.dm_btn>
             </div>
 
             <%!-- Embedded Code Agent panels --%>
@@ -568,7 +571,7 @@ defmodule SynapsisWeb.AssistantLive.Show do
           </div>
 
           <%!-- Input area --%>
-          <div class="border-t border-base-300 p-3 bg-base-100">
+          <div class="border-t border-outline-variant p-3 bg-surface">
             <div class="flex gap-2 items-end">
               <.dm_markdown_input
                 id="message-input"

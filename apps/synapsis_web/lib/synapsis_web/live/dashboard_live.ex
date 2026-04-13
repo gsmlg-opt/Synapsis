@@ -69,12 +69,12 @@ defmodule SynapsisWeb.DashboardLive do
             <.dm_link
               :for={project <- @projects}
               navigate={~p"/projects/#{project.id}"}
-              class="flex items-center gap-3 w-full p-2 rounded hover:bg-base-200 transition-colors"
+              class="flex items-center gap-3 w-full p-2 rounded hover:bg-surface-container transition-colors"
             >
               <.dm_mdi name="folder" class="w-5 h-5 text-primary" />
               <div class="flex-1 min-w-0">
                 <div class="font-medium">{project.slug}</div>
-                <div class="text-xs text-base-content/50 truncate">{project.path}</div>
+                <div class="text-xs text-on-surface-variant truncate">{project.path}</div>
               </div>
               <.dm_badge variant="primary" outline size="sm">
                 project
@@ -97,14 +97,14 @@ defmodule SynapsisWeb.DashboardLive do
             <.dm_link
               :for={session <- @recent_sessions}
               navigate={~p"/projects/#{session.project_id}/sessions/#{session.id}"}
-              class="flex items-center gap-3 w-full p-2 rounded hover:bg-base-200 transition-colors"
+              class="flex items-center gap-3 w-full p-2 rounded hover:bg-surface-container transition-colors"
             >
               <.dm_mdi name="chat-processing-outline" class="w-5 h-5 text-secondary" />
               <div class="flex-1 min-w-0">
                 <div class="font-medium">
                   {session.title || "Session #{String.slice(session.id, 0, 8)}"}
                 </div>
-                <div class="text-xs text-base-content/50">
+                <div class="text-xs text-on-surface-variant">
                   {session.provider}/{session.model}
                 </div>
               </div>

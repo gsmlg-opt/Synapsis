@@ -56,18 +56,18 @@ defmodule SynapsisWeb.AssistantLive.Index do
         >
           <.dm_card variant="bordered" class="hover:border-primary/50 transition-colors h-full">
             <div class="flex items-start gap-3">
-              <div class="bg-primary/10 rounded-lg p-2">
+              <div class="bg-primary-container rounded-lg p-2">
                 <.dm_mdi name={assistant.icon} class="w-6 h-6 text-primary" />
               </div>
               <div class="flex-1 min-w-0">
-                <h3 class="font-medium text-base-content">{assistant.label}</h3>
-                <p class="text-xs text-base-content/50 mt-1">{assistant.description}</p>
+                <h3 class="font-medium text-on-surface">{assistant.label}</h3>
+                <p class="text-xs text-on-surface-variant mt-1">{assistant.description}</p>
               </div>
             </div>
             <:action>
               <div class="flex items-center justify-between">
                 <.dm_badge variant="ghost" size="sm">{assistant.name}</.dm_badge>
-                <.dm_mdi name="chevron-right" class="w-4 h-4 text-base-content/30" />
+                <.dm_mdi name="chevron-right" class="w-4 h-4 text-on-surface-variant/50" />
               </div>
             </:action>
           </.dm_card>

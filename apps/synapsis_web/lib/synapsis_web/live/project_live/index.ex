@@ -153,8 +153,8 @@ defmodule SynapsisWeb.ProjectLive.Index do
           </div>
         </.dm_form>
 
-        <div :if={@show_browser} class="mt-4 border border-base-300 rounded-lg overflow-hidden">
-          <div class="bg-base-200 px-3 py-2 flex items-center gap-2 text-sm font-mono">
+        <div :if={@show_browser} class="mt-4 border border-outline-variant rounded-lg overflow-hidden">
+          <div class="bg-surface-container px-3 py-2 flex items-center gap-2 text-sm font-mono">
             <.dm_mdi name="folder-outline" class="w-4 h-4 text-primary" />
             <span class="truncate">{@browse_path}</span>
             <.dm_btn
@@ -168,10 +168,10 @@ defmodule SynapsisWeb.ProjectLive.Index do
               <.dm_mdi name="arrow-up" class="w-4 h-4" />
             </.dm_btn>
           </div>
-          <div class="max-h-64 overflow-y-auto divide-y divide-base-200">
+          <div class="max-h-64 overflow-y-auto divide-y divide-surface-container">
             <div
               :for={entry <- @browse_entries}
-              class="flex items-center gap-2 px-3 py-1.5 hover:bg-base-200 cursor-pointer text-sm"
+              class="flex items-center gap-2 px-3 py-1.5 hover:bg-surface-container cursor-pointer text-sm"
             >
               <div
                 :if={entry.dir?}
@@ -182,7 +182,7 @@ defmodule SynapsisWeb.ProjectLive.Index do
                 <.dm_mdi name="folder" class="w-4 h-4 text-warning" />
                 <span>{entry.name}</span>
               </div>
-              <div :if={!entry.dir?} class="flex items-center gap-2 flex-1 text-base-content/50">
+              <div :if={!entry.dir?} class="flex items-center gap-2 flex-1 text-on-surface-variant">
                 <.dm_mdi name="file-outline" class="w-4 h-4" />
                 <span>{entry.name}</span>
               </div>
@@ -199,7 +199,7 @@ defmodule SynapsisWeb.ProjectLive.Index do
             </div>
             <div
               :if={@browse_entries == []}
-              class="px-3 py-4 text-center text-base-content/50 text-sm"
+              class="px-3 py-4 text-center text-on-surface-variant text-sm"
             >
               Empty directory
             </div>
@@ -213,10 +213,10 @@ defmodule SynapsisWeb.ProjectLive.Index do
           <.dm_link
             :for={project <- @projects}
             navigate={~p"/projects/#{project.id}"}
-            class="flex flex-col gap-1 w-full p-2 rounded hover:bg-base-200 transition-colors"
+            class="flex flex-col gap-1 w-full p-2 rounded hover:bg-surface-container transition-colors"
           >
             <div class="font-medium text-primary">{project.slug}</div>
-            <div class="text-sm text-base-content/50">{project.path}</div>
+            <div class="text-sm text-on-surface-variant">{project.path}</div>
           </.dm_link>
         </div>
       </.dm_card>

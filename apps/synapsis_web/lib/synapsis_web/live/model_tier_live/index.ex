@@ -36,7 +36,7 @@ defmodule SynapsisWeb.ModelTierLive.Index do
 
       <h1 class="text-2xl font-bold mb-6">Default Model</h1>
 
-      <p class="text-sm text-base-content/60 mb-4">
+      <p class="text-sm text-on-surface-variant mb-4">
         Each agent is assigned a model tier. The tier determines which model is used based on the session's provider.
       </p>
 
@@ -47,7 +47,7 @@ defmodule SynapsisWeb.ModelTierLive.Index do
           </.dm_badge>
         </:col>
         <:col :let={tier} label="Description">
-          <span class="text-base-content/60">{tier.description}</span>
+          <span class="text-on-surface-variant">{tier.description}</span>
         </:col>
       </.dm_table>
     </div>

@@ -57,7 +57,7 @@ defmodule SynapsisWeb.ProjectLive.Show do
 
       <.dm_card variant="bordered" class="mb-6">
         <:title>{@project.slug}</:title>
-        <p class="text-sm text-base-content/50">{@project.path}</p>
+        <p class="text-sm text-on-surface-variant">{@project.path}</p>
         <:action>
           <.dm_btn variant="primary" size="sm" phx-click="create_session">
             + New Session
@@ -70,7 +70,7 @@ defmodule SynapsisWeb.ProjectLive.Show do
         <div class="space-y-1">
           <div
             :for={session <- @sessions}
-            class="flex justify-between items-center w-full p-2 rounded hover:bg-base-200 transition-colors"
+            class="flex justify-between items-center w-full p-2 rounded hover:bg-surface-container transition-colors"
           >
             <.dm_link
               navigate={~p"/projects/#{@project.id}/sessions/#{session.id}"}
@@ -79,7 +79,7 @@ defmodule SynapsisWeb.ProjectLive.Show do
               <div class="font-medium">
                 {session.title || "Session #{String.slice(session.id, 0, 8)}"}
               </div>
-              <div class="text-xs text-base-content/50 mt-1">
+              <div class="text-xs text-on-surface-variant mt-1">
                 {session.provider}/{session.model} · {session.agent} ·
                 <.dm_badge variant={status_color(session.status)} size="sm">
                   {session.status}
@@ -93,7 +93,7 @@ defmodule SynapsisWeb.ProjectLive.Show do
               confirm="Delete this session?"
               phx-click="delete_session"
               phx-value-id={session.id}
-              class="ml-2 text-base-content/40 hover:text-error"
+              class="ml-2 text-on-surface-variant hover:text-error"
             >
               Delete
             </.dm_btn>

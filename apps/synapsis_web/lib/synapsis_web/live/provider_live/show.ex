@@ -489,7 +489,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
         <%= if Synapsis.Providers.oauth_provider?(@provider) do %>
           <div class="flex items-center gap-3">
             <span class="w-2 h-2 rounded-full bg-success"></span>
-            <span class="text-sm text-base-content">Authenticated via OAuth</span>
+            <span class="text-sm text-on-surface">Authenticated via OAuth</span>
             <.dm_btn variant="ghost" size="xs" phx-click="oauth_refresh">
               Refresh Token
             </.dm_btn>
@@ -501,7 +501,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
           <%= case @oauth_state do %>
             <% :idle -> %>
               <div class="space-y-3">
-                <p class="text-sm text-base-content/70">
+                <p class="text-sm text-on-surface-variant">
                   Sign in with your ChatGPT account using the OAuth device flow.
                   This uses the same authentication as OpenAI Codex CLI.
                 </p>
@@ -511,11 +511,11 @@ defmodule SynapsisWeb.ProviderLive.Show do
               </div>
             <% :waiting_for_user -> %>
               <div class="space-y-4">
-                <p class="text-sm text-base-content/70">
+                <p class="text-sm text-on-surface-variant">
                   Visit the link below and enter this code:
                 </p>
                 <div class="flex items-center gap-4">
-                  <code class="text-2xl font-mono font-bold tracking-widest bg-base-200 px-4 py-2 rounded-lg select-all">
+                  <code class="text-2xl font-mono font-bold tracking-widest bg-surface-container px-4 py-2 rounded-lg select-all">
                     {@oauth_user_code}
                   </code>
                   <.dm_loading_spinner size="sm" />
@@ -530,7 +530,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
                     {@oauth_verification_url}
                   </a>
                 </div>
-                <p class="text-xs text-base-content/50">
+                <p class="text-xs text-on-surface-variant">
                   Waiting for authorization... This will expire in 15 minutes.
                 </p>
                 <.dm_btn variant="ghost" size="sm" phx-click="oauth_cancel">
@@ -582,7 +582,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
                   />
                   {model.name}
                 </label>
-                <span class="text-xs text-base-content/40">{model.id}</span>
+                <span class="text-xs text-on-surface-variant">{model.id}</span>
               </div>
             </div>
             <:actions>
@@ -602,15 +602,15 @@ defmodule SynapsisWeb.ProviderLive.Show do
               <%= if model_enabled?(model.id, @enabled_models) do %>
                 <span class="w-2 h-2 rounded-full bg-success"></span>
                 <span class="text-sm">{model.name}</span>
-                <span class="text-xs text-base-content/40">{model.id}</span>
+                <span class="text-xs text-on-surface-variant">{model.id}</span>
               <% else %>
-                <span class="w-2 h-2 rounded-full bg-base-content/20"></span>
-                <span class="text-sm text-base-content/50">{model.name}</span>
-                <span class="text-xs text-base-content/30">{model.id}</span>
+                <span class="w-2 h-2 rounded-full bg-on-surface/20"></span>
+                <span class="text-sm text-on-surface-variant">{model.name}</span>
+                <span class="text-xs text-on-surface-variant/50">{model.id}</span>
               <% end %>
             </div>
           </div>
-          <div :if={@enabled_models == []} class="text-xs text-base-content/50 mt-3">
+          <div :if={@enabled_models == []} class="text-xs text-on-surface-variant mt-3">
             All models enabled (no filter set)
           </div>
         <% end %>
@@ -623,7 +623,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
             <span class="text-lg font-semibold">Test Chat</span>
             <.dm_mdi
               name={if @chat_open, do: "chevron-up", else: "chevron-down"}
-              class="text-base-content/50"
+              class="text-on-surface-variant"
             />
           </div>
         </:title>
@@ -650,11 +650,14 @@ defmodule SynapsisWeb.ProviderLive.Show do
 
           <%!-- Messages --%>
           <div
-            class="bg-base-100 rounded-lg border border-base-300 p-3 min-h-[120px] max-h-[400px] overflow-y-auto space-y-3"
+            class="bg-surface rounded-lg border border-outline-variant p-3 min-h-[120px] max-h-[400px] overflow-y-auto space-y-3"
             id="chat-messages"
             phx-hook="ScrollBottom"
           >
-            <div :if={@chat_messages == [] && !@chat_streaming} class="text-base-content/40 text-sm">
+            <div
+              :if={@chat_messages == [] && !@chat_streaming}
+              class="text-on-surface-variant text-sm"
+            >
               Send a message to test this provider...
             </div>
 

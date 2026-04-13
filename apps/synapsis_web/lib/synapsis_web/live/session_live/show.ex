@@ -409,12 +409,12 @@ defmodule SynapsisWeb.SessionLive.Show do
     complete = entry[:complete] || entry["complete"]
 
     cond do
-      is_nil(status) or status == 0 -> "bg-base-content/30"
+      is_nil(status) or status == 0 -> "bg-on-surface/30"
       status == 429 -> "bg-warning"
       status >= 400 -> "bg-error"
       complete == false -> "bg-warning"
       status >= 200 and status < 300 -> "bg-success"
-      true -> "bg-base-content/30"
+      true -> "bg-on-surface/30"
     end
   end
 
@@ -461,10 +461,10 @@ defmodule SynapsisWeb.SessionLive.Show do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="flex h-full bg-base-100 text-base-content">
+    <div class="flex h-full bg-surface text-on-surface">
       <%!-- Sidebar --%>
-      <aside class="w-64 bg-base-200 border-r border-base-300 flex flex-col">
-        <div class="p-4 border-b border-base-300">
+      <aside class="w-64 bg-secondary text-secondary-content border-r border-outline-variant flex flex-col">
+        <div class="p-4 border-b border-outline-variant">
           <.dm_link navigate={~p"/projects/#{@project.id}"} class="text-lg font-semibold">
             {@project.slug}
           </.dm_link>
@@ -535,7 +535,7 @@ defmodule SynapsisWeb.SessionLive.Show do
                   <div class="text-sm truncate">
                     {s.title || "Session #{String.slice(s.id, 0, 8)}"}
                   </div>
-                  <div class="text-xs text-base-content/50 mt-0.5">
+                  <div class="text-xs text-secondary-content/70 mt-0.5">
                     {s.provider}/{s.model}
                   </div>
                 </.link>
@@ -567,7 +567,7 @@ defmodule SynapsisWeb.SessionLive.Show do
       <%!-- Main content --%>
       <main class="flex-1 min-w-0 flex flex-col">
         <%!-- Session header --%>
-        <div class="px-4 py-3 border-b border-base-300 flex items-center justify-between">
+        <div class="px-4 py-3 border-b border-outline-variant flex items-center justify-between">
           <div class="flex items-center gap-3">
             <%= if @editing_title do %>
               <form phx-submit="save_title" class="flex items-center gap-2">
@@ -614,18 +614,18 @@ defmodule SynapsisWeb.SessionLive.Show do
                     phx-change="switch_provider"
                   />
                 </div>
-                <div class="text-xs text-base-content/60 font-semibold">Model</div>
+                <div class="text-xs text-on-surface-variant font-semibold">Model</div>
                 <div
                   :for={m <- @session_models}
-                  class={"p-2 rounded cursor-pointer hover:bg-base-200 transition-colors #{if(m.id == @session.model, do: "bg-primary/10 text-primary", else: "")}"}
+                  class={"p-2 rounded cursor-pointer hover:bg-surface-container transition-colors #{if(m.id == @session.model, do: "bg-primary-container text-primary", else: "")}"}
                   phx-click="switch_model"
                   phx-value-provider={@selector_provider}
                   phx-value-model={m.id}
                 >
                   <div class="font-medium">{m[:name] || m.id}</div>
-                  <div class="text-xs text-base-content/50">{m.id}</div>
+                  <div class="text-xs text-on-surface-variant">{m.id}</div>
                 </div>
-                <div :if={@session_models == []} class="text-xs text-base-content/50 p-2">
+                <div :if={@session_models == []} class="text-xs text-on-surface-variant p-2">
                   No models available
                 </div>
               </:content>
@@ -661,42 +661,42 @@ defmodule SynapsisWeb.SessionLive.Show do
           </:title>
           <:body>
             <div class="flex flex-col w-full overflow-y-auto max-h-[80vh]">
-              <div :if={@debug_entries == []} class="text-sm text-base-content/50 p-6 text-center">
+              <div :if={@debug_entries == []} class="text-sm text-on-surface-variant p-6 text-center">
                 No debug entries yet. Send a message to capture API calls.
               </div>
               <div :for={entry <- @debug_entries} class="mb-2">
                 <div
-                  class={"flex items-center gap-2 px-3 py-2 rounded cursor-pointer hover:bg-base-300 text-sm font-mono #{debug_status_class(entry)}"}
+                  class={"flex items-center gap-2 px-3 py-2 rounded cursor-pointer hover:bg-surface-container-high text-sm font-mono #{debug_status_class(entry)}"}
                   phx-click="toggle_debug_entry"
                   phx-value-id={entry[:request_id] || entry["request_id"]}
                 >
                   <span class={"w-2 h-2 rounded-full #{debug_status_dot(entry)}"}></span>
                   <span class="font-semibold">{debug_method(entry)}</span>
-                  <span class="truncate flex-1 text-base-content/70">{debug_provider(entry)}</span>
-                  <span class="text-base-content/50">{debug_model(entry)}</span>
+                  <span class="truncate flex-1 text-on-surface-variant">{debug_provider(entry)}</span>
+                  <span class="text-on-surface-variant">{debug_model(entry)}</span>
                   <span :if={debug_status(entry)} class="font-semibold">
                     &rarr; {debug_status(entry)}
                   </span>
-                  <span :if={debug_duration(entry)} class="text-base-content/50">
+                  <span :if={debug_duration(entry)} class="text-on-surface-variant">
                     ({debug_duration(entry)}ms)
                   </span>
                 </div>
                 <div :if={entry[:expanded]} class="mt-1 mx-3 space-y-2">
                   <%!-- Request --%>
-                  <div :if={entry[:url] || entry["url"]} class="bg-base-200 rounded p-3">
-                    <div class="text-xs font-semibold text-base-content/60 mb-1">Request</div>
-                    <div class="text-xs font-mono break-all text-base-content/80 mb-2">
+                  <div :if={entry[:url] || entry["url"]} class="bg-surface-container rounded p-3">
+                    <div class="text-xs font-semibold text-on-surface-variant mb-1">Request</div>
+                    <div class="text-xs font-mono break-all text-on-surface/80 mb-2">
                       {entry[:url] || entry["url"]}
                     </div>
                     <div :if={entry[:headers] || entry["headers"]} class="text-xs mb-2">
                       <details>
-                        <summary class="cursor-pointer text-base-content/50">Headers</summary>
+                        <summary class="cursor-pointer text-on-surface-variant">Headers</summary>
                         <pre class="mt-1 text-xs overflow-x-auto"><%= inspect_headers(entry[:headers] || entry["headers"]) %></pre>
                       </details>
                     </div>
                     <div :if={entry[:body] || entry["body"]} class="text-xs">
                       <details>
-                        <summary class="cursor-pointer text-base-content/50">Body</summary>
+                        <summary class="cursor-pointer text-on-surface-variant">Body</summary>
                         <pre class="mt-1 text-xs overflow-x-auto max-h-60"><%= format_body(entry[:body] || entry["body"]) %></pre>
                       </details>
                     </div>
@@ -707,21 +707,21 @@ defmodule SynapsisWeb.SessionLive.Show do
                       entry[:response_body] || entry["response_body"] || entry[:status] ||
                         entry["status"]
                     }
-                    class="bg-base-200 rounded p-3"
+                    class="bg-surface-container rounded p-3"
                   >
-                    <div class="text-xs font-semibold text-base-content/60 mb-1">Response</div>
+                    <div class="text-xs font-semibold text-on-surface-variant mb-1">Response</div>
                     <div
                       :if={entry[:response_headers] || entry["response_headers"]}
                       class="text-xs mb-2"
                     >
                       <details>
-                        <summary class="cursor-pointer text-base-content/50">Headers</summary>
+                        <summary class="cursor-pointer text-on-surface-variant">Headers</summary>
                         <pre class="mt-1 text-xs overflow-x-auto"><%= inspect_headers(entry[:response_headers] || entry["response_headers"]) %></pre>
                       </details>
                     </div>
                     <div :if={entry[:response_body] || entry["response_body"]} class="text-xs">
                       <details>
-                        <summary class="cursor-pointer text-base-content/50">Body</summary>
+                        <summary class="cursor-pointer text-on-surface-variant">Body</summary>
                         <pre class="mt-1 text-xs overflow-x-auto max-h-60"><%= format_body(entry[:response_body] || entry["response_body"]) %></pre>
                       </details>
                     </div>

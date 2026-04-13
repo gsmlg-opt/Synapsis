@@ -287,14 +287,14 @@ defmodule SynapsisWeb.LSPLive.Index do
           </.dm_btn>
           <h2 class="text-lg font-semibold">Import LSP Servers from JSON</h2>
         </div>
-        <p class="text-sm text-base-content/60 mb-3">
+        <p class="text-sm text-on-surface-variant mb-3">
           Paste JSON in Claude Code format. Each key is the server name, value is the config.
         </p>
         <details class="mb-3">
-          <summary class="text-xs text-base-content/40 cursor-pointer hover:text-base-content/60">
+          <summary class="text-xs text-on-surface-variant cursor-pointer hover:text-on-surface-variant">
             Example format
           </summary>
-          <pre class="text-xs bg-base-200 p-3 rounded mt-1 overflow-x-auto"><code>{lsp_import_example()}</code></pre>
+          <pre class="text-xs bg-surface-container p-3 rounded mt-1 overflow-x-auto"><code>{lsp_import_example()}</code></pre>
         </details>
         <.dm_form for={%{}} phx-submit="import_json">
           <.dm_textarea
@@ -371,13 +371,13 @@ defmodule SynapsisWeb.LSPLive.Index do
                 <.dm_badge :if={enabled} variant="success" size="sm">Enabled</.dm_badge>
                 <.dm_badge :if={!enabled} variant="ghost" size="sm">Disabled</.dm_badge>
               </div>
-              <div class="text-xs text-base-content/50 mt-1">{preset.description}</div>
+              <div class="text-xs text-on-surface-variant mt-1">{preset.description}</div>
             </div>
           </div>
-          <div class="text-xs text-base-content/40 font-mono mt-1">
+          <div class="text-xs text-on-surface-variant font-mono mt-1">
             {preset.command} {Enum.join(preset.args, " ")}
           </div>
-          <div class="text-xs text-base-content/40 mt-1">
+          <div class="text-xs text-on-surface-variant mt-1">
             {preset.extensions |> Enum.join(", ")}
           </div>
           <div class="mt-3 flex items-center gap-2 flex-wrap">
@@ -388,7 +388,7 @@ defmodule SynapsisWeb.LSPLive.Index do
                 phx-click="toggle_auto_start"
                 phx-value-id={config.id}
               />
-              <span class="text-xs text-base-content/50">Auto-start</span>
+              <span class="text-xs text-on-surface-variant">Auto-start</span>
               <.dm_link navigate={~p"/settings/lsp/#{config.id}"} class="ml-auto">
                 <.dm_btn variant="ghost" size="xs">Edit</.dm_btn>
               </.dm_link>
@@ -439,8 +439,8 @@ defmodule SynapsisWeb.LSPLive.Index do
                 Delete
               </.dm_btn>
             </div>
-            <div class="text-xs text-base-content/50">{config.command}</div>
-            <div :if={config.args != []} class="text-xs text-base-content/40 mt-1">
+            <div class="text-xs text-on-surface-variant">{config.command}</div>
+            <div :if={config.args != []} class="text-xs text-on-surface-variant mt-1">
               {Enum.join(config.args, " ")}
             </div>
             <div class="mt-2 flex items-center gap-2">
@@ -450,7 +450,7 @@ defmodule SynapsisWeb.LSPLive.Index do
                 phx-click="toggle_auto_start"
                 phx-value-id={config.id}
               />
-              <span class="text-xs text-base-content/50">Auto-start</span>
+              <span class="text-xs text-on-surface-variant">Auto-start</span>
             </div>
           </.dm_card>
         </div>

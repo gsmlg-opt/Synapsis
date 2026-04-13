@@ -21,7 +21,7 @@ defmodule SynapsisWeb.SettingsLive do
               <:title>
                 <.dm_mdi name="cloud" class="w-5 h-5 inline mr-2" />Providers
               </:title>
-              <p class="text-sm text-base-content/50">
+              <p class="text-sm text-on-surface-variant">
                 Manage LLM provider configurations and API keys.
               </p>
             </.dm_card>
@@ -32,7 +32,7 @@ defmodule SynapsisWeb.SettingsLive do
               <:title>
                 <.dm_mdi name="tune" class="w-5 h-5 inline mr-2" />Default Model
               </:title>
-              <p class="text-sm text-base-content/50">
+              <p class="text-sm text-on-surface-variant">
                 View default, fast, and expert model tiers per provider.
               </p>
             </.dm_card>
@@ -43,7 +43,7 @@ defmodule SynapsisWeb.SettingsLive do
               <:title>
                 <.dm_mdi name="brain" class="w-5 h-5 inline mr-2" />Memory
               </:title>
-              <p class="text-sm text-base-content/50">
+              <p class="text-sm text-on-surface-variant">
                 Manage persistent memory entries across scopes.
               </p>
             </.dm_card>
@@ -54,7 +54,7 @@ defmodule SynapsisWeb.SettingsLive do
               <:title>
                 <.dm_mdi name="lightning-bolt" class="w-5 h-5 inline mr-2" />Skills
               </:title>
-              <p class="text-sm text-base-content/50">
+              <p class="text-sm text-on-surface-variant">
                 Create and edit skill definitions with custom prompts.
               </p>
             </.dm_card>
@@ -65,7 +65,7 @@ defmodule SynapsisWeb.SettingsLive do
               <:title>
                 <.dm_mdi name="puzzle" class="w-5 h-5 inline mr-2" />MCP Servers
               </:title>
-              <p class="text-sm text-base-content/50">
+              <p class="text-sm text-on-surface-variant">
                 Configure Model Context Protocol server connections.
               </p>
             </.dm_card>
@@ -76,7 +76,7 @@ defmodule SynapsisWeb.SettingsLive do
               <:title>
                 <.dm_mdi name="code-braces" class="w-5 h-5 inline mr-2" />LSP Servers
               </:title>
-              <p class="text-sm text-base-content/50">
+              <p class="text-sm text-on-surface-variant">
                 Configure Language Server Protocol integrations.
               </p>
             </.dm_card>

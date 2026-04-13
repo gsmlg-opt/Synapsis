@@ -254,7 +254,7 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
 
             <div
               :if={display_resources(assigns) == []}
-              class="text-center py-8 text-base-content/50"
+              class="text-center py-8 text-on-surface-variant"
             >
               <.dm_mdi name="folder-open-outline" class="w-8 h-8 mx-auto mb-2" />
               <p>No documents found</p>
@@ -264,8 +264,8 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
               <div
                 :for={resource <- display_resources(assigns)}
                 class={[
-                  "flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-base-200 transition-colors",
-                  @selected && @selected.id == resource.id && "bg-base-200"
+                  "flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-surface-container transition-colors",
+                  @selected && @selected.id == resource.id && "bg-surface-container"
                 ]}
                 phx-click="select"
                 phx-value-id={resource.id}
@@ -276,7 +276,7 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
                 />
                 <div class="flex-1 min-w-0">
                   <div class="text-sm font-medium truncate">{filename(resource.path)}</div>
-                  <div class="text-xs text-base-content/50 truncate">{resource.path}</div>
+                  <div class="text-xs text-on-surface-variant truncate">{resource.path}</div>
                 </div>
                 <.dm_badge
                   variant={lifecycle_color(resource.lifecycle)}
@@ -329,7 +329,7 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
               </div>
             </:title>
 
-            <div class="flex gap-2 mb-4 text-xs text-base-content/60">
+            <div class="flex gap-2 mb-4 text-xs text-on-surface-variant">
               <.dm_badge variant={lifecycle_color(@selected.lifecycle)} size="sm">
                 {@selected.lifecycle}
               </.dm_badge>
@@ -345,7 +345,7 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
                 <textarea
                   name="content"
                   rows="20"
-                  class="w-full font-mono text-sm bg-base-200 rounded p-4 border border-base-300 focus:border-primary focus:outline-none"
+                  class="w-full font-mono text-sm bg-surface-container rounded p-4 border border-outline-variant focus:border-primary focus:outline-none"
                 >{@edit_content}</textarea>
                 <div class="flex gap-2 mt-3">
                   <.dm_btn type="submit" variant="primary" size="sm">
@@ -361,7 +361,7 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
             <%!-- Read-only mode --%>
             <div
               :if={!@editing}
-              class="prose prose-sm max-w-none bg-base-200 rounded p-4 overflow-auto max-h-[60vh]"
+              class="prose prose-sm max-w-none bg-surface-container rounded p-4 overflow-auto max-h-[60vh]"
             >
               <pre class="whitespace-pre-wrap text-sm">{@selected.content || "(empty)"}</pre>
             </div>
@@ -412,11 +412,11 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
   defp kind_color(:document), do: "text-primary"
   defp kind_color(:attachment), do: "text-warning"
   defp kind_color(:handoff), do: "text-info"
-  defp kind_color(:session_scratch), do: "text-base-content/50"
+  defp kind_color(:session_scratch), do: "text-on-surface-variant"
   defp kind_color(:skill), do: "text-secondary"
   defp kind_color(:memory), do: "text-accent"
   defp kind_color(:todo), do: "text-success"
-  defp kind_color(_), do: "text-base-content/60"
+  defp kind_color(_), do: "text-on-surface-variant"
 
   defp lifecycle_color(:scratch), do: "ghost"
   defp lifecycle_color(:draft), do: "warning"

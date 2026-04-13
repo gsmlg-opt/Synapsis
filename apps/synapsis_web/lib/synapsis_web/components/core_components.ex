@@ -34,7 +34,7 @@ defmodule SynapsisWeb.CoreComponents do
         </div>
         <div>
           <div class={"text-2xl font-bold text-#{@color}"}>{@value}</div>
-          <div class="text-sm text-base-content/60">{@label}</div>
+          <div class="text-sm text-on-surface-variant">{@label}</div>
         </div>
       </div>
     </.dm_card>
@@ -53,9 +53,9 @@ defmodule SynapsisWeb.CoreComponents do
   def empty_state(assigns) do
     ~H"""
     <div class={["text-center py-12", @class]}>
-      <.dm_mdi name={@icon} class="w-12 h-12 text-base-content/30 mx-auto mb-3" />
-      <h3 class="text-lg font-medium text-base-content/60">{@title}</h3>
-      <p :if={@description} class="text-sm text-base-content/40 mt-1">{@description}</p>
+      <.dm_mdi name={@icon} class="w-12 h-12 text-on-surface-variant/50 mx-auto mb-3" />
+      <h3 class="text-lg font-medium text-on-surface-variant">{@title}</h3>
+      <p :if={@description} class="text-sm text-on-surface-variant mt-1">{@description}</p>
       <div :if={@action != []} class="mt-4">
         {render_slot(@action)}
       </div>
@@ -82,8 +82,8 @@ defmodule SynapsisWeb.CoreComponents do
       <div class={[
         "rounded-lg px-3 py-2 max-w-[80%] text-sm",
         if(@role == "user",
-          do: "bg-primary/20 text-base-content",
-          else: "bg-base-300 text-base-content"
+          do: "bg-primary-container text-on-primary-container",
+          else: "bg-surface-container-high text-on-surface"
         )
       ]}>
         <div :if={@label && @role == "assistant"} class="text-xs font-medium text-primary/70 mb-1">
@@ -107,17 +107,17 @@ defmodule SynapsisWeb.CoreComponents do
     ~H"""
     <div class={["flex justify-center my-3", @class]}>
       <details class="group w-full max-w-[90%]">
-        <summary class="flex items-center gap-2 cursor-pointer text-xs text-base-content/50 hover:text-base-content/70 py-2">
-          <div class="flex-1 border-t border-base-300" />
+        <summary class="flex items-center gap-2 cursor-pointer text-xs text-on-surface-variant hover:text-on-surface-variant py-2">
+          <div class="flex-1 border-t border-outline-variant" />
           <.dm_mdi name="archive-outline" class="w-4 h-4 shrink-0" />
           <span class="shrink-0">{@count} messages compacted</span>
           <.dm_mdi
             name="chevron-down"
             class="w-3.5 h-3.5 transition-transform group-open:rotate-180 shrink-0"
           />
-          <div class="flex-1 border-t border-base-300" />
+          <div class="flex-1 border-t border-outline-variant" />
         </summary>
-        <div class="mt-2 mx-4 p-3 rounded-lg bg-base-200 text-xs text-base-content/60 max-h-48 overflow-y-auto whitespace-pre-wrap">
+        <div class="mt-2 mx-4 p-3 rounded-lg bg-surface-container text-xs text-on-surface-variant max-h-48 overflow-y-auto whitespace-pre-wrap">
           {@summary}
         </div>
       </details>
@@ -141,9 +141,9 @@ defmodule SynapsisWeb.CoreComponents do
         <div class="flex items-center gap-2 mb-1 text-xs text-secondary">
           <.dm_mdi name="heart-pulse" class="w-3.5 h-3.5" />
           <span class="font-medium">{@name}</span>
-          <span :if={@timestamp} class="text-base-content/40">{@timestamp}</span>
+          <span :if={@timestamp} class="text-on-surface-variant">{@timestamp}</span>
         </div>
-        <div class="text-base-content whitespace-pre-wrap">
+        <div class="text-on-surface whitespace-pre-wrap">
           {render_slot(@inner_block)}
         </div>
       </div>
@@ -167,13 +167,13 @@ defmodule SynapsisWeb.CoreComponents do
       class={["border border-primary/20 rounded-lg overflow-hidden text-sm", @class]}
       open={@status == "running"}
     >
-      <summary class="bg-base-200 px-3 py-2 flex items-center gap-2 cursor-pointer select-none list-none">
+      <summary class="bg-surface-container px-3 py-2 flex items-center gap-2 cursor-pointer select-none list-none">
         <.dm_mdi name="robot-outline" class="w-4 h-4 text-primary shrink-0" />
         <span class="font-medium text-xs text-primary">Code Agent</span>
-        <span class="flex-1 text-xs text-base-content/50 italic truncate pl-1" title={@prompt}>
+        <span class="flex-1 text-xs text-on-surface-variant italic truncate pl-1" title={@prompt}>
           {String.slice(@prompt, 0, 60)}{if String.length(@prompt) > 60, do: "…", else: ""}
         </span>
-        <span :if={@status == "running"} class="text-xs text-base-content/40 animate-pulse">
+        <span :if={@status == "running"} class="text-xs text-on-surface-variant animate-pulse">
           Running…
         </span>
         <.dm_badge :if={@status == "complete"} variant="success" size="sm">done</.dm_badge>
@@ -181,7 +181,7 @@ defmodule SynapsisWeb.CoreComponents do
       </summary>
       <div class="p-3 space-y-2">
         <details :if={@tool_calls != []}>
-          <summary class="text-xs cursor-pointer text-base-content/40 hover:text-base-content/70 select-none">
+          <summary class="text-xs cursor-pointer text-on-surface-variant hover:text-on-surface-variant select-none">
             {length(@tool_calls)} tool call{if length(@tool_calls) != 1, do: "s", else: ""}
           </summary>
           <div class="mt-2 space-y-1">
@@ -192,7 +192,7 @@ defmodule SynapsisWeb.CoreComponents do
         </details>
         <div
           :if={@completion}
-          class="text-xs text-base-content/80 border-t border-base-300 pt-2 whitespace-pre-wrap"
+          class="text-xs text-on-surface border-t border-outline-variant pt-2 whitespace-pre-wrap"
         >
           {@completion}
         </div>
@@ -228,18 +228,18 @@ defmodule SynapsisWeb.CoreComponents do
 
   def tool_call_display(assigns) do
     ~H"""
-    <div class={["border border-base-300 rounded-lg p-3 text-sm", @class]}>
+    <div class={["border border-outline-variant rounded-lg p-3 text-sm", @class]}>
       <div class="flex items-center gap-2 mb-1">
-        <.dm_mdi name="wrench" class="w-4 h-4 text-base-content/60" />
+        <.dm_mdi name="wrench" class="w-4 h-4 text-on-surface-variant" />
         <span class="font-medium">{@name}</span>
         <.dm_badge variant={tool_status_color(@status)} size="sm">
           {@status}
         </.dm_badge>
       </div>
-      <div :if={@params != []} class="text-xs text-base-content/50 mt-1">
+      <div :if={@params != []} class="text-xs text-on-surface-variant mt-1">
         {render_slot(@params)}
       </div>
-      <div :if={@result != []} class="text-xs mt-2 border-t border-base-300 pt-2">
+      <div :if={@result != []} class="text-xs mt-2 border-t border-outline-variant pt-2">
         {render_slot(@result)}
       </div>
     </div>
@@ -264,7 +264,7 @@ defmodule SynapsisWeb.CoreComponents do
     <div class={@class}>
       <.dm_label>{@label}</.dm_label>
       <div class={[
-        "bg-base-300 text-base-content/60 rounded px-3 py-2 border border-base-300",
+        "bg-surface-container-high text-on-surface-variant rounded px-3 py-2 border border-outline-variant",
         if(@monospace, do: "font-mono text-sm whitespace-pre-wrap")
       ]}>
         {@value}
@@ -283,7 +283,7 @@ defmodule SynapsisWeb.CoreComponents do
 
   def mode_toggle(assigns) do
     ~H"""
-    <div class={["flex gap-0 bg-base-300 rounded-lg p-0.5", @class]}>
+    <div class={["flex gap-0 bg-surface-container-high rounded-lg p-0.5", @class]}>
       <.dm_btn
         :for={{value, label} <- @modes}
         variant={if(@current_mode == value, do: "primary", else: "ghost")}
@@ -316,7 +316,7 @@ defmodule SynapsisWeb.CoreComponents do
     assigns = assign(assigns, :items, items)
 
     ~H"""
-    <nav class={["hidden md:block w-56 shrink-0 border-r border-base-300 py-4 pr-4", @class]}>
+    <nav class={["hidden md:block w-56 shrink-0 border-r border-outline-variant py-4 pr-4", @class]}>
       <.dm_left_menu active={active_menu_id(@current_path, @items)} size="sm">
         <:title>Settings</:title>
         <:menu :for={item <- @items}>
@@ -353,10 +353,10 @@ defmodule SynapsisWeb.CoreComponents do
 
     ~H"""
     <div class={[
-      "flex items-center justify-between bg-base-200 border-t border-base-300 px-3 py-1",
+      "flex items-center justify-between bg-surface-container border-t border-outline-variant px-3 py-1",
       @class
     ]}>
-      <div :if={@has_session} class="flex gap-0 bg-base-300 rounded-lg p-0.5">
+      <div :if={@has_session} class="flex gap-0 bg-surface-container-high rounded-lg p-0.5">
         <.dm_btn
           :for={{value, label, icon} <- @modes}
           variant={if(@current_mode == value, do: "primary", else: "ghost")}
@@ -368,11 +368,11 @@ defmodule SynapsisWeb.CoreComponents do
           <span class="hidden sm:inline">{label}</span>
         </.dm_btn>
       </div>
-      <div :if={!@has_session} class="text-xs text-base-content/50">
+      <div :if={!@has_session} class="text-xs text-on-surface-variant">
         No active session
       </div>
       <div class="flex items-center gap-3">
-        <div class="flex items-center gap-1.5 text-xs text-base-content/50">
+        <div class="flex items-center gap-1.5 text-xs text-on-surface-variant">
           <span class={[
             "inline-block w-2 h-2 rounded-full",
             status_dot_color(@session_status)
@@ -382,7 +382,7 @@ defmodule SynapsisWeb.CoreComponents do
         </div>
         <.dm_link
           navigate={~p"/settings"}
-          class="flex items-center gap-1 text-xs text-base-content/50 hover:text-base-content transition-colors"
+          class="flex items-center gap-1 text-xs text-on-surface-variant hover:text-on-surface transition-colors"
         >
           <.dm_mdi name="cog-outline" class="w-3.5 h-3.5" />
           <span class="hidden sm:inline">Settings</span>
@@ -392,11 +392,11 @@ defmodule SynapsisWeb.CoreComponents do
     """
   end
 
-  defp status_dot_color("idle"), do: "bg-success"
+  defp status_dot_color("idle"), do: "bg-primary"
   defp status_dot_color("streaming"), do: "bg-info animate-pulse"
   defp status_dot_color("tool_executing"), do: "bg-warning animate-pulse"
   defp status_dot_color("error"), do: "bg-error"
-  defp status_dot_color(_), do: "bg-base-content/30"
+  defp status_dot_color(_), do: "bg-on-surface/30"
 
   @doc """
   Breadcrumb navigation with proper link support.
@@ -413,17 +413,17 @@ defmodule SynapsisWeb.CoreComponents do
   def breadcrumb(assigns) do
     ~H"""
     <nav aria-label="Breadcrumb" class={["text-sm", @class]}>
-      <ol class="flex items-center gap-1 text-base-content/60">
+      <ol class="flex items-center gap-1 text-on-surface-variant">
         <li :for={{crumb, idx} <- Enum.with_index(@crumb)} class="flex items-center gap-1">
-          <.dm_mdi :if={idx > 0} name="chevron-right" class="w-4 h-4 text-base-content/30" />
+          <.dm_mdi :if={idx > 0} name="chevron-right" class="w-4 h-4 text-on-surface-variant/50" />
           <.dm_link
             :if={crumb[:to]}
             navigate={crumb.to}
-            class="hover:text-base-content transition-colors"
+            class="hover:text-on-surface transition-colors"
           >
             {render_slot(crumb)}
           </.dm_link>
-          <span :if={!crumb[:to]} class="text-base-content">
+          <span :if={!crumb[:to]} class="text-on-surface">
             {render_slot(crumb)}
           </span>
         </li>
@@ -439,31 +439,31 @@ defmodule SynapsisWeb.CoreComponents do
   """
   def global_status_bar(assigns) do
     ~H"""
-    <div class="flex items-center justify-between bg-base-200 border-t border-base-300 px-3 py-1 shrink-0">
+    <div class="flex items-center justify-between bg-surface-container border-t border-outline-variant px-3 py-1 shrink-0">
       <div class="flex items-center gap-3">
         <.dm_link
           navigate={~p"/assistant"}
-          class="flex items-center gap-1.5 text-xs text-base-content/50 hover:text-base-content transition-colors"
+          class="flex items-center gap-1.5 text-xs text-on-surface-variant hover:text-on-surface transition-colors"
         >
           <.dm_mdi name="robot-outline" class="w-3.5 h-3.5" />
           <span class="hidden sm:inline">Assistant</span>
         </.dm_link>
         <.dm_link
           navigate={~p"/workspace"}
-          class="flex items-center gap-1.5 text-xs text-base-content/50 hover:text-base-content transition-colors"
+          class="flex items-center gap-1.5 text-xs text-on-surface-variant hover:text-on-surface transition-colors"
         >
           <.dm_mdi name="file-tree-outline" class="w-3.5 h-3.5" />
           <span class="hidden sm:inline">Workspace</span>
         </.dm_link>
       </div>
       <div class="flex items-center gap-3">
-        <div class="flex items-center gap-1.5 text-xs text-base-content/50">
-          <span class="inline-block w-2 h-2 rounded-full bg-success"></span>
+        <div class="flex items-center gap-1.5 text-xs text-on-surface-variant">
+          <span class="inline-block w-2 h-2 rounded-full bg-primary"></span>
           <span class="hidden sm:inline">Ready</span>
         </div>
         <.dm_link
           navigate={~p"/settings"}
-          class="flex items-center gap-1 text-xs text-base-content/50 hover:text-base-content transition-colors"
+          class="flex items-center gap-1 text-xs text-on-surface-variant hover:text-on-surface transition-colors"
         >
           <.dm_mdi name="cog-outline" class="w-3.5 h-3.5" />
           <span class="hidden sm:inline">Settings</span>
@@ -515,13 +515,16 @@ defmodule SynapsisWeb.CoreComponents do
         <% %Synapsis.Part.ToolResult{content: content, is_error: is_error} -> %>
           <div class={[
             "text-xs border rounded-lg p-2 max-h-64 overflow-y-auto",
-            if(is_error, do: "border-error/30 bg-error/5", else: "border-base-300 bg-base-200")
+            if(is_error,
+              do: "border-error/30 bg-error/5",
+              else: "border-outline-variant bg-surface-container"
+            )
           ]}>
             <pre class="whitespace-pre-wrap">{content}</pre>
           </div>
         <% %Synapsis.Part.File{path: path, content: content} -> %>
-          <div class="border border-base-300 rounded-lg p-2 text-xs">
-            <div class="flex items-center gap-1 mb-1 text-base-content/60">
+          <div class="border border-outline-variant rounded-lg p-2 text-xs">
+            <div class="flex items-center gap-1 mb-1 text-on-surface-variant">
               <.dm_mdi name="file-document-outline" class="w-3.5 h-3.5" />
               <span class="font-mono">{path}</span>
             </div>
@@ -544,7 +547,7 @@ defmodule SynapsisWeb.CoreComponents do
   def reasoning_block(assigns) do
     ~H"""
     <details class={["group", @class]} open={!@collapsed}>
-      <summary class="flex items-center gap-2 cursor-pointer text-xs text-base-content/50 hover:text-base-content/70 py-1">
+      <summary class="flex items-center gap-2 cursor-pointer text-xs text-on-surface-variant hover:text-on-surface-variant py-1">
         <.dm_mdi name="thought-bubble-outline" class="w-4 h-4" />
         <span>Thinking</span>
         <.dm_mdi
@@ -552,7 +555,7 @@ defmodule SynapsisWeb.CoreComponents do
           class="w-3.5 h-3.5 transition-transform group-open:rotate-90"
         />
       </summary>
-      <div class="ml-6 mt-1 text-xs text-base-content/40 whitespace-pre-wrap max-h-48 overflow-y-auto">
+      <div class="ml-6 mt-1 text-xs text-on-surface-variant whitespace-pre-wrap max-h-48 overflow-y-auto">
         {@content}
       </div>
     </details>
@@ -578,7 +581,7 @@ defmodule SynapsisWeb.CoreComponents do
             <span class="font-medium text-sm">{@tool}</span>
             <.dm_badge variant="warning" size="sm">{@level}</.dm_badge>
           </div>
-          <pre class="text-xs text-base-content/50 max-h-24 overflow-y-auto mb-2">{Jason.encode!(@input || %{}, pretty: true)}</pre>
+          <pre class="text-xs text-on-surface-variant max-h-24 overflow-y-auto mb-2">{Jason.encode!(@input || %{}, pretty: true)}</pre>
           <div class="flex gap-2">
             <.dm_btn
               variant="primary"
@@ -610,7 +613,7 @@ defmodule SynapsisWeb.CoreComponents do
 
   def streaming_indicator(assigns) do
     ~H"""
-    <div class={["flex items-center gap-2 text-xs text-base-content/50", @class]}>
+    <div class={["flex items-center gap-2 text-xs text-on-surface-variant", @class]}>
       <span class="flex gap-1">
         <span class="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:0ms]" />
         <span class="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:150ms]" />
@@ -637,7 +640,7 @@ defmodule SynapsisWeb.CoreComponents do
         "group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors text-sm",
         if(@active,
           do: "bg-primary/10 text-primary border-r-2 border-primary",
-          else: "text-base-content/70 hover:bg-base-300"
+          else: "text-on-surface-variant hover:bg-surface-container-high"
         ),
         @class
       ]}
@@ -651,7 +654,7 @@ defmodule SynapsisWeb.CoreComponents do
         <div class="truncate font-medium">
           {@session.title || "Session #{String.slice(@session.id, 0..7)}"}
         </div>
-        <div class="text-xs text-base-content/40 truncate">
+        <div class="text-xs text-on-surface-variant truncate">
           {@session.provider}/{@session.model}
         </div>
       </div>

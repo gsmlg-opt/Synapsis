@@ -223,7 +223,7 @@ defmodule SynapsisWeb.MemoryLive.Index do
       <%= if @active_tab == "knowledge" do %>
         <div class="mb-4 flex flex-wrap gap-2 items-center">
           <select
-            class="select select-sm select-bordered bg-base-200 text-base-content"
+            class="select select-sm select-bordered bg-surface-container text-on-surface"
             phx-change="filter_scope"
             name="scope"
           >
@@ -234,7 +234,7 @@ defmodule SynapsisWeb.MemoryLive.Index do
           </select>
 
           <select
-            class="select select-sm select-bordered bg-base-200 text-base-content"
+            class="select select-sm select-bordered bg-surface-container text-on-surface"
             phx-change="filter_kind"
             name="kind"
           >
@@ -248,7 +248,7 @@ defmodule SynapsisWeb.MemoryLive.Index do
           </select>
 
           <select
-            class="select select-sm select-bordered bg-base-200 text-base-content"
+            class="select select-sm select-bordered bg-surface-container text-on-surface"
             phx-change="filter_source"
             name="source"
           >
@@ -272,10 +272,10 @@ defmodule SynapsisWeb.MemoryLive.Index do
             <.dm_form for={@create_form} id="create-memory-form" phx-submit="create_memory">
               <div class="grid grid-cols-2 gap-4 mb-4">
                 <div>
-                  <label class="label text-base-content/60 text-sm">Scope</label>
+                  <label class="label text-on-surface-variant text-sm">Scope</label>
                   <select
                     name="scope"
-                    class="select select-bordered w-full bg-base-200 text-base-content"
+                    class="select select-bordered w-full bg-surface-container text-on-surface"
                   >
                     <option value="shared">Shared</option>
                     <option value="project" selected>Project</option>
@@ -283,10 +283,10 @@ defmodule SynapsisWeb.MemoryLive.Index do
                   </select>
                 </div>
                 <div>
-                  <label class="label text-base-content/60 text-sm">Kind</label>
+                  <label class="label text-on-surface-variant text-sm">Kind</label>
                   <select
                     name="kind"
-                    class="select select-bordered w-full bg-base-200 text-base-content"
+                    class="select select-bordered w-full bg-surface-container text-on-surface"
                   >
                     <option value="fact" selected>Fact</option>
                     <option value="decision">Decision</option>
@@ -298,11 +298,11 @@ defmodule SynapsisWeb.MemoryLive.Index do
                 </div>
               </div>
               <div class="mb-4">
-                <label class="label text-base-content/60 text-sm">Title</label>
+                <label class="label text-on-surface-variant text-sm">Title</label>
                 <.dm_input name="title" value="" placeholder="Short title (~10 words)" required />
               </div>
               <div class="mb-4">
-                <label class="label text-base-content/60 text-sm">Summary</label>
+                <label class="label text-on-surface-variant text-sm">Summary</label>
                 <.dm_textarea
                   name="summary"
                   value=""
@@ -312,7 +312,7 @@ defmodule SynapsisWeb.MemoryLive.Index do
                 />
               </div>
               <div class="mb-4">
-                <label class="label text-base-content/60 text-sm">Tags (comma separated)</label>
+                <label class="label text-on-surface-variant text-sm">Tags (comma separated)</label>
                 <.dm_input name="tags" value="" placeholder="tag1, tag2, tag3" />
               </div>
               <div class="flex gap-2 justify-end">
@@ -339,7 +339,7 @@ defmodule SynapsisWeb.MemoryLive.Index do
                     <div class="flex items-center gap-2 mb-1 flex-wrap">
                       <.dm_link
                         navigate={~p"/settings/memory/#{memory.id}"}
-                        class="font-semibold text-base-content hover:text-primary"
+                        class="font-semibold text-on-surface hover:text-primary"
                       >
                         {memory.title}
                       </.dm_link>
@@ -353,17 +353,17 @@ defmodule SynapsisWeb.MemoryLive.Index do
                         {memory.source}
                       </.dm_badge>
                     </div>
-                    <p class="text-base-content/70 text-sm">{memory.summary}</p>
+                    <p class="text-on-surface-variant text-sm">{memory.summary}</p>
                     <%= if memory.tags != [] do %>
                       <div class="flex gap-1 mt-1 flex-wrap">
                         <%= for tag <- memory.tags do %>
-                          <span class="text-xs bg-base-300 text-base-content/60 px-1.5 py-0.5 rounded">
+                          <span class="text-xs bg-surface-container-high text-on-surface-variant px-1.5 py-0.5 rounded">
                             {tag}
                           </span>
                         <% end %>
                       </div>
                     <% end %>
-                    <div class="flex gap-3 mt-1 text-xs text-base-content/40">
+                    <div class="flex gap-3 mt-1 text-xs text-on-surface-variant">
                       <span>Importance: {Float.round(memory.importance || 0.0, 1)}</span>
                       <span>Confidence: {Float.round(memory.confidence || 0.0, 1)}</span>
                       <%= if memory.contributed_by do %>
@@ -390,7 +390,7 @@ defmodule SynapsisWeb.MemoryLive.Index do
       <%= if @active_tab == "events" do %>
         <div class="mb-4">
           <select
-            class="select select-sm select-bordered bg-base-200 text-base-content"
+            class="select select-sm select-bordered bg-surface-container text-on-surface"
             phx-change="filter_event_type"
             name="type"
           >

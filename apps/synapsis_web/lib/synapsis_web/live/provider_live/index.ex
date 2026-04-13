@@ -219,15 +219,15 @@ defmodule SynapsisWeb.ProviderLive.Index do
               >
                 <.dm_card
                   variant="bordered"
-                  class="cursor-pointer hover:border-primary hover:bg-base-300 transition-colors h-full"
+                  class="cursor-pointer hover:border-primary hover:bg-surface-container-high transition-colors h-full"
                 >
                   <div class="font-medium">{preset.name}</div>
-                  <div class="text-xs text-base-content/50 mt-1">{preset.type}</div>
+                  <div class="text-xs text-on-surface-variant mt-1">{preset.type}</div>
                 </.dm_card>
               </button>
             </div>
 
-            <h3 class="text-sm font-semibold text-base-content/50 mt-6 mb-3">Custom</h3>
+            <h3 class="text-sm font-semibold text-on-surface-variant mt-6 mb-3">Custom</h3>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               <button
                 :for={custom <- @custom_presets}
@@ -237,10 +237,10 @@ defmodule SynapsisWeb.ProviderLive.Index do
               >
                 <.dm_card
                   variant="bordered"
-                  class="cursor-pointer border-dashed hover:border-primary hover:bg-base-300 transition-colors h-full"
+                  class="cursor-pointer border-dashed hover:border-primary hover:bg-surface-container-high transition-colors h-full"
                 >
                   <div class="font-medium">{custom.label}</div>
-                  <div class="text-xs text-base-content/50 mt-1">Custom base URL</div>
+                  <div class="text-xs text-on-surface-variant mt-1">Custom base URL</div>
                 </.dm_card>
               </button>
             </div>
@@ -267,14 +267,14 @@ defmodule SynapsisWeb.ProviderLive.Index do
                 phx-click="delete_provider"
                 phx-value-id={provider.id}
                 confirm="Delete this provider?"
-                class="text-base-content/40 hover:text-error ml-2"
+                class="text-on-surface-variant hover:text-error ml-2"
               >
                 Delete
               </.dm_btn>
             </div>
           </:title>
-          <div class="text-xs text-base-content/50">{provider.type}</div>
-          <div :if={provider.base_url} class="text-xs text-base-content/40 mt-1 truncate">
+          <div class="text-xs text-on-surface-variant">{provider.type}</div>
+          <div :if={provider.base_url} class="text-xs text-on-surface-variant mt-1 truncate">
             {provider.base_url}
           </div>
           <div class="mt-2">
@@ -288,7 +288,7 @@ defmodule SynapsisWeb.ProviderLive.Index do
         </.dm_card>
       </div>
 
-      <div :if={@providers == [] && !@show_form} class="text-center text-base-content/40 py-12">
+      <div :if={@providers == [] && !@show_form} class="text-center text-on-surface-variant py-12">
         No providers configured. Click "+ Add Provider" to get started.
       </div>
     </div>

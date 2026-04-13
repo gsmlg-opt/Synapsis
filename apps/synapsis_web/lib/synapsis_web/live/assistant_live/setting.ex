@@ -412,23 +412,23 @@ defmodule SynapsisWeb.AssistantLive.Setting do
       <%!-- Header --%>
       <.dm_card variant="bordered" class="mb-6">
         <div class="flex items-center gap-4">
-          <div class="bg-base-300 rounded-full w-12 h-12 flex items-center justify-center text-lg font-bold text-base-content/70">
+          <div class="bg-surface-container-high rounded-full w-12 h-12 flex items-center justify-center text-lg font-bold text-on-surface-variant">
             {String.first(@assistant_name)}
           </div>
           <div class="flex-1">
             <div class="flex items-center gap-3">
               <h1 class="text-xl font-bold">{@assistant_name}</h1>
-              <span class="text-xs font-mono px-2 py-0.5 rounded bg-base-300 text-base-content/60">
+              <span class="text-xs font-mono px-2 py-0.5 rounded bg-surface-container-high text-on-surface-variant">
                 {@assistant_name}
               </span>
               <span
                 :if={@assistant_name == "default"}
-                class="text-xs font-mono px-2 py-0.5 rounded border border-base-content/20 text-base-content/60"
+                class="text-xs font-mono px-2 py-0.5 rounded border border-outline text-on-surface-variant"
               >
                 DEFAULT
               </span>
             </div>
-            <p class="text-sm text-base-content/50 mt-0.5">
+            <p class="text-sm text-on-surface-variant mt-0.5">
               Agent workspace and routing.
             </p>
           </div>
@@ -540,44 +540,44 @@ defmodule SynapsisWeb.AssistantLive.Setting do
     ~H"""
     <.dm_card variant="bordered">
       <:title>Overview</:title>
-      <p class="text-xs text-base-content/50 mb-4">
+      <p class="text-xs text-on-surface-variant mb-4">
         Workspace paths and identity metadata.
       </p>
       <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
         <div>
-          <div class="text-xs text-base-content/50 mb-1">Workspace</div>
+          <div class="text-xs text-on-surface-variant mb-1">Workspace</div>
           <div class="text-sm font-mono break-all">{System.user_home() || "~"}</div>
         </div>
         <div>
-          <div class="text-xs text-base-content/50 mb-1">Primary Model</div>
+          <div class="text-xs text-on-surface-variant mb-1">Primary Model</div>
           <div class="text-sm font-mono">{@primary_model_display}</div>
         </div>
         <div>
-          <div class="text-xs text-base-content/50 mb-1">Identity Name</div>
+          <div class="text-xs text-on-surface-variant mb-1">Identity Name</div>
           <div class="text-sm">{@identity_name}</div>
         </div>
         <div>
-          <div class="text-xs text-base-content/50 mb-1">Default</div>
+          <div class="text-xs text-on-surface-variant mb-1">Default</div>
           <div class="text-sm">{if @assistant_name == "default", do: "yes", else: "no"}</div>
         </div>
         <div>
-          <div class="text-xs text-base-content/50 mb-1">Identity Emoji</div>
+          <div class="text-xs text-on-surface-variant mb-1">Identity Emoji</div>
           <div class="text-sm">-</div>
         </div>
         <div>
-          <div class="text-xs text-base-content/50 mb-1">Skills Filter</div>
+          <div class="text-xs text-on-surface-variant mb-1">Skills Filter</div>
           <div class="text-sm">all skills</div>
         </div>
       </div>
 
-      <div class="border-t border-base-300 pt-4">
-        <div class="text-xs text-base-content/50 mb-3">Model Selection</div>
+      <div class="border-t border-outline-variant pt-4">
+        <div class="text-xs text-on-surface-variant mb-3">Model Selection</div>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <form phx-change="select_provider">
-            <label class="text-xs text-base-content/50 mb-1 block">Provider</label>
+            <label class="text-xs text-on-surface-variant mb-1 block">Provider</label>
             <select
               name="provider"
-              class="w-full bg-base-200 border border-base-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
+              class="w-full bg-surface-container border border-outline-variant rounded px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
             >
               <option
                 :for={p <- @providers}
@@ -589,10 +589,10 @@ defmodule SynapsisWeb.AssistantLive.Setting do
             </select>
           </form>
           <form phx-change="select_model">
-            <label class="text-xs text-base-content/50 mb-1 block">Primary model (default)</label>
+            <label class="text-xs text-on-surface-variant mb-1 block">Primary model (default)</label>
             <select
               name="model"
-              class="w-full bg-base-200 border border-base-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
+              class="w-full bg-surface-container border border-outline-variant rounded px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
             >
               <option
                 :for={model <- @available_models}
@@ -604,14 +604,16 @@ defmodule SynapsisWeb.AssistantLive.Setting do
             </select>
           </form>
           <form phx-change="update_fallbacks">
-            <label class="text-xs text-base-content/50 mb-1 block">Fallbacks (comma-separated)</label>
+            <label class="text-xs text-on-surface-variant mb-1 block">
+              Fallbacks (comma-separated)
+            </label>
             <input
               type="text"
               name="fallbacks"
               value={@fallbacks}
               phx-debounce="300"
               placeholder="model-1, model-2, ..."
-              class="w-full bg-base-200 border border-base-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
+              class="w-full bg-surface-container border border-outline-variant rounded px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
             />
           </form>
         </div>
@@ -640,7 +642,7 @@ defmodule SynapsisWeb.AssistantLive.Setting do
         <div class="flex items-center justify-between w-full">
           <div>
             <div>Core Files</div>
-            <p class="text-xs text-base-content/50 font-normal mt-0.5">
+            <p class="text-xs text-on-surface-variant font-normal mt-0.5">
               Bootstrap persona, identity, and tool guidance.
             </p>
           </div>
@@ -653,23 +655,24 @@ defmodule SynapsisWeb.AssistantLive.Setting do
       <div class="flex gap-4 min-h-[400px]">
         <%!-- File list sidebar --%>
         <div class="w-56 shrink-0 space-y-1">
-          <button
+          <.dm_btn
             :for={file <- @files}
+            variant="ghost"
             phx-click="select_file"
             phx-value-path={file.path}
             class={[
               "w-full text-left px-3 py-2.5 rounded-lg border transition-colors",
               if(file.path == @selected_file,
                 do: "border-primary bg-primary/10",
-                else: "border-base-300 hover:border-base-content/20"
+                else: "border-outline-variant hover:border-outline"
               )
             ]}
           >
             <div class="font-mono text-sm font-medium">{file.name}</div>
-            <div class="text-xs text-base-content/40 mt-0.5">
+            <div class="text-xs text-on-surface-variant mt-0.5">
               {file.status}
             </div>
-          </button>
+          </.dm_btn>
         </div>
 
         <%!-- File editor --%>
@@ -678,7 +681,7 @@ defmodule SynapsisWeb.AssistantLive.Setting do
             <div class="flex items-center justify-between mb-3">
               <div>
                 <div class="font-mono text-sm font-medium">{file_name(@selected_file)}</div>
-                <div class="text-xs text-base-content/40">{@selected_file}</div>
+                <div class="text-xs text-on-surface-variant">{@selected_file}</div>
               </div>
               <div class="flex gap-2">
                 <.dm_btn
@@ -700,16 +703,16 @@ defmodule SynapsisWeb.AssistantLive.Setting do
               </div>
             </div>
             <div>
-              <label class="text-xs text-base-content/50 mb-1 block">Content</label>
+              <label class="text-xs text-on-surface-variant mb-1 block">Content</label>
               <textarea
                 phx-change="update_file_content"
                 phx-debounce="300"
                 name="content"
-                class="w-full bg-base-200 border border-base-300 rounded-lg px-3 py-2 text-sm font-mono resize-y min-h-[320px] focus:outline-none focus:border-primary/50"
+                class="w-full bg-surface-container border border-outline-variant rounded-lg px-3 py-2 text-sm font-mono resize-y min-h-[320px] focus:outline-none focus:border-primary/50"
               >{@file_content || ""}</textarea>
             </div>
           <% else %>
-            <div class="flex items-center justify-center h-full text-base-content/30 text-sm">
+            <div class="flex items-center justify-center h-full text-on-surface-variant/50 text-sm">
               Select a file to view and edit
             </div>
           <% end %>
@@ -733,7 +736,7 @@ defmodule SynapsisWeb.AssistantLive.Setting do
         <div class="flex items-center justify-between w-full">
           <div>
             <div>Tool Access</div>
-            <p class="text-xs text-base-content/50 font-normal mt-0.5">
+            <p class="text-xs text-on-surface-variant font-normal mt-0.5">
               Profile + per-tool overrides for this agent. {@enabled}/{@total} enabled.
             </p>
           </div>
@@ -754,18 +757,18 @@ defmodule SynapsisWeb.AssistantLive.Setting do
       <%!-- Profile & Source --%>
       <div class="grid grid-cols-2 gap-4 mb-4">
         <div>
-          <div class="text-xs text-base-content/50 mb-1">Profile</div>
+          <div class="text-xs text-on-surface-variant mb-1">Profile</div>
           <div class="text-sm font-mono">{@tool_profile}</div>
         </div>
         <div>
-          <div class="text-xs text-base-content/50 mb-1">Source</div>
+          <div class="text-xs text-on-surface-variant mb-1">Source</div>
           <div class="text-sm font-mono">default</div>
         </div>
       </div>
 
       <%!-- Quick Presets --%>
       <div class="mb-6">
-        <div class="text-xs text-base-content/50 mb-2">Quick Presets</div>
+        <div class="text-xs text-on-surface-variant mb-2">Quick Presets</div>
         <div class="flex gap-2">
           <span
             :for={preset <- ~w(Minimal Coding Messaging Full Inherit)}
@@ -773,7 +776,7 @@ defmodule SynapsisWeb.AssistantLive.Setting do
               "text-xs px-3 py-1 rounded-full cursor-pointer transition-colors",
               if(String.downcase(preset) == @tool_profile,
                 do: "bg-primary text-primary-content",
-                else: "bg-base-300 text-base-content/60 hover:bg-base-content/10"
+                else: "bg-surface-container-high text-on-surface-variant hover:bg-surface-container"
               )
             ]}
           >
@@ -799,7 +802,7 @@ defmodule SynapsisWeb.AssistantLive.Setting do
   defp tool_category(assigns) do
     ~H"""
     <div>
-      <h3 class="text-sm font-semibold text-base-content/70 mb-3">{@category}</h3>
+      <h3 class="text-sm font-semibold text-on-surface-variant mb-3">{@category}</h3>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-1">
         <.tool_row :for={tool <- @tools} tool={tool} agent_tools={@agent_tools} />
       </div>
@@ -815,12 +818,13 @@ defmodule SynapsisWeb.AssistantLive.Setting do
     <div class="py-1">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2 min-w-0">
-          <span class="font-mono text-sm text-base-content">{@tool.name}</span>
-          <span class="text-[10px] px-1.5 py-0.5 rounded bg-base-300 text-base-content/50 shrink-0">
+          <span class="font-mono text-sm text-on-surface">{@tool.name}</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant shrink-0">
             core
           </span>
         </div>
-        <button
+        <.dm_btn
+          variant="ghost"
           phx-click="toggle_tool"
           phx-value-tool={@tool.name}
           class="shrink-0 ml-2"
@@ -828,16 +832,16 @@ defmodule SynapsisWeb.AssistantLive.Setting do
         >
           <div class={[
             "w-9 h-5 rounded-full relative transition-colors",
-            if(@enabled, do: "bg-success", else: "bg-base-content/20")
+            if(@enabled, do: "bg-primary", else: "bg-on-surface/20")
           ]}>
             <div class={[
               "absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all",
               if(@enabled, do: "left-[18px]", else: "left-0.5")
             ]} />
           </div>
-        </button>
+        </.dm_btn>
       </div>
-      <div class="text-[11px] text-base-content/40 truncate">{@tool.description}</div>
+      <div class="text-[11px] text-on-surface-variant truncate">{@tool.description}</div>
     </div>
     """
   end
@@ -856,7 +860,7 @@ defmodule SynapsisWeb.AssistantLive.Setting do
       <:action>
         <.dm_link
           navigate={~p"/settings/skills"}
-          class="text-xs text-base-content/50 hover:text-primary"
+          class="text-xs text-on-surface-variant hover:text-primary"
         >
           Manage skills
         </.dm_link>
@@ -874,7 +878,7 @@ defmodule SynapsisWeb.AssistantLive.Setting do
         <div class="flex items-center justify-between w-full">
           <div>
             <div>Heartbeat Schedules</div>
-            <p class="text-xs text-base-content/50 font-normal mt-0.5">
+            <p class="text-xs text-on-surface-variant font-normal mt-0.5">
               Proactive agent invocations on cron schedules.
             </p>
           </div>
@@ -885,7 +889,10 @@ defmodule SynapsisWeb.AssistantLive.Setting do
       </:title>
 
       <%!-- New heartbeat form --%>
-      <div :if={@show_heartbeat_form} class="border border-primary/30 rounded-lg p-4 mb-4 bg-base-200">
+      <div
+        :if={@show_heartbeat_form}
+        class="border border-primary/30 rounded-lg p-4 mb-4 bg-surface-container"
+      >
         <h4 class="text-sm font-medium mb-3">
           {if @editing_heartbeat_id, do: "Edit Heartbeat", else: "New Heartbeat"}
         </h4>
@@ -985,8 +992,9 @@ defmodule SynapsisWeb.AssistantLive.Setting do
     assigns = assign(assigns, :next_run, next_run)
 
     ~H"""
-    <div class="flex items-center gap-3 p-3 rounded-lg border border-base-300 hover:border-base-content/20 transition-colors">
-      <button
+    <div class="flex items-center gap-3 p-3 rounded-lg border border-outline-variant hover:border-outline transition-colors">
+      <.dm_btn
+        variant="ghost"
         phx-click="toggle_heartbeat"
         phx-value-id={@heartbeat.id}
         class="shrink-0"
@@ -994,18 +1002,18 @@ defmodule SynapsisWeb.AssistantLive.Setting do
       >
         <div class={[
           "w-9 h-5 rounded-full relative transition-colors",
-          if(@heartbeat.enabled, do: "bg-success", else: "bg-base-content/20")
+          if(@heartbeat.enabled, do: "bg-primary", else: "bg-on-surface/20")
         ]}>
           <div class={[
             "absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all",
             if(@heartbeat.enabled, do: "left-[18px]", else: "left-0.5")
           ]} />
         </div>
-      </button>
+      </.dm_btn>
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2">
           <span class="font-medium text-sm">{@heartbeat.name}</span>
-          <span class="font-mono text-xs px-1.5 py-0.5 rounded bg-base-300 text-base-content/50">
+          <span class="font-mono text-xs px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant">
             {@heartbeat.schedule}
           </span>
           <.dm_badge
@@ -1016,8 +1024,8 @@ defmodule SynapsisWeb.AssistantLive.Setting do
             active
           </.dm_badge>
         </div>
-        <div class="text-xs text-base-content/40 truncate mt-0.5">{@heartbeat.prompt}</div>
-        <div :if={@heartbeat.enabled} class="text-xs text-base-content/30 mt-0.5">
+        <div class="text-xs text-on-surface-variant truncate mt-0.5">{@heartbeat.prompt}</div>
+        <div :if={@heartbeat.enabled} class="text-xs text-on-surface-variant/50 mt-0.5">
           Next run: {@next_run}
         </div>
       </div>

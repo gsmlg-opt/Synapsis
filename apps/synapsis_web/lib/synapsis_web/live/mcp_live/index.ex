@@ -351,17 +351,18 @@ defmodule SynapsisWeb.MCPLive.Index do
           </.dm_btn>
           <h2 class="text-lg font-semibold">Import MCP Servers from JSON</h2>
         </div>
-        <p class="text-sm text-base-content/60 mb-3">
-          Paste JSON in Claude Code <code class="text-xs bg-base-200 px-1 rounded">mcp.json</code>
+        <p class="text-sm text-on-surface-variant mb-3">
+          Paste JSON in Claude Code
+          <code class="text-xs bg-surface-container px-1 rounded">mcp.json</code>
           format.
-          Supports both <code class="text-xs bg-base-200 px-1 rounded">mcpServers</code>
+          Supports both <code class="text-xs bg-surface-container px-1 rounded">mcpServers</code>
           wrapper and bare server objects.
         </p>
         <details class="mb-3">
-          <summary class="text-xs text-base-content/40 cursor-pointer hover:text-base-content/60">
+          <summary class="text-xs text-on-surface-variant cursor-pointer hover:text-on-surface-variant">
             Example format
           </summary>
-          <pre class="text-xs bg-base-200 p-3 rounded mt-1 overflow-x-auto"><code>{mcp_import_example()}</code></pre>
+          <pre class="text-xs bg-surface-container p-3 rounded mt-1 overflow-x-auto"><code>{mcp_import_example()}</code></pre>
         </details>
         <.dm_form for={%{}} phx-submit="import_json">
           <.dm_textarea
@@ -482,7 +483,7 @@ defmodule SynapsisWeb.MCPLive.Index do
               <h2 class="text-lg font-semibold">Select an MCP Server</h2>
               <.dm_link
                 navigate={~p"/settings/mcp"}
-                class="text-base-content/50 hover:text-base-content text-sm"
+                class="text-on-surface-variant hover:text-on-surface text-sm"
               >
                 Cancel
               </.dm_link>
@@ -505,13 +506,13 @@ defmodule SynapsisWeb.MCPLive.Index do
                   ]}
                 >
                   <div class="font-medium">{preset.name}</div>
-                  <div class="text-xs text-base-content/50 mt-1">{preset.description}</div>
-                  <div class="text-xs text-base-content/40 mt-1 font-mono">
+                  <div class="text-xs text-on-surface-variant mt-1">{preset.description}</div>
+                  <div class="text-xs text-on-surface-variant mt-1 font-mono">
                     {preset.command} {Enum.join(preset.args, " ")}
                   </div>
                   <div
                     :if={preset.name in @configured_names}
-                    class="text-xs text-base-content/40 mt-1"
+                    class="text-xs text-on-surface-variant mt-1"
                   >
                     Already configured
                   </div>
@@ -519,12 +520,12 @@ defmodule SynapsisWeb.MCPLive.Index do
               </button>
             </div>
 
-            <h3 class="text-sm font-semibold text-base-content/50 mt-6 mb-3">Custom</h3>
+            <h3 class="text-sm font-semibold text-on-surface-variant mt-6 mb-3">Custom</h3>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               <button phx-click="select_custom" class="w-full text-left">
                 <.dm_card variant="bordered" class="cursor-pointer border-dashed hover:border-primary">
                   <div class="font-medium">Custom MCP Server</div>
-                  <div class="text-xs text-base-content/50 mt-1">
+                  <div class="text-xs text-on-surface-variant mt-1">
                     Configure a custom stdio or SSE server
                   </div>
                 </.dm_card>
@@ -566,32 +567,35 @@ defmodule SynapsisWeb.MCPLive.Index do
               </.dm_btn>
             </div>
           </div>
-          <div class="text-xs text-base-content/50">
+          <div class="text-xs text-on-surface-variant">
             {config.transport}
             <span :if={config.command}>{" | #{config.command}"}</span>
             <span :if={config.args != []}>
               {" " <> Enum.join(config.args, " ")}
             </span>
           </div>
-          <div :if={config.url} class="text-xs text-base-content/40 mt-1 truncate">
+          <div :if={config.url} class="text-xs text-on-surface-variant mt-1 truncate">
             {config.url}
           </div>
           <div :if={map_size(config.env || %{}) > 0} class="text-xs text-warning mt-1">
             {"#{map_size(config.env)} env var(s)"}
           </div>
           <%!-- Server info from initialize response --%>
-          <div :if={ps[:running] && ps[:server_info]} class="mt-2 p-2 bg-base-200 rounded text-xs">
-            <div class="font-semibold text-base-content/70 mb-1">Server Info</div>
-            <div :if={ps[:server_info]["serverInfo"]} class="text-base-content/60">
+          <div
+            :if={ps[:running] && ps[:server_info]}
+            class="mt-2 p-2 bg-surface-container rounded text-xs"
+          >
+            <div class="font-semibold text-on-surface-variant mb-1">Server Info</div>
+            <div :if={ps[:server_info]["serverInfo"]} class="text-on-surface-variant">
               {ps[:server_info]["serverInfo"]["name"]}
               <span :if={ps[:server_info]["serverInfo"]["version"]}>
                 v{ps[:server_info]["serverInfo"]["version"]}
               </span>
             </div>
-            <div :if={ps[:server_info]["protocolVersion"]} class="text-base-content/40">
+            <div :if={ps[:server_info]["protocolVersion"]} class="text-on-surface-variant">
               Protocol: {ps[:server_info]["protocolVersion"]}
             </div>
-            <div :if={ps[:server_info]["capabilities"]} class="text-base-content/40">
+            <div :if={ps[:server_info]["capabilities"]} class="text-on-surface-variant">
               Capabilities: {ps[:server_info]["capabilities"] |> Map.keys() |> Enum.join(", ")}
             </div>
           </div>
@@ -637,34 +641,35 @@ defmodule SynapsisWeb.MCPLive.Index do
               backdrop
             >
               <:trigger :let={dialog_id}>
-                <button
-                  type="button"
-                  class="btn btn-ghost btn-xs text-primary"
+                <.dm_btn
+                  variant="ghost"
+                  size="xs"
+                  class="text-primary"
                   onclick={"var d=document.getElementById('#{dialog_id}');d.showModal();d.classList.add('modal-open');d.addEventListener('close',function(){d.classList.remove('modal-open')},{once:true})"}
                 >
                   <.dm_mdi name="puzzle-outline" class="w-3 h-3 mr-1" />
                   {length(ps[:tools])} tool(s)
-                </button>
+                </.dm_btn>
               </:trigger>
               <:title>Tools — {config.name}</:title>
               <:body>
                 <div class="w-full overflow-y-auto max-h-96">
                   <div
                     :for={tool <- ps[:tools]}
-                    class="border-b border-base-300 last:border-b-0 py-3"
+                    class="border-b border-outline-variant last:border-b-0 py-3"
                   >
                     <div class="font-mono text-sm font-semibold text-primary">
                       {tool["name"]}
                     </div>
-                    <div :if={tool["description"]} class="text-sm text-base-content/60 mt-1">
+                    <div :if={tool["description"]} class="text-sm text-on-surface-variant mt-1">
                       {tool["description"]}
                     </div>
                     <div :if={tool["inputSchema"]} class="mt-2">
                       <details class="cursor-pointer">
-                        <summary class="text-xs text-base-content/40 hover:text-base-content/60">
+                        <summary class="text-xs text-on-surface-variant hover:text-on-surface-variant">
                           Input Schema
                         </summary>
-                        <pre class="text-xs bg-base-200 p-2 rounded mt-1 overflow-x-auto"><code>{Jason.encode!(tool["inputSchema"], pretty: true)}</code></pre>
+                        <pre class="text-xs bg-surface-container p-2 rounded mt-1 overflow-x-auto"><code>{Jason.encode!(tool["inputSchema"], pretty: true)}</code></pre>
                       </details>
                     </div>
                   </div>
@@ -675,7 +680,7 @@ defmodule SynapsisWeb.MCPLive.Index do
         </.dm_card>
       </div>
 
-      <div :if={@configs == [] && !@show_form} class="text-center text-base-content/40 py-12">
+      <div :if={@configs == [] && !@show_form} class="text-center text-on-surface-variant py-12">
         No MCP servers configured. Click "+ Add MCP Server" to get started.
       </div>
     </div>

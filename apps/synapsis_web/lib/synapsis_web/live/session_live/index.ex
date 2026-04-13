@@ -190,7 +190,7 @@ defmodule SynapsisWeb.SessionLive.Index do
             <div class="font-medium">
               {session.title || "Session #{String.slice(session.id, 0, 8)}"}
             </div>
-            <div class="text-xs text-base-content/50 mt-1">
+            <div class="text-xs text-on-surface-variant mt-1">
               {session.provider}/{session.model} · {session.agent}
             </div>
           </.dm_card>
