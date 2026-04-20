@@ -518,7 +518,7 @@ defmodule SynapsisWeb.SessionLive.Show do
               size="sm"
               phx-click="toggle_new_session_debug"
             />
-            <.dm_btn variant="primary" class="w-full" phx-click="create_session">
+            <.dm_btn variant="outline" class="w-full" phx-click="create_session">
               Create
             </.dm_btn>
           </div>
@@ -581,7 +581,7 @@ defmodule SynapsisWeb.SessionLive.Show do
                   phx-keydown="cancel_editing_title"
                   phx-key="Escape"
                 />
-                <.dm_btn type="submit" variant="primary" size="xs">Save</.dm_btn>
+                <.dm_btn type="submit" variant="secondary" size="xs">Save</.dm_btn>
                 <.dm_btn variant="ghost" size="xs" phx-click="cancel_editing_title">
                   Cancel
                 </.dm_btn>

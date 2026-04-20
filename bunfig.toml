@@ -1,4 +1,8 @@
 [install]
 # Frozen lockfile in CI
 # frozenLockfile = true
-registry = "https://registry.npmmirror.com"
+registry = "https://npm.gsmlg.dev"
+optional = true
+
+[workspaces]
+packages = ["apps/*"]

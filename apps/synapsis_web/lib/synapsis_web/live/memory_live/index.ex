@@ -222,41 +222,47 @@ defmodule SynapsisWeb.MemoryLive.Index do
       <%!-- Knowledge tab --%>
       <%= if @active_tab == "knowledge" do %>
         <div class="mb-4 flex flex-wrap gap-2 items-center">
-          <select
-            class="select select-sm select-bordered bg-surface-container text-on-surface"
-            phx-change="filter_scope"
+          <.dm_select
             name="scope"
-          >
-            <option value="all" selected={@scope_filter == "all"}>All Scopes</option>
-            <option value="shared" selected={@scope_filter == "shared"}>Shared</option>
-            <option value="project" selected={@scope_filter == "project"}>Project</option>
-            <option value="agent" selected={@scope_filter == "agent"}>Agent</option>
-          </select>
+            value={@scope_filter}
+            options={[
+              {"all", "All Scopes"},
+              {"shared", "Shared"},
+              {"project", "Project"},
+              {"agent", "Agent"}
+            ]}
+            size="sm"
+            phx-change="filter_scope"
+          />
 
-          <select
-            class="select select-sm select-bordered bg-surface-container text-on-surface"
-            phx-change="filter_kind"
+          <.dm_select
             name="kind"
-          >
-            <option value="all" selected={@kind_filter == "all"}>All Kinds</option>
-            <option value="fact" selected={@kind_filter == "fact"}>Fact</option>
-            <option value="decision" selected={@kind_filter == "decision"}>Decision</option>
-            <option value="lesson" selected={@kind_filter == "lesson"}>Lesson</option>
-            <option value="preference" selected={@kind_filter == "preference"}>Preference</option>
-            <option value="pattern" selected={@kind_filter == "pattern"}>Pattern</option>
-            <option value="warning" selected={@kind_filter == "warning"}>Warning</option>
-          </select>
+            value={@kind_filter}
+            options={[
+              {"all", "All Kinds"},
+              {"fact", "Fact"},
+              {"decision", "Decision"},
+              {"lesson", "Lesson"},
+              {"preference", "Preference"},
+              {"pattern", "Pattern"},
+              {"warning", "Warning"}
+            ]}
+            size="sm"
+            phx-change="filter_kind"
+          />
 
-          <select
-            class="select select-sm select-bordered bg-surface-container text-on-surface"
-            phx-change="filter_source"
+          <.dm_select
             name="source"
-          >
-            <option value="all" selected={@source_filter == "all"}>All Sources</option>
-            <option value="human" selected={@source_filter == "human"}>Human</option>
-            <option value="agent" selected={@source_filter == "agent"}>Agent</option>
-            <option value="summarizer" selected={@source_filter == "summarizer"}>Summarizer</option>
-          </select>
+            value={@source_filter}
+            options={[
+              {"all", "All Sources"},
+              {"human", "Human"},
+              {"agent", "Agent"},
+              {"summarizer", "Summarizer"}
+            ]}
+            size="sm"
+            phx-change="filter_source"
+          />
 
           <div class="flex-1" />
 
@@ -272,29 +278,27 @@ defmodule SynapsisWeb.MemoryLive.Index do
             <.dm_form for={@create_form} id="create-memory-form" phx-submit="create_memory">
               <div class="grid grid-cols-2 gap-4 mb-4">
                 <div>
-                  <label class="label text-on-surface-variant text-sm">Scope</label>
-                  <select
+                  <.dm_select
                     name="scope"
-                    class="select select-bordered w-full bg-surface-container text-on-surface"
-                  >
-                    <option value="shared">Shared</option>
-                    <option value="project" selected>Project</option>
-                    <option value="agent">Agent</option>
-                  </select>
+                    label="Scope"
+                    value="project"
+                    options={[{"shared", "Shared"}, {"project", "Project"}, {"agent", "Agent"}]}
+                  />
                 </div>
                 <div>
-                  <label class="label text-on-surface-variant text-sm">Kind</label>
-                  <select
+                  <.dm_select
                     name="kind"
-                    class="select select-bordered w-full bg-surface-container text-on-surface"
-                  >
-                    <option value="fact" selected>Fact</option>
-                    <option value="decision">Decision</option>
-                    <option value="lesson">Lesson</option>
-                    <option value="preference">Preference</option>
-                    <option value="pattern">Pattern</option>
-                    <option value="warning">Warning</option>
-                  </select>
+                    label="Kind"
+                    value="fact"
+                    options={[
+                      {"fact", "Fact"},
+                      {"decision", "Decision"},
+                      {"lesson", "Lesson"},
+                      {"preference", "Preference"},
+                      {"pattern", "Pattern"},
+                      {"warning", "Warning"}
+                    ]}
+                  />
                 </div>
               </div>
               <div class="mb-4">
@@ -317,7 +321,7 @@ defmodule SynapsisWeb.MemoryLive.Index do
               </div>
               <div class="flex gap-2 justify-end">
                 <.dm_btn variant="ghost" phx-click="cancel_create">Cancel</.dm_btn>
-                <.dm_btn variant="primary" type="submit">Save</.dm_btn>
+                <.dm_btn variant="secondary" type="submit">Save</.dm_btn>
               </div>
             </.dm_form>
           </.dm_card>
@@ -389,21 +393,23 @@ defmodule SynapsisWeb.MemoryLive.Index do
       <%!-- Events tab --%>
       <%= if @active_tab == "events" do %>
         <div class="mb-4">
-          <select
-            class="select select-sm select-bordered bg-surface-container text-on-surface"
-            phx-change="filter_event_type"
+          <.dm_select
             name="type"
-          >
-            <option value="all" selected={@events_type_filter == "all"}>All Types</option>
-            <option value="tool_called">Tool Called</option>
-            <option value="tool_succeeded">Tool Succeeded</option>
-            <option value="tool_failed">Tool Failed</option>
-            <option value="message_added">Message Added</option>
-            <option value="task_completed">Task Completed</option>
-            <option value="task_failed">Task Failed</option>
-            <option value="memory_promoted">Memory Promoted</option>
-            <option value="memory_updated">Memory Updated</option>
-          </select>
+            value={@events_type_filter}
+            options={[
+              {"all", "All Types"},
+              {"tool_called", "Tool Called"},
+              {"tool_succeeded", "Tool Succeeded"},
+              {"tool_failed", "Tool Failed"},
+              {"message_added", "Message Added"},
+              {"task_completed", "Task Completed"},
+              {"task_failed", "Task Failed"},
+              {"memory_promoted", "Memory Promoted"},
+              {"memory_updated", "Memory Updated"}
+            ]}
+            size="sm"
+            phx-change="filter_event_type"
+          />
         </div>
 
         <%= if @events == [] do %>

@@ -35,10 +35,10 @@ config :phoenix, :json_library, Jason
 
 # Configure bun for JS bundling
 config :bun,
-  version: "1.3.3",
+  version: "1.3.4",
   synapsis_web: [
     args: ~w(build assets/js/app.ts --outdir=priv/static/assets
-             --external=/fonts/* --external=/images/*),
+             --format=esm --external=/fonts/* --external=/images/*),
     cd: Path.expand("../apps/synapsis_web", __DIR__),
     env: %{}
   ]

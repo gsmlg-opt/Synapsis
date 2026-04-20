@@ -3,11 +3,11 @@ export const SendButtonHook = {
     this.el.addEventListener("click", () => {
       const input = document.getElementById("message-input") as any
       if (!input) return
-      const value = (input.value || input.getAttribute("value") || "").trim()
+      // getValue() returns the live editor content; .value is the stale property
+      const value = (input.getValue?.() ?? input.value ?? "").trim()
       if (value) {
         this.pushEvent("send_message", { content: value })
-        input.value = ""
-        input.setAttribute("value", "")
+        input.setValue?.("")
       }
     })
   },

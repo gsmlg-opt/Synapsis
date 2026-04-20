@@ -574,46 +574,31 @@ defmodule SynapsisWeb.AssistantLive.Setting do
         <div class="text-xs text-on-surface-variant mb-3">Model Selection</div>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <form phx-change="select_provider">
-            <label class="text-xs text-on-surface-variant mb-1 block">Provider</label>
-            <select
+            <.dm_select
               name="provider"
-              class="w-full bg-surface-container border border-outline-variant rounded px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
-            >
-              <option
-                :for={p <- @providers}
-                value={p.name}
-                selected={p.name == @selected_provider}
-              >
-                {p.name}
-              </option>
-            </select>
+              label="Provider"
+              value={@selected_provider}
+              options={Enum.map(@providers, &{&1.name, &1.name})}
+              size="sm"
+            />
           </form>
           <form phx-change="select_model">
-            <label class="text-xs text-on-surface-variant mb-1 block">Primary model (default)</label>
-            <select
+            <.dm_select
               name="model"
-              class="w-full bg-surface-container border border-outline-variant rounded px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
-            >
-              <option
-                :for={model <- @available_models}
-                value={model_id(model)}
-                selected={model_id(model) == @selected_model}
-              >
-                {model_label(model)}
-              </option>
-            </select>
+              label="Primary model (default)"
+              value={@selected_model}
+              options={Enum.map(@available_models, &{model_id(&1), model_label(&1)})}
+              size="sm"
+            />
           </form>
           <form phx-change="update_fallbacks">
-            <label class="text-xs text-on-surface-variant mb-1 block">
-              Fallbacks (comma-separated)
-            </label>
-            <input
-              type="text"
+            <.dm_input
               name="fallbacks"
+              label="Fallbacks (comma-separated)"
               value={@fallbacks}
               phx-debounce="300"
               placeholder="model-1, model-2, ..."
-              class="w-full bg-surface-container border border-outline-variant rounded px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
+              size="sm"
             />
           </form>
         </div>
@@ -835,7 +820,7 @@ defmodule SynapsisWeb.AssistantLive.Setting do
             if(@enabled, do: "bg-primary", else: "bg-on-surface/20")
           ]}>
             <div class={[
-              "absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all",
+              "absolute top-0.5 w-4 h-4 rounded-full bg-surface-container-highest shadow transition-all",
               if(@enabled, do: "left-[18px]", else: "left-0.5")
             ]} />
           </div>
@@ -1005,7 +990,7 @@ defmodule SynapsisWeb.AssistantLive.Setting do
           if(@heartbeat.enabled, do: "bg-primary", else: "bg-on-surface/20")
         ]}>
           <div class={[
-            "absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all",
+            "absolute top-0.5 w-4 h-4 rounded-full bg-surface-container-highest shadow transition-all",
             if(@heartbeat.enabled, do: "left-[18px]", else: "left-0.5")
           ]} />
         </div>

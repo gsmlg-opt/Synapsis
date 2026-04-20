@@ -489,12 +489,16 @@ defmodule SynapsisWeb.MCPLive.Index do
               </.dm_link>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              <button
+              <div
                 :for={preset <- @presets}
-                phx-click="select_preset"
+                phx-click={if(preset.name not in @configured_names, do: "select_preset")}
                 phx-value-name={preset.name}
-                disabled={preset.name in @configured_names}
-                class="w-full text-left"
+                class={[
+                  "w-full text-left",
+                  if(preset.name not in @configured_names, do: "cursor-pointer")
+                ]}
+                role="button"
+                tabindex="0"
               >
                 <.dm_card
                   variant="bordered"
@@ -517,19 +521,24 @@ defmodule SynapsisWeb.MCPLive.Index do
                     Already configured
                   </div>
                 </.dm_card>
-              </button>
+              </div>
             </div>
 
             <h3 class="text-sm font-semibold text-on-surface-variant mt-6 mb-3">Custom</h3>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              <button phx-click="select_custom" class="w-full text-left">
+              <div
+                phx-click="select_custom"
+                class="w-full text-left cursor-pointer"
+                role="button"
+                tabindex="0"
+              >
                 <.dm_card variant="bordered" class="cursor-pointer border-dashed hover:border-primary">
                   <div class="font-medium">Custom MCP Server</div>
                   <div class="text-xs text-on-surface-variant mt-1">
                     Configure a custom stdio or SSE server
                   </div>
                 </.dm_card>
-              </button>
+              </div>
             </div>
           </div>
         <% end %>

@@ -371,22 +371,13 @@ defmodule SynapsisWeb.CoreComponents do
       <div :if={!@has_session} class="text-xs text-on-surface-variant">
         No active session
       </div>
-      <div class="flex items-center gap-3">
-        <div class="flex items-center gap-1.5 text-xs text-on-surface-variant">
-          <span class={[
-            "inline-block w-2 h-2 rounded-full",
-            status_dot_color(@session_status)
-          ]}>
-          </span>
-          {@session_status}
-        </div>
-        <.dm_link
-          navigate={~p"/settings"}
-          class="flex items-center gap-1 text-xs text-on-surface-variant hover:text-on-surface transition-colors"
-        >
-          <.dm_mdi name="cog-outline" class="w-3.5 h-3.5" />
-          <span class="hidden sm:inline">Settings</span>
-        </.dm_link>
+      <div class="flex items-center gap-1.5 text-xs text-on-surface-variant">
+        <span class={[
+          "inline-block w-2 h-2 rounded-full",
+          status_dot_color(@session_status)
+        ]}>
+        </span>
+        {@session_status}
       </div>
     </div>
     """
@@ -401,8 +392,7 @@ defmodule SynapsisWeb.CoreComponents do
   @doc """
   Breadcrumb navigation with proper link support.
 
-  Replaces `dm_breadcrumb` which uses unstyled DaisyUI `breadcrumbs` class
-  and doesn't render the `to` attribute as links.
+  Custom breadcrumb navigation with proper link support.
   """
   attr :class, :string, default: nil
 

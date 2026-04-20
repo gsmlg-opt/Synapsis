@@ -211,11 +211,13 @@ defmodule SynapsisWeb.ProviderLive.Index do
               </.dm_btn>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              <button
+              <div
                 :for={preset <- @presets}
                 phx-click="select_preset"
                 phx-value-name={preset.name}
-                class="text-left"
+                class="text-left cursor-pointer"
+                role="button"
+                tabindex="0"
               >
                 <.dm_card
                   variant="bordered"
@@ -224,16 +226,18 @@ defmodule SynapsisWeb.ProviderLive.Index do
                   <div class="font-medium">{preset.name}</div>
                   <div class="text-xs text-on-surface-variant mt-1">{preset.type}</div>
                 </.dm_card>
-              </button>
+              </div>
             </div>
 
             <h3 class="text-sm font-semibold text-on-surface-variant mt-6 mb-3">Custom</h3>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              <button
+              <div
                 :for={custom <- @custom_presets}
                 phx-click="select_custom"
                 phx-value-type={custom.type}
-                class="text-left"
+                class="text-left cursor-pointer"
+                role="button"
+                tabindex="0"
               >
                 <.dm_card
                   variant="bordered"
@@ -242,7 +246,7 @@ defmodule SynapsisWeb.ProviderLive.Index do
                   <div class="font-medium">{custom.label}</div>
                   <div class="text-xs text-on-surface-variant mt-1">Custom base URL</div>
                 </.dm_card>
-              </button>
+              </div>
             </div>
           </div>
         <% end %>

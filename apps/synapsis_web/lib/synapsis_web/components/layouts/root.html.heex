@@ -7,13 +7,20 @@
     <title>Synapsis</title>
     <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
     <script>
-      // Restore saved theme before first paint to avoid flash
+      // Restore saved theme before first paint to avoid flash.
+      // Validate against known themes to avoid applying a stale/invalid value
+      // that would leave all CSS theme variables unresolved.
       (function() {
+        var valid = ["sunshine", "moonlight"];
         var t = localStorage.getItem("theme");
-        if (t) document.documentElement.setAttribute("data-theme", t);
+        if (t && valid.indexOf(t) >= 0) {
+          document.documentElement.setAttribute("data-theme", t);
+        } else if (t) {
+          localStorage.removeItem("theme");
+        }
       })();
     </script>
-    <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
+    <script defer phx-track-static type="module" src={~p"/assets/app.js"}>
     </script>
   </head>
   <body class="bg-surface text-on-surface min-h-screen overflow-x-hidden">

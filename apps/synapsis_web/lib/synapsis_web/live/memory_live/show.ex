@@ -188,15 +188,17 @@ defmodule SynapsisWeb.MemoryLive.Show do
           <.dm_form for={@edit_form} id="edit-memory-form" phx-submit="save">
             <div class="grid grid-cols-2 gap-4 mb-4">
               <div>
-                <label class="label text-on-surface-variant text-sm">Kind</label>
-                <select
+                <.dm_select
                   name="kind"
-                  class="select select-bordered w-full bg-surface-container text-on-surface"
-                >
-                  <%= for kind <- ~w(fact decision lesson preference pattern warning) do %>
-                    <option value={kind} selected={@memory.kind == kind}>{kind}</option>
-                  <% end %>
-                </select>
+                  label="Kind"
+                  value={@memory.kind}
+                  options={
+                    Enum.map(
+                      ~w(fact decision lesson preference pattern warning),
+                      &{&1, String.capitalize(&1)}
+                    )
+                  }
+                />
               </div>
               <div class="grid grid-cols-2 gap-2">
                 <div>

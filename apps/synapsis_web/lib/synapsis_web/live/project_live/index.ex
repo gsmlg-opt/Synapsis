@@ -147,7 +147,7 @@ defmodule SynapsisWeb.ProjectLive.Index do
             <.dm_btn type="button" variant="ghost" size="sm" phx-click="toggle_browser">
               <.dm_mdi name="folder-search-outline" class="w-5 h-5" /> Browse
             </.dm_btn>
-            <.dm_btn type="submit" variant="primary" size="sm">
+            <.dm_btn type="submit" variant="secondary" size="sm">
               Create
             </.dm_btn>
           </div>

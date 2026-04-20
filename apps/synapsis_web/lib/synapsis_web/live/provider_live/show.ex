@@ -505,7 +505,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
                   Sign in with your ChatGPT account using the OAuth device flow.
                   This uses the same authentication as OpenAI Codex CLI.
                 </p>
-                <.dm_btn variant="primary" phx-click="oauth_start">
+                <.dm_btn variant="secondary" phx-click="oauth_start">
                   <.dm_mdi name="login" class="mr-2" /> Sign in with ChatGPT
                 </.dm_btn>
               </div>
@@ -547,7 +547,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
                 <div class="bg-error/10 border border-error/30 rounded-lg px-3 py-2 text-sm text-error">
                   {@oauth_error}
                 </div>
-                <.dm_btn variant="primary" size="sm" phx-click="oauth_start">
+                <.dm_btn variant="secondary" size="sm" phx-click="oauth_start">
                   Try Again
                 </.dm_btn>
               </div>
@@ -571,23 +571,19 @@ defmodule SynapsisWeb.ProviderLive.Show do
             <input type="hidden" name="models[]" value="" />
             <div class="space-y-2">
               <div :for={model <- @all_models} class="flex items-center gap-3">
-                <label class="flex items-center gap-2 text-sm leading-6">
-                  <input
-                    type="checkbox"
-                    name="models[]"
-                    value={model.id}
-                    checked={model_enabled?(model.id, @enabled_models)}
-                    class="checkbox"
-                    id={"model-#{model.id}"}
-                  />
-                  {model.name}
-                </label>
+                <.dm_checkbox
+                  name="models[]"
+                  value={model.id}
+                  checked={model_enabled?(model.id, @enabled_models)}
+                  id={"model-#{model.id}"}
+                  label={model.name}
+                />
                 <span class="text-xs text-on-surface-variant">{model.id}</span>
               </div>
             </div>
             <:actions>
               <div class="flex gap-2">
-                <.dm_btn type="submit" variant="primary" size="sm">
+                <.dm_btn type="submit" variant="secondary" size="sm">
                   Save Models
                 </.dm_btn>
                 <.dm_btn type="button" variant="ghost" size="sm" phx-click="toggle_edit_models">
@@ -697,7 +693,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
               disabled={@chat_streaming}
               class="flex-1"
             />
-            <.dm_btn type="submit" variant="primary" size="sm" disabled={@chat_streaming}>
+            <.dm_btn type="submit" variant="secondary" size="sm" disabled={@chat_streaming}>
               Send
             </.dm_btn>
           </.dm_form>

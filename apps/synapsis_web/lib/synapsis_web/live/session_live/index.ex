@@ -175,7 +175,7 @@ defmodule SynapsisWeb.SessionLive.Index do
           <% end %>
         </div>
         <:action>
-          <.dm_btn variant="primary" class="w-full" phx-click="create_session">
+          <.dm_btn variant="secondary" class="w-full" phx-click="create_session">
             Create Session
           </.dm_btn>
         </:action>

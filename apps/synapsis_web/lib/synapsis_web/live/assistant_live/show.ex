@@ -414,7 +414,7 @@ defmodule SynapsisWeb.AssistantLive.Show do
             </.dm_link>
           </div>
           <%= if @provider_configured do %>
-            <.dm_btn variant="primary" class="w-full" phx-click="toggle_new_session">
+            <.dm_btn variant="outline" class="w-full" phx-click="toggle_new_session">
               <.dm_mdi name="plus" class="w-4 h-4" /> New Session
             </.dm_btn>
           <% else %>
@@ -423,7 +423,7 @@ defmodule SynapsisWeb.AssistantLive.Show do
               position="bottom"
               color="warning"
             >
-              <.dm_btn variant="primary" class="w-full opacity-50 cursor-not-allowed" disabled>
+              <.dm_btn variant="outline" class="w-full opacity-50 cursor-not-allowed" disabled>
                 <.dm_mdi name="plus" class="w-4 h-4" /> New Session
               </.dm_btn>
             </.dm_tooltip>
@@ -439,7 +439,7 @@ defmodule SynapsisWeb.AssistantLive.Show do
             {@agent_config.provider} / {@agent_config.model ||
               Synapsis.Providers.default_model(@agent_config.provider)}
           </div>
-          <.dm_btn variant="primary" size="sm" class="w-full" phx-click="create_session">
+          <.dm_btn variant="outline" size="sm" class="w-full" phx-click="create_session">
             Create Session
           </.dm_btn>
         </div>
@@ -572,31 +572,32 @@ defmodule SynapsisWeb.AssistantLive.Show do
 
           <%!-- Input area --%>
           <div class="border-t border-outline-variant p-3 bg-surface">
-            <div class="flex gap-2 items-end">
-              <.dm_markdown_input
-                id="message-input"
-                name="content"
-                value=""
-                phx-hook="MarkdownSubmit"
-                placeholder="Send a message... (Ctrl+Enter to send)"
-                disabled={@session_status not in ~w(idle error)}
-                theme="auto"
-                class={[
-                  "flex-1 min-h-[80px] max-h-[200px]",
-                  if(@session_status not in ~w(idle error), do: "opacity-50 cursor-not-allowed")
-                ]}
-              />
-              <.dm_btn
-                id="send-btn"
-                variant="primary"
-                size="md"
-                disabled={@session_status not in ~w(idle error)}
-                phx-hook="SendButton"
-                class="self-end mb-1"
-              >
-                <.dm_mdi name="send" class="w-5 h-5" />
-              </.dm_btn>
-            </div>
+            <el-dm-markdown-input
+              id="message-input"
+              name="content"
+              value=""
+              phx-hook="MarkdownSubmit"
+              placeholder="Send a message... (Ctrl+Enter to send)"
+              disabled={@session_status not in ~w(idle error)}
+              theme="auto"
+              class={[
+                "w-full min-h-[80px] max-h-[200px]",
+                if(@session_status not in ~w(idle error), do: "opacity-50 cursor-not-allowed")
+              ]}
+            >
+              <div slot="bottom-end">
+                <.dm_btn
+                  id="send-btn"
+                  variant="primary"
+                  size="sm"
+                  disabled={@session_status not in ~w(idle error)}
+                  phx-hook="SendButton"
+                >
+                  <.dm_mdi name="send" class="w-4 h-4" />
+                  <span>Send</span>
+                </.dm_btn>
+              </div>
+            </el-dm-markdown-input>
           </div>
 
           <%!-- Status bar --%>
@@ -620,12 +621,12 @@ defmodule SynapsisWeb.AssistantLive.Show do
             >
               <:action>
                 <%= if @provider_configured do %>
-                  <.dm_btn variant="primary" phx-click="toggle_new_session">
+                  <.dm_btn variant="secondary" phx-click="toggle_new_session">
                     <.dm_mdi name="plus" class="w-4 h-4" /> New Session
                   </.dm_btn>
                 <% else %>
                   <.dm_link navigate={~p"/assistant/#{@assistant_name}/setting"}>
-                    <.dm_btn variant="primary">
+                    <.dm_btn variant="secondary">
                       <.dm_mdi name="cog-outline" class="w-4 h-4" /> Go to Settings
                     </.dm_btn>
                   </.dm_link>
