@@ -44,6 +44,8 @@ defmodule SynapsisServer.Router do
   scope "/api", SynapsisServer do
     pipe_through :api
 
+    get "/health", HealthController, :show
+
     resources "/sessions", SessionController, only: [:index, :show, :create, :delete]
     post "/sessions/:id/messages", SessionController, :send_message
     post "/sessions/:id/fork", SessionController, :fork

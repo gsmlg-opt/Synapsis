@@ -6,7 +6,7 @@ defmodule SynapsisCore.Application do
   @impl true
   def start(_type, _args) do
     optional_children =
-      [SynapsisPlugin.Supervisor, SynapsisServer.Supervisor]
+      [SynapsisPlugin.Supervisor]
       |> Enum.filter(&Code.ensure_loaded?/1)
 
     oban_child =

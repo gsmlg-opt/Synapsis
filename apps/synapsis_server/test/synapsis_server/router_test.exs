@@ -211,6 +211,13 @@ defmodule SynapsisServer.RouterTest do
     end
   end
 
+  describe "API health routes exist" do
+    test "GET /api/health" do
+      assert %{plug: SynapsisServer.HealthController, plug_opts: :show} =
+               Phoenix.Router.route_info(SynapsisServer.Router, "GET", "/api/health", "")
+    end
+  end
+
   # ---------------------------------------------------------------------------
   # 404 for unknown routes
   # ---------------------------------------------------------------------------
