@@ -249,7 +249,9 @@ defmodule SynapsisWeb.CoreComponents do
   defp tool_status_color("pending"), do: "ghost"
   defp tool_status_color("running"), do: "warning"
   defp tool_status_color("complete"), do: "success"
+  defp tool_status_color("completed"), do: "success"
   defp tool_status_color("error"), do: "error"
+  defp tool_status_color(_), do: "ghost"
 
   @doc """
   Read-only form field with label and value display.
