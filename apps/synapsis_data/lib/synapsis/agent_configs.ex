@@ -4,6 +4,25 @@ defmodule Synapsis.AgentConfigs do
   import Ecto.Query, except: [update: 2]
   alias Synapsis.{AgentConfig, Repo}
 
+  @build_tools ~w(
+    file_read file_edit file_write multi_edit file_delete file_move list_dir
+    grep glob bash fetch web_search
+    todo_read todo_write enter_plan_mode exit_plan_mode
+    task skill tool_search ask_user sleep
+    memory_save memory_search memory_update session_summarize
+    board_read board_update devlog_read devlog_write
+    repo_link repo_status repo_sync
+    worktree_create worktree_list worktree_remove
+    workspace_read workspace_write workspace_list workspace_search
+    diagnostics
+  )
+
+  @plan_tools ~w(file_read grep glob diagnostics)
+
+  @assistant_tools ~w(
+    task ask_user web_search todo_read todo_write enter_plan_mode exit_plan_mode
+  )
+
   @doc "List all agent configs, ordered by name."
   def list do
     AgentConfig
@@ -48,6 +67,73 @@ defmodule Synapsis.AgentConfigs do
     Repo.delete(agent_config)
   end
 
+  @doc "Return default agent configuration maps."
+  def default_attrs do
+    [
+      %{
+        name: "assistant",
+        label: "Assistant",
+        icon: "account-supervisor-outline",
+        description: "Coordinator assistant for planning, delegation, and user interaction.",
+        system_prompt: assistant_system_prompt(),
+        tools: @assistant_tools,
+        reasoning_effort: "high",
+        read_only: false,
+        max_tokens: 8192,
+        model_tier: "expert",
+        is_default: false,
+        enabled: true
+      },
+      %{
+        name: "build",
+        label: "Build",
+        icon: "robot-outline",
+        description: "AI coding assistant with full workspace access, tools, and memory.",
+        system_prompt: default_system_prompt(),
+        tools: @build_tools,
+        reasoning_effort: "medium",
+        read_only: false,
+        max_tokens: 8192,
+        model_tier: "default",
+        is_default: true,
+        enabled: true
+      },
+      %{
+        name: "main",
+        label: "Main",
+        icon: "robot-outline",
+        description: "AI coding assistant with full workspace access, tools, and memory.",
+        system_prompt: default_system_prompt(),
+        tools: @build_tools,
+        reasoning_effort: "medium",
+        read_only: false,
+        max_tokens: 8192,
+        model_tier: "default",
+        is_default: false,
+        enabled: true
+      },
+      %{
+        name: "plan",
+        label: "Plan",
+        icon: "clipboard-text-outline",
+        description: "Read-only planning assistant for analysis before implementation.",
+        system_prompt: plan_system_prompt(),
+        tools: @plan_tools,
+        reasoning_effort: "high",
+        read_only: true,
+        max_tokens: 8192,
+        model_tier: "expert",
+        is_default: false,
+        enabled: true
+      }
+    ]
+  end
+
+  @doc "Return a default agent configuration map by name."
+  def default_attrs(name) when is_binary(name) do
+    Enum.find(default_attrs(), &(&1.name == name))
+  end
+
   @doc "Upsert an agent config by name — insert or update."
   def upsert(name, attrs) when is_binary(name) and is_map(attrs) do
     case get_by_name(name) do
@@ -65,90 +151,7 @@ defmodule Synapsis.AgentConfigs do
   Called on application startup.
   """
   def seed_defaults do
-    defaults = [
-      %{
-        name: "main",
-        label: "Main",
-        icon: "robot-outline",
-        description: "AI coding assistant with full workspace access, tools, and memory.",
-        system_prompt: """
-        You are Synapsis, an AI coding assistant. You help developers write, edit, and understand code.
-        You have access to tools for reading files, editing files, running shell commands, and searching code.
-        Always explain your reasoning before making changes. Be concise and precise.
-        """,
-        tools: [
-          # Filesystem
-          "file_read",
-          "file_edit",
-          "file_write",
-          "multi_edit",
-          "file_delete",
-          "file_move",
-          "list_dir",
-          # Search
-          "grep",
-          "glob",
-          # Execution
-          "bash",
-          # Web
-          "fetch",
-          "web_search",
-          # Planning
-          "todo_read",
-          "todo_write",
-          "enter_plan_mode",
-          "exit_plan_mode",
-          # Orchestration
-          "task",
-          "skill",
-          "tool_search",
-          # Interaction
-          "ask_user",
-          # Session
-          "sleep",
-          # Memory
-          "memory_save",
-          "memory_search",
-          "memory_update",
-          "session_summarize",
-          # Workflow
-          "board_read",
-          "board_update",
-          "devlog_read",
-          "devlog_write",
-          # Repo & Worktree
-          "repo_link",
-          "repo_status",
-          "repo_sync",
-          "worktree_create",
-          "worktree_list",
-          "worktree_remove",
-          # Workspace
-          "workspace_read",
-          "workspace_write",
-          "workspace_list",
-          "workspace_search",
-          # Diagnostics
-          "diagnostics"
-        ],
-        reasoning_effort: "medium",
-        read_only: false,
-        max_tokens: 8192,
-        model_tier: "default",
-        is_default: true,
-        enabled: true
-      }
-    ]
-
-    # Remove legacy agents that are no longer used
-    for name <- ~w(assistant build plan default) do
-      case get_by_name(name) do
-        nil -> :ok
-        agent -> delete(agent)
-      end
-    end
-
-    for attrs <- defaults do
+    for attrs <- default_attrs() do
       case get_by_name(attrs.name) do
         nil -> create(attrs)
         _existing -> :ok
@@ -156,5 +159,27 @@ defmodule Synapsis.AgentConfigs do
     end
 
     :ok
+  end
+
+  defp default_system_prompt do
+    """
+    You are Synapsis, an AI coding assistant. You help developers write, edit, and understand code.
+    You have access to tools for reading files, editing files, running shell commands, and searching code.
+    Always explain your reasoning before making changes. Be concise and precise.
+    """
+  end
+
+  defp plan_system_prompt do
+    """
+    You are Synapsis in planning mode. Analyze the request, inspect context, and produce careful plans.
+    Use read-only tools only. Do not edit files or run commands that modify the workspace.
+    """
+  end
+
+  defp assistant_system_prompt do
+    """
+    You are Synapsis Assistant, a coordinator for planning, task routing, and user interaction.
+    Help organize work and delegate when appropriate. Do not directly edit the workspace.
+    """
   end
 end

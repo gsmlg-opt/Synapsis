@@ -164,8 +164,22 @@ defmodule Synapsis.Session.Monitor do
     }
   end
 
+  @doc "Returns the highest-severity signal currently recorded, or `:ok`."
+  @spec worst_signal(t()) :: signal()
+  def worst_signal(%__MODULE__{signals: []}), do: :ok
+
+  def worst_signal(%__MODULE__{signals: signals}) do
+    Enum.max_by(signals, &signal_severity/1)
+  end
+
   defp max_duplicate(counts) when map_size(counts) == 0, do: 0
   defp max_duplicate(counts), do: counts |> Map.values() |> Enum.max()
+
+  defp signal_severity({:test_regression, _payload}), do: 4
+  defp signal_severity({:duplicate_tool_call, _hash, _count}), do: 3
+  defp signal_severity({:stagnation, _count}), do: 2
+  defp signal_severity({:iteration_warning, _count}), do: 1
+  defp signal_severity(_signal), do: 0
 
   defp cap_signals(signals) when length(signals) > @max_signals do
     Enum.take(signals, @max_signals)

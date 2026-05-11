@@ -14,7 +14,10 @@ defmodule Synapsis.Agent.Resolver do
         from_db(ac)
 
       nil ->
-        hardcoded_default(name)
+        name
+        |> default_name()
+        |> AgentConfigs.default_attrs()
+        |> from_default()
     end
   end
 
@@ -50,68 +53,39 @@ defmodule Synapsis.Agent.Resolver do
     }
   end
 
-  defp hardcoded_default(_name) do
+  defp from_default(attrs) when is_map(attrs) do
     %{
-      name: "main",
-      label: "Main",
-      icon: "robot-outline",
-      description: "AI coding assistant with full workspace access, tools, and memory.",
-      model: nil,
-      provider: nil,
-      system_prompt: default_system_prompt(),
-      tools: [
-        "file_read",
-        "file_edit",
-        "file_write",
-        "multi_edit",
-        "file_delete",
-        "file_move",
-        "list_dir",
-        "grep",
-        "glob",
-        "bash",
-        "fetch",
-        "web_search",
-        "todo_read",
-        "todo_write",
-        "enter_plan_mode",
-        "exit_plan_mode",
-        "task",
-        "skill",
-        "tool_search",
-        "ask_user",
-        "sleep",
-        "memory_save",
-        "memory_search",
-        "memory_update",
-        "session_summarize",
-        "board_read",
-        "board_update",
-        "devlog_read",
-        "devlog_write",
-        "repo_link",
-        "repo_status",
-        "repo_sync",
-        "worktree_create",
-        "worktree_list",
-        "worktree_remove",
-        "diagnostics"
-      ],
-      reasoning_effort: "medium",
-      read_only: false,
-      max_tokens: 8192,
-      model_tier: :default,
-      fallback_models: "",
-      is_default: true,
-      enabled: true
+      name: attrs.name,
+      label: attrs.label,
+      icon: attrs.icon,
+      description: attrs.description,
+      model: Map.get(attrs, :model),
+      provider: Map.get(attrs, :provider),
+      system_prompt: attrs.system_prompt,
+      tools: attrs.tools,
+      reasoning_effort: attrs.reasoning_effort,
+      read_only: attrs.read_only,
+      max_tokens: attrs.max_tokens,
+      model_tier: model_tier(Map.get(attrs, :model_tier)),
+      fallback_models: Map.get(attrs, :fallback_models, ""),
+      is_default: attrs.is_default,
+      enabled: attrs.enabled
     }
   end
 
+  defp from_default(nil), do: "build" |> AgentConfigs.default_attrs() |> from_default()
+
+  defp default_name("assistant"), do: "assistant"
+  defp default_name("build"), do: "build"
+  defp default_name("main"), do: "main"
+  defp default_name("plan"), do: "plan"
+  defp default_name(_name), do: "build"
+
+  defp model_tier("fast"), do: :fast
+  defp model_tier("expert"), do: :expert
+  defp model_tier(_tier), do: :default
+
   defp default_system_prompt do
-    """
-    You are Synapsis, an AI coding assistant. You help developers write, edit, and understand code.
-    You have access to tools for reading files, editing files, running shell commands, and searching code.
-    Always explain your reasoning before making changes. Be concise and precise.
-    """
+    AgentConfigs.default_attrs("build").system_prompt
   end
 end

@@ -33,12 +33,12 @@ defmodule Synapsis.ProjectsTest do
         |> Project.changeset(%{path: "/tmp/proj_get", slug: "proj-get", name: "proj-get"})
         |> Repo.insert()
 
-      assert {:ok, found} = Projects.get(project.id)
+      assert found = Projects.get(project.id)
       assert found.id == project.id
     end
 
     test "returns error for missing project" do
-      assert {:error, :not_found} = Projects.get(Ecto.UUID.generate())
+      assert Projects.get(Ecto.UUID.generate()) == nil
     end
   end
 

@@ -61,20 +61,10 @@ defmodule Synapsis.Session.Sharing do
   end
 
   defp do_import(session_data, messages_data, project_path) do
-    slug = Synapsis.Project.slug_from_path(project_path)
-
     project =
-      case Repo.get_by(Synapsis.Project, path: project_path) do
-        nil ->
-          case %Synapsis.Project{}
-               |> Synapsis.Project.changeset(%{path: project_path, slug: slug})
-               |> Repo.insert() do
-            {:ok, p} -> p
-            {:error, _} -> nil
-          end
-
-        p ->
-          p
+      case Synapsis.Projects.find_or_create(project_path) do
+        {:ok, project} -> project
+        {:error, _changeset} -> nil
       end
 
     if is_nil(project) do

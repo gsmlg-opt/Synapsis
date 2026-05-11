@@ -7,9 +7,10 @@ defmodule Synapsis.Projects do
   @spec find_or_create(binary()) :: {:ok, Project.t()} | {:error, Ecto.Changeset.t()}
   def find_or_create(path) do
     slug = Project.slug_from_path(path)
+    name = project_name_from_slug(slug)
 
     %Project{}
-    |> Project.changeset(%{path: path, slug: slug, name: slug})
+    |> Project.changeset(%{path: path, slug: slug, name: name})
     |> Repo.insert(
       on_conflict: {:replace, [:updated_at]},
       conflict_target: :path,
@@ -59,5 +60,19 @@ defmodule Synapsis.Projects do
 
   def archive(%Project{} = project) do
     project |> Project.changeset(%{status: :archived}) |> Repo.update()
+  end
+
+  defp project_name_from_slug(""), do: "project"
+
+  defp project_name_from_slug(slug) do
+    slug
+    |> String.replace("_", "-")
+    |> String.replace(~r/[^a-z0-9-]/, "-")
+    |> String.replace(~r/-+/, "-")
+    |> String.trim("-")
+    |> case do
+      "" -> "project"
+      name -> String.slice(name, 0, 64)
+    end
   end
 end
