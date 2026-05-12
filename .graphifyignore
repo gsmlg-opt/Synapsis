@@ -1,0 +1,25 @@
+# .graphifyignore
+node_modules/
+dist/
+deps/
+_build/
+tmp/
+cover/
+*.generated.py
+
+# Only index first-party Synapsis sources; skip vendored deps and build output.
+*
+!apps/
+!apps/**
+!packages/
+!packages/**
+!config/
+!config/**
+!mix.exs
+
+apps/**/tmp/
+apps/**/tmp/**
+apps/**/cover/
+apps/**/cover/**
+apps/**/priv/static/assets/
+apps/**/priv/static/assets/**

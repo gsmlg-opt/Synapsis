@@ -1,0 +1,2798 @@
+{
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/mix.exs": {
+    "mtime": 1773749138.8531973,
+    "hash": "02cfc5e4454525d8cf5c134e5ec697dc"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/config/prod.exs": {
+    "mtime": 1770965140.017629,
+    "hash": "eee5b87ed247a2593a71260500f96339"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/config/dev.exs": {
+    "mtime": 1771949961.7435796,
+    "hash": "f27c50d44124664ffd5495531da3f0e1"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/config/test.exs": {
+    "mtime": 1773334659.0849638,
+    "hash": "f8903415aeb34406ae0972528301acb3"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/config/runtime.exs": {
+    "mtime": 1774936731.2845619,
+    "hash": "07260011d99020519f3333ef4e603244"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/config/config.exs": {
+    "mtime": 1776318475.2027438,
+    "hash": "76962ae5d40e3f47dc6ca201e7c269d4"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/mix.exs": {
+    "mtime": 1775264193.9212737,
+    "hash": "fdf4fae50a6fee0b9c8c7b9a7cf58905"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis_core.ex": {
+    "mtime": 1770892551.9685845,
+    "hash": "e04a5fc85b5b49fafa20f2ca3f16744b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis_core/application.ex": {
+    "mtime": 1777312621.904111,
+    "hash": "e97d4d5b16fa014fc3df8831d60b5bc0"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/context_window.ex": {
+    "mtime": 1771613884.000671,
+    "hash": "e8394a83a8e8c45f8e42a3c4063681a1"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/llm.ex": {
+    "mtime": 1773334659.0779636,
+    "hash": "aef184b1c52b3a8e53123930af5a44ec"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/prompt_builder.ex": {
+    "mtime": 1773334659.0799637,
+    "hash": "7e223d8f3ad17bcff4169ba390219026"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/config.ex": {
+    "mtime": 1773940525.9688652,
+    "hash": "a7754ab381d5701190e1ac338253b23a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/file_watcher.ex": {
+    "mtime": 1774925089.871804,
+    "hash": "3e53d362dd5af9bf6773a3710649d55d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/git.ex": {
+    "mtime": 1774925089.871804,
+    "hash": "bbbf4f840e5708f29f4532a8034791e3"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/message_builder.ex": {
+    "mtime": 1774925089.871804,
+    "hash": "bb8e5f02f869f6931dcf0906f55f6622"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/image.ex": {
+    "mtime": 1774932336.438598,
+    "hash": "36fc96f9dc902af5da050080c6d70312"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/sessions.ex": {
+    "mtime": 1774938580.61879,
+    "hash": "105258975de38f4dbc714a1160bf9f32"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/git_worktree.ex": {
+    "mtime": 1774946739.1864111,
+    "hash": "0fda47a5e1d995ae28d34debd94a9faa"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/dev_log.ex": {
+    "mtime": 1775264428.3203437,
+    "hash": "7dd0c96547b1f1f2eb55abf6984c20bc"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/board.ex": {
+    "mtime": 1775269206.664413,
+    "hash": "73aaa68e0c5656fadeec9088757e3713"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool.ex": {
+    "mtime": 1775267008.3419855,
+    "hash": "7c8e67a372c15fe308c936a3616750c0"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/agent/tool_dispatcher.ex": {
+    "mtime": 1773889958.2365735,
+    "hash": "08573711ae151fb423a5de0cce061299"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/agent/response_flusher.ex": {
+    "mtime": 1774931905.6726065,
+    "hash": "d73dd464b6669d5c02c7d6622033e68c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/agent/stream_accumulator.ex": {
+    "mtime": 1774946294.4357016,
+    "hash": "ee839727ff504e78e308d41743d9040b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/agent/resolver.ex": {
+    "mtime": 1777331951.7734442,
+    "hash": "090b5e2c73fd916b89fb83be97022f97"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/session/supervisor.ex": {
+    "mtime": 1770893563.1270473,
+    "hash": "e369d2a34badab4a386eef6612aa8526"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/session/dynamic_supervisor.ex": {
+    "mtime": 1770893563.1310472,
+    "hash": "2590954f19abc241d16d3a57cb6880c9"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/session/orchestrator.ex": {
+    "mtime": 1777332101.0,
+    "hash": "9479ac52080b4ffe46841ce59ea69a55"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/session/compactor.ex": {
+    "mtime": 1774929565.890433,
+    "hash": "99f42b54539a2f0a8a4c6fab6c36f4ed"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/session/fork.ex": {
+    "mtime": 1774929867.0278184,
+    "hash": "d906343a56cdf64dfdc69aa2c622b3b4"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/session/stream.ex": {
+    "mtime": 1774944166.2894378,
+    "hash": "e43ee5206b18b2d58bca356132ca23ef"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/session/workspace_manager.ex": {
+    "mtime": 1774946036.9682512,
+    "hash": "c39ae9bd342019af574dee5f241fd6fa"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/session/sharing.ex": {
+    "mtime": 1777331860.0219376,
+    "hash": "ac6cc175b8ea2a4d33fae36ca6fb175a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/session/monitor.ex": {
+    "mtime": 1777331986.6022086,
+    "hash": "328419d2e3265190086240db9e4d5479"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/behaviour.ex": {
+    "mtime": 1770973498.8390677,
+    "hash": "16f83e0a796057501792c075a4d542f8"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/ask_user.ex": {
+    "mtime": 1773249715.548379,
+    "hash": "0b01a72d1d76d964aecb26327ec670a2"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/bash.ex": {
+    "mtime": 1773249715.548379,
+    "hash": "b1127990ae7bd1f5101e20880fbb77fc"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/computer.ex": {
+    "mtime": 1773249715.548379,
+    "hash": "4c4431f47c905687832f1cb0456cdd1b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/context.ex": {
+    "mtime": 1773249715.548379,
+    "hash": "e0a9766cda490f9d8e89609217041649"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/send_message.ex": {
+    "mtime": 1773249715.548379,
+    "hash": "ff3c4d56bb8caec99b295962a1257c8f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/sleep.ex": {
+    "mtime": 1773249715.549379,
+    "hash": "5bb5b4f040462f6bcd72f394b0b4ddce"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/team_delete.ex": {
+    "mtime": 1773249715.549379,
+    "hash": "06c526ceb028ed88b81b38d155f530e0"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/teammate.ex": {
+    "mtime": 1773249715.549379,
+    "hash": "d321257a9f2023b2a0a974835ad37716"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/todo_read.ex": {
+    "mtime": 1773249715.549379,
+    "hash": "b40406723d626ac315e6833587c955f4"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/tool_search.ex": {
+    "mtime": 1773249715.549379,
+    "hash": "23b0b00481d0e044bf3b603389e1a531"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/memory_search.ex": {
+    "mtime": 1773334659.0809636,
+    "hash": "90204f501e4c4e32b7e1ef4087c5a779"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/session_summarize.ex": {
+    "mtime": 1773334659.0809636,
+    "hash": "134dc226903a6d610a25a1ca87d78ac9"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/agent_inbox.ex": {
+    "mtime": 1774291758.2372794,
+    "hash": "9c3b4473c116876a1346758575c2497a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/notebook_read.ex": {
+    "mtime": 1774292946.5609744,
+    "hash": "9a549b7b53434372c02df88f9d096c2d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/notebook_edit.ex": {
+    "mtime": 1774292947.5429916,
+    "hash": "6652f8a6ab3c820beca2ebb212b958c4"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/glob.ex": {
+    "mtime": 1774348895.6757016,
+    "hash": "a7c0828f14824300e77e903704dacd4e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/agent_discover.ex": {
+    "mtime": 1774925089.871804,
+    "hash": "b8d2922a4719dd449fec9c57bd724428"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/skill.ex": {
+    "mtime": 1774928365.9104567,
+    "hash": "326bfd87d8759c6d7c749aca87a8fdb9"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/grep.ex": {
+    "mtime": 1774939547.8346684,
+    "hash": "96f5a8dc5ad7711d754e350d2c93d0b3"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/multi_edit.ex": {
+    "mtime": 1774945060.9493086,
+    "hash": "f02a073b2201978ba5a164f2ee50117f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/fetch.ex": {
+    "mtime": 1774945170.2112238,
+    "hash": "7be02bdaa6817ff60d0ab04640177ec9"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/file_delete.ex": {
+    "mtime": 1774945188.596546,
+    "hash": "74559a5c0e3eb0800440f9a7a10ef339"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/file_move.ex": {
+    "mtime": 1774945195.7476711,
+    "hash": "43c2531fe42e82eb1eb70e5a5d1440bb"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/file_read.ex": {
+    "mtime": 1774945202.2807856,
+    "hash": "d79a3c5551f41dd40ca9a211e9c2ed71"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/file_write.ex": {
+    "mtime": 1774945215.5070171,
+    "hash": "4e63ccf969834d544173aef569dee125"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/file_edit.ex": {
+    "mtime": 1774945230.007271,
+    "hash": "a9ff604cf200fe06beefe56acbbeb746"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/list_dir.ex": {
+    "mtime": 1774945337.9451602,
+    "hash": "707a668720c26e261c0b6a445de065fa"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/diagnostics.ex": {
+    "mtime": 1774945436.9118907,
+    "hash": "0416f46d4b6c7254d692569bbf99ede6"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/agent_reply.ex": {
+    "mtime": 1774945462.1243315,
+    "hash": "943037a23189f9891f270c7e683dcacf"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/exit_plan_mode.ex": {
+    "mtime": 1774945463.416354,
+    "hash": "1f8393ddd8b3d159b9a72a5505a87a57"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/enter_plan_mode.ex": {
+    "mtime": 1774945464.677376,
+    "hash": "4572bd2c0758d49e392ff1b7624cd40c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/agent_send.ex": {
+    "mtime": 1774945465.7823954,
+    "hash": "dd5b0f096187da737aeb06079807ff45"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/agent_handoff.ex": {
+    "mtime": 1774945467.070418,
+    "hash": "c4cd4fb761e35eafe784fc2e38dbf41a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/agent_ask.ex": {
+    "mtime": 1774945469.1714547,
+    "hash": "15378ec356cea8ea7c9dd82b34b24606"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/memory_save.ex": {
+    "mtime": 1774945471.074488,
+    "hash": "da2307a90a323a10e3abbe0d1939069c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/memory_update.ex": {
+    "mtime": 1774945625.393178,
+    "hash": "2334841205d60c202b52f5a84066bb95"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/todo_write.ex": {
+    "mtime": 1774945626.8732033,
+    "hash": "a1ca5b2d7b9a915d6d8f8d718a311fde"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/vfs.ex": {
+    "mtime": 1774945647.1635504,
+    "hash": "e2a6d70187e82ecf2133133ae24118f0"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/web_search.ex": {
+    "mtime": 1774946579.7056444,
+    "hash": "b991a98b0ec34a63b10a1f81160eb304"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/executor.ex": {
+    "mtime": 1774947018.3872588,
+    "hash": "d628e11b1b7eea1376e5f82e7b183381"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/path_validator.ex": {
+    "mtime": 1774947463.8959994,
+    "hash": "c6680cdf852f689ec8ca41198eb89ae7"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/permission.ex": {
+    "mtime": 1774949405.9151103,
+    "hash": "186f91e9cf4737590bf62ec30370f2db"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/board_read.ex": {
+    "mtime": 1775269206.7034135,
+    "hash": "ddceb664393ed9288fd479bba071268e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/board_update.ex": {
+    "mtime": 1775267248.3403842,
+    "hash": "73dd18223daf29b2e7fef8f53624a598"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/devlog_write.ex": {
+    "mtime": 1775269206.7034135,
+    "hash": "8612653e37b94559efe1733147d4213c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/devlog_read.ex": {
+    "mtime": 1775267482.850627,
+    "hash": "57a88c142a0d935cfca85e6bfe61b802"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/repo_link.ex": {
+    "mtime": 1775267499.3309238,
+    "hash": "5bb3fd93310812a97ad2e6a29edf368c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/repo_sync.ex": {
+    "mtime": 1775267502.1009736,
+    "hash": "28babab5ac16fb57d7bd3ebcea4ca7d8"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/repo_status.ex": {
+    "mtime": 1775267520.6133065,
+    "hash": "2fc22f56e9e8e990a577c8e67f56babc"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/worktree_create.ex": {
+    "mtime": 1775269206.6584127,
+    "hash": "679fc6f3441ed81e9b2f663d1df3f222"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/worktree_list.ex": {
+    "mtime": 1775267551.1848562,
+    "hash": "a1b042b77983be8b138469db3ec5e974"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/worktree_remove.ex": {
+    "mtime": 1775267560.588025,
+    "hash": "3aeef4153a2b6ebaa7be1cc111dc8d05"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/agent_spawn.ex": {
+    "mtime": 1775269206.674413,
+    "hash": "5bcff6b0b51639a2a3b6f23571fe096b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/agent_status.ex": {
+    "mtime": 1775267573.2712529,
+    "hash": "e24164df768649f36dc179c5d306e75c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/builtin.ex": {
+    "mtime": 1775267581.7204044,
+    "hash": "21a875ed519b149f18a311c17ee5035e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/registry.ex": {
+    "mtime": 1775278431.7338784,
+    "hash": "b4fa64dbc0b6af772fd3e467e176b367"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/task.ex": {
+    "mtime": 1775278545.3300364,
+    "hash": "759dea1658ddcda13d7ea5690dc4233d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/permissions.ex": {
+    "mtime": 1777331986.6032085,
+    "hash": "6f8c54a62bb67f239a2bc750412c690a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/tool/permission/session_config.ex": {
+    "mtime": 1773249715.548379,
+    "hash": "b15ee54189f59e831d04a26a56ec4a9d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/memory/context_builder.ex": {
+    "mtime": 1773334659.0789635,
+    "hash": "5e00a404338cbd9fef2f5de2be7f9d8b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/memory/prompts.ex": {
+    "mtime": 1773334659.0789635,
+    "hash": "55f6c7cdf6f4c445556d9d52ec4802c8"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/memory/summarizer_dispatcher.ex": {
+    "mtime": 1773334659.0789635,
+    "hash": "201c00d47a84911aca18b383fc9ade39"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/memory/supervisor.ex": {
+    "mtime": 1773334659.0789635,
+    "hash": "2def139f118f35e142a9f1314e7b0245"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/memory/writer.ex": {
+    "mtime": 1773334659.0789635,
+    "hash": "d60df555c67735c4a7b770deefed70f4"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/memory/retriever.ex": {
+    "mtime": 1774925089.871804,
+    "hash": "d6f35c36fa9e49dc6069e89a51148080"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/memory/working_memory.ex": {
+    "mtime": 1774939781.1876771,
+    "hash": "e49bf46cafd2fe3013203dc688c761ed"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/memory/cache.ex": {
+    "mtime": 1774940275.396236,
+    "hash": "10dc424e0c19de815532028b09441847"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/git/runner.ex": {
+    "mtime": 1775263948.3150578,
+    "hash": "83b6c66eb72dac76a41f561e8d30ce82"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/git/repo_ops.ex": {
+    "mtime": 1775263956.7892032,
+    "hash": "c15c51e43e912fe95b193022a0439a18"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/git/branch.ex": {
+    "mtime": 1775263957.814221,
+    "hash": "0fa590fe739eb2cb3aebe193d1639b15"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/git/worktree.ex": {
+    "mtime": 1775263958.8352382,
+    "hash": "6bdef1fa25fcabcf2cb235811a9d4333"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/git/log.ex": {
+    "mtime": 1775263959.8482556,
+    "hash": "b246081101c7719d8565ecc2dafb6d46"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/git/diff.ex": {
+    "mtime": 1775263960.8682733,
+    "hash": "b8f29b10ab34e8c659f8794bd71997ae"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/git/status.ex": {
+    "mtime": 1775263961.8902907,
+    "hash": "0b689b275690b9f7234dfd465ff32752"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/harness/event.ex": {
+    "mtime": 1778564085.647434,
+    "hash": "ead3868730674c57a7467fe21df550c0"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/harness/context.ex": {
+    "mtime": 1778564195.095433,
+    "hash": "5da356dc0b394e2c39d60b85045826f5"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/harness/provider_event.ex": {
+    "mtime": 1778563899.5689917,
+    "hash": "594a51733e1835ec03fd636a927c8cdf"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/harness/loop.ex": {
+    "mtime": 1778564226.6020055,
+    "hash": "d8d11c9feeeeed6ba137f94ddc9d207f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/harness/loop/input.ex": {
+    "mtime": 1778563911.488214,
+    "hash": "d036035756d0034309f1daa78e06f344"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/harness/loop/effect.ex": {
+    "mtime": 1778563920.9353902,
+    "hash": "cd0c23f0389a7737c93e146870489872"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/harness/loop/broadcast.ex": {
+    "mtime": 1778563926.5944958,
+    "hash": "ee3e29b4914c8887150309f1a6999421"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/harness/loop/next_action.ex": {
+    "mtime": 1778563931.506587,
+    "hash": "05359b0a78592cd0c8963c124a3d1e20"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis_core_test.exs": {
+    "mtime": 1770892738.202798,
+    "hash": "fd93824cb0feedcc7b5a466a9726fa2d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/test_helper.exs": {
+    "mtime": 1773752734.7700918,
+    "hash": "50451dbe6e4742b3757b1c0d630baa68"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/git_test.exs": {
+    "mtime": 1771954331.702303,
+    "hash": "97c88d05fbdedcbf352c5f63596df2ca"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/config_test.exs": {
+    "mtime": 1771955475.6605687,
+    "hash": "bfd78a74980794acc770ae85a709450a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/context_window_test.exs": {
+    "mtime": 1771957474.304272,
+    "hash": "5c30eb1dd0daff6d423f5eab3d7aadd9"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/image_test.exs": {
+    "mtime": 1771956736.2380843,
+    "hash": "0cf2a1aa222aa2bb396c73d13163cb51"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/message_builder_test.exs": {
+    "mtime": 1771957028.7272956,
+    "hash": "c15355bfe93b49cc7bffd0ce1fa6f21a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/file_watcher_test.exs": {
+    "mtime": 1771973670.0489192,
+    "hash": "9e0046871dee00b9cf49da0961fae211"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/git_worktree_test.exs": {
+    "mtime": 1771974032.027907,
+    "hash": "3bde4f343570f172c3dc78ec969c4653"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/llm_test.exs": {
+    "mtime": 1773334659.0819635,
+    "hash": "809bbb533e18aa952bccb5147b461975"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/sessions_test.exs": {
+    "mtime": 1773790148.7549126,
+    "hash": "9666bc785990eef2b7463742a20b8ce9"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/board_test.exs": {
+    "mtime": 1775264848.3211033,
+    "hash": "371d96965708b52e04c4367f4b5e307d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/dev_log_test.exs": {
+    "mtime": 1775264968.3212652,
+    "hash": "89c2f0990db2149903ad8373c506cbb5"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/projects_test.exs": {
+    "mtime": 1777332060.8689127,
+    "hash": "4daeef4490f614276a005b20c4c8acb1"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/prompt_builder_test.exs": {
+    "mtime": 1775318788.1390867,
+    "hash": "8bbfc1997b313912b08af7cdb04be4e4"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/agent/stream_accumulator_test.exs": {
+    "mtime": 1773750651.2148695,
+    "hash": "d8b75569b16235d69cf8a97db39f7f44"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/agent/resolver_test.exs": {
+    "mtime": 1775316248.4138982,
+    "hash": "d91769ab7a6f85d04731b9d9a5484d82"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/agent/tool_dispatcher_test.exs": {
+    "mtime": 1775318797.0101995,
+    "hash": "1f7e4b34c7512c76e761ae570f262572"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/agent/response_flusher_test.exs": {
+    "mtime": 1775318798.3412163,
+    "hash": "cc34b4d76d90b986ca0f47bc64e21fc6"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/path_validator_test.exs": {
+    "mtime": 1771954326.9732928,
+    "hash": "4a92b43b3829fde2c32a6ea6cd0c30fa"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/tools_test.exs": {
+    "mtime": 1771954657.9447227,
+    "hash": "5ae51098c65cf01a10ce3fdc4b117ac6"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/edge_cases_test.exs": {
+    "mtime": 1771957810.3441188,
+    "hash": "3ec04c8e13da2fff59c11c04ff58064e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/diagnostics_test.exs": {
+    "mtime": 1771967054.5287697,
+    "hash": "a04402346f8afa9afe8cfab8f2b9496f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/fetch_test.exs": {
+    "mtime": 1771968095.3637743,
+    "hash": "4e3654ddb1b91bf77b7f69fa72b24408"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/ask_user_test.exs": {
+    "mtime": 1773249715.549379,
+    "hash": "267b9b74927f079d6840acc1bff853e9"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/behaviour_test.exs": {
+    "mtime": 1773249715.549379,
+    "hash": "184eefc54e819037597132fe2b256280"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/disabled_tools_test.exs": {
+    "mtime": 1773249715.549379,
+    "hash": "10193087588e5e2a099c87850bb11382"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/e2e_test.exs": {
+    "mtime": 1773249715.549379,
+    "hash": "504646b3812499f59f2c4a3963cfc58f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/executor_test.exs": {
+    "mtime": 1773249715.549379,
+    "hash": "e4a8f6458359dd4580a10409091d7e08"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/multi_edit_test.exs": {
+    "mtime": 1773249715.549379,
+    "hash": "e12c839d50fa9881c16c5e2d6ce13cfd"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/parallel_test.exs": {
+    "mtime": 1773249715.549379,
+    "hash": "ee40e3c60dd8c4a3b811a15e0838c8e5"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/permission_test.exs": {
+    "mtime": 1773249715.549379,
+    "hash": "a7856ddd00ae09fadb398d0ca3f4904a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/skill_test.exs": {
+    "mtime": 1773249715.549379,
+    "hash": "1b41058be8f4952448294986b6f1d25a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/sleep_test.exs": {
+    "mtime": 1773249715.549379,
+    "hash": "c9c86382465c1d530501dc3aa272d267"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/swarm_test.exs": {
+    "mtime": 1773249715.549379,
+    "hash": "d29077370cca4602561f6f0d880bc093"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/tool_search_test.exs": {
+    "mtime": 1773249715.549379,
+    "hash": "4d2713e59b7477c5656fc1e109295ce9"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/web_search_test.exs": {
+    "mtime": 1773249715.549379,
+    "hash": "ffef61d6454d314ba64f7c3b88554d6d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/file_read_test.exs": {
+    "mtime": 1774203650.4496002,
+    "hash": "8fa4f0009261c4aa0f89c381f52104a5"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/file_write_test.exs": {
+    "mtime": 1774203716.0247364,
+    "hash": "33cd7ccfd70ad351ab1ecac66cac7cd4"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/file_edit_test.exs": {
+    "mtime": 1774203665.4418597,
+    "hash": "22959e7bd89e2aef35c64c23af05eccc"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/file_delete_test.exs": {
+    "mtime": 1774203669.1739244,
+    "hash": "289eb00391bd2d0fcc612b2f95b280b8"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/file_move_test.exs": {
+    "mtime": 1774203716.0247364,
+    "hash": "f8f7c75c365a6f91010607166d7a4666"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/list_dir_test.exs": {
+    "mtime": 1774203681.62114,
+    "hash": "15a6b2a0e8d2fbd5f01f1aec01d8bd9d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/grep_test.exs": {
+    "mtime": 1774203688.896266,
+    "hash": "6973a45cba1c482fd271b89e669a0083"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/glob_test.exs": {
+    "mtime": 1774203694.0593555,
+    "hash": "2b26121e1d53a5fe8a474641bcf80276"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/bash_test.exs": {
+    "mtime": 1774203698.6734354,
+    "hash": "4eb0901d55ac6725e67e2cd26334bb17"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/enter_plan_mode_test.exs": {
+    "mtime": 1774203701.3934827,
+    "hash": "240685601c9b11b1c4fce0180eeaa55e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/exit_plan_mode_test.exs": {
+    "mtime": 1774203703.8465252,
+    "hash": "2012c95ec6c17db1d9e1f1be9613572a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/session_summarize_test.exs": {
+    "mtime": 1774203705.382552,
+    "hash": "0ea5f638786a7bdb878d6c6facf60e8d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/communication_test.exs": {
+    "mtime": 1774291790.5058293,
+    "hash": "63af96cdf11e25751d9627768b7cd276"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/vfs_test.exs": {
+    "mtime": 1774349151.5393422,
+    "hash": "7698d2011f7a57bbd458d2e85bc7d6eb"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/task_test.exs": {
+    "mtime": 1774465374.7151532,
+    "hash": "adc02c01080d253b2548dd7fa3f65373"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/builtin_test.exs": {
+    "mtime": 1774465493.8560834,
+    "hash": "70fcefaaee9bf521dfe096840294f32a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/workflow_tools_test.exs": {
+    "mtime": 1775269206.730414,
+    "hash": "e73777f5b43eea742ca9b6a5c622a02e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/registry_test.exs": {
+    "mtime": 1775278597.32702,
+    "hash": "2dde6c0292ba971d329c177c8076282f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/memory_tools_test.exs": {
+    "mtime": 1775318800.120239,
+    "hash": "12aad45a6c64e075bac2124d1d49272d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/plan_mode_test.exs": {
+    "mtime": 1775318801.854261,
+    "hash": "e866d4c7d9b028a0fce893ebce85028c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/tool/todo_test.exs": {
+    "mtime": 1775318803.1712775,
+    "hash": "ba22e1d1cbe37c29ba1a918f9711b61f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/session/monitor_test.exs": {
+    "mtime": 1771627346.4741247,
+    "hash": "b13b3cf9d529bfcdc681e58a8f435ee4"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/session/orchestrator_test.exs": {
+    "mtime": 1771956735.657057,
+    "hash": "9551a1ec83f6cc27dca1892522f475d8"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/session/stream_test.exs": {
+    "mtime": 1774944392.206496,
+    "hash": "0bb726a907c3f4f52cd8730eb280a8a6"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/session/fork_test.exs": {
+    "mtime": 1775318791.231126,
+    "hash": "d9c95c5a4a5324df935625fef86abf56"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/session/compactor_test.exs": {
+    "mtime": 1775318792.948148,
+    "hash": "34db48e8fca5dd95e3a8ca495b0ad0a5"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/session/supervisor_test.exs": {
+    "mtime": 1775318794.0691621,
+    "hash": "a57fb5a4ef84f9df59455d810e843f2b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/session/workspace_manager_test.exs": {
+    "mtime": 1775318795.233177,
+    "hash": "d62fd0388afd233746888b94deb15bd6"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/session/sharing_test.exs": {
+    "mtime": 1775318804.0512888,
+    "hash": "58bfcc00cda94fca30d0c72977bd1f25"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/memory/cache_test.exs": {
+    "mtime": 1773334659.0819635,
+    "hash": "94ed0917130eaab8860739a8a6ed2ab4"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/memory/context_builder_test.exs": {
+    "mtime": 1773334659.0819635,
+    "hash": "629f2e9fd9fa8e8dc840cbc8fd7ee905"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/memory/retriever_test.exs": {
+    "mtime": 1773334659.0819635,
+    "hash": "ea4dfe59e11ec57dd4d66f35fe80de22"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/memory/writer_test.exs": {
+    "mtime": 1773334659.0819635,
+    "hash": "7fb2c641c5ecc93b81736622b519d987"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/memory/summarizer_dispatcher_test.exs": {
+    "mtime": 1775318790.4941168,
+    "hash": "5e57d822d1908b446c52bf505d1a2e86"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/git/runner_test.exs": {
+    "mtime": 1775269206.7084136,
+    "hash": "4d2f2e0aad8092739da6a62b2d12340c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/git/repo_ops_test.exs": {
+    "mtime": 1775263985.16069,
+    "hash": "d519a9a06321850f4d761d6076b8ad41"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/git/branch_test.exs": {
+    "mtime": 1775263993.2078283,
+    "hash": "1951a17b6c8c3087be171a734fcbdccd"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/git/worktree_test.exs": {
+    "mtime": 1775264002.7809925,
+    "hash": "55a2b96a237b1a0b7113aa5ffc3528a7"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/git/query_test.exs": {
+    "mtime": 1775264062.6680205,
+    "hash": "a71224ce338576dde8ab84c745785ea1"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/harness/event_test.exs": {
+    "mtime": 1778559686.6913261,
+    "hash": "f6b2a76ec901026b5bb0830571679e63"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/harness/context_test.exs": {
+    "mtime": 1778559686.6913261,
+    "hash": "ec72be80980d3f34220fa418a921b60c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/harness/loop_test.exs": {
+    "mtime": 1778564085.649434,
+    "hash": "6c58cae3a70b61e3bb5926e71c0d3b7d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/harness/loop/adt_test.exs": {
+    "mtime": 1778564085.647434,
+    "hash": "8b31a655fefdf1473aa20f42efb5a718"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/mix.exs": {
+    "mtime": 1777312621.904111,
+    "hash": "ea5734fbc1a43bef1deb450cfe07fd01"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/lib/synapsis_server.ex": {
+    "mtime": 1770964680.9798276,
+    "hash": "e4689137386853eb2c6ba7f73c9503ae"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/lib/synapsis_server/telemetry.ex": {
+    "mtime": 1770964702.2331889,
+    "hash": "2fc6d9c11e380c19cc138c9507ca0a00"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/lib/synapsis_server/endpoint.ex": {
+    "mtime": 1772791453.73181,
+    "hash": "650994760c0f7eec644a402b378eeb32"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/lib/synapsis_server/router.ex": {
+    "mtime": 1777312621.9051108,
+    "hash": "64f002811662f88d9ae457b2a92d5725"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/lib/synapsis_server/supervisor.ex": {
+    "mtime": 1777312791.4633207,
+    "hash": "34fb4a62310eb36c604608536c051add"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/lib/synapsis_server/debug_store.ex": {
+    "mtime": 1774507291.8422902,
+    "hash": "e783ecdca112bfb453c5634dfdfa814e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/lib/synapsis_server/application.ex": {
+    "mtime": 1777312778.204635,
+    "hash": "0ec9a0b9724e01c058a671522fd36948"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/lib/synapsis_server/channels/user_socket.ex": {
+    "mtime": 1770964724.8505733,
+    "hash": "027533de260c0e783769c7ebf3e69970"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/lib/synapsis_server/channels/session_channel.ex": {
+    "mtime": 1774948363.5432346,
+    "hash": "ec3f7a0d7e780a38d854c9e8ccedcd0c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/lib/synapsis_server/controllers/error_json.ex": {
+    "mtime": 1770964799.2408376,
+    "hash": "5de29a112cb93c6893096d68968ca678"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/lib/synapsis_server/controllers/error_html.ex": {
+    "mtime": 1770964799.2498376,
+    "hash": "c0877aa26244d580640494ad6ec45d5f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/lib/synapsis_server/controllers/sse_controller.ex": {
+    "mtime": 1771958669.0220523,
+    "hash": "8502465029eee57ae4dac0ddc49a0757"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/lib/synapsis_server/controllers/config_controller.ex": {
+    "mtime": 1774941861.9924517,
+    "hash": "8214c26bb9fd3353d1c67c0428e20931"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/lib/synapsis_server/controllers/provider_controller.ex": {
+    "mtime": 1774951573.5525813,
+    "hash": "f97c86046414ac26ae7c8e797851ba72"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/lib/synapsis_server/controllers/session_controller.ex": {
+    "mtime": 1774951575.8356395,
+    "hash": "1fe930b489e7c2dabbd626d3f3686ead"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/lib/synapsis_server/controllers/health_controller.ex": {
+    "mtime": 1777312621.904111,
+    "hash": "dcdf60130b5f3099b74bb61283071c48"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/test/test_helper.exs": {
+    "mtime": 1770964865.6129653,
+    "hash": "8331301311ecd0466fe909eade091706"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/test/support/conn_case.ex": {
+    "mtime": 1770964865.6239657,
+    "hash": "9c2a6fd46de55979a07250c867ea6409"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/test/support/channel_case.ex": {
+    "mtime": 1770964865.6319659,
+    "hash": "3585dd5212801f48a39bfa7a28a460e2"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/test/synapsis_server/router_test.exs": {
+    "mtime": 1777312522.1903534,
+    "hash": "e8d6f967b4dcb93343cc6ab30269fef5"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/test/synapsis_server/debug_store_test.exs": {
+    "mtime": 1774507303.5464928,
+    "hash": "c6f78c3a492fe46fdb0341b5fdd0f57c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/test/synapsis_server/controllers/config_controller_test.exs": {
+    "mtime": 1771619653.1598856,
+    "hash": "9aefafe17223be8c4092b3474ee181c3"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/test/synapsis_server/controllers/error_json_test.exs": {
+    "mtime": 1771956107.4367902,
+    "hash": "a36468192e621aaf41cb66a348349a18"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/test/synapsis_server/controllers/session_controller_test.exs": {
+    "mtime": 1774952087.4343913,
+    "hash": "3e6399bc51bf991b76e024e689733070"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/test/synapsis_server/controllers/provider_controller_test.exs": {
+    "mtime": 1774952115.1340687,
+    "hash": "4488b4fc1dd895e790098343dabf112a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/test/synapsis_server/controllers/sse_controller_test.exs": {
+    "mtime": 1775319087.5477173,
+    "hash": "c19d272a9d0fd84daaff511682c92b0a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/test/synapsis_server/controllers/health_controller_test.exs": {
+    "mtime": 1777312522.1903534,
+    "hash": "920f49850f7da5bb2610c03784921aa0"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/test/synapsis_server/channels/session_channel_test.exs": {
+    "mtime": 1775318970.8263404,
+    "hash": "11fac4998b41dfb48ef935040308d55b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/test/synapsis_server/channels/user_socket_test.exs": {
+    "mtime": 1775318972.7893639,
+    "hash": "cf64eaa8dfd9a9484574dc27b4acde3b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_cli/mix.exs": {
+    "mtime": 1773074239.0015748,
+    "hash": "383376ed28a6ad119e2eec8f239aff26"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_cli/lib/synapsis_cli.ex": {
+    "mtime": 1770896449.529957,
+    "hash": "aec1ef036a058cdecd9da7aee1117def"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_cli/lib/synapsis_cli/main.ex": {
+    "mtime": 1774955264.5983963,
+    "hash": "3a0bed62eaca8a61d705ce968497c42f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_cli/test/test_helper.exs": {
+    "mtime": 1770887439.2184417,
+    "hash": "7566dc08e72e565faebc0970e685df87"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_cli/test/synapsis_cli_test.exs": {
+    "mtime": 1771954161.2752059,
+    "hash": "2ff5225f18994c1d226215fd5ad8896a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_cli/test/synapsis_cli/main_test.exs": {
+    "mtime": 1771598891.140932,
+    "hash": "ec508408713db7d272e3b1960cb0e28a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_cli/test/synapsis_cli/sse_test.exs": {
+    "mtime": 1771958795.897608,
+    "hash": "9058ffc75ff634a1845270b23379d34a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_cli/test/synapsis_cli/http_test.exs": {
+    "mtime": 1771959096.0972052,
+    "hash": "2d79812c3bd9ca2f29b474d04a2e7638"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_cli/test/synapsis_cli/args_test.exs": {
+    "mtime": 1771962506.0142906,
+    "hash": "4cda04d97402b8d2353018eb2c8ce4f7"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/mix.exs": {
+    "mtime": 1775747831.323573,
+    "hash": "8cc211f2b4d681b1b6fa8b7da9f05611"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web.ex": {
+    "mtime": 1774334163.0998254,
+    "hash": "fffc8fe77ea744afadc321240b9a4ed7"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/gettext.ex": {
+    "mtime": 1770912620.631573,
+    "hash": "0e969a85e3fb2e25f2302ad09407bbc8"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/components/layouts.ex": {
+    "mtime": 1774953184.0,
+    "hash": "a767fdfbfa03c522c6c2620c24fae1ea"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/components/message_helpers.ex": {
+    "mtime": 1774921398.5408044,
+    "hash": "9cd885138bf0c41c826526840f984207"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/components/core_components.ex": {
+    "mtime": 1777048667.3286314,
+    "hash": "0411b0b431143e07e9a066ead925b459"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/dashboard_live.ex": {
+    "mtime": 1776098612.3854618,
+    "hash": "baa28f376629502745ec9216b5d36c62"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/settings_live.ex": {
+    "mtime": 1776098613.5704052,
+    "hash": "9f742aaa9dc8b023340ba214a3da80cf"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/project_live/show.ex": {
+    "mtime": 1776099034.7045941,
+    "hash": "da3a7e6b189c1237774e9470dbc9867a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/project_live/index.ex": {
+    "mtime": 1776323322.6173372,
+    "hash": "4d3cf21cc4cc361af6344a4f688f25d1"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/session_live/index.ex": {
+    "mtime": 1776323355.3349838,
+    "hash": "05d48365b20705aec654f338f54dbc95"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/session_live/show.ex": {
+    "mtime": 1776325227.1007366,
+    "hash": "1c5caee6c4b44a3b984f2c8d3d854787"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/provider_live/index.ex": {
+    "mtime": 1776323200.9439495,
+    "hash": "7f6f0b7d1274d22b4eafcef0f7856a13"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/provider_live/show.ex": {
+    "mtime": 1776323381.34449,
+    "hash": "6c71ac55dae0344d6d7885736829792e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/memory_live/show.ex": {
+    "mtime": 1776323434.2055025,
+    "hash": "7bf354e41677abef3033a9d3a5a346f6"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/memory_live/index.ex": {
+    "mtime": 1776323434.2055025,
+    "hash": "d1c0c0a9e104c2909dee12d6f9a4b7d8"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/skill_live/show.ex": {
+    "mtime": 1774953184.0,
+    "hash": "66e48aed5a55d08cd39800a746daf561"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/skill_live/index.ex": {
+    "mtime": 1774953184.0,
+    "hash": "b145bdc5599595974fe3e994c112e17f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/mcp_live/show.ex": {
+    "mtime": 1774953184.0,
+    "hash": "b2af72b1edf185aa9b10f512004ca586"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/mcp_live/index.ex": {
+    "mtime": 1776323434.2715037,
+    "hash": "e21220812b62853e3dbd9dc733c54f45"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/lsp_live/show.ex": {
+    "mtime": 1774953184.0,
+    "hash": "fc4155e110441e4ed7956a6f70a770ca"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/lsp_live/index.ex": {
+    "mtime": 1776099026.4123924,
+    "hash": "f0ca8eaffb087fbcb2447ae3e693d02b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/model_tier_live/index.ex": {
+    "mtime": 1776099027.580421,
+    "hash": "65c6293cf8fe98fad0f97e23063190c8"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/assistant_live/index.ex": {
+    "mtime": 1776098619.2271373,
+    "hash": "a4042154d9e18bf80aab428a55b10fbd"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/assistant_live/setting.ex": {
+    "mtime": 1776323249.4109097,
+    "hash": "5007ab78354434aafa111db13c9d5104"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/assistant_live/show.ex": {
+    "mtime": 1776397108.7714021,
+    "hash": "08d45c1a6abc469623ccac16aa9019a1"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/workspace_live/explorer.ex": {
+    "mtime": 1776099047.7188215,
+    "hash": "7cc644b9be22d31c25113a3d8942c2f9"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/test_helper.exs": {
+    "mtime": 1770912692.9797952,
+    "hash": "8331301311ecd0466fe909eade091706"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/support/conn_case.ex": {
+    "mtime": 1770965669.3482974,
+    "hash": "00bfc05bac04fe5e4b0c6b1f1c9cf7eb"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/live/settings_live_test.exs": {
+    "mtime": 1774338141.4574103,
+    "hash": "9d8663586a32a19fb02a15db29cf8aa7"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/live/dashboard_live_test.exs": {
+    "mtime": 1775318978.8304362,
+    "hash": "2e8865319892b01b4ecd9ca008ed3370"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/live/provider_live/index_test.exs": {
+    "mtime": 1774338224.3408265,
+    "hash": "6552e601889d7385938fde1b3689be24"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/live/provider_live/show_test.exs": {
+    "mtime": 1774338229.4199135,
+    "hash": "7e5335e34d19f295f4762f1e605fd50a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/live/session_live/show_test.exs": {
+    "mtime": 1775318979.901449,
+    "hash": "7e51d2bfcb19bffe26ed3d60813c8ea7"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/live/session_live/index_test.exs": {
+    "mtime": 1775318981.069463,
+    "hash": "85cd33cb3a26d4a474903504e3f39a8b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/live/lsp_live/show_test.exs": {
+    "mtime": 1774340333.2676892,
+    "hash": "9387af4fe874b1923df13c275fe86b40"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/live/lsp_live/index_test.exs": {
+    "mtime": 1774349492.7528875,
+    "hash": "5718abe837eaeba18c0b5e51ca6a64a3"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/live/memory_live/show_test.exs": {
+    "mtime": 1773334659.0849638,
+    "hash": "578d4d9346d9c6e5f996c09fb40d2d2d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/live/memory_live/index_test.exs": {
+    "mtime": 1774340095.288561,
+    "hash": "c008630589d01ed3580729a0a9f3c098"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/live/mcp_live/show_test.exs": {
+    "mtime": 1774340573.2718217,
+    "hash": "0c01cce2f9f95a005b2faa64e1315b93"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/live/mcp_live/index_test.exs": {
+    "mtime": 1774341053.2950356,
+    "hash": "9363c94df496bc13106fd0659e4c6d53"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/live/skill_live/index_test.exs": {
+    "mtime": 1774349492.8008885,
+    "hash": "b84b75415ebbf94eed068b5b0706b7e3"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/live/skill_live/show_test.exs": {
+    "mtime": 1774338230.571933,
+    "hash": "9c6d6e129df4782ea76f8b1fec1ec045"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/live/project_live/show_test.exs": {
+    "mtime": 1775318982.577481,
+    "hash": "7788a86ecb034483972191777d55bb17"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/live/project_live/index_test.exs": {
+    "mtime": 1775318993.6716132,
+    "hash": "8d85ea9e19bea998af7cfc877d125a2e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/live/model_tier_live/index_test.exs": {
+    "mtime": 1773249715.5513792,
+    "hash": "0287b836c777e42e11ef40933f6546bd"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/live/assistant_live/index_test.exs": {
+    "mtime": 1773941428.3164515,
+    "hash": "c90e5b78f14bf79da0eb8f741c51e26e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/live/assistant_live/setting_test.exs": {
+    "mtime": 1774916948.4870882,
+    "hash": "e5d0b917314998f5c3ea61ad085ceddc"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/live/assistant_live/show_test.exs": {
+    "mtime": 1774920744.0767572,
+    "hash": "5d5ad5af48f5519a2def482d76322e1b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/live/workspace_live/explorer_test.exs": {
+    "mtime": 1774340693.27588,
+    "hash": "6bb7abc1adac410b24cdbdfd7a19852f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/components/message_helpers_test.exs": {
+    "mtime": 1774919055.980639,
+    "hash": "9479cbff95c81a2116d6dadf6db799e0"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/assets/js/app.ts": {
+    "mtime": 1776397233.5988991,
+    "hash": "7c02b3c5c8067a4dbdb23d57acb48713"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/mix.exs": {
+    "mtime": 1774921346.4869115,
+    "hash": "142fa871cd5cc8b1743fdb4be045e0a4"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/repo.ex": {
+    "mtime": 1770952431.4654038,
+    "hash": "fea15588b16a52ff24c0cc050bf3ffec"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/memory_entry.ex": {
+    "mtime": 1770964677.8267741,
+    "hash": "e508cdf334c57a1ca0c9529a8942ba26"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/mcp_config.ex": {
+    "mtime": 1770973723.8388348,
+    "hash": "d5b405d4f2b6047a35e68acd69117084"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/lsp_config.ex": {
+    "mtime": 1770973723.844835,
+    "hash": "9b87657a601d5fc342cc352c6b3d8e5f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/part.ex": {
+    "mtime": 1771598604.1457658,
+    "hash": "12fba8939bdf48085e98c08d4334d76c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/failed_attempt.ex": {
+    "mtime": 1771607454.0130417,
+    "hash": "444fa157fd0ec527247810c85212613a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/patch.ex": {
+    "mtime": 1771607458.86113,
+    "hash": "cad27e31ae35dcc254a21c6439082e8d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/agent_event.ex": {
+    "mtime": 1772790834.6733735,
+    "hash": "bb3984dd838b55314a539aa58d05d3db"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/agent_summary.ex": {
+    "mtime": 1772790837.7854276,
+    "hash": "58a9e370b1d8e9267cd413b23c0fcc39"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/agent_checkpoint.ex": {
+    "mtime": 1772790840.9024818,
+    "hash": "0c7f887ddf826d6117591d6e773cc6ad"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/agent_checkpoints.ex": {
+    "mtime": 1772791358.204266,
+    "hash": "bcc4b2a69092ca2bb04b395fa30939bc"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/session_permission.ex": {
+    "mtime": 1773249715.550379,
+    "hash": "b66b207499fe70bcdc27a47d1ba59143"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/session_todo.ex": {
+    "mtime": 1773249715.550379,
+    "hash": "68f5f9512141477b50908ffe3bac3705"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/tool_call.ex": {
+    "mtime": 1773249715.550379,
+    "hash": "944fac39c0f4aa1ca2c2a43f26ccd313"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/memory.ex": {
+    "mtime": 1773334659.0829637,
+    "hash": "b84764a2e48a7a4c67acd88630c63748"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/memory_checkpoint.ex": {
+    "mtime": 1773334659.0829637,
+    "hash": "3a9b9c96453f1563359ebfc75677c414"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/memory_event.ex": {
+    "mtime": 1773334659.0829637,
+    "hash": "25b0731c934c5f5c016be93dbbba01ad"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/semantic_memory.ex": {
+    "mtime": 1773334659.0829637,
+    "hash": "d0ed6ebc9f78043482b15bb0ed4f5d45"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/workspace_document.ex": {
+    "mtime": 1773741864.9214692,
+    "hash": "519d5f36fdcd8acaf31c0960b8a60244"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/workspace_document_version.ex": {
+    "mtime": 1773741864.9214692,
+    "hash": "3ac5fc1495cf83b68bbe41865980ba2b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/message.ex": {
+    "mtime": 1773825266.0445669,
+    "hash": "fd787fe877a9af913958f73c5f597c4f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/tool_approval.ex": {
+    "mtime": 1773890715.0466392,
+    "hash": "e3051a8e98a18efddba38202f20722f7"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/agent_config.ex": {
+    "mtime": 1773940459.300694,
+    "hash": "d1a7606bc184d268e6c165fef3015a08"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/agent_message.ex": {
+    "mtime": 1774291744.1970403,
+    "hash": "b6e7dcb2a754e3f0ae71899942ec0633"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/agent_messages.ex": {
+    "mtime": 1774291778.3506222,
+    "hash": "58acb8b13efaae0e8a23111bb352948e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/workspace_documents.ex": {
+    "mtime": 1774932969.3076158,
+    "hash": "a2ca44d3cc21a51f5372d49f29a12949"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/agent_events.ex": {
+    "mtime": 1774939285.7832131,
+    "hash": "34923ca0e015652076cee15cb5939189"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/agent_summaries.ex": {
+    "mtime": 1774939303.8605182,
+    "hash": "76812a21e01a24d4ef3195d839928057"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/session.ex": {
+    "mtime": 1774941832.065938,
+    "hash": "0ec5dcc5e7370d129f5f869d8fad6340"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/skill.ex": {
+    "mtime": 1774943594.3043911,
+    "hash": "2878059329ba71f77108a3e407e3563b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/plugin_config.ex": {
+    "mtime": 1774943597.810452,
+    "hash": "a41025b02f2b0132ee38c7bd9308c833"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/heartbeat_config.ex": {
+    "mtime": 1774943599.0584736,
+    "hash": "d7eee27da9d1085e61ead59fe115c207"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/provider_config.ex": {
+    "mtime": 1774943604.6125696,
+    "hash": "9e3947a37023e35f2f176dadeb3604f7"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/repo_remote.ex": {
+    "mtime": 1775259148.289626,
+    "hash": "6c453248a1952caac4b406886a27c69e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/repo_worktree.ex": {
+    "mtime": 1775259268.2906551,
+    "hash": "fe6e582ec095a2b484aa9d8c6304c549"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/repo_record.ex": {
+    "mtime": 1775259868.2958708,
+    "hash": "d026b6079b262767de670236b2f264e7"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/repos.ex": {
+    "mtime": 1775261548.3038669,
+    "hash": "4735bdf144fa49cad416202d0b16af41"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/worktrees.ex": {
+    "mtime": 1775261668.3009436,
+    "hash": "1dd281ab638739b2dc40c31e97cc8872"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/projects.ex": {
+    "mtime": 1777331860.0209377,
+    "hash": "c2ffd7b36c47b0d1323344c1989ba275"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/project.ex": {
+    "mtime": 1777331860.0149376,
+    "hash": "38b5a4988794d835182389aac293376c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/agent_configs.ex": {
+    "mtime": 1777331951.7734442,
+    "hash": "9451510ba1f196ba79823811d3dbf8cf"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/agent_run.ex": {
+    "mtime": 1777312778.204635,
+    "hash": "aef2343b3186b1c7904f00cd9708651e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/harness_event.ex": {
+    "mtime": 1778559863.223524,
+    "hash": "42cd21c7818b20e66be94edd303a0e2b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/harness_events.ex": {
+    "mtime": 1778559863.223524,
+    "hash": "b23cbb5ba753cd9fe33796f9f8306697"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/message_part.ex": {
+    "mtime": 1778559863.223524,
+    "hash": "7187c39ea1012a9195e931ad83503e18"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/part/text.ex": {
+    "mtime": 1770952408.3019931,
+    "hash": "fd10d1b28633ce25214af41b92131d13"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/part/tool_use.ex": {
+    "mtime": 1770952408.3029933,
+    "hash": "52a5a9f5b8a7bd7b26ae81dd2ca573a3"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/part/tool_result.ex": {
+    "mtime": 1770952408.3039932,
+    "hash": "cdf7bf9ca2a6936cf8fb2e4abefd45f8"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/part/reasoning.ex": {
+    "mtime": 1770952408.3049934,
+    "hash": "1d01d7e550df4198cefbebe97c3ff614"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/part/file.ex": {
+    "mtime": 1770952408.3059933,
+    "hash": "450433b0d7a5f3b5e8e627e494382033"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/part/snapshot.ex": {
+    "mtime": 1770952408.3069932,
+    "hash": "4314bf52b0853f0abe1a99b62a4d4b05"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/part/agent.ex": {
+    "mtime": 1770952408.3069932,
+    "hash": "5eed9ab6a7b14864dfeb6c7fab467699"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/part/image.ex": {
+    "mtime": 1771598604.1457658,
+    "hash": "bd5495e57cf9a8fc454611c3d163fc35"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/lib/synapsis/encrypted/binary.ex": {
+    "mtime": 1770952437.0725033,
+    "hash": "23374696105172a96ddd2e1bd4efb237"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/test_helper.exs": {
+    "mtime": 1773741864.9214692,
+    "hash": "d0681fd9309117e4c2664b20595e02fe"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/support/data_case.ex": {
+    "mtime": 1770952408.3109934,
+    "hash": "55fb34172a255a54b648664c468e1eec"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/provider_config_test.exs": {
+    "mtime": 1770952408.3129935,
+    "hash": "ddf86b2615997d07f8b207e0a9aaa598"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/skill_test.exs": {
+    "mtime": 1771611044.9616098,
+    "hash": "1c8fd5c17710998f8bbb0906349fb3d2"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/lsp_config_test.exs": {
+    "mtime": 1771621540.252239,
+    "hash": "755d36da310cad4eb4edc2393d16b507"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/mcp_config_test.exs": {
+    "mtime": 1771621570.7548032,
+    "hash": "997dce9bc9144ae25a4cd8d8fbdd8bc6"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/part_test.exs": {
+    "mtime": 1771956109.1879616,
+    "hash": "1bc993b4b366797d57ed6812c207687c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/session_permission_test.exs": {
+    "mtime": 1773249715.550379,
+    "hash": "f6d143c38fefa890764e2c2c4fc3bdef"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/session_todo_test.exs": {
+    "mtime": 1773249715.550379,
+    "hash": "723536612c722c1d6447f828fd4b28b2"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/tool_call_test.exs": {
+    "mtime": 1773249715.550379,
+    "hash": "ee532db4423006a578cb7e2b6c76937f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/memory_entry_test.exs": {
+    "mtime": 1773334659.0839636,
+    "hash": "ef9c40ddc8a43a7d66913fc5d0f86235"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/tool_approval_test.exs": {
+    "mtime": 1773890814.127341,
+    "hash": "0c8068d6837b428c1925d9b07a1d2cf4"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/agent_messages_test.exs": {
+    "mtime": 1774291817.2612853,
+    "hash": "37e1ef248f1d69495259de83e119f34f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/heartbeat_config_test.exs": {
+    "mtime": 1774917402.2864633,
+    "hash": "eec935aded8ed2bebc8ef294a76dd51d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/project_test.exs": {
+    "mtime": 1775259388.2906902,
+    "hash": "2ff7352f8c95ca7fcdaf35aa1bd27d5f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/repo_record_test.exs": {
+    "mtime": 1775259508.2907305,
+    "hash": "ae53ea51317ace5537a1e42d0f176052"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/repo_remote_test.exs": {
+    "mtime": 1775259628.2947743,
+    "hash": "3aec3ed9ce1784b19ed3fe5e18e1f61b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/repo_worktree_test.exs": {
+    "mtime": 1775259748.2918212,
+    "hash": "130ea5d427599cf2699f81bab200ed50"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/failed_attempt_test.exs": {
+    "mtime": 1775260490.0915122,
+    "hash": "afc82f3dc31a9c8c06115cc2aaddecb3"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/patch_test.exs": {
+    "mtime": 1775260498.2816527,
+    "hash": "41c3ca5090c4b5e11cbc2f1fa9b13f06"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/session_test.exs": {
+    "mtime": 1775260507.6168125,
+    "hash": "ab7cc7eae3b4aedde7f00bd14005dc86"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/message_test.exs": {
+    "mtime": 1775260514.8429363,
+    "hash": "8313d0990da493918ec408a3d05bf671"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/plugin_config_test.exs": {
+    "mtime": 1775260520.5420341,
+    "hash": "9262d6e660f4d1edbb5b44db1a59123a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/schema_test.exs": {
+    "mtime": 1775260658.781403,
+    "hash": "c6c93abcb7a12bd864a90df2cd29586c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/projects_context_test.exs": {
+    "mtime": 1775261788.3030183,
+    "hash": "ac4e45bf8b51eede9c00dd8b396336c4"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/repos_test.exs": {
+    "mtime": 1775261908.3060913,
+    "hash": "a8062d945e919e4f16e864d2da384716"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/worktrees_test.exs": {
+    "mtime": 1775262028.304163,
+    "hash": "94522f5f78c483125920decfbc9b53cf"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/harness_events_test.exs": {
+    "mtime": 1778559769.8173716,
+    "hash": "26b9398f6cfbaa39ee5dae7745504edd"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/message_part_test.exs": {
+    "mtime": 1778559812.0953574,
+    "hash": "d3a747ecc1f247dbe26297f45bac035f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/test/synapsis/encrypted/binary_test.exs": {
+    "mtime": 1771623600.798764,
+    "hash": "616529176fd5c31f14c1f146466bb129"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/seeds.exs": {
+    "mtime": 1772209519.7065809,
+    "hash": "03b56a98de164dc1c061dcdf49baecc3"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20250101000001_create_projects.exs": {
+    "mtime": 1770952408.3099933,
+    "hash": "33078704c245c1b58d9f5cb849de0613"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20250101000002_create_sessions.exs": {
+    "mtime": 1770952408.3099933,
+    "hash": "696f8266ef4604b29452c4b706ca19b3"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20250101000003_create_messages.exs": {
+    "mtime": 1770952408.3099933,
+    "hash": "d50762d5dae73e30a708365ec9a97d60"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20250213000001_create_provider_configs.exs": {
+    "mtime": 1770952408.3099933,
+    "hash": "8fecd32aaff10278a69b41b04e7be5d1"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260213000001_create_memory_entries.exs": {
+    "mtime": 1770964677.7987735,
+    "hash": "df396755fe0741cdb2334b7b1196a3b1"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260213000002_create_skills.exs": {
+    "mtime": 1770964677.8137739,
+    "hash": "323e5e3160979c040c3bb7dd1c9d5c8a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260213000003_create_mcp_configs.exs": {
+    "mtime": 1770964677.8177738,
+    "hash": "f9cc5d748192270f8d6bc660b23d145c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260213000004_create_lsp_configs.exs": {
+    "mtime": 1770964677.822774,
+    "hash": "4597b1fb852c4f3aea01317d02bd62dc"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260214000001_create_plugin_configs.exs": {
+    "mtime": 1770973713.2411768,
+    "hash": "f0272c7c52573cd20b105d6bb29b178b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260214000002_migrate_mcp_lsp_to_plugin_configs.exs": {
+    "mtime": 1770973713.2511773,
+    "hash": "b7ef26e775a37087b6b95b4ac9f562d9"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260221000001_create_failed_attempts.exs": {
+    "mtime": 1771607440.1957898,
+    "hash": "63e149c4ea5950dd9f5efec9a71fe565"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260221000002_create_patches.exs": {
+    "mtime": 1771607443.438849,
+    "hash": "9dd3e2fe2076725eae31226311202a8f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260225000001_add_missing_indexes.exs": {
+    "mtime": 1771959849.1810496,
+    "hash": "6b7faaf2165546b6ee88b03696ffc990"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260306000001_create_agent_events.exs": {
+    "mtime": 1772790826.947239,
+    "hash": "07570d0f084b2bc5963ed0d820e4200f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260306000002_create_agent_summaries.exs": {
+    "mtime": 1772790829.2562792,
+    "hash": "70449461913f3a79b470153dcaab27c4"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260306000003_create_agent_checkpoints.exs": {
+    "mtime": 1772790831.836324,
+    "hash": "fccc927f67f084ecd748ca3caa15aab0"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260310000001_create_tool_calls.exs": {
+    "mtime": 1773249715.550379,
+    "hash": "722b6649a9c3c1f18cdbfe641dfbfa80"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260310000002_create_session_permissions.exs": {
+    "mtime": 1773249715.550379,
+    "hash": "c5dca10b6747e7483b2d2cebf867e29d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260310000003_create_session_todos.exs": {
+    "mtime": 1773249715.550379,
+    "hash": "6d028bd31aade276382be8220c3438c3"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260311000001_alter_session_permissions_to_enum.exs": {
+    "mtime": 1773249715.550379,
+    "hash": "8ad31801070acaaf4961bf14b1d73669"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260312000001_create_memory_events.exs": {
+    "mtime": 1773334659.0829637,
+    "hash": "0fdb5e691f7dd6f7095fe2a8f3f0b1ea"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260312000002_create_memory_checkpoints.exs": {
+    "mtime": 1773334659.0829637,
+    "hash": "a15db9bdf33cd0b2dfd967571267237b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260312000003_create_semantic_memories.exs": {
+    "mtime": 1773334659.0829637,
+    "hash": "34772a309854c2efed2c45676d13e98b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260312000004_migrate_memory_entries_to_semantic_memories.exs": {
+    "mtime": 1773334659.0829637,
+    "hash": "c86ae3a2cacf28edce89905f33e4793a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260312000005_add_oban_jobs.exs": {
+    "mtime": 1773334659.0829637,
+    "hash": "8936fd59dcd74a8518057aae45cab962"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260313000001_create_workspace_documents.exs": {
+    "mtime": 1773741864.9214692,
+    "hash": "a57eee76edb656658123d2362112e3ff"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260313000002_create_workspace_document_versions.exs": {
+    "mtime": 1773741864.9214692,
+    "hash": "738ba222d94272165e2f0421d22b19e2"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260318000001_create_heartbeat_configs.exs": {
+    "mtime": 1773789766.0575962,
+    "hash": "b1b206a37d89f7852d28fe986fc2a7c5"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260318000002_create_tool_approvals.exs": {
+    "mtime": 1773789768.2746327,
+    "hash": "225c5d2d87b52904fd686a5685dfb119"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260319000001_fix_tool_approvals_unique_index.exs": {
+    "mtime": 1773890635.9062788,
+    "hash": "420a0e68cb5e07ab666e3dfa3634bf4f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260320000001_create_agent_configs.exs": {
+    "mtime": 1773940439.3163426,
+    "hash": "71819e6a5629322aae5a8cb6b9a4f7de"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260323000001_add_debug_to_sessions.exs": {
+    "mtime": 1774290883.8176737,
+    "hash": "bd86f58157bca0aad3eb9e6dcc279733"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260324000001_create_agent_messages.exs": {
+    "mtime": 1774291397.3241649,
+    "hash": "711ce1c67e3b7c0f36898ef6e97532bc"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260331000001_add_missing_indexes.exs": {
+    "mtime": 1774939617.0168538,
+    "hash": "00dc0a5f487d0bafa87b6fd5dd88a914"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260404000001_alter_projects_add_fields.exs": {
+    "mtime": 1775257768.2792735,
+    "hash": "ecb415a110d6c40e94e880bffb171e83"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260404000002_create_repos.exs": {
+    "mtime": 1775257888.2823925,
+    "hash": "a839aa0c6e8a33aad93dfac1fcd6fff2"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260404000003_create_repo_remotes.exs": {
+    "mtime": 1775258008.2755027,
+    "hash": "8cc1ca83101fef2ddc9c8d66bca75524"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260404000004_create_repo_worktrees.exs": {
+    "mtime": 1775258128.2786064,
+    "hash": "f69bb97def7d512f138c6c9a182598a4"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260428000001_create_agent_runs.exs": {
+    "mtime": 1777312778.204635,
+    "hash": "035ea74dc694acfc2098cd745bd8c0bc"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260512000001_create_harness_events.exs": {
+    "mtime": 1778559863.223524,
+    "hash": "b6686990ec1c45d9ed06006b62d40923"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_data/priv/repo/migrations/20260512000002_create_parts.exs": {
+    "mtime": 1778559863.223524,
+    "hash": "8bc873aea065c34768a97d060beb4f33"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/mix.exs": {
+    "mtime": 1773074239.0015748,
+    "hash": "d7fbba469db9fea535c68aefe93aa874"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/lib/synapsis/providers.ex": {
+    "mtime": 1775742439.5411434,
+    "hash": "694efff16b3ccaaf861bae95cd6e5b1b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/lib/synapsis/provider/retry.ex": {
+    "mtime": 1770952501.7406476,
+    "hash": "f48c9f5dce068cc7fa0735a7b76482be"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/lib/synapsis/provider/event_mapper.ex": {
+    "mtime": 1770957821.426769,
+    "hash": "8ef8af32b99cdee621b1579107f79bef"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/lib/synapsis/provider/registry.ex": {
+    "mtime": 1770957821.426769,
+    "hash": "009e05142ee57e947ba7b0bfdb60cb9e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/lib/synapsis/provider/message_mapper.ex": {
+    "mtime": 1772372472.2431524,
+    "hash": "3342fe1f700db38af20486a1b5808669"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/lib/synapsis/provider/sanitizer.ex": {
+    "mtime": 1774290883.8186736,
+    "hash": "05c7308155a668f0f4c2e561621eb31f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/lib/synapsis/provider/adapter.ex": {
+    "mtime": 1774946461.9266024,
+    "hash": "23df840cc7ce2e7fbfe6baf4f806fe2b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/lib/synapsis/provider/model_registry.ex": {
+    "mtime": 1775742413.731706,
+    "hash": "f5c6a921178c986ccf180ec3e3d79d22"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/lib/synapsis/provider/transport/sse.ex": {
+    "mtime": 1772462530.3762622,
+    "hash": "766e35527b5eb9393e3d0bf06206772c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/lib/synapsis/provider/transport/anthropic.ex": {
+    "mtime": 1774949396.4289408,
+    "hash": "b6f9190896058f048cd1e780a20ff4e7"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/lib/synapsis/provider/transport/google.ex": {
+    "mtime": 1774949397.9679682,
+    "hash": "560359b79278caa9b3a5c390e0384402"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/lib/synapsis/provider/transport/openai.ex": {
+    "mtime": 1774949404.1300786,
+    "hash": "9a5b01ee2ebc94f80bae75211594fb80"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/lib/synapsis/provider/oauth/openai.ex": {
+    "mtime": 1774946421.8839085,
+    "hash": "09fae211dc3002b4209de81aa41014f8"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/test/test_helper.exs": {
+    "mtime": 1770952481.6982932,
+    "hash": "8331301311ecd0466fe909eade091706"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/test/synapsis/providers_test.exs": {
+    "mtime": 1775742455.563415,
+    "hash": "e4e044b79e6789c931cb39c07f6be527"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/test/synapsis/provider/event_mapper_test.exs": {
+    "mtime": 1771956092.4153028,
+    "hash": "ddabb94d015cc325ffc2460df77147a7"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/test/synapsis/provider/retry_test.exs": {
+    "mtime": 1771957861.1655471,
+    "hash": "0a019ff5825917a6de72f10bb4460fb7"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/test/synapsis/provider/message_mapper_test.exs": {
+    "mtime": 1771962120.53162,
+    "hash": "33c70777980497e720b934ee84fb8648"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/test/synapsis/provider/registry_test.exs": {
+    "mtime": 1771969613.902901,
+    "hash": "093087909d00c7ae5b3b385832bf6e70"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/test/synapsis/provider/adapter_test.exs": {
+    "mtime": 1771998277.7225087,
+    "hash": "795883911706cc7d2005d665a40cd728"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/test/synapsis/provider/model_registry_test.exs": {
+    "mtime": 1772372651.0741012,
+    "hash": "41f5ce3662725db96aa89a0594de891d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/test/synapsis/provider/transport/openai_test.exs": {
+    "mtime": 1771951228.2625864,
+    "hash": "81446588150d712a7c89afbcd20c084d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/test/synapsis/provider/transport/anthropic_test.exs": {
+    "mtime": 1771951242.7448373,
+    "hash": "ab0892dee4876d4317612ed8a70151fc"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/test/synapsis/provider/transport/sse_test.exs": {
+    "mtime": 1771957812.3781762,
+    "hash": "25e54cc29d31942578ad643439d93e1b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/test/synapsis/provider/transport/google_test.exs": {
+    "mtime": 1774944267.1092556,
+    "hash": "4fb5cacabc10c6bbfa7e78dd71b61062"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_provider/test/synapsis_provider/sanitizer_test.exs": {
+    "mtime": 1774290883.8186736,
+    "hash": "5878a6d5950fbad3cb2c54281de1abeb"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/mix.exs": {
+    "mtime": 1773074239.0015748,
+    "hash": "225c89d3283640aa58cf7c6963bdb352"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/lib/synapsis_plugin.ex": {
+    "mtime": 1773336278.9719114,
+    "hash": "b8fddc133fa44dff6714ee7cc7ec0292"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/lib/synapsis_plugin/supervisor.ex": {
+    "mtime": 1771598750.5184853,
+    "hash": "1bad29a5c99e7b53cd40a798b72015d1"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/lib/synapsis_plugin/loader.ex": {
+    "mtime": 1774925089.871804,
+    "hash": "9a9e50e128af055ebd3bc74b3b6eaa7f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/lib/synapsis_plugin/mcp.ex": {
+    "mtime": 1774946941.2269187,
+    "hash": "f36240517d52bfc838cb4a20917afb42"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/lib/synapsis_plugin/server.ex": {
+    "mtime": 1774946944.4319744,
+    "hash": "163ca91f135cea96d4df4547a6e0d7af"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/lib/synapsis_plugin/lsp.ex": {
+    "mtime": 1774947568.6908207,
+    "hash": "c58d6b1d17a7b436ba14783aabdf9ca0"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/lib/synapsis_plugin/mcp/protocol.ex": {
+    "mtime": 1771958672.7020931,
+    "hash": "9f90d7f3078623a115576b9842e9e3f9"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/lib/synapsis_plugin/mcp/presets.ex": {
+    "mtime": 1772533737.0283089,
+    "hash": "196932e2578eb9ddaedffd54b17a9bf8"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/lib/synapsis_plugin/lsp/position.ex": {
+    "mtime": 1770973896.3471324,
+    "hash": "7e96b7b0107837d5a2d8d46a258b6812"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/lib/synapsis_plugin/lsp/protocol.ex": {
+    "mtime": 1771958676.2091324,
+    "hash": "edebeacb33e0db2d2d452030718076f8"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/lib/synapsis_plugin/lsp/manager.ex": {
+    "mtime": 1772471430.724546,
+    "hash": "faf935b2abd080de19936e9b37ae2757"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/lib/synapsis_plugin/lsp/presets.ex": {
+    "mtime": 1773741864.9214692,
+    "hash": "fb322a1ac11dd61b4b639e9dc3b33318"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/lib/synapsis/plugin.ex": {
+    "mtime": 1770973802.5383873,
+    "hash": "bb1c8abc7ea0ef29e4e97b8d64a3d765"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/test/test_helper.exs": {
+    "mtime": 1770973946.288397,
+    "hash": "7566dc08e72e565faebc0970e685df87"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/test/support/mock_plugin.ex": {
+    "mtime": 1770973946.3003976,
+    "hash": "f16ad11f09e1d24b66bb7cc0b847426e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/test/synapsis_plugin/loader_test.exs": {
+    "mtime": 1771610985.4447062,
+    "hash": "d4c841f7b4667a64d409165d02648bb8"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/test/synapsis_plugin/supervisor_test.exs": {
+    "mtime": 1771624431.6683922,
+    "hash": "7ee76e1284be0f5a1d8efb9233732457"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/test/synapsis_plugin/plugin_behaviour_test.exs": {
+    "mtime": 1771957086.8014402,
+    "hash": "851207e7298f994d3b90bd7ebc34bad2"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/test/synapsis_plugin/mcp_test.exs": {
+    "mtime": 1771967125.179862,
+    "hash": "b0555fffccf82fb6a209ae19fb116fbf"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/test/synapsis_plugin/server_test.exs": {
+    "mtime": 1771969419.9297035,
+    "hash": "463f04d30ee5921fcad6217af117b170"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/test/synapsis_plugin/lsp_test.exs": {
+    "mtime": 1774464620.6689029,
+    "hash": "1fae8cf24d261a490c486ce2622ecc71"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/test/synapsis_plugin/lsp/position_test.exs": {
+    "mtime": 1771622920.7057166,
+    "hash": "c5bd513ceaca99981597412c15338ef9"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/test/synapsis_plugin/lsp/protocol_test.exs": {
+    "mtime": 1771959471.712055,
+    "hash": "fdbfc2f2fd040e5fc223565002b8fa10"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/test/synapsis_plugin/lsp/manager_test.exs": {
+    "mtime": 1773741864.9214692,
+    "hash": "3f501fb4e11d6a80b76cf63afadbf94c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/test/synapsis_plugin/lsp/presets_test.exs": {
+    "mtime": 1773741864.9214692,
+    "hash": "1c220a2c56230601a149aeb6bdd6dc9c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/test/synapsis_plugin/mcp/protocol_test.exs": {
+    "mtime": 1771959402.2997286,
+    "hash": "5b7639fa5c3d6bf1e9b0e7fcf7fb7c88"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_plugin/test/synapsis_plugin/mcp/presets_test.exs": {
+    "mtime": 1772533737.029309,
+    "hash": "8fcf9ff84a8bae5b119171271cf6aaa9"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/mix.exs": {
+    "mtime": 1774915421.2976656,
+    "hash": "6d5420d3a6d5f4a4b2942077a62d715f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent.ex": {
+    "mtime": 1772652628.4650686,
+    "hash": "14423f61b76e51eafe3fc918ddf37382"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/heartbeats.ex": {
+    "mtime": 1774921372.4543567,
+    "hash": "084d18a64717e58b64d70d1e5c997fe0"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/work_item.ex": {
+    "mtime": 1772645288.3031898,
+    "hash": "78ac5ab47077b0e028a07a29c6ffde76"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/behaviour.ex": {
+    "mtime": 1772645726.3373973,
+    "hash": "592531bfe7290335fd4f210439a87bd6"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/project_assistant.ex": {
+    "mtime": 1772791021.9716427,
+    "hash": "4a19514eade96a5f06a8cd311ca21c67"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/messaging.ex": {
+    "mtime": 1773755986.7512546,
+    "hash": "0d8c686c72ae3b7250a56ed8c6ee5ad4"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/approval.ex": {
+    "mtime": 1773890703.9524484,
+    "hash": "9f0a7949c2dab174998844501452ee13"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/global_assistant.ex": {
+    "mtime": 1774940053.4063833,
+    "hash": "3603c57026753ea9d71365b167a9bfee"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/session_bridge.ex": {
+    "mtime": 1774940170.6364167,
+    "hash": "c44ad9ac12f2af13d6120dbe8f9b9b6e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/context_builder.ex": {
+    "mtime": 1774955008.2653682,
+    "hash": "1f798efc7035d2dc2fc77bc4d21b530c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/agent_registry.ex": {
+    "mtime": 1774955026.7865875,
+    "hash": "6595891443a743011b8eced8f3942563"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/supervisor.ex": {
+    "mtime": 1774955036.115693,
+    "hash": "e37bb73e83778860553f3bc112a9590f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/global_agent.ex": {
+    "mtime": 1774955529.2608228,
+    "hash": "68b0d8d64ef623937f65d9ecf3d6c8d8"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/streaming_executor.ex": {
+    "mtime": 1775232558.4716277,
+    "hash": "eaad1e89c0c9f41be6a6d346a80c7a62"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/query_loop.ex": {
+    "mtime": 1775232558.450627,
+    "hash": "44fb3890d7960f5328d06311fa4ffb24"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/tool_scoping.ex": {
+    "mtime": 1775269206.6974134,
+    "hash": "2905a8399ae40809ff1d139fbaebd6a8"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/build_agent_supervisor.ex": {
+    "mtime": 1775268268.3435376,
+    "hash": "a71efd2c299d785d56abc9c924d0b83d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/worktree_cleanup.ex": {
+    "mtime": 1775268545.1396854,
+    "hash": "d38cd00dd6645ba8ea79fadebc7a129a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/project_context_builder.ex": {
+    "mtime": 1775268564.8599918,
+    "hash": "d43620ee1d998160d3fec340a78116b3"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/repo_context_builder.ex": {
+    "mtime": 1775268572.0041032,
+    "hash": "c453b4bdb3ebf6a5c894b72a04ae40ce"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/runs.ex": {
+    "mtime": 1777312769.21361,
+    "hash": "651566e4eb0321272568c3c676036a36"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/run_events.ex": {
+    "mtime": 1777312778.2056348,
+    "hash": "d43fcfdf697b5d8d4cd8d9303a5daf21"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/memory/summary.ex": {
+    "mtime": 1772645238.871337,
+    "hash": "a5cfb3aba5f295e5c5140b1be378be4f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/memory/event.ex": {
+    "mtime": 1772790912.1777244,
+    "hash": "7b3cd7c47ada5b882d5d14f219598193"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/memory/summary_store.ex": {
+    "mtime": 1774939209.4649286,
+    "hash": "897b80beb08334dfd79890253eec138e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/memory/event_store.ex": {
+    "mtime": 1774939211.987971,
+    "hash": "d6259f02d4a5b968b60266ff309e5f0c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/behaviours/default_project.ex": {
+    "mtime": 1772645736.1925488,
+    "hash": "8ae0a31e7a7600e48ab646793081bee7"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/runtime/node.ex": {
+    "mtime": 1772651039.1936455,
+    "hash": "275031432bf542ff68d912b7ab556e2c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/runtime/event.ex": {
+    "mtime": 1772651044.899756,
+    "hash": "e7cb22bc93f3ec16b9282558cbe2b08b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/runtime/graph.ex": {
+    "mtime": 1772651193.6215944,
+    "hash": "71892ece779b4c8b00e2c36fd3ea3ba2"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/runtime/project_graph.ex": {
+    "mtime": 1772651269.323011,
+    "hash": "2cd264df73a573c47d1b17599a207aab"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/runtime/checkpoint.ex": {
+    "mtime": 1772652538.5505111,
+    "hash": "f8587856187ebf7b72f8f26a275f3d83"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/runtime/runner.ex": {
+    "mtime": 1774940038.5421257,
+    "hash": "ea3d996f272c6744f5f645048dd98969"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/runtime/checkpoint_store.ex": {
+    "mtime": 1774947530.9921656,
+    "hash": "44d48bd695f491b397546100d595ba3f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/nodes/helpers.ex": {
+    "mtime": 1773758761.9669867,
+    "hash": "6f25fd1dedd00796fe1e7cb1f554d4bb"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/nodes/approval_gate.ex": {
+    "mtime": 1774925089.870804,
+    "hash": "6c9aa292232dcf31434a1fafb7da5e41"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/nodes/build_prompt.ex": {
+    "mtime": 1774925089.870804,
+    "hash": "bf6f1aa84c17f5415b07ff5394db0e47"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/nodes/compact_context.ex": {
+    "mtime": 1774925089.870804,
+    "hash": "176ef6587d2f36b18ba97fc5982cbc8e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/nodes/complete.ex": {
+    "mtime": 1774925089.870804,
+    "hash": "f839e997f7c994d535e4f2904e8540ad"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/nodes/escalate.ex": {
+    "mtime": 1774925089.870804,
+    "hash": "009eb2cd08abac096ae979785a8fae20"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/nodes/llm_stream.ex": {
+    "mtime": 1774925089.870804,
+    "hash": "eed89d347cf0c13697e28691a4e76738"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/nodes/orchestrate.ex": {
+    "mtime": 1774925089.870804,
+    "hash": "3f32e2c31daea985c8d11b135828db22"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/nodes/process_response.ex": {
+    "mtime": 1774925089.870804,
+    "hash": "60a8d8e8334f09ef4c12a531e5e98dc6"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/nodes/receive_message.ex": {
+    "mtime": 1774925089.870804,
+    "hash": "9a1f877a35aa2f140f7cefcfe9ac52cd"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/nodes/tool_execute.ex": {
+    "mtime": 1774925089.871804,
+    "hash": "acaf56dafbe2d2feaf67e6b2067ac1cd"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/nodes/tool_dispatch.ex": {
+    "mtime": 1774929550.370164,
+    "hash": "8ee6394304290c9f97ff884df1a7d0bf"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/nodes/reason.ex": {
+    "mtime": 1774954302.9323277,
+    "hash": "3969e57ec8e91566f8656fd5a53654cb"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/nodes/respond.ex": {
+    "mtime": 1774954317.1083672,
+    "hash": "5f19dafb852eeeb54796f82bc62c5b4d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/nodes/act.ex": {
+    "mtime": 1774955437.4628177,
+    "hash": "c6f74c832e22782a9d09869eec50f47a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/nodes/spawn_agent.ex": {
+    "mtime": 1774955455.2948291,
+    "hash": "ae718d0ee6ee8a57f5917a4411cafe17"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/graphs/coding_loop.ex": {
+    "mtime": 1773789835.560738,
+    "hash": "65651b8783dff100ba8a2c45ec916eb1"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/graphs/conversational_loop.ex": {
+    "mtime": 1774955472.126835,
+    "hash": "2cad70458465a21387d3eb409a3cd9c2"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/heartbeat/templates.ex": {
+    "mtime": 1774918921.5413234,
+    "hash": "b106c0ab5337b94bf41efb5debb22b8d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/heartbeat/scheduler.ex": {
+    "mtime": 1774921577.6378863,
+    "hash": "0f30498f39287c0b4aec46ed8ca5f79a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/heartbeat/worker.ex": {
+    "mtime": 1774946967.8093803,
+    "hash": "ffc4ea5cbad3328661f69c949b827620"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/query_loop/state.ex": {
+    "mtime": 1775228848.09659,
+    "hash": "bf9daf17aefa70dcfdfbc6943f6147be"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/query_loop/executor.ex": {
+    "mtime": 1775232558.4716277,
+    "hash": "4edc60543460036713402447d34b8751"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/query_loop/context.ex": {
+    "mtime": 1775229268.104254,
+    "hash": "5344b0796bfe5cb4402da28fb3a3f66c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/agents/assistant_agent.ex": {
+    "mtime": 1775268388.3472965,
+    "hash": "6e2c3390e09bce7f3494e2e256e8cae4"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/agent/agents/build_agent.ex": {
+    "mtime": 1775269206.7144136,
+    "hash": "8e664b3f19a39949381dca3b69c5b98d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/session/debug_telemetry.ex": {
+    "mtime": 1774451655.9504707,
+    "hash": "db4d127c78b94127676b9b31bd70bee2"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/session/auditor_task.ex": {
+    "mtime": 1774925089.871804,
+    "hash": "2d7201a745e9fb6307de58e3078c3959"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/session/worker.ex": {
+    "mtime": 1775278524.0186327,
+    "hash": "e83699bdb9afcc5ed337d7fc5a3209be"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/session/worker/auditor.ex": {
+    "mtime": 1773756258.8031614,
+    "hash": "aaeadb4ae01e7578099024eb14330af2"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/session/worker/persistence.ex": {
+    "mtime": 1774929608.045166,
+    "hash": "203b8c535a197976487ba73e9e689f2c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/session/worker/boot.ex": {
+    "mtime": 1774954789.1222725,
+    "hash": "0c0e9e5f1cd3ef94e2b064a9dca40c00"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/session/worker/io_handler.ex": {
+    "mtime": 1775230739.9159105,
+    "hash": "666ddedfd0a72f45449432d7a63f7c93"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/session/worker/config.ex": {
+    "mtime": 1775278576.0206172,
+    "hash": "72cff1671b5f93c14423a901ddff6d6f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis_agent/application.ex": {
+    "mtime": 1774954999.2222562,
+    "hash": "1344b5dcde18b862c71b3a7f7a0a6d22"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/test_helper.exs": {
+    "mtime": 1772791220.1040797,
+    "hash": "501d47b624f1b15ae06cefe4bdca2cee"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent_test.exs": {
+    "mtime": 1772791239.106377,
+    "hash": "83bd1082c90e707f64d834104105fb46"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/messaging_test.exs": {
+    "mtime": 1773756054.146153,
+    "hash": "df79223b69f85b9a1ecfedc775ee0d2a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/context_builder_test.exs": {
+    "mtime": 1773790211.5799549,
+    "hash": "f21fc2930da3ca713a8a78b73cd10dae"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/query_loop_context_test.exs": {
+    "mtime": 1775232558.4546273,
+    "hash": "21b7723d0182e724ffa115574d5e5f66"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/streaming_executor_test.exs": {
+    "mtime": 1775231668.1296258,
+    "hash": "cdb3f5dd89b28df5250ef21a9bd2f15d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/query_loop_test.exs": {
+    "mtime": 1775232558.4696276,
+    "hash": "e3cba1e247b01279c30c801b8d3cbec8"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/query_loop_fork_test.exs": {
+    "mtime": 1775232558.4596274,
+    "hash": "2c3e9cf3ff39aace35b55080fbac1f01"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/tool_scoping_test.exs": {
+    "mtime": 1775268619.820852,
+    "hash": "e1f25d27d161d2e206b294a373c7783b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/project_context_builder_test.exs": {
+    "mtime": 1775268631.179031,
+    "hash": "423de2fd9adc765b2acef857c5022271"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/repo_context_builder_test.exs": {
+    "mtime": 1775268641.6901968,
+    "hash": "e7a630b7b3c5b981498204612d6f65a7"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/worktree_cleanup_test.exs": {
+    "mtime": 1775268756.8790312,
+    "hash": "e8ebbd1f52c0589ac4a7b41e225b9818"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/approval_test.exs": {
+    "mtime": 1775318879.676233,
+    "hash": "43aee4486f3a031ca902adcfcf8a8c3e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/session_bridge_test.exs": {
+    "mtime": 1775318896.1114352,
+    "hash": "f5153f6f60f2719bd54fee65820d01bc"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/runs_test.exs": {
+    "mtime": 1777312847.6814377,
+    "hash": "8ae35193cc711a31a4e032d73d49b5df"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/runtime/graph_test.exs": {
+    "mtime": 1772651174.194228,
+    "hash": "833f463cb3c1e31336e869a2061e355f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/runtime/checkpoint_store_test.exs": {
+    "mtime": 1772791141.7917416,
+    "hash": "011819e0c563986cc8bc8b08d0f27f71"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/runtime/runner_test.exs": {
+    "mtime": 1772791261.6207304,
+    "hash": "3e75793aa773eea7922b4af14e079f16"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/graphs/coding_loop_test.exs": {
+    "mtime": 1773790901.354989,
+    "hash": "9e94e8afcca61f786b7eb1def7c45d80"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/nodes/node_test.exs": {
+    "mtime": 1773790933.8815722,
+    "hash": "59d3ef5fd143c26e3f0ad7905e93ab5b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/nodes/receive_message_test.exs": {
+    "mtime": 1774924480.480507,
+    "hash": "d8664302ed2b1acb7705fb2428b00643"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/nodes/approval_gate_test.exs": {
+    "mtime": 1774924498.3918483,
+    "hash": "d326e020858330921fc4e40501d794e6"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/nodes/build_prompt_test.exs": {
+    "mtime": 1775318886.7783206,
+    "hash": "9b8621af3a12f4cfeecc85cad4fdb70a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/nodes/compact_context_test.exs": {
+    "mtime": 1775318888.3063393,
+    "hash": "011d038e515abda24bcc526061ff4a61"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/nodes/complete_test.exs": {
+    "mtime": 1775318890.4443655,
+    "hash": "348d372ae1d0d5ff69329b8118753af7"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/nodes/process_response_test.exs": {
+    "mtime": 1775318890.4593656,
+    "hash": "92b91a336007b5ff0023126df3c8a6b2"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/nodes/tool_dispatch_test.exs": {
+    "mtime": 1775318891.6573803,
+    "hash": "19894cd41b9a5e79bddcbb3bd7c55e80"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/nodes/tool_execute_test.exs": {
+    "mtime": 1775318893.103398,
+    "hash": "fa4dfa0b43d329fa56ac441a04cf5893"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/nodes/escalate_integration_test.exs": {
+    "mtime": 1775318897.648454,
+    "hash": "544d6ba797b7addba4fa4e3a29082af2"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/heartbeat/templates_test.exs": {
+    "mtime": 1773790256.7347047,
+    "hash": "77c8283c16cff2e6d874e47120c78b5c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/heartbeat/worker_test.exs": {
+    "mtime": 1774919043.4004216,
+    "hash": "61f8893eb70a6d76ca15492342cc873c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/heartbeat/scheduler_test.exs": {
+    "mtime": 1774919180.7898016,
+    "hash": "05bef49b90724751a8fd6124ba9beb2c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/query_loop/executor_test.exs": {
+    "mtime": 1775232558.4736276,
+    "hash": "a2099dd64111d3f4bc03779f716d52ac"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/agent/agents/agent_stubs_test.exs": {
+    "mtime": 1775268654.6954021,
+    "hash": "f83c2e23d8ad32eb4fd47e1c3a769b10"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/synapsis/session/auditor_task_test.exs": {
+    "mtime": 1775318895.0144217,
+    "hash": "9801368fbbd43a4f54099807a94bfbb5"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/support/test_project_behaviour.ex": {
+    "mtime": 1772645781.8872547,
+    "hash": "17dfc5cb178e724fea840a3cd92548b3"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/test/support/data_case.ex": {
+    "mtime": 1772791094.7809176,
+    "hash": "6a38c2ac6db840877d5a91c67ffe3245"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/mix.exs": {
+    "mtime": 1773741864.9234693,
+    "hash": "36374d36ce10c01d357854dd0194c342"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/lib/synapsis/workspace.ex": {
+    "mtime": 1773931951.0388064,
+    "hash": "b458f8308454b75b7637effdd89197af"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/lib/synapsis/workspace/blob_store.ex": {
+    "mtime": 1773741864.9224694,
+    "hash": "80c6a4ec80afbfea8f1dc77d4681484a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/lib/synapsis/workspace/gc.ex": {
+    "mtime": 1773741864.9234693,
+    "hash": "a67a261d46c3499786fcc70676c03360"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/lib/synapsis/workspace/permissions.ex": {
+    "mtime": 1773741864.9234693,
+    "hash": "88455db5e3860198d2c49404ff762977"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/lib/synapsis/workspace/projection.ex": {
+    "mtime": 1773741864.9234693,
+    "hash": "f1fb3d08dc88a6677f095410a2ab6492"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/lib/synapsis/workspace/resource.ex": {
+    "mtime": 1773741864.9234693,
+    "hash": "3d85bed98bb239dabd3fbf10f2ef7292"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/lib/synapsis/workspace/resources.ex": {
+    "mtime": 1773741864.9234693,
+    "hash": "1fb67320e9691a0c6cc5856f9d55fd1a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/lib/synapsis/workspace/search.ex": {
+    "mtime": 1773741864.9234693,
+    "hash": "f8e124741969b7db88dd5225c94fde4e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/lib/synapsis/workspace/tools.ex": {
+    "mtime": 1773741864.9234693,
+    "hash": "2e80d9ae70b976bfb7af6efae5484588"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/lib/synapsis/workspace/identity.ex": {
+    "mtime": 1773931615.5467312,
+    "hash": "c9644e6e9a691f808d3661b1ad75b599"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/lib/synapsis/workspace/path_resolver.ex": {
+    "mtime": 1775264548.3166006,
+    "hash": "d129f183eb816ba32e2076226691eb44"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/lib/synapsis/workspace/blob_store/local.ex": {
+    "mtime": 1773741864.9224694,
+    "hash": "f0a7de02df970df67552e78a6c411586"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/lib/synapsis/workspace/tools/workspace_delete.ex": {
+    "mtime": 1773741864.9234693,
+    "hash": "8a8e4e60930ea41423a361748c7c8bb8"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/lib/synapsis/workspace/tools/workspace_list.ex": {
+    "mtime": 1773741864.9234693,
+    "hash": "01aab1a54855d23cee53872357cb1be3"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/lib/synapsis/workspace/tools/workspace_read.ex": {
+    "mtime": 1774946759.8467698,
+    "hash": "afa6b162485b0d8a6451cc3c7ba3d8ef"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/lib/synapsis/workspace/tools/workspace_write.ex": {
+    "mtime": 1774946760.8617873,
+    "hash": "f65ba6151d363b6b9541f99ad154da61"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/lib/synapsis/workspace/tools/workspace_search.ex": {
+    "mtime": 1774949513.83804,
+    "hash": "23122da91cb90a155a8f8a7f7a143883"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/test/test_helper.exs": {
+    "mtime": 1773741864.9244695,
+    "hash": "8331301311ecd0466fe909eade091706"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/test/integration/lifecycle_promotion_test.exs": {
+    "mtime": 1775319049.4532726,
+    "hash": "8878497b49a8f91ad51b87a97fb664c0"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/test/integration/search_fanout_test.exs": {
+    "mtime": 1775319051.3382945,
+    "hash": "752220f56674d78846e8e1a8a121f98c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/test/integration/projection_roundtrip_test.exs": {
+    "mtime": 1775319052.1283038,
+    "hash": "1c64656063e11c2bc78f27baa57519c7"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/test/integration/gc_cleanup_test.exs": {
+    "mtime": 1775319053.6573217,
+    "hash": "bb03e218006223087b50ec230d260091"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/test/support/blob_store_case.ex": {
+    "mtime": 1773741864.9234693,
+    "hash": "821e6876b48081be4a62e217f0c31d30"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/test/support/workspace_case.ex": {
+    "mtime": 1775319048.0992565,
+    "hash": "0847d05c366f152c20d1e63986871e78"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/test/synapsis/workspace_test.exs": {
+    "mtime": 1775319040.2251642,
+    "hash": "64a4c33f775313aa69223385741cf182"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/test/synapsis/workspace/path_resolver_test.exs": {
+    "mtime": 1773741864.9234693,
+    "hash": "fa5acb0de2cd5ec95978958add539e67"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/test/synapsis/workspace/permissions_test.exs": {
+    "mtime": 1773741864.9234693,
+    "hash": "1b99acb14c5aa8c7d7dd054b31377c21"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/test/synapsis/workspace/identity_test.exs": {
+    "mtime": 1773825069.8921344,
+    "hash": "299934ebee0d95b378192a3fbb9da16c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/test/synapsis/workspace/path_resolver_additions_test.exs": {
+    "mtime": 1775265088.3234115,
+    "hash": "1a3121613e49c9aefee82f75fe999ba8"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/test/synapsis/workspace/workspace_api_test.exs": {
+    "mtime": 1775319041.3601775,
+    "hash": "cf4732a2e0f6826fbbf6a0939847b733"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/test/synapsis/workspace/tools_test.exs": {
+    "mtime": 1775319041.8581834,
+    "hash": "72f2630f517e30ec5e804ff6fd247e1d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/test/synapsis/workspace/search_test.exs": {
+    "mtime": 1775319043.364201,
+    "hash": "68434dfa98336b7b3d71b56235ac6fe8"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/test/synapsis/workspace/resources_test.exs": {
+    "mtime": 1775319044.9262192,
+    "hash": "1863890e6b4071135046ff5551d1b310"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/test/synapsis/workspace/projection_test.exs": {
+    "mtime": 1775319046.4572372,
+    "hash": "f00e575d34ae2fa052d150ad4ad00b44"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/test/synapsis/workspace/gc_test.exs": {
+    "mtime": 1775319047.3082473,
+    "hash": "22a4504512d090ab9f520762de03a081"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_workspace/test/synapsis/workspace/blob_store/local_test.exs": {
+    "mtime": 1773741864.9234693,
+    "hash": "00f403b74165ad77385f10eb3fb2b2c4"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/req/mix.exs": {
+    "mtime": 1770887512.0,
+    "hash": "e08d06dc09f192ce71be1b9c3d728aba"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/jason/mix.exs": {
+    "mtime": 1770887512.0,
+    "hash": "94e3e84da500d30d1082a921416ef2f0"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/owl/mix.exs": {
+    "mtime": 1770887512.0,
+    "hash": "e7f43c5e01c849a8ecf05ed438e5206c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/finch/mix.exs": {
+    "mtime": 1770887512.0,
+    "hash": "b0d5759b4efd18b1e42f79f0691ee2be"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/mime/mix.exs": {
+    "mtime": 1770887513.0,
+    "hash": "626559467ed0365a651f5bcca140553a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/mint/mix.exs": {
+    "mtime": 1770887513.0,
+    "hash": "9c2fe35ccbe0b76ea99ae7355bdb7738"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/nimble_options/mix.exs": {
+    "mtime": 1770887513.0,
+    "hash": "3bcb44f897b5c2a1974d03fc4c771469"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/nimble_pool/mix.exs": {
+    "mtime": 1770887513.0,
+    "hash": "4aeee60eda706d3db9b6438746f50799"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/hpax/mix.exs": {
+    "mtime": 1770887520.0,
+    "hash": "1e2585ff3161bc9f9c8a175a45a4b490"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/postgrex/mix.exs": {
+    "mtime": 1770887520.0,
+    "hash": "813fc400d0fe90f6cda788c04755c859"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/db_connection/mix.exs": {
+    "mtime": 1770887520.0,
+    "hash": "d3c85c27d53e54144a54bc61e9c81677"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/decimal/mix.exs": {
+    "mtime": 1770887520.0,
+    "hash": "34741cde86e5597ae5889dcda7b7de2e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/ecto/mix.exs": {
+    "mtime": 1770887520.0,
+    "hash": "aac4541aacbec95615c765478dbdc60c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/telemetry_metrics/mix.exs": {
+    "mtime": 1770887520.0,
+    "hash": "1db8fdc0294464405b82767c61a44f7c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/gettext/mix.exs": {
+    "mtime": 1770887520.0,
+    "hash": "91bb1dcccf642cd9cd7e3bfa6eadf1a5"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/dns_cluster/mix.exs": {
+    "mtime": 1770887520.0,
+    "hash": "27077d3a8732f514ec793f21cc8bb5d7"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/cors_plug/mix.exs": {
+    "mtime": 1770887520.0,
+    "hash": "f4267983589372be7217d672bb4d49de"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/plug/mix.exs": {
+    "mtime": 1770887520.0,
+    "hash": "6291a431573a5c4bdaaa2c8d0028b5b4"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/plug_crypto/mix.exs": {
+    "mtime": 1770887520.0,
+    "hash": "20715473f51687dcd99e0a9c61477cc8"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/thousand_island/mix.exs": {
+    "mtime": 1770887520.0,
+    "hash": "2e3d736aa45ea3eee1e94d06770d3d2e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/websock/mix.exs": {
+    "mtime": 1770887520.0,
+    "hash": "ce83fdebd1a803ba5ed9971186d1db57"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/expo/mix.exs": {
+    "mtime": 1770887520.0,
+    "hash": "391d459ea5909f6984537228d7bb0392"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/phoenix_pubsub/mix.exs": {
+    "mtime": 1770887520.0,
+    "hash": "f43608ff76b9070b22a9397df7b7e416"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/phoenix_template/mix.exs": {
+    "mtime": 1770887520.0,
+    "hash": "0801315720dc65773b6da92809c408b1"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/websock_adapter/mix.exs": {
+    "mtime": 1770887520.0,
+    "hash": "1a1ee4af88cccdde7ba08cfd765ec8c2"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/bypass/mix.exs": {
+    "mtime": 1770892755.0,
+    "hash": "19ded0b9f15238e9d9bd1a65ec6a3a29"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/plug_cowboy/mix.exs": {
+    "mtime": 1770892755.0,
+    "hash": "77b80b1544ec7d99140e6fdb727113de"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/file_system/mix.exs": {
+    "mtime": 1770897191.0,
+    "hash": "ad44eb2bdac9fcb43d0693a255420a77"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/bun/mix.exs": {
+    "mtime": 1770913067.0,
+    "hash": "b7b62e3742c9dc35cfaa6764bb2a8cfb"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/tailwind/mix.exs": {
+    "mtime": 1770915041.0,
+    "hash": "b5023cdbb31d70053a882ee17674a8af"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/phoenix_html/mix.exs": {
+    "mtime": 1770917082.0,
+    "hash": "2684a9ac9dec93c26d7ed609751ec1ea"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/cc_precompiler/mix.exs": {
+    "mtime": 1771598926.0,
+    "hash": "63fd05ae8d02dbdbae73aaa66d28727b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/elixir_make/mix.exs": {
+    "mtime": 1771598926.0,
+    "hash": "ab797d26373525dd62684ca95a2edcb5"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/ex_doc/mix.exs": {
+    "mtime": 1772794054.0,
+    "hash": "defa969280cac7bcc40f3836d48078c0"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/earmark_parser/mix.exs": {
+    "mtime": 1772794054.0,
+    "hash": "78c9daa3339f112fb0eaf96f87c1cf77"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/makeup_elixir/mix.exs": {
+    "mtime": 1772794054.0,
+    "hash": "a05731b6d4b355888200ba95383ab14d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/makeup_erlang/mix.exs": {
+    "mtime": 1772794054.0,
+    "hash": "5dad86af25705feefe999fc1764055be"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/makeup/mix.exs": {
+    "mtime": 1772794054.0,
+    "hash": "cea64914bffda6b045fb43b2945d34fd"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/nimble_parsec/mix.exs": {
+    "mtime": 1772794054.0,
+    "hash": "6daa0bcebf2bf87e1130ee4754a9de9b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/oban/mix.exs": {
+    "mtime": 1773258459.0,
+    "hash": "726af88069510c59edabf48aefd0424f"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/telemetry/mix.exs": {
+    "mtime": 1774333415.0,
+    "hash": "fa840f206ad0606147ce30bda611c9cf"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/phoenix/mix.exs": {
+    "mtime": 1774333415.0,
+    "hash": "767ee5d41e07435f69be9db3e2ac48bc"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/ecto_sql/mix.exs": {
+    "mtime": 1774333417.0,
+    "hash": "d03cec58602ab3b23a6dab3686e91d66"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/crontab/mix.exs": {
+    "mtime": 1774915437.0,
+    "hash": "8179023a5000aee0efc914cb822e1eee"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/yaml_elixir/mix.exs": {
+    "mtime": 1775265099.0,
+    "hash": "a7ee2b83e799c79bf8b0fcc673dfdfdc"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/yaml_elixir/config/config.exs": {
+    "mtime": 1775265099.0,
+    "hash": "68b329da9893e34099c7d8ad5cb9c940"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/phoenix_live_view/mix.exs": {
+    "mtime": 1775748010.0,
+    "hash": "0690cd4b86f2c1bd1f675e5c6d52780a"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/phoenix_duskmoon/mix.exs": {
+    "mtime": 1775748011.0,
+    "hash": "bbede5c7f8ff5727ca8cd07abd6fef63"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/lazy_html/mix.exs": {
+    "mtime": 1775748011.0,
+    "hash": "d904d5108ed93323e7b88c0d304a3cd8"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/lazy_html/config/config.exs": {
+    "mtime": 1775748011.0,
+    "hash": "68ce4d4df36caca5a13bf1fc7035621e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/fine/mix.exs": {
+    "mtime": 1775748011.0,
+    "hash": "4e8788a010642d156c05c7f38697c8a3"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/deps/bandit/mix.exs": {
+    "mtime": 1775748011.0,
+    "hash": "30cfed056c6b40c51f635b43182ea53e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/channel/src/socket.ts": {
+    "mtime": 1772463299.9392486,
+    "hash": "66cc84509a1c3f8807e32147eb922e2d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/channel/src/index.ts": {
+    "mtime": 1772463320.8705657,
+    "hash": "29ea5f83e9c6db86ffb25bcd14e13b5c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/channel/src/middleware.ts": {
+    "mtime": 1772463359.0651457,
+    "hash": "69e82ea175bb911111323be1e9710b3d"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/hooks/src/markdown-renderer.ts": {
+    "mtime": 1770964795.27477,
+    "hash": "788ded3900bd2ef7e710fa5c43a41688"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/hooks/src/diff-viewer.ts": {
+    "mtime": 1770964795.27677,
+    "hash": "2372c6405c2e07c873c9feb4d0cb6e28"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/hooks/src/terminal-output.ts": {
+    "mtime": 1770964795.2817702,
+    "hash": "4d1001fe6f3b80ea6e8a84876aa5fdd0"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/hooks/src/scroll-bottom.ts": {
+    "mtime": 1772446620.4567363,
+    "hash": "bd108c4140599fe6681c072137a197c5"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/hooks/src/chat-app.ts": {
+    "mtime": 1772463341.0968726,
+    "hash": "6f1f8ba38f54d6636c9f7b40ad004b96"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/hooks/src/textarea-submit.ts": {
+    "mtime": 1773741864.9244695,
+    "hash": "155a88a6dd55464ef470f7adcc122db8"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/hooks/src/streaming-text.ts": {
+    "mtime": 1775748920.2094836,
+    "hash": "e001cf6406b7a956cfafec0807a9a590"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/hooks/src/index.ts": {
+    "mtime": 1775752967.2947013,
+    "hash": "0841ae56597b7ab813b0ef81028032a8"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/hooks/src/markdown-submit.ts": {
+    "mtime": 1776397095.0474439,
+    "hash": "51477e49dbd1abd4dab2465780f20db2"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/hooks/src/send-button.ts": {
+    "mtime": 1776397097.9166458,
+    "hash": "2987981bd1567cc4244425f12b38c49e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/ui/src/index.ts": {
+    "mtime": 1770964795.2087688,
+    "hash": "a409d8a82491d27d91bf9e03fd6f88a1"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/ui/src/ErrorBoundary.tsx": {
+    "mtime": 1773249715.5523794,
+    "hash": "32756d5189ad51a2d566db395ce47129"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/ui/src/chat/ChatApp.tsx": {
+    "mtime": 1773249715.5523794,
+    "hash": "7fac6e89cabfc7bd1b7c0fb1f37a9b13"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/ui/src/chat/MessageInput.tsx": {
+    "mtime": 1773249715.5523794,
+    "hash": "58d9cc2fe51a67379134d72d9bf8b93e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/ui/src/chat/MessageItem.tsx": {
+    "mtime": 1773249715.5523794,
+    "hash": "92169f3cddaae8e4a26264da3463c05b"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/ui/src/chat/MessageList.tsx": {
+    "mtime": 1773249715.5523794,
+    "hash": "f3f7eae091c0a1a79174b6bf14619b9c"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/ui/src/chat/PermissionDialog.tsx": {
+    "mtime": 1773249715.5523794,
+    "hash": "bbb1f834ad8399f3a339822a5dc037d1"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/ui/src/chat/StreamingText.tsx": {
+    "mtime": 1773249715.5523794,
+    "hash": "dc77f433eead2b4507155bbf898290a3"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/ui/src/chat/ThinkingBlock.tsx": {
+    "mtime": 1773249715.5523794,
+    "hash": "ed83d5d1d4f2f18a5156d3e68fea338e"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/ui/src/chat/ToolCallCard.tsx": {
+    "mtime": 1773249715.5523794,
+    "hash": "de16d4b3f0eadf4ce1ed00593a9c00e4"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/ui/src/chat/store.ts": {
+    "mtime": 1773334659.0869637,
+    "hash": "a3faf8ab288d77c56e900f670f4cc568"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/ui/src/widgets/DiffViewer.tsx": {
+    "mtime": 1773249715.5523794,
+    "hash": "66d583a5e42df29d59728c621e8b4be2"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/ui/src/widgets/TerminalOutput.tsx": {
+    "mtime": 1773249715.5523794,
+    "hash": "630dcf8516a9ae77f8fcaffc05aa03e6"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/packages/ui/src/widgets/MarkdownView.tsx": {
+    "mtime": 1774285991.6792653,
+    "hash": "f64b80eb8bcead9dabd67ce36eb02177"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/README.md": {
+    "mtime": 1770887277.5815141,
+    "hash": "4bc3fc850d6412ea8a432d743a0080ff"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_server/README.md": {
+    "mtime": 1770887351.6688602,
+    "hash": "72640e145108219eb4db71730d4d55c8"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_cli/README.md": {
+    "mtime": 1770887439.1914413,
+    "hash": "4c1e4016a78a295ff08d733dc8c5eeee"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/README.md": {
+    "mtime": 1770887447.4075892,
+    "hash": "86d1234106a8ed2641bbba8f97127bf5"
+  },
+  "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/README.md": {
+    "mtime": 1772645120.0092878,
+    "hash": "0df8b19b282beaab5073767f8ee1bd80"
+  }
+}
