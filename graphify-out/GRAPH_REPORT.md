@@ -1,16 +1,16 @@
-# Graph Report - Synapsis  (2026-05-15)
+# Graph Report - Synapsis  (2026-05-17)
 
 ## Corpus Check
-- 719 files · ~257,445 words
+- 721 files · ~257,785 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 4364 nodes · 5020 edges · 684 communities (296 shown, 388 thin omitted)
+- 4387 nodes · 5060 edges · 687 communities (297 shown, 390 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 61 edges (avg confidence: 0.81)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `a5c2875a`
+- Built from commit: `3317b608`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -680,9 +680,12 @@
 - [[_COMMUNITY_Community 662|Community 662]]
 - [[_COMMUNITY_Community 663|Community 663]]
 - [[_COMMUNITY_Community 664|Community 664]]
+- [[_COMMUNITY_Community 665|Community 665]]
+- [[_COMMUNITY_Community 666|Community 666]]
+- [[_COMMUNITY_Community 667|Community 667]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `SynapsisWeb.AgentLive.Agents` - 47 edges
+1. `SynapsisWeb.AgentLive.Agents` - 54 edges
 2. `add()` - 40 edges
 3. `Synapsis.Tool.Registry` - 31 edges
 4. `Synapsis.WorkspaceDocuments` - 31 edges
@@ -697,27 +700,27 @@
 - `change()` --calls--> `add()`  [INFERRED]
   apps/synapsis_data/priv/repo/migrations/20250101000001_create_projects.exs → apps/synapsis_core/lib/synapsis/git_worktree.ex
 - `change()` --calls--> `add()`  [INFERRED]
+  apps/synapsis_data/priv/repo/migrations/20250101000002_create_sessions.exs → apps/synapsis_core/lib/synapsis/git_worktree.ex
+- `change()` --calls--> `add()`  [INFERRED]
+  apps/synapsis_data/priv/repo/migrations/20250101000003_create_messages.exs → apps/synapsis_core/lib/synapsis/git_worktree.ex
+- `change()` --calls--> `add()`  [INFERRED]
   apps/synapsis_data/priv/repo/migrations/20250213000001_create_provider_configs.exs → apps/synapsis_core/lib/synapsis/git_worktree.ex
 - `change()` --calls--> `add()`  [INFERRED]
-  apps/synapsis_data/priv/repo/migrations/20260213000001_create_memory_entries.exs → apps/synapsis_core/lib/synapsis/git_worktree.ex
-- `change()` --calls--> `add()`  [INFERRED]
   apps/synapsis_data/priv/repo/migrations/20260213000002_create_skills.exs → apps/synapsis_core/lib/synapsis/git_worktree.ex
-- `change()` --calls--> `add()`  [INFERRED]
-  apps/synapsis_data/priv/repo/migrations/20260213000003_create_mcp_configs.exs → apps/synapsis_core/lib/synapsis/git_worktree.ex
 
 ## Hyperedges (group relationships)
 - **Hex Dependency Documentation Pattern** — synapsis_core_hex_dependency, synapsis_cli_hex_dependency, synapsis_web_hex_dependency, synapsis_agent_hex_dependency, mix_exs_dependencies, exdoc_documentation_generation, hexdocs_publishing [INFERRED 0.88]
 - **Phoenix Server Run Flow** — mix_setup, mix_phx_server, iex_phx_server, localhost_4000 [EXTRACTED 1.00]
 
-## Communities (684 total, 388 thin omitted)
+## Communities (687 total, 390 thin omitted)
 
 ### Community 0 - "Community 0"
 Cohesion: 0.05
 Nodes (39): ChatAppProps, MessageInput(), MessageInputProps, MessageItem(), PartView(), tryParseToolResult(), MessageList(), PermissionDialog() (+31 more)
 
 ### Community 1 - "Community 1"
-Cohesion: 0.08
-Nodes (39): SynapsisWeb.AgentLive.Agents, agent_config_map(), agent_form(), agent_label(), agent_option_label(), agent_tool_names(), apply_action(), assign_common() (+31 more)
+Cohesion: 0.07
+Nodes (45): SynapsisWeb.AgentLive.Agents, agent_config_map(), agent_form(), agent_label(), agent_option_label(), agent_tool_names(), apply_action(), assign_common() (+37 more)
 
 ### Community 2 - "Community 2"
 Cohesion: 0.05
@@ -748,40 +751,40 @@ Cohesion: 0.07
 Nodes (16): Aborted, Compacted, MessageAppended, PartAppended, PartUpdated, PermissionDenied, PermissionGranted, PermissionRequested (+8 more)
 
 ### Community 9 - "Community 9"
+Cohesion: 0.09
+Nodes (16): AgentModelCascaderHook, CascaderChangeDetail, ChatAppHook, ChatAppHookInstance, DiffViewerHook, DiffViewerHookInstance, Hooks, MarkdownRenderer (+8 more)
+
+### Community 10 - "Community 10"
 Cohesion: 0.18
 Nodes (27): Synapsis.Harness.Loop, append_content_fragment(), append_tool_args_fragment(), append_user_prompt(), apply_events(), assistant_message_exists?(), cancel_pending_tools(), clear_finalized_accumulators() (+19 more)
 
-### Community 10 - "Community 10"
+### Community 11 - "Community 11"
 Cohesion: 0.14
 Nodes (18): Synapsis.Agent.Runtime.Runner, complete(), emit(), execute_node(), fail(), fetch_binary(), fetch_map(), fetch_node() (+10 more)
 
-### Community 11 - "Community 11"
+### Community 12 - "Community 12"
 Cohesion: 0.14
 Nodes (27): Synapsis.Workspace.Projection, build_skill_content(), build_todo_content(), build_todo_resource(), dispatch_find(), dispatch_list(), find_memory(), find_projected() (+19 more)
 
-### Community 12 - "Community 12"
+### Community 13 - "Community 13"
 Cohesion: 0.12
 Nodes (18): Synapsis.Sessions, compact(), create(), default_model(), default_provider(), delete(), ensure_project(), ensure_session_running() (+10 more)
 
-### Community 13 - "Community 13"
+### Community 14 - "Community 14"
 Cohesion: 0.11
 Nodes (13): SynapsisWeb.AssistantLive.Setting, count_fallbacks(), count_total_tools(), format_size(), handle_event(), handle_params(), load_identity_files(), load_models() (+5 more)
 
-### Community 14 - "Community 14"
+### Community 15 - "Community 15"
 Cohesion: 0.1
 Nodes (26): ExDoc Documentation Generation, Hex Package Installation Pattern, HexDocs Publishing, iex -S mix phx.server, localhost:4000, mix.exs Dependencies, mix phx.server, mix setup (+18 more)
 
-### Community 15 - "Community 15"
+### Community 16 - "Community 16"
 Cohesion: 0.1
 Nodes (10): Synapsis.Session.Worker, agent_type_from_name(), build_query_loop_messages(), format_message_content(), handle_call(), resolve_agent_tools(), resume_reply(), start_link() (+2 more)
 
-### Community 16 - "Community 16"
+### Community 17 - "Community 17"
 Cohesion: 0.09
 Nodes (6): DummyTool, ReadTool, Synapsis.Tool.PermissionTest, do_check_with_config(), resolve_allow_setting(), resolve_by_level()
-
-### Community 18 - "Community 18"
-Cohesion: 0.12
-Nodes (14): ChatAppHook, ChatAppHookInstance, DiffViewerHook, DiffViewerHookInstance, Hooks, MarkdownRenderer, MarkdownRendererInstance, MarkdownSubmitHook (+6 more)
 
 ### Community 19 - "Community 19"
 Cohesion: 0.11
@@ -876,24 +879,24 @@ Cohesion: 0.21
 Nodes (15): EctoSQL.MixProject, ansi_option(), deps(), docs(), ecto_dep(), env_run(), mix_cmd_with_status_check(), myxql_dep() (+7 more)
 
 ### Community 42 - "Community 42"
-Cohesion: 0.12
-Nodes (11): Synapsis.Repo.Migrations.CreateSessions, change(), Synapsis.Repo.Migrations.CreateMessages, change(), Synapsis.Repo.Migrations.CreateFailedAttempts, change(), Synapsis.Repo.Migrations.CreateMemoryEvents, change() (+3 more)
-
-### Community 43 - "Community 43"
 Cohesion: 0.16
 Nodes (7): Synapsis.Provider.MessageMapper, build_request(), extract_role_parts(), format_openai_message(), format_openai_messages(), merge_openai_content(), merge_text_content()
 
-### Community 44 - "Community 44"
+### Community 43 - "Community 43"
 Cohesion: 0.23
 Nodes (15): Synapsis.Agent.SessionBridge, build_diagnostics(), build_file_tree(), build_git_log(), build_memory_context(), build_spawn_context(), collect_port_output(), create_session() (+7 more)
 
-### Community 45 - "Community 45"
+### Community 44 - "Community 44"
 Cohesion: 0.26
 Nodes (13): Synapsis.Session.WorkspaceManager, apply_and_test(), collect_port_output(), extract_file_path(), promote(), revert_and_learn(), run_in_dir(), run_test() (+5 more)
 
-### Community 46 - "Community 46"
+### Community 45 - "Community 45"
 Cohesion: 0.2
 Nodes (8): Synapsis.Tool.Executor, broadcast_side_effects(), dispatch(), encode_result(), execute(), execute_module(), execute_process(), persist_tool_call()
+
+### Community 46 - "Community 46"
+Cohesion: 0.22
+Nodes (11): Synapsis.AgentConfigs, assistant_system_prompt(), default_attrs(), default_system_prompt(), delete(), normalize_default_flags(), plan_system_prompt(), protected?() (+3 more)
 
 ### Community 47 - "Community 47"
 Cohesion: 0.26
@@ -908,28 +911,28 @@ Cohesion: 0.21
 Nodes (11): Phoenix.LiveView.MixProject, aliases(), coverage_ignore_modules(), deps(), docs(), elixirc_paths(), extras(), groups_for_extras() (+3 more)
 
 ### Community 50 - "Community 50"
+Cohesion: 0.15
+Nodes (10): Synapsis.Repo.Migrations.CreateMemoryEntries, change(), Synapsis.Repo.Migrations.CreateFailedAttempts, change(), Synapsis.Repo.Migrations.AlterSessionPermissionsToEnum, down(), up(), Synapsis.Repo.Migrations.CreateMemoryCheckpoints (+2 more)
+
+### Community 51 - "Community 51"
 Cohesion: 0.22
 Nodes (9): Synapsis.Tool.Permission, check(), do_check(), extract_session_id(), resolve_allow_setting(), resolve_by_level(), resolve_override(), session_config() (+1 more)
 
-### Community 51 - "Community 51"
+### Community 52 - "Community 52"
 Cohesion: 0.23
 Nodes (11): AgentConfigCompat, SynapsisWeb.ChatLive, assign_chat_data(), default_agent_name(), global_session?(), handle_event(), handle_info(), handle_params() (+3 more)
 
-### Community 52 - "Community 52"
+### Community 53 - "Community 53"
 Cohesion: 0.23
 Nodes (8): SynapsisWeb.MemoryLive.Index, handle_event(), handle_info(), load_checkpoints(), load_data(), load_events(), load_knowledge(), mount()
 
-### Community 53 - "Community 53"
+### Community 54 - "Community 54"
 Cohesion: 0.22
 Nodes (9): SynapsisWeb.LSPLive.Index, apply_action(), handle_event(), handle_params(), import_lsp_servers(), list_configs(), parse_args(), parse_env() (+1 more)
 
-### Community 54 - "Community 54"
+### Community 55 - "Community 55"
 Cohesion: 0.21
 Nodes (7): Synapsis.AgentMessages, get(), history(), maybe_filter_since(), maybe_filter_type(), thread(), unread()
-
-### Community 55 - "Community 55"
-Cohesion: 0.23
-Nodes (10): Synapsis.AgentConfigs, assistant_system_prompt(), default_attrs(), default_system_prompt(), delete(), normalize_default_flags(), plan_system_prompt(), protected?() (+2 more)
 
 ### Community 56 - "Community 56"
 Cohesion: 0.16
@@ -1076,316 +1079,316 @@ Cohesion: 0.27
 Nodes (9): Oban.MixProject, aliases(), deps(), elixirc_paths(), extras(), groups_for_extras(), groups_for_modules(), package() (+1 more)
 
 ### Community 93 - "Community 93"
-Cohesion: 0.27
-Nodes (9): Synapsis.Agent.ResponseFlusher, build_parts(), flush(), flush_tool_result(), safe_insert_message(), update_tool_use_status(), Synapsis.Repo.Migrations.AlterSessionPermissionsToEnum, down() (+1 more)
-
-### Community 94 - "Community 94"
 Cohesion: 0.25
 Nodes (7): Synapsis.Session.Monitor, cap_signals(), max_duplicate(), record_iteration(), record_tool_call(), summary(), trim_tool_counts()
 
-### Community 95 - "Community 95"
+### Community 94 - "Community 94"
 Cohesion: 0.24
 Nodes (5): Synapsis.Tool.FileRead, execute(), maybe_limit(), maybe_offset(), resolve_path()
 
-### Community 96 - "Community 96"
+### Community 95 - "Community 95"
 Cohesion: 0.22
 Nodes (4): Synapsis.Tool.FileWrite, execute(), execute_write(), resolve_path()
 
-### Community 97 - "Community 97"
+### Community 96 - "Community 96"
 Cohesion: 0.22
 Nodes (4): Synapsis.Tool.WorktreeCreate, compute_worktree_path(), ensure_branch(), execute()
 
-### Community 98 - "Community 98"
+### Community 97 - "Community 97"
 Cohesion: 0.22
 Nodes (4): Synapsis.Tool.WorktreeRemove, execute(), maybe_delete_branch(), update_worktree_status()
 
-### Community 100 - "Community 100"
+### Community 99 - "Community 99"
 Cohesion: 0.18
 Nodes (10): Done, Error, ReasoningDelta, StepFinish, StepStart, Synapsis.Harness.ProviderEvent, TextDelta, ToolCallArgsDelta (+2 more)
 
-### Community 101 - "Community 101"
+### Community 100 - "Community 100"
 Cohesion: 0.18
 Nodes (3): FailMockTool, SlowMockTool, Synapsis.Tool.ParallelTest
 
-### Community 102 - "Community 102"
+### Community 101 - "Community 101"
 Cohesion: 0.25
 Nodes (6): SynapsisWeb.MemoryLive.Show, build_edit_form(), handle_event(), handle_info(), mount(), parse_float()
 
-### Community 103 - "Community 103"
+### Community 102 - "Community 102"
 Cohesion: 0.22
 Nodes (4): Synapsis.Part, cast_part(), load_atom(), load_part()
 
-### Community 104 - "Community 104"
+### Community 103 - "Community 103"
 Cohesion: 0.24
 Nodes (5): Synapsis.HeartbeatConfig, changeset(), create(), update_config(), validate_cron_expression()
 
-### Community 105 - "Community 105"
+### Community 104 - "Community 104"
 Cohesion: 0.25
 Nodes (8): SynapsisPlugin.LSP.Presets, all(), configured_names(), detect_languages(), get(), has_extensions?(), has_markers?(), lsp_command()
 
-### Community 106 - "Community 106"
+### Community 105 - "Community 105"
 Cohesion: 0.25
 Nodes (7): Synapsis.Agent.Runtime.CheckpointStore, deserialize_error(), safe_to_existing_atom(), serialize_for_db(), serialize_graph(), to_checkpoint(), try_to_existing_atom()
 
-### Community 107 - "Community 107"
+### Community 106 - "Community 106"
 Cohesion: 0.24
 Nodes (5): Synapsis.Workspace.Tools.WorkspaceList, execute(), maybe_add(), parse_kind(), parse_sort()
 
-### Community 108 - "Community 108"
+### Community 107 - "Community 107"
 Cohesion: 0.24
 Nodes (5): Synapsis.Workspace.Tools.WorkspaceWrite, build_agent_context(), execute(), maybe_put(), parse_format()
 
-### Community 109 - "Community 109"
+### Community 108 - "Community 108"
 Cohesion: 0.24
 Nodes (5): Synapsis.Workspace.Tools.WorkspaceSearch, execute(), maybe_add(), parse_kind(), parse_scope()
 
-### Community 110 - "Community 110"
+### Community 109 - "Community 109"
 Cohesion: 0.27
 Nodes (7): Req.MixProject, deps(), docs(), finch_opts(), package(), plug_opts(), project()
 
-### Community 111 - "Community 111"
+### Community 110 - "Community 110"
 Cohesion: 0.29
 Nodes (9): DBConnection.Mixfile, deps(), description(), docs(), env_run(), package(), project(), test_paths() (+1 more)
 
-### Community 112 - "Community 112"
+### Community 111 - "Community 111"
 Cohesion: 0.29
 Nodes (7): Synapsis.FileWatcher, file_system_available?(), handle_info(), ignored?(), init(), start_link(), via()
 
-### Community 113 - "Community 113"
+### Community 112 - "Community 112"
 Cohesion: 0.29
 Nodes (7): Synapsis.Session.Sharing, do_import(), export(), export_to_file(), import_parts(), import_session(), load_messages()
 
-### Community 115 - "Community 115"
+### Community 114 - "Community 114"
 Cohesion: 0.22
 Nodes (3): Synapsis.Tool.FileDelete, execute(), resolve_path()
 
-### Community 116 - "Community 116"
+### Community 115 - "Community 115"
 Cohesion: 0.22
 Nodes (3): Synapsis.Tool.FileMove, execute(), resolve_path()
 
-### Community 117 - "Community 117"
+### Community 116 - "Community 116"
 Cohesion: 0.24
 Nodes (4): Synapsis.Tool.ListDir, execute(), list_entries(), resolve_path()
 
-### Community 118 - "Community 118"
+### Community 117 - "Community 117"
 Cohesion: 0.24
 Nodes (4): Synapsis.Tool.AgentSend, execute(), resolve_agent_id(), safe_msg_type()
 
-### Community 119 - "Community 119"
+### Community 118 - "Community 118"
 Cohesion: 0.22
 Nodes (3): Synapsis.Tool.AgentHandoff, execute(), maybe_write_workspace_handoff()
 
-### Community 120 - "Community 120"
+### Community 119 - "Community 119"
 Cohesion: 0.22
 Nodes (3): Synapsis.Tool.MemoryUpdate, broadcast_memory_updated(), execute()
 
-### Community 121 - "Community 121"
+### Community 120 - "Community 120"
 Cohesion: 0.24
 Nodes (4): Synapsis.Tool.TodoWrite, execute(), get_in_struct(), safe_status_atom()
 
-### Community 122 - "Community 122"
+### Community 121 - "Community 121"
 Cohesion: 0.24
 Nodes (4): Synapsis.Tool.WebSearch, execute(), parse_brave_results(), search()
 
-### Community 123 - "Community 123"
+### Community 122 - "Community 122"
 Cohesion: 0.22
 Nodes (3): Synapsis.Tool.DevlogWrite, execute(), persist_devlog()
 
-### Community 124 - "Community 124"
+### Community 123 - "Community 123"
 Cohesion: 0.22
 Nodes (3): Synapsis.Tool.RepoLink, add_additional_remotes(), execute()
 
-### Community 125 - "Community 125"
+### Community 124 - "Community 124"
 Cohesion: 0.36
 Nodes (9): Synapsis.Memory.Retriever, build_cache_key(), build_filters(), build_scope_pairs(), do_retrieve(), keyword_match_score(), recency_score(), retrieve() (+1 more)
 
-### Community 126 - "Community 126"
+### Community 125 - "Community 125"
 Cohesion: 0.24
 Nodes (4): Synapsis.Memory.Cache, handle_info(), init(), schedule_sweep()
 
-### Community 127 - "Community 127"
+### Community 126 - "Community 126"
 Cohesion: 0.22
 Nodes (3): SynapsisServer.DebugStore, maybe_evict(), put_request()
 
-### Community 128 - "Community 128"
+### Community 127 - "Community 127"
 Cohesion: 0.31
 Nodes (7): SynapsisWeb.AgentLive.Toolsets, apply_action(), assign_common(), available_tools(), handle_event(), handle_params(), toolset_form()
 
-### Community 129 - "Community 129"
+### Community 128 - "Community 128"
 Cohesion: 0.27
 Nodes (5): Synapsis.Repos, get(), get_with_remotes(), remove_remote(), set_primary_remote()
 
-### Community 130 - "Community 130"
+### Community 129 - "Community 129"
 Cohesion: 0.24
 Nodes (4): Synapsis.Provider.Registry, get(), module_for(), resolve_module()
 
-### Community 131 - "Community 131"
+### Community 130 - "Community 130"
 Cohesion: 0.29
 Nodes (6): SynapsisPlugin.MCP, execute(), extract_tool_content(), handle_mcp_message(), init(), send_request()
 
-### Community 132 - "Community 132"
+### Community 131 - "Community 131"
 Cohesion: 0.27
 Nodes (7): SynapsisPlugin.Server, handle_call(), init(), put_pending_from(), register_tools(), terminate(), unregister_tools()
 
-### Community 134 - "Community 134"
+### Community 133 - "Community 133"
 Cohesion: 0.2
 Nodes (3): FailInitPlugin, NoHandleInfoPlugin, SynapsisPlugin.ServerTest
 
-### Community 135 - "Community 135"
+### Community 134 - "Community 134"
 Cohesion: 0.27
 Nodes (5): Synapsis.Agent.Approval, arg_matches?(), check_approval(), glob_match?(), matches?()
 
-### Community 136 - "Community 136"
+### Community 135 - "Community 135"
 Cohesion: 0.22
 Nodes (3): Synapsis.Agent.AgentRegistry, fetch_entries(), handle_call()
 
-### Community 137 - "Community 137"
+### Community 136 - "Community 136"
 Cohesion: 0.33
 Nodes (8): Jason.Mixfile, deps(), description(), dialyzer(), docs(), maybe_stream_data(), package(), project()
 
-### Community 138 - "Community 138"
+### Community 137 - "Community 137"
 Cohesion: 0.33
 Nodes (8): Ecto.MixProject, deps(), docs(), elixirc_paths(), extras(), groups_for_extras(), package(), project()
 
-### Community 139 - "Community 139"
+### Community 138 - "Community 138"
 Cohesion: 0.33
 Nodes (9): Plug.MixProject, application(), deps(), extra_applications(), groups_for_extras(), groups_for_modules(), package(), plug_crypto_version() (+1 more)
 
-### Community 140 - "Community 140"
+### Community 139 - "Community 139"
 Cohesion: 0.31
 Nodes (7): Makeup.Mixfile, aliases(), compiler_paths(), deps(), description(), package(), project()
 
-### Community 141 - "Community 141"
+### Community 140 - "Community 140"
 Cohesion: 0.44
 Nodes (8): SynapsisCore.Application, maybe_apply(), maybe_child(), register_env_providers(), seed_default_agents(), seed_heartbeat_templates(), start(), sync_heartbeat_scheduler()
 
-### Community 142 - "Community 142"
+### Community 141 - "Community 141"
 Cohesion: 0.42
 Nodes (8): Synapsis.Git, checkpoint(), collect_output(), diff(), is_repo?(), last_commit_message(), run(), undo_last()
 
-### Community 143 - "Community 143"
+### Community 142 - "Community 142"
 Cohesion: 0.25
 Nodes (3): Synapsis.Image, encode_file(), media_type()
 
-### Community 144 - "Community 144"
+### Community 143 - "Community 143"
 Cohesion: 0.39
 Nodes (8): Synapsis.GitWorktree, apply_patch(), collect_output(), is_worktree?(), list(), parse_worktree_list(), remove(), run()
 
-### Community 145 - "Community 145"
+### Community 144 - "Community 144"
 Cohesion: 0.25
 Nodes (3): Synapsis.Tool.Bash, collect_output(), execute()
 
-### Community 147 - "Community 147"
+### Community 146 - "Community 146"
 Cohesion: 0.25
 Nodes (3): Synapsis.Tool.TodoRead, execute(), get_in_struct()
 
-### Community 148 - "Community 148"
+### Community 147 - "Community 147"
 Cohesion: 0.36
 Nodes (5): Synapsis.Tool.ToolSearch, description(), execute(), name(), relevance_score()
 
-### Community 149 - "Community 149"
+### Community 148 - "Community 148"
 Cohesion: 0.25
 Nodes (3): Synapsis.Tool.MemorySearch, execute(), parse_scope()
 
-### Community 151 - "Community 151"
+### Community 150 - "Community 150"
 Cohesion: 0.25
 Nodes (3): Synapsis.Tool.Glob, execute(), filter_within_project()
 
-### Community 152 - "Community 152"
+### Community 151 - "Community 151"
 Cohesion: 0.25
 Nodes (3): Synapsis.Tool.Skill, execute(), find_skill()
 
-### Community 153 - "Community 153"
+### Community 152 - "Community 152"
 Cohesion: 0.25
 Nodes (3): Synapsis.Tool.Diagnostics, execute(), severity_label()
 
-### Community 154 - "Community 154"
+### Community 153 - "Community 153"
 Cohesion: 0.25
 Nodes (3): Synapsis.Tool.ExitPlanMode, execute(), get_in_struct()
 
-### Community 155 - "Community 155"
+### Community 154 - "Community 154"
 Cohesion: 0.25
 Nodes (3): Synapsis.Tool.EnterPlanMode, execute(), get_in_struct()
 
-### Community 156 - "Community 156"
+### Community 155 - "Community 155"
 Cohesion: 0.25
 Nodes (3): Synapsis.Tool.AgentAsk, do_ask(), execute()
 
-### Community 157 - "Community 157"
+### Community 156 - "Community 156"
 Cohesion: 0.28
 Nodes (4): Synapsis.Tool.DevlogRead, category(), execute(), fetch_entries()
 
-### Community 159 - "Community 159"
+### Community 158 - "Community 158"
 Cohesion: 0.25
 Nodes (3): Synapsis.Tool.Permissions, check(), session_auto_approve()
 
-### Community 160 - "Community 160"
+### Community 159 - "Community 159"
 Cohesion: 0.44
 Nodes (8): SynapsisServer.HealthController, check_agent_daemon(), check_oban(), check_process(), check_repo(), healthy?(), show(), version()
 
-### Community 161 - "Community 161"
+### Community 160 - "Community 160"
 Cohesion: 0.28
 Nodes (4): SynapsisWeb.SessionLive.Index, fetch_provider_models(), handle_event(), mount()
 
-### Community 162 - "Community 162"
+### Community 161 - "Community 161"
 Cohesion: 0.28
 Nodes (4): SynapsisWeb.MCPLive.Show, handle_event(), parse_args(), parse_env()
 
-### Community 163 - "Community 163"
+### Community 162 - "Community 162"
 Cohesion: 0.31
 Nodes (5): SynapsisWeb.AssistantLive.Show, handle_info(), handle_params(), load_sessions(), update_code_agent()
 
-### Community 164 - "Community 164"
+### Community 163 - "Community 163"
 Cohesion: 0.31
 Nodes (5): SynapsisWeb.AgentLive.Skills, apply_action(), assign_common(), handle_event(), handle_params()
 
-### Community 165 - "Community 165"
+### Community 164 - "Community 164"
 Cohesion: 0.31
 Nodes (7): Synapsis.Projects, archive(), find_or_create(), get(), list(), project_name_from_slug(), update()
 
-### Community 166 - "Community 166"
+### Community 165 - "Community 165"
 Cohesion: 0.33
 Nodes (7): Synapsis.Session.Worker.Config, do_switch_agent(), do_switch_model(), ensure_agent_model(), env_key(), resolve_agent(), resolve_provider_config()
 
-### Community 167 - "Community 167"
+### Community 166 - "Community 166"
 Cohesion: 0.36
 Nodes (7): Telemetry.Metrics.MixProject, deps(), description(), docs(), package(), preferred_cli_env(), project()
 
-### Community 168 - "Community 168"
+### Community 167 - "Community 167"
 Cohesion: 0.36
 Nodes (8): Bypass.Mixfile, application(), deps(), description(), docs(), env(), package(), project()
 
-### Community 169 - "Community 169"
+### Community 168 - "Community 168"
 Cohesion: 0.33
 Nodes (7): FileSystem.MixProject, compile_mac(), deps(), description(), file_system(), package(), project()
 
-### Community 170 - "Community 170"
+### Community 169 - "Community 169"
 Cohesion: 0.33
 Nodes (6): MakeupElixir.Mixfile, aliases(), deps(), description(), package(), project()
 
-### Community 171 - "Community 171"
+### Community 170 - "Community 170"
 Cohesion: 0.29
 Nodes (3): Synapsis.Git.Worktree, list(), parse_worktree_list()
 
-### Community 172 - "Community 172"
+### Community 171 - "Community 171"
 Cohesion: 0.43
 Nodes (7): Synapsis.Session.Compactor, compact(), extract_text(), load_messages(), maybe_compact(), model_limit(), summarize_messages()
 
-### Community 179 - "Community 179"
+### Community 178 - "Community 178"
 Cohesion: 0.29
 Nodes (3): Synapsis.Tool.RepoStatus, execute(), name()
 
-### Community 182 - "Community 182"
+### Community 181 - "Community 181"
 Cohesion: 0.43
 Nodes (7): Synapsis.Memory.ContextBuilder, build(), extract_query_signal(), format_entries(), retrieve_scope(), scope_limit(), xml_escape()
 
-### Community 185 - "Community 185"
+### Community 184 - "Community 184"
 Cohesion: 0.43
 Nodes (7): SynapsisWeb, html(), html_helpers(), live_component(), live_view(), static_paths(), verified_routes()
 
-### Community 186 - "Community 186"
+### Community 185 - "Community 185"
 Cohesion: 0.36
 Nodes (5): SynapsisWeb.ProjectLive.Index, apply_action(), handle_event(), handle_params(), list_directory()
+
+### Community 186 - "Community 186"
+Cohesion: 0.29
+Nodes (3): SynapsisWeb.AgentLive.AgentsTest, cascader_options(), html_attribute_unescape()
 
 ### Community 187 - "Community 187"
 Cohesion: 0.36
@@ -1476,357 +1479,365 @@ Cohesion: 0.48
 Nodes (6): Synapsis.MessageBuilder, build_request(), build_system_prompt(), provider_module!(), resolve_provider_type(), resolve_tools()
 
 ### Community 214 - "Community 214"
+Cohesion: 0.48
+Nodes (6): Synapsis.Agent.ResponseFlusher, build_parts(), flush(), flush_tool_result(), safe_insert_message(), update_tool_use_status()
+
+### Community 215 - "Community 215"
 Cohesion: 0.38
 Nodes (5): Synapsis.Tool.Permission.SessionConfig, from_db(), map_to_override_list(), normalize_decision(), parse_overrides()
 
-### Community 215 - "Community 215"
+### Community 216 - "Community 216"
 Cohesion: 0.29
 Nodes (6): CancelProviderStream, CancelTool, RequestPermission, StartProviderStream, StartTool, Synapsis.Harness.Loop.Effect
 
-### Community 217 - "Community 217"
+### Community 218 - "Community 218"
 Cohesion: 0.38
 Nodes (4): SynapsisServer, controller(), static_paths(), verified_routes()
 
-### Community 218 - "Community 218"
+### Community 219 - "Community 219"
 Cohesion: 0.43
 Nodes (5): SynapsisWeb.MixProject, aliases(), deps(), elixirc_paths(), project()
 
-### Community 220 - "Community 220"
+### Community 221 - "Community 221"
 Cohesion: 0.33
 Nodes (3): SynapsisWeb.ProviderLive.Index, apply_action(), handle_params()
 
-### Community 221 - "Community 221"
+### Community 222 - "Community 222"
 Cohesion: 0.43
 Nodes (5): SynapsisData.MixProject, aliases(), deps(), elixirc_paths(), project()
 
-### Community 223 - "Community 223"
+### Community 224 - "Community 224"
 Cohesion: 0.38
 Nodes (5): SynapsisPlugin.MCP.Presets, all(), configured_names(), get(), required_env()
 
-### Community 224 - "Community 224"
+### Community 225 - "Community 225"
 Cohesion: 0.33
 Nodes (3): Synapsis.Agent.Messaging, delegate(), envelope()
 
-### Community 225 - "Community 225"
+### Community 226 - "Community 226"
 Cohesion: 0.38
 Nodes (4): Synapsis.Session.Worker.Persistence, broadcast(), set_status(), update_session_status()
 
-### Community 226 - "Community 226"
+### Community 227 - "Community 227"
 Cohesion: 0.43
 Nodes (5): Mint.MixProject, deps(), elixirc_paths(), package(), project()
 
-### Community 227 - "Community 227"
+### Community 228 - "Community 228"
 Cohesion: 0.43
 Nodes (5): NimbleOptions.MixProject, deps(), docs(), package(), project()
 
-### Community 228 - "Community 228"
+### Community 229 - "Community 229"
 Cohesion: 0.43
 Nodes (5): NimblePool.MixProject, deps(), docs(), package(), project()
 
-### Community 229 - "Community 229"
+### Community 230 - "Community 230"
 Cohesion: 0.43
 Nodes (5): Postgrex.Mixfile, deps(), docs(), package(), project()
 
-### Community 230 - "Community 230"
+### Community 231 - "Community 231"
 Cohesion: 0.43
 Nodes (5): Decimal.Mixfile, deps(), description(), package(), project()
 
-### Community 231 - "Community 231"
+### Community 232 - "Community 232"
 Cohesion: 0.43
 Nodes (5): Gettext.Mixfile, deps(), elixirc_paths(), hex_package(), project()
 
-### Community 232 - "Community 232"
+### Community 233 - "Community 233"
 Cohesion: 0.43
 Nodes (5): CorsPlug.Mixfile, deps(), description(), package(), project()
 
-### Community 233 - "Community 233"
+### Community 234 - "Community 234"
 Cohesion: 0.43
 Nodes (5): PhoenixTemplate.MixProject, deps(), docs(), package(), project()
 
-### Community 234 - "Community 234"
+### Community 235 - "Community 235"
 Cohesion: 0.43
 Nodes (5): Plug.Cowboy.MixProject, aliases(), deps(), package(), project()
 
-### Community 235 - "Community 235"
+### Community 236 - "Community 236"
 Cohesion: 0.43
 Nodes (5): ElixirMake.Mixfile, deps(), docs(), package(), project()
 
-### Community 236 - "Community 236"
+### Community 237 - "Community 237"
 Cohesion: 0.48
 Nodes (6): YamlElixir.Mixfile, deps(), description(), docs(), package(), project()
 
-### Community 237 - "Community 237"
+### Community 238 - "Community 238"
 Cohesion: 0.43
 Nodes (5): PhoenixDuskmoon.Mixfile, aliases(), deps(), package(), project()
 
-### Community 238 - "Community 238"
+### Community 239 - "Community 239"
 Cohesion: 0.43
 Nodes (5): LazyHTML.MixProject, deps(), docs(), package(), project()
 
-### Community 240 - "Community 240"
+### Community 241 - "Community 241"
 Cohesion: 0.53
 Nodes (5): Synapsis.LLM, complete(), get_env_key(), maybe_put(), resolve_provider_config()
 
-### Community 243 - "Community 243"
+### Community 244 - "Community 244"
 Cohesion: 0.33
 Nodes (5): ReasoningDelta, StatusChanged, Synapsis.Harness.Loop.Broadcast, TextDelta, ToolArgsDelta
 
-### Community 246 - "Community 246"
+### Community 247 - "Community 247"
 Cohesion: 0.47
 Nodes (4): SynapsisServer.MixProject, deps(), elixirc_paths(), project()
 
-### Community 247 - "Community 247"
+### Community 248 - "Community 248"
 Cohesion: 0.4
 Nodes (3): SynapsisServer.Telemetry, init(), periodic_measurements()
 
-### Community 248 - "Community 248"
+### Community 249 - "Community 249"
 Cohesion: 0.47
 Nodes (4): SynapsisCli.MixProject, deps(), escript(), project()
 
-### Community 250 - "Community 250"
+### Community 251 - "Community 251"
 Cohesion: 0.47
 Nodes (4): SynapsisWeb.SkillLive.Index, handle_event(), list_skills(), mount()
 
-### Community 254 - "Community 254"
+### Community 255 - "Community 255"
 Cohesion: 0.47
 Nodes (5): Synapsis.AgentEvents, apply_filters(), json_safe(), list(), stringify_atoms()
 
-### Community 255 - "Community 255"
+### Community 256 - "Community 256"
 Cohesion: 0.4
 Nodes (3): Synapsis.AgentSummaries, apply_filters(), list()
 
-### Community 256 - "Community 256"
+### Community 257 - "Community 257"
 Cohesion: 0.47
 Nodes (4): Synapsis.ProviderConfig, changeset(), update_changeset(), validate_base_url()
 
-### Community 257 - "Community 257"
+### Community 258 - "Community 258"
 Cohesion: 0.47
 Nodes (4): SynapsisProvider.MixProject, deps(), elixirc_paths(), project()
 
-### Community 258 - "Community 258"
+### Community 259 - "Community 259"
 Cohesion: 0.47
 Nodes (4): SynapsisProvider.Sanitizer, redact_headers(), sanitize_request(), sanitize_response()
 
-### Community 259 - "Community 259"
+### Community 260 - "Community 260"
 Cohesion: 0.47
 Nodes (4): SynapsisPlugin.MixProject, deps(), elixirc_paths(), project()
 
-### Community 260 - "Community 260"
+### Community 261 - "Community 261"
 Cohesion: 0.53
 Nodes (5): SynapsisPlugin.Loader, config_to_map(), load_plugin_configs(), module_for_type(), start_auto_plugins()
 
-### Community 261 - "Community 261"
+### Community 262 - "Community 262"
 Cohesion: 0.4
 Nodes (3): SynapsisPlugin.LSP.Protocol, decode_message(), extract_json()
 
-### Community 263 - "Community 263"
+### Community 264 - "Community 264"
 Cohesion: 0.47
 Nodes (4): SynapsisAgent.MixProject, deps(), elixirc_paths(), project()
 
-### Community 265 - "Community 265"
+### Community 266 - "Community 266"
 Cohesion: 0.53
 Nodes (5): Synapsis.Agent.WorktreeCleanup, cleanup_worktree(), finalize_cleanup(), perform(), remove_git_worktree()
 
-### Community 267 - "Community 267"
+### Community 268 - "Community 268"
 Cohesion: 0.53
 Nodes (5): Synapsis.Agent.Nodes.SpawnAgent, extract_prompt(), find_spawn_tool(), run(), spawn_and_notify()
 
-### Community 268 - "Community 268"
+### Community 269 - "Community 269"
 Cohesion: 0.53
 Nodes (5): Synapsis.Agent.Heartbeat.Scheduler, load_enabled_configs(), next_run_time(), schedule_heartbeat(), sync_crontab()
 
-### Community 269 - "Community 269"
+### Community 270 - "Community 270"
 Cohesion: 0.53
 Nodes (5): Synapsis.Session.Worker.Boot, boot(), load_and_boot(), normalize_project_path(), setup_worktree()
 
-### Community 270 - "Community 270"
+### Community 271 - "Community 271"
 Cohesion: 0.33
 Nodes (3): ExecutorNode, PlannerNode, Synapsis.Agent.Runtime.GraphTest
 
-### Community 272 - "Community 272"
+### Community 273 - "Community 273"
 Cohesion: 0.47
 Nodes (4): SynapsisWorkspace.MixProject, deps(), elixirc_paths(), project()
 
-### Community 273 - "Community 273"
+### Community 274 - "Community 274"
 Cohesion: 0.4
 Nodes (3): Synapsis.Workspace.BlobStore.Local, ref_to_path(), root_dir()
 
-### Community 275 - "Community 275"
+### Community 276 - "Community 276"
 Cohesion: 0.47
 Nodes (4): MIME.Mixfile, deps(), package(), project()
 
-### Community 276 - "Community 276"
+### Community 277 - "Community 277"
 Cohesion: 0.47
 Nodes (4): HPAX.MixProject, deps(), package(), project()
 
-### Community 277 - "Community 277"
+### Community 278 - "Community 278"
 Cohesion: 0.47
 Nodes (4): DNSCluster.MixProject, deps(), package(), project()
 
-### Community 278 - "Community 278"
+### Community 279 - "Community 279"
 Cohesion: 0.47
 Nodes (4): Plug.Crypto.MixProject, deps(), package(), project()
 
-### Community 279 - "Community 279"
+### Community 280 - "Community 280"
 Cohesion: 0.47
 Nodes (4): WebSock.MixProject, deps(), dialyzer(), project()
 
-### Community 280 - "Community 280"
+### Community 281 - "Community 281"
 Cohesion: 0.47
 Nodes (4): WebSockAdapter.MixProject, deps(), dialyzer(), project()
 
-### Community 281 - "Community 281"
+### Community 282 - "Community 282"
 Cohesion: 0.47
 Nodes (4): PhoenixHTML.Mixfile, deps(), package(), project()
 
-### Community 282 - "Community 282"
+### Community 283 - "Community 283"
 Cohesion: 0.47
 Nodes (4): EarmarkParser.MixProject, elixirc_paths(), package(), project()
 
-### Community 283 - "Community 283"
+### Community 284 - "Community 284"
 Cohesion: 0.4
 Nodes (3): NimbleParsec.MixProject, package(), project()
 
-### Community 284 - "Community 284"
+### Community 285 - "Community 285"
 Cohesion: 0.4
 Nodes (4): channelCache, createSessionChannel(), getSocket(), SessionEvent
 
-### Community 285 - "Community 285"
+### Community 286 - "Community 286"
 Cohesion: 0.6
 Nodes (4): Synapsis.MixProject, deps(), project(), releases()
 
-### Community 286 - "Community 286"
+### Community 287 - "Community 287"
 Cohesion: 0.5
 Nodes (3): Synapsis.Agent.ToolDispatcher, dispatch_all(), execute_async()
 
-### Community 287 - "Community 287"
+### Community 288 - "Community 288"
 Cohesion: 0.5
 Nodes (3): Synapsis.Session.Supervisor, start_link(), via()
 
-### Community 288 - "Community 288"
+### Community 289 - "Community 289"
 Cohesion: 0.5
 Nodes (3): Synapsis.Session.Orchestrator, decide(), has_duplicate_signals?()
 
-### Community 289 - "Community 289"
+### Community 290 - "Community 290"
 Cohesion: 0.6
 Nodes (4): Synapsis.Session.Fork, do_fork(), fork(), load_messages()
 
-### Community 290 - "Community 290"
+### Community 291 - "Community 291"
 Cohesion: 0.6
 Nodes (4): Synapsis.Tool.PathValidator, resolve_components(), resolve_path(), validate()
 
-### Community 291 - "Community 291"
+### Community 292 - "Community 292"
 Cohesion: 0.5
 Nodes (3): Synapsis.Git.Diff, parse_int(), stat()
 
-### Community 297 - "Community 297"
+### Community 298 - "Community 298"
 Cohesion: 0.5
 Nodes (3): Synapsis.HarnessEvents, append(), next_version()
 
-### Community 301 - "Community 301"
+### Community 302 - "Community 302"
 Cohesion: 0.6
 Nodes (4): Synapsis.Provider.EventMapper, map_event(), parse_google_parts(), parse_openai_tool_call()
 
-### Community 303 - "Community 303"
+### Community 304 - "Community 304"
 Cohesion: 0.5
 Nodes (3): Synapsis.Provider.Transport.OpenAI, auth_headers(), fetch_models()
 
-### Community 305 - "Community 305"
+### Community 306 - "Community 306"
 Cohesion: 0.6
 Nodes (4): SynapsisPlugin.LSP.Manager, detect_languages(), get_all_diagnostics(), start_for_project()
 
-### Community 307 - "Community 307"
+### Community 308 - "Community 308"
 Cohesion: 0.6
 Nodes (4): Synapsis.Agent.RepoContextBuilder, build(), fetch_git_status(), parse_git_status()
 
-### Community 309 - "Community 309"
+### Community 310 - "Community 310"
 Cohesion: 0.5
 Nodes (3): Synapsis.Workspace.PathResolver, normalize_path(), parent()
 
-### Community 310 - "Community 310"
+### Community 311 - "Community 311"
 Cohesion: 0.5
 Nodes (3): Bun.MixProject, deps(), project()
 
-### Community 311 - "Community 311"
+### Community 312 - "Community 312"
 Cohesion: 0.5
 Nodes (3): Tailwind.MixProject, deps(), project()
 
-### Community 315 - "Community 315"
+### Community 316 - "Community 316"
 Cohesion: 0.67
 Nodes (3): Synapsis.Tool.Context, new(), to_map()
 
-### Community 316 - "Community 316"
+### Community 317 - "Community 317"
 Cohesion: 0.67
 Nodes (3): Synapsis.Tool.Builtin, default_timeout(), register_all()
 
-### Community 318 - "Community 318"
+### Community 319 - "Community 319"
 Cohesion: 0.67
 Nodes (3): Synapsis.Git.Runner, collect_output(), run()
 
-### Community 320 - "Community 320"
+### Community 321 - "Community 321"
 Cohesion: 0.67
 Nodes (3): Synapsis.Git.Status, parse_status(), summary()
 
-### Community 327 - "Community 327"
+### Community 328 - "Community 328"
 Cohesion: 0.67
 Nodes (3): SynapsisServer.SSEController, events(), sse_loop()
 
-### Community 328 - "Community 328"
+### Community 329 - "Community 329"
 Cohesion: 0.67
 Nodes (3): SynapsisServer.ConfigController, sanitize_config(), show()
 
-### Community 329 - "Community 329"
+### Community 330 - "Community 330"
 Cohesion: 0.67
 Nodes (3): SynapsisCli.SSETest, parse_sse_event(), process_sse_data()
 
-### Community 350 - "Community 350"
+### Community 352 - "Community 352"
 Cohesion: 0.67
 Nodes (3): Synapsis.Agent.Nodes.BuildPrompt, extract_latest_user_message(), run()
 
-### Community 351 - "Community 351"
+### Community 353 - "Community 353"
 Cohesion: 0.67
 Nodes (3): Synapsis.Agent.Nodes.ToolDispatch, run(), run_with_session()
 
-### Community 352 - "Community 352"
+### Community 354 - "Community 354"
 Cohesion: 0.67
 Nodes (3): Synapsis.Agent.Nodes.Act, determine_route(), run()
 
-### Community 357 - "Community 357"
+### Community 359 - "Community 359"
 Cohesion: 0.67
 Nodes (3): SynapsisAgent.Application, maybe_apply(), start()
 
-### Community 358 - "Community 358"
+### Community 360 - "Community 360"
 Cohesion: 0.67
 Nodes (3): Synapsis.AgentTest, assert_event(), eventually()
 
-### Community 360 - "Community 360"
+### Community 362 - "Community 362"
 Cohesion: 0.67
 Nodes (3): Telemetry.MixProject, application(), project()
 
-### Community 361 - "Community 361"
+### Community 363 - "Community 363"
 Cohesion: 0.5
 Nodes (3): code:elixir (def deps do), Installation, SynapsisCore
 
-### Community 362 - "Community 362"
+### Community 364 - "Community 364"
 Cohesion: 0.5
 Nodes (3): code:elixir (def deps do), Installation, SynapsisCli
 
-### Community 363 - "Community 363"
+### Community 365 - "Community 365"
 Cohesion: 0.5
 Nodes (3): code:elixir (def deps do), Installation, SynapsisWeb
 
-### Community 364 - "Community 364"
+### Community 366 - "Community 366"
 Cohesion: 0.5
 Nodes (3): code:elixir (def deps do), Installation, SynapsisAgent
 
 ## Knowledge Gaps
 - **307 isolated node(s):** `SynapsisCore`, `Synapsis.Tool.Behaviour`, `SessionCreated`, `MessageAppended`, `PartAppended` (+302 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **388 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **390 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
+- **Why does `add()` connect `Community 50` to `Community 384`, `Community 385`, `Community 386`, `Community 387`, `Community 388`, `Community 389`, `Community 390`, `Community 391`, `Community 392`, `Community 393`, `Community 394`, `Community 395`, `Community 396`, `Community 397`, `Community 398`, `Community 143`, `Community 313`, `Community 367`, `Community 368`, `Community 369`, `Community 370`, `Community 371`, `Community 372`, `Community 373`, `Community 374`, `Community 375`, `Community 376`, `Community 377`, `Community 378`, `Community 379`, `Community 380`, `Community 381`, `Community 382`, `Community 383`?**
+  _High betweenness centrality (0.001) - this node is a cross-community bridge._
+- **Why does `change()` connect `Community 370` to `Community 50`?**
+  _High betweenness centrality (0.000) - this node is a cross-community bridge._
 - **Are the 38 inferred relationships involving `add()` (e.g. with `change()` and `change()`) actually correct?**
   _`add()` has 38 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `SynapsisCore`, `Synapsis.Tool.Behaviour`, `SessionCreated` to the rest of the system?**
@@ -1834,10 +1845,6 @@ _Questions this graph is uniquely positioned to answer:_
 - **Should `Community 0` be split into smaller, more focused modules?**
   _Cohesion score 0.05 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
-  _Cohesion score 0.08 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07 - nodes in this community are weakly interconnected._
 - **Should `Community 2` be split into smaller, more focused modules?**
   _Cohesion score 0.05 - nodes in this community are weakly interconnected._
-- **Should `Community 3` be split into smaller, more focused modules?**
-  _Cohesion score 0.09 - nodes in this community are weakly interconnected._
-- **Should `Community 4` be split into smaller, more focused modules?**
-  _Cohesion score 0.11 - nodes in this community are weakly interconnected._

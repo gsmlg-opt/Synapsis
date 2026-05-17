@@ -1,9 +1,10 @@
 defmodule SynapsisWeb.AgentLive.AgentsTest do
   use SynapsisWeb.ConnCase
 
-  alias Synapsis.{AgentConfig, AgentConfigs, AgentSkills, Repo, Skill, Toolsets}
+  alias Synapsis.{AgentConfig, AgentConfigs, AgentSkills, ProviderConfig, Repo, Skill, Toolsets}
 
   setup do
+    Repo.delete_all(ProviderConfig)
     Repo.delete_all(AgentConfig)
     :ok
   end
@@ -29,9 +30,12 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
     end
 
     test "creates an agent", %{conn: conn} do
+      insert_provider("openai", "openai")
       {:ok, toolset} = Toolsets.create(%{name: "readers", tool_names: ["file_read"]})
 
       {:ok, view, _html} = live(conn, ~p"/agent/agents/new")
+
+      select_provider_model(view, "openai", "gpt-4.1")
 
       view
       |> form("form[phx-submit='save_agent']", %{
@@ -56,7 +60,15 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
     end
 
     test "updates an agent", %{conn: conn} do
-      {:ok, agent} = AgentConfigs.create(%{name: "editor", label: "Editor"})
+      insert_provider("openai", "openai")
+
+      {:ok, agent} =
+        AgentConfigs.create(%{
+          name: "editor",
+          label: "Editor",
+          provider: "openai",
+          model: "gpt-4.1"
+        })
 
       {:ok, view, _html} = live(conn, ~p"/agent/agents/#{agent.id}/config")
 
@@ -149,14 +161,90 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
 
       refute has_element?(view, "button[phx-click='switch_config_tab'][phx-value-tab='delete']")
       assert has_element?(view, "el-dm-button[phx-click='start_wizard']", "Start Wizard")
-      assert has_element?(view, "select[name='agent[provider]']")
-      assert has_element?(view, "select[name='agent[model]']")
+      assert has_element?(view, "el-dm-cascader#agent-provider-model")
+      assert has_element?(view, "input[name='agent[provider]']")
+      assert has_element?(view, "input[name='agent[model]']")
       assert has_element?(view, "input[name='agent[fallback_models]']")
       assert has_element?(view, "input[name='agent[workspace_path]']")
       assert has_element?(view, "select[name='agent[reasoning_effort]']")
       assert has_element?(view, "select[name='agent[model_tier]']")
       assert has_element?(view, "input[name='agent[max_tokens]']")
       assert has_element?(view, "input[name='agent[read_only]'][value='true']")
+    end
+
+    test "provider model cascader only lists configured providers", %{conn: conn} do
+      Repo.insert!(%ProviderConfig{
+        name: "anthropic",
+        type: "anthropic",
+        base_url: "https://api.anthropic.com",
+        enabled: true
+      })
+
+      Repo.insert!(%ProviderConfig{
+        name: "openrouter",
+        type: "openrouter",
+        base_url: "https://openrouter.ai/api",
+        enabled: true
+      })
+
+      Repo.insert!(%ProviderConfig{
+        name: "openai",
+        type: "openai",
+        base_url: "https://api.openai.com",
+        enabled: true
+      })
+
+      Repo.insert!(%ProviderConfig{
+        name: "custom-openai",
+        type: "openai",
+        base_url: "https://api.example.com",
+        api_key_encrypted: "sk-test",
+        enabled: true
+      })
+
+      {:ok, view, html} = live(conn, ~p"/agent/agents/new")
+      provider_values = cascader_options(html) |> Enum.map(& &1["value"])
+
+      assert has_element?(view, "el-dm-cascader#agent-provider-model")
+      assert provider_values == ["custom-openai"]
+      refute "anthropic" in provider_values
+      refute "openai" in provider_values
+      refute "openrouter" in provider_values
+    end
+
+    test "provider model cascader only lists models supported by each provider", %{conn: conn} do
+      Repo.insert!(%ProviderConfig{
+        name: "anthropic",
+        type: "anthropic",
+        base_url: "https://api.anthropic.com",
+        api_key_encrypted: "sk-ant-test",
+        enabled: true
+      })
+
+      Repo.insert!(%ProviderConfig{
+        name: "openai",
+        type: "openai",
+        base_url: "https://api.openai.com",
+        api_key_encrypted: "sk-openai-test",
+        config: %{"enabled_models" => ["gpt-4.1-mini"]},
+        enabled: true
+      })
+
+      {:ok, view, html} = live(conn, ~p"/agent/agents/new")
+      options = cascader_options(html)
+      openai_models = cascader_model_values(options, "openai")
+      anthropic_models = cascader_model_values(options, "anthropic")
+
+      assert has_element?(view, "el-dm-cascader#agent-provider-model")
+      assert openai_models == ["gpt-4.1-mini"]
+      assert "claude-sonnet-4-6" in anthropic_models
+      refute "gpt-4.1" in openai_models
+      refute "claude-sonnet-4-6" in openai_models
+
+      select_provider_model(view, "openai", "gpt-4.1-mini")
+
+      assert has_element?(view, "input[name='agent[provider]'][value='openai']")
+      assert has_element?(view, "input[name='agent[model]'][value='gpt-4.1-mini']")
     end
 
     test "wizard button starts step-by-step configuration", %{conn: conn} do
@@ -241,5 +329,45 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       refute has_element?(view, "form[phx-submit='delete_agent']")
       assert html =~ "Default agent cannot be deleted"
     end
+  end
+
+  defp insert_provider(name, type) do
+    Repo.insert!(%ProviderConfig{
+      name: name,
+      type: type,
+      base_url: "https://api.example.com",
+      api_key_encrypted: "sk-test",
+      enabled: true
+    })
+  end
+
+  defp select_provider_model(view, provider, model) do
+    render_change(view, "change_agent_form", %{
+      "agent" => %{"provider" => provider, "model" => model}
+    })
+  end
+
+  defp cascader_options(html) do
+    ~r/<el-dm-cascader[^>]*id="agent-provider-model"[^>]*options="([^"]*)"/
+    |> Regex.run(html)
+    |> List.last()
+    |> html_attribute_unescape()
+    |> Jason.decode!()
+  end
+
+  defp html_attribute_unescape(value) do
+    value
+    |> String.replace("&quot;", "\"")
+    |> String.replace("&#34;", "\"")
+    |> String.replace("&amp;", "&")
+    |> String.replace("&lt;", "<")
+    |> String.replace("&gt;", ">")
+  end
+
+  defp cascader_model_values(options, provider) do
+    options
+    |> Enum.find(%{"children" => []}, &(&1["value"] == provider))
+    |> Map.get("children", [])
+    |> Enum.map(& &1["value"])
   end
 end

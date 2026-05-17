@@ -82,6 +82,11 @@ defmodule SynapsisWeb.AgentLive.Agents do
     end
   end
 
+  def handle_event("change_agent_form", %{"agent" => attrs}, socket) do
+    {:noreply,
+     assign(socket, agent: preview_agent(socket.assigns.agent, attrs, socket.assigns.providers))}
+  end
+
   def handle_event("save_agent", %{"agent" => attrs} = params, socket) do
     skill_ids = params |> Map.get("skill_ids", []) |> List.wrap()
     attrs = normalize_agent_attrs(attrs, socket.assigns.agent)
@@ -331,6 +336,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
             as={:agent}
             id="agent-config-form"
             phx-submit="save_agent"
+            phx-change="change_agent_form"
             class={if @active_tab == "management", do: "hidden", else: "space-y-5"}
           >
             <section class={tab_panel_class(@active_tab, "overview")}>
@@ -361,12 +367,35 @@ defmodule SynapsisWeb.AgentLive.Agents do
                 <.readonly_field :if={@action == :config} label="Name" value={@agent.name} />
                 <.dm_input type="text" name="agent[label]" value={@agent.label} label="Label" />
                 <.dm_input type="text" name="agent[icon]" value={@agent.icon} label="Icon" />
-                <.dm_select
-                  name="agent[provider]"
-                  label="Provider"
-                  options={provider_options(@providers, @agent)}
-                  value={@agent.provider || ""}
-                />
+                <div class="form-group">
+                  <label for="agent-provider-model" class="form-label">
+                    <span>Provider / model</span>
+                  </label>
+                  <.dm_cascader
+                    id="agent-provider-model"
+                    options={provider_model_cascader_options(@providers)}
+                    selected_path={provider_model_selected_path(@providers, @agent)}
+                    placeholder="Select provider / model"
+                    searchable
+                    clearable
+                    separator=" / "
+                    phx-hook="AgentModelCascader"
+                    data-provider-input="agent-provider-hidden"
+                    data-model-input="agent-model-hidden"
+                  />
+                  <input
+                    id="agent-provider-hidden"
+                    type="hidden"
+                    name="agent[provider]"
+                    value={@agent.provider || ""}
+                  />
+                  <input
+                    id="agent-model-hidden"
+                    type="hidden"
+                    name="agent[model]"
+                    value={@agent.model || ""}
+                  />
+                </div>
                 <.dm_textarea
                   name="agent[description]"
                   value={@agent.description}
@@ -377,14 +406,8 @@ defmodule SynapsisWeb.AgentLive.Agents do
               </div>
 
               <div class="mt-5">
-                <div class="text-xs text-on-surface-variant mb-3">Model Selection</div>
+                <div class="text-xs text-on-surface-variant mb-3">Fallback Models</div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <.dm_select
-                    name="agent[model]"
-                    label="Primary model"
-                    options={model_options(@providers, @agent)}
-                    value={@agent.model || ""}
-                  />
                   <.dm_input
                     type="text"
                     name="agent[fallback_models]"
@@ -764,6 +787,41 @@ defmodule SynapsisWeb.AgentLive.Agents do
     |> Map.update("read_only", false, &(&1 in ["true", "on", true]))
   end
 
+  defp preview_agent(%AgentConfig{} = agent, attrs, providers) do
+    provider = normalize_form_value(Map.get(attrs, "provider", agent.provider))
+    models = models_for_provider(providers, provider)
+    model = normalize_form_value(Map.get(attrs, "model", agent.model))
+
+    model =
+      if model_supported?(model, models) do
+        model
+      else
+        nil
+      end
+
+    %{
+      agent
+      | name: Map.get(attrs, "name", agent.name),
+        label: Map.get(attrs, "label", agent.label),
+        icon: Map.get(attrs, "icon", agent.icon),
+        description: Map.get(attrs, "description", agent.description),
+        provider: provider,
+        model: model,
+        fallback_models: Map.get(attrs, "fallback_models", agent.fallback_models),
+        reasoning_effort: Map.get(attrs, "reasoning_effort", agent.reasoning_effort),
+        model_tier: Map.get(attrs, "model_tier", agent.model_tier),
+        max_tokens: Map.get(attrs, "max_tokens", agent.max_tokens),
+        enabled: Map.get(attrs, "enabled", agent.enabled) in ["true", "on", true],
+        read_only: Map.get(attrs, "read_only", agent.read_only) in ["true", "on", true],
+        config: workspace_config(agent, attrs, Map.get(attrs, "workspace_path"))
+    }
+  end
+
+  defp preview_agent(agent, _attrs, _providers), do: agent
+
+  defp normalize_form_value(value) when value in [nil, ""], do: nil
+  defp normalize_form_value(value), do: value
+
   defp normalize_blank(attrs, key) do
     case Map.get(attrs, key) do
       "" -> Map.put(attrs, key, nil)
@@ -890,39 +948,58 @@ defmodule SynapsisWeb.AgentLive.Agents do
   defp delete_confirmation(_agent), do: "delete agent"
 
   defp load_providers do
-    configured =
-      case Providers.list(enabled: true) do
-        {:ok, list} -> list
-        list when is_list(list) -> list
-        _ -> []
-      end
-
-    (configured ++ Providers.preset_providers())
+    case Providers.list(enabled: true) do
+      {:ok, list} -> list
+      list when is_list(list) -> list
+      _ -> []
+    end
+    |> Enum.filter(&configured_provider?/1)
     |> Enum.uniq_by(&provider_name/1)
     |> Enum.sort_by(&provider_name/1)
   end
 
-  defp provider_options(providers, %AgentConfig{} = agent) do
-    options =
-      providers
-      |> Enum.map(&{provider_name(&1), provider_label(&1)})
-      |> include_current_option(agent.provider)
+  defp configured_provider?(%{type: "local"}), do: true
+  defp configured_provider?(%{api_key_encrypted: key}) when key not in [nil, ""], do: true
 
-    [{"", "Select provider"} | options]
+  defp configured_provider?(%{config: config}) do
+    Synapsis.Provider.OAuth.OpenAI.access_token_from_config(config) not in [nil, ""]
   end
 
-  defp model_options(providers, %AgentConfig{} = agent) do
-    options =
-      providers
-      |> models_for_provider(agent.provider)
-      |> Enum.map(&{model_id(&1), model_label(&1)})
-      |> include_current_option(agent.model)
+  defp provider_model_cascader_options(providers) do
+    providers
+    |> Enum.map(fn provider ->
+      provider_id = provider_name(provider)
 
-    [{"", "Select model"} | options]
+      %{
+        value: provider_id,
+        label: provider_label(provider),
+        children:
+          providers
+          |> models_for_provider(provider_id)
+          |> Enum.map(&%{value: model_id(&1), label: model_label(&1)})
+      }
+    end)
+    |> Enum.reject(&(&1.children == []))
   end
 
-  defp models_for_provider(_providers, nil), do: ModelRegistry.list_all()
-  defp models_for_provider(_providers, ""), do: ModelRegistry.list_all()
+  defp provider_model_selected_path(providers, %AgentConfig{} = agent) do
+    provider = normalize_form_value(agent.provider)
+    model = normalize_form_value(agent.model)
+
+    cond do
+      provider in [nil, ""] ->
+        []
+
+      model_supported?(model, models_for_provider(providers, provider)) ->
+        Enum.reject([provider, model], &(&1 in [nil, ""]))
+
+      true ->
+        []
+    end
+  end
+
+  defp models_for_provider(_providers, nil), do: []
+  defp models_for_provider(_providers, ""), do: []
 
   defp models_for_provider(providers, provider_name) do
     provider = Enum.find(providers, &(provider_name(&1) == provider_name))
@@ -935,7 +1012,21 @@ defmodule SynapsisWeb.AgentLive.Agents do
         models -> models
       end
     end)
+    |> filter_enabled_models(provider)
   end
+
+  defp filter_enabled_models(models, nil), do: models
+
+  defp filter_enabled_models(models, provider) do
+    case Providers.enabled_models(provider) do
+      [] -> models
+      enabled_models -> Enum.filter(models, &(model_id(&1) in enabled_models))
+    end
+  end
+
+  defp model_supported?(nil, _models), do: true
+  defp model_supported?("", _models), do: true
+  defp model_supported?(model, models), do: Enum.any?(models, &(model_id(&1) == model))
 
   defp provider_model_keys(provider_name, nil), do: [provider_name]
 
@@ -951,17 +1042,6 @@ defmodule SynapsisWeb.AgentLive.Agents do
       String.starts_with?(provider_name, "zhipu") -> "zhipu"
       String.starts_with?(provider_name, "minimax") -> "minimax"
       true -> nil
-    end
-  end
-
-  defp include_current_option(options, nil), do: options
-  defp include_current_option(options, ""), do: options
-
-  defp include_current_option(options, current) do
-    if Enum.any?(options, fn {value, _label} -> value == current end) do
-      options
-    else
-      [{current, current} | options]
     end
   end
 
