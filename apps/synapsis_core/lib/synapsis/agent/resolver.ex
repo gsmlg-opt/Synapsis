@@ -4,7 +4,7 @@ defmodule Synapsis.Agent.Resolver do
   falling back to hardcoded defaults if not found.
   """
 
-  alias Synapsis.AgentConfigs
+  alias Synapsis.{AgentConfigs, AgentSkills, Toolset, Toolsets}
 
   def resolve(agent_name, _project_config \\ %{}) do
     name = to_string(agent_name)
@@ -42,7 +42,10 @@ defmodule Synapsis.Agent.Resolver do
       model: ac.model,
       provider: ac.provider,
       system_prompt: ac.system_prompt || default_system_prompt(),
-      tools: ac.tools || [],
+      tools: resolve_tools(ac),
+      toolset_id: ac.toolset_id,
+      skills: AgentSkills.list_skills_for_agent(ac),
+      workspace_path: workspace_path(ac.name, ac.config),
       reasoning_effort: ac.reasoning_effort || "medium",
       read_only: ac.read_only || false,
       max_tokens: ac.max_tokens || 8192,
@@ -63,6 +66,9 @@ defmodule Synapsis.Agent.Resolver do
       provider: Map.get(attrs, :provider),
       system_prompt: attrs.system_prompt,
       tools: attrs.tools,
+      toolset_id: Map.get(attrs, :toolset_id),
+      skills: Map.get(attrs, :skills, []),
+      workspace_path: workspace_path(attrs.name, Map.get(attrs, :config, %{})),
       reasoning_effort: attrs.reasoning_effort,
       read_only: attrs.read_only,
       max_tokens: attrs.max_tokens,
@@ -81,9 +87,33 @@ defmodule Synapsis.Agent.Resolver do
   defp default_name("plan"), do: "plan"
   defp default_name(_name), do: "build"
 
+  defp resolve_tools(%{toolset_id: nil, tools: tools}), do: tools || []
+
+  defp resolve_tools(%{toolset_id: toolset_id, tools: tools}) do
+    case Toolsets.get(toolset_id) do
+      %Toolset{tool_names: tool_names} -> tool_names || []
+      nil -> tools || []
+    end
+  end
+
   defp model_tier("fast"), do: :fast
   defp model_tier("expert"), do: :expert
   defp model_tier(_tier), do: :default
+
+  defp workspace_path(name, config) when is_map(config) do
+    case Map.get(config, "workspace_path") || Map.get(config, :workspace_path) do
+      path when is_binary(path) and path != "" -> path
+      _ -> default_workspace_path(name)
+    end
+  end
+
+  defp workspace_path(name, _config), do: default_workspace_path(name)
+
+  defp default_workspace_path(name) when is_binary(name) and name != "" do
+    "~/.synapsis/agents/#{name}"
+  end
+
+  defp default_workspace_path(_name), do: "~/.synapsis/agents/build"
 
   defp default_system_prompt do
     AgentConfigs.default_attrs("build").system_prompt

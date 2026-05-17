@@ -9,6 +9,10 @@ defmodule SynapsisServer.Router do
               SynapsisWeb.AssistantLive.Index,
               SynapsisWeb.AssistantLive.Show,
               SynapsisWeb.AssistantLive.Setting,
+              SynapsisWeb.ChatLive,
+              SynapsisWeb.AgentLive.Agents,
+              SynapsisWeb.AgentLive.Toolsets,
+              SynapsisWeb.AgentLive.Skills,
               SynapsisWeb.ProjectLive.Index,
               SynapsisWeb.ProjectLive.Show,
               SynapsisWeb.SessionLive.Index,
@@ -67,10 +71,29 @@ defmodule SynapsisServer.Router do
     get "/config", ConfigController, :show
   end
 
+  scope "/", SynapsisServer do
+    pipe_through :browser
+
+    get "/agent", RedirectController, :agent
+  end
+
   scope "/", SynapsisWeb do
     pipe_through :browser
 
     live "/", DashboardLive, :index
+    live "/chat", ChatLive, :index
+    live "/chat/:session_id", ChatLive, :session
+
+    live "/agent/agents", AgentLive.Agents, :index
+    live "/agent/agents/new", AgentLive.Agents, :new
+    live "/agent/agents/:id/config", AgentLive.Agents, :config
+    live "/agent/tools", AgentLive.Toolsets, :index
+    live "/agent/tools/new", AgentLive.Toolsets, :new
+    live "/agent/tools/:id/edit", AgentLive.Toolsets, :edit
+    live "/agent/skills", AgentLive.Skills, :index
+    live "/agent/skills/new", AgentLive.Skills, :new
+    live "/agent/skills/:id/edit", AgentLive.Skills, :edit
+
     live "/assistant", AssistantLive.Index, :index
     live "/assistant/:name/sessions", AssistantLive.Show, :sessions
     live "/assistant/:name/sessions/:session_id", AssistantLive.Show, :session

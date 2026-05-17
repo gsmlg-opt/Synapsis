@@ -2,7 +2,7 @@ defmodule Synapsis.Agent.ResolverTest do
   use ExUnit.Case, async: false
 
   alias Synapsis.Agent.Resolver
-  alias Synapsis.{AgentConfig, AgentConfigs, Repo}
+  alias Synapsis.{AgentConfig, AgentConfigs, AgentSkills, Repo, Skills, Toolsets}
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
@@ -47,6 +47,8 @@ defmodule Synapsis.Agent.ResolverTest do
       assert Map.has_key?(agent, :read_only)
       assert Map.has_key?(agent, :max_tokens)
       assert Map.has_key?(agent, :model_tier)
+      assert Map.has_key?(agent, :workspace_path)
+      assert agent.workspace_path == "~/.synapsis/agents/build"
     end
 
     test "default build agent includes all expected tools" do
@@ -202,6 +204,57 @@ defmodule Synapsis.Agent.ResolverTest do
       assert agent.read_only == true
       assert agent.model_tier == :expert
     end
+
+    test "uses assigned toolset tools before legacy agent tools" do
+      {:ok, toolset} =
+        Toolsets.create(%{
+          name: "focused-tools",
+          tool_names: ["file_read", "mcp:filesystem:read_file"]
+        })
+
+      {:ok, _} =
+        AgentConfigs.create(%{
+          name: "toolset-agent",
+          tools: ["bash"],
+          toolset_id: toolset.id
+        })
+
+      agent = Resolver.resolve("toolset-agent")
+      assert agent.tools == ["file_read", "mcp:filesystem:read_file"]
+      assert agent.toolset_id == toolset.id
+    end
+
+    test "returns skills assigned to the agent" do
+      {:ok, agent_config} =
+        AgentConfigs.create(%{
+          name: "skilled-agent",
+          system_prompt: "Base prompt"
+        })
+
+      {:ok, skill} =
+        Skills.create(%{
+          name: "review-style",
+          scope: "global",
+          system_prompt_fragment: "Always review tradeoffs."
+        })
+
+      {:ok, _skills} = AgentSkills.assign_skills(agent_config, [skill.id])
+
+      agent = Resolver.resolve("skilled-agent")
+      assert Enum.map(agent.skills, & &1.name) == ["review-style"]
+      assert hd(agent.skills).system_prompt_fragment == "Always review tradeoffs."
+    end
+
+    test "returns configured agent workspace path" do
+      {:ok, _} =
+        AgentConfigs.create(%{
+          name: "workspace-agent",
+          config: %{"workspace_path" => "~/.synapsis/agents/custom-workspace"}
+        })
+
+      agent = Resolver.resolve("workspace-agent")
+      assert agent.workspace_path == "~/.synapsis/agents/custom-workspace"
+    end
   end
 
   describe "list_agents/0" do
@@ -219,22 +272,34 @@ defmodule Synapsis.Agent.ResolverTest do
   end
 
   describe "seed_defaults/0" do
-    test "creates assistant, build, and plan agents" do
+    test "creates assistant, build, main, and plan agents with main as the only default" do
       AgentConfigs.seed_defaults()
 
       assistant = AgentConfigs.get_by_name("assistant")
       build = AgentConfigs.get_by_name("build")
+      main = AgentConfigs.get_by_name("main")
       plan = AgentConfigs.get_by_name("plan")
 
       assert assistant != nil
       assert build != nil
+      assert main != nil
       assert plan != nil
       assert assistant.name == "assistant"
       assert assistant.is_default == false
       assert build.name == "build"
+      assert build.is_default == false
+      assert main.name == "main"
+      assert main.is_default == true
       assert plan.name == "plan"
-      assert build.is_default == true
+      assert plan.is_default == false
       assert plan.read_only == true
+
+      defaults =
+        AgentConfigs.list()
+        |> Enum.filter(& &1.is_default)
+        |> Enum.map(& &1.name)
+
+      assert defaults == ["main"]
     end
 
     test "does not overwrite existing agents" do
@@ -250,6 +315,30 @@ defmodule Synapsis.Agent.ResolverTest do
       build = AgentConfigs.get_by_name("build")
       assert build.provider == "openai"
       assert build.model == "gpt-4"
+    end
+
+    test "normalizes existing default flags to the main agent" do
+      {:ok, _} = AgentConfigs.create(%{name: "build", is_default: true})
+      {:ok, _} = AgentConfigs.create(%{name: "main", is_default: false})
+
+      AgentConfigs.seed_defaults()
+
+      refute AgentConfigs.get_by_name("build").is_default
+      assert AgentConfigs.get_by_name("main").is_default
+    end
+
+    test "create and update keep main as the only default agent" do
+      {:ok, build} = AgentConfigs.create(%{name: "build", is_default: true})
+      refute Repo.get!(AgentConfig, build.id).is_default
+
+      {:ok, main} = AgentConfigs.create(%{name: "main", is_default: false})
+      assert Repo.get!(AgentConfig, main.id).is_default
+
+      {:ok, other} = AgentConfigs.create(%{name: "other"})
+      {:ok, _other} = AgentConfigs.update(other, %{is_default: true})
+
+      refute Repo.get!(AgentConfig, other.id).is_default
+      assert Repo.get!(AgentConfig, main.id).is_default
     end
   end
 end

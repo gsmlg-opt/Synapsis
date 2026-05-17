@@ -53,6 +53,7 @@ defmodule Synapsis.AgentConfigs do
     %AgentConfig{}
     |> AgentConfig.changeset(attrs)
     |> Repo.insert()
+    |> reload_after_default_normalization()
   end
 
   @doc "Update an existing agent config."
@@ -60,11 +61,21 @@ defmodule Synapsis.AgentConfigs do
     agent_config
     |> AgentConfig.update_changeset(attrs)
     |> Repo.update()
+    |> reload_after_default_normalization()
   end
 
   @doc "Delete an agent config."
   def delete(%AgentConfig{} = agent_config) do
-    Repo.delete(agent_config)
+    if protected?(agent_config) do
+      {:error, :protected}
+    else
+      Repo.delete(agent_config)
+    end
+  end
+
+  @doc "Returns true for default/built-in agent records that should not be removed."
+  def protected?(%AgentConfig{} = agent_config) do
+    agent_config.is_default || agent_config.name in Enum.map(default_attrs(), & &1.name)
   end
 
   @doc "Return default agent configuration maps."
@@ -95,7 +106,7 @@ defmodule Synapsis.AgentConfigs do
         read_only: false,
         max_tokens: 8192,
         model_tier: "default",
-        is_default: true,
+        is_default: false,
         enabled: true
       },
       %{
@@ -109,7 +120,7 @@ defmodule Synapsis.AgentConfigs do
         read_only: false,
         max_tokens: 8192,
         model_tier: "default",
-        is_default: false,
+        is_default: true,
         enabled: true
       },
       %{
@@ -157,6 +168,27 @@ defmodule Synapsis.AgentConfigs do
         _existing -> :ok
       end
     end
+
+    normalize_default_flags()
+
+    :ok
+  end
+
+  defp reload_after_default_normalization({:ok, %AgentConfig{} = agent_config}) do
+    normalize_default_flags()
+    {:ok, Repo.get!(AgentConfig, agent_config.id)}
+  end
+
+  defp reload_after_default_normalization(result), do: result
+
+  defp normalize_default_flags do
+    AgentConfig
+    |> where([agent], agent.name != "main")
+    |> Repo.update_all(set: [is_default: false])
+
+    AgentConfig
+    |> where([agent], agent.name == "main")
+    |> Repo.update_all(set: [is_default: true])
 
     :ok
   end

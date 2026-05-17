@@ -282,6 +282,14 @@ defmodule Synapsis.Session.Worker do
       max_turns: Map.get(state.agent || %{}, :max_turns, 50)
     }
 
+    agent_config =
+      (state.agent || %{})
+      |> Map.merge(%{
+        agent_type: agent_type_from_name((state.agent || %{})[:name]),
+        project_id: state.session && state.session.project_id,
+        name: (state.agent || %{})[:name]
+      })
+
     loop_ctx = %Synapsis.Agent.QueryLoop.Context{
       session_id: state.session_id,
       system_prompt: :dynamic,
@@ -291,11 +299,7 @@ defmodule Synapsis.Session.Worker do
       subscriber: self(),
       project_path: state.project_path,
       working_dir: state.worktree_path || state.project_path,
-      agent_config: %{
-        agent_type: agent_type_from_name((state.agent || %{})[:name]),
-        project_id: state.session && state.session.project_id,
-        name: (state.agent || %{})[:name]
-      }
+      agent_config: agent_config
     }
 
     task = Task.async(fn -> Synapsis.Agent.QueryLoop.run(loop_state, loop_ctx) end)

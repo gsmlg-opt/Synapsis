@@ -7,31 +7,17 @@
     <:logo>
       <.dm_mdi name="brain" class="w-6 h-6" />
     </:logo>
-    <:menu to={~p"/assistant"}>
-      <.dm_mdi name="robot" class="w-4 h-4 inline mr-1" /> Assistant
+    <:menu to={~p"/chat"}>
+      <.dm_mdi name="message-text" class="w-4 h-4 inline mr-1" /> Chat
     </:menu>
-    <:menu to={~p"/projects"}>
-      <.dm_mdi name="folder-multiple" class="w-4 h-4 inline mr-1" /> Projects
+    <:menu to={~p"/agent/agents"}>
+      <.dm_mdi name="robot" class="w-4 h-4 inline mr-1" /> Agent
     </:menu>
-    <:menu to={~p"/workspace"}>
-      <.dm_mdi name="file-tree" class="w-4 h-4 inline mr-1" /> Workspace
-    </:menu>
-    <:menu to={~p"/settings/providers"}>
-      <.dm_mdi name="cloud" class="w-4 h-4 inline mr-1" /> Providers
-    </:menu>
-    <:menu to={~p"/settings/mcp"}>
-      <.dm_mdi name="puzzle" class="w-4 h-4 inline mr-1" /> MCP
-    </:menu>
-    <:menu to={~p"/settings/lsp"}>
-      <.dm_mdi name="code-braces" class="w-4 h-4 inline mr-1" /> LSP
+    <:menu to={~p"/settings"}>
+      <.dm_mdi name="cog" class="w-4 h-4 inline mr-1" /> Settings
     </:menu>
     <:user_profile>
-      <div class="flex items-center gap-2">
-        <.dm_theme_switcher />
-        <.dm_link navigate={~p"/settings"}>
-          <.dm_mdi name="cog" class="w-5 h-5" />
-        </.dm_link>
-      </div>
+      <.dm_theme_switcher />
     </:user_profile>
   </.dm_appbar>
   <div class="fixed top-4 right-4 z-[1000]">

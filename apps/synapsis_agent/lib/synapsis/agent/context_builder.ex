@@ -45,7 +45,8 @@ defmodule Synapsis.Agent.ContextBuilder do
       {:base, load_base_prompt(agent_type, agent_config)},
       {:soul, load_soul(project_id)},
       {:identity, load_identity()},
-      {:skills, build_skills_manifest(project_id)},
+      {:assigned_skills, build_assigned_skills(agent_config)},
+      {:skills, build_skills_manifest(project_id, agent_config)},
       {:memory, load_memory_context(user_message, project_id, model_context_window)},
       {:bootstrap, load_bootstrap()},
       {:project, load_project_context(project_id)}
@@ -119,8 +120,15 @@ defmodule Synapsis.Agent.ContextBuilder do
   MCP/LSP tools get a provider prefix.
   """
   @spec build_skills_manifest(String.t() | nil) :: String.t() | nil
-  def build_skills_manifest(_project_id) do
-    tools = Synapsis.Tool.Registry.list_for_llm()
+  @spec build_skills_manifest(String.t() | nil, map()) :: String.t() | nil
+  def build_skills_manifest(project_id, agent_config \\ %{})
+
+  def build_skills_manifest(_project_id, agent_config) do
+    tool_names = Map.get(agent_config, :tools) || Map.get(agent_config, "tools") || []
+
+    tools =
+      Synapsis.Tool.Registry.list_for_llm()
+      |> maybe_filter_tools(tool_names)
 
     case tools do
       [] ->
@@ -220,6 +228,9 @@ defmodule Synapsis.Agent.ContextBuilder do
   defp wrap_layer(:skills, content),
     do: "<available_skills>\n#{content}\n</available_skills>"
 
+  defp wrap_layer(:assigned_skills, content),
+    do: "<assigned_skills>\n#{content}\n</assigned_skills>"
+
   defp wrap_layer(:memory, content), do: "<memory>\n#{content}\n</memory>"
   defp wrap_layer(:bootstrap, content), do: "<environment>\n#{content}\n</environment>"
   defp wrap_layer(:project, content), do: "<project>\n#{content}\n</project>"
@@ -231,6 +242,48 @@ defmodule Synapsis.Agent.ContextBuilder do
       String.slice(desc, 0, max_len - 1) <> "…"
     end
   end
+
+  defp maybe_filter_tools(tools, []), do: tools
+  defp maybe_filter_tools(tools, nil), do: tools
+
+  defp maybe_filter_tools(tools, tool_names) when is_list(tool_names) do
+    names = MapSet.new(tool_names)
+    Enum.filter(tools, &(MapSet.member?(names, &1.name) || MapSet.member?(names, &1[:name])))
+  end
+
+  defp build_assigned_skills(agent_config) do
+    skills = Map.get(agent_config, :skills) || Map.get(agent_config, "skills") || []
+
+    skills
+    |> Enum.map(&format_assigned_skill/1)
+    |> Enum.reject(&(&1 == ""))
+    |> case do
+      [] -> nil
+      lines -> Enum.join(lines, "\n\n")
+    end
+  end
+
+  defp format_assigned_skill(skill) do
+    fragment = skill_value(skill, :system_prompt_fragment)
+
+    if is_binary(fragment) and String.trim(fragment) != "" do
+      name = skill_value(skill, :name) || "unnamed-skill"
+      description = skill_value(skill, :description)
+
+      ["## #{name}", description, fragment]
+      |> Enum.reject(&is_nil/1)
+      |> Enum.reject(&(is_binary(&1) and String.trim(&1) == ""))
+      |> Enum.join("\n")
+    else
+      ""
+    end
+  end
+
+  defp skill_value(skill, key) when is_map(skill) do
+    Map.get(skill, key) || Map.get(skill, to_string(key))
+  end
+
+  defp skill_value(_skill, _key), do: nil
 
   defp default_base_prompt do
     """

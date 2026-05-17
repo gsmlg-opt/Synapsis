@@ -121,7 +121,7 @@ defmodule SynapsisWeb.AssistantLive.SettingTest do
       |> render_click()
 
       view
-      |> element("button[phx-click=\"toggle_heartbeat\"][phx-value-id=\"#{config.id}\"]")
+      |> element("el-dm-button[phx-click=\"toggle_heartbeat\"][phx-value-id=\"#{config.id}\"]")
       |> render_click()
 
       updated = HeartbeatConfig.get(config.id)
