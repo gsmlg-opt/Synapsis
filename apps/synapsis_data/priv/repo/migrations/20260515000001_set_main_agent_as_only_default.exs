@@ -7,7 +7,6 @@ defmodule Synapsis.Repo.Migrations.SetMainAgentAsOnlyDefault do
   end
 
   def down do
-    execute("UPDATE agent_configs SET is_default = FALSE WHERE name = 'main'")
-    execute("UPDATE agent_configs SET is_default = TRUE WHERE name = 'build'")
+    :ok
   end
 end

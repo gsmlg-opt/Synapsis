@@ -100,7 +100,7 @@ defmodule Synapsis.Agent.SessionBridge do
       project_id: project.id,
       provider: opts[:provider] || "anthropic",
       model: opts[:model] || Synapsis.Providers.default_model(opts[:provider] || "anthropic"),
-      agent: opts[:agent] || "build"
+      agent: opts[:agent] || "main"
     }
 
     %Session{}

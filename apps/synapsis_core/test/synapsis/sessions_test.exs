@@ -13,7 +13,7 @@ defmodule Synapsis.SessionsTest do
 
       assert session.id
       assert session.status == "idle"
-      assert session.agent == "build"
+      assert session.agent == "main"
       assert session.project.path == "/tmp/test_sessions_create"
     end
 

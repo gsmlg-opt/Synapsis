@@ -485,7 +485,7 @@ defmodule SynapsisWeb.ChatLive do
   defp global_session?(session), do: session.project && session.project.path == "__global__"
 
   defp default_agent_name([agent | _]), do: agent.name
-  defp default_agent_name([]), do: "build"
+  defp default_agent_name([]), do: "main"
 
   defp reject_permission(socket, tool_use_id) do
     update(

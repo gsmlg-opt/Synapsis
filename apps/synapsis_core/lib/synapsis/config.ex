@@ -19,8 +19,8 @@ defmodule Synapsis.Config do
   def defaults do
     %{
       "agents" => %{
-        "build" => %{
-          "name" => "build",
+        "main" => %{
+          "name" => "main",
           "systemPrompt" => default_system_prompt(),
           "tools" => [
             "file_read",
@@ -36,16 +36,6 @@ defmodule Synapsis.Config do
           "modelTier" => "default",
           "reasoningEffort" => "medium",
           "readOnly" => false
-        },
-        "plan" => %{
-          "name" => "plan",
-          "systemPrompt" =>
-            "You are a planning assistant. Analyze the codebase and create implementation plans. Do NOT make changes.",
-          "tools" => ["file_read", "grep", "glob", "diagnostics"],
-          "model" => nil,
-          "modelTier" => "expert",
-          "reasoningEffort" => "high",
-          "readOnly" => true
         }
       },
       "providers" => %{},

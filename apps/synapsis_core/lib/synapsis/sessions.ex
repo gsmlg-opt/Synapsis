@@ -14,7 +14,7 @@ defmodule Synapsis.Sessions do
 
     provider = opts[:provider] || default_provider(config)
     model = opts[:model] || default_model(config, provider)
-    agent = opts[:agent] || "build"
+    agent = opts[:agent] || "main"
 
     attrs = %{
       project_id: project.id,

@@ -78,7 +78,7 @@ defmodule Synapsis.Tool.Task do
         true ->
           spawn_opts =
             %{
-              agent: "build",
+              agent: "main",
               notify_pid: self(),
               notify_ref: Ecto.UUID.generate()
             }
@@ -110,7 +110,7 @@ defmodule Synapsis.Tool.Task do
             list
 
           _ ->
-            case Synapsis.Agent.Resolver.resolve("build") do
+            case Synapsis.Agent.Resolver.resolve("main") do
               %{tools: names} when is_list(names) and names != [] -> names
               _ -> :read_only
             end

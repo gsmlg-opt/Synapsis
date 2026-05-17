@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `3317b608`
+- Built from commit: `ff44486b`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -706,7 +706,7 @@
 - `change()` --calls--> `add()`  [INFERRED]
   apps/synapsis_data/priv/repo/migrations/20250213000001_create_provider_configs.exs → apps/synapsis_core/lib/synapsis/git_worktree.ex
 - `change()` --calls--> `add()`  [INFERRED]
-  apps/synapsis_data/priv/repo/migrations/20260213000002_create_skills.exs → apps/synapsis_core/lib/synapsis/git_worktree.ex
+  apps/synapsis_data/priv/repo/migrations/20260213000001_create_memory_entries.exs → apps/synapsis_core/lib/synapsis/git_worktree.ex
 
 ## Hyperedges (group relationships)
 - **Hex Dependency Documentation Pattern** — synapsis_core_hex_dependency, synapsis_cli_hex_dependency, synapsis_web_hex_dependency, synapsis_agent_hex_dependency, mix_exs_dependencies, exdoc_documentation_generation, hexdocs_publishing [INFERRED 0.88]
@@ -912,7 +912,7 @@ Nodes (11): Phoenix.LiveView.MixProject, aliases(), coverage_ignore_modules(), d
 
 ### Community 50 - "Community 50"
 Cohesion: 0.15
-Nodes (10): Synapsis.Repo.Migrations.CreateMemoryEntries, change(), Synapsis.Repo.Migrations.CreateFailedAttempts, change(), Synapsis.Repo.Migrations.AlterSessionPermissionsToEnum, down(), up(), Synapsis.Repo.Migrations.CreateMemoryCheckpoints (+2 more)
+Nodes (10): Synapsis.Repo.Migrations.CreateAgentCheckpoints, change(), Synapsis.Repo.Migrations.AlterSessionPermissionsToEnum, down(), up(), Synapsis.Repo.Migrations.CreateMemoryCheckpoints, change(), Synapsis.Repo.Migrations.AlterProjectsAddFields (+2 more)
 
 ### Community 51 - "Community 51"
 Cohesion: 0.22
@@ -1836,7 +1836,7 @@ _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `add()` connect `Community 50` to `Community 384`, `Community 385`, `Community 386`, `Community 387`, `Community 388`, `Community 389`, `Community 390`, `Community 391`, `Community 392`, `Community 393`, `Community 394`, `Community 395`, `Community 396`, `Community 397`, `Community 398`, `Community 143`, `Community 313`, `Community 367`, `Community 368`, `Community 369`, `Community 370`, `Community 371`, `Community 372`, `Community 373`, `Community 374`, `Community 375`, `Community 376`, `Community 377`, `Community 378`, `Community 379`, `Community 380`, `Community 381`, `Community 382`, `Community 383`?**
   _High betweenness centrality (0.001) - this node is a cross-community bridge._
-- **Why does `change()` connect `Community 370` to `Community 50`?**
+- **Why does `change()` connect `Community 382` to `Community 50`?**
   _High betweenness centrality (0.000) - this node is a cross-community bridge._
 - **Are the 38 inferred relationships involving `add()` (e.g. with `change()` and `change()`) actually correct?**
   _`add()` has 38 INFERRED edges - model-reasoned connections that need verification._

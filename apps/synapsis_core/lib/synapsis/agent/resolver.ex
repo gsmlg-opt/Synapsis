@@ -79,13 +79,10 @@ defmodule Synapsis.Agent.Resolver do
     }
   end
 
-  defp from_default(nil), do: "build" |> AgentConfigs.default_attrs() |> from_default()
+  defp from_default(nil), do: "main" |> AgentConfigs.default_attrs() |> from_default()
 
-  defp default_name("assistant"), do: "assistant"
-  defp default_name("build"), do: "build"
   defp default_name("main"), do: "main"
-  defp default_name("plan"), do: "plan"
-  defp default_name(_name), do: "build"
+  defp default_name(_name), do: "main"
 
   defp resolve_tools(%{toolset_id: nil, tools: tools}), do: tools || []
 
@@ -113,9 +110,9 @@ defmodule Synapsis.Agent.Resolver do
     "~/.synapsis/agents/#{name}"
   end
 
-  defp default_workspace_path(_name), do: "~/.synapsis/agents/build"
+  defp default_workspace_path(_name), do: "~/.synapsis/agents/main"
 
   defp default_system_prompt do
-    AgentConfigs.default_attrs("build").system_prompt
+    AgentConfigs.default_attrs("main").system_prompt
   end
 end

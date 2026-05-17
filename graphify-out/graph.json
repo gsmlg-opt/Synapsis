@@ -22138,7 +22138,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20250101000001_create_projects.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20250101000001_create_projects_exs",
-      "community": 394,
+      "community": 369,
       "norm_label": "20250101000001_create_projects.exs"
     },
     {
@@ -22147,7 +22147,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20250101000001_create_projects.exs",
       "source_location": "L1",
       "id": "migrations_20250101000001_create_projects_synapsis_repo_migrations_createprojects",
-      "community": 394,
+      "community": 369,
       "norm_label": "synapsis.repo.migrations.createprojects"
     },
     {
@@ -22156,7 +22156,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20250101000001_create_projects.exs",
       "source_location": "L4",
       "id": "migrations_20250101000001_create_projects_synapsis_repo_migrations_createprojects_change",
-      "community": 394,
+      "community": 369,
       "norm_label": "change()"
     },
     {
@@ -22165,7 +22165,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20250101000002_create_sessions.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20250101000002_create_sessions_exs",
-      "community": 378,
+      "community": 392,
       "norm_label": "20250101000002_create_sessions.exs"
     },
     {
@@ -22174,7 +22174,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20250101000002_create_sessions.exs",
       "source_location": "L1",
       "id": "migrations_20250101000002_create_sessions_synapsis_repo_migrations_createsessions",
-      "community": 378,
+      "community": 392,
       "norm_label": "synapsis.repo.migrations.createsessions"
     },
     {
@@ -22183,7 +22183,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20250101000002_create_sessions.exs",
       "source_location": "L4",
       "id": "migrations_20250101000002_create_sessions_synapsis_repo_migrations_createsessions_change",
-      "community": 378,
+      "community": 392,
       "norm_label": "change()"
     },
     {
@@ -22192,7 +22192,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20250101000003_create_messages.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20250101000003_create_messages_exs",
-      "community": 383,
+      "community": 398,
       "norm_label": "20250101000003_create_messages.exs"
     },
     {
@@ -22201,7 +22201,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20250101000003_create_messages.exs",
       "source_location": "L1",
       "id": "migrations_20250101000003_create_messages_synapsis_repo_migrations_createmessages",
-      "community": 383,
+      "community": 398,
       "norm_label": "synapsis.repo.migrations.createmessages"
     },
     {
@@ -22210,7 +22210,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20250101000003_create_messages.exs",
       "source_location": "L4",
       "id": "migrations_20250101000003_create_messages_synapsis_repo_migrations_createmessages_change",
-      "community": 383,
+      "community": 398,
       "norm_label": "change()"
     },
     {
@@ -22219,7 +22219,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20250213000001_create_provider_configs.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20250213000001_create_provider_configs_exs",
-      "community": 380,
+      "community": 384,
       "norm_label": "20250213000001_create_provider_configs.exs"
     },
     {
@@ -22228,7 +22228,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20250213000001_create_provider_configs.exs",
       "source_location": "L1",
       "id": "migrations_20250213000001_create_provider_configs_synapsis_repo_migrations_createproviderconfigs",
-      "community": 380,
+      "community": 384,
       "norm_label": "synapsis.repo.migrations.createproviderconfigs"
     },
     {
@@ -22237,7 +22237,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20250213000001_create_provider_configs.exs",
       "source_location": "L4",
       "id": "migrations_20250213000001_create_provider_configs_synapsis_repo_migrations_createproviderconfigs_change",
-      "community": 380,
+      "community": 384,
       "norm_label": "change()"
     },
     {
@@ -22246,7 +22246,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260213000001_create_memory_entries.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260213000001_create_memory_entries_exs",
-      "community": 50,
+      "community": 389,
       "norm_label": "20260213000001_create_memory_entries.exs"
     },
     {
@@ -22255,7 +22255,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260213000001_create_memory_entries.exs",
       "source_location": "L1",
       "id": "migrations_20260213000001_create_memory_entries_synapsis_repo_migrations_creatememoryentries",
-      "community": 50,
+      "community": 389,
       "norm_label": "synapsis.repo.migrations.creatememoryentries"
     },
     {
@@ -22264,7 +22264,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260213000001_create_memory_entries.exs",
       "source_location": "L4",
       "id": "migrations_20260213000001_create_memory_entries_synapsis_repo_migrations_creatememoryentries_change",
-      "community": 50,
+      "community": 389,
       "norm_label": "change()"
     },
     {
@@ -22273,7 +22273,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260213000002_create_skills.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260213000002_create_skills_exs",
-      "community": 390,
+      "community": 373,
       "norm_label": "20260213000002_create_skills.exs"
     },
     {
@@ -22282,7 +22282,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260213000002_create_skills.exs",
       "source_location": "L1",
       "id": "migrations_20260213000002_create_skills_synapsis_repo_migrations_createskills",
-      "community": 390,
+      "community": 373,
       "norm_label": "synapsis.repo.migrations.createskills"
     },
     {
@@ -22291,7 +22291,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260213000002_create_skills.exs",
       "source_location": "L4",
       "id": "migrations_20260213000002_create_skills_synapsis_repo_migrations_createskills_change",
-      "community": 390,
+      "community": 373,
       "norm_label": "change()"
     },
     {
@@ -22300,7 +22300,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260213000003_create_mcp_configs.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260213000003_create_mcp_configs_exs",
-      "community": 385,
+      "community": 397,
       "norm_label": "20260213000003_create_mcp_configs.exs"
     },
     {
@@ -22309,7 +22309,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260213000003_create_mcp_configs.exs",
       "source_location": "L1",
       "id": "migrations_20260213000003_create_mcp_configs_synapsis_repo_migrations_createmcpconfigs",
-      "community": 385,
+      "community": 397,
       "norm_label": "synapsis.repo.migrations.createmcpconfigs"
     },
     {
@@ -22318,7 +22318,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260213000003_create_mcp_configs.exs",
       "source_location": "L4",
       "id": "migrations_20260213000003_create_mcp_configs_synapsis_repo_migrations_createmcpconfigs_change",
-      "community": 385,
+      "community": 397,
       "norm_label": "change()"
     },
     {
@@ -22354,7 +22354,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260214000001_create_plugin_configs.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260214000001_create_plugin_configs_exs",
-      "community": 388,
+      "community": 395,
       "norm_label": "20260214000001_create_plugin_configs.exs"
     },
     {
@@ -22363,7 +22363,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260214000001_create_plugin_configs.exs",
       "source_location": "L1",
       "id": "migrations_20260214000001_create_plugin_configs_synapsis_repo_migrations_createpluginconfigs",
-      "community": 388,
+      "community": 395,
       "norm_label": "synapsis.repo.migrations.createpluginconfigs"
     },
     {
@@ -22372,7 +22372,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260214000001_create_plugin_configs.exs",
       "source_location": "L4",
       "id": "migrations_20260214000001_create_plugin_configs_synapsis_repo_migrations_createpluginconfigs_change",
-      "community": 388,
+      "community": 395,
       "norm_label": "change()"
     },
     {
@@ -22417,7 +22417,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260221000001_create_failed_attempts.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260221000001_create_failed_attempts_exs",
-      "community": 50,
+      "community": 370,
       "norm_label": "20260221000001_create_failed_attempts.exs"
     },
     {
@@ -22426,7 +22426,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260221000001_create_failed_attempts.exs",
       "source_location": "L1",
       "id": "migrations_20260221000001_create_failed_attempts_synapsis_repo_migrations_createfailedattempts",
-      "community": 50,
+      "community": 370,
       "norm_label": "synapsis.repo.migrations.createfailedattempts"
     },
     {
@@ -22435,7 +22435,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260221000001_create_failed_attempts.exs",
       "source_location": "L4",
       "id": "migrations_20260221000001_create_failed_attempts_synapsis_repo_migrations_createfailedattempts_change",
-      "community": 50,
+      "community": 370,
       "norm_label": "change()"
     },
     {
@@ -22498,7 +22498,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260306000001_create_agent_events.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260306000001_create_agent_events_exs",
-      "community": 368,
+      "community": 383,
       "norm_label": "20260306000001_create_agent_events.exs"
     },
     {
@@ -22507,7 +22507,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260306000001_create_agent_events.exs",
       "source_location": "L1",
       "id": "migrations_20260306000001_create_agent_events_synapsis_repo_migrations_createagentevents",
-      "community": 368,
+      "community": 383,
       "norm_label": "synapsis.repo.migrations.createagentevents"
     },
     {
@@ -22516,7 +22516,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260306000001_create_agent_events.exs",
       "source_location": "L4",
       "id": "migrations_20260306000001_create_agent_events_synapsis_repo_migrations_createagentevents_change",
-      "community": 368,
+      "community": 383,
       "norm_label": "change()"
     },
     {
@@ -22525,7 +22525,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260306000002_create_agent_summaries.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260306000002_create_agent_summaries_exs",
-      "community": 391,
+      "community": 380,
       "norm_label": "20260306000002_create_agent_summaries.exs"
     },
     {
@@ -22534,7 +22534,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260306000002_create_agent_summaries.exs",
       "source_location": "L1",
       "id": "migrations_20260306000002_create_agent_summaries_synapsis_repo_migrations_createagentsummaries",
-      "community": 391,
+      "community": 380,
       "norm_label": "synapsis.repo.migrations.createagentsummaries"
     },
     {
@@ -22543,7 +22543,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260306000002_create_agent_summaries.exs",
       "source_location": "L4",
       "id": "migrations_20260306000002_create_agent_summaries_synapsis_repo_migrations_createagentsummaries_change",
-      "community": 391,
+      "community": 380,
       "norm_label": "change()"
     },
     {
@@ -22552,7 +22552,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260306000003_create_agent_checkpoints.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260306000003_create_agent_checkpoints_exs",
-      "community": 381,
+      "community": 50,
       "norm_label": "20260306000003_create_agent_checkpoints.exs"
     },
     {
@@ -22561,7 +22561,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260306000003_create_agent_checkpoints.exs",
       "source_location": "L1",
       "id": "migrations_20260306000003_create_agent_checkpoints_synapsis_repo_migrations_createagentcheckpoints",
-      "community": 381,
+      "community": 50,
       "norm_label": "synapsis.repo.migrations.createagentcheckpoints"
     },
     {
@@ -22570,7 +22570,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260306000003_create_agent_checkpoints.exs",
       "source_location": "L4",
       "id": "migrations_20260306000003_create_agent_checkpoints_synapsis_repo_migrations_createagentcheckpoints_change",
-      "community": 381,
+      "community": 50,
       "norm_label": "change()"
     },
     {
@@ -22579,7 +22579,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260310000001_create_tool_calls.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260310000001_create_tool_calls_exs",
-      "community": 387,
+      "community": 379,
       "norm_label": "20260310000001_create_tool_calls.exs"
     },
     {
@@ -22588,7 +22588,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260310000001_create_tool_calls.exs",
       "source_location": "L1",
       "id": "migrations_20260310000001_create_tool_calls_synapsis_repo_migrations_createtoolcalls",
-      "community": 387,
+      "community": 379,
       "norm_label": "synapsis.repo.migrations.createtoolcalls"
     },
     {
@@ -22597,7 +22597,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260310000001_create_tool_calls.exs",
       "source_location": "L4",
       "id": "migrations_20260310000001_create_tool_calls_synapsis_repo_migrations_createtoolcalls_change",
-      "community": 387,
+      "community": 379,
       "norm_label": "change()"
     },
     {
@@ -22606,7 +22606,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260310000002_create_session_permissions.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260310000002_create_session_permissions_exs",
-      "community": 371,
+      "community": 381,
       "norm_label": "20260310000002_create_session_permissions.exs"
     },
     {
@@ -22615,7 +22615,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260310000002_create_session_permissions.exs",
       "source_location": "L1",
       "id": "migrations_20260310000002_create_session_permissions_synapsis_repo_migrations_createsessionpermissions",
-      "community": 371,
+      "community": 381,
       "norm_label": "synapsis.repo.migrations.createsessionpermissions"
     },
     {
@@ -22624,7 +22624,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260310000002_create_session_permissions.exs",
       "source_location": "L4",
       "id": "migrations_20260310000002_create_session_permissions_synapsis_repo_migrations_createsessionpermissions_change",
-      "community": 371,
+      "community": 381,
       "norm_label": "change()"
     },
     {
@@ -22696,7 +22696,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260312000001_create_memory_events.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260312000001_create_memory_events_exs",
-      "community": 396,
+      "community": 377,
       "norm_label": "20260312000001_create_memory_events.exs"
     },
     {
@@ -22705,7 +22705,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260312000001_create_memory_events.exs",
       "source_location": "L1",
       "id": "migrations_20260312000001_create_memory_events_synapsis_repo_migrations_creatememoryevents",
-      "community": 396,
+      "community": 377,
       "norm_label": "synapsis.repo.migrations.creatememoryevents"
     },
     {
@@ -22714,7 +22714,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260312000001_create_memory_events.exs",
       "source_location": "L4",
       "id": "migrations_20260312000001_create_memory_events_synapsis_repo_migrations_creatememoryevents_change",
-      "community": 396,
+      "community": 377,
       "norm_label": "change()"
     },
     {
@@ -22750,7 +22750,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260312000003_create_semantic_memories.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260312000003_create_semantic_memories_exs",
-      "community": 382,
+      "community": 390,
       "norm_label": "20260312000003_create_semantic_memories.exs"
     },
     {
@@ -22759,7 +22759,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260312000003_create_semantic_memories.exs",
       "source_location": "L1",
       "id": "migrations_20260312000003_create_semantic_memories_synapsis_repo_migrations_createsemanticmemories",
-      "community": 382,
+      "community": 390,
       "norm_label": "synapsis.repo.migrations.createsemanticmemories"
     },
     {
@@ -22768,7 +22768,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260312000003_create_semantic_memories.exs",
       "source_location": "L4",
       "id": "migrations_20260312000003_create_semantic_memories_synapsis_repo_migrations_createsemanticmemories_change",
-      "community": 382,
+      "community": 390,
       "norm_label": "change()"
     },
     {
@@ -22849,7 +22849,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260313000001_create_workspace_documents.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260313000001_create_workspace_documents_exs",
-      "community": 397,
+      "community": 378,
       "norm_label": "20260313000001_create_workspace_documents.exs"
     },
     {
@@ -22858,7 +22858,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260313000001_create_workspace_documents.exs",
       "source_location": "L1",
       "id": "migrations_20260313000001_create_workspace_documents_synapsis_repo_migrations_createworkspacedocuments",
-      "community": 397,
+      "community": 378,
       "norm_label": "synapsis.repo.migrations.createworkspacedocuments"
     },
     {
@@ -22867,7 +22867,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260313000001_create_workspace_documents.exs",
       "source_location": "L4",
       "id": "migrations_20260313000001_create_workspace_documents_synapsis_repo_migrations_createworkspacedocuments_change",
-      "community": 397,
+      "community": 378,
       "norm_label": "change()"
     },
     {
@@ -22876,7 +22876,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260313000002_create_workspace_document_versions.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260313000002_create_workspace_document_versions_exs",
-      "community": 392,
+      "community": 393,
       "norm_label": "20260313000002_create_workspace_document_versions.exs"
     },
     {
@@ -22885,7 +22885,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260313000002_create_workspace_document_versions.exs",
       "source_location": "L1",
       "id": "migrations_20260313000002_create_workspace_document_versions_synapsis_repo_migrations_createworkspacedocumentversions",
-      "community": 392,
+      "community": 393,
       "norm_label": "synapsis.repo.migrations.createworkspacedocumentversions"
     },
     {
@@ -22894,7 +22894,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260313000002_create_workspace_document_versions.exs",
       "source_location": "L4",
       "id": "migrations_20260313000002_create_workspace_document_versions_synapsis_repo_migrations_createworkspacedocumentversions_change",
-      "community": 392,
+      "community": 393,
       "norm_label": "change()"
     },
     {
@@ -22903,7 +22903,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260318000001_create_heartbeat_configs.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260318000001_create_heartbeat_configs_exs",
-      "community": 398,
+      "community": 367,
       "norm_label": "20260318000001_create_heartbeat_configs.exs"
     },
     {
@@ -22912,7 +22912,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260318000001_create_heartbeat_configs.exs",
       "source_location": "L1",
       "id": "migrations_20260318000001_create_heartbeat_configs_synapsis_repo_migrations_createheartbeatconfigs",
-      "community": 398,
+      "community": 367,
       "norm_label": "synapsis.repo.migrations.createheartbeatconfigs"
     },
     {
@@ -22921,7 +22921,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260318000001_create_heartbeat_configs.exs",
       "source_location": "L4",
       "id": "migrations_20260318000001_create_heartbeat_configs_synapsis_repo_migrations_createheartbeatconfigs_change",
-      "community": 398,
+      "community": 367,
       "norm_label": "change()"
     },
     {
@@ -22930,7 +22930,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260318000002_create_tool_approvals.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260318000002_create_tool_approvals_exs",
-      "community": 384,
+      "community": 396,
       "norm_label": "20260318000002_create_tool_approvals.exs"
     },
     {
@@ -22939,7 +22939,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260318000002_create_tool_approvals.exs",
       "source_location": "L1",
       "id": "migrations_20260318000002_create_tool_approvals_synapsis_repo_migrations_createtoolapprovals",
-      "community": 384,
+      "community": 396,
       "norm_label": "synapsis.repo.migrations.createtoolapprovals"
     },
     {
@@ -22948,7 +22948,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260318000002_create_tool_approvals.exs",
       "source_location": "L4",
       "id": "migrations_20260318000002_create_tool_approvals_synapsis_repo_migrations_createtoolapprovals_change",
-      "community": 384,
+      "community": 396,
       "norm_label": "change()"
     },
     {
@@ -22984,7 +22984,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260320000001_create_agent_configs.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260320000001_create_agent_configs_exs",
-      "community": 367,
+      "community": 368,
       "norm_label": "20260320000001_create_agent_configs.exs"
     },
     {
@@ -22993,7 +22993,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260320000001_create_agent_configs.exs",
       "source_location": "L1",
       "id": "migrations_20260320000001_create_agent_configs_synapsis_repo_migrations_createagentconfigs",
-      "community": 367,
+      "community": 368,
       "norm_label": "synapsis.repo.migrations.createagentconfigs"
     },
     {
@@ -23002,7 +23002,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260320000001_create_agent_configs.exs",
       "source_location": "L4",
       "id": "migrations_20260320000001_create_agent_configs_synapsis_repo_migrations_createagentconfigs_change",
-      "community": 367,
+      "community": 368,
       "norm_label": "change()"
     },
     {
@@ -23011,7 +23011,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260323000001_add_debug_to_sessions.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260323000001_add_debug_to_sessions_exs",
-      "community": 393,
+      "community": 372,
       "norm_label": "20260323000001_add_debug_to_sessions.exs"
     },
     {
@@ -23020,7 +23020,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260323000001_add_debug_to_sessions.exs",
       "source_location": "L1",
       "id": "migrations_20260323000001_add_debug_to_sessions_synapsis_repo_migrations_adddebugtosessions",
-      "community": 393,
+      "community": 372,
       "norm_label": "synapsis.repo.migrations.adddebugtosessions"
     },
     {
@@ -23029,7 +23029,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260323000001_add_debug_to_sessions.exs",
       "source_location": "L4",
       "id": "migrations_20260323000001_add_debug_to_sessions_synapsis_repo_migrations_adddebugtosessions_change",
-      "community": 393,
+      "community": 372,
       "norm_label": "change()"
     },
     {
@@ -23038,7 +23038,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260324000001_create_agent_messages.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260324000001_create_agent_messages_exs",
-      "community": 379,
+      "community": 391,
       "norm_label": "20260324000001_create_agent_messages.exs"
     },
     {
@@ -23047,7 +23047,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260324000001_create_agent_messages.exs",
       "source_location": "L1",
       "id": "migrations_20260324000001_create_agent_messages_synapsis_repo_migrations_createagentmessages",
-      "community": 379,
+      "community": 391,
       "norm_label": "synapsis.repo.migrations.createagentmessages"
     },
     {
@@ -23056,7 +23056,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260324000001_create_agent_messages.exs",
       "source_location": "L4",
       "id": "migrations_20260324000001_create_agent_messages_synapsis_repo_migrations_createagentmessages_change",
-      "community": 379,
+      "community": 391,
       "norm_label": "change()"
     },
     {
@@ -23092,7 +23092,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260404000001_alter_projects_add_fields.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260404000001_alter_projects_add_fields_exs",
-      "community": 389,
+      "community": 50,
       "norm_label": "20260404000001_alter_projects_add_fields.exs"
     },
     {
@@ -23101,7 +23101,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260404000001_alter_projects_add_fields.exs",
       "source_location": "L1",
       "id": "migrations_20260404000001_alter_projects_add_fields_synapsis_repo_migrations_alterprojectsaddfields",
-      "community": 389,
+      "community": 50,
       "norm_label": "synapsis.repo.migrations.alterprojectsaddfields"
     },
     {
@@ -23110,7 +23110,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260404000001_alter_projects_add_fields.exs",
       "source_location": "L4",
       "id": "migrations_20260404000001_alter_projects_add_fields_synapsis_repo_migrations_alterprojectsaddfields_change",
-      "community": 389,
+      "community": 50,
       "norm_label": "change()"
     },
     {
@@ -23119,7 +23119,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260404000002_create_repos.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260404000002_create_repos_exs",
-      "community": 374,
+      "community": 371,
       "norm_label": "20260404000002_create_repos.exs"
     },
     {
@@ -23128,7 +23128,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260404000002_create_repos.exs",
       "source_location": "L1",
       "id": "migrations_20260404000002_create_repos_synapsis_repo_migrations_createrepos",
-      "community": 374,
+      "community": 371,
       "norm_label": "synapsis.repo.migrations.createrepos"
     },
     {
@@ -23137,7 +23137,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260404000002_create_repos.exs",
       "source_location": "L4",
       "id": "migrations_20260404000002_create_repos_synapsis_repo_migrations_createrepos_change",
-      "community": 374,
+      "community": 371,
       "norm_label": "change()"
     },
     {
@@ -23146,7 +23146,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260404000003_create_repo_remotes.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260404000003_create_repo_remotes_exs",
-      "community": 395,
+      "community": 388,
       "norm_label": "20260404000003_create_repo_remotes.exs"
     },
     {
@@ -23155,7 +23155,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260404000003_create_repo_remotes.exs",
       "source_location": "L1",
       "id": "migrations_20260404000003_create_repo_remotes_synapsis_repo_migrations_createreporemotes",
-      "community": 395,
+      "community": 388,
       "norm_label": "synapsis.repo.migrations.createreporemotes"
     },
     {
@@ -23164,7 +23164,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260404000003_create_repo_remotes.exs",
       "source_location": "L4",
       "id": "migrations_20260404000003_create_repo_remotes_synapsis_repo_migrations_createreporemotes_change",
-      "community": 395,
+      "community": 388,
       "norm_label": "change()"
     },
     {
@@ -23173,7 +23173,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260404000004_create_repo_worktrees.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260404000004_create_repo_worktrees_exs",
-      "community": 377,
+      "community": 387,
       "norm_label": "20260404000004_create_repo_worktrees.exs"
     },
     {
@@ -23182,7 +23182,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260404000004_create_repo_worktrees.exs",
       "source_location": "L1",
       "id": "migrations_20260404000004_create_repo_worktrees_synapsis_repo_migrations_createrepoworktrees",
-      "community": 377,
+      "community": 387,
       "norm_label": "synapsis.repo.migrations.createrepoworktrees"
     },
     {
@@ -23191,7 +23191,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260404000004_create_repo_worktrees.exs",
       "source_location": "L4",
       "id": "migrations_20260404000004_create_repo_worktrees_synapsis_repo_migrations_createrepoworktrees_change",
-      "community": 377,
+      "community": 387,
       "norm_label": "change()"
     },
     {
@@ -23200,7 +23200,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260428000001_create_agent_runs.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260428000001_create_agent_runs_exs",
-      "community": 372,
+      "community": 385,
       "norm_label": "20260428000001_create_agent_runs.exs"
     },
     {
@@ -23209,7 +23209,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260428000001_create_agent_runs.exs",
       "source_location": "L1",
       "id": "migrations_20260428000001_create_agent_runs_synapsis_repo_migrations_createagentruns",
-      "community": 372,
+      "community": 385,
       "norm_label": "synapsis.repo.migrations.createagentruns"
     },
     {
@@ -23218,7 +23218,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260428000001_create_agent_runs.exs",
       "source_location": "L4",
       "id": "migrations_20260428000001_create_agent_runs_synapsis_repo_migrations_createagentruns_change",
-      "community": 372,
+      "community": 385,
       "norm_label": "change()"
     },
     {
@@ -23227,7 +23227,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260512000001_create_harness_events.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260512000001_create_harness_events_exs",
-      "community": 370,
+      "community": 382,
       "norm_label": "20260512000001_create_harness_events.exs"
     },
     {
@@ -23236,7 +23236,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260512000001_create_harness_events.exs",
       "source_location": "L1",
       "id": "migrations_20260512000001_create_harness_events_synapsis_repo_migrations_createharnessevents",
-      "community": 370,
+      "community": 382,
       "norm_label": "synapsis.repo.migrations.createharnessevents"
     },
     {
@@ -23245,7 +23245,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260512000001_create_harness_events.exs",
       "source_location": "L4",
       "id": "migrations_20260512000001_create_harness_events_synapsis_repo_migrations_createharnessevents_change",
-      "community": 370,
+      "community": 382,
       "norm_label": "change()"
     },
     {
@@ -23254,7 +23254,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260512000002_create_parts.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260512000002_create_parts_exs",
-      "community": 373,
+      "community": 394,
       "norm_label": "20260512000002_create_parts.exs"
     },
     {
@@ -23263,7 +23263,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260512000002_create_parts.exs",
       "source_location": "L1",
       "id": "migrations_20260512000002_create_parts_synapsis_repo_migrations_createparts",
-      "community": 373,
+      "community": 394,
       "norm_label": "synapsis.repo.migrations.createparts"
     },
     {
@@ -23272,7 +23272,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260512000002_create_parts.exs",
       "source_location": "L4",
       "id": "migrations_20260512000002_create_parts_synapsis_repo_migrations_createparts_change",
-      "community": 373,
+      "community": 394,
       "norm_label": "change()"
     },
     {
@@ -23281,7 +23281,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260514000001_create_toolsets_and_agent_skills.exs",
       "source_location": "L1",
       "id": "apps_synapsis_data_priv_repo_migrations_20260514000001_create_toolsets_and_agent_skills_exs",
-      "community": 369,
+      "community": 374,
       "norm_label": "20260514000001_create_toolsets_and_agent_skills.exs"
     },
     {
@@ -23290,7 +23290,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260514000001_create_toolsets_and_agent_skills.exs",
       "source_location": "L1",
       "id": "migrations_20260514000001_create_toolsets_and_agent_skills_synapsis_repo_migrations_createtoolsetsandagentskills",
-      "community": 369,
+      "community": 374,
       "norm_label": "synapsis.repo.migrations.createtoolsetsandagentskills"
     },
     {
@@ -23299,7 +23299,7 @@
       "source_file": "apps/synapsis_data/priv/repo/migrations/20260514000001_create_toolsets_and_agent_skills.exs",
       "source_location": "L4",
       "id": "migrations_20260514000001_create_toolsets_and_agent_skills_synapsis_repo_migrations_createtoolsetsandagentskills_change",
-      "community": 369,
+      "community": 374,
       "norm_label": "change()"
     },
     {
@@ -62770,9 +62770,9 @@
       "source_file": "apps/synapsis_web/lib/synapsis_web/live/agent_live/agents.ex",
       "source_location": "L968",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "agent_live_agents_synapsisweb_agentlive_agents",
-      "target": "agent_live_agents_synapsisweb_agentlive_agents_provider_model_cascader_options",
-      "confidence_score": 1.0
+      "target": "agent_live_agents_synapsisweb_agentlive_agents_provider_model_cascader_options"
     },
     {
       "relation": "method",
@@ -62780,9 +62780,9 @@
       "source_file": "apps/synapsis_web/lib/synapsis_web/live/agent_live/agents.ex",
       "source_location": "L985",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "agent_live_agents_synapsisweb_agentlive_agents",
-      "target": "agent_live_agents_synapsisweb_agentlive_agents_provider_model_selected_path",
-      "confidence_score": 1.0
+      "target": "agent_live_agents_synapsisweb_agentlive_agents_provider_model_selected_path"
     },
     {
       "relation": "method",
@@ -63284,9 +63284,9 @@
       "source_location": "L986",
       "weight": 1.0,
       "context": "call",
+      "confidence_score": 1.0,
       "source": "agent_live_agents_synapsisweb_agentlive_agents_provider_model_selected_path",
-      "target": "agent_live_agents_synapsisweb_agentlive_agents_normalize_form_value",
-      "confidence_score": 1.0
+      "target": "agent_live_agents_synapsisweb_agentlive_agents_normalize_form_value"
     },
     {
       "relation": "calls",
@@ -63350,9 +63350,9 @@
       "source_location": "L971",
       "weight": 1.0,
       "context": "call",
+      "confidence_score": 1.0,
       "source": "agent_live_agents_synapsisweb_agentlive_agents_provider_model_cascader_options",
-      "target": "agent_live_agents_synapsisweb_agentlive_agents_provider_name",
-      "confidence_score": 1.0
+      "target": "agent_live_agents_synapsisweb_agentlive_agents_provider_name"
     },
     {
       "relation": "calls",
@@ -63361,9 +63361,9 @@
       "source_location": "L975",
       "weight": 1.0,
       "context": "call",
+      "confidence_score": 1.0,
       "source": "agent_live_agents_synapsisweb_agentlive_agents_provider_model_cascader_options",
-      "target": "agent_live_agents_synapsisweb_agentlive_agents_provider_label",
-      "confidence_score": 1.0
+      "target": "agent_live_agents_synapsisweb_agentlive_agents_provider_label"
     },
     {
       "relation": "calls",
@@ -63372,9 +63372,9 @@
       "source_location": "L978",
       "weight": 1.0,
       "context": "call",
+      "confidence_score": 1.0,
       "source": "agent_live_agents_synapsisweb_agentlive_agents_provider_model_cascader_options",
-      "target": "agent_live_agents_synapsisweb_agentlive_agents_models_for_provider",
-      "confidence_score": 1.0
+      "target": "agent_live_agents_synapsisweb_agentlive_agents_models_for_provider"
     },
     {
       "relation": "calls",
@@ -63383,9 +63383,9 @@
       "source_location": "L979",
       "weight": 1.0,
       "context": "call",
+      "confidence_score": 1.0,
       "source": "agent_live_agents_synapsisweb_agentlive_agents_provider_model_cascader_options",
-      "target": "agent_live_agents_synapsisweb_agentlive_agents_model_id",
-      "confidence_score": 1.0
+      "target": "agent_live_agents_synapsisweb_agentlive_agents_model_id"
     },
     {
       "relation": "calls",
@@ -63394,9 +63394,9 @@
       "source_location": "L979",
       "weight": 1.0,
       "context": "call",
+      "confidence_score": 1.0,
       "source": "agent_live_agents_synapsisweb_agentlive_agents_provider_model_cascader_options",
-      "target": "agent_live_agents_synapsisweb_agentlive_agents_model_label",
-      "confidence_score": 1.0
+      "target": "agent_live_agents_synapsisweb_agentlive_agents_model_label"
     },
     {
       "relation": "calls",
@@ -63405,9 +63405,9 @@
       "source_location": "L993",
       "weight": 1.0,
       "context": "call",
+      "confidence_score": 1.0,
       "source": "agent_live_agents_synapsisweb_agentlive_agents_provider_model_selected_path",
-      "target": "agent_live_agents_synapsisweb_agentlive_agents_model_supported",
-      "confidence_score": 1.0
+      "target": "agent_live_agents_synapsisweb_agentlive_agents_model_supported"
     },
     {
       "relation": "calls",
@@ -63416,9 +63416,9 @@
       "source_location": "L993",
       "weight": 1.0,
       "context": "call",
+      "confidence_score": 1.0,
       "source": "agent_live_agents_synapsisweb_agentlive_agents_provider_model_selected_path",
-      "target": "agent_live_agents_synapsisweb_agentlive_agents_models_for_provider",
-      "confidence_score": 1.0
+      "target": "agent_live_agents_synapsisweb_agentlive_agents_models_for_provider"
     },
     {
       "relation": "calls",
@@ -63901,9 +63901,9 @@
       "source_file": "apps/synapsis_web/test/synapsis_web/live/agent_live/agents_test.exs",
       "source_location": "L344",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "agent_live_agents_test_synapsisweb_agentlive_agentstest",
-      "target": "agent_live_agents_test_synapsisweb_agentlive_agentstest_select_provider_model",
-      "confidence_score": 1.0
+      "target": "agent_live_agents_test_synapsisweb_agentlive_agentstest_select_provider_model"
     },
     {
       "relation": "method",
@@ -63911,9 +63911,9 @@
       "source_file": "apps/synapsis_web/test/synapsis_web/live/agent_live/agents_test.exs",
       "source_location": "L350",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "agent_live_agents_test_synapsisweb_agentlive_agentstest",
-      "target": "agent_live_agents_test_synapsisweb_agentlive_agentstest_cascader_options",
-      "confidence_score": 1.0
+      "target": "agent_live_agents_test_synapsisweb_agentlive_agentstest_cascader_options"
     },
     {
       "relation": "method",
@@ -63921,9 +63921,9 @@
       "source_file": "apps/synapsis_web/test/synapsis_web/live/agent_live/agents_test.exs",
       "source_location": "L358",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "agent_live_agents_test_synapsisweb_agentlive_agentstest",
-      "target": "agent_live_agents_test_synapsisweb_agentlive_agentstest_html_attribute_unescape",
-      "confidence_score": 1.0
+      "target": "agent_live_agents_test_synapsisweb_agentlive_agentstest_html_attribute_unescape"
     },
     {
       "relation": "method",
@@ -63931,9 +63931,9 @@
       "source_file": "apps/synapsis_web/test/synapsis_web/live/agent_live/agents_test.exs",
       "source_location": "L367",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "agent_live_agents_test_synapsisweb_agentlive_agentstest",
-      "target": "agent_live_agents_test_synapsisweb_agentlive_agentstest_cascader_model_values",
-      "confidence_score": 1.0
+      "target": "agent_live_agents_test_synapsisweb_agentlive_agentstest_cascader_model_values"
     },
     {
       "relation": "method",
@@ -63952,9 +63952,9 @@
       "source_location": "L354",
       "weight": 1.0,
       "context": "call",
+      "confidence_score": 1.0,
       "source": "agent_live_agents_test_synapsisweb_agentlive_agentstest_cascader_options",
-      "target": "agent_live_agents_test_synapsisweb_agentlive_agentstest_html_attribute_unescape",
-      "confidence_score": 1.0
+      "target": "agent_live_agents_test_synapsisweb_agentlive_agentstest_html_attribute_unescape"
     },
     {
       "relation": "contains",
@@ -90053,9 +90053,9 @@
       "source_file": "packages/hooks/src/index.ts",
       "source_location": "L10",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "packages_hooks_src_index_ts",
-      "target": "packages_hooks_src_agent_model_cascader_ts",
-      "confidence_score": 1.0
+      "target": "packages_hooks_src_agent_model_cascader_ts"
     },
     {
       "relation": "imports",
@@ -90064,9 +90064,9 @@
       "source_file": "packages/hooks/src/index.ts",
       "source_location": "L10",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "packages_hooks_src_index_ts",
-      "target": "src_agent_model_cascader_agentmodelcascaderhook",
-      "confidence_score": 1.0
+      "target": "src_agent_model_cascader_agentmodelcascaderhook"
     },
     {
       "relation": "contains",
@@ -90104,9 +90104,9 @@
       "source_file": "packages/hooks/src/agent-model-cascader.ts",
       "source_location": "L1",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "packages_hooks_src_agent_model_cascader_ts",
-      "target": "src_agent_model_cascader_cascaderchangedetail",
-      "confidence_score": 1.0
+      "target": "src_agent_model_cascader_cascaderchangedetail"
     },
     {
       "relation": "contains",
@@ -90114,9 +90114,9 @@
       "source_file": "packages/hooks/src/agent-model-cascader.ts",
       "source_location": "L6",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "packages_hooks_src_agent_model_cascader_ts",
-      "target": "src_agent_model_cascader_pathfromvalue",
-      "confidence_score": 1.0
+      "target": "src_agent_model_cascader_pathfromvalue"
     },
     {
       "relation": "contains",
@@ -90124,9 +90124,9 @@
       "source_file": "packages/hooks/src/agent-model-cascader.ts",
       "source_location": "L23",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "packages_hooks_src_agent_model_cascader_ts",
-      "target": "src_agent_model_cascader_cascadervalue",
-      "confidence_score": 1.0
+      "target": "src_agent_model_cascader_cascadervalue"
     },
     {
       "relation": "contains",
@@ -90134,9 +90134,9 @@
       "source_file": "packages/hooks/src/agent-model-cascader.ts",
       "source_location": "L27",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "packages_hooks_src_agent_model_cascader_ts",
-      "target": "src_agent_model_cascader_agentmodelcascaderhook",
-      "confidence_score": 1.0
+      "target": "src_agent_model_cascader_agentmodelcascaderhook"
     },
     {
       "relation": "contains",
@@ -91644,5 +91644,5 @@
       "source_file": "apps/synapsis_server/README.md"
     }
   ],
-  "built_at_commit": "3317b6084a4234e882f323185b2b7be3a182ef67"
+  "built_at_commit": "ff44486b9bc9ee72dc5cede589fe2e162d145d9f"
 }

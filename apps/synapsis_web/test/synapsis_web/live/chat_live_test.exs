@@ -6,10 +6,10 @@ defmodule SynapsisWeb.ChatLiveTest do
   setup do
     Synapsis.Repo.delete_all(Synapsis.AgentConfig)
 
-    {:ok, _build} =
+    {:ok, _main} =
       AgentConfigs.create(%{
-        name: "build",
-        label: "Build",
+        name: "main",
+        label: "Main",
         provider: "anthropic",
         model: "test-model"
       })

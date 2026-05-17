@@ -28,7 +28,7 @@ defmodule SynapsisWeb.SessionLive.Show do
             {session.provider, session_models}
           end
 
-        agent_mode = session.agent || "build"
+        agent_mode = session.agent || "main"
         session_mode = derive_mode(session)
 
         # Subscribe to debug events for this session
@@ -84,7 +84,7 @@ defmodule SynapsisWeb.SessionLive.Show do
 
     case Synapsis.Sessions.switch_mode(session.id, mode) do
       :ok ->
-        agent_mode = if mode == "plan_mode", do: "plan", else: "build"
+        agent_mode = "main"
 
         {:noreply,
          socket
@@ -374,13 +374,19 @@ defmodule SynapsisWeb.SessionLive.Show do
     Enum.map(models, fn m -> {m.id, m[:name] || m.id} end)
   end
 
-  defp derive_mode(%{agent: "plan"}), do: "plan_mode"
-
   defp derive_mode(%{id: session_id}) do
     case Synapsis.Tool.Permission.session_config(session_id) do
-      %{mode: :autonomous, allow_destructive: :allow} -> "bypass_permissions"
-      %{mode: :autonomous} -> "edit_automatically"
-      _ -> "ask_before_edits"
+      %{mode: :interactive, allow_write: :deny, allow_execute: :deny, allow_destructive: :deny} ->
+        "plan_mode"
+
+      %{mode: :autonomous, allow_destructive: :allow} ->
+        "bypass_permissions"
+
+      %{mode: :autonomous} ->
+        "edit_automatically"
+
+      _ ->
+        "ask_before_edits"
     end
   end
 

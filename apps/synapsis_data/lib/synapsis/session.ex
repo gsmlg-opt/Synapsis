@@ -8,7 +8,7 @@ defmodule Synapsis.Session do
 
   schema "sessions" do
     field(:title, :string)
-    field(:agent, :string, default: "build")
+    field(:agent, :string, default: "main")
     field(:provider, :string)
     field(:model, :string)
     field(:status, :string, default: "idle")

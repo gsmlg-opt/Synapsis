@@ -150,7 +150,7 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
   defp create_heartbeat_session(project_path, config) do
     Synapsis.Sessions.create(project_path, %{
       title: "Heartbeat: #{config.name}",
-      agent: "build",
+      agent: "main",
       metadata: %{type: :heartbeat, heartbeat_id: config.id, heartbeat_name: config.name}
     })
   end

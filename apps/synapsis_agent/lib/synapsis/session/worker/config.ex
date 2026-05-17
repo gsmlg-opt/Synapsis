@@ -6,7 +6,7 @@ defmodule Synapsis.Session.Worker.Config do
   @valid_modes ~w(bypass_permissions ask_before_edits edit_automatically plan_mode assistant_mode)
   @mode_configs %{
     "bypass_permissions" => %{
-      agent: "build",
+      agent: "main",
       permission: %{
         mode: :autonomous,
         allow_write: :allow,
@@ -15,7 +15,7 @@ defmodule Synapsis.Session.Worker.Config do
       }
     },
     "ask_before_edits" => %{
-      agent: "build",
+      agent: "main",
       permission: %{
         mode: :interactive,
         allow_write: :ask,
@@ -24,7 +24,7 @@ defmodule Synapsis.Session.Worker.Config do
       }
     },
     "edit_automatically" => %{
-      agent: "build",
+      agent: "main",
       permission: %{
         mode: :autonomous,
         allow_write: :allow,
@@ -33,7 +33,7 @@ defmodule Synapsis.Session.Worker.Config do
       }
     },
     "plan_mode" => %{
-      agent: "plan",
+      agent: "main",
       permission: %{
         mode: :interactive,
         allow_write: :deny,
@@ -42,7 +42,7 @@ defmodule Synapsis.Session.Worker.Config do
       }
     },
     "assistant_mode" => %{
-      agent: "assistant",
+      agent: "main",
       permission: %{
         mode: :interactive,
         allow_write: :deny,
