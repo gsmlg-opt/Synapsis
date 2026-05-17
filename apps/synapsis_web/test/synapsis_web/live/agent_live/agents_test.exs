@@ -172,44 +172,51 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       assert has_element?(view, "input[name='agent[read_only]'][value='true']")
     end
 
-    test "provider model cascader only lists configured providers", %{conn: conn} do
+    test "provider model cascader lists enabled provider configs", %{conn: conn} do
       Repo.insert!(%ProviderConfig{
-        name: "anthropic",
+        name: "custom-anthropic",
         type: "anthropic",
-        base_url: "https://api.anthropic.com",
-        enabled: true
-      })
-
-      Repo.insert!(%ProviderConfig{
-        name: "openrouter",
-        type: "openrouter",
-        base_url: "https://openrouter.ai/api",
-        enabled: true
-      })
-
-      Repo.insert!(%ProviderConfig{
-        name: "openai",
-        type: "openai",
-        base_url: "https://api.openai.com",
+        base_url: "https://api.example.com/anthropic",
         enabled: true
       })
 
       Repo.insert!(%ProviderConfig{
         name: "custom-openai",
         type: "openai",
-        base_url: "https://api.example.com",
-        api_key_encrypted: "sk-test",
+        base_url: "https://api.example.com/openai",
         enabled: true
+      })
+
+      Repo.insert!(%ProviderConfig{
+        name: "disabled-openai",
+        type: "openai",
+        base_url: "https://api.example.com/disabled",
+        enabled: false
       })
 
       {:ok, view, html} = live(conn, ~p"/agent/agents/new")
       provider_values = cascader_options(html) |> Enum.map(& &1["value"])
 
       assert has_element?(view, "el-dm-cascader#agent-provider-model")
-      assert provider_values == ["custom-openai"]
-      refute "anthropic" in provider_values
-      refute "openai" in provider_values
-      refute "openrouter" in provider_values
+      assert provider_values == ["custom-anthropic", "custom-openai"]
+      refute "disabled-openai" in provider_values
+    end
+
+    test "provider model cascader prefers provider family models over transport type models",
+         %{conn: conn} do
+      Repo.insert!(%ProviderConfig{
+        name: "minimax-cn",
+        type: "anthropic",
+        base_url: "https://api.minimaxi.com/anthropic",
+        api_key_encrypted: "sk-test",
+        enabled: true
+      })
+
+      {:ok, _view, html} = live(conn, ~p"/agent/agents/new")
+      minimax_models = cascader_options(html) |> cascader_model_values("minimax-cn")
+
+      assert "MiniMax-M2" in minimax_models
+      refute "claude-sonnet-4-6" in minimax_models
     end
 
     test "provider model cascader only lists models supported by each provider", %{conn: conn} do
@@ -245,6 +252,29 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
 
       assert has_element?(view, "input[name='agent[provider]'][value='openai']")
       assert has_element?(view, "input[name='agent[model]'][value='gpt-4.1-mini']")
+    end
+
+    test "provider model cascader uses saved provider model filters when registry has no match",
+         %{conn: conn} do
+      Repo.insert!(%ProviderConfig{
+        name: "custom-anthropic",
+        type: "anthropic",
+        base_url: "https://api.example.com/anthropic",
+        api_key_encrypted: "sk-test",
+        config: %{"enabled_models" => ["vendor-alpha", "vendor-beta"]},
+        enabled: true
+      })
+
+      {:ok, view, html} = live(conn, ~p"/agent/agents/new")
+      custom_models = cascader_options(html) |> cascader_model_values("custom-anthropic")
+
+      assert custom_models == ["vendor-alpha", "vendor-beta"]
+      refute "claude-sonnet-4-6" in custom_models
+
+      select_provider_model(view, "custom-anthropic", "vendor-beta")
+
+      assert has_element?(view, "input[name='agent[provider]'][value='custom-anthropic']")
+      assert has_element?(view, "input[name='agent[model]'][value='vendor-beta']")
     end
 
     test "wizard button starts step-by-step configuration", %{conn: conn} do

@@ -953,16 +953,8 @@ defmodule SynapsisWeb.AgentLive.Agents do
       list when is_list(list) -> list
       _ -> []
     end
-    |> Enum.filter(&configured_provider?/1)
     |> Enum.uniq_by(&provider_name/1)
     |> Enum.sort_by(&provider_name/1)
-  end
-
-  defp configured_provider?(%{type: "local"}), do: true
-  defp configured_provider?(%{api_key_encrypted: key}) when key not in [nil, ""], do: true
-
-  defp configured_provider?(%{config: config}) do
-    Synapsis.Provider.OAuth.OpenAI.access_token_from_config(config) not in [nil, ""]
   end
 
   defp provider_model_cascader_options(providers) do
@@ -979,7 +971,6 @@ defmodule SynapsisWeb.AgentLive.Agents do
           |> Enum.map(&%{value: model_id(&1), label: model_label(&1)})
       }
     end)
-    |> Enum.reject(&(&1.children == []))
   end
 
   defp provider_model_selected_path(providers, %AgentConfig{} = agent) do
@@ -1004,6 +995,15 @@ defmodule SynapsisWeb.AgentLive.Agents do
   defp models_for_provider(providers, provider_name) do
     provider = Enum.find(providers, &(provider_name(&1) == provider_name))
 
+    provider_configured_models(provider)
+    |> case do
+      [] -> registry_models_for_provider(provider_name, provider)
+      models -> models
+    end
+    |> filter_enabled_models(provider)
+  end
+
+  defp registry_models_for_provider(provider_name, provider) do
     provider_name
     |> provider_model_keys(provider)
     |> Enum.find_value([], fn key ->
@@ -1012,7 +1012,6 @@ defmodule SynapsisWeb.AgentLive.Agents do
         models -> models
       end
     end)
-    |> filter_enabled_models(provider)
   end
 
   defp filter_enabled_models(models, nil), do: models
@@ -1020,8 +1019,73 @@ defmodule SynapsisWeb.AgentLive.Agents do
   defp filter_enabled_models(models, provider) do
     case Providers.enabled_models(provider) do
       [] -> models
-      enabled_models -> Enum.filter(models, &(model_id(&1) in enabled_models))
+      enabled_models -> models_for_enabled_ids(models, enabled_models)
     end
+  end
+
+  defp models_for_enabled_ids(models, enabled_models) do
+    models_by_id = Map.new(models, &{model_id(&1), &1})
+
+    enabled_models
+    |> normalize_model_ids()
+    |> Enum.map(fn id -> Map.get(models_by_id, id, %{id: id, name: id}) end)
+  end
+
+  defp provider_configured_models(nil), do: []
+
+  defp provider_configured_models(provider) do
+    provider
+    |> provider_config_map()
+    |> Map.get("models", [])
+    |> normalize_configured_models()
+  end
+
+  defp provider_config_map(%{config: config}) when is_map(config) do
+    Map.new(config, fn {key, value} -> {to_string(key), value} end)
+  end
+
+  defp provider_config_map(%{"config" => config}) when is_map(config) do
+    Map.new(config, fn {key, value} -> {to_string(key), value} end)
+  end
+
+  defp provider_config_map(_provider), do: %{}
+
+  defp normalize_configured_models(models) when is_list(models) do
+    models
+    |> Enum.map(&normalize_configured_model/1)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq_by(&model_id/1)
+  end
+
+  defp normalize_configured_models(_models), do: []
+
+  defp normalize_configured_model(model) when is_binary(model) do
+    case String.trim(model) do
+      "" -> nil
+      id -> %{id: id, name: id}
+    end
+  end
+
+  defp normalize_configured_model(%{id: id} = model),
+    do: normalize_configured_model(id, model[:name])
+
+  defp normalize_configured_model(%{"id" => id} = model),
+    do: normalize_configured_model(id, model["name"])
+
+  defp normalize_configured_model(_model), do: nil
+
+  defp normalize_configured_model(id, name) do
+    id = model_id(id)
+    name = if name in [nil, ""], do: id, else: model_id(name)
+
+    if id == "", do: nil, else: %{id: id, name: name}
+  end
+
+  defp normalize_model_ids(model_ids) do
+    model_ids
+    |> Enum.map(&model_id/1)
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
   end
 
   defp model_supported?(nil, _models), do: true
@@ -1031,17 +1095,31 @@ defmodule SynapsisWeb.AgentLive.Agents do
   defp provider_model_keys(provider_name, nil), do: [provider_name]
 
   defp provider_model_keys(provider_name, provider) do
-    [provider_name, provider_type(provider), provider_family(provider_name)]
+    [provider_name, provider_family(provider_name, provider), provider_type(provider)]
     |> Enum.reject(&(&1 in [nil, ""]))
     |> Enum.uniq()
   end
 
-  defp provider_family(provider_name) do
+  defp provider_family(provider_name, provider) do
+    provider_hint =
+      [provider_name, provider_base_url(provider)]
+      |> Enum.reject(&(&1 in [nil, ""]))
+      |> Enum.join(" ")
+      |> String.downcase()
+
     cond do
-      String.starts_with?(provider_name, "moonshot") -> "moonshot"
-      String.starts_with?(provider_name, "zhipu") -> "zhipu"
-      String.starts_with?(provider_name, "minimax") -> "minimax"
-      true -> nil
+      String.contains?(provider_hint, "moonshot") ->
+        "moonshot"
+
+      String.contains?(provider_hint, "zhipu") or String.contains?(provider_hint, "bigmodel") or
+          String.contains?(provider_hint, "z.ai") ->
+        "zhipu"
+
+      String.contains?(provider_hint, "minimax") ->
+        "minimax"
+
+      true ->
+        nil
     end
   end
 
@@ -1051,6 +1129,10 @@ defmodule SynapsisWeb.AgentLive.Agents do
   defp provider_type(%{type: type}), do: type
   defp provider_type(%{"type" => type}), do: type
   defp provider_type(_provider), do: nil
+
+  defp provider_base_url(%{base_url: base_url}), do: base_url
+  defp provider_base_url(%{"base_url" => base_url}), do: base_url
+  defp provider_base_url(_provider), do: nil
 
   defp provider_label(provider) do
     case provider_type(provider) do
