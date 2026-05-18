@@ -178,9 +178,9 @@ defmodule Synapsis.Agent.Nodes.NodeTest do
   end
 
   describe "Complete" do
-    test "returns :end" do
+    test "routes back to receive" do
       state = CodingLoop.initial_state(%{session_id: Ecto.UUID.generate()})
-      assert {:end, ^state} = Nodes.Complete.run(state, %{})
+      assert {:next, :default, ^state} = Nodes.Complete.run(state, %{})
     end
   end
 end

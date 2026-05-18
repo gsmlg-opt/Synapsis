@@ -232,5 +232,22 @@ defmodule SynapsisWeb.ChatLiveTest do
       assert recovered.provider == "zhipu-coding"
       assert recovered.model == "glm-4.7"
     end
+
+    test "ignores stale active status after a completed turn", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "reviewer"})
+
+      {:ok, view, _html} = live(conn, ~p"/chat/#{session.id}")
+
+      send(view.pid, {"done", %{}})
+      render(view)
+
+      send(view.pid, {"session_status", %{status: "streaming"}})
+      html = render(view)
+
+      refute html =~ "Generating..."
+      refute has_element?(view, "el-dm-markdown-input#message-input[disabled]")
+      assert Repo.get!(Session, session.id).status == "idle"
+    end
   end
 end

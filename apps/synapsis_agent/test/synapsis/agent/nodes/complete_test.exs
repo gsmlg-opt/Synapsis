@@ -27,13 +27,13 @@ defmodule Synapsis.Agent.Nodes.CompleteTest do
   end
 
   describe "run/2" do
-    test "ends the graph and returns state", %{session: session} do
+    test "routes the graph back to receive and returns state", %{session: session} do
       state = %{
         session_id: session.id,
         iteration_count: 5
       }
 
-      assert {:end, ^state} = Complete.run(state, %{})
+      assert {:next, :default, ^state} = Complete.run(state, %{})
     end
 
     test "broadcasts done and session_status events", %{session: session} do

@@ -5,7 +5,7 @@ defmodule Synapsis.Agent.Nodes.Complete do
   require Logger
 
   @impl true
-  @spec run(map(), map()) :: {:end, map()}
+  @spec run(map(), map()) :: {:next, atom(), map()}
   def run(state, _ctx) do
     session_id = state.session_id
 
@@ -29,6 +29,6 @@ defmodule Synapsis.Agent.Nodes.Complete do
       iterations: state.iteration_count
     )
 
-    {:end, state}
+    {:next, :default, state}
   end
 end

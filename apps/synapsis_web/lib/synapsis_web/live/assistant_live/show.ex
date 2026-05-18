@@ -296,14 +296,14 @@ defmodule SynapsisWeb.AssistantLive.Show do
   end
 
   def handle_info({"session_status", %{status: status}}, socket) do
-    {:noreply, assign(socket, :session_status, status)}
+    {:noreply, assign_session_status(socket, status)}
   end
 
   def handle_info({"error", %{message: msg}}, socket) do
     {:noreply,
      socket
      |> put_flash(:error, msg)
-     |> assign(:session_status, "error")}
+     |> assign_session_status("error")}
   end
 
   def handle_info({"agent_switched", %{agent: agent}}, socket) do
@@ -645,6 +645,50 @@ defmodule SynapsisWeb.AssistantLive.Show do
   defp load_sessions(agent_name) do
     Sessions.recent(limit: 50)
     |> Enum.filter(&(&1.agent == agent_name))
+  end
+
+  defp assign_session_status(socket, status) when status in ~w(streaming tool_executing) do
+    case fetch_current_session(socket) do
+      {:ok, %{status: terminal_status} = session} when terminal_status in ~w(idle error) ->
+        socket
+        |> assign(:current_session, session)
+        |> clear_transient_generation()
+        |> assign(:session_status, terminal_status)
+
+      _ ->
+        assign(socket, :session_status, status)
+    end
+  end
+
+  defp assign_session_status(socket, status) when status in ~w(idle error) do
+    socket
+    |> maybe_refresh_current_session()
+    |> clear_transient_generation()
+    |> assign(:session_status, status)
+  end
+
+  defp assign_session_status(socket, status), do: assign(socket, :session_status, status)
+
+  defp maybe_refresh_current_session(socket) do
+    case fetch_current_session(socket) do
+      {:ok, session} -> assign(socket, :current_session, session)
+      _ -> socket
+    end
+  end
+
+  defp fetch_current_session(%{assigns: %{current_session: %{id: id}}}) do
+    Sessions.get(id)
+  end
+
+  defp fetch_current_session(_socket), do: {:error, :not_found}
+
+  defp clear_transient_generation(socket) do
+    assign(socket,
+      streaming_text: "",
+      streaming_reasoning: "",
+      tool_calls: %{},
+      permission_requests: []
+    )
   end
 
   defp update_code_agent(socket, sub_id, "tool_use", %{tool: name}) do

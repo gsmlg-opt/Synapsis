@@ -3,6 +3,13 @@ defmodule Synapsis.SessionsTest do
 
   alias Synapsis.{Sessions, Message, ProviderConfig, Repo}
 
+  defmodule TerminalNode do
+    @behaviour Synapsis.Agent.Runtime.Node
+
+    @impl true
+    def run(state, _ctx), do: {:end, state}
+  end
+
   setup do
     Repo.delete_all(ProviderConfig)
     :ok
@@ -360,6 +367,39 @@ defmodule Synapsis.SessionsTest do
       assert result == :ok
     end
 
+    test "accepts another message after a graph turn completes" do
+      {:ok, session} =
+        Sessions.create("/tmp/test_sess_multi_turn_#{:rand.uniform(100_000)}", %{
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}")
+      [{worker_pid, _}] = Registry.lookup(Synapsis.Session.Registry, session.id)
+
+      assert :ok = Sessions.send_message(session.id, "first")
+
+      complete_graph_turn(worker_pid)
+      assert_receive {"session_status", %{status: "idle"}}, 1_000
+
+      assert :ok = Sessions.send_message(session.id, "second")
+      Synapsis.Session.DynamicSupervisor.stop_session(session.id)
+    end
+
+    test "restarts a terminal graph runner before sending" do
+      {:ok, session} =
+        Sessions.create("/tmp/test_sess_terminal_runner_#{:rand.uniform(100_000)}", %{
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      [{worker_pid, _}] = Registry.lookup(Synapsis.Session.Registry, session.id)
+      replace_runner_with_terminal_runner(worker_pid, session.id)
+
+      assert :ok = Sessions.send_message(session.id, "after terminal runner")
+      Synapsis.Session.DynamicSupervisor.stop_session(session.id)
+    end
+
     test "ensure_running/1 is a no-op when worker is already running" do
       {:ok, session} =
         Sessions.create("/tmp/test_sess_ensure_#{:rand.uniform(100_000)}", %{
@@ -369,6 +409,56 @@ defmodule Synapsis.SessionsTest do
 
       # Worker is already started by create/2, ensure_running should be a no-op
       assert :ok = Sessions.ensure_running(session.id)
+    end
+  end
+
+  defp replace_runner_with_terminal_runner(worker_pid, run_id) do
+    old_runner_pid = :sys.get_state(worker_pid).runner_pid
+    if Process.alive?(old_runner_pid), do: GenServer.stop(old_runner_pid, :normal, 5_000)
+
+    {:ok, runner_pid} =
+      Synapsis.Agent.Runtime.Runner.start_link(
+        graph: %{
+          nodes: %{done: __MODULE__.TerminalNode},
+          edges: %{done: :end},
+          start: :done
+        },
+        state: %{},
+        run_id: run_id
+      )
+
+    assert %{status: :completed} = Synapsis.Agent.Runtime.Runner.await(runner_pid)
+
+    :sys.replace_state(worker_pid, fn state ->
+      %{state | runner_pid: runner_pid}
+    end)
+  end
+
+  defp complete_graph_turn(worker_pid) do
+    receive do
+      {"done", %{}} ->
+        :ok
+    after
+      100 ->
+        assert runner_waiting_on?(worker_pid, :llm_stream)
+        send(worker_pid, :provider_done)
+        assert_receive {"done", %{}}, 1_000
+    end
+  end
+
+  defp runner_waiting_on?(worker_pid, node, attempts \\ 20)
+  defp runner_waiting_on?(_worker_pid, _node, 0), do: false
+
+  defp runner_waiting_on?(worker_pid, node, attempts) do
+    runner_pid = :sys.get_state(worker_pid).runner_pid
+
+    case Synapsis.Agent.Runtime.Runner.snapshot(runner_pid) do
+      %{status: :waiting, node: ^node} ->
+        true
+
+      _snapshot ->
+        Process.sleep(25)
+        runner_waiting_on?(worker_pid, node, attempts - 1)
     end
   end
 
