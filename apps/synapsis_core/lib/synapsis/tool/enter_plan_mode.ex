@@ -38,13 +38,13 @@ defmodule Synapsis.Tool.EnterPlanMode do
 
           session ->
             case session
-                 |> Synapsis.Session.changeset(%{agent: "plan"})
+                 |> Synapsis.Session.changeset(%{agent: "main"})
                  |> Synapsis.Repo.update() do
               {:ok, _updated} ->
                 Phoenix.PubSub.broadcast(
                   Synapsis.PubSub,
                   "session:#{session_id}",
-                  {:agent_mode_changed, :plan}
+                  {:agent_mode_changed, :main}
                 )
 
                 {:ok, "Entered plan mode"}

@@ -7,11 +7,10 @@ defmodule Synapsis.ConfigTest do
     test "returns expected default config structure" do
       config = Config.defaults()
       assert is_map(config["agents"])
-      assert is_map(config["agents"]["build"])
-      assert is_map(config["agents"]["plan"])
-      assert config["agents"]["plan"]["readOnly"] == true
-      assert "file_read" in config["agents"]["build"]["tools"]
-      assert "bash" in config["agents"]["build"]["tools"]
+      assert is_map(config["agents"]["main"])
+      assert Map.keys(config["agents"]) == ["main"]
+      assert "file_read" in config["agents"]["main"]["tools"]
+      assert "bash" in config["agents"]["main"]["tools"]
     end
   end
 
@@ -58,15 +57,15 @@ defmodule Synapsis.ConfigTest do
   end
 
   describe "defaults/0 structure" do
-    test "build agent has fetch tool" do
+    test "main agent has fetch tool" do
       config = Config.defaults()
-      assert "fetch" in config["agents"]["build"]["tools"]
+      assert "fetch" in config["agents"]["main"]["tools"]
     end
 
-    test "plan agent is read-only with high reasoning effort" do
+    test "main agent is write-enabled with medium reasoning effort" do
       config = Config.defaults()
-      assert config["agents"]["plan"]["readOnly"] == true
-      assert config["agents"]["plan"]["reasoningEffort"] == "high"
+      assert config["agents"]["main"]["readOnly"] == false
+      assert config["agents"]["main"]["reasoningEffort"] == "medium"
     end
 
     test "top-level keys exist" do

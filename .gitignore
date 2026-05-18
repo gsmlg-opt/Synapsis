@@ -101,3 +101,8 @@ devenv.local.nix
 
 # app
 .secrets.toml
+
+# graphify
+graphify-out/cache/
+graphify-out/*.lock
+/graphify-out

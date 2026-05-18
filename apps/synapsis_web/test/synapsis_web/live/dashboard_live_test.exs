@@ -21,13 +21,24 @@ defmodule SynapsisWeb.DashboardLiveTest do
     end
 
     test "renders appbar navigation links", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/")
-      assert html =~ "Assistant"
-      assert html =~ "Providers"
-      assert html =~ "MCP"
-      assert html =~ "LSP"
-      # Settings is rendered as an icon link to /settings
-      assert html =~ ~s(href="/settings")
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      assert has_element?(view, "header.appbar .appbar-trailing a[href='/chat']", "Chat")
+
+      assert has_element?(
+               view,
+               "header.appbar .appbar-trailing a[href='/agent/agents']",
+               "Agent"
+             )
+
+      assert has_element?(view, "header.appbar .appbar-trailing a[href='/settings']", "Settings")
+      assert has_element?(view, "header.appbar .appbar-trailing [phx-hook='ThemeSwitcher']")
+
+      refute has_element?(view, "header.appbar a[href='/projects']")
+      refute has_element?(view, "header.appbar a[href='/workspace']")
+      refute has_element?(view, "header.appbar a[href='/settings/providers']")
+      refute has_element?(view, "header.appbar a[href='/settings/mcp']")
+      refute has_element?(view, "header.appbar a[href='/settings/lsp']")
     end
 
     test "lists projects when they exist", %{conn: conn} do

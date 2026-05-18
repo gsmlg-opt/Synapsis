@@ -104,6 +104,23 @@ defmodule SynapsisWeb.AssistantLive.ShowTest do
       assert html =~ "morning-briefing"
       assert html =~ "Test result"
     end
+
+    test "ignores stale active status after a completed turn", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "build"})
+
+      {:ok, view, _html} = live(conn, ~p"/assistant/build/sessions/#{session.id}")
+
+      send(view.pid, {"done", %{}})
+      render(view)
+
+      send(view.pid, {"session_status", %{status: "streaming"}})
+      html = render(view)
+
+      refute html =~ "Generating..."
+      refute has_element?(view, "el-dm-markdown-input#message-input[disabled]")
+      assert Synapsis.Repo.get!(Synapsis.Session, session.id).status == "idle"
+    end
   end
 
   describe "chat_bubble component label rendering" do

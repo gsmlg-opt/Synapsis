@@ -73,7 +73,7 @@ defmodule Synapsis.Agent.ToolDispatcher do
 
     Task.Supervisor.async_nolink(Synapsis.Tool.TaskSupervisor, fn ->
       result =
-        Synapsis.Tool.Executor.execute(tool_use.tool, tool_use.input, %{
+        Synapsis.Tool.Executor.execute_approved(tool_use.tool, tool_use.input, %{
           project_path: effective_path,
           session_id: session_id,
           working_dir: effective_path,

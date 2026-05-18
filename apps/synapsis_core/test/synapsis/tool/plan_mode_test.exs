@@ -34,18 +34,18 @@ defmodule Synapsis.Tool.PlanModeTest do
       assert %{"type" => "object"} = EnterPlanMode.parameters()
     end
 
-    test "broadcasts agent_mode_changed :plan and persists to DB", %{session: session} do
+    test "broadcasts agent_mode_changed :main and keeps main agent in DB", %{session: session} do
       topic = "session:#{session.id}"
       Phoenix.PubSub.subscribe(Synapsis.PubSub, topic)
 
       assert {:ok, msg} = EnterPlanMode.execute(%{}, %{session_id: session.id})
       assert msg =~ "plan mode"
 
-      assert_receive {:agent_mode_changed, :plan}
+      assert_receive {:agent_mode_changed, :main}
 
       # Verify DB was updated
       updated = Repo.get!(Synapsis.Session, session.id)
-      assert updated.agent == "plan"
+      assert updated.agent == "main"
     end
 
     test "returns error without session_id" do
@@ -63,7 +63,7 @@ defmodule Synapsis.Tool.PlanModeTest do
       assert %{"type" => "object"} = ExitPlanMode.parameters()
     end
 
-    test "broadcasts agent_mode_changed :build and plan_submitted with plan text", %{
+    test "broadcasts agent_mode_changed :main and plan_submitted with plan text", %{
       session: session
     } do
       topic = "session:#{session.id}"
@@ -75,11 +75,11 @@ defmodule Synapsis.Tool.PlanModeTest do
       assert msg =~ "Exited plan mode"
 
       assert_receive {:plan_submitted, ^plan_text}
-      assert_receive {:agent_mode_changed, :build}
+      assert_receive {:agent_mode_changed, :main}
 
       # Verify DB was updated
       updated = Repo.get!(Synapsis.Session, session.id)
-      assert updated.agent == "build"
+      assert updated.agent == "main"
     end
 
     test "broadcasts with nil plan when no plan given", %{session: session} do
@@ -89,7 +89,7 @@ defmodule Synapsis.Tool.PlanModeTest do
       assert {:ok, _} = ExitPlanMode.execute(%{}, %{session_id: session.id})
 
       assert_receive {:plan_submitted, nil}
-      assert_receive {:agent_mode_changed, :build}
+      assert_receive {:agent_mode_changed, :main}
     end
 
     test "returns error without session_id" do

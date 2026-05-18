@@ -20,22 +20,23 @@ defmodule SynapsisWeb.SettingsLiveTest do
       assert html =~ "Manage persistent memory entries across scopes."
     end
 
-    test "renders skills link", %{conn: conn} do
+    test "does not render agent skills link", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/settings")
-      assert html =~ "Skills"
-      assert html =~ "Create and edit skill definitions with custom prompts."
+      refute html =~ ~p"/settings/skills"
+      refute html =~ "Create and edit skill definitions with custom prompts."
     end
 
-    test "renders MCP servers link", %{conn: conn} do
+    test "does not render MCP servers link", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/settings")
-      assert html =~ "MCP Servers"
-      assert html =~ "Configure Model Context Protocol server connections."
+      refute html =~ ~p"/settings/mcp"
+      refute html =~ "Configure Model Context Protocol server connections."
     end
 
-    test "renders LSP servers link", %{conn: conn} do
+    test "does not render LSP servers link", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/settings")
-      assert html =~ "LSP Servers"
-      assert html =~ "Configure Language Server Protocol integrations."
+      refute html =~ ~p"/settings/lsp"
+      refute html =~ "LSP Servers"
+      refute html =~ "Configure Language Server Protocol integrations."
     end
 
     test "heading is present and page mounts correctly", %{conn: conn} do
@@ -51,14 +52,17 @@ defmodule SynapsisWeb.SettingsLiveTest do
       assert html =~ "View default, fast, and expert model tiers per provider."
     end
 
+    test "renders theme control in settings content", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings")
+      assert has_element?(view, "[data-testid='settings-theme-switcher']")
+    end
+
     test "all setting cards are rendered", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/settings")
       assert html =~ ~p"/settings/providers"
       assert html =~ ~p"/settings/models"
       assert html =~ ~p"/settings/memory"
-      assert html =~ ~p"/settings/skills"
-      assert html =~ ~p"/settings/mcp"
-      assert html =~ ~p"/settings/lsp"
+      refute html =~ ~p"/settings/lsp"
     end
 
     test "each card has a heading and description", %{conn: conn} do
@@ -66,9 +70,7 @@ defmodule SynapsisWeb.SettingsLiveTest do
       assert has_element?(view, "[slot=\"header\"]", "Providers")
       assert has_element?(view, "[slot=\"header\"]", "Default Model")
       assert has_element?(view, "[slot=\"header\"]", "Memory")
-      assert has_element?(view, "[slot=\"header\"]", "Skills")
-      assert has_element?(view, "[slot=\"header\"]", "MCP Servers")
-      assert has_element?(view, "[slot=\"header\"]", "LSP Servers")
+      refute has_element?(view, "[slot=\"header\"]", "LSP Servers")
     end
   end
 end

@@ -6,7 +6,11 @@ defmodule Synapsis.SessionTest do
   setup do
     {:ok, project} =
       %Project{}
-      |> Project.changeset(%{path: "/tmp/session_test_#{:rand.uniform(100_000)}", slug: "session-test-#{:rand.uniform(100_000)}", name: "session-test-#{:rand.uniform(100_000)}"})
+      |> Project.changeset(%{
+        path: "/tmp/session_test_#{:rand.uniform(100_000)}",
+        slug: "session-test-#{:rand.uniform(100_000)}",
+        name: "session-test-#{:rand.uniform(100_000)}"
+      })
       |> Repo.insert()
 
     %{project: project}
@@ -86,7 +90,7 @@ defmodule Synapsis.SessionTest do
     end
 
     test "allows valid agents", %{project: project} do
-      for agent <- ~w(build plan custom) do
+      for agent <- ~w(main custom) do
         cs =
           %Session{}
           |> Session.changeset(%{
@@ -101,9 +105,12 @@ defmodule Synapsis.SessionTest do
     end
 
     test "sets defaults" do
-      cs = %Session{} |> Session.changeset(%{provider: "p", model: "m", project_id: Ecto.UUID.generate()})
+      cs =
+        %Session{}
+        |> Session.changeset(%{provider: "p", model: "m", project_id: Ecto.UUID.generate()})
+
       assert get_field(cs, :status) == "idle"
-      assert get_field(cs, :agent) == "build"
+      assert get_field(cs, :agent) == "main"
       assert get_field(cs, :config) == %{}
     end
   end
@@ -141,14 +148,14 @@ defmodule Synapsis.SessionTest do
       assert found.status == "idle"
     end
 
-    test "agent defaults to build when not provided", %{project: project} do
+    test "agent defaults to main when not provided", %{project: project} do
       {:ok, session} =
         %Session{}
         |> Session.changeset(%{provider: "p", model: "m", project_id: project.id})
         |> Repo.insert()
 
       found = Repo.get!(Session, session.id)
-      assert found.agent == "build"
+      assert found.agent == "main"
     end
 
     test "config defaults to empty map when not provided", %{project: project} do
@@ -169,7 +176,7 @@ defmodule Synapsis.SessionTest do
 
       found = Repo.get!(Session, session.id)
       assert found.status == "idle"
-      assert found.agent == "build"
+      assert found.agent == "main"
       assert found.config == %{}
     end
   end
@@ -191,7 +198,12 @@ defmodule Synapsis.SessionTest do
     test "transitions from streaming to tool_executing", %{project: project} do
       {:ok, session} =
         %Session{}
-        |> Session.changeset(%{provider: "p", model: "m", project_id: project.id, status: "streaming"})
+        |> Session.changeset(%{
+          provider: "p",
+          model: "m",
+          project_id: project.id,
+          status: "streaming"
+        })
         |> Repo.insert()
 
       cs = Session.status_changeset(session, "tool_executing")
@@ -203,7 +215,12 @@ defmodule Synapsis.SessionTest do
     test "transitions from tool_executing back to idle", %{project: project} do
       {:ok, session} =
         %Session{}
-        |> Session.changeset(%{provider: "p", model: "m", project_id: project.id, status: "tool_executing"})
+        |> Session.changeset(%{
+          provider: "p",
+          model: "m",
+          project_id: project.id,
+          status: "tool_executing"
+        })
         |> Repo.insert()
 
       cs = Session.status_changeset(session, "idle")
@@ -216,7 +233,12 @@ defmodule Synapsis.SessionTest do
       for initial_status <- ~w(idle streaming tool_executing) do
         {:ok, session} =
           %Session{}
-          |> Session.changeset(%{provider: "p", model: "m", project_id: project.id, status: initial_status})
+          |> Session.changeset(%{
+            provider: "p",
+            model: "m",
+            project_id: project.id,
+            status: initial_status
+          })
           |> Repo.insert()
 
         cs = Session.status_changeset(session, "error")
@@ -236,7 +258,9 @@ defmodule Synapsis.SessionTest do
       refute cs.valid?
     end
 
-    test "nil status passes changeset validation but fails on DB not-null constraint", %{project: project} do
+    test "nil status passes changeset validation but fails on DB not-null constraint", %{
+      project: project
+    } do
       {:ok, session} =
         %Session{}
         |> Session.changeset(%{provider: "p", model: "m", project_id: project.id})
@@ -289,7 +313,12 @@ defmodule Synapsis.SessionTest do
     test "config can be updated after creation", %{project: project} do
       {:ok, session} =
         %Session{}
-        |> Session.changeset(%{provider: "p", model: "m", project_id: project.id, config: %{"a" => 1}})
+        |> Session.changeset(%{
+          provider: "p",
+          model: "m",
+          project_id: project.id,
+          config: %{"a" => 1}
+        })
         |> Repo.insert()
 
       {:ok, updated} =

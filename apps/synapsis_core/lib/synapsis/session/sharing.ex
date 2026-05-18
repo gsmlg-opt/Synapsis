@@ -74,7 +74,7 @@ defmodule Synapsis.Session.Sharing do
         project_id: project.id,
         provider: session_data["provider"] || "anthropic",
         model: session_data["model"] || Synapsis.Providers.default_model("anthropic"),
-        agent: session_data["agent"] || "build",
+        agent: session_data["agent"] || "main",
         title: "[Imported] #{session_data["title"] || "session"}"
       }
 

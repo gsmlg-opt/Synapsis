@@ -39,7 +39,7 @@ defmodule Synapsis.Agent.Graphs.CodingLoop do
           terminate: :complete
         },
         escalate: :build_prompt,
-        complete: :end
+        complete: :receive
       },
       start: :receive
     })

@@ -844,7 +844,7 @@ defmodule SynapsisWeb.AssistantLive.Setting do
       />
       <:action>
         <.dm_link
-          navigate={~p"/settings/skills"}
+          navigate={~p"/agent/skills"}
           class="text-xs text-on-surface-variant hover:text-primary"
         >
           Manage skills

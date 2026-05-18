@@ -6,9 +6,11 @@ defmodule Synapsis.Session.Worker do
   alias Synapsis.Session.Stream, as: SessionStream
   alias Synapsis.Session.WorkspaceManager
   alias Synapsis.Session.Worker.{Boot, Config, IOHandler, Persistence}
+  alias Synapsis.Agent.Graphs.CodingLoop
   alias Synapsis.Agent.Runtime.Runner
 
   @timeout :timer.minutes(30)
+  @runner_ready_timeout 1_000
 
   defstruct [
     :session_id,
@@ -76,16 +78,25 @@ defmodule Synapsis.Session.Worker do
 
   @impl true
   def handle_call({:send_message, content, image_parts}, _from, state) do
-    Persistence.persist_user_message(state.session_id, content, image_parts)
-    Persistence.set_status(state.session_id, "streaming")
-
     case state.execution_mode do
       :query_loop ->
-        new_state = start_query_loop(content, state)
-        {:reply, :ok, new_state, @timeout}
+        case persist_user_message(state, content, image_parts) do
+          :ok ->
+            new_state = start_query_loop(content, state)
+            {:reply, :ok, new_state, @timeout}
+
+          {:error, reason} ->
+            {:reply, {:error, reason}, state, @timeout}
+        end
 
       :graph ->
-        resume_reply(state, %{user_input: content, image_parts: image_parts})
+        with {:ok, ready_state} <- prepare_graph_runner_for_message(state),
+             :ok <- persist_user_message(ready_state, content, image_parts) do
+          resume_reply(ready_state, %{user_input: content, image_parts: image_parts})
+        else
+          {:error, reason} ->
+            {:reply, {:error, reason}, state, @timeout}
+        end
     end
   end
 
@@ -271,6 +282,122 @@ defmodule Synapsis.Session.Worker do
     end
   end
 
+  defp persist_user_message(state, content, image_parts) do
+    case Persistence.persist_user_message(state.session_id, content, image_parts) do
+      :ok ->
+        Persistence.set_status(state.session_id, "streaming")
+        :ok
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp prepare_graph_runner_for_message(state) do
+    case runner_snapshot(state.runner_pid) do
+      {:ok, %{status: :waiting, node: :receive}} ->
+        {:ok, state}
+
+      {:ok, %{status: :running, node: node}} when node in [:receive, :complete] ->
+        await_graph_runner_ready(state)
+
+      {:ok, %{status: status}} when status in [:completed, :failed] ->
+        restart_graph_runner(state)
+
+      {:ok, %{status: :waiting, node: node}} ->
+        {:error, {:runner_waiting_on, node}}
+
+      {:ok, %{status: status, node: node}} ->
+        {:error, {:runner_not_ready, status, node}}
+
+      {:error, :no_runner} ->
+        restart_graph_runner(state)
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp runner_snapshot(nil), do: {:error, :no_runner}
+
+  defp runner_snapshot(pid) do
+    {:ok, Runner.snapshot(pid)}
+  catch
+    :exit, reason -> {:error, reason}
+  end
+
+  defp await_graph_runner_ready(state) do
+    case Runner.await(state.runner_pid, @runner_ready_timeout) do
+      %{status: :waiting, node: :receive} ->
+        {:ok, state}
+
+      %{status: status, node: node} ->
+        {:error, {:runner_not_ready, status, node}}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  catch
+    :exit, reason -> {:error, reason}
+  end
+
+  defp restart_graph_runner(state) do
+    stop_runner(state.runner_pid)
+
+    case start_graph_runner(state) do
+      {:ok, runner_pid} ->
+        await_graph_runner_ready(%{
+          state
+          | runner_pid: runner_pid,
+            stream_ref: nil,
+            stream_acc: Synapsis.Agent.StreamAccumulator.new(),
+            pending_tool_count: 0,
+            pending_approvals: MapSet.new(),
+            approval_decisions: %{}
+        })
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp start_graph_runner(state) do
+    with {:ok, graph} <- CodingLoop.build() do
+      Runner.start_link(
+        graph: graph,
+        state:
+          CodingLoop.initial_state(%{
+            session_id: state.session_id,
+            provider_config: state.provider_config,
+            agent_config: state.agent,
+            worktree_path: state.worktree_path
+          }),
+        ctx: graph_ctx(state),
+        run_id: state.session_id
+      )
+    end
+  end
+
+  defp graph_ctx(state) do
+    agent = state.agent || %{}
+
+    %{
+      provider: agent[:provider] || state.session.provider,
+      model: agent[:model] || state.session.model,
+      project_path: state.project_path,
+      project_id: to_string(state.session.project_id)
+    }
+  end
+
+  defp stop_runner(nil), do: :ok
+
+  defp stop_runner(pid) when is_pid(pid) do
+    if Process.alive?(pid), do: GenServer.stop(pid, :normal, 5_000)
+    :ok
+  catch
+    :exit, _reason -> :ok
+  end
+
   # -- QueryLoop helpers --
 
   defp start_query_loop(content, state) do
@@ -282,6 +409,14 @@ defmodule Synapsis.Session.Worker do
       max_turns: Map.get(state.agent || %{}, :max_turns, 50)
     }
 
+    agent_config =
+      (state.agent || %{})
+      |> Map.merge(%{
+        agent_type: agent_type_from_name((state.agent || %{})[:name]),
+        project_id: state.session && state.session.project_id,
+        name: (state.agent || %{})[:name]
+      })
+
     loop_ctx = %Synapsis.Agent.QueryLoop.Context{
       session_id: state.session_id,
       system_prompt: :dynamic,
@@ -291,11 +426,7 @@ defmodule Synapsis.Session.Worker do
       subscriber: self(),
       project_path: state.project_path,
       working_dir: state.worktree_path || state.project_path,
-      agent_config: %{
-        agent_type: agent_type_from_name((state.agent || %{})[:name]),
-        project_id: state.session && state.session.project_id,
-        name: (state.agent || %{})[:name]
-      }
+      agent_config: agent_config
     }
 
     task = Task.async(fn -> Synapsis.Agent.QueryLoop.run(loop_state, loop_ctx) end)

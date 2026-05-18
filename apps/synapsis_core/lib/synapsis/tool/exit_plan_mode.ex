@@ -45,7 +45,7 @@ defmodule Synapsis.Tool.ExitPlanMode do
 
           session ->
             case session
-                 |> Synapsis.Session.changeset(%{agent: "build"})
+                 |> Synapsis.Session.changeset(%{agent: "main"})
                  |> Synapsis.Repo.update() do
               {:ok, _updated} ->
                 Phoenix.PubSub.broadcast(
@@ -57,7 +57,7 @@ defmodule Synapsis.Tool.ExitPlanMode do
                 Phoenix.PubSub.broadcast(
                   Synapsis.PubSub,
                   "session:#{session_id}",
-                  {:agent_mode_changed, :build}
+                  {:agent_mode_changed, :main}
                 )
 
                 {:ok, "Exited plan mode"}

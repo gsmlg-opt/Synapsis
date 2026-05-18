@@ -309,10 +309,7 @@ defmodule SynapsisWeb.CoreComponents do
     items = [
       %{to: ~p"/settings/providers", icon: "cloud", label: "Providers"},
       %{to: ~p"/settings/models", icon: "tune", label: "Default Model"},
-      %{to: ~p"/settings/memory", icon: "brain", label: "Memory"},
-      %{to: ~p"/settings/skills", icon: "lightning-bolt", label: "Skills"},
-      %{to: ~p"/settings/mcp", icon: "puzzle", label: "MCP Servers"},
-      %{to: ~p"/settings/lsp", icon: "code-braces", label: "LSP Servers"}
+      %{to: ~p"/settings/memory", icon: "brain", label: "Memory"}
     ]
 
     assigns = assign(assigns, :items, items)

@@ -2,7 +2,7 @@ defmodule Synapsis.Agent.ResolverTest do
   use ExUnit.Case, async: false
 
   alias Synapsis.Agent.Resolver
-  alias Synapsis.{AgentConfig, AgentConfigs, Repo}
+  alias Synapsis.{AgentConfig, AgentConfigs, AgentSkills, Repo, Skills, Toolsets}
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
@@ -13,9 +13,9 @@ defmodule Synapsis.Agent.ResolverTest do
   end
 
   describe "resolve/1 with no DB records (hardcoded fallback)" do
-    test "returns default build agent config" do
-      agent = Resolver.resolve("build")
-      assert agent.name == "build"
+    test "returns default main agent config" do
+      agent = Resolver.resolve("main")
+      assert agent.name == "main"
       assert agent.read_only == false
       assert agent.reasoning_effort == "medium"
       assert agent.max_tokens == 8192
@@ -25,18 +25,8 @@ defmodule Synapsis.Agent.ResolverTest do
       assert String.length(agent.system_prompt) > 0
     end
 
-    test "returns default plan agent config" do
-      agent = Resolver.resolve("plan")
-      assert agent.name == "plan"
-      assert agent.read_only == true
-      assert agent.reasoning_effort == "high"
-      assert agent.max_tokens == 8192
-      refute "bash" in agent.tools
-      assert "file_read" in agent.tools
-    end
-
     test "returns proper structure with all expected keys" do
-      agent = Resolver.resolve("build")
+      agent = Resolver.resolve("main")
 
       assert Map.has_key?(agent, :name)
       assert Map.has_key?(agent, :model)
@@ -47,10 +37,12 @@ defmodule Synapsis.Agent.ResolverTest do
       assert Map.has_key?(agent, :read_only)
       assert Map.has_key?(agent, :max_tokens)
       assert Map.has_key?(agent, :model_tier)
+      assert Map.has_key?(agent, :workspace_path)
+      assert agent.workspace_path == "~/.synapsis/agents/main"
     end
 
-    test "default build agent includes all expected tools" do
-      agent = Resolver.resolve("build")
+    test "default main agent includes all expected tools" do
+      agent = Resolver.resolve("main")
 
       # Filesystem + Search + Execution + Web + Planning + Orchestration +
       # Interaction + Session + Memory + Workflow + Repo/Worktree + Diagnostics
@@ -65,67 +57,54 @@ defmodule Synapsis.Agent.ResolverTest do
         worktree_create worktree_list worktree_remove
         diagnostics
       ) do
-        assert tool in agent.tools, "expected #{tool} in build agent tools"
+        assert tool in agent.tools, "expected #{tool} in main agent tools"
       end
     end
 
-    test "default plan agent includes only read-only tools" do
-      agent = Resolver.resolve("plan")
-      expected_tools = ["file_read", "grep", "glob", "diagnostics"]
-      assert agent.tools == expected_tools
-    end
-
-    test "unknown agent name falls back to build agent defaults" do
+    test "retired and unknown agent names fall back to main agent defaults" do
       agent = Resolver.resolve("unknown_agent_xyz")
-      build = Resolver.resolve("build")
+      main = Resolver.resolve("main")
 
-      assert agent.tools == build.tools
-      assert agent.read_only == build.read_only
-      assert agent.system_prompt == build.system_prompt
-      assert agent.max_tokens == build.max_tokens
-    end
-
-    test "returns default assistant agent config" do
-      agent = Resolver.resolve("assistant")
-      assert agent.name == "assistant"
-      assert agent.read_only == false
-      assert agent.reasoning_effort == "high"
-      assert agent.max_tokens == 8192
-      assert agent.model_tier == :expert
-      assert "task" in agent.tools
-      assert "ask_user" in agent.tools
-      refute "file_read" in agent.tools
-      refute "file_edit" in agent.tools
-      refute "bash" in agent.tools
-    end
-
-    test "assistant config includes orchestration tools but no filesystem tools" do
-      agent = Resolver.resolve("assistant")
-      # Should have these
-      for tool <- ~w(task ask_user web_search todo_read todo_write enter_plan_mode exit_plan_mode) do
-        assert tool in agent.tools, "expected #{tool} in assistant tools"
+      for retired_name <- ~w(assistant build plan) do
+        retired = Resolver.resolve(retired_name)
+        assert retired.name == "main"
+        assert retired.tools == main.tools
+        assert retired.read_only == main.read_only
+        assert retired.system_prompt == main.system_prompt
+        assert retired.max_tokens == main.max_tokens
       end
 
-      # Should NOT have these
-      for tool <- ~w(file_read file_edit file_write bash grep glob) do
-        refute tool in agent.tools, "did not expect #{tool} in assistant tools"
-      end
+      assert agent.name == "main"
+      assert agent.tools == main.tools
+      assert agent.read_only == main.read_only
+      assert agent.system_prompt == main.system_prompt
+      assert agent.max_tokens == main.max_tokens
     end
 
     test "accepts atom agent names" do
       agent = Resolver.resolve(:build)
-      assert agent.name == "build"
+      assert agent.name == "main"
       assert agent.read_only == false
     end
 
-    test "build agent has :default model_tier" do
-      agent = Resolver.resolve("build")
+    test "main agent has :default model_tier" do
+      agent = Resolver.resolve("main")
       assert agent.model_tier == :default
     end
 
-    test "plan agent has :expert model_tier" do
-      agent = Resolver.resolve("plan")
-      assert agent.model_tier == :expert
+    test "project default agent fills main provider and model" do
+      agent =
+        Resolver.resolve("main", %{
+          "agents" => %{
+            "default" => %{
+              "provider" => "zhipu-coding",
+              "model" => "glm-4.7"
+            }
+          }
+        })
+
+      assert agent.provider == "zhipu-coding"
+      assert agent.model == "glm-4.7"
     end
   end
 
@@ -176,6 +155,28 @@ defmodule Synapsis.Agent.ResolverTest do
       assert agent.model_tier == :default
     end
 
+    test "project default agent fills blank DB provider and model" do
+      {:ok, _} =
+        AgentConfigs.create(%{
+          name: "main",
+          provider: nil,
+          model: nil
+        })
+
+      agent =
+        Resolver.resolve("main", %{
+          "agents" => %{
+            "default" => %{
+              "provider" => "zhipu-coding",
+              "model" => "glm-4.7"
+            }
+          }
+        })
+
+      assert agent.provider == "zhipu-coding"
+      assert agent.model == "glm-4.7"
+    end
+
     test "custom agent stored in DB is resolved" do
       {:ok, _} =
         AgentConfigs.create(%{
@@ -202,54 +203,136 @@ defmodule Synapsis.Agent.ResolverTest do
       assert agent.read_only == true
       assert agent.model_tier == :expert
     end
+
+    test "uses assigned toolset tools before legacy agent tools" do
+      {:ok, toolset} =
+        Toolsets.create(%{
+          name: "focused-tools",
+          tool_names: ["file_read", "mcp:filesystem:read_file"]
+        })
+
+      {:ok, _} =
+        AgentConfigs.create(%{
+          name: "toolset-agent",
+          tools: ["bash"],
+          toolset_id: toolset.id
+        })
+
+      agent = Resolver.resolve("toolset-agent")
+      assert agent.tools == ["file_read", "mcp:filesystem:read_file"]
+      assert agent.toolset_id == toolset.id
+    end
+
+    test "returns skills assigned to the agent" do
+      {:ok, agent_config} =
+        AgentConfigs.create(%{
+          name: "skilled-agent",
+          system_prompt: "Base prompt"
+        })
+
+      {:ok, skill} =
+        Skills.create(%{
+          name: "review-style",
+          scope: "global",
+          system_prompt_fragment: "Always review tradeoffs."
+        })
+
+      {:ok, _skills} = AgentSkills.assign_skills(agent_config, [skill.id])
+
+      agent = Resolver.resolve("skilled-agent")
+      assert Enum.map(agent.skills, & &1.name) == ["review-style"]
+      assert hd(agent.skills).system_prompt_fragment == "Always review tradeoffs."
+    end
+
+    test "returns configured agent workspace path" do
+      {:ok, _} =
+        AgentConfigs.create(%{
+          name: "workspace-agent",
+          config: %{"workspace_path" => "~/.synapsis/agents/custom-workspace"}
+        })
+
+      agent = Resolver.resolve("workspace-agent")
+      assert agent.workspace_path == "~/.synapsis/agents/custom-workspace"
+    end
   end
 
   describe "list_agents/0" do
     test "returns all enabled agents from DB" do
-      {:ok, _} = AgentConfigs.create(%{name: "build", enabled: true})
-      {:ok, _} = AgentConfigs.create(%{name: "plan", enabled: true})
+      {:ok, _} = AgentConfigs.create(%{name: "main", enabled: true})
+      {:ok, _} = AgentConfigs.create(%{name: "reviewer", enabled: true})
       {:ok, _} = AgentConfigs.create(%{name: "disabled", enabled: false})
 
       agents = Resolver.list_agents()
       names = Enum.map(agents, & &1.name)
-      assert "build" in names
-      assert "plan" in names
+      assert "main" in names
+      assert "reviewer" in names
       refute "disabled" in names
     end
   end
 
   describe "seed_defaults/0" do
-    test "creates assistant, build, and plan agents" do
+    test "creates only the main default agent" do
       AgentConfigs.seed_defaults()
 
-      assistant = AgentConfigs.get_by_name("assistant")
-      build = AgentConfigs.get_by_name("build")
-      plan = AgentConfigs.get_by_name("plan")
+      main = AgentConfigs.get_by_name("main")
 
-      assert assistant != nil
-      assert build != nil
-      assert plan != nil
-      assert assistant.name == "assistant"
-      assert assistant.is_default == false
-      assert build.name == "build"
-      assert plan.name == "plan"
-      assert build.is_default == true
-      assert plan.read_only == true
+      assert main != nil
+      assert main.name == "main"
+      assert main.is_default == true
+      assert AgentConfigs.get_by_name("assistant") == nil
+      assert AgentConfigs.get_by_name("build") == nil
+      assert AgentConfigs.get_by_name("plan") == nil
+
+      agents =
+        AgentConfigs.list()
+        |> Enum.map(& &1.name)
+
+      assert agents == ["main"]
     end
 
-    test "does not overwrite existing agents" do
+    test "does not overwrite existing main agent" do
       {:ok, _} =
         AgentConfigs.create(%{
-          name: "build",
+          name: "main",
           provider: "openai",
           model: "gpt-4"
         })
 
       AgentConfigs.seed_defaults()
 
-      build = AgentConfigs.get_by_name("build")
-      assert build.provider == "openai"
-      assert build.model == "gpt-4"
+      main = AgentConfigs.get_by_name("main")
+      assert main.provider == "openai"
+      assert main.model == "gpt-4"
+    end
+
+    test "removes retired built-in agents and preserves custom agents" do
+      {:ok, _} = AgentConfigs.create(%{name: "assistant", is_default: true})
+      {:ok, _} = AgentConfigs.create(%{name: "build", is_default: true})
+      {:ok, _} = AgentConfigs.create(%{name: "plan", is_default: true})
+      {:ok, _} = AgentConfigs.create(%{name: "main", is_default: false})
+      {:ok, _} = AgentConfigs.create(%{name: "reviewer", is_default: true})
+
+      AgentConfigs.seed_defaults()
+
+      assert AgentConfigs.get_by_name("assistant") == nil
+      assert AgentConfigs.get_by_name("build") == nil
+      assert AgentConfigs.get_by_name("plan") == nil
+      assert AgentConfigs.get_by_name("reviewer") != nil
+      assert AgentConfigs.get_by_name("main").is_default
+    end
+
+    test "create and update keep main as the only default agent" do
+      {:ok, other_default} = AgentConfigs.create(%{name: "other-default", is_default: true})
+      refute Repo.get!(AgentConfig, other_default.id).is_default
+
+      {:ok, main} = AgentConfigs.create(%{name: "main", is_default: false})
+      assert Repo.get!(AgentConfig, main.id).is_default
+
+      {:ok, other} = AgentConfigs.create(%{name: "other"})
+      {:ok, _other} = AgentConfigs.update(other, %{is_default: true})
+
+      refute Repo.get!(AgentConfig, other.id).is_default
+      assert Repo.get!(AgentConfig, main.id).is_default
     end
   end
 end

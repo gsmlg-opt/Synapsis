@@ -17,11 +17,7 @@ defmodule Synapsis.AgentConfigs do
     diagnostics
   )
 
-  @plan_tools ~w(file_read grep glob diagnostics)
-
-  @assistant_tools ~w(
-    task ask_user web_search todo_read todo_write enter_plan_mode exit_plan_mode
-  )
+  @retired_default_agent_names ~w(assistant build plan)
 
   @doc "List all agent configs, ordered by name."
   def list do
@@ -53,6 +49,7 @@ defmodule Synapsis.AgentConfigs do
     %AgentConfig{}
     |> AgentConfig.changeset(attrs)
     |> Repo.insert()
+    |> reload_after_default_normalization()
   end
 
   @doc "Update an existing agent config."
@@ -60,44 +57,26 @@ defmodule Synapsis.AgentConfigs do
     agent_config
     |> AgentConfig.update_changeset(attrs)
     |> Repo.update()
+    |> reload_after_default_normalization()
   end
 
   @doc "Delete an agent config."
   def delete(%AgentConfig{} = agent_config) do
-    Repo.delete(agent_config)
+    if protected?(agent_config) do
+      {:error, :protected}
+    else
+      Repo.delete(agent_config)
+    end
+  end
+
+  @doc "Returns true for default/built-in agent records that should not be removed."
+  def protected?(%AgentConfig{} = agent_config) do
+    agent_config.is_default || agent_config.name in Enum.map(default_attrs(), & &1.name)
   end
 
   @doc "Return default agent configuration maps."
   def default_attrs do
     [
-      %{
-        name: "assistant",
-        label: "Assistant",
-        icon: "account-supervisor-outline",
-        description: "Coordinator assistant for planning, delegation, and user interaction.",
-        system_prompt: assistant_system_prompt(),
-        tools: @assistant_tools,
-        reasoning_effort: "high",
-        read_only: false,
-        max_tokens: 8192,
-        model_tier: "expert",
-        is_default: false,
-        enabled: true
-      },
-      %{
-        name: "build",
-        label: "Build",
-        icon: "robot-outline",
-        description: "AI coding assistant with full workspace access, tools, and memory.",
-        system_prompt: default_system_prompt(),
-        tools: @build_tools,
-        reasoning_effort: "medium",
-        read_only: false,
-        max_tokens: 8192,
-        model_tier: "default",
-        is_default: true,
-        enabled: true
-      },
       %{
         name: "main",
         label: "Main",
@@ -109,21 +88,7 @@ defmodule Synapsis.AgentConfigs do
         read_only: false,
         max_tokens: 8192,
         model_tier: "default",
-        is_default: false,
-        enabled: true
-      },
-      %{
-        name: "plan",
-        label: "Plan",
-        icon: "clipboard-text-outline",
-        description: "Read-only planning assistant for analysis before implementation.",
-        system_prompt: plan_system_prompt(),
-        tools: @plan_tools,
-        reasoning_effort: "high",
-        read_only: true,
-        max_tokens: 8192,
-        model_tier: "expert",
-        is_default: false,
+        is_default: true,
         enabled: true
       }
     ]
@@ -151,12 +116,43 @@ defmodule Synapsis.AgentConfigs do
   Called on application startup.
   """
   def seed_defaults do
+    purge_retired_default_agents()
+
     for attrs <- default_attrs() do
       case get_by_name(attrs.name) do
         nil -> create(attrs)
         _existing -> :ok
       end
     end
+
+    normalize_default_flags()
+
+    :ok
+  end
+
+  defp purge_retired_default_agents do
+    AgentConfig
+    |> where([agent], agent.name in ^@retired_default_agent_names)
+    |> Repo.delete_all()
+
+    :ok
+  end
+
+  defp reload_after_default_normalization({:ok, %AgentConfig{} = agent_config}) do
+    normalize_default_flags()
+    {:ok, Repo.get!(AgentConfig, agent_config.id)}
+  end
+
+  defp reload_after_default_normalization(result), do: result
+
+  defp normalize_default_flags do
+    AgentConfig
+    |> where([agent], agent.name != "main")
+    |> Repo.update_all(set: [is_default: false])
+
+    AgentConfig
+    |> where([agent], agent.name == "main")
+    |> Repo.update_all(set: [is_default: true])
 
     :ok
   end
@@ -166,20 +162,6 @@ defmodule Synapsis.AgentConfigs do
     You are Synapsis, an AI coding assistant. You help developers write, edit, and understand code.
     You have access to tools for reading files, editing files, running shell commands, and searching code.
     Always explain your reasoning before making changes. Be concise and precise.
-    """
-  end
-
-  defp plan_system_prompt do
-    """
-    You are Synapsis in planning mode. Analyze the request, inspect context, and produce careful plans.
-    Use read-only tools only. Do not edit files or run commands that modify the workspace.
-    """
-  end
-
-  defp assistant_system_prompt do
-    """
-    You are Synapsis Assistant, a coordinator for planning, task routing, and user interaction.
-    Help organize work and delegate when appropriate. Do not directly edit the workspace.
     """
   end
 end

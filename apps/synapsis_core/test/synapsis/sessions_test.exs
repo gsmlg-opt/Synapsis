@@ -1,7 +1,19 @@
 defmodule Synapsis.SessionsTest do
   use Synapsis.DataCase
 
-  alias Synapsis.{Sessions, Message, Repo}
+  alias Synapsis.{Sessions, Message, ProviderConfig, Repo}
+
+  defmodule TerminalNode do
+    @behaviour Synapsis.Agent.Runtime.Node
+
+    @impl true
+    def run(state, _ctx), do: {:end, state}
+  end
+
+  setup do
+    Repo.delete_all(ProviderConfig)
+    :ok
+  end
 
   describe "create/2" do
     test "creates a session for a new project" do
@@ -13,7 +25,7 @@ defmodule Synapsis.SessionsTest do
 
       assert session.id
       assert session.status == "idle"
-      assert session.agent == "build"
+      assert session.agent == "main"
       assert session.project.path == "/tmp/test_sessions_create"
     end
 
@@ -46,7 +58,7 @@ defmodule Synapsis.SessionsTest do
       end)
 
       {:ok, session} =
-        Sessions.create("/tmp/test_sess_default_#{:rand.uniform(100_000)}")
+        Sessions.create(temp_project_without_agent_default("test_sess_default"))
 
       assert session.provider == "anthropic"
       assert session.model == Synapsis.Providers.default_model("anthropic")
@@ -67,10 +79,64 @@ defmodule Synapsis.SessionsTest do
       end)
 
       {:ok, session} =
-        Sessions.create("/tmp/test_sess_oai_env_#{:rand.uniform(100_000)}")
+        Sessions.create(temp_project_without_agent_default("test_sess_oai_env"))
 
       assert session.provider == "openai"
       assert session.model == Synapsis.Providers.default_model("openai")
+    end
+
+    test "uses project default agent provider and model when omitted" do
+      dir = Path.join(System.tmp_dir!(), "test_sess_project_default_#{System.unique_integer()}")
+      File.mkdir_p!(dir)
+
+      File.write!(
+        Path.join(dir, ".opencode.json"),
+        Jason.encode!(%{
+          "agents" => %{
+            "default" => %{
+              "provider" => "zhipu-coding",
+              "model" => "glm-4.7"
+            }
+          }
+        })
+      )
+
+      {:ok, session} = Sessions.create(dir)
+
+      assert session.provider == "zhipu-coding"
+      assert session.model == "glm-4.7"
+    end
+
+    test "uses first enabled model from configured providers when no config or env default exists" do
+      prev_ant = System.get_env("ANTHROPIC_API_KEY")
+      prev_oai = System.get_env("OPENAI_API_KEY")
+      prev_goo = System.get_env("GOOGLE_API_KEY")
+      System.delete_env("ANTHROPIC_API_KEY")
+      System.delete_env("OPENAI_API_KEY")
+      System.delete_env("GOOGLE_API_KEY")
+
+      on_exit(fn ->
+        if prev_ant, do: System.put_env("ANTHROPIC_API_KEY", prev_ant)
+        if prev_oai, do: System.put_env("OPENAI_API_KEY", prev_oai)
+        if prev_goo, do: System.put_env("GOOGLE_API_KEY", prev_goo)
+      end)
+
+      Repo.delete_all(ProviderConfig)
+
+      Repo.insert!(%ProviderConfig{
+        name: "zhipu-coding",
+        type: "anthropic",
+        base_url: "https://open.bigmodel.cn/api/anthropic",
+        api_key_encrypted: "sk-test",
+        config: %{"enabled_models" => ["glm-4.7", "glm-5"]},
+        enabled: true
+      })
+
+      {:ok, session} =
+        Sessions.create(temp_project_without_agent_default("test_sess_configured_provider"))
+
+      assert session.provider == "zhipu-coding"
+      assert session.model == "glm-4.7"
     end
 
     test "reuses existing project" do
@@ -301,6 +367,39 @@ defmodule Synapsis.SessionsTest do
       assert result == :ok
     end
 
+    test "accepts another message after a graph turn completes" do
+      {:ok, session} =
+        Sessions.create("/tmp/test_sess_multi_turn_#{:rand.uniform(100_000)}", %{
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}")
+      [{worker_pid, _}] = Registry.lookup(Synapsis.Session.Registry, session.id)
+
+      assert :ok = Sessions.send_message(session.id, "first")
+
+      complete_graph_turn(worker_pid)
+      assert_receive {"session_status", %{status: "idle"}}, 1_000
+
+      assert :ok = Sessions.send_message(session.id, "second")
+      Synapsis.Session.DynamicSupervisor.stop_session(session.id)
+    end
+
+    test "restarts a terminal graph runner before sending" do
+      {:ok, session} =
+        Sessions.create("/tmp/test_sess_terminal_runner_#{:rand.uniform(100_000)}", %{
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      [{worker_pid, _}] = Registry.lookup(Synapsis.Session.Registry, session.id)
+      replace_runner_with_terminal_runner(worker_pid, session.id)
+
+      assert :ok = Sessions.send_message(session.id, "after terminal runner")
+      Synapsis.Session.DynamicSupervisor.stop_session(session.id)
+    end
+
     test "ensure_running/1 is a no-op when worker is already running" do
       {:ok, session} =
         Sessions.create("/tmp/test_sess_ensure_#{:rand.uniform(100_000)}", %{
@@ -310,6 +409,56 @@ defmodule Synapsis.SessionsTest do
 
       # Worker is already started by create/2, ensure_running should be a no-op
       assert :ok = Sessions.ensure_running(session.id)
+    end
+  end
+
+  defp replace_runner_with_terminal_runner(worker_pid, run_id) do
+    old_runner_pid = :sys.get_state(worker_pid).runner_pid
+    if Process.alive?(old_runner_pid), do: GenServer.stop(old_runner_pid, :normal, 5_000)
+
+    {:ok, runner_pid} =
+      Synapsis.Agent.Runtime.Runner.start_link(
+        graph: %{
+          nodes: %{done: __MODULE__.TerminalNode},
+          edges: %{done: :end},
+          start: :done
+        },
+        state: %{},
+        run_id: run_id
+      )
+
+    assert %{status: :completed} = Synapsis.Agent.Runtime.Runner.await(runner_pid)
+
+    :sys.replace_state(worker_pid, fn state ->
+      %{state | runner_pid: runner_pid}
+    end)
+  end
+
+  defp complete_graph_turn(worker_pid) do
+    receive do
+      {"done", %{}} ->
+        :ok
+    after
+      100 ->
+        assert runner_waiting_on?(worker_pid, :llm_stream)
+        send(worker_pid, :provider_done)
+        assert_receive {"done", %{}}, 1_000
+    end
+  end
+
+  defp runner_waiting_on?(worker_pid, node, attempts \\ 20)
+  defp runner_waiting_on?(_worker_pid, _node, 0), do: false
+
+  defp runner_waiting_on?(worker_pid, node, attempts) do
+    runner_pid = :sys.get_state(worker_pid).runner_pid
+
+    case Synapsis.Agent.Runtime.Runner.snapshot(runner_pid) do
+      %{status: :waiting, node: ^node} ->
+        true
+
+      _snapshot ->
+        Process.sleep(25)
+        runner_waiting_on?(worker_pid, node, attempts - 1)
     end
   end
 
@@ -501,5 +650,24 @@ defmodule Synapsis.SessionsTest do
     test "returns error for unknown session" do
       assert {:error, :not_found} = Sessions.compact(Ecto.UUID.generate())
     end
+  end
+
+  defp temp_project_without_agent_default(prefix) do
+    dir = Path.join(System.tmp_dir!(), "#{prefix}_#{System.unique_integer([:positive])}")
+    File.mkdir_p!(dir)
+
+    File.write!(
+      Path.join(dir, ".opencode.json"),
+      Jason.encode!(%{
+        "agents" => %{
+          "default" => %{
+            "provider" => nil,
+            "model" => nil
+          }
+        }
+      })
+    )
+
+    dir
   end
 end
