@@ -1,7 +1,12 @@
 defmodule Synapsis.SessionsTest do
   use Synapsis.DataCase
 
-  alias Synapsis.{Sessions, Message, Repo}
+  alias Synapsis.{Sessions, Message, ProviderConfig, Repo}
+
+  setup do
+    Repo.delete_all(ProviderConfig)
+    :ok
+  end
 
   describe "create/2" do
     test "creates a session for a new project" do
@@ -46,7 +51,7 @@ defmodule Synapsis.SessionsTest do
       end)
 
       {:ok, session} =
-        Sessions.create("/tmp/test_sess_default_#{:rand.uniform(100_000)}")
+        Sessions.create(temp_project_without_agent_default("test_sess_default"))
 
       assert session.provider == "anthropic"
       assert session.model == Synapsis.Providers.default_model("anthropic")
@@ -67,10 +72,64 @@ defmodule Synapsis.SessionsTest do
       end)
 
       {:ok, session} =
-        Sessions.create("/tmp/test_sess_oai_env_#{:rand.uniform(100_000)}")
+        Sessions.create(temp_project_without_agent_default("test_sess_oai_env"))
 
       assert session.provider == "openai"
       assert session.model == Synapsis.Providers.default_model("openai")
+    end
+
+    test "uses project default agent provider and model when omitted" do
+      dir = Path.join(System.tmp_dir!(), "test_sess_project_default_#{System.unique_integer()}")
+      File.mkdir_p!(dir)
+
+      File.write!(
+        Path.join(dir, ".opencode.json"),
+        Jason.encode!(%{
+          "agents" => %{
+            "default" => %{
+              "provider" => "zhipu-coding",
+              "model" => "glm-4.7"
+            }
+          }
+        })
+      )
+
+      {:ok, session} = Sessions.create(dir)
+
+      assert session.provider == "zhipu-coding"
+      assert session.model == "glm-4.7"
+    end
+
+    test "uses first enabled model from configured providers when no config or env default exists" do
+      prev_ant = System.get_env("ANTHROPIC_API_KEY")
+      prev_oai = System.get_env("OPENAI_API_KEY")
+      prev_goo = System.get_env("GOOGLE_API_KEY")
+      System.delete_env("ANTHROPIC_API_KEY")
+      System.delete_env("OPENAI_API_KEY")
+      System.delete_env("GOOGLE_API_KEY")
+
+      on_exit(fn ->
+        if prev_ant, do: System.put_env("ANTHROPIC_API_KEY", prev_ant)
+        if prev_oai, do: System.put_env("OPENAI_API_KEY", prev_oai)
+        if prev_goo, do: System.put_env("GOOGLE_API_KEY", prev_goo)
+      end)
+
+      Repo.delete_all(ProviderConfig)
+
+      Repo.insert!(%ProviderConfig{
+        name: "zhipu-coding",
+        type: "anthropic",
+        base_url: "https://open.bigmodel.cn/api/anthropic",
+        api_key_encrypted: "sk-test",
+        config: %{"enabled_models" => ["glm-4.7", "glm-5"]},
+        enabled: true
+      })
+
+      {:ok, session} =
+        Sessions.create(temp_project_without_agent_default("test_sess_configured_provider"))
+
+      assert session.provider == "zhipu-coding"
+      assert session.model == "glm-4.7"
     end
 
     test "reuses existing project" do
@@ -501,5 +560,24 @@ defmodule Synapsis.SessionsTest do
     test "returns error for unknown session" do
       assert {:error, :not_found} = Sessions.compact(Ecto.UUID.generate())
     end
+  end
+
+  defp temp_project_without_agent_default(prefix) do
+    dir = Path.join(System.tmp_dir!(), "#{prefix}_#{System.unique_integer([:positive])}")
+    File.mkdir_p!(dir)
+
+    File.write!(
+      Path.join(dir, ".opencode.json"),
+      Jason.encode!(%{
+        "agents" => %{
+          "default" => %{
+            "provider" => nil,
+            "model" => nil
+          }
+        }
+      })
+    )
+
+    dir
   end
 end

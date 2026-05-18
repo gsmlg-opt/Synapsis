@@ -6,19 +6,22 @@ defmodule Synapsis.Agent.Resolver do
 
   alias Synapsis.{AgentConfigs, AgentSkills, Toolset, Toolsets}
 
-  def resolve(agent_name, _project_config \\ %{}) do
+  def resolve(agent_name, project_config \\ %{}) do
     name = to_string(agent_name)
 
-    case AgentConfigs.get_by_name(name) do
-      %Synapsis.AgentConfig{} = ac ->
-        from_db(ac)
+    agent =
+      case AgentConfigs.get_by_name(name) do
+        %Synapsis.AgentConfig{} = ac ->
+          from_db(ac)
 
-      nil ->
-        name
-        |> default_name()
-        |> AgentConfigs.default_attrs()
-        |> from_default()
-    end
+        nil ->
+          name
+          |> default_name()
+          |> AgentConfigs.default_attrs()
+          |> from_default()
+      end
+
+    apply_project_agent_config(agent, project_config)
   end
 
   @doc "List all available agent names from the database."
@@ -81,6 +84,43 @@ defmodule Synapsis.Agent.Resolver do
 
   defp from_default(nil), do: "main" |> AgentConfigs.default_attrs() |> from_default()
 
+  defp apply_project_agent_config(agent, project_config) when is_map(project_config) do
+    config = project_agent_config(project_config, agent.name)
+
+    agent
+    |> fill_blank(:provider, config["provider"])
+    |> fill_blank(:model, config["model"])
+  end
+
+  defp apply_project_agent_config(agent, _project_config), do: agent
+
+  defp project_agent_config(config, agent_name) do
+    agents = config["agents"] || %{}
+    name = to_string(agent_name || "main")
+
+    base =
+      if name == "main" do
+        Map.get(agents, "default", %{})
+      else
+        %{}
+      end
+
+    exact = Map.get(agents, name, %{})
+
+    Map.merge(base, exact, fn _key, base_value, exact_value ->
+      if blank?(exact_value), do: base_value, else: exact_value
+    end)
+  end
+
+  defp fill_blank(agent, _key, value) when value in [nil, ""], do: agent
+
+  defp fill_blank(agent, key, value) do
+    case Map.get(agent, key) do
+      current when current in [nil, ""] -> Map.put(agent, key, value)
+      _current -> agent
+    end
+  end
+
   defp default_name("main"), do: "main"
   defp default_name(_name), do: "main"
 
@@ -96,6 +136,8 @@ defmodule Synapsis.Agent.Resolver do
   defp model_tier("fast"), do: :fast
   defp model_tier("expert"), do: :expert
   defp model_tier(_tier), do: :default
+
+  defp blank?(value), do: value in [nil, ""]
 
   defp workspace_path(name, config) when is_map(config) do
     case Map.get(config, "workspace_path") || Map.get(config, :workspace_path) do

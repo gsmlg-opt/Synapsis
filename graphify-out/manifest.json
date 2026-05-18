@@ -68,8 +68,8 @@
     "hash": "36fc96f9dc902af5da050080c6d70312"
   },
   "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/sessions.ex": {
-    "mtime": 1779022923.0592241,
-    "hash": "e22c003c7b521cab48408248c89364a2"
+    "mtime": 1779037173.3623765,
+    "hash": "de809db96fe191d2e1e39bf07a90a478"
   },
   "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/git_worktree.ex": {
     "mtime": 1774946739.1864111,
@@ -100,8 +100,8 @@
     "hash": "ee839727ff504e78e308d41743d9040b"
   },
   "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/agent/resolver.ex": {
-    "mtime": 1779022923.0592241,
-    "hash": "d8c227e1132711a5237cb785f93c285f"
+    "mtime": 1779036916.9469216,
+    "hash": "3f280a86942274970e164f6334e6d442"
   },
   "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/lib/synapsis/session/supervisor.ex": {
     "mtime": 1770893563.1270473,
@@ -512,8 +512,8 @@
     "hash": "809bbb533e18aa952bccb5147b461975"
   },
   "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/sessions_test.exs": {
-    "mtime": 1779023131.4243617,
-    "hash": "9e7bccbe36c891ca1656bd49d2955d50"
+    "mtime": 1779036608.3204722,
+    "hash": "5c7ed731ad04cab53613158a44651bbb"
   },
   "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/board_test.exs": {
     "mtime": 1775264848.3211033,
@@ -536,8 +536,8 @@
     "hash": "d8b75569b16235d69cf8a97db39f7f44"
   },
   "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/agent/resolver_test.exs": {
-    "mtime": 1779022776.1810126,
-    "hash": "0638181c8752c6032f3ea313a503720a"
+    "mtime": 1779036753.112008,
+    "hash": "7d553574af7655c8cc689f2ce3ecc702"
   },
   "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_core/test/synapsis/agent/tool_dispatcher_test.exs": {
     "mtime": 1775318797.0101995,
@@ -984,8 +984,8 @@
     "hash": "bfb751fbd45780d6e999c7ccf38c098a"
   },
   "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/chat_live.ex": {
-    "mtime": 1779022923.060224,
-    "hash": "5951b93c63c747d859696ad184b1cb96"
+    "mtime": 1779113622.1841033,
+    "hash": "bbaf39f4529ad1ddcd5bf9beeba9771a"
   },
   "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/project_live/show.ex": {
     "mtime": 1776099034.7045941,
@@ -1096,8 +1096,8 @@
     "hash": "d0a4dc81696a00ebe56be8ca8a7e391c"
   },
   "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/live/chat_live_test.exs": {
-    "mtime": 1779022783.8051617,
-    "hash": "58075c342798b137cfee8a66f1da37a9"
+    "mtime": 1779113581.7663364,
+    "hash": "db1ee908378526f123394fc03e2ff877"
   },
   "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/live/provider_live/index_test.exs": {
     "mtime": 1774338224.3408265,
@@ -2228,8 +2228,8 @@
     "hash": "203b8c535a197976487ba73e9e689f2c"
   },
   "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/session/worker/boot.ex": {
-    "mtime": 1774954789.1222725,
-    "hash": "0c0e9e5f1cd3ef94e2b064a9dca40c00"
+    "mtime": 1779036916.9459217,
+    "hash": "9b7cd0202c07b1c2bec6b5c6a9a7a929"
   },
   "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_agent/lib/synapsis/session/worker/io_handler.ex": {
     "mtime": 1775230739.9159105,

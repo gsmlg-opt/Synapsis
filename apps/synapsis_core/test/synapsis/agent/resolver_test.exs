@@ -91,6 +91,21 @@ defmodule Synapsis.Agent.ResolverTest do
       agent = Resolver.resolve("main")
       assert agent.model_tier == :default
     end
+
+    test "project default agent fills main provider and model" do
+      agent =
+        Resolver.resolve("main", %{
+          "agents" => %{
+            "default" => %{
+              "provider" => "zhipu-coding",
+              "model" => "glm-4.7"
+            }
+          }
+        })
+
+      assert agent.provider == "zhipu-coding"
+      assert agent.model == "glm-4.7"
+    end
   end
 
   describe "resolve/1 with DB records" do
@@ -138,6 +153,28 @@ defmodule Synapsis.Agent.ResolverTest do
       assert agent.read_only == false
       assert agent.max_tokens == 2048
       assert agent.model_tier == :default
+    end
+
+    test "project default agent fills blank DB provider and model" do
+      {:ok, _} =
+        AgentConfigs.create(%{
+          name: "main",
+          provider: nil,
+          model: nil
+        })
+
+      agent =
+        Resolver.resolve("main", %{
+          "agents" => %{
+            "default" => %{
+              "provider" => "zhipu-coding",
+              "model" => "glm-4.7"
+            }
+          }
+        })
+
+      assert agent.provider == "zhipu-coding"
+      assert agent.model == "glm-4.7"
     end
 
     test "custom agent stored in DB is resolved" do

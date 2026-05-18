@@ -8,13 +8,16 @@ defmodule Synapsis.Sessions do
   alias Synapsis.{Repo, Project, Session, Message}
   import Ecto.Query
 
+  @transient_statuses ~w(streaming tool_executing)
+  @stale_transient_status_after_seconds 120
+
   def create(project_path, opts \\ %{}) do
     project = ensure_project(project_path)
     config = Synapsis.Config.resolve(project_path)
 
-    provider = opts[:provider] || default_provider(config)
-    model = opts[:model] || default_model(config, provider)
     agent = opts[:agent] || "main"
+    provider = opts[:provider] || default_provider(config, agent)
+    model = opts[:model] || default_model(config, provider, agent)
 
     attrs = %{
       project_id: project.id,
@@ -36,6 +39,46 @@ defmodule Synapsis.Sessions do
     case Repo.get(Session, session_id) do
       nil -> {:error, :not_found}
       session -> {:ok, Repo.preload(session, [:project, :messages])}
+    end
+  end
+
+  def recover_stale_transient_status(%Session{} = session, opts \\ []) do
+    after_seconds = Keyword.get(opts, :after_seconds, @stale_transient_status_after_seconds)
+
+    if stale_transient_status?(session, after_seconds) do
+      session
+      |> Session.changeset(stale_transient_recovery_attrs(session))
+      |> Repo.update()
+      |> case do
+        {:ok, updated} ->
+          restart_session_worker(updated.id)
+          {:ok, Repo.preload(updated, [:project, :messages])}
+
+        {:error, _changeset} ->
+          {:ok, session}
+      end
+    else
+      {:ok, session}
+    end
+  end
+
+  def recover_unsupported_provider_model(%Session{} = session) do
+    {provider, model} = recovered_provider_model(session)
+
+    if provider == session.provider and model == session.model do
+      {:ok, session}
+    else
+      session
+      |> Session.changeset(%{provider: provider, model: model})
+      |> Repo.update()
+      |> case do
+        {:ok, updated} ->
+          restart_session_worker(updated.id)
+          {:ok, Repo.preload(updated, [:project, :messages])}
+
+        {:error, _changeset} ->
+          {:ok, session}
+      end
     end
   end
 
@@ -282,21 +325,191 @@ defmodule Synapsis.Sessions do
     end
   end
 
-  defp default_provider(config) do
+  defp restart_session_worker(session_id) do
+    Synapsis.Session.DynamicSupervisor.stop_session(session_id)
+    ensure_session_running(session_id)
+  end
+
+  defp default_provider(config, agent) do
+    agent_config = agent_config(config, agent)
     providers = config["providers"] || %{}
 
     cond do
-      Map.has_key?(providers, "anthropic") -> "anthropic"
-      Map.has_key?(providers, "openai") -> "openai"
-      Map.has_key?(providers, "google") -> "google"
-      System.get_env("ANTHROPIC_API_KEY") -> "anthropic"
-      System.get_env("OPENAI_API_KEY") -> "openai"
-      System.get_env("GOOGLE_API_KEY") -> "google"
-      true -> "anthropic"
+      present?(agent_config["provider"]) ->
+        agent_config["provider"]
+
+      Map.has_key?(providers, "anthropic") ->
+        "anthropic"
+
+      Map.has_key?(providers, "openai") ->
+        "openai"
+
+      Map.has_key?(providers, "google") ->
+        "google"
+
+      System.get_env("ANTHROPIC_API_KEY") ->
+        "anthropic"
+
+      System.get_env("OPENAI_API_KEY") ->
+        "openai"
+
+      System.get_env("GOOGLE_API_KEY") ->
+        "google"
+
+      provider = first_enabled_provider_name() ->
+        provider
+
+      true ->
+        "anthropic"
     end
   end
 
-  defp default_model(_config, provider), do: Synapsis.Providers.default_model(provider)
+  defp default_model(config, provider, agent) do
+    agent_config = agent_config(config, agent)
+
+    cond do
+      present?(agent_config["model"]) ->
+        agent_config["model"]
+
+      model = first_enabled_provider_model(provider) ->
+        model
+
+      true ->
+        Synapsis.Providers.default_model(provider)
+    end
+  end
+
+  defp agent_config(config, agent) do
+    agents = config["agents"] || %{}
+    agent_name = to_string(agent || "main")
+
+    base =
+      if agent_name == "main" do
+        Map.get(agents, "default", %{})
+      else
+        %{}
+      end
+
+    exact = Map.get(agents, agent_name, %{})
+
+    Map.merge(base, exact, fn _key, base_value, exact_value ->
+      if blank?(exact_value), do: base_value, else: exact_value
+    end)
+  end
+
+  defp first_enabled_provider_name do
+    case Synapsis.Providers.list(enabled: true) do
+      {:ok, providers} -> Enum.find_value(providers, &provider_name/1)
+      _ -> nil
+    end
+  end
+
+  defp provider_name(%{name: name}) when is_binary(name) do
+    if present?(name), do: name
+  end
+
+  defp provider_name(_provider), do: nil
+
+  defp first_enabled_provider_model(provider) when provider in [nil, ""], do: nil
+
+  defp first_enabled_provider_model(provider) do
+    case Synapsis.Providers.get_by_name(provider) do
+      {:ok, provider_config} ->
+        provider_config
+        |> Synapsis.Providers.enabled_models()
+        |> Enum.find(&present?/1)
+
+      {:error, _} ->
+        nil
+    end
+  end
+
+  defp stale_transient_recovery_attrs(session) do
+    {provider, model} = recovered_provider_model(session)
+
+    %{
+      status: "idle",
+      provider: provider,
+      model: model
+    }
+  end
+
+  defp recovered_provider_model(session) do
+    cond do
+      provider_model_supported?(session.provider, session.model) ->
+        {session.provider, session.model}
+
+      provider_configured?(session.provider) ->
+        {session.provider,
+         supported_model(session.config, session.provider, session.agent, session.model)}
+
+      true ->
+        provider = default_provider(session.config || %{}, session.agent)
+        {provider, supported_model(session.config, provider, session.agent, session.model)}
+    end
+  end
+
+  defp supported_model(config, provider, agent, fallback_model) do
+    model = default_model(config || %{}, provider, agent)
+
+    cond do
+      model_supported?(provider, model) ->
+        model
+
+      model_supported?(provider, fallback_model) ->
+        fallback_model
+
+      fallback = first_enabled_provider_model(provider) ->
+        fallback
+
+      true ->
+        model || fallback_model
+    end
+  end
+
+  defp provider_model_supported?(provider, model) do
+    provider_configured?(provider) and model_supported?(provider, model)
+  end
+
+  defp provider_configured?(provider) when provider in [nil, ""], do: false
+
+  defp provider_configured?(provider) do
+    case Synapsis.Providers.get_by_name(provider) do
+      {:ok, %{enabled: true}} -> true
+      _ -> false
+    end
+  end
+
+  defp model_supported?(_provider, model) when model in [nil, ""], do: false
+
+  defp model_supported?(provider, model) do
+    case Synapsis.Providers.get_by_name(provider) do
+      {:ok, %{enabled: true} = provider_config} ->
+        case Synapsis.Providers.enabled_models(provider_config) do
+          [] -> true
+          models -> model in models
+        end
+
+      _ ->
+        false
+    end
+  end
+
+  defp stale_transient_status?(%Session{status: status, updated_at: updated_at}, after_seconds)
+       when status in @transient_statuses do
+    stale_updated_at?(updated_at, after_seconds)
+  end
+
+  defp stale_transient_status?(_session, _after_seconds), do: false
+
+  defp stale_updated_at?(nil, _after_seconds), do: true
+
+  defp stale_updated_at?(%DateTime{} = updated_at, after_seconds) do
+    DateTime.diff(DateTime.utc_now(), updated_at, :second) >= after_seconds
+  end
+
+  defp blank?(value), do: value in [nil, ""]
+  defp present?(value), do: is_binary(value) and String.trim(value) != ""
 
   defp exit_reason({:timeout, _}), do: :worker_timeout
   defp exit_reason({:noproc, _}), do: :worker_not_running

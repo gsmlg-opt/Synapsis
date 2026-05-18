@@ -43,6 +43,7 @@ defmodule SynapsisWeb.ChatLive do
     case Sessions.get(session_id) do
       {:ok, session} ->
         if global_session?(session) do
+          session = prepare_chat_session(session)
           Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}")
           agent_name = session.agent || default_agent_name(socket.assigns.agents)
 
@@ -50,6 +51,7 @@ defmodule SynapsisWeb.ChatLive do
            assign(socket,
              selected_agent: agent_name,
              agent_config: Synapsis.Agent.Resolver.resolve(agent_name),
+             sessions: load_global_sessions(),
              current_session: session,
              messages: Sessions.get_messages(session.id),
              streaming_text: "",
@@ -110,10 +112,13 @@ defmodule SynapsisWeb.ChatLive do
         default_agent_name(socket.assigns.agents)
 
     agent_config = Synapsis.Agent.Resolver.resolve(agent_name)
-    provider = agent_config.provider || "anthropic"
-    model = agent_config.model || Synapsis.Providers.default_model(provider)
 
-    case Sessions.create("__global__", %{provider: provider, model: model, agent: agent_name}) do
+    attrs =
+      %{agent: agent_name}
+      |> maybe_put_present(:provider, agent_config.provider)
+      |> maybe_put_present(:model, agent_config.model)
+
+    case Sessions.create("__global__", attrs) do
       {:ok, session} ->
         {:noreply,
          socket
@@ -156,8 +161,25 @@ defmodule SynapsisWeb.ChatLive do
         {:noreply, put_flash(socket, :error, "Message too large")}
 
       true ->
-        Sessions.send_message(socket.assigns.current_session.id, content)
-        {:noreply, socket}
+        session = socket.assigns.current_session
+
+        case Sessions.send_message(session.id, content) do
+          :ok ->
+            {:noreply,
+             assign(socket,
+               messages: Sessions.get_messages(session.id),
+               sessions: load_global_sessions(),
+               session_status: "streaming"
+             )}
+
+          {:error, reason} ->
+            Logger.warning("chat_send_message_failed",
+              session_id: session.id,
+              reason: inspect(reason)
+            )
+
+            {:noreply, put_flash(socket, :error, "Failed to send message")}
+        end
     end
   end
 
@@ -469,6 +491,29 @@ defmodule SynapsisWeb.ChatLive do
       sessions: load_global_sessions()
     )
   end
+
+  defp prepare_chat_session(%{status: status} = session)
+       when status in ~w(streaming tool_executing) do
+    with :ok <- Sessions.ensure_running(session.id),
+         {:ok, refreshed} <- Sessions.get(session.id),
+         {:ok, recovered} <- Sessions.recover_stale_transient_status(refreshed) do
+      if recovered.status in ~w(idle error), do: prepare_chat_session(recovered), else: recovered
+    else
+      _ -> session
+    end
+  end
+
+  defp prepare_chat_session(%{status: status} = session) when status in ~w(idle error) do
+    case Sessions.recover_unsupported_provider_model(session) do
+      {:ok, recovered} -> recovered
+      _ -> session
+    end
+  end
+
+  defp prepare_chat_session(session), do: session
+
+  defp maybe_put_present(attrs, _key, value) when value in [nil, ""], do: attrs
+  defp maybe_put_present(attrs, key, value), do: Map.put(attrs, key, value)
 
   defp load_agents do
     case AgentConfigs.list_enabled() do

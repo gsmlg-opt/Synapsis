@@ -7,12 +7,27 @@ defmodule Synapsis.Session.Worker.Boot do
   alias Synapsis.Agent.Runtime.Runner
   alias Synapsis.Agent.Graphs.CodingLoop
 
+  @transient_statuses ~w(streaming tool_executing)
+
   def load_and_boot(session_id, opts \\ []) do
     case Repo.get(Session, session_id) do
-      nil -> {:stop, {:error, :session_not_found}}
-      session -> boot(Repo.preload(session, :project), session_id, opts)
+      nil ->
+        {:stop, {:error, :session_not_found}}
+
+      session ->
+        boot(session |> reset_transient_status() |> Repo.preload(:project), session_id, opts)
     end
   end
+
+  defp reset_transient_status(%Session{status: status} = session)
+       when status in @transient_statuses do
+    case session |> Session.status_changeset("idle") |> Repo.update() do
+      {:ok, updated} -> updated
+      {:error, _changeset} -> session
+    end
+  end
+
+  defp reset_transient_status(session), do: session
 
   defp boot(session, session_id, opts) do
     Process.flag(:trap_exit, true)
