@@ -972,16 +972,16 @@
     "hash": "9cd885138bf0c41c826526840f984207"
   },
   "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/components/core_components.ex": {
-    "mtime": 1778768414.2433996,
-    "hash": "91840359bd7e3becb6065573c97ae739"
+    "mtime": 1779115975.563345,
+    "hash": "8a9f803530869b4d9ec63acffb941adb"
   },
   "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/dashboard_live.ex": {
     "mtime": 1776098612.3854618,
     "hash": "baa28f376629502745ec9216b5d36c62"
   },
   "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/settings_live.ex": {
-    "mtime": 1778768414.2433996,
-    "hash": "bfb751fbd45780d6e999c7ccf38c098a"
+    "mtime": 1779116008.1211886,
+    "hash": "da3280727cf34c430f3e35ef5953874f"
   },
   "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/lib/synapsis_web/live/chat_live.ex": {
     "mtime": 1779113622.1841033,
@@ -1088,8 +1088,8 @@
     "hash": "00bfc05bac04fe5e4b0c6b1f1c9cf7eb"
   },
   "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/live/settings_live_test.exs": {
-    "mtime": 1778768210.2249496,
-    "hash": "356b7d1e3da7ef36f656b0c999baeb8c"
+    "mtime": 1779115920.160897,
+    "hash": "1e2f2f0c3211acb847ebb201c8e9a5b6"
   },
   "/home/gao/Workspace/gsmlg-opt/Synapsis/apps/synapsis_web/test/synapsis_web/live/dashboard_live_test.exs": {
     "mtime": 1778768210.2239494,

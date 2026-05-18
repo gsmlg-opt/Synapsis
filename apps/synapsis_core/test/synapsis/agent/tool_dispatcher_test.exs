@@ -86,6 +86,32 @@ defmodule Synapsis.Agent.ToolDispatcherTest do
 
       assert_receive {:tool_result, "tu_1", _result, _is_error}, 5_000
     end
+
+    @tag :tmp_dir
+    test "runs already-approved execute tools without re-checking session permissions", %{
+      session: session,
+      tmp_dir: tmp_dir
+    } do
+      tool_use = %Synapsis.Part.ToolUse{
+        tool: "bash",
+        tool_use_id: "tu_bash",
+        input: %{"command" => "printf dispatcher-ok"},
+        status: :pending
+      }
+
+      opts = %{
+        project_path: tmp_dir,
+        effective_path: tmp_dir,
+        session_id: session.id,
+        agent_id: "test",
+        project_id: session.project_id,
+        tool_call_hashes: MapSet.new()
+      }
+
+      _task = ToolDispatcher.execute_async(tool_use, self(), opts)
+
+      assert_receive {:tool_result, "tu_bash", "dispatcher-ok", false}, 5_000
+    end
   end
 
   describe "dispatch_all/4" do

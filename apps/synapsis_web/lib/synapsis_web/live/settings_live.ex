@@ -60,17 +60,6 @@ defmodule SynapsisWeb.SettingsLive do
               </p>
             </.dm_card>
           </.dm_link>
-
-          <.dm_link navigate={~p"/settings/lsp"}>
-            <.dm_card variant="bordered">
-              <:title>
-                <.dm_mdi name="code-braces" class="w-5 h-5 inline mr-2" />LSP Servers
-              </:title>
-              <p class="text-sm text-on-surface-variant">
-                Configure Language Server Protocol integrations.
-              </p>
-            </.dm_card>
-          </.dm_link>
         </div>
       </div>
     </div>
