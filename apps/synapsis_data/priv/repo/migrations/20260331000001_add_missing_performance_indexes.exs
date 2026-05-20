@@ -1,4 +1,4 @@
-defmodule Synapsis.Repo.Migrations.AddMissingIndexes do
+defmodule Synapsis.Repo.Migrations.AddMissingPerformanceIndexes do
   use Ecto.Migration
 
   def change do
