@@ -26,10 +26,12 @@ defmodule SynapsisWeb.SettingsLiveTest do
       refute html =~ "Create and edit skill definitions with custom prompts."
     end
 
-    test "does not render MCP servers link", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/settings")
-      refute html =~ ~p"/settings/mcp"
-      refute html =~ "Configure Model Context Protocol server connections."
+    test "renders MCP servers link", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/settings")
+      assert html =~ ~p"/settings/mcp"
+      assert html =~ "MCP Servers"
+      assert html =~ "Manage Model Context Protocol server connections."
+      assert has_element?(view, "a[href='/settings/mcp']", "MCP Servers")
     end
 
     test "does not render LSP servers link", %{conn: conn} do
@@ -62,6 +64,7 @@ defmodule SynapsisWeb.SettingsLiveTest do
       assert html =~ ~p"/settings/providers"
       assert html =~ ~p"/settings/models"
       assert html =~ ~p"/settings/memory"
+      assert html =~ ~p"/settings/mcp"
       refute html =~ ~p"/settings/lsp"
     end
 
@@ -70,6 +73,7 @@ defmodule SynapsisWeb.SettingsLiveTest do
       assert has_element?(view, "[slot=\"header\"]", "Providers")
       assert has_element?(view, "[slot=\"header\"]", "Default Model")
       assert has_element?(view, "[slot=\"header\"]", "Memory")
+      assert has_element?(view, "[slot=\"header\"]", "MCP Servers")
       refute has_element?(view, "[slot=\"header\"]", "LSP Servers")
     end
   end

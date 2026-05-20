@@ -98,6 +98,7 @@ defmodule SynapsisWeb.MCPLive.Index do
       name: params["name"] || preset.name,
       transport: params["transport"] || preset.transport,
       command: params["command"] || preset.command,
+      url: params["url"],
       args: if(params["args"], do: parse_args(params["args"]), else: preset.args),
       env: if(params["env"], do: parse_env(params["env"]), else: preset.env),
       auto_start: params["auto_start"] == "true"
@@ -162,7 +163,9 @@ defmodule SynapsisWeb.MCPLive.Index do
       config ->
         plugin_config = %{
           name: config.name,
+          transport: config.transport,
           command: config.command,
+          url: config.url,
           args: config.args || [],
           env: config.env || %{}
         }
@@ -277,6 +280,7 @@ defmodule SynapsisWeb.MCPLive.Index do
           name: name,
           transport: Map.get(config, "transport", "stdio"),
           command: Map.get(config, "command", ""),
+          url: Map.get(config, "url"),
           args: Map.get(config, "args", []),
           env: Map.get(config, "env", %{}),
           auto_start: Map.get(config, "autoStart", false)
@@ -325,7 +329,7 @@ defmodule SynapsisWeb.MCPLive.Index do
       )
 
     ~H"""
-    <div class="max-w-5xl mx-auto p-6">
+    <.settings_layout current_path="/settings/mcp" content_class="max-w-5xl">
       <.breadcrumb class="mb-4">
         <:crumb to={~p"/settings"}>Settings</:crumb>
         <:crumb>MCP Servers</:crumb>
@@ -411,12 +415,21 @@ defmodule SynapsisWeb.MCPLive.Index do
                 <.dm_select
                   name="transport"
                   label="Transport"
-                  options={[{"stdio", "stdio"}, {"sse", "SSE"}]}
+                  options={[{"stdio", "stdio"}, {"http", "HTTP"}]}
                   value="stdio"
                 />
               <% else %>
                 <.readonly_field label="Transport" value={@selected_preset.transport} />
               <% end %>
+              <div :if={Map.get(@selected_preset, :custom)}>
+                <.dm_input
+                  type="text"
+                  name="url"
+                  value=""
+                  placeholder="http://localhost:7331/mcp"
+                  label="URL"
+                />
+              </div>
               <%= if Map.get(@selected_preset, :custom) do %>
                 <.dm_input
                   type="text"
@@ -535,7 +548,7 @@ defmodule SynapsisWeb.MCPLive.Index do
                 <.dm_card variant="bordered" class="cursor-pointer border-dashed hover:border-primary">
                   <div class="font-medium">Custom MCP Server</div>
                   <div class="text-xs text-on-surface-variant mt-1">
-                    Configure a custom stdio or SSE server
+                    Configure a custom stdio or HTTP server
                   </div>
                 </.dm_card>
               </div>
@@ -692,7 +705,7 @@ defmodule SynapsisWeb.MCPLive.Index do
       <div :if={@configs == [] && !@show_form} class="text-center text-on-surface-variant py-12">
         No MCP servers configured. Click "+ Add MCP Server" to get started.
       </div>
-    </div>
+    </.settings_layout>
     """
   end
 

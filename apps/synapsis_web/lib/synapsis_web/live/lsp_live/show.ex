@@ -48,7 +48,7 @@ defmodule SynapsisWeb.LSPLive.Show do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="max-w-4xl mx-auto p-6">
+    <.settings_layout current_path="/settings/lsp" content_class="max-w-4xl">
       <.breadcrumb class="mb-4">
         <:crumb to={~p"/settings"}>Settings</:crumb>
         <:crumb to={~p"/settings/lsp"}>LSP Servers</:crumb>
@@ -90,7 +90,7 @@ defmodule SynapsisWeb.LSPLive.Show do
           </.dm_btn>
         </.dm_form>
       </.dm_card>
-    </div>
+    </.settings_layout>
     """
   end
 end

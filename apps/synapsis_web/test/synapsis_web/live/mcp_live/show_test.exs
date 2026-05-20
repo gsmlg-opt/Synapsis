@@ -50,7 +50,7 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     {:ok, _view, html} = live(conn, ~p"/settings/mcp/#{config.id}")
     assert html =~ "Transport"
     assert html =~ "stdio"
-    assert html =~ "SSE"
+    assert html =~ "HTTP"
   end
 
   test "shows auto-start checkbox", %{conn: conn, config: config} do
@@ -171,15 +171,26 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     assert html =~ "OTHER=world"
   end
 
-  test "submitting form with sse transport updates transport", %{conn: conn, config: config} do
+  test "submitting form with http transport updates transport and url", %{
+    conn: conn,
+    config: config
+  } do
     {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
 
     view
-    |> form("form", %{"command" => "test", "transport" => "sse", "url" => "http://example.com"})
+    |> form("form", %{
+      "command" => "",
+      "transport" => "http",
+      "url" => "http://example.com/mcp"
+    })
     |> render_submit()
 
     html = render(view)
     assert html =~ "MCP server updated"
+
+    updated = Repo.get!(PluginConfig, config.id)
+    assert updated.transport == "http"
+    assert updated.url == "http://example.com/mcp"
   end
 
   test "auto_start checkbox — submitting with false value", %{conn: conn, config: config} do

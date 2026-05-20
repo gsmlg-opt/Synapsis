@@ -47,7 +47,7 @@ defmodule SynapsisWeb.SkillLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="max-w-4xl mx-auto p-6">
+    <.settings_layout current_path="/settings/skills" content_class="max-w-4xl">
       <.breadcrumb class="mb-4">
         <:crumb to={~p"/settings"}>Settings</:crumb>
         <:crumb>Skills</:crumb>
@@ -113,7 +113,7 @@ defmodule SynapsisWeb.SkillLive.Index do
           </div>
         </.dm_card>
       </div>
-    </div>
+    </.settings_layout>
     """
   end
 end

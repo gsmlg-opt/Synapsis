@@ -300,6 +300,26 @@ defmodule SynapsisWeb.CoreComponents do
   end
 
   @doc """
+  Shared layout for settings pages with consistent left navigation.
+  """
+  attr :current_path, :string, required: true
+  attr :content_class, :string, default: "max-w-5xl"
+  attr :class, :string, default: nil
+
+  slot :inner_block, required: true
+
+  def settings_layout(assigns) do
+    ~H"""
+    <div class={["flex max-w-7xl mx-auto p-6 gap-6", @class]} data-testid="settings-layout">
+      <.settings_sidebar current_path={@current_path} />
+      <div class={["flex-1 min-w-0", @content_class]}>
+        {render_slot(@inner_block)}
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
   Settings navigation sidebar with active state.
   """
   attr :current_path, :string, required: true
@@ -309,13 +329,17 @@ defmodule SynapsisWeb.CoreComponents do
     items = [
       %{to: ~p"/settings/providers", icon: "cloud", label: "Providers"},
       %{to: ~p"/settings/models", icon: "tune", label: "Default Model"},
-      %{to: ~p"/settings/memory", icon: "brain", label: "Memory"}
+      %{to: ~p"/settings/memory", icon: "brain", label: "Memory"},
+      %{to: ~p"/settings/mcp", icon: "server-network", label: "MCP Servers"}
     ]
 
     assigns = assign(assigns, :items, items)
 
     ~H"""
-    <nav class={["hidden md:block w-56 shrink-0 border-r border-outline-variant py-4 pr-4", @class]}>
+    <nav
+      class={["hidden md:block w-56 shrink-0 border-r border-outline-variant py-4 pr-4", @class]}
+      data-testid="settings-sidebar"
+    >
       <.dm_left_menu active={active_menu_id(@current_path, @items)} size="sm">
         <:title>Settings</:title>
         <:menu :for={item <- @items}>

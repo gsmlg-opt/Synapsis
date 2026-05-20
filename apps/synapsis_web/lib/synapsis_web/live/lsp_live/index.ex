@@ -261,7 +261,7 @@ defmodule SynapsisWeb.LSPLive.Index do
       )
 
     ~H"""
-    <div class="max-w-5xl mx-auto p-6">
+    <.settings_layout current_path="/settings/lsp" content_class="max-w-5xl">
       <.breadcrumb class="mb-4">
         <:crumb to={~p"/settings"}>Settings</:crumb>
         <:crumb>LSP Servers</:crumb>
@@ -455,7 +455,7 @@ defmodule SynapsisWeb.LSPLive.Index do
           </.dm_card>
         </div>
       </div>
-    </div>
+    </.settings_layout>
     """
   end
 

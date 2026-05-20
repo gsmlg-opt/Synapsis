@@ -30,7 +30,9 @@ defmodule SynapsisPlugin.MixProject do
   defp deps do
     [
       {:synapsis_core, in_umbrella: true},
-      {:jason, "~> 1.4"}
+      {:jason, "~> 1.4"},
+      {:req, "~> 0.5"},
+      {:bypass, "~> 2.1", only: :test}
     ]
   end
 end

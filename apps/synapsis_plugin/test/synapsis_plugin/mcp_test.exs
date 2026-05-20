@@ -29,7 +29,9 @@ defmodule SynapsisPlugin.MCPTest do
     end
 
     test "encodes a notification with explicit params" do
-      {:ok, encoded} = Protocol.encode_notification("notifications/progress", %{"sessionId" => "abc123"})
+      {:ok, encoded} =
+        Protocol.encode_notification("notifications/progress", %{"sessionId" => "abc123"})
+
       decoded = Jason.decode!(String.trim_trailing(encoded, "\n"))
       assert decoded["method"] == "notifications/progress"
       assert decoded["params"]["sessionId"] == "abc123"
@@ -212,6 +214,109 @@ defmodule SynapsisPlugin.MCPTest do
 
       assert {:error, {:no_binary, _}} = SynapsisPlugin.MCP.init(config)
     end
+
+    test "initializes an HTTP MCP server and loads tools" do
+      bypass = Bypass.open()
+
+      Bypass.expect(bypass, "POST", "/mcp", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        request = Jason.decode!(body)
+
+        response =
+          case request["method"] do
+            "initialize" ->
+              json_rpc_result(request["id"], %{
+                "protocolVersion" => "2024-11-05",
+                "serverInfo" => %{"name" => "http-mcp", "version" => "1.0.0"},
+                "capabilities" => %{}
+              })
+
+            "notifications/initialized" ->
+              nil
+
+            "tools/list" ->
+              json_rpc_result(request["id"], %{
+                "tools" => [
+                  %{
+                    "name" => "echo",
+                    "description" => "Echo text",
+                    "inputSchema" => %{"type" => "object"}
+                  }
+                ]
+              })
+          end
+
+        respond_json(conn, response)
+      end)
+
+      config = %{
+        name: "http_server",
+        transport: "http",
+        url: "http://localhost:#{bypass.port}/mcp"
+      }
+
+      assert {:ok, state} = SynapsisPlugin.MCP.init(config)
+      assert state.initialized
+      assert state.server_name == "http_server"
+      assert state.server_info["serverInfo"]["name"] == "http-mcp"
+
+      assert [
+               %{
+                 name: "mcp:http_server:echo",
+                 description: "Echo text",
+                 parameters: %{"type" => "object"}
+               }
+             ] = SynapsisPlugin.MCP.tools(state)
+    end
+
+    test "executes an HTTP MCP tool call synchronously" do
+      bypass = Bypass.open()
+
+      Bypass.expect(bypass, "POST", "/mcp", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        request = Jason.decode!(body)
+
+        response =
+          case request["method"] do
+            "tools/call" ->
+              assert request["params"] == %{"name" => "echo", "arguments" => %{"text" => "hi"}}
+
+              json_rpc_result(request["id"], %{"content" => [%{"type" => "text", "text" => "hi"}]})
+          end
+
+        respond_json(conn, response)
+      end)
+
+      state = %SynapsisPlugin.MCP{
+        transport: "http",
+        url: "http://localhost:#{bypass.port}/mcp",
+        server_name: "http_server",
+        tools: [%{"name" => "echo", "description" => "Echo text"}],
+        port: nil,
+        request_id: 10,
+        pending: %{},
+        buffer: "",
+        env: %{},
+        initialized: true,
+        command: nil,
+        args: []
+      }
+
+      assert {:ok, "hi", next_state} =
+               SynapsisPlugin.MCP.execute("mcp:http_server:echo", %{"text" => "hi"}, state)
+
+      assert next_state.request_id == 11
+    end
+  end
+
+  defp json_rpc_result(id, result), do: %{"jsonrpc" => "2.0", "id" => id, "result" => result}
+
+  defp respond_json(conn, nil), do: Plug.Conn.resp(conn, 202, "")
+
+  defp respond_json(conn, response) do
+    conn
+    |> Plug.Conn.put_resp_content_type("application/json")
+    |> Plug.Conn.resp(200, Jason.encode!(response))
   end
 
   describe "SynapsisPlugin public API" do

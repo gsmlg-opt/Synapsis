@@ -427,7 +427,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
     assigns = assign(assigns, model_options: model_options)
 
     ~H"""
-    <div class="max-w-4xl mx-auto p-6">
+    <.settings_layout current_path="/settings/providers" content_class="max-w-4xl">
       <.breadcrumb class="mb-4">
         <:crumb to={~p"/settings"}>Settings</:crumb>
         <:crumb to={~p"/settings/providers"}>Providers</:crumb>
@@ -571,13 +571,17 @@ defmodule SynapsisWeb.ProviderLive.Show do
             <input type="hidden" name="models[]" value="" />
             <div class="space-y-2">
               <div :for={model <- @all_models} class="flex items-center gap-3">
-                <.dm_checkbox
-                  name="models[]"
-                  value={model.id}
-                  checked={model_enabled?(model.id, @enabled_models)}
-                  id={"model-#{model.id}"}
-                  label={model.name}
-                />
+                <label class="flex items-center gap-2 text-sm" for={"model-#{model.id}"}>
+                  <input
+                    type="checkbox"
+                    name="models[]"
+                    value={model.id}
+                    checked={model_enabled?(model.id, @enabled_models)}
+                    id={"model-#{model.id}"}
+                    class="h-4 w-4 rounded border-outline text-primary focus:ring-primary"
+                  />
+                  <span>{model.name}</span>
+                </label>
                 <span class="text-xs text-on-surface-variant">{model.id}</span>
               </div>
             </div>
@@ -699,7 +703,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
           </.dm_form>
         </div>
       </.dm_card>
-    </div>
+    </.settings_layout>
     """
   end
 end

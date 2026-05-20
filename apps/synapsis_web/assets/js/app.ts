@@ -12,6 +12,8 @@ import { Hooks } from "@synapsis/hooks"
 // Client-only theme switcher — upstream hook pushes "theme_changed" to the
 // server which has no handler, causing a disconnect flash. We handle
 // everything on the client: localStorage + data-theme on <html>.
+const themeControllerSelector = ".theme-controller, .theme-controller-item"
+
 const ThemeSwitcher = {
   mounted(this: { el: HTMLElement }) {
     const saved = localStorage.getItem("theme")
@@ -19,7 +21,7 @@ const ThemeSwitcher = {
       document.documentElement.setAttribute("data-theme", saved)
     }
 
-    const controllers = this.el.querySelectorAll<HTMLInputElement>(".theme-controller")
+    const controllers = this.el.querySelectorAll<HTMLInputElement>(themeControllerSelector)
     const current = saved || this.el.dataset.theme || "default"
 
     controllers.forEach((c) => {
@@ -34,7 +36,7 @@ const ThemeSwitcher = {
   updated(this: { el: HTMLElement }) {
     const saved = localStorage.getItem("theme")
     if (saved) {
-      this.el.querySelectorAll<HTMLInputElement>(".theme-controller").forEach((c) => {
+      this.el.querySelectorAll<HTMLInputElement>(themeControllerSelector).forEach((c) => {
         c.checked = c.value === saved
       })
     }

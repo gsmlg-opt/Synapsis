@@ -7,18 +7,18 @@ defmodule Synapsis.MCPConfig do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @valid_transports ~w(stdio sse)
+  @valid_transports ~w(stdio http sse)
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
   schema "mcp_configs" do
-    field :name, :string
-    field :transport, :string, default: "stdio"
-    field :command, :string
-    field :args, {:array, :string}, default: []
-    field :url, :string
-    field :env, :map, default: %{}
-    field :auto_connect, :boolean, default: false
+    field(:name, :string)
+    field(:transport, :string, default: "stdio")
+    field(:command, :string)
+    field(:args, {:array, :string}, default: [])
+    field(:url, :string)
+    field(:env, :map, default: %{})
+    field(:auto_connect, :boolean, default: false)
 
     timestamps(type: :utc_datetime_usec)
   end

@@ -41,7 +41,7 @@ defmodule SynapsisWeb.SkillLive.Show do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="max-w-4xl mx-auto p-6">
+    <.settings_layout current_path="/settings/skills" content_class="max-w-4xl">
       <.breadcrumb class="mb-4">
         <:crumb to={~p"/settings"}>Settings</:crumb>
         <:crumb to={~p"/settings/skills"}>Skills</:crumb>
@@ -89,7 +89,7 @@ defmodule SynapsisWeb.SkillLive.Show do
           </:actions>
         </.dm_form>
       </.dm_card>
-    </div>
+    </.settings_layout>
     """
   end
 end

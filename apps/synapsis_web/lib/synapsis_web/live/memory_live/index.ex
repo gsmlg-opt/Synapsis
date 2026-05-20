@@ -185,7 +185,7 @@ defmodule SynapsisWeb.MemoryLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="max-w-6xl mx-auto p-6">
+    <.settings_layout current_path="/settings/memory" content_class="max-w-6xl">
       <.breadcrumb class="mb-4">
         <:crumb to={~p"/settings"}>Settings</:crumb>
         <:crumb>Memory</:crumb>
@@ -455,7 +455,7 @@ defmodule SynapsisWeb.MemoryLive.Index do
           </.dm_table>
         <% end %>
       <% end %>
-    </div>
+    </.settings_layout>
     """
   end
 

@@ -2,14 +2,18 @@ defmodule SynapsisPlugin.MCP do
   @moduledoc """
   MCP (Model Context Protocol) plugin implementation.
 
-  Manages an MCP server process via Port (stdio) or HTTP (SSE).
+  Manages an MCP server process via Port (stdio) or HTTP.
   Discovers tools via `tools/list` and executes them via `tools/call`.
   """
   use Synapsis.Plugin
   require Logger
 
+  @http_timeout_ms 15_000
+
   defstruct [
     :port,
+    :transport,
+    :url,
     :server_name,
     :command,
     :args,
@@ -24,6 +28,16 @@ defmodule SynapsisPlugin.MCP do
 
   @impl Synapsis.Plugin
   def init(config) do
+    transport = config[:transport] || config["transport"] || "stdio"
+
+    cond do
+      transport in ["http", "sse"] -> init_http(config, transport)
+      transport == "stdio" -> init_stdio(config, transport)
+      true -> {:error, {:unsupported_transport, transport}}
+    end
+  end
+
+  defp init_stdio(config, transport) do
     server_name = config[:name] || config["name"]
     command = config[:command] || config["command"]
     args = config[:args] || config["args"] || []
@@ -52,6 +66,7 @@ defmodule SynapsisPlugin.MCP do
 
         state = %__MODULE__{
           port: port,
+          transport: transport,
           server_name: server_name,
           command: command,
           args: args,
@@ -75,6 +90,51 @@ defmodule SynapsisPlugin.MCP do
     end
   end
 
+  defp init_http(config, transport) do
+    server_name = config[:name] || config["name"]
+    url = config[:url] || config["url"]
+    env = config[:env] || config["env"] || %{}
+
+    if is_nil(url) or url == "" do
+      {:error, {:missing_url, server_name}}
+    else
+      state = %__MODULE__{
+        port: nil,
+        transport: transport,
+        url: url,
+        server_name: server_name,
+        command: config[:command] || config["command"],
+        args: config[:args] || config["args"] || [],
+        env: env,
+        request_id: 1,
+        pending: %{},
+        buffer: "",
+        tools: [],
+        initialized: false
+      }
+
+      with {:ok, server_info, state} <-
+             request_http(state, "initialize", %{
+               "protocolVersion" => "2024-11-05",
+               "capabilities" => %{},
+               "clientInfo" => %{"name" => "synapsis", "version" => "0.1.0"}
+             }),
+           {:ok, state} <- notify_http(state, "notifications/initialized"),
+           {:ok, tools_result, state} <- request_http(state, "tools/list", %{}) do
+        {:ok,
+         %{
+           state
+           | initialized: true,
+             server_info: server_info,
+             tools: tools_result["tools"] || []
+         }}
+      else
+        {:error, reason, _state} -> {:error, reason}
+        {:error, reason} -> {:error, reason}
+      end
+    end
+  end
+
   @impl Synapsis.Plugin
   def tools(%__MODULE__{tools: tools, server_name: server_name}) do
     Enum.map(tools, fn tool ->
@@ -87,19 +147,25 @@ defmodule SynapsisPlugin.MCP do
   end
 
   @impl Synapsis.Plugin
+  def execute(tool_name, input, %__MODULE__{transport: transport} = state)
+      when transport in ["http", "sse"] do
+    case request_http(
+           state,
+           "tools/call",
+           %{"name" => mcp_tool_name(tool_name), "arguments" => input}
+         ) do
+      {:ok, result, state} -> {:ok, extract_tool_content(result), state}
+      {:error, reason, state} -> {:error, reason, state}
+    end
+  end
+
   def execute(tool_name, input, %__MODULE__{} = state) do
     # Extract the MCP tool name from the full name (mcp:server:tool)
-    mcp_tool_name =
-      case String.split(tool_name, ":", parts: 3) do
-        [_mcp, _server, name] -> name
-        _ -> tool_name
-      end
-
     state =
       send_request(
         state,
         "tools/call",
-        %{"name" => mcp_tool_name, "arguments" => input},
+        %{"name" => mcp_tool_name(tool_name), "arguments" => input},
         :tool_call
       )
 
@@ -134,6 +200,103 @@ defmodule SynapsisPlugin.MCP do
   def terminate(_reason, _state), do: :ok
 
   # Private helpers
+
+  defp mcp_tool_name(tool_name) do
+    case String.split(tool_name, ":", parts: 3) do
+      [_mcp, _server, name] -> name
+      _ -> tool_name
+    end
+  end
+
+  defp request_http(state, method, params) do
+    id = state.request_id
+    state = %{state | request_id: id + 1}
+
+    case post_http_json(state.url, %{
+           "jsonrpc" => "2.0",
+           "id" => id,
+           "method" => method,
+           "params" => params
+         }) do
+      {:ok, %{"result" => result}} ->
+        {:ok, result, state}
+
+      {:ok, %{"error" => %{"message" => message}}} ->
+        {:error, message, state}
+
+      {:ok, %{"error" => error}} ->
+        {:error, inspect(error), state}
+
+      {:ok, response} ->
+        {:error, {:unexpected_response, response}, state}
+
+      {:error, reason} ->
+        {:error, reason, state}
+    end
+  end
+
+  defp notify_http(state, method, params \\ %{}) do
+    body = %{"jsonrpc" => "2.0", "method" => method}
+    body = if params == %{}, do: body, else: Map.put(body, "params", params)
+
+    case post_http_json(state.url, body) do
+      {:ok, _response} -> {:ok, state}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp post_http_json(url, body) do
+    case Req.post(url,
+           headers: [{"accept", "application/json, text/event-stream"}],
+           json: body,
+           receive_timeout: @http_timeout_ms
+         ) do
+      {:ok, %Req.Response{status: status, body: response_body}} when status in 200..299 ->
+        decode_http_body(response_body)
+
+      {:ok, %Req.Response{status: status, body: response_body}} ->
+        {:error, {:http_error, status, response_body}}
+
+      {:error, %Req.TransportError{} = error} ->
+        {:error, Exception.message(error)}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp decode_http_body(body) when body in [nil, ""], do: {:ok, %{}}
+  defp decode_http_body(body) when is_map(body), do: {:ok, body}
+
+  defp decode_http_body(body) when is_binary(body) do
+    case Jason.decode(body) do
+      {:ok, decoded} ->
+        {:ok, decoded}
+
+      {:error, _} ->
+        case decode_sse_json(body) do
+          {:ok, decoded} -> {:ok, decoded}
+          :error -> {:error, {:invalid_json_response, body}}
+        end
+    end
+  end
+
+  defp decode_sse_json(body) do
+    json =
+      body
+      |> String.split("\n")
+      |> Enum.find_value(fn line ->
+        case String.trim(line) do
+          "data: " <> json when json != "[DONE]" -> json
+          _ -> nil
+        end
+      end)
+
+    case json do
+      nil -> :error
+      json -> Jason.decode(json)
+    end
+  end
 
   defp handle_mcp_message(%{"id" => id, "result" => result}, state) do
     case Map.pop(state.pending, id) do

@@ -4,7 +4,7 @@ defmodule Synapsis.PluginConfig do
   import Ecto.Changeset
 
   @valid_types ~w(mcp lsp custom)
-  @valid_transports ~w(stdio sse tcp)
+  @valid_transports ~w(stdio http sse tcp)
   @valid_scopes ~w(global project)
 
   @primary_key {:id, :binary_id, autogenerate: true}

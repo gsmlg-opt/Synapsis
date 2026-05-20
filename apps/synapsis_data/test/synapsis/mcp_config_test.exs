@@ -64,6 +64,20 @@ defmodule Synapsis.MCPConfigTest do
       assert config.url == "http://localhost:3000/mcp"
     end
 
+    test "accepts http transport" do
+      {:ok, config} =
+        %MCPConfig{}
+        |> MCPConfig.changeset(%{
+          name: "http-server",
+          transport: "http",
+          url: "http://localhost:3000/mcp"
+        })
+        |> Repo.insert()
+
+      assert config.transport == "http"
+      assert config.url == "http://localhost:3000/mcp"
+    end
+
     test "defaults auto_connect to false" do
       {:ok, config} =
         %MCPConfig{}

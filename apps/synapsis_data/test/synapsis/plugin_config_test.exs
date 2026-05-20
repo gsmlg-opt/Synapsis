@@ -44,7 +44,7 @@ defmodule Synapsis.PluginConfigTest do
     end
 
     test "allows valid transports" do
-      for transport <- ~w(stdio sse tcp) do
+      for transport <- ~w(stdio http sse tcp) do
         cs =
           %PluginConfig{}
           |> PluginConfig.changeset(%{type: "mcp", name: "test", transport: transport})

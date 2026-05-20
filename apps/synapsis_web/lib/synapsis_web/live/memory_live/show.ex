@@ -154,7 +154,7 @@ defmodule SynapsisWeb.MemoryLive.Show do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="max-w-4xl mx-auto p-6">
+    <.settings_layout current_path="/settings/memory" content_class="max-w-4xl">
       <.breadcrumb class="mb-4">
         <:crumb to={~p"/settings"}>Settings</:crumb>
         <:crumb to={~p"/settings/memory"}>Memory</:crumb>
@@ -317,7 +317,7 @@ defmodule SynapsisWeb.MemoryLive.Show do
           </div>
         </.dm_card>
       <% end %>
-    </div>
+    </.settings_layout>
     """
   end
 

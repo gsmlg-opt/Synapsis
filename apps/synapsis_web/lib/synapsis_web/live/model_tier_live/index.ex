@@ -28,7 +28,7 @@ defmodule SynapsisWeb.ModelTierLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="max-w-4xl mx-auto p-6">
+    <.settings_layout current_path="/settings/models" content_class="max-w-4xl">
       <.breadcrumb class="mb-4">
         <:crumb to={~p"/settings"}>Settings</:crumb>
         <:crumb>Default Model</:crumb>
@@ -50,7 +50,7 @@ defmodule SynapsisWeb.ModelTierLive.Index do
           <span class="text-on-surface-variant">{tier.description}</span>
         </:col>
       </.dm_table>
-    </div>
+    </.settings_layout>
     """
   end
 end

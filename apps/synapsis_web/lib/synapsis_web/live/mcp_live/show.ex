@@ -83,7 +83,7 @@ defmodule SynapsisWeb.MCPLive.Show do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="max-w-4xl mx-auto p-6">
+    <.settings_layout current_path="/settings/mcp" content_class="max-w-4xl">
       <.breadcrumb class="mb-4">
         <:crumb to={~p"/settings"}>Settings</:crumb>
         <:crumb to={~p"/settings/mcp"}>MCP Servers</:crumb>
@@ -97,7 +97,7 @@ defmodule SynapsisWeb.MCPLive.Show do
           <.dm_select
             name="transport"
             label="Transport"
-            options={[{"stdio", "stdio"}, {"sse", "SSE"}]}
+            options={[{"stdio", "stdio"}, {"http", "HTTP"}]}
             value={@config.transport}
           />
 
@@ -145,7 +145,7 @@ defmodule SynapsisWeb.MCPLive.Show do
           </.dm_btn>
         </.dm_form>
       </.dm_card>
-    </div>
+    </.settings_layout>
     """
   end
 end

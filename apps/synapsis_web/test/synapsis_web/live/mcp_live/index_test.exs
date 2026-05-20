@@ -45,7 +45,7 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
 
       html =
         view
-        |> element(~s(button[phx-click="select_preset"][phx-value-name="filesystem"]))
+        |> element(~s([phx-click="select_preset"][phx-value-name="filesystem"]))
         |> render_click()
 
       assert html =~ "npx"
@@ -57,17 +57,19 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
 
       html =
         view
-        |> element(~s(button[phx-click="select_custom"]))
+        |> element(~s([phx-click="select_custom"]))
         |> render_click()
 
       assert html =~ "New Custom MCP Server"
+      assert html =~ "HTTP"
+      assert html =~ ~s(name="url")
     end
 
     test "creates MCP config from preset", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings/mcp/new")
 
       view
-      |> element(~s(button[phx-click="select_preset"][phx-value-name="memory"]))
+      |> element(~s([phx-click="select_preset"][phx-value-name="memory"]))
       |> render_click()
 
       view
@@ -82,7 +84,7 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
       {:ok, view, _html} = live(conn, ~p"/settings/mcp/new")
 
       view
-      |> element(~s(button[phx-click="select_custom"]))
+      |> element(~s([phx-click="select_custom"]))
       |> render_click()
 
       view
@@ -95,6 +97,30 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
 
       flash = assert_redirect(view, "/settings/mcp")
       assert flash["info"] == "MCP server added"
+    end
+
+    test "creates HTTP MCP config from custom form", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings/mcp/new")
+
+      view
+      |> element(~s([phx-click="select_custom"]))
+      |> render_click()
+
+      view
+      |> form(~s(form[phx-submit="create_config"]), %{
+        "name" => "http-test",
+        "transport" => "http",
+        "url" => "http://localhost:7331/mcp"
+      })
+      |> render_submit()
+
+      flash = assert_redirect(view, "/settings/mcp")
+      assert flash["info"] == "MCP server added"
+
+      config = Repo.get_by!(PluginConfig, name: "http-test", type: "mcp")
+      assert config.transport == "http"
+      assert config.url == "http://localhost:7331/mcp"
+      assert config.command in [nil, ""]
     end
 
     test "deletes MCP config", %{conn: conn} do
@@ -179,7 +205,7 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
       {:ok, view, _html} = live(conn, ~p"/settings/mcp/new")
 
       view
-      |> element(~s(button[phx-click="select_preset"][phx-value-name="filesystem"]))
+      |> element(~s([phx-click="select_preset"][phx-value-name="filesystem"]))
       |> render_click()
 
       html =
@@ -195,7 +221,7 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
 
       html =
         view
-        |> element(~s(button[phx-click="select_preset"][phx-value-name="github"]))
+        |> element(~s([phx-click="select_preset"][phx-value-name="github"]))
         |> render_click()
 
       assert html =~ "GITHUB_PERSONAL_ACCESS_TOKEN"
