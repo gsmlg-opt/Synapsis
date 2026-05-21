@@ -9,45 +9,55 @@ defmodule Synapsis.Session.Worker.Config do
       agent: "main",
       permission: %{
         mode: :autonomous,
+        allow_read: :allow,
         allow_write: :allow,
         allow_execute: :allow,
-        allow_destructive: :allow
+        allow_destructive: :allow,
+        tool_overrides: %{}
       }
     },
     "ask_before_edits" => %{
       agent: "main",
       permission: %{
         mode: :interactive,
+        allow_read: :allow,
         allow_write: :ask,
         allow_execute: :ask,
-        allow_destructive: :ask
+        allow_destructive: :ask,
+        tool_overrides: %{}
       }
     },
     "edit_automatically" => %{
       agent: "main",
       permission: %{
         mode: :autonomous,
+        allow_read: :allow,
         allow_write: :allow,
         allow_execute: :allow,
-        allow_destructive: :ask
+        allow_destructive: :ask,
+        tool_overrides: %{}
       }
     },
     "plan_mode" => %{
       agent: "main",
       permission: %{
         mode: :interactive,
+        allow_read: :allow,
         allow_write: :deny,
         allow_execute: :deny,
-        allow_destructive: :deny
+        allow_destructive: :deny,
+        tool_overrides: %{}
       }
     },
     "assistant_mode" => %{
       agent: "main",
       permission: %{
         mode: :interactive,
+        allow_read: :allow,
         allow_write: :deny,
         allow_execute: :deny,
-        allow_destructive: :deny
+        allow_destructive: :deny,
+        tool_overrides: %{}
       }
     }
   }
@@ -105,7 +115,16 @@ defmodule Synapsis.Session.Worker.Config do
     case session |> Session.changeset(%{agent: name_str}) |> Repo.update() do
       {:ok, updated_session} ->
         agent = resolve_agent(updated_session)
-        {:ok, agent, updated_session}
+
+        with {:ok, _permission} <-
+               Synapsis.Tool.Permission.update_config(
+                 updated_session.id,
+                 Synapsis.Tool.Permission.config_for_mode(agent[:permission_mode])
+               ) do
+          {:ok, agent, updated_session}
+        else
+          {:error, _changeset} -> {:error, :permission_update_failed}
+        end
 
       {:error, _changeset} ->
         {:error, :db_update_failed}

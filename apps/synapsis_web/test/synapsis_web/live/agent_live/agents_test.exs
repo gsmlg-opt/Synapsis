@@ -47,6 +47,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
           "model" => "gpt-4.1",
           "system_prompt" => "Research carefully.",
           "toolset_id" => toolset.id,
+          "permission_mode" => "restrict",
           "enabled" => "true"
         },
         "skill_ids" => []
@@ -56,6 +57,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       agent = Repo.get_by!(AgentConfig, name: "researcher")
       assert agent.label == "Researcher"
       assert agent.toolset_id == toolset.id
+      assert agent.permission_mode == "restrict"
       assert_redirect(view, ~p"/agent/agents")
     end
 
@@ -82,6 +84,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
           "system_prompt" => "Edit carefully.",
           "workspace_path" => "~/.synapsis/agents/editor",
           "toolset_id" => "",
+          "permission_mode" => "yolo",
           "enabled" => "true"
         },
         "skill_ids" => []
@@ -91,10 +94,38 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       updated = Repo.get!(AgentConfig, agent.id)
       assert updated.label == "Updated Editor"
       assert updated.config["workspace_path"] == "~/.synapsis/agents/editor"
-      assert_redirect(view, ~p"/agent/agents")
+      assert updated.permission_mode == "yolo"
+      :ok = refute_redirected(view)
+      assert has_element?(view, "form#agent-config-form")
+      assert render(view) =~ "Updated Editor"
+    end
+
+    test "does not reset permission mode when save payload omits the select", %{conn: conn} do
+      {:ok, agent} =
+        AgentConfigs.create(%{
+          name: "reviewer",
+          label: "Reviewer",
+          permission_mode: "restrict"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+
+      render_submit(view, "save_agent", %{
+        "agent" => %{
+          "label" => "Reviewer",
+          "enabled" => "true"
+        },
+        "skill_ids" => []
+      })
+
+      assert Repo.get!(AgentConfig, agent.id).permission_mode == "restrict"
+      :ok = refute_redirected(view)
+      assert has_element?(view, "select[name='agent[permission_mode]']")
     end
 
     test "configures an agent from a rich vertical-tab workspace", %{conn: conn} do
+      insert_provider("openai", "openai")
+
       {:ok, toolset} =
         Toolsets.create(%{
           name: "workspace",
@@ -119,6 +150,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
           fallback_models: "gpt-4o, o3",
           reasoning_effort: "high",
           model_tier: "expert",
+          permission_mode: "ask",
           max_tokens: 16_384,
           read_only: true,
           toolset_id: toolset.id
@@ -141,6 +173,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       assert html =~ "Workspace tools"
       assert html =~ "~/.synapsis/agents/builder"
       assert html =~ "code-review"
+      assert cascader_value(html) == ["openai", "gpt-4.1"]
 
       assert has_element?(view, "button[phx-click='switch_config_tab'][phx-value-tab='overview']")
 
@@ -170,6 +203,8 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       assert has_element?(view, "select[name='agent[model_tier]']")
       assert has_element?(view, "input[name='agent[max_tokens]']")
       assert has_element?(view, "input[name='agent[read_only]'][value='true']")
+      assert has_element?(view, "select[name='agent[permission_mode]']")
+      assert has_element?(view, "form#agent-config-form el-dm-button[type='submit']", "Save")
     end
 
     test "provider model cascader lists enabled provider configs", %{conn: conn} do
@@ -379,6 +414,14 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
 
   defp cascader_options(html) do
     ~r/<el-dm-cascader[^>]*id="agent-provider-model"[^>]*options="([^"]*)"/
+    |> Regex.run(html)
+    |> List.last()
+    |> html_attribute_unescape()
+    |> Jason.decode!()
+  end
+
+  defp cascader_value(html) do
+    ~r/<el-dm-cascader[^>]*id="agent-provider-model"[^>]*value="([^"]*)"/
     |> Regex.run(html)
     |> List.last()
     |> html_attribute_unescape()

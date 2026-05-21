@@ -102,10 +102,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
       {:ok, %AgentConfig{} = agent} ->
         {:ok, _skills} = AgentSkills.assign_skills(agent, skill_ids)
 
-        {:noreply,
-         socket
-         |> put_flash(:info, "Agent saved")
-         |> push_navigate(to: ~p"/agent/agents")}
+        {:noreply, after_agent_save(socket, agent)}
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, save_error(reason))}
@@ -203,11 +200,13 @@ defmodule SynapsisWeb.AgentLive.Agents do
     tool_names = agent_tool_names(assigns.agent, selected_toolset)
     fallback_tokens = fallback_tokens(assigns.agent.fallback_models)
     workspace_path = workspace_path(assigns.agent)
+    permission_mode = permission_mode(assigns.agent)
 
     assigns =
       assigns
       |> assign(:selected_toolset, selected_toolset)
       |> assign(:tool_names, tool_names)
+      |> assign(:permission_mode, permission_mode)
       |> assign(:fallback_count, length(fallback_tokens))
       |> assign(:fallback_tokens, fallback_tokens)
       |> assign(:skill_count, length(assigns.selected_skill_ids))
@@ -522,12 +521,21 @@ defmodule SynapsisWeb.AgentLive.Agents do
                 </.dm_link>
               </div>
 
-              <.dm_select
-                name="agent[toolset_id]"
-                label="Toolset"
-                options={[{"", "Legacy/custom tools"} | Enum.map(@toolsets, &{&1.id, &1.name})]}
-                value={@agent.toolset_id || ""}
-              />
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <.dm_select
+                  name="agent[toolset_id]"
+                  label="Toolset"
+                  options={[{"", "Legacy/custom tools"} | Enum.map(@toolsets, &{&1.id, &1.name})]}
+                  value={@agent.toolset_id || ""}
+                />
+
+                <.dm_select
+                  name="agent[permission_mode]"
+                  label="Permission mode"
+                  options={permission_mode_options()}
+                  value={@permission_mode}
+                />
+              </div>
 
               <div :if={@selected_toolset} class="mt-3 text-sm text-on-surface-variant">
                 {@selected_toolset.description}
@@ -613,7 +621,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
               <.dm_link navigate={~p"/agent/agents"}>
                 <.dm_btn type="button" variant="ghost">Cancel</.dm_btn>
               </.dm_link>
-              <.dm_btn type="submit" variant="primary">Save Agent</.dm_btn>
+              <.dm_btn type="submit" variant="primary">Save</.dm_btn>
             </div>
           </.dm_form>
 
@@ -775,6 +783,23 @@ defmodule SynapsisWeb.AgentLive.Agents do
     end
   end
 
+  defp after_agent_save(%{assigns: %{live_action: :new}} = socket, _agent) do
+    socket
+    |> put_flash(:info, "Agent saved")
+    |> push_navigate(to: ~p"/agent/agents")
+  end
+
+  defp after_agent_save(%{assigns: %{live_action: :config}} = socket, %AgentConfig{} = agent) do
+    assign(socket,
+      agent: agent,
+      agents: AgentConfigs.list(),
+      selected_skill_ids: AgentSkills.list_skill_ids(agent.id)
+    )
+    |> put_flash(:info, "Agent saved")
+  end
+
+  defp after_agent_save(socket, _agent), do: put_flash(socket, :info, "Agent saved")
+
   defp normalize_agent_attrs(attrs, agent) do
     {workspace_path, attrs} = Map.pop(attrs, "workspace_path")
 
@@ -782,6 +807,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
     |> normalize_blank("provider")
     |> normalize_blank("model")
     |> normalize_blank("toolset_id")
+    |> normalize_permission_mode(agent)
     |> Map.put("config", workspace_config(agent, attrs, workspace_path))
     |> Map.update("enabled", false, &(&1 in ["true", "on", true]))
     |> Map.update("read_only", false, &(&1 in ["true", "on", true]))
@@ -811,6 +837,8 @@ defmodule SynapsisWeb.AgentLive.Agents do
         reasoning_effort: Map.get(attrs, "reasoning_effort", agent.reasoning_effort),
         model_tier: Map.get(attrs, "model_tier", agent.model_tier),
         max_tokens: Map.get(attrs, "max_tokens", agent.max_tokens),
+        permission_mode:
+          permission_mode(Map.get(attrs, "permission_mode", agent.permission_mode)),
         enabled: Map.get(attrs, "enabled", agent.enabled) in ["true", "on", true],
         read_only: Map.get(attrs, "read_only", agent.read_only) in ["true", "on", true],
         config: workspace_config(agent, attrs, Map.get(attrs, "workspace_path"))
@@ -827,6 +855,12 @@ defmodule SynapsisWeb.AgentLive.Agents do
       "" -> Map.put(attrs, key, nil)
       _ -> attrs
     end
+  end
+
+  defp normalize_permission_mode(attrs, agent) do
+    existing_mode = if match?(%AgentConfig{}, agent), do: agent.permission_mode, else: nil
+    mode = permission_mode(Map.get(attrs, "permission_mode", existing_mode))
+    Map.put(attrs, "permission_mode", mode)
   end
 
   defp delete_agent(socket, %AgentConfig{} = agent, confirmation) do
@@ -1164,6 +1198,18 @@ defmodule SynapsisWeb.AgentLive.Agents do
 
   defp agent_tool_names(%AgentConfig{} = agent, nil), do: agent.tools || []
   defp agent_tool_names(_agent, toolset), do: toolset.tool_names || []
+
+  defp permission_mode_options do
+    [
+      {"yolo", "Yolo"},
+      {"ask", "Ask for bash"},
+      {"restrict", "Restrict"}
+    ]
+  end
+
+  defp permission_mode(%AgentConfig{permission_mode: mode}), do: permission_mode(mode)
+  defp permission_mode(mode) when mode in ["yolo", "ask", "restrict"], do: mode
+  defp permission_mode(_mode), do: "ask"
 
   defp agent_label(%AgentConfig{name: nil, label: nil}), do: "Agent"
   defp agent_label(%AgentConfig{label: label}) when label not in [nil, ""], do: label

@@ -3,6 +3,12 @@ type CascaderChangeDetail = {
   path?: unknown
 }
 
+type CascaderElement = HTMLElement & {
+  value?: unknown
+  _parseValue?: () => void
+  update?: () => void
+}
+
 function pathFromValue(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value.map(String)
@@ -20,27 +26,55 @@ function pathFromValue(value: unknown): string[] {
   }
 }
 
-function cascaderValue(element: HTMLElement & { value?: unknown }): unknown {
-  return element.value ?? element.getAttribute("value")
+function cascaderValue(element: CascaderElement): unknown {
+  if (typeof element.value === "string" && element.value.trim() !== "") {
+    return element.value
+  }
+
+  return element.getAttribute("value") ?? element.value
 }
 
 export const AgentModelCascaderHook = {
   mounted(this: any) {
-    this.handleChange = (event: CustomEvent<CascaderChangeDetail>) => {
-      const path = pathFromValue(event.detail?.path)
-      this.syncInputs(path.length > 0 ? path : pathFromValue(event.detail?.value), true)
+    this.handleChange = (event: Event) => {
+      const detail = (event as CustomEvent<CascaderChangeDetail>).detail
+      const path = pathFromValue(detail?.path)
+      this.syncFromPath(path.length > 0 ? path : pathFromValue(detail?.value), true)
     }
 
-    this.syncInputs(pathFromValue(cascaderValue(this.el)), false)
+    this.syncFromElement(false)
+    this.el.addEventListener("change", this.handleChange)
     this.el.addEventListener("dm-change", this.handleChange)
   },
 
   updated(this: any) {
-    this.syncInputs(pathFromValue(cascaderValue(this.el)), false)
+    this.syncFromElement(false)
   },
 
   destroyed(this: any) {
+    this.el.removeEventListener("change", this.handleChange)
     this.el.removeEventListener("dm-change", this.handleChange)
+  },
+
+  syncFromElement(this: any, notify: boolean) {
+    this.syncFromPath(pathFromValue(cascaderValue(this.el)), notify)
+  },
+
+  syncFromPath(this: any, path: string[], notify: boolean) {
+    this.syncCascaderDisplay(path)
+    this.syncInputs(path, notify)
+  },
+
+  syncCascaderDisplay(this: any, path: string[]) {
+    const value = path.length > 0 ? JSON.stringify(path) : ""
+    const cascader = this.el as CascaderElement
+
+    if (cascader.value !== value) {
+      cascader.value = value
+    }
+
+    cascader._parseValue?.()
+    cascader.update?.()
   },
 
   syncInputs(this: any, path: string[], notify: boolean) {

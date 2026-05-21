@@ -8,6 +8,7 @@ defmodule Synapsis.AgentConfig do
 
   @name_format ~r/^[a-z0-9][a-z0-9_-]*$/
   @valid_model_tiers ~w(fast default expert)
+  @valid_permission_modes ~w(yolo ask restrict)
   @valid_reasoning_efforts ~w(low medium high)
 
   schema "agent_configs" do
@@ -23,6 +24,7 @@ defmodule Synapsis.AgentConfig do
     field(:read_only, :boolean, default: false)
     field(:max_tokens, :integer, default: 8192)
     field(:model_tier, :string, default: "default")
+    field(:permission_mode, :string, default: "ask")
     field(:fallback_models, :string, default: "")
     field(:is_default, :boolean, default: false)
     field(:enabled, :boolean, default: true)
@@ -36,7 +38,7 @@ defmodule Synapsis.AgentConfig do
   @required_fields ~w(name)a
   @optional_fields ~w(label icon description provider model system_prompt tools
                        reasoning_effort read_only max_tokens model_tier
-                       fallback_models is_default enabled config toolset_id)a
+                       permission_mode fallback_models is_default enabled config toolset_id)a
 
   def changeset(agent_config, attrs) do
     agent_config
@@ -47,6 +49,7 @@ defmodule Synapsis.AgentConfig do
         "must start with a letter or digit and contain only lowercase letters, digits, hyphens, or underscores"
     )
     |> validate_inclusion(:model_tier, @valid_model_tiers)
+    |> validate_inclusion(:permission_mode, @valid_permission_modes)
     |> validate_inclusion(:reasoning_effort, @valid_reasoning_efforts)
     |> validate_number(:max_tokens, greater_than: 0)
     |> unique_constraint(:name)
@@ -56,11 +59,13 @@ defmodule Synapsis.AgentConfig do
     agent_config
     |> cast(attrs, @optional_fields)
     |> validate_inclusion(:model_tier, @valid_model_tiers)
+    |> validate_inclusion(:permission_mode, @valid_permission_modes)
     |> validate_inclusion(:reasoning_effort, @valid_reasoning_efforts)
     |> validate_number(:max_tokens, greater_than: 0)
     |> unique_constraint(:name)
   end
 
   def valid_model_tiers, do: @valid_model_tiers
+  def valid_permission_modes, do: @valid_permission_modes
   def valid_reasoning_efforts, do: @valid_reasoning_efforts
 end

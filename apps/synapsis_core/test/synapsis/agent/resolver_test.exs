@@ -18,6 +18,7 @@ defmodule Synapsis.Agent.ResolverTest do
       assert agent.name == "main"
       assert agent.read_only == false
       assert agent.reasoning_effort == "medium"
+      assert agent.permission_mode == "ask"
       assert agent.max_tokens == 8192
       assert agent.model == nil
       assert agent.provider == nil
@@ -34,6 +35,7 @@ defmodule Synapsis.Agent.ResolverTest do
       assert Map.has_key?(agent, :system_prompt)
       assert Map.has_key?(agent, :tools)
       assert Map.has_key?(agent, :reasoning_effort)
+      assert Map.has_key?(agent, :permission_mode)
       assert Map.has_key?(agent, :read_only)
       assert Map.has_key?(agent, :max_tokens)
       assert Map.has_key?(agent, :model_tier)
@@ -118,6 +120,7 @@ defmodule Synapsis.Agent.ResolverTest do
           system_prompt: "Custom prompt",
           tools: ["file_read", "grep"],
           reasoning_effort: "high",
+          permission_mode: "restrict",
           read_only: false,
           max_tokens: 4096,
           model_tier: "fast"
@@ -130,6 +133,7 @@ defmodule Synapsis.Agent.ResolverTest do
       assert agent.system_prompt == "Custom prompt"
       assert agent.tools == ["file_read", "grep"]
       assert agent.reasoning_effort == "high"
+      assert agent.permission_mode == "restrict"
       assert agent.max_tokens == 4096
       assert agent.model_tier == :fast
     end
@@ -189,6 +193,7 @@ defmodule Synapsis.Agent.ResolverTest do
           system_prompt: "You are a code reviewer.",
           tools: ["file_read", "grep", "glob"],
           reasoning_effort: "high",
+          permission_mode: "yolo",
           read_only: true,
           max_tokens: 16384,
           model_tier: "expert"
@@ -200,6 +205,7 @@ defmodule Synapsis.Agent.ResolverTest do
       assert agent.icon == "magnify"
       assert agent.description == "Reviews code for quality"
       assert agent.provider == "anthropic"
+      assert agent.permission_mode == "yolo"
       assert agent.read_only == true
       assert agent.model_tier == :expert
     end

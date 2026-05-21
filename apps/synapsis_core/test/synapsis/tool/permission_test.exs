@@ -128,7 +128,7 @@ defmodule Synapsis.Tool.PermissionTest do
       config = SessionConfig.default()
       assert config.session_id == nil
       assert config.mode == :interactive
-      assert config.allow_read == true
+      assert config.allow_read == :allow
       assert config.allow_write == :allow
       assert config.allow_execute == :ask
       assert config.allow_destructive == :ask
@@ -140,6 +140,22 @@ defmodule Synapsis.Tool.PermissionTest do
         struct!(SessionConfig, mode: :autonomous)
       end
     end
+
+    test "from_db/1 loads read policy and normalizes override decisions" do
+      config =
+        SessionConfig.from_db(%Synapsis.SessionPermission{
+          session_id: "s1",
+          mode: :interactive,
+          allow_read: :ask,
+          allow_write: :allow,
+          allow_execute: :allow,
+          allow_destructive: :allow,
+          tool_overrides: %{"bash(*)" => "requires_approval"}
+        })
+
+      assert config.allow_read == :ask
+      assert [%{tool: "bash", pattern: "*", decision: :requires_approval}] = config.overrides
+    end
   end
 
   describe "Permission.check/3 — interactive mode, all 5 permission levels" do
@@ -150,10 +166,12 @@ defmodule Synapsis.Tool.PermissionTest do
       assert :allowed = do_check_with_config("none_tool", %{}, config, :none)
     end
 
-    test ":read level is always allowed" do
-      config = %SessionConfig{session_id: "s1", mode: :interactive, allow_execute: false}
+    test ":read level follows allow_read setting" do
+      allowed_config = %SessionConfig{session_id: "s1", mode: :interactive, allow_read: :allow}
+      ask_config = %SessionConfig{session_id: "s1", mode: :interactive, allow_read: :ask}
 
-      assert :allowed = do_check_with_config("read_tool", %{}, config, :read)
+      assert :allowed = do_check_with_config("read_tool", %{}, allowed_config, :read)
+      assert :requires_approval = do_check_with_config("read_tool", %{}, ask_config, :read)
     end
 
     test ":write level follows allow_write setting" do
@@ -344,6 +362,41 @@ defmodule Synapsis.Tool.PermissionTest do
     end
   end
 
+  describe "config_for_mode/1" do
+    test "yolo allows all levels without overrides" do
+      assert %{
+               mode: :autonomous,
+               allow_read: :allow,
+               allow_write: :allow,
+               allow_execute: :allow,
+               allow_destructive: :allow,
+               tool_overrides: %{}
+             } = Permission.config_for_mode("yolo")
+    end
+
+    test "ask only requests approval for bash" do
+      assert %{
+               mode: :interactive,
+               allow_read: :allow,
+               allow_write: :allow,
+               allow_execute: :allow,
+               allow_destructive: :allow,
+               tool_overrides: %{"bash(*)" => "requires_approval"}
+             } = Permission.config_for_mode("ask")
+    end
+
+    test "restrict asks for every non-internal tool level" do
+      assert %{
+               mode: :interactive,
+               allow_read: :ask,
+               allow_write: :ask,
+               allow_execute: :ask,
+               allow_destructive: :ask,
+               tool_overrides: %{}
+             } = Permission.config_for_mode("restrict")
+    end
+  end
+
   describe "tool_permission_level/1" do
     test "returns :write for unknown tools not in registry" do
       assert :write =
@@ -417,7 +470,7 @@ defmodule Synapsis.Tool.PermissionTest do
   defp resolve_by_level(level, %SessionConfig{mode: :interactive} = config) do
     case level do
       :none -> :allowed
-      :read -> :allowed
+      :read -> resolve_allow_setting(config.allow_read)
       :write -> resolve_allow_setting(config.allow_write)
       :execute -> resolve_allow_setting(config.allow_execute)
       :destructive -> resolve_allow_setting(config.allow_destructive)

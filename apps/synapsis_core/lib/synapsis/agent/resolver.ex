@@ -53,6 +53,7 @@ defmodule Synapsis.Agent.Resolver do
       read_only: ac.read_only || false,
       max_tokens: ac.max_tokens || 8192,
       model_tier: model_tier,
+      permission_mode: ac.permission_mode || "ask",
       fallback_models: ac.fallback_models || "",
       is_default: ac.is_default || false,
       enabled: ac.enabled
@@ -76,6 +77,7 @@ defmodule Synapsis.Agent.Resolver do
       read_only: attrs.read_only,
       max_tokens: attrs.max_tokens,
       model_tier: model_tier(Map.get(attrs, :model_tier)),
+      permission_mode: Map.get(attrs, :permission_mode, "ask"),
       fallback_models: Map.get(attrs, :fallback_models, ""),
       is_default: attrs.is_default,
       enabled: attrs.enabled

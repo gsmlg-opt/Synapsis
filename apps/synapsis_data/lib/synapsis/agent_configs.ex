@@ -88,6 +88,7 @@ defmodule Synapsis.AgentConfigs do
         read_only: false,
         max_tokens: 8192,
         model_tier: "default",
+        permission_mode: "ask",
         is_default: true,
         enabled: true
       }

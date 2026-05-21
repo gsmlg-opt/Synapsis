@@ -20,6 +20,8 @@ defmodule Synapsis.Tool.Permission do
 
   alias Synapsis.Tool.Permission.SessionConfig
 
+  @permission_modes ~w(yolo ask restrict)
+
   # ---------------------------------------------------------------------------
   # Public API
   # ---------------------------------------------------------------------------
@@ -86,13 +88,22 @@ defmodule Synapsis.Tool.Permission do
   Upsert session permission configuration in the database.
 
   `attrs` is a map with keys matching `SessionPermission` fields
-  (`:mode`, `:allow_write`, `:allow_execute`, `:allow_destructive`, `:tool_overrides`).
+  (`:mode`, `:allow_read`, `:allow_write`, `:allow_execute`, `:allow_destructive`,
+  `:tool_overrides`).
   """
   @spec update_config(binary(), map()) ::
           {:ok, Synapsis.SessionPermission.t()} | {:error, Ecto.Changeset.t()}
   def update_config(session_id, attrs) do
     attrs = Map.put(attrs, :session_id, session_id)
-    updatable = [:mode, :allow_write, :allow_execute, :allow_destructive, :tool_overrides]
+
+    updatable = [
+      :mode,
+      :allow_read,
+      :allow_write,
+      :allow_execute,
+      :allow_destructive,
+      :tool_overrides
+    ]
 
     %Synapsis.SessionPermission{}
     |> Synapsis.SessionPermission.changeset(attrs)
@@ -101,6 +112,46 @@ defmodule Synapsis.Tool.Permission do
       conflict_target: :session_id,
       returning: true
     )
+  end
+
+  @doc "Return the agent-level permission modes accepted by the UI and schema."
+  @spec valid_permission_modes() :: [String.t()]
+  def valid_permission_modes, do: @permission_modes
+
+  @doc "Map an agent permission mode to a session permission config."
+  @spec config_for_mode(String.t() | atom() | nil) :: map()
+  def config_for_mode(mode) do
+    case normalize_permission_mode(mode) do
+      "yolo" ->
+        %{
+          mode: :autonomous,
+          allow_read: :allow,
+          allow_write: :allow,
+          allow_execute: :allow,
+          allow_destructive: :allow,
+          tool_overrides: %{}
+        }
+
+      "restrict" ->
+        %{
+          mode: :interactive,
+          allow_read: :ask,
+          allow_write: :ask,
+          allow_execute: :ask,
+          allow_destructive: :ask,
+          tool_overrides: %{}
+        }
+
+      _ask ->
+        %{
+          mode: :interactive,
+          allow_read: :allow,
+          allow_write: :allow,
+          allow_execute: :allow,
+          allow_destructive: :allow,
+          tool_overrides: %{"bash(*)" => "requires_approval"}
+        }
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -206,7 +257,7 @@ defmodule Synapsis.Tool.Permission do
   defp resolve_by_level(level, %SessionConfig{mode: :interactive} = config) do
     case level do
       :none -> :allowed
-      :read -> :allowed
+      :read -> resolve_allow_setting(config.allow_read)
       :write -> resolve_allow_setting(config.allow_write)
       :execute -> resolve_allow_setting(config.allow_execute)
       :destructive -> resolve_allow_setting(config.allow_destructive)
@@ -287,6 +338,12 @@ defmodule Synapsis.Tool.Permission do
     parse_override(str)
     |> Map.put(:decision, :allowed)
   end
+
+  defp normalize_permission_mode(mode) when is_atom(mode),
+    do: mode |> Atom.to_string() |> normalize_permission_mode()
+
+  defp normalize_permission_mode(mode) when mode in @permission_modes, do: mode
+  defp normalize_permission_mode(_mode), do: "ask"
 
   defp extract_session_id(id) when is_binary(id), do: id
   defp extract_session_id(%{id: id}) when is_binary(id), do: id

@@ -5,7 +5,7 @@ defmodule Synapsis.Tool.Permission.SessionConfig do
   Fields:
   - `session_id` — the session this config belongs to (nil for defaults)
   - `mode` — `:interactive` or `:autonomous`
-  - `allow_read` — whether read-level tools are allowed (always true)
+  - `allow_read` — whether read-level tools are allowed
   - `allow_write` — whether write-level tools are allowed
   - `allow_execute` — whether execute-level tools are allowed
   - `allow_destructive` — `:allow`, `:deny`, or `:ask` for destructive tools
@@ -15,7 +15,7 @@ defmodule Synapsis.Tool.Permission.SessionConfig do
   @type t :: %__MODULE__{
           session_id: binary() | nil,
           mode: :interactive | :autonomous,
-          allow_read: boolean(),
+          allow_read: :allow | :deny | :ask,
           allow_write: :allow | :deny | :ask,
           allow_execute: :allow | :deny | :ask,
           allow_destructive: :allow | :deny | :ask,
@@ -26,7 +26,7 @@ defmodule Synapsis.Tool.Permission.SessionConfig do
   defstruct [
     :session_id,
     mode: :interactive,
-    allow_read: true,
+    allow_read: :allow,
     allow_write: :allow,
     allow_execute: :ask,
     allow_destructive: :ask,
@@ -47,7 +47,7 @@ defmodule Synapsis.Tool.Permission.SessionConfig do
     %__MODULE__{
       session_id: row.session_id,
       mode: row.mode,
-      allow_read: true,
+      allow_read: row.allow_read,
       allow_write: row.allow_write,
       allow_execute: row.allow_execute,
       allow_destructive: row.allow_destructive,
@@ -76,8 +76,11 @@ defmodule Synapsis.Tool.Permission.SessionConfig do
   end
 
   defp normalize_decision("allowed"), do: :allowed
+  defp normalize_decision("allow"), do: :allowed
   defp normalize_decision("denied"), do: :denied
+  defp normalize_decision("deny"), do: :denied
   defp normalize_decision("requires_approval"), do: :requires_approval
+  defp normalize_decision("ask"), do: :requires_approval
   defp normalize_decision(atom) when is_atom(atom), do: atom
   defp normalize_decision(_), do: :requires_approval
 end

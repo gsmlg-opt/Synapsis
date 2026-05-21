@@ -30,6 +30,7 @@ defmodule Synapsis.Sessions do
     }
 
     with {:ok, session} <- %Session{} |> Session.changeset(attrs) |> Repo.insert(),
+         {:ok, _permission} <- apply_agent_permission(session, config, agent),
          {:ok, _pid} <- Synapsis.Session.DynamicSupervisor.start_session(session.id) do
       {:ok, Repo.preload(session, :project)}
     end
@@ -328,6 +329,14 @@ defmodule Synapsis.Sessions do
   defp restart_session_worker(session_id) do
     Synapsis.Session.DynamicSupervisor.stop_session(session_id)
     ensure_session_running(session_id)
+  end
+
+  defp apply_agent_permission(%Session{} = session, project_config, agent_name) do
+    agent_name
+    |> Synapsis.Agent.Resolver.resolve(project_config)
+    |> Map.get(:permission_mode)
+    |> Synapsis.Tool.Permission.config_for_mode()
+    |> then(&Synapsis.Tool.Permission.update_config(session.id, &1))
   end
 
   defp default_provider(config, agent) do

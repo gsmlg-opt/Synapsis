@@ -1,7 +1,7 @@
 defmodule Synapsis.SessionsTest do
   use Synapsis.DataCase
 
-  alias Synapsis.{Sessions, Message, ProviderConfig, Repo}
+  alias Synapsis.{AgentConfigs, Message, ProviderConfig, Repo, SessionPermission, Sessions}
 
   defmodule TerminalNode do
     @behaviour Synapsis.Agent.Runtime.Node
@@ -41,6 +41,32 @@ defmodule Synapsis.SessionsTest do
       assert session.project != nil
       assert session.project.id != nil
       assert session.title == "My Test Session"
+    end
+
+    test "applies selected agent permission mode to the session" do
+      agent_name = "restricted-#{System.unique_integer([:positive])}"
+
+      {:ok, _agent} =
+        AgentConfigs.create(%{
+          name: agent_name,
+          permission_mode: "restrict"
+        })
+
+      {:ok, session} =
+        Sessions.create("/tmp/test_sessions_permission_#{System.unique_integer([:positive])}", %{
+          provider: "anthropic",
+          model: "test-model",
+          agent: agent_name
+        })
+
+      permission = Repo.get_by!(SessionPermission, session_id: session.id)
+
+      assert permission.mode == :interactive
+      assert permission.allow_read == :ask
+      assert permission.allow_write == :ask
+      assert permission.allow_execute == :ask
+      assert permission.allow_destructive == :ask
+      assert permission.tool_overrides == %{}
     end
 
     test "defaults to anthropic when no config and no env vars set" do
