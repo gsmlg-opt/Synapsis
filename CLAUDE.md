@@ -54,6 +54,20 @@ Read every file in `docs/` before writing any code. These are the source of trut
 - GenServers: `Synapsis.Session.Worker`, `Synapsis.LSP.Server`
 - Config: `~/.config/synapsis/{config,auth}.json`, project `.opencode.json`
 
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues for `gsmlg-opt/Synapsis` using `gh`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the default five-label triage vocabulary. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This is a single-context repo. Use repo-wide architecture, decision, guardrail, PRD, and design docs. See `docs/agents/domain.md`.
+
 ---
 
 ## Phase 1: Umbrella Scaffold + Core Schemas
@@ -369,7 +383,7 @@ If you encounter missing features, bugs, or need functionality not yet available
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **Synapsis** (2730 symbols, 2878 relationships, 5 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **Synapsis** (2750 symbols, 2898 relationships, 5 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

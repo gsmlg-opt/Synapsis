@@ -101,6 +101,20 @@ Use scoped tests for scoped changes. For PRD work, modify only files in the stat
 - Update docs only when the behavior or public contract changes, or when the task explicitly asks for docs.
 - Keep generated planning/checklist content out of `AGENTS.md`; this file should stay concise and operational.
 
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues for `gsmlg-opt/Synapsis` using `gh`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the default five-label triage vocabulary. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This is a single-context repo. Use repo-wide architecture, decision, guardrail, PRD, and design docs. See `docs/agents/domain.md`.
+
 ## Dependency Issue Routing
 
 If a dependency from the `gsmlg*`, `duskmoon-dev`, `Gao-OS`, or related internal GitHub organizations is missing needed behavior or appears buggy, do not silently work around it.
@@ -132,7 +146,7 @@ Rules:
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **Synapsis** (2730 symbols, 2878 relationships, 5 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **Synapsis** (2750 symbols, 2898 relationships, 5 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
