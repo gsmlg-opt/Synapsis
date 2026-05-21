@@ -69,6 +69,14 @@ defmodule Synapsis.Agent.StreamAccumulatorTest do
       assert [{"reasoning", %{text: "thinking..."}}] = broadcasts
     end
 
+    test "reasoning_signature_delta appends to pending_reasoning_signature", %{acc: acc} do
+      {broadcasts, acc} =
+        StreamAccumulator.accumulate({:reasoning_signature_delta, "sig-123"}, acc)
+
+      assert acc.pending_reasoning_signature == "sig-123"
+      assert broadcasts == []
+    end
+
     test "handles interleaved text and tool events", %{acc: acc} do
       {_, acc} = StreamAccumulator.accumulate({:text_delta, "Let me read "}, acc)
       {_, acc} = StreamAccumulator.accumulate({:tool_use_start, "file_read", "tu_1"}, acc)
@@ -123,6 +131,7 @@ defmodule Synapsis.Agent.StreamAccumulatorTest do
       assert acc.pending_tool_use == nil
       assert acc.pending_tool_input == ""
       assert acc.pending_reasoning == ""
+      assert acc.pending_reasoning_signature == ""
       assert acc.tool_uses == []
     end
   end

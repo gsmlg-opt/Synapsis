@@ -99,12 +99,14 @@ defmodule Synapsis.Session.Worker.Config do
           {:error, _} ->
             auth = Synapsis.Config.load_auth()
             api_key = get_in(auth, [provider_name, "apiKey"]) || env_key(provider_name)
+            base_url = provider_base_url(provider_name, auth)
 
             %{
               api_key: api_key,
-              base_url: Synapsis.Providers.default_base_url(provider_name),
-              type: provider_name
+              base_url: base_url,
+              type: Synapsis.Providers.provider_type(provider_name)
             }
+            |> maybe_put(:default_model, Synapsis.Providers.env_default_model(provider_name))
         end
     end
   end
@@ -175,9 +177,17 @@ defmodule Synapsis.Session.Worker.Config do
   def apply_mode(_mode_name, _state), do: {:error, :invalid_mode}
 
   defp env_key(provider_name) do
-    case Synapsis.Providers.env_var_name(provider_name) do
-      nil -> nil
-      var -> System.get_env(var)
-    end
+    Synapsis.Providers.env_api_key(provider_name)
   end
+
+  defp provider_base_url(provider_name, auth) do
+    get_in(auth, [provider_name, "baseURL"]) ||
+      get_in(auth, [provider_name, "baseUrl"]) ||
+      get_in(auth, [provider_name, "base_url"]) ||
+      Synapsis.Providers.env_base_url(provider_name) ||
+      Synapsis.Providers.default_base_url(provider_name)
+  end
+
+  defp maybe_put(map, _key, value) when value in [nil, ""], do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 end

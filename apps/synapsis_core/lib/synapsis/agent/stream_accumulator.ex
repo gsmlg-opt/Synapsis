@@ -11,6 +11,7 @@ defmodule Synapsis.Agent.StreamAccumulator do
           pending_tool_use: map() | nil,
           pending_tool_input: String.t(),
           pending_reasoning: String.t(),
+          pending_reasoning_signature: String.t(),
           tool_uses: [Synapsis.Part.ToolUse.t()]
         }
 
@@ -83,6 +84,10 @@ defmodule Synapsis.Agent.StreamAccumulator do
     {[{"reasoning", %{text: text}}], %{acc | pending_reasoning: acc.pending_reasoning <> text}}
   end
 
+  def accumulate({:reasoning_signature_delta, signature}, acc) do
+    {[], %{acc | pending_reasoning_signature: acc.pending_reasoning_signature <> signature}}
+  end
+
   def accumulate(:message_start, acc), do: {[], acc}
   def accumulate({:message_delta, _delta}, acc), do: {[], acc}
   def accumulate(:done, acc), do: {[], acc}
@@ -103,6 +108,7 @@ defmodule Synapsis.Agent.StreamAccumulator do
       pending_tool_use: nil,
       pending_tool_input: "",
       pending_reasoning: "",
+      pending_reasoning_signature: "",
       tool_uses: []
     }
   end

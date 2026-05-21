@@ -31,6 +31,7 @@ defmodule Synapsis.Agent.Nodes.NodeTest do
         pending_tool_use: nil,
         pending_tool_input: "",
         pending_reasoning: "",
+        pending_reasoning_signature: "",
         tool_uses: []
       }
 
@@ -51,6 +52,7 @@ defmodule Synapsis.Agent.Nodes.NodeTest do
         pending_tool_use: nil,
         pending_tool_input: "",
         pending_reasoning: "",
+        pending_reasoning_signature: "",
         tool_uses: [tool_use]
       }
 
@@ -79,6 +81,7 @@ defmodule Synapsis.Agent.Nodes.NodeTest do
         pending_tool_use: nil,
         pending_tool_input: "",
         pending_reasoning: "",
+        pending_reasoning_signature: "",
         tool_uses: []
       }
 
@@ -96,6 +99,26 @@ defmodule Synapsis.Agent.Nodes.NodeTest do
       ctx = %{stream_error: "connection_failed"}
       assert {:next, :error, new_state} = Nodes.LLMStream.run(state, ctx)
       assert new_state[:stream_error] == "connection_failed"
+      assert new_state[:pending_text] == "Provider error: connection_failed"
+    end
+
+    test "handles resumed legacy state without reasoning signature" do
+      state =
+        CodingLoop.initial_state(%{session_id: "s1"})
+        |> Map.delete(:pending_reasoning_signature)
+        |> Map.put(:awaiting_stream, true)
+
+      acc = %{
+        pending_text: "hello world",
+        pending_tool_use: nil,
+        pending_tool_input: "",
+        pending_reasoning: "",
+        pending_reasoning_signature: "sig-123",
+        tool_uses: []
+      }
+
+      assert {:next, :default, new_state} = Nodes.LLMStream.run(state, %{stream_acc: acc})
+      assert new_state.pending_reasoning_signature == "sig-123"
     end
   end
 

@@ -62,27 +62,12 @@ defmodule Synapsis.Config do
   end
 
   def load_env_overrides do
-    overrides = %{}
-
-    overrides =
-      case System.get_env("ANTHROPIC_API_KEY") do
-        nil -> overrides
-        key -> put_in_nested(overrides, ["providers", "anthropic", "apiKey"], key)
-      end
-
-    overrides =
-      case System.get_env("OPENAI_API_KEY") do
-        nil -> overrides
-        key -> put_in_nested(overrides, ["providers", "openai", "apiKey"], key)
-      end
-
-    overrides =
-      case System.get_env("GOOGLE_API_KEY") do
-        nil -> overrides
-        key -> put_in_nested(overrides, ["providers", "google", "apiKey"], key)
-      end
-
-    overrides
+    Enum.reduce(~w(anthropic openai google openrouter), %{}, fn provider, overrides ->
+      overrides
+      |> maybe_put_provider(provider, "apiKey", Synapsis.Providers.env_api_key(provider))
+      |> maybe_put_provider(provider, "baseURL", Synapsis.Providers.env_base_url(provider))
+      |> maybe_put_provider(provider, "model", Synapsis.Providers.env_default_model(provider))
+    end)
   end
 
   def deep_merge(base, override) when is_map(base) and is_map(override) do
@@ -114,6 +99,13 @@ defmodule Synapsis.Config do
   defp put_in_nested(map, [key | rest], value) do
     inner = Map.get(map, key, %{})
     Map.put(map, key, put_in_nested(inner, rest, value))
+  end
+
+  defp maybe_put_provider(overrides, _provider, _key, value) when value in [nil, ""],
+    do: overrides
+
+  defp maybe_put_provider(overrides, provider, key, value) do
+    put_in_nested(overrides, ["providers", provider, key], value)
   end
 
   @doc """

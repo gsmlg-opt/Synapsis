@@ -27,6 +27,7 @@ defmodule Synapsis.Agent.Nodes.Reason do
             state
             |> Map.delete(:awaiting_stream)
             |> Map.put(:stream_error, ctx[:stream_error])
+            |> Map.put_new(:pending_reasoning_signature, "")
 
           {:next, :error, new_state}
 
@@ -34,14 +35,14 @@ defmodule Synapsis.Agent.Nodes.Reason do
           acc = ctx[:stream_acc]
 
           new_state =
-            %{
-              state
-              | pending_text: acc.pending_text,
-                pending_tool_use: acc.pending_tool_use,
-                pending_tool_input: acc.pending_tool_input,
-                pending_reasoning: acc.pending_reasoning,
-                tool_uses: acc.tool_uses
-            }
+            Map.merge(state, %{
+              pending_text: acc.pending_text,
+              pending_tool_use: acc.pending_tool_use,
+              pending_tool_input: acc.pending_tool_input,
+              pending_reasoning: acc.pending_reasoning,
+              pending_reasoning_signature: acc.pending_reasoning_signature,
+              tool_uses: acc.tool_uses
+            })
             |> Map.delete(:awaiting_stream)
             |> Map.delete(:request)
 

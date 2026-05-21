@@ -9,7 +9,11 @@ defmodule Synapsis.Provider.EventMapperTest do
 
   describe "map_event/2 Anthropic" do
     test "parses text_start" do
-      chunk = %{"type" => "content_block_start", "content_block" => %{"type" => "text", "text" => ""}}
+      chunk = %{
+        "type" => "content_block_start",
+        "content_block" => %{"type" => "text", "text" => ""}
+      }
+
       assert :text_start = EventMapper.map_event(:anthropic, chunk)
     end
 
@@ -28,7 +32,8 @@ defmodule Synapsis.Provider.EventMapperTest do
         "content_block" => %{"type" => "tool_use", "name" => "file_read", "id" => "toolu_123"}
       }
 
-      assert {:tool_use_start, "file_read", "toolu_123"} = EventMapper.map_event(:anthropic, chunk)
+      assert {:tool_use_start, "file_read", "toolu_123"} =
+               EventMapper.map_event(:anthropic, chunk)
     end
 
     test "parses tool_input_delta" do
@@ -54,8 +59,18 @@ defmodule Synapsis.Provider.EventMapperTest do
       assert {:reasoning_delta, "Let me think..."} = EventMapper.map_event(:anthropic, chunk)
     end
 
+    test "parses reasoning signature_delta" do
+      chunk = %{
+        "type" => "content_block_delta",
+        "delta" => %{"type" => "signature_delta", "signature" => "sig-123"}
+      }
+
+      assert {:reasoning_signature_delta, "sig-123"} = EventMapper.map_event(:anthropic, chunk)
+    end
+
     test "parses content_block_stop" do
-      assert :content_block_stop = EventMapper.map_event(:anthropic, %{"type" => "content_block_stop"})
+      assert :content_block_stop =
+               EventMapper.map_event(:anthropic, %{"type" => "content_block_stop"})
     end
 
     test "parses message_start" do
@@ -64,7 +79,9 @@ defmodule Synapsis.Provider.EventMapperTest do
 
     test "parses message_delta" do
       chunk = %{"type" => "message_delta", "delta" => %{"stop_reason" => "end_turn"}}
-      assert {:message_delta, %{"stop_reason" => "end_turn"}} = EventMapper.map_event(:anthropic, chunk)
+
+      assert {:message_delta, %{"stop_reason" => "end_turn"}} =
+               EventMapper.map_event(:anthropic, chunk)
     end
 
     test "parses message_stop as done" do
@@ -269,7 +286,8 @@ defmodule Synapsis.Provider.EventMapperTest do
         }
       }
 
-      assert {:tool_use_start, "file_edit", "toolu_abc"} = EventMapper.map_event(:anthropic, chunk)
+      assert {:tool_use_start, "file_edit", "toolu_abc"} =
+               EventMapper.map_event(:anthropic, chunk)
     end
   end
 

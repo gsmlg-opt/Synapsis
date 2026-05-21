@@ -23,28 +23,53 @@ defmodule Synapsis.Provider.EventMapper do
   # Anthropic — mostly passthrough, already canonical
   # ---------------------------------------------------------------------------
 
-  def map_event(:anthropic, %{"type" => "content_block_start", "content_block" => %{"type" => "tool_use"} = block}) do
+  def map_event(:anthropic, %{
+        "type" => "content_block_start",
+        "content_block" => %{"type" => "tool_use"} = block
+      }) do
     {:tool_use_start, block["name"], block["id"]}
   end
 
-  def map_event(:anthropic, %{"type" => "content_block_start", "content_block" => %{"type" => "text"}}) do
+  def map_event(:anthropic, %{
+        "type" => "content_block_start",
+        "content_block" => %{"type" => "text"}
+      }) do
     :text_start
   end
 
-  def map_event(:anthropic, %{"type" => "content_block_start", "content_block" => %{"type" => "thinking"}}) do
+  def map_event(:anthropic, %{
+        "type" => "content_block_start",
+        "content_block" => %{"type" => "thinking"}
+      }) do
     :reasoning_start
   end
 
-  def map_event(:anthropic, %{"type" => "content_block_delta", "delta" => %{"type" => "text_delta", "text" => text}}) do
+  def map_event(:anthropic, %{
+        "type" => "content_block_delta",
+        "delta" => %{"type" => "text_delta", "text" => text}
+      }) do
     {:text_delta, text}
   end
 
-  def map_event(:anthropic, %{"type" => "content_block_delta", "delta" => %{"type" => "input_json_delta", "partial_json" => json}}) do
+  def map_event(:anthropic, %{
+        "type" => "content_block_delta",
+        "delta" => %{"type" => "input_json_delta", "partial_json" => json}
+      }) do
     {:tool_input_delta, json}
   end
 
-  def map_event(:anthropic, %{"type" => "content_block_delta", "delta" => %{"type" => "thinking_delta", "thinking" => text}}) do
+  def map_event(:anthropic, %{
+        "type" => "content_block_delta",
+        "delta" => %{"type" => "thinking_delta", "thinking" => text}
+      }) do
     {:reasoning_delta, text}
+  end
+
+  def map_event(:anthropic, %{
+        "type" => "content_block_delta",
+        "delta" => %{"type" => "signature_delta", "signature" => signature}
+      }) do
+    {:reasoning_signature_delta, signature}
   end
 
   def map_event(:anthropic, %{"type" => "content_block_stop"}) do

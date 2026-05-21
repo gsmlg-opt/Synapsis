@@ -3,6 +3,15 @@ defmodule Synapsis.SessionsTest do
 
   alias Synapsis.{AgentConfigs, Message, ProviderConfig, Repo, SessionPermission, Sessions}
 
+  @provider_env_vars ~w(
+    ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL ANTHROPIC_MODEL
+    ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL ANTHROPIC_DEFAULT_OPUS_MODEL
+    ANTHROPIC_FAST_MODEL ANTHROPIC_EXPERT_MODEL OPENAI_API_KEY OPENAI_BASE_URL OPENAI_MODEL
+    OPENAI_DEFAULT_MODEL GOOGLE_API_KEY GOOGLE_BASE_URL GOOGLE_MODEL GOOGLE_DEFAULT_MODEL
+    OPENROUTER_API_KEY OPENROUTER_BASE_URL OPENROUTER_MODEL CHATGPT_OAUTH_TOKEN
+    CHATGPT_BASE_URL CHATGPT_MODEL
+  )
+
   defmodule TerminalNode do
     @behaviour Synapsis.Agent.Runtime.Node
 
@@ -70,18 +79,8 @@ defmodule Synapsis.SessionsTest do
     end
 
     test "defaults to anthropic when no config and no env vars set" do
-      prev_ant = System.get_env("ANTHROPIC_API_KEY")
-      prev_oai = System.get_env("OPENAI_API_KEY")
-      prev_goo = System.get_env("GOOGLE_API_KEY")
-      System.delete_env("ANTHROPIC_API_KEY")
-      System.delete_env("OPENAI_API_KEY")
-      System.delete_env("GOOGLE_API_KEY")
-
-      on_exit(fn ->
-        if prev_ant, do: System.put_env("ANTHROPIC_API_KEY", prev_ant)
-        if prev_oai, do: System.put_env("OPENAI_API_KEY", prev_oai)
-        if prev_goo, do: System.put_env("GOOGLE_API_KEY", prev_goo)
-      end)
+      preserve_provider_env()
+      Enum.each(@provider_env_vars, &System.delete_env/1)
 
       {:ok, session} =
         Sessions.create(temp_project_without_agent_default("test_sess_default"))
@@ -91,24 +90,28 @@ defmodule Synapsis.SessionsTest do
     end
 
     test "selects openai when OPENAI_API_KEY is set and ANTHROPIC not set" do
-      prev_ant = System.get_env("ANTHROPIC_API_KEY")
-      prev_oai = System.get_env("OPENAI_API_KEY")
-      System.delete_env("ANTHROPIC_API_KEY")
+      preserve_provider_env()
+      Enum.each(@provider_env_vars, &System.delete_env/1)
       System.put_env("OPENAI_API_KEY", "sk-openai-test")
-
-      on_exit(fn ->
-        if prev_ant, do: System.put_env("ANTHROPIC_API_KEY", prev_ant)
-
-        if prev_oai,
-          do: System.put_env("OPENAI_API_KEY", prev_oai),
-          else: System.delete_env("OPENAI_API_KEY")
-      end)
 
       {:ok, session} =
         Sessions.create(temp_project_without_agent_default("test_sess_oai_env"))
 
       assert session.provider == "openai"
       assert session.model == Synapsis.Providers.default_model("openai")
+    end
+
+    test "uses Anthropic-compatible auth token and model env aliases" do
+      preserve_provider_env()
+      Enum.each(@provider_env_vars, &System.delete_env/1)
+      System.put_env("ANTHROPIC_AUTH_TOKEN", "auth-token-test")
+      System.put_env("ANTHROPIC_MODEL", "env-anthropic-model")
+
+      {:ok, session} =
+        Sessions.create(temp_project_without_agent_default("test_sess_ant_alias_env"))
+
+      assert session.provider == "anthropic"
+      assert session.model == "env-anthropic-model"
     end
 
     test "uses project default agent provider and model when omitted" do
@@ -134,18 +137,8 @@ defmodule Synapsis.SessionsTest do
     end
 
     test "uses first enabled model from configured providers when no config or env default exists" do
-      prev_ant = System.get_env("ANTHROPIC_API_KEY")
-      prev_oai = System.get_env("OPENAI_API_KEY")
-      prev_goo = System.get_env("GOOGLE_API_KEY")
-      System.delete_env("ANTHROPIC_API_KEY")
-      System.delete_env("OPENAI_API_KEY")
-      System.delete_env("GOOGLE_API_KEY")
-
-      on_exit(fn ->
-        if prev_ant, do: System.put_env("ANTHROPIC_API_KEY", prev_ant)
-        if prev_oai, do: System.put_env("OPENAI_API_KEY", prev_oai)
-        if prev_goo, do: System.put_env("GOOGLE_API_KEY", prev_goo)
-      end)
+      preserve_provider_env()
+      Enum.each(@provider_env_vars, &System.delete_env/1)
 
       Repo.delete_all(ProviderConfig)
 
@@ -192,6 +185,17 @@ defmodule Synapsis.SessionsTest do
 
       assert session.agent == "plan"
     end
+  end
+
+  defp preserve_provider_env do
+    previous = Map.new(@provider_env_vars, &{&1, System.get_env(&1)})
+
+    on_exit(fn ->
+      Enum.each(previous, fn
+        {var, nil} -> System.delete_env(var)
+        {var, value} -> System.put_env(var, value)
+      end)
+    end)
   end
 
   describe "get/1" do
@@ -358,31 +362,39 @@ defmodule Synapsis.SessionsTest do
     test "delegates binary content to worker" do
       {:ok, session} =
         Sessions.create("/tmp/test_sess_send_#{:rand.uniform(100_000)}", %{
-          provider: "anthropic",
-          model: "claude-sonnet-4-20250514"
+          provider: "unknown-test-provider",
+          model: "test-model"
         })
+
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}")
 
       result = Sessions.send_message(session.id, "Hello world")
       assert result == :ok
+      assert_terminal_status(session.id, "error")
     end
 
     test "delegates map with content key to worker" do
       {:ok, session} =
         Sessions.create("/tmp/test_sess_map_msg_#{:rand.uniform(100_000)}", %{
-          provider: "anthropic",
-          model: "claude-sonnet-4-20250514"
+          provider: "unknown-test-provider",
+          model: "test-model"
         })
+
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}")
 
       result = Sessions.send_message(session.id, %{content: "Hello via map"})
       assert result == :ok
+      assert_terminal_status(session.id, "error")
     end
 
     test "sends message with images list (filters invalid paths)" do
       {:ok, session} =
         Sessions.create("/tmp/test_sess_img_msg_#{:rand.uniform(100_000)}", %{
-          provider: "anthropic",
-          model: "claude-sonnet-4-20250514"
+          provider: "unknown-test-provider",
+          model: "test-model"
         })
+
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}")
 
       result =
         Sessions.send_message(session.id, %{
@@ -391,6 +403,7 @@ defmodule Synapsis.SessionsTest do
         })
 
       assert result == :ok
+      assert_terminal_status(session.id, "error")
     end
 
     test "accepts another message after a graph turn completes" do
@@ -415,15 +428,17 @@ defmodule Synapsis.SessionsTest do
     test "restarts a terminal graph runner before sending" do
       {:ok, session} =
         Sessions.create("/tmp/test_sess_terminal_runner_#{:rand.uniform(100_000)}", %{
-          provider: "anthropic",
-          model: "claude-sonnet-4-20250514"
+          provider: "unknown-test-provider",
+          model: "test-model"
         })
+
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}")
 
       [{worker_pid, _}] = Registry.lookup(Synapsis.Session.Registry, session.id)
       replace_runner_with_terminal_runner(worker_pid, session.id)
 
       assert :ok = Sessions.send_message(session.id, "after terminal runner")
-      Synapsis.Session.DynamicSupervisor.stop_session(session.id)
+      assert_terminal_status(session.id, "error")
     end
 
     test "ensure_running/1 is a no-op when worker is already running" do
@@ -469,6 +484,14 @@ defmodule Synapsis.SessionsTest do
         assert runner_waiting_on?(worker_pid, :llm_stream)
         send(worker_pid, :provider_done)
         assert_receive {"done", %{}}, 1_000
+    end
+  end
+
+  defp assert_terminal_status(session_id, expected_status) do
+    try do
+      assert_receive {"session_status", %{status: ^expected_status}}, 5_000
+    after
+      Synapsis.Session.DynamicSupervisor.stop_session(session_id)
     end
   end
 
@@ -685,6 +708,7 @@ defmodule Synapsis.SessionsTest do
     File.write!(
       Path.join(dir, ".opencode.json"),
       Jason.encode!(%{
+        "providers" => nil,
         "agents" => %{
           "default" => %{
             "provider" => nil,

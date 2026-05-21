@@ -1,7 +1,14 @@
 defmodule Synapsis.ConfigTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Synapsis.Config
+
+  @provider_env_vars ~w(
+    ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL ANTHROPIC_MODEL
+    ANTHROPIC_DEFAULT_SONNET_MODEL OPENAI_API_KEY OPENAI_BASE_URL OPENAI_MODEL
+    GOOGLE_API_KEY GOOGLE_BASE_URL GOOGLE_MODEL OPENROUTER_API_KEY
+    OPENROUTER_BASE_URL OPENROUTER_MODEL
+  )
 
   describe "defaults/0" do
     test "returns expected default config structure" do
@@ -154,31 +161,57 @@ defmodule Synapsis.ConfigTest do
 
   describe "load_env_overrides/0" do
     test "picks up ANTHROPIC_API_KEY from env" do
+      preserve_provider_env()
       System.put_env("ANTHROPIC_API_KEY", "test-key-123")
       overrides = Config.load_env_overrides()
       assert get_in(overrides, ["providers", "anthropic", "apiKey"]) == "test-key-123"
+    end
+
+    test "picks up Anthropic-compatible auth, base URL, and model env aliases" do
+      preserve_provider_env()
       System.delete_env("ANTHROPIC_API_KEY")
+      System.put_env("ANTHROPIC_AUTH_TOKEN", "test-auth-token")
+      System.put_env("ANTHROPIC_BASE_URL", "https://example.test/anthropic")
+      System.put_env("ANTHROPIC_MODEL", "example-model")
+
+      overrides = Config.load_env_overrides()
+      assert get_in(overrides, ["providers", "anthropic", "apiKey"]) == "test-auth-token"
+
+      assert get_in(overrides, ["providers", "anthropic", "baseURL"]) ==
+               "https://example.test/anthropic"
+
+      assert get_in(overrides, ["providers", "anthropic", "model"]) == "example-model"
     end
 
     test "picks up OPENAI_API_KEY from env" do
+      preserve_provider_env()
       System.put_env("OPENAI_API_KEY", "sk-openai-test")
       overrides = Config.load_env_overrides()
       assert get_in(overrides, ["providers", "openai", "apiKey"]) == "sk-openai-test"
-      System.delete_env("OPENAI_API_KEY")
     end
 
     test "picks up GOOGLE_API_KEY from env" do
+      preserve_provider_env()
       System.put_env("GOOGLE_API_KEY", "google-test-key")
       overrides = Config.load_env_overrides()
       assert get_in(overrides, ["providers", "google", "apiKey"]) == "google-test-key"
-      System.delete_env("GOOGLE_API_KEY")
     end
 
     test "returns empty map when no env vars set" do
-      System.delete_env("ANTHROPIC_API_KEY")
-      System.delete_env("OPENAI_API_KEY")
-      System.delete_env("GOOGLE_API_KEY")
+      preserve_provider_env()
+      Enum.each(@provider_env_vars, &System.delete_env/1)
       assert Config.load_env_overrides() == %{}
     end
+  end
+
+  defp preserve_provider_env do
+    previous = Map.new(@provider_env_vars, &{&1, System.get_env(&1)})
+
+    on_exit(fn ->
+      Enum.each(previous, fn
+        {var, nil} -> System.delete_env(var)
+        {var, value} -> System.put_env(var, value)
+      end)
+    end)
   end
 end

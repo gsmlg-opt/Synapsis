@@ -19,7 +19,8 @@ defmodule Synapsis.Provider.MessageMapper do
   """
   def build_request(:anthropic, messages, tools, opts) do
     request = %{
-      model: opts[:model] || Synapsis.Providers.default_model(opts[:provider_name] || "anthropic"),
+      model:
+        opts[:model] || Synapsis.Providers.default_model(opts[:provider_name] || "anthropic"),
       max_tokens: opts[:max_tokens] || 8192,
       stream: true,
       messages: Enum.map(messages, &format_anthropic_message/1)
@@ -111,8 +112,9 @@ defmodule Synapsis.Provider.MessageMapper do
     }
   end
 
-  defp format_anthropic_content(%Synapsis.Part.Reasoning{content: content}) do
-    %{type: "text", text: "[thinking] #{content}"}
+  defp format_anthropic_content(%Synapsis.Part.Reasoning{content: content, signature: signature}) do
+    %{type: "thinking", thinking: content}
+    |> maybe_put(:signature, signature)
   end
 
   defp format_anthropic_content(%{content: content}) do
@@ -126,6 +128,9 @@ defmodule Synapsis.Provider.MessageMapper do
       input_schema: tool.parameters
     }
   end
+
+  defp maybe_put(map, _key, value) when value in [nil, ""], do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
   # ---------------------------------------------------------------------------
   # OpenAI message formatting — chat completions format
@@ -144,7 +149,9 @@ defmodule Synapsis.Provider.MessageMapper do
   defp format_openai_message(msg) do
     {role, parts} = extract_role_parts(msg)
     {tool_uses, other_parts} = Enum.split_with(parts, &match?(%Synapsis.Part.ToolUse{}, &1))
-    {tool_results, content_parts} = Enum.split_with(other_parts, &match?(%Synapsis.Part.ToolResult{}, &1))
+
+    {tool_results, content_parts} =
+      Enum.split_with(other_parts, &match?(%Synapsis.Part.ToolResult{}, &1))
 
     cond do
       tool_results != [] ->
@@ -161,7 +168,9 @@ defmodule Synapsis.Provider.MessageMapper do
         # Assistant messages with tool_use become tool_calls
         base =
           case content_parts do
-            [] -> %{role: "assistant"}
+            [] ->
+              %{role: "assistant"}
+
             _ ->
               content_items = Enum.map(content_parts, &format_openai_content/1)
               %{role: "assistant", content: merge_openai_content(content_items)}
@@ -174,10 +183,11 @@ defmodule Synapsis.Provider.MessageMapper do
               type: "function",
               function: %{
                 name: tool,
-                arguments: case Jason.encode(input) do
-                  {:ok, json} -> json
-                  {:error, _} -> "{}"
-                end
+                arguments:
+                  case Jason.encode(input) do
+                    {:ok, json} -> json
+                    {:error, _} -> "{}"
+                  end
               }
             }
           end)

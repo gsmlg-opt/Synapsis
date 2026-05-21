@@ -30,6 +30,7 @@ defmodule Synapsis.Agent.Nodes.ProcessResponseTest do
         pending_tool_use: nil,
         pending_tool_input: "",
         pending_reasoning: "",
+        pending_reasoning_signature: "",
         tool_uses: []
       }
 
@@ -50,10 +51,25 @@ defmodule Synapsis.Agent.Nodes.ProcessResponseTest do
         pending_tool_use: nil,
         pending_tool_input: "",
         pending_reasoning: "",
+        pending_reasoning_signature: "",
         tool_uses: [tool_use]
       }
 
       assert {:next, :has_tools, _new_state} = ProcessResponse.run(state, %{})
+    end
+
+    test "handles resumed legacy state without reasoning signature", %{session: session} do
+      state = %{
+        session_id: session.id,
+        pending_text: "Provider error: HTTP 403: Request not allowed",
+        pending_tool_use: nil,
+        pending_tool_input: "",
+        pending_reasoning: "",
+        tool_uses: []
+      }
+
+      assert {:next, :no_tools, new_state} = ProcessResponse.run(state, %{})
+      assert new_state.pending_reasoning_signature == ""
     end
   end
 end

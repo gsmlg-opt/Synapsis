@@ -283,7 +283,14 @@ defmodule SynapsisWeb.ChatLive do
   end
 
   def handle_info({"error", %{message: msg}}, socket) do
-    {:noreply, socket |> put_flash(:error, msg) |> assign_session_status("error")}
+    messages =
+      if session = socket.assigns.current_session, do: Sessions.get_messages(session.id), else: []
+
+    {:noreply,
+     socket
+     |> assign(:messages, messages)
+     |> put_flash(:error, msg)
+     |> assign_session_status("error")}
   end
 
   def handle_info(

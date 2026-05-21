@@ -21,24 +21,26 @@ defmodule Synapsis.Agent.Nodes.Act do
     session_id = state.session_id
 
     acc = %{
-      pending_text: state.pending_text,
-      pending_tool_use: state.pending_tool_use,
-      pending_tool_input: state.pending_tool_input,
-      pending_reasoning: state.pending_reasoning,
-      tool_uses: state.tool_uses
+      pending_text: Map.get(state, :pending_text, ""),
+      pending_tool_use: Map.get(state, :pending_tool_use),
+      pending_tool_input: Map.get(state, :pending_tool_input, ""),
+      pending_reasoning: Map.get(state, :pending_reasoning, ""),
+      pending_reasoning_signature: Map.get(state, :pending_reasoning_signature, ""),
+      tool_uses: Map.get(state, :tool_uses, [])
     }
 
     flushed = ResponseFlusher.flush(session_id, acc)
 
-    new_state = %{
-      state
-      | pending_text: flushed.pending_text,
+    new_state =
+      Map.merge(state, %{
+        pending_text: flushed.pending_text,
         pending_tool_use: flushed.pending_tool_use,
         pending_tool_input: flushed.pending_tool_input,
-        pending_reasoning: flushed.pending_reasoning
-    }
+        pending_reasoning: flushed.pending_reasoning,
+        pending_reasoning_signature: flushed.pending_reasoning_signature
+      })
 
-    route = determine_route(new_state.tool_uses)
+    route = determine_route(Map.get(new_state, :tool_uses, []))
     {:next, route, new_state}
   end
 

@@ -49,5 +49,21 @@ defmodule Synapsis.Agent.Nodes.CompleteTest do
       assert_receive {"done", %{}}
       assert_receive {"session_status", %{status: "idle"}}
     end
+
+    test "broadcasts error status when stream failed", %{session: session} do
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}")
+
+      state = %{
+        session_id: session.id,
+        iteration_count: 3,
+        stream_error: "HTTP 403: Request not allowed"
+      }
+
+      Complete.run(state, %{})
+
+      assert_receive {"error", %{message: "Provider error: HTTP 403: Request not allowed"}}
+      assert_receive {"session_status", %{status: "error"}}
+      refute_receive {"done", %{}}
+    end
   end
 end

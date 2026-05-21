@@ -243,10 +243,13 @@ defmodule SynapsisWeb.AgentLive.Agents do
             <.dm_link navigate={~p"/agent/agents"}>
               <.dm_btn type="button" variant="ghost" size="sm">Cancel</.dm_btn>
             </.dm_link>
+            <%!-- TODO(upstream): duskmoon-dev/duskmoon-elements#59 --%>
+            <%!-- WORKAROUND(upstream): duskmoon-dev/duskmoon-elements#59 --%>
+            <%!-- el-dm-button ignores form= attr; use JS.dispatch to submit by ID instead --%>
             <.dm_btn
               :if={@active_tab != "management"}
-              type="submit"
-              form="agent-config-form"
+              type="button"
+              phx-click={JS.dispatch("submit", to: "#agent-config-form")}
               variant="primary"
               size="sm"
             >

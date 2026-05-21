@@ -284,6 +284,18 @@ defmodule Synapsis.Providers do
   def default_base_url("local"), do: "http://localhost:11434"
   def default_base_url(_), do: nil
 
+  @doc "Runtime provider type for a provider name."
+  def provider_type(provider_name) do
+    case provider_name do
+      name
+      when name in ~w(moonshot-ai moonshot-cn zhipu-ai zhipu-cn zhipu-coding minimax-io minimax-cn) ->
+        "anthropic"
+
+      name ->
+        name
+    end
+  end
+
   @doc "Default model for a provider type or named provider."
   def default_model("anthropic"), do: "claude-sonnet-4-6"
   def default_model("openai"), do: "gpt-4.1"
@@ -386,20 +398,87 @@ defmodule Synapsis.Providers do
     }
   end
 
-  @doc "Environment variable name for a provider's API key."
-  def env_var_name("anthropic"), do: "ANTHROPIC_API_KEY"
-  def env_var_name("openai"), do: "OPENAI_API_KEY"
-  def env_var_name("openai-sub"), do: "CHATGPT_OAUTH_TOKEN"
-  def env_var_name("google"), do: "GOOGLE_API_KEY"
-  def env_var_name("moonshot-ai"), do: "MOONSHOT_API_KEY"
-  def env_var_name("moonshot-cn"), do: "MOONSHOT_API_KEY"
-  def env_var_name("zhipu-ai"), do: "ZHIPU_API_KEY"
-  def env_var_name("zhipu-cn"), do: "ZHIPU_API_KEY"
-  def env_var_name("zhipu-coding"), do: "ZHIPU_API_KEY"
-  def env_var_name("minimax-io"), do: "MINIMAX_API_KEY"
-  def env_var_name("minimax-cn"), do: "MINIMAX_API_KEY"
-  def env_var_name("openrouter"), do: "OPENROUTER_API_KEY"
-  def env_var_name(_), do: nil
+  @doc "Environment variable name for a provider's primary API key."
+  def env_var_name(provider_name) do
+    provider_name
+    |> env_var_names()
+    |> List.first()
+  end
+
+  @doc "Environment variable names accepted for a provider's API key, in priority order."
+  def env_var_names("anthropic"), do: ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"]
+  def env_var_names("openai"), do: ["OPENAI_API_KEY"]
+  def env_var_names("openai-sub"), do: ["CHATGPT_OAUTH_TOKEN"]
+  def env_var_names("google"), do: ["GOOGLE_API_KEY"]
+  def env_var_names("moonshot-ai"), do: ["MOONSHOT_API_KEY"]
+  def env_var_names("moonshot-cn"), do: ["MOONSHOT_API_KEY"]
+  def env_var_names("zhipu-ai"), do: ["ZHIPU_API_KEY"]
+  def env_var_names("zhipu-cn"), do: ["ZHIPU_API_KEY"]
+  def env_var_names("zhipu-coding"), do: ["ZHIPU_API_KEY"]
+  def env_var_names("minimax-io"), do: ["MINIMAX_API_KEY"]
+  def env_var_names("minimax-cn"), do: ["MINIMAX_API_KEY"]
+  def env_var_names("openrouter"), do: ["OPENROUTER_API_KEY"]
+  def env_var_names(_), do: []
+
+  @doc "Return the first configured API key for a provider from the environment."
+  def env_api_key(provider_name) do
+    provider_name
+    |> env_var_names()
+    |> Enum.find_value(&present_env/1)
+  end
+
+  @doc "Return true when a provider is configured through environment variables."
+  def env_configured?(provider_name), do: present?(env_api_key(provider_name))
+
+  @doc "Return a provider base URL override from the environment."
+  def env_base_url(provider_name) do
+    provider_name
+    |> env_base_url_var()
+    |> present_env()
+  end
+
+  @doc "Return a provider default model override from the environment."
+  def env_default_model(provider_name), do: env_model_for_tier(provider_name, :default)
+
+  @doc "Return a provider model override for a tier from the environment."
+  def env_model_for_tier(provider_name, tier) do
+    provider_name
+    |> env_model_vars(tier)
+    |> Enum.find_value(&present_env/1)
+  end
+
+  defp env_base_url_var("anthropic"), do: "ANTHROPIC_BASE_URL"
+  defp env_base_url_var("openai"), do: "OPENAI_BASE_URL"
+  defp env_base_url_var("openai-sub"), do: "CHATGPT_BASE_URL"
+  defp env_base_url_var("google"), do: "GOOGLE_BASE_URL"
+  defp env_base_url_var("openrouter"), do: "OPENROUTER_BASE_URL"
+  defp env_base_url_var(_), do: nil
+
+  defp env_model_vars("anthropic", :default),
+    do: ["ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL"]
+
+  defp env_model_vars("anthropic", :fast),
+    do: ["ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_FAST_MODEL"]
+
+  defp env_model_vars("anthropic", :expert),
+    do: ["ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_EXPERT_MODEL"]
+
+  defp env_model_vars("openai", :default), do: ["OPENAI_MODEL", "OPENAI_DEFAULT_MODEL"]
+  defp env_model_vars("openai-sub", :default), do: ["CHATGPT_MODEL", "OPENAI_MODEL"]
+  defp env_model_vars("google", :default), do: ["GOOGLE_MODEL", "GOOGLE_DEFAULT_MODEL"]
+  defp env_model_vars("openrouter", :default), do: ["OPENROUTER_MODEL"]
+  defp env_model_vars(_provider_name, _tier), do: []
+
+  defp present_env(nil), do: nil
+
+  defp present_env(var_name) do
+    case System.get_env(var_name) do
+      value when is_binary(value) and value != "" -> value
+      _ -> nil
+    end
+  end
+
+  defp present?(value), do: is_binary(value) and value != ""
 
   defp atomize_keys(map) when is_map(map) do
     Map.new(map, fn {k, v} -> {safe_to_atom(k), v} end)

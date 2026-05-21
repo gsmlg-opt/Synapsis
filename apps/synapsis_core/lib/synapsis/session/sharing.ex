@@ -125,7 +125,9 @@ defmodule Synapsis.Session.Sharing do
   defp export_part(%Synapsis.Part.ToolResult{} = p),
     do: %{type: "tool_result", content: p.content, is_error: p.is_error}
 
-  defp export_part(%Synapsis.Part.Reasoning{content: c}), do: %{type: "reasoning", content: c}
+  defp export_part(%Synapsis.Part.Reasoning{content: c, signature: signature}) do
+    %{type: "reasoning", content: c, signature: signature}
+  end
 
   defp export_part(%Synapsis.Part.File{path: p, content: c}),
     do: %{type: "file", path: p, content: c}
@@ -134,10 +136,17 @@ defmodule Synapsis.Session.Sharing do
 
   defp import_parts(parts_data) do
     Enum.map(parts_data, fn
-      %{"type" => "text", "content" => c} -> %Synapsis.Part.Text{content: c}
-      %{"type" => "reasoning", "content" => c} -> %Synapsis.Part.Reasoning{content: c}
-      %{"type" => "file", "path" => p, "content" => c} -> %Synapsis.Part.File{path: p, content: c}
-      _ -> %Synapsis.Part.Text{content: "[imported content]"}
+      %{"type" => "text", "content" => c} ->
+        %Synapsis.Part.Text{content: c}
+
+      %{"type" => "reasoning", "content" => c} = part ->
+        %Synapsis.Part.Reasoning{content: c, signature: part["signature"]}
+
+      %{"type" => "file", "path" => p, "content" => c} ->
+        %Synapsis.Part.File{path: p, content: c}
+
+      _ ->
+        %Synapsis.Part.Text{content: "[imported content]"}
     end)
   end
 

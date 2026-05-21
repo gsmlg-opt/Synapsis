@@ -40,7 +40,7 @@ defmodule SynapsisWeb.MixProject do
       {:phoenix_duskmoon, "~> 9.1"},
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.4"},
-      {:bun, "~> 1.6", runtime: Mix.env() == :dev},
+      {:bun, "~> 2.0", runtime: Mix.env() == :dev},
       {:tailwind, "~> 0.2", runtime: Mix.env() == :dev},
       {:lazy_html, ">= 0.1.0", only: :test}
     ]

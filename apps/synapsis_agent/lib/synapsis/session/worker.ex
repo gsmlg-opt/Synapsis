@@ -7,6 +7,7 @@ defmodule Synapsis.Session.Worker do
   alias Synapsis.Session.WorkspaceManager
   alias Synapsis.Session.Worker.{Boot, Config, IOHandler, Persistence}
   alias Synapsis.Agent.Graphs.CodingLoop
+  alias Synapsis.Agent.ResponseFlusher
   alias Synapsis.Agent.Runtime.Runner
 
   @timeout :timer.minutes(30)
@@ -158,6 +159,7 @@ defmodule Synapsis.Session.Worker do
     case state.execution_mode do
       :query_loop ->
         if state.query_loop_task, do: Task.shutdown(state.query_loop_task, :brutal_kill)
+        close_open_tool_uses(state.session_id)
         Persistence.set_status(state.session_id, "idle")
         {:noreply, %{state | query_loop_task: nil}, @timeout}
 
@@ -173,6 +175,7 @@ defmodule Synapsis.Session.Worker do
           end
         end
 
+        close_open_tool_uses(state.session_id)
         Persistence.set_status(state.session_id, "idle")
         {:noreply, %{state | stream_ref: nil, runner_pid: nil}, @timeout}
     end
@@ -396,6 +399,11 @@ defmodule Synapsis.Session.Worker do
     :ok
   catch
     :exit, _reason -> :ok
+  end
+
+  defp close_open_tool_uses(session_id) do
+    _ = ResponseFlusher.ensure_tool_results(session_id, "Tool use cancelled by user.", true)
+    :ok
   end
 
   # -- QueryLoop helpers --

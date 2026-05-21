@@ -356,13 +356,13 @@ defmodule Synapsis.Sessions do
       Map.has_key?(providers, "google") ->
         "google"
 
-      System.get_env("ANTHROPIC_API_KEY") ->
+      Synapsis.Providers.env_configured?("anthropic") ->
         "anthropic"
 
-      System.get_env("OPENAI_API_KEY") ->
+      Synapsis.Providers.env_configured?("openai") ->
         "openai"
 
-      System.get_env("GOOGLE_API_KEY") ->
+      Synapsis.Providers.env_configured?("google") ->
         "google"
 
       provider = first_enabled_provider_name() ->
@@ -381,6 +381,9 @@ defmodule Synapsis.Sessions do
         agent_config["model"]
 
       model = first_enabled_provider_model(provider) ->
+        model
+
+      model = Synapsis.Providers.env_default_model(provider) ->
         model
 
       true ->
@@ -445,6 +448,9 @@ defmodule Synapsis.Sessions do
 
   defp recovered_provider_model(session) do
     cond do
+      model = env_recovery_model(session.provider, session.model) ->
+        {session.provider, model}
+
       provider_model_supported?(session.provider, session.model) ->
         {session.provider, session.model}
 
@@ -485,7 +491,7 @@ defmodule Synapsis.Sessions do
   defp provider_configured?(provider) do
     case Synapsis.Providers.get_by_name(provider) do
       {:ok, %{enabled: true}} -> true
-      _ -> false
+      _ -> Synapsis.Providers.env_configured?(provider)
     end
   end
 
@@ -500,7 +506,25 @@ defmodule Synapsis.Sessions do
         end
 
       _ ->
-        false
+        Synapsis.Providers.env_configured?(provider)
+    end
+  end
+
+  defp env_recovery_model(provider, model) do
+    env_model = Synapsis.Providers.env_default_model(provider)
+
+    cond do
+      blank?(env_model) ->
+        nil
+
+      blank?(model) ->
+        env_model
+
+      model == Synapsis.Providers.default_model(provider) ->
+        env_model
+
+      true ->
+        nil
     end
   end
 

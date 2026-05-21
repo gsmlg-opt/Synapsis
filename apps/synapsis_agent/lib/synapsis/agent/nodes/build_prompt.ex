@@ -9,6 +9,7 @@ defmodule Synapsis.Agent.Nodes.BuildPrompt do
 
   alias Synapsis.Message
   alias Synapsis.Agent.ContextBuilder
+  alias Synapsis.Agent.ResponseFlusher
   require Logger
 
   @impl true
@@ -17,6 +18,12 @@ defmodule Synapsis.Agent.Nodes.BuildPrompt do
     session_id = state.session_id
     agent_config = state.agent_config
     provider = ctx[:provider] || agent_config[:provider] || "anthropic"
+
+    ResponseFlusher.ensure_tool_results(
+      session_id,
+      "Tool use did not complete before the next turn.",
+      true
+    )
 
     # Load messages from DB
     messages = Message.list_by_session(session_id)

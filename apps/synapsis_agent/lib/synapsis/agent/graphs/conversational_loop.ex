@@ -60,6 +60,7 @@ defmodule Synapsis.Agent.Graphs.ConversationalLoop do
       pending_tool_use: nil,
       pending_tool_input: "",
       pending_reasoning: "",
+      pending_reasoning_signature: "",
       tool_uses: [],
       monitor: Synapsis.Session.Monitor.new(),
       iteration_count: 0,

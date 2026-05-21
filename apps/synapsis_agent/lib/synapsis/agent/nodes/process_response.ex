@@ -11,24 +11,26 @@ defmodule Synapsis.Agent.Nodes.ProcessResponse do
 
     # Flush accumulated content to DB
     acc = %{
-      pending_text: state.pending_text,
-      pending_tool_use: state.pending_tool_use,
-      pending_tool_input: state.pending_tool_input,
-      pending_reasoning: state.pending_reasoning,
-      tool_uses: state.tool_uses
+      pending_text: Map.get(state, :pending_text, ""),
+      pending_tool_use: Map.get(state, :pending_tool_use),
+      pending_tool_input: Map.get(state, :pending_tool_input, ""),
+      pending_reasoning: Map.get(state, :pending_reasoning, ""),
+      pending_reasoning_signature: Map.get(state, :pending_reasoning_signature, ""),
+      tool_uses: Map.get(state, :tool_uses, [])
     }
 
     flushed = ResponseFlusher.flush(session_id, acc)
 
-    new_state = %{
-      state
-      | pending_text: flushed.pending_text,
+    new_state =
+      Map.merge(state, %{
+        pending_text: flushed.pending_text,
         pending_tool_use: flushed.pending_tool_use,
         pending_tool_input: flushed.pending_tool_input,
-        pending_reasoning: flushed.pending_reasoning
-    }
+        pending_reasoning: flushed.pending_reasoning,
+        pending_reasoning_signature: flushed.pending_reasoning_signature
+      })
 
-    if Enum.empty?(state.tool_uses) do
+    if Enum.empty?(acc.tool_uses) do
       {:next, :no_tools, new_state}
     else
       {:next, :has_tools, new_state}

@@ -22,6 +22,8 @@ defmodule Synapsis.Agent.Nodes.LLMStream do
             state
             |> Map.delete(:awaiting_stream)
             |> Map.put(:stream_error, ctx[:stream_error])
+            |> Map.put(:pending_text, provider_error_text(ctx[:stream_error]))
+            |> Map.put_new(:pending_reasoning_signature, "")
 
           {:next, :error, new_state}
 
@@ -29,14 +31,14 @@ defmodule Synapsis.Agent.Nodes.LLMStream do
           acc = ctx[:stream_acc]
 
           new_state =
-            %{
-              state
-              | pending_text: acc.pending_text,
-                pending_tool_use: acc.pending_tool_use,
-                pending_tool_input: acc.pending_tool_input,
-                pending_reasoning: acc.pending_reasoning,
-                tool_uses: acc.tool_uses
-            }
+            Map.merge(state, %{
+              pending_text: acc.pending_text,
+              pending_tool_use: acc.pending_tool_use,
+              pending_tool_input: acc.pending_tool_input,
+              pending_reasoning: acc.pending_reasoning,
+              pending_reasoning_signature: acc.pending_reasoning_signature,
+              tool_uses: acc.tool_uses
+            })
             |> Map.delete(:awaiting_stream)
             |> Map.delete(:request)
 
@@ -55,4 +57,7 @@ defmodule Synapsis.Agent.Nodes.LLMStream do
       {:wait, Map.put(state, :awaiting_stream, true)}
     end
   end
+
+  defp provider_error_text(reason) when is_binary(reason), do: "Provider error: #{reason}"
+  defp provider_error_text(reason), do: "Provider error: #{inspect(reason)}"
 end

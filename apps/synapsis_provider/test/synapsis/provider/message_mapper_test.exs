@@ -34,7 +34,7 @@ defmodule Synapsis.Provider.MessageMapperTest do
 
   @reasoning_msg %{
     role: :assistant,
-    parts: [%Synapsis.Part.Reasoning{content: "Let me think..."}]
+    parts: [%Synapsis.Part.Reasoning{content: "Let me think...", signature: "sig-123"}]
   }
 
   @sample_tools [
@@ -47,7 +47,10 @@ defmodule Synapsis.Provider.MessageMapperTest do
 
   describe "build_request/4 :anthropic" do
     test "formats basic text message" do
-      request = MessageMapper.build_request(:anthropic, [@text_msg], [], %{model: "claude-sonnet-4-20250514"})
+      request =
+        MessageMapper.build_request(:anthropic, [@text_msg], [], %{
+          model: "claude-sonnet-4-20250514"
+        })
 
       assert request.model == "claude-sonnet-4-20250514"
       assert request.stream == true
@@ -100,8 +103,9 @@ defmodule Synapsis.Provider.MessageMapperTest do
       request = MessageMapper.build_request(:anthropic, [@reasoning_msg], [], %{})
       [msg] = request.messages
       [block] = msg.content
-      assert block.type == "text"
-      assert String.contains?(block.text, "thinking")
+      assert block.type == "thinking"
+      assert block.thinking == "Let me think..."
+      assert block.signature == "sig-123"
     end
 
     test "formats tools" do
@@ -130,7 +134,11 @@ defmodule Synapsis.Provider.MessageMapperTest do
     end
 
     test "formats Image parts as base64 source block" do
-      msg = %{role: :user, parts: [%Synapsis.Part.Image{media_type: "image/png", data: "base64data"}]}
+      msg = %{
+        role: :user,
+        parts: [%Synapsis.Part.Image{media_type: "image/png", data: "base64data"}]
+      }
+
       request = MessageMapper.build_request(:anthropic, [msg], [], %{})
       [m] = request.messages
       [block] = m.content
@@ -222,7 +230,11 @@ defmodule Synapsis.Provider.MessageMapperTest do
     end
 
     test "formats Image parts as multimodal image_url content" do
-      msg = %{role: :user, parts: [%Synapsis.Part.Image{media_type: "image/jpeg", data: "b64data"}]}
+      msg = %{
+        role: :user,
+        parts: [%Synapsis.Part.Image{media_type: "image/jpeg", data: "b64data"}]
+      }
+
       request = MessageMapper.build_request(:openai, [msg], [], %{})
       [m] = request.messages
       assert is_list(m.content)
@@ -288,7 +300,8 @@ defmodule Synapsis.Provider.MessageMapperTest do
 
   describe "build_request/4 :google" do
     test "formats basic text message" do
-      request = MessageMapper.build_request(:google, [@text_msg], [], %{model: "gemini-2.0-flash"})
+      request =
+        MessageMapper.build_request(:google, [@text_msg], [], %{model: "gemini-2.0-flash"})
 
       assert request.model == "gemini-2.0-flash"
       assert request.stream == true

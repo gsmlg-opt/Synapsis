@@ -3,21 +3,21 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@duskmoon-dev/core": "latest",
-    "@duskmoon-dev/css-art": "latest",
-    "@duskmoon-dev/elements": "latest",
-    "@duskmoon-dev/art-elements": "latest",
-    "@duskmoon-dev/el-markdown": "latest",
-    "@duskmoon-dev/el-markdown-input": "latest",
+    "@duskmoon-dev/core": "1.17.0",
+    "@duskmoon-dev/css-art": "1.17.0",
+    "@duskmoon-dev/elements": "1.5.3",
+    "@duskmoon-dev/art-elements": "1.5.3",
+    "@duskmoon-dev/el-markdown": "1.5.3",
+    "@duskmoon-dev/el-markdown-input": "1.5.3",
     "@mdi/svg": "^7.4.47",
     "@synapsis/hooks": "workspace:*",
     "bootstrap-icons": "^1.13.1",
-    "phoenix": "1.8.3",
+    "phoenix": "1.8.7",
     "phoenix_html": "4.3.0",
-    "phoenix_live_view": "1.1.23"
+    "phoenix_live_view": "1.1.30"
   },
   "devDependencies": {
     "@types/phoenix": "^1.6.7",
-    "typescript": "^5.7.0"
+    "typescript": "6.0.3"
   }
 }

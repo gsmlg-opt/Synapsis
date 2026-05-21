@@ -1,5 +1,5 @@
 defmodule Synapsis.ProvidersTest do
-  use Synapsis.DataCase, async: true
+  use Synapsis.DataCase, async: false
 
   alias Synapsis.{Providers, ProviderConfig}
   alias Synapsis.Provider.Registry, as: ProviderRegistry
@@ -298,6 +298,34 @@ defmodule Synapsis.ProvidersTest do
     end
   end
 
+  describe "environment provider helpers" do
+    test "uses ANTHROPIC_AUTH_TOKEN when ANTHROPIC_API_KEY is absent" do
+      preserve_env(~w(ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN))
+      System.delete_env("ANTHROPIC_API_KEY")
+      System.put_env("ANTHROPIC_AUTH_TOKEN", "auth-token-test")
+
+      assert Providers.env_api_key("anthropic") == "auth-token-test"
+      assert Providers.env_configured?("anthropic")
+    end
+
+    test "uses Anthropic-compatible base URL and model overrides" do
+      preserve_env(~w(ANTHROPIC_BASE_URL ANTHROPIC_MODEL ANTHROPIC_DEFAULT_OPUS_MODEL))
+      System.put_env("ANTHROPIC_BASE_URL", "https://example.test/anthropic")
+      System.put_env("ANTHROPIC_MODEL", "model-default")
+      System.put_env("ANTHROPIC_DEFAULT_OPUS_MODEL", "model-expert")
+
+      assert Providers.env_base_url("anthropic") == "https://example.test/anthropic"
+      assert Providers.env_default_model("anthropic") == "model-default"
+      assert Providers.env_model_for_tier("anthropic", :expert) == "model-expert"
+    end
+
+    test "maps Anthropic-compatible named providers to anthropic transport type" do
+      assert Providers.provider_type("zhipu-coding") == "anthropic"
+      assert Providers.provider_type("anthropic") == "anthropic"
+      assert Providers.provider_type("openrouter") == "openrouter"
+    end
+  end
+
   describe "list/1 ordering" do
     test "returns providers ordered by name ascending" do
       {:ok, _} = Providers.create(%{@valid_attrs | name: "zulu-provider"})
@@ -465,7 +493,12 @@ defmodule Synapsis.ProvidersTest do
       presets = Providers.preset_providers()
       assert is_list(presets)
       assert length(presets) > 0
-      assert Enum.all?(presets, &(is_map(&1) and Map.has_key?(&1, :name) and Map.has_key?(&1, :type) and Map.has_key?(&1, :base_url)))
+
+      assert Enum.all?(
+               presets,
+               &(is_map(&1) and Map.has_key?(&1, :name) and Map.has_key?(&1, :type) and
+                   Map.has_key?(&1, :base_url))
+             )
     end
 
     test "includes known providers" do
@@ -497,5 +530,16 @@ defmodule Synapsis.ProvidersTest do
     test "returns openai_compat default model" do
       assert Providers.default_model("openai_compat") == "gpt-4.1"
     end
+  end
+
+  defp preserve_env(vars) do
+    previous = Map.new(vars, &{&1, System.get_env(&1)})
+
+    on_exit(fn ->
+      Enum.each(previous, fn
+        {var, nil} -> System.delete_env(var)
+        {var, value} -> System.put_env(var, value)
+      end)
+    end)
   end
 end

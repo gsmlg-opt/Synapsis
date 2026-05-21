@@ -112,22 +112,29 @@ defmodule Synapsis.LLM do
 
           {:error, _} ->
             auth = Synapsis.Config.load_auth()
-            api_key = get_in(auth, [provider_name, "apiKey"]) || get_env_key(provider_name)
+
+            api_key =
+              get_in(auth, [provider_name, "apiKey"]) ||
+                Synapsis.Providers.env_api_key(provider_name)
+
+            base_url = provider_base_url(auth, provider_name)
 
             %{
               api_key: api_key,
-              base_url: Synapsis.Providers.default_base_url(provider_name),
-              type: provider_name
+              base_url: base_url,
+              type: Synapsis.Providers.provider_type(provider_name)
             }
+            |> maybe_put(:default_model, Synapsis.Providers.env_default_model(provider_name))
         end
     end
   end
 
-  defp get_env_key(provider_name) do
-    case Synapsis.Providers.env_var_name(provider_name) do
-      nil -> nil
-      var -> System.get_env(var)
-    end
+  defp provider_base_url(auth, provider_name) do
+    get_in(auth, [provider_name, "baseURL"]) ||
+      get_in(auth, [provider_name, "baseUrl"]) ||
+      get_in(auth, [provider_name, "base_url"]) ||
+      Synapsis.Providers.env_base_url(provider_name) ||
+      Synapsis.Providers.default_base_url(provider_name)
   end
 
   defp maybe_put(map, _key, nil), do: map

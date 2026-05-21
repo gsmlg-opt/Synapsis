@@ -30,16 +30,17 @@ defmodule Synapsis.Agent.Nodes.Respond do
       {"session_status", %{status: "idle"}}
     )
 
-    new_state = %{
-      state
-      | pending_text: "",
+    new_state =
+      Map.merge(state, %{
+        pending_text: "",
         pending_tool_use: nil,
         pending_tool_input: "",
         pending_reasoning: "",
+        pending_reasoning_signature: "",
         tool_uses: [],
         user_input: nil,
         iteration_count: state.iteration_count + 1
-    }
+      })
 
     Logger.info("conversational_response_complete",
       session_id: session_id,
