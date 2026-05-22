@@ -1,5 +1,5 @@
 defmodule Synapsis.FileWatcher do
-  @moduledoc "Watches project directories for file changes and broadcasts events."
+  @moduledoc "Watches workspace directories for file changes and broadcasts events."
   use GenServer
   require Logger
 

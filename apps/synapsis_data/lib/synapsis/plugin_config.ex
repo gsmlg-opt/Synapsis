@@ -5,7 +5,7 @@ defmodule Synapsis.PluginConfig do
 
   @valid_types ~w(mcp lsp custom)
   @valid_transports ~w(stdio http sse tcp)
-  @valid_scopes ~w(global project)
+  @valid_scopes ~w(global)
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -20,9 +20,7 @@ defmodule Synapsis.PluginConfig do
     field(:env, :map, default: %{})
     field(:settings, :map, default: %{})
     field(:auto_start, :boolean, default: false)
-    field(:scope, :string, default: "project")
-
-    belongs_to(:project, Synapsis.Project)
+    field(:scope, :string, default: "global")
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -40,8 +38,7 @@ defmodule Synapsis.PluginConfig do
       :env,
       :settings,
       :auto_start,
-      :scope,
-      :project_id
+      :scope
     ])
     |> validate_required([:type, :name])
     |> validate_inclusion(:type, @valid_types)
@@ -51,6 +48,6 @@ defmodule Synapsis.PluginConfig do
     |> validate_length(:command, max: 4_096)
     |> validate_length(:url, max: 2_048)
     |> validate_length(:root_path, max: 4_096)
-    |> unique_constraint([:name, :scope, :project_id])
+    |> unique_constraint([:name, :scope])
   end
 end

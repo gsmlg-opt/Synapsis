@@ -95,7 +95,7 @@ defmodule Synapsis.Workspace do
           doc = if blob_ref, do: %{doc | blob_ref: blob_ref}, else: doc
           resource = Resource.from_document(doc)
           action = if is_new, do: :created, else: :updated
-          broadcast_change(path, action, doc.id, doc.project_id)
+          broadcast_change(path, action, doc.id, doc.agent_id)
           {:ok, resource}
 
         {:error, _} = error ->
@@ -122,7 +122,7 @@ defmodule Synapsis.Workspace do
       {:ok, doc} ->
         case Resources.soft_delete(doc) do
           {:ok, _} ->
-            broadcast_change(doc.path, :deleted, doc.id, doc.project_id)
+            broadcast_change(doc.path, :deleted, doc.id, doc.agent_id)
             :ok
 
           {:error, _} = error ->
@@ -168,8 +168,8 @@ defmodule Synapsis.Workspace do
   Search workspace documents using full-text search.
 
   Options:
-    - `:scope` - :global, :project, or :session
-    - `:project_id` - filter by project
+    - `:scope` - :global, :agent, or :session
+    - `:agent_id` - filter by agent
     - `:kind` - filter by document kind
     - `:limit` - max results (default 20)
   """
@@ -192,8 +192,8 @@ defmodule Synapsis.Workspace do
       case Resources.move(doc, to_path) do
         {:ok, updated} ->
           resource = Resource.from_document(updated)
-          broadcast_change(from_path, :deleted, doc.id, doc.project_id)
-          broadcast_change(to_path, :created, doc.id, updated.project_id)
+          broadcast_change(from_path, :deleted, doc.id, doc.agent_id)
+          broadcast_change(to_path, :created, doc.id, updated.agent_id)
           {:ok, resource}
 
         {:error, _} = error ->
@@ -247,9 +247,9 @@ defmodule Synapsis.Workspace do
         {:error, "path exceeds maximum length of #{@max_path_length} bytes"}
 
       not String.starts_with?(path, "/shared/") and
-          not String.starts_with?(path, "/projects/") and
+          not String.starts_with?(path, "/agents/") and
           not String.starts_with?(path, "/global/") ->
-        {:error, "path must start with /shared/, /projects/, or /global/"}
+        {:error, "path must start with /shared/, /agents/, or /global/"}
 
       true ->
         segments = path |> String.trim_leading("/") |> String.split("/", trim: true)
@@ -286,10 +286,10 @@ defmodule Synapsis.Workspace do
 
     domain_patterns = [
       ~r{^/shared/skills/},
-      ~r{^/projects/[^/]+/skills/},
+      ~r{^/agents/[^/]+/skills/},
       ~r{^/shared/memory/},
-      ~r{^/projects/[^/]+/memory/},
-      ~r{^/projects/[^/]+/sessions/[^/]+/todo\.md$}
+      ~r{^/agents/[^/]+/memory/},
+      ~r{^/agents/[^/]+/sessions/[^/]+/todo\.md$}
     ]
 
     if Enum.any?(domain_patterns, &Regex.match?(&1, path)) do
@@ -303,12 +303,12 @@ defmodule Synapsis.Workspace do
   # PubSub broadcasts (WS-16)
   # ---------------------------------------------------------------------------
 
-  defp broadcast_change(path, action, resource_id, project_id) do
+  defp broadcast_change(path, action, resource_id, agent_id) do
     message = {:workspace_changed, %{path: path, action: action, resource_id: resource_id}}
 
     topic =
-      if project_id do
-        "workspace:#{project_id}"
+      if agent_id do
+        "workspace:agent:#{agent_id}"
       else
         "workspace:global"
       end

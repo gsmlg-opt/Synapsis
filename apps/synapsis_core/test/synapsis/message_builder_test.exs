@@ -316,7 +316,7 @@ defmodule Synapsis.MessageBuilderTest do
       assert block.content == "permission denied"
     end
 
-    test "reasoning part becomes prefixed text in anthropic format" do
+    test "reasoning part becomes native thinking block in anthropic format" do
       messages = [
         %{role: "assistant", parts: [%Reasoning{content: "Let me think..."}]}
       ]
@@ -325,8 +325,8 @@ defmodule Synapsis.MessageBuilderTest do
       [msg] = result.messages
       [block] = msg.content
 
-      assert block.type == "text"
-      assert block.text == "[thinking] Let me think..."
+      assert block.type == "thinking"
+      assert block.thinking == "Let me think..."
     end
 
     test "image part becomes anthropic image block" do

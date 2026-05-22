@@ -153,7 +153,7 @@ defmodule SynapsisWeb.AgentLive.Skills do
         <.dm_select
           name="skill[scope]"
           label="Scope"
-          options={[{"global", "Global"}, {"project", "Project"}]}
+          options={[{"global", "Global"}]}
           value={@skill.scope || "global"}
         />
 

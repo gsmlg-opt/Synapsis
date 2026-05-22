@@ -14,7 +14,6 @@ defmodule Synapsis.Session.Fork do
   end
 
   defp do_fork(session, message_id) do
-    session = Repo.preload(session, :project)
     messages = load_messages(session.id)
 
     messages_to_copy =
@@ -36,7 +35,6 @@ defmodule Synapsis.Session.Fork do
       title = "Fork of #{session.title || session.id}"
 
       attrs = %{
-        project_id: session.project_id,
         provider: session.provider,
         model: session.model,
         agent: session.agent,
@@ -67,7 +65,7 @@ defmodule Synapsis.Session.Fork do
           end
         end
 
-        Repo.preload(new_session, :project)
+        new_session
       end)
     end
   end

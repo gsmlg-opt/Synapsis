@@ -20,7 +20,7 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
        selected: nil,
        editing: false,
        edit_content: "",
-       subscribed_project: extract_project_id(path)
+       subscribed_agent: extract_agent_id(path)
      )}
   end
 
@@ -135,13 +135,13 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
     selected = socket.assigns.selected
 
     if selected && promotable?(selected) do
-      project_id = extract_project_id(selected.path)
-      new_path = promote_path(selected.path, project_id)
+      agent_id = extract_agent_id(selected.path)
+      new_path = promote_path(selected.path, agent_id)
 
       case Synapsis.Workspace.write(new_path, selected.content || "", %{
              author: "user",
              lifecycle: :shared,
-             visibility: :project_shared,
+             visibility: :agent_shared,
              metadata: Map.put(selected.metadata, "promoted_from", selected.path)
            }) do
         {:ok, promoted} ->
@@ -151,7 +151,7 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
           {:noreply,
            socket
            |> assign(selected: promoted, resources: resources)
-           |> put_flash(:info, "Promoted to project level")}
+           |> put_flash(:info, "Promoted to agent level")}
 
         {:error, reason} ->
           Logger.warning("workspace_promote_failed", reason: inspect(reason))
@@ -304,7 +304,7 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
                     variant="ghost"
                     size="sm"
                     phx-click="promote"
-                    title="Promote to project level"
+                    title="Promote to agent level"
                   >
                     <.dm_mdi name="arrow-up-bold" class="w-4 h-4 text-success" />
                   </.dm_btn>
@@ -432,40 +432,40 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
 
   defp promotable?(_), do: false
 
-  defp extract_project_id(path) do
+  defp extract_agent_id(path) do
     case String.split(path, "/", trim: true) do
-      ["projects", project_id | _] -> project_id
+      ["agents", agent_id | _] -> agent_id
       _ -> nil
     end
   end
 
-  defp promote_path(session_path, project_id) do
+  defp promote_path(session_path, agent_id) do
     filename = session_path |> String.split("/") |> List.last() || "untitled"
-    "/projects/#{project_id}/notes/#{String.downcase(filename)}"
+    "/agents/#{agent_id}/notes/#{String.downcase(filename)}"
   end
 
   defp subscribe_workspace_changes(path) do
     Phoenix.PubSub.subscribe(Synapsis.PubSub, "workspace:global")
 
-    case extract_project_id(path) do
+    case extract_agent_id(path) do
       nil -> :ok
-      project_id -> Phoenix.PubSub.subscribe(Synapsis.PubSub, "workspace:#{project_id}")
+      agent_id -> Phoenix.PubSub.subscribe(Synapsis.PubSub, "workspace:agent:#{agent_id}")
     end
   end
 
-  # Unsubscribe from old project topic, subscribe to new one, update tracking assign
+  # Unsubscribe from old agent topic, subscribe to new one, update tracking assign
   defp resubscribe_workspace_changes(socket, path) do
-    old_project = socket.assigns[:subscribed_project]
-    new_project = extract_project_id(path)
+    old_agent = socket.assigns[:subscribed_agent]
+    new_agent = extract_agent_id(path)
 
-    if old_project && old_project != new_project do
-      Phoenix.PubSub.unsubscribe(Synapsis.PubSub, "workspace:#{old_project}")
+    if old_agent && old_agent != new_agent do
+      Phoenix.PubSub.unsubscribe(Synapsis.PubSub, "workspace:agent:#{old_agent}")
     end
 
-    if new_project && new_project != old_project do
-      Phoenix.PubSub.subscribe(Synapsis.PubSub, "workspace:#{new_project}")
+    if new_agent && new_agent != old_agent do
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "workspace:agent:#{new_agent}")
     end
 
-    assign(socket, :subscribed_project, new_project)
+    assign(socket, :subscribed_agent, new_agent)
   end
 end

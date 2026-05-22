@@ -7,27 +7,27 @@ defmodule SynapsisWeb.AssistantLive.ShowTest do
 
   describe "assistant show page" do
     test "renders empty state when no session selected", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/assistant/build/sessions")
-      assert html =~ "Build Assistant"
+      {:ok, _view, html} = live(conn, ~p"/assistant/main/sessions")
+      assert html =~ "Main Assistant"
     end
 
     test "renders personality indicator with primary/70 style in session header", %{conn: conn} do
       {:ok, session} =
-        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "build"})
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
 
-      {:ok, _view, html} = live(conn, ~p"/assistant/build/sessions/#{session.id}")
+      {:ok, _view, html} = live(conn, ~p"/assistant/main/sessions/#{session.id}")
       # Personality name appears in the styled span (text-primary/70 class)
       assert html =~ "text-primary/70"
-      assert html =~ "Build"
+      assert html =~ "Main"
       # Provider/model info in subtext
       assert html =~ "anthropic/test"
     end
 
     test "handles session_compacted PubSub event and reloads messages", %{conn: conn} do
       {:ok, session} =
-        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "build"})
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
 
-      {:ok, view, _html} = live(conn, ~p"/assistant/build/sessions/#{session.id}")
+      {:ok, view, _html} = live(conn, ~p"/assistant/main/sessions/#{session.id}")
 
       Phoenix.PubSub.broadcast(
         Synapsis.PubSub,
@@ -41,7 +41,7 @@ defmodule SynapsisWeb.AssistantLive.ShowTest do
     end
 
     test "handles session_compacted when no session is selected", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/assistant/build/sessions")
+      {:ok, view, _html} = live(conn, ~p"/assistant/main/sessions")
 
       # Directly send to the view process — current_session is nil so messages stays []
       send(
@@ -50,14 +50,14 @@ defmodule SynapsisWeb.AssistantLive.ShowTest do
       )
 
       # View should not crash
-      assert render(view) =~ "Build Assistant"
+      assert render(view) =~ "Main Assistant"
     end
 
     test "handles system_message compaction notification", %{conn: conn} do
       {:ok, session} =
-        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "build"})
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
 
-      {:ok, view, _html} = live(conn, ~p"/assistant/build/sessions/#{session.id}")
+      {:ok, view, _html} = live(conn, ~p"/assistant/main/sessions/#{session.id}")
 
       Phoenix.PubSub.broadcast(
         Synapsis.PubSub,
@@ -76,9 +76,9 @@ defmodule SynapsisWeb.AssistantLive.ShowTest do
 
     test "handles system_message with non-compaction type without crash", %{conn: conn} do
       {:ok, session} =
-        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "build"})
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
 
-      {:ok, view, _html} = live(conn, ~p"/assistant/build/sessions/#{session.id}")
+      {:ok, view, _html} = live(conn, ~p"/assistant/main/sessions/#{session.id}")
 
       # Non-compaction system messages fall through to the catch-all handle_info/2
       send(view.pid, {:system_message, %{type: :info, text: "Some info message", metadata: %{}}})
@@ -89,9 +89,9 @@ defmodule SynapsisWeb.AssistantLive.ShowTest do
 
     test "receives heartbeat notification via PubSub", %{conn: conn} do
       {:ok, session} =
-        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "build"})
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
 
-      {:ok, view, _html} = live(conn, ~p"/assistant/build/sessions/#{session.id}")
+      {:ok, view, _html} = live(conn, ~p"/assistant/main/sessions/#{session.id}")
 
       Phoenix.PubSub.broadcast(
         Synapsis.PubSub,
@@ -107,9 +107,9 @@ defmodule SynapsisWeb.AssistantLive.ShowTest do
 
     test "ignores stale active status after a completed turn", %{conn: conn} do
       {:ok, session} =
-        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "build"})
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
 
-      {:ok, view, _html} = live(conn, ~p"/assistant/build/sessions/#{session.id}")
+      {:ok, view, _html} = live(conn, ~p"/assistant/main/sessions/#{session.id}")
 
       send(view.pid, {"done", %{}})
       render(view)
@@ -126,9 +126,9 @@ defmodule SynapsisWeb.AssistantLive.ShowTest do
   describe "chat_bubble component label rendering" do
     test "label renders only for assistant role via integration", %{conn: conn} do
       {:ok, session} =
-        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "build"})
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
 
-      {:ok, _view, html} = live(conn, ~p"/assistant/build/sessions/#{session.id}")
+      {:ok, _view, html} = live(conn, ~p"/assistant/main/sessions/#{session.id}")
       # The personality indicator span in the session header uses text-primary/70
       assert html =~ "text-primary/70"
     end

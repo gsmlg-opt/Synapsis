@@ -175,7 +175,7 @@ defmodule SynapsisPlugin.LSP.Presets do
     end
   end
 
-  @doc "Detect languages present in a project directory using file extensions and markers."
+  @doc "Detect languages present in a workspace directory using file extensions and markers."
   def detect_languages(project_path) do
     @presets
     |> Enum.filter(fn preset ->
@@ -198,7 +198,7 @@ defmodule SynapsisPlugin.LSP.Presets do
       })
       |> Repo.insert(
         on_conflict: :nothing,
-        conflict_target: [:name, :scope, :project_id]
+        conflict_target: [:name, :scope]
       )
     end)
 

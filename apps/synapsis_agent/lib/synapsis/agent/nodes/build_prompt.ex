@@ -3,7 +3,7 @@ defmodule Synapsis.Agent.Nodes.BuildPrompt do
   Loads messages from DB, builds provider request via MessageBuilder.
 
   Uses the full context assembly pipeline (AI-2) to build the system prompt
-  with identity files, skills manifest, memory context, and project context.
+  with identity files, skills manifest, memory context, and agent context.
   """
   @behaviour Synapsis.Agent.Runtime.Node
 
@@ -34,7 +34,7 @@ defmodule Synapsis.Agent.Nodes.BuildPrompt do
     # Build full system prompt via ContextBuilder (AI-2)
     system_prompt =
       ContextBuilder.build_system_prompt(:coding, [
-        {:project_id, agent_config[:project_id]},
+        {:agent_id, agent_config[:name] || agent_config[:agent_id] || "main"},
         {:session_id, session_id},
         {:user_message, user_message},
         {:agent_config, agent_config}

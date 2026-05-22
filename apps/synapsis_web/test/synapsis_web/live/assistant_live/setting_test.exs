@@ -5,13 +5,13 @@ defmodule SynapsisWeb.AssistantLive.SettingTest do
 
   describe "assistant setting page" do
     test "mounts and renders setting tabs", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/assistant/build/setting")
+      {:ok, _view, html} = live(conn, ~p"/assistant/main/setting")
       assert html =~ "Overview"
       assert html =~ "Cron Jobs"
     end
 
     test "can switch to cron jobs tab", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/assistant/build/setting")
+      {:ok, view, _html} = live(conn, ~p"/assistant/main/setting")
 
       html =
         view
@@ -23,7 +23,7 @@ defmodule SynapsisWeb.AssistantLive.SettingTest do
     end
 
     test "shows new heartbeat form on button click", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/assistant/build/setting")
+      {:ok, view, _html} = live(conn, ~p"/assistant/main/setting")
 
       # Switch to cron jobs tab
       view
@@ -42,7 +42,7 @@ defmodule SynapsisWeb.AssistantLive.SettingTest do
     end
 
     test "cancel heartbeat form hides it", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/assistant/build/setting")
+      {:ok, view, _html} = live(conn, ~p"/assistant/main/setting")
 
       view
       |> element("el-dm-button[phx-value-tab=\"cron_jobs\"]")
@@ -62,7 +62,7 @@ defmodule SynapsisWeb.AssistantLive.SettingTest do
     end
 
     test "creates a heartbeat config via form submit", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/assistant/build/setting")
+      {:ok, view, _html} = live(conn, ~p"/assistant/main/setting")
 
       view
       |> element("el-dm-button[phx-value-tab=\"cron_jobs\"]")
@@ -94,7 +94,7 @@ defmodule SynapsisWeb.AssistantLive.SettingTest do
           enabled: true
         })
 
-      {:ok, view, _html} = live(conn, ~p"/assistant/build/setting")
+      {:ok, view, _html} = live(conn, ~p"/assistant/main/setting")
 
       html =
         view
@@ -114,7 +114,7 @@ defmodule SynapsisWeb.AssistantLive.SettingTest do
           enabled: false
         })
 
-      {:ok, view, _html} = live(conn, ~p"/assistant/build/setting")
+      {:ok, view, _html} = live(conn, ~p"/assistant/main/setting")
 
       view
       |> element("el-dm-button[phx-value-tab=\"cron_jobs\"]")
@@ -136,7 +136,7 @@ defmodule SynapsisWeb.AssistantLive.SettingTest do
           prompt: "Delete test"
         })
 
-      {:ok, view, _html} = live(conn, ~p"/assistant/build/setting")
+      {:ok, view, _html} = live(conn, ~p"/assistant/main/setting")
 
       view
       |> element("el-dm-button[phx-value-tab=\"cron_jobs\"]")

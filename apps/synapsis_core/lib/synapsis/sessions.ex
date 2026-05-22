@@ -5,22 +5,20 @@ defmodule Synapsis.Sessions do
   # DebugStore lives in synapsis_server (compiled after synapsis_core)
   @compile {:no_warn_undefined, [Synapsis.Session.Worker, SynapsisServer.DebugStore]}
 
-  alias Synapsis.{Repo, Project, Session, Message}
+  alias Synapsis.{Repo, Session, Message}
   import Ecto.Query
 
   @transient_statuses ~w(streaming tool_executing)
   @stale_transient_status_after_seconds 120
 
-  def create(project_path, opts \\ %{}) do
-    project = ensure_project(project_path)
-    config = Synapsis.Config.resolve(project_path)
-
-    agent = opts[:agent] || "main"
-    provider = opts[:provider] || default_provider(config, agent)
-    model = opts[:model] || default_model(config, provider, agent)
+  def create(agent_name \\ "main", opts \\ %{}) do
+    agent = opts[:agent] || agent_name || "main"
+    agent_config = Synapsis.Agent.Resolver.resolve(agent)
+    config = %{}
+    provider = opts[:provider] || agent_config.provider || default_provider(config, agent)
+    model = opts[:model] || agent_config.model || default_model(config, provider, agent)
 
     attrs = %{
-      project_id: project.id,
       provider: provider,
       model: model,
       agent: agent,
@@ -30,16 +28,16 @@ defmodule Synapsis.Sessions do
     }
 
     with {:ok, session} <- %Session{} |> Session.changeset(attrs) |> Repo.insert(),
-         {:ok, _permission} <- apply_agent_permission(session, config, agent),
+         {:ok, _permission} <- apply_agent_permission(session, agent),
          {:ok, _pid} <- Synapsis.Session.DynamicSupervisor.start_session(session.id) do
-      {:ok, Repo.preload(session, :project)}
+      {:ok, session}
     end
   end
 
   def get(session_id) do
     case Repo.get(Session, session_id) do
       nil -> {:error, :not_found}
-      session -> {:ok, Repo.preload(session, [:project, :messages])}
+      session -> {:ok, Repo.preload(session, [:messages])}
     end
   end
 
@@ -53,7 +51,7 @@ defmodule Synapsis.Sessions do
       |> case do
         {:ok, updated} ->
           restart_session_worker(updated.id)
-          {:ok, Repo.preload(updated, [:project, :messages])}
+          {:ok, Repo.preload(updated, [:messages])}
 
         {:error, _changeset} ->
           {:ok, session}
@@ -75,7 +73,7 @@ defmodule Synapsis.Sessions do
       |> case do
         {:ok, updated} ->
           restart_session_worker(updated.id)
-          {:ok, Repo.preload(updated, [:project, :messages])}
+          {:ok, Repo.preload(updated, [:messages])}
 
         {:error, _changeset} ->
           {:ok, session}
@@ -83,45 +81,44 @@ defmodule Synapsis.Sessions do
     end
   end
 
-  def list(project_path, opts \\ []) do
+  def list(agent_name, opts \\ []) do
+    list_by_agent(agent_name, opts)
+  end
+
+  def list_by_agent(agent_name, opts \\ []) do
     limit = Keyword.get(opts, :limit, 20)
 
     query =
       from(s in Session,
-        join: p in Project,
-        on: s.project_id == p.id,
-        where: p.path == ^project_path,
+        where: s.agent == ^agent_name,
         order_by: [desc: s.updated_at],
-        limit: ^limit,
-        preload: [:project]
+        limit: ^limit
       )
 
     {:ok, Repo.all(query)}
   end
 
-  def list_by_project(project_id, opts \\ []) do
-    limit = Keyword.get(opts, :limit, 50)
-
-    query =
-      from(s in Session,
-        where: s.project_id == ^project_id,
-        order_by: [desc: s.updated_at],
-        limit: ^limit,
-        preload: [:project]
-      )
-
-    Repo.all(query)
+  def count_by_agent_names(agent_names) when is_list(agent_names) do
+    from(s in Session,
+      where: s.agent in ^agent_names,
+      group_by: s.agent,
+      select: {s.agent, count(s.id)}
+    )
+    |> Repo.all()
+    |> Map.new()
   end
 
   def recent(opts \\ []) do
     limit = Keyword.get(opts, :limit, 10)
+    agent = Keyword.get(opts, :agent)
 
     query =
       from(s in Session,
         order_by: [desc: s.updated_at],
-        limit: ^limit,
-        preload: [:project]
+        limit: ^limit
       )
+
+    query = if agent, do: where(query, [s], s.agent == ^agent), else: query
 
     Repo.all(query)
   end
@@ -303,13 +300,6 @@ defmodule Synapsis.Sessions do
     end
   end
 
-  defp ensure_project(project_path) do
-    case Synapsis.Projects.find_or_create(project_path) do
-      {:ok, project} -> project
-      {:error, _changeset} -> Repo.get_by(Project, path: project_path)
-    end
-  end
-
   def ensure_running(session_id), do: ensure_session_running(session_id)
 
   defp ensure_session_running(session_id) do
@@ -331,9 +321,9 @@ defmodule Synapsis.Sessions do
     ensure_session_running(session_id)
   end
 
-  defp apply_agent_permission(%Session{} = session, project_config, agent_name) do
+  defp apply_agent_permission(%Session{} = session, agent_name) do
     agent_name
-    |> Synapsis.Agent.Resolver.resolve(project_config)
+    |> Synapsis.Agent.Resolver.resolve()
     |> Map.get(:permission_mode)
     |> Synapsis.Tool.Permission.config_for_mode()
     |> then(&Synapsis.Tool.Permission.update_config(session.id, &1))

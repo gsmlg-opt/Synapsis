@@ -52,12 +52,12 @@ defmodule Synapsis.Agent.Nodes.ApprovalGate do
   # First entry — check persistent approvals before asking user
   defp handle_initial(state) do
     classified = state[:classified_tools] || []
-    project_id = state.agent_config[:project_id]
+    agent_name = state.agent_config[:name]
 
     # Check persistent approvals for each tool
     {auto_resolved, needs_user} =
       Enum.split_with(classified, fn {_status, tool_use} ->
-        case Approval.check_approval(tool_use.tool, tool_use.input || %{}, project_id: project_id) do
+        case Approval.check_approval(tool_use.tool, tool_use.input || %{}, agent_name: agent_name) do
           :allow -> true
           :record -> true
           _ -> false

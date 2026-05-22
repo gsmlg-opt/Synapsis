@@ -7,7 +7,7 @@ defmodule Synapsis.Agent.Runs do
 
   @stale_error "daemon restarted before completion"
   @updatable_fields ~w(
-    kind status source assistant_name session_id project_id heartbeat_id routine_id prompt
+    kind status source assistant_name session_id heartbeat_id routine_id prompt
     tool_profile model provider summary error started_at finished_at metadata
   )a
 

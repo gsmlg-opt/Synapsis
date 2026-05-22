@@ -3,7 +3,7 @@ defmodule Synapsis.SemanticMemory do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @valid_scopes ~w(shared project agent)
+  @valid_scopes ~w(shared agent)
   @valid_kinds ~w(fact decision lesson preference pattern warning summary policy)
   @valid_sources ~w(human summarizer agent)
 

@@ -7,7 +7,7 @@ defmodule Synapsis.AgentEvent do
 
   schema "agent_events" do
     field :event_type, :string
-    field :project_id, :string
+    field :agent_id, :string
     field :work_id, :string
     field :payload, :map, default: %{}
 
@@ -16,7 +16,7 @@ defmodule Synapsis.AgentEvent do
 
   def changeset(event, attrs) do
     event
-    |> cast(attrs, [:event_type, :project_id, :work_id, :payload])
+    |> cast(attrs, [:event_type, :agent_id, :work_id, :payload])
     |> validate_required([:event_type])
   end
 end

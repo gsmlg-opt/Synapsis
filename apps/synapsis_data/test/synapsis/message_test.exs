@@ -1,21 +1,12 @@
 defmodule Synapsis.MessageTest do
   use Synapsis.DataCase
 
-  alias Synapsis.{Message, Session, Project, Repo}
+  alias Synapsis.{Message, Session, Repo}
 
   setup do
-    {:ok, project} =
-      %Project{}
-      |> Project.changeset(%{
-        path: "/tmp/msg_test_#{:rand.uniform(100_000)}",
-        slug: "msg-test-#{:rand.uniform(100_000)}",
-        name: "msg-test-#{:rand.uniform(100_000)}"
-      })
-      |> Repo.insert()
-
     {:ok, session} =
       %Session{}
-      |> Session.changeset(%{provider: "test", model: "test", project_id: project.id})
+      |> Session.changeset(%{provider: "test", model: "test", agent: "main"})
       |> Repo.insert()
 
     %{session: session}

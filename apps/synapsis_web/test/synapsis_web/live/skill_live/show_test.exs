@@ -83,7 +83,7 @@ defmodule SynapsisWeb.SkillLive.ShowTest do
       assert html =~ ~s(value="#{skill.name}")
     end
 
-    test "update_skill changes scope to project", %{conn: conn, skill: skill} do
+    test "update_skill keeps global scope", %{conn: conn, skill: skill} do
       {:ok, view, _html} = live(conn, ~p"/settings/skills/#{skill.id}")
 
       view
@@ -91,12 +91,12 @@ defmodule SynapsisWeb.SkillLive.ShowTest do
         "name" => skill.name,
         "description" => skill.description,
         "system_prompt_fragment" => skill.system_prompt_fragment,
-        "scope" => "project"
+        "scope" => "global"
       })
       |> render_submit()
 
       updated = Synapsis.Repo.get(Synapsis.Skill, skill.id)
-      assert updated.scope == "project"
+      assert updated.scope == "global"
     end
 
     test "update_skill changes system prompt fragment", %{conn: conn, skill: skill} do

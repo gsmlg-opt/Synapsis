@@ -1,5 +1,5 @@
 defmodule Synapsis.Session do
-  @moduledoc "Session entity - a conversation workspace tied to a project."
+  @moduledoc "Session entity - an agent-owned conversation workspace."
   use Ecto.Schema
   import Ecto.Changeset
 
@@ -15,7 +15,6 @@ defmodule Synapsis.Session do
     field(:config, :map, default: %{})
     field(:debug, :boolean, default: false)
 
-    belongs_to(:project, Synapsis.Project)
     has_many(:messages, Synapsis.Message)
     has_many(:failed_attempts, Synapsis.FailedAttempt)
     has_many(:patches, Synapsis.Patch)
@@ -30,14 +29,13 @@ defmodule Synapsis.Session do
 
   def changeset(session, attrs) do
     session
-    |> cast(attrs, [:title, :agent, :provider, :model, :status, :config, :project_id, :debug])
-    |> validate_required([:provider, :model, :project_id])
+    |> cast(attrs, [:title, :agent, :provider, :model, :status, :config, :debug])
+    |> validate_required([:provider, :model, :agent])
     |> validate_inclusion(:status, @valid_statuses)
     |> validate_length(:title, max: 500)
     |> validate_length(:agent, min: 1, max: 255)
     |> validate_length(:provider, max: 255)
     |> validate_length(:model, max: 255)
-    |> foreign_key_constraint(:project_id)
   end
 
   def status_changeset(session, status) do

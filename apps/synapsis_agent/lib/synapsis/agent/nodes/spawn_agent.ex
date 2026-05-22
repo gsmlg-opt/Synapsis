@@ -28,10 +28,10 @@ defmodule Synapsis.Agent.Nodes.SpawnAgent do
 
       tool_use ->
         prompt = extract_prompt(tool_use)
-        project_id = ctx[:project_id] || state[:project_id]
+        agent_id = ctx[:agent_id] || state.agent_config[:name] || "main"
         parent_session_id = state.session_id
 
-        spawn_and_notify(parent_session_id, project_id, prompt, state)
+        spawn_and_notify(parent_session_id, agent_id, prompt, state)
     end
   end
 
@@ -48,13 +48,13 @@ defmodule Synapsis.Agent.Nodes.SpawnAgent do
     Map.get(input, "prompt") || Map.get(input, :prompt) || "Perform the requested task."
   end
 
-  defp spawn_and_notify(parent_session_id, project_id, prompt, state) do
+  defp spawn_and_notify(parent_session_id, agent_id, prompt, state) do
     opts = %{
       notify_pid: self(),
       notify_ref: parent_session_id
     }
 
-    case SessionBridge.spawn_coding_session(project_id, prompt, opts) do
+    case SessionBridge.spawn_coding_session(agent_id, prompt, opts) do
       {:ok, child_session_id} ->
         AgentRegistry.register(parent_session_id, child_session_id, prompt)
 

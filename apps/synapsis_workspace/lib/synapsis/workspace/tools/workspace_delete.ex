@@ -24,7 +24,7 @@ defmodule Synapsis.Workspace.Tools.WorkspaceDelete do
         "path" => %{
           "type" => "string",
           "description" =>
-            "Workspace path (e.g. /projects/myapp/notes/old.md) or document ID"
+            "Workspace path (e.g. /agents/main/notes/old.md) or document ID"
         }
       },
       "required" => ["path"]
@@ -37,7 +37,7 @@ defmodule Synapsis.Workspace.Tools.WorkspaceDelete do
 
     agent_ctx = %{
       role: context[:role] || :user,
-      project_id: context[:project_id],
+      agent_id: context[:agent_id],
       session_id: context[:session_id]
     }
 

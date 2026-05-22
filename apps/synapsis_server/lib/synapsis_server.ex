@@ -6,7 +6,9 @@ defmodule SynapsisServer do
   Channels for LLM streaming, and REST API for programmatic access.
   """
 
-  def static_paths, do: ~w(assets fonts images favicon.ico robots.txt apple-touch-icon.png apple-touch-icon-precomposed.png)
+  def static_paths,
+    do:
+      ~w(assets fonts images favicon.ico robots.txt apple-touch-icon.png apple-touch-icon-precomposed.png)
 
   def router do
     quote do

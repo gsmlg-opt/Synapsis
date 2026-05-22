@@ -1,5 +1,5 @@
 defmodule Synapsis.AgentSummary do
-  @moduledoc "Upsertable summary for project/task/global rollups."
+  @moduledoc "Upsertable summary for agent/task/global rollups."
   use Ecto.Schema
   import Ecto.Changeset
 
@@ -15,7 +15,7 @@ defmodule Synapsis.AgentSummary do
     timestamps(type: :utc_datetime_usec)
   end
 
-  @valid_scopes ~w(global project task)
+  @valid_scopes ~w(global agent task)
 
   def changeset(summary, attrs) do
     summary

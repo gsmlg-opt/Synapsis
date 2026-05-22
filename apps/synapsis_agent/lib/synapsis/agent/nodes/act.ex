@@ -6,7 +6,7 @@ defmodule Synapsis.Agent.Nodes.Act do
 
   - `:respond`  — no tool calls; reply directly to the user
   - `:spawn`    — tool calls requesting a Code Agent (`task` tool detected)
-  - `:delegate` — routing to a Project Agent (future)
+  - `:delegate` — routing to another agent (future)
   """
   @behaviour Synapsis.Agent.Runtime.Node
 

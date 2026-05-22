@@ -83,10 +83,10 @@ defmodule SynapsisWeb.SkillLive.IndexTest do
              )
     end
 
-    test "scope selector has global and project options", %{conn: conn} do
+    test "scope selector has global option only", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/settings/skills")
       assert html =~ "Global"
-      assert html =~ "Project"
+      refute html =~ "Project"
     end
 
     test "heading displays Skills", %{conn: conn} do
@@ -117,14 +117,14 @@ defmodule SynapsisWeb.SkillLive.IndexTest do
       assert html =~ "/settings/skills/#{skill.id}"
     end
 
-    test "skill with project scope shows 'project' label", %{conn: conn} do
+    test "skill with global scope shows 'global' label", %{conn: conn} do
       %Synapsis.Skill{}
-      |> Synapsis.Skill.changeset(%{name: "proj-scoped", scope: "project"})
+      |> Synapsis.Skill.changeset(%{name: "global-scoped", scope: "global"})
       |> Synapsis.Repo.insert!()
 
       {:ok, _view, html} = live(conn, ~p"/settings/skills")
-      assert html =~ "proj-scoped"
-      assert html =~ "project"
+      assert html =~ "global-scoped"
+      assert html =~ "global"
     end
   end
 end

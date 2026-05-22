@@ -20,7 +20,6 @@ defmodule Synapsis.AgentRun do
     field(:source, :string, default: "system")
     field(:assistant_name, :string)
     field(:session_id, :binary_id)
-    field(:project_id, :string)
     field(:heartbeat_id, :binary_id)
     field(:routine_id, :binary_id)
     field(:prompt, :string)
@@ -44,7 +43,6 @@ defmodule Synapsis.AgentRun do
       :source,
       :assistant_name,
       :session_id,
-      :project_id,
       :heartbeat_id,
       :routine_id,
       :prompt,

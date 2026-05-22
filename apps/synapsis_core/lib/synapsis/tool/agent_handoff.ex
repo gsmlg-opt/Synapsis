@@ -71,14 +71,12 @@ defmodule Synapsis.Tool.AgentHandoff do
       to_agent_id: to,
       type: "handoff",
       payload: handoff_payload,
-      project_id: context[:project_id],
       session_id: context[:session_id]
     }
 
     case Synapsis.AgentMessages.create(attrs) do
       {:ok, message} ->
-        # Write handoff record to workspace if project_id is available
-        maybe_write_workspace_handoff(context[:project_id], ref, handoff_payload, from, to)
+        maybe_write_workspace_handoff(context[:agent_id] || from, ref, handoff_payload, from, to)
 
         # Broadcast delegation to target agent
         Phoenix.PubSub.broadcast(
@@ -117,8 +115,8 @@ defmodule Synapsis.Tool.AgentHandoff do
 
   defp maybe_write_workspace_handoff(nil, _ref, _payload, _from, _to), do: :ok
 
-  defp maybe_write_workspace_handoff(project_id, ref, payload, from, to) do
-    path = "/projects/#{project_id}/handoffs/#{ref}.json"
+  defp maybe_write_workspace_handoff(agent_id, ref, payload, from, to) do
+    path = "/agents/#{agent_id}/handoffs/#{ref}.json"
 
     handoff_doc =
       Jason.encode!(%{
@@ -134,7 +132,7 @@ defmodule Synapsis.Tool.AgentHandoff do
       apply(Synapsis.Workspace, :write, [
         path,
         handoff_doc,
-        %{kind: "handoff", content_format: "json", created_by: from}
+        %{kind: :handoff, content_format: :json, author: from}
       ])
     end
 

@@ -38,9 +38,9 @@ defmodule Synapsis.Tool.FileReadTest do
   end
 
   @tag :tmp_dir
-  test "rejects path outside project root", %{tmp_dir: tmp_dir} do
+  test "rejects path outside workspace root", %{tmp_dir: tmp_dir} do
     {:error, msg} = FileRead.execute(%{"path" => "/etc/passwd"}, %{project_path: tmp_dir})
-    assert msg =~ "outside project root"
+    assert msg =~ "outside workspace root"
   end
 
   @tag :tmp_dir

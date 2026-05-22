@@ -16,7 +16,7 @@ defmodule Synapsis.Agent.QueryLoop do
 
   @doc """
   Creates a scoped child context for subagent execution.
-  Inherits project/working dir, gets restricted tools, custom prompt.
+  Inherits workspace/working dir, gets restricted tools, custom prompt.
   """
   @spec fork(Context.t(), keyword()) :: Context.t()
   def fork(%Context{} = parent, opts) do
@@ -176,7 +176,7 @@ defmodule Synapsis.Agent.QueryLoop do
     prompt =
       Synapsis.Agent.ContextBuilder.build_system_prompt(
         ctx.agent_config[:agent_type] || :conversational,
-        project_id: ctx.agent_config[:project_id],
+        agent_id: ctx.agent_config[:name],
         session_id: ctx.session_id,
         user_message: user_text,
         agent_config: ctx.agent_config

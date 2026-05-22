@@ -1,20 +1,11 @@
 defmodule Synapsis.Agent.SessionBridge do
   @moduledoc """
-  Bridges multi-agent system (GlobalAssistant/ProjectAssistant) with
-  CodingLoop sessions. Handles spawning sessions, injecting context,
-  and monitoring completion.
+  Bridges agent orchestration with CodingLoop sessions.
   """
-
-  # LSP.Manager lives in synapsis_lsp (optional dependency)
-  @compile {:no_warn_undefined, Synapsis.LSP.Manager}
 
   require Logger
 
-  @port_line_buffer 4_096
-  @max_output_lines 5_000
-
-  alias Synapsis.{Repo, Session, Project}
-  alias Synapsis.Session.DynamicSupervisor, as: SessionDynSup
+  alias Synapsis.Sessions
 
   @type spawn_opts :: %{
           optional(:provider) => String.t(),
@@ -26,21 +17,19 @@ defmodule Synapsis.Agent.SessionBridge do
         }
 
   @doc """
-  Spawns a coding session for a project, starts the Worker/CodingLoop,
+  Spawns a coding session for an agent, starts the Worker/CodingLoop,
   and optionally sends the initial message.
 
   Returns `{:ok, session_id}` on success.
   """
   @spec spawn_coding_session(String.t(), String.t() | nil, spawn_opts()) ::
           {:ok, String.t()} | {:error, term()}
-  def spawn_coding_session(project_id, initial_message, opts \\ %{}) do
-    with {:ok, project} <- fetch_project(project_id),
-         {:ok, session} <- create_session(project, opts),
-         {:ok, _sup} <- start_session(session.id),
+  def spawn_coding_session(agent_name, initial_message, opts \\ %{}) do
+    with {:ok, session} <- create_session(agent_name, opts),
          :ok <- maybe_send_message(session.id, initial_message),
          :ok <- maybe_subscribe_completion(session.id, opts) do
       Logger.info("coding_session_spawned",
-        project_id: project_id,
+        agent: session.agent,
         session_id: session.id
       )
 
@@ -49,29 +38,16 @@ defmodule Synapsis.Agent.SessionBridge do
   end
 
   @doc """
-  Builds context string for a spawned session from project state.
-  Includes file tree, recent git log, active diagnostics, and memory.
+  Builds context string for a spawned session from an agent workspace.
   """
   @spec build_spawn_context(String.t(), map()) :: String.t()
-  def build_spawn_context(project_path, opts \\ %{}) do
+  def build_spawn_context(workspace_path, opts \\ %{}) do
     sections = []
 
     sections =
-      case build_file_tree(project_path) do
+      case build_file_tree(workspace_path) do
         nil -> sections
-        tree -> sections ++ ["## Project Files\n```\n#{tree}\n```"]
-      end
-
-    sections =
-      case build_git_log(project_path) do
-        nil -> sections
-        log -> sections ++ ["## Recent Git History\n```\n#{log}\n```"]
-      end
-
-    sections =
-      case build_diagnostics(opts[:project_id]) do
-        nil -> sections
-        diag -> sections ++ ["## Active Diagnostics\n#{diag}"]
+        tree -> sections ++ ["## Workspace Files\n```\n#{tree}\n```"]
       end
 
     sections =
@@ -88,28 +64,14 @@ defmodule Synapsis.Agent.SessionBridge do
 
   # -- Private --
 
-  defp fetch_project(project_id) do
-    case Repo.get(Project, project_id) do
-      nil -> {:error, :project_not_found}
-      project -> {:ok, project}
-    end
-  end
-
-  defp create_session(project, opts) do
+  defp create_session(agent_name, opts) do
     attrs = %{
-      project_id: project.id,
       provider: opts[:provider] || "anthropic",
       model: opts[:model] || Synapsis.Providers.default_model(opts[:provider] || "anthropic"),
-      agent: opts[:agent] || "main"
+      agent: opts[:agent] || agent_name || "main"
     }
 
-    %Session{}
-    |> Session.changeset(attrs)
-    |> Repo.insert()
-  end
-
-  defp start_session(session_id) do
-    SessionDynSup.start_session(session_id)
+    Sessions.create(attrs.agent, attrs)
   end
 
   defp maybe_send_message(_session_id, nil), do: :ok
@@ -175,79 +137,11 @@ defmodule Synapsis.Agent.SessionBridge do
     end
   end
 
-  defp build_git_log(project_path) do
-    if Synapsis.Git.is_repo?(project_path) do
-      case run_command("git", ["-C", project_path, "log", "--oneline", "-10"]) do
-        {:ok, output} -> if output == "", do: nil, else: String.trim(output)
-        {:error, _} -> nil
-      end
-    end
-  end
-
-  defp run_command(cmd, args) do
-    executable = System.find_executable(cmd) || cmd
-
-    port =
-      Port.open({:spawn_executable, executable}, [
-        {:args, args},
-        :binary,
-        :exit_status,
-        :stderr_to_stdout,
-        {:line, @port_line_buffer}
-      ])
-
-    collect_port_output(port, [])
-  end
-
-  defp collect_port_output(port, acc) do
-    receive do
-      {^port, {:data, {:eol, line}}} ->
-        acc = [line | acc]
-
-        if length(acc) > @max_output_lines do
-          Port.close(port)
-          {:ok, acc |> Enum.reverse() |> Enum.join("\n")}
-        else
-          collect_port_output(port, acc)
-        end
-
-      {^port, {:data, {:noeol, line}}} ->
-        collect_port_output(port, [line | acc])
-
-      {^port, {:exit_status, 0}} ->
-        {:ok, acc |> Enum.reverse() |> Enum.join("\n")}
-
-      {^port, {:exit_status, _code}} ->
-        {:error, acc |> Enum.reverse() |> Enum.join("\n")}
-    after
-      10_000 ->
-        Port.close(port)
-        {:error, :timeout}
-    end
-  end
-
-  defp build_diagnostics(nil), do: nil
-
-  defp build_diagnostics(project_id) do
-    case Synapsis.LSP.Manager.get_diagnostics(project_id) do
-      {:ok, diagnostics} when diagnostics != [] ->
-        diagnostics
-        |> Enum.take(10)
-        |> Enum.map(fn d -> "- #{d.file}:#{d.line}: #{d.message}" end)
-        |> Enum.join("\n")
-
-      _ ->
-        nil
-    end
-  rescue
-    _e in [RuntimeError, UndefinedFunctionError, ArgumentError] -> nil
-  end
-
   defp build_memory_context(opts) do
-    project_id = opts[:project_id]
+    agent_id = opts[:agent_id] || opts[:agent]
 
-    if project_id do
-      context = Synapsis.Memory.ContextBuilder.build(%{project_id: project_id})
+    if agent_id do
+      context = Synapsis.Memory.ContextBuilder.build(%{agent_id: agent_id, agent_scope: :agent})
       if context == "", do: nil, else: context
     end
   rescue

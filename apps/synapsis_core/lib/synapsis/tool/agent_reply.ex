@@ -59,7 +59,6 @@ defmodule Synapsis.Tool.AgentReply do
           type: "response",
           in_reply_to: original.id,
           payload: %{"content" => content, "status" => status},
-          project_id: context[:project_id],
           session_id: context[:session_id]
         }
 

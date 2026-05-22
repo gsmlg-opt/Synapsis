@@ -10,9 +10,6 @@ defmodule Synapsis.AgentConfigs do
     todo_read todo_write enter_plan_mode exit_plan_mode
     task skill tool_search ask_user sleep
     memory_save memory_search memory_update session_summarize
-    board_read board_update devlog_read devlog_write
-    repo_link repo_status repo_sync
-    worktree_create worktree_list worktree_remove
     workspace_read workspace_write workspace_list workspace_search
     diagnostics
   )

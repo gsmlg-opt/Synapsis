@@ -5,7 +5,7 @@ defmodule Synapsis.Harness.ContextTest do
 
   test "folds session, messages, and parts in order" do
     events = [
-      Event.session_created("session-1", project_id: "project-1"),
+      Event.session_created("session-1", agent_id: "main"),
       Event.message_appended("session-1", %{id: "message-1", role: :user, ordinal: 0}),
       Event.part_appended("session-1", "message-1", %{
         id: "part-1",
@@ -18,14 +18,14 @@ defmodule Synapsis.Harness.ContextTest do
     context = Enum.reduce(events, Context.new(), &Context.apply_event/2)
 
     assert context.session_id == "session-1"
-    assert context.project_id == "project-1"
+    assert context.agent_id == "main"
     assert [%{id: "message-1", parts: [%{id: "part-1"}]}] = context.messages
   end
 
   test "updates a part by id" do
     context =
       Context.new()
-      |> Context.apply_event(Event.session_created("session-1", project_id: "project-1"))
+      |> Context.apply_event(Event.session_created("session-1", agent_id: "main"))
       |> Context.apply_event(
         Event.message_appended("session-1", %{id: "message-1", role: :assistant, ordinal: 0})
       )
@@ -49,8 +49,10 @@ defmodule Synapsis.Harness.ContextTest do
   test "permission and abort events update in-flight state" do
     context =
       Context.new()
-      |> Context.apply_event(Event.session_created("session-1", project_id: "project-1"))
-      |> Context.apply_event(Event.permission_requested("session-1", "request-1", "part-1", :write))
+      |> Context.apply_event(Event.session_created("session-1", agent_id: "main"))
+      |> Context.apply_event(
+        Event.permission_requested("session-1", "request-1", "part-1", :write)
+      )
       |> Context.apply_event(Event.permission_denied("session-1", "request-1", :user_denied))
       |> Context.apply_event(Event.aborted("session-1", :user_requested))
 

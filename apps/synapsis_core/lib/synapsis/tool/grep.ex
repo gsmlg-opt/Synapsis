@@ -25,7 +25,7 @@ defmodule Synapsis.Tool.Grep do
         "pattern" => %{"type" => "string", "description" => "Regex pattern to search for"},
         "path" => %{
           "type" => "string",
-          "description" => "Directory or file to search in (default: project root)"
+          "description" => "Directory or file to search in (default: workspace root)"
         },
         "include" => %{
           "type" => "string",

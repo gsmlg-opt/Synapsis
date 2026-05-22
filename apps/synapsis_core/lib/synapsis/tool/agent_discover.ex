@@ -7,7 +7,7 @@ defmodule Synapsis.Tool.AgentDiscover do
 
   @impl true
   def description,
-    do: "Discover running agents. List all, get a specific agent, or find agents by project."
+    do: "Discover running agents. List all, get a specific agent, or find agents by owner."
 
   @impl true
   def parameters do
@@ -16,13 +16,13 @@ defmodule Synapsis.Tool.AgentDiscover do
       "properties" => %{
         "action" => %{
           "type" => "string",
-          "enum" => ["list", "get", "find_by_project"],
+          "enum" => ["list", "get", "find_by_agent"],
           "description" => "Discovery action"
         },
         "agent_id" => %{"type" => "string", "description" => "Agent ID (for 'get' action)"},
-        "project_id" => %{
+        "owner_agent_id" => %{
           "type" => "string",
-          "description" => "Project ID (for 'find_by_project')"
+          "description" => "Owner agent ID (for 'find_by_agent')"
         },
         "type" => %{"type" => "string", "description" => "Optional agent type filter"}
       },
@@ -41,7 +41,7 @@ defmodule Synapsis.Tool.AgentDiscover do
     case input["action"] do
       "list" -> list_agents(input["type"])
       "get" -> get_agent(input["agent_id"])
-      "find_by_project" -> find_by_project(input["project_id"])
+      "find_by_agent" -> find_by_agent(input["owner_agent_id"])
       other -> {:error, "Unknown action: #{other}"}
     end
   end
@@ -85,24 +85,24 @@ defmodule Synapsis.Tool.AgentDiscover do
     end
   end
 
-  defp find_by_project(nil), do: {:error, "project_id is required for 'find_by_project'"}
+  defp find_by_agent(nil), do: {:error, "owner_agent_id is required for 'find_by_agent'"}
 
-  defp find_by_project(project_id) do
+  defp find_by_agent(agent_id) do
     agents =
       Registry.select(Synapsis.Session.Registry, [
         {{:"$1", :"$2", :"$3"}, [], [{{:"$1", :"$2", :"$3"}}]}
       ])
       |> Enum.filter(fn {_key, _pid, value} ->
-        is_map(value) and Map.get(value, :project_id) == project_id
+        is_map(value) and Map.get(value, :agent_id) == agent_id
       end)
       |> Enum.map(fn {key, pid, _value} ->
         %{"id" => to_string(key), "pid" => inspect(pid), "alive" => Process.alive?(pid)}
       end)
 
-    {:ok, Jason.encode!(%{agents: agents, count: length(agents), project_id: project_id})}
+    {:ok, Jason.encode!(%{agents: agents, count: length(agents), agent_id: agent_id})}
   rescue
     _e in [ArgumentError, RuntimeError] ->
-      {:ok, Jason.encode!(%{agents: [], count: 0, project_id: project_id})}
+      {:ok, Jason.encode!(%{agents: [], count: 0, agent_id: agent_id})}
   end
 
   defp format_value(value) when is_map(value), do: inspect(value)

@@ -53,12 +53,12 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
     test "displays existing memories", %{conn: conn} do
       create_semantic_memory(%{
         title: "My Test Fact",
-        summary: "Important fact about the project"
+        summary: "Important fact about the workspace"
       })
 
       {:ok, _view, html} = live(conn, ~p"/settings/memory")
       assert html =~ "My Test Fact"
-      assert html =~ "Important fact about the project"
+      assert html =~ "Important fact about the workspace"
     end
 
     test "shows New Memory button", %{conn: conn} do
@@ -67,10 +67,10 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
     end
 
     test "shows kind and scope badges on memories", %{conn: conn} do
-      create_semantic_memory(%{kind: "decision", scope: "project", scope_id: "proj1"})
+      create_semantic_memory(%{kind: "decision", scope: "agent", scope_id: "main"})
       {:ok, _view, html} = live(conn, ~p"/settings/memory")
       assert html =~ "decision"
-      assert html =~ "project"
+      assert html =~ "agent"
     end
 
     test "clicking New Memory shows create form", %{conn: conn} do

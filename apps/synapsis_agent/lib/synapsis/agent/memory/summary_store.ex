@@ -1,6 +1,6 @@
 defmodule Synapsis.Agent.Memory.SummaryStore do
   @moduledoc """
-  DB-backed summary store for project/task/global rollups.
+  DB-backed summary store for agent/task/global rollups.
   Delegates to `Synapsis.AgentSummaries` for persistence.
   """
 
@@ -39,7 +39,7 @@ defmodule Synapsis.Agent.Memory.SummaryStore do
 
   @known_atoms %{
     "global" => :global,
-    "project" => :project,
+    "agent" => :agent,
     "task" => :task,
     "progress" => :progress,
     "decisions" => :decisions,

@@ -10,7 +10,6 @@ defmodule Synapsis.Session.Sharing do
         {:error, :not_found}
 
       session ->
-        session = Repo.preload(session, :project)
         messages = load_messages(session_id)
 
         data = %{
@@ -21,7 +20,6 @@ defmodule Synapsis.Session.Sharing do
             agent: session.agent,
             provider: session.provider,
             model: session.model,
-            project_path: (session.project && session.project.path) || "__global__",
             created_at: session.inserted_at |> DateTime.to_iso8601()
           },
           messages: Enum.map(messages, &export_message/1)
@@ -47,10 +45,10 @@ defmodule Synapsis.Session.Sharing do
     end
   end
 
-  def import_session(json_string, project_path) do
+  def import_session(json_string, agent_name \\ nil) do
     case Jason.decode(json_string) do
       {:ok, %{"session" => session_data, "messages" => messages_data}} ->
-        do_import(session_data, messages_data, project_path)
+        do_import(session_data, messages_data, agent_name)
 
       {:ok, _} ->
         {:error, "invalid session export format"}
@@ -60,52 +58,41 @@ defmodule Synapsis.Session.Sharing do
     end
   end
 
-  defp do_import(session_data, messages_data, project_path) do
-    project =
-      case Synapsis.Projects.find_or_create(project_path) do
-        {:ok, project} -> project
-        {:error, _changeset} -> nil
-      end
+  defp do_import(session_data, messages_data, agent_name) do
+    attrs = %{
+      provider: session_data["provider"] || "anthropic",
+      model: session_data["model"] || Synapsis.Providers.default_model("anthropic"),
+      agent: agent_name || session_data["agent"] || "main",
+      title: "[Imported] #{session_data["title"] || "session"}"
+    }
 
-    if is_nil(project) do
-      {:error, "Failed to create project for import"}
-    else
-      attrs = %{
-        project_id: project.id,
-        provider: session_data["provider"] || "anthropic",
-        model: session_data["model"] || Synapsis.Providers.default_model("anthropic"),
-        agent: session_data["agent"] || "main",
-        title: "[Imported] #{session_data["title"] || "session"}"
-      }
-
-      Repo.transaction(fn ->
-        session =
-          case %Session{}
-               |> Session.changeset(attrs)
-               |> Repo.insert() do
-            {:ok, s} -> s
-            {:error, changeset} -> Repo.rollback(changeset)
-          end
-
-        for msg_data <- messages_data do
-          parts = import_parts(msg_data["parts"] || [])
-
-          case %Message{}
-               |> Message.changeset(%{
-                 session_id: session.id,
-                 role: msg_data["role"] || "user",
-                 parts: parts,
-                 token_count: msg_data["token_count"] || 0
-               })
-               |> Repo.insert() do
-            {:ok, _} -> :ok
-            {:error, changeset} -> Repo.rollback(changeset)
-          end
+    Repo.transaction(fn ->
+      session =
+        case %Session{}
+             |> Session.changeset(attrs)
+             |> Repo.insert() do
+          {:ok, s} -> s
+          {:error, changeset} -> Repo.rollback(changeset)
         end
 
-        Repo.preload(session, :project)
-      end)
-    end
+      for msg_data <- messages_data do
+        parts = import_parts(msg_data["parts"] || [])
+
+        case %Message{}
+             |> Message.changeset(%{
+               session_id: session.id,
+               role: msg_data["role"] || "user",
+               parts: parts,
+               token_count: msg_data["token_count"] || 0
+             })
+             |> Repo.insert() do
+          {:ok, _} -> :ok
+          {:error, changeset} -> Repo.rollback(changeset)
+        end
+      end
+
+      session
+    end)
   end
 
   defp export_message(message) do

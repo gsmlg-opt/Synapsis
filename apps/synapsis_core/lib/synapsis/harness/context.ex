@@ -5,7 +5,7 @@ defmodule Synapsis.Harness.Context do
 
   defstruct [
     :session_id,
-    :project_id,
+    :agent_id,
     :parent_id,
     status: :new,
     metadata: %{},
@@ -31,7 +31,7 @@ defmodule Synapsis.Harness.Context do
     %{
       context
       | session_id: event.aggregate_id,
-        project_id: event.project_id,
+        agent_id: event.agent_id,
         parent_id: event.parent_id,
         metadata: event.metadata,
         status: :idle

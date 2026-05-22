@@ -18,7 +18,7 @@ defmodule Synapsis.Tool.AgentSend do
         "to" => %{
           "type" => "string",
           "description" =>
-            "Target agent ID (e.g. \"global\", \"project:{id}\", \"session:{id}\", UUID)"
+            "Target agent ID (e.g. \"global\", \"agent:{id}\", \"session:{id}\", UUID)"
         },
         "content" => %{"type" => "string", "description" => "Message content"},
         "type" => %{
@@ -53,7 +53,6 @@ defmodule Synapsis.Tool.AgentSend do
       to_agent_id: to,
       type: msg_type,
       payload: %{"content" => content, "metadata" => metadata},
-      project_id: context[:project_id],
       session_id: context[:session_id]
     }
 

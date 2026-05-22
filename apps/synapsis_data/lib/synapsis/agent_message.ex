@@ -17,7 +17,6 @@ defmodule Synapsis.AgentMessage do
     field(:in_reply_to, :binary_id)
     field(:payload, :map, default: %{})
     field(:status, :string, default: "delivered")
-    field(:project_id, :binary_id)
     field(:session_id, :binary_id)
     field(:expires_at, :utc_datetime_usec)
 
@@ -25,7 +24,7 @@ defmodule Synapsis.AgentMessage do
   end
 
   @required_fields ~w(ref from_agent_id to_agent_id)a
-  @optional_fields ~w(type in_reply_to payload status project_id session_id expires_at)a
+  @optional_fields ~w(type in_reply_to payload status session_id expires_at)a
 
   def changeset(message, attrs) do
     message

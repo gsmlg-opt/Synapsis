@@ -52,9 +52,9 @@ defmodule Synapsis.Tool.ToolsTest do
       assert msg =~ "not found"
     end
 
-    test "rejects path outside project root" do
+    test "rejects path outside workspace root" do
       {:error, msg} = FileRead.execute(%{"path" => "/etc/passwd"}, %{project_path: @test_dir})
-      assert msg =~ "outside project root"
+      assert msg =~ "outside workspace root"
     end
 
     test "rejects sibling-directory path traversal" do
@@ -62,7 +62,7 @@ defmodule Synapsis.Tool.ToolsTest do
       # sibling would be /tmp/synapsis_tool_test_12345_evil
       sibling = @test_dir <> "_evil"
       {:error, msg} = FileRead.execute(%{"path" => sibling}, %{project_path: @test_dir})
-      assert msg =~ "outside project root"
+      assert msg =~ "outside workspace root"
     end
 
     test "reads with offset zero returns all lines" do
@@ -148,7 +148,7 @@ defmodule Synapsis.Tool.ToolsTest do
       assert content == "XXX bar foo bar foo"
     end
 
-    test "rejects path traversal outside project root" do
+    test "rejects path traversal outside workspace root" do
       {:error, msg} =
         FileEdit.execute(
           %{"path" => "../../etc/hosts", "old_string" => "localhost", "new_string" => "evil"},
@@ -222,13 +222,13 @@ defmodule Synapsis.Tool.ToolsTest do
       assert output =~ "No matches"
     end
 
-    test "rejects path traversal outside project root" do
+    test "rejects path traversal outside workspace root" do
       {:error, msg} =
         Grep.execute(%{"pattern" => "root", "path" => "../../../../etc"}, %{
           project_path: @test_dir
         })
 
-      assert msg =~ "outside project root"
+      assert msg =~ "outside workspace root"
     end
   end
 
@@ -248,11 +248,11 @@ defmodule Synapsis.Tool.ToolsTest do
       assert output =~ "No files matched"
     end
 
-    test "rejects base path outside project root" do
+    test "rejects base path outside workspace root" do
       {:error, msg} =
         Glob.execute(%{"pattern" => "*", "path" => "/etc"}, %{project_path: @test_dir})
 
-      assert msg =~ "outside project root"
+      assert msg =~ "outside workspace root"
     end
   end
 
@@ -273,16 +273,16 @@ defmodule Synapsis.Tool.ToolsTest do
       assert msg =~ "not found" or msg =~ "does not exist"
     end
 
-    test "rejects path traversal outside project root" do
+    test "rejects path traversal outside workspace root" do
       {:error, msg} = ListDir.execute(%{"path" => "/etc"}, %{project_path: @test_dir})
-      assert msg =~ "outside project root"
+      assert msg =~ "outside workspace root"
     end
 
     test "rejects relative path traversal" do
       {:error, msg} =
         ListDir.execute(%{"path" => "../../../../../../etc"}, %{project_path: @test_dir})
 
-      assert msg =~ "outside project root"
+      assert msg =~ "outside workspace root"
     end
   end
 
@@ -441,7 +441,7 @@ defmodule Synapsis.Tool.ToolsTest do
       assert :file_changed in FileDelete.side_effects()
     end
 
-    test "rejects path traversal outside project root" do
+    test "rejects path traversal outside workspace root" do
       {:error, msg} =
         FileDelete.execute(%{"path" => "../../etc/passwd"}, %{project_path: @test_dir})
 
@@ -479,7 +479,7 @@ defmodule Synapsis.Tool.ToolsTest do
       assert :file_changed in FileMove.side_effects()
     end
 
-    test "rejects source path traversal outside project root" do
+    test "rejects source path traversal outside workspace root" do
       {:error, msg} =
         FileMove.execute(
           %{"source" => "../../etc/passwd", "destination" => "safe_dest.txt"},
@@ -489,7 +489,7 @@ defmodule Synapsis.Tool.ToolsTest do
       assert msg =~ "outside"
     end
 
-    test "rejects destination path traversal outside project root" do
+    test "rejects destination path traversal outside workspace root" do
       source = Path.join(@test_dir, "move_trav_src.txt")
       File.write!(source, "data")
 

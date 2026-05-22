@@ -13,11 +13,8 @@ defmodule Synapsis.Agent.Supervisor do
   @impl true
   def init(_opts) do
     children = [
-      {Registry, keys: :unique, name: Synapsis.Agent.ProjectRegistry},
       {Registry, keys: :unique, name: Synapsis.Agent.Runtime.RunRegistry},
-      {DynamicSupervisor, strategy: :one_for_one, name: Synapsis.Agent.ProjectSupervisor},
-      Synapsis.Agent.AgentRegistry,
-      Synapsis.Agent.GlobalAssistant
+      Synapsis.Agent.AgentRegistry
     ]
 
     Supervisor.init(children, strategy: :one_for_one)

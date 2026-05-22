@@ -9,14 +9,9 @@ defmodule SynapsisServer.Router do
               SynapsisWeb.AssistantLive.Index,
               SynapsisWeb.AssistantLive.Show,
               SynapsisWeb.AssistantLive.Setting,
-              SynapsisWeb.ChatLive,
               SynapsisWeb.AgentLive.Agents,
               SynapsisWeb.AgentLive.Toolsets,
               SynapsisWeb.AgentLive.Skills,
-              SynapsisWeb.ProjectLive.Index,
-              SynapsisWeb.ProjectLive.Show,
-              SynapsisWeb.SessionLive.Index,
-              SynapsisWeb.SessionLive.Show,
               SynapsisWeb.SettingsLive,
               SynapsisWeb.ProviderLive.Index,
               SynapsisWeb.ProviderLive.Show,
@@ -81,8 +76,6 @@ defmodule SynapsisServer.Router do
     pipe_through :browser
 
     live "/", DashboardLive, :index
-    live "/chat", ChatLive, :index
-    live "/chat/:session_id", ChatLive, :session
 
     live "/agent/agents", AgentLive.Agents, :index
     live "/agent/agents/new", AgentLive.Agents, :new
@@ -98,15 +91,6 @@ defmodule SynapsisServer.Router do
     live "/assistant/:name/sessions", AssistantLive.Show, :sessions
     live "/assistant/:name/sessions/:session_id", AssistantLive.Show, :session
     live "/assistant/:name/setting", AssistantLive.Setting, :index
-
-    live "/projects", ProjectLive.Index, :index
-    live "/projects/new", ProjectLive.Index, :new
-    live "/projects/:id", ProjectLive.Show, :show
-    live "/projects/:id/edit", ProjectLive.Show, :edit
-
-    live "/projects/:project_id/sessions", SessionLive.Index, :index
-    live "/projects/:project_id/sessions/new", SessionLive.Index, :new
-    live "/projects/:project_id/sessions/:id", SessionLive.Show, :show
 
     # TODO: add authentication guard (on_mount hook or pipeline plug) before production
     live "/workspace", WorkspaceLive.Explorer, :index

@@ -1,7 +1,7 @@
 defmodule Synapsis.Config do
   @moduledoc """
   Configuration loader and merger.
-  Merges: defaults < user config < project config < env overrides.
+  Merges: defaults < user config < workspace config < env overrides.
   """
 
   @config_dir "~/.config/synapsis"

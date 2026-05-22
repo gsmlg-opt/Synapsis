@@ -25,7 +25,6 @@ defmodule Synapsis.Memory.Retriever do
           query: String.t(),
           scope: atom(),
           agent_id: String.t() | nil,
-          project_id: String.t() | nil,
           kinds: [String.t()] | nil,
           tags: [String.t()] | nil,
           limit: non_neg_integer()
@@ -84,21 +83,13 @@ defmodule Synapsis.Memory.Retriever do
   end
 
   defp build_scope_pairs(opts) do
-    agent_scope = Map.get(opts, :scope, :project)
+    agent_scope = Map.get(opts, :scope, :agent)
     agent_id = Map.get(opts, :agent_id)
-    project_id = Map.get(opts, :project_id, "")
 
     case agent_scope do
       :agent when is_binary(agent_id) ->
         [
           {"agent", agent_id},
-          {"project", project_id},
-          {"shared", ""}
-        ]
-
-      :project ->
-        [
-          {"project", project_id},
           {"shared", ""}
         ]
 
@@ -200,7 +191,6 @@ defmodule Synapsis.Memory.Retriever do
       Map.get(opts, :query, ""),
       Map.get(opts, :scope),
       Map.get(opts, :agent_id),
-      Map.get(opts, :project_id),
       Map.get(opts, :kinds),
       Map.get(opts, :tags),
       Map.get(opts, :limit, @default_limit)

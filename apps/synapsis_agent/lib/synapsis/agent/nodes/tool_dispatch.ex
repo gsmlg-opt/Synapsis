@@ -14,7 +14,6 @@ defmodule Synapsis.Agent.Nodes.ToolDispatch do
          Map.put(state, :classified_tools, Enum.map(state.tool_uses, &{:approved, &1}))}
 
       session ->
-        session = Repo.preload(session, :project)
         run_with_session(state, session)
     end
   end

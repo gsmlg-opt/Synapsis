@@ -4,19 +4,10 @@ defmodule Synapsis.FailedAttemptTest do
   alias Synapsis.{FailedAttempt, Repo}
 
   setup do
-    {:ok, project} =
-      %Synapsis.Project{}
-      |> Synapsis.Project.changeset(%{
-        path: "/tmp/fa_test_#{System.unique_integer([:positive])}",
-        slug: "fa-test-#{System.unique_integer([:positive])}",
-        name: "fa-test-#{System.unique_integer([:positive])}"
-      })
-      |> Repo.insert()
-
     {:ok, session} =
       %Synapsis.Session{}
       |> Synapsis.Session.changeset(%{
-        project_id: project.id,
+        agent: "main",
         provider: "anthropic",
         model: "claude-sonnet-4-20250514"
       })

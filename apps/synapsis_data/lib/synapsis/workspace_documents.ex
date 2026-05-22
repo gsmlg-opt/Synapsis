@@ -123,7 +123,7 @@ defmodule Synapsis.WorkspaceDocuments do
   @spec search(String.t(), keyword()) :: [WorkspaceDocument.t()]
   def search(query_text, opts \\ []) do
     limit = Keyword.get(opts, :limit, 20)
-    project_id = Keyword.get(opts, :project_id)
+    agent_id = Keyword.get(opts, :agent_id)
     kind = Keyword.get(opts, :kind)
     scope = Keyword.get(opts, :scope)
 
@@ -145,13 +145,13 @@ defmodule Synapsis.WorkspaceDocuments do
         limit: ^limit
       )
 
-    query = if project_id, do: where(query, [d], d.project_id == ^project_id), else: query
+    query = if agent_id, do: where(query, [d], d.agent_id == ^agent_id), else: query
     query = if kind, do: where(query, [d], d.kind == ^kind), else: query
 
     query =
       case scope do
-        :global -> where(query, [d], is_nil(d.project_id))
-        :project -> where(query, [d], not is_nil(d.project_id) and is_nil(d.session_id))
+        :global -> where(query, [d], is_nil(d.agent_id))
+        :agent -> where(query, [d], not is_nil(d.agent_id) and is_nil(d.session_id))
         :session -> where(query, [d], not is_nil(d.session_id))
         _ -> query
       end
@@ -436,54 +436,37 @@ defmodule Synapsis.WorkspaceDocuments do
   # Domain projection queries — Skills
   # ---------------------------------------------------------------------------
 
-  @doc "List skills by scope, optionally filtered by project_id."
+  @doc "List skills by scope."
   @spec list_skills(String.t(), String.t() | nil, non_neg_integer()) :: [struct()]
-  def list_skills(scope, project_id, limit) do
-    query =
-      from(s in Synapsis.Skill,
-        where: s.scope == ^scope,
-        limit: ^limit
-      )
-
-    query =
-      if project_id do
-        where(query, [s], s.project_id == ^project_id)
-      else
-        where(query, [s], is_nil(s.project_id))
-      end
-
-    Repo.all(query)
+  def list_skills(scope, _agent_id, limit) do
+    from(s in Synapsis.Skill,
+      where: s.scope == ^scope,
+      limit: ^limit
+    )
+    |> Repo.all()
   end
 
-  @doc "Find a single skill by scope, optional project_id, and name."
+  @doc "Find a single skill by scope and name."
   @spec find_skill(String.t(), String.t() | nil, String.t()) :: struct() | nil
-  def find_skill(scope, project_id, name) do
-    query =
-      from(s in Synapsis.Skill,
-        where: s.scope == ^scope and s.name == ^name,
-        limit: 1
-      )
-
-    query =
-      if project_id do
-        where(query, [s], s.project_id == ^project_id)
-      else
-        where(query, [s], is_nil(s.project_id))
-      end
-
-    Repo.one(query)
+  def find_skill(scope, _agent_id, name) do
+    from(s in Synapsis.Skill,
+      where: s.scope == ^scope and s.name == ^name,
+      limit: 1
+    )
+    |> Repo.one()
   end
 
   # ---------------------------------------------------------------------------
-  # Domain projection queries — Memory entries
+  # Domain projection queries — Semantic memories
   # ---------------------------------------------------------------------------
 
-  @doc "List memory entries by scope, optionally filtered by scope_id."
-  @spec list_memory_entries(String.t(), String.t() | nil, non_neg_integer()) :: [struct()]
-  def list_memory_entries(scope, scope_id, limit) do
+  @doc "List semantic memories by scope, optionally filtered by scope_id."
+  @spec list_semantic_memories(String.t(), String.t() | nil, non_neg_integer()) :: [struct()]
+  def list_semantic_memories(scope, scope_id, limit) do
     query =
-      from(m in Synapsis.MemoryEntry,
-        where: m.scope == ^scope,
+      from(m in Synapsis.SemanticMemory,
+        where: m.scope == ^scope and is_nil(m.archived_at),
+        order_by: [desc: m.updated_at],
         limit: ^limit
       )
 
@@ -497,12 +480,12 @@ defmodule Synapsis.WorkspaceDocuments do
     Repo.all(query)
   end
 
-  @doc "Find a single memory entry by scope, optional scope_id, and key."
-  @spec find_memory_entry(String.t(), String.t() | nil, String.t()) :: struct() | nil
-  def find_memory_entry(scope, scope_id, key) do
+  @doc "Find a single semantic memory by scope, optional scope_id, and id."
+  @spec find_semantic_memory(String.t(), String.t() | nil, String.t()) :: struct() | nil
+  def find_semantic_memory(scope, scope_id, id) do
     query =
-      from(m in Synapsis.MemoryEntry,
-        where: m.scope == ^scope and m.key == ^key,
+      from(m in Synapsis.SemanticMemory,
+        where: m.scope == ^scope and m.id == ^id and is_nil(m.archived_at),
         limit: 1
       )
 
@@ -530,24 +513,24 @@ defmodule Synapsis.WorkspaceDocuments do
     |> Repo.all()
   end
 
-  @doc "List session IDs for a project."
-  @spec list_session_ids_for_project(String.t(), non_neg_integer()) :: [String.t()]
-  def list_session_ids_for_project(project_id, limit) do
+  @doc "List session IDs for an agent."
+  @spec list_session_ids_for_agent(String.t(), non_neg_integer()) :: [String.t()]
+  def list_session_ids_for_agent(agent_id, limit) do
     from(s in Synapsis.Session,
-      where: s.project_id == ^project_id,
+      where: s.agent == ^agent_id,
       select: s.id,
       limit: ^limit
     )
     |> Repo.all()
   end
 
-  @doc "List all todos for a project in a single JOIN query, grouped by session_id."
-  @spec list_todos_for_project(String.t(), non_neg_integer()) :: %{String.t() => [struct()]}
-  def list_todos_for_project(project_id, limit) do
+  @doc "List all todos for an agent in a single JOIN query, grouped by session_id."
+  @spec list_todos_for_agent(String.t(), non_neg_integer()) :: %{String.t() => [struct()]}
+  def list_todos_for_agent(agent_id, limit) do
     from(t in Synapsis.SessionTodo,
       join: s in Synapsis.Session,
       on: t.session_id == s.id,
-      where: s.project_id == ^project_id,
+      where: s.agent == ^agent_id,
       order_by: [asc: t.sort_order, asc: t.inserted_at],
       limit: ^limit
     )
@@ -559,12 +542,12 @@ defmodule Synapsis.WorkspaceDocuments do
   # Domain projection queries — Session lookup
   # ---------------------------------------------------------------------------
 
-  @doc "Get the project_id for a session."
-  @spec get_session_project_id(String.t()) :: String.t() | nil
-  def get_session_project_id(session_id) do
+  @doc "Get the agent owner for a session."
+  @spec get_session_agent_id(String.t()) :: String.t() | nil
+  def get_session_agent_id(session_id) do
     from(s in Synapsis.Session,
       where: s.id == ^session_id,
-      select: s.project_id,
+      select: s.agent,
       limit: 1
     )
     |> Repo.one()

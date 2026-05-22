@@ -7,27 +7,26 @@ defmodule Synapsis.Workspace.PathResolverTest do
     test "resolves global shared path" do
       assert {:ok, resolved} = PathResolver.resolve("/shared/notes/idea.md")
       assert resolved.scope == :global
-      assert resolved.project_id == nil
+      assert resolved.agent_id == nil
       assert resolved.session_id == nil
       assert resolved.default_visibility == :global_shared
       assert resolved.segments == ["notes", "idea.md"]
     end
 
-    test "resolves project path" do
-      assert {:ok, resolved} = PathResolver.resolve("/projects/abc123/plans/auth.md")
-      assert resolved.scope == :project
-      assert resolved.project_id == "abc123"
+    test "resolves agent path" do
+      assert {:ok, resolved} = PathResolver.resolve("/agents/main/plans/auth.md")
+      assert resolved.scope == :agent
+      assert resolved.agent_id == "main"
       assert resolved.session_id == nil
-      assert resolved.default_visibility == :project_shared
+      assert resolved.default_visibility == :agent_shared
       assert resolved.segments == ["plans", "auth.md"]
     end
 
     test "resolves session path" do
-      assert {:ok, resolved} =
-               PathResolver.resolve("/projects/abc/sessions/sess1/todo.md")
+      assert {:ok, resolved} = PathResolver.resolve("/agents/main/sessions/sess1/todo.md")
 
       assert resolved.scope == :session
-      assert resolved.project_id == "abc"
+      assert resolved.agent_id == "main"
       assert resolved.session_id == "sess1"
       assert resolved.default_visibility == :private
       assert resolved.segments == ["todo.md"]
@@ -35,7 +34,7 @@ defmodule Synapsis.Workspace.PathResolverTest do
 
     test "resolves session scratch path with scratch lifecycle" do
       assert {:ok, resolved} =
-               PathResolver.resolve("/projects/abc/sessions/sess1/scratch/draft.md")
+               PathResolver.resolve("/agents/main/sessions/sess1/scratch/draft.md")
 
       assert resolved.default_lifecycle == :scratch
     end

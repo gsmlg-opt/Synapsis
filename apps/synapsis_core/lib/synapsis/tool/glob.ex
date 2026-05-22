@@ -23,7 +23,10 @@ defmodule Synapsis.Tool.Glob do
           "type" => "string",
           "description" => "Glob pattern (e.g. '**/*.ex', 'lib/**/*.exs')"
         },
-        "path" => %{"type" => "string", "description" => "Base directory (default: project root)"}
+        "path" => %{
+          "type" => "string",
+          "description" => "Base directory (default: workspace root)"
+        }
       },
       "required" => ["pattern"]
     }

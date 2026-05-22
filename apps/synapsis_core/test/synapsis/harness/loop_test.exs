@@ -16,8 +16,8 @@ defmodule Synapsis.Harness.LoopTest do
     Context.new(Keyword.merge(defaults, attrs))
     |> Context.apply_event(
       Event.session_created("session-1",
-        project_id: "project-1",
-        metadata: %{cwd: "/tmp/project"}
+        agent_id: "main",
+        metadata: %{cwd: "/tmp/workspace"}
       )
     )
   end

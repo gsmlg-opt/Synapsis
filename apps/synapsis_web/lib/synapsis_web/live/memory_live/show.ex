@@ -330,7 +330,6 @@ defmodule SynapsisWeb.MemoryLive.Show do
   defp kind_color(_), do: "ghost"
 
   defp scope_color("shared"), do: "info"
-  defp scope_color("project"), do: "primary"
   defp scope_color("agent"), do: "secondary"
   defp scope_color(_), do: "ghost"
 

@@ -22,22 +22,22 @@ defmodule Synapsis.Tool.PathValidatorTest do
       assert :ok = PathValidator.validate("#{@project_root}/a/b/c/d.txt", @project_root)
     end
 
-    test "rejects path outside project root" do
+    test "rejects path outside workspace root" do
       assert {:error, msg} = PathValidator.validate("/etc/passwd", @project_root)
-      assert msg =~ "outside project root"
+      assert msg =~ "outside workspace root"
     end
 
     test "rejects sibling directory (prefix attack)" do
       # /tmp/synapsis_validator_test_evil must NOT match /tmp/synapsis_validator_test
       sibling = @project_root <> "_evil"
       assert {:error, msg} = PathValidator.validate(sibling, @project_root)
-      assert msg =~ "outside project root"
+      assert msg =~ "outside workspace root"
     end
 
     test "rejects relative traversal path" do
       traversal = "#{@project_root}/../../etc/passwd"
       assert {:error, msg} = PathValidator.validate(traversal, @project_root)
-      assert msg =~ "outside project root"
+      assert msg =~ "outside workspace root"
     end
 
     test "handles Path.expand for relative paths with dot segments" do

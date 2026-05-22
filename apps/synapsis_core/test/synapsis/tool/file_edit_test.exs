@@ -76,14 +76,14 @@ defmodule Synapsis.Tool.FileEditTest do
   end
 
   @tag :tmp_dir
-  test "rejects path outside project root", %{tmp_dir: tmp_dir} do
+  test "rejects path outside workspace root", %{tmp_dir: tmp_dir} do
     {:error, msg} =
       FileEdit.execute(
         %{"path" => "/etc/passwd", "old_string" => "root", "new_string" => "evil"},
         %{project_path: tmp_dir}
       )
 
-    assert msg =~ "outside project root"
+    assert msg =~ "outside workspace root"
   end
 
   test "declares write permission and file_changed side effect" do

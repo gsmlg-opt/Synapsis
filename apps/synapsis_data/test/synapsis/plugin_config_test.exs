@@ -69,22 +69,13 @@ defmodule Synapsis.PluginConfigTest do
       assert get_field(cs, :env) == %{}
       assert get_field(cs, :settings) == %{}
       assert get_field(cs, :auto_start) == false
-      assert get_field(cs, :scope) == "project"
+      assert get_field(cs, :scope) == "global"
     end
   end
 
   describe "unique_constraint" do
-    test "enforces uniqueness of name + scope + project_id with same non-nil project_id" do
-      {:ok, project} =
-        %Synapsis.Project{}
-        |> Synapsis.Project.changeset(%{
-          path: "/tmp/plugin-unique-#{:rand.uniform(100_000)}",
-          slug: "plugin-unique-#{:rand.uniform(100_000)}",
-          name: "plugin-unique-#{:rand.uniform(100_000)}"
-        })
-        |> Repo.insert()
-
-      attrs = %{type: "mcp", name: "unique-plugin", scope: "project", project_id: project.id}
+    test "enforces uniqueness of name + scope" do
+      attrs = %{type: "mcp", name: "unique-plugin", scope: "global"}
 
       {:ok, _} =
         %PluginConfig{}

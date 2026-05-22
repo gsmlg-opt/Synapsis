@@ -296,7 +296,7 @@ defmodule SynapsisWeb.AssistantLive.Setting do
       name: params["name"],
       schedule: params["schedule"],
       prompt: params["prompt"],
-      agent_type: validated_atom(params["agent_type"], ~w(global project), :global),
+      agent_type: validated_atom(params["agent_type"], ~w(global agent), :global),
       session_isolation:
         validated_atom(params["session_isolation"], ~w(isolated main), :isolated),
       notify_user: params["notify_user"] == "true",
@@ -916,7 +916,7 @@ defmodule SynapsisWeb.AssistantLive.Setting do
               name="agent_type"
               label="Agent Type"
               value={@heartbeat_form[:agent_type] || "global"}
-              options={[{"Global", "global"}, {"Project", "project"}]}
+              options={[{"Global", "global"}, {"Agent", "agent"}]}
             />
             <.dm_input
               type="select"

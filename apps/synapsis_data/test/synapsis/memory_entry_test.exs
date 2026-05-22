@@ -67,7 +67,7 @@ defmodule Synapsis.SemanticMemoryTest do
     end
 
     test "allows valid scopes" do
-      for scope <- ~w(shared project agent) do
+      for scope <- ~w(shared agent) do
         cs =
           %SemanticMemory{}
           |> SemanticMemory.changeset(%{
@@ -142,8 +142,8 @@ defmodule Synapsis.SemanticMemoryTest do
       {:ok, memory} =
         %SemanticMemory{}
         |> SemanticMemory.changeset(%{
-          scope: "project",
-          scope_id: "proj1",
+          scope: "agent",
+          scope_id: "main",
           kind: "decision",
           title: "old title",
           summary: "old summary"

@@ -1,18 +1,19 @@
 defmodule Synapsis.Workspace.PathResolver do
   @moduledoc """
-  Parses workspace paths and derives scope, project_id, session_id, and
+  Parses workspace paths and derives scope, agent_id, session_id, and
   default visibility from path conventions.
 
   Path conventions:
-    /shared/**                          → global scope, visibility: global_shared
-    /projects/:project_id/**            → project scope, visibility: project_shared
-    /projects/:project_id/sessions/:sid/** → session scope, visibility: private
+    /shared/**                              → global scope, visibility: global_shared
+    /global/**                              → global scope, visibility: global_shared
+    /agents/:agent_id/**                    → agent scope, visibility: agent_shared
+    /agents/:agent_id/sessions/:sid/**      → session scope, visibility: private
   """
 
-  @type scope :: :global | :project | :session
+  @type scope :: :global | :agent | :session
   @type resolved :: %{
           scope: scope(),
-          project_id: String.t() | nil,
+          agent_id: String.t() | nil,
           session_id: String.t() | nil,
           default_visibility: atom(),
           default_lifecycle: atom(),
@@ -25,13 +26,13 @@ defmodule Synapsis.Workspace.PathResolver do
   ## Examples
 
       iex> PathResolver.resolve("/shared/notes/idea.md")
-      {:ok, %{scope: :global, project_id: nil, session_id: nil, ...}}
+      {:ok, %{scope: :global, agent_id: nil, session_id: nil, ...}}
 
-      iex> PathResolver.resolve("/projects/abc/plans/auth.md")
-      {:ok, %{scope: :project, project_id: "abc", session_id: nil, ...}}
+      iex> PathResolver.resolve("/agents/main/plans/auth.md")
+      {:ok, %{scope: :agent, agent_id: "main", session_id: nil, ...}}
 
       iex> PathResolver.resolve("/global/soul.md")
-      {:ok, %{scope: :global, project_id: nil, session_id: nil, ...}}
+      {:ok, %{scope: :global, agent_id: nil, session_id: nil, ...}}
   """
   @spec resolve(String.t()) :: {:ok, resolved()} | {:error, String.t()}
   def resolve(path) when is_binary(path) do
@@ -43,7 +44,7 @@ defmodule Synapsis.Workspace.PathResolver do
         {:ok,
          %{
            scope: :global,
-           project_id: nil,
+           agent_id: nil,
            session_id: nil,
            default_visibility: :global_shared,
            default_lifecycle: :shared,
@@ -54,34 +55,31 @@ defmodule Synapsis.Workspace.PathResolver do
         {:ok,
          %{
            scope: :global,
-           project_id: nil,
+           agent_id: nil,
            session_id: nil,
            default_visibility: :global_shared,
            default_lifecycle: :shared,
            segments: rest
          }}
 
-      ["projects", project_id, "sessions", session_id | rest] ->
-        # WS-8.3: all session paths default to :scratch
-        lifecycle = :scratch
-
+      ["agents", agent_id, "sessions", session_id | rest] ->
         {:ok,
          %{
            scope: :session,
-           project_id: project_id,
+           agent_id: agent_id,
            session_id: session_id,
            default_visibility: :private,
-           default_lifecycle: lifecycle,
+           default_lifecycle: :scratch,
            segments: rest
          }}
 
-      ["projects", project_id | rest] ->
+      ["agents", agent_id | rest] ->
         {:ok,
          %{
-           scope: :project,
-           project_id: project_id,
+           scope: :agent,
+           agent_id: agent_id,
            session_id: nil,
-           default_visibility: :project_shared,
+           default_visibility: :agent_shared,
            default_lifecycle: :shared,
            segments: rest
          }}
@@ -90,7 +88,7 @@ defmodule Synapsis.Workspace.PathResolver do
         {:error, "empty path"}
 
       _ ->
-        {:error, "path must start with /shared/, /global/, or /projects/"}
+        {:error, "path must start with /shared/, /global/, or /agents/"}
     end
   end
 
@@ -100,11 +98,6 @@ defmodule Synapsis.Workspace.PathResolver do
   @spec derive_kind([String.t()]) :: atom()
   def derive_kind(segments) do
     case segments do
-      ["board.yaml"] -> :board
-      ["plans" | _] -> :plan
-      ["design" | _] -> :design_doc
-      ["logs", "devlog.md"] -> :devlog
-      ["repos", _repo_id, "config.yaml"] -> :repo_config
       ["attachments" | _] -> :attachment
       ["handoffs" | _] -> :handoff
       ["scratch" | _] -> :session_scratch

@@ -27,7 +27,7 @@ defmodule Synapsis.Tool.MemorySearch do
         },
         "scope" => %{
           "type" => "string",
-          "enum" => ["shared", "project", "agent"],
+          "enum" => ["shared", "agent"],
           "description" => "Starting scope (defaults to agent's scope, walks up)"
         },
         "kinds" => %{
@@ -58,7 +58,6 @@ defmodule Synapsis.Tool.MemorySearch do
       query: query,
       scope: parse_scope(Map.get(input, "scope"), context),
       agent_id: Map.get(context, :agent_id),
-      project_id: Map.get(context, :project_id, ""),
       kinds: Map.get(input, "kinds"),
       tags: Map.get(input, "tags"),
       limit: Map.get(input, "limit", 5)
@@ -83,9 +82,8 @@ defmodule Synapsis.Tool.MemorySearch do
     {:ok, Jason.encode!(formatted)}
   end
 
-  defp parse_scope(nil, context), do: Map.get(context, :agent_scope, :project)
+  defp parse_scope(nil, context), do: Map.get(context, :agent_scope, :agent)
   defp parse_scope("shared", _), do: :shared
-  defp parse_scope("project", _), do: :project
   defp parse_scope("agent", _), do: :agent
-  defp parse_scope(_, context), do: Map.get(context, :agent_scope, :project)
+  defp parse_scope(_, context), do: Map.get(context, :agent_scope, :agent)
 end

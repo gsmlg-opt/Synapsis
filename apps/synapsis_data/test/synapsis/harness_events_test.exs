@@ -8,7 +8,7 @@ defmodule Synapsis.HarnessEventsTest do
 
     assert {:ok, %HarnessEvent{version: 1}} =
              HarnessEvents.append(session_id, "session_created", %{
-               "project_id" => Ecto.UUID.generate()
+               "agent_id" => "main"
              })
 
     assert {:ok, %HarnessEvent{version: 2}} =

@@ -14,20 +14,15 @@ defmodule Synapsis.Workspace.TestCase do
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Synapsis.Repo)
 
-    {:ok, project} =
-      Synapsis.Repo.insert(%Synapsis.Project{
-        slug: "ws-test-#{System.unique_integer([:positive])}",
-        path: "/tmp/ws-test",
-        name: "ws-test"
-      })
+    agent_id = "ws-test-#{System.unique_integer([:positive])}"
 
     {:ok, session} =
       Synapsis.Repo.insert(%Synapsis.Session{
-        project_id: project.id,
+        agent: agent_id,
         provider: "anthropic",
         model: "claude-3-5-sonnet"
       })
 
-    %{project: project, session: session}
+    %{agent_id: agent_id, session: session}
   end
 end

@@ -8,7 +8,7 @@ defmodule Synapsis.Harness.Event do
       :aggregate_id,
       :version,
       :inserted_at,
-      :project_id,
+      :agent_id,
       :parent_id,
       metadata: %{}
     ]
@@ -127,7 +127,7 @@ defmodule Synapsis.Harness.Event do
   def session_created(session_id, opts) do
     %SessionCreated{
       aggregate_id: session_id,
-      project_id: Keyword.fetch!(opts, :project_id),
+      agent_id: Keyword.fetch!(opts, :agent_id),
       parent_id: Keyword.get(opts, :parent_id),
       metadata: Keyword.get(opts, :metadata, %{})
     }

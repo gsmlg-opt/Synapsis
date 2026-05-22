@@ -4,15 +4,22 @@ defmodule SynapsisServer.SessionController do
 
   alias Synapsis.Sessions
 
-  @max_path_bytes 4_096
+  @max_agent_bytes 255
 
   def index(conn, params) do
-    project_path = params["project_path"] || "."
+    agent = params["agent"]
 
-    if byte_size(project_path) > @max_path_bytes do
-      conn |> put_status(400) |> json(%{error: "project_path too long"})
+    if is_binary(agent) and byte_size(agent) > @max_agent_bytes do
+      conn |> put_status(400) |> json(%{error: "agent too long"})
     else
-      {:ok, sessions} = Sessions.list(project_path)
+      sessions =
+        if is_binary(agent) and agent != "" do
+          {:ok, sessions} = Sessions.list(agent)
+          sessions
+        else
+          Sessions.recent(limit: 50)
+        end
+
       json(conn, %{data: Enum.map(sessions, &serialize_session/1)})
     end
   end
@@ -28,27 +35,27 @@ defmodule SynapsisServer.SessionController do
   end
 
   def create(conn, params) do
-    project_path = params["project_path"] || "."
+    agent = params["agent"] || "main"
 
-    if byte_size(project_path) > @max_path_bytes do
-      conn |> put_status(400) |> json(%{error: "project_path too long"})
+    if byte_size(agent) > @max_agent_bytes do
+      conn |> put_status(400) |> json(%{error: "agent too long"})
     else
-      create_session(conn, project_path, params)
+      create_session(conn, agent, params)
     end
   end
 
-  defp create_session(conn, project_path, params) do
+  defp create_session(conn, agent, params) do
     opts =
       %{
         provider: params["provider"],
         model: params["model"],
-        agent: params["agent"],
+        agent: agent,
         title: params["title"]
       }
       |> Enum.reject(fn {_k, v} -> is_nil(v) end)
       |> Map.new()
 
-    case Sessions.create(project_path, opts) do
+    case Sessions.create(agent, opts) do
       {:ok, session} ->
         conn
         |> put_status(201)
@@ -189,8 +196,6 @@ defmodule SynapsisServer.SessionController do
       provider: session.provider,
       model: session.model,
       status: session.status,
-      project_id: session.project_id,
-      project_path: if(Ecto.assoc_loaded?(session.project), do: session.project.path),
       inserted_at: session.inserted_at,
       updated_at: session.updated_at
     }

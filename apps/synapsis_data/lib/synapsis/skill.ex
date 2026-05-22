@@ -1,9 +1,9 @@
 defmodule Synapsis.Skill do
-  @moduledoc "A skill definition scoped to global or project."
+  @moduledoc "A global skill definition assignable to agents."
   use Ecto.Schema
   import Ecto.Changeset
 
-  @valid_scopes ~w(global project)
+  @valid_scopes ~w(global)
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -16,8 +16,6 @@ defmodule Synapsis.Skill do
     field(:config_overrides, :map, default: %{})
     field(:is_builtin, :boolean, default: false)
 
-    belongs_to(:project, Synapsis.Project)
-
     timestamps(type: :utc_datetime_usec)
   end
 
@@ -25,7 +23,6 @@ defmodule Synapsis.Skill do
     skill
     |> cast(attrs, [
       :scope,
-      :project_id,
       :name,
       :description,
       :system_prompt_fragment,
@@ -38,6 +35,6 @@ defmodule Synapsis.Skill do
     |> validate_length(:name, max: 255)
     |> validate_length(:description, max: 2_000)
     |> validate_length(:system_prompt_fragment, max: 50_000)
-    |> unique_constraint([:scope, :project_id, :name])
+    |> unique_constraint([:scope, :name])
   end
 end

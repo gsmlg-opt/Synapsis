@@ -64,9 +64,8 @@ defmodule Synapsis.PromptBuilder do
 
       session ->
         context = %{
-          project_id: to_string(session.project_id),
           agent_id: session.agent || "default",
-          agent_scope: :project
+          agent_scope: :agent
         }
 
         case ContextBuilder.build(context) do

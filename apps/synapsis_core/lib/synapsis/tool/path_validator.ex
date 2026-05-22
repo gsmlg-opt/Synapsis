@@ -5,10 +5,10 @@ defmodule Synapsis.Tool.PathValidator do
   Returns :ok if `path` is within `project_path`, or an error tuple.
 
   Requires a trailing slash comparison to prevent sibling-directory attacks
-  (e.g. `/tmp/foo-evil` must not match project root `/tmp/foo`).
+  (e.g. `/tmp/foo-evil` must not match workspace root `/tmp/foo`).
 
   Also resolves symlinks to prevent symlink-based escapes where a symlink
-  inside the project root points to a target outside it.
+  inside the workspace root points to a target outside it.
   """
   def validate(_path, nil), do: :ok
 
@@ -19,7 +19,7 @@ defmodule Synapsis.Tool.PathValidator do
     if abs_path == abs_project or String.starts_with?(abs_path, abs_project <> "/") do
       :ok
     else
-      {:error, "Path is outside project root"}
+      {:error, "Path is outside workspace root"}
     end
   end
 

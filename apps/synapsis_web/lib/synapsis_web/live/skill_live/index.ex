@@ -73,7 +73,7 @@ defmodule SynapsisWeb.SkillLive.Index do
           <div>
             <.dm_select
               name="scope"
-              options={[{"global", "Global"}, {"project", "Project"}]}
+              options={[{"global", "Global"}]}
               value="global"
             />
           </div>

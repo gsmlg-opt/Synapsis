@@ -90,4 +90,3 @@ end
 if System.get_env("MIX_TAILWIND_PATH") do
   config :tailwind, path: System.get_env("MIX_TAILWIND_PATH")
 end
-

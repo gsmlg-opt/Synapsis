@@ -57,19 +57,10 @@ defmodule Synapsis.Agent.ToolDispatcher do
     effective_path = opts[:effective_path] || project_path
     session_id = opts[:session_id]
     agent_id = opts[:agent_id] || "default"
-    project_id = opts[:project_id]
     tool_call_hashes = opts[:tool_call_hashes] || MapSet.new()
 
     call_hash = :erlang.phash2({tool_use.tool, tool_use.input})
     is_duplicate = MapSet.member?(tool_call_hashes, call_hash)
-
-    # Auto-checkpoint before write operations (only on main tree)
-    worktree_path = opts[:worktree_path]
-
-    if is_nil(worktree_path) and tool_use.tool in ["file_edit", "file_write", "bash"] and
-         Synapsis.Git.is_repo?(project_path) do
-      Synapsis.Git.checkpoint(project_path, "synapsis pre-#{tool_use.tool}")
-    end
 
     Task.Supervisor.async_nolink(Synapsis.Tool.TaskSupervisor, fn ->
       result =
@@ -78,8 +69,7 @@ defmodule Synapsis.Agent.ToolDispatcher do
           session_id: session_id,
           working_dir: effective_path,
           agent_id: agent_id,
-          agent_scope: :project,
-          project_id: project_id
+          agent_scope: :agent
         })
 
       case result do

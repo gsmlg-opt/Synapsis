@@ -5,30 +5,6 @@ defmodule Synapsis.Agent do
 
   alias Synapsis.Agent.Memory.{EventStore, SummaryStore}
   alias Synapsis.Agent.Runtime.{Checkpoint, CheckpointStore, Graph, Runner}
-  alias Synapsis.Agent.{GlobalAssistant, WorkItem}
-
-  @spec start_project(String.t(), map()) :: {:ok, pid()} | {:error, term()}
-  def start_project(project_id, metadata \\ %{})
-      when is_binary(project_id) and is_map(metadata) do
-    GlobalAssistant.start_project(project_id, metadata)
-  end
-
-  @spec dispatch_work(map() | WorkItem.t()) :: :ok | {:error, term()}
-  def dispatch_work(attrs_or_work_item) do
-    with {:ok, work_item} <- WorkItem.new(attrs_or_work_item) do
-      GlobalAssistant.dispatch_work(work_item)
-    end
-  end
-
-  @spec list_projects() :: [map()]
-  def list_projects do
-    GlobalAssistant.list_projects()
-  end
-
-  @spec project_status(String.t()) :: {:ok, map()} | {:error, :not_found}
-  def project_status(project_id) when is_binary(project_id) do
-    GlobalAssistant.project_status(project_id)
-  end
 
   @spec append_event(map()) :: :ok | {:error, term()}
   def append_event(attrs) when is_map(attrs), do: EventStore.append(attrs)

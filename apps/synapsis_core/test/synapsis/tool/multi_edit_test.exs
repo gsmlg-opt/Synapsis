@@ -158,7 +158,7 @@ defmodule Synapsis.Tool.MultiEditTest do
   end
 
   describe "path validation" do
-    test "rejects path outside project root", %{ctx: ctx} do
+    test "rejects path outside workspace root", %{ctx: ctx} do
       {:error, msg} =
         MultiEdit.execute(
           %{
@@ -173,7 +173,7 @@ defmodule Synapsis.Tool.MultiEditTest do
           ctx
         )
 
-      assert msg =~ "outside project root"
+      assert msg =~ "outside workspace root"
     end
 
     test "rejects directory traversal", %{ctx: ctx} do

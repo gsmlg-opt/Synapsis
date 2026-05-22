@@ -27,8 +27,8 @@ defmodule Synapsis.AgentEvents do
 
   defp apply_filters(query, []), do: query
 
-  defp apply_filters(query, [{:project_id, val} | rest]) when is_binary(val) do
-    query |> where([e], e.project_id == ^val) |> apply_filters(rest)
+  defp apply_filters(query, [{:agent_id, val} | rest]) when is_binary(val) do
+    query |> where([e], e.agent_id == ^val) |> apply_filters(rest)
   end
 
   defp apply_filters(query, [{:work_id, val} | rest]) when is_binary(val) do

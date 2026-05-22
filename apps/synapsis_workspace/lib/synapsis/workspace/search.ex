@@ -11,8 +11,8 @@ defmodule Synapsis.Workspace.Search do
   Search workspace documents using PostgreSQL full-text search.
 
   Options:
-    - `:scope` - limit to :global, :project, or :session
-    - `:project_id` - filter by project
+    - `:scope` - limit to :global, :agent, or :session
+    - `:agent_id` - filter by agent
     - `:kind` - filter by document kind
     - `:limit` - max results (default 20)
   """

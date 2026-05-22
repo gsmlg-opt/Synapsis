@@ -12,8 +12,8 @@ defmodule Synapsis.Workspace.Identity do
   | Soul             | `/global/soul.md`              | Global  |
   | Identity         | `/global/identity.md`          | Global  |
   | Bootstrap        | `/global/bootstrap.md`         | Global  |
-  | Project Soul     | `/projects/<id>/soul.md`       | Project |
-  | Project Context  | `/projects/<id>/context.md`    | Project |
+  | Agent Soul       | `/agents/<name>/soul.md`       | Agent   |
+  | Agent Context    | `/agents/<name>/context.md`    | Agent   |
   """
 
   alias Synapsis.Workspace
@@ -81,7 +81,7 @@ defmodule Synapsis.Workspace.Identity do
   - Package manager: (your package manager)
 
   ## Conventions
-  - (Add project-wide conventions here)
+  - (Add workspace-wide conventions here)
   """
 
   @default_agents """
@@ -152,25 +152,25 @@ defmodule Synapsis.Workspace.Identity do
   """
 
   @doc """
-  Load the soul content for a given project. Returns global soul, project soul,
+  Load the soul content for a given agent. Returns global soul, agent soul,
   or concatenation of both per RD-1 precedence rules.
 
   Returns `nil` if no soul file exists.
   """
   @spec load_soul(String.t() | nil) :: String.t() | nil
-  def load_soul(project_id \\ nil) do
+  def load_soul(agent_id \\ nil) do
     global = read_content(@global_soul_path)
 
-    project =
-      if project_id do
-        read_content("/projects/#{project_id}/soul.md")
+    agent =
+      if agent_id do
+        read_content("/agents/#{agent_id}/soul.md")
       end
 
-    case {global, project} do
+    case {global, agent} do
       {nil, nil} -> nil
       {g, nil} -> g
       {nil, p} -> p
-      {g, p} -> g <> "\n\n<!-- Project-specific -->\n\n" <> p
+      {g, p} -> g <> "\n\n<!-- Agent-specific -->\n\n" <> p
     end
   end
 
@@ -186,32 +186,32 @@ defmodule Synapsis.Workspace.Identity do
     read_content(@global_bootstrap_path)
   end
 
-  @doc "Load project-specific context. Returns `nil` if not set."
-  @spec load_project_context(String.t()) :: String.t() | nil
-  def load_project_context(project_id) do
-    read_content("/projects/#{project_id}/context.md")
+  @doc "Load agent-specific context. Returns `nil` if not set."
+  @spec load_agent_context(String.t()) :: String.t() | nil
+  def load_agent_context(agent_id) do
+    read_content("/agents/#{agent_id}/context.md")
   end
 
   @doc """
   Load all identity files into a map.
 
-  Returns a map with keys `:soul`, `:identity`, `:bootstrap`, `:project_soul`,
-  `:project_context`. Values are `nil` when file doesn't exist.
+  Returns a map with keys `:soul`, `:identity`, `:bootstrap`, `:agent_soul`,
+  `:agent_context`. Values are `nil` when file doesn't exist.
   """
   @spec load_all(String.t() | nil) :: %{
           soul: String.t() | nil,
           identity: String.t() | nil,
           bootstrap: String.t() | nil,
-          project_soul: String.t() | nil,
-          project_context: String.t() | nil
+          agent_soul: String.t() | nil,
+          agent_context: String.t() | nil
         }
-  def load_all(project_id \\ nil) do
+  def load_all(agent_id \\ nil) do
     %{
-      soul: load_soul(project_id),
+      soul: load_soul(agent_id),
       identity: load_identity(),
       bootstrap: load_bootstrap(),
-      project_soul: if(project_id, do: read_content("/projects/#{project_id}/soul.md")),
-      project_context: if(project_id, do: read_content("/projects/#{project_id}/context.md"))
+      agent_soul: if(agent_id, do: read_content("/agents/#{agent_id}/soul.md")),
+      agent_context: if(agent_id, do: load_agent_context(agent_id))
     }
   end
 

@@ -10,7 +10,7 @@ defmodule Synapsis.WorkspaceDocument do
   @foreign_key_type :binary_id
 
   @kind_values ~w(document attachment handoff session_scratch)a
-  @visibility_values ~w(private project_shared global_shared published)a
+  @visibility_values ~w(private agent_shared global_shared published)a
   @lifecycle_values ~w(scratch draft shared published archived)a
   @content_format_values ~w(markdown yaml json text binary)a
 
@@ -28,8 +28,8 @@ defmodule Synapsis.WorkspaceDocument do
     field(:updated_by, :string)
     field(:last_accessed_at, :utc_datetime_usec)
     field(:deleted_at, :utc_datetime_usec)
+    field(:agent_id, :string)
 
-    belongs_to(:project, Synapsis.Project)
     belongs_to(:session, Synapsis.Session)
 
     has_many(:versions, Synapsis.WorkspaceDocumentVersion, foreign_key: :document_id)
@@ -39,7 +39,7 @@ defmodule Synapsis.WorkspaceDocument do
 
   @required_fields ~w(path created_by updated_by)a
   @optional_fields ~w(kind visibility lifecycle content_format content_body blob_ref
-                       metadata version project_id session_id last_accessed_at deleted_at)a
+                       metadata version agent_id session_id last_accessed_at deleted_at)a
 
   def changeset(document, attrs) do
     document

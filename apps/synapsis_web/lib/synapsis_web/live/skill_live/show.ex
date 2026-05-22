@@ -62,7 +62,7 @@ defmodule SynapsisWeb.SkillLive.Show do
 
           <.dm_select
             name="scope"
-            options={[{"global", "Global"}, {"project", "Project"}]}
+            options={[{"global", "Global"}]}
             value={@skill.scope}
           />
 

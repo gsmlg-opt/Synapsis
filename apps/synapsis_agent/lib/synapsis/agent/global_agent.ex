@@ -82,7 +82,7 @@ defmodule Synapsis.Agent.GlobalAgent do
     case Boot.load_and_boot(session_id,
            graph_module: Synapsis.Agent.Graphs.ConversationalLoop
          ) do
-      {session, agent, provider_config, runner_pid, _worktree, _project_path} ->
+      {session, agent, provider_config, runner_pid, _project_path} ->
         state = %__MODULE__{
           session_id: session_id,
           session: session,
@@ -192,7 +192,7 @@ defmodule Synapsis.Agent.GlobalAgent do
 
     EventStore.append(%{
       event_type: :code_agent_completed,
-      project_id: nil,
+      agent_id: state.session.agent || "main",
       work_id: child_session_id,
       payload: %{
         parent_session_id: state.session_id,

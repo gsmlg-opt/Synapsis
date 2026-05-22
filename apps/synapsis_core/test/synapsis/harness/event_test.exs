@@ -6,7 +6,7 @@ defmodule Synapsis.Harness.EventTest do
   test "session_created carries aggregate metadata" do
     event =
       Event.session_created("session-1",
-        project_id: "project-1",
+        agent_id: "main",
         parent_id: nil,
         metadata: %{"model" => "claude"}
       )
@@ -14,7 +14,7 @@ defmodule Synapsis.Harness.EventTest do
     assert %Event.SessionCreated{
              aggregate_id: "session-1",
              version: nil,
-             project_id: "project-1",
+             agent_id: "main",
              parent_id: nil,
              metadata: %{"model" => "claude"}
            } = event

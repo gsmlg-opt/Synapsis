@@ -50,12 +50,10 @@ defmodule Synapsis.Agent.Nodes.ToolExecute do
         if pid = worker_pid(state.session_id) do
           dispatch_opts = %{
             project_path: ctx[:project_path],
-            effective_path: state.worktree_path || ctx[:project_path],
+            effective_path: ctx[:project_path],
             session_id: session_id,
             agent_id: state.agent_config[:name] || "default",
-            project_id: ctx[:project_id],
-            tool_call_hashes: state.tool_call_hashes,
-            worktree_path: state.worktree_path
+            tool_call_hashes: state.tool_call_hashes
           }
 
           send(pid, {:node_request, :dispatch_tools, approved, dispatch_opts})

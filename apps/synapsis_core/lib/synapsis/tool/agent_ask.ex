@@ -56,7 +56,6 @@ defmodule Synapsis.Tool.AgentAsk do
       to_agent_id: to,
       type: "request",
       payload: %{"question" => question, "context" => ctx},
-      project_id: context[:project_id],
       session_id: context[:session_id],
       expires_at: DateTime.add(DateTime.utc_now(), timeout, :millisecond)
     }

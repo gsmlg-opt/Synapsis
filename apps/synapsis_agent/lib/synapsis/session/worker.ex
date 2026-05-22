@@ -4,7 +4,6 @@ defmodule Synapsis.Session.Worker do
   require Logger
 
   alias Synapsis.Session.Stream, as: SessionStream
-  alias Synapsis.Session.WorkspaceManager
   alias Synapsis.Session.Worker.{Boot, Config, IOHandler, Persistence}
   alias Synapsis.Agent.Graphs.CodingLoop
   alias Synapsis.Agent.ResponseFlusher
@@ -22,7 +21,6 @@ defmodule Synapsis.Session.Worker do
     :stream_ref,
     :project_path,
     :debug_handler_id,
-    worktree_path: nil,
     stream_acc: Synapsis.Agent.StreamAccumulator.new(),
     pending_tool_count: 0,
     pending_approvals: MapSet.new(),
@@ -61,7 +59,7 @@ defmodule Synapsis.Session.Worker do
       {:stop, reason} ->
         {:stop, reason}
 
-      {session, agent, pc, runner, wt, project_path} ->
+      {session, agent, pc, runner, project_path} ->
         Logger.info("session_worker_started", session_id: session.id)
 
         {:ok,
@@ -71,7 +69,6 @@ defmodule Synapsis.Session.Worker do
            agent: agent,
            provider_config: pc,
            runner_pid: runner,
-           worktree_path: wt,
            project_path: project_path
          }, @timeout}
     end
@@ -263,9 +260,6 @@ defmodule Synapsis.Session.Worker do
       reason: inspect(reason)
     )
 
-    if state.worktree_path,
-      do: WorkspaceManager.teardown(state.project_path, state.session_id)
-
     if Code.ensure_loaded?(Synapsis.Tool.Teammate) and
          function_exported?(Synapsis.Tool.Teammate, :delete_all, 1) do
       Synapsis.Tool.Teammate.delete_all(state.session_id)
@@ -372,8 +366,7 @@ defmodule Synapsis.Session.Worker do
           CodingLoop.initial_state(%{
             session_id: state.session_id,
             provider_config: state.provider_config,
-            agent_config: state.agent,
-            worktree_path: state.worktree_path
+            agent_config: state.agent
           }),
         ctx: graph_ctx(state),
         run_id: state.session_id
@@ -388,7 +381,7 @@ defmodule Synapsis.Session.Worker do
       provider: agent[:provider] || state.session.provider,
       model: agent[:model] || state.session.model,
       project_path: state.project_path,
-      project_id: to_string(state.session.project_id)
+      agent_id: state.session.agent || agent[:name] || "main"
     }
   end
 
@@ -421,7 +414,7 @@ defmodule Synapsis.Session.Worker do
       (state.agent || %{})
       |> Map.merge(%{
         agent_type: agent_type_from_name((state.agent || %{})[:name]),
-        project_id: state.session && state.session.project_id,
+        agent_id: state.session && state.session.agent,
         name: (state.agent || %{})[:name]
       })
 
@@ -433,7 +426,7 @@ defmodule Synapsis.Session.Worker do
       provider_config: state.provider_config,
       subscriber: self(),
       project_path: state.project_path,
-      working_dir: state.worktree_path || state.project_path,
+      working_dir: state.project_path,
       agent_config: agent_config
     }
 

@@ -36,7 +36,7 @@ defmodule Synapsis.Memory.SummarizerDispatcher do
 
   Options:
   - `:focus` — optional hint to focus extraction
-  - `:scope` — default scope for extracted memories (default: "project")
+  - `:scope` — default scope for extracted memories (default: "agent")
   - `:provider` — LLM provider to use (default: session's provider)
   - `:force` — bypass event threshold check
   """
@@ -56,7 +56,7 @@ defmodule Synapsis.Memory.SummarizerDispatcher do
   def perform(%Oban.Job{args: args}) do
     session_id = args["session_id"]
     focus = args["focus"]
-    scope = args["scope"] || "project"
+    scope = args["scope"] || "agent"
     force = args["force"] || false
 
     Logger.info("summarizer_started", session_id: session_id, focus: focus)
@@ -92,7 +92,7 @@ defmodule Synapsis.Memory.SummarizerDispatcher do
   defp load_session(session_id) do
     case Repo.get(Synapsis.Session, session_id) do
       nil -> {:error, "session not found"}
-      session -> {:ok, Repo.preload(session, :project)}
+      session -> {:ok, session}
     end
   end
 
@@ -210,7 +210,6 @@ defmodule Synapsis.Memory.SummarizerDispatcher do
   end
 
   defp persist_candidates(candidates, session, default_scope) do
-    project_id = to_string(session.project_id)
     agent_id = session.agent || "default"
 
     results =
@@ -227,7 +226,7 @@ defmodule Synapsis.Memory.SummarizerDispatcher do
             case scope do
               "shared" -> ""
               "agent" -> agent_id
-              _ -> project_id
+              _ -> agent_id
             end
 
           attrs = %{
@@ -267,7 +266,7 @@ defmodule Synapsis.Memory.SummarizerDispatcher do
       type: "summary_created",
       agent_id: agent_id,
       scope: default_scope,
-      scope_id: project_id,
+      scope_id: agent_id,
       correlation_id: session.id,
       payload: %{
         session_id: session.id,

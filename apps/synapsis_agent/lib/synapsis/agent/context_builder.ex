@@ -9,7 +9,7 @@ defmodule Synapsis.Agent.ContextBuilder do
   4. Skills Manifest (computed from tool registry)
   5. Memory Context (auto-retrieved)
   6. Bootstrap (workspace file)
-  7. Project Context (conditional)
+  7. Agent Context (conditional)
 
   Each layer is wrapped in XML tags for unambiguous LLM parsing.
   """
@@ -27,7 +27,7 @@ defmodule Synapsis.Agent.ContextBuilder do
 
   ## Options
 
-    * `:project_id` — for project-scoped agents
+    * `:agent_id` — for agent-scoped workspace context
     * `:session_id` — for memory relevance scoring
     * `:user_message` — latest user message for memory search
     * `:model_context_window` — model's context window size (default: 128_000)
@@ -36,20 +36,20 @@ defmodule Synapsis.Agent.ContextBuilder do
   """
   @spec build_system_prompt(atom(), keyword()) :: String.t()
   def build_system_prompt(agent_type, opts \\ []) do
-    project_id = Keyword.get(opts, :project_id)
+    agent_id = Keyword.get(opts, :agent_id)
     user_message = Keyword.get(opts, :user_message, "")
     model_context_window = Keyword.get(opts, :model_context_window, 128_000)
     agent_config = Keyword.get(opts, :agent_config, %{})
 
     layers = [
       {:base, load_base_prompt(agent_type, agent_config)},
-      {:soul, load_soul(project_id)},
+      {:soul, load_soul(agent_id)},
       {:identity, load_identity()},
       {:assigned_skills, build_assigned_skills(agent_config)},
-      {:skills, build_skills_manifest(project_id, agent_config)},
-      {:memory, load_memory_context(user_message, project_id, model_context_window)},
+      {:skills, build_skills_manifest(agent_id, agent_config)},
+      {:memory, load_memory_context(user_message, agent_id, model_context_window)},
       {:bootstrap, load_bootstrap()},
-      {:project, load_project_context(project_id)}
+      {:agent, load_agent_context(agent_id)}
     ]
 
     layers
@@ -66,7 +66,7 @@ defmodule Synapsis.Agent.ContextBuilder do
 
   ## Options
 
-    * `:project_id` — project the agent will work in
+    * `:agent_id` — agent the child will work as
     * `:session_id` — parent session ID for correlation
     * `:task` — natural-language task description
     * `:agent_config` — agent configuration to pass to the child
@@ -74,16 +74,16 @@ defmodule Synapsis.Agent.ContextBuilder do
   """
   @spec build_coding_context(keyword()) :: map()
   def build_coding_context(opts \\ []) do
-    project_id = Keyword.get(opts, :project_id)
+    agent_id = Keyword.get(opts, :agent_id)
     task = Keyword.get(opts, :task, "")
     agent_config = Keyword.get(opts, :agent_config, %{})
 
     %{
       task: task,
-      project_id: project_id,
+      agent_id: agent_id,
       agent_config: agent_config,
-      soul: load_soul(project_id),
-      project_context: load_project_context(project_id)
+      soul: load_soul(agent_id),
+      agent_context: load_agent_context(agent_id)
     }
   end
 
@@ -97,8 +97,8 @@ defmodule Synapsis.Agent.ContextBuilder do
 
   @doc "Load soul from workspace identity files."
   @spec load_soul(String.t() | nil) :: String.t() | nil
-  def load_soul(project_id) do
-    Identity.load_soul(project_id)
+  def load_soul(agent_id) do
+    Identity.load_soul(agent_id)
   end
 
   @doc "Load user identity from workspace."
@@ -121,9 +121,9 @@ defmodule Synapsis.Agent.ContextBuilder do
   """
   @spec build_skills_manifest(String.t() | nil) :: String.t() | nil
   @spec build_skills_manifest(String.t() | nil, map()) :: String.t() | nil
-  def build_skills_manifest(project_id, agent_config \\ %{})
+  def build_skills_manifest(agent_id, agent_config \\ %{})
 
-  def build_skills_manifest(_project_id, agent_config) do
+  def build_skills_manifest(_agent_id, agent_config) do
     tool_names = Map.get(agent_config, :tools) || Map.get(agent_config, "tools") || []
 
     tools =
@@ -159,11 +159,11 @@ defmodule Synapsis.Agent.ContextBuilder do
   context window, hard capped at 10 entries.
   """
   @spec load_memory_context(String.t(), String.t() | nil, pos_integer()) :: String.t() | nil
-  def load_memory_context(query, project_id, model_context_window) do
+  def load_memory_context(query, agent_id, model_context_window) do
     context = %{
       query: query || "",
-      project_id: project_id || "",
-      agent_scope: :project,
+      agent_id: agent_id || "",
+      agent_scope: :agent,
       memory_token_budget: memory_token_budget(model_context_window)
     }
 
@@ -177,14 +177,14 @@ defmodule Synapsis.Agent.ContextBuilder do
       nil
   end
 
-  @doc "Load project-specific context from workspace."
-  @spec load_project_context(String.t() | nil) :: String.t() | nil
-  def load_project_context(nil), do: nil
+  @doc "Load agent-specific context from workspace."
+  @spec load_agent_context(String.t() | nil) :: String.t() | nil
+  def load_agent_context(nil), do: nil
 
-  def load_project_context(project_id) do
+  def load_agent_context(agent_id) do
     parts =
       [
-        Identity.load_project_context(project_id)
+        Identity.load_agent_context(agent_id)
       ]
       |> Enum.reject(&is_nil/1)
 
@@ -233,7 +233,7 @@ defmodule Synapsis.Agent.ContextBuilder do
 
   defp wrap_layer(:memory, content), do: "<memory>\n#{content}\n</memory>"
   defp wrap_layer(:bootstrap, content), do: "<environment>\n#{content}\n</environment>"
-  defp wrap_layer(:project, content), do: "<project>\n#{content}\n</project>"
+  defp wrap_layer(:agent, content), do: "<agent_context>\n#{content}\n</agent_context>"
 
   defp truncate_description(desc, max_len) do
     if String.length(desc) <= max_len do

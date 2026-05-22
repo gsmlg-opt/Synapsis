@@ -6,7 +6,7 @@ defmodule Synapsis.Workspace.Resource do
   or projected from a domain schema (skills, memory entries, etc.).
   """
 
-  @type visibility :: :private | :project_shared | :global_shared | :published
+  @type visibility :: :private | :agent_shared | :global_shared | :published
   @type lifecycle :: :scratch | :draft | :shared | :published | :archived
   @type kind :: :document | :attachment | :handoff | :session_scratch | :skill | :memory | :todo
 

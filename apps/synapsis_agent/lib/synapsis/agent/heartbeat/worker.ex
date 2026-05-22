@@ -107,13 +107,8 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
       {:error, Exception.message(e)}
   end
 
-  # Run a headless agent session with the heartbeat prompt.
-  # Uses the default project path "~" for global heartbeats, or the
-  # project path for project-scoped heartbeats.
   defp run_heartbeat_session(%HeartbeatConfig{} = config, timestamp) do
-    project_path = resolve_project_path(config)
-
-    case create_heartbeat_session(project_path, config) do
+    case create_heartbeat_session(config) do
       {:ok, session} ->
         case Synapsis.Sessions.send_message(session.id, config.prompt) do
           :ok ->
@@ -135,22 +130,12 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
     end
   end
 
-  defp resolve_project_path(%HeartbeatConfig{agent_type: :project, project_id: pid})
-       when is_binary(pid) do
-    case Synapsis.Projects.get(pid) do
-      {:ok, %Synapsis.Project{path: path}} -> path
-      {:error, _} -> System.user_home() || "/"
-    end
-  end
+  defp create_heartbeat_session(config) do
+    agent_name = config.agent_name || "main"
 
-  defp resolve_project_path(_config) do
-    System.user_home() || "/"
-  end
-
-  defp create_heartbeat_session(project_path, config) do
-    Synapsis.Sessions.create(project_path, %{
+    Synapsis.Sessions.create(agent_name, %{
       title: "Heartbeat: #{config.name}",
-      agent: "main",
+      agent: agent_name,
       metadata: %{type: :heartbeat, heartbeat_id: config.id, heartbeat_name: config.name}
     })
   end

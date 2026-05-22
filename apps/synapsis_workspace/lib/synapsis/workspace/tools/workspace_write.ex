@@ -23,7 +23,7 @@ defmodule Synapsis.Workspace.Tools.WorkspaceWrite do
       "properties" => %{
         "path" => %{
           "type" => "string",
-          "description" => "Workspace path (e.g. /projects/myapp/plans/auth-redesign.md)"
+          "description" => "Workspace path (e.g. /agents/main/plans/auth-redesign.md)"
         },
         "content" => %{
           "type" => "string",
@@ -96,7 +96,7 @@ defmodule Synapsis.Workspace.Tools.WorkspaceWrite do
   defp build_agent_context(context) do
     %{
       role: context[:role] || :user,
-      project_id: context[:project_id],
+      agent_id: context[:agent_id],
       session_id: context[:session_id]
     }
   end

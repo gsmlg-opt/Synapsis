@@ -31,7 +31,7 @@ defmodule Synapsis.Tool.MemorySave do
             "properties" => %{
               "scope" => %{
                 "type" => "string",
-                "enum" => ["shared", "project", "agent"],
+                "enum" => ["shared", "agent"],
                 "description" => "Memory scope (defaults to agent's natural scope)"
               },
               "kind" => %{
@@ -70,13 +70,12 @@ defmodule Synapsis.Tool.MemorySave do
   def execute(input, context) do
     memories = Map.get(input, "memories", [])
     agent_id = Map.get(context, :agent_id, "unknown")
-    project_id = Map.get(context, :project_id, "")
-    agent_scope = Map.get(context, :agent_scope, :project)
+    agent_scope = Map.get(context, :agent_scope, :agent)
 
     results =
       Enum.map(memories, fn mem ->
         scope = Map.get(mem, "scope") || infer_scope(agent_scope)
-        scope_id = scope_id_for(scope, project_id, agent_id)
+        scope_id = scope_id_for(scope, agent_id)
 
         attrs = %{
           scope: scope,
@@ -108,12 +107,11 @@ defmodule Synapsis.Tool.MemorySave do
 
   defp infer_scope(:agent), do: "agent"
   defp infer_scope(:shared), do: "shared"
-  defp infer_scope(_), do: "project"
+  defp infer_scope(_), do: "agent"
 
-  defp scope_id_for("shared", _, _), do: ""
-  defp scope_id_for("project", project_id, _), do: project_id
-  defp scope_id_for("agent", _, agent_id), do: agent_id
-  defp scope_id_for(_, project_id, _), do: project_id
+  defp scope_id_for("shared", _), do: ""
+  defp scope_id_for("agent", agent_id), do: agent_id
+  defp scope_id_for(_, agent_id), do: agent_id
 
   defp broadcast_memory_promoted(scope, scope_id, memory_id) do
     Phoenix.PubSub.broadcast(

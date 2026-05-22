@@ -16,14 +16,13 @@ defmodule Synapsis.HeartbeatConfig do
   schema "heartbeat_configs" do
     field(:name, :string)
     field(:schedule, :string)
-    field(:agent_type, Ecto.Enum, values: [:global, :project])
+    field(:agent_type, Ecto.Enum, values: [:global, :agent])
+    field(:agent_name, :string)
     field(:prompt, :string)
     field(:enabled, :boolean, default: false)
     field(:notify_user, :boolean, default: true)
     field(:session_isolation, Ecto.Enum, values: [:isolated, :main], default: :isolated)
     field(:keep_history, :boolean, default: false)
-
-    belongs_to(:project, Synapsis.Project)
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -34,7 +33,7 @@ defmodule Synapsis.HeartbeatConfig do
       :name,
       :schedule,
       :agent_type,
-      :project_id,
+      :agent_name,
       :prompt,
       :enabled,
       :notify_user,

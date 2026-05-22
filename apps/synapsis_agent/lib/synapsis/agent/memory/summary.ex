@@ -1,12 +1,12 @@
 defmodule Synapsis.Agent.Memory.Summary do
   @moduledoc """
-  Compressed memory entry for task/project/global summaries.
+  Compressed memory entry for task/agent/global summaries.
   """
 
   @enforce_keys [:scope, :scope_id, :kind, :content, :updated_at]
   defstruct [:scope, :scope_id, :kind, :content, :metadata, :updated_at]
 
-  @type scope :: :global | :project | :task
+  @type scope :: :global | :agent | :task
 
   @type t :: %__MODULE__{
           scope: scope(),

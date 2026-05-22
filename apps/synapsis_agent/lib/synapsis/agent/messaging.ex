@@ -1,8 +1,7 @@
 defmodule Synapsis.Agent.Messaging do
   @moduledoc """
   Agent-to-agent messaging via PubSub typed envelopes.
-  Provides structured communication between GlobalAssistant,
-  ProjectAssistant, and coding sessions.
+  Provides structured communication between agents and coding sessions.
   """
 
   @type agent_id :: String.t()

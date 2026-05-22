@@ -4,17 +4,17 @@ defmodule Synapsis.Workspace.Permissions do
 
   Rules (per WS-17):
   - User role: unrestricted read/write everywhere.
-  - Global agent: read/write `/shared/**` and any `/projects/:id/**` it is delegated to.
-  - Project agent: read/write own `/projects/:id/**`, read-only `/shared/**`.
-  - Session agent: read/write own `/projects/:id/sessions/<own-session>/**`,
-    read-only for project-level paths (`/projects/:id/**`) and `/shared/**`.
+  - Global agent: read/write `/shared/**`, `/global/**`, and any delegated agent workspace.
+  - Agent role: read/write own `/agents/:agent/**`, read-only `/shared/**`.
+  - Session role: read/write own `/agents/:agent/sessions/<own-session>/**`,
+    read-only for its agent-level workspace and `/shared/**`.
   """
 
   alias Synapsis.Workspace.PathResolver
 
   @type agent_context :: %{
-          required(:role) => :global | :project | :session | :user,
-          optional(:project_id) => String.t() | nil,
+          required(:role) => :global | :agent | :session | :user,
+          optional(:agent_id) => String.t() | nil,
           optional(:session_id) => String.t() | nil
         }
 
@@ -40,42 +40,37 @@ defmodule Synapsis.Workspace.Permissions do
   # Role-specific checks
   # ---------------------------------------------------------------------------
 
-  # Global agent: read/write /shared/**, read/write any /projects/:id/** it is
-  # explicitly delegated to (project_id in context must match).
   defp check_role(:global, _ctx, %{scope: :global}, _action), do: :allowed
 
-  defp check_role(:global, ctx, %{scope: scope, project_id: path_project_id}, _action)
-       when scope in [:project, :session] do
-    if delegated_to?(ctx, path_project_id), do: :allowed, else: :denied
+  defp check_role(:global, ctx, %{scope: scope, agent_id: path_agent_id}, _action)
+       when scope in [:agent, :session] do
+    if delegated_to?(ctx, path_agent_id), do: :allowed, else: :denied
   end
 
-  # Project agent: read/write own project tree, read-only on /shared.
-  defp check_role(:project, ctx, %{scope: :project, project_id: path_project_id}, _action) do
-    if own_project?(ctx, path_project_id), do: :allowed, else: :denied
+  defp check_role(:agent, ctx, %{scope: :agent, agent_id: path_agent_id}, _action) do
+    if own_agent?(ctx, path_agent_id), do: :allowed, else: :denied
   end
 
-  defp check_role(:project, ctx, %{scope: :session, project_id: path_project_id}, _action) do
-    if own_project?(ctx, path_project_id), do: :allowed, else: :denied
+  defp check_role(:agent, ctx, %{scope: :session, agent_id: path_agent_id}, _action) do
+    if own_agent?(ctx, path_agent_id), do: :allowed, else: :denied
   end
 
-  defp check_role(:project, _ctx, %{scope: :global}, :read), do: :allowed
-  defp check_role(:project, _ctx, %{scope: :global}, :write), do: :denied
+  defp check_role(:agent, _ctx, %{scope: :global}, :read), do: :allowed
+  defp check_role(:agent, _ctx, %{scope: :global}, :write), do: :denied
 
-  # Session agent: read/write own session subtree, read-only for project and
-  # shared paths (within the same project).
-  defp check_role(:session, ctx, %{scope: :session, project_id: pid, session_id: sid}, action) do
+  defp check_role(:session, ctx, %{scope: :session, agent_id: agent_id, session_id: sid}, action) do
     cond do
-      own_project?(ctx, pid) and own_session?(ctx, sid) -> :allowed
-      own_project?(ctx, pid) -> gate_action(action)
+      own_agent?(ctx, agent_id) and own_session?(ctx, sid) -> :allowed
+      own_agent?(ctx, agent_id) -> gate_action(action)
       true -> :denied
     end
   end
 
-  defp check_role(:session, ctx, %{scope: :project, project_id: path_project_id}, :read) do
-    if own_project?(ctx, path_project_id), do: :allowed, else: :denied
+  defp check_role(:session, ctx, %{scope: :agent, agent_id: path_agent_id}, :read) do
+    if own_agent?(ctx, path_agent_id), do: :allowed, else: :denied
   end
 
-  defp check_role(:session, _ctx, %{scope: :project}, :write), do: :denied
+  defp check_role(:session, _ctx, %{scope: :agent}, :write), do: :denied
 
   defp check_role(:session, _ctx, %{scope: :global}, :read), do: :allowed
   defp check_role(:session, _ctx, %{scope: :global}, :write), do: :denied
@@ -87,11 +82,11 @@ defmodule Synapsis.Workspace.Permissions do
   # Helpers
   # ---------------------------------------------------------------------------
 
-  defp own_project?(%{project_id: ctx_pid}, path_pid)
-       when is_binary(ctx_pid) and is_binary(path_pid),
-       do: ctx_pid == path_pid
+  defp own_agent?(%{agent_id: ctx_agent_id}, path_agent_id)
+       when is_binary(ctx_agent_id) and is_binary(path_agent_id),
+       do: ctx_agent_id == path_agent_id
 
-  defp own_project?(_ctx, _path_pid), do: false
+  defp own_agent?(_ctx, _path_agent_id), do: false
 
   defp own_session?(%{session_id: ctx_sid}, path_sid)
        when is_binary(ctx_sid) and is_binary(path_sid),
@@ -99,12 +94,12 @@ defmodule Synapsis.Workspace.Permissions do
 
   defp own_session?(_ctx, _path_sid), do: false
 
-  # A global agent is considered delegated to a project when its context
-  # carries a matching project_id.  If no project_id is set the global agent
-  # has unrestricted access to all project trees.
-  defp delegated_to?(%{project_id: nil}, _path_pid), do: true
-  defp delegated_to?(%{project_id: ctx_pid}, path_pid) when is_binary(ctx_pid), do: ctx_pid == path_pid
-  defp delegated_to?(_ctx, _path_pid), do: false
+  defp delegated_to?(%{agent_id: nil}, _path_agent_id), do: true
+
+  defp delegated_to?(%{agent_id: ctx_agent_id}, path_agent_id) when is_binary(ctx_agent_id),
+    do: ctx_agent_id == path_agent_id
+
+  defp delegated_to?(_ctx, _path_agent_id), do: false
 
   # Enforce read-only access: read stays :allowed, write becomes :denied.
   defp gate_action(:read), do: :allowed

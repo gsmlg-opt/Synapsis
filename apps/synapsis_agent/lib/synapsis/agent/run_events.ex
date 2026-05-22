@@ -38,7 +38,7 @@ defmodule Synapsis.Agent.RunEvents do
          function_exported?(Synapsis.AgentEvents, :append, 1) do
       case Synapsis.AgentEvents.append(%{
              event_type: event_type,
-             project_id: run.project_id,
+             agent_id: run.assistant_name || "daemon",
              work_id: run.id,
              payload: payload
            }) do
@@ -79,15 +79,9 @@ defmodule Synapsis.Agent.RunEvents do
       "source" => run.source,
       "assistant_name" => run.assistant_name,
       "session_id" => run.session_id,
-      "project_id" => run.project_id,
       "heartbeat_id" => run.heartbeat_id,
       "routine_id" => run.routine_id
     }
-  end
-
-  defp memory_scope(%AgentRun{project_id: project_id})
-       when is_binary(project_id) and project_id != "" do
-    {"project", project_id}
   end
 
   defp memory_scope(%AgentRun{session_id: session_id})

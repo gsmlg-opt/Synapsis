@@ -2,7 +2,7 @@ defmodule Synapsis.Tool.Context do
   @moduledoc """
   Structured context passed to tool `execute/2` callbacks.
 
-  Provides session metadata, project paths, permissions, and agent
+  Provides session metadata, workspace paths, permissions, and agent
   orchestration info needed during tool execution.
   """
 
@@ -39,7 +39,7 @@ defmodule Synapsis.Tool.Context do
   @doc """
   Derive a sub-agent context from a parent context.
 
-  Sets `parent_agent` to the given pid and inherits project/session info.
+  Sets `parent_agent` to the given pid and inherits workspace/session info.
   """
   @spec sub_agent_context(t(), pid()) :: t()
   def sub_agent_context(%__MODULE__{} = ctx, parent_pid) when is_pid(parent_pid) do

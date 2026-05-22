@@ -131,7 +131,7 @@ defmodule SynapsisWeb.AssistantLive.Show do
     provider = agent_config.provider || "anthropic"
     model = agent_config.model || Synapsis.Providers.default_model(provider)
 
-    case Sessions.create("__global__", %{provider: provider, model: model, agent: name}) do
+    case Sessions.create(name, %{provider: provider, model: model, agent: name}) do
       {:ok, session} ->
         sessions = [session | socket.assigns.sessions]
 
@@ -643,8 +643,8 @@ defmodule SynapsisWeb.AssistantLive.Show do
   # --- Helpers ---
 
   defp load_sessions(agent_name) do
-    Sessions.recent(limit: 50)
-    |> Enum.filter(&(&1.agent == agent_name))
+    {:ok, sessions} = Sessions.list(agent_name, limit: 50)
+    sessions
   end
 
   defp assign_session_status(socket, status) when status in ~w(streaming tool_executing) do

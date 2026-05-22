@@ -23,7 +23,7 @@ defmodule Synapsis.Agent.Memory.EventStore do
       id: row.id,
       event_type: safe_to_atom(row.event_type),
       timestamp: row.inserted_at,
-      project_id: row.project_id,
+      agent_id: row.agent_id,
       work_id: row.work_id,
       payload: row.payload || %{}
     }

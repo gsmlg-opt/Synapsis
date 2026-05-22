@@ -13,7 +13,7 @@ defmodule Synapsis.Workspace.Tools.WorkspaceSearch do
 
   @impl true
   def description do
-    "Search workspace documents using full-text search. Finds plans, todos, notes, and other artifacts matching a query. Supports scoping to global, project, or session."
+    "Search workspace documents using full-text search. Finds plans, todos, notes, and other artifacts matching a query. Supports scoping to global, agent, or session."
   end
 
   @impl true
@@ -27,12 +27,12 @@ defmodule Synapsis.Workspace.Tools.WorkspaceSearch do
         },
         "scope" => %{
           "type" => "string",
-          "enum" => ["global", "project", "session"],
+          "enum" => ["global", "agent", "session"],
           "description" => "Limit search scope"
         },
-        "project_id" => %{
+        "agent_id" => %{
           "type" => "string",
-          "description" => "Filter by project ID"
+          "description" => "Filter by agent name"
         },
         "kind" => %{
           "type" => "string",
@@ -55,7 +55,7 @@ defmodule Synapsis.Workspace.Tools.WorkspaceSearch do
     opts =
       []
       |> maybe_add(:scope, parse_scope(input["scope"]))
-      |> maybe_add(:project_id, input["project_id"])
+      |> maybe_add(:agent_id, input["agent_id"])
       |> maybe_add(:kind, parse_kind(input["kind"]))
       |> maybe_add(:limit, input["limit"])
 
@@ -80,7 +80,7 @@ defmodule Synapsis.Workspace.Tools.WorkspaceSearch do
   defp maybe_add(opts, key, value), do: [{key, value} | opts]
 
   defp parse_scope("global"), do: :global
-  defp parse_scope("project"), do: :project
+  defp parse_scope("agent"), do: :agent
   defp parse_scope("session"), do: :session
   defp parse_scope(_), do: nil
 

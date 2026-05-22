@@ -24,7 +24,7 @@ defmodule Synapsis.Workspace.Tools.WorkspaceList do
         "path" => %{
           "type" => "string",
           "description" =>
-            "Path prefix to list (e.g. /projects/myapp/plans/, /shared/notes/)"
+            "Path prefix to list (e.g. /agents/main/plans/, /shared/notes/)"
         },
         "depth" => %{
           "type" => "integer",
@@ -55,7 +55,7 @@ defmodule Synapsis.Workspace.Tools.WorkspaceList do
 
     agent_ctx = %{
       role: context[:role] || :user,
-      project_id: context[:project_id],
+      agent_id: context[:agent_id],
       session_id: context[:session_id]
     }
 

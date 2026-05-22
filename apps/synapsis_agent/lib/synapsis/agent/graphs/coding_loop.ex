@@ -61,7 +61,6 @@ defmodule Synapsis.Agent.Graphs.CodingLoop do
       iteration_count: 0,
       provider_config: opts[:provider_config] || %{},
       agent_config: opts[:agent_config] || %{},
-      worktree_path: opts[:worktree_path],
       decision: nil,
       tool_call_hashes: MapSet.new(),
       user_input: nil,

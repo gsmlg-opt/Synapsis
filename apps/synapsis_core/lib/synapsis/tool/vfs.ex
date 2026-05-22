@@ -11,8 +11,8 @@ defmodule Synapsis.Tool.VFS do
 
   ## Path Mapping
 
-      @synapsis/projects/myapp/plans/auth.md → /projects/myapp/plans/auth.md
-      @synapsis/shared/notes/ideas.md        → /shared/notes/ideas.md
+      @synapsis/agents/main/plans/auth.md → /agents/main/plans/auth.md
+      @synapsis/shared/notes/ideas.md     → /shared/notes/ideas.md
 
   ## Cross-Boundary Rules
 

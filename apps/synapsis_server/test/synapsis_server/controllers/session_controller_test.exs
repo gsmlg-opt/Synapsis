@@ -194,16 +194,17 @@ defmodule SynapsisServer.SessionControllerTest do
   end
 
   describe "input validation" do
-    test "rejects project_path exceeding 4096 bytes on create", %{conn: conn} do
+    test "ignores legacy project_path on create", %{conn: conn} do
       long_path = String.duplicate("a", 4097)
       conn = post(conn, "/api/sessions", %{project_path: long_path})
-      assert %{"error" => "project_path too long"} = json_response(conn, 400)
+      assert %{"data" => %{"agent" => "main", "status" => "idle"}} = json_response(conn, 201)
     end
 
-    test "rejects project_path exceeding 4096 bytes on index", %{conn: conn} do
+    test "ignores legacy project_path on index", %{conn: conn} do
       long_path = String.duplicate("a", 4097)
       conn = get(conn, "/api/sessions", %{project_path: long_path})
-      assert %{"error" => "project_path too long"} = json_response(conn, 400)
+      assert %{"data" => sessions} = json_response(conn, 200)
+      assert is_list(sessions)
     end
 
     test "rejects content exceeding 256KB", %{conn: conn} do

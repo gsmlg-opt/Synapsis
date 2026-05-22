@@ -5,9 +5,8 @@ defmodule Synapsis.Memory.ContextBuilder do
 
   Budget allocation:
   - Shared: ~5%
-  - Project: ~50%
-  - Agent: ~20%
-  - Session (working memory): ~25%
+  - Agent: ~70%
+  - Session (working memory): injected separately
   """
 
   alias Synapsis.Memory.Retriever
@@ -17,8 +16,7 @@ defmodule Synapsis.Memory.ContextBuilder do
   # Session-scope working memory is injected separately by WorkingMemory module.
   @budget %{
     shared: 0.10,
-    project: 0.60,
-    agent: 0.30
+    agent: 0.90
   }
 
   @doc """
@@ -29,18 +27,14 @@ defmodule Synapsis.Memory.ContextBuilder do
   @spec build(map()) :: String.t()
   def build(context) do
     query = extract_query_signal(context)
-    project_id = Map.get(context, :project_id, "")
     agent_id = Map.get(context, :agent_id)
-    agent_scope = Map.get(context, :agent_scope, :project)
     max_tokens = Map.get(context, :memory_token_budget, @default_max_tokens)
 
-    # Retrieve memories at different scope levels
-    shared_memories = retrieve_scope(:shared, query, nil, "", max_tokens)
-    project_memories = retrieve_scope(:project, query, nil, project_id, max_tokens)
+    shared_memories = retrieve_scope(:shared, query, nil, max_tokens)
 
     agent_memories =
-      if agent_scope == :agent and agent_id do
-        retrieve_scope(:agent, query, agent_id, project_id, max_tokens)
+      if agent_id do
+        retrieve_scope(:agent, query, agent_id, max_tokens)
       else
         []
       end
@@ -53,15 +47,6 @@ defmodule Synapsis.Memory.ContextBuilder do
         budget = trunc(max_tokens * @budget.shared)
         entries = format_entries(shared_memories, budget)
         sections ++ ["<shared>\n#{entries}\n</shared>"]
-      else
-        sections
-      end
-
-    sections =
-      if project_memories != [] do
-        budget = trunc(max_tokens * @budget.project)
-        entries = format_entries(project_memories, budget)
-        sections ++ ["<project context=\"#{project_id}\">\n#{entries}\n</project>"]
       else
         sections
       end
@@ -82,19 +67,17 @@ defmodule Synapsis.Memory.ContextBuilder do
     end
   end
 
-  defp retrieve_scope(scope, query, agent_id, project_id, _max_tokens) do
+  defp retrieve_scope(scope, query, agent_id, _max_tokens) do
     Retriever.retrieve(%{
       query: query,
       scope: scope,
       agent_id: agent_id,
-      project_id: project_id,
       limit: scope_limit(scope)
     })
   end
 
   defp scope_limit(:shared), do: 3
-  defp scope_limit(:project), do: 5
-  defp scope_limit(:agent), do: 3
+  defp scope_limit(:agent), do: 5
 
   defp extract_query_signal(context) do
     # Extract query from latest user message or current goal

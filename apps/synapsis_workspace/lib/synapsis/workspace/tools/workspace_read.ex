@@ -24,7 +24,7 @@ defmodule Synapsis.Workspace.Tools.WorkspaceRead do
         "path" => %{
           "type" => "string",
           "description" =>
-            "Workspace path (e.g. /projects/myapp/plans/auth.md) or document ID (ULID/UUID)"
+            "Workspace path (e.g. /agents/main/plans/auth.md) or document ID (ULID/UUID)"
         }
       },
       "required" => ["path"]
@@ -37,7 +37,7 @@ defmodule Synapsis.Workspace.Tools.WorkspaceRead do
 
     agent_ctx = %{
       role: context[:role] || :user,
-      project_id: context[:project_id],
+      agent_id: context[:agent_id],
       session_id: context[:session_id]
     }
 

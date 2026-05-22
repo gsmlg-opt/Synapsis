@@ -8,27 +8,19 @@ defmodule SynapsisWeb.DashboardLiveTest do
       assert has_element?(view, "h1", "Dashboard")
     end
 
-    test "shows projects section heading", %{conn: conn} do
+    test "shows enabled agents summary", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
-      # dm_card header slot renders as [slot="header"] inside el-dm-card
-      assert has_element?(view, "[slot=\"header\"]", "Projects")
-    end
-
-    test "shows recent sessions section heading", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
-      # dm_card header slot renders as [slot="header"] inside el-dm-card
-      assert has_element?(view, "[slot=\"header\"]", "Recent Sessions")
+      assert has_element?(view, "p", "Enabled agents")
+      assert has_element?(view, "el-dm-card", "Agent sessions")
     end
 
     test "renders appbar navigation links", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
 
-      assert has_element?(view, "header.appbar .appbar-trailing a[href='/chat']", "Chat")
-
       assert has_element?(
                view,
                "header.appbar .appbar-trailing a[href='/agent/agents']",
-               "Agent"
+               "Agents"
              )
 
       assert has_element?(view, "header.appbar .appbar-trailing a[href='/settings']", "Settings")
@@ -37,115 +29,66 @@ defmodule SynapsisWeb.DashboardLiveTest do
       assert theme_switcher_hook_source() =~ ".theme-controller-item"
 
       refute has_element?(view, "header.appbar a[href='/projects']")
-      refute has_element?(view, "header.appbar a[href='/workspace']")
+      refute has_element?(view, "header.appbar a[href='/chat']")
       refute has_element?(view, "header.appbar a[href='/settings/providers']")
       refute has_element?(view, "header.appbar a[href='/settings/mcp']")
       refute has_element?(view, "header.appbar a[href='/settings/lsp']")
     end
 
-    test "lists projects when they exist", %{conn: conn} do
-      {:ok, project} =
-        %Synapsis.Project{}
-        |> Synapsis.Project.changeset(%{
-          path: "/tmp/dash_proj_#{:rand.uniform(100_000)}",
-          slug: "dash-proj",
-          name: "dash-proj"
+    test "lists enabled agents with session counts", %{conn: conn} do
+      {:ok, _agent} =
+        %Synapsis.AgentConfig{}
+        |> Synapsis.AgentConfig.changeset(%{
+          name: "coder",
+          label: "Coder",
+          description: "Coding agent",
+          enabled: true
         })
         |> Synapsis.Repo.insert()
 
-      {:ok, _view, html} = live(conn, ~p"/")
-      assert html =~ project.slug
-      assert html =~ project.path
-    end
-
-    test "lists recent sessions when they exist", %{conn: conn} do
-      {:ok, project} =
-        %Synapsis.Project{}
-        |> Synapsis.Project.changeset(%{
-          path: "/tmp/dash_sess_#{:rand.uniform(100_000)}",
-          slug: "dash-sess",
-          name: "dash-sess"
-        })
-        |> Synapsis.Repo.insert()
-
-      {:ok, session} =
-        %Synapsis.Session{}
-        |> Synapsis.Session.changeset(%{
-          project_id: project.id,
-          provider: "anthropic",
-          model: "claude-sonnet-4-20250514",
-          title: "Test Dashboard Session"
-        })
-        |> Synapsis.Repo.insert()
-
-      {:ok, _view, html} = live(conn, ~p"/")
-      assert html =~ session.title
-      assert html =~ "anthropic/claude-sonnet-4-20250514"
-    end
-
-    test "renders empty state text in projects section when no projects inserted", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
-      assert has_element?(view, "[slot=\"header\"]", "Projects")
-    end
-
-    test "renders empty state text in sessions section when no sessions inserted", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
-      assert has_element?(view, "[slot=\"header\"]", "Recent Sessions")
-    end
-
-    test "renders New project button", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
-      # dm_btn renders as el-dm-button custom element
-      assert has_element?(view, "el-dm-button", "New")
-    end
-
-    test "session without title shows truncated id fallback", %{conn: conn} do
-      {:ok, project} =
-        %Synapsis.Project{}
-        |> Synapsis.Project.changeset(%{
-          path: "/tmp/dash_notitle_#{:rand.uniform(100_000)}",
-          slug: "dash-notitle",
-          name: "dash-notitle"
-        })
-        |> Synapsis.Repo.insert()
-
-      {:ok, session} =
-        %Synapsis.Session{}
-        |> Synapsis.Session.changeset(%{
-          project_id: project.id,
-          provider: "anthropic",
-          model: "claude-sonnet-4-20250514"
-        })
-        |> Synapsis.Repo.insert()
-
-      {:ok, _view, html} = live(conn, ~p"/")
-      assert html =~ "Session #{String.slice(session.id, 0, 8)}"
-    end
-
-    test "session displays agent name", %{conn: conn} do
-      {:ok, project} =
-        %Synapsis.Project{}
-        |> Synapsis.Project.changeset(%{
-          path: "/tmp/dash_agent_#{:rand.uniform(100_000)}",
-          slug: "dash-agent",
-          name: "dash-agent"
+      {:ok, _disabled} =
+        %Synapsis.AgentConfig{}
+        |> Synapsis.AgentConfig.changeset(%{
+          name: "paused",
+          label: "Paused",
+          description: "Disabled agent",
+          enabled: false
         })
         |> Synapsis.Repo.insert()
 
       {:ok, _session} =
         %Synapsis.Session{}
         |> Synapsis.Session.changeset(%{
-          project_id: project.id,
           provider: "anthropic",
           model: "claude-sonnet-4-20250514",
-          agent: "plan"
+          agent: "coder",
+          title: "Coder Session"
         })
         |> Synapsis.Repo.insert()
 
-      {:ok, view, _html} = live(conn, ~p"/")
-      # Agent name is inside a dm_badge which renders as el-dm-badge
-      # The component maps variant="ghost" to color="ghost" on the element
-      assert has_element?(view, "el-dm-badge[color=\"ghost\"]")
+      {:ok, _second_session} =
+        %Synapsis.Session{}
+        |> Synapsis.Session.changeset(%{
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514",
+          agent: "coder"
+        })
+        |> Synapsis.Repo.insert()
+
+      {:ok, _disabled_session} =
+        %Synapsis.Session{}
+        |> Synapsis.Session.changeset(%{
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514",
+          agent: "paused"
+        })
+        |> Synapsis.Repo.insert()
+
+      {:ok, view, html} = live(conn, ~p"/")
+      assert html =~ "Coder"
+      assert html =~ "Coding agent"
+      assert has_element?(view, "el-dm-badge", "2")
+      refute html =~ "Paused"
     end
 
     test "renders Synapsis in the page title", %{conn: conn} do

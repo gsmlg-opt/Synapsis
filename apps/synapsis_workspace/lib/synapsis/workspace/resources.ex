@@ -70,7 +70,7 @@ defmodule Synapsis.Workspace.Resources do
         visibility: Map.get(opts, :visibility, resolved.default_visibility),
         lifecycle: Map.get(opts, :lifecycle, resolved.default_lifecycle),
         metadata: Map.get(opts, :metadata, %{}),
-        project_id: resolved.project_id,
+        agent_id: resolved.agent_id,
         session_id: resolved.session_id,
         created_by: author,
         updated_by: author,
@@ -129,7 +129,7 @@ defmodule Synapsis.Workspace.Resources do
     with {:ok, resolved} <- PathResolver.resolve(new_path) do
       attrs = %{
         path: new_path,
-        project_id: resolved.project_id,
+        agent_id: resolved.agent_id,
         session_id: resolved.session_id
       }
 

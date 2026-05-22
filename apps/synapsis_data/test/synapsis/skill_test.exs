@@ -28,7 +28,7 @@ defmodule Synapsis.SkillTest do
     end
 
     test "allows valid scopes" do
-      for scope <- ~w(global project) do
+      for scope <- ~w(global) do
         cs = %Skill{} |> Skill.changeset(%{name: "test", scope: scope})
         assert cs.valid?, "Expected scope #{scope} to be valid"
       end
@@ -58,12 +58,13 @@ defmodule Synapsis.SkillTest do
       assert found.description == "A test skill"
     end
 
-    test "allows duplicate names when project_id differs (NULL is distinct)" do
-      # PostgreSQL treats NULL as distinct in unique indexes
+    test "enforces unique names in a scope" do
       attrs = %{name: "unique-skill", scope: "global"}
 
       {:ok, _} = %Skill{} |> Skill.changeset(attrs) |> Repo.insert()
-      {:ok, _} = %Skill{} |> Skill.changeset(attrs) |> Repo.insert()
+      {:error, changeset} = %Skill{} |> Skill.changeset(attrs) |> Repo.insert()
+
+      assert %{scope: ["has already been taken"]} = errors_on(changeset)
     end
   end
 end

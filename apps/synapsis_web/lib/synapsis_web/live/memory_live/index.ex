@@ -228,7 +228,6 @@ defmodule SynapsisWeb.MemoryLive.Index do
             options={[
               {"all", "All Scopes"},
               {"shared", "Shared"},
-              {"project", "Project"},
               {"agent", "Agent"}
             ]}
             size="sm"
@@ -281,8 +280,8 @@ defmodule SynapsisWeb.MemoryLive.Index do
                   <.dm_select
                     name="scope"
                     label="Scope"
-                    value="project"
-                    options={[{"shared", "Shared"}, {"project", "Project"}, {"agent", "Agent"}]}
+                    value="agent"
+                    options={[{"shared", "Shared"}, {"agent", "Agent"}]}
                   />
                 </div>
                 <div>
@@ -468,7 +467,6 @@ defmodule SynapsisWeb.MemoryLive.Index do
   defp kind_color(_), do: "ghost"
 
   defp scope_color("shared"), do: "info"
-  defp scope_color("project"), do: "primary"
   defp scope_color("agent"), do: "secondary"
   defp scope_color(_), do: "ghost"
 

@@ -66,19 +66,19 @@ defmodule Synapsis.Tool.Task do
       model = input["model"]
 
       session_id = context[:session_id]
-      project_id = context[:project_id]
+      agent_id = context[:agent_id] || "main"
 
       cond do
         is_nil(session_id) ->
           {:error, "No session context available for sub-agent"}
 
-        is_nil(project_id) ->
-          {:error, "No project context available for sub-agent"}
+        is_nil(agent_id) ->
+          {:error, "No agent context available for sub-agent"}
 
         true ->
           spawn_opts =
             %{
-              agent: "main",
+              agent: agent_id,
               notify_pid: self(),
               notify_ref: Ecto.UUID.generate()
             }
@@ -86,10 +86,10 @@ defmodule Synapsis.Tool.Task do
 
           case mode do
             "foreground" ->
-              execute_foreground(project_id, prompt, spawn_opts, session_id)
+              execute_foreground(agent_id, prompt, spawn_opts, session_id)
 
             "background" ->
-              execute_background(project_id, prompt, spawn_opts)
+              execute_background(agent_id, prompt, spawn_opts)
 
             _ ->
               {:error, "Invalid mode: #{mode}. Use 'foreground' or 'background'."}
@@ -179,10 +179,10 @@ defmodule Synapsis.Tool.Task do
     end
   end
 
-  defp execute_foreground(project_id, prompt, opts, parent_session_id) do
+  defp execute_foreground(agent_id, prompt, opts, parent_session_id) do
     ref = opts.notify_ref
 
-    case Synapsis.Agent.SessionBridge.spawn_coding_session(project_id, prompt, opts) do
+    case Synapsis.Agent.SessionBridge.spawn_coding_session(agent_id, prompt, opts) do
       {:ok, sub_session_id} ->
         Logger.info("sub_agent_foreground_started",
           sub_session_id: sub_session_id,
@@ -251,12 +251,12 @@ defmodule Synapsis.Tool.Task do
     end
   end
 
-  defp execute_background(project_id, prompt, opts) do
+  defp execute_background(agent_id, prompt, opts) do
     ref = opts.notify_ref
     caller = self()
 
     Task.Supervisor.start_child(Synapsis.Tool.TaskSupervisor, fn ->
-      case Synapsis.Agent.SessionBridge.spawn_coding_session(project_id, prompt, opts) do
+      case Synapsis.Agent.SessionBridge.spawn_coding_session(agent_id, prompt, opts) do
         {:ok, sub_session_id} ->
           Logger.info("sub_agent_background_started",
             sub_session_id: sub_session_id,

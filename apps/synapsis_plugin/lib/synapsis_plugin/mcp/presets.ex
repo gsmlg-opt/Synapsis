@@ -160,7 +160,7 @@ defmodule SynapsisPlugin.MCP.Presets do
       })
       |> Repo.insert(
         on_conflict: :nothing,
-        conflict_target: [:name, :scope, :project_id]
+        conflict_target: [:name, :scope]
       )
     end)
 

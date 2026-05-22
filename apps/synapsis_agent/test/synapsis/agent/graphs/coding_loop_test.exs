@@ -68,15 +68,13 @@ defmodule Synapsis.Agent.Graphs.CodingLoopTest do
         CodingLoop.initial_state(%{
           session_id: "test-123",
           provider_config: %{api_key: "key"},
-          agent_config: %{name: "build"},
-          worktree_path: "/tmp/wt"
+          agent_config: %{name: "main"}
         })
 
       assert state.session_id == "test-123"
       assert state.pending_text == ""
       assert state.tool_uses == []
       assert state.iteration_count == 0
-      assert state.worktree_path == "/tmp/wt"
       assert %MapSet{} = state.tool_call_hashes
     end
   end

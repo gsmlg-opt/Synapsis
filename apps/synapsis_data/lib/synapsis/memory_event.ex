@@ -3,7 +3,7 @@ defmodule Synapsis.MemoryEvent do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @valid_scopes ~w(shared project agent session)
+  @valid_scopes ~w(shared agent session)
   @valid_types ~w(
     run_created task_received plan_created plan_updated message_added
     tool_called tool_succeeded tool_failed handoff_requested handoff_completed

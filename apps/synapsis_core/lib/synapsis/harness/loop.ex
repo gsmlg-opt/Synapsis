@@ -222,7 +222,7 @@ defmodule Synapsis.Harness.Loop do
   def next_provider_input(%Context{} = context) do
     Map.merge(context.provider_request || %{}, %{
       session_id: context.session_id,
-      project_id: context.project_id,
+      agent_id: context.agent_id,
       messages: context.messages,
       tools: Map.keys(context.available_tools || %{}),
       metadata: context.metadata

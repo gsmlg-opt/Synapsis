@@ -3,7 +3,7 @@ defmodule Synapsis.Agent.Approval do
   Persistent tool approval checking (AI-7).
 
   Resolves tool approval policy by checking persistent approvals in the database.
-  Resolution order: project-scoped → global → most specific pattern → default :ask.
+  Resolution order: agent-scoped → global → most specific pattern → default :ask.
   """
 
   alias Synapsis.ToolApproval
@@ -16,16 +16,16 @@ defmodule Synapsis.Agent.Approval do
 
   ## Resolution Order
 
-  1. Check project-scoped approvals (if project_id given)
+  1. Check agent-scoped approvals (if agent_name given)
   2. Check global approvals
   3. Most specific pattern wins (longer pattern = more specific)
   4. If no match → default to `:ask`
   """
   @spec check_approval(String.t(), map(), keyword()) :: :allow | :record | :ask | :deny
   def check_approval(tool_name, input, opts \\ []) do
-    project_id = Keyword.get(opts, :project_id)
+    agent_name = Keyword.get(opts, :agent_name) || Keyword.get(opts, :agent_id)
 
-    approvals = ToolApproval.load_for_check(project_id)
+    approvals = ToolApproval.load_for_check(agent_name)
 
     matching =
       approvals
@@ -33,8 +33,7 @@ defmodule Synapsis.Agent.Approval do
         matches?(approval.pattern, tool_name, input)
       end)
       |> Enum.sort_by(fn a ->
-        # Sort by: 1) project-scoped first, 2) longest pattern first
-        scope_priority = if a.scope == :project, do: 0, else: 1
+        scope_priority = if a.scope == :agent, do: 0, else: 1
         {scope_priority, -byte_size(a.pattern)}
       end)
 
@@ -102,20 +101,20 @@ defmodule Synapsis.Agent.Approval do
   @doc """
   Persist a new tool approval rule.
 
-  If an approval with the same scope/project/pattern exists, updates the policy.
+  If an approval with the same scope/agent/pattern exists, updates the policy.
   Broadcasts `:tool_approval_changed` via PubSub.
   """
   @spec persist_approval(String.t(), atom(), keyword()) ::
           {:ok, ToolApproval.t()} | {:error, term()}
   def persist_approval(pattern, policy, opts \\ []) do
     scope = Keyword.get(opts, :scope, :global)
-    project_id = Keyword.get(opts, :project_id)
+    agent_name = Keyword.get(opts, :agent_name) || Keyword.get(opts, :agent_id)
     created_by = Keyword.get(opts, :created_by, :user)
 
     attrs = %{
       pattern: pattern,
       scope: scope,
-      project_id: project_id,
+      agent_name: agent_name,
       policy: policy,
       created_by: created_by
     }
@@ -137,12 +136,12 @@ defmodule Synapsis.Agent.Approval do
     end
   end
 
-  @doc "List all approvals, optionally filtered by scope and project."
+  @doc "List all approvals, optionally filtered by scope and agent."
   @spec list_approvals(keyword()) :: [ToolApproval.t()]
   def list_approvals(opts \\ []) do
     scope = Keyword.get(opts, :scope)
-    project_id = Keyword.get(opts, :project_id)
-    ToolApproval.list_by_scope(scope, project_id)
+    agent_name = Keyword.get(opts, :agent_name) || Keyword.get(opts, :agent_id)
+    ToolApproval.list_by_scope(scope, agent_name)
   end
 
   @doc "Delete an approval by ID."

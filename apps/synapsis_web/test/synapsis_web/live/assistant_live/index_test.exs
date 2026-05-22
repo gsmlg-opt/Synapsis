@@ -11,8 +11,9 @@ defmodule SynapsisWeb.AssistantLive.IndexTest do
     test "renders default assistant cards", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/assistant")
 
-      assert html =~ "Build"
-      assert html =~ "Workspace-driven coding assistant"
+      assert html =~ "Main"
+      assert html =~ "AI coding assistant with full workspace access"
+      refute html =~ "Build"
     end
   end
 end
