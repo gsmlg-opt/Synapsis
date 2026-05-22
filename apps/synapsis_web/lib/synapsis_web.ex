@@ -6,7 +6,7 @@ defmodule SynapsisWeb do
   and React hook bridges. All rendering and UI logic lives here.
   """
 
-  def static_paths, do: ~w(assets fonts images favicon.ico robots.txt)
+  def static_paths, do: ~w(assets fonts images favicon.ico favicon.png robots.txt apple-touch-icon.png apple-touch-icon-precomposed.png)
 
   def live_view do
     quote do
