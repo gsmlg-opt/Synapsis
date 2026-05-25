@@ -219,6 +219,8 @@ defmodule SynapsisPlugin.MCPTest do
       bypass = Bypass.open()
 
       Bypass.expect(bypass, "POST", "/mcp", fn conn ->
+        assert {"x-api-key", "secret"} in conn.req_headers
+
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         request = Jason.decode!(body)
 
@@ -252,7 +254,8 @@ defmodule SynapsisPlugin.MCPTest do
       config = %{
         name: "http_server",
         transport: "http",
-        url: "http://localhost:#{bypass.port}/mcp"
+        url: "http://localhost:#{bypass.port}/mcp",
+        settings: %{"headers" => %{"X-Api-Key" => "secret"}}
       }
 
       assert {:ok, state} = SynapsisPlugin.MCP.init(config)
@@ -273,6 +276,8 @@ defmodule SynapsisPlugin.MCPTest do
       bypass = Bypass.open()
 
       Bypass.expect(bypass, "POST", "/mcp", fn conn ->
+        assert {"x-trace", "abc123"} in conn.req_headers
+
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         request = Jason.decode!(body)
 
@@ -297,6 +302,7 @@ defmodule SynapsisPlugin.MCPTest do
         pending: %{},
         buffer: "",
         env: %{},
+        headers: %{"X-Trace" => "abc123"},
         initialized: true,
         command: nil,
         args: []

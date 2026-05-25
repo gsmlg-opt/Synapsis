@@ -62,7 +62,34 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
 
       assert html =~ "New Custom MCP Server"
       assert html =~ "HTTP"
-      assert html =~ ~s(name="url")
+      assert html =~ "Command"
+      assert html =~ "Arguments (one per line)"
+      assert html =~ "Environment Variables"
+      refute html =~ ~s(name="url")
+      refute html =~ "Headers"
+    end
+
+    test "custom form switches HTTP transport fields", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings/mcp/new")
+
+      view
+      |> element(~s([phx-click="select_custom"]))
+      |> render_click()
+
+      html =
+        view
+        |> form(~s(form[phx-submit="create_config"]), %{
+          "name" => "http-test",
+          "transport" => "http"
+        })
+        |> render_change()
+
+      assert html =~ "URL"
+      assert html =~ "Headers (Name: Value, one per line)"
+      assert html =~ ~s(name="headers")
+      refute html =~ "Command"
+      refute html =~ "Arguments (one per line)"
+      refute html =~ "Environment Variables"
     end
 
     test "creates MCP config from preset", %{conn: conn} do
@@ -109,8 +136,16 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
       view
       |> form(~s(form[phx-submit="create_config"]), %{
         "name" => "http-test",
+        "transport" => "http"
+      })
+      |> render_change()
+
+      view
+      |> form(~s(form[phx-submit="create_config"]), %{
+        "name" => "http-test",
         "transport" => "http",
-        "url" => "http://localhost:7331/mcp"
+        "url" => "http://localhost:7331/mcp",
+        "headers" => "Authorization: Bearer test-token\nX-Workspace: docs\ninvalid"
       })
       |> render_submit()
 
@@ -121,6 +156,15 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
       assert config.transport == "http"
       assert config.url == "http://localhost:7331/mcp"
       assert config.command in [nil, ""]
+      assert config.args == []
+      assert config.env == %{}
+
+      assert config.settings == %{
+               "headers" => %{
+                 "Authorization" => "Bearer test-token",
+                 "X-Workspace" => "docs"
+               }
+             }
     end
 
     test "deletes MCP config", %{conn: conn} do

@@ -7,7 +7,13 @@ defmodule SynapsisWeb.MCPLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, configs: [], page_title: "MCP Servers", plugin_states: %{})}
+    {:ok,
+     assign(socket,
+       configs: [],
+       page_title: "MCP Servers",
+       plugin_states: %{},
+       custom_form: %{}
+     )}
   end
 
   @impl true
@@ -69,7 +75,7 @@ defmodule SynapsisWeb.MCPLive.Index do
       SynapsisPlugin.MCP.Presets.all()
       |> Enum.find(&(&1.name == name))
 
-    {:noreply, assign(socket, selected_preset: preset)}
+    {:noreply, assign(socket, selected_preset: preset, custom_form: %{})}
   end
 
   def handle_event("select_custom", _params, socket) do
@@ -83,24 +89,30 @@ defmodule SynapsisWeb.MCPLive.Index do
       custom: true
     }
 
-    {:noreply, assign(socket, selected_preset: custom)}
+    {:noreply, assign(socket, selected_preset: custom, custom_form: %{"transport" => "stdio"})}
   end
 
   def handle_event("back_to_presets", _params, socket) do
-    {:noreply, assign(socket, selected_preset: nil)}
+    {:noreply, assign(socket, selected_preset: nil, custom_form: %{})}
+  end
+
+  def handle_event("change_custom_config", params, socket) do
+    {:noreply, assign(socket, custom_form: Map.drop(params, ["_target"]))}
   end
 
   def handle_event("create_config", params, socket) do
     preset = socket.assigns.selected_preset
+    transport = params["transport"] || preset.transport
 
     attrs = %{
       type: "mcp",
       name: params["name"] || preset.name,
-      transport: params["transport"] || preset.transport,
-      command: params["command"] || preset.command,
-      url: params["url"],
-      args: if(params["args"], do: parse_args(params["args"]), else: preset.args),
-      env: if(params["env"], do: parse_env(params["env"]), else: preset.env),
+      transport: transport,
+      command: command_for_transport(transport, params, preset),
+      url: url_for_transport(transport, params),
+      args: args_for_transport(transport, params, preset),
+      env: env_for_transport(transport, params, preset),
+      settings: settings_for_transport(transport, params),
       auto_start: params["auto_start"] == "true"
     }
 
@@ -167,7 +179,8 @@ defmodule SynapsisWeb.MCPLive.Index do
           command: config.command,
           url: config.url,
           args: config.args || [],
-          env: config.env || %{}
+          env: config.env || %{},
+          settings: config.settings || %{}
         }
 
         result =
@@ -317,6 +330,56 @@ defmodule SynapsisWeb.MCPLive.Index do
     end)
   end
 
+  defp parse_headers(nil), do: %{}
+  defp parse_headers(""), do: %{}
+
+  defp parse_headers(str) when is_binary(str) do
+    str
+    |> String.split("\n", trim: true)
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.reduce(%{}, fn line, acc ->
+      case String.split(line, ":", parts: 2) do
+        [name, value] ->
+          name = String.trim(name)
+
+          if name == "" do
+            acc
+          else
+            Map.put(acc, name, String.trim(value))
+          end
+
+        _ ->
+          acc
+      end
+    end)
+  end
+
+  defp command_for_transport("stdio", params, preset), do: params["command"] || preset.command
+  defp command_for_transport(_transport, _params, _preset), do: ""
+
+  defp url_for_transport(transport, params) when transport in ["http", "sse"], do: params["url"]
+  defp url_for_transport(_transport, _params), do: nil
+
+  defp args_for_transport("stdio", params, preset) do
+    if(params["args"], do: parse_args(params["args"]), else: preset.args)
+  end
+
+  defp args_for_transport(_transport, _params, _preset), do: []
+
+  defp env_for_transport("stdio", params, preset) do
+    if(params["env"], do: parse_env(params["env"]), else: preset.env)
+  end
+
+  defp env_for_transport(_transport, _params, _preset), do: %{}
+
+  defp settings_for_transport(transport, params) when transport in ["http", "sse"] do
+    headers = parse_headers(params["headers"])
+    if headers == %{}, do: %{}, else: %{"headers" => headers}
+  end
+
+  defp settings_for_transport(_transport, _params), do: %{}
+
   @impl true
   def render(assigns) do
     presets = SynapsisPlugin.MCP.Presets.all()
@@ -325,7 +388,9 @@ defmodule SynapsisWeb.MCPLive.Index do
     assigns =
       assign(assigns,
         presets: presets,
-        configured_names: configured
+        configured_names: configured,
+        custom_form: Map.get(assigns, :custom_form, %{}),
+        custom_transport: custom_transport(assigns)
       )
 
     ~H"""
@@ -398,12 +463,16 @@ defmodule SynapsisWeb.MCPLive.Index do
                 <% end %>
               </h2>
             </div>
-            <.dm_form for={%{}} phx-submit="create_config">
+            <.dm_form
+              for={%{}}
+              phx-submit="create_config"
+              phx-change={if Map.get(@selected_preset, :custom), do: "change_custom_config"}
+            >
               <%= if Map.get(@selected_preset, :custom) do %>
                 <.dm_input
                   type="text"
                   name="name"
-                  value=""
+                  value={form_value(@custom_form, "name")}
                   placeholder="Server name"
                   required
                   label="Name"
@@ -416,59 +485,77 @@ defmodule SynapsisWeb.MCPLive.Index do
                   name="transport"
                   label="Transport"
                   options={[{"stdio", "stdio"}, {"http", "HTTP"}]}
-                  value="stdio"
+                  value={@custom_transport}
                 />
               <% else %>
                 <.readonly_field label="Transport" value={@selected_preset.transport} />
               <% end %>
-              <div :if={Map.get(@selected_preset, :custom)}>
+              <div :if={Map.get(@selected_preset, :custom) && @custom_transport in ["http", "sse"]}>
                 <.dm_input
                   type="text"
                   name="url"
-                  value=""
+                  value={form_value(@custom_form, "url")}
                   placeholder="http://localhost:7331/mcp"
                   label="URL"
                 />
+                <.dm_textarea
+                  name="headers"
+                  value={form_value(@custom_form, "headers")}
+                  rows={4}
+                  placeholder="Authorization: Bearer token"
+                  label="Headers (Name: Value, one per line)"
+                />
               </div>
-              <%= if Map.get(@selected_preset, :custom) do %>
+              <%= if Map.get(@selected_preset, :custom) && @custom_transport == "stdio" do %>
                 <.dm_input
                   type="text"
                   name="command"
-                  value=""
+                  value={form_value(@custom_form, "command")}
                   placeholder="e.g. npx"
                   label="Command"
                 />
               <% else %>
-                <.dm_input
-                  type="text"
-                  name="command"
-                  value={@selected_preset.command}
-                  readonly
-                  label="Command"
-                />
+                <%= if !Map.get(@selected_preset, :custom) do %>
+                  <.dm_input
+                    type="text"
+                    name="command"
+                    value={@selected_preset.command}
+                    readonly
+                    label="Command"
+                  />
+                <% end %>
               <% end %>
-              <%= if Map.get(@selected_preset, :custom) do %>
+              <%= if Map.get(@selected_preset, :custom) && @custom_transport == "stdio" do %>
                 <.dm_textarea
                   name="args"
-                  value=""
+                  value={form_value(@custom_form, "args")}
                   rows={3}
                   placeholder="One argument per line"
                   label="Arguments (one per line)"
                 />
               <% else %>
-                <.readonly_field
-                  label="Arguments (one per line)"
-                  value={Enum.join(@selected_preset.args, "\n")}
-                  monospace
-                />
+                <%= if !Map.get(@selected_preset, :custom) do %>
+                  <.readonly_field
+                    label="Arguments (one per line)"
+                    value={Enum.join(@selected_preset.args, "\n")}
+                    monospace
+                  />
+                <% end %>
               <% end %>
-              <div :if={Map.get(@selected_preset, :custom) || map_size(@selected_preset.env) > 0}>
+              <div :if={
+                (Map.get(@selected_preset, :custom) && @custom_transport == "stdio") ||
+                  (!Map.get(@selected_preset, :custom) && map_size(@selected_preset.env) > 0)
+              }>
                 <.dm_textarea
                   name="env"
                   rows={3}
                   placeholder="KEY=VALUE"
                   label="Environment Variables (KEY=VALUE, one per line)"
-                  value={format_env_for_form(@selected_preset.env)}
+                  value={
+                    if Map.get(@selected_preset, :custom),
+                      do: form_value(@custom_form, "env"),
+                      else: format_env_for_form(@selected_preset.env)
+                  }
                 />
                 <div
                   :if={!Map.get(@selected_preset, :custom) && has_required_env?(@selected_preset)}
@@ -714,6 +801,17 @@ defmodule SynapsisWeb.MCPLive.Index do
   end
 
   defp format_env_for_form(_), do: ""
+
+  defp form_value(form, key, default \\ "") when is_map(form) do
+    Map.get(form, key, default) || default
+  end
+
+  defp custom_transport(%{selected_preset: %{custom: true}, custom_form: form}) do
+    form_value(form || %{}, "transport", "stdio")
+  end
+
+  defp custom_transport(%{selected_preset: %{transport: transport}}), do: transport || "stdio"
+  defp custom_transport(_assigns), do: "stdio"
 
   defp has_required_env?(%{env: env}) when is_map(env) do
     Enum.any?(env, fn {_k, v} -> v == "" end)

@@ -80,9 +80,24 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
   end
 
   test "shows URL field", %{conn: conn, config: config} do
-    {:ok, _view, html} = live(conn, ~p"/settings/mcp/#{config.id}")
+    {:ok, http_config} =
+      PluginConfig.changeset(config, %{
+        transport: "http",
+        command: "",
+        args: [],
+        env: %{},
+        url: "http://example.com/mcp"
+      })
+      |> Repo.update()
+
+    {:ok, _view, html} = live(conn, ~p"/settings/mcp/#{http_config.id}")
+
     assert html =~ "URL"
     assert html =~ ~s(name="url")
+    assert html =~ "Headers (Name: Value, one per line)"
+    refute html =~ "Command"
+    refute html =~ "Arguments (one per line)"
+    refute html =~ "Environment Variables"
   end
 
   test "shows args textarea", %{conn: conn, config: config} do
@@ -95,6 +110,21 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     {:ok, _view, html} = live(conn, ~p"/settings/mcp/#{config.id}")
     assert html =~ "Environment Variables"
     assert html =~ ~s(name="env")
+  end
+
+  test "switching transport to HTTP shows URL and headers fields", %{conn: conn, config: config} do
+    {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
+
+    html =
+      view
+      |> form("form", %{"transport" => "http"})
+      |> render_change()
+
+    assert html =~ "URL"
+    assert html =~ "Headers (Name: Value, one per line)"
+    refute html =~ "Command"
+    refute html =~ "Arguments (one per line)"
+    refute html =~ "Environment Variables"
   end
 
   test "config with env vars displays them formatted", %{conn: conn} do
@@ -178,10 +208,14 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
 
     view
+    |> form("form", %{"transport" => "http"})
+    |> render_change()
+
+    view
     |> form("form", %{
-      "command" => "",
       "transport" => "http",
-      "url" => "http://example.com/mcp"
+      "url" => "http://example.com/mcp",
+      "headers" => "Authorization: Bearer test-token\nX-Client: synapsis\ninvalid"
     })
     |> render_submit()
 
@@ -191,6 +225,16 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     updated = Repo.get!(PluginConfig, config.id)
     assert updated.transport == "http"
     assert updated.url == "http://example.com/mcp"
+    assert updated.command in [nil, ""]
+    assert updated.args == []
+    assert updated.env == %{}
+
+    assert updated.settings == %{
+             "headers" => %{
+               "Authorization" => "Bearer test-token",
+               "X-Client" => "synapsis"
+             }
+           }
   end
 
   test "auto_start checkbox — submitting with false value", %{conn: conn, config: config} do

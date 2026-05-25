@@ -18,6 +18,7 @@ defmodule SynapsisPlugin.MCP do
     :command,
     :args,
     :env,
+    :headers,
     :request_id,
     :pending,
     :buffer,
@@ -94,6 +95,8 @@ defmodule SynapsisPlugin.MCP do
     server_name = config[:name] || config["name"]
     url = config[:url] || config["url"]
     env = config[:env] || config["env"] || %{}
+    settings = config[:settings] || config["settings"] || %{}
+    headers = http_headers(settings)
 
     if is_nil(url) or url == "" do
       {:error, {:missing_url, server_name}}
@@ -106,6 +109,7 @@ defmodule SynapsisPlugin.MCP do
         command: config[:command] || config["command"],
         args: config[:args] || config["args"] || [],
         env: env,
+        headers: headers,
         request_id: 1,
         pending: %{},
         buffer: "",
@@ -212,7 +216,7 @@ defmodule SynapsisPlugin.MCP do
     id = state.request_id
     state = %{state | request_id: id + 1}
 
-    case post_http_json(state.url, %{
+    case post_http_json(state.url, state.headers, %{
            "jsonrpc" => "2.0",
            "id" => id,
            "method" => method,
@@ -239,15 +243,17 @@ defmodule SynapsisPlugin.MCP do
     body = %{"jsonrpc" => "2.0", "method" => method}
     body = if params == %{}, do: body, else: Map.put(body, "params", params)
 
-    case post_http_json(state.url, body) do
+    case post_http_json(state.url, state.headers, body) do
       {:ok, _response} -> {:ok, state}
       {:error, reason} -> {:error, reason}
     end
   end
 
-  defp post_http_json(url, body) do
+  defp post_http_json(url, headers, body) do
     case Req.post(url,
-           headers: [{"accept", "application/json, text/event-stream"}],
+           headers: [
+             {"accept", "application/json, text/event-stream"} | normalize_headers(headers)
+           ],
            json: body,
            receive_timeout: @http_timeout_ms
          ) do
@@ -264,6 +270,18 @@ defmodule SynapsisPlugin.MCP do
         {:error, reason}
     end
   end
+
+  defp http_headers(%{"headers" => headers}) when is_map(headers), do: headers
+  defp http_headers(%{headers: headers}) when is_map(headers), do: headers
+  defp http_headers(_settings), do: %{}
+
+  defp normalize_headers(headers) when is_map(headers) do
+    headers
+    |> Enum.map(fn {name, value} -> {to_string(name), to_string(value)} end)
+    |> Enum.reject(fn {name, _value} -> String.trim(name) == "" end)
+  end
+
+  defp normalize_headers(_headers), do: []
 
   defp decode_http_body(body) when body in [nil, ""], do: {:ok, %{}}
   defp decode_http_body(body) when is_map(body), do: {:ok, body}
