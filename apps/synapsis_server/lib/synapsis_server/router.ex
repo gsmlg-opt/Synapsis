@@ -6,10 +6,8 @@ defmodule SynapsisServer.Router do
   @compile {:no_warn_undefined,
             [
               SynapsisWeb.DashboardLive,
-              SynapsisWeb.AssistantLive.Index,
-              SynapsisWeb.AssistantLive.Show,
-              SynapsisWeb.AssistantLive.Setting,
               SynapsisWeb.AgentLive.Agents,
+              SynapsisWeb.AgentLive.Sessions,
               SynapsisWeb.AgentLive.Toolsets,
               SynapsisWeb.AgentLive.Skills,
               SynapsisWeb.SettingsLive,
@@ -86,11 +84,8 @@ defmodule SynapsisServer.Router do
     live "/agent/skills", AgentLive.Skills, :index
     live "/agent/skills/new", AgentLive.Skills, :new
     live "/agent/skills/:id/edit", AgentLive.Skills, :edit
-
-    live "/assistant", AssistantLive.Index, :index
-    live "/assistant/:name/sessions", AssistantLive.Show, :sessions
-    live "/assistant/:name/sessions/:session_id", AssistantLive.Show, :session
-    live "/assistant/:name/setting", AssistantLive.Setting, :index
+    live "/agent/agents/:agent_id/sessions", AgentLive.Sessions, :sessions
+    live "/agent/agents/:agent_id/sessions/:session_id", AgentLive.Sessions, :session
 
     # TODO: add authentication guard (on_mount hook or pipeline plug) before production
     live "/workspace", WorkspaceLive.Explorer, :index

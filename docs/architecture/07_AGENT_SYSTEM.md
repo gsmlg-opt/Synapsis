@@ -434,7 +434,7 @@ Providers are injected, not imported:
 
 ### Agent <-> Web UI
 
-`SynapsisWeb.AssistantLive` provides the UI:
+`SynapsisWeb.AgentLive.Sessions` provides the UI:
 
 1. On mount, starts the `__global__` project via `Agent.start_project/2`
 2. User prompts are dispatched as `:ad_hoc_prompt` WorkItems
@@ -446,7 +446,7 @@ Providers are injected, not imported:
 ## Data Flow: User Request -> Agent Execution
 
 ```
-1. User sends prompt via AssistantLive
+1. User sends prompt via AgentLive.Sessions
          |
          v
 2. Agent.dispatch_work(%{project_id: "proj-1", task_type: :ad_hoc_prompt, ...})

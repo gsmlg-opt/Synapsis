@@ -55,7 +55,7 @@ without moving Phoenix or Repo concerns into the pure core.
 | Plugin protocols | `apps/synapsis_plugin/lib/synapsis_plugin/**/*` | Keep | Treat MCP/LSP/plugin servers as adapters/tools, not part of reducer logic. |
 | Workspace resources | `apps/synapsis_workspace/lib/synapsis/workspace/**/*` | Keep | Workspace permissions and path resolution remain support-layer behavior for tools. |
 | REST/SSE/channel API | `apps/synapsis_server/lib/synapsis_server/router.ex`, `controllers/session_controller.ex`, `controllers/sse_controller.ex`, `channels/session_channel.ex` | Keep, add parity routes later | Existing API is `/api/sessions`; OpenCode parity uses `/session`. Add compatibility intentionally in Phase 6, not during Phase 1/2 reducer work. |
-| LiveView UI | `apps/synapsis_web/lib/synapsis_web/live/assistant_live/show.ex`, `session_live/*`, `message_helpers.ex`, `components/core_components.ex` | Keep | Main chat is LiveView, not React. UI consumes current serialized parts and PubSub events. Preserve current events while adding harness topics behind the same session boundary. |
+| LiveView UI | `apps/synapsis_web/lib/synapsis_web/live/agent_live/sessions.ex`, `session_live/*`, `message_helpers.ex`, `components/core_components.ex` | Keep | Main chat is LiveView, not React. UI consumes current serialized parts and PubSub events. Preserve current events while adding harness topics behind the same session boundary. |
 | CLI | `apps/synapsis_cli/lib/synapsis_cli/main.ex` | Port later | CLI currently creates `/api/sessions`, sends `/api/sessions/:id/messages`, and streams `/api/sessions/:id/events`. Update after Phase 6 compatibility routes exist. |
 
 ## Existing Data Shape

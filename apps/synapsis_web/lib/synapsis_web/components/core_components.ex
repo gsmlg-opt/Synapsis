@@ -152,7 +152,7 @@ defmodule SynapsisWeb.CoreComponents do
   end
 
   @doc """
-  Embedded Code Agent panel — shown inline in chat when the Assistant spawns a sub-agent.
+  Embedded Code Agent panel — shown inline in chat when an agent spawns a sub-agent.
   Displays task description, live tool calls, and completion summary.
   """
   attr :prompt, :string, required: true
@@ -448,18 +448,18 @@ defmodule SynapsisWeb.CoreComponents do
   @doc """
   Global status bar shown at the bottom of every page.
 
-  Displays system status indicator and links to settings/assistant.
+  Displays system status indicator and links to settings/agents.
   """
   def global_status_bar(assigns) do
     ~H"""
     <div class="flex items-center justify-between bg-surface-container border-t border-outline-variant px-3 py-1 shrink-0">
       <div class="flex items-center gap-3">
         <.dm_link
-          navigate={~p"/assistant"}
+          navigate={~p"/agent/agents"}
           class="flex items-center gap-1.5 text-xs text-on-surface-variant hover:text-on-surface transition-colors"
         >
           <.dm_mdi name="robot-outline" class="w-3.5 h-3.5" />
-          <span class="hidden sm:inline">Assistant</span>
+          <span class="hidden sm:inline">Agents</span>
         </.dm_link>
         <.dm_link
           navigate={~p"/workspace"}

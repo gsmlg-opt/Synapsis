@@ -83,8 +83,8 @@ Do not introduce CLI as a release dependency.
 
 - JSON session/provider/config APIs under `/api`;
 - SSE session events at `/api/sessions/:id/events`;
-- LiveView routes for dashboard, assistants, sessions, settings, providers, memory, skills, MCP, LSP, model tiers, and workspace;
-- Assistant setting route: `/assistant/:name/setting`.
+- LiveView routes for dashboard, agents, sessions, settings, providers, memory, skills, MCP, LSP, model tiers, and workspace;
+- Agent config route: `/agent/agents/:agent_id/config`.
 
 `SynapsisServer.Endpoint` already exposes:
 
@@ -202,8 +202,8 @@ Phoenix Web App
   │
   ├─ SynapsisWeb LiveViews
   │   ├─ DashboardLive          health + daemon status
-  │   ├─ AssistantLive.Show     existing sessions/chat
-  │   └─ AssistantLive.Setting  routines + dream + run history
+  │   ├─ AgentLive.Sessions     existing sessions/chat
+  │   └─ AgentLive.Agents       config, routines, dream, run history
   │
   ├─ Synapsis.Agent.Daemon
   │   ├─ permanent GenServer
@@ -1315,12 +1315,12 @@ Phoenix.PubSub.subscribe(Synapsis.PubSub, "agent:daemon")
 Phoenix.PubSub.subscribe(Synapsis.PubSub, "agent:runs")
 ```
 
-### 12.2 Assistant Settings: rename Cron Jobs to Routines
+### 12.2 Agent Settings: rename Cron Jobs to Routines
 
 Update:
 
 ```text
-apps/synapsis_web/lib/synapsis_web/live/assistant_live/setting.ex
+apps/synapsis_web/lib/synapsis_web/live/agent_live/agents.ex
 ```
 
 Current tab label:
@@ -1640,7 +1640,7 @@ Files:
 apps/synapsis_agent/lib/synapsis/agent/heartbeat/worker.ex
 apps/synapsis_agent/lib/synapsis/agent/heartbeat/result_writer.ex
 apps/synapsis_agent/lib/synapsis/agent/daemon.ex
-apps/synapsis_web/lib/synapsis_web/live/assistant_live/setting.ex
+apps/synapsis_web/lib/synapsis_web/live/agent_live/agents.ex
 ```
 
 Tasks:
@@ -1670,7 +1670,7 @@ Files:
 apps/synapsis_agent/lib/synapsis/agent/dream.ex
 apps/synapsis_agent/lib/synapsis/agent/dream_prompt.ex
 apps/synapsis_agent/lib/synapsis/agent/daemon.ex
-apps/synapsis_web/lib/synapsis_web/live/assistant_live/setting.ex
+apps/synapsis_web/lib/synapsis_web/live/agent_live/agents.ex
 apps/synapsis_server/lib/synapsis_server/controllers/agent_controller.ex
 apps/synapsis_server/lib/synapsis_server/router.ex
 ```
@@ -1703,7 +1703,7 @@ apps/synapsis_server/lib/synapsis_server/controllers/agent_controller.ex
 apps/synapsis_server/lib/synapsis_server/controllers/agent_run_controller.ex
 apps/synapsis_server/lib/synapsis_server/controllers/heartbeat_controller.ex
 apps/synapsis_server/lib/synapsis_server/router.ex
-apps/synapsis_web/lib/synapsis_web/live/assistant_live/setting.ex
+apps/synapsis_web/lib/synapsis_web/live/agent_live/agents.ex
 ```
 
 Tasks:
@@ -1737,7 +1737,7 @@ apps/synapsis_data/lib/synapsis/agent_routine.ex
 apps/synapsis_agent/lib/synapsis/agent/routines.ex
 apps/synapsis_agent/lib/synapsis/agent/routine_worker.ex
 apps/synapsis_agent/lib/synapsis/agent/routine_scheduler.ex
-apps/synapsis_web/lib/synapsis_web/live/assistant_live/setting.ex
+apps/synapsis_web/lib/synapsis_web/live/agent_live/agents.ex
 ```
 
 Tasks:
@@ -1887,8 +1887,8 @@ The project is considered working for this milestone when this browser-first flo
 5. Dashboard shows health for Repo, PubSub, Oban, tool registry, provider registry, session supervisor, agent supervisor, agent daemon, endpoint.
 6. `/api/health` returns JSON.
 7. `/api/agent/status` returns daemon status.
-8. Existing assistant session chat still works.
-9. `/assistant/:name/setting` has a `Routines` tab.
+8. Existing agent session chat still works.
+9. `/agent/agents/:agent_id/config` has a `Routines` tab.
 10. Routines tab lists heartbeat configs.
 11. User can create/edit/toggle/delete a heartbeat.
 12. User can click `Run now` for a heartbeat.

@@ -1,21 +1,21 @@
-defmodule SynapsisWeb.AssistantLive.ShowTest do
+defmodule SynapsisWeb.AgentLive.SessionsTest do
   use SynapsisWeb.ConnCase
 
   import Phoenix.Component
 
   alias Synapsis.Sessions
 
-  describe "assistant show page" do
+  describe "agent sessions page" do
     test "renders empty state when no session selected", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/assistant/main/sessions")
-      assert html =~ "Main Assistant"
+      {:ok, _view, html} = live(conn, ~p"/agent/agents/main/sessions")
+      assert html =~ "Main Agent"
     end
 
     test "renders personality indicator with primary/70 style in session header", %{conn: conn} do
       {:ok, session} =
         Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
 
-      {:ok, _view, html} = live(conn, ~p"/assistant/main/sessions/#{session.id}")
+      {:ok, _view, html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
       # Personality name appears in the styled span (text-primary/70 class)
       assert html =~ "text-primary/70"
       assert html =~ "Main"
@@ -27,7 +27,7 @@ defmodule SynapsisWeb.AssistantLive.ShowTest do
       {:ok, session} =
         Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
 
-      {:ok, view, _html} = live(conn, ~p"/assistant/main/sessions/#{session.id}")
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
 
       Phoenix.PubSub.broadcast(
         Synapsis.PubSub,
@@ -41,7 +41,7 @@ defmodule SynapsisWeb.AssistantLive.ShowTest do
     end
 
     test "handles session_compacted when no session is selected", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/assistant/main/sessions")
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions")
 
       # Directly send to the view process — current_session is nil so messages stays []
       send(
@@ -50,14 +50,14 @@ defmodule SynapsisWeb.AssistantLive.ShowTest do
       )
 
       # View should not crash
-      assert render(view) =~ "Main Assistant"
+      assert render(view) =~ "Main Agent"
     end
 
     test "handles system_message compaction notification", %{conn: conn} do
       {:ok, session} =
         Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
 
-      {:ok, view, _html} = live(conn, ~p"/assistant/main/sessions/#{session.id}")
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
 
       Phoenix.PubSub.broadcast(
         Synapsis.PubSub,
@@ -78,7 +78,7 @@ defmodule SynapsisWeb.AssistantLive.ShowTest do
       {:ok, session} =
         Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
 
-      {:ok, view, _html} = live(conn, ~p"/assistant/main/sessions/#{session.id}")
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
 
       # Non-compaction system messages fall through to the catch-all handle_info/2
       send(view.pid, {:system_message, %{type: :info, text: "Some info message", metadata: %{}}})
@@ -91,7 +91,7 @@ defmodule SynapsisWeb.AssistantLive.ShowTest do
       {:ok, session} =
         Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
 
-      {:ok, view, _html} = live(conn, ~p"/assistant/main/sessions/#{session.id}")
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
 
       Phoenix.PubSub.broadcast(
         Synapsis.PubSub,
@@ -109,7 +109,7 @@ defmodule SynapsisWeb.AssistantLive.ShowTest do
       {:ok, session} =
         Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
 
-      {:ok, view, _html} = live(conn, ~p"/assistant/main/sessions/#{session.id}")
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
 
       send(view.pid, {"done", %{}})
       render(view)
@@ -128,7 +128,7 @@ defmodule SynapsisWeb.AssistantLive.ShowTest do
       {:ok, session} =
         Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
 
-      {:ok, _view, html} = live(conn, ~p"/assistant/main/sessions/#{session.id}")
+      {:ok, _view, html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
       # The personality indicator span in the session header uses text-primary/70
       assert html =~ "text-primary/70"
     end
@@ -160,10 +160,10 @@ defmodule SynapsisWeb.AssistantLive.ShowTest do
             </SynapsisWeb.CoreComponents.chat_bubble>
             """
           end,
-          %{role: "assistant", label: "My Assistant"}
+          %{role: "assistant", label: "My Agent"}
         )
 
-      assert html =~ "My Assistant"
+      assert html =~ "My Agent"
       assert html =~ "text-primary/70"
     end
 
@@ -177,11 +177,11 @@ defmodule SynapsisWeb.AssistantLive.ShowTest do
             </SynapsisWeb.CoreComponents.chat_bubble>
             """
           end,
-          %{role: "user", label: "My Assistant"}
+          %{role: "user", label: "My Agent"}
         )
 
       refute html =~ "text-primary/70"
-      refute html =~ "My Assistant"
+      refute html =~ "My Agent"
     end
 
     test "chat_bubble label does not render for system role", _ctx do
@@ -194,11 +194,11 @@ defmodule SynapsisWeb.AssistantLive.ShowTest do
             </SynapsisWeb.CoreComponents.chat_bubble>
             """
           end,
-          %{role: "system", label: "My Assistant"}
+          %{role: "system", label: "My Agent"}
         )
 
       refute html =~ "text-primary/70"
-      refute html =~ "My Assistant"
+      refute html =~ "My Agent"
     end
   end
 end

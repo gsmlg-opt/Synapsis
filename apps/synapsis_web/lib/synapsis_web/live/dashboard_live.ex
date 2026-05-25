@@ -33,7 +33,8 @@ defmodule SynapsisWeb.DashboardLive do
 
     case Sessions.create(agent_name, %{provider: provider, model: model, agent: agent_name}) do
       {:ok, session} ->
-        {:noreply, push_navigate(socket, to: ~p"/assistant/#{agent_name}/sessions/#{session.id}")}
+        {:noreply,
+         push_navigate(socket, to: ~p"/agent/agents/#{agent_name}/sessions/#{session.id}")}
 
       {:error, reason} ->
         Logger.warning("dashboard_session_create_failed",
@@ -115,7 +116,7 @@ defmodule SynapsisWeb.DashboardLive do
           </p>
 
           <div class="flex items-center gap-2 mt-4">
-            <.dm_link navigate={~p"/assistant/#{agent.name}/sessions"} class="flex-1">
+            <.dm_link navigate={~p"/agent/agents/#{agent.name}/sessions"} class="flex-1">
               <.dm_btn variant="secondary" size="sm" class="w-full">
                 <.dm_mdi name="message-text-outline" class="w-4 h-4" /> Sessions
               </.dm_btn>

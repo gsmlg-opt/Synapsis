@@ -79,7 +79,7 @@ This PRD covers 6 subsystems (Entity Model, Git Ops, Workspace, Tools, Agents, W
 
 | Action | File | Responsibility |
 |--------|------|----------------|
-| NEW | `apps/synapsis_agent/lib/synapsis/agent/agents/assistant_agent.ex` | Singleton Assistant GenServer |
+| NEW | `apps/synapsis_agent/lib/synapsis/agent/global_agent.ex` | Singleton global Agent GenServer |
 | NEW | `apps/synapsis_agent/lib/synapsis/agent/agents/build_agent.ex` | Ephemeral Build Agent |
 | NEW | `apps/synapsis_agent/lib/synapsis/agent/project_context_builder.ex` | Assemble project context for Assistant |
 | NEW | `apps/synapsis_agent/lib/synapsis/agent/repo_context_builder.ex` | Assemble repo context for Build Agent |
@@ -3388,16 +3388,16 @@ git add apps/synapsis_agent/lib/synapsis/agent/build_agent_supervisor.ex
 git commit -m "feat(agent): add BuildAgentSupervisor"
 ```
 
-### Task 35: AssistantAgent and BuildAgent (stubs)
+### Task 35: GlobalAgent and BuildAgent (stubs)
 
 **Files:**
-- Create: `apps/synapsis_agent/lib/synapsis/agent/agents/assistant_agent.ex`
+- Create: `apps/synapsis_agent/lib/synapsis/agent/global_agent.ex`
 - Create: `apps/synapsis_agent/lib/synapsis/agent/agents/build_agent.ex`
-- Test: `apps/synapsis_agent/test/synapsis/agent/agents/assistant_agent_test.exs`
+- Test: `apps/synapsis_agent/test/synapsis/agent/global_agent_test.exs`
 
 These are structural stubs that define the GenServer interface and state shape. Full graph execution integration is beyond this plan's scope — it builds on the existing graph runtime (GR-1 through GR-5 from agent-system-prd, unchanged).
 
-- [ ] **Step 1: Implement AssistantAgent stub** — GenServer with context_mode state, handle_info for notifications
+- [ ] **Step 1: Implement GlobalAgent stub** — GenServer with context_mode state, handle_info for notifications
 - [ ] **Step 2: Implement BuildAgent stub** — GenServer with init config, temporary restart
 - [ ] **Step 3: Write tests for start/stop lifecycle**
 - [ ] **Step 4: Commit**

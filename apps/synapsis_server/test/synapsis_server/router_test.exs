@@ -110,6 +110,51 @@ defmodule SynapsisServer.RouterTest do
     end
   end
 
+  describe "agent session LiveView routes exist" do
+    test "GET /agent/agents/:agent_id/sessions routes to agent sessions" do
+      assert %{
+               plug: Phoenix.LiveView.Plug,
+               plug_opts: :sessions,
+               log_module: SynapsisWeb.AgentLive.Sessions
+             } =
+               Phoenix.Router.route_info(
+                 SynapsisServer.Router,
+                 "GET",
+                 "/agent/agents/main/sessions",
+                 ""
+               )
+    end
+
+    test "GET /agent/agents/:agent_id/sessions/:session_id routes to agent session" do
+      assert %{
+               plug: Phoenix.LiveView.Plug,
+               plug_opts: :session,
+               log_module: SynapsisWeb.AgentLive.Sessions
+             } =
+               Phoenix.Router.route_info(
+                 SynapsisServer.Router,
+                 "GET",
+                 "/agent/agents/main/sessions/#{@uuid}",
+                 ""
+               )
+    end
+
+    test "legacy chat routes are not routable" do
+      legacy_root = "/" <> "assistant"
+      legacy_session_path = Path.join([legacy_root, "main", "sessions", @uuid])
+
+      assert :error = Phoenix.Router.route_info(SynapsisServer.Router, "GET", legacy_root, "")
+
+      assert :error =
+               Phoenix.Router.route_info(
+                 SynapsisServer.Router,
+                 "GET",
+                 legacy_session_path,
+                 ""
+               )
+    end
+  end
+
   describe "API provider routes exist" do
     test "GET /api/providers" do
       assert %{plug: SynapsisServer.ProviderController, plug_opts: :index} =

@@ -75,7 +75,7 @@ synapsis_core       ← depends on data, agent, provider (owns tools, LLM, sessi
 The Worker handles 12 distinct concerns in one module:
 
 1. **State machine** — idle/streaming/tool_executing/error transitions
-2. **Message persistence** — insert user/assistant messages to DB
+2. **Message persistence** — insert user and assistant messages to DB
 3. **Provider lifecycle** — start stream, monitor stream process, handle crashes
 4. **Chunk accumulation** — text_delta, tool_use_start, tool_input_delta, reasoning_delta
 5. **Tool dispatch** — permission check, async execution, result collection
@@ -359,7 +359,7 @@ SynapsisAgent.Supervisor (strategy: :rest_for_one)
 - Dashboard (`/`)
 
 **CV-7.2** — React surfaces (client-rendered, real-time via Channel):
-- Chat/session interaction (`/assistant`, `/assistant/:session_id`)
+- Chat/session interaction (`/agent/agents/:agent_id/sessions`, `/agent/agents/:agent_id/sessions/:session_id`)
 - Streaming text, tool calls, permission dialogs
 - Agent status indicators
 - Session list sidebar

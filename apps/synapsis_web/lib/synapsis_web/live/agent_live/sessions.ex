@@ -1,13 +1,13 @@
-defmodule SynapsisWeb.AssistantLive.Show do
-  @moduledoc "Chat interface for a named assistant with session sidebar and PubSub streaming."
+defmodule SynapsisWeb.AgentLive.Sessions do
+  @moduledoc "Chat interface for a named agent with session sidebar and PubSub streaming."
   use SynapsisWeb, :live_view
   require Logger
 
   alias Synapsis.Sessions
 
   @impl true
-  def mount(%{"name" => name}, _session, socket) do
-    agent_config = Synapsis.Agent.Resolver.resolve(name)
+  def mount(%{"agent_id" => agent_id}, _session, socket) do
+    agent_config = Synapsis.Agent.Resolver.resolve(agent_id)
     provider_configured? = not is_nil(agent_config.provider)
 
     if connected?(socket) do
@@ -16,8 +16,8 @@ defmodule SynapsisWeb.AssistantLive.Show do
 
     {:ok,
      assign(socket,
-       page_title: "#{String.capitalize(name)} Assistant",
-       assistant_name: name,
+       page_title: "#{String.capitalize(agent_id)} Agent",
+       agent_id: agent_id,
        agent_config: agent_config,
        provider_configured: provider_configured?,
        sessions: [],
@@ -32,14 +32,14 @@ defmodule SynapsisWeb.AssistantLive.Show do
        session_status: "idle",
        show_new_session: false,
        show_sidebar: true,
-       current_mode: name
+       current_mode: agent_id
      )}
   end
 
   @impl true
   def handle_params(%{"session_id" => session_id} = params, _uri, socket) do
-    name = params["name"] || socket.assigns.assistant_name
-    sessions = load_sessions(name)
+    agent_id = params["agent_id"] || socket.assigns.agent_id
+    sessions = load_sessions(agent_id)
 
     # Unsubscribe from previous session
     if old = socket.assigns.current_session do
@@ -53,7 +53,7 @@ defmodule SynapsisWeb.AssistantLive.Show do
 
         {:noreply,
          assign(socket,
-           assistant_name: name,
+           agent_id: agent_id,
            sessions: sessions,
            current_session: session,
            messages: messages,
@@ -63,19 +63,19 @@ defmodule SynapsisWeb.AssistantLive.Show do
            permission_requests: [],
            code_agent_sessions: %{},
            session_status: session.status || "idle",
-           current_mode: session.agent || name
+           current_mode: session.agent || agent_id
          )}
 
       {:error, :not_found} ->
         {:noreply,
          socket
          |> put_flash(:error, "Session not found")
-         |> push_navigate(to: ~p"/assistant/#{name}/sessions")}
+         |> push_navigate(to: ~p"/agent/agents/#{agent_id}/sessions")}
     end
   end
 
-  def handle_params(%{"name" => name}, _uri, socket) do
-    sessions = load_sessions(name)
+  def handle_params(%{"agent_id" => agent_id}, _uri, socket) do
+    sessions = load_sessions(agent_id)
 
     if old = socket.assigns.current_session do
       Phoenix.PubSub.unsubscribe(Synapsis.PubSub, "session:#{old.id}")
@@ -83,7 +83,7 @@ defmodule SynapsisWeb.AssistantLive.Show do
 
     {:noreply,
      assign(socket,
-       assistant_name: name,
+       agent_id: agent_id,
        sessions: sessions,
        current_session: nil,
        messages: [],
@@ -125,20 +125,20 @@ defmodule SynapsisWeb.AssistantLive.Show do
   end
 
   def handle_event("create_session", _params, socket) do
-    name = socket.assigns.assistant_name
+    agent_id = socket.assigns.agent_id
     # Re-resolve to pick up any config changes saved from the setting page
-    agent_config = Synapsis.Agent.Resolver.resolve(name)
+    agent_config = Synapsis.Agent.Resolver.resolve(agent_id)
     provider = agent_config.provider || "anthropic"
     model = agent_config.model || Synapsis.Providers.default_model(provider)
 
-    case Sessions.create(name, %{provider: provider, model: model, agent: name}) do
+    case Sessions.create(agent_id, %{provider: provider, model: model, agent: agent_id}) do
       {:ok, session} ->
         sessions = [session | socket.assigns.sessions]
 
         {:noreply,
          socket
          |> assign(sessions: sessions, show_new_session: false)
-         |> push_patch(to: ~p"/assistant/#{name}/sessions/#{session.id}")}
+         |> push_patch(to: ~p"/agent/agents/#{agent_id}/sessions/#{session.id}")}
 
       {:error, reason} ->
         Logger.warning("session_create_failed", reason: inspect(reason))
@@ -147,12 +147,12 @@ defmodule SynapsisWeb.AssistantLive.Show do
   end
 
   def handle_event("switch_session", %{"id" => session_id}, socket) do
-    name = socket.assigns.assistant_name
-    {:noreply, push_patch(socket, to: ~p"/assistant/#{name}/sessions/#{session_id}")}
+    agent_id = socket.assigns.agent_id
+    {:noreply, push_patch(socket, to: ~p"/agent/agents/#{agent_id}/sessions/#{session_id}")}
   end
 
   def handle_event("delete_session", %{"id" => session_id}, socket) do
-    name = socket.assigns.assistant_name
+    agent_id = socket.assigns.agent_id
     Sessions.delete(session_id)
     sessions = Enum.reject(socket.assigns.sessions, &(&1.id == session_id))
 
@@ -160,7 +160,7 @@ defmodule SynapsisWeb.AssistantLive.Show do
       {:noreply,
        socket
        |> assign(:sessions, sessions)
-       |> push_navigate(to: ~p"/assistant/#{name}/sessions")}
+       |> push_navigate(to: ~p"/agent/agents/#{agent_id}/sessions")}
     else
       {:noreply, assign(socket, :sessions, sessions)}
     end
@@ -272,7 +272,7 @@ defmodule SynapsisWeb.AssistantLive.Show do
   end
 
   def handle_info({"done", _}, socket) do
-    name = socket.assigns.assistant_name
+    name = socket.assigns.agent_id
 
     messages =
       if session = socket.assigns.current_session do
@@ -397,17 +397,17 @@ defmodule SynapsisWeb.AssistantLive.Show do
         "fixed md:relative inset-y-0 left-0 z-10 md:z-auto md:translate-x-0 pt-16 md:pt-0",
         if(@show_sidebar, do: "translate-x-0", else: "-translate-x-full")
       ]}>
-        <%!-- Assistant header --%>
+        <%!-- Agent header --%>
         <div class="p-3 border-b border-outline-variant">
           <div class="flex items-center justify-between mb-2">
             <.dm_link
-              navigate={~p"/assistant"}
+              navigate={~p"/agent/agents"}
               class="text-xs text-secondary-content/70 hover:text-secondary-content"
             >
-              <.dm_mdi name="chevron-left" class="w-3.5 h-3.5 inline" /> Assistants
+              <.dm_mdi name="chevron-left" class="w-3.5 h-3.5 inline" /> Agents
             </.dm_link>
             <.dm_link
-              navigate={~p"/assistant/#{@assistant_name}/setting"}
+              navigate={~p"/agent/agents/#{@agent_id}/config"}
               class="text-xs text-secondary-content/70 hover:text-secondary-content"
             >
               <.dm_mdi name="cog-outline" class="w-3.5 h-3.5" />
@@ -419,7 +419,7 @@ defmodule SynapsisWeb.AssistantLive.Show do
             </.dm_btn>
           <% else %>
             <.dm_tooltip
-              content="Set a provider in assistant settings first"
+              content="Set a provider in agent config first"
               position="bottom"
               color="warning"
             >
@@ -477,7 +477,7 @@ defmodule SynapsisWeb.AssistantLive.Show do
                 </h2>
                 <div class="text-xs text-on-surface-variant">
                   <span class="text-primary/70">
-                    {@agent_config.label || String.capitalize(@assistant_name)}
+                    {@agent_config.label || String.capitalize(@agent_id)}
                   </span>
                   <span class="mx-1">&middot;</span>
                   {@current_session.provider}/{@current_session.model}
@@ -612,7 +612,7 @@ defmodule SynapsisWeb.AssistantLive.Show do
           <div class="flex-1 flex items-center justify-center">
             <.empty_state
               icon="robot-outline"
-              title={"#{String.capitalize(@assistant_name)} Assistant"}
+              title={"#{String.capitalize(@agent_id)} Agent"}
               description={
                 if @provider_configured,
                   do: "Create or select a session to start chatting",
@@ -625,7 +625,7 @@ defmodule SynapsisWeb.AssistantLive.Show do
                     <.dm_mdi name="plus" class="w-4 h-4" /> New Session
                   </.dm_btn>
                 <% else %>
-                  <.dm_link navigate={~p"/assistant/#{@assistant_name}/setting"}>
+                  <.dm_link navigate={~p"/agent/agents/#{@agent_id}/config"}>
                     <.dm_btn variant="secondary">
                       <.dm_mdi name="cog-outline" class="w-4 h-4" /> Go to Settings
                     </.dm_btn>
