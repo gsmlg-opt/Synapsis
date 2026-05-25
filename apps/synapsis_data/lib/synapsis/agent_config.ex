@@ -29,6 +29,7 @@ defmodule Synapsis.AgentConfig do
     field(:is_default, :boolean, default: false)
     field(:enabled, :boolean, default: true)
     field(:config, :map, default: %{})
+    field(:toolset_ids, {:array, :string}, default: [])
 
     belongs_to(:toolset, Synapsis.Toolset)
 
@@ -38,7 +39,7 @@ defmodule Synapsis.AgentConfig do
   @required_fields ~w(name)a
   @optional_fields ~w(label icon description provider model system_prompt tools
                        reasoning_effort read_only max_tokens model_tier
-                       permission_mode fallback_models is_default enabled config toolset_id)a
+                       permission_mode fallback_models is_default enabled config toolset_id toolset_ids)a
 
   def changeset(agent_config, attrs) do
     agent_config

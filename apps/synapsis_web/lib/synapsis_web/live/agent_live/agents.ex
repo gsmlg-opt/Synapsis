@@ -214,15 +214,17 @@ defmodule SynapsisWeb.AgentLive.Agents do
   attr :wizard_mode, :boolean, required: true
 
   defp agent_form(assigns) do
-    selected_toolset = selected_toolset(assigns.agent, assigns.toolsets)
-    tool_names = agent_tool_names(assigns.agent, selected_toolset)
+    selected_toolsets = selected_toolsets(assigns.agent, assigns.toolsets)
+    selected_toolset_ids = Enum.map(selected_toolsets, & &1.id)
+    tool_names = agent_tool_names(assigns.agent, selected_toolsets)
     fallback_tokens = fallback_tokens(assigns.agent.fallback_models)
     workspace_path = workspace_path(assigns.agent)
     permission_mode = permission_mode(assigns.agent)
 
     assigns =
       assigns
-      |> assign(:selected_toolset, selected_toolset)
+      |> assign(:selected_toolsets, selected_toolsets)
+      |> assign(:selected_toolset_ids, selected_toolset_ids)
       |> assign(:tool_names, tool_names)
       |> assign(:permission_mode, permission_mode)
       |> assign(:fallback_count, length(fallback_tokens))
@@ -547,13 +549,6 @@ defmodule SynapsisWeb.AgentLive.Agents do
 
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <.dm_select
-                  name="agent[toolset_id]"
-                  label="Toolset"
-                  options={[{"", "Legacy/custom tools"} | Enum.map(@toolsets, &{&1.id, &1.name})]}
-                  value={@agent.toolset_id || ""}
-                />
-
-                <.dm_select
                   name="agent[permission_mode]"
                   label="Permission mode"
                   options={permission_mode_options()}
@@ -561,8 +556,62 @@ defmodule SynapsisWeb.AgentLive.Agents do
                 />
               </div>
 
-              <div :if={@selected_toolset} class="mt-3 text-sm text-on-surface-variant">
-                {@selected_toolset.description}
+              <div class="mt-5">
+                <div class="mb-2 flex items-center justify-between gap-3">
+                  <div>
+                    <div class="text-sm font-medium">Toolsets</div>
+                    <div class="text-xs text-on-surface-variant">
+                      Add or remove named toolsets for this agent.
+                    </div>
+                  </div>
+                  <.dm_link navigate={~p"/agent/tools/new"}>
+                    <.dm_btn type="button" variant="ghost" size="xs">New Toolset</.dm_btn>
+                  </.dm_link>
+                </div>
+
+                <input type="hidden" name="agent[toolset_ids][]" value="" />
+
+                <div
+                  :if={@toolsets != []}
+                  class="grid grid-cols-1 md:grid-cols-2 gap-2"
+                  data-testid="agent-toolset-list"
+                >
+                  <label
+                    :for={toolset <- @toolsets}
+                    class="flex items-start gap-2 rounded border border-outline-variant bg-surface-container-high p-3 text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      name="agent[toolset_ids][]"
+                      value={toolset.id}
+                      checked={toolset.id in @selected_toolset_ids}
+                    />
+                    <span class="min-w-0">
+                      <span class="font-medium">{toolset.name}</span>
+                      <span class="block text-xs text-on-surface-variant">
+                        {toolset.description || "#{length(toolset.tool_names || [])} tools"}
+                      </span>
+                      <span class="mt-2 flex flex-wrap gap-1">
+                        <span
+                          :for={tool_name <- Enum.take(toolset.tool_names || [], 4)}
+                          class="rounded bg-surface px-1.5 py-0.5 font-mono text-[11px] text-on-surface-variant"
+                        >
+                          {tool_name}
+                        </span>
+                        <span
+                          :if={length(toolset.tool_names || []) > 4}
+                          class="text-[11px] text-on-surface-variant"
+                        >
+                          +{length(toolset.tool_names || []) - 4}
+                        </span>
+                      </span>
+                    </span>
+                  </label>
+                </div>
+
+                <div :if={@toolsets == []} class="text-sm text-on-surface-variant">
+                  No toolsets are available. Create one from Agents > Tools.
+                </div>
               </div>
 
               <div class="mt-5">
@@ -830,6 +879,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
     attrs
     |> merge_provider_model_state()
     |> Map.delete("provider_model_state")
+    |> normalize_toolset_attrs()
     |> normalize_blank("provider")
     |> normalize_blank("model")
     |> normalize_blank("toolset_id")
@@ -863,6 +913,8 @@ defmodule SynapsisWeb.AgentLive.Agents do
         reasoning_effort: Map.get(attrs, "reasoning_effort", agent.reasoning_effort),
         model_tier: Map.get(attrs, "model_tier", agent.model_tier),
         max_tokens: Map.get(attrs, "max_tokens", agent.max_tokens),
+        toolset_ids: preview_toolset_ids(agent, attrs),
+        toolset_id: preview_legacy_toolset_id(agent, attrs),
         permission_mode:
           permission_mode(Map.get(attrs, "permission_mode", agent.permission_mode)),
         enabled: Map.get(attrs, "enabled", agent.enabled) in ["true", "on", true],
@@ -882,6 +934,46 @@ defmodule SynapsisWeb.AgentLive.Agents do
       _ -> attrs
     end
   end
+
+  defp normalize_toolset_attrs(%{"toolset_ids" => raw_ids} = attrs) do
+    toolset_ids = normalize_toolset_ids(raw_ids)
+
+    attrs
+    |> Map.put("toolset_ids", toolset_ids)
+    |> Map.put("toolset_id", List.first(toolset_ids) || "")
+  end
+
+  defp normalize_toolset_attrs(%{"toolset_id" => toolset_id} = attrs) do
+    case normalize_form_value(toolset_id) do
+      nil -> Map.put(attrs, "toolset_ids", [])
+      id -> Map.put(attrs, "toolset_ids", [id])
+    end
+  end
+
+  defp normalize_toolset_attrs(attrs), do: attrs
+
+  defp normalize_toolset_ids(ids) do
+    ids
+    |> List.wrap()
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.uniq()
+  end
+
+  defp preview_toolset_ids(%AgentConfig{}, %{"toolset_ids" => ids}) do
+    normalize_toolset_ids(ids)
+  end
+
+  defp preview_toolset_ids(%AgentConfig{toolset_ids: ids, toolset_id: legacy_id}, _attrs) do
+    selected_toolset_ids(%AgentConfig{toolset_ids: ids, toolset_id: legacy_id})
+  end
+
+  defp preview_legacy_toolset_id(%AgentConfig{}, %{"toolset_ids" => ids}) do
+    ids
+    |> normalize_toolset_ids()
+    |> List.first()
+  end
+
+  defp preview_legacy_toolset_id(%AgentConfig{} = agent, _attrs), do: agent.toolset_id
 
   defp merge_provider_model_state(attrs) do
     case decode_provider_model_state(Map.get(attrs, "provider_model_state")) do
@@ -1235,15 +1327,34 @@ defmodule SynapsisWeb.AgentLive.Agents do
   defp model_label(%{"id" => id}), do: id
   defp model_label(model), do: to_string(model)
 
-  defp selected_toolset(%AgentConfig{toolset_id: nil}, _toolsets), do: nil
-  defp selected_toolset(%AgentConfig{toolset_id: ""}, _toolsets), do: nil
+  defp selected_toolsets(%AgentConfig{} = agent, toolsets) do
+    ids = selected_toolset_ids(agent)
+    by_id = Map.new(toolsets, &{&1.id, &1})
 
-  defp selected_toolset(%AgentConfig{toolset_id: toolset_id}, toolsets) do
-    Enum.find(toolsets, &(&1.id == toolset_id))
+    Enum.flat_map(ids, fn id ->
+      case Map.get(by_id, id) do
+        nil -> []
+        toolset -> [toolset]
+      end
+    end)
   end
 
-  defp agent_tool_names(%AgentConfig{} = agent, nil), do: agent.tools || []
-  defp agent_tool_names(_agent, toolset), do: toolset.tool_names || []
+  defp selected_toolset_ids(%AgentConfig{toolset_ids: ids}) when is_list(ids) and ids != [] do
+    normalize_toolset_ids(ids)
+  end
+
+  defp selected_toolset_ids(%AgentConfig{toolset_id: id}) when not is_nil(id) and id != "",
+    do: [id]
+
+  defp selected_toolset_ids(_agent), do: []
+
+  defp agent_tool_names(%AgentConfig{} = agent, []), do: agent.tools || []
+
+  defp agent_tool_names(_agent, toolsets) do
+    toolsets
+    |> Enum.flat_map(&(&1.tool_names || []))
+    |> Enum.uniq()
+  end
 
   defp permission_mode_options do
     [

@@ -224,6 +224,33 @@ defmodule Synapsis.Agent.ResolverTest do
       agent = Resolver.resolve("toolset-agent")
       assert agent.tools == ["file_read", "mcp:filesystem:read_file"]
       assert agent.toolset_id == toolset.id
+      assert agent.toolset_ids == [toolset.id]
+    end
+
+    test "merges tools from multiple assigned toolsets in order" do
+      {:ok, readers} =
+        Toolsets.create(%{
+          name: "readers",
+          tool_names: ["file_read", "grep"]
+        })
+
+      {:ok, docs} =
+        Toolsets.create(%{
+          name: "docs",
+          tool_names: ["mcp:docs:search", "grep"]
+        })
+
+      {:ok, _} =
+        AgentConfigs.create(%{
+          name: "multi-toolset-agent",
+          tools: ["bash"],
+          toolset_ids: [docs.id, readers.id],
+          toolset_id: docs.id
+        })
+
+      agent = Resolver.resolve("multi-toolset-agent")
+      assert agent.tools == ["mcp:docs:search", "grep", "file_read"]
+      assert agent.toolset_ids == [docs.id, readers.id]
     end
 
     test "returns skills assigned to the agent" do

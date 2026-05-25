@@ -33,7 +33,9 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
        toolset: nil,
        toolsets: [],
        selected_tool_names: [],
-       available_tools: []
+       available_tools: [],
+       mcp_sources: [],
+       selected_source: "built-in"
      )}
   end
 
@@ -85,8 +87,23 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
      )}
   end
 
+  def handle_event("select_tool_source", %{"source" => source}, socket) do
+    source =
+      socket.assigns.available_tools
+      |> tool_source_options(socket.assigns.mcp_sources)
+      |> Enum.find_value("built-in", fn {value, _label} ->
+        if value == source, do: value
+      end)
+
+    {:noreply, assign(socket, :selected_source, source)}
+  end
+
   def handle_event("select_all_tools", _params, socket) do
-    tool_names = Enum.map(socket.assigns.available_tools, & &1.name)
+    tool_names =
+      socket.assigns.available_tools
+      |> tools_for_source(socket.assigns.selected_source)
+      |> Enum.map(& &1.name)
+
     selected_tool_names = merge_tool_names(socket.assigns.selected_tool_names, tool_names)
 
     {:noreply, assign(socket, selected_tool_names: selected_tool_names)}
@@ -95,6 +112,7 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
   def handle_event("select_tool_group", %{"category" => category}, socket) do
     tool_names =
       socket.assigns.available_tools
+      |> tools_for_source(socket.assigns.selected_source)
       |> Enum.filter(&(to_string(&1.category) == category))
       |> Enum.map(& &1.name)
 
@@ -140,6 +158,8 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
           toolset={@toolset}
           available_tools={@available_tools}
           selected_tool_names={@selected_tool_names}
+          mcp_sources={@mcp_sources}
+          selected_source={@selected_source}
         />
 
         <div :if={@live_action == :index} class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -192,16 +212,24 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
   attr :toolset, :map, required: true
   attr :available_tools, :list, required: true
   attr :selected_tool_names, :list, required: true
+  attr :mcp_sources, :list, required: true
+  attr :selected_source, :string, required: true
 
   defp toolset_form(assigns) do
     available_names = Enum.map(assigns.available_tools, & &1.name)
     unavailable_names = assigns.selected_tool_names -- available_names
-    tool_groups = available_tool_groups(assigns.available_tools)
+    source_options = tool_source_options(assigns.available_tools, assigns.mcp_sources)
+    source_tools = tools_for_source(assigns.available_tools, assigns.selected_source)
+    tool_groups = available_tool_groups(source_tools)
+    selected_source_label = source_label(assigns.selected_source, assigns.mcp_sources)
 
     assigns =
       assigns
       |> assign(:unavailable_names, unavailable_names)
+      |> assign(:source_options, source_options)
+      |> assign(:source_tools, source_tools)
       |> assign(:tool_groups, tool_groups)
+      |> assign(:selected_source_label, selected_source_label)
 
     ~H"""
     <.dm_card variant="bordered" class="mb-6">
@@ -224,13 +252,40 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
         />
 
         <div>
+          <div class="mb-3">
+            <div class="mb-2 text-sm font-medium">Tool source</div>
+            <div class="flex flex-wrap gap-2" data-testid="tool-source-selector">
+              <.dm_btn
+                :for={{source, label} <- @source_options}
+                type="button"
+                variant={if(@selected_source == source, do: "primary", else: "ghost")}
+                size="sm"
+                phx-click="select_tool_source"
+                phx-value-source={source}
+              >
+                {label}
+              </.dm_btn>
+            </div>
+          </div>
+
           <div class="mb-2 flex items-center justify-between gap-3">
-            <div class="text-sm font-medium">Tools</div>
+            <div>
+              <div class="text-sm font-medium">Tools</div>
+              <div class="text-xs text-on-surface-variant">{@selected_source_label}</div>
+            </div>
             <.dm_btn type="button" variant="ghost" size="xs" phx-click="select_all_tools">
-              Select all
+              Select all from source
             </.dm_btn>
           </div>
           <div class="space-y-4">
+            <div
+              :if={@source_tools == []}
+              class="rounded-lg border border-outline-variant bg-surface-container-high p-4 text-sm text-on-surface-variant"
+            >
+              No tools are registered for this source. Start the MCP server from Settings > MCP
+              Servers to discover its tools.
+            </div>
+
             <section
               :for={{category, label, tools} <- @tool_groups}
               data-tool-category={category}
@@ -311,19 +366,26 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
   defp assign_common(socket) do
     assign(socket,
       toolsets: Toolsets.list(),
-      available_tools: available_tools()
+      available_tools: available_tools(),
+      mcp_sources: Toolsets.list_mcp_sources()
     )
   end
 
   defp apply_action(socket, :index, _params) do
-    assign(socket, page_title: "Toolsets", toolset: nil, selected_tool_names: [])
+    assign(socket,
+      page_title: "Toolsets",
+      toolset: nil,
+      selected_tool_names: [],
+      selected_source: "built-in"
+    )
   end
 
   defp apply_action(socket, :new, _params) do
     assign(socket,
       page_title: "New Toolset",
       toolset: %Toolset{tool_names: []},
-      selected_tool_names: []
+      selected_tool_names: [],
+      selected_source: "built-in"
     )
   end
 
@@ -333,7 +395,8 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
         assign(socket,
           page_title: "Edit Toolset",
           toolset: toolset,
-          selected_tool_names: toolset.tool_names || []
+          selected_tool_names: toolset.tool_names || [],
+          selected_source: initial_tool_source(toolset.tool_names || [])
         )
 
       nil ->
@@ -376,12 +439,59 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
         description: tool.description || "",
         category: category,
         category_label: category_label(category),
-        source: if(String.starts_with?(tool.name, "mcp:"), do: "mcp", else: "built-in")
+        source: tool_source(tool.name)
       }
     end)
     |> Enum.sort_by(&{category_index(&1.category), &1.name})
   rescue
     ArgumentError -> []
+  end
+
+  defp tool_source("mcp:" <> rest) do
+    rest
+    |> String.split(":", parts: 2)
+    |> List.first()
+  end
+
+  defp tool_source(_name), do: "built-in"
+
+  defp tools_for_source(tools, source) do
+    Enum.filter(tools, &(&1.source == source))
+  end
+
+  defp tool_source_options(tools, mcp_sources) do
+    configured_sources = Enum.map(mcp_sources, & &1.name)
+
+    registered_sources =
+      tools
+      |> Enum.map(& &1.source)
+      |> Enum.reject(&(&1 == "built-in"))
+
+    mcp_options =
+      (configured_sources ++ registered_sources)
+      |> Enum.uniq()
+      |> Enum.sort()
+      |> Enum.map(&{&1, "MCP: #{&1}"})
+
+    [{"built-in", "Built in"} | mcp_options]
+  end
+
+  defp source_label("built-in", _mcp_sources), do: "Built-in tools"
+
+  defp source_label(source, mcp_sources) do
+    case Enum.find(mcp_sources, &(&1.name == source)) do
+      nil -> "MCP source: #{source}"
+      mcp -> "MCP source: #{mcp.name}"
+    end
+  end
+
+  defp initial_tool_source(tool_names) do
+    Enum.find_value(tool_names, "built-in", fn name ->
+      case tool_source(name) do
+        "built-in" -> nil
+        source -> source
+      end
+    end)
   end
 
   defp available_tool_groups(tools) do

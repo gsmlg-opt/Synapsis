@@ -1,7 +1,7 @@
 defmodule Synapsis.ToolsetTest do
   use Synapsis.DataCase
 
-  alias Synapsis.{Toolset, Toolsets}
+  alias Synapsis.{PluginConfig, Repo, Toolset, Toolsets}
 
   describe "changeset/2" do
     test "accepts named toolsets with built-in and MCP tools" do
@@ -47,6 +47,44 @@ defmodule Synapsis.ToolsetTest do
       {:ok, toolset} = Toolsets.create(%{name: "builtin", is_builtin: true})
       assert {:error, :protected} = Toolsets.delete(toolset)
       assert Toolsets.get(toolset.id)
+    end
+
+    test "lists toolsets by ids in caller order" do
+      {:ok, first} = Toolsets.create(%{name: "first"})
+      {:ok, second} = Toolsets.create(%{name: "second"})
+
+      assert Enum.map(Toolsets.list_by_ids([second.id, first.id, first.id, ""]), & &1.id) == [
+               second.id,
+               first.id
+             ]
+    end
+
+    test "lists configured MCP sources ordered by name" do
+      Repo.insert!(
+        PluginConfig.changeset(%PluginConfig{}, %{
+          type: "mcp",
+          name: "z-docs",
+          transport: "stdio"
+        })
+      )
+
+      Repo.insert!(
+        PluginConfig.changeset(%PluginConfig{}, %{
+          type: "lsp",
+          name: "gopls",
+          transport: "stdio"
+        })
+      )
+
+      Repo.insert!(
+        PluginConfig.changeset(%PluginConfig{}, %{
+          type: "mcp",
+          name: "a-files",
+          transport: "stdio"
+        })
+      )
+
+      assert Toolsets.list_mcp_sources() |> Enum.map(& &1.name) == ["a-files", "z-docs"]
     end
   end
 end

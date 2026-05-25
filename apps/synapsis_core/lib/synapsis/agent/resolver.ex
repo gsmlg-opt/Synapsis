@@ -47,6 +47,7 @@ defmodule Synapsis.Agent.Resolver do
       system_prompt: ac.system_prompt || default_system_prompt(),
       tools: resolve_tools(ac),
       toolset_id: ac.toolset_id,
+      toolset_ids: selected_toolset_ids(ac),
       skills: AgentSkills.list_skills_for_agent(ac),
       workspace_path: workspace_path(ac.name, ac.config),
       reasoning_effort: ac.reasoning_effort || "medium",
@@ -71,6 +72,7 @@ defmodule Synapsis.Agent.Resolver do
       system_prompt: attrs.system_prompt,
       tools: attrs.tools,
       toolset_id: Map.get(attrs, :toolset_id),
+      toolset_ids: Map.get(attrs, :toolset_ids, []),
       skills: Map.get(attrs, :skills, []),
       workspace_path: workspace_path(attrs.name, Map.get(attrs, :config, %{})),
       reasoning_effort: attrs.reasoning_effort,
@@ -126,14 +128,34 @@ defmodule Synapsis.Agent.Resolver do
   defp default_name("main"), do: "main"
   defp default_name(_name), do: "main"
 
-  defp resolve_tools(%{toolset_id: nil, tools: tools}), do: tools || []
+  defp resolve_tools(%{} = agent) do
+    toolset_ids = selected_toolset_ids(agent)
+    tools = Map.get(agent, :tools) || []
 
-  defp resolve_tools(%{toolset_id: toolset_id, tools: tools}) do
-    case Toolsets.get(toolset_id) do
-      %Toolset{tool_names: tool_names} -> tool_names || []
-      nil -> tools || []
+    case toolset_ids do
+      [] ->
+        tools
+
+      ids ->
+        ids
+        |> Toolsets.list_by_ids()
+        |> Enum.flat_map(fn %Toolset{tool_names: tool_names} -> tool_names || [] end)
+        |> Enum.uniq()
+        |> case do
+          [] -> tools
+          tool_names -> tool_names
+        end
     end
   end
+
+  defp selected_toolset_ids(%{toolset_ids: ids}) when is_list(ids) and ids != [] do
+    ids
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.uniq()
+  end
+
+  defp selected_toolset_ids(%{toolset_id: id}) when not is_nil(id) and id != "", do: [id]
+  defp selected_toolset_ids(_agent), do: []
 
   defp model_tier("fast"), do: :fast
   defp model_tier("expert"), do: :expert

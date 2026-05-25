@@ -49,7 +49,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
           "description" => "Finds facts",
           "provider_model_state" => Jason.encode!(%{provider: "openai", model: "gpt-4.1"}),
           "system_prompt" => "Research carefully.",
-          "toolset_id" => toolset.id,
+          "toolset_ids" => [toolset.id],
           "permission_mode" => "restrict",
           "enabled" => "true"
         },
@@ -59,6 +59,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       agent = Repo.get_by!(AgentConfig, name: "researcher")
       assert agent.label == "Researcher"
       assert agent.toolset_id == toolset.id
+      assert agent.toolset_ids == [toolset.id]
       assert agent.permission_mode == "restrict"
       assert_redirect(view, ~p"/agent/agents")
     end
@@ -85,7 +86,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
           "model" => "gpt-4.1",
           "system_prompt" => "Edit carefully.",
           "workspace_path" => "~/.synapsis/agents/editor",
-          "toolset_id" => "",
+          "toolset_ids" => [""],
           "permission_mode" => "yolo",
           "enabled" => "true"
         },
@@ -96,6 +97,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       updated = Repo.get!(AgentConfig, agent.id)
       assert updated.label == "Updated Editor"
       assert updated.config["workspace_path"] == "~/.synapsis/agents/editor"
+      assert updated.toolset_ids == []
       assert updated.permission_mode == "yolo"
       :ok = refute_redirected(view)
       assert has_element?(view, "form#agent-config-form")
@@ -183,6 +185,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
           permission_mode: "ask",
           max_tokens: 16_384,
           read_only: true,
+          toolset_ids: [toolset.id],
           toolset_id: toolset.id
         })
 
@@ -234,7 +237,92 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       assert has_element?(view, "input[name='agent[max_tokens]']")
       assert has_element?(view, "input[name='agent[read_only]'][value='true']")
       assert has_element?(view, "select[name='agent[permission_mode]']")
+      assert has_element?(view, "[data-testid='agent-toolset-list']")
+
+      assert has_element?(
+               view,
+               "input[name='agent[toolset_ids][]'][value='#{toolset.id}'][checked]"
+             )
+
       assert has_element?(view, "form#agent-config-form el-dm-button[type='submit']", "Save")
+    end
+
+    test "config tools tab can add and remove multiple toolsets", %{conn: conn} do
+      {:ok, reader_toolset} =
+        Toolsets.create(%{
+          name: "readers",
+          description: "Read tools",
+          tool_names: ["file_read"]
+        })
+
+      {:ok, mcp_toolset} =
+        Toolsets.create(%{
+          name: "docs-mcp",
+          description: "Docs MCP tools",
+          tool_names: ["mcp:docs:search"]
+        })
+
+      {:ok, agent} =
+        AgentConfigs.create(%{
+          name: "tool-user",
+          label: "Tool User",
+          toolset_ids: [reader_toolset.id],
+          toolset_id: reader_toolset.id
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+
+      view
+      |> element("button[phx-click='switch_config_tab'][phx-value-tab='tools']")
+      |> render_click()
+
+      assert has_element?(
+               view,
+               "input[name='agent[toolset_ids][]'][value='#{reader_toolset.id}'][checked]"
+             )
+
+      refute has_element?(
+               view,
+               "input[name='agent[toolset_ids][]'][value='#{mcp_toolset.id}'][checked]"
+             )
+
+      view
+      |> form("form[phx-submit='save_agent']", %{
+        "agent" => %{
+          "label" => "Tool User",
+          "toolset_ids" => [reader_toolset.id, mcp_toolset.id],
+          "permission_mode" => "ask",
+          "enabled" => "true"
+        },
+        "skill_ids" => []
+      })
+      |> render_submit()
+
+      updated = Repo.get!(AgentConfig, agent.id)
+      assert updated.toolset_ids == [reader_toolset.id, mcp_toolset.id]
+      assert updated.toolset_id == reader_toolset.id
+      assert render(view) =~ "mcp:docs:search"
+
+      view
+      |> form("form[phx-submit='save_agent']", %{
+        "agent" => %{
+          "label" => "Tool User",
+          "toolset_ids" => [mcp_toolset.id],
+          "permission_mode" => "ask",
+          "enabled" => "true"
+        },
+        "skill_ids" => []
+      })
+      |> render_submit()
+
+      updated = Repo.get!(AgentConfig, agent.id)
+      assert updated.toolset_ids == [mcp_toolset.id]
+      assert updated.toolset_id == mcp_toolset.id
+
+      refute has_element?(
+               view,
+               "input[name='agent[toolset_ids][]'][value='#{reader_toolset.id}'][checked]"
+             )
     end
 
     test "provider model cascader lists enabled provider configs", %{conn: conn} do

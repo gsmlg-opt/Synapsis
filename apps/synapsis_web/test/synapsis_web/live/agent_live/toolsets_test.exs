@@ -1,9 +1,10 @@
 defmodule SynapsisWeb.AgentLive.ToolsetsTest do
   use SynapsisWeb.ConnCase
 
-  alias Synapsis.{Repo, Toolset, Toolsets}
+  alias Synapsis.{PluginConfig, Repo, Toolset, Toolsets}
 
   setup do
+    Repo.delete_all(PluginConfig)
     Repo.delete_all(Toolset)
     :ok
   end
@@ -17,6 +18,7 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
       assert html =~ "Toolsets"
       assert html =~ "readers"
       assert has_element?(view, "aside", "Agents")
+      assert has_element?(view, "aside .app-left-menu a.app-left-menu-item", "Agents")
       assert html =~ "file_read"
     end
 
@@ -51,11 +53,85 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
       {:ok, view, _html} = live(conn, ~p"/agent/tools/new")
 
       view
-      |> element("el-dm-button[phx-click='select_all_tools']", "Select all")
+      |> element("el-dm-button[phx-click='select_all_tools']", "Select all from source")
       |> render_click()
 
       assert has_element?(view, "input[name='tool_names[]'][value='file_read'][checked]")
       assert has_element?(view, "input[name='tool_names[]'][value='grep'][checked]")
+    end
+
+    test "selects MCP source tools from configured servers", %{conn: conn} do
+      Repo.insert!(
+        PluginConfig.changeset(%PluginConfig{}, %{
+          name: "demo",
+          type: "mcp",
+          transport: "stdio"
+        })
+      )
+
+      Synapsis.Tool.Registry.register_process("mcp:demo:search_docs", self(),
+        description: "Search docs",
+        category: :search
+      )
+
+      on_exit(fn -> Synapsis.Tool.Registry.unregister("mcp:demo:search_docs") end)
+
+      {:ok, view, html} = live(conn, ~p"/agent/tools/new")
+
+      assert html =~ "Built in"
+      assert html =~ "MCP: demo"
+      refute has_element?(view, "input[name='tool_names[]'][value='mcp:demo:search_docs']")
+
+      view
+      |> element("[data-testid='tool-source-selector'] el-dm-button", "MCP: demo")
+      |> render_click()
+
+      assert has_element?(view, "input[name='tool_names[]'][value='mcp:demo:search_docs']")
+
+      view
+      |> element("el-dm-button[phx-click='select_all_tools']", "Select all from source")
+      |> render_click()
+
+      assert has_element?(
+               view,
+               "input[name='tool_names[]'][value='mcp:demo:search_docs'][checked]"
+             )
+
+      view
+      |> form("form[phx-submit='save_toolset']", %{
+        "toolset" => %{
+          "name" => "demo-mcp",
+          "description" => "Demo MCP tools"
+        },
+        "tool_names" => ["mcp:demo:search_docs"]
+      })
+      |> render_submit()
+
+      toolset = Repo.get_by!(Toolset, name: "demo-mcp")
+      assert toolset.tool_names == ["mcp:demo:search_docs"]
+    end
+
+    test "shows empty MCP source when the configured server has no registered tools", %{
+      conn: conn
+    } do
+      Repo.insert!(
+        PluginConfig.changeset(%PluginConfig{}, %{
+          name: "empty",
+          type: "mcp",
+          transport: "stdio"
+        })
+      )
+
+      {:ok, view, _html} = live(conn, ~p"/agent/tools/new")
+
+      view
+      |> element("[data-testid='tool-source-selector'] el-dm-button", "MCP: empty")
+      |> render_click()
+
+      html = render(view)
+      assert html =~ "No tools are registered for this source"
+      assert html =~ "MCP"
+      assert html =~ "Servers"
     end
 
     test "select all in group marks only that group", %{conn: conn} do
