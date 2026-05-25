@@ -647,13 +647,18 @@ defmodule SynapsisWeb.CoreComponents do
   def session_list_item(assigns) do
     ~H"""
     <div
+      data-session-row={@session.id}
+      role="button"
+      tabindex="0"
+      aria-current={if @active, do: "page", else: nil}
       phx-click="switch_session"
       phx-value-id={@session.id}
       class={[
-        "group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors text-sm",
+        "group flex items-center gap-3 rounded-md border px-3 py-2.5 cursor-pointer transition-colors text-sm",
         if(@active,
-          do: "bg-primary/10 text-primary border-r-2 border-primary",
-          else: "text-on-surface-variant hover:bg-surface-container-high"
+          do: "border-primary/30 bg-primary-container text-on-primary-container shadow-sm",
+          else:
+            "border-transparent text-on-surface hover:border-outline-variant hover:bg-surface-container-high"
         ),
         @class
       ]}
@@ -667,7 +672,10 @@ defmodule SynapsisWeb.CoreComponents do
         <div class="truncate font-medium">
           {@session.title || "Session #{String.slice(@session.id, 0..7)}"}
         </div>
-        <div class="text-xs text-on-surface-variant truncate">
+        <div class={[
+          "text-xs truncate",
+          if(@active, do: "text-on-primary-container/70", else: "text-on-surface-variant")
+        ]}>
           {@session.provider}/{@session.model}
         </div>
       </div>
@@ -677,7 +685,7 @@ defmodule SynapsisWeb.CoreComponents do
         phx-click="delete_session"
         phx-value-id={@session.id}
         data-confirm="Delete this session?"
-        class="opacity-0 group-hover:opacity-100"
+        class="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
       >
         <.dm_mdi name="delete-outline" class="w-3.5 h-3.5" />
       </.dm_btn>

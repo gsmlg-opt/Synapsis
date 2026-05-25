@@ -17,14 +17,21 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
 
     test "lists agents inside the Agent module shell", %{conn: conn} do
       {:ok, agent} = AgentConfigs.create(%{name: "planner", label: "Planner"})
+      {:ok, second_agent} = AgentConfigs.create(%{name: "reviewer", label: "Reviewer"})
 
       {:ok, view, html} = live(conn, ~p"/agent/agents")
 
       assert html =~ "Agents"
       assert html =~ "Planner"
+      assert html =~ "Reviewer"
       assert has_element?(view, "aside", "Tools")
       assert has_element?(view, "a[href='/agent/agents/new']", "New Agent")
+      assert has_element?(view, "el-dm-card[data-agent-card='planner']", "Planner")
+      assert has_element?(view, "el-dm-card[data-agent-card='reviewer']", "Reviewer")
+      assert has_element?(view, "a[href='/agent/agents/planner/sessions']", "Sessions")
+      assert has_element?(view, "a[href='/agent/agents/reviewer/sessions']", "Sessions")
       assert has_element?(view, "a[href='/agent/agents/#{agent.id}/config']", "Config")
+      assert has_element?(view, "a[href='/agent/agents/#{second_agent.id}/config']", "Config")
       refute html =~ ">Edit<"
       refute html =~ ">Remove<"
     end
@@ -35,16 +42,12 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
 
       {:ok, view, _html} = live(conn, ~p"/agent/agents/new")
 
-      select_provider_model(view, "openai", "gpt-4.1")
-
-      view
-      |> form("form[phx-submit='save_agent']", %{
+      render_submit(view, "save_agent", %{
         "agent" => %{
           "name" => "researcher",
           "label" => "Researcher",
           "description" => "Finds facts",
-          "provider" => "openai",
-          "model" => "gpt-4.1",
+          "provider_model_state" => Jason.encode!(%{provider: "openai", model: "gpt-4.1"}),
           "system_prompt" => "Research carefully.",
           "toolset_id" => toolset.id,
           "permission_mode" => "restrict",
@@ -52,7 +55,6 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
         },
         "skill_ids" => []
       })
-      |> render_submit()
 
       agent = Repo.get_by!(AgentConfig, name: "researcher")
       assert agent.label == "Researcher"
@@ -121,6 +123,34 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       assert Repo.get!(AgentConfig, agent.id).permission_mode == "restrict"
       :ok = refute_redirected(view)
       assert has_element?(view, "select[name='agent[permission_mode]']")
+    end
+
+    test "saves provider model from client-managed picker state when hidden values are stale",
+         %{conn: conn} do
+      insert_provider("openai", "openai")
+
+      {:ok, agent} =
+        AgentConfigs.create(%{
+          name: "picker",
+          label: "Picker"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+
+      render_submit(view, "save_agent", %{
+        "agent" => %{
+          "label" => "Picker",
+          "provider" => "",
+          "model" => "",
+          "provider_model_state" => Jason.encode!(%{provider: "openai", model: "gpt-4.1"})
+        },
+        "skill_ids" => []
+      })
+
+      updated = Repo.get!(AgentConfig, agent.id)
+      assert updated.provider == "openai"
+      assert updated.model == "gpt-4.1"
+      :ok = refute_redirected(view)
     end
 
     test "configures an agent from a rich vertical-tab workspace", %{conn: conn} do
@@ -194,7 +224,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
 
       refute has_element?(view, "button[phx-click='switch_config_tab'][phx-value-tab='delete']")
       assert has_element?(view, "el-dm-button[phx-click='start_wizard']", "Start Wizard")
-      assert has_element?(view, "el-dm-cascader#agent-provider-model")
+      assert has_element?(view, "#agent-provider-model-picker[phx-hook='AgentModelPicker']")
       assert has_element?(view, "input[name='agent[provider]']")
       assert has_element?(view, "input[name='agent[model]']")
       assert has_element?(view, "input[name='agent[fallback_models]']")
@@ -232,7 +262,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       {:ok, view, html} = live(conn, ~p"/agent/agents/new")
       provider_values = cascader_options(html) |> Enum.map(& &1["value"])
 
-      assert has_element?(view, "el-dm-cascader#agent-provider-model")
+      assert has_element?(view, "#agent-provider-model-picker[phx-hook='AgentModelPicker']")
       assert provider_values == ["custom-anthropic", "custom-openai"]
       refute "disabled-openai" in provider_values
     end
@@ -277,16 +307,11 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       openai_models = cascader_model_values(options, "openai")
       anthropic_models = cascader_model_values(options, "anthropic")
 
-      assert has_element?(view, "el-dm-cascader#agent-provider-model")
+      assert has_element?(view, "#agent-provider-model-picker[phx-hook='AgentModelPicker']")
       assert openai_models == ["gpt-4.1-mini"]
       assert "claude-sonnet-4-6" in anthropic_models
       refute "gpt-4.1" in openai_models
       refute "claude-sonnet-4-6" in openai_models
-
-      select_provider_model(view, "openai", "gpt-4.1-mini")
-
-      assert has_element?(view, "input[name='agent[provider]'][value='openai']")
-      assert has_element?(view, "input[name='agent[model]'][value='gpt-4.1-mini']")
     end
 
     test "provider model cascader uses saved provider model filters when registry has no match",
@@ -300,16 +325,11 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
         enabled: true
       })
 
-      {:ok, view, html} = live(conn, ~p"/agent/agents/new")
+      {:ok, _view, html} = live(conn, ~p"/agent/agents/new")
       custom_models = cascader_options(html) |> cascader_model_values("custom-anthropic")
 
       assert custom_models == ["vendor-alpha", "vendor-beta"]
       refute "claude-sonnet-4-6" in custom_models
-
-      select_provider_model(view, "custom-anthropic", "vendor-beta")
-
-      assert has_element?(view, "input[name='agent[provider]'][value='custom-anthropic']")
-      assert has_element?(view, "input[name='agent[model]'][value='vendor-beta']")
     end
 
     test "wizard button starts step-by-step configuration", %{conn: conn} do
@@ -406,14 +426,8 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
     })
   end
 
-  defp select_provider_model(view, provider, model) do
-    render_change(view, "change_agent_form", %{
-      "agent" => %{"provider" => provider, "model" => model}
-    })
-  end
-
   defp cascader_options(html) do
-    ~r/<el-dm-cascader[^>]*id="agent-provider-model"[^>]*options="([^"]*)"/
+    ~r/<div[^>]*id="agent-provider-model-picker"[^>]*data-options="([^"]*)"/
     |> Regex.run(html)
     |> List.last()
     |> html_attribute_unescape()
@@ -421,11 +435,15 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
   end
 
   defp cascader_value(html) do
-    ~r/<el-dm-cascader[^>]*id="agent-provider-model"[^>]*value="([^"]*)"/
-    |> Regex.run(html)
-    |> List.last()
-    |> html_attribute_unescape()
-    |> Jason.decode!()
+    state =
+      ~r/<input[^>]*id="agent-provider-model-state"[^>]*value="([^"]*)"/
+      |> Regex.run(html)
+      |> List.last()
+      |> html_attribute_unescape()
+      |> Jason.decode!()
+
+    [state["provider"], state["model"]]
+    |> Enum.reject(&(&1 in [nil, ""]))
   end
 
   defp html_attribute_unescape(value) do

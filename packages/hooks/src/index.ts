@@ -8,9 +8,11 @@ import { ScrollBottomHook } from "./scroll-bottom"
 import { StreamingTextHook } from "./streaming-text"
 import { TextareaSubmitHook } from "./textarea-submit"
 import { AgentModelCascaderHook } from "./agent-model-cascader"
+import { AgentModelPickerHook } from "./agent-model-picker"
 
 export const Hooks = {
   AgentModelCascader: AgentModelCascaderHook,
+  AgentModelPicker: AgentModelPickerHook,
   ChatApp: ChatAppHook,
   MarkdownRenderer,
   MarkdownSubmit: MarkdownSubmitHook,
@@ -32,3 +34,4 @@ export { ScrollBottomHook } from "./scroll-bottom"
 export { StreamingTextHook } from "./streaming-text"
 export { TextareaSubmitHook } from "./textarea-submit"
 export { AgentModelCascaderHook } from "./agent-model-cascader"
+export { AgentModelPickerHook } from "./agent-model-picker"

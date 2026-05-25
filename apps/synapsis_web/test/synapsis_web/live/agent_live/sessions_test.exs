@@ -11,6 +11,20 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       assert html =~ "Main Agent"
     end
 
+    test "renders a structured session sidebar with active session rows", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, view, html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      assert has_element?(view, "aside[data-agent-session-sidebar]", "Main Agent")
+      assert has_element?(view, "nav[aria-label='Agent sessions']")
+      assert has_element?(view, "div[data-session-row='#{session.id}'][aria-current='page']")
+      assert html =~ "Sessions"
+      assert html =~ "New Session"
+      assert html =~ "anthropic/test"
+    end
+
     test "renders personality indicator with primary/70 style in session header", %{conn: conn} do
       {:ok, session} =
         Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})

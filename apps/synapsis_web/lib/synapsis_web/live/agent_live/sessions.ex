@@ -392,29 +392,53 @@ defmodule SynapsisWeb.AgentLive.Sessions do
       </.dm_btn>
 
       <%!-- Sidebar --%>
-      <aside class={[
-        "w-64 bg-secondary text-secondary-content border-r border-outline-variant flex flex-col shrink-0 transition-transform",
-        "fixed md:relative inset-y-0 left-0 z-10 md:z-auto md:translate-x-0 pt-16 md:pt-0",
-        if(@show_sidebar, do: "translate-x-0", else: "-translate-x-full")
-      ]}>
+      <aside
+        class={[
+          "w-72 bg-surface-container text-on-surface border-r border-outline-variant flex flex-col shrink-0 transition-transform shadow-lg md:shadow-none",
+          "fixed md:relative inset-y-0 left-0 z-10 md:z-auto md:translate-x-0 pt-16 md:pt-0",
+          if(@show_sidebar, do: "translate-x-0", else: "-translate-x-full")
+        ]}
+        data-agent-session-sidebar
+      >
         <%!-- Agent header --%>
-        <div class="p-3 border-b border-outline-variant">
-          <div class="flex items-center justify-between mb-2">
+        <div class="px-4 py-3 border-b border-outline-variant bg-surface-container-high">
+          <div class="flex items-center justify-between gap-2">
             <.dm_link
               navigate={~p"/agent/agents"}
-              class="text-xs text-secondary-content/70 hover:text-secondary-content"
+              class="inline-flex items-center gap-1 text-xs text-on-surface-variant hover:text-on-surface transition-colors"
             >
-              <.dm_mdi name="chevron-left" class="w-3.5 h-3.5 inline" /> Agents
+              <.dm_mdi name="chevron-left" class="w-3.5 h-3.5" /> Agents
             </.dm_link>
             <.dm_link
               navigate={~p"/agent/agents/#{@agent_id}/config"}
-              class="text-xs text-secondary-content/70 hover:text-secondary-content"
+              aria-label="Agent settings"
+              class="inline-flex h-8 w-8 items-center justify-center rounded-md text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface transition-colors"
             >
-              <.dm_mdi name="cog-outline" class="w-3.5 h-3.5" />
+              <.dm_mdi name="cog-outline" class="w-4 h-4" />
             </.dm_link>
           </div>
+
+          <div class="mt-3 flex items-center gap-3 min-w-0">
+            <div class="h-10 w-10 rounded-md bg-primary-container text-on-primary-container flex items-center justify-center shrink-0">
+              <.dm_mdi name={@agent_config.icon || "robot-happy-outline"} class="w-5 h-5" />
+            </div>
+            <div class="min-w-0">
+              <h2 class="text-sm font-semibold truncate">
+                {agent_display_name(@agent_config, @agent_id)}
+              </h2>
+              <p class="text-xs text-on-surface-variant truncate">
+                <%= if @provider_configured do %>
+                  {@agent_config.provider}/{@agent_config.model ||
+                    Synapsis.Providers.default_model(@agent_config.provider)}
+                <% else %>
+                  Provider not configured
+                <% end %>
+              </p>
+            </div>
+          </div>
+
           <%= if @provider_configured do %>
-            <.dm_btn variant="outline" class="w-full" phx-click="toggle_new_session">
+            <.dm_btn variant="primary" class="w-full mt-3" phx-click="toggle_new_session">
               <.dm_mdi name="plus" class="w-4 h-4" /> New Session
             </.dm_btn>
           <% else %>
@@ -423,7 +447,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
               position="bottom"
               color="warning"
             >
-              <.dm_btn variant="outline" class="w-full opacity-50 cursor-not-allowed" disabled>
+              <.dm_btn variant="ghost" class="w-full mt-3 opacity-60 cursor-not-allowed" disabled>
                 <.dm_mdi name="plus" class="w-4 h-4" /> New Session
               </.dm_btn>
             </.dm_tooltip>
@@ -433,7 +457,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
         <%!-- New session confirm --%>
         <div
           :if={@show_new_session && @provider_configured}
-          class="p-3 border-b border-outline-variant bg-surface"
+          class="m-3 rounded-md border border-outline-variant bg-surface-container-high p-3"
         >
           <div class="text-xs text-on-surface-variant mb-2">
             {@agent_config.provider} / {@agent_config.model ||
@@ -445,7 +469,11 @@ defmodule SynapsisWeb.AgentLive.Sessions do
         </div>
 
         <%!-- Session list --%>
-        <nav class="flex-1 overflow-y-auto">
+        <div class="px-4 py-2 border-b border-outline-variant flex items-center justify-between text-xs text-on-surface-variant">
+          <span>Sessions</span>
+          <span class="font-mono">{length(@sessions)}</span>
+        </div>
+        <nav class="flex-1 overflow-y-auto p-2 space-y-1" aria-label="Agent sessions">
           <.session_list_item
             :for={session <- @sessions}
             session={session}
@@ -645,6 +673,16 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   defp load_sessions(agent_name) do
     {:ok, sessions} = Sessions.list(agent_name, limit: 50)
     sessions
+  end
+
+  defp agent_display_name(agent_config, agent_id) do
+    base =
+      case agent_config do
+        %{label: label} when label not in [nil, ""] -> label
+        _ -> String.capitalize(agent_id)
+      end
+
+    if String.ends_with?(base, "Agent"), do: base, else: "#{base} Agent"
   end
 
   defp assign_session_status(socket, status) when status in ~w(streaming tool_executing) do

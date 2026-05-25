@@ -152,7 +152,12 @@ defmodule SynapsisWeb.AgentLive.Agents do
         />
 
         <div :if={@live_action == :index} class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <.dm_card :for={agent <- @agents} variant="bordered">
+          <.dm_card
+            :for={agent <- @agents}
+            variant="bordered"
+            class="min-h-40 flex flex-col hover:border-primary/40 transition-colors"
+            data-agent-card={agent.name}
+          >
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
                 <div class="flex items-center gap-2">
@@ -170,7 +175,12 @@ defmodule SynapsisWeb.AgentLive.Agents do
                   <span>{runtime_summary(agent)}</span>
                 </div>
               </div>
-              <div class="shrink-0">
+              <div class="shrink-0 flex items-center gap-2">
+                <.dm_link navigate={~p"/agent/agents/#{agent.name}/sessions"}>
+                  <.dm_btn variant="secondary" size="xs">
+                    <.dm_mdi name="message-text-outline" class="w-3.5 h-3.5" /> Sessions
+                  </.dm_btn>
+                </.dm_link>
                 <.dm_link navigate={~p"/agent/agents/#{agent.id}/config"}>
                   <.dm_btn variant="ghost" size="xs">
                     <.dm_mdi name="cog-outline" class="w-3.5 h-3.5" /> Config
@@ -243,18 +253,14 @@ defmodule SynapsisWeb.AgentLive.Agents do
             <.dm_link navigate={~p"/agent/agents"}>
               <.dm_btn type="button" variant="ghost" size="sm">Cancel</.dm_btn>
             </.dm_link>
-            <%!-- TODO(upstream): duskmoon-dev/duskmoon-elements#59 --%>
-            <%!-- WORKAROUND(upstream): duskmoon-dev/duskmoon-elements#59 --%>
-            <%!-- el-dm-button ignores form= attr; use JS.dispatch to submit by ID instead --%>
-            <.dm_btn
+            <button
               :if={@active_tab != "management"}
-              type="button"
-              phx-click={JS.dispatch("submit", to: "#agent-config-form")}
-              variant="primary"
-              size="sm"
+              type="submit"
+              form="agent-config-form"
+              class="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-content transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30"
             >
-              Save Agent
-            </.dm_btn>
+              <.dm_mdi name="content-save-outline" class="w-3.5 h-3.5" /> Save Agent
+            </button>
           </div>
         </div>
 
@@ -370,33 +376,40 @@ defmodule SynapsisWeb.AgentLive.Agents do
                 <.dm_input type="text" name="agent[label]" value={@agent.label} label="Label" />
                 <.dm_input type="text" name="agent[icon]" value={@agent.icon} label="Icon" />
                 <div class="form-group">
-                  <label for="agent-provider-model" class="form-label">
+                  <label for="agent-provider-model-picker-provider" class="form-label">
                     <span>Provider / model</span>
                   </label>
-                  <.dm_cascader
-                    id="agent-provider-model"
-                    options={provider_model_cascader_options(@providers)}
-                    selected_path={provider_model_selected_path(@providers, @agent)}
-                    placeholder="Select provider / model"
-                    searchable
-                    clearable
-                    separator=" / "
-                    phx-hook="AgentModelCascader"
+                  <div
+                    id="agent-provider-model-picker"
+                    phx-hook="AgentModelPicker"
+                    phx-update="ignore"
+                    data-agent-id={@agent.id || "new"}
+                    data-options={Jason.encode!(provider_model_cascader_options(@providers))}
+                    data-provider={@agent.provider || ""}
+                    data-model={@agent.model || ""}
                     data-provider-input="agent-provider-hidden"
                     data-model-input="agent-model-hidden"
-                  />
-                  <input
-                    id="agent-provider-hidden"
-                    type="hidden"
-                    name="agent[provider]"
-                    value={@agent.provider || ""}
-                  />
-                  <input
-                    id="agent-model-hidden"
-                    type="hidden"
-                    name="agent[model]"
-                    value={@agent.model || ""}
-                  />
+                    data-state-input="agent-provider-model-state"
+                  >
+                    <input
+                      id="agent-provider-hidden"
+                      type="hidden"
+                      name="agent[provider]"
+                      value={@agent.provider || ""}
+                    />
+                    <input
+                      id="agent-model-hidden"
+                      type="hidden"
+                      name="agent[model]"
+                      value={@agent.model || ""}
+                    />
+                    <input
+                      id="agent-provider-model-state"
+                      type="hidden"
+                      name="agent[provider_model_state]"
+                      value={provider_model_state_value(@agent)}
+                    />
+                  </div>
                 </div>
                 <.dm_textarea
                   name="agent[description]"
@@ -807,6 +820,8 @@ defmodule SynapsisWeb.AgentLive.Agents do
     {workspace_path, attrs} = Map.pop(attrs, "workspace_path")
 
     attrs
+    |> merge_provider_model_state()
+    |> Map.delete("provider_model_state")
     |> normalize_blank("provider")
     |> normalize_blank("model")
     |> normalize_blank("toolset_id")
@@ -859,6 +874,35 @@ defmodule SynapsisWeb.AgentLive.Agents do
       _ -> attrs
     end
   end
+
+  defp merge_provider_model_state(attrs) do
+    case decode_provider_model_state(Map.get(attrs, "provider_model_state")) do
+      {:ok, state} ->
+        attrs
+        |> merge_provider_model_value("provider", Map.get(state, "provider"))
+        |> merge_provider_model_value("model", Map.get(state, "model"))
+
+      :error ->
+        attrs
+    end
+  end
+
+  defp merge_provider_model_value(attrs, key, state_value) do
+    case {normalize_form_value(Map.get(attrs, key)), normalize_form_value(state_value)} do
+      {nil, nil} -> attrs
+      {nil, value} -> Map.put(attrs, key, value)
+      {_value, _state_value} -> attrs
+    end
+  end
+
+  defp decode_provider_model_state(value) when is_binary(value) and value != "" do
+    case Jason.decode(value) do
+      {:ok, %{} = state} -> {:ok, state}
+      _ -> :error
+    end
+  end
+
+  defp decode_provider_model_state(_value), do: :error
 
   defp normalize_permission_mode(attrs, agent) do
     existing_mode = if match?(%AgentConfig{}, agent), do: agent.permission_mode, else: nil
@@ -1010,20 +1054,11 @@ defmodule SynapsisWeb.AgentLive.Agents do
     end)
   end
 
-  defp provider_model_selected_path(providers, %AgentConfig{} = agent) do
-    provider = normalize_form_value(agent.provider)
-    model = normalize_form_value(agent.model)
-
-    cond do
-      provider in [nil, ""] ->
-        []
-
-      model_supported?(model, models_for_provider(providers, provider)) ->
-        Enum.reject([provider, model], &(&1 in [nil, ""]))
-
-      true ->
-        []
-    end
+  defp provider_model_state_value(%AgentConfig{} = agent) do
+    Jason.encode!(%{
+      provider: agent.provider || "",
+      model: agent.model || ""
+    })
   end
 
   defp models_for_provider(_providers, nil), do: []
