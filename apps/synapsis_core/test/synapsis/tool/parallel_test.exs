@@ -20,6 +20,42 @@ defmodule Synapsis.Tool.ParallelTest do
     end
   end
 
+  defmodule FlakyTimeoutTool do
+    use Synapsis.Tool
+
+    @impl true
+    def name, do: "parallel_test_flaky_timeout"
+    @impl true
+    def description, do: "Times out once, then succeeds"
+    @impl true
+    def parameters, do: %{"type" => "object", "properties" => %{}}
+    @impl true
+    def permission_level, do: :read
+
+    @impl true
+    def execute(%{counter: counter}, _ctx) do
+      attempt = Agent.get_and_update(counter, &{&1, &1 + 1})
+
+      if attempt == 0 do
+        Process.sleep(:infinity)
+      else
+        {:ok, "retried"}
+      end
+    end
+  end
+
+  defmodule NeverReplyProcessTool do
+    use GenServer
+
+    def start_link(counter), do: GenServer.start_link(__MODULE__, counter)
+    def init(counter), do: {:ok, counter}
+
+    def handle_call({:execute, _tool_name, _input, _context}, _from, counter) do
+      Agent.update(counter, &(&1 + 1))
+      {:noreply, counter}
+    end
+  end
+
   setup do
     Registry.register_module("parallel_test_slow", SlowMockTool, timeout: 5_000)
 
@@ -114,6 +150,50 @@ defmodule Synapsis.Tool.ParallelTest do
       assert {:ok, "done"} = result_map["ok_3"]
       assert {:error, "intentional failure"} = result_map["fail_1"]
       assert {:error, "intentional failure"} = result_map["fail_2"]
+    end
+  end
+
+  describe "timeout and retry handling" do
+    test "retries retry-safe module tools after timeout" do
+      {:ok, counter} = Agent.start_link(fn -> 0 end)
+
+      Registry.register_module("parallel_test_flaky_timeout", FlakyTimeoutTool, timeout: 20)
+
+      on_exit(fn ->
+        Registry.unregister("parallel_test_flaky_timeout")
+      end)
+
+      assert {:ok, "retried"} =
+               Executor.execute_approved(
+                 "parallel_test_flaky_timeout",
+                 %{counter: counter},
+                 %{tool_max_retries: 1, tool_retry_backoff_ms: 0}
+               )
+
+      assert Agent.get(counter, & &1) == 2
+    end
+
+    test "times out and retries process tools without blocking forever" do
+      {:ok, counter} = Agent.start_link(fn -> 0 end)
+      {:ok, pid} = NeverReplyProcessTool.start_link(counter)
+
+      Registry.register_process("parallel_test_never_reply", pid,
+        timeout: 20,
+        permission_level: :read
+      )
+
+      on_exit(fn ->
+        Registry.unregister("parallel_test_never_reply")
+      end)
+
+      assert {:error, :timeout} =
+               Executor.execute_approved(
+                 "parallel_test_never_reply",
+                 %{},
+                 %{tool_max_retries: 1, tool_retry_backoff_ms: 0}
+               )
+
+      assert Agent.get(counter, & &1) == 2
     end
   end
 end

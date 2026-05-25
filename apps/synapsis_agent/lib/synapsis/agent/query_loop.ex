@@ -202,7 +202,7 @@ defmodule Synapsis.Agent.QueryLoop do
       name = tool[:name] || Map.get(tool, "name")
 
       case name && Synapsis.Tool.Registry.lookup(name) do
-        {:ok, {:module, mod, _opts}} -> Map.put(acc, name, mod)
+        {:ok, entry} -> Map.put(acc, name, entry)
         _ -> acc
       end
     end)

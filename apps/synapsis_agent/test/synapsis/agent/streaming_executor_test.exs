@@ -29,7 +29,21 @@ defmodule Synapsis.Agent.StreamingExecutorTest do
     end
   end
 
-  @tool_map %{"fast_read" => FastReadTool, "slow_write" => SlowWriteTool}
+  defmodule HangingReadTool do
+    use Synapsis.Tool
+    def name, do: "hanging_read"
+    def description, do: "never returns"
+    def parameters, do: %{}
+    def permission_level, do: :read
+    def execute(_input, _ctx), do: Process.sleep(:infinity)
+  end
+
+  @tool_map %{
+    "fast_read" => FastReadTool,
+    "slow_write" => SlowWriteTool,
+    "hanging_read" => HangingReadTool
+  }
+
   @ctx %{session_id: "test"}
 
   describe "new/2" do
@@ -117,6 +131,25 @@ defmodule Synapsis.Agent.StreamingExecutorTest do
 
       {results, _exec} = StreamingExecutor.get_remaining_results(exec)
       assert length(results) == 2
+    end
+
+    test "times out in-flight tools and returns the result id" do
+      ctx = Map.merge(@ctx, %{tool_timeout_ms: 20, tool_max_retries: 0})
+
+      exec =
+        @tool_map
+        |> StreamingExecutor.new(ctx)
+        |> StreamingExecutor.add_tool(%{id: "r_timeout", name: "hanging_read", input: %{}})
+
+      {results, _exec} = StreamingExecutor.get_remaining_results(exec)
+
+      assert [
+               %{
+                 tool_use_id: "r_timeout",
+                 content: "Tool execution timed out",
+                 is_error: true
+               }
+             ] = results
     end
   end
 end

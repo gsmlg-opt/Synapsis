@@ -85,11 +85,15 @@ defmodule Synapsis.Agent.ToolDispatcher do
           send(caller_pid, {:tool_result, tool_use.tool_use_id, final_output, false})
 
         {:error, reason} ->
-          error_msg = if is_binary(reason), do: reason, else: "Tool execution failed"
+          error_msg = error_message(reason)
           send(caller_pid, {:tool_result, tool_use.tool_use_id, error_msg, true})
       end
     end)
   end
+
+  defp error_message(:timeout), do: "Tool execution timed out"
+  defp error_message(reason) when is_binary(reason), do: reason
+  defp error_message(_reason), do: "Tool execution failed"
 
   @doc """
   Dispatch all tool uses: execute approved, request approval, deny denied.

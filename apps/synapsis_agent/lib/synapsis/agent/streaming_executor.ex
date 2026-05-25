@@ -12,7 +12,19 @@ defmodule Synapsis.Agent.StreamingExecutor do
 
   defmodule TrackedTool do
     @moduledoc false
-    defstruct [:id, :name, :input, :status, :concurrent_safe?, :task_ref, :result, :order]
+    defstruct [
+      :id,
+      :name,
+      :input,
+      :status,
+      :concurrent_safe?,
+      :task_ref,
+      :task_pid,
+      :started_at_ms,
+      :result,
+      :order
+    ]
+
     # status: :queued | :executing | :completed
   end
 
@@ -90,13 +102,8 @@ defmodule Synapsis.Agent.StreamingExecutor do
       nil ->
         false
 
-      mod ->
-        level =
-          if function_exported?(mod, :permission_level, 0),
-            do: mod.permission_level(),
-            else: :write
-
-        level in @concurrent_permission_levels
+      tool_spec ->
+        permission_level(tool_spec) in @concurrent_permission_levels
     end
   end
 
@@ -137,12 +144,30 @@ defmodule Synapsis.Agent.StreamingExecutor do
     parent = self()
     ref = make_ref()
 
-    Task.start(fn ->
-      result = Executor.run_one(%{name: t.name, input: t.input}, exec.tool_map, exec.context)
-      send(parent, {:streaming_tool_done, ref, t.id, result})
-    end)
+    case Task.Supervisor.start_child(Synapsis.Tool.TaskSupervisor, fn ->
+           result = Executor.run_one(%{name: t.name, input: t.input}, exec.tool_map, exec.context)
+           send(parent, {:streaming_tool_done, ref, t.id, result})
+         end) do
+      {:ok, pid} ->
+        %{
+          t
+          | status: :executing,
+            task_ref: ref,
+            task_pid: pid,
+            started_at_ms: System.monotonic_time(:millisecond)
+        }
 
-    %{t | status: :executing, task_ref: ref}
+      {:error, reason} ->
+        %{
+          t
+          | status: :completed,
+            result: %{
+              tool_use_id: t.id,
+              content: "Tool execution failed: #{inspect(reason)}",
+              is_error: true
+            }
+        }
+    end
   end
 
   defp check_completions(%__MODULE__{} = exec) do
@@ -153,7 +178,13 @@ defmodule Synapsis.Agent.StreamingExecutor do
             {:streaming_tool_done, ^ref, ^id, result} ->
               %{t | status: :completed, result: format_result(id, result)}
           after
-            0 -> t
+            0 ->
+              if tool_timed_out?(t, exec) do
+                stop_tool_task(t)
+                %{t | status: :completed, result: timeout_result(id)}
+              else
+                t
+              end
           end
 
         t ->
@@ -167,7 +198,7 @@ defmodule Synapsis.Agent.StreamingExecutor do
     tools =
       Enum.map(exec.tools, fn
         %TrackedTool{status: :executing} = t ->
-          wait_for_tool(t)
+          wait_for_tool(t, exec)
 
         %TrackedTool{status: :completed} = t ->
           t
@@ -175,24 +206,82 @@ defmodule Synapsis.Agent.StreamingExecutor do
         %TrackedTool{status: :queued} = t ->
           # Shouldn't happen after start_all_queued, but handle gracefully
           started = start_tool(t, exec)
-          wait_for_tool(started)
+          wait_for_tool(started, exec)
       end)
 
     %{exec | tools: tools}
   end
 
-  defp wait_for_tool(%TrackedTool{task_ref: ref, id: id} = t) do
+  defp wait_for_tool(%TrackedTool{status: :completed} = t, _exec), do: t
+
+  defp wait_for_tool(%TrackedTool{task_ref: ref, id: id} = t, exec) when not is_nil(ref) do
     receive do
       {:streaming_tool_done, ^ref, ^id, result} ->
         %{t | status: :completed, result: format_result(id, result)}
     after
-      60_000 ->
-        %{
-          t
-          | status: :completed,
-            result: %{tool_use_id: id, content: "Tool execution timed out", is_error: true}
-        }
+      wait_timeout_ms(t, exec) ->
+        stop_tool_task(t)
+        %{t | status: :completed, result: timeout_result(id)}
     end
+  end
+
+  defp wait_for_tool(%TrackedTool{id: id} = t, _exec) do
+    %{
+      t
+      | status: :completed,
+        result: %{tool_use_id: id, content: "Tool execution failed to start", is_error: true}
+    }
+  end
+
+  defp tool_timed_out?(%TrackedTool{started_at_ms: nil}, _exec), do: false
+
+  defp tool_timed_out?(%TrackedTool{started_at_ms: started_at_ms} = t, exec) do
+    System.monotonic_time(:millisecond) - started_at_ms >= wait_timeout_ms(t, exec)
+  end
+
+  defp wait_timeout_ms(%TrackedTool{name: name}, exec) do
+    exec.tool_map
+    |> Map.get(name)
+    |> execution_budget_ms(exec.context)
+    |> Kernel.+(1_000)
+  end
+
+  defp execution_budget_ms({:module, _module, opts}, context) do
+    Synapsis.Tool.Executor.execution_budget_ms(context, opts)
+  end
+
+  defp execution_budget_ms({:process, _pid, opts}, context) do
+    Synapsis.Tool.Executor.execution_budget_ms(context, opts)
+  end
+
+  defp execution_budget_ms(_tool_spec, context) do
+    Synapsis.Tool.Executor.execution_budget_ms(context)
+  end
+
+  defp stop_tool_task(%TrackedTool{task_pid: pid}) when is_pid(pid) do
+    if Process.alive?(pid), do: Process.exit(pid, :kill)
+  end
+
+  defp stop_tool_task(_tool), do: :ok
+
+  defp timeout_result(id) do
+    %{tool_use_id: id, content: "Tool execution timed out", is_error: true}
+  end
+
+  defp permission_level({:module, module, opts}) do
+    opts[:permission_level] ||
+      (function_exported?(module, :permission_level, 0) && module.permission_level()) ||
+      :write
+  end
+
+  defp permission_level({:process, _pid, opts}) do
+    Keyword.get(opts, :permission_level, :read)
+  end
+
+  defp permission_level(mod) when is_atom(mod) do
+    if function_exported?(mod, :permission_level, 0),
+      do: mod.permission_level(),
+      else: :write
   end
 
   defp format_result(id, {:ok, result}) when is_binary(result),
@@ -203,6 +292,9 @@ defmodule Synapsis.Agent.StreamingExecutor do
 
   defp format_result(id, {:error, reason}) when is_binary(reason),
     do: %{tool_use_id: id, content: reason, is_error: true}
+
+  defp format_result(id, {:error, :timeout}),
+    do: timeout_result(id)
 
   defp format_result(id, {:error, reason}),
     do: %{tool_use_id: id, content: inspect(reason), is_error: true}

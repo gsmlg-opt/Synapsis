@@ -3,6 +3,10 @@ defmodule Synapsis.Tool.Executor do
   require Logger
 
   @default_timeout 30_000
+  @default_safe_retries 2
+  @default_unsafe_retries 0
+  @default_retry_backoff 250
+  @retryable_permission_levels [:none, :read]
 
   @type execute_result :: {:ok, term()} | {:error, term()}
   @type tool_call :: %{id: String.t(), name: String.t(), input: map()}
@@ -14,12 +18,21 @@ defmodule Synapsis.Tool.Executor do
     execute(name, input, context)
   end
 
+  @doc "Return the maximum expected runtime for one tool call including retries."
+  def execution_budget_ms(context, opts \\ []) do
+    timeout = resolve_timeout(opts, context)
+    max_retries = max_retries_from_opts(opts, context, @default_safe_retries)
+    backoff = retry_backoff_ms(opts, context)
+
+    timeout * (max_retries + 1) + backoff * max_retries
+  end
+
   @doc "Execute a tool by name with input and context."
   def execute(tool_name, input, context) when is_binary(tool_name) do
     with {:ok, entry} <- registry_lookup(tool_name),
          :ok <- check_enabled(entry),
          :ok <- check_permission(tool_name, context) do
-      dispatch(tool_name, entry, input, context)
+      dispatch_with_retries(tool_name, entry, input, context)
     end
   end
 
@@ -31,7 +44,7 @@ defmodule Synapsis.Tool.Executor do
   def execute_approved(tool_name, input, context) when is_binary(tool_name) do
     with {:ok, entry} <- registry_lookup(tool_name),
          :ok <- check_enabled(entry) do
-      dispatch(tool_name, entry, input, context)
+      dispatch_with_retries(tool_name, entry, input, context)
     end
   end
 
@@ -63,6 +76,7 @@ defmodule Synapsis.Tool.Executor do
       end)
 
     max_concurrency = System.schedulers_online()
+    stream_timeout = batch_stream_timeout_ms(work_units, context)
 
     # Zip work units with their items so we can recover call IDs on crash
     results =
@@ -76,7 +90,7 @@ defmodule Synapsis.Tool.Executor do
         end,
         max_concurrency: max_concurrency,
         ordered: false,
-        timeout: :infinity,
+        timeout: stream_timeout,
         on_timeout: :kill_task
       )
       |> Enum.zip(work_units)
@@ -138,17 +152,44 @@ defmodule Synapsis.Tool.Executor do
     execute_process(tool_name, pid, opts, input, context)
   end
 
+  defp dispatch_with_retries(tool_name, entry, input, context) do
+    max_retries = max_retries_for_entry(entry, context)
+    attempt_dispatch(tool_name, entry, input, context, 0, max_retries)
+  end
+
+  defp attempt_dispatch(tool_name, entry, input, context, attempt, max_retries) do
+    case dispatch(tool_name, entry, input, context) do
+      {:error, reason} = error ->
+        if attempt < max_retries and retryable_reason?(reason) do
+          Logger.warning("tool_call_retry",
+            tool_name: tool_name,
+            attempt: attempt + 1,
+            max_retries: max_retries,
+            reason: inspect(reason)
+          )
+
+          sleep_before_retry(entry, context, attempt)
+          attempt_dispatch(tool_name, entry, input, context, attempt + 1, max_retries)
+        else
+          error
+        end
+
+      result ->
+        result
+    end
+  end
+
   defp execute_module(tool_name, module, opts, input, context) do
-    timeout = opts[:timeout] || @default_timeout
+    timeout = resolve_timeout(opts, context)
     start_time = System.monotonic_time(:millisecond)
 
     try do
       task =
         Task.Supervisor.async_nolink(Synapsis.Tool.TaskSupervisor, fn ->
-          module.execute(input, context)
+          safe_module_execute(module, input, context)
         end)
 
-      case Task.yield(task, timeout) || Task.shutdown(task) do
+      case Task.yield(task, timeout) || Task.shutdown(task, :brutal_kill) do
         {:ok, {:ok, result}} ->
           duration_ms = System.monotonic_time(:millisecond) - start_time
           persist_tool_call(tool_name, input, {:ok, result}, :completed, duration_ms, context)
@@ -188,8 +229,17 @@ defmodule Synapsis.Tool.Executor do
     end
   end
 
+  defp safe_module_execute(module, input, context) do
+    module.execute(input, context)
+  rescue
+    e -> {:error, Exception.message(e)}
+  catch
+    :exit, reason -> {:error, {:exit, reason}}
+    kind, reason -> {:error, {kind, reason}}
+  end
+
   defp execute_process(tool_name, pid, opts, input, context) do
-    timeout = opts[:timeout] || @default_timeout
+    timeout = resolve_timeout(opts, context)
     start_time = System.monotonic_time(:millisecond)
 
     try do
@@ -219,6 +269,119 @@ defmodule Synapsis.Tool.Executor do
         {:error, {:exit, reason}}
     end
   end
+
+  defp batch_stream_timeout_ms([], _context), do: @default_timeout
+
+  defp batch_stream_timeout_ms(work_units, context) do
+    work_units
+    |> Enum.map(fn items ->
+      items
+      |> Enum.map(fn {call, _idx} -> tool_execution_budget_ms(call.name, context) end)
+      |> Enum.sum()
+    end)
+    |> Enum.max(fn -> @default_timeout end)
+    |> Kernel.+(1_000)
+  end
+
+  defp tool_execution_budget_ms(tool_name, context) do
+    case registry_lookup(tool_name) do
+      {:ok, entry} -> execution_budget_ms(context, entry_opts(entry))
+      {:error, _reason} -> execution_budget_ms(context)
+    end
+  end
+
+  defp resolve_timeout(opts, context) do
+    context_value(context, :tool_timeout_ms)
+    |> non_negative_integer(opts[:timeout] || @default_timeout)
+  end
+
+  defp max_retries_for_entry(entry, context) do
+    default =
+      if retry_safe_entry?(entry, context) do
+        @default_safe_retries
+      else
+        @default_unsafe_retries
+      end
+
+    entry
+    |> entry_opts()
+    |> max_retries_from_opts(context, default)
+  end
+
+  defp max_retries_from_opts(opts, context, default) do
+    value =
+      context_value(context, :tool_max_retries) ||
+        opts[:max_retries] ||
+        opts[:retries]
+
+    non_negative_integer(value, default)
+  end
+
+  defp retry_backoff_ms(opts, context) do
+    value =
+      context_value(context, :tool_retry_backoff_ms) ||
+        opts[:retry_backoff_ms]
+
+    non_negative_integer(value, @default_retry_backoff)
+  end
+
+  defp sleep_before_retry(entry, context, attempt) do
+    entry
+    |> entry_opts()
+    |> retry_backoff_ms(context)
+    |> Kernel.*(attempt + 1)
+    |> Process.sleep()
+  end
+
+  defp retry_safe_entry?(entry, context) do
+    context_value(context, :tool_retry_unsafe) == true or
+      permission_level(entry) in @retryable_permission_levels
+  end
+
+  defp retryable_reason?(:timeout), do: true
+  defp retryable_reason?({:timeout, _reason}), do: true
+  defp retryable_reason?({:exit, :timeout}), do: true
+  defp retryable_reason?({:exit, {:timeout, _reason}}), do: true
+
+  defp retryable_reason?(reason) when is_binary(reason) do
+    reason
+    |> String.downcase()
+    |> then(fn text ->
+      String.contains?(text, "timeout") or
+        String.contains?(text, "timed out") or
+        String.contains?(text, "connection closed")
+    end)
+  end
+
+  defp retryable_reason?(_reason), do: false
+
+  defp permission_level({:module, module, opts}) do
+    opts[:permission_level] ||
+      (function_exported?(module, :permission_level, 0) && module.permission_level()) ||
+      :write
+  end
+
+  defp permission_level({:process, _pid, opts}) do
+    Keyword.get(opts, :permission_level, :read)
+  end
+
+  defp entry_opts({:module, _module, opts}), do: opts
+  defp entry_opts({:process, _pid, opts}), do: opts
+
+  defp context_value(context, key) do
+    Map.get(context, key) || Map.get(context, to_string(key))
+  end
+
+  defp non_negative_integer(value, _default) when is_integer(value) and value >= 0, do: value
+
+  defp non_negative_integer(value, default) when is_binary(value) do
+    case Integer.parse(value) do
+      {int, ""} when int >= 0 -> int
+      _ -> default
+    end
+  end
+
+  defp non_negative_integer(_value, default), do: default
 
   defp broadcast_side_effects(_tool_name, module, context) do
     effects =
