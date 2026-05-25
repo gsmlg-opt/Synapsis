@@ -26,6 +26,12 @@ defmodule SynapsisWeb.SettingsLayoutTest do
       assert has_element?(view, "[data-testid='settings-sidebar']"),
              "expected settings sidebar on #{path}"
 
+      assert has_element?(view, "aside[data-testid='settings-sidebar'].w-64.bg-secondary"),
+             "expected settings sidebar to use the full-height left rail on #{path}"
+
+      assert has_element?(view, "[data-testid='settings-sidebar'] .app-left-menu"),
+             "expected settings sidebar to use the shared left menu styling on #{path}"
+
       assert has_element?(
                view,
                "[data-testid='settings-sidebar'] a[href='/settings/mcp']",
@@ -33,6 +39,42 @@ defmodule SynapsisWeb.SettingsLayoutTest do
              ),
              "expected MCP Servers menu item on #{path}"
     end
+  end
+
+  test "settings overview is active on the root settings page", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/settings")
+
+    assert has_element?(
+             view,
+             "[data-testid='settings-sidebar'] a[href='/settings'][aria-current='page']",
+             "Overview"
+           )
+  end
+
+  test "nested settings pages activate their specific menu item", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/settings/providers/new")
+
+    assert has_element?(
+             view,
+             "[data-testid='settings-sidebar'] a[href='/settings/providers'][aria-current='page']",
+             "Providers"
+           )
+
+    refute has_element?(
+             view,
+             "[data-testid='settings-sidebar'] a[href='/settings'][aria-current='page']",
+             "Overview"
+           )
+  end
+
+  test "unlisted settings sections do not activate overview", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/settings/skills")
+
+    refute has_element?(
+             view,
+             "[data-testid='settings-sidebar'] a[href='/settings'][aria-current='page']",
+             "Overview"
+           )
   end
 
   defp create_dynamic_settings_paths do

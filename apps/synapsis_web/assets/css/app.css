@@ -28,7 +28,7 @@ code, pre, kbd, samp {
    but @duskmoon-dev/core only defines .theme-controller-item.
    TODO: file upstream issue at duskmoon-dev/duskmoon-css with label "internal request" */
 @layer components {
-  .agent-left-menu {
+  .app-left-menu {
     --color-on-surface: var(--color-secondary-content);
     --color-on-surface-variant: color-mix(
       in oklch,
@@ -37,19 +37,22 @@ code, pre, kbd, samp {
     );
   }
 
-  .agent-left-menu .nested-menu {
+  .app-left-menu .nested-menu {
     gap: 0.25rem;
     padding: 0;
   }
 
-  .agent-left-menu .nested-menu-title {
+  .app-left-menu .nested-menu-title {
     padding: 1.25rem 1rem 0.75rem;
     font-size: 0.75rem;
     font-weight: 700;
     letter-spacing: 0.06em;
   }
 
-  .agent-left-menu .agent-left-menu-item {
+  .app-left-menu .app-left-menu-item {
+    display: flex;
+    width: 100%;
+    align-items: center;
     min-height: 2.75rem;
     padding: 0.75rem 1rem;
     gap: 0.75rem;
@@ -58,7 +61,7 @@ code, pre, kbd, samp {
     font-weight: 700;
   }
 
-  .agent-left-menu .agent-left-menu-item:hover {
+  .app-left-menu .app-left-menu-item:hover {
     background-color: color-mix(
       in oklch,
       var(--color-secondary-content),
@@ -66,12 +69,12 @@ code, pre, kbd, samp {
     );
   }
 
-  .agent-left-menu .agent-left-menu-item-active {
+  .app-left-menu .app-left-menu-item-active {
     background-color: var(--color-primary-container);
     color: var(--color-on-primary-container);
   }
 
-  .agent-left-menu .agent-left-menu-item-active:hover {
+  .app-left-menu .app-left-menu-item-active:hover {
     background-color: var(--color-primary-container);
   }
 

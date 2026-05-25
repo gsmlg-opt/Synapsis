@@ -9,7 +9,7 @@ defmodule SynapsisWeb.AgentLive.Components do
     ~H"""
     <div class="flex min-h-full">
       <aside class="hidden md:block w-64 shrink-0 border-r border-outline-variant bg-secondary text-secondary-content px-5 py-6">
-        <.dm_left_menu active={active_path(@active)} size="lg" class="agent-left-menu">
+        <.dm_left_menu active={active_path(@active)} size="lg" class="app-left-menu">
           <:title>Agent</:title>
           <:menu>
             <.dm_link navigate={~p"/agent/agents"} class={nav_item_class(@active, :agents)}>
@@ -42,8 +42,8 @@ defmodule SynapsisWeb.AgentLive.Components do
 
   defp nav_item_class(active, item) do
     [
-      "agent-left-menu-item",
-      active == item && "agent-left-menu-item-active"
+      "app-left-menu-item",
+      active == item && "app-left-menu-item-active"
     ]
   end
 end

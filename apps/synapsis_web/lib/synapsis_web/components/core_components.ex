@@ -310,11 +310,13 @@ defmodule SynapsisWeb.CoreComponents do
 
   def settings_layout(assigns) do
     ~H"""
-    <div class={["flex max-w-7xl mx-auto p-6 gap-6", @class]} data-testid="settings-layout">
+    <div class={["flex min-h-full", @class]} data-testid="settings-layout">
       <.settings_sidebar current_path={@current_path} />
-      <div class={["flex-1 min-w-0", @content_class]}>
-        {render_slot(@inner_block)}
-      </div>
+      <main class="flex-1 min-w-0 p-6">
+        <div class={["mx-auto", @content_class]}>
+          {render_slot(@inner_block)}
+        </div>
+      </main>
     </div>
     """
   end
@@ -327,29 +329,40 @@ defmodule SynapsisWeb.CoreComponents do
 
   def settings_sidebar(assigns) do
     items = [
+      %{to: ~p"/settings", icon: "view-dashboard-outline", label: "Overview"},
       %{to: ~p"/settings/providers", icon: "cloud", label: "Providers"},
       %{to: ~p"/settings/models", icon: "tune", label: "Default Model"},
       %{to: ~p"/settings/memory", icon: "brain", label: "Memory"},
       %{to: ~p"/settings/mcp", icon: "server-network", label: "MCP Servers"}
     ]
 
-    assigns = assign(assigns, :items, items)
+    assigns =
+      assigns
+      |> assign(:items, items)
+      |> assign(:active_path, active_menu_id(assigns.current_path, items))
 
     ~H"""
-    <nav
-      class={["hidden md:block w-56 shrink-0 border-r border-outline-variant py-4 pr-4", @class]}
+    <aside
+      class={[
+        "hidden w-64 shrink-0 border-r border-outline-variant bg-secondary px-5 py-6 text-secondary-content md:block",
+        @class
+      ]}
       data-testid="settings-sidebar"
+      aria-label="Settings navigation"
     >
-      <.dm_left_menu active={active_menu_id(@current_path, @items)} size="sm">
+      <.dm_left_menu active={@active_path} size="lg" class="app-left-menu">
         <:title>Settings</:title>
         <:menu :for={item <- @items}>
-          <.dm_link navigate={item.to} class="flex items-center gap-2 w-full">
-            <.dm_mdi name={item.icon} class="w-4 h-4" />
-            {item.label}
+          <.dm_link
+            navigate={item.to}
+            aria-current={if(@active_path == item.to, do: "page")}
+            class={settings_sidebar_item_class(@active_path == item.to)}
+          >
+            <.dm_mdi name={item.icon} class="w-5 h-5 shrink-0" /> {item.label}
           </.dm_link>
         </:menu>
       </.dm_left_menu>
-    </nav>
+    </aside>
     """
   end
 
@@ -486,10 +499,28 @@ defmodule SynapsisWeb.CoreComponents do
     """
   end
 
+  defp settings_sidebar_item_class(true) do
+    [
+      "app-left-menu-item",
+      "app-left-menu-item-active"
+    ]
+  end
+
+  defp settings_sidebar_item_class(false) do
+    "app-left-menu-item"
+  end
+
   defp active_menu_id(current_path, items) do
-    Enum.find_value(items, fn item ->
-      if String.starts_with?(current_path, item.to), do: item.to
-    end)
+    items
+    |> Enum.map(& &1.to)
+    |> Enum.filter(&settings_path_active?(current_path, &1))
+    |> Enum.max_by(&String.length/1, fn -> nil end)
+  end
+
+  defp settings_path_active?(current_path, "/settings"), do: current_path == "/settings"
+
+  defp settings_path_active?(current_path, path) do
+    current_path == path or String.starts_with?(current_path, path <> "/")
   end
 
   @doc """
