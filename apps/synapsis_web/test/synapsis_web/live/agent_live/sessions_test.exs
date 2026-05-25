@@ -137,17 +137,8 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
     end
   end
 
-  describe "chat_bubble component label rendering" do
-    test "label renders only for assistant role via integration", %{conn: conn} do
-      {:ok, session} =
-        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
-
-      {:ok, _view, html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
-      # The personality indicator span in the session header uses text-primary/70
-      assert html =~ "text-primary/70"
-    end
-
-    test "chat_bubble label attr defaults to nil — no label div without explicit label", _ctx do
+  describe "chat_bubble component DuskMoon rendering" do
+    test "chat_bubble renders a phoenix_duskmoon chat element for user messages", _ctx do
       html =
         render_component(
           fn assigns ->
@@ -157,14 +148,41 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
             </SynapsisWeb.CoreComponents.chat_bubble>
             """
           end,
-          %{role: "assistant"}
+          %{role: "user"}
         )
 
-      # Without a label, the conditional :if={@label && @role == "assistant"} is false
-      refute html =~ "text-xs font-medium text-primary/70"
+      assert html =~ "<el-dm-chat"
+      assert html =~ ~s(align="end")
+      assert html =~ ~s(color="primary")
+      assert html =~ ~s(variant="filled")
     end
 
-    test "chat_bubble label renders for assistant role", _ctx do
+    test "chat_bubble renders avatar and message metadata", _ctx do
+      html =
+        render_component(
+          fn assigns ->
+            ~H"""
+            <SynapsisWeb.CoreComponents.chat_bubble
+              role={assigns.role}
+              label={assigns.label}
+              avatar={assigns.avatar}
+              time={assigns.time}
+              status={assigns.status}
+            >
+              content
+            </SynapsisWeb.CoreComponents.chat_bubble>
+            """
+          end,
+          %{role: "assistant", label: "Pi", avatar: "π", time: "16:29:00", status: "out: 99"}
+        )
+
+      assert html =~ ~s(author="Pi")
+      assert html =~ ~s(avatar="π")
+      assert html =~ ~s(time="16:29:00")
+      assert html =~ ~s(status="out: 99")
+    end
+
+    test "chat_bubble label renders as assistant author", _ctx do
       html =
         render_component(
           fn assigns ->
@@ -177,11 +195,31 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
           %{role: "assistant", label: "My Agent"}
         )
 
+      assert html =~ "<el-dm-chat"
       assert html =~ "My Agent"
-      assert html =~ "text-primary/70"
+      assert html =~ ~s(author="My Agent")
+      assert html =~ ~s(align="start")
     end
 
-    test "chat_bubble label does not render for user role", _ctx do
+    test "chat_bubble defaults author and avatar by role", _ctx do
+      html =
+        render_component(
+          fn assigns ->
+            ~H"""
+            <SynapsisWeb.CoreComponents.chat_bubble role={assigns.role}>
+              content
+            </SynapsisWeb.CoreComponents.chat_bubble>
+            """
+          end,
+          %{role: "assistant"}
+        )
+
+      assert html =~ "<el-dm-chat"
+      assert html =~ ~s(author="Assistant")
+      assert html =~ ~s(avatar="AI")
+    end
+
+    test "chat_bubble uses user role defaults instead of arbitrary labels", _ctx do
       html =
         render_component(
           fn assigns ->
@@ -194,11 +232,13 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
           %{role: "user", label: "My Agent"}
         )
 
-      refute html =~ "text-primary/70"
+      assert html =~ "<el-dm-chat"
       refute html =~ "My Agent"
+      assert html =~ ~s(author="You")
+      assert html =~ ~s(avatar="U")
     end
 
-    test "chat_bubble label does not render for system role", _ctx do
+    test "chat_bubble uses system role defaults instead of arbitrary labels", _ctx do
       html =
         render_component(
           fn assigns ->
@@ -211,8 +251,38 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
           %{role: "system", label: "My Agent"}
         )
 
-      refute html =~ "text-primary/70"
+      assert html =~ "<el-dm-chat"
       refute html =~ "My Agent"
+      assert html =~ ~s(author="System")
+      assert html =~ ~s(avatar="S")
+    end
+
+    test "message_parts passes timestamp and token status to chat messages", _ctx do
+      message = %Synapsis.Message{
+        role: "assistant",
+        token_count: 99,
+        inserted_at: ~U[2026-05-26 16:29:00.000000Z],
+        parts: [%Synapsis.Part.Text{content: "hello"}]
+      }
+
+      html =
+        render_component(
+          fn assigns ->
+            ~H"""
+            <SynapsisWeb.CoreComponents.message_parts
+              message={assigns.message}
+              assistant_label="Pi"
+              assistant_avatar="π"
+            />
+            """
+          end,
+          %{message: message}
+        )
+
+      assert html =~ ~s(author="Pi")
+      assert html =~ ~s(avatar="π")
+      assert html =~ ~s(time="16:29:00")
+      assert html =~ ~s(status="out: 99")
     end
   end
 end

@@ -538,7 +538,12 @@ defmodule SynapsisWeb.AgentLive.Sessions do
             phx-hook="ScrollBottom"
             class="flex-1 overflow-y-auto p-4 space-y-3"
           >
-            <.message_parts :for={msg <- @messages} message={msg} />
+            <.message_parts
+              :for={msg <- @messages}
+              message={msg}
+              assistant_label={agent_display_name(@agent_config, @agent_id)}
+              assistant_avatar={agent_avatar(@agent_config)}
+            />
 
             <.reasoning_block
               :if={@streaming_reasoning != ""}
@@ -586,6 +591,9 @@ defmodule SynapsisWeb.AgentLive.Sessions do
             <.chat_bubble
               :if={@streaming_text != "" || @session_status == "streaming"}
               role="assistant"
+              label={agent_display_name(@agent_config, @agent_id)}
+              avatar={agent_avatar(@agent_config)}
+              status="streaming"
             >
               <.dm_markdown
                 id="streaming-output"
@@ -684,6 +692,12 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
     if String.ends_with?(base, "Agent"), do: base, else: "#{base} Agent"
   end
+
+  defp agent_avatar(%{icon: icon}) when is_binary(icon) do
+    if String.contains?(icon, "-") or length(String.graphemes(icon)) > 3, do: nil, else: icon
+  end
+
+  defp agent_avatar(_agent_config), do: nil
 
   defp assign_session_status(socket, status) when status in ~w(streaming tool_executing) do
     case fetch_current_session(socket) do

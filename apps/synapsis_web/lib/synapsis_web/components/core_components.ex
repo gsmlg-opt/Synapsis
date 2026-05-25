@@ -68,32 +68,64 @@ defmodule SynapsisWeb.CoreComponents do
   """
   attr :role, :string, required: true, values: ~w(user assistant system)
   attr :label, :string, default: nil
+  attr :avatar, :string, default: nil
+  attr :time, :string, default: nil
+  attr :status, :string, default: nil
   attr :class, :string, default: nil
 
   slot :inner_block, required: true
 
   def chat_bubble(assigns) do
+    assigns =
+      assigns
+      |> assign(:align, if(assigns.role == "user", do: "end", else: "start"))
+      |> assign(:color, if(assigns.role == "user", do: "primary", else: nil))
+      |> assign(:variant, if(assigns.role == "user", do: "filled", else: "tonal"))
+      |> assign(:author, chat_author(assigns.role, assigns.label))
+      |> assign(:display_avatar, chat_avatar(assigns.role, assigns.avatar, assigns.label))
+
     ~H"""
-    <div class={[
-      "flex",
-      if(@role == "user", do: "justify-end", else: "justify-start"),
-      @class
-    ]}>
-      <div class={[
-        "rounded-lg px-3 py-2 max-w-[80%] text-sm",
-        if(@role == "user",
-          do: "bg-primary-container text-on-primary-container",
-          else: "bg-surface-container-high text-on-surface"
-        )
-      ]}>
-        <div :if={@label && @role == "assistant"} class="text-xs font-medium text-primary/70 mb-1">
-          {@label}
-        </div>
-        {render_slot(@inner_block)}
-      </div>
-    </div>
+    <.dm_chat
+      align={@align}
+      color={@color}
+      variant={@variant}
+      size="sm"
+      author={@author}
+      avatar={@display_avatar}
+      time={@time}
+      status={@status}
+      class={@class}
+    >
+      {render_slot(@inner_block)}
+    </.dm_chat>
     """
   end
+
+  defp chat_author("user", _label), do: "You"
+  defp chat_author("assistant", label) when label not in [nil, ""], do: label
+  defp chat_author("assistant", _label), do: "Assistant"
+  defp chat_author("system", _label), do: "System"
+
+  defp chat_avatar(_role, avatar, _label) when avatar not in [nil, ""], do: avatar
+  defp chat_avatar("user", _avatar, _label), do: "U"
+  defp chat_avatar("assistant", _avatar, nil), do: "AI"
+  defp chat_avatar("assistant", _avatar, ""), do: "AI"
+  defp chat_avatar("assistant", _avatar, label), do: initials(label, "AI")
+  defp chat_avatar("system", _avatar, _label), do: "S"
+
+  defp initials(value, fallback) when is_binary(value) do
+    initials =
+      value
+      |> String.split(~r/\s+/, trim: true)
+      |> Enum.map(&String.first/1)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.take(2)
+      |> Enum.join()
+
+    if initials == "", do: fallback, else: String.upcase(initials)
+  end
+
+  defp initials(_value, fallback), do: fallback
 
   @doc """
   Compaction marker — visual indicator that messages were compacted/summarized.
@@ -527,9 +559,18 @@ defmodule SynapsisWeb.CoreComponents do
   Renders a message's parts, dispatching to the appropriate sub-component per part type.
   """
   attr :message, :map, required: true
+  attr :assistant_label, :string, default: nil
+  attr :assistant_avatar, :string, default: nil
   attr :class, :string, default: nil
 
   def message_parts(assigns) do
+    assigns =
+      assigns
+      |> assign(:message_label, message_label(assigns.message, assigns.assistant_label))
+      |> assign(:message_avatar, message_avatar(assigns.message, assigns.assistant_avatar))
+      |> assign(:message_time, message_time(assigns.message))
+      |> assign(:message_status, message_status(assigns.message))
+
     ~H"""
     <div :for={part <- @message.parts || []} class={@class}>
       <%= case part do %>
@@ -540,11 +581,17 @@ defmodule SynapsisWeb.CoreComponents do
               <.compaction_marker count={count} summary={summary} />
             <% @message.role == "system" and memory_recall?(content) -> %>
               <.memory_indicator source={detect_memory_source(content)} />
-              <.chat_bubble role="system">
+              <.chat_bubble role="system" time={@message_time} status={@message_status}>
                 <.dm_markdown content={content} theme="auto" />
               </.chat_bubble>
             <% true -> %>
-              <.chat_bubble role={@message.role}>
+              <.chat_bubble
+                role={@message.role}
+                label={@message_label}
+                avatar={@message_avatar}
+                time={@message_time}
+                status={@message_status}
+              >
                 <.dm_markdown content={content} theme="auto" />
               </.chat_bubble>
           <% end %>
@@ -580,6 +627,37 @@ defmodule SynapsisWeb.CoreComponents do
     </div>
     """
   end
+
+  defp message_label(%{role: "assistant"}, assistant_label), do: assistant_label
+  defp message_label(_message, _assistant_label), do: nil
+
+  defp message_avatar(%{role: "assistant"}, assistant_avatar), do: assistant_avatar
+  defp message_avatar(_message, _assistant_avatar), do: nil
+
+  defp message_time(%{inserted_at: %DateTime{} = inserted_at}) do
+    Calendar.strftime(inserted_at, "%H:%M:%S")
+  end
+
+  defp message_time(%{inserted_at: %NaiveDateTime{} = inserted_at}) do
+    Calendar.strftime(inserted_at, "%H:%M:%S")
+  end
+
+  defp message_time(_message), do: nil
+
+  defp message_status(%{role: "user", token_count: count}) when is_integer(count) and count > 0 do
+    "in: #{count}"
+  end
+
+  defp message_status(%{role: "assistant", token_count: count})
+       when is_integer(count) and count > 0 do
+    "out: #{count}"
+  end
+
+  defp message_status(%{token_count: count}) when is_integer(count) and count > 0 do
+    "#{count} tokens"
+  end
+
+  defp message_status(_message), do: nil
 
   @doc """
   Collapsible reasoning/thinking trace block.
