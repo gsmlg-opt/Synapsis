@@ -35,7 +35,8 @@ defmodule Synapsis.Config do
           "model" => nil,
           "modelTier" => "default",
           "reasoningEffort" => "medium",
-          "readOnly" => false
+          "readOnly" => false,
+          "permissionMode" => "ask"
         }
       },
       "providers" => %{},
@@ -138,7 +139,9 @@ defmodule Synapsis.Config do
       "label" => :label,
       "icon" => :icon,
       "description" => :description,
-      "enabled" => :enabled
+      "enabled" => :enabled,
+      "permissionMode" => :permission_mode,
+      "permission_mode" => :permission_mode
     }
 
     Enum.reduce(config, %{}, fn {key, value}, acc ->

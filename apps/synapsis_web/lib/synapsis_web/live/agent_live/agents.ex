@@ -93,9 +93,17 @@ defmodule SynapsisWeb.AgentLive.Agents do
 
     result =
       case socket.assigns.live_action do
-        :new -> AgentConfigs.create(attrs)
-        :config -> AgentConfigs.update(socket.assigns.agent, attrs)
-        _ -> {:error, :unsupported_action}
+        :new ->
+          AgentConfigs.create(attrs)
+
+        :config ->
+          case AgentConfigs.get(socket.assigns.agent.id) do
+            nil -> {:error, :not_found}
+            db_agent -> AgentConfigs.update(db_agent, attrs)
+          end
+
+        _ ->
+          {:error, :unsupported_action}
       end
 
     case result do
