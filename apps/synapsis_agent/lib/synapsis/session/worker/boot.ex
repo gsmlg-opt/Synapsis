@@ -37,7 +37,8 @@ defmodule Synapsis.Session.Worker.Boot do
     provider_config = Config.resolve_provider_config(provider)
     workspace_path = normalize_workspace_path(agent[:workspace_path])
 
-    with {:ok, graph} <- graph_module.build() do
+    with {:ok, workspace_path} <- ensure_workspace_path(workspace_path),
+         {:ok, graph} <- graph_module.build() do
       initial_state =
         graph_module.initial_state(%{
           session_id: session_id,
@@ -61,10 +62,22 @@ defmodule Synapsis.Session.Worker.Boot do
           {:stop, {:runner_start_failed, reason}}
       end
     else
-      {:error, reason} -> {:stop, {:graph_build_failed, reason}}
+      {:error, {:workspace_unavailable, _path, _reason} = reason} ->
+        {:stop, reason}
+
+      {:error, reason} ->
+        {:stop, {:graph_build_failed, reason}}
     end
   end
 
   defp normalize_workspace_path(path) when is_binary(path) and path != "", do: Path.expand(path)
   defp normalize_workspace_path(_), do: File.cwd!()
+
+  @doc false
+  def ensure_workspace_path(path) when is_binary(path) do
+    case File.mkdir_p(path) do
+      :ok -> {:ok, path}
+      {:error, reason} -> {:error, {:workspace_unavailable, path, reason}}
+    end
+  end
 end

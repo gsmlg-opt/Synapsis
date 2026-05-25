@@ -44,6 +44,13 @@ defmodule Synapsis.Tool.BashTest do
     assert output =~ "err"
   end
 
+  test "returns explicit error when working directory is missing" do
+    missing_dir = Path.join(System.tmp_dir!(), "missing-bash-cwd-#{System.unique_integer()}")
+
+    assert {:error, msg} = Bash.execute(%{"command" => "pwd"}, %{project_path: missing_dir})
+    assert msg == "Working directory does not exist: #{missing_dir}"
+  end
+
   test "declares execute permission and execution category" do
     assert Bash.permission_level() == :execute
     assert Bash.category() == :execution

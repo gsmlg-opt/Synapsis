@@ -39,6 +39,14 @@ defmodule Synapsis.Tool.Bash do
     timeout = min(input["timeout"] || @default_timeout, @max_timeout)
     cwd = context[:project_path] || "."
 
+    unless File.dir?(cwd) do
+      {:error, "Working directory does not exist: #{cwd}"}
+    else
+      execute_command(command, cwd, timeout)
+    end
+  end
+
+  defp execute_command(command, cwd, timeout) do
     port =
       Port.open({:spawn_executable, "/bin/sh"}, [
         :binary,
