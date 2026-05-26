@@ -164,14 +164,7 @@ defmodule Synapsis.Session.Worker do
         if state.stream_ref,
           do: SessionStream.cancel_stream(state.stream_ref, state.session.provider)
 
-        if state.runner_pid do
-          try do
-            GenServer.stop(state.runner_pid, :normal)
-          catch
-            :exit, _ -> :ok
-          end
-        end
-
+        force_stop_runner(state.runner_pid)
         close_open_tool_uses(state.session_id)
         Persistence.set_status(state.session_id, "idle")
         {:noreply, %{state | stream_ref: nil, runner_pid: nil}, @timeout}
@@ -392,6 +385,13 @@ defmodule Synapsis.Session.Worker do
     :ok
   catch
     :exit, _reason -> :ok
+  end
+
+  defp force_stop_runner(nil), do: :ok
+
+  defp force_stop_runner(pid) when is_pid(pid) do
+    if Process.alive?(pid), do: Process.exit(pid, :kill)
+    :ok
   end
 
   defp close_open_tool_uses(session_id) do

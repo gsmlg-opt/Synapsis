@@ -2,7 +2,10 @@ defmodule Synapsis.Agent.Nodes.Orchestrate do
   @moduledoc "Consults Monitor and Orchestrator to decide: continue, pause, escalate, or terminate."
   @behaviour Synapsis.Agent.Runtime.Node
 
+  require Logger
+
   alias Synapsis.Session.{Monitor, Orchestrator}
+  alias Synapsis.Session.Worker.Persistence
 
   @max_tool_iterations 25
 
@@ -18,6 +21,7 @@ defmodule Synapsis.Agent.Nodes.Orchestrate do
 
     decision = Orchestrator.decide(monitor, max_iterations: max_iterations)
     applied = Orchestrator.apply_decision(decision, state.session_id)
+    execute_actions(applied.actions, state)
 
     new_state = %{
       state
@@ -33,5 +37,25 @@ defmodule Synapsis.Agent.Nodes.Orchestrate do
       :escalate -> {:next, :escalate, new_state}
       :terminate -> {:next, :terminate, new_state}
     end
+  end
+
+  defp execute_actions(actions, state) do
+    Enum.each(actions, &execute_action(&1, state))
+  end
+
+  defp execute_action({:broadcast, event, payload}, state) do
+    Persistence.broadcast(state.session_id, event, payload)
+  end
+
+  defp execute_action({:set_status, status}, state) do
+    Persistence.set_status(state.session_id, to_string(status))
+  end
+
+  defp execute_action({:persist_message, reason}, state) do
+    Persistence.broadcast(state.session_id, "orchestrator_message", %{message: reason})
+  end
+
+  defp execute_action({:invoke_auditor, reason}, state) do
+    Logger.info("auditor_invocation_requested", session_id: state.session_id, reason: reason)
   end
 end
