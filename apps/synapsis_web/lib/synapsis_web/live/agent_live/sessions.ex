@@ -100,20 +100,12 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   @impl true
   @max_content_bytes 256_000
 
+  def handle_event("send_message", %{"value" => content}, socket) do
+    send_message(content, socket)
+  end
+
   def handle_event("send_message", %{"content" => content}, socket) do
-    content = String.trim(content)
-
-    cond do
-      content == "" or is_nil(socket.assigns.current_session) ->
-        {:noreply, socket}
-
-      byte_size(content) > @max_content_bytes ->
-        {:noreply, put_flash(socket, :error, "Message too large")}
-
-      true ->
-        Sessions.send_message(socket.assigns.current_session.id, content)
-        {:noreply, socket}
-    end
+    send_message(content, socket)
   end
 
   def handle_event("toggle_new_session", _params, socket) do
@@ -220,6 +212,24 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
     {:noreply, assign(socket, :current_mode, mode)}
   end
+
+  defp send_message(content, socket) when is_binary(content) do
+    content = String.trim(content)
+
+    cond do
+      content == "" or is_nil(socket.assigns.current_session) ->
+        {:noreply, socket}
+
+      byte_size(content) > @max_content_bytes ->
+        {:noreply, put_flash(socket, :error, "Message too large")}
+
+      true ->
+        Sessions.send_message(socket.assigns.current_session.id, content)
+        {:noreply, socket}
+    end
+  end
+
+  defp send_message(_content, socket), do: {:noreply, socket}
 
   # --- PubSub handle_info ---
 
@@ -493,7 +503,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
       <main class="flex-1 min-w-0 flex flex-col">
         <%= if @current_session do %>
           <%!-- Session header --%>
-          <div class="flex items-center justify-between border-b border-outline-variant px-4 py-2 bg-surface">
+          <div class="flex items-center justify-between border-b border-outline-variant bg-surface-container-low px-4 py-3">
             <div class="flex items-center gap-3 min-w-0">
               <.dm_mdi
                 name={@agent_config.icon || "robot-happy-outline"}
@@ -533,11 +543,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
           </div>
 
           <%!-- Message list --%>
-          <div
-            id="messages"
-            phx-hook="ScrollBottom"
-            class="flex-1 overflow-y-auto p-4 space-y-3"
-          >
+          <div id="messages" phx-hook="ScrollBottom" class="flex-1 overflow-y-auto p-5 space-y-4">
             <.message_parts
               :for={msg <- @messages}
               message={msg}
@@ -607,33 +613,21 @@ defmodule SynapsisWeb.AgentLive.Sessions do
           </div>
 
           <%!-- Input area --%>
-          <div class="border-t border-outline-variant p-3 bg-surface">
-            <el-dm-markdown-input
+          <div class="border-t border-outline-variant bg-surface-container-low p-3">
+            <.dm_chat_input
               id="message-input"
               name="content"
               value=""
-              phx-hook="MarkdownSubmit"
-              placeholder="Send a message... (Ctrl+Enter to send)"
+              placeholder="Send a message... (Ctrl/Cmd+Enter)"
               disabled={@session_status not in ~w(idle error)}
-              theme="auto"
+              send_label="Send"
+              clear_on_send
+              duskmoon-send-send="send_message"
               class={[
-                "w-full min-h-[80px] max-h-[200px]",
+                "synapsis-chat-input w-full",
                 if(@session_status not in ~w(idle error), do: "opacity-50 cursor-not-allowed")
               ]}
-            >
-              <div slot="bottom-end">
-                <.dm_btn
-                  id="send-btn"
-                  variant="primary"
-                  size="sm"
-                  disabled={@session_status not in ~w(idle error)}
-                  phx-hook="SendButton"
-                >
-                  <.dm_mdi name="send" class="w-4 h-4" />
-                  <span>Send</span>
-                </.dm_btn>
-              </div>
-            </el-dm-markdown-input>
+            />
           </div>
 
           <%!-- Status bar --%>

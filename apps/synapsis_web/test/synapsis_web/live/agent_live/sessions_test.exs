@@ -132,8 +132,21 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       html = render(view)
 
       refute html =~ "Generating..."
-      refute has_element?(view, "el-dm-markdown-input#message-input[disabled]")
+      refute has_element?(view, "el-dm-chat-input#message-input[disabled]")
       assert Synapsis.Repo.get!(Synapsis.Session, session.id).status == "idle"
+    end
+
+    test "chat input uses DuskMoon chat input send event", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      assert has_element?(view, "el-dm-chat-input#message-input[phx-hook='WebComponentHook']")
+
+      render_hook(view, "send_message", %{"value" => "   "})
+
+      assert Sessions.get_messages(session.id) == []
     end
   end
 

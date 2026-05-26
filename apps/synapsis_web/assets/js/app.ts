@@ -7,6 +7,7 @@ import { LiveSocket } from "phoenix_live_view"
 import "@duskmoon-dev/el-markdown-input/register"
 import "@duskmoon-dev/el-markdown/register"
 import "@duskmoon-dev/elements/register"
+import * as DuskmoonHooks from "../../../../deps/phoenix_duskmoon/assets/js/hooks/index.js"
 import { Hooks } from "@synapsis/hooks"
 
 // Client-only theme switcher — upstream hook pushes "theme_changed" to the
@@ -56,7 +57,7 @@ try {
 const liveSocket = new LiveSocket("/live", Socket, {
   transport: window.WebSocket,
   params: { _csrf_token: csrfToken },
-  hooks: { ThemeSwitcher, ...Hooks },
+  hooks: { ...DuskmoonHooks, ThemeSwitcher, ...Hooks },
 })
 
 liveSocket.connect()

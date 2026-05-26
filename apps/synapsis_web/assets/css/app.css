@@ -101,6 +101,26 @@ code, pre, kbd, samp {
   input.theme-controller:checked:hover {
     background-color: var(--color-secondary);
   }
+
+  .synapsis-chat-input::part(editor) {
+    min-height: 6rem;
+    max-height: 12rem;
+    --md-radius: var(--radius-field, 0.375rem);
+  }
+
+  .synapsis-chat-input::part(send) {
+    border-color: var(--color-primary);
+    background-color: var(--color-primary);
+    color: var(--color-primary-content);
+  }
+
+  .synapsis-chat-input::part(send):hover {
+    background-color: color-mix(
+      in oklch,
+      var(--color-primary),
+      var(--color-on-primary-container) 8%
+    );
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

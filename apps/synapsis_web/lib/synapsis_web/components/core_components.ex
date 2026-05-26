@@ -260,30 +260,36 @@ defmodule SynapsisWeb.CoreComponents do
 
   def tool_call_display(assigns) do
     ~H"""
-    <div class={["border border-outline-variant rounded-lg p-3 text-sm", @class]}>
-      <div class="flex items-center gap-2 mb-1">
-        <.dm_mdi name="wrench" class="w-4 h-4 text-on-surface-variant" />
-        <span class="font-medium">{@name}</span>
-        <.dm_badge variant={tool_status_color(@status)} size="sm">
-          {@status}
-        </.dm_badge>
-      </div>
-      <div :if={@params != []} class="text-xs text-on-surface-variant mt-1">
-        {render_slot(@params)}
-      </div>
-      <div :if={@result != []} class="text-xs mt-2 border-t border-outline-variant pt-2">
-        {render_slot(@result)}
-      </div>
-    </div>
+    <.dm_chat_tool
+      name={@name}
+      status={chat_tool_status(@status)}
+      open={@status in ~w(running error)}
+      class={@class}
+    >
+      <:name_slot>
+        <span class="inline-flex items-center gap-2">
+          <.dm_mdi name="wrench" class="h-4 w-4 text-on-surface-variant" />
+          <span class="font-medium">{@name}</span>
+        </span>
+      </:name_slot>
+      <:call :if={@params != []}>
+        <div class="text-xs text-on-surface-variant">
+          {render_slot(@params)}
+        </div>
+      </:call>
+      <:result :if={@result != []}>
+        <div class="text-xs">
+          {render_slot(@result)}
+        </div>
+      </:result>
+    </.dm_chat_tool>
     """
   end
 
-  defp tool_status_color("pending"), do: "ghost"
-  defp tool_status_color("running"), do: "warning"
-  defp tool_status_color("complete"), do: "success"
-  defp tool_status_color("completed"), do: "success"
-  defp tool_status_color("error"), do: "error"
-  defp tool_status_color(_), do: "ghost"
+  defp chat_tool_status("complete"), do: "success"
+  defp chat_tool_status("completed"), do: "success"
+  defp chat_tool_status(status) when status in ~w(pending running success error), do: status
+  defp chat_tool_status(_), do: "pending"
 
   @doc """
   Read-only form field with label and value display.
@@ -668,19 +674,16 @@ defmodule SynapsisWeb.CoreComponents do
 
   def reasoning_block(assigns) do
     ~H"""
-    <details class={["group", @class]} open={!@collapsed}>
-      <summary class="flex items-center gap-2 cursor-pointer text-xs text-on-surface-variant hover:text-on-surface-variant py-1">
-        <.dm_mdi name="thought-bubble-outline" class="w-4 h-4" />
-        <span>Thinking</span>
-        <.dm_mdi
-          name="chevron-right"
-          class="w-3.5 h-3.5 transition-transform group-open:rotate-90"
-        />
-      </summary>
-      <div class="ml-6 mt-1 text-xs text-on-surface-variant whitespace-pre-wrap max-h-48 overflow-y-auto">
+    <.dm_chat_reasoning summary="Thinking" open={!@collapsed} class={@class}>
+      <:summary_slot>
+        <span class="inline-flex items-center gap-2 text-xs text-on-surface-variant">
+          <.dm_mdi name="thought-bubble-outline" class="h-4 w-4" /> Thinking
+        </span>
+      </:summary_slot>
+      <div class="max-h-48 overflow-y-auto whitespace-pre-wrap text-xs leading-relaxed text-on-surface-variant">
         {@content}
       </div>
-    </details>
+    </.dm_chat_reasoning>
     """
   end
 
@@ -736,11 +739,7 @@ defmodule SynapsisWeb.CoreComponents do
   def streaming_indicator(assigns) do
     ~H"""
     <div class={["flex items-center gap-2 text-xs text-on-surface-variant", @class]}>
-      <span class="flex gap-1">
-        <span class="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:0ms]" />
-        <span class="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:150ms]" />
-        <span class="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:300ms]" />
-      </span>
+      <.dm_chat_typing />
       <span>Generating...</span>
     </div>
     """
