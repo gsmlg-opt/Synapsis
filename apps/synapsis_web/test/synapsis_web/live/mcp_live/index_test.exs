@@ -3,6 +3,25 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
 
   alias Synapsis.{Repo, PluginConfig}
 
+  defmodule FakeMCPPlugin do
+    use GenServer
+
+    def start_link(opts) do
+      name = Keyword.fetch!(opts, :name)
+      state = Keyword.fetch!(opts, :state)
+
+      GenServer.start_link(__MODULE__, state,
+        name: {:via, Registry, {SynapsisPlugin.Registry, name}}
+      )
+    end
+
+    @impl true
+    def init(state), do: {:ok, state}
+
+    @impl true
+    def handle_call(:get_state, _from, state), do: {:reply, state, state}
+  end
+
   defp create_mcp_config(attrs) do
     %PluginConfig{}
     |> PluginConfig.changeset(Map.merge(%{type: "mcp", transport: "stdio"}, attrs))
@@ -223,6 +242,31 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
 
       {:ok, _view, html} = live(conn, ~p"/settings/mcp")
       assert html =~ "-y @test/server"
+    end
+
+    test "tools modal trigger uses DuskMoon dialog show API", %{conn: conn} do
+      config = create_mcp_config(%{name: "tools-server", command: "test"})
+
+      start_supervised!(
+        {FakeMCPPlugin,
+         name: config.name,
+         state: %SynapsisPlugin.MCP{
+           initialized: true,
+           tools: [
+             %{
+               "name" => "search_docs",
+               "description" => "Search docs",
+               "inputSchema" => %{"type" => "object"}
+             }
+           ]
+         }}
+      )
+
+      {:ok, _view, html} = live(conn, ~p"/settings/mcp")
+
+      assert html =~ "1 tool(s)"
+      assert html =~ ".show()"
+      refute html =~ "showModal()"
     end
 
     test "lists multiple MCP configs", %{conn: conn} do

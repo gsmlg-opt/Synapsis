@@ -754,7 +754,7 @@ defmodule SynapsisWeb.MCPLive.Index do
                   variant="ghost"
                   size="xs"
                   class="text-primary"
-                  onclick={"var d=document.getElementById('#{dialog_id}');d.showModal();d.classList.add('modal-open');d.addEventListener('close',function(){d.classList.remove('modal-open')},{once:true})"}
+                  onclick={"document.getElementById('#{dialog_id}').show()"}
                 >
                   <.dm_mdi name="puzzle-outline" class="w-3 h-3 mr-1" />
                   {length(ps[:tools])} tool(s)

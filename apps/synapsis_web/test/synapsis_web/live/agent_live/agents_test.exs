@@ -104,6 +104,17 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       assert render(view) =~ "Updated Editor"
     end
 
+    test "opens config page by agent name from sessions links", %{conn: conn} do
+      {:ok, agent} = AgentConfigs.create(%{name: "main", label: "Main Agent"})
+
+      {:ok, view, html} = live(conn, ~p"/agent/agents/main/config")
+
+      assert html =~ "Main Agent"
+      assert html =~ agent.id
+      assert has_element?(view, "form#agent-config-form")
+      assert has_element?(view, "button[phx-click='switch_config_tab'][phx-value-tab='overview']")
+    end
+
     test "does not reset permission mode when save payload omits the select", %{conn: conn} do
       {:ok, agent} =
         AgentConfigs.create(%{

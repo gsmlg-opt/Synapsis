@@ -839,7 +839,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
   end
 
   defp apply_action(socket, :config, %{"id" => id}) do
-    case AgentConfigs.get(id) do
+    case get_agent_config(id) do
       %AgentConfig{} = agent ->
         assign(socket,
           page_title: "Agent Config",
@@ -853,6 +853,13 @@ defmodule SynapsisWeb.AgentLive.Agents do
         socket
         |> put_flash(:error, "Agent not found")
         |> push_navigate(to: ~p"/agent/agents")
+    end
+  end
+
+  defp get_agent_config(id_or_name) do
+    case Ecto.UUID.cast(id_or_name) do
+      {:ok, id} -> AgentConfigs.get(id)
+      :error -> AgentConfigs.get_by_name(id_or_name)
     end
   end
 
