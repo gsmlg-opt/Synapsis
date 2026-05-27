@@ -148,6 +148,72 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
       assert Sessions.get_messages(session.id) == []
     end
+
+    test "renders failed tool result immediately while streaming", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      send(view.pid, {"tool_use", %{tool: "file_read", tool_use_id: "tu_failed"}})
+
+      assert render(view) =~ "file_read"
+
+      send(
+        view.pid,
+        {"tool_result", %{tool_use_id: "tu_failed", content: "Permission denied", is_error: true}}
+      )
+
+      html = render(view)
+
+      assert html =~ ~s(status="error")
+      assert html =~ "Permission denied"
+    end
+
+    @tag capture_log: true
+    test "renders sent user message immediately before agent response", %{conn: conn} do
+      bypass = Bypass.open()
+      provider_name = "immediate_chat_#{System.unique_integer([:positive])}"
+
+      :ok =
+        Synapsis.Provider.Registry.register(provider_name, %{
+          type: "anthropic",
+          api_key: "test-key",
+          base_url: "http://localhost:#{bypass.port}"
+        })
+
+      on_exit(fn -> Synapsis.Provider.Registry.unregister(provider_name) end)
+
+      Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("text/event-stream")
+        |> Plug.Conn.send_resp(200, """
+        data: {"type":"message_start","message":{"id":"msg_immediate"}}
+
+        data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+        data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ack"}}
+
+        data: {"type":"message_stop"}
+
+        """)
+      end)
+
+      {:ok, session} =
+        Sessions.create("__global__", %{
+          provider: provider_name,
+          model: "claude-sonnet-4-20250514",
+          agent: "main"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      html = render_hook(view, "send_message", %{"value" => "show this immediately"})
+
+      assert html =~ "show this immediately"
+      assert [%{role: "user"}] = Sessions.get_messages(session.id)
+      assert_eventually(fn -> length(Sessions.get_messages(session.id)) == 2 end)
+    end
   end
 
   describe "chat_bubble component DuskMoon rendering" do
@@ -298,4 +364,17 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       assert html =~ ~s(status="out: 99")
     end
   end
+
+  defp assert_eventually(fun, attempts \\ 20)
+
+  defp assert_eventually(fun, attempts) when attempts > 0 do
+    if fun.() do
+      assert true
+    else
+      Process.sleep(25)
+      assert_eventually(fun, attempts - 1)
+    end
+  end
+
+  defp assert_eventually(_fun, 0), do: flunk("condition was not met before timeout")
 end

@@ -123,6 +123,30 @@ code, pre, kbd, samp {
   }
 }
 
+/* Agent working indicator — bouncing dots */
+@keyframes agent-dot-bounce {
+  0%, 80%, 100% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.agent-dot {
+  animation: agent-dot-bounce 1.2s ease-in-out infinite;
+}
+
+.agent-dot-2 {
+  animation-delay: 0.15s;
+}
+
+.agent-dot-3 {
+  animation-delay: 0.3s;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

@@ -746,6 +746,49 @@ defmodule SynapsisWeb.CoreComponents do
   end
 
   @doc """
+  Prominent agent working indicator shown above the chat input area.
+
+  Displays animated bouncing dots, "Agent is working..." text,
+  and a Stop button to cancel the current operation.
+  """
+  attr :status, :string, required: true
+  attr :on_cancel, :string, default: "cancel_stream"
+  attr :class, :string, default: nil
+
+  def agent_working_indicator(assigns) do
+    ~H"""
+    <div class={[
+      "flex items-center justify-between px-4 py-2 border-b border-outline-variant bg-surface-container",
+      @class
+    ]}>
+      <div class="flex items-center gap-2.5">
+        <span class="inline-flex items-center gap-1" aria-hidden="true">
+          <span class="agent-dot agent-dot-1 inline-block w-2 h-2 rounded-full bg-primary"></span>
+          <span class="agent-dot agent-dot-2 inline-block w-2 h-2 rounded-full bg-primary"></span>
+          <span class="agent-dot agent-dot-3 inline-block w-2 h-2 rounded-full bg-primary"></span>
+        </span>
+        <span class="text-sm text-on-surface-variant font-medium">
+          <%= if @status == "tool_executing" do %>
+            Agent is executing tools…
+          <% else %>
+            Agent is working…
+          <% end %>
+        </span>
+      </div>
+      <.dm_btn
+        variant="ghost"
+        size="xs"
+        phx-click={@on_cancel}
+        class="text-error hover:bg-error/10"
+      >
+        <.dm_mdi name="stop" class="w-4 h-4" />
+        <span>Stop</span>
+      </.dm_btn>
+    </div>
+    """
+  end
+
+  @doc """
   Session list sidebar item with title, provider/model, status, and delete button.
   """
   attr :session, :map, required: true

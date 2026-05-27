@@ -224,8 +224,36 @@ defmodule SynapsisWeb.AgentLive.Sessions do
         {:noreply, put_flash(socket, :error, "Message too large")}
 
       true ->
-        Sessions.send_message(socket.assigns.current_session.id, content)
-        {:noreply, socket}
+        session_id = socket.assigns.current_session.id
+
+        # Optimistic update: show the user message immediately
+        optimistic_msg = %Synapsis.Message{
+          id: Ecto.UUID.generate(),
+          session_id: session_id,
+          role: "user",
+          parts: [%Synapsis.Part.Text{content: content}],
+          inserted_at: DateTime.utc_now()
+        }
+
+        socket =
+          socket
+          |> update(:messages, &(&1 ++ [optimistic_msg]))
+          |> assign(:session_status, "streaming")
+
+        case Sessions.send_message(session_id, content) do
+          :ok ->
+            # Reload from DB to get the real persisted message with correct ID/timestamps
+            {:noreply, assign(socket, :messages, Sessions.get_messages(session_id))}
+
+          {:error, reason} ->
+            Logger.warning("session_send_failed", session_id: session_id, reason: inspect(reason))
+
+            {:noreply,
+             socket
+             |> assign(:messages, Sessions.get_messages(session_id))
+             |> assign(:session_status, "error")
+             |> put_flash(:error, "Failed to send message")}
+        end
     end
   end
 
@@ -557,11 +585,17 @@ defmodule SynapsisWeb.AgentLive.Sessions do
               collapsed={false}
             />
 
-            <div :for={{_id, tc} <- @tool_calls} :if={tc.status == "running"}>
-              <.tool_call_display name={tc.name} status={tc.status}>
+            <div :for={{_id, tc} <- @tool_calls}>
+              <.tool_call_display name={tc[:name] || "tool"} status={tc[:status] || "pending"}>
                 <:params>
-                  <pre class="max-h-32 overflow-y-auto">{Jason.encode!(tc.input || %{}, pretty: true)}</pre>
+                  <pre class="max-h-32 overflow-y-auto">{Jason.encode!(tc[:input] || %{}, pretty: true)}</pre>
                 </:params>
+                <:result :if={tc[:result] not in [nil, ""]}>
+                  <pre class={[
+                    "max-h-48 overflow-y-auto whitespace-pre-wrap",
+                    if(tc[:status] == "error", do: "text-error", else: nil)
+                  ]}>{tc[:result]}</pre>
+                </:result>
               </.tool_call_display>
             </div>
 
@@ -611,6 +645,12 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
             <.streaming_indicator :if={@session_status == "streaming" && @streaming_text == ""} />
           </div>
+
+          <%!-- Agent working indicator --%>
+          <.agent_working_indicator
+            :if={@session_status in ~w(streaming tool_executing)}
+            status={@session_status}
+          />
 
           <%!-- Input area --%>
           <div class="border-t border-outline-variant bg-surface-container-low p-3">
@@ -707,9 +747,17 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   end
 
   defp assign_session_status(socket, status) when status in ~w(idle error) do
+    messages =
+      if session = socket.assigns.current_session do
+        Sessions.get_messages(session.id)
+      else
+        []
+      end
+
     socket
     |> maybe_refresh_current_session()
     |> clear_transient_generation()
+    |> assign(:messages, messages)
     |> assign(:session_status, status)
   end
 
