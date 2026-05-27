@@ -239,6 +239,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
           socket
           |> update(:messages, &(&1 ++ [optimistic_msg]))
           |> assign(:session_status, "streaming")
+          |> assign(:tool_calls, %{})
 
         case Sessions.send_message(session_id, content) do
           :ok ->
@@ -321,13 +322,19 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
     sessions = load_sessions(name)
 
+    # Keep tool calls with error status visible so failed tools remain in chat
+    error_tool_calls =
+      socket.assigns.tool_calls
+      |> Enum.filter(fn {_id, tc} -> tc[:status] == "error" end)
+      |> Map.new()
+
     {:noreply,
      assign(socket,
        messages: messages,
        sessions: sessions,
        streaming_text: "",
        streaming_reasoning: "",
-       tool_calls: %{},
+       tool_calls: error_tool_calls,
        permission_requests: [],
        session_status: "idle"
      )}
@@ -777,10 +784,16 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   defp fetch_current_session(_socket), do: {:error, :not_found}
 
   defp clear_transient_generation(socket) do
+    # Preserve tool calls with error status so failed tools remain visible in chat
+    error_tool_calls =
+      socket.assigns.tool_calls
+      |> Enum.filter(fn {_id, tc} -> tc[:status] == "error" end)
+      |> Map.new()
+
     assign(socket,
       streaming_text: "",
       streaming_reasoning: "",
-      tool_calls: %{},
+      tool_calls: error_tool_calls,
       permission_requests: []
     )
   end
