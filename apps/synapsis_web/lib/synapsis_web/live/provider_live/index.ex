@@ -65,6 +65,7 @@ defmodule SynapsisWeb.ProviderLive.Index do
 
     case Synapsis.Providers.create(attrs) do
       {:ok, provider} ->
+        {provider, refresh_flash} = maybe_refresh_models_on_create(provider, preset)
         {:ok, providers} = Synapsis.Providers.list()
 
         # Redirect OAuth providers to show page for OAuth login
@@ -78,7 +79,7 @@ defmodule SynapsisWeb.ProviderLive.Index do
         {:noreply,
          socket
          |> assign(providers: providers, show_form: false, selected_preset: nil)
-         |> put_flash(:info, "Provider created")
+         |> put_flash(:info, refresh_flash)
          |> push_navigate(to: redirect_to)}
 
       {:error, %Ecto.Changeset{errors: errors}} ->
@@ -105,6 +106,15 @@ defmodule SynapsisWeb.ProviderLive.Index do
         {:noreply, put_flash(socket, :error, "Failed to delete provider")}
     end
   end
+
+  defp maybe_refresh_models_on_create(provider, %{custom: true}) do
+    case Synapsis.Providers.refresh_models(provider.id) do
+      {:ok, updated} -> {updated, "Provider created and models loaded"}
+      {:error, _reason} -> {provider, "Provider created; model loading failed"}
+    end
+  end
+
+  defp maybe_refresh_models_on_create(provider, _preset), do: {provider, "Provider created"}
 
   @impl true
   def render(assigns) do

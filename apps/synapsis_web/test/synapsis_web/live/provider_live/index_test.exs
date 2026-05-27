@@ -173,7 +173,37 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       |> render_submit()
 
       flash = assert_redirected(view, ~p"/settings/providers")
-      assert flash["info"] == "Provider created"
+      assert flash["info"] == "Provider created; model loading failed"
+    end
+
+    test "custom compatible provider creation loads models", %{conn: conn} do
+      bypass = Bypass.open()
+
+      Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "model-a"}]}))
+      end)
+
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/new")
+
+      view
+      |> element(~s(button[phx-click="select_custom"][phx-value-type="openai"]))
+      |> render_click()
+
+      view
+      |> form("form[phx-submit]", %{
+        "name" => "my-compatible-llm",
+        "base_url" => "http://localhost:#{bypass.port}/v1",
+        "api_key" => "sk-test"
+      })
+      |> render_submit()
+
+      flash = assert_redirected(view, ~p"/settings/providers")
+      assert flash["info"] == "Provider created and models loaded"
+
+      provider = Synapsis.Repo.get_by!(Synapsis.ProviderConfig, name: "my-compatible-llm")
+      assert [%{"id" => "model-a"}] = provider.config["available_models"]
     end
 
     test "delete_provider event removes provider from grid", %{conn: conn} do

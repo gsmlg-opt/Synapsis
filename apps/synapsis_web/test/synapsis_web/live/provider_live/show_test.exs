@@ -169,6 +169,41 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       assert html =~ ~s(name="models[]")
     end
 
+    test "refresh_models reloads models from provider settings", %{conn: conn} do
+      bypass = Bypass.open()
+
+      Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "fresh-model"}]}))
+      end)
+
+      {:ok, provider} =
+        %Synapsis.ProviderConfig{}
+        |> Synapsis.ProviderConfig.changeset(%{
+          name: "refreshable-provider-#{:rand.uniform(100_000)}",
+          type: "openai",
+          base_url: "http://localhost:#{bypass.port}/v1",
+          api_key_encrypted: "sk-test",
+          config: %{"available_models" => [%{"id" => "old-model", "name" => "Old Model"}]}
+        })
+        |> Synapsis.Repo.insert()
+
+      {:ok, view, html} = live(conn, ~p"/settings/providers/#{provider.id}")
+      assert html =~ "Old Model"
+
+      html =
+        view
+        |> element(~s(el-dm-button[phx-click="refresh_models"]))
+        |> render_click()
+
+      assert html =~ "Models refreshed"
+      assert html =~ "fresh-model"
+
+      {:ok, updated} = Synapsis.Providers.get(provider.id)
+      assert [%{"id" => "fresh-model"}] = updated.config["available_models"]
+    end
+
     test "save_models persists enabled models", %{conn: conn, provider: provider} do
       {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
 

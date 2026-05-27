@@ -84,8 +84,14 @@ defmodule Synapsis.Providers do
   def models_for(provider_name) do
     case get_by_name(provider_name) do
       {:ok, provider} ->
-        config = build_runtime_config(provider)
-        Synapsis.Provider.Adapter.models(config)
+        case cached_models(provider) do
+          [] ->
+            config = build_runtime_config(provider)
+            Synapsis.Provider.Adapter.models(config)
+
+          models ->
+            {:ok, models}
+        end
 
       {:error, _} ->
         {:error, :not_found}
@@ -96,13 +102,53 @@ defmodule Synapsis.Providers do
   def models_by_id(id) do
     case get(id) do
       {:ok, provider} ->
-        config = build_runtime_config(provider)
-        Synapsis.Provider.Adapter.models(config)
+        provider
+        |> cached_models()
+        |> case do
+          [] ->
+            config = build_runtime_config(provider)
+            Synapsis.Provider.Adapter.models(config)
+
+          models ->
+            {:ok, models}
+        end
 
       {:error, _} ->
         {:error, :not_found}
     end
   end
+
+  @doc "Refresh provider models from the provider's /models endpoint and cache them in config."
+  def refresh_models(id) do
+    with {:ok, provider} <- get(id),
+         {:ok, models} <- fetch_models(provider) do
+      config =
+        provider.config
+        |> Kernel.||(%{})
+        |> Map.merge(%{
+          "available_models" => Enum.map(models, &stringify_model/1),
+          "models_refreshed_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+        })
+
+      update(id, %{config: config})
+    end
+  end
+
+  @doc "Fetch provider models from the remote endpoint, bypassing any cached config."
+  def fetch_models(%ProviderConfig{} = provider) do
+    provider
+    |> build_runtime_config()
+    |> Map.put(:discover_models, true)
+    |> Synapsis.Provider.Adapter.models()
+  end
+
+  @doc "Return cached discovered models for a provider."
+  def cached_models(%ProviderConfig{config: %{"available_models" => models}})
+      when is_list(models) do
+    Enum.map(models, &normalize_model/1)
+  end
+
+  def cached_models(_), do: []
 
   @doc "Return the list of enabled model IDs for a provider. Empty list means all models enabled."
   def enabled_models(%ProviderConfig{config: config}) do
@@ -110,6 +156,29 @@ defmodule Synapsis.Providers do
       %{"enabled_models" => models} when is_list(models) -> models
       _ -> []
     end
+  end
+
+  defp stringify_model(model) do
+    model
+    |> Map.take([:id, :name, :context_window])
+    |> Enum.map(fn {key, value} -> {to_string(key), value} end)
+    |> Map.new()
+  end
+
+  defp normalize_model(%{id: id} = model) do
+    %{
+      id: id,
+      name: model[:name] || id,
+      context_window: model[:context_window] || 128_000
+    }
+  end
+
+  defp normalize_model(%{"id" => id} = model) do
+    %{
+      id: id,
+      name: model["name"] || id,
+      context_window: model["context_window"] || 128_000
+    }
   end
 
   def test_connection(id) do

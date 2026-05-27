@@ -8,6 +8,44 @@ defmodule Synapsis.Provider.Transport.AnthropicTest do
     %{bypass: bypass, port: bypass.port}
   end
 
+  describe "fetch_models/1" do
+    test "returns parsed models from /models", %{bypass: bypass, port: port} do
+      Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+        headers = Map.new(conn.req_headers)
+        assert headers["x-api-key"] == "test-api-key"
+        assert headers["authorization"] == "Bearer test-api-key"
+        assert headers["anthropic-version"] == "2023-06-01"
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(
+          200,
+          Jason.encode!(%{
+            "data" => [
+              %{"id" => "claude-sonnet", "display_name" => "Claude Sonnet"},
+              %{"id" => "compatible-model", "context_length" => 64_000}
+            ]
+          })
+        )
+      end)
+
+      config = %{api_key: "test-api-key", base_url: "http://localhost:#{port}"}
+      assert {:ok, models} = Anthropic.fetch_models(config)
+      assert [%{id: "claude-sonnet", name: "Claude Sonnet"}, %{id: "compatible-model"}] = models
+    end
+
+    test "uses /models when base_url already includes /v1", %{bypass: bypass, port: port} do
+      Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "model-a"}]}))
+      end)
+
+      config = %{api_key: "test-key", base_url: "http://localhost:#{port}/v1"}
+      assert {:ok, [%{id: "model-a"}]} = Anthropic.fetch_models(config)
+    end
+  end
+
   describe "stream/3" do
     test "sends correct headers", %{bypass: bypass, port: port} do
       Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->

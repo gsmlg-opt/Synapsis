@@ -96,6 +96,31 @@ defmodule SynapsisWeb.ProviderLive.Show do
     end
   end
 
+  def handle_event("refresh_models", _params, socket) do
+    case Synapsis.Providers.refresh_models(socket.assigns.provider.id) do
+      {:ok, provider} ->
+        all_models = Synapsis.Providers.cached_models(provider)
+
+        {:noreply,
+         socket
+         |> assign(
+           provider: provider,
+           all_models: all_models,
+           enabled_models: Synapsis.Providers.enabled_models(provider),
+           chat_model: default_chat_model(all_models, socket.assigns.chat_model)
+         )
+         |> put_flash(:info, "Models refreshed")}
+
+      {:error, reason} ->
+        Logger.warning("provider_models_refresh_failed",
+          provider_id: socket.assigns.provider.id,
+          reason: inspect(reason)
+        )
+
+        {:noreply, put_flash(socket, :error, "Failed to refresh models")}
+    end
+  end
+
   # -- Test Chat Events --
 
   def handle_event("toggle_chat", _params, socket) do
@@ -360,11 +385,23 @@ defmodule SynapsisWeb.ProviderLive.Show do
   end
 
   defp fetch_models(provider) do
-    case Synapsis.Providers.models_by_id(provider.id) do
-      {:ok, models} -> models
-      {:error, _} -> []
+    case Synapsis.Providers.cached_models(provider) do
+      [] ->
+        case Synapsis.Providers.models_by_id(provider.id) do
+          {:ok, models} -> models
+          {:error, _} -> []
+        end
+
+      models ->
+        models
     end
   end
+
+  defp default_chat_model([], current), do: current
+  defp default_chat_model(models, nil), do: hd(models).id
+
+  defp default_chat_model(models, current),
+    do: if(Enum.any?(models, &(&1.id == current)), do: current, else: hd(models).id)
 
   defp model_enabled?(model_id, enabled_models) do
     enabled_models == [] or model_id in enabled_models
@@ -556,17 +593,26 @@ defmodule SynapsisWeb.ProviderLive.Show do
       </.dm_card>
 
       <%!-- Models Section --%>
-      <.dm_card :if={@all_models != []} variant="bordered" class="mb-6">
+      <.dm_card variant="bordered" class="mb-6">
         <:title>
           <div class="flex justify-between items-center w-full">
             <span>Models</span>
-            <.dm_btn variant="ghost" size="xs" phx-click="toggle_edit_models">
-              {if @editing_models, do: "Cancel", else: "Edit"}
-            </.dm_btn>
+            <div class="flex items-center gap-2">
+              <.dm_btn variant="ghost" size="xs" phx-click="refresh_models">
+                Refresh Models
+              </.dm_btn>
+              <.dm_btn variant="ghost" size="xs" phx-click="toggle_edit_models">
+                {if @editing_models, do: "Cancel", else: "Edit"}
+              </.dm_btn>
+            </div>
           </div>
         </:title>
 
-        <%= if @editing_models do %>
+        <div :if={@all_models == []} class="text-sm text-on-surface-variant">
+          No models loaded. Use Refresh Models to load the provider's model list.
+        </div>
+
+        <%= if @all_models != [] && @editing_models do %>
           <.dm_form for={to_form(%{})} phx-submit="save_models">
             <input type="hidden" name="models[]" value="" />
             <div class="space-y-2">
@@ -596,7 +642,9 @@ defmodule SynapsisWeb.ProviderLive.Show do
               </div>
             </:actions>
           </.dm_form>
-        <% else %>
+        <% end %>
+
+        <%= if @all_models != [] && !@editing_models do %>
           <div class="space-y-1">
             <div :for={model <- @all_models} class="flex items-center gap-2 py-1">
               <%= if model_enabled?(model.id, @enabled_models) do %>

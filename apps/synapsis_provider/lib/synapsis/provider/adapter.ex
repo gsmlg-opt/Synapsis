@@ -60,6 +60,9 @@ defmodule Synapsis.Provider.Adapter do
 
       :anthropic ->
         cond do
+          discovered_models?(config) ->
+            Transport.Anthropic.fetch_models(config)
+
           String.contains?(base_url, "moonshot") ->
             {:ok, ModelRegistry.list(:moonshot)}
 
@@ -76,6 +79,10 @@ defmodule Synapsis.Provider.Adapter do
       :google ->
         {:ok, ModelRegistry.list(:google)}
     end
+  end
+
+  defp discovered_models?(config) do
+    config[:discover_models] == true or config["discover_models"] == true
   end
 
   @doc """

@@ -122,6 +122,30 @@ defmodule Synapsis.ProvidersTest do
     end
   end
 
+  describe "refresh_models/1" do
+    test "loads compatible provider models and stores them in config" do
+      bypass = Bypass.open()
+
+      Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "model-a"}]}))
+      end)
+
+      {:ok, provider} =
+        Providers.create(%{
+          name: "compatible-provider",
+          type: "openai",
+          base_url: "http://localhost:#{bypass.port}",
+          api_key_encrypted: "sk-test"
+        })
+
+      assert {:ok, updated} = Providers.refresh_models(provider.id)
+      assert [%{"id" => "model-a", "name" => "model-a"}] = updated.config["available_models"]
+      assert {:ok, [%{id: "model-a"}]} = Providers.models_by_id(provider.id)
+    end
+  end
+
   describe "delete/1" do
     test "deletes provider and unregisters from registry" do
       {:ok, provider} = Providers.create(@valid_attrs)

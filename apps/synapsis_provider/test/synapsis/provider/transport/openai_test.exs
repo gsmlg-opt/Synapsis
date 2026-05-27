@@ -85,6 +85,17 @@ defmodule Synapsis.Provider.Transport.OpenAITest do
       assert {:ok, [model]} = OpenAI.fetch_models(config)
       assert model.id == "llama3"
     end
+
+    test "uses /models when base_url already includes /v1", %{bypass: bypass, port: port} do
+      Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "model-a"}]}))
+      end)
+
+      config = %{api_key: "test-key", base_url: "http://localhost:#{port}/v1"}
+      assert {:ok, [%{id: "model-a"}]} = OpenAI.fetch_models(config)
+    end
   end
 
   describe "default_base_url/0" do
