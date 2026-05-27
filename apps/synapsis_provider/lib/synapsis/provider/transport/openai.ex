@@ -15,10 +15,12 @@ defmodule Synapsis.Provider.Transport.OpenAI do
 
   @doc "Fetch available models from the provider."
   def fetch_models(config) do
-    base_url = config[:base_url] || @default_base_url
+    base_url = config[:base_url] || config["base_url"] || @default_base_url
     headers = auth_headers(config)
 
-    case Req.get(models_url(base_url), headers: headers, receive_timeout: 5_000, retry: false) do
+    url = models_url(base_url, config)
+
+    case Req.get(url, headers: headers, receive_timeout: 5_000, retry: false) do
       {:ok, %{status: 200, body: %{"data" => models}}} ->
         {:ok,
          Enum.map(models, fn m ->
@@ -30,7 +32,7 @@ defmodule Synapsis.Provider.Transport.OpenAI do
          end)}
 
       {:ok, %{status: status}} ->
-        {:error, "HTTP #{status}"}
+        {:error, "HTTP #{status} from #{url}"}
 
       {:error, reason} ->
         {:error, reason}
@@ -40,14 +42,19 @@ defmodule Synapsis.Provider.Transport.OpenAI do
   @doc "Default base URL for OpenAI API."
   def default_base_url, do: @default_base_url
 
-  defp models_url(base_url) do
+  defp models_url(base_url, config) do
     base_url = String.trim_trailing(to_string(base_url), "/")
 
-    if String.ends_with?(base_url, "/v1") do
+    if compatible_discovery?(config) or String.ends_with?(base_url, "/v1") do
       "#{base_url}/models"
     else
       "#{base_url}/v1/models"
     end
+  end
+
+  defp compatible_discovery?(config) do
+    config[:discover_models] || config["discover_models"] || config[:type] == "openai_compat" ||
+      config["type"] == "openai_compat"
   end
 
   defp auth_headers(config) do

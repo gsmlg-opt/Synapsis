@@ -96,6 +96,22 @@ defmodule Synapsis.Provider.Transport.OpenAITest do
       config = %{api_key: "test-key", base_url: "http://localhost:#{port}/v1"}
       assert {:ok, [%{id: "model-a"}]} = OpenAI.fetch_models(config)
     end
+
+    test "uses base plus /models for compatible discovery", %{bypass: bypass, port: port} do
+      Bypass.expect_once(bypass, "GET", "/llm/v1/models", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "proxy-model"}]}))
+      end)
+
+      config = %{
+        "api_key" => "test-key",
+        "base_url" => "http://localhost:#{port}/llm/v1",
+        "discover_models" => true
+      }
+
+      assert {:ok, [%{id: "proxy-model"}]} = OpenAI.fetch_models(config)
+    end
   end
 
   describe "default_base_url/0" do

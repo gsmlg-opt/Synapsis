@@ -13,16 +13,14 @@ defmodule Synapsis.Provider.Transport.Anthropic do
   def fetch_models(config) do
     base_url = config[:base_url] || config["base_url"] || @default_base_url
 
-    case Req.get(models_url(base_url),
-           headers: auth_headers(config),
-           receive_timeout: 5_000,
-           retry: false
-         ) do
+    url = models_url(base_url)
+
+    case Req.get(url, headers: auth_headers(config), receive_timeout: 5_000, retry: false) do
       {:ok, %{status: 200, body: %{"data" => models}}} when is_list(models) ->
         {:ok, Enum.map(models, &model_from_response/1)}
 
       {:ok, %{status: status}} ->
-        {:error, "HTTP #{status}"}
+        {:error, "HTTP #{status} from #{url}"}
 
       {:error, reason} ->
         {:error, reason}

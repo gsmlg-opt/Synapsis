@@ -44,6 +44,17 @@ defmodule Synapsis.Provider.Transport.AnthropicTest do
       config = %{api_key: "test-key", base_url: "http://localhost:#{port}/v1"}
       assert {:ok, [%{id: "model-a"}]} = Anthropic.fetch_models(config)
     end
+
+    test "uses base plus /v1/models for compatible providers", %{bypass: bypass, port: port} do
+      Bypass.expect_once(bypass, "GET", "/llm/anthropic/v1/models", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "versioned-model"}]}))
+      end)
+
+      config = %{api_key: "test-key", base_url: "http://localhost:#{port}/llm/anthropic"}
+      assert {:ok, [%{id: "versioned-model"}]} = Anthropic.fetch_models(config)
+    end
   end
 
   describe "stream/3" do
