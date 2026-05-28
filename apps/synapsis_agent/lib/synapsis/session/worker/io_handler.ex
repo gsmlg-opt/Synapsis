@@ -33,13 +33,14 @@ defmodule Synapsis.Session.Worker.IOHandler do
   end
 
   def handle_dispatch_tools(classified, opts, state) do
-    hashes = ToolDispatcher.dispatch_all(classified, self(), state.session_id, opts)
+    {hashes, task_refs} = ToolDispatcher.dispatch_all(classified, self(), state.session_id, opts)
 
     {:noreply,
      %{
        state
        | pending_tool_count: length(classified),
-         stream_acc: Map.put(state.stream_acc, :tool_call_hashes, hashes)
+         stream_acc: Map.put(state.stream_acc, :tool_call_hashes, hashes),
+         tool_tasks: MapSet.union(state.tool_tasks, task_refs)
      }}
   end
 
@@ -80,6 +81,26 @@ defmodule Synapsis.Session.Worker.IOHandler do
     remaining = state.pending_tool_count - 1
     if remaining <= 0, do: safe_resume(state.runner_pid, %{tools_completed: true})
     {:noreply, %{state | pending_tool_count: remaining}}
+  end
+
+  def handle_tool_task_down(ref, reason, state) do
+    new_tool_tasks = MapSet.delete(state.tool_tasks, ref)
+
+    # Normal exits mean the task completed and already sent {:tool_result, ...},
+    # which was handled by handle_tool_result. Only decrement for abnormal exits
+    # where the tool_result message was never sent.
+    if reason == :normal do
+      {:noreply, %{state | tool_tasks: new_tool_tasks}}
+    else
+      Logger.warning("tool_task_down",
+        session_id: state.session_id,
+        reason: inspect(reason)
+      )
+
+      remaining = state.pending_tool_count - 1
+      if remaining <= 0, do: safe_resume(state.runner_pid, %{tools_completed: true})
+      {:noreply, %{state | pending_tool_count: remaining, tool_tasks: new_tool_tasks}}
+    end
   end
 
   def handle_runner_exit(reason, state) do

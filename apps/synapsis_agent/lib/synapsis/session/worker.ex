@@ -26,7 +26,8 @@ defmodule Synapsis.Session.Worker do
     pending_approvals: MapSet.new(),
     approval_decisions: %{},
     execution_mode: :graph,
-    query_loop_task: nil
+    query_loop_task: nil,
+    tool_tasks: MapSet.new()
   ]
 
   def start_link(opts) do
@@ -167,7 +168,9 @@ defmodule Synapsis.Session.Worker do
         force_stop_runner(state.runner_pid)
         close_open_tool_uses(state.session_id)
         Persistence.set_status(state.session_id, "idle")
-        {:noreply, %{state | stream_ref: nil, runner_pid: nil}, @timeout}
+
+        {:noreply, %{state | stream_ref: nil, runner_pid: nil, tool_tasks: MapSet.new()},
+         @timeout}
     end
   end
 
@@ -243,7 +246,18 @@ defmodule Synapsis.Session.Worker do
     {:stop, :normal, s}
   end
 
-  def handle_info({:DOWN, _, :process, _, _}, s), do: {:noreply, s, @timeout}
+  # Tool task crashed — the try/rescue/catch in ToolDispatcher.execute_async should
+  # normally prevent this, but as a safety net we handle task crashes here by
+  # decrementing the pending tool count so the runner doesn't stay stuck waiting.
+  def handle_info({:DOWN, ref, :process, _pid, reason}, s)
+      when is_reference(ref) do
+    if MapSet.member?(s.tool_tasks, ref) do
+      IOHandler.handle_tool_task_down(ref, reason, s)
+    else
+      {:noreply, s, @timeout}
+    end
+  end
+
   def handle_info(_msg, s), do: {:noreply, s, @timeout}
 
   @impl true
@@ -343,7 +357,8 @@ defmodule Synapsis.Session.Worker do
             stream_acc: Synapsis.Agent.StreamAccumulator.new(),
             pending_tool_count: 0,
             pending_approvals: MapSet.new(),
-            approval_decisions: %{}
+            approval_decisions: %{},
+            tool_tasks: MapSet.new()
         })
 
       {:error, reason} ->

@@ -63,30 +63,69 @@ defmodule Synapsis.Agent.ToolDispatcher do
     is_duplicate = MapSet.member?(tool_call_hashes, call_hash)
 
     Task.Supervisor.async_nolink(Synapsis.Tool.TaskSupervisor, fn ->
-      result =
-        Synapsis.Tool.Executor.execute_approved(tool_use.tool, tool_use.input, %{
-          project_path: effective_path,
-          session_id: session_id,
-          working_dir: effective_path,
-          agent_id: agent_id,
-          agent_scope: :agent
-        })
+      try do
+        result =
+          Synapsis.Tool.Executor.execute_approved(tool_use.tool, tool_use.input, %{
+            project_path: effective_path,
+            session_id: session_id,
+            working_dir: effective_path,
+            agent_id: agent_id,
+            agent_scope: :agent
+          })
 
-      case result do
-        {:ok, output} ->
-          final_output =
-            if is_duplicate do
-              output <>
-                "\n\nWarning: This exact tool call was already made in this conversation turn. The same approach may not work. Try a different approach."
-            else
-              output
-            end
+        case result do
+          {:ok, output} ->
+            final_output =
+              if is_duplicate do
+                output <>
+                  "\n\nWarning: This exact tool call was already made in this conversation turn. The same approach may not work. Try a different approach."
+              else
+                output
+              end
 
-          send(caller_pid, {:tool_result, tool_use.tool_use_id, final_output, false})
+            send(caller_pid, {:tool_result, tool_use.tool_use_id, final_output, false})
 
-        {:error, reason} ->
-          error_msg = error_message(reason)
-          send(caller_pid, {:tool_result, tool_use.tool_use_id, error_msg, true})
+          {:error, reason} ->
+            error_msg = error_message(reason)
+            send(caller_pid, {:tool_result, tool_use.tool_use_id, error_msg, true})
+
+          other ->
+            Logger.warning("tool_unexpected_result",
+              tool: tool_use.tool,
+              result: inspect(other)
+            )
+
+            send(
+              caller_pid,
+              {:tool_result, tool_use.tool_use_id, "Unexpected tool result: #{inspect(other)}",
+               true}
+            )
+        end
+      rescue
+        e ->
+          Logger.warning("tool_task_crashed",
+            tool: tool_use.tool,
+            error: Exception.message(e)
+          )
+
+          send(
+            caller_pid,
+            {:tool_result, tool_use.tool_use_id,
+             "Tool execution crashed: #{Exception.message(e)}", true}
+          )
+      catch
+        kind, reason ->
+          Logger.warning("tool_task_caught",
+            tool: tool_use.tool,
+            kind: kind,
+            reason: inspect(reason)
+          )
+
+          send(
+            caller_pid,
+            {:tool_result, tool_use.tool_use_id,
+             "Tool execution failed: #{inspect({kind, reason})}", true}
+          )
       end
     end)
   end
@@ -97,14 +136,15 @@ defmodule Synapsis.Agent.ToolDispatcher do
 
   @doc """
   Dispatch all tool uses: execute approved, request approval, deny denied.
-  Returns updated tool_call_hashes.
+  Returns `{updated_tool_call_hashes, tool_task_refs}` where `tool_task_refs`
+  is a MapSet of task refs from spawned tool tasks (for crash monitoring).
   """
   @spec dispatch_all(
           [{:approved | :requires_approval | :denied, Synapsis.Part.ToolUse.t()}],
           pid(),
           String.t(),
           map()
-        ) :: MapSet.t()
+        ) :: {MapSet.t(), MapSet.t()}
   def dispatch_all(classified_tools, caller_pid, session_id, opts) do
     hashes = opts[:tool_call_hashes] || MapSet.new()
 
@@ -113,31 +153,40 @@ defmodule Synapsis.Agent.ToolDispatcher do
         MapSet.put(acc, :erlang.phash2({tu.tool, tu.input}))
       end)
 
-    for {classification, tool_use} <- classified_tools do
-      case classification do
-        :approved ->
-          execute_async(tool_use, caller_pid, Map.put(opts, :tool_call_hashes, hashes))
+    task_refs =
+      for {classification, tool_use} <- classified_tools, reduce: MapSet.new() do
+        acc ->
+          case classification do
+            :approved ->
+              task =
+                execute_async(tool_use, caller_pid, Map.put(opts, :tool_call_hashes, hashes))
 
-        :requires_approval ->
-          Phoenix.PubSub.broadcast(
-            Synapsis.PubSub,
-            "session:#{session_id}",
-            {"permission_request",
-             %{
-               tool: tool_use.tool,
-               tool_use_id: tool_use.tool_use_id,
-               input: tool_use.input
-             }}
-          )
+              MapSet.put(acc, task.ref)
 
-        :denied ->
-          send(
-            caller_pid,
-            {:tool_result, tool_use.tool_use_id, "Tool denied by permission policy.", true}
-          )
+            :requires_approval ->
+              Phoenix.PubSub.broadcast(
+                Synapsis.PubSub,
+                "session:#{session_id}",
+                {"permission_request",
+                 %{
+                   tool: tool_use.tool,
+                   tool_use_id: tool_use.tool_use_id,
+                   input: tool_use.input
+                 }}
+              )
+
+              acc
+
+            :denied ->
+              send(
+                caller_pid,
+                {:tool_result, tool_use.tool_use_id, "Tool denied by permission policy.", true}
+              )
+
+              acc
+          end
       end
-    end
 
-    new_hashes
+    {new_hashes, task_refs}
   end
 end
