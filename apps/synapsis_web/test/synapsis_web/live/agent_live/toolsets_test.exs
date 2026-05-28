@@ -138,6 +138,27 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
       assert toolset.tool_names == ["mcp:demo:search_docs"]
     end
 
+    test "refreshes MCP tool list when registry changes after page load", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/agent/tools/new")
+      refute html =~ "MCP: live"
+      refute has_element?(view, "input[name='tool_names[]'][value='mcp:live:list_tools']")
+
+      Synapsis.Tool.Registry.register_process("mcp:live:list_tools", self(),
+        description: "List live tools",
+        category: :search
+      )
+
+      on_exit(fn -> Synapsis.Tool.Registry.unregister("mcp:live:list_tools") end)
+
+      assert render(view) =~ "MCP: live"
+
+      view
+      |> element("[data-testid='tool-source-selector'] el-dm-button", "MCP: live")
+      |> render_click()
+
+      assert has_element?(view, "input[name='tool_names[]'][value='mcp:live:list_tools']")
+    end
+
     test "shows empty MCP source when the configured server has no registered tools", %{
       conn: conn
     } do

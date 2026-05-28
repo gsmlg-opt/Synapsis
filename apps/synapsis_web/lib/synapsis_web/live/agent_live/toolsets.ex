@@ -33,6 +33,10 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
 
   @impl true
   def mount(_params, _session, socket) do
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "tool_registry")
+    end
+
     {:ok,
      assign(socket,
        page_title: "Toolsets",
@@ -43,6 +47,11 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
        mcp_sources: [],
        selected_source: "built-in"
      )}
+  end
+
+  @impl true
+  def handle_info({:tool_registry_changed, _payload}, socket) do
+    {:noreply, assign_tool_catalog(socket)}
   end
 
   @impl true
@@ -376,7 +385,13 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
 
   defp assign_common(socket) do
     assign(socket,
-      toolsets: Toolsets.list(),
+      toolsets: Toolsets.list()
+    )
+    |> assign_tool_catalog()
+  end
+
+  defp assign_tool_catalog(socket) do
+    assign(socket,
       available_tools: available_tools(),
       mcp_sources: Toolsets.list_mcp_sources()
     )

@@ -60,14 +60,14 @@ defmodule SynapsisPlugin.Server do
   def handle_call({:execute, tool_name, input, _context}, from, state) do
     case state.plugin_module.execute(tool_name, input, state.plugin_state) do
       {:ok, result, new_plugin_state} ->
-        {:reply, {:ok, result}, %{state | plugin_state: new_plugin_state}}
+        {:reply, {:ok, result}, put_plugin_state(state, new_plugin_state)}
 
       {:async, new_plugin_state} ->
         # Plugin will reply later via handle_info
-        {:noreply, %{state | plugin_state: put_pending_from(new_plugin_state, from)}}
+        {:noreply, put_plugin_state(state, put_pending_from(new_plugin_state, from))}
 
       {:error, reason, new_plugin_state} ->
-        {:reply, {:error, reason}, %{state | plugin_state: new_plugin_state}}
+        {:reply, {:error, reason}, put_plugin_state(state, new_plugin_state)}
     end
   end
 
@@ -80,7 +80,7 @@ defmodule SynapsisPlugin.Server do
     if function_exported?(state.plugin_module, :handle_effect, 3) do
       case state.plugin_module.handle_effect(effect, payload, state.plugin_state) do
         {:ok, new_plugin_state} ->
-          {:noreply, %{state | plugin_state: new_plugin_state}}
+          {:noreply, put_plugin_state(state, new_plugin_state)}
 
         other ->
           Logger.warning("plugin_handle_effect_unexpected",
@@ -99,7 +99,7 @@ defmodule SynapsisPlugin.Server do
     if function_exported?(state.plugin_module, :handle_info, 2) do
       case state.plugin_module.handle_info(msg, state.plugin_state) do
         {:ok, new_plugin_state} ->
-          {:noreply, %{state | plugin_state: new_plugin_state}}
+          {:noreply, put_plugin_state(state, new_plugin_state)}
 
         other ->
           Logger.warning("plugin_handle_info_unexpected",
@@ -158,6 +158,28 @@ defmodule SynapsisPlugin.Server do
     for name <- tool_names do
       Synapsis.Tool.Registry.unregister(name)
     end
+  end
+
+  defp put_plugin_state(state, new_plugin_state) do
+    old_tools = state.plugin_module.tools(state.plugin_state)
+    new_tools = state.plugin_module.tools(new_plugin_state)
+
+    state = %{state | plugin_state: new_plugin_state}
+
+    if old_tools == new_tools do
+      state
+    else
+      sync_registered_tools(state, new_tools)
+    end
+  end
+
+  defp sync_registered_tools(state, tools) do
+    desired = Enum.map(tools, & &1.name)
+    stale = (state.registered_tools || []) -- desired
+
+    unregister_tools(stale)
+
+    %{state | registered_tools: register_tools(state.name, tools)}
   end
 
   defp put_pending_from(plugin_state, from) when is_map(plugin_state) do

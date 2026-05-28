@@ -44,12 +44,14 @@ defmodule Synapsis.Tool.Registry do
   def register_module(name, module, opts \\ []) do
     enriched = enrich_opts_from_module(module, opts)
     :ets.insert(@table, {name, {:module, module, enriched}})
+    broadcast_tool_registry_changed(:registered, name)
     :ok
   end
 
   @doc "Register a process-based tool (plugin GenServer)."
   def register_process(name, pid, opts \\ []) do
     :ets.insert(@table, {name, {:process, pid, opts}})
+    broadcast_tool_registry_changed(:registered, name)
     :ok
   end
 
@@ -70,6 +72,7 @@ defmodule Synapsis.Tool.Registry do
 
     enriched = enrich_opts_from_module(tool.module, opts)
     :ets.insert(@table, {tool.name, {:module, tool.module, enriched}})
+    broadcast_tool_registry_changed(:registered, tool.name)
     :ok
   end
 
@@ -202,6 +205,7 @@ defmodule Synapsis.Tool.Registry do
       [{^tool_name, {kind, ref, opts}}] ->
         updated_opts = Keyword.put(opts, :loaded, true)
         :ets.insert(@table, {tool_name, {kind, ref, updated_opts}})
+        broadcast_tool_registry_changed(:updated, tool_name)
         :ok
 
       [] ->
@@ -215,6 +219,7 @@ defmodule Synapsis.Tool.Registry do
 
   def unregister(tool_name) do
     :ets.delete(@table, tool_name)
+    broadcast_tool_registry_changed(:unregistered, tool_name)
     :ok
   end
 
@@ -274,6 +279,16 @@ defmodule Synapsis.Tool.Registry do
       function_exported?(module, :enabled?, 0) -> module.enabled?()
       true -> true
     end
+  end
+
+  defp broadcast_tool_registry_changed(action, tool_name) do
+    Phoenix.PubSub.broadcast(
+      Synapsis.PubSub,
+      "tool_registry",
+      {:tool_registry_changed, %{action: action, tool_name: tool_name}}
+    )
+  catch
+    :exit, _reason -> :ok
   end
 
   # --- Entry mapping helpers ---

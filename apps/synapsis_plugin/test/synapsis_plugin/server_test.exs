@@ -21,6 +21,36 @@ defmodule SynapsisPlugin.ServerTest do
     def execute(_, _, state), do: {:error, "unknown", state}
   end
 
+  defmodule DynamicToolsPlugin do
+    use Synapsis.Plugin
+
+    @impl Synapsis.Plugin
+    def init(config) do
+      {:ok,
+       %{
+         prefix: Map.fetch!(config, :prefix),
+         tools: Map.get(config, :tools, ["one"])
+       }}
+    end
+
+    @impl Synapsis.Plugin
+    def tools(state) do
+      Enum.map(state.tools, fn name ->
+        %{
+          name: "mcp:#{state.prefix}:#{name}",
+          description: "Dynamic #{name}",
+          parameters: %{"type" => "object"}
+        }
+      end)
+    end
+
+    @impl Synapsis.Plugin
+    def execute(_tool_name, _input, state), do: {:ok, "ok", state}
+
+    @impl Synapsis.Plugin
+    def handle_info({:replace_tools, tools}, state), do: {:ok, %{state | tools: tools}}
+  end
+
   describe "plugin lifecycle" do
     test "starts a mock plugin and registers tools" do
       {:ok, pid} =
@@ -48,6 +78,32 @@ defmodule SynapsisPlugin.ServerTest do
       # Stop and verify process is dead
       GenServer.stop(pid)
       refute Process.alive?(pid)
+    end
+
+    test "syncs registry when plugin tool list changes after startup" do
+      prefix = "dynamic_#{System.unique_integer([:positive])}"
+      name = "test_dynamic_#{System.unique_integer([:positive])}"
+
+      {:ok, pid} =
+        SynapsisPlugin.start_plugin(DynamicToolsPlugin, name, %{
+          prefix: prefix,
+          tools: ["old"]
+        })
+
+      old_tool = "mcp:#{prefix}:old"
+      new_tool = "mcp:#{prefix}:new"
+
+      assert {:ok, _} = Synapsis.Tool.Registry.lookup(old_tool)
+      assert {:error, :not_found} = Synapsis.Tool.Registry.lookup(new_tool)
+
+      send(pid, {:replace_tools, ["new"]})
+      Process.sleep(30)
+
+      assert {:error, :not_found} = Synapsis.Tool.Registry.lookup(old_tool)
+      assert {:ok, _} = Synapsis.Tool.Registry.lookup(new_tool)
+
+      GenServer.stop(pid)
+      assert {:error, :not_found} = Synapsis.Tool.Registry.lookup(new_tool)
     end
 
     test "handles effect forwarding" do
