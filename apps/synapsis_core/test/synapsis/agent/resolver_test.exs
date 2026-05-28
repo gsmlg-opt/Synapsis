@@ -50,13 +50,21 @@ defmodule Synapsis.Agent.ResolverTest do
       # Interaction + Session + Memory + Workflow + Diagnostics
       for tool <- ~w(
         file_read file_edit file_write multi_edit file_delete file_move list_dir
-        grep glob bash fetch web_search
+        grep glob bash
         todo_read todo_write enter_plan_mode exit_plan_mode
         task skill tool_search ask_user sleep
         memory_save memory_search memory_update session_summarize
         diagnostics
       ) do
         assert tool in agent.tools, "expected #{tool} in main agent tools"
+      end
+
+      for retired_tool <- ~w(
+        workspace_read workspace_write workspace_delete workspace_list workspace_search
+        notebook_read notebook_edit
+        fetch web_search
+      ) do
+        refute retired_tool in agent.tools, "expected #{retired_tool} to be removed"
       end
     end
 
@@ -225,6 +233,24 @@ defmodule Synapsis.Agent.ResolverTest do
       assert agent.tools == ["file_read", "mcp:filesystem:read_file"]
       assert agent.toolset_id == toolset.id
       assert agent.toolset_ids == [toolset.id]
+    end
+
+    test "removes retired tools from persisted agent and toolset configs" do
+      {:ok, toolset} =
+        Toolsets.create(%{
+          name: "retired-toolset",
+          tool_names: ["workspace_read", "file_read", "notebook_edit"]
+        })
+
+      {:ok, _} =
+        AgentConfigs.create(%{
+          name: "retired-tool-agent",
+          tools: ["workspace_write", "bash", "notebook_read"],
+          toolset_id: toolset.id
+        })
+
+      agent = Resolver.resolve("retired-tool-agent")
+      assert agent.tools == ["file_read"]
     end
 
     test "merges tools from multiple assigned toolsets in order" do

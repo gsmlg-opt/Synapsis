@@ -49,6 +49,33 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
       assert has_element?(view, "[data-tool-category='search'] input[value='grep']")
     end
 
+    test "hides retired tools even if they remain registered in the running registry", %{
+      conn: conn
+    } do
+      retired_tools = ~w(
+        workspace_read workspace_write workspace_delete workspace_list workspace_search
+        notebook_read notebook_edit
+        fetch web_search
+      )
+
+      for name <- retired_tools do
+        Synapsis.Tool.Registry.register_process(name, self(),
+          description: "retired #{name}",
+          category: :web
+        )
+      end
+
+      on_exit(fn ->
+        for name <- retired_tools, do: Synapsis.Tool.Registry.unregister(name)
+      end)
+
+      {:ok, view, _html} = live(conn, ~p"/agent/tools/new")
+
+      for name <- retired_tools do
+        refute has_element?(view, "input[name='tool_names[]'][value='#{name}']")
+      end
+    end
+
     test "select all marks every available tool", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/agent/tools/new")
 

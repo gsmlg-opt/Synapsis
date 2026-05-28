@@ -21,7 +21,6 @@ defmodule Synapsis.Tool.PermissionTest do
       assert :write = Permissions.level("file_write")
       assert :write = Permissions.level("file_edit")
       assert :write = Permissions.level("file_move")
-      assert :write = Permissions.level("fetch")
     end
 
     test "classifies execute tools" do

@@ -1,13 +1,7 @@
 defmodule Synapsis.Workspace.Tools do
   @moduledoc "Registers workspace tools in the tool registry."
 
-  @tools [
-    Synapsis.Workspace.Tools.WorkspaceRead,
-    Synapsis.Workspace.Tools.WorkspaceWrite,
-    Synapsis.Workspace.Tools.WorkspaceDelete,
-    Synapsis.Workspace.Tools.WorkspaceList,
-    Synapsis.Workspace.Tools.WorkspaceSearch
-  ]
+  @tools []
 
   def register_all do
     for mod <- @tools do

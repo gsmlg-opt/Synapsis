@@ -6,6 +6,12 @@ defmodule Synapsis.Agent.Resolver do
 
   alias Synapsis.{AgentConfigs, AgentSkills, Toolset, Toolsets}
 
+  @retired_tool_names ~w(
+    workspace_read workspace_write workspace_delete workspace_list workspace_search
+    notebook_read notebook_edit
+    fetch web_search
+  )
+
   def resolve(agent_name, project_config \\ %{}) do
     name = to_string(agent_name)
 
@@ -134,18 +140,23 @@ defmodule Synapsis.Agent.Resolver do
 
     case toolset_ids do
       [] ->
-        tools
+        active_tool_names(tools)
 
       ids ->
         ids
         |> Toolsets.list_by_ids()
         |> Enum.flat_map(fn %Toolset{tool_names: tool_names} -> tool_names || [] end)
+        |> active_tool_names()
         |> Enum.uniq()
         |> case do
-          [] -> tools
+          [] -> active_tool_names(tools)
           tool_names -> tool_names
         end
     end
+  end
+
+  defp active_tool_names(tool_names) when is_list(tool_names) do
+    Enum.reject(tool_names, &(&1 in @retired_tool_names))
   end
 
   defp selected_toolset_ids(%{toolset_ids: ids}) when is_list(ids) and ids != [] do

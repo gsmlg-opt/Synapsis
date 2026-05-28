@@ -57,25 +57,21 @@ Tools self-declare their permission level, category, and side effects. Defaults 
 | 8 | Grep | `grep` | search | `:read` | — | yes |
 | 9 | Glob | `glob` | search | `:read` | — | yes |
 | 10 | BashExec | `bash_exec` | execution | `:execute` | — | yes |
-| 11 | WebFetch | `web_fetch` | web | `:read` | — | yes |
-| 12 | WebSearch | `web_search` | web | `:read` | — | yes |
-| 13 | TodoWrite | `todo_write` | planning | `:none` | — | yes |
-| 14 | TodoRead | `todo_read` | planning | `:none` | — | yes |
-| 15 | Task | `task` | orchestration | `:none` | — | yes |
-| 16 | ToolSearch | `tool_search` | orchestration | `:none` | — | yes |
-| 17 | Skill | `skill` | orchestration | `:none` | — | yes |
-| 18 | AskUser | `ask_user` | interaction | `:none` | — | yes |
-| 19 | EnterPlanMode | `enter_plan_mode` | session | `:none` | — | yes |
-| 20 | ExitPlanMode | `exit_plan_mode` | session | `:none` | — | yes |
-| 21 | Sleep | `sleep` | session | `:none` | — | yes |
-| 22 | NotebookRead | `notebook_read` | notebook | `:read` | — | **no** |
-| 23 | NotebookEdit | `notebook_edit` | notebook | `:write` | `[:file_changed]` | **no** |
-| 24 | Computer | `computer` | computer | `:execute` | — | **no** |
-| 25 | SendMessage | `send_message` | swarm | `:none` | — | yes |
-| 26 | Teammate | `teammate` | swarm | `:none` | — | yes |
-| 27 | TeamDelete | `team_delete` | swarm | `:none` | — | yes |
+| 11 | TodoWrite | `todo_write` | planning | `:none` | — | yes |
+| 12 | TodoRead | `todo_read` | planning | `:none` | — | yes |
+| 13 | Task | `task` | orchestration | `:none` | — | yes |
+| 14 | ToolSearch | `tool_search` | orchestration | `:none` | — | yes |
+| 15 | Skill | `skill` | orchestration | `:none` | — | yes |
+| 16 | AskUser | `ask_user` | interaction | `:none` | — | yes |
+| 17 | EnterPlanMode | `enter_plan_mode` | session | `:none` | — | yes |
+| 18 | ExitPlanMode | `exit_plan_mode` | session | `:none` | — | yes |
+| 19 | Sleep | `sleep` | session | `:none` | — | yes |
+| 20 | Computer | `computer` | computer | `:execute` | — | **no** |
+| 21 | SendMessage | `send_message` | swarm | `:none` | — | yes |
+| 22 | Teammate | `teammate` | swarm | `:none` | — | yes |
+| 23 | TeamDelete | `team_delete` | swarm | `:none` | — | yes |
 
-**Total: 27 tools (21 enabled by default, 3 disabled/future, 3 swarm)**
+**Total: 23 tools (19 enabled by default, 1 disabled/future, 3 swarm)**
 
 ### Filesystem Tools (7)
 
@@ -95,11 +91,6 @@ Tools self-declare their permission level, category, and side effects. Defaults 
 ### Execution Tools (1)
 
 - **`bash_exec`** — Execute shell command in a persistent bash session. State (env, cwd) persists across calls within the session. Implemented as a Port with a long-running bash process. Configurable timeout (default 30s).
-
-### Web Tools (2)
-
-- **`web_fetch`** — Fetch web page content at a URL. Returns extracted text. No JavaScript execution.
-- **`web_search`** — Search the web and return results with titles, URLs, and snippets.
 
 ### Planning Tools (2)
 
@@ -121,11 +112,6 @@ Tools self-declare their permission level, category, and side effects. Defaults 
 - **`enter_plan_mode`** — Switch to plan mode. Write/execute tools are disabled. Agent explores and builds a plan.
 - **`exit_plan_mode`** — Exit plan mode, present the plan for approval. On approval, returns to `:build` mode.
 - **`sleep`** — Wait for a duration or until user input. Interruptible via selective receive.
-
-### Notebook Tools (2, disabled by default)
-
-- **`notebook_read`** — Read a `.ipynb` file, return all cells with outputs. Enable with `notebook_tools: true`.
-- **`notebook_edit`** — Replace or insert a cell in a notebook. Enable with `notebook_tools: true`.
 
 ### Computer Use Tools (1, disabled by default)
 

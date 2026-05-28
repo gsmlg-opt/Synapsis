@@ -11,7 +11,6 @@ defmodule Synapsis.Tool.BuiltinTest do
     "bash",
     "grep",
     "glob",
-    "fetch",
     "diagnostics",
     "list_dir",
     "file_delete",
@@ -21,7 +20,6 @@ defmodule Synapsis.Tool.BuiltinTest do
     "todo_read",
     "enter_plan_mode",
     "exit_plan_mode",
-    "web_search",
     "ask_user",
     "task",
     "skill",
@@ -34,12 +32,10 @@ defmodule Synapsis.Tool.BuiltinTest do
     "memory_save",
     "memory_search",
     "memory_update",
-    "notebook_edit",
-    "notebook_read",
     "computer"
   ]
 
-  @disabled_tool_names ["notebook_edit", "notebook_read", "computer"]
+  @disabled_tool_names ["computer"]
   @enabled_tool_names @all_expected_tools -- @disabled_tool_names
 
   @expected_timeouts %{
@@ -49,13 +45,11 @@ defmodule Synapsis.Tool.BuiltinTest do
     "bash" => 30_000,
     "grep" => 10_000,
     "glob" => 5_000,
-    "fetch" => 15_000,
     "diagnostics" => 10_000,
     "list_dir" => 5_000,
     "file_delete" => 5_000,
     "file_move" => 5_000,
     "multi_edit" => 15_000,
-    "web_search" => 15_000,
     "ask_user" => 300_000,
     "task" => 600_000,
     "sleep" => 600_000
@@ -75,12 +69,12 @@ defmodule Synapsis.Tool.BuiltinTest do
       end
 
       builtin_tools = Enum.filter(all_tools, &(&1.name in @all_expected_tools))
-      assert length(builtin_tools) == 32
+      assert length(builtin_tools) == 28
     end
   end
 
   describe "enabled tools" do
-    test "29 tools are enabled" do
+    test "27 tools are enabled" do
       enabled_count =
         @all_expected_tools
         |> Enum.count(fn name ->
@@ -88,7 +82,7 @@ defmodule Synapsis.Tool.BuiltinTest do
           not (function_exported?(mod, :enabled?, 0) and not mod.enabled?())
         end)
 
-      assert enabled_count == 29
+      assert enabled_count == 27
     end
 
     test "all expected enabled tools respond to enabled? as true or default" do
@@ -109,7 +103,7 @@ defmodule Synapsis.Tool.BuiltinTest do
   end
 
   describe "disabled tools" do
-    test "exactly 3 tools are disabled: notebook_edit, notebook_read, computer" do
+    test "exactly 1 tool is disabled: computer" do
       disabled =
         @all_expected_tools
         |> Enum.filter(fn name ->
@@ -118,7 +112,7 @@ defmodule Synapsis.Tool.BuiltinTest do
         end)
 
       assert Enum.sort(disabled) == Enum.sort(@disabled_tool_names)
-      assert length(disabled) == 3
+      assert length(disabled) == 1
     end
   end
 
@@ -129,7 +123,6 @@ defmodule Synapsis.Tool.BuiltinTest do
       "grep",
       "multi_edit",
       "todo_write",
-      "web_search",
       "ask_user",
       "task",
       "tool_search",
@@ -197,10 +190,10 @@ defmodule Synapsis.Tool.BuiltinTest do
                "Tool #{name} should still be registered after re-registration"
       end
 
-      # Count should still be 28
+      # Count should stay stable after re-registration.
       all_tools = Registry.list()
       builtin_tools = Enum.filter(all_tools, &(&1.name in @all_expected_tools))
-      assert length(builtin_tools) == 32
+      assert length(builtin_tools) == 28
     end
   end
 end

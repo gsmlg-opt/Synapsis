@@ -9,7 +9,6 @@ defmodule Synapsis.Tool.Builtin do
     Synapsis.Tool.Bash,
     Synapsis.Tool.Grep,
     Synapsis.Tool.Glob,
-    Synapsis.Tool.Fetch,
     Synapsis.Tool.Diagnostics,
     Synapsis.Tool.ListDir,
     Synapsis.Tool.FileDelete,
@@ -21,8 +20,6 @@ defmodule Synapsis.Tool.Builtin do
     Synapsis.Tool.TodoRead,
     Synapsis.Tool.EnterPlanMode,
     Synapsis.Tool.ExitPlanMode,
-    # Phase 8: Web search
-    Synapsis.Tool.WebSearch,
     # Phase 9: User interaction
     Synapsis.Tool.AskUser,
     # Phase 10: Sub-agent tools
@@ -47,9 +44,6 @@ defmodule Synapsis.Tool.Builtin do
     Synapsis.Tool.AgentHandoff,
     Synapsis.Tool.AgentDiscover,
     Synapsis.Tool.AgentInbox,
-    # Phase 13: Disabled stubs
-    Synapsis.Tool.NotebookEdit,
-    Synapsis.Tool.NotebookRead,
     Synapsis.Tool.Computer,
     Synapsis.Tool.AgentStatus
   ]
@@ -67,8 +61,6 @@ defmodule Synapsis.Tool.Builtin do
   end
 
   defp default_timeout("bash"), do: 30_000
-  defp default_timeout("fetch"), do: 15_000
-  defp default_timeout("web_search"), do: 15_000
   defp default_timeout("multi_edit"), do: 15_000
   defp default_timeout("task"), do: 600_000
   defp default_timeout("grep"), do: 10_000

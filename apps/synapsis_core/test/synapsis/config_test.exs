@@ -64,9 +64,10 @@ defmodule Synapsis.ConfigTest do
   end
 
   describe "defaults/0 structure" do
-    test "main agent has fetch tool" do
+    test "main agent does not include retired web tools" do
       config = Config.defaults()
-      assert "fetch" in config["agents"]["main"]["tools"]
+      refute "fetch" in config["agents"]["main"]["tools"]
+      refute "web_search" in config["agents"]["main"]["tools"]
     end
 
     test "main agent is write-enabled with medium reasoning effort" do

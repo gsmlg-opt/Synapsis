@@ -29,8 +29,7 @@ defmodule Synapsis.Config do
             "bash",
             "grep",
             "glob",
-            "diagnostics",
-            "fetch"
+            "diagnostics"
           ],
           "model" => nil,
           "modelTier" => "default",

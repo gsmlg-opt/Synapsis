@@ -107,7 +107,6 @@ defmodule Synapsis.Workspace.Identity do
   - Filesystem: read, write, edit, delete, move
   - Search: grep, glob
   - Execution: bash
-  - Web: fetch, search
 
   ## Guidance
   (Add tool usage preferences and constraints here.)

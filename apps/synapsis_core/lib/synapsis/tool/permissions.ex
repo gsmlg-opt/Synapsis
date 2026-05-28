@@ -5,12 +5,11 @@ defmodule Synapsis.Tool.Permissions do
 
   @read_tools ~w(
     diagnostics file_read glob grep list_dir lsp_definition lsp_diagnostics
-    memory_search notebook_read session_summarize web_search
+    memory_search session_summarize
   )
 
   @write_tools ~w(
-    fetch file_edit file_move file_write memory_save memory_update multi_edit notebook_edit
-    workspace_delete workspace_write
+    file_edit file_move file_write memory_save memory_update multi_edit
   )
 
   @execute_tools ~w(bash computer)

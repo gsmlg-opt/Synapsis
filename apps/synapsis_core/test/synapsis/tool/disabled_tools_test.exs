@@ -1,13 +1,9 @@
 defmodule Synapsis.Tool.DisabledToolsTest do
   use ExUnit.Case, async: true
 
-  alias Synapsis.Tool.NotebookRead
-  alias Synapsis.Tool.NotebookEdit
   alias Synapsis.Tool.Computer
 
   @disabled_tools [
-    {NotebookRead, "notebook_read", :read, :notebook, "Notebook tools are not enabled"},
-    {NotebookEdit, "notebook_edit", :write, :notebook, "Notebook tools are not enabled"},
     {Computer, "computer", :execute, :computer, "Computer use is not enabled"}
   ]
 
@@ -47,18 +43,6 @@ defmodule Synapsis.Tool.DisabledToolsTest do
         assert {:error, unquote(error_msg)} ==
                  unquote(mod).execute(%{}, %{})
       end
-    end
-  end
-
-  describe "NotebookEdit side_effects" do
-    test "declares :file_changed side effect" do
-      assert :file_changed in NotebookEdit.side_effects()
-    end
-  end
-
-  describe "NotebookRead side_effects" do
-    test "has no side effects" do
-      assert NotebookRead.side_effects() == []
     end
   end
 

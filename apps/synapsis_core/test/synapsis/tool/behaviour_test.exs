@@ -146,11 +146,6 @@ defmodule Synapsis.Tool.BehaviourTest do
       assert Synapsis.Tool.Bash.category() == :execution
     end
 
-    test "Fetch has correct permission_level and category" do
-      assert Synapsis.Tool.Fetch.permission_level() == :read
-      assert Synapsis.Tool.Fetch.category() == :web
-    end
-
     test "Diagnostics has correct permission_level and category" do
       assert Synapsis.Tool.Diagnostics.permission_level() == :read
       assert Synapsis.Tool.Diagnostics.category() == :search

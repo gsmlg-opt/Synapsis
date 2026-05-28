@@ -25,6 +25,12 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
     {:uncategorized, "Other"}
   ]
 
+  @retired_tool_names ~w(
+    workspace_read workspace_write workspace_delete workspace_list workspace_search
+    notebook_read notebook_edit
+    fetch web_search
+  )
+
   @impl true
   def mount(_params, _session, socket) do
     {:ok,
@@ -51,7 +57,12 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
 
   @impl true
   def handle_event("save_toolset", %{"toolset" => attrs} = params, socket) do
-    tool_names = params |> Map.get("tool_names", []) |> List.wrap() |> Enum.reject(&(&1 == ""))
+    tool_names =
+      params
+      |> Map.get("tool_names", [])
+      |> List.wrap()
+      |> active_tool_names()
+
     attrs = Map.put(attrs, "tool_names", tool_names)
 
     result =
@@ -410,7 +421,7 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
     params
     |> Map.get("tool_names", [])
     |> List.wrap()
-    |> Enum.reject(&(&1 == ""))
+    |> active_tool_names()
   end
 
   defp preview_toolset(%Toolset{} = toolset, attrs) do
@@ -431,6 +442,7 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
     category_lookup = tool_category_lookup()
 
     Synapsis.Tool.Registry.list()
+    |> Enum.reject(&retired_tool_name?(&1.name))
     |> Enum.map(fn tool ->
       category = Map.get(category_lookup, tool.name, :uncategorized)
 
@@ -446,6 +458,14 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
   rescue
     ArgumentError -> []
   end
+
+  defp active_tool_names(tool_names) do
+    tool_names
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.reject(&retired_tool_name?/1)
+  end
+
+  defp retired_tool_name?(name), do: name in @retired_tool_names
 
   defp tool_source("mcp:" <> rest) do
     rest

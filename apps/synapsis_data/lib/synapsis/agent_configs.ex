@@ -6,11 +6,10 @@ defmodule Synapsis.AgentConfigs do
 
   @build_tools ~w(
     file_read file_edit file_write multi_edit file_delete file_move list_dir
-    grep glob bash fetch web_search
+    grep glob bash
     todo_read todo_write enter_plan_mode exit_plan_mode
     task skill tool_search ask_user sleep
     memory_save memory_search memory_update session_summarize
-    workspace_read workspace_write workspace_list workspace_search
     diagnostics
   )
 
