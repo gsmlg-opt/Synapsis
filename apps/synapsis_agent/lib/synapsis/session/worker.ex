@@ -195,6 +195,9 @@ defmodule Synapsis.Session.Worker do
   def handle_info({:tool_result, id, res, err}, s),
     do: IOHandler.handle_tool_result(id, res, err, s)
 
+  def handle_info({:runner_resume, pid, ctx, attempts}, s),
+    do: IOHandler.handle_runner_resume(pid, ctx, attempts, s)
+
   def handle_info({:auditor_completed, _}, s) do
     if s.runner_pid, do: Runner.resume(s.runner_pid, %{auditor_completed: true})
     {:noreply, s}

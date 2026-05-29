@@ -8,6 +8,9 @@ defmodule Synapsis.Session.Worker.IOHandler do
   alias Synapsis.Agent.{StreamAccumulator, ResponseFlusher, ToolDispatcher}
   alias Synapsis.Agent.Runtime.Runner
 
+  @runner_resume_retry_delay 10
+  @runner_resume_retry_attempts 50
+
   def handle_start_stream(request, state) do
     provider = state.agent[:provider] || state.session.provider
 
@@ -103,6 +106,13 @@ defmodule Synapsis.Session.Worker.IOHandler do
     end
   end
 
+  def handle_runner_resume(pid, ctx, attempts, %{runner_pid: pid} = state) do
+    resume_or_retry(pid, ctx, attempts)
+    {:noreply, state}
+  end
+
+  def handle_runner_resume(_pid, _ctx, _attempts, state), do: {:noreply, state}
+
   def handle_runner_exit(reason, state) do
     Logger.warning("runner_exited", session_id: state.session_id, reason: inspect(reason))
     Persistence.update_session_status(state.session_id, "error")
@@ -176,7 +186,33 @@ defmodule Synapsis.Session.Worker.IOHandler do
 
   # After cancel, runner_pid is nil but in-flight messages may still arrive.
   defp safe_resume(nil, _ctx), do: :ok
-  defp safe_resume(pid, ctx), do: Runner.resume(pid, ctx)
+  defp safe_resume(pid, ctx), do: resume_or_retry(pid, ctx, @runner_resume_retry_attempts)
+
+  defp resume_or_retry(pid, ctx, attempts) when attempts > 0 do
+    case Runner.resume(pid, ctx) do
+      :ok ->
+        :ok
+
+      {:error, :not_waiting} ->
+        Process.send_after(
+          self(),
+          {:runner_resume, pid, ctx, attempts - 1},
+          @runner_resume_retry_delay
+        )
+
+        :ok
+
+      {:error, reason} ->
+        Logger.debug("runner_resume_skipped", reason: inspect(reason))
+        :ok
+    end
+  catch
+    :exit, reason ->
+      Logger.debug("runner_resume_exit", reason: inspect(reason))
+      :ok
+  end
+
+  defp resume_or_retry(_pid, _ctx, 0), do: :ok
 
   # -- Debug telemetry helpers --
 

@@ -51,7 +51,8 @@ defmodule Synapsis.Agent.GlobalAgent do
     stream_acc: Synapsis.Agent.StreamAccumulator.new(),
     pending_tool_count: 0,
     pending_approvals: MapSet.new(),
-    approval_decisions: %{}
+    approval_decisions: %{},
+    tool_tasks: MapSet.new()
   ]
 
   @spec start_link(keyword()) :: GenServer.on_start()
@@ -141,7 +142,7 @@ defmodule Synapsis.Agent.GlobalAgent do
     end
 
     Persistence.set_status(state.session_id, "idle")
-    {:noreply, %{state | stream_ref: nil, runner_pid: nil}, @timeout}
+    {:noreply, %{state | stream_ref: nil, runner_pid: nil, tool_tasks: MapSet.new()}, @timeout}
   end
 
   @impl true
@@ -181,6 +182,11 @@ defmodule Synapsis.Agent.GlobalAgent do
 
   def handle_info({:tool_result, id, res, err}, s) do
     IOHandler.handle_tool_result(id, res, err, s)
+    |> noreply_from_io(s)
+  end
+
+  def handle_info({:runner_resume, pid, ctx, attempts}, s) do
+    IOHandler.handle_runner_resume(pid, ctx, attempts, s)
     |> noreply_from_io(s)
   end
 
@@ -237,6 +243,16 @@ defmodule Synapsis.Agent.GlobalAgent do
     Logger.warning("global_agent_runner_exit", session_id: s.session_id)
     Persistence.set_status(s.session_id, "idle")
     {:noreply, %{s | runner_pid: nil}, @timeout}
+  end
+
+  def handle_info({:DOWN, ref, :process, _pid, reason}, s)
+      when is_reference(ref) do
+    if MapSet.member?(s.tool_tasks, ref) do
+      IOHandler.handle_tool_task_down(ref, reason, s)
+      |> noreply_from_io(s)
+    else
+      {:noreply, s, @timeout}
+    end
   end
 
   def handle_info(:timeout, state) do
