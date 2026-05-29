@@ -121,6 +121,32 @@ code, pre, kbd, samp {
       var(--color-on-primary-container) 8%
     );
   }
+
+  /* WORKAROUND(upstream): duskmoon-dev/duskmoon-elements#62
+     Slotted content inside el-dm-chat shadow DOM does not inherit
+     the bubble's text color for the filled variant. Set color on the
+     host element so light-DOM children (el-dm-markdown etc.) inherit it. */
+  el-dm-chat[variant="filled"][color="primary"] {
+    color: var(--color-primary-content);
+  }
+  el-dm-chat[variant="filled"][color="secondary"] {
+    color: var(--color-secondary-content);
+  }
+  el-dm-chat[variant="filled"][color="tertiary"] {
+    color: var(--color-tertiary-content);
+  }
+  el-dm-chat[variant="filled"][color="info"] {
+    color: var(--color-info-content);
+  }
+  el-dm-chat[variant="filled"][color="success"] {
+    color: var(--color-success-content);
+  }
+  el-dm-chat[variant="filled"][color="warning"] {
+    color: var(--color-warning-content);
+  }
+  el-dm-chat[variant="filled"][color="error"] {
+    color: var(--color-error-content);
+  }
 }
 
 /* Agent working indicator — bouncing dots */
