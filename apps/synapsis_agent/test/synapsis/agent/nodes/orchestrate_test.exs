@@ -5,7 +5,7 @@ defmodule Synapsis.Agent.Nodes.OrchestrateTest do
   alias Synapsis.Agent.Nodes.Orchestrate
   alias Synapsis.Session.Monitor
 
-  test "pause decision applies idle status and broadcasts the pause" do
+  test "pause decision is observed but does not stop the tool loop" do
     {:ok, session} =
       %Session{}
       |> Session.changeset(%{
@@ -27,12 +27,11 @@ defmodule Synapsis.Agent.Nodes.OrchestrateTest do
       decision: nil
     }
 
-    assert {:next, :pause, new_state} = Orchestrate.run(state, %{})
+    assert {:next, :continue, new_state} = Orchestrate.run(state, %{})
     assert new_state.decision == :pause
 
-    assert_receive {"orchestrator_pause", %{reason: reason}}
-    assert reason =~ "waiting for user guidance"
-    assert_receive {"session_status", %{status: "idle"}}
-    assert Repo.get!(Session, session.id).status == "idle"
+    refute_receive {"orchestrator_pause", _}, 50
+    refute_receive {"session_status", _}, 50
+    assert Repo.get!(Session, session.id).status == "streaming"
   end
 end

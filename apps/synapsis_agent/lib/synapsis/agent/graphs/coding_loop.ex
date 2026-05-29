@@ -57,6 +57,7 @@ defmodule Synapsis.Agent.Graphs.CodingLoop do
       pending_reasoning: "",
       pending_reasoning_signature: "",
       tool_uses: [],
+      iteration_activity: %{text_emitted: false, tool_calls_emitted: 0, tool_results_received: 0},
       monitor: Synapsis.Session.Monitor.new(),
       iteration_count: 0,
       provider_config: opts[:provider_config] || %{},

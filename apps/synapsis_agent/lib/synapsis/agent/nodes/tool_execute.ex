@@ -11,11 +11,17 @@ defmodule Synapsis.Agent.Nodes.ToolExecute do
   def run(state, ctx) do
     if state[:awaiting_tools] do
       # Tools completed — proceed to orchestrator
+      tool_result_count =
+        state
+        |> Map.get(:classified_tools, [])
+        |> Enum.count(fn {status, _} -> status in [:approved, :auto_approved] end)
+
       new_state =
         state
         |> Map.delete(:awaiting_tools)
         |> Map.delete(:classified_tools)
         |> Map.put(:tool_uses, [])
+        |> put_tool_results_received(tool_result_count)
 
       {:next, :default, new_state}
     else
@@ -62,5 +68,16 @@ defmodule Synapsis.Agent.Nodes.ToolExecute do
         {:wait, Map.put(state, :awaiting_tools, true)}
       end
     end
+  end
+
+  defp put_tool_results_received(state, count) do
+    activity =
+      Map.get(state, :iteration_activity, %{
+        text_emitted: false,
+        tool_calls_emitted: 0,
+        tool_results_received: 0
+      })
+
+    Map.put(state, :iteration_activity, Map.put(activity, :tool_results_received, count))
   end
 end

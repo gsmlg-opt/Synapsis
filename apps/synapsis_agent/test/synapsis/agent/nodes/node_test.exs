@@ -35,7 +35,13 @@ defmodule Synapsis.Agent.Nodes.NodeTest do
         tool_uses: []
       }
 
-      assert {:next, :no_tools, _state} = Nodes.ProcessResponse.run(state, %{})
+      assert {:next, :no_tools, new_state} = Nodes.ProcessResponse.run(state, %{})
+
+      assert new_state.iteration_activity == %{
+               text_emitted: false,
+               tool_calls_emitted: 0,
+               tool_results_received: 0
+             }
     end
 
     test "routes to :has_tools when tool_uses present" do
@@ -56,7 +62,28 @@ defmodule Synapsis.Agent.Nodes.NodeTest do
         tool_uses: [tool_use]
       }
 
-      assert {:next, :has_tools, _state} = Nodes.ProcessResponse.run(state, %{})
+      assert {:next, :has_tools, new_state} = Nodes.ProcessResponse.run(state, %{})
+
+      assert new_state.iteration_activity == %{
+               text_emitted: false,
+               tool_calls_emitted: 1,
+               tool_results_received: 0
+             }
+    end
+
+    test "records text output activity" do
+      state = %{
+        session_id: Ecto.UUID.generate(),
+        pending_text: "hello",
+        pending_tool_use: nil,
+        pending_tool_input: "",
+        pending_reasoning: "",
+        pending_reasoning_signature: "",
+        tool_uses: []
+      }
+
+      assert {:next, :no_tools, new_state} = Nodes.ProcessResponse.run(state, %{})
+      assert new_state.iteration_activity.text_emitted
     end
   end
 
@@ -130,7 +157,37 @@ defmodule Synapsis.Agent.Nodes.NodeTest do
 
       assert {:next, selector, new_state} = Nodes.Orchestrate.run(state, %{})
       assert new_state.iteration_count == 1
-      assert selector in [:continue, :pause, :escalate, :terminate]
+      assert selector == :continue
+    end
+
+    test "continues even when monitor would pause for stagnation" do
+      state =
+        CodingLoop.initial_state(%{session_id: Ecto.UUID.generate()})
+        |> Map.put(:monitor, %{Synapsis.Session.Monitor.new() | consecutive_empty_iterations: 2})
+
+      assert {:next, :continue, new_state} = Nodes.Orchestrate.run(state, %{})
+      assert new_state.decision == :pause
+    end
+
+    test "tool result activity prevents false stagnation" do
+      state =
+        CodingLoop.initial_state(%{session_id: Ecto.UUID.generate()})
+        |> Map.put(:monitor, %{Synapsis.Session.Monitor.new() | consecutive_empty_iterations: 2})
+        |> Map.put(:iteration_activity, %{
+          text_emitted: false,
+          tool_calls_emitted: 0,
+          tool_results_received: 5
+        })
+
+      assert {:next, :continue, new_state} = Nodes.Orchestrate.run(state, %{})
+      assert new_state.monitor.consecutive_empty_iterations == 0
+      assert new_state.decision == :continue
+
+      assert new_state.iteration_activity == %{
+               text_emitted: false,
+               tool_calls_emitted: 0,
+               tool_results_received: 0
+             }
     end
   end
 

@@ -5,7 +5,6 @@ defmodule Synapsis.Agent.Nodes.Orchestrate do
   require Logger
 
   alias Synapsis.Session.{Monitor, Orchestrator}
-  alias Synapsis.Session.Worker.Persistence
 
   @max_tool_iterations 25
 
@@ -13,49 +12,46 @@ defmodule Synapsis.Agent.Nodes.Orchestrate do
   @spec run(map(), map()) :: {:next, atom(), map()}
   def run(state, _ctx) do
     iteration_count = state.iteration_count + 1
-    has_output = state.pending_text != "" or length(state.tool_uses) > 0
+    has_output = meaningful_output?(state)
     {_signals, monitor} = Monitor.record_iteration(state.monitor, has_output)
 
     max_iterations =
       Application.get_env(:synapsis_core, :max_tool_iterations, @max_tool_iterations)
 
     decision = Orchestrator.decide(monitor, max_iterations: max_iterations)
-    applied = Orchestrator.apply_decision(decision, state.session_id)
-    execute_actions(applied.actions, state)
+    {decision_name, reason} = decision
 
-    new_state = %{
-      state
-      | iteration_count: iteration_count,
+    Logger.info("orchestrator_decision_observed",
+      session_id: state.session_id,
+      decision: decision_name,
+      reason: reason
+    )
+
+    new_state =
+      Map.merge(state, %{
+        iteration_count: iteration_count,
         monitor: monitor,
         tool_uses: [],
-        decision: applied.decision
-    }
+        decision: decision_name,
+        iteration_activity: empty_activity()
+      })
 
-    case applied.decision do
-      :continue -> {:next, :continue, new_state}
-      :pause -> {:next, :pause, new_state}
-      :escalate -> {:next, :escalate, new_state}
-      :terminate -> {:next, :terminate, new_state}
-    end
+    {:next, :continue, new_state}
   end
 
-  defp execute_actions(actions, state) do
-    Enum.each(actions, &execute_action(&1, state))
+  defp meaningful_output?(state) do
+    activity = Map.get(state, :iteration_activity, empty_activity())
+
+    activity_value(activity, :text_emitted) or
+      activity_value(activity, :tool_calls_emitted) > 0 or
+      activity_value(activity, :tool_results_received) > 0 or
+      state.pending_text != "" or
+      length(state.tool_uses) > 0
   end
 
-  defp execute_action({:broadcast, event, payload}, state) do
-    Persistence.broadcast(state.session_id, event, payload)
+  defp activity_value(activity, key) do
+    Map.get(activity, key, Map.get(activity, Atom.to_string(key), empty_activity()[key]))
   end
 
-  defp execute_action({:set_status, status}, state) do
-    Persistence.set_status(state.session_id, to_string(status))
-  end
-
-  defp execute_action({:persist_message, reason}, state) do
-    Persistence.broadcast(state.session_id, "orchestrator_message", %{message: reason})
-  end
-
-  defp execute_action({:invoke_auditor, reason}, state) do
-    Logger.info("auditor_invocation_requested", session_id: state.session_id, reason: reason)
-  end
+  defp empty_activity, do: %{text_emitted: false, tool_calls_emitted: 0, tool_results_received: 0}
 end

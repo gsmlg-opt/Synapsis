@@ -27,7 +27,12 @@ defmodule Synapsis.Agent.Nodes.ProcessResponse do
         pending_tool_use: flushed.pending_tool_use,
         pending_tool_input: flushed.pending_tool_input,
         pending_reasoning: flushed.pending_reasoning,
-        pending_reasoning_signature: flushed.pending_reasoning_signature
+        pending_reasoning_signature: flushed.pending_reasoning_signature,
+        iteration_activity: %{
+          text_emitted: acc.pending_text != "",
+          tool_calls_emitted: length(acc.tool_uses),
+          tool_results_received: 0
+        }
       })
 
     if Enum.empty?(acc.tool_uses) do
