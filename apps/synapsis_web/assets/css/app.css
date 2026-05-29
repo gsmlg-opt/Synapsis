@@ -128,24 +128,46 @@ code, pre, kbd, samp {
      host element so light-DOM children (el-dm-markdown etc.) inherit it. */
   el-dm-chat[variant="filled"][color="primary"] {
     color: var(--color-primary-content);
+    --synapsis-chat-filled-fg: var(--color-primary-content);
   }
   el-dm-chat[variant="filled"][color="secondary"] {
     color: var(--color-secondary-content);
+    --synapsis-chat-filled-fg: var(--color-secondary-content);
   }
   el-dm-chat[variant="filled"][color="tertiary"] {
     color: var(--color-tertiary-content);
+    --synapsis-chat-filled-fg: var(--color-tertiary-content);
   }
   el-dm-chat[variant="filled"][color="info"] {
     color: var(--color-info-content);
+    --synapsis-chat-filled-fg: var(--color-info-content);
   }
   el-dm-chat[variant="filled"][color="success"] {
     color: var(--color-success-content);
+    --synapsis-chat-filled-fg: var(--color-success-content);
   }
   el-dm-chat[variant="filled"][color="warning"] {
     color: var(--color-warning-content);
+    --synapsis-chat-filled-fg: var(--color-warning-content);
   }
   el-dm-chat[variant="filled"][color="error"] {
     color: var(--color-error-content);
+    --synapsis-chat-filled-fg: var(--color-error-content);
+  }
+
+  el-dm-chat[variant="filled"] el-dm-markdown {
+    color: var(--synapsis-chat-filled-fg);
+    --color-on-surface: var(--synapsis-chat-filled-fg);
+    --color-on-surface-variant: color-mix(
+      in oklch,
+      var(--synapsis-chat-filled-fg),
+      transparent 22%
+    );
+    --color-primary: var(--synapsis-chat-filled-fg);
+  }
+
+  el-dm-chat[variant="filled"] el-dm-markdown::part(content) {
+    color: var(--synapsis-chat-filled-fg);
   }
 }
 
