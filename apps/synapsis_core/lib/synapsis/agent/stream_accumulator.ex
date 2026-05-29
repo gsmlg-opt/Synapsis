@@ -90,12 +90,38 @@ defmodule Synapsis.Agent.StreamAccumulator do
 
   def accumulate(:message_start, acc), do: {[], acc}
   def accumulate({:message_delta, _delta}, acc), do: {[], acc}
-  def accumulate(:done, acc), do: {[], acc}
+  def accumulate(:done, acc), do: {[], finalize_pending_tool(acc)}
   def accumulate(:ignore, acc), do: {[], acc}
 
   def accumulate({:error, error}, acc) do
     error_msg = if is_map(error), do: error["message"] || "provider error", else: "provider error"
     {[{"error", %{message: error_msg}}], acc}
+  end
+
+  # Finalizes a pending tool use into tool_uses when content_block_stop was missed.
+  # Some Anthropic-compatible proxies omit content_block_stop for the last tool.
+  defp finalize_pending_tool(%{pending_tool_use: nil} = acc), do: acc
+
+  defp finalize_pending_tool(%{pending_tool_use: %{tool: name, tool_use_id: id}} = acc) do
+    input =
+      case Jason.decode(acc.pending_tool_input) do
+        {:ok, parsed} -> parsed
+        _ -> %{}
+      end
+
+    tool_use = %Synapsis.Part.ToolUse{
+      tool: name,
+      tool_use_id: id,
+      input: input,
+      status: :pending
+    }
+
+    %{
+      acc
+      | pending_tool_use: nil,
+        pending_tool_input: "",
+        tool_uses: acc.tool_uses ++ [tool_use]
+    }
   end
 
   @doc """

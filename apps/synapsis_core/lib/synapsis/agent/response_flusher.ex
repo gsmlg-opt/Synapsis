@@ -23,6 +23,9 @@ defmodule Synapsis.Agent.ResponseFlusher do
   """
   @spec build_parts(acc()) :: [term()]
   def build_parts(acc) do
+    # Finalize any pending tool use that wasn't closed by content_block_stop
+    acc = finalize_pending_tool(acc)
+
     parts = []
 
     parts =
@@ -358,4 +361,32 @@ defmodule Synapsis.Agent.ResponseFlusher do
 
   defp blank_to_nil(value) when value in [nil, ""], do: nil
   defp blank_to_nil(value), do: value
+
+  # Finalizes a pending tool use that wasn't closed by content_block_stop.
+  # Defense-in-depth: some Anthropic-compatible proxies omit content_block_stop.
+  defp finalize_pending_tool(%{pending_tool_use: nil} = acc), do: acc
+
+  defp finalize_pending_tool(%{pending_tool_use: %{tool: name, tool_use_id: id}} = acc) do
+    input =
+      case Jason.decode(acc.pending_tool_input || "") do
+        {:ok, parsed} -> parsed
+        _ -> %{}
+      end
+
+    tool_use = %Synapsis.Part.ToolUse{
+      tool: name,
+      tool_use_id: id,
+      input: input,
+      status: :pending
+    }
+
+    %{
+      acc
+      | pending_tool_use: nil,
+        pending_tool_input: "",
+        tool_uses: (acc.tool_uses || []) ++ [tool_use]
+    }
+  end
+
+  defp finalize_pending_tool(acc), do: acc
 end

@@ -102,12 +102,61 @@ defmodule Synapsis.Agent.StreamAccumulatorTest do
       assert Enum.at(acc.tool_uses, 1).tool == "grep"
     end
 
-    test "ignores :message_start, :message_delta, :done, :ignore", %{acc: acc} do
-      for event <- [:message_start, {:message_delta, %{}}, :done, :ignore] do
+    test "ignores :message_start, :message_delta, :ignore", %{acc: acc} do
+      for event <- [:message_start, {:message_delta, %{}}, :ignore] do
         {broadcasts, new_acc} = StreamAccumulator.accumulate(event, acc)
         assert broadcasts == []
         assert new_acc == acc
       end
+    end
+
+    test ":done is no-op without pending tool_use", %{acc: acc} do
+      {broadcasts, new_acc} = StreamAccumulator.accumulate(:done, acc)
+      assert broadcasts == []
+      assert new_acc == acc
+    end
+
+    test ":done finalizes pending tool_use into tool_uses", %{acc: acc} do
+      {_, acc} = StreamAccumulator.accumulate({:tool_use_start, "file_read", "tu_1"}, acc)
+      {_, acc} = StreamAccumulator.accumulate({:tool_input_delta, ~s({"path": "/foo"})}, acc)
+
+      # No content_block_stop — stream ends directly with :done
+      {broadcasts, acc} = StreamAccumulator.accumulate(:done, acc)
+
+      assert broadcasts == []
+      assert acc.pending_tool_use == nil
+      assert acc.pending_tool_input == ""
+      assert [tool_use] = acc.tool_uses
+      assert tool_use.tool == "file_read"
+      assert tool_use.tool_use_id == "tu_1"
+      assert tool_use.input == %{"path" => "/foo"}
+      assert tool_use.status == :pending
+    end
+
+    test ":done preserves already-finalized tools and finalizes the last", %{acc: acc} do
+      # First tool: properly closed with content_block_stop
+      {_, acc} = StreamAccumulator.accumulate({:tool_use_start, "file_read", "tu_1"}, acc)
+      {_, acc} = StreamAccumulator.accumulate({:tool_input_delta, ~s({"path":"/a"})}, acc)
+      {_, acc} = StreamAccumulator.accumulate(:content_block_stop, acc)
+
+      # Second tool: missing content_block_stop, stream ends
+      {_, acc} = StreamAccumulator.accumulate({:tool_use_start, "grep", "tu_2"}, acc)
+      {_, acc} = StreamAccumulator.accumulate({:tool_input_delta, ~s({"pattern":"x"})}, acc)
+      {_, acc} = StreamAccumulator.accumulate(:done, acc)
+
+      assert length(acc.tool_uses) == 2
+      assert Enum.at(acc.tool_uses, 0).tool == "file_read"
+      assert Enum.at(acc.tool_uses, 1).tool == "grep"
+      assert Enum.at(acc.tool_uses, 1).input == %{"pattern" => "x"}
+    end
+
+    test ":done handles invalid JSON in pending_tool_input", %{acc: acc} do
+      {_, acc} = StreamAccumulator.accumulate({:tool_use_start, "file_read", "tu_1"}, acc)
+      {_, acc} = StreamAccumulator.accumulate({:tool_input_delta, "not valid json"}, acc)
+      {_, acc} = StreamAccumulator.accumulate(:done, acc)
+
+      assert [tool_use] = acc.tool_uses
+      assert tool_use.input == %{}
     end
 
     test "content_block_stop without pending tool_use is no-op", %{acc: acc} do
