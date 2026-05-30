@@ -5,16 +5,11 @@ defmodule Synapsis.Session.Worker.IOHandler do
 
   alias Synapsis.Session.Stream, as: SessionStream
   alias Synapsis.Session.Worker.{Auditor, Persistence}
-  alias Synapsis.Agent.{StreamAccumulator, ResponseFlusher, ToolDispatcher}
-  alias Synapsis.Agent.Runtime.Runner
-
-  @runner_resume_retry_delay 10
-  @runner_resume_retry_attempts 50
+  alias Synapsis.Agent.{StreamAccumulator, ResponseFlusher}
+  alias Synapsis.Session.Worker
 
   def handle_start_stream(request, state) do
     provider = state.agent[:provider] || state.session.provider
-
-    # Inject session_id for telemetry/debug capture
     config = Map.put(state.provider_config, :session_id, state.session_id)
     debug_handler = maybe_attach_debug(state)
 
@@ -26,17 +21,30 @@ defmodule Synapsis.Session.Worker.IOHandler do
            | stream_ref: ref,
              stream_acc: StreamAccumulator.new(),
              debug_handler_id: debug_handler
-         }}
+         }, Worker.timeout()}
 
       {:error, reason} ->
         detach_debug(debug_handler)
-        safe_resume(state.runner_pid, %{stream_error: reason})
-        {:noreply, state}
+        new_ctx = Map.put(state.engine_ctx, :stream_error, reason)
+        {:noreply, Worker.step_engine(%{state | engine_ctx: new_ctx}), Worker.timeout()}
     end
   end
 
   def handle_dispatch_tools(classified, opts, state) do
-    {hashes, task_refs} = ToolDispatcher.dispatch_all(classified, self(), state.session_id, opts)
+    epoch = state.epoch
+    caller = self()
+
+    {task_refs, hashes} =
+      Enum.reduce(
+        classified,
+        {MapSet.new(), opts[:tool_call_hashes] || MapSet.new()},
+        fn {_cls, tool_use} = item, {refs, acc_hashes} ->
+          new_hash = MapSet.put(acc_hashes, :erlang.phash2({tool_use.tool, tool_use.input}))
+          task = spawn_fenced_tool_task(item, caller, epoch, opts, state)
+          refs2 = if task, do: MapSet.put(refs, task.ref), else: refs
+          {refs2, new_hash}
+        end
+      )
 
     {:noreply,
      %{
@@ -44,32 +52,45 @@ defmodule Synapsis.Session.Worker.IOHandler do
        | pending_tool_count: length(classified),
          stream_acc: Map.put(state.stream_acc, :tool_call_hashes, hashes),
          tool_tasks: MapSet.union(state.tool_tasks, task_refs)
-     }}
+     }, Worker.timeout()}
   end
 
   def handle_start_auditor(params, state) do
     task = Auditor.start_async(params, state)
     Process.monitor(task.pid)
-    {:noreply, state}
+    {:noreply, state, Worker.timeout()}
   end
 
   def handle_provider_chunk(event, state) do
-    {broadcasts, new_acc} = StreamAccumulator.accumulate(event, state.stream_acc)
-    for {name, payload} <- broadcasts, do: Persistence.broadcast(state.session_id, name, payload)
-    {:noreply, %{state | stream_acc: new_acc}}
+    if state.stream_ref do
+      {broadcasts, new_acc} = StreamAccumulator.accumulate(event, state.stream_acc)
+
+      for {name, payload} <- broadcasts,
+          do: Persistence.broadcast(state.session_id, name, payload)
+
+      {:noreply, %{state | stream_acc: new_acc}, Worker.timeout()}
+    else
+      {:noreply, state, Worker.timeout()}
+    end
   end
 
   def handle_provider_done(state) do
     detach_debug(state.debug_handler_id)
-    safe_resume(state.runner_pid, %{stream_acc: state.stream_acc})
-    {:noreply, %{state | stream_ref: nil, debug_handler_id: nil}}
+    new_ctx = Map.put(state.engine_ctx, :stream_acc, state.stream_acc)
+
+    {:noreply,
+     Worker.step_engine(%{state | stream_ref: nil, debug_handler_id: nil, engine_ctx: new_ctx}),
+     Worker.timeout()}
   end
 
   def handle_provider_error(reason, state) do
     detach_debug(state.debug_handler_id)
     Logger.warning("provider_error", session_id: state.session_id, reason: inspect(reason))
-    safe_resume(state.runner_pid, %{stream_error: reason})
-    {:noreply, %{state | stream_ref: nil, debug_handler_id: nil}}
+    new_ctx = Map.put(state.engine_ctx, :stream_error, reason)
+
+    {:noreply,
+     Worker.step_engine(%{state | stream_ref: nil, debug_handler_id: nil, engine_ctx: new_ctx}),
+     Worker.timeout()}
   end
 
   def handle_tool_result(id, result, is_error, state) do
@@ -82,50 +103,37 @@ defmodule Synapsis.Session.Worker.IOHandler do
     })
 
     remaining = state.pending_tool_count - 1
-    if remaining <= 0, do: safe_resume(state.runner_pid, %{tools_completed: true})
-    {:noreply, %{state | pending_tool_count: remaining}}
+
+    if remaining <= 0 do
+      {:noreply, Worker.step_engine(%{state | pending_tool_count: 0}), Worker.timeout()}
+    else
+      {:noreply, %{state | pending_tool_count: remaining}, Worker.timeout()}
+    end
   end
 
   def handle_tool_task_down(ref, reason, state) do
     new_tool_tasks = MapSet.delete(state.tool_tasks, ref)
 
-    # Normal exits mean the task completed and already sent {:tool_result, ...},
-    # which was handled by handle_tool_result. Only decrement for abnormal exits
-    # where the tool_result message was never sent.
     if reason == :normal do
-      {:noreply, %{state | tool_tasks: new_tool_tasks}}
+      {:noreply, %{state | tool_tasks: new_tool_tasks}, Worker.timeout()}
     else
-      Logger.warning("tool_task_down",
-        session_id: state.session_id,
-        reason: inspect(reason)
-      )
-
+      Logger.warning("tool_task_down", session_id: state.session_id, reason: inspect(reason))
       remaining = state.pending_tool_count - 1
-      if remaining <= 0, do: safe_resume(state.runner_pid, %{tools_completed: true})
-      {:noreply, %{state | pending_tool_count: remaining, tool_tasks: new_tool_tasks}}
+
+      if remaining <= 0 do
+        {:noreply,
+         Worker.step_engine(%{state | pending_tool_count: 0, tool_tasks: new_tool_tasks}),
+         Worker.timeout()}
+      else
+        {:noreply, %{state | pending_tool_count: remaining, tool_tasks: new_tool_tasks},
+         Worker.timeout()}
+      end
     end
   end
 
-  def handle_runner_resume(pid, ctx, attempts, %{runner_pid: pid} = state) do
-    resume_or_retry(pid, ctx, attempts)
-    {:noreply, state}
-  end
+  # --- QueryLoop event handlers ---
 
-  def handle_runner_resume(_pid, _ctx, _attempts, state), do: {:noreply, state}
-
-  def handle_runner_exit(reason, state) do
-    Logger.warning("runner_exited", session_id: state.session_id, reason: inspect(reason))
-    Persistence.update_session_status(state.session_id, "error")
-    Persistence.broadcast(state.session_id, "error", %{message: "Agent runner crashed"})
-    Persistence.broadcast(state.session_id, "session_status", %{status: "error"})
-    {:noreply, %{state | runner_pid: nil}}
-  end
-
-  # -- QueryLoop event handlers --
-
-  def handle_query_loop_event({:stream_start}, state) do
-    {:noreply, state}
-  end
+  def handle_query_loop_event({:stream_start}, state), do: {:noreply, state, Worker.timeout()}
 
   def handle_query_loop_event({:stream_chunk, chunk}, state) do
     case chunk do
@@ -139,12 +147,11 @@ defmodule Synapsis.Session.Worker.IOHandler do
         :ok
     end
 
-    {:noreply, state}
+    {:noreply, state, Worker.timeout()}
   end
 
-  def handle_query_loop_event({:stream_end, _assistant_msg}, state) do
-    {:noreply, state}
-  end
+  def handle_query_loop_event({:stream_end, _assistant_msg}, state),
+    do: {:noreply, state, Worker.timeout()}
 
   def handle_query_loop_event({:tool_start, id, name, input}, state) do
     Persistence.broadcast(state.session_id, "tool_start", %{
@@ -153,7 +160,7 @@ defmodule Synapsis.Session.Worker.IOHandler do
       input: input
     })
 
-    {:noreply, state}
+    {:noreply, state, Worker.timeout()}
   end
 
   def handle_query_loop_event({:tool_result, id, result}, state) do
@@ -163,12 +170,11 @@ defmodule Synapsis.Session.Worker.IOHandler do
       is_error: result.is_error
     })
 
-    {:noreply, state}
+    {:noreply, state, Worker.timeout()}
   end
 
-  def handle_query_loop_event({:turn_complete, _turn}, state) do
-    {:noreply, state}
-  end
+  def handle_query_loop_event({:turn_complete, _turn}, state),
+    do: {:noreply, state, Worker.timeout()}
 
   def handle_query_loop_event({:terminal, reason, _final_state}, state) do
     status = if reason == :completed, do: "idle", else: "error"
@@ -179,42 +185,112 @@ defmodule Synapsis.Session.Worker.IOHandler do
       reason: to_string(reason)
     })
 
-    {:noreply, state}
+    {:noreply, state, Worker.timeout()}
   end
 
-  def handle_query_loop_event(_event, state), do: {:noreply, state}
+  def handle_query_loop_event(_event, state), do: {:noreply, state, Worker.timeout()}
 
-  # After cancel, runner_pid is nil but in-flight messages may still arrive.
-  defp safe_resume(nil, _ctx), do: :ok
-  defp safe_resume(pid, ctx), do: resume_or_retry(pid, ctx, @runner_resume_retry_attempts)
+  # --- Private ---
 
-  defp resume_or_retry(pid, ctx, attempts) when attempts > 0 do
-    case Runner.resume(pid, ctx) do
-      :ok ->
-        :ok
+  defp spawn_fenced_tool_task({classification, tool_use}, caller, epoch, opts, state) do
+    case classification do
+      cls when cls in [:approved, :auto_approved] ->
+        project_path = opts[:project_path]
+        effective_path = opts[:effective_path] || project_path
+        session_id = opts[:session_id]
+        agent_id = opts[:agent_id] || "default"
+        tool_call_hashes = opts[:tool_call_hashes] || MapSet.new()
+        call_hash = :erlang.phash2({tool_use.tool, tool_use.input})
+        is_duplicate = MapSet.member?(tool_call_hashes, call_hash)
 
-      {:error, :not_waiting} ->
-        Process.send_after(
-          self(),
-          {:runner_resume, pid, ctx, attempts - 1},
-          @runner_resume_retry_delay
+        Task.Supervisor.async_nolink(Synapsis.Tool.TaskSupervisor, fn ->
+          try do
+            result =
+              Synapsis.Tool.Executor.execute_approved(tool_use.tool, tool_use.input, %{
+                project_path: effective_path,
+                session_id: session_id,
+                working_dir: effective_path,
+                agent_id: agent_id,
+                agent_scope: :agent
+              })
+
+            {output, is_error} =
+              case result do
+                {:ok, out} ->
+                  suffix =
+                    if is_duplicate,
+                      do:
+                        "\n\nWarning: This exact tool call was already made in this conversation turn. Try a different approach.",
+                      else: ""
+
+                  {out <> suffix, false}
+
+                {:error, reason} ->
+                  {tool_error_message(reason), true}
+
+                other ->
+                  Logger.warning("tool_unexpected_result",
+                    tool: tool_use.tool,
+                    result: inspect(other)
+                  )
+
+                  {"Unexpected tool result: #{inspect(other)}", true}
+              end
+
+            send(caller, {:tool_result, epoch, tool_use.tool_use_id, output, is_error})
+          rescue
+            e ->
+              Logger.warning("tool_task_crashed",
+                tool: tool_use.tool,
+                error: Exception.message(e)
+              )
+
+              send(
+                caller,
+                {:tool_result, epoch, tool_use.tool_use_id,
+                 "Tool execution crashed: #{Exception.message(e)}", true}
+              )
+          catch
+            kind, reason ->
+              Logger.warning("tool_task_caught", tool: tool_use.tool, kind: kind)
+
+              send(
+                caller,
+                {:tool_result, epoch, tool_use.tool_use_id,
+                 "Tool execution failed: #{inspect({kind, reason})}", true}
+              )
+          end
+        end)
+
+      :requires_approval ->
+        Phoenix.PubSub.broadcast(
+          Synapsis.PubSub,
+          "session:#{state.session_id}",
+          {"permission_request",
+           %{
+             tool: tool_use.tool,
+             tool_use_id: tool_use.tool_use_id,
+             input: tool_use.input
+           }}
         )
 
-        :ok
+        nil
 
-      {:error, reason} ->
-        Logger.debug("runner_resume_skipped", reason: inspect(reason))
-        :ok
+      :denied ->
+        ResponseFlusher.flush_tool_result(
+          state.session_id,
+          tool_use.tool_use_id,
+          "Tool denied by permission policy.",
+          true
+        )
+
+        nil
     end
-  catch
-    :exit, reason ->
-      Logger.debug("runner_resume_exit", reason: inspect(reason))
-      :ok
   end
 
-  defp resume_or_retry(_pid, _ctx, 0), do: :ok
-
-  # -- Debug telemetry helpers --
+  defp tool_error_message(:timeout), do: "Tool execution timed out"
+  defp tool_error_message(reason) when is_binary(reason), do: reason
+  defp tool_error_message(_), do: "Tool execution failed"
 
   defp maybe_attach_debug(state) do
     if session_debug_enabled?(state.session_id) do
@@ -223,10 +299,7 @@ defmodule Synapsis.Session.Worker.IOHandler do
   end
 
   defp detach_debug(nil), do: :ok
-
-  defp detach_debug(handler_id) do
-    Synapsis.Session.DebugTelemetry.detach(handler_id)
-  end
+  defp detach_debug(handler_id), do: Synapsis.Session.DebugTelemetry.detach(handler_id)
 
   defp session_debug_enabled?(session_id) do
     case Synapsis.Repo.get(Synapsis.Session, session_id) do
