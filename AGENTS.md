@@ -1,10 +1,10 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
+## Project Structure And Module Organization
 
 This is an Elixir umbrella project with a Phoenix server/web surface, OTP-backed agent runtime, Ecto persistence, and TypeScript workspace packages.
 
-- `apps/synapsis_data`: `Synapsis.Repo`, Ecto schemas, migrations, persistence contexts, encrypted fields, and database-facing APIs.
+- `apps/synapsis_data`: Ecto schemas, Repo, migrations, persistence contexts, encrypted fields, and database-facing APIs.
 - `apps/synapsis_provider`: provider adapters and streaming transport for Anthropic, OpenAI-compatible, Google, model registry, retry, sanitization, and provider event/message mapping.
 - `apps/synapsis_core`: shared domain services, session orchestration helpers, tool registry/executor, permissions, config, PubSub, memory, git/worktree helpers, and file watching.
 - `apps/synapsis_agent`: supervised agent/session runtime, agent graphs, query loop, runtime checkpoints, work items, heartbeats, messaging, and session worker implementation.
@@ -40,12 +40,13 @@ This is an Elixir umbrella project with a Phoenix server/web surface, OTP-backed
 - Test provider HTTP behavior with `Bypass`; never hit real provider APIs in tests.
 - Keep `.opencode.json` compatibility for agents, providers, MCP servers, and LSP config unless a task explicitly changes that contract.
 
-## Build, Test, and Development Commands
+## Build, Test, And Development Commands
 
 Run commands from the repository root unless noted.
 
 - `mix deps.get`: fetch Elixir dependencies.
 - `mix ecto.create && mix ecto.migrate`: create and migrate the configured database.
+- `mix ecto.setup`: create, migrate, and seed when appropriate.
 - `mix phx.server`: start the Phoenix endpoint on the configured dev port (`4657` by default).
 - `mix test`: run the full umbrella test suite.
 - `mix test apps/synapsis_core/test`: run one app's tests by path.
@@ -76,7 +77,7 @@ Use scoped tests for scoped changes. For PRD work, modify only files in the stat
 - Keep `synapsis_data` free of agent runtime, orchestration, Phoenix, provider streaming, tool execution, and UI logic.
 - When a task explicitly targets `synapsis_data`, keep the change data-only. If the requested behavior truly needs cross-package API or architecture changes, explain the required boundary change before broadening the edit.
 
-## Tool, Agent, and Process Rules
+## Tool, Agent, And Process Rules
 
 - Every tool implements `Synapsis.Tool.Behaviour`; every provider adapter follows the provider behavior/transport patterns already in `synapsis_provider`.
 - Tools must include project context, validate inputs, honor permissions, persist auditable calls where required, and broadcast side effects only after persistence.
@@ -101,17 +102,17 @@ Use scoped tests for scoped changes. For PRD work, modify only files in the stat
 - Update docs only when the behavior or public contract changes, or when the task explicitly asks for docs.
 - Keep generated planning/checklist content out of `AGENTS.md`; this file should stay concise and operational.
 
-## Agent skills
+## Agent Skills
 
-### Issue tracker
+### Issue Tracker
 
 Issues are tracked in GitHub Issues for `gsmlg-opt/Synapsis` using `gh`. See `docs/agents/issue-tracker.md`.
 
-### Triage labels
+### Triage Labels
 
 Use the default five-label triage vocabulary. See `docs/agents/triage-labels.md`.
 
-### Domain docs
+### Domain Docs
 
 This is a single-context repo. Use repo-wide architecture, decision, guardrail, PRD, and design docs. See `docs/agents/domain.md`.
 
@@ -125,7 +126,7 @@ If a dependency from the `gsmlg*`, `duskmoon-dev`, `Gao-OS`, or related internal
 - For non-blocking temporary workarounds, add `# WORKAROUND(upstream): org/repo#issue`.
 - If the upstream issue blocks the requested task, stop that blocked task and move only to unrelated unblocked work.
 
-## Git, Commits, and PRs
+## Git, Commits, And PRs
 
 - Put repo-local worktrees under `.trees/<branch-name>`.
 - Do not revert user changes or unrelated dirty worktree files.
@@ -133,42 +134,41 @@ If a dependency from the `gsmlg*`, `duskmoon-dev`, `Gao-OS`, or related internal
 - Do not include `Generated with Claude Code` or `Co-Authored-By: Claude` in commit messages.
 - PRs should include a concise problem/solution summary, linked issue or task, test evidence, and screenshots or GIFs for UI changes.
 
-## graphify
+## Graphify
 
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+This project has a knowledge graph at `graphify-out/` with god nodes, community structure, and cross-file relationships.
 
-Rules:
-- ALWAYS read graphify-out/GRAPH_REPORT.md before reading any source files, running grep/glob searches, or answering codebase questions. The graph is your primary map of the codebase.
-- IF graphify-out/wiki/index.md EXISTS, navigate it instead of reading raw files
-- For cross-module "how does X relate to Y" questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep — these traverse the graph's EXTRACTED + INFERRED edges instead of scanning files
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+- Always read `graphify-out/GRAPH_REPORT.md` before reading source files, running grep/glob searches, or answering codebase questions.
+- If `graphify-out/wiki/index.md` exists, navigate it instead of reading raw files.
+- For cross-module questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep.
+- After modifying code, run `graphify update .` to keep the graph current.
 
 <!-- gitnexus:start -->
-# GitNexus — Code Intelligence
+# GitNexus - Code Intelligence
 
-This project is indexed by GitNexus as **Synapsis** (2680 symbols, 2884 relationships, 18 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **Synapsis** (2680 symbols, 2884 relationships, 18 execution flows). Use the GitNexus tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
 ## Always Do
 
-- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
+- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius.
 - **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
 - **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
-- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
+- When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping.
+- When you need full context on a specific symbol, use `gitnexus_context({name: "symbolName"})`.
 
 ## Never Do
 
 - NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
 - NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
-- NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
+- NEVER rename symbols with find-and-replace; use `gitnexus_rename`.
 - NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
 
 ## Resources
 
 | Resource | Use for |
-|----------|---------|
+| --- | --- |
 | `gitnexus://repo/Synapsis/context` | Codebase overview, check index freshness |
 | `gitnexus://repo/Synapsis/clusters` | All functional areas |
 | `gitnexus://repo/Synapsis/processes` | All execution flows |
@@ -177,7 +177,7 @@ This project is indexed by GitNexus as **Synapsis** (2680 symbols, 2884 relation
 ## CLI
 
 | Task | Read this skill file |
-|------|---------------------|
+| --- | --- |
 | Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
 | Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
 | Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
