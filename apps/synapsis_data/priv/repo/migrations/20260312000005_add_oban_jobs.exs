@@ -1,11 +1,8 @@
 defmodule Synapsis.Repo.Migrations.AddObanJobs do
   use Ecto.Migration
 
-  def up do
-    Oban.Migration.up(version: 12)
-  end
-
-  def down do
-    Oban.Migration.down(version: 1)
-  end
+  # Oban removed in ADR-006 C3. Migration kept as a no-op so existing
+  # deployments that have already run it don't fail on rollback/re-run.
+  def up, do: :ok
+  def down, do: :ok
 end

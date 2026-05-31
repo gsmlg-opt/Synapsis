@@ -11,7 +11,7 @@ defmodule SynapsisServer.HealthControllerTest do
                "ok" => ok,
                "repo" => "ok",
                "pubsub" => "ok",
-               "oban" => _,
+               "scheduler" => _,
                "tool_registry" => _,
                "provider_registry" => _,
                "session_supervisor" => _,
