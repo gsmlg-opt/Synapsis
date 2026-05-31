@@ -49,7 +49,10 @@ defmodule Synapsis.Session.Worker do
     approval_decisions: %{},
     execution_mode: :graph,
     query_loop_task: nil,
-    tool_tasks: MapSet.new()
+    # Map of task_ref => tool_use_id; allows error tool_result flush on abnormal task exit.
+    tool_tasks: %{},
+    # Set of tool_use_ids already executed this turn; guards against soft-retry re-execution.
+    executed_tool_ids: MapSet.new()
   ]
 
   def start_link(opts) do
@@ -130,7 +133,14 @@ defmodule Synapsis.Session.Worker do
                 |> Map.put(:user_input, content)
                 |> Map.put(:image_parts, image_parts)
 
-              new_state = step_engine(%{state | engine_ctx: new_engine_ctx})
+              # Reset per-turn idempotency guard on each new user message.
+              new_state =
+                step_engine(%{
+                  state
+                  | engine_ctx: new_engine_ctx,
+                    executed_tool_ids: MapSet.new()
+                })
+
               {:reply, :ok, new_state, @timeout}
 
             {:error, reason} ->
@@ -223,7 +233,8 @@ defmodule Synapsis.Session.Worker do
              pending_tool_count: 0,
              pending_approvals: MapSet.new(),
              approval_decisions: %{},
-             tool_tasks: MapSet.new()
+             tool_tasks: %{},
+             executed_tool_ids: MapSet.new()
          }, @timeout}
     end
   end
@@ -290,10 +301,9 @@ defmodule Synapsis.Session.Worker do
 
   # Tool task monitor — abnormal exit without having sent a tool_result.
   def handle_info({:DOWN, ref, :process, _pid, reason}, s) when is_reference(ref) do
-    if MapSet.member?(s.tool_tasks, ref) do
-      IOHandler.handle_tool_task_down(ref, reason, s)
-    else
-      {:noreply, s, @timeout}
+    case Map.fetch(s.tool_tasks, ref) do
+      {:ok, tool_use_id} -> IOHandler.handle_tool_task_down(ref, tool_use_id, reason, s)
+      :error -> {:noreply, s, @timeout}
     end
   end
 

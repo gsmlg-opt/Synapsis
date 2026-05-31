@@ -37,7 +37,8 @@ defmodule Synapsis.Agent.GlobalAgent do
     pending_tool_count: 0,
     pending_approvals: MapSet.new(),
     approval_decisions: %{},
-    tool_tasks: MapSet.new()
+    tool_tasks: %{},
+    executed_tool_ids: MapSet.new()
   ]
 
   @spec start_link(keyword()) :: GenServer.on_start()
@@ -130,7 +131,8 @@ defmodule Synapsis.Agent.GlobalAgent do
          engine_state: initial,
          engine_node: state.graph.start,
          pending_tool_count: 0,
-         tool_tasks: MapSet.new()
+         tool_tasks: %{},
+         executed_tool_ids: MapSet.new()
      }, @timeout}
   end
 
@@ -212,10 +214,9 @@ defmodule Synapsis.Agent.GlobalAgent do
   end
 
   def handle_info({:DOWN, ref, :process, _pid, reason}, s) when is_reference(ref) do
-    if MapSet.member?(s.tool_tasks, ref) do
-      IOHandler.handle_tool_task_down(ref, reason, s)
-    else
-      {:noreply, s, @timeout}
+    case Map.fetch(s.tool_tasks, ref) do
+      {:ok, tool_use_id} -> IOHandler.handle_tool_task_down(ref, tool_use_id, reason, s)
+      :error -> {:noreply, s, @timeout}
     end
   end
 

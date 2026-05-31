@@ -34,24 +34,33 @@ defmodule Synapsis.Session.Worker.IOHandler do
     epoch = state.epoch
     caller = self()
 
-    {task_refs, hashes} =
+    # Idempotency: skip any tool already executed in this turn (soft-retry guard).
+    fresh =
+      Enum.reject(classified, fn {_cls, tu} ->
+        MapSet.member?(state.executed_tool_ids, tu.tool_use_id)
+      end)
+
+    {task_map, hashes, new_executed} =
       Enum.reduce(
-        classified,
-        {MapSet.new(), opts[:tool_call_hashes] || MapSet.new()},
-        fn {_cls, tool_use} = item, {refs, acc_hashes} ->
+        fresh,
+        {%{}, opts[:tool_call_hashes] || MapSet.new(), state.executed_tool_ids},
+        fn {_cls, tool_use} = item, {acc_map, acc_hashes, acc_exec} ->
           new_hash = MapSet.put(acc_hashes, :erlang.phash2({tool_use.tool, tool_use.input}))
           task = spawn_fenced_tool_task(item, caller, epoch, opts, state)
-          refs2 = if task, do: MapSet.put(refs, task.ref), else: refs
-          {refs2, new_hash}
+          # Map ref → tool_use_id so handle_tool_task_down can flush an error result on crash.
+          map2 = if task, do: Map.put(acc_map, task.ref, tool_use.tool_use_id), else: acc_map
+          exec2 = MapSet.put(acc_exec, tool_use.tool_use_id)
+          {map2, new_hash, exec2}
         end
       )
 
     {:noreply,
      %{
        state
-       | pending_tool_count: length(classified),
+       | pending_tool_count: length(fresh),
          stream_acc: Map.put(state.stream_acc, :tool_call_hashes, hashes),
-         tool_tasks: MapSet.union(state.tool_tasks, task_refs)
+         tool_tasks: Map.merge(state.tool_tasks, task_map),
+         executed_tool_ids: new_executed
      }, Worker.timeout()}
   end
 
@@ -111,13 +120,33 @@ defmodule Synapsis.Session.Worker.IOHandler do
     end
   end
 
-  def handle_tool_task_down(ref, reason, state) do
-    new_tool_tasks = MapSet.delete(state.tool_tasks, ref)
+  def handle_tool_task_down(ref, tool_use_id, reason, state) do
+    new_tool_tasks = Map.delete(state.tool_tasks, ref)
 
     if reason == :normal do
+      # Task sent its {:tool_result, ...} message before exiting cleanly — nothing to do.
       {:noreply, %{state | tool_tasks: new_tool_tasks}, Worker.timeout()}
     else
-      Logger.warning("tool_task_down", session_id: state.session_id, reason: inspect(reason))
+      Logger.warning("tool_task_down",
+        session_id: state.session_id,
+        tool_use_id: tool_use_id,
+        reason: inspect(reason)
+      )
+
+      # Flush an error tool_result so the provider never sees an unanswered tool_use.
+      ResponseFlusher.flush_tool_result(
+        state.session_id,
+        tool_use_id,
+        "Tool execution failed unexpectedly: #{inspect(reason)}",
+        true
+      )
+
+      Persistence.broadcast(state.session_id, "tool_result", %{
+        tool_use_id: tool_use_id,
+        content: "Tool execution failed unexpectedly: #{inspect(reason)}",
+        is_error: true
+      })
+
       remaining = state.pending_tool_count - 1
 
       if remaining <= 0 do
