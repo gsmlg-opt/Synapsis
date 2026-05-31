@@ -34,6 +34,7 @@ defmodule SynapsisCore.Application do
         {Task.Supervisor, name: Synapsis.Tool.TaskSupervisor},
         Synapsis.Tool.Registry,
         {Registry, keys: :unique, name: Synapsis.FileWatcher.Registry},
+        Synapsis.Config.Store.Supervisor,
         Synapsis.Memory.Supervisor
       ] ++
         oban_child ++
