@@ -1,27 +1,11 @@
 defmodule Synapsis.Memory.SummarizerDispatcher do
   @moduledoc """
-  Oban worker for background session summarization.
+  Background session summarization — no longer an Oban worker.
 
-  Triggers:
-  - `message_complete` broadcast (if enough new events since last summary)
-  - Task/session completion
-  - Explicit `session_summarize` tool invocation
-  - Scheduled compaction window
-
-  Pipeline:
-  1. Load event range for session
-  2. Compress: strip redundant tool outputs, collapse streaming chunks
-  3. LLM call via `Synapsis.LLM.complete/2` (single-shot, no agent loop)
-  4. Parse structured output into SemanticMemory candidates
-  5. Apply promotion rules (importance threshold, kind filter)
-  6. Insert into semantic_memories with appropriate scope
-  7. Broadcast `:memory_promoted` via PubSub
+  `enqueue/2` spawns a supervised Task via `Tool.TaskSupervisor`.
+  The pipeline (load → compress → LLM → parse → store) is unchanged;
+  persistence now goes through `Memory.Adapter` instead of Ecto directly.
   """
-
-  use Oban.Worker,
-    queue: :memory,
-    max_attempts: 3,
-    unique: [period: 60, fields: [:args], keys: [:session_id]]
 
   require Logger
   import Ecto.Query
@@ -32,32 +16,32 @@ defmodule Synapsis.Memory.SummarizerDispatcher do
   @summarizer_system_prompt Synapsis.Memory.Prompts.summarizer_system_prompt()
 
   @doc """
-  Enqueues a summarization job for a session.
-
-  Options:
-  - `:focus` — optional hint to focus extraction
-  - `:scope` — default scope for extracted memories (default: "agent")
-  - `:provider` — LLM provider to use (default: session's provider)
-  - `:force` — bypass event threshold check
+  Enqueue a summarization job for a session in a supervised background Task.
+  Returns `{:ok, task}` or `:skip` when the event threshold is not met.
   """
-  @spec enqueue(String.t(), keyword()) :: {:ok, Oban.Job.t()} | {:error, term()}
+  @spec enqueue(String.t(), keyword()) :: {:ok, Task.t()} | :skip | {:error, term()}
   def enqueue(session_id, opts \\ []) do
-    args =
-      %{session_id: session_id}
-      |> maybe_put(:focus, Keyword.get(opts, :focus))
-      |> maybe_put(:scope, Keyword.get(opts, :scope))
-      |> maybe_put(:provider, Keyword.get(opts, :provider))
-      |> maybe_put(:force, Keyword.get(opts, :force))
+    args = %{
+      session_id: session_id,
+      focus: Keyword.get(opts, :focus),
+      scope: Keyword.get(opts, :scope, "agent"),
+      force: Keyword.get(opts, :force, false)
+    }
 
-    %{} |> Map.merge(args) |> __MODULE__.new() |> Oban.insert()
+    task =
+      Task.Supervisor.async_nolink(Synapsis.Tool.TaskSupervisor, fn ->
+        run(args)
+      end)
+
+    {:ok, task}
   end
 
-  @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
-    session_id = args["session_id"]
-    focus = args["focus"]
-    scope = args["scope"] || "agent"
-    force = args["force"] || false
+  @doc "Run a summarization job synchronously (used by tests and LocalScheduler)."
+  @spec run(map()) :: :ok | {:skip, String.t()} | {:error, term()}
+  def run(%{session_id: session_id} = args) do
+    focus = args[:focus] || args["focus"]
+    scope = args[:scope] || args["scope"] || "agent"
+    force = args[:force] || args["force"] || false
 
     Logger.info("summarizer_started", session_id: session_id, focus: focus)
 
@@ -81,13 +65,15 @@ defmodule Synapsis.Memory.SummarizerDispatcher do
 
       {:skip, reason} ->
         Logger.info("summarizer_skipped", session_id: session_id, reason: reason)
-        :ok
+        {:skip, reason}
 
       {:error, reason} = err ->
         Logger.warning("summarizer_failed", session_id: session_id, reason: inspect(reason))
         err
     end
   end
+
+  # --- Private ---
 
   defp load_session(session_id) do
     case Repo.get(Synapsis.Session, session_id) do
@@ -99,7 +85,6 @@ defmodule Synapsis.Memory.SummarizerDispatcher do
   defp check_threshold(_session_id, true), do: :ok
 
   defp check_threshold(session_id, _force) do
-    # Use correlation_id to track events by session
     event_count =
       from(e in Synapsis.MemoryEvent,
         where: e.correlation_id == ^session_id,
@@ -126,18 +111,14 @@ defmodule Synapsis.Memory.SummarizerDispatcher do
         event_count
       end
 
-    if events_since >= @event_threshold do
-      :ok
-    else
-      {:skip, "only #{events_since} events since last summary (threshold: #{@event_threshold})"}
-    end
+    if events_since >= @event_threshold,
+      do: :ok,
+      else:
+        {:skip, "only #{events_since} events since last summary (threshold: #{@event_threshold})"}
   end
 
   defp load_messages(session_id) do
-    from(m in Synapsis.Message,
-      where: m.session_id == ^session_id,
-      order_by: m.inserted_at
-    )
+    from(m in Synapsis.Message, where: m.session_id == ^session_id, order_by: m.inserted_at)
     |> Repo.all()
   end
 
@@ -150,8 +131,6 @@ defmodule Synapsis.Memory.SummarizerDispatcher do
             parts
             |> Enum.flat_map(fn
               %Synapsis.Part.Text{content: c} when is_binary(c) -> [c]
-              %{type: "text", content: c} when is_binary(c) -> [c]
-              %{"type" => "text", "content" => c} when is_binary(c) -> [c]
               _ -> []
             end)
             |> Enum.join(" ")
@@ -167,13 +146,8 @@ defmodule Synapsis.Memory.SummarizerDispatcher do
   end
 
   defp extract_via_llm(compressed, focus, session) do
-    focus_instruction =
-      if focus, do: "\n\nFocus especially on: #{focus}", else: ""
-
-    messages = [
-      %{role: "user", content: "#{compressed}#{focus_instruction}"}
-    ]
-
+    focus_instruction = if focus, do: "\n\nFocus especially on: #{focus}", else: ""
+    messages = [%{role: "user", content: "#{compressed}#{focus_instruction}"}]
     provider = session.provider || "anthropic"
 
     case Synapsis.LLM.complete(messages,
@@ -187,7 +161,6 @@ defmodule Synapsis.Memory.SummarizerDispatcher do
   end
 
   defp parse_candidates(text) do
-    # Extract JSON array from response (may have markdown wrapping)
     json_text =
       case Regex.run(~r/\[[\s\S]*\]/, text) do
         [match] -> match
@@ -216,18 +189,11 @@ defmodule Synapsis.Memory.SummarizerDispatcher do
       Enum.map(candidates, fn candidate ->
         importance = candidate["importance"] || 0.6
 
-        # Apply promotion rules: skip low-importance candidates
         if importance < 0.3 do
           :skipped
         else
           scope = candidate["scope"] || default_scope
-
-          scope_id =
-            case scope do
-              "shared" -> ""
-              "agent" -> agent_id
-              _ -> agent_id
-            end
+          scope_id = if scope == "shared", do: "", else: agent_id
 
           attrs = %{
             scope: scope,
@@ -239,11 +205,10 @@ defmodule Synapsis.Memory.SummarizerDispatcher do
             importance: importance,
             confidence: 0.7,
             freshness: 1.0,
-            source: "summarizer",
-            contributed_by: agent_id
+            source: "summarizer"
           }
 
-          case Synapsis.Memory.store_semantic(attrs) do
+          case Synapsis.Memory.Adapter.store(attrs) do
             {:ok, mem} ->
               Synapsis.Memory.Cache.invalidate(scope, scope_id)
 
@@ -261,7 +226,6 @@ defmodule Synapsis.Memory.SummarizerDispatcher do
         end
       end)
 
-    # Record summary_created event
     Synapsis.Memory.append_event(%{
       type: "summary_created",
       agent_id: agent_id,
@@ -277,7 +241,4 @@ defmodule Synapsis.Memory.SummarizerDispatcher do
 
     {:ok, Enum.count(results, &(&1 == :ok))}
   end
-
-  defp maybe_put(map, _key, nil), do: map
-  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 end

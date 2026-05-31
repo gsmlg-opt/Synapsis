@@ -1,60 +1,48 @@
 defmodule Synapsis.Agent.Heartbeat.Worker do
   @moduledoc """
-  Oban worker for heartbeat execution (AI-6).
+  Heartbeat execution — called by `LocalScheduler` as a supervised Task.
 
   Runs scheduled agent invocations in isolated sessions.
   Results are written to workspace and user notified via PubSub.
-  After execution, the worker reschedules itself for the next cron window.
   """
-  use Oban.Worker,
-    queue: :heartbeat,
-    max_attempts: 3,
-    priority: 3
 
-  alias Synapsis.HeartbeatConfig
-  alias Synapsis.Heartbeats
   alias Synapsis.Workspace
   require Logger
 
-  @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"heartbeat_id" => heartbeat_id}}) do
-    case Heartbeats.get(heartbeat_id) do
-      nil ->
-        Logger.warning("heartbeat_config_not_found", heartbeat_id: heartbeat_id)
-        {:error, :config_not_found}
-
-      %HeartbeatConfig{enabled: false} ->
-        Logger.info("heartbeat_disabled", heartbeat_id: heartbeat_id)
+  @doc "Execute a heartbeat config map (from Config.Store or Ecto, same shape)."
+  @spec execute(map()) :: :ok | {:error, term()}
+  def execute(config) do
+    case Map.get(config, :enabled, true) do
+      false ->
+        Logger.info("heartbeat_disabled", name: config.name)
         :ok
 
-      config ->
+      _ ->
         case execute_heartbeat(config) do
-          :ok ->
-            case Synapsis.Agent.Heartbeat.Scheduler.schedule_heartbeat(config) do
-              :ok ->
-                :ok
-
-              {:error, reason} ->
-                Logger.warning("heartbeat_reschedule_failed",
-                  heartbeat_id: heartbeat_id,
-                  reason: inspect(reason)
-                )
-
-                :ok
-            end
-
-          {:error, _} = error ->
-            Logger.warning("heartbeat_skipping_reschedule",
-              heartbeat_id: heartbeat_id,
-              reason: "execution failed"
-            )
-
-            error
+          :ok -> :ok
+          {:error, _} = err -> err
         end
     end
   end
 
-  defp execute_heartbeat(%HeartbeatConfig{} = config) do
+  # Legacy entry-point used by old Oban scheduler — keeps callers compiling.
+  @doc false
+  def perform_by_id(heartbeat_id) do
+    case Synapsis.Heartbeats.get(heartbeat_id) do
+      nil ->
+        Logger.warning("heartbeat_config_not_found", heartbeat_id: heartbeat_id)
+        {:error, :config_not_found}
+
+      %{enabled: false} ->
+        Logger.info("heartbeat_disabled", heartbeat_id: heartbeat_id)
+        :ok
+
+      config ->
+        execute_heartbeat(config)
+    end
+  end
+
+  defp execute_heartbeat(config) do
     Logger.info("heartbeat_executing",
       name: config.name,
       heartbeat_id: config.id
@@ -107,7 +95,7 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
       {:error, Exception.message(e)}
   end
 
-  defp run_heartbeat_session(%HeartbeatConfig{} = config, timestamp) do
+  defp run_heartbeat_session(config, timestamp) do
     case create_heartbeat_session(config) do
       {:ok, session} ->
         case Synapsis.Sessions.send_message(session.id, config.prompt) do

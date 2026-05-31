@@ -211,8 +211,12 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       html = render_hook(view, "send_message", %{"value" => "show this immediately"})
 
       assert html =~ "show this immediately"
-      assert [%{role: "user"}] = Sessions.get_messages(session.id)
-      assert_eventually(fn -> length(Sessions.get_messages(session.id)) == 2 end)
+      # The user message must be written before the agent responds.
+      # Don't assert exactly 1 message — on fast CI the assistant reply can
+      # already be written by the time we check.
+      messages = Sessions.get_messages(session.id)
+      assert Enum.any?(messages, &(&1.role == "user")), "expected a user message to be persisted"
+      assert_eventually(fn -> length(Sessions.get_messages(session.id)) >= 2 end)
     end
   end
 

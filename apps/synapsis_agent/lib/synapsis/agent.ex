@@ -4,7 +4,7 @@ defmodule Synapsis.Agent do
   """
 
   alias Synapsis.Agent.Memory.{EventStore, SummaryStore}
-  alias Synapsis.Agent.Runtime.{Checkpoint, CheckpointStore, Graph, Runner}
+  alias Synapsis.Agent.Runtime.{Engine, Graph, Runner}
 
   @spec append_event(map()) :: :ok | {:error, term()}
   def append_event(attrs) when is_map(attrs), do: EventStore.append(attrs)
@@ -22,44 +22,19 @@ defmodule Synapsis.Agent do
     SummaryStore.get(scope, scope_id, kind)
   end
 
+  @doc """
+  Run a graph synchronously to completion or first wait.
+  Convenience wrapper for scripts and tests. For live sessions use `Session.Worker`.
+  """
   @spec run_graph(Graph.t() | map(), map(), keyword()) ::
           {:ok, Runner.snapshot()} | {:error, term(), Runner.snapshot() | nil}
   def run_graph(graph, state \\ %{}, opts \\ []) when is_map(state) and is_list(opts) do
     Runner.run(graph, state, opts)
   end
 
-  @spec start_runner(keyword()) :: GenServer.on_start()
-  def start_runner(opts) when is_list(opts) do
-    Runner.start_link(opts)
-  end
-
-  @spec resume_run(String.t(), map()) :: :ok | {:error, term()}
-  def resume_run(run_id, ctx_updates \\ %{}) when is_binary(run_id) and is_map(ctx_updates) do
-    Runner.resume(run_id, ctx_updates)
-  end
-
-  @spec await_run(String.t(), timeout()) :: Runner.snapshot() | {:error, term()}
-  def await_run(run_id, timeout \\ 5_000) when is_binary(run_id) do
-    Runner.await(run_id, timeout)
-  end
-
-  @spec run_snapshot(String.t()) :: Runner.snapshot() | {:error, term()}
-  def run_snapshot(run_id) when is_binary(run_id) do
-    Runner.snapshot(run_id)
-  end
-
-  @spec restore_run(String.t(), keyword()) :: {:ok, pid()} | {:error, term()}
-  def restore_run(run_id, opts \\ []) when is_binary(run_id) and is_list(opts) do
-    Runner.start_from_checkpoint(run_id, opts)
-  end
-
-  @spec get_checkpoint(String.t()) :: {:ok, Checkpoint.t()} | {:error, :not_found}
-  def get_checkpoint(run_id) when is_binary(run_id) do
-    CheckpointStore.get(run_id)
-  end
-
-  @spec list_checkpoints(keyword()) :: [Checkpoint.t()]
-  def list_checkpoints(filters \\ []) do
-    CheckpointStore.list(filters)
+  @doc "Step a graph until it waits or finishes. Pure — no process."
+  @spec step_graph(Graph.t(), atom(), map(), map()) :: Engine.run_result()
+  def step_graph(%Graph{} = graph, node, workflow_state \\ %{}, ctx \\ %{}) do
+    Engine.run_until_wait(graph, node, workflow_state, ctx)
   end
 end

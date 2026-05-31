@@ -1,20 +1,22 @@
 defmodule Synapsis.Session.Worker.Boot do
-  @moduledoc "Handles Worker initialization: session loading, graph creation, Runner start."
+  @moduledoc "Handles Worker initialization: session loading and graph construction."
 
   alias Synapsis.{Repo, Session}
   alias Synapsis.Session.Worker.Config
-  alias Synapsis.Agent.Runtime.Runner
   alias Synapsis.Agent.Graphs.CodingLoop
 
   @transient_statuses ~w(streaming tool_executing)
 
+  @doc """
+  Load the session and build the initial graph + engine state/ctx.
+
+  Returns `{session, agent, provider_config, graph, engine_state, engine_ctx, project_path}`
+  or `{:stop, reason}`.
+  """
   def load_and_boot(session_id, opts \\ []) do
     case Repo.get(Session, session_id) do
-      nil ->
-        {:stop, {:error, :session_not_found}}
-
-      session ->
-        boot(reset_transient_status(session), session_id, opts)
+      nil -> {:stop, {:error, :session_not_found}}
+      session -> boot(reset_transient_status(session), session_id, opts)
     end
   end
 
@@ -39,28 +41,23 @@ defmodule Synapsis.Session.Worker.Boot do
 
     with {:ok, workspace_path} <- ensure_workspace_path(workspace_path),
          {:ok, graph} <- graph_module.build() do
-      initial_state =
+      engine_state =
         graph_module.initial_state(%{
           session_id: session_id,
           provider_config: provider_config,
           agent_config: agent
         })
 
-      ctx = %{
+      engine_ctx = %{
         provider: provider,
         model: agent[:model] || session.model,
         project_path: workspace_path,
         agent_id: session.agent || agent[:name] || "main"
       }
 
-      case Runner.start_link(graph: graph, state: initial_state, ctx: ctx, run_id: session_id) do
-        {:ok, runner_pid} ->
-          Synapsis.Memory.Writer.subscribe_session(session_id)
-          {session, agent, provider_config, runner_pid, workspace_path}
+      Synapsis.Memory.Writer.subscribe_session(session_id)
 
-        {:error, reason} ->
-          {:stop, {:runner_start_failed, reason}}
-      end
+      {session, agent, provider_config, graph, engine_state, engine_ctx, workspace_path}
     else
       {:error, {:workspace_unavailable, _path, _reason} = reason} ->
         {:stop, reason}

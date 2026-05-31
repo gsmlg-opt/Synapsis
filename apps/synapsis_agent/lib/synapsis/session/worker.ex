@@ -1,5 +1,19 @@
 defmodule Synapsis.Session.Worker do
-  @moduledoc "Thin GenServer wrapper around graph-driven Runtime.Runner execution."
+  @moduledoc """
+  Per-session GenServer. Owns the graph engine and all I/O state.
+
+  The engine (pure functions in `Runtime.Engine`) is stepped inline — no
+  separate Runner process, no cross-process resume dance. Long-running I/O
+  (LLM streaming, tool execution) is delegated via messages to the Worker's
+  mailbox and coordinated by IOHandler.
+
+  ## Epoch fencing
+
+  Every boot assigns a new monotonic epoch. Tasks capture the epoch at spawn
+  and stamp every result/chunk message. The Worker drops messages whose epoch
+  does not match the current one, so results from a dead incarnation (surviving
+  after a `rest_for_one` restart) are silently discarded.
+  """
   use GenServer
   require Logger
 
@@ -7,17 +21,25 @@ defmodule Synapsis.Session.Worker do
   alias Synapsis.Session.Worker.{Boot, Config, IOHandler, Persistence}
   alias Synapsis.Agent.Graphs.CodingLoop
   alias Synapsis.Agent.ResponseFlusher
-  alias Synapsis.Agent.Runtime.Runner
+  alias Synapsis.Agent.Runtime.Engine
 
   @timeout :timer.minutes(30)
-  @runner_ready_timeout 1_000
+
+  @doc "Inactivity timeout value — used by IOHandler to keep the timeout consistent."
+  def timeout, do: @timeout
 
   defstruct [
     :session_id,
     :session,
     :agent,
     :provider_config,
-    :runner_pid,
+    # Engine fields (replace runner_pid)
+    :graph,
+    :engine_node,
+    :engine_state,
+    :engine_ctx,
+    :epoch,
+    # I/O state
     :stream_ref,
     :project_path,
     :debug_handler_id,
@@ -27,7 +49,10 @@ defmodule Synapsis.Session.Worker do
     approval_decisions: %{},
     execution_mode: :graph,
     query_loop_task: nil,
-    tool_tasks: MapSet.new()
+    # Map of task_ref => tool_use_id; allows error tool_result flush on abnormal task exit.
+    tool_tasks: %{},
+    # Set of tool_use_ids already executed this turn; guards against soft-retry re-execution.
+    executed_tool_ids: MapSet.new()
   ]
 
   def start_link(opts) do
@@ -60,19 +85,30 @@ defmodule Synapsis.Session.Worker do
       {:stop, reason} ->
         {:stop, reason}
 
-      {session, agent, pc, runner, project_path} ->
+      {session, agent, pc, graph, engine_state, engine_ctx, project_path} ->
         Logger.info("session_worker_started", session_id: session.id)
 
-        {:ok,
-         %__MODULE__{
-           session_id: session.id,
-           session: session,
-           agent: agent,
-           provider_config: pc,
-           runner_pid: runner,
-           project_path: project_path
-         }, @timeout}
+        state = %__MODULE__{
+          session_id: session.id,
+          session: session,
+          agent: agent,
+          provider_config: pc,
+          graph: graph,
+          engine_node: graph.start,
+          engine_state: engine_state,
+          engine_ctx: engine_ctx,
+          epoch: new_epoch(),
+          project_path: project_path
+        }
+
+        # Park the engine at :receive after init so the Worker is registered first.
+        {:ok, state, {:continue, :init_engine}}
     end
+  end
+
+  @impl true
+  def handle_continue(:init_engine, state) do
+    {:noreply, step_engine(state), @timeout}
   end
 
   @impl true
@@ -89,12 +125,29 @@ defmodule Synapsis.Session.Worker do
         end
 
       :graph ->
-        with {:ok, ready_state} <- prepare_graph_runner_for_message(state),
-             :ok <- persist_user_message(ready_state, content, image_parts) do
-          resume_reply(ready_state, %{user_input: content, image_parts: image_parts})
+        if engine_ready?(state) do
+          case persist_user_message(state, content, image_parts) do
+            :ok ->
+              new_engine_ctx =
+                state.engine_ctx
+                |> Map.put(:user_input, content)
+                |> Map.put(:image_parts, image_parts)
+
+              # Reset per-turn idempotency guard on each new user message.
+              new_state =
+                step_engine(%{
+                  state
+                  | engine_ctx: new_engine_ctx,
+                    executed_tool_ids: MapSet.new()
+                })
+
+              {:reply, :ok, new_state, @timeout}
+
+            {:error, reason} ->
+              {:reply, {:error, reason}, state, @timeout}
+          end
         else
-          {:error, reason} ->
-            {:reply, {:error, reason}, state, @timeout}
+          {:reply, {:error, {:engine_not_ready, state.engine_node}}, state, @timeout}
         end
     end
   end
@@ -102,25 +155,21 @@ defmodule Synapsis.Session.Worker do
   def handle_call(:retry, _from, state) do
     if Persistence.has_messages?(state.session_id) do
       Persistence.set_status(state.session_id, "streaming")
-      resume_reply(state, %{retry: true})
+      new_state = step_engine(state)
+      {:reply, :ok, new_state, @timeout}
     else
       {:reply, {:error, :no_messages}, state, @timeout}
     end
   end
 
   def handle_call(:get_status, _from, state) do
-    s =
-      if state.runner_pid do
-        try do
-          Runner.snapshot(state.runner_pid)[:status] || :unknown
-        catch
-          :exit, _ -> :unknown
-        end
-      else
-        :unknown
+    status =
+      cond do
+        not engine_ready?(state) -> :running
+        true -> :waiting
       end
 
-    {:reply, s, state, @timeout}
+    {:reply, status, state, @timeout}
   end
 
   def handle_call({:switch_agent, name}, _from, state) do
@@ -165,12 +214,28 @@ defmodule Synapsis.Session.Worker do
         if state.stream_ref,
           do: SessionStream.cancel_stream(state.stream_ref, state.session.provider)
 
-        force_stop_runner(state.runner_pid)
         close_open_tool_uses(state.session_id)
         Persistence.set_status(state.session_id, "idle")
 
-        {:noreply, %{state | stream_ref: nil, runner_pid: nil, tool_tasks: MapSet.new()},
-         @timeout}
+        # Bump epoch so surviving I/O task results from this turn are dropped.
+        new_epoch = new_epoch()
+
+        # Reset engine back to :receive/idle
+        initial = reset_engine_state(state)
+
+        {:noreply,
+         %{
+           state
+           | stream_ref: nil,
+             epoch: new_epoch,
+             engine_state: initial,
+             engine_node: state.graph.start,
+             pending_tool_count: 0,
+             pending_approvals: MapSet.new(),
+             approval_decisions: %{},
+             tool_tasks: %{},
+             executed_tool_ids: MapSet.new()
+         }, @timeout}
     end
   end
 
@@ -185,22 +250,27 @@ defmodule Synapsis.Session.Worker do
     do: IOHandler.handle_dispatch_tools(c, o, s)
 
   def handle_info({:node_request, :request_approvals, ids}, s),
-    do: {:noreply, %{s | pending_approvals: MapSet.new(ids), approval_decisions: %{}}}
+    do: {:noreply, %{s | pending_approvals: MapSet.new(ids), approval_decisions: %{}}, @timeout}
 
   def handle_info({:node_request, :start_auditor, p}, s), do: IOHandler.handle_start_auditor(p, s)
   def handle_info({:provider_chunk, event}, s), do: IOHandler.handle_provider_chunk(event, s)
   def handle_info(:provider_done, s), do: IOHandler.handle_provider_done(s)
   def handle_info({:provider_error, r}, s), do: IOHandler.handle_provider_error(r, s)
 
-  def handle_info({:tool_result, id, res, err}, s),
+  # Epoch-fenced tool results — drop if epoch does not match current incarnation.
+  def handle_info({:tool_result, epoch, id, res, err}, %{epoch: epoch} = s),
     do: IOHandler.handle_tool_result(id, res, err, s)
 
-  def handle_info({:runner_resume, pid, ctx, attempts}, s),
-    do: IOHandler.handle_runner_resume(pid, ctx, attempts, s)
+  def handle_info({:tool_result, _stale_epoch, _id, _res, _err}, s),
+    do: {:noreply, s, @timeout}
+
+  # Legacy unfenced tool results (from global TaskSupervisor path) — still handled.
+  def handle_info({:tool_result, id, res, err}, s) when is_binary(id),
+    do: IOHandler.handle_tool_result(id, res, err, s)
 
   def handle_info({:auditor_completed, _}, s) do
-    if s.runner_pid, do: Runner.resume(s.runner_pid, %{auditor_completed: true})
-    {:noreply, s}
+    new_ctx = Map.put(s.engine_ctx, :auditor_completed, true)
+    {:noreply, step_engine(%{s | engine_ctx: new_ctx}), @timeout}
   end
 
   # QueryLoop events
@@ -218,47 +288,29 @@ defmodule Synapsis.Session.Worker do
     {:noreply, %{s | query_loop_task: nil}, @timeout}
   end
 
-  # QueryLoop Task DOWN (crash or shutdown)
+  # QueryLoop Task DOWN
   def handle_info(
         {:DOWN, ref, :process, _pid, reason},
         %{query_loop_task: %Task{ref: task_ref}} = s
       )
       when ref == task_ref do
-    Logger.warning("query_loop_task_down",
-      session_id: s.session_id,
-      reason: inspect(reason)
-    )
-
+    Logger.warning("query_loop_task_down", session_id: s.session_id, reason: inspect(reason))
     Persistence.set_status(s.session_id, "idle")
     {:noreply, %{s | query_loop_task: nil}, @timeout}
   end
 
-  def handle_info({:EXIT, pid, reason}, %{runner_pid: pid} = s),
-    do: IOHandler.handle_runner_exit(reason, s)
-
-  def handle_info({:EXIT, _, :normal}, s), do: {:noreply, s, @timeout}
-
-  def handle_info({:EXIT, _, r}, s) do
-    Logger.warning("linked_process_exited", session_id: s.session_id, reason: inspect(r))
-    {:noreply, s, @timeout}
+  # Tool task monitor — abnormal exit without having sent a tool_result.
+  def handle_info({:DOWN, ref, :process, _pid, reason}, s) when is_reference(ref) do
+    case Map.fetch(s.tool_tasks, ref) do
+      {:ok, tool_use_id} -> IOHandler.handle_tool_task_down(ref, tool_use_id, reason, s)
+      :error -> {:noreply, s, @timeout}
+    end
   end
 
   def handle_info(:timeout, s) do
     Logger.info("session_inactivity_timeout", session_id: s.session_id)
     Persistence.update_session_status(s.session_id, "idle")
     {:stop, :normal, s}
-  end
-
-  # Tool task crashed — the try/rescue/catch in ToolDispatcher.execute_async should
-  # normally prevent this, but as a safety net we handle task crashes here by
-  # decrementing the pending tool count so the runner doesn't stay stuck waiting.
-  def handle_info({:DOWN, ref, :process, _pid, reason}, s)
-      when is_reference(ref) do
-    if MapSet.member?(s.tool_tasks, ref) do
-      IOHandler.handle_tool_task_down(ref, reason, s)
-    else
-      {:noreply, s, @timeout}
-    end
   end
 
   def handle_info(_msg, s), do: {:noreply, s, @timeout}
@@ -278,15 +330,47 @@ defmodule Synapsis.Session.Worker do
     :ok
   end
 
-  defp resume_reply(state, ctx) do
-    if state.runner_pid do
-      case Runner.resume(state.runner_pid, ctx) do
-        :ok -> {:reply, :ok, state, @timeout}
-        {:error, r} -> {:reply, {:error, r}, state, @timeout}
-      end
-    else
-      {:reply, {:error, :no_runner}, state, @timeout}
+  # --- Engine helpers ---
+
+  @doc false
+  def step_engine(%__MODULE__{} = state) do
+    case Engine.run_until_wait(
+           state.graph,
+           state.engine_node,
+           state.engine_state,
+           state.engine_ctx
+         ) do
+      {:waiting, node, new_workflow_state} ->
+        %{state | engine_node: node, engine_state: new_workflow_state}
+
+      {:done, _new_workflow_state} ->
+        # Graph reached :end — reset to start (next turn).
+        %{state | engine_node: state.graph.start, engine_state: reset_engine_state(state)}
+
+      {:error, reason, new_workflow_state} ->
+        Logger.warning("engine_error", session_id: state.session_id, reason: inspect(reason))
+        Persistence.update_session_status(state.session_id, "error")
+        Persistence.broadcast(state.session_id, "error", %{message: "Agent engine error"})
+        Persistence.broadcast(state.session_id, "session_status", %{status: "error"})
+        %{state | engine_state: new_workflow_state}
     end
+  end
+
+  @doc "True when the engine is parked at :receive waiting for user input."
+  def engine_ready?(%__MODULE__{engine_node: node, engine_state: es}) do
+    node == :receive and Map.get(es, :awaiting_input, false)
+  end
+
+  # --- Private helpers ---
+
+  defp new_epoch, do: System.monotonic_time()
+
+  defp reset_engine_state(state) do
+    CodingLoop.initial_state(%{
+      session_id: state.session_id,
+      provider_config: state.provider_config,
+      agent_config: state.agent
+    })
   end
 
   defp persist_user_message(state, content, image_parts) do
@@ -300,116 +384,26 @@ defmodule Synapsis.Session.Worker do
     end
   end
 
-  defp prepare_graph_runner_for_message(state) do
-    case runner_snapshot(state.runner_pid) do
-      {:ok, %{status: :waiting, node: :receive}} ->
-        {:ok, state}
+  defp collect_approval(state, tool_use_id, decision) do
+    decisions = Map.put(state.approval_decisions, tool_use_id, decision)
+    state = %{state | approval_decisions: decisions}
 
-      {:ok, %{status: :running, node: node}} when node in [:receive, :complete] ->
-        await_graph_runner_ready(state)
+    if MapSet.size(state.pending_approvals) > 0 and
+         Enum.all?(state.pending_approvals, &Map.has_key?(decisions, &1)) do
+      new_ctx = Map.put(state.engine_ctx, :approval_decisions, decisions)
 
-      {:ok, %{status: status}} when status in [:completed, :failed] ->
-        restart_graph_runner(state)
-
-      {:ok, %{status: :waiting, node: node}} ->
-        {:error, {:runner_waiting_on, node}}
-
-      {:ok, %{status: status, node: node}} ->
-        {:error, {:runner_not_ready, status, node}}
-
-      {:error, :no_runner} ->
-        restart_graph_runner(state)
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp runner_snapshot(nil), do: {:error, :no_runner}
-
-  defp runner_snapshot(pid) do
-    {:ok, Runner.snapshot(pid)}
-  catch
-    :exit, reason -> {:error, reason}
-  end
-
-  defp await_graph_runner_ready(state) do
-    case Runner.await(state.runner_pid, @runner_ready_timeout) do
-      %{status: :waiting, node: :receive} ->
-        {:ok, state}
-
-      %{status: status, node: node} ->
-        {:error, {:runner_not_ready, status, node}}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  catch
-    :exit, reason -> {:error, reason}
-  end
-
-  defp restart_graph_runner(state) do
-    stop_runner(state.runner_pid)
-
-    case start_graph_runner(state) do
-      {:ok, runner_pid} ->
-        await_graph_runner_ready(%{
+      new_state =
+        step_engine(%{
           state
-          | runner_pid: runner_pid,
-            stream_ref: nil,
-            stream_acc: Synapsis.Agent.StreamAccumulator.new(),
-            pending_tool_count: 0,
+          | engine_ctx: new_ctx,
             pending_approvals: MapSet.new(),
-            approval_decisions: %{},
-            tool_tasks: MapSet.new()
+            approval_decisions: %{}
         })
 
-      {:error, reason} ->
-        {:error, reason}
+      {:noreply, new_state, @timeout}
+    else
+      {:noreply, state, @timeout}
     end
-  end
-
-  defp start_graph_runner(state) do
-    with {:ok, graph} <- CodingLoop.build() do
-      Runner.start_link(
-        graph: graph,
-        state:
-          CodingLoop.initial_state(%{
-            session_id: state.session_id,
-            provider_config: state.provider_config,
-            agent_config: state.agent
-          }),
-        ctx: graph_ctx(state),
-        run_id: state.session_id
-      )
-    end
-  end
-
-  defp graph_ctx(state) do
-    agent = state.agent || %{}
-
-    %{
-      provider: agent[:provider] || state.session.provider,
-      model: agent[:model] || state.session.model,
-      project_path: state.project_path,
-      agent_id: state.session.agent || agent[:name] || "main"
-    }
-  end
-
-  defp stop_runner(nil), do: :ok
-
-  defp stop_runner(pid) when is_pid(pid) do
-    if Process.alive?(pid), do: GenServer.stop(pid, :normal, 5_000)
-    :ok
-  catch
-    :exit, _reason -> :ok
-  end
-
-  defp force_stop_runner(nil), do: :ok
-
-  defp force_stop_runner(pid) when is_pid(pid) do
-    if Process.alive?(pid), do: Process.exit(pid, :kill)
-    :ok
   end
 
   defp close_open_tool_uses(session_id) do
@@ -417,7 +411,7 @@ defmodule Synapsis.Session.Worker do
     :ok
   end
 
-  # -- QueryLoop helpers --
+  # --- QueryLoop helpers (unchanged) ---
 
   defp start_query_loop(content, state) do
     messages = build_query_loop_messages(state.session_id)
@@ -498,17 +492,4 @@ defmodule Synapsis.Session.Worker do
   defp agent_type_from_name("assistant"), do: :conversational
   defp agent_type_from_name("plan"), do: :planning
   defp agent_type_from_name(_), do: :coding
-
-  defp collect_approval(state, tool_use_id, decision) do
-    decisions = Map.put(state.approval_decisions, tool_use_id, decision)
-    state = %{state | approval_decisions: decisions}
-
-    if state.runner_pid && MapSet.size(state.pending_approvals) > 0 &&
-         Enum.all?(state.pending_approvals, &Map.has_key?(decisions, &1)) do
-      Runner.resume(state.runner_pid, %{approval_decisions: decisions})
-      {:noreply, %{state | pending_approvals: MapSet.new(), approval_decisions: %{}}, @timeout}
-    else
-      {:noreply, state, @timeout}
-    end
-  end
 end

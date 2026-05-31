@@ -9,22 +9,6 @@ defmodule SynapsisCore.Application do
       [SynapsisPlugin.Supervisor]
       |> Enum.filter(&Code.ensure_loaded?/1)
 
-    oban_child =
-      case Application.fetch_env!(:synapsis_core, Oban) do
-        false ->
-          []
-
-        oban_config ->
-          case Application.ensure_all_started(:oban) do
-            {:ok, _} ->
-              [{Oban, oban_config}]
-
-            {:error, _} ->
-              Logger.warning("oban_start_skipped", reason: "oban application not available")
-              []
-          end
-      end
-
     children =
       [
         Synapsis.Repo,
@@ -34,10 +18,11 @@ defmodule SynapsisCore.Application do
         {Task.Supervisor, name: Synapsis.Tool.TaskSupervisor},
         Synapsis.Tool.Registry,
         {Registry, keys: :unique, name: Synapsis.FileWatcher.Registry},
+        Synapsis.Config.Store.Supervisor,
         Synapsis.Memory.Supervisor
       ] ++
-        oban_child ++
         maybe_child(Synapsis.Workspace.GC) ++
+        maybe_child(Synapsis.Agent.Heartbeat.LocalScheduler) ++
         optional_children
 
     opts = [strategy: :one_for_one, name: SynapsisCore.Supervisor]
@@ -55,7 +40,6 @@ defmodule SynapsisCore.Application do
         register_env_providers()
         seed_default_agents()
         seed_heartbeat_templates()
-        sync_heartbeat_scheduler()
 
         maybe_apply(SynapsisPlugin.Loader, :start_auto_plugins, [])
 
@@ -98,13 +82,6 @@ defmodule SynapsisCore.Application do
       Logger.warning("heartbeat_seed_failed", error: Exception.message(e))
   end
 
-  defp sync_heartbeat_scheduler do
-    maybe_apply(Synapsis.Agent.Heartbeat.Scheduler, :sync_crontab, [])
-  rescue
-    e in [RuntimeError, Ecto.QueryError, DBConnection.ConnectionError] ->
-      Logger.warning("heartbeat_sync_failed", error: Exception.message(e))
-  end
-
   defp register_env_providers do
     Enum.each(@env_provider_names, fn name ->
       api_key = Synapsis.Providers.env_api_key(name)
@@ -114,11 +91,9 @@ defmodule SynapsisCore.Application do
 
       case {Synapsis.Provider.Registry.get(name), api_key} do
         {{:ok, _}, _} ->
-          # Already registered from DB, skip
           :ok
 
         {_, nil} ->
-          # No env var set, skip
           :ok
 
         {_, api_key} ->

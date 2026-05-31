@@ -1,54 +1,53 @@
 defmodule Synapsis.Agent.Runtime.RunnerTest do
-  use Synapsis.Agent.DataCase, async: false
+  # Runner is now a pure sync wrapper over Engine — no DB, no process, runs async.
+  use ExUnit.Case, async: true
 
-  alias Synapsis.Agent.Runtime.{CheckpointStore, Graph, Node, Runner}
+  alias Synapsis.Agent.Runtime.{Engine, Graph, Node, Runner}
 
   defmodule PlannerNode do
     @behaviour Node
-
     @impl true
-    def run(state, _ctx) do
-      {:next, :planned, Map.update(state, :steps, [:planner], &(&1 ++ [:planner]))}
-    end
+    def run(state, _ctx),
+      do: {:next, :planned, Map.update(state, :steps, [:planner], &(&1 ++ [:planner]))}
   end
 
   defmodule ExecutorNode do
     @behaviour Node
-
     @impl true
-    def run(state, _ctx) do
-      {:next, :done, Map.update(state, :steps, [:executor], &(&1 ++ [:executor]))}
-    end
+    def run(state, _ctx),
+      do: {:next, :done, Map.update(state, :steps, [:executor], &(&1 ++ [:executor]))}
   end
 
   defmodule FinishNode do
     @behaviour Node
-
     @impl true
-    def run(state, _ctx) do
-      {:end, Map.update(state, :steps, [:finish], &(&1 ++ [:finish]))}
-    end
+    def run(state, _ctx),
+      do: {:end, Map.update(state, :steps, [:finish], &(&1 ++ [:finish]))}
   end
 
-  defmodule ApprovalNode do
+  defmodule WaitNode do
     @behaviour Node
-
     @impl true
     def run(state, ctx) do
-      if Map.get(ctx, :approved, false) do
-        {:next, :approved, Map.put(state, :approved, true)}
-      else
-        {:wait, state}
-      end
+      if Map.get(ctx, :approved, false),
+        do: {:next, :approved, Map.put(state, :approved, true)},
+        else: {:wait, state}
     end
   end
 
   defmodule MissingEdgeNode do
     @behaviour Node
-
     @impl true
     def run(state, _ctx), do: {:next, :missing, state}
   end
+
+  defmodule CrashNode do
+    @behaviour Node
+    @impl true
+    def run(_state, _ctx), do: raise("boom")
+  end
+
+  # --- Runner.run/3 tests ---
 
   test "executes a linear graph to completion" do
     graph = %Graph{
@@ -63,127 +62,96 @@ defmodule Synapsis.Agent.Runtime.RunnerTest do
     assert snapshot.state.steps == [:planner, :executor, :finish]
   end
 
-  test "pauses and resumes waiting runs" do
+  test "parks at first wait node" do
     graph = %Graph{
-      nodes: %{approval: ApprovalNode, finish: FinishNode},
+      nodes: %{approval: WaitNode, finish: FinishNode},
       edges: %{approval: %{approved: :finish}, finish: :end},
       start: :approval
     }
 
-    assert {:ok, pid} = Runner.start_link(graph: graph, state: %{}, ctx: %{})
-
-    waiting = Runner.await(pid)
-    assert waiting.status == :waiting
-    assert waiting.node == :approval
-
-    assert :ok = Runner.resume(pid, %{approved: true})
-    completed = Runner.await(pid)
-
-    assert completed.status == :completed
-    assert completed.node == :end
-    assert completed.state.approved
+    assert {:ok, snapshot} = Runner.run(graph, %{}, ctx: %{})
+    assert snapshot.status == :waiting
+    assert snapshot.node == :approval
   end
 
-  test "fails when transition selector cannot be resolved" do
+  test "reaches completion when ctx satisfies wait condition" do
+    graph = %Graph{
+      nodes: %{approval: WaitNode, finish: FinishNode},
+      edges: %{approval: %{approved: :finish}, finish: :end},
+      start: :approval
+    }
+
+    assert {:ok, snapshot} = Runner.run(graph, %{}, ctx: %{approved: true})
+    assert snapshot.status == :completed
+    assert snapshot.node == :end
+    assert snapshot.state.approved
+  end
+
+  test "returns error when transition selector cannot be resolved" do
     graph = %Graph{
       nodes: %{planner: MissingEdgeNode},
       edges: %{planner: %{ok: :end}},
       start: :planner
     }
 
-    assert {:error, {:invalid_transition, {:unknown_edge_selector, :planner, :missing}}, snapshot} =
+    assert {:error, {:invalid_transition, :planner, :missing, _}, snapshot} =
              Runner.run(graph, %{})
 
     assert snapshot.status == :failed
-    assert snapshot.node == :planner
   end
 
-  test "emits lifecycle events through handler callback" do
-    parent = self()
-
-    event_handler = fn event ->
-      send(parent, {:runtime_event, event.type, event.node})
-    end
-
+  test "returns error when node crashes" do
     graph = %Graph{
-      nodes: %{finish: FinishNode},
-      edges: %{finish: :end},
-      start: :finish
+      nodes: %{boom: CrashNode},
+      edges: %{boom: :end},
+      start: :boom
     }
 
-    assert {:ok, _snapshot} = Runner.run(graph, %{}, event_handler: event_handler)
+    assert {:error, {:node_crash, CrashNode, %RuntimeError{message: "boom"}, _}, snapshot} =
+             Runner.run(graph, %{})
 
-    assert_received {:runtime_event, :agent_started, :finish}
-    assert_received {:runtime_event, :node_started, :finish}
-    assert_received {:runtime_event, :node_finished, :finish}
-    assert_received {:runtime_event, :agent_finished, :end}
+    assert snapshot.status == :failed
   end
 
-  test "persists waiting checkpoint and supports resume by run_id after restart" do
-    run_id = "run-checkpoint-" <> Integer.to_string(System.unique_integer([:positive]))
+  # --- Engine.run_until_wait/4 tests ---
 
-    graph = %Graph{
-      nodes: %{approval: ApprovalNode, finish: FinishNode},
-      edges: %{approval: %{approved: :finish}, finish: :end},
-      start: :approval
-    }
+  test "Engine steps through the full graph" do
+    {:ok, graph} =
+      Graph.new(%{
+        nodes: %{planner: PlannerNode, finish: FinishNode},
+        edges: %{planner: %{planned: :finish}, finish: :end},
+        start: :planner
+      })
 
-    assert {:ok, pid} = Runner.start_link(graph: graph, state: %{}, ctx: %{}, run_id: run_id)
-    waiting = Runner.await(pid)
-
-    assert waiting.status == :waiting
-    assert waiting.node == :approval
-
-    assert {:ok, checkpoint} = CheckpointStore.get(run_id)
-    assert checkpoint.status == :waiting
-    assert checkpoint.node == :approval
-
-    assert :ok = GenServer.stop(pid, :normal)
-    assert eventually(fn -> Runner.whereis(run_id) == nil end)
-
-    assert :ok = Runner.resume(run_id, %{approved: true})
-
-    assert eventually(fn ->
-             case Runner.await(run_id, 50) do
-               %{status: :completed, node: :end, state: %{approved: true}} -> true
-               _ -> false
-             end
-           end)
-
-    assert {:ok, completed_checkpoint} = CheckpointStore.get(run_id)
-    assert completed_checkpoint.status == :completed
-    assert completed_checkpoint.node == :end
-    assert completed_checkpoint.state.approved
+    assert {:done, %{steps: [:planner, :finish]}} =
+             Engine.run_until_wait(graph, :planner, %{steps: []}, %{})
   end
 
-  test "reads snapshot by run_id from checkpoint when runner is offline" do
-    run_id = "run-offline-" <> Integer.to_string(System.unique_integer([:positive]))
+  test "Engine parks at wait node and preserves state" do
+    {:ok, graph} =
+      Graph.new(%{
+        nodes: %{approval: WaitNode, finish: FinishNode},
+        edges: %{approval: %{approved: :finish}, finish: :end},
+        start: :approval
+      })
 
-    graph = %Graph{
-      nodes: %{approval: ApprovalNode, finish: FinishNode},
-      edges: %{approval: %{approved: :finish}, finish: :end},
-      start: :approval
-    }
+    assert {:waiting, :approval, parked_state} =
+             Engine.run_until_wait(graph, :approval, %{}, %{})
 
-    assert {:ok, pid} = Runner.start_link(graph: graph, state: %{}, ctx: %{}, run_id: run_id)
-    assert %{status: :waiting} = Runner.await(pid)
-    assert :ok = GenServer.stop(pid, :normal)
-    assert eventually(fn -> Runner.whereis(run_id) == nil end)
-
-    assert %{run_id: ^run_id, status: :waiting, node: :approval} = Runner.snapshot(run_id)
-    assert %{run_id: ^run_id, status: :waiting, node: :approval} = Runner.await(run_id)
+    # Re-step from the parked state with approval in ctx — should finish.
+    assert {:done, %{approved: true}} =
+             Engine.run_until_wait(graph, :approval, parked_state, %{approved: true})
   end
 
-  defp eventually(fun, retries \\ 30)
+  test "Engine.step resolves conditional edges" do
+    {:ok, graph} =
+      Graph.new(%{
+        nodes: %{planner: PlannerNode, executor: ExecutorNode, finish: FinishNode},
+        edges: %{planner: %{planned: :executor}, executor: %{done: :finish}, finish: :end},
+        start: :planner
+      })
 
-  defp eventually(fun, 0), do: fun.()
-
-  defp eventually(fun, retries) do
-    if fun.() do
-      true
-    else
-      Process.sleep(10)
-      eventually(fun, retries - 1)
-    end
+    assert {:next, :executor, %{steps: [:planner]}} =
+             Engine.step(graph, :planner, %{steps: []}, %{})
   end
 end

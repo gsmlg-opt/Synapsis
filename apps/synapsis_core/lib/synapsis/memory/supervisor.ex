@@ -8,10 +8,16 @@ defmodule Synapsis.Memory.Supervisor do
 
   @impl true
   def init(_opts) do
-    children = [
-      Synapsis.Memory.Cache,
-      Synapsis.Memory.Writer
-    ]
+    adapter = Application.get_env(:synapsis_core, :memory_adapter, Synapsis.Memory.FileAdapter)
+
+    adapter_child =
+      if function_exported?(adapter, :start_link, 1) do
+        [adapter]
+      else
+        []
+      end
+
+    children = adapter_child ++ [Synapsis.Memory.Cache, Synapsis.Memory.Writer]
 
     Supervisor.init(children, strategy: :one_for_one)
   end
