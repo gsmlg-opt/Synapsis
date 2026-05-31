@@ -24,15 +24,22 @@ defmodule Synapsis.Config.Store.Watcher do
         Logger.warning("config_watcher_mkdir", path: dir, reason: inspect(reason))
     end
 
-    # file_system watches the directory; events are sent to this process.
-    case FileSystem.start_link(dirs: [dir], name: :synapsis_config_fs) do
-      {:ok, pid} ->
-        FileSystem.subscribe(:synapsis_config_fs)
-        {:ok, %{watcher_pid: pid, dir: dir}}
+    # Respect the same :file_system_enabled flag used by FileWatcher.
+    # FileSystem returns :ignore when inotify-tools is unavailable (CI).
+    fs_enabled = Application.get_env(:synapsis_core, :file_system_enabled, true)
 
-      {:error, reason} ->
-        Logger.warning("config_watcher_start_failed", reason: inspect(reason))
-        {:ok, %{watcher_pid: nil, dir: dir}}
+    if fs_enabled do
+      case FileSystem.start_link(dirs: [dir], name: :synapsis_config_fs) do
+        {:ok, pid} ->
+          FileSystem.subscribe(:synapsis_config_fs)
+          {:ok, %{watcher_pid: pid, dir: dir}}
+
+        other ->
+          Logger.warning("config_watcher_start_failed", reason: inspect(other))
+          {:ok, %{watcher_pid: nil, dir: dir}}
+      end
+    else
+      {:ok, %{watcher_pid: nil, dir: dir}}
     end
   end
 
