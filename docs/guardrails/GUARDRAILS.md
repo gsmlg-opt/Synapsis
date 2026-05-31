@@ -1,8 +1,15 @@
 # Guardrails
 
+> **Direction change — [ADR-006](../decisions/ADR-006-in-process-sessions-and-concord-storage.md):**
+> ADR-006 reverses two rules below — #1 *NEVER* (session state lives **in** the
+> `Session.GenServer`, not the DB) and #1 *ALWAYS* (**broadcast live, snapshot
+> after** instead of persist-before-broadcast). Those rules are marked inline.
+> They remain in force until the Postgres → files/Concord cutover lands; do not
+> apply the ADR-006 model to code that still runs on `Synapsis.Repo`.
+
 ## NEVER DO
 
-1. **Never store session/message state in GenServer** — DB is source of truth. Processes hold transient operational state only (current stream, pending chunks).
+1. **Never store session/message state in GenServer** — DB is source of truth. Processes hold transient operational state only (current stream, pending chunks). *(Reversed by ADR-006: the session process becomes the live source of truth, snapshotting to Concord per turn.)*
 
 2. **Never make synchronous LLM calls** — Always stream async. Never block the caller.
 
@@ -24,7 +31,7 @@
 
 ## ALWAYS DO
 
-1. **Always persist before broadcasting** — Write message to DB, then broadcast via PubSub. On crash recovery, DB is the source of truth.
+1. **Always persist before broadcasting** — Write message to DB, then broadcast via PubSub. On crash recovery, DB is the source of truth. *(Reversed by ADR-006: deltas broadcast live from process state; the durable per-turn snapshot to Concord follows, fire-and-forget. Readers get current state from the process, not the store.)*
 
 2. **Always use UUID for IDs** — Postgres-native, no coordination needed. Never auto-increment.
 

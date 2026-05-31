@@ -1,6 +1,6 @@
 # ADR-002: PostgreSQL Storage
 
-## Status: Accepted
+## Status: Superseded by [ADR-006](ADR-006-in-process-sessions-and-concord-storage.md)
 
 ## Context
 

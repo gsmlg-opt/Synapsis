@@ -1,6 +1,6 @@
 # ADR-004: Process-Per-Session Architecture
 
-## Status: Accepted
+## Status: Accepted — amended by [ADR-006](ADR-006-in-process-sessions-and-concord-storage.md)
 
 ## Context
 
