@@ -158,6 +158,8 @@ defmodule Synapsis.Agent.ContextBuilder do
   Uses the latest user message as the search query. Token budget is 5% of model
   context window, hard capped at 10 entries.
   """
+  @memory_context_timeout 4_000
+
   @spec load_memory_context(String.t(), String.t() | nil, pos_integer()) :: String.t() | nil
   def load_memory_context(query, agent_id, model_context_window) do
     context = %{
@@ -167,9 +169,19 @@ defmodule Synapsis.Agent.ContextBuilder do
       memory_token_budget: memory_token_budget(model_context_window)
     }
 
-    case MemoryContextBuilder.build(context) do
-      "" -> nil
-      content -> content
+    # Memory retrieval must never block the prompt-building path indefinitely.
+    task = Task.async(fn -> MemoryContextBuilder.build(context) end)
+
+    case Task.yield(task, @memory_context_timeout) || Task.shutdown(task) do
+      {:ok, ""} ->
+        nil
+
+      {:ok, content} ->
+        content
+
+      nil ->
+        Logger.warning("memory_context_timeout", agent_id: agent_id)
+        nil
     end
   rescue
     e in [RuntimeError, Ecto.QueryError, DBConnection.ConnectionError] ->
