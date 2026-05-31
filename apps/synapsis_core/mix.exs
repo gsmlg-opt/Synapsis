@@ -41,7 +41,6 @@ defmodule SynapsisCore.MixProject do
       {:jason, "~> 1.4"},
       {:yaml_elixir, "~> 2.11"},
       {:toml, "~> 0.7"},
-      {:oban, "~> 2.19"},
       {:file_system, "~> 1.0"},
       {:bypass, "~> 2.1", only: :test}
     ]

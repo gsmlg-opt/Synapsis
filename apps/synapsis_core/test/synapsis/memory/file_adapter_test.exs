@@ -14,7 +14,12 @@ defmodule Synapsis.Memory.FileAdapterTest do
     {:ok, _pid} = FileAdapter.start_link([])
 
     on_exit(fn ->
-      if pid = Process.whereis(FileAdapter), do: GenServer.stop(pid)
+      # Use try/catch because another test may have already stopped the adapter.
+      try do
+        if pid = Process.whereis(FileAdapter), do: GenServer.stop(pid)
+      catch
+        :exit, _ -> :ok
+      end
 
       if original,
         do: System.put_env("SYNAPSIS_MEMORY_DIR", original),

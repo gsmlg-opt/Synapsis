@@ -2,7 +2,6 @@ defmodule Synapsis.Config.StoreTest do
   use ExUnit.Case, async: false
 
   alias Synapsis.Config.Store
-  alias Synapsis.Config.Store.Server
 
   @moduletag :tmp_dir
 

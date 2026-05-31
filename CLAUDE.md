@@ -137,7 +137,7 @@ If a dependency from `gsmlg*`, `duskmoon-dev`, `Gao-OS`, or related internal Git
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **Synapsis** (2662 symbols, 2866 relationships, 18 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **Synapsis** (2666 symbols, 2870 relationships, 18 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

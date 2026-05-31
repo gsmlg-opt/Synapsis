@@ -7,7 +7,7 @@ defmodule SynapsisServer.HealthController do
     checks = %{
       repo: check_repo(),
       pubsub: check_process(Synapsis.PubSub),
-      oban: check_oban(),
+      scheduler: check_scheduler(),
       tool_registry: check_process(Synapsis.Tool.Registry),
       provider_registry: check_process(Synapsis.Provider.Registry),
       session_supervisor: check_process(Synapsis.Session.DynamicSupervisor),
@@ -20,6 +20,7 @@ defmodule SynapsisServer.HealthController do
       checks
       |> Map.put(:ok, healthy?(checks))
       |> Map.put(:version, version())
+      |> Map.put(:scheduler_entries, scheduler_entries())
 
     json(conn, payload)
   end
@@ -35,11 +36,30 @@ defmodule SynapsisServer.HealthController do
     :exit, reason -> "error: #{inspect(reason)}"
   end
 
-  defp check_oban do
-    case Application.fetch_env(:synapsis_core, Oban) do
-      {:ok, false} -> "disabled"
-      {:ok, _config} -> check_process(Oban)
-      :error -> "not_configured"
+  defp check_scheduler do
+    if Code.ensure_loaded?(Synapsis.Agent.Heartbeat.LocalScheduler) do
+      check_process(Synapsis.Agent.Heartbeat.LocalScheduler)
+    else
+      "not_configured"
+    end
+  end
+
+  defp scheduler_entries do
+    if Code.ensure_loaded?(Synapsis.Agent.Heartbeat.LocalScheduler) do
+      try do
+        Synapsis.Agent.Heartbeat.LocalScheduler.status()
+        |> Enum.map(fn e ->
+          %{
+            name: e.name,
+            schedule: e.schedule,
+            next_run_at: if(e.next_run_at, do: DateTime.to_iso8601(e.next_run_at))
+          }
+        end)
+      rescue
+        _ -> []
+      end
+    else
+      []
     end
   end
 
@@ -60,7 +80,7 @@ defmodule SynapsisServer.HealthController do
 
   defp healthy?(checks) do
     Enum.all?(checks, fn
-      {:oban, status} -> status in ["ok", "disabled", "not_configured"]
+      {:scheduler, status} -> status in ["ok", "not_configured"]
       {:agent_daemon, "error: not_started"} -> false
       {_name, "ok"} -> true
       {_name, _status} -> false
