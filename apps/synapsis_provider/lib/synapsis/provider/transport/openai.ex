@@ -99,17 +99,16 @@ defmodule Synapsis.Provider.Transport.OpenAI do
 
   defp models_url(base_url, config) do
     base_url = String.trim_trailing(to_string(base_url), "/")
+    type = config[:type] || config["type"]
 
-    if compatible_discovery?(config) or String.ends_with?(base_url, "/v1") do
+    # Use bare /models only when the base_url already includes /v1, or the provider
+    # is openai_compat (which may serve /models directly). Never use discover_models
+    # to alter the URL — that flag controls cache-bypass, not endpoint shape.
+    if type == "openai_compat" or String.ends_with?(base_url, "/v1") do
       "#{base_url}/models"
     else
       "#{base_url}/v1/models"
     end
-  end
-
-  defp compatible_discovery?(config) do
-    config[:discover_models] || config["discover_models"] || config[:type] == "openai_compat" ||
-      config["type"] == "openai_compat"
   end
 
   defp auth_headers(config) do

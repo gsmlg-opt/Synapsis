@@ -359,7 +359,7 @@ defmodule Synapsis.Provider.Adapter do
             {:error, msg}
 
           _other ->
-            {:error, "unexpected provider response format"}
+            {:error, "unexpected response format"}
         end
 
       {:error, exception} ->
@@ -398,7 +398,7 @@ defmodule Synapsis.Provider.Adapter do
             {:ok, text}
 
           _other ->
-            {:error, "unexpected provider response format"}
+            {:error, "unexpected response format"}
         end
 
       {:error, exception} ->
@@ -433,7 +433,7 @@ defmodule Synapsis.Provider.Adapter do
               {:error, msg}
 
             _other ->
-              {:error, "unexpected provider response format"}
+              {:error, "unexpected response format"}
           end
         end
 
