@@ -32,7 +32,7 @@ defmodule Synapsis.Provider.Transport.OpenAI do
          end)}
 
       {:ok, %{status: status}} ->
-        {:error, "HTTP #{status} from #{url}"}
+        {:error, "HTTP #{status}"}
 
       {:error, reason} ->
         {:error, reason}
@@ -41,6 +41,61 @@ defmodule Synapsis.Provider.Transport.OpenAI do
 
   @doc "Default base URL for OpenAI API."
   def default_base_url, do: @default_base_url
+
+  @doc """
+  Stream a request to an OpenAI-compatible Chat Completions API.
+
+  Sends raw SSE events to `caller` as `{:chunk, map | "[DONE]"}`, followed
+  by `:stream_done` on success or `{:stream_error, reason}` on failure.
+  Supports Azure deployments via `config[:azure]`.
+  """
+  def stream(request, config, caller) do
+    base_url = config[:base_url] || config["base_url"] || @default_base_url
+
+    {url, headers, body} =
+      if config[:azure] do
+        model = request[:model] || request["model"] || "gpt-4.1"
+        api_version = config[:api_version] || "2024-02-15-preview"
+
+        url =
+          "#{String.trim_trailing(to_string(base_url), "/")}/openai/deployments/#{model}/chat/completions?api-version=#{api_version}"
+
+        headers = [{"api-key", config[:api_key]}, {"content-type", "application/json"}]
+        {url, headers, Map.drop(request, [:model, "model"])}
+      else
+        url = "#{String.trim_trailing(to_string(base_url), "/")}/v1/chat/completions"
+        headers = [{"content-type", "application/json"}] ++ auth_headers(config)
+        {url, headers, request}
+      end
+
+    try do
+      resp =
+        Req.post!(url,
+          headers: headers,
+          json: body,
+          receive_timeout: 300_000,
+          compressed: false,
+          retry: false,
+          redirect: false,
+          into: fn {:data, data}, {req, resp} ->
+            {events, buffer} =
+              Synapsis.Provider.Transport.SSE.accumulate_and_parse(data, resp.body || "")
+
+            for raw <- events, do: send(caller, {:chunk, raw})
+
+            {:cont, {req, %{resp | body: buffer}}}
+          end
+        )
+
+      if resp.status >= 400 do
+        send(caller, {:stream_error, "HTTP #{resp.status}"})
+      else
+        send(caller, :stream_done)
+      end
+    rescue
+      e -> send(caller, {:stream_error, Exception.message(e)})
+    end
+  end
 
   defp models_url(base_url, config) do
     base_url = String.trim_trailing(to_string(base_url), "/")
