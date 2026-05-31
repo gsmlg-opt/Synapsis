@@ -56,7 +56,7 @@ defmodule Synapsis.Provider.Transport.Google do
         send(caller, :stream_done)
       end
     rescue
-      e -> send(caller, {:stream_error, "Google stream failed"})
+      _e -> send(caller, {:stream_error, "Google stream failed"})
     end
   end
 end
