@@ -21,12 +21,9 @@ config :phoenix, sort_verified_routes_query_params: true
 
 config :synapsis_core, :file_system_enabled, false
 
-# Concord: isolated per-partition data dir, clustering off (single node),
-# Prometheus exporter + HTTP API off (no port binding during tests).
+# Concord: isolated per-partition data dir, clustering off (single node).
 config :concord,
   clustering: false,
-  prometheus_enabled: false,
-  http: [enabled: false],
   data_dir: Path.expand("../tmp/concord_test#{System.get_env("MIX_TEST_PARTITION")}", __DIR__)
 
 config :ra,
