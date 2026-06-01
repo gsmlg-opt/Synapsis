@@ -50,6 +50,10 @@ defmodule SynapsisWeb.AgentLive.Sessions do
       {:ok, session} ->
         Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}")
         messages = Sessions.get_messages(session.id)
+        # ADR-006 B2: the live process is the read authority for current state,
+        # so a fresh mount mid-turn shows the in-flight status/text; fall back to
+        # the durable/DB status when the process is down.
+        {status, in_flight} = live_session_state(session)
 
         {:noreply,
          assign(socket,
@@ -57,12 +61,12 @@ defmodule SynapsisWeb.AgentLive.Sessions do
            sessions: sessions,
            current_session: session,
            messages: messages,
-           streaming_text: "",
+           streaming_text: in_flight,
            streaming_reasoning: "",
            tool_calls: %{},
            permission_requests: [],
            code_agent_sessions: %{},
-           session_status: session.status || "idle",
+           session_status: status,
            current_mode: session.agent || agent_id
          )}
 
@@ -94,6 +98,26 @@ defmodule SynapsisWeb.AgentLive.Sessions do
        session_status: "idle"
      )}
   end
+
+  # ADR-006 B2: resolve {status, in_flight_text} from the live read authority
+  # (the running session process), falling back to Concord's durable snapshot
+  # and finally the DB status. Returns UI status vocabulary ("idle"/"streaming").
+  defp live_session_state(session) do
+    case Synapsis.Session.Read.live_snapshot(session.id) do
+      {:live, %{status: status, in_flight_text: text}} ->
+        {live_status_string(status), text || ""}
+
+      {:durable, %{meta: %{status: status}}} when is_binary(status) ->
+        {status, ""}
+
+      _ ->
+        {session.status || "idle", ""}
+    end
+  end
+
+  defp live_status_string(:running), do: "streaming"
+  defp live_status_string(:waiting), do: "idle"
+  defp live_status_string(other), do: to_string(other)
 
   # --- Events ---
 

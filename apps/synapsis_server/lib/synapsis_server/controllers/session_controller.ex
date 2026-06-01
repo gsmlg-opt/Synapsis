@@ -27,10 +27,30 @@ defmodule SynapsisServer.SessionController do
   def show(conn, %{"id" => id}) do
     case Sessions.get(id) do
       {:ok, session} ->
-        json(conn, %{data: serialize_session_with_messages(session)})
+        data =
+          session
+          |> serialize_session_with_messages()
+          |> Map.merge(live_state(id))
+
+        json(conn, %{data: data})
 
       {:error, :not_found} ->
         conn |> put_status(404) |> json(%{error: "Session not found"})
+    end
+  end
+
+  # ADR-006 B2: the live Session.Worker is the read authority for current state;
+  # fall back to Concord's last durable snapshot when the process is down.
+  defp live_state(id) do
+    case Synapsis.Session.Read.live_snapshot(id) do
+      {:live, %{status: status, in_flight_text: text}} ->
+        %{live: true, live_status: to_string(status), in_flight: text}
+
+      {:durable, %{meta: meta}} ->
+        %{live: false, live_status: nil, durable_turn_count: meta[:turn_count]}
+
+      _ ->
+        %{live: false, live_status: nil}
     end
   end
 

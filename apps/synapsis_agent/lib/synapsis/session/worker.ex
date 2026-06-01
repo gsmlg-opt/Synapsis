@@ -77,6 +77,13 @@ defmodule Synapsis.Session.Worker do
 
   def get_status(session_id), do: GenServer.call(via(session_id), :get_status, 10_000)
 
+  @doc """
+  Live read snapshot of the session (ADR-006 B2): the process is the read
+  authority during a turn. Returns the current status, session record, and the
+  in-flight assistant text accumulated so far this turn.
+  """
+  def snapshot(session_id), do: GenServer.call(via(session_id), :snapshot, 10_000)
+
   defp via(id), do: {:via, Registry, {Synapsis.Session.Registry, id}}
 
   @impl true
@@ -195,6 +202,19 @@ defmodule Synapsis.Session.Worker do
       end
 
     {:reply, status, state, @timeout}
+  end
+
+  def handle_call(:snapshot, _from, state) do
+    status = if engine_ready?(state), do: :waiting, else: :running
+
+    snapshot = %{
+      source: :live,
+      status: status,
+      session: state.session,
+      in_flight_text: Map.get(state.stream_acc, :pending_text, "")
+    }
+
+    {:reply, snapshot, state, @timeout}
   end
 
   def handle_call({:switch_agent, name}, _from, state) do

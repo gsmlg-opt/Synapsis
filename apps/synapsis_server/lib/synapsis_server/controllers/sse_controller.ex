@@ -16,11 +16,40 @@ defmodule SynapsisServer.SSEController do
           |> put_resp_header("connection", "keep-alive")
           |> send_chunked(200)
 
-        sse_loop(conn, session_id)
+        # ADR-006 B2: first frame is the current state from the live read
+        # authority (process snapshot, or Concord fallback), then live deltas.
+        conn
+        |> send_initial_state(session_id)
+        |> sse_loop(session_id)
     end
   end
 
   @event_pattern ~r/^[a-z0-9_-]+$/
+
+  defp send_initial_state(conn, session_id) do
+    payload =
+      case Synapsis.Session.Read.live_snapshot(session_id) do
+        {:live, %{status: status, in_flight_text: text}} ->
+          %{live: true, status: to_string(status), in_flight: text}
+
+        {:durable, %{meta: meta}} ->
+          %{live: false, status: meta[:status], durable_turn_count: meta[:turn_count]}
+
+        _ ->
+          %{live: false, status: nil}
+      end
+
+    case Jason.encode(payload) do
+      {:ok, data} ->
+        case chunk(conn, "event: session_state\ndata: #{data}\n\n") do
+          {:ok, conn} -> conn
+          {:error, _} -> conn
+        end
+
+      {:error, _} ->
+        conn
+    end
+  end
 
   defp sse_loop(conn, session_id) do
     receive do
