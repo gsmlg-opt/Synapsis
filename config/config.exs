@@ -6,20 +6,17 @@ import Config
 # ADR-006 C4: PostgreSQL removed — no Ecto Repo. Session/agent state lives in
 # Concord (below); configs are files; memory is the memory port.
 
-# Concord embedded KV store (ADR-006 session storage).
-# Node-local mode: clustering off means no libcluster/leader-election gating
-# in the session path — a single-member Ra cluster on this node. The Prometheus
-# exporter (default-on, binds :9568) and HTTP API are off — this is an embedded
-# in-process store, not a standalone server.
+# Concord 2.x embedded KV store (ADR-006 session storage).
+# Node-local mode: `clustering: false` disables libcluster (no leader-election
+# gating in the session path) — a single-member Ra cluster on this node. Concord
+# 2.x starts the :ra default system itself and defaults its Prometheus exporter
+# off, so no further host-side config is needed.
 config :concord,
   clustering: false,
-  prometheus_enabled: false,
-  http: [enabled: false],
   data_dir: Path.expand("../tmp/concord/#{node()}", __DIR__)
 
-# Concord 1.1.0 does not start the :ra default system itself, so give :ra an
-# explicit on-disk home; the host boot starts the default system before the
-# node-local store is used (see Synapsis.Session.Store.ensure_started/1).
+# Keep the embedded :ra system's on-disk data under tmp/ as well; without this
+# ra writes its WAL/segments to ./<node> at the cwd (repo root).
 config :ra, data_dir: Path.expand("../tmp/ra/#{node()}", __DIR__) |> to_charlist()
 
 # General application configuration
