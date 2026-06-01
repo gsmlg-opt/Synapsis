@@ -11,7 +11,7 @@ defmodule SynapsisCore.Application do
 
     children =
       [
-        Synapsis.Repo,
+        # ADR-006 C4: Synapsis.Repo removed; storage is Concord + files + memory port.
         {Phoenix.PubSub, name: Synapsis.PubSub},
         {Task.Supervisor, name: Synapsis.Provider.TaskSupervisor},
         Synapsis.Provider.Registry,

@@ -29,9 +29,12 @@ defmodule SynapsisData.MixProject do
   defp elixirc_paths(_), do: ["lib"]
 
   defp deps do
+    # ADR-006 C4: Postgres removed. `ecto` stays for data modeling only
+    # (Ecto.Type/changeset used by Part/Encrypted.Binary); no ecto_sql/postgrex,
+    # no Repo. Session/agent state lives in Concord; configs in files; memory in
+    # the memory port.
     [
-      {:ecto_sql, "~> 3.12"},
-      {:postgrex, "~> 0.19"},
+      {:ecto, "~> 3.12"},
       {:jason, "~> 1.4"},
       {:concord, "~> 1.1"}
     ]
@@ -39,10 +42,7 @@ defmodule SynapsisData.MixProject do
 
   defp aliases do
     [
-      setup: ["deps.get", "ecto.setup"],
-      "ecto.setup": ["ecto.create", "ecto.migrate"],
-      "ecto.reset": ["ecto.drop", "ecto.setup"],
-      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"]
+      setup: ["deps.get"]
     ]
   end
 end

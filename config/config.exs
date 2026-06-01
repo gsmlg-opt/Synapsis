@@ -3,12 +3,8 @@
 # help of the Config module.
 import Config
 
-# Ecto Repo configuration
-config :synapsis_data, ecto_repos: [Synapsis.Repo]
-
-config :synapsis_data, Synapsis.Repo,
-  migration_primary_key: [type: :binary_id],
-  migration_timestamps: [type: :utc_datetime_usec]
+# ADR-006 C4: PostgreSQL removed — no Ecto Repo. Session/agent state lives in
+# Concord (below); configs are files; memory is the memory port.
 
 # Concord embedded KV store (ADR-006 session storage).
 # Node-local mode: clustering off means no libcluster/leader-election gating
