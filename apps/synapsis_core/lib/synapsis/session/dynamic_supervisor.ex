@@ -12,8 +12,19 @@ defmodule Synapsis.Session.DynamicSupervisor do
   end
 
   def start_session(session_id) do
-    spec = {Synapsis.Session.Supervisor, session_id: session_id}
-    DynamicSupervisor.start_child(__MODULE__, spec)
+    if Synapsis.Session.Quarantine.quarantined?(session_id) do
+      {:error, :quarantined}
+    else
+      # :temporary — a session tree that exhausts its own restart budget
+      # (poison protection, ADR-006 B1) stays down rather than being
+      # resurrected here; re-entry is gated by the quarantine check above.
+      spec =
+        Supervisor.child_spec({Synapsis.Session.Supervisor, session_id: session_id},
+          restart: :temporary
+        )
+
+      DynamicSupervisor.start_child(__MODULE__, spec)
+    end
   end
 
   def stop_session(session_id) do

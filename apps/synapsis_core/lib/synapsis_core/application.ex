@@ -18,6 +18,7 @@ defmodule SynapsisCore.Application do
         {Task.Supervisor, name: Synapsis.Tool.TaskSupervisor},
         Synapsis.Tool.Registry,
         {Registry, keys: :unique, name: Synapsis.FileWatcher.Registry},
+        Synapsis.Session.Quarantine,
         Synapsis.Config.Store.Supervisor,
         Synapsis.Memory.Supervisor
       ] ++
@@ -30,6 +31,8 @@ defmodule SynapsisCore.Application do
 
     case result do
       {:ok, _pid} ->
+        ensure_session_store_ready()
+
         try do
           Synapsis.Providers.load_all_into_registry()
         rescue
@@ -51,6 +54,18 @@ defmodule SynapsisCore.Application do
   end
 
   @env_provider_names ~w(anthropic openai openai-sub google moonshot-ai moonshot-cn zhipu-ai zhipu-cn zhipu-coding minimax-io minimax-cn openrouter)
+
+  # Bring up the embedded node-local Concord store once at boot (ADR-006 B1):
+  # start the :ra default system and ensure Concord has formed its single-member
+  # cluster before any session snapshots/rehydrates. See Session.Store.
+  defp ensure_session_store_ready do
+    case Synapsis.Session.Store.ensure_started() do
+      :ok -> :ok
+      {:error, reason} -> Logger.warning("session_store_not_ready", reason: inspect(reason))
+    end
+  rescue
+    e -> Logger.warning("session_store_start_failed", error: Exception.message(e))
+  end
 
   defp maybe_child(mod) do
     if Code.ensure_loaded?(mod) do

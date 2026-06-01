@@ -10,6 +10,22 @@ config :synapsis_data, Synapsis.Repo,
   migration_primary_key: [type: :binary_id],
   migration_timestamps: [type: :utc_datetime_usec]
 
+# Concord embedded KV store (ADR-006 session storage).
+# Node-local mode: clustering off means no libcluster/leader-election gating
+# in the session path — a single-member Ra cluster on this node. The Prometheus
+# exporter (default-on, binds :9568) and HTTP API are off — this is an embedded
+# in-process store, not a standalone server.
+config :concord,
+  clustering: false,
+  prometheus_enabled: false,
+  http: [enabled: false],
+  data_dir: Path.expand("../tmp/concord/#{node()}", __DIR__)
+
+# Concord 1.1.0 does not start the :ra default system itself, so give :ra an
+# explicit on-disk home; the host boot starts the default system before the
+# node-local store is used (see Synapsis.Session.Store.ensure_started/1).
+config :ra, data_dir: Path.expand("../tmp/ra/#{node()}", __DIR__) |> to_charlist()
+
 # General application configuration
 config :synapsis_server,
   generators: [timestamp_type: :utc_datetime_usec]
