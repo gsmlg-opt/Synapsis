@@ -19,7 +19,9 @@ defmodule SynapsisCore.Application do
         Synapsis.Tool.Registry,
         {Registry, keys: :unique, name: Synapsis.FileWatcher.Registry},
         Synapsis.Session.Quarantine,
-        Synapsis.Config.Store.Supervisor,
+        # Config.Store now boots in SynapsisData.Application (data/storage layer)
+        # so lower apps (e.g. synapsis_provider) can read configs without
+        # depending upward on synapsis_core.
         Synapsis.Memory.Supervisor
       ] ++
         maybe_child(Synapsis.Workspace.GC) ++

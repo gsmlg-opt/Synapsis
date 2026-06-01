@@ -21,7 +21,8 @@ defmodule SynapsisData.MixProject do
 
   def application do
     [
-      extra_applications: [:logger]
+      extra_applications: [:logger],
+      mod: {SynapsisData.Application, []}
     ]
   end
 
@@ -36,7 +37,9 @@ defmodule SynapsisData.MixProject do
     [
       {:ecto, "~> 3.12"},
       {:jason, "~> 1.4"},
-      {:concord, "~> 2.1"}
+      {:concord, "~> 2.1"},
+      {:toml, "~> 0.7"},
+      {:file_system, "~> 1.0"}
     ]
   end
 
