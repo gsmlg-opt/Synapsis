@@ -33,7 +33,7 @@ defmodule SynapsisData.MixProject do
       {:ecto_sql, "~> 3.12"},
       {:postgrex, "~> 0.19"},
       {:jason, "~> 1.4"},
-      {:concord, "~> 1.1"}
+      {:concord, "~> 2.1"}
     ]
   end
 

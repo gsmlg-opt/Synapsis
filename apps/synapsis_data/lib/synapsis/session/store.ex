@@ -11,17 +11,18 @@ defmodule Synapsis.Session.Store do
   This module is a thin functional wrapper. Concord owns the process and the
   state, so there is no GenServer here (see the OTP "no process without a
   runtime reason" rule). A whole turn is committed atomically via a single
-  Concord transaction: the turn entry and the updated meta snapshot either both
+  `Concord.put_many/2`: the turn entry and the updated meta snapshot either both
   land or neither does.
 
-  ## Concord deltas captured during the B0 spike
+  ## Concord notes (targets `concord 2.1.0`)
 
-    * The released Hex package (`concord 1.1.0`) does **not** ship the v2
-      `Concord.Txn` / `Concord.KV` API advertised on the project's `main`
-      branch. Whole-turn atomicity is therefore achieved with the v1
-      `Concord.put_many/2`, which the state machine applies as a single Raft
-      log entry — all-or-nothing by construction.
-      `# TODO(upstream): gsmlg-dev/concord#18` (release the v2 `Txn` API).
+    * Concord 2.x starts the embedded `:ra` default system itself, defaults the
+      Prometheus exporter off, and honours `clustering: false` — so embedded
+      node-local boot needs no host-side glue (the 1.1.0 workarounds are gone).
+    * Whole-turn atomicity uses `Concord.put_many/2`, which the state machine
+      applies as a single Raft log entry — all-or-nothing by construction.
+      (`Concord.Txn` is available in 2.x for *conditional* commits if needed
+      later; the unconditional snapshot does not need compare predicates.)
     * `Concord.prefix_scan/1` returns matches in **descending** key order
       (its server-side reduce reverses the ascending ETS scan). `list_turns/1`
       sorts ascending to honor the ADR-006 "turns in order" contract — callers
@@ -137,80 +138,21 @@ defmodule Synapsis.Session.Store do
   # ── readiness ────────────────────────────────────────────────────────────
 
   @doc """
-  Ensure the embedded node-local store is up and serving, then block until it is
-  ready (or return `{:error, :not_ready}` after `timeout` ms).
+  Block until the embedded node-local store is up and serving, or return
+  `{:error, :not_ready}` after `timeout` ms.
 
-  Works around three `concord 1.1.0` behaviours found during the B0/B1 spikes
-  (all tracked in `# TODO(upstream): gsmlg-dev/concord#17`):
-
-    * Concord does not start the `:ra` default system itself — its own suite
-      relies on a test helper calling `:ra_system.start_default/0`. We start it
-      here (idempotent).
-    * Concord forms its cluster from a fire-and-forget `init_cluster` task at app
-      start, which fails with `:system_not_started` if the ra system was not up
-      yet.
-    * `init_cluster` always uses `:ra.start_server`, which fails with `:not_new`
-      when the ra data dir already holds state — i.e. **every node restart**,
-      which is exactly the rehydrate path. We `:ra.restart_server` the existing
-      server in that case; only if there is genuinely no server do we bounce the
-      `:concord` app so its `init_cluster` re-runs.
+  Concord 2.x starts the `:ra` default system and (re)starts its single-member
+  cluster from any persisted data dir during its own application start, so
+  embedded boot needs no host-side glue. This is purely a readiness gate over
+  Concord's fire-and-forget `init_cluster` task — it returns as soon as the
+  store answers a probe (or its data is absent, which is still "ready").
   """
-  @cluster_name :concord_cluster
-
-  def ensure_started(timeout \\ 10_000) do
-    _ = start_ra_default_system()
-
-    case wait_until_ready(500) do
-      :ok -> :ok
-      {:error, :not_ready} -> recover_and_wait(timeout)
-    end
-  end
-
-  # WORKAROUND(upstream): gsmlg-dev/concord#17
-  defp recover_and_wait(timeout) do
-    server_id = {@cluster_name, node()}
-
-    case safe_restart_server(server_id) do
-      :ok ->
-        :ok
-
-      _ ->
-        # No restartable server (fresh data dir or never started): bounce the
-        # app so Concord's init_cluster runs `start_server` against a clean dir.
-        _ = Application.stop(:concord)
-        {:ok, _} = Application.ensure_all_started(:concord)
-        :ok
-    end
-
-    wait_until_ready(timeout)
-  end
-
-  defp safe_restart_server(server_id) do
-    case :ra.restart_server(:default, server_id) do
-      :ok -> :ok
-      {:error, {:already_started, _}} -> :ok
-      other -> other
-    end
-  rescue
-    _ -> {:error, :restart_failed}
-  catch
-    _, _ -> {:error, :restart_failed}
-  end
-
-  defp start_ra_default_system do
-    case :ra_system.fetch(:default) do
-      sys when is_map(sys) -> :ok
-      _ -> :ra_system.start_default()
-    end
-  end
+  def ensure_started(timeout \\ 10_000), do: wait_until_ready(timeout)
 
   @doc """
   Block until the node-local Concord store can serve requests, or return
-  `{:error, :not_ready}` after `timeout` ms.
-
-  Assumes the store is already started (see `ensure_started/1`); a single-member
-  Ra cluster elects a leader near-instantly, so this returns quickly once boot
-  has completed.
+  `{:error, :not_ready}` after `timeout` ms. A single-member Ra cluster elects a
+  leader near-instantly, so this returns quickly once boot has completed.
   """
   def wait_until_ready(timeout \\ 5_000) do
     deadline = System.monotonic_time(:millisecond) + timeout
