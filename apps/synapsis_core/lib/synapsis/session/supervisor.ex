@@ -28,6 +28,10 @@ defmodule Synapsis.Session.Supervisor do
       {Synapsis.Session.Worker, session_id: session_id}
     ]
 
-    Supervisor.init(children, strategy: :rest_for_one)
+    # Bound restarts (ADR-006 B1 poison protection): if the Worker's init/
+    # rehydrate keeps crashing, exhaust the budget and let this tree terminate
+    # rather than restart-loop. DynamicSupervisor starts us :temporary, and the
+    # Worker records boot failures so the session is quarantined.
+    Supervisor.init(children, strategy: :rest_for_one, max_restarts: 3, max_seconds: 5)
   end
 end

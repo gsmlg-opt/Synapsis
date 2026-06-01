@@ -140,30 +140,61 @@ defmodule Synapsis.Session.Store do
   Ensure the embedded node-local store is up and serving, then block until it is
   ready (or return `{:error, :not_ready}` after `timeout` ms).
 
-  Works around two `concord 1.1.0` behaviours found during the B0 spike:
+  Works around three `concord 1.1.0` behaviours found during the B0/B1 spikes
+  (all tracked in `# TODO(upstream): gsmlg-dev/concord#17`):
 
     * Concord does not start the `:ra` default system itself — its own suite
       relies on a test helper calling `:ra_system.start_default/0`. We start it
-      here (idempotent). `# TODO(upstream): gsmlg-dev/concord#17`.
+      here (idempotent).
     * Concord forms its cluster from a fire-and-forget `init_cluster` task at app
       start, which fails with `:system_not_started` if the ra system was not up
-      yet. If the store is not ready after starting ra, we bounce the `:concord`
-      application once so `init_cluster` re-runs with the ra system available.
+      yet.
+    * `init_cluster` always uses `:ra.start_server`, which fails with `:not_new`
+      when the ra data dir already holds state — i.e. **every node restart**,
+      which is exactly the rehydrate path. We `:ra.restart_server` the existing
+      server in that case; only if there is genuinely no server do we bounce the
+      `:concord` app so its `init_cluster` re-runs.
   """
+  @cluster_name :concord_cluster
+
   def ensure_started(timeout \\ 10_000) do
     _ = start_ra_default_system()
 
     case wait_until_ready(500) do
+      :ok -> :ok
+      {:error, :not_ready} -> recover_and_wait(timeout)
+    end
+  end
+
+  # WORKAROUND(upstream): gsmlg-dev/concord#17
+  defp recover_and_wait(timeout) do
+    server_id = {@cluster_name, node()}
+
+    case safe_restart_server(server_id) do
       :ok ->
         :ok
 
-      {:error, :not_ready} ->
-        # WORKAROUND(upstream): gsmlg-dev/concord#17 — Concord's init_cluster ran
-        # before the ra system existed; bounce the app so it re-forms its cluster.
+      _ ->
+        # No restartable server (fresh data dir or never started): bounce the
+        # app so Concord's init_cluster runs `start_server` against a clean dir.
         _ = Application.stop(:concord)
         {:ok, _} = Application.ensure_all_started(:concord)
-        wait_until_ready(timeout)
+        :ok
     end
+
+    wait_until_ready(timeout)
+  end
+
+  defp safe_restart_server(server_id) do
+    case :ra.restart_server(:default, server_id) do
+      :ok -> :ok
+      {:error, {:already_started, _}} -> :ok
+      other -> other
+    end
+  rescue
+    _ -> {:error, :restart_failed}
+  catch
+    _, _ -> {:error, :restart_failed}
   end
 
   defp start_ra_default_system do

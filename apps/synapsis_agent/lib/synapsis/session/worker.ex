@@ -81,28 +81,53 @@ defmodule Synapsis.Session.Worker do
 
   @impl true
   def init(opts) do
-    case Boot.load_and_boot(Keyword.fetch!(opts, :session_id)) do
-      {:stop, reason} ->
-        {:stop, reason}
+    session_id = Keyword.fetch!(opts, :session_id)
 
-      {session, agent, pc, graph, engine_state, engine_ctx, project_path} ->
-        Logger.info("session_worker_started", session_id: session.id)
+    try do
+      case Boot.load_and_boot(session_id) do
+        {:stop, reason} ->
+          record_boot_failure(session_id)
+          {:stop, reason}
 
-        state = %__MODULE__{
-          session_id: session.id,
-          session: session,
-          agent: agent,
-          provider_config: pc,
-          graph: graph,
-          engine_node: graph.start,
-          engine_state: engine_state,
-          engine_ctx: engine_ctx,
-          epoch: new_epoch(),
-          project_path: project_path
-        }
+        {session, agent, pc, graph, engine_state, engine_ctx, project_path} ->
+          # Successful boot clears the poison-protection failure counter.
+          Synapsis.Session.Quarantine.clear(session.id)
+          Logger.info("session_worker_started", session_id: session.id)
 
-        # Park the engine at :receive after init so the Worker is registered first.
-        {:ok, state, {:continue, :init_engine}}
+          state = %__MODULE__{
+            session_id: session.id,
+            session: session,
+            agent: agent,
+            provider_config: pc,
+            graph: graph,
+            engine_node: graph.start,
+            engine_state: engine_state,
+            engine_ctx: engine_ctx,
+            # New monotonic epoch each (re)boot — fences stale task results and
+            # satisfies the ADR-006 "bump epoch on rehydrate" rule.
+            epoch: new_epoch(),
+            project_path: project_path
+          }
+
+          # Park the engine at :receive after init so the Worker is registered first.
+          {:ok, state, {:continue, :init_engine}}
+      end
+    rescue
+      e ->
+        # A crash in init/rehydrate (e.g. corrupt snapshot) counts toward poison
+        # protection, then re-raises so the supervisor's restart budget applies.
+        record_boot_failure(session_id)
+        reraise e, __STACKTRACE__
+    end
+  end
+
+  defp record_boot_failure(session_id) do
+    case Synapsis.Session.Quarantine.record_failure(session_id) do
+      {:quarantined, count} ->
+        Logger.error("session_quarantined", session_id: session_id, failures: count)
+
+      _ ->
+        :ok
     end
   end
 
@@ -344,7 +369,10 @@ defmodule Synapsis.Session.Worker do
         %{state | engine_node: node, engine_state: new_workflow_state}
 
       {:done, _new_workflow_state} ->
-        # Graph reached :end — reset to start (next turn).
+        # Turn boundary: graph reached :end. Snapshot the whole turn to Concord
+        # fire-and-forget (ADR-006 B1) — never blocks the worker — then reset to
+        # start for the next turn.
+        Synapsis.Session.Snapshot.snapshot_async(state.session_id)
         %{state | engine_node: state.graph.start, engine_state: reset_engine_state(state)}
 
       {:error, reason, new_workflow_state} ->
