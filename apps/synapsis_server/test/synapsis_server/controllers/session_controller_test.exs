@@ -168,14 +168,12 @@ defmodule SynapsisServer.SessionControllerTest do
 
       # 15 messages × 12k tokens each = 180k > 160k (80% of claude-sonnet 200k limit)
       for i <- 1..15 do
-        %Synapsis.Message{}
-        |> Synapsis.Message.changeset(%{
+        (fn a -> Synapsis.Message.append(a.session_id, a) end).(%{
           session_id: session.id,
           role: if(rem(i, 2) == 0, do: "assistant", else: "user"),
           parts: [%Synapsis.Part.Text{content: "Message #{i}"}],
           token_count: 12_000
         })
-        |> Synapsis.Repo.insert!()
       end
 
       conn = post(conn, "/api/sessions/#{id}/compact", %{})
@@ -320,8 +318,7 @@ defmodule SynapsisServer.SessionControllerTest do
     end
 
     test "serializes ToolUse parts", %{conn: conn, session: session} do
-      %Synapsis.Message{}
-      |> Synapsis.Message.changeset(%{
+      (fn a -> Synapsis.Message.append(a.session_id, a) end).(%{
         session_id: session.id,
         role: "assistant",
         parts: [
@@ -334,7 +331,6 @@ defmodule SynapsisServer.SessionControllerTest do
         ],
         token_count: 10
       })
-      |> Synapsis.Repo.insert!()
 
       conn = get(conn, "/api/sessions/#{session.id}")
       %{"data" => %{"messages" => messages}} = json_response(conn, 200)
@@ -347,8 +343,7 @@ defmodule SynapsisServer.SessionControllerTest do
     end
 
     test "serializes ToolResult parts", %{conn: conn, session: session} do
-      %Synapsis.Message{}
-      |> Synapsis.Message.changeset(%{
+      (fn a -> Synapsis.Message.append(a.session_id, a) end).(%{
         session_id: session.id,
         role: "user",
         parts: [
@@ -360,7 +355,6 @@ defmodule SynapsisServer.SessionControllerTest do
         ],
         token_count: 10
       })
-      |> Synapsis.Repo.insert!()
 
       conn = get(conn, "/api/sessions/#{session.id}")
       %{"data" => %{"messages" => messages}} = json_response(conn, 200)
@@ -373,14 +367,12 @@ defmodule SynapsisServer.SessionControllerTest do
     end
 
     test "serializes Reasoning parts", %{conn: conn, session: session} do
-      %Synapsis.Message{}
-      |> Synapsis.Message.changeset(%{
+      (fn a -> Synapsis.Message.append(a.session_id, a) end).(%{
         session_id: session.id,
         role: "assistant",
         parts: [%Synapsis.Part.Reasoning{content: "Thinking step by step..."}],
         token_count: 5
       })
-      |> Synapsis.Repo.insert!()
 
       conn = get(conn, "/api/sessions/#{session.id}")
       %{"data" => %{"messages" => messages}} = json_response(conn, 200)
@@ -391,14 +383,12 @@ defmodule SynapsisServer.SessionControllerTest do
     end
 
     test "serializes File parts", %{conn: conn, session: session} do
-      %Synapsis.Message{}
-      |> Synapsis.Message.changeset(%{
+      (fn a -> Synapsis.Message.append(a.session_id, a) end).(%{
         session_id: session.id,
         role: "assistant",
         parts: [%Synapsis.Part.File{path: "/tmp/hello.txt", content: "hello world"}],
         token_count: 5
       })
-      |> Synapsis.Repo.insert!()
 
       conn = get(conn, "/api/sessions/#{session.id}")
       %{"data" => %{"messages" => messages}} = json_response(conn, 200)
@@ -410,14 +400,12 @@ defmodule SynapsisServer.SessionControllerTest do
     end
 
     test "serializes Agent parts", %{conn: conn, session: session} do
-      %Synapsis.Message{}
-      |> Synapsis.Message.changeset(%{
+      (fn a -> Synapsis.Message.append(a.session_id, a) end).(%{
         session_id: session.id,
         role: "assistant",
         parts: [%Synapsis.Part.Agent{agent: "build", message: "Starting build..."}],
         token_count: 5
       })
-      |> Synapsis.Repo.insert!()
 
       conn = get(conn, "/api/sessions/#{session.id}")
       %{"data" => %{"messages" => messages}} = json_response(conn, 200)
@@ -432,14 +420,12 @@ defmodule SynapsisServer.SessionControllerTest do
       conn: conn,
       session: session
     } do
-      %Synapsis.Message{}
-      |> Synapsis.Message.changeset(%{
+      (fn a -> Synapsis.Message.append(a.session_id, a) end).(%{
         session_id: session.id,
         role: "user",
         parts: [%Synapsis.Part.Image{media_type: "image/png", data: "base64data"}],
         token_count: 5
       })
-      |> Synapsis.Repo.insert!()
 
       conn = get(conn, "/api/sessions/#{session.id}")
       %{"data" => %{"messages" => messages}} = json_response(conn, 200)
