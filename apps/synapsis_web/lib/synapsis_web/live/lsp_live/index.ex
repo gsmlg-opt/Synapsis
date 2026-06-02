@@ -2,8 +2,7 @@ defmodule SynapsisWeb.LSPLive.Index do
   use SynapsisWeb, :live_view
   require Logger
 
-  alias Synapsis.{Repo, PluginConfig}
-  import Ecto.Query, only: [from: 2]
+  alias Synapsis.PluginConfigs
 
   @impl true
   def mount(_params, _session, socket) do
@@ -79,7 +78,7 @@ defmodule SynapsisWeb.LSPLive.Index do
         auto_start: true
       }
 
-      case Repo.insert(PluginConfig.changeset(%PluginConfig{}, attrs)) do
+      case PluginConfigs.create(attrs) do
         {:ok, _} ->
           {:noreply,
            socket
@@ -95,12 +94,12 @@ defmodule SynapsisWeb.LSPLive.Index do
   end
 
   def handle_event("disable_builtin", %{"name" => name}, socket) do
-    case Repo.get_by(PluginConfig, name: name, type: "lsp") do
+    case PluginConfigs.get_by_name_type(name, "lsp") do
       nil ->
         {:noreply, socket}
 
       config ->
-        case Repo.delete(config) do
+        case PluginConfigs.delete(config) do
           {:ok, _} ->
             {:noreply,
              socket
@@ -114,14 +113,12 @@ defmodule SynapsisWeb.LSPLive.Index do
   end
 
   def handle_event("toggle_auto_start", %{"id" => id}, socket) do
-    case Repo.get(PluginConfig, id) do
+    case PluginConfigs.get(id) do
       nil ->
         {:noreply, socket}
 
       config ->
-        case config
-             |> PluginConfig.changeset(%{auto_start: !config.auto_start})
-             |> Repo.update() do
+        case PluginConfigs.update(config, %{auto_start: !config.auto_start}) do
           {:ok, _} -> {:noreply, assign(socket, configs: list_configs())}
           {:error, _} -> {:noreply, put_flash(socket, :error, "Failed to update config")}
         end
@@ -140,7 +137,7 @@ defmodule SynapsisWeb.LSPLive.Index do
       auto_start: params["auto_start"] == "true"
     }
 
-    case Repo.insert(PluginConfig.changeset(%PluginConfig{}, attrs)) do
+    case PluginConfigs.create(attrs) do
       {:ok, _} ->
         {:noreply,
          socket
@@ -163,9 +160,9 @@ defmodule SynapsisWeb.LSPLive.Index do
   end
 
   def handle_event("delete_config", %{"id" => id}, socket) do
-    case Repo.get(PluginConfig, id) do
+    case PluginConfigs.get(id) do
       nil -> :ok
-      config -> Repo.delete(config)
+      config -> PluginConfigs.delete(config)
     end
 
     {:noreply, assign(socket, configs: list_configs())}
@@ -174,9 +171,7 @@ defmodule SynapsisWeb.LSPLive.Index do
 
   # -- Helpers -----------------------------------------------------------------
 
-  defp list_configs do
-    Repo.all(from(p in PluginConfig, where: p.type == "lsp", order_by: [asc: p.name]))
-  end
+  defp list_configs, do: PluginConfigs.list_by_type("lsp")
 
   defp parse_lsp_json(json) do
     case Jason.decode(json) do
@@ -212,7 +207,7 @@ defmodule SynapsisWeb.LSPLive.Index do
           auto_start: Map.get(config, "autoStart", false)
         }
 
-        case Repo.insert(PluginConfig.changeset(%PluginConfig{}, attrs)) do
+        case PluginConfigs.create(attrs) do
           {:ok, _} -> {imported + 1, skipped}
           {:error, _} -> {imported, skipped + 1}
         end

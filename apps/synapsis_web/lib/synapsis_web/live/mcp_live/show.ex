@@ -1,11 +1,11 @@
 defmodule SynapsisWeb.MCPLive.Show do
   use SynapsisWeb, :live_view
 
-  alias Synapsis.{Repo, PluginConfig}
+  alias Synapsis.{PluginConfig, PluginConfigs}
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
-    case Repo.get(PluginConfig, id) do
+    case PluginConfigs.get(id) do
       nil ->
         {:ok,
          socket
@@ -46,9 +46,7 @@ defmodule SynapsisWeb.MCPLive.Show do
       auto_start: params["auto_start"] == "true"
     }
 
-    changeset = PluginConfig.changeset(socket.assigns.config, attrs)
-
-    case Repo.update(changeset) do
+    case PluginConfigs.update(socket.assigns.config, attrs) do
       {:ok, config} ->
         {:noreply,
          socket

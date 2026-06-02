@@ -6,8 +6,7 @@ defmodule SynapsisPlugin.LSP.Presets do
   Each preset is a built-in LSP that can be enabled/disabled via the UI.
   """
 
-  alias Synapsis.{Repo, PluginConfig}
-  import Ecto.Query, only: [from: 2]
+  alias Synapsis.PluginConfigs
 
   @presets [
     %{
@@ -188,27 +187,22 @@ defmodule SynapsisPlugin.LSP.Presets do
   @doc "Insert all presets into plugin_configs as type \"lsp\" (idempotent)."
   def seed_defaults do
     Enum.each(@presets, fn preset ->
-      %PluginConfig{}
-      |> PluginConfig.changeset(%{
-        type: "lsp",
-        name: preset.name,
-        command: preset.command,
-        args: preset.args,
-        auto_start: false
-      })
-      |> Repo.insert(
-        on_conflict: :nothing,
-        conflict_target: [:name, :scope]
-      )
+      unless PluginConfigs.get_by_name_type(preset.name, "lsp") do
+        PluginConfigs.create(%{
+          type: "lsp",
+          name: preset.name,
+          command: preset.command,
+          args: preset.args,
+          auto_start: false
+        })
+      end
     end)
 
     :ok
   end
 
-  @doc "Return names of presets already configured in the database."
-  def configured_names do
-    Repo.all(from(p in PluginConfig, where: p.type == "lsp", select: p.name))
-  end
+  @doc "Return names of presets already configured in the store."
+  def configured_names, do: PluginConfigs.names_by_type("lsp")
 
   defp has_extensions?(project_path, extensions) do
     Enum.any?(extensions, fn ext ->
