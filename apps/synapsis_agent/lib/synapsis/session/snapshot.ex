@@ -99,41 +99,16 @@ defmodule Synapsis.Session.Snapshot do
     end
   end
 
-  @doc "Encode a persisted message into a JSON-friendly turn map."
-  def encode_message(%Message{} = message) do
-    %{
-      role: message.role,
-      token_count: message.token_count,
-      parts: Enum.map(message.parts || [], &encode_part/1)
-    }
-  end
+  @doc "Encode a persisted message into a durable turn map (delegates to Message)."
+  defdelegate encode_message(message), to: Message, as: :encode
 
   # ── internals ────────────────────────────────────────────────────────────
 
   defp write_turns(session_id, [], meta), do: Store.put_meta(session_id, meta)
 
   defp write_turns(session_id, messages, meta) do
-    messages
-    |> Enum.with_index()
-    |> Enum.reduce_while(:ok, fn {message, index}, :ok ->
-      case Store.commit_turn(session_id, index, encode_message(message), meta) do
-        :ok -> {:cont, :ok}
-        {:error, _} = err -> {:halt, err}
-      end
-    end)
+    with :ok <- Store.replace_turns(session_id, Enum.map(messages, &Message.encode/1)) do
+      Store.put_meta(session_id, meta)
+    end
   end
-
-  defp encode_part(%Synapsis.Part.Text{content: content}),
-    do: %{type: "text", text: content || ""}
-
-  defp encode_part(%Synapsis.Part.ToolUse{tool: name, tool_use_id: id, input: input}),
-    do: %{type: "tool_use", id: id, name: name, input: input || %{}}
-
-  defp encode_part(%Synapsis.Part.ToolResult{tool_use_id: id, content: content, is_error: err}),
-    do: %{type: "tool_result", tool_use_id: id, content: content || "", is_error: err || false}
-
-  defp encode_part(%Synapsis.Part.Image{media_type: mt}),
-    do: %{type: "image", media_type: mt}
-
-  defp encode_part(other), do: %{type: "unknown", raw: inspect(other)}
 end

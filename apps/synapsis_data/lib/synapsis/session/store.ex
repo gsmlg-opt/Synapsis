@@ -160,6 +160,33 @@ defmodule Synapsis.Session.Store do
     end
   end
 
+  @doc """
+  Replace the full ordered turn list for a session in one atomic batch: drops the
+  existing `turns/*` and writes `turns/0..n-1` from `turn_maps`. Meta is left
+  untouched. Used by the message write path (a message == a turn).
+  """
+  def replace_turns(id, turn_maps) when is_binary(id) and is_list(turn_maps) do
+    old_keys =
+      case Concord.prefix_scan(turns_prefix(id)) do
+        {:ok, pairs} -> Enum.map(pairs, fn {k, _v} -> k end)
+        _ -> []
+      end
+
+    new_puts =
+      turn_maps
+      |> Enum.with_index()
+      |> Enum.map(fn {turn, n} -> {turn_key(id, n), turn} end)
+
+    # Delete stale higher-index turns (when the list shrank), then write the new set.
+    stale = old_keys -- Enum.map(new_puts, fn {k, _v} -> k end)
+    if stale != [], do: Concord.delete_many(stale)
+
+    case new_puts do
+      [] -> :ok
+      puts -> with {:ok, _} <- Concord.put_many(puts), do: :ok
+    end
+  end
+
   @doc "Delete a whole session: meta, turns, and every session-scoped value."
   def delete_session(id) when is_binary(id) do
     keys =

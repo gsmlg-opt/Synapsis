@@ -1,7 +1,8 @@
 defmodule Synapsis.Session.Worker.Boot do
   @moduledoc "Handles Worker initialization: session loading and graph construction."
 
-  alias Synapsis.{Repo, Session}
+  alias Synapsis.Session
+  alias Synapsis.Session.Store
   alias Synapsis.Session.Worker.Config
   alias Synapsis.Agent.Graphs.CodingLoop
 
@@ -14,18 +15,17 @@ defmodule Synapsis.Session.Worker.Boot do
   or `{:stop, reason}`.
   """
   def load_and_boot(session_id, opts \\ []) do
-    case Repo.get(Session, session_id) do
-      nil -> {:stop, {:error, :session_not_found}}
-      session -> boot(reset_transient_status(session), session_id, opts)
+    case Store.get_meta(session_id) do
+      {:error, :not_found} -> {:stop, {:error, :session_not_found}}
+      {:ok, meta} -> boot(reset_transient_status(Session.from_meta(meta)), session_id, opts)
     end
   end
 
-  defp reset_transient_status(%Session{status: status} = session)
+  defp reset_transient_status(%Session{status: status, id: id} = session)
        when status in @transient_statuses do
-    case session |> Session.status_changeset("idle") |> Repo.update() do
-      {:ok, updated} -> updated
-      {:error, _changeset} -> session
-    end
+    updated = %{session | status: "idle"}
+    Store.put_meta(id, Session.to_meta(updated))
+    updated
   end
 
   defp reset_transient_status(session), do: session
