@@ -105,16 +105,8 @@ defmodule Synapsis.Memory.Writer do
   # ── Internals ───────────────────────────────────────────────────────
 
   defp persist_event(attrs) do
-    case Synapsis.Memory.append_event(attrs) do
-      {:ok, _event} ->
-        :ok
-
-      {:error, changeset} ->
-        Logger.warning("memory_event_persist_failed",
-          error: inspect(changeset.errors),
-          type: Map.get(attrs, :type)
-        )
-    end
+    _ = Synapsis.Memory.append_event(attrs)
+    :ok
   end
 
   defp map_tool_effect(:file_changed), do: "tool_succeeded"

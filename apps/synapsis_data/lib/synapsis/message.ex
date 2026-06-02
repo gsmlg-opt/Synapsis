@@ -50,11 +50,14 @@ defmodule Synapsis.Message do
   Append a message to a session's durable turns. Accepts a `%Message{}` or an
   attrs map; assigns an id/timestamp when missing. Returns `{:ok, message}`.
   """
-  @spec append(String.t(), %__MODULE__{} | map()) :: {:ok, %__MODULE__{}}
+  @spec append(String.t(), %__MODULE__{} | map()) :: {:ok, %__MODULE__{}} | {:error, term()}
   def append(session_id, %__MODULE__{} = message) do
     message = ensure_identity(%{message | session_id: session_id})
-    :ok = Store.replace_turns(session_id, encode_all(list_by_session(session_id) ++ [message]))
-    {:ok, message}
+
+    case Store.replace_turns(session_id, encode_all(list_by_session(session_id) ++ [message])) do
+      :ok -> {:ok, message}
+      error -> error
+    end
   end
 
   def append(session_id, attrs) when is_map(attrs) do
@@ -68,7 +71,7 @@ defmodule Synapsis.Message do
   end
 
   @doc "Update a single message (matched by id) within its session's turns."
-  @spec update_message(%__MODULE__{}) :: {:ok, %__MODULE__{}}
+  @spec update_message(%__MODULE__{}) :: {:ok, %__MODULE__{}} | {:error, term()}
   def update_message(%__MODULE__{id: id, session_id: session_id} = message)
       when is_binary(id) and is_binary(session_id) do
     updated =
@@ -76,8 +79,10 @@ defmodule Synapsis.Message do
       |> list_by_session()
       |> Enum.map(fn m -> if m.id == id, do: message, else: m end)
 
-    :ok = persist_list(session_id, updated)
-    {:ok, message}
+    case persist_list(session_id, updated) do
+      :ok -> {:ok, message}
+      error -> error
+    end
   end
 
   @doc "Encode a `%Message{}` into a durable turn map (id-stamped)."

@@ -17,6 +17,7 @@ defmodule Synapsis.Session.Worker.Persistence do
     # ADR-006 C4: a message is a durable Concord turn.
     case Message.append(session_id, %Message{role: "user", parts: parts, token_count: token_count}) do
       {:ok, _} -> :ok
+      {:error, _} = err -> err
     end
   end
 
@@ -46,11 +47,8 @@ defmodule Synapsis.Session.Worker.Persistence do
   end
 
   def set_status(session_id, status) do
-    case update_session_status(session_id, status) do
-      {:ok, _} -> broadcast(session_id, "session_status", %{status: status})
-      :ok -> broadcast(session_id, "session_status", %{status: status})
-      {:error, _} = err -> err
-    end
+    _ = update_session_status(session_id, status)
+    broadcast(session_id, "session_status", %{status: status})
   end
 
   def broadcast(session_id, event, payload),

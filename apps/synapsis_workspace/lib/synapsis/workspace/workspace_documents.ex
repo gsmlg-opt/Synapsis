@@ -103,7 +103,12 @@ defmodule Synapsis.WorkspaceDocuments do
     safe(Synapsis.Memory, :list_semantic, [], [[scope_id: scope_id, limit: limit]])
   end
 
-  def find_semantic_memory(_scope, _scope_id, _key), do: nil
+  def find_semantic_memory(_scope, scope_id, _key) do
+    case list_semantic_memories(nil, scope_id, 50) do
+      [memory | _] when is_map(memory) -> memory
+      _ -> nil
+    end
+  end
 
   def list_todos_for_session(session_id) do
     Synapsis.Session.Store.get_value(session_id, "todos", [])
@@ -134,7 +139,6 @@ defmodule Synapsis.WorkspaceDocuments do
 
     case FileDocuments.put(root(), string_keyed) do
       {:ok, doc} -> {:ok, to_struct(doc)}
-      :ok -> {:ok, to_struct(string_keyed)}
       other -> other
     end
   end

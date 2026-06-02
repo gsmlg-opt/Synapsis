@@ -99,16 +99,12 @@ defmodule SynapsisWeb.LSPLive.Index do
         {:noreply, socket}
 
       config ->
-        case PluginConfigs.delete(config) do
-          {:ok, _} ->
-            {:noreply,
-             socket
-             |> assign(configs: list_configs())
-             |> put_flash(:info, "#{name} LSP disabled")}
+        {:ok, _} = PluginConfigs.delete(config)
 
-          {:error, _} ->
-            {:noreply, put_flash(socket, :error, "Failed to disable #{name}")}
-        end
+        {:noreply,
+         socket
+         |> assign(configs: list_configs())
+         |> put_flash(:info, "#{name} LSP disabled")}
     end
   end
 
