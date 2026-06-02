@@ -228,12 +228,13 @@ defmodule SynapsisServer.ProviderControllerTest do
 
   describe "GET /api/providers (env detection)" do
     setup %{} do
-      # Remove seeded providers so env detection tests start clean
-      import Ecto.Query
-
-      Synapsis.Repo.delete_all(
-        from(p in Synapsis.ProviderConfig, where: p.name in ["anthropic", "openai", "google"])
-      )
+      # ADR-006 C4: remove seeded providers (Config.Store) so env detection starts clean.
+      for name <- ["anthropic", "openai", "google"] do
+        case Synapsis.Providers.get_by_name(name) do
+          {:ok, p} -> Synapsis.Providers.delete(p["id"])
+          _ -> :ok
+        end
+      end
 
       :ok
     end
