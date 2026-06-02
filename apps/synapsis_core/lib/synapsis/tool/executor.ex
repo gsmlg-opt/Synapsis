@@ -419,18 +419,6 @@ defmodule Synapsis.Tool.Executor do
   # persist to. Retained as a no-op seam for future telemetry/audit.
   defp persist_tool_call(_tool_name, _input, _result, _status, _duration_ms, _context), do: :ok
 
-  defp safe_inspect(value) when is_atom(value), do: Atom.to_string(value)
-  defp safe_inspect(value) when is_number(value), do: to_string(value)
-
-  defp safe_inspect(value) when is_list(value) do
-    case Jason.encode(value) do
-      {:ok, json} -> json
-      {:error, _} -> "list result"
-    end
-  end
-
-  defp safe_inspect(_value), do: "non-serializable result"
-
   # --- Batch helpers ---
 
   defp extract_file_path(input) when is_map(input) do
