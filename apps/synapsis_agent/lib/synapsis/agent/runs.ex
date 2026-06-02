@@ -1,10 +1,13 @@
 defmodule Synapsis.Agent.Runs do
-  @moduledoc "Lifecycle API for persisted daemon run records."
+  @moduledoc """
+  Lifecycle API for daemon run records.
 
-  import Ecto.Query
+  ADR-006 C4: node-local coordination data in Concord under `coord/agent_runs/`,
+  keyed by id (ADR-006 §10 — cluster form is future work).
+  """
+  alias Synapsis.AgentRun
 
-  alias Synapsis.{AgentRun, Repo}
-
+  @prefix "coord/agent_runs/"
   @stale_error "daemon restarted before completion"
   @updatable_fields ~w(
     kind status source assistant_name session_id heartbeat_id routine_id prompt
@@ -13,107 +16,117 @@ defmodule Synapsis.Agent.Runs do
 
   @spec create(map()) :: {:ok, AgentRun.t()} | {:error, Ecto.Changeset.t()}
   def create(attrs) when is_map(attrs) do
-    %AgentRun{}
-    |> AgentRun.changeset(normalize_attrs(attrs))
-    |> Repo.insert()
+    changeset = AgentRun.changeset(%AgentRun{}, normalize_attrs(attrs))
+
+    if changeset.valid? do
+      now = utc_now()
+
+      run =
+        changeset
+        |> Ecto.Changeset.apply_changes()
+        |> then(&%{&1 | id: &1.id || Ecto.UUID.generate(), inserted_at: now, updated_at: now})
+
+      persist(run)
+      {:ok, run}
+    else
+      {:error, changeset}
+    end
   end
 
   @spec get(String.t()) :: AgentRun.t() | nil
-  def get(id), do: Repo.get(AgentRun, id)
+  def get(id) do
+    case Concord.get(@prefix <> id) do
+      {:ok, map} -> struct(AgentRun, map)
+      _ -> nil
+    end
+  end
 
   @spec list_recent(keyword()) :: [AgentRun.t()]
   def list_recent(opts \\ []) do
-    limit = Keyword.get(opts, :limit, 50)
-
-    AgentRun
-    |> order_by([run], desc: run.inserted_at)
-    |> limit(^limit)
-    |> Repo.all()
+    scan() |> recent() |> Enum.take(Keyword.get(opts, :limit, 50))
   end
 
   @spec list_by_status(String.t(), keyword()) :: [AgentRun.t()]
   def list_by_status(status, opts \\ []) when is_binary(status) do
-    limit = Keyword.get(opts, :limit, 50)
-
-    AgentRun
-    |> where([run], run.status == ^status)
-    |> order_by([run], desc: run.inserted_at)
-    |> limit(^limit)
-    |> Repo.all()
+    scan()
+    |> Enum.filter(&(&1.status == status))
+    |> recent()
+    |> Enum.take(Keyword.get(opts, :limit, 50))
   end
 
-  @spec mark_running(AgentRun.t(), map()) :: {:ok, AgentRun.t()} | {:error, Ecto.Changeset.t()}
+  @spec mark_running(AgentRun.t(), map()) :: {:ok, AgentRun.t()}
   def mark_running(%AgentRun{} = run, attrs \\ %{}) do
-    attrs = normalize_attrs(attrs)
     started_at = attr(attrs, :started_at) || run.started_at || utc_now()
-
     update_run(run, attrs, %{status: "running", started_at: started_at})
   end
 
-  @spec mark_waiting_approval(AgentRun.t(), map()) ::
-          {:ok, AgentRun.t()} | {:error, Ecto.Changeset.t()}
+  @spec mark_waiting_approval(AgentRun.t(), map()) :: {:ok, AgentRun.t()}
   def mark_waiting_approval(%AgentRun{} = run, attrs \\ %{}) do
-    attrs = normalize_attrs(attrs)
     started_at = attr(attrs, :started_at) || run.started_at || utc_now()
-
     update_run(run, attrs, %{status: "waiting_approval", started_at: started_at})
   end
 
-  @spec mark_completed(AgentRun.t(), String.t(), map()) ::
-          {:ok, AgentRun.t()} | {:error, Ecto.Changeset.t()}
+  @spec mark_completed(AgentRun.t(), String.t(), map()) :: {:ok, AgentRun.t()}
   def mark_completed(%AgentRun{} = run, summary, attrs \\ %{}) when is_binary(summary) do
-    attrs = normalize_attrs(attrs)
     finished_at = attr(attrs, :finished_at) || utc_now()
-
     update_run(run, attrs, %{status: "completed", summary: summary, finished_at: finished_at})
   end
 
-  @spec mark_failed(AgentRun.t(), String.t(), map()) ::
-          {:ok, AgentRun.t()} | {:error, Ecto.Changeset.t()}
+  @spec mark_failed(AgentRun.t(), String.t(), map()) :: {:ok, AgentRun.t()}
   def mark_failed(%AgentRun{} = run, error, attrs \\ %{}) when is_binary(error) do
-    attrs = normalize_attrs(attrs)
     finished_at = attr(attrs, :finished_at) || utc_now()
-
     update_run(run, attrs, %{status: "failed", error: error, finished_at: finished_at})
   end
 
-  @spec mark_cancelled(AgentRun.t(), map()) :: {:ok, AgentRun.t()} | {:error, Ecto.Changeset.t()}
+  @spec mark_cancelled(AgentRun.t(), map()) :: {:ok, AgentRun.t()}
   def mark_cancelled(%AgentRun{} = run, attrs \\ %{}) do
-    attrs = normalize_attrs(attrs)
     finished_at = attr(attrs, :finished_at) || utc_now()
-
     update_run(run, attrs, %{status: "cancelled", finished_at: finished_at})
   end
 
-  @spec recover_stale_running_runs(keyword()) :: {non_neg_integer(), nil | [term()]}
+  @spec recover_stale_running_runs(keyword()) :: {non_neg_integer(), nil}
   def recover_stale_running_runs(opts \\ []) do
     older_than = Keyword.get(opts, :older_than, DateTime.add(utc_now(), -3600, :second))
-    now = utc_now()
 
-    AgentRun
-    |> where([run], run.status in ["running", "waiting_approval"])
-    |> where(
-      [run],
-      (not is_nil(run.started_at) and run.started_at < ^older_than) or
-        (is_nil(run.started_at) and run.inserted_at < ^older_than)
-    )
-    |> Repo.update_all(
-      set: [
-        status: "failed",
-        error: @stale_error,
-        finished_at: now,
-        updated_at: now
-      ]
-    )
+    stale =
+      scan()
+      |> Enum.filter(fn run ->
+        run.status in ["running", "waiting_approval"] and
+          DateTime.compare(run.started_at || run.inserted_at, older_than) == :lt
+      end)
+
+    Enum.each(stale, fn run ->
+      update_run(run, %{}, %{status: "failed", error: @stale_error, finished_at: utc_now()})
+    end)
+
+    {length(stale), nil}
   end
+
+  # ── internals ──────────────────────────────────────────────────────────────
 
   defp update_run(%AgentRun{} = run, attrs, lifecycle_attrs) do
-    attrs = Map.merge(attrs, lifecycle_attrs)
-
-    run
-    |> AgentRun.changeset(attrs)
-    |> Repo.update()
+    merged = run |> Map.merge(normalize_attrs(attrs)) |> Map.merge(lifecycle_attrs)
+    updated = %{merged | updated_at: utc_now()}
+    persist(updated)
+    {:ok, updated}
   end
+
+  defp persist(%AgentRun{} = run) do
+    case Concord.put(@prefix <> run.id, Map.from_struct(run)) do
+      :ok -> :ok
+      {:ok, _} -> :ok
+      _ -> :ok
+    end
+  end
+
+  defp scan do
+    case Concord.prefix_scan(@prefix) do
+      {:ok, pairs} -> Enum.map(pairs, fn {_k, v} -> struct(AgentRun, v) end)
+      _ -> []
+    end
+  end
+
+  defp recent(runs), do: Enum.sort_by(runs, & &1.inserted_at, {:desc, DateTime})
 
   defp normalize_attrs(attrs) when is_map(attrs) do
     Enum.reduce(attrs, %{}, fn
@@ -131,7 +144,7 @@ defmodule Synapsis.Agent.Runs do
     end)
   end
 
-  defp attr(attrs, key), do: Map.get(attrs, key)
+  defp attr(attrs, key), do: Map.get(normalize_attrs(attrs), key)
 
   defp utc_now, do: DateTime.utc_now()
 end

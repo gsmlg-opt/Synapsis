@@ -28,7 +28,8 @@ defmodule Synapsis.Session.AuditorTask do
 
   require Logger
 
-  alias Synapsis.{FailedAttempt, Repo, PromptBuilder}
+  alias Synapsis.{FailedAttempt, PromptBuilder}
+  alias Synapsis.Session.Store
   alias Synapsis.Session.Monitor
 
   @auditor_max_tokens 1_024
@@ -96,10 +97,7 @@ defmodule Synapsis.Session.AuditorTask do
       auditor_model: Keyword.get(opts, :auditor_model)
     }
 
-    result =
-      %FailedAttempt{}
-      |> FailedAttempt.changeset(attrs)
-      |> Repo.insert()
+    result = append_failed_attempt(session_id, attrs)
 
     case result do
       {:ok, attempt} ->
@@ -211,14 +209,29 @@ defmodule Synapsis.Session.AuditorTask do
   end
 
   defp next_attempt_number(session_id) do
-    import Ecto.Query
+    numbers =
+      session_id
+      |> Store.get_value("failed_attempts", [])
+      |> Enum.map(&Map.get(&1, :attempt_number, 0))
 
-    current_max =
-      FailedAttempt
-      |> where([fa], fa.session_id == ^session_id)
-      |> select([fa], max(fa.attempt_number))
-      |> Repo.one()
+    Enum.max([0 | numbers]) + 1
+  end
 
-    (current_max || 0) + 1
+  # ADR-006 C4: the failure log is a session-scoped Concord value (a list).
+  defp append_failed_attempt(session_id, attrs) do
+    changeset = FailedAttempt.changeset(%FailedAttempt{}, attrs)
+
+    if changeset.valid? do
+      record =
+        changeset
+        |> Ecto.Changeset.apply_changes()
+        |> Map.merge(%{id: Ecto.UUID.generate(), inserted_at: DateTime.utc_now()})
+
+      existing = Store.get_value(session_id, "failed_attempts", [])
+      :ok = Store.put_value(session_id, "failed_attempts", existing ++ [Map.from_struct(record)])
+      {:ok, record}
+    else
+      {:error, changeset}
+    end
   end
 end

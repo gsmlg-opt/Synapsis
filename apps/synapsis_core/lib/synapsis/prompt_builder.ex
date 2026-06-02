@@ -6,9 +6,9 @@ defmodule Synapsis.PromptBuilder do
   context blocks that get appended to the system prompt before each provider call.
   """
 
-  alias Synapsis.{FailedAttempt, Session, Repo}
+  alias Synapsis.{FailedAttempt, Session}
+  alias Synapsis.Session.Store
   alias Synapsis.Memory.ContextBuilder
-  import Ecto.Query
 
   @max_entries 7
 
@@ -20,12 +20,13 @@ defmodule Synapsis.PromptBuilder do
   """
   @spec build_failure_context(String.t()) :: String.t() | nil
   def build_failure_context(session_id) do
+    # ADR-006 C4: the failure log is a session-scoped Concord value.
     attempts =
-      FailedAttempt
-      |> where([fa], fa.session_id == ^session_id)
-      |> order_by([fa], desc: fa.inserted_at)
-      |> limit(@max_entries)
-      |> Repo.all()
+      session_id
+      |> Store.get_value("failed_attempts", [])
+      |> Enum.map(&struct(FailedAttempt, &1))
+      |> Enum.sort_by(& &1.inserted_at, {:desc, DateTime})
+      |> Enum.take(@max_entries)
 
     case attempts do
       [] -> nil
@@ -58,11 +59,13 @@ defmodule Synapsis.PromptBuilder do
   """
   @spec build_memory_context(String.t()) :: String.t() | nil
   def build_memory_context(session_id) do
-    case Repo.get(Session, session_id) do
-      nil ->
+    case Store.get_meta(session_id) do
+      {:error, :not_found} ->
         nil
 
-      session ->
+      {:ok, meta} ->
+        session = Session.from_meta(meta)
+
         context = %{
           agent_id: session.agent || "default",
           agent_scope: :agent
