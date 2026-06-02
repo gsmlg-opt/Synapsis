@@ -69,16 +69,15 @@ defmodule Synapsis.Tool.Permission do
   def session_config(nil), do: SessionConfig.default()
 
   def session_config(session_id) do
-    case Synapsis.Repo.get_by(Synapsis.SessionPermission, session_id: session_id) do
+    case Synapsis.Session.Store.get_value(session_id, "permission", nil) do
       nil ->
         %SessionConfig{SessionConfig.default() | session_id: session_id}
 
-      row ->
-        SessionConfig.from_db(row)
+      map when is_map(map) ->
+        SessionConfig.from_db(struct(Synapsis.SessionPermission, map))
     end
   rescue
-    _e in [Ecto.QueryError, DBConnection.ConnectionError, DBConnection.OwnershipError] ->
-      %SessionConfig{SessionConfig.default() | session_id: session_id}
+    _e -> %SessionConfig{SessionConfig.default() | session_id: session_id}
   catch
     :exit, _ ->
       %SessionConfig{SessionConfig.default() | session_id: session_id}
@@ -95,23 +94,16 @@ defmodule Synapsis.Tool.Permission do
           {:ok, Synapsis.SessionPermission.t()} | {:error, Ecto.Changeset.t()}
   def update_config(session_id, attrs) do
     attrs = Map.put(attrs, :session_id, session_id)
+    changeset = Synapsis.SessionPermission.changeset(%Synapsis.SessionPermission{}, attrs)
 
-    updatable = [
-      :mode,
-      :allow_read,
-      :allow_write,
-      :allow_execute,
-      :allow_destructive,
-      :tool_overrides
-    ]
-
-    %Synapsis.SessionPermission{}
-    |> Synapsis.SessionPermission.changeset(attrs)
-    |> Synapsis.Repo.insert(
-      on_conflict: {:replace, updatable},
-      conflict_target: :session_id,
-      returning: true
-    )
+    if changeset.valid? do
+      record = Ecto.Changeset.apply_changes(changeset)
+      # ADR-006 C4: a single session-scoped Concord value (round-trips terms).
+      :ok = Synapsis.Session.Store.put_value(session_id, "permission", Map.from_struct(record))
+      {:ok, record}
+    else
+      {:error, changeset}
+    end
   end
 
   @doc "Return the agent-level permission modes accepted by the UI and schema."

@@ -47,7 +47,33 @@ defmodule Synapsis.Session.Store do
   def turn_key(id, n) when is_binary(id) and is_integer(n) and n >= 0,
     do: turns_prefix(id) <> pad(n)
 
+  @doc "Prefix covering every key for a session."
+  def session_prefix(id) when is_binary(id), do: "sessions/" <> id <> "/"
+
+  @doc "Key for an arbitrary session-scoped value (todos, permission, …)."
+  def value_key(id, suffix) when is_binary(id) and is_binary(suffix),
+    do: session_prefix(id) <> suffix
+
   defp pad(n), do: n |> Integer.to_string() |> String.pad_leading(@turn_pad, "0")
+
+  # ── session-scoped values (todos, permission, …) ──────────────────────────
+
+  @doc "Write a session-scoped value under `sessions/<id>/<suffix>`."
+  def put_value(id, suffix, value) when is_binary(id) and is_binary(suffix) do
+    case Concord.put(value_key(id, suffix), value) do
+      :ok -> :ok
+      {:ok, _} -> :ok
+      other -> normalize_error(other)
+    end
+  end
+
+  @doc "Read a session-scoped value, returning `default` when absent."
+  def get_value(id, suffix, default \\ nil) when is_binary(id) and is_binary(suffix) do
+    case Concord.get(value_key(id, suffix)) do
+      {:ok, value} -> value
+      _ -> default
+    end
+  end
 
   # ── meta ─────────────────────────────────────────────────────────────────
 
@@ -120,15 +146,17 @@ defmodule Synapsis.Session.Store do
     end
   end
 
-  @doc "Delete a whole session: its meta snapshot and every turn."
+  @doc "Delete a whole session: meta, turns, and every session-scoped value."
   def delete_session(id) when is_binary(id) do
-    turn_keys =
-      case Concord.prefix_scan(turns_prefix(id)) do
+    keys =
+      case Concord.prefix_scan(session_prefix(id)) do
         {:ok, pairs} -> Enum.map(pairs, fn {k, _v} -> k end)
         _ -> []
       end
 
-    case Concord.delete_many([meta_key(id) | turn_keys]) do
+    keys = Enum.uniq([meta_key(id) | keys])
+
+    case Concord.delete_many(keys) do
       {:ok, _} -> :ok
       :ok -> :ok
       other -> normalize_error(other)

@@ -2,7 +2,7 @@ defmodule Synapsis.Tool.TodoWrite do
   @moduledoc "Create or replace the session todo list."
   use Synapsis.Tool
 
-  import Ecto.Query
+  alias Synapsis.Session.Store
 
   @impl true
   def name, do: "todo_write"
@@ -50,45 +50,29 @@ defmodule Synapsis.Tool.TodoWrite do
         {:error, "session_id is required in context"}
 
       session_id ->
-        todos = input["todos"] || []
+        # ADR-006 C4: the session todo list is a single session-scoped Concord
+        # value (an ordered list), replaced atomically on each write.
+        records =
+          (input["todos"] || [])
+          |> Enum.with_index()
+          |> Enum.map(fn {todo, index} ->
+            %{
+              "todo_id" => todo["id"],
+              "content" => todo["content"],
+              "status" => safe_status(todo["status"]),
+              "sort_order" => index
+            }
+          end)
 
-        Synapsis.Repo.transaction(fn ->
-          # Delete all existing todos for this session
-          from(t in Synapsis.SessionTodo, where: t.session_id == ^session_id)
-          |> Synapsis.Repo.delete_all()
-
-          # Insert new todos with sort_order from array index
-          inserted =
-            todos
-            |> Enum.with_index()
-            |> Enum.map(fn {todo, index} ->
-              attrs = %{
-                session_id: session_id,
-                todo_id: todo["id"],
-                content: todo["content"],
-                status: safe_status_atom(todo["status"]),
-                sort_order: index
-              }
-
-              case %Synapsis.SessionTodo{}
-                   |> Synapsis.SessionTodo.changeset(attrs)
-                   |> Synapsis.Repo.insert() do
-                {:ok, todo} -> todo
-                {:error, changeset} -> Synapsis.Repo.rollback(changeset)
-              end
-            end)
-
-          inserted
-        end)
-        |> case do
-          {:ok, inserted} ->
+        case Store.put_value(session_id, "todos", records) do
+          :ok ->
             Phoenix.PubSub.broadcast(
               Synapsis.PubSub,
               "session:#{session_id}",
-              {:todo_update, session_id, inserted}
+              {:todo_update, session_id, records}
             )
 
-            {:ok, "Updated #{length(inserted)} todo(s)."}
+            {:ok, "Updated #{length(records)} todo(s)."}
 
           {:error, _reason} ->
             {:error, "Failed to update todos"}
@@ -96,11 +80,8 @@ defmodule Synapsis.Tool.TodoWrite do
     end
   end
 
-  defp safe_status_atom(status) when status in ["pending", "in_progress", "completed"],
-    do: String.to_existing_atom(status)
-
-  defp safe_status_atom(nil), do: :pending
-  defp safe_status_atom(_), do: :pending
+  defp safe_status(status) when status in ["pending", "in_progress", "completed"], do: status
+  defp safe_status(_), do: "pending"
 
   defp get_in_struct(%{session_id: id}, :session_id), do: id
   defp get_in_struct(_, _), do: nil
