@@ -412,62 +412,12 @@ defmodule Synapsis.Tool.Executor do
     end
   end
 
-  # --- Persistence (T029) ---
-
-  defp persist_tool_call(tool_name, input, result, status, duration_ms, context) do
-    session_id = context[:session_id]
-
-    if session_id do
-      try do
-        {output, error_message} = encode_result(result)
-
-        attrs = %{
-          session_id: session_id,
-          tool_name: tool_name,
-          input: input,
-          output: output,
-          status: status,
-          duration_ms: duration_ms,
-          error_message: error_message
-        }
-
-        # Include message_id if present in context
-        attrs =
-          if context[:message_id] do
-            Map.put(attrs, :message_id, context[:message_id])
-          else
-            attrs
-          end
-
-        %Synapsis.ToolCall{}
-        |> Synapsis.ToolCall.changeset(attrs)
-        |> Synapsis.Repo.insert()
-      rescue
-        e in [
-          Ecto.QueryError,
-          DBConnection.ConnectionError,
-          DBConnection.OwnershipError,
-          RuntimeError
-        ] ->
-          Logger.warning("tool_call_persist_failed",
-            tool_name: tool_name,
-            error: Exception.message(e)
-          )
-
-          :ok
-      end
-    end
-  end
-
-  defp encode_result({:ok, result}) when is_map(result), do: {result, nil}
-  defp encode_result({:ok, result}) when is_binary(result), do: {%{"result" => result}, nil}
-  defp encode_result({:ok, result}), do: {%{"result" => safe_inspect(result)}, nil}
-  defp encode_result({:error, reason}) when is_binary(reason), do: {nil, reason}
-
-  defp encode_result({:error, reason}) when is_atom(reason),
-    do: {nil, "tool execution failed: #{reason}"}
-
-  defp encode_result({:error, _reason}), do: {nil, "tool execution failed"}
+  # --- Persistence ---
+  #
+  # ADR-006 C4: tool invocations are captured in the session's Concord turns
+  # (tool_use / tool_result parts), so there is no separate ToolCall table to
+  # persist to. Retained as a no-op seam for future telemetry/audit.
+  defp persist_tool_call(_tool_name, _input, _result, _status, _duration_ms, _context), do: :ok
 
   defp safe_inspect(value) when is_atom(value), do: Atom.to_string(value)
   defp safe_inspect(value) when is_number(value), do: to_string(value)

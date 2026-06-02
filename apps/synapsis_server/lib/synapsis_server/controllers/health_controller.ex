@@ -5,7 +5,7 @@ defmodule SynapsisServer.HealthController do
 
   def show(conn, _params) do
     checks = %{
-      repo: check_repo(),
+      store: check_store(),
       pubsub: check_process(Synapsis.PubSub),
       scheduler: check_scheduler(),
       tool_registry: check_process(Synapsis.Tool.Registry),
@@ -25,9 +25,10 @@ defmodule SynapsisServer.HealthController do
     json(conn, payload)
   end
 
-  defp check_repo do
-    case Synapsis.Repo.query("SELECT 1", [], timeout: @repo_timeout) do
-      {:ok, _} -> "ok"
+  # ADR-006 C4: the embedded node-local Concord store replaces Postgres.
+  defp check_store do
+    case Synapsis.Session.Store.wait_until_ready(@repo_timeout) do
+      :ok -> "ok"
       {:error, reason} -> "error: #{inspect(reason)}"
     end
   rescue

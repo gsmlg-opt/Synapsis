@@ -269,8 +269,8 @@ defmodule SynapsisServer.SessionChannel do
   # -- Debug state loading --
 
   defp load_debug_state(session_id) do
-    case Synapsis.Repo.get(Synapsis.Session, session_id) do
-      %{debug: true} ->
+    case Synapsis.Session.Store.get_meta(session_id) do
+      {:ok, %{debug: true}} ->
         entries =
           if Code.ensure_loaded?(SynapsisServer.DebugStore) and
                Process.whereis(SynapsisServer.DebugStore) != nil do
