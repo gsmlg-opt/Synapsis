@@ -1,11 +1,7 @@
 import Config
 
-# Database configuration for development
-# Note: socket_dir is set in runtime.exs to pick up PGHOST at startup time
-config :synapsis_data, Synapsis.Repo,
-  stacktrace: true,
-  show_sensitive_data_on_connection_error: true,
-  pool_size: 10
+# ADR-006 C4: no PostgreSQL — session/agent state lives in the embedded Concord
+# store, configs in files, memory in the memory port.
 
 config :synapsis_server, SynapsisServer.Endpoint,
   http: [ip: {0, 0, 0, 0, 0, 0, 0, 0}, port: 4657],

@@ -12,7 +12,7 @@ defmodule Synapsis.Agent.Nodes.SpawnAgent do
   @behaviour Synapsis.Agent.Runtime.Node
 
   # SessionBridge lives in synapsis_agent — same app, no circular dep issue.
-  alias Synapsis.Agent.{AgentRegistry, SessionBridge}
+  alias Synapsis.Agent.SessionBridge
 
   require Logger
 
@@ -56,8 +56,6 @@ defmodule Synapsis.Agent.Nodes.SpawnAgent do
 
     case SessionBridge.spawn_coding_session(agent_id, prompt, opts) do
       {:ok, child_session_id} ->
-        AgentRegistry.register(parent_session_id, child_session_id, prompt)
-
         Phoenix.PubSub.broadcast(
           Synapsis.PubSub,
           "session:#{parent_session_id}",
