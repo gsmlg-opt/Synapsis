@@ -9,7 +9,6 @@ defmodule Synapsis.Tool.SessionSummarize do
   use Synapsis.Tool
 
   require Logger
-  import Ecto.Query
 
   @impl true
   def name, do: "session_summarize"
@@ -100,27 +99,19 @@ defmodule Synapsis.Tool.SessionSummarize do
   end
 
   defp load_messages(session_id, scope, range) do
-    query =
-      from(m in Synapsis.Message, where: m.session_id == ^session_id, order_by: m.inserted_at)
+    messages = Synapsis.Message.list_by_session(session_id)
 
-    query =
-      case scope do
-        "recent" ->
-          from(m in Synapsis.Message,
-            where: m.session_id == ^session_id,
-            order_by: [desc: m.inserted_at],
-            limit: 10
-          )
+    case scope do
+      "recent" ->
+        messages |> Enum.reverse() |> Enum.take(10)
 
-        "range" when is_list(range) and length(range) == 2 ->
-          [start, stop] = range
-          query |> offset(^start) |> limit(^(stop - start))
+      "range" when is_list(range) and length(range) == 2 ->
+        [start, stop] = range
+        Enum.slice(messages, start, max(stop - start, 0))
 
-        _ ->
-          query
-      end
-
-    Synapsis.Repo.all(query)
+      _ ->
+        messages
+    end
   end
 
   defp extract_text(messages) do
@@ -178,9 +169,9 @@ defmodule Synapsis.Tool.SessionSummarize do
     session_id = context[:session_id]
 
     provider =
-      case Synapsis.Repo.get(Synapsis.Session, session_id) do
-        nil -> "anthropic"
-        session -> session.provider || "anthropic"
+      case Synapsis.Session.Store.get_meta(session_id) do
+        {:ok, meta} -> meta[:provider] || "anthropic"
+        _ -> "anthropic"
       end
 
     case Synapsis.LLM.complete(llm_messages,

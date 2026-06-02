@@ -1,9 +1,8 @@
 defmodule Synapsis.Session.Compactor do
   @moduledoc "Compacts old messages when approaching context window limit."
 
-  alias Synapsis.{Repo, Message, ContextWindow}
+  alias Synapsis.{Message, ContextWindow}
   alias Synapsis.Provider.ModelRegistry
-  import Ecto.Query
 
   @default_limit 128_000
   @summary_char_cap 4_000
@@ -29,35 +28,22 @@ defmodule Synapsis.Session.Compactor do
       summary = summarize_messages(to_compact)
       summary_tokens = ContextWindow.estimate_tokens(summary)
 
-      case Repo.transaction(fn ->
-             ids = Enum.map(to_compact, & &1.id)
+      # ADR-006 C4: rewrite the durable turn list as [summary | kept] atomically.
+      summary_message = %Message{
+        session_id: session_id,
+        role: "system",
+        parts: [%Synapsis.Part.Text{content: summary}],
+        token_count: summary_tokens
+      }
 
-             from(m in Message, where: m.id in ^ids)
-             |> Repo.delete_all()
+      :ok = Message.persist_list(session_id, [summary_message | to_keep])
 
-             case %Message{}
-                  |> Message.changeset(%{
-                    session_id: session_id,
-                    role: "system",
-                    parts: [%Synapsis.Part.Text{content: summary}],
-                    token_count: summary_tokens
-                  })
-                  |> Repo.insert() do
-               {:ok, msg} -> msg
-               {:error, changeset} -> Repo.rollback(changeset)
-             end
-           end) do
-        {:ok, _} ->
-          {:ok,
-           %{
-             removed: length(to_compact),
-             kept: length(to_keep),
-             summary_tokens: summary_tokens
-           }}
-
-        {:error, reason} ->
-          {:error, reason}
-      end
+      {:ok,
+       %{
+         removed: length(to_compact),
+         kept: length(to_keep),
+         summary_tokens: summary_tokens
+       }}
     end
   end
 
@@ -91,12 +77,7 @@ defmodule Synapsis.Session.Compactor do
     |> String.slice(0, 500)
   end
 
-  defp load_messages(session_id) do
-    Message
-    |> where([m], m.session_id == ^session_id)
-    |> order_by([m], asc: m.inserted_at)
-    |> Repo.all()
-  end
+  defp load_messages(session_id), do: Message.list_by_session(session_id)
 
   defp model_limit(model) do
     case ModelRegistry.get(model) do
