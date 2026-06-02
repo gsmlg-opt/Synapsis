@@ -5,8 +5,10 @@ defmodule Synapsis.Sessions do
   # DebugStore lives in synapsis_server (compiled after synapsis_core)
   @compile {:no_warn_undefined, [Synapsis.Session.Worker, SynapsisServer.DebugStore]}
 
-  alias Synapsis.{Repo, Session, Message}
-  import Ecto.Query
+  # ADR-006 C4: sessions persist in the node-local Concord store (Session.Store),
+  # not Postgres. `meta` holds the session fields; messages are durable turns.
+  alias Synapsis.{Session, Message}
+  alias Synapsis.Session.Store
 
   @transient_statuses ~w(streaming tool_executing)
   @stale_transient_status_after_seconds 120
@@ -27,17 +29,29 @@ defmodule Synapsis.Sessions do
       debug: opts[:debug] || false
     }
 
-    with {:ok, session} <- %Session{} |> Session.changeset(attrs) |> Repo.insert(),
-         {:ok, _permission} <- apply_agent_permission(session, agent),
-         {:ok, _pid} <- Synapsis.Session.DynamicSupervisor.start_session(session.id) do
-      {:ok, session}
+    now = DateTime.utc_now()
+    changeset = Session.changeset(%Session{}, attrs)
+
+    if changeset.valid? do
+      session =
+        changeset
+        |> Ecto.Changeset.apply_changes()
+        |> then(&%{&1 | id: &1.id || Ecto.UUID.generate(), inserted_at: now, updated_at: now})
+
+      with :ok <- Store.put_meta(session.id, Session.to_meta(session)),
+           {:ok, _permission} <- apply_agent_permission(session, agent),
+           {:ok, _pid} <- Synapsis.Session.DynamicSupervisor.start_session(session.id) do
+        {:ok, session}
+      end
+    else
+      {:error, changeset}
     end
   end
 
   def get(session_id) do
-    case Repo.get(Session, session_id) do
-      nil -> {:error, :not_found}
-      session -> {:ok, Repo.preload(session, [:messages])}
+    case Store.get_meta(session_id) do
+      {:ok, meta} -> {:ok, with_messages(Session.from_meta(meta))}
+      {:error, :not_found} -> {:error, :not_found}
     end
   end
 
@@ -45,17 +59,9 @@ defmodule Synapsis.Sessions do
     after_seconds = Keyword.get(opts, :after_seconds, @stale_transient_status_after_seconds)
 
     if stale_transient_status?(session, after_seconds) do
-      session
-      |> Session.changeset(stale_transient_recovery_attrs(session))
-      |> Repo.update()
-      |> case do
-        {:ok, updated} ->
-          restart_session_worker(updated.id)
-          {:ok, Repo.preload(updated, [:messages])}
-
-        {:error, _changeset} ->
-          {:ok, session}
-      end
+      updated = persist_update(session, stale_transient_recovery_attrs(session))
+      restart_session_worker(updated.id)
+      {:ok, with_messages(updated)}
     else
       {:ok, session}
     end
@@ -67,17 +73,9 @@ defmodule Synapsis.Sessions do
     if provider == session.provider and model == session.model do
       {:ok, session}
     else
-      session
-      |> Session.changeset(%{provider: provider, model: model})
-      |> Repo.update()
-      |> case do
-        {:ok, updated} ->
-          restart_session_worker(updated.id)
-          {:ok, Repo.preload(updated, [:messages])}
-
-        {:error, _changeset} ->
-          {:ok, session}
-      end
+      updated = persist_update(session, %{provider: provider, model: model})
+      restart_session_worker(updated.id)
+      {:ok, with_messages(updated)}
     end
   end
 
@@ -88,88 +86,97 @@ defmodule Synapsis.Sessions do
   def list_by_agent(agent_name, opts \\ []) do
     limit = Keyword.get(opts, :limit, 20)
 
-    query =
-      from(s in Session,
-        where: s.agent == ^agent_name,
-        order_by: [desc: s.updated_at],
-        limit: ^limit
-      )
+    sessions =
+      all_sessions()
+      |> Enum.filter(&(&1.agent == agent_name))
+      |> sort_recent()
+      |> Enum.take(limit)
 
-    {:ok, Repo.all(query)}
+    {:ok, sessions}
   end
 
   def count_by_agent_names(agent_names) when is_list(agent_names) do
-    from(s in Session,
-      where: s.agent in ^agent_names,
-      group_by: s.agent,
-      select: {s.agent, count(s.id)}
-    )
-    |> Repo.all()
-    |> Map.new()
+    all_sessions()
+    |> Enum.filter(&(&1.agent in agent_names))
+    |> Enum.frequencies_by(& &1.agent)
   end
 
   def recent(opts \\ []) do
     limit = Keyword.get(opts, :limit, 10)
     agent = Keyword.get(opts, :agent)
 
-    query =
-      from(s in Session,
-        order_by: [desc: s.updated_at],
-        limit: ^limit
-      )
-
-    query = if agent, do: where(query, [s], s.agent == ^agent), else: query
-
-    Repo.all(query)
+    all_sessions()
+    |> then(fn s -> if agent, do: Enum.filter(s, &(&1.agent == agent)), else: s end)
+    |> sort_recent()
+    |> Enum.take(limit)
   end
 
   def delete(session_id) do
-    # Delete from DB first, then stop the session process.
-    # Stopping the session first can disrupt pooled DB connections in test sandbox mode.
     result =
-      case Repo.get(Session, session_id) do
-        nil -> {:error, :not_found}
-        session -> Repo.delete(session)
+      case Store.get_meta(session_id) do
+        {:error, :not_found} ->
+          {:error, :not_found}
+
+        {:ok, _meta} ->
+          Store.delete_session(session_id)
+          {:ok, session_id}
       end
 
     Synapsis.Session.DynamicSupervisor.stop_session(session_id)
-
-    if Code.ensure_loaded?(SynapsisServer.DebugStore) and
-         Process.whereis(SynapsisServer.DebugStore) != nil do
-      SynapsisServer.DebugStore.clear_entries(session_id)
-    end
-
+    clear_debug_entries(session_id)
     result
   end
 
   def update_title(session_id, title) when is_binary(title) do
-    case Repo.get(Session, session_id) do
-      nil -> {:error, :not_found}
-      session -> session |> Ecto.Changeset.change(title: title) |> Repo.update()
-    end
+    update_meta_field(session_id, %{title: title})
   end
 
   def update_debug(session_id, enabled) when is_boolean(enabled) do
-    case Repo.get(Session, session_id) do
-      nil ->
-        {:error, :not_found}
+    case update_meta_field(session_id, %{debug: enabled}) do
+      {:ok, _session} = ok ->
+        unless enabled, do: clear_debug_entries(session_id)
+        ok
 
-      session ->
-        session
-        |> Ecto.Changeset.change(debug: enabled)
-        |> Repo.update()
-        |> tap(fn
-          {:ok, _} ->
-            unless enabled do
-              if Code.ensure_loaded?(SynapsisServer.DebugStore) and
-                   Process.whereis(SynapsisServer.DebugStore) != nil do
-                SynapsisServer.DebugStore.clear_entries(session_id)
-              end
-            end
+      other ->
+        other
+    end
+  end
 
-          _ ->
-            :ok
-        end)
+  # ── Concord-backed helpers ─────────────────────────────────────────────────
+
+  defp all_sessions do
+    case Store.list_metas() do
+      {:ok, metas} -> Enum.map(metas, &Session.from_meta/1)
+      _ -> []
+    end
+  end
+
+  defp sort_recent(sessions) do
+    Enum.sort_by(sessions, & &1.updated_at, fn a, b ->
+      DateTime.compare(a || ~U[1970-01-01 00:00:00Z], b || ~U[1970-01-01 00:00:00Z]) != :lt
+    end)
+  end
+
+  defp with_messages(%Session{} = session),
+    do: %{session | messages: Message.list_by_session(session.id)}
+
+  defp persist_update(%Session{} = session, attrs) do
+    updated = session |> Map.merge(Map.new(attrs)) |> Map.put(:updated_at, DateTime.utc_now())
+    Store.put_meta(updated.id, Session.to_meta(updated))
+    updated
+  end
+
+  defp update_meta_field(session_id, attrs) do
+    case Store.get_meta(session_id) do
+      {:ok, meta} -> {:ok, with_messages(persist_update(Session.from_meta(meta), attrs))}
+      {:error, :not_found} -> {:error, :not_found}
+    end
+  end
+
+  defp clear_debug_entries(session_id) do
+    if Code.ensure_loaded?(SynapsisServer.DebugStore) and
+         Process.whereis(SynapsisServer.DebugStore) != nil do
+      SynapsisServer.DebugStore.clear_entries(session_id)
     end
   end
 
@@ -247,21 +254,12 @@ defmodule Synapsis.Sessions do
   end
 
   def get_messages(session_id, opts \\ []) do
-    limit = Keyword.get(opts, :limit)
+    messages = Message.list_by_session(session_id)
 
-    query =
-      Message
-      |> where([m], m.session_id == ^session_id)
-      |> order_by([m], asc: m.inserted_at)
-
-    query =
-      if limit do
-        query |> limit(^limit)
-      else
-        query
-      end
-
-    Repo.all(query)
+    case Keyword.get(opts, :limit) do
+      nil -> messages
+      limit -> Enum.take(messages, limit)
+    end
   end
 
   def fork(session_id, opts \\ []) do

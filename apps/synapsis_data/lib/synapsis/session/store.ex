@@ -86,6 +86,20 @@ defmodule Synapsis.Session.Store do
     end
   end
 
+  @doc "List every session's metadata snapshot (scans all `sessions/*/meta` keys)."
+  def list_metas do
+    case Concord.prefix_scan("sessions/") do
+      {:ok, pairs} ->
+        metas =
+          for {key, value} <- pairs, String.ends_with?(key, "/meta"), do: value
+
+        {:ok, metas}
+
+      other ->
+        normalize_error(other)
+    end
+  end
+
   @doc "Read a session's metadata snapshot."
   def get_meta(id) when is_binary(id) do
     case Concord.get(meta_key(id)) do

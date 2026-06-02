@@ -18,19 +18,19 @@ defmodule Synapsis.Session.Snapshot do
   require Logger
 
   alias Synapsis.Session.Store
-  alias Synapsis.{Repo, Session, Message}
+  alias Synapsis.{Session, Message}
 
-  @doc "Build the durable `meta` snapshot for a session."
+  @doc """
+  Build the durable `meta` snapshot for a session.
+
+  Carries the full session fields (so `Sessions.from_meta/1` can reconstruct a
+  `%Session{}`) plus the turn count and a snapshot timestamp.
+  """
   def build_meta(%Session{} = session, turn_count) when is_integer(turn_count) do
-    %{
-      status: session.status,
-      agent: session.agent,
-      provider: session.provider,
-      model: session.model,
-      title: session.title,
+    Session.to_meta(session, %{
       turn_count: turn_count,
       snapshotted_at: DateTime.to_iso8601(DateTime.utc_now())
-    }
+    })
   end
 
   @doc """
@@ -39,13 +39,13 @@ defmodule Synapsis.Session.Snapshot do
   overwrites in place). Returns `:ok` or `{:error, reason}`.
   """
   def snapshot_session(session_id) when is_binary(session_id) do
-    case Repo.get(Session, session_id) do
-      nil ->
+    case Store.get_meta(session_id) do
+      {:error, :not_found} ->
         {:error, :session_not_found}
 
-      %Session{} = session ->
+      {:ok, meta} ->
         messages = Message.list_by_session(session_id)
-        meta = build_meta(session, length(messages))
+        meta = Map.put(meta, :turn_count, length(messages))
         write_turns(session_id, messages, meta)
     end
   end
