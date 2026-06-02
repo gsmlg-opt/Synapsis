@@ -28,11 +28,8 @@ defmodule Synapsis.ToolApprovalTest do
       refute changeset.valid?
     end
 
-    test "inserts valid approval" do
-      {:ok, approval} =
-        %ToolApproval{}
-        |> ToolApproval.changeset(@valid_attrs)
-        |> Repo.insert()
+    test "creates a valid approval" do
+      {:ok, approval} = ToolApproval.create(@valid_attrs)
 
       assert approval.pattern == "file_read"
       assert approval.policy == :allow

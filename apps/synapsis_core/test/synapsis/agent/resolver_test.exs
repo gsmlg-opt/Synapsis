@@ -2,13 +2,12 @@ defmodule Synapsis.Agent.ResolverTest do
   use ExUnit.Case, async: false
 
   alias Synapsis.Agent.Resolver
-  alias Synapsis.{AgentConfig, AgentConfigs, AgentSkills, Repo, Skills, Toolsets}
+  alias Synapsis.{AgentConfigs, AgentSkills, Config.Store, Skills, Toolsets}
 
   setup do
-    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
-
-    # Clean up any existing agent_configs for isolation
-    Repo.delete_all(AgentConfig)
+    Synapsis.Session.Store.ensure_started()
+    # ADR-006 C4: clean up any existing agent configs (Config.Store) for isolation.
+    Enum.each(Store.list(:agent), &Store.delete(:agent, &1["id"]))
     :ok
   end
 
@@ -377,18 +376,7 @@ defmodule Synapsis.Agent.ResolverTest do
       assert AgentConfigs.get_by_name("main").is_default
     end
 
-    test "create and update keep main as the only default agent" do
-      {:ok, other_default} = AgentConfigs.create(%{name: "other-default", is_default: true})
-      refute Repo.get!(AgentConfig, other_default.id).is_default
-
-      {:ok, main} = AgentConfigs.create(%{name: "main", is_default: false})
-      assert Repo.get!(AgentConfig, main.id).is_default
-
-      {:ok, other} = AgentConfigs.create(%{name: "other"})
-      {:ok, _other} = AgentConfigs.update(other, %{is_default: true})
-
-      refute Repo.get!(AgentConfig, other.id).is_default
-      assert Repo.get!(AgentConfig, main.id).is_default
-    end
+    # ADR-006 C4: the Postgres-era "only main is default" normalization invariant
+    # is not reimplemented on Config.Store; test removed with the behavior.
   end
 end
