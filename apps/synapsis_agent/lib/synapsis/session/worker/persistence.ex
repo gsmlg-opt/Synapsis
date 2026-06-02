@@ -40,7 +40,7 @@ defmodule Synapsis.Session.Worker.Persistence do
       session -> session |> Session.status_changeset(status) |> Repo.update()
     end
   rescue
-    e in [Ecto.QueryError, DBConnection.ConnectionError, DBConnection.OwnershipError] ->
+    e in [Ecto.QueryError] ->
       Logger.warning("update_session_status_failed",
         session_id: session_id,
         error: Exception.message(e)

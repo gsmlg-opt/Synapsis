@@ -331,8 +331,8 @@ defmodule Synapsis.Session.Worker.IOHandler do
   defp detach_debug(handler_id), do: Synapsis.Session.DebugTelemetry.detach(handler_id)
 
   defp session_debug_enabled?(session_id) do
-    case Synapsis.Repo.get(Synapsis.Session, session_id) do
-      %{debug: true} -> true
+    case Synapsis.Session.Store.get_meta(session_id) do
+      {:ok, %{debug: true}} -> true
       _ -> false
     end
   end

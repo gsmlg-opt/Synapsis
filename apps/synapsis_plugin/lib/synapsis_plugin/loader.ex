@@ -23,7 +23,7 @@ defmodule SynapsisPlugin.Loader do
 
       :ok
     rescue
-      e in [RuntimeError, Ecto.QueryError, DBConnection.ConnectionError] ->
+      e in [RuntimeError, Ecto.QueryError] ->
         Logger.warning("plugin_loader_error", error: Exception.message(e))
         :ok
     end

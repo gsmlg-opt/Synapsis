@@ -162,7 +162,7 @@ defmodule Synapsis.Agent.ResponseFlusher do
 
     {:ok, repaired}
   rescue
-    e in [Ecto.QueryError, Ecto.StaleEntryError, DBConnection.ConnectionError] ->
+    e in [Ecto.QueryError, Ecto.StaleEntryError] ->
       Logger.warning("ensure_tool_results_failed",
         session_id: session_id,
         error: Exception.message(e)
@@ -202,7 +202,7 @@ defmodule Synapsis.Agent.ResponseFlusher do
       end
     end)
   rescue
-    e in [Ecto.QueryError, Ecto.StaleEntryError, DBConnection.ConnectionError] ->
+    e in [Ecto.QueryError, Ecto.StaleEntryError] ->
       Logger.warning("update_tool_use_status_failed",
         session_id: session_id,
         tool_use_id: tool_use_id,

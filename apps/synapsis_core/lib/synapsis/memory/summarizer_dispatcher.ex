@@ -8,9 +8,8 @@ defmodule Synapsis.Memory.SummarizerDispatcher do
   """
 
   require Logger
-  import Ecto.Query
 
-  alias Synapsis.Repo
+  alias Synapsis.{Message, Session}
 
   @event_threshold 10
   @summarizer_system_prompt Synapsis.Memory.Prompts.summarizer_system_prompt()
@@ -76,51 +75,24 @@ defmodule Synapsis.Memory.SummarizerDispatcher do
   # --- Private ---
 
   defp load_session(session_id) do
-    case Repo.get(Synapsis.Session, session_id) do
-      nil -> {:error, "session not found"}
-      session -> {:ok, session}
+    case Synapsis.Session.Store.get_meta(session_id) do
+      {:error, :not_found} -> {:error, "session not found"}
+      {:ok, meta} -> {:ok, Session.from_meta(meta)}
     end
   end
 
   defp check_threshold(_session_id, true), do: :ok
 
   defp check_threshold(session_id, _force) do
-    event_count =
-      from(e in Synapsis.MemoryEvent,
-        where: e.correlation_id == ^session_id,
-        select: count()
-      )
-      |> Repo.one()
+    # ADR-006 C4: memory_events removed — gate on durable message count instead.
+    count = length(Message.list_by_session(session_id))
 
-    last_summary =
-      from(e in Synapsis.MemoryEvent,
-        where: e.correlation_id == ^session_id and e.type == "summary_created",
-        order_by: [desc: e.inserted_at],
-        limit: 1
-      )
-      |> Repo.one()
-
-    events_since =
-      if last_summary do
-        from(e in Synapsis.MemoryEvent,
-          where: e.correlation_id == ^session_id and e.inserted_at > ^last_summary.inserted_at,
-          select: count()
-        )
-        |> Repo.one()
-      else
-        event_count
-      end
-
-    if events_since >= @event_threshold,
+    if count >= @event_threshold,
       do: :ok,
-      else:
-        {:skip, "only #{events_since} events since last summary (threshold: #{@event_threshold})"}
+      else: {:skip, "only #{count} messages (threshold: #{@event_threshold})"}
   end
 
-  defp load_messages(session_id) do
-    from(m in Synapsis.Message, where: m.session_id == ^session_id, order_by: m.inserted_at)
-    |> Repo.all()
-  end
+  defp load_messages(session_id), do: Message.list_by_session(session_id)
 
   defp compress_messages(messages) do
     messages

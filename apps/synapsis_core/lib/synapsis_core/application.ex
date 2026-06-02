@@ -38,7 +38,7 @@ defmodule SynapsisCore.Application do
         try do
           Synapsis.Providers.load_all_into_registry()
         rescue
-          e in [RuntimeError, Ecto.QueryError, DBConnection.ConnectionError] ->
+          e in [RuntimeError, Ecto.QueryError] ->
             Logger.warning("provider_registry_load_failed", error: Exception.message(e))
         end
 
@@ -87,7 +87,7 @@ defmodule SynapsisCore.Application do
     try do
       Synapsis.AgentConfigs.seed_defaults()
     rescue
-      e in [RuntimeError, Ecto.QueryError, DBConnection.ConnectionError] ->
+      e in [RuntimeError, Ecto.QueryError] ->
         Logger.warning("agent_config_seed_failed", error: Exception.message(e))
     end
   end
@@ -95,7 +95,7 @@ defmodule SynapsisCore.Application do
   defp seed_heartbeat_templates do
     maybe_apply(Synapsis.Agent.Heartbeat.Templates, :seed_defaults, [])
   rescue
-    e in [RuntimeError, Ecto.QueryError, DBConnection.ConnectionError] ->
+    e in [RuntimeError, Ecto.QueryError] ->
       Logger.warning("heartbeat_seed_failed", error: Exception.message(e))
   end
 
