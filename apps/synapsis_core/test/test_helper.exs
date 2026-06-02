@@ -1,5 +1,4 @@
 ExUnit.start()
-Ecto.Adapters.SQL.Sandbox.mode(Synapsis.Repo, :manual)
 
 # Start registries that were moved to SynapsisAgent.Application.
 # These are needed for Worker/Session tests in synapsis_core.

@@ -1,10 +1,5 @@
-# Start the Repo for standalone test runs (synapsis_data is a library app,
-# so the Repo isn't started by an application supervisor).
-# When running as part of the umbrella, the Repo may already be started.
-case Synapsis.Repo.start_link(Synapsis.Repo.config()) do
-  {:ok, _} -> :ok
-  {:error, {:already_started, _}} -> :ok
-end
+# ADR-006 C4: no PostgreSQL. The embedded Concord store starts with the
+# :concord application; ensure it is ready before tests touch Session.Store.
+Synapsis.Session.Store.ensure_started()
 
 ExUnit.start()
-Ecto.Adapters.SQL.Sandbox.mode(Synapsis.Repo, :manual)

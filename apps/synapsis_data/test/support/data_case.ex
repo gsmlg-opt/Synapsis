@@ -4,22 +4,22 @@ defmodule Synapsis.DataCase do
 
   using do
     quote do
-      alias Synapsis.Repo
-      import Ecto
       import Ecto.Changeset
-      import Ecto.Query
       import Synapsis.DataCase
     end
   end
 
+  # ADR-006 C4: no Ecto sandbox — the embedded Concord store is node-local; tests
+  # isolate via unique ids rather than per-test DB transactions.
   setup tags do
-    Synapsis.DataCase.setup_sandbox(tags)
+    setup_sandbox(tags)
     :ok
   end
 
-  def setup_sandbox(tags) do
-    pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Synapsis.Repo, shared: not tags[:async])
-    on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
+  @doc "Kept for ConnCase/ChannelCase compatibility — ensures the store is up."
+  def setup_sandbox(_tags) do
+    Synapsis.Session.Store.ensure_started()
+    :ok
   end
 
   def errors_on(changeset) do
