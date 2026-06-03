@@ -1,13 +1,15 @@
 defmodule SynapsisWeb.AgentLive.ToolsetsTest do
   use SynapsisWeb.ConnCase
 
-  alias Synapsis.{PluginConfig, Repo, Toolset, Toolsets}
+  alias Synapsis.{PluginConfigs, Toolsets}
 
   setup do
-    Repo.delete_all(PluginConfig)
-    Repo.delete_all(Toolset)
+    Synapsis.DataCase.clear_config_store(:plugin)
+    Synapsis.DataCase.clear_config_store(:toolset)
     :ok
   end
+
+  defp toolset_by_name(name), do: Enum.find(Toolsets.list(), &(&1.name == name))
 
   describe "toolsets routes" do
     test "lists toolsets and available tools", %{conn: conn} do
@@ -35,7 +37,7 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
       })
       |> render_submit()
 
-      toolset = Repo.get_by!(Toolset, name: "research-tools")
+      toolset = toolset_by_name("research-tools")
       assert toolset.tool_names == ["file_read", "grep"]
       assert_redirect(view, ~p"/agent/tools")
     end
@@ -88,13 +90,12 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
     end
 
     test "selects MCP source tools from configured servers", %{conn: conn} do
-      Repo.insert!(
-        PluginConfig.changeset(%PluginConfig{}, %{
-          name: "demo",
-          type: "mcp",
-          transport: "stdio"
-        })
-      )
+      PluginConfigs.create(%{
+        name: "demo",
+        type: "mcp",
+        transport: "stdio"
+      })
+      |> elem(1)
 
       Synapsis.Tool.Registry.register_process("mcp:demo:search_docs", self(),
         description: "Search docs",
@@ -134,7 +135,7 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
       })
       |> render_submit()
 
-      toolset = Repo.get_by!(Toolset, name: "demo-mcp")
+      toolset = toolset_by_name("demo-mcp")
       assert toolset.tool_names == ["mcp:demo:search_docs"]
     end
 
@@ -162,13 +163,12 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
     test "shows empty MCP source when the configured server has no registered tools", %{
       conn: conn
     } do
-      Repo.insert!(
-        PluginConfig.changeset(%PluginConfig{}, %{
-          name: "empty",
-          type: "mcp",
-          transport: "stdio"
-        })
-      )
+      PluginConfigs.create(%{
+        name: "empty",
+        type: "mcp",
+        transport: "stdio"
+      })
+      |> elem(1)
 
       {:ok, view, _html} = live(conn, ~p"/agent/tools/new")
 
@@ -225,7 +225,7 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
       |> element(~s(el-dm-button[phx-click="delete_toolset"][phx-value-id="#{toolset.id}"]))
       |> render_click()
 
-      refute Repo.get(Toolset, toolset.id)
+      refute Toolsets.get(toolset.id)
     end
   end
 end

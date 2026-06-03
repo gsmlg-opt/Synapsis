@@ -1,12 +1,16 @@
 defmodule SynapsisWeb.LSPLive.IndexTest do
   use SynapsisWeb.ConnCase
 
-  alias Synapsis.{Repo, PluginConfig}
+  alias Synapsis.PluginConfigs
+
+  setup do
+    Synapsis.DataCase.clear_config_store(:plugin)
+    :ok
+  end
 
   defp create_lsp_config(attrs) do
-    %PluginConfig{}
-    |> PluginConfig.changeset(Map.merge(%{type: "lsp"}, attrs))
-    |> Repo.insert!()
+    {:ok, config} = PluginConfigs.create(Map.merge(%{type: "lsp"}, attrs))
+    config
   end
 
   describe "LSP servers page" do
@@ -61,7 +65,7 @@ defmodule SynapsisWeb.LSPLive.IndexTest do
       |> element(~s(el-dm-button[phx-click="enable_builtin"][phx-value-name="gopls"]))
       |> render_click()
 
-      assert Repo.get_by(PluginConfig, name: "gopls", type: "lsp")
+      assert PluginConfigs.get_by_name_type("gopls", "lsp")
     end
 
     test "enabled built-in shows Disable button and Edit link", %{conn: conn} do
@@ -86,7 +90,7 @@ defmodule SynapsisWeb.LSPLive.IndexTest do
       |> element(~s(el-dm-button[phx-click="disable_builtin"][phx-value-name="gopls"]))
       |> render_click()
 
-      refute Repo.get_by(PluginConfig, name: "gopls", type: "lsp")
+      refute PluginConfigs.get_by_name_type("gopls", "lsp")
     end
 
     test "toggle_auto_start flips the auto_start flag", %{conn: conn} do
@@ -98,7 +102,7 @@ defmodule SynapsisWeb.LSPLive.IndexTest do
       |> element(~s(input[phx-click="toggle_auto_start"][phx-value-id="#{config.id}"]))
       |> render_click()
 
-      updated = Repo.get!(PluginConfig, config.id)
+      updated = PluginConfigs.get(config.id)
       assert updated.auto_start == true
     end
 
@@ -131,7 +135,7 @@ defmodule SynapsisWeb.LSPLive.IndexTest do
 
       flash = assert_redirect(view, "/settings/lsp")
       assert flash["info"] == "Custom LSP server added"
-      assert Repo.get_by(PluginConfig, name: "my-lsp", type: "lsp")
+      assert PluginConfigs.get_by_name_type("my-lsp", "lsp")
     end
 
     test "custom LSP appears in Custom section", %{conn: conn} do
@@ -151,7 +155,7 @@ defmodule SynapsisWeb.LSPLive.IndexTest do
       |> element(~s(el-dm-button[phx-click="delete_config"][phx-value-id="#{config.id}"]))
       |> render_click()
 
-      refute Repo.get(PluginConfig, config.id)
+      refute PluginConfigs.get(config.id)
     end
 
     test "delete_config with nonexistent id does not crash", %{conn: conn} do
@@ -176,7 +180,7 @@ defmodule SynapsisWeb.LSPLive.IndexTest do
         |> render_submit()
 
       assert html =~ "Imported 1 LSP server"
-      assert Repo.get_by(PluginConfig, name: "my-lang", type: "lsp")
+      assert PluginConfigs.get_by_name_type("my-lang", "lsp")
     end
 
     test "import_json skips already configured servers", %{conn: conn} do

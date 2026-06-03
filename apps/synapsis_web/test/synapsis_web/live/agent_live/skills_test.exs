@@ -1,13 +1,14 @@
 defmodule SynapsisWeb.AgentLive.SkillsTest do
   use SynapsisWeb.ConnCase
 
-  alias Synapsis.{AgentConfigs, AgentSkills, Repo, Skill, Skills}
+  alias Synapsis.{AgentConfigs, AgentSkills, Skills}
 
   setup do
-    Repo.delete_all(Synapsis.AgentConfig)
-    Repo.delete_all(Skill)
+    Synapsis.DataCase.clear_config_store(:skill)
     :ok
   end
+
+  defp skill_by_name(name), do: Enum.find(Skills.list(), &(&1.name == name))
 
   describe "skills routes" do
     test "lists skills inside the Agent module shell", %{conn: conn} do
@@ -38,7 +39,7 @@ defmodule SynapsisWeb.AgentLive.SkillsTest do
       })
       |> render_submit()
 
-      skill = Repo.get_by!(Skill, name: "writing-style")
+      skill = skill_by_name("writing-style")
       assert AgentSkills.list_agent_ids(skill.id) == [agent.id]
       assert_redirect(view, ~p"/agent/skills")
     end
@@ -61,7 +62,7 @@ defmodule SynapsisWeb.AgentLive.SkillsTest do
       })
       |> render_submit()
 
-      updated = Repo.get!(Skill, skill.id)
+      updated = Skills.get(skill.id)
       assert updated.system_prompt_fragment == "Review risks first."
       assert AgentSkills.list_agent_ids(skill.id) == [agent.id]
       assert_redirect(view, ~p"/agent/skills")
@@ -76,7 +77,7 @@ defmodule SynapsisWeb.AgentLive.SkillsTest do
       |> element(~s(el-dm-button[phx-click="delete_skill"][phx-value-id="#{skill.id}"]))
       |> render_click()
 
-      refute Repo.get(Skill, skill.id)
+      refute Skills.get(skill.id)
     end
   end
 end
