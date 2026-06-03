@@ -68,13 +68,14 @@ defmodule Synapsis.Workspace.FileDocuments do
     |> Enum.filter(&File.regular?/1)
     |> Enum.reject(&String.starts_with?(&1, meta_prefix))
     |> Enum.map(fn abs_path ->
-      rel = Path.relative_to(abs_path, workspace_root)
-      meta = read_meta(workspace_root, rel)
+      # Normalize to the leading-slash path so meta lookup and id match put/get.
+      path = "/" <> Path.relative_to(abs_path, workspace_root)
+      meta = read_meta(workspace_root, path)
 
       Map.merge(meta, %{
-        id: meta[:id] || path_id(rel),
-        path: rel,
-        content_format: meta[:content_format] || infer_format(rel)
+        id: meta[:id] || path_id(path),
+        path: path,
+        content_format: meta[:content_format] || infer_format(path)
       })
     end)
   end

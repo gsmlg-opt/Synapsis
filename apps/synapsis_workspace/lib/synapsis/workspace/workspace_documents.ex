@@ -28,7 +28,11 @@ defmodule Synapsis.WorkspaceDocuments do
   end
 
   def get(id) do
-    Enum.find(all_docs(), &(&1.id == id))
+    # all_docs/0 (list-backed) carries metadata only; reload via path for content.
+    case Enum.find(all_docs(), &(&1.id == id)) do
+      nil -> nil
+      doc -> get_by_path(doc.path) || doc
+    end
   end
 
   def list_by_prefix(prefix, opts \\ []) do
