@@ -118,14 +118,29 @@ defmodule Synapsis.Message do
   defp encode_part(%Synapsis.Part.Text{content: content}),
     do: %{type: "text", text: content || ""}
 
-  defp encode_part(%Synapsis.Part.ToolUse{tool: name, tool_use_id: id, input: input}),
-    do: %{type: "tool_use", id: id, name: name, input: input || %{}}
+  defp encode_part(%Synapsis.Part.ToolUse{} = p),
+    do: %{
+      type: "tool_use",
+      id: p.tool_use_id,
+      name: p.tool,
+      input: p.input || %{},
+      status: to_string(p.status || :pending)
+    }
 
   defp encode_part(%Synapsis.Part.ToolResult{tool_use_id: id, content: content, is_error: err}),
     do: %{type: "tool_result", tool_use_id: id, content: content || "", is_error: err || false}
 
-  defp encode_part(%Synapsis.Part.Image{media_type: mt}),
-    do: %{type: "image", media_type: mt}
+  defp encode_part(%Synapsis.Part.Reasoning{content: content, signature: sig}),
+    do: %{type: "reasoning", content: content || "", signature: sig}
+
+  defp encode_part(%Synapsis.Part.Agent{agent: agent, message: message}),
+    do: %{type: "agent", agent: agent, message: message}
+
+  defp encode_part(%Synapsis.Part.File{path: path, content: content}),
+    do: %{type: "file", path: path, content: content}
+
+  defp encode_part(%Synapsis.Part.Image{media_type: mt, data: data, path: path}),
+    do: %{type: "image", media_type: mt, data: data, path: path}
 
   defp encode_part(other), do: %{type: "unknown", raw: inspect(other)}
 
@@ -146,7 +161,8 @@ defmodule Synapsis.Message do
     do: %Synapsis.Part.ToolUse{
       tool: fetch(p, :name),
       tool_use_id: fetch(p, :id),
-      input: fetch(p, :input) || %{}
+      input: fetch(p, :input) || %{},
+      status: decode_status(fetch(p, :status))
     }
 
   defp decode_part(%{type: "tool_result"} = p),
@@ -156,10 +172,35 @@ defmodule Synapsis.Message do
       is_error: fetch(p, :is_error) || false
     }
 
+  defp decode_part(%{type: "reasoning"} = p),
+    do: %Synapsis.Part.Reasoning{
+      content: fetch(p, :content) || fetch(p, :text) || "",
+      signature: fetch(p, :signature)
+    }
+
+  defp decode_part(%{type: "agent"} = p),
+    do: %Synapsis.Part.Agent{agent: fetch(p, :agent), message: fetch(p, :message)}
+
+  defp decode_part(%{type: "file"} = p),
+    do: %Synapsis.Part.File{path: fetch(p, :path), content: fetch(p, :content)}
+
   defp decode_part(%{type: "image"} = p),
-    do: %Synapsis.Part.Image{media_type: fetch(p, :media_type)}
+    do: %Synapsis.Part.Image{
+      media_type: fetch(p, :media_type),
+      data: fetch(p, :data),
+      path: fetch(p, :path)
+    }
 
   defp decode_part(_other), do: %Synapsis.Part.Text{content: ""}
+
+  defp decode_status(nil), do: :pending
+  defp decode_status(s) when is_atom(s), do: s
+
+  defp decode_status(s) when is_binary(s) do
+    String.to_existing_atom(s)
+  rescue
+    ArgumentError -> :pending
+  end
 
   # Concord round-trips atom-keyed maps, but tolerate string keys defensively.
   defp fetch(map, key) when is_atom(key) do

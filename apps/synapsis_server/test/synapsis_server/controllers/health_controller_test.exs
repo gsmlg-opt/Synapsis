@@ -9,7 +9,7 @@ defmodule SynapsisServer.HealthControllerTest do
 
       assert %{
                "ok" => ok,
-               "repo" => "ok",
+               "store" => "ok",
                "pubsub" => "ok",
                "scheduler" => _,
                "tool_registry" => _,
