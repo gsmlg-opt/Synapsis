@@ -166,6 +166,7 @@ defmodule Synapsis.AgentConfigs do
       "is_default" => r.is_default,
       "enabled" => r.enabled,
       "config" => Jason.encode!(r.config || %{}),
+      "toolset_id" => r.toolset_id,
       "toolset_ids" => r.toolset_ids || []
     }
     |> Enum.reject(fn {_k, v} -> is_nil(v) end)
