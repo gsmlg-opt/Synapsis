@@ -95,7 +95,8 @@ defmodule Synapsis.Workspace do
       case Resources.upsert(path, content_body, opts) do
         {:ok, doc} ->
           doc = if blob_ref, do: %{doc | blob_ref: blob_ref}, else: doc
-          resource = Resource.from_document(doc)
+          # Load blob content (as read/2 does) so the returned resource carries body.
+          resource = doc |> maybe_load_blob() |> Resource.from_document()
           action = if is_new, do: :created, else: :updated
           broadcast_change(path, action, doc.id, doc.agent_id)
           {:ok, resource}

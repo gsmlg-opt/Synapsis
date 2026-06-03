@@ -66,6 +66,8 @@ defmodule Synapsis.WorkspaceDocuments do
     q = String.downcase(query_text)
 
     all_docs()
+    # all_docs/0 is metadata-only; load content per doc before substring matching.
+    |> Enum.map(&(get_by_path(&1.path) || &1))
     |> Enum.filter(&String.contains?(String.downcase(&1.content_body || ""), q))
   end
 
