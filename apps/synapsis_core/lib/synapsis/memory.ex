@@ -32,12 +32,12 @@ defmodule Synapsis.Memory do
   def touch_accessed([]), do: :ok
   def touch_accessed(ids) when is_list(ids), do: Adapter.active().touch_accessed(ids)
 
-  # ── events / checkpoints (removed in C4 — inert) ────────────────────────────
+  # ── events (node-local ETS log) / checkpoints (in Concord) ──────────────────
 
-  @doc "No-op: memory_events removed in C4 (use telemetry for observability)."
-  def append_event(attrs), do: {:ok, attrs}
-  def list_events(_filters \\ []), do: []
-  def count_events(_filters \\ []), do: 0
+  @doc "Append a memory event (task/run/tool lifecycle) to the node-local event log."
+  def append_event(attrs), do: Synapsis.Memory.EventLog.append(attrs)
+  def list_events(filters \\ []), do: Synapsis.Memory.EventLog.list(filters)
+  def count_events(filters \\ []), do: Synapsis.Memory.EventLog.count(filters)
 
   @doc "No-op: memory_checkpoints removed in C4 (session snapshot is in Concord)."
   def write_checkpoint(attrs), do: {:ok, attrs}

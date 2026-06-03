@@ -17,7 +17,8 @@ defmodule Synapsis.Memory.Supervisor do
         []
       end
 
-    children = adapter_child ++ [Synapsis.Memory.Cache, Synapsis.Memory.Writer]
+    children =
+      adapter_child ++ [Synapsis.Memory.EventLog, Synapsis.Memory.Cache, Synapsis.Memory.Writer]
 
     Supervisor.init(children, strategy: :one_for_one)
   end
