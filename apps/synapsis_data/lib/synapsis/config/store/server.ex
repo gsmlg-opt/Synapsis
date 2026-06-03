@@ -15,11 +15,13 @@ defmodule Synapsis.Config.Store.Server do
 
   # --- Public API (delegates from Store) ---
 
+  # Entries are stored atom-keyed in ETS; reads expose string-keyed maps to match
+  # how contexts (and the persisted TOML) address fields.
   @spec list(atom()) :: [map()]
   def list(type) do
     case :ets.info(table(type)) do
       :undefined -> []
-      _ -> :ets.tab2list(table(type)) |> Enum.map(fn {_id, entry} -> entry end)
+      _ -> :ets.tab2list(table(type)) |> Enum.map(fn {_id, entry} -> stringify_keys(entry) end)
     end
   end
 
@@ -31,7 +33,7 @@ defmodule Synapsis.Config.Store.Server do
 
       _ ->
         case :ets.lookup(table(type), id) do
-          [{^id, entry}] -> {:ok, entry}
+          [{^id, entry}] -> {:ok, stringify_keys(entry)}
           [] -> {:error, :not_found}
         end
     end

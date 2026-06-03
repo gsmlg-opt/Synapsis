@@ -50,38 +50,13 @@ defmodule Synapsis.HeartbeatConfigTest do
       assert Ecto.Changeset.get_field(changeset, :keep_history) == false
     end
 
-    test "inserts valid config" do
-      {:ok, config} =
-        %HeartbeatConfig{}
-        |> HeartbeatConfig.changeset(@valid_attrs)
-        |> Repo.insert()
+    test "creates valid config" do
+      name = "insert-test-#{System.unique_integer([:positive])}"
+      {:ok, config} = HeartbeatConfig.create(%{@valid_attrs | name: name})
 
-      assert config.name == "test-heartbeat"
+      assert config.name == name
       assert config.schedule == "30 7 * * 1-5"
       assert config.enabled == false
-    end
-
-    test "requires name uniqueness" do
-      %HeartbeatConfig{}
-      |> HeartbeatConfig.changeset(%{
-        @valid_attrs
-        | name: "unique-test-#{System.unique_integer([:positive])}"
-      })
-      |> Repo.insert!()
-
-      # Insert same name again
-      name = "dup-name-#{System.unique_integer([:positive])}"
-
-      %HeartbeatConfig{}
-      |> HeartbeatConfig.changeset(%{@valid_attrs | name: name})
-      |> Repo.insert!()
-
-      assert {:error, changeset} =
-               %HeartbeatConfig{}
-               |> HeartbeatConfig.changeset(%{@valid_attrs | name: name})
-               |> Repo.insert()
-
-      assert errors_on(changeset)[:name]
     end
   end
 
@@ -169,7 +144,7 @@ defmodule Synapsis.HeartbeatConfigTest do
     test "removes config from database" do
       name = "delete-test-#{System.unique_integer([:positive])}"
       {:ok, config} = HeartbeatConfig.create(%{@valid_attrs | name: name})
-      assert {:ok, _} = HeartbeatConfig.delete_config(config)
+      assert :ok = HeartbeatConfig.delete_config(config)
       assert HeartbeatConfig.get(config.id) == nil
     end
   end

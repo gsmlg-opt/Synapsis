@@ -54,33 +54,41 @@ defmodule Synapsis.ProviderConfigTest do
     end
 
     test "validates name format - allows hyphens and underscores" do
-      changeset = ProviderConfig.changeset(%ProviderConfig{}, %{@valid_attrs | name: "my-custom_provider1"})
+      changeset =
+        ProviderConfig.changeset(%ProviderConfig{}, %{@valid_attrs | name: "my-custom_provider1"})
+
       assert changeset.valid?
     end
 
     test "validates base_url must be HTTP(S)" do
-      changeset = ProviderConfig.changeset(%ProviderConfig{}, Map.put(@valid_attrs, :base_url, "ftp://bad.com"))
+      changeset =
+        ProviderConfig.changeset(
+          %ProviderConfig{},
+          Map.put(@valid_attrs, :base_url, "ftp://bad.com")
+        )
+
       refute changeset.valid?
       assert %{base_url: ["must be a valid HTTP or HTTPS URL"]} = errors_on(changeset)
     end
 
     test "accepts valid HTTPS base_url" do
-      changeset = ProviderConfig.changeset(%ProviderConfig{}, Map.put(@valid_attrs, :base_url, "https://api.example.com"))
+      changeset =
+        ProviderConfig.changeset(
+          %ProviderConfig{},
+          Map.put(@valid_attrs, :base_url, "https://api.example.com")
+        )
+
       assert changeset.valid?
     end
 
     test "accepts valid HTTP base_url" do
-      changeset = ProviderConfig.changeset(%ProviderConfig{}, Map.put(@valid_attrs, :base_url, "http://localhost:11434"))
+      changeset =
+        ProviderConfig.changeset(
+          %ProviderConfig{},
+          Map.put(@valid_attrs, :base_url, "http://localhost:11434")
+        )
+
       assert changeset.valid?
-    end
-
-    test "enforces unique name constraint" do
-      {:ok, _} = %ProviderConfig{} |> ProviderConfig.changeset(@valid_attrs) |> Repo.insert()
-
-      {:error, changeset} =
-        %ProviderConfig{} |> ProviderConfig.changeset(@valid_attrs) |> Repo.insert()
-
-      assert %{name: ["has already been taken"]} = errors_on(changeset)
     end
 
     test "config defaults to empty map" do
@@ -96,37 +104,23 @@ defmodule Synapsis.ProviderConfigTest do
 
   describe "update_changeset/2" do
     test "allows partial updates" do
-      {:ok, provider} = %ProviderConfig{} |> ProviderConfig.changeset(@valid_attrs) |> Repo.insert()
+      provider =
+        %ProviderConfig{}
+        |> ProviderConfig.changeset(@valid_attrs)
+        |> Ecto.Changeset.apply_changes()
 
       changeset = ProviderConfig.update_changeset(provider, %{enabled: false})
       assert changeset.valid?
     end
 
     test "validates type on update" do
-      {:ok, provider} = %ProviderConfig{} |> ProviderConfig.changeset(@valid_attrs) |> Repo.insert()
+      provider =
+        %ProviderConfig{}
+        |> ProviderConfig.changeset(@valid_attrs)
+        |> Ecto.Changeset.apply_changes()
 
       changeset = ProviderConfig.update_changeset(provider, %{type: "invalid"})
       refute changeset.valid?
-    end
-  end
-
-  describe "database round-trip with encryption" do
-    test "api_key is encrypted at rest and decrypted on load" do
-      {:ok, provider} =
-        %ProviderConfig{}
-        |> ProviderConfig.changeset(%{@valid_attrs | api_key_encrypted: "sk-secret-123"})
-        |> Repo.insert()
-
-      loaded = Repo.get!(ProviderConfig, provider.id)
-      assert loaded.api_key_encrypted == "sk-secret-123"
-    end
-
-    test "nil api_key round-trips correctly" do
-      attrs = Map.delete(@valid_attrs, :api_key_encrypted)
-      {:ok, provider} = %ProviderConfig{} |> ProviderConfig.changeset(attrs) |> Repo.insert()
-
-      loaded = Repo.get!(ProviderConfig, provider.id)
-      assert is_nil(loaded.api_key_encrypted)
     end
   end
 end

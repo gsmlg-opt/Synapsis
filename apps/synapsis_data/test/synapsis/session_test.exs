@@ -1,7 +1,8 @@
 defmodule Synapsis.SessionTest do
   use Synapsis.DataCase, async: true
 
-  alias Synapsis.{Repo, Session}
+  alias Synapsis.Session
+  alias Synapsis.Session.Store
 
   describe "changeset/2" do
     test "valid with required agent-owned fields" do
@@ -45,19 +46,21 @@ defmodule Synapsis.SessionTest do
     end
   end
 
-  describe "persistence" do
-    test "inserts and reads back an agent-owned session" do
-      {:ok, session} =
-        %Session{}
-        |> Session.changeset(%{
-          provider: "anthropic",
-          model: "claude-sonnet",
-          agent: "main",
-          title: "Agent session"
-        })
-        |> Repo.insert()
+  describe "Concord meta round-trip" do
+    test "writes and reads back an agent-owned session via the Session.Store" do
+      session = %Session{
+        id: Ecto.UUID.generate(),
+        provider: "anthropic",
+        model: "claude-sonnet",
+        agent: "main",
+        title: "Agent session",
+        status: "idle"
+      }
 
-      found = Repo.get!(Session, session.id)
+      :ok = Store.put_meta(session.id, Session.to_meta(session))
+
+      {:ok, meta} = Store.get_meta(session.id)
+      found = Session.from_meta(meta)
       assert found.agent == "main"
       assert found.title == "Agent session"
       assert found.status == "idle"

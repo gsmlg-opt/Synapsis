@@ -1,19 +1,12 @@
 defmodule Synapsis.FailedAttemptTest do
   use Synapsis.DataCase, async: true
 
-  alias Synapsis.{FailedAttempt, Repo}
+  alias Synapsis.FailedAttempt
 
+  # ADR-006 C4: FailedAttempt is an embedded_schema validated by changeset only;
+  # a session id is all these tests need.
   setup do
-    {:ok, session} =
-      %Synapsis.Session{}
-      |> Synapsis.Session.changeset(%{
-        agent: "main",
-        provider: "anthropic",
-        model: "claude-sonnet-4-20250514"
-      })
-      |> Repo.insert()
-
-    {:ok, session: session}
+    {:ok, session: %{id: Ecto.UUID.generate()}}
   end
 
   describe "changeset/2" do
@@ -52,9 +45,9 @@ defmodule Synapsis.FailedAttemptTest do
     end
   end
 
-  describe "persistence" do
-    test "inserts and reads back", %{session: session} do
-      {:ok, fa} =
+  describe "apply_changes" do
+    test "casts required and optional fields", %{session: session} do
+      fa =
         %FailedAttempt{}
         |> FailedAttempt.changeset(%{
           session_id: session.id,
@@ -63,25 +56,12 @@ defmodule Synapsis.FailedAttemptTest do
           error_message: "test fail",
           lesson: "don't do that"
         })
-        |> Repo.insert()
+        |> Ecto.Changeset.apply_changes()
 
-      assert fa.id
       assert fa.attempt_number == 1
       assert fa.tool_call_hash == "hash123"
       assert fa.lesson == "don't do that"
-
-      fetched = Repo.get(FailedAttempt, fa.id)
-      assert fetched.session_id == session.id
-    end
-
-    test "cascades on session delete", %{session: session} do
-      {:ok, fa} =
-        %FailedAttempt{}
-        |> FailedAttempt.changeset(%{session_id: session.id, attempt_number: 1})
-        |> Repo.insert()
-
-      Repo.delete(session)
-      assert Repo.get(FailedAttempt, fa.id) == nil
+      assert fa.session_id == session.id
     end
   end
 end

@@ -22,6 +22,26 @@ defmodule Synapsis.DataCase do
     :ok
   end
 
+  @doc """
+  Clear all rows of a `Config.Store` type's ETS table (test isolation for
+  Config.Store-backed contexts, which have no per-test transaction rollback).
+  """
+  def clear_config_store(type) do
+    table = :"synapsis_config_#{type}"
+    if :ets.info(table) != :undefined, do: :ets.delete_all_objects(table)
+    :ok
+  end
+
+  @doc "Delete every Concord key under a coordination prefix (test isolation)."
+  def clear_coord(prefix) when is_binary(prefix) do
+    case Concord.prefix_scan(prefix) do
+      {:ok, pairs} -> Concord.delete_many(Enum.map(pairs, fn {k, _} -> k end))
+      _ -> :ok
+    end
+
+    :ok
+  end
+
   def errors_on(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {message, opts} ->
       Regex.replace(~r"%{(\w+)}", message, fn _, key ->

@@ -1,15 +1,17 @@
 defmodule Synapsis.MessageTest do
   use Synapsis.DataCase
 
-  alias Synapsis.{Message, Session, Repo}
+  alias Synapsis.Message
 
+  # ADR-006 C4: Message is an embedded_schema; durable storage is Concord turns
+  # (see Synapsis.Session.Store). These tests cover changeset validation and the
+  # `{:array, Synapsis.Part}` casting via apply_changes (no Repo).
   setup do
-    {:ok, session} =
-      %Session{}
-      |> Session.changeset(%{provider: "test", model: "test", agent: "main"})
-      |> Repo.insert()
+    %{session: %{id: Ecto.UUID.generate()}}
+  end
 
-    %{session: session}
+  defp build(attrs) do
+    %Message{} |> Message.changeset(attrs) |> Ecto.Changeset.apply_changes()
   end
 
   describe "changeset/2" do
@@ -84,12 +86,17 @@ defmodule Synapsis.MessageTest do
 
   describe "token_count validation" do
     test "accepts zero token_count", %{session: session} do
-      cs = %Message{} |> Message.changeset(%{role: "user", session_id: session.id, token_count: 0})
+      cs =
+        %Message{} |> Message.changeset(%{role: "user", session_id: session.id, token_count: 0})
+
       assert cs.valid?
     end
 
     test "accepts positive token_count", %{session: session} do
-      cs = %Message{} |> Message.changeset(%{role: "user", session_id: session.id, token_count: 5000})
+      cs =
+        %Message{}
+        |> Message.changeset(%{role: "user", session_id: session.id, token_count: 5000})
+
       assert cs.valid?
     end
 
@@ -98,31 +105,20 @@ defmodule Synapsis.MessageTest do
       assert get_field(cs, :token_count) == 0
     end
 
-    test "persists token_count correctly", %{session: session} do
-      {:ok, msg} =
-        %Message{}
-        |> Message.changeset(%{role: "user", session_id: session.id, token_count: 42})
-        |> Repo.insert()
-
-      found = Repo.get!(Message, msg.id)
-      assert found.token_count == 42
+    test "casts token_count correctly", %{session: session} do
+      msg = build(%{role: "user", session_id: session.id, token_count: 42})
+      assert msg.token_count == 42
     end
   end
 
   describe "parts field with multiple part types" do
-    test "stores and retrieves text part", %{session: session} do
+    test "casts text part", %{session: session} do
       parts = [%{"type" => "text", "content" => "Hello world"}]
-
-      {:ok, msg} =
-        %Message{}
-        |> Message.changeset(%{role: "user", session_id: session.id, parts: parts})
-        |> Repo.insert()
-
-      found = Repo.get!(Message, msg.id)
-      assert [%Synapsis.Part.Text{content: "Hello world"}] = found.parts
+      msg = build(%{role: "user", session_id: session.id, parts: parts})
+      assert [%Synapsis.Part.Text{content: "Hello world"}] = msg.parts
     end
 
-    test "stores and retrieves tool_use part", %{session: session} do
+    test "casts tool_use part", %{session: session} do
       parts = [
         %{
           "type" => "tool_use",
@@ -133,16 +129,19 @@ defmodule Synapsis.MessageTest do
         }
       ]
 
-      {:ok, msg} =
-        %Message{}
-        |> Message.changeset(%{role: "assistant", session_id: session.id, parts: parts})
-        |> Repo.insert()
+      msg = build(%{role: "assistant", session_id: session.id, parts: parts})
 
-      found = Repo.get!(Message, msg.id)
-      assert [%Synapsis.Part.ToolUse{tool: "bash", tool_use_id: "tu_123", input: %{"command" => "ls -la"}, status: :pending}] = found.parts
+      assert [
+               %Synapsis.Part.ToolUse{
+                 tool: "bash",
+                 tool_use_id: "tu_123",
+                 input: %{"command" => "ls -la"},
+                 status: :pending
+               }
+             ] = msg.parts
     end
 
-    test "stores and retrieves tool_result part", %{session: session} do
+    test "casts tool_result part", %{session: session} do
       parts = [
         %{
           "type" => "tool_result",
@@ -152,28 +151,24 @@ defmodule Synapsis.MessageTest do
         }
       ]
 
-      {:ok, msg} =
-        %Message{}
-        |> Message.changeset(%{role: "user", session_id: session.id, parts: parts})
-        |> Repo.insert()
+      msg = build(%{role: "user", session_id: session.id, parts: parts})
 
-      found = Repo.get!(Message, msg.id)
-      assert [%Synapsis.Part.ToolResult{tool_use_id: "tu_123", content: "file1.ex\nfile2.ex", is_error: false}] = found.parts
+      assert [
+               %Synapsis.Part.ToolResult{
+                 tool_use_id: "tu_123",
+                 content: "file1.ex\nfile2.ex",
+                 is_error: false
+               }
+             ] = msg.parts
     end
 
-    test "stores and retrieves reasoning part", %{session: session} do
+    test "casts reasoning part", %{session: session} do
       parts = [%{"type" => "reasoning", "content" => "Let me think about this..."}]
-
-      {:ok, msg} =
-        %Message{}
-        |> Message.changeset(%{role: "assistant", session_id: session.id, parts: parts})
-        |> Repo.insert()
-
-      found = Repo.get!(Message, msg.id)
-      assert [%Synapsis.Part.Reasoning{content: "Let me think about this..."}] = found.parts
+      msg = build(%{role: "assistant", session_id: session.id, parts: parts})
+      assert [%Synapsis.Part.Reasoning{content: "Let me think about this..."}] = msg.parts
     end
 
-    test "stores and retrieves multiple mixed part types", %{session: session} do
+    test "casts multiple mixed part types", %{session: session} do
       parts = [
         %{"type" => "text", "content" => "I'll help with that."},
         %{
@@ -186,41 +181,26 @@ defmodule Synapsis.MessageTest do
         %{"type" => "reasoning", "content" => "The file contains..."}
       ]
 
-      {:ok, msg} =
-        %Message{}
-        |> Message.changeset(%{role: "assistant", session_id: session.id, parts: parts})
-        |> Repo.insert()
+      msg = build(%{role: "assistant", session_id: session.id, parts: parts})
 
-      found = Repo.get!(Message, msg.id)
-      assert length(found.parts) == 3
-      assert %Synapsis.Part.Text{content: "I'll help with that."} = Enum.at(found.parts, 0)
-      assert %Synapsis.Part.ToolUse{tool: "file_read"} = Enum.at(found.parts, 1)
-      assert %Synapsis.Part.Reasoning{content: "The file contains..."} = Enum.at(found.parts, 2)
+      assert length(msg.parts) == 3
+      assert %Synapsis.Part.Text{content: "I'll help with that."} = Enum.at(msg.parts, 0)
+      assert %Synapsis.Part.ToolUse{tool: "file_read"} = Enum.at(msg.parts, 1)
+      assert %Synapsis.Part.Reasoning{content: "The file contains..."} = Enum.at(msg.parts, 2)
     end
 
-    test "stores and retrieves agent part", %{session: session} do
+    test "casts agent part", %{session: session} do
       parts = [%{"type" => "agent", "agent" => "plan", "message" => "Switching to plan mode."}]
-
-      {:ok, msg} =
-        %Message{}
-        |> Message.changeset(%{role: "assistant", session_id: session.id, parts: parts})
-        |> Repo.insert()
-
-      found = Repo.get!(Message, msg.id)
-      assert [%Synapsis.Part.Agent{agent: "plan", message: "Switching to plan mode."}] = found.parts
+      msg = build(%{role: "assistant", session_id: session.id, parts: parts})
+      assert [%Synapsis.Part.Agent{agent: "plan", message: "Switching to plan mode."}] = msg.parts
     end
 
-    test "empty parts list persists correctly", %{session: session} do
-      {:ok, msg} =
-        %Message{}
-        |> Message.changeset(%{role: "user", session_id: session.id, parts: []})
-        |> Repo.insert()
-
-      found = Repo.get!(Message, msg.id)
-      assert found.parts == []
+    test "empty parts list casts correctly", %{session: session} do
+      msg = build(%{role: "user", session_id: session.id, parts: []})
+      assert msg.parts == []
     end
 
-    test "tool_result with is_error true round-trips", %{session: session} do
+    test "tool_result with is_error true casts", %{session: session} do
       parts = [
         %{
           "type" => "tool_result",
@@ -230,48 +210,23 @@ defmodule Synapsis.MessageTest do
         }
       ]
 
-      {:ok, msg} =
-        %Message{}
-        |> Message.changeset(%{role: "user", session_id: session.id, parts: parts})
-        |> Repo.insert()
-
-      found = Repo.get!(Message, msg.id)
-      assert [%Synapsis.Part.ToolResult{is_error: true, content: "Permission denied"}] = found.parts
+      msg = build(%{role: "user", session_id: session.id, parts: parts})
+      assert [%Synapsis.Part.ToolResult{is_error: true, content: "Permission denied"}] = msg.parts
     end
   end
 
-  describe "persistence" do
-    test "inserts and retrieves message", %{session: session} do
-      {:ok, msg} =
-        %Message{}
-        |> Message.changeset(%{role: "user", session_id: session.id, token_count: 10})
-        |> Repo.insert()
+  describe "Concord turn round-trip" do
+    test "append and list_by_session round-trips role and token_count", %{session: session} do
+      {:ok, _msg} = Message.append(session.id, %{role: "user", token_count: 10})
 
-      found = Repo.get!(Message, msg.id)
-      assert found.role == "user"
-      assert found.token_count == 10
+      assert [%Message{role: "user", token_count: 10, session_id: sid}] =
+               Message.list_by_session(session.id)
+
+      assert sid == session.id
     end
 
-    test "stores and retrieves parts", %{session: session} do
-      parts = [%{"type" => "text", "content" => "Hello"}]
-
-      {:ok, msg} =
-        %Message{}
-        |> Message.changeset(%{role: "user", session_id: session.id, parts: parts})
-        |> Repo.insert()
-
-      found = Repo.get!(Message, msg.id)
-      assert length(found.parts) == 1
-    end
-
-    test "preloads session association", %{session: session} do
-      {:ok, msg} =
-        %Message{}
-        |> Message.changeset(%{role: "assistant", session_id: session.id})
-        |> Repo.insert()
-
-      loaded = Repo.preload(msg, :session)
-      assert loaded.session.id == session.id
+    test "list_by_session is empty for an unknown session" do
+      assert Message.list_by_session(Ecto.UUID.generate()) == []
     end
   end
 end

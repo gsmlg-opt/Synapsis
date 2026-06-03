@@ -33,10 +33,11 @@ defmodule Synapsis.Toolsets do
 
   @doc "List configured MCP plugin sources ordered by name."
   def list_mcp_sources do
+    # Store.list/1 returns atom-keyed maps; build structs first, then filter by type.
     :plugin
     |> Store.list()
-    |> Enum.filter(&(&1["type"] == "mcp"))
     |> Enum.map(&plugin_to_struct/1)
+    |> Enum.filter(&(&1.type == "mcp"))
     |> Enum.sort_by(& &1.name)
   end
 

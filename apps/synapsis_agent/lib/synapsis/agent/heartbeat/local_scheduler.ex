@@ -107,7 +107,23 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
   # --- Private ---
 
   defp load_configs do
-    file_configs = ConfigStore.list(:heartbeat)
+    # Config.Store returns string-keyed maps; normalize to the atom-keyed shape
+    # the scheduler consumes (config.schedule, config.name, …).
+    file_configs =
+      :heartbeat
+      |> ConfigStore.list()
+      |> Enum.map(fn c ->
+        %{
+          id: c["id"],
+          name: c["name"],
+          schedule: c["schedule"],
+          enabled: c["enabled"],
+          prompt: c["prompt"] || "",
+          agent_name: c["agent_name"] || "main",
+          keep_history: c["keep_history"] || false,
+          notify_user: c["notify_user"] || false
+        }
+      end)
 
     configs =
       if file_configs != [] do
