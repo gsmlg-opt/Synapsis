@@ -67,21 +67,51 @@ defmodule Synapsis.Memory.Adapter do
 
   @doc "Store via the active adapter."
   @spec store(map()) :: {:ok, memory()} | {:error, term()}
-  def store(attrs), do: active().store(attrs)
+  def store(attrs), do: with_retry(fn -> active().store(attrs) end)
 
   @doc "Get via the active adapter."
   @spec get(String.t()) :: {:ok, memory()} | {:error, :not_found}
-  def get(id), do: active().get(id)
+  def get(id), do: with_retry(fn -> active().get(id) end)
 
   @doc "List via the active adapter."
   @spec list(keyword()) :: [memory()]
-  def list(filters \\ []), do: active().list(filters)
+  def list(filters \\ []), do: with_retry(fn -> active().list(filters) end)
 
   @doc "Update via the active adapter."
   @spec update(String.t(), map()) :: {:ok, memory()} | {:error, term()}
-  def update(id, attrs), do: active().update(id, attrs)
+  def update(id, attrs), do: with_retry(fn -> active().update(id, attrs) end)
 
   @doc "Archive via the active adapter."
   @spec archive(String.t()) :: :ok | {:error, term()}
-  def archive(id), do: active().archive(id)
+  def archive(id), do: with_retry(fn -> active().archive(id) end)
+
+  # The adapter is a supervised singleton; if it is momentarily down, revive it
+  # and retry rather than surfacing a `:noproc` exit to callers.
+  defp with_retry(fun, retries \\ 5) do
+    fun.()
+  catch
+    :exit, reason ->
+      if retries > 0 and noproc?(reason) do
+        revive()
+        with_retry(fun, retries - 1)
+      else
+        :erlang.raise(:exit, reason, __STACKTRACE__)
+      end
+  end
+
+  defp revive do
+    Enum.each([active(), Synapsis.Memory.EventLog], fn mod ->
+      if function_exported?(mod, :start_link, 1) and not is_pid(Process.whereis(mod)) do
+        case mod.start_link([]) do
+          {:ok, pid} -> Process.unlink(pid)
+          _ -> :ok
+        end
+      end
+    end)
+  end
+
+  defp noproc?(:noproc), do: true
+  defp noproc?({:noproc, _}), do: true
+  defp noproc?({{:noproc, _}, _}), do: true
+  defp noproc?(_), do: false
 end

@@ -49,14 +49,20 @@ defmodule Synapsis.Memory.Writer do
 
   @impl true
   def handle_info({:tool_effect, effect_type, payload}, state) do
-    persist_event(%{
-      scope: "session",
-      scope_id: extract_session_id(payload),
-      agent_id: Map.get(payload, :agent_id, "unknown"),
-      type: map_tool_effect(effect_type),
-      importance: importance_for(effect_type),
-      payload: sanitize_payload(payload)
-    })
+    # Observability writes must never crash the Writer (repeated crashes would
+    # escalate Memory.Supervisor and take down the file adapter / event log).
+    try do
+      persist_event(%{
+        scope: "session",
+        scope_id: extract_session_id(payload),
+        agent_id: Map.get(payload, :agent_id, "unknown"),
+        type: map_tool_effect(effect_type),
+        importance: importance_for(effect_type),
+        payload: sanitize_payload(payload)
+      })
+    rescue
+      _ -> :ok
+    end
 
     {:noreply, state}
   end
@@ -107,6 +113,8 @@ defmodule Synapsis.Memory.Writer do
   defp persist_event(attrs) do
     _ = Synapsis.Memory.append_event(attrs)
     :ok
+  rescue
+    _ -> :ok
   end
 
   defp map_tool_effect(:file_changed), do: "tool_succeeded"

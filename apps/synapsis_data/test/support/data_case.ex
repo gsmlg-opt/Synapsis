@@ -38,17 +38,39 @@ defmodule Synapsis.DataCase do
   clean file store.
   """
   def reset_memory_store do
-    adapter = Synapsis.Memory.Adapter.active()
-
     dir = Application.get_env(:synapsis_core, :memory_dir)
     if dir, do: File.rm_rf!(dir)
 
-    if function_exported?(adapter, :start_link, 1) and is_nil(Process.whereis(adapter)) do
-      {:ok, _} = adapter.start_link([])
-    end
-
     if :ets.info(:synapsis_memory_file_index) != :undefined,
       do: :ets.delete_all_objects(:synapsis_memory_file_index)
+
+    if :ets.info(Synapsis.Memory.EventLog) != :undefined,
+      do: :ets.delete_all_objects(Synapsis.Memory.EventLog)
+
+    :ok
+  end
+
+  @doc """
+  Ensure the supervised memory adapter (and event log) are alive. A prior test
+  that crashed can take the singleton down past its restart budget; we restart it
+  **unlinked** so it survives the transient test process.
+  """
+  def ensure_memory_adapter do
+    Enum.each(
+      [Synapsis.Memory.Adapter.active(), Synapsis.Memory.EventLog],
+      &ensure_alive/1
+    )
+
+    :ok
+  end
+
+  defp ensure_alive(mod) do
+    if function_exported?(mod, :start_link, 1) and not is_pid(Process.whereis(mod)) do
+      case mod.start_link([]) do
+        {:ok, pid} -> Process.unlink(pid)
+        _ -> :ok
+      end
+    end
 
     :ok
   end

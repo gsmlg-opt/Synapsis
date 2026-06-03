@@ -20,6 +20,8 @@ defmodule Synapsis.Memory.Supervisor do
     children =
       adapter_child ++ [Synapsis.Memory.EventLog, Synapsis.Memory.Cache, Synapsis.Memory.Writer]
 
-    Supervisor.init(children, strategy: :one_for_one)
+    # Never escalate: a transient child crash must not terminate the supervisor
+    # and take down the file adapter / event log siblings.
+    Supervisor.init(children, strategy: :one_for_one, max_restarts: 1_000_000, max_seconds: 1)
   end
 end

@@ -97,8 +97,19 @@ defmodule Synapsis.Memory.FileAdapter do
 
   @impl true
   def init(_opts) do
-    :ets.new(@table, [:named_table, :bag, :public, read_concurrency: true])
-    build_index()
+    # Tolerate a pre-existing (orphaned) table and a malformed file on disk so the
+    # singleton can always (re)start — a crash here would leave it permanently
+    # down past its restart budget.
+    if :ets.info(@table) == :undefined do
+      :ets.new(@table, [:named_table, :bag, :public, read_concurrency: true])
+    end
+
+    try do
+      build_index()
+    rescue
+      _ -> :ok
+    end
+
     {:ok, %{}}
   end
 
