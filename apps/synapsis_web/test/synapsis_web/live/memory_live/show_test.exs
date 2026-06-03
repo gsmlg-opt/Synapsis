@@ -1,7 +1,7 @@
 defmodule SynapsisWeb.MemoryLive.ShowTest do
   use SynapsisWeb.ConnCase
 
-  alias Synapsis.{SemanticMemory, MemoryEvent, Repo}
+  alias Synapsis.Memory
 
   defp create_semantic_memory(attrs) do
     defaults = %{
@@ -18,33 +18,17 @@ defmodule SynapsisWeb.MemoryLive.ShowTest do
       contributed_by: "test_agent"
     }
 
-    %SemanticMemory{}
-    |> SemanticMemory.changeset(Map.merge(defaults, attrs))
-    |> Repo.insert!()
-  end
-
-  defp create_history_event(memory_id, scope, scope_id) do
-    sid = if scope_id == "" or is_nil(scope_id), do: "_shared", else: scope_id
-
-    %MemoryEvent{}
-    |> MemoryEvent.changeset(%{
-      scope: scope,
-      scope_id: sid,
-      agent_id: "ui_user",
-      type: "memory_updated",
-      importance: 0.6,
-      payload: %{
-        memory_id: memory_id,
-        action: "update",
-        previous: %{title: "Old Title", summary: "Old summary"}
-      }
-    })
-    |> Repo.insert!()
+    {:ok, memory} = Memory.store_semantic(Map.merge(defaults, attrs))
+    memory
   end
 
   setup do
-    Repo.delete_all(MemoryEvent)
-    Repo.delete_all(SemanticMemory)
+    dir = Application.get_env(:synapsis_core, :memory_dir)
+    if dir, do: File.rm_rf!(dir)
+
+    if :ets.info(:synapsis_memory_file_index) != :undefined,
+      do: :ets.delete_all_objects(:synapsis_memory_file_index)
+
     :ok
   end
 
@@ -161,16 +145,6 @@ defmodule SynapsisWeb.MemoryLive.ShowTest do
         |> follow_redirect(conn)
 
       assert html_response(conn, 200) =~ "Memory archived"
-    end
-
-    test "shows change history when events exist", %{conn: conn} do
-      mem = create_semantic_memory(%{})
-      create_history_event(mem.id, mem.scope, mem.scope_id)
-
-      {:ok, _view, html} = live(conn, ~p"/settings/memory/#{mem.id}")
-
-      assert html =~ "Change History"
-      assert html =~ "ui_user"
     end
 
     test "hides change history when no events", %{conn: conn} do

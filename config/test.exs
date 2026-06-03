@@ -17,6 +17,10 @@ config :phoenix, sort_verified_routes_query_params: true
 
 config :synapsis_core, :file_system_enabled, false
 
+# Memory port: isolated per-partition file store for tests.
+config :synapsis_core,
+  memory_dir: Path.expand("../tmp/memory_test#{System.get_env("MIX_TEST_PARTITION")}", __DIR__)
+
 # Concord: isolated per-partition data dir, clustering off (single node).
 config :concord,
   clustering: false,

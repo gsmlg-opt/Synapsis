@@ -1,7 +1,7 @@
 defmodule SynapsisWeb.SettingsLayoutTest do
   use SynapsisWeb.ConnCase
 
-  alias Synapsis.{MemoryEvent, PluginConfig, ProviderConfig, Repo, SemanticMemory, Skill}
+  alias Synapsis.{Memory, PluginConfigs, Providers, Skills}
 
   @static_settings_paths [
     "/settings",
@@ -78,21 +78,15 @@ defmodule SynapsisWeb.SettingsLayoutTest do
   end
 
   defp create_dynamic_settings_paths do
-    provider =
-      %ProviderConfig{}
-      |> ProviderConfig.changeset(%{
+    {:ok, provider} =
+      Providers.create(%{
         name: "layout-provider-#{System.unique_integer([:positive])}",
         type: "anthropic",
         api_key_encrypted: "test-key"
       })
-      |> Repo.insert!()
 
-    Repo.delete_all(MemoryEvent)
-    Repo.delete_all(SemanticMemory)
-
-    memory =
-      %SemanticMemory{}
-      |> SemanticMemory.changeset(%{
+    {:ok, memory} =
+      Memory.store_semantic(%{
         scope: "shared",
         scope_id: "",
         kind: "fact",
@@ -105,37 +99,30 @@ defmodule SynapsisWeb.SettingsLayoutTest do
         freshness: 1.0,
         contributed_by: "test"
       })
-      |> Repo.insert!()
 
-    skill =
-      %Skill{}
-      |> Skill.changeset(%{
+    {:ok, skill} =
+      Skills.create(%{
         name: "layout-skill-#{System.unique_integer([:positive])}",
         scope: "global",
         description: "Used by the settings layout test",
         system_prompt_fragment: "Keep layout tests focused."
       })
-      |> Repo.insert!()
 
-    mcp_config =
-      %PluginConfig{}
-      |> PluginConfig.changeset(%{
+    {:ok, mcp_config} =
+      PluginConfigs.create(%{
         type: "mcp",
         name: "layout-mcp-#{System.unique_integer([:positive])}",
         transport: "stdio",
         command: "npx"
       })
-      |> Repo.insert!()
 
-    lsp_config =
-      %PluginConfig{}
-      |> PluginConfig.changeset(%{
+    {:ok, lsp_config} =
+      PluginConfigs.create(%{
         type: "lsp",
         name: "layout-lsp-#{System.unique_integer([:positive])}",
         command: "elixir-ls",
         args: ["--stdio"]
       })
-      |> Repo.insert!()
 
     [
       "/settings/providers/#{provider.id}",
