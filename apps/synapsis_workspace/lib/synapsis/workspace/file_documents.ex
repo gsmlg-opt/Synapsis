@@ -68,14 +68,16 @@ defmodule Synapsis.Workspace.FileDocuments do
     |> Enum.filter(&File.regular?/1)
     |> Enum.reject(&String.starts_with?(&1, meta_prefix))
     |> Enum.map(fn abs_path ->
-      # Normalize to the leading-slash path so meta lookup and id match put/get.
-      path = "/" <> Path.relative_to(abs_path, workspace_root)
-      meta = read_meta(workspace_root, path)
+      rel = Path.relative_to(abs_path, workspace_root)
+      # meta_path/path_id are slash-insensitive, so reading by rel finds the meta
+      # stored under the caller's (possibly leading-slash) path; return the
+      # stored path so it round-trips through the Workspace API unchanged.
+      meta = read_meta(workspace_root, rel)
 
       Map.merge(meta, %{
-        id: meta[:id] || path_id(path),
-        path: path,
-        content_format: meta[:content_format] || infer_format(path)
+        id: meta[:id] || path_id(rel),
+        path: meta[:path] || rel,
+        content_format: meta[:content_format] || infer_format(rel)
       })
     end)
   end
@@ -113,6 +115,14 @@ defmodule Synapsis.Workspace.FileDocuments do
                 attrs[:content_format] || attrs["content_format"] ||
                   existing_meta[:content_format] || infer_format(path),
               metadata: attrs[:metadata] || attrs["metadata"] || existing_meta[:metadata] || %{},
+              # Persist ownership fields so they survive the meta round-trip
+              # (update_changeset requires created_by/updated_by).
+              created_by: attrs[:created_by] || attrs["created_by"] || existing_meta[:created_by],
+              updated_by:
+                attrs[:updated_by] || attrs["updated_by"] || existing_meta[:updated_by] ||
+                  attrs[:created_by] || attrs["created_by"],
+              agent_id: attrs[:agent_id] || attrs["agent_id"] || existing_meta[:agent_id],
+              session_id: attrs[:session_id] || attrs["session_id"] || existing_meta[:session_id],
               version: (existing_meta[:version] || 0) + 1,
               inserted_at: existing_meta[:inserted_at] || now,
               updated_at: now
@@ -171,12 +181,17 @@ defmodule Synapsis.Workspace.FileDocuments do
     File.write!(mp, Jason.encode!(serializable, pretty: true))
   end
 
+  # Slash-insensitive: "/a/b.md" and "a/b.md" map to the same sidecar/id so a
+  # value stored by one caller is found by another regardless of leading slash.
   defp meta_path(workspace_root, path) do
-    encoded = String.replace(path, "/", "__")
+    encoded = path |> String.trim_leading("/") |> String.replace("/", "__")
     Path.join([workspace_root, @meta_dir, "#{encoded}.json"])
   end
 
-  defp path_id(path), do: :crypto.hash(:md5, path) |> Base.encode16(case: :lower)
+  defp path_id(path),
+    do:
+      :crypto.hash(:md5, String.trim_leading(path, "/"))
+      |> Base.encode16(case: :lower)
 
   defp infer_format(path) do
     case Path.extname(path) do
