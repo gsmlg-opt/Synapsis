@@ -4,6 +4,12 @@ defmodule Synapsis.ProvidersTest do
   alias Synapsis.{Providers, ProviderConfig}
   alias Synapsis.Provider.Registry, as: ProviderRegistry
 
+  # ADR-006 C4: providers persist in the global Config.Store; isolate per test.
+  setup do
+    Synapsis.DataCase.clear_config_store(:provider)
+    :ok
+  end
+
   @valid_attrs %{
     name: "test-provider",
     type: "anthropic",

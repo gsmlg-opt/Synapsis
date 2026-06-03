@@ -10,6 +10,9 @@ defmodule Synapsis.Config.StoreTest do
     original = System.get_env("SYNAPSIS_CONFIG_DIR")
     System.put_env("SYNAPSIS_CONFIG_DIR", tmp_dir)
 
+    # Reload from the empty tmp dir so boot-seeded entries don't pollute the test.
+    Enum.each(Store.types(), &Store.reload/1)
+
     on_exit(fn ->
       if original,
         do: System.put_env("SYNAPSIS_CONFIG_DIR", original),
@@ -29,12 +32,12 @@ defmodule Synapsis.Config.StoreTest do
   test "put/get round-trips an entry" do
     entry = %{id: "t1", name: "default", tool_names: ["bash", "file_read"]}
     assert {:ok, saved} = Store.put(:toolset, entry)
-    assert saved.id == "t1"
-    assert saved.name == "default"
+    assert saved["id"] == "t1"
+    assert saved["name"] == "default"
 
     assert {:ok, fetched} = Store.get(:toolset, "t1")
-    assert fetched.id == "t1"
-    assert fetched.name == "default"
+    assert fetched["id"] == "t1"
+    assert fetched["name"] == "default"
   end
 
   test "put persists to TOML file" do
@@ -58,7 +61,7 @@ defmodule Synapsis.Config.StoreTest do
     Store.put(:heartbeat, %{id: "h2", name: "weekly", schedule: "0 9 * * 1"})
 
     entries = Store.list(:heartbeat)
-    ids = Enum.map(entries, & &1.id) |> Enum.sort()
+    ids = Enum.map(entries, & &1["id"]) |> Enum.sort()
     assert ids == ["h1", "h2"]
   end
 
@@ -77,7 +80,7 @@ defmodule Synapsis.Config.StoreTest do
     Store.reload(:agent)
 
     assert {:ok, entry} = Store.get(:agent, "file-agent")
-    assert entry.name == "from-file"
+    assert entry["name"] == "from-file"
   end
 
   test "missing id returns error from put" do

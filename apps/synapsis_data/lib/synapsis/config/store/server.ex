@@ -82,7 +82,8 @@ defmodule Synapsis.Config.Store.Server do
       entry = Map.put(atomize_keys(attrs), :id, id)
       :ets.insert(state.table, {id, entry})
       persist(state.type)
-      {:reply, {:ok, entry}, state}
+      # Expose string-keyed maps consistently with get/2 and list/1.
+      {:reply, {:ok, stringify_keys(entry)}, state}
     end
   end
 
