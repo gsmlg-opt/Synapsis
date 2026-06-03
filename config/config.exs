@@ -13,6 +13,12 @@ import Config
 # off, so no further host-side config is needed.
 config :concord,
   clustering: false,
+  # Disable value compression: it provides no benefit for a node-local
+  # single-member store, and Concord 2.1.0's Raft state machine crashes on
+  # compressed values during apply (terminates the leader → :cluster_not_ready).
+  # See gsmlg-dev/concord#23 (prefix_scan) and the apply/state-machine crash.
+  # TODO(upstream): gsmlg-dev/concord — remove once compression is crash-safe.
+  compression: [enabled: false],
   data_dir: Path.expand("../tmp/concord/#{node()}", __DIR__)
 
 # Keep the embedded :ra system's on-disk data under tmp/ as well; without this
