@@ -45,8 +45,12 @@ defmodule Synapsis.AgentEvents do
 
   defp scan do
     case Concord.prefix_scan(@prefix) do
-      {:ok, pairs} -> Enum.map(pairs, fn {_k, v} -> struct(AgentEvent, v) end)
-      _ -> []
+      # WORKAROUND(upstream): gsmlg-dev/concord#23 — prefix_scan skips decompression.
+      {:ok, pairs} ->
+        Enum.map(pairs, fn {_k, v} -> struct(AgentEvent, Concord.Compression.decompress(v)) end)
+
+      _ ->
+        []
     end
   end
 

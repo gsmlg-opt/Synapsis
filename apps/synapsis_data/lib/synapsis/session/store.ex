@@ -90,8 +90,11 @@ defmodule Synapsis.Session.Store do
   def list_metas do
     case Concord.prefix_scan("sessions/") do
       {:ok, pairs} ->
+        # WORKAROUND(upstream): gsmlg-dev/concord#23 — prefix_scan skips decompression.
         metas =
-          for {key, value} <- pairs, String.ends_with?(key, "/meta"), do: value
+          for {key, value} <- pairs,
+              String.ends_with?(key, "/meta"),
+              do: Concord.Compression.decompress(value)
 
         {:ok, metas}
 
@@ -129,10 +132,11 @@ defmodule Synapsis.Session.Store do
   def list_turns(id) when is_binary(id) do
     case Concord.prefix_scan(turns_prefix(id)) do
       {:ok, pairs} ->
+        # WORKAROUND(upstream): gsmlg-dev/concord#23 — prefix_scan skips decompression.
         turns =
           pairs
           |> Enum.sort_by(fn {k, _v} -> k end)
-          |> Enum.map(fn {_k, v} -> v end)
+          |> Enum.map(fn {_k, v} -> Concord.Compression.decompress(v) end)
 
         {:ok, turns}
 

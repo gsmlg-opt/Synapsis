@@ -32,11 +32,11 @@ defmodule Synapsis.AgentCheckpoints do
     end
   end
 
-  @spec get(String.t()) :: AgentCheckpoint.t() | nil
+  @spec get(String.t()) :: {:ok, AgentCheckpoint.t()} | {:error, :not_found}
   def get(run_id) when is_binary(run_id) do
     case Concord.get(@prefix <> run_id) do
-      {:ok, map} -> struct(AgentCheckpoint, map)
-      _ -> nil
+      {:ok, map} -> {:ok, struct(AgentCheckpoint, map)}
+      _ -> {:error, :not_found}
     end
   end
 
@@ -67,8 +67,14 @@ defmodule Synapsis.AgentCheckpoints do
 
   defp scan do
     case Concord.prefix_scan(@prefix) do
-      {:ok, pairs} -> Enum.map(pairs, fn {_k, v} -> struct(AgentCheckpoint, v) end)
-      _ -> []
+      # WORKAROUND(upstream): gsmlg-dev/concord#23 — prefix_scan skips decompression.
+      {:ok, pairs} ->
+        Enum.map(pairs, fn {_k, v} ->
+          struct(AgentCheckpoint, Concord.Compression.decompress(v))
+        end)
+
+      _ ->
+        []
     end
   end
 end
