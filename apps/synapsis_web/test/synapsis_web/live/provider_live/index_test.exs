@@ -2,7 +2,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
   use SynapsisWeb.ConnCase
 
   setup do
-    Synapsis.Repo.delete_all(Synapsis.ProviderConfig)
+    clear_providers()
     :ok
   end
 
@@ -24,14 +24,11 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
     end
 
     test "lists existing providers as grid cards", %{conn: conn} do
-      {:ok, _} =
-        %Synapsis.ProviderConfig{}
-        |> Synapsis.ProviderConfig.changeset(%{
-          name: "test_provider_#{:rand.uniform(100_000)}",
-          type: "anthropic",
-          api_key_encrypted: "sk-test-key"
-        })
-        |> Synapsis.Repo.insert()
+      create_provider(%{
+        name: "test_provider_#{:rand.uniform(100_000)}",
+        type: "anthropic",
+        api_key_encrypted: "sk-test-key"
+      })
 
       {:ok, _view, html} = live(conn, ~p"/settings/providers")
       assert html =~ "test_provider_"
@@ -202,21 +199,19 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       flash = assert_redirected(view, ~p"/settings/providers")
       assert flash["info"] == "Provider created and models loaded"
 
-      provider = Synapsis.Repo.get_by!(Synapsis.ProviderConfig, name: "my-compatible-llm")
+      {:ok, provider} = Synapsis.Providers.get_by_name("my-compatible-llm")
       assert [%{"id" => "model-a"}] = provider.config["available_models"]
     end
 
     test "delete_provider event removes provider from grid", %{conn: conn} do
       name = "prov_del_#{:rand.uniform(100_000)}"
 
-      {:ok, provider} =
-        %Synapsis.ProviderConfig{}
-        |> Synapsis.ProviderConfig.changeset(%{
+      provider =
+        create_provider(%{
           name: name,
           type: "anthropic",
           api_key_encrypted: "sk-test-key"
         })
-        |> Synapsis.Repo.insert()
 
       {:ok, view, html} = live(conn, ~p"/settings/providers")
       assert html =~ name
@@ -228,15 +223,12 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
     end
 
     test "shows enabled badge for enabled provider", %{conn: conn} do
-      {:ok, _} =
-        %Synapsis.ProviderConfig{}
-        |> Synapsis.ProviderConfig.changeset(%{
-          name: "enabled_prov_#{:rand.uniform(100_000)}",
-          type: "anthropic",
-          api_key_encrypted: "sk-key",
-          enabled: true
-        })
-        |> Synapsis.Repo.insert()
+      create_provider(%{
+        name: "enabled_prov_#{:rand.uniform(100_000)}",
+        type: "anthropic",
+        api_key_encrypted: "sk-key",
+        enabled: true
+      })
 
       {:ok, view, _html} = live(conn, ~p"/settings/providers")
       # dm_badge uses <slot /> which renders empty; check for badge-success class
@@ -244,15 +236,12 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
     end
 
     test "shows disabled badge for disabled provider", %{conn: conn} do
-      {:ok, _} =
-        %Synapsis.ProviderConfig{}
-        |> Synapsis.ProviderConfig.changeset(%{
-          name: "disabled_prov_#{:rand.uniform(100_000)}",
-          type: "openai_compat",
-          api_key_encrypted: "sk-key",
-          enabled: false
-        })
-        |> Synapsis.Repo.insert()
+      create_provider(%{
+        name: "disabled_prov_#{:rand.uniform(100_000)}",
+        type: "openai_compat",
+        api_key_encrypted: "sk-key",
+        enabled: false
+      })
 
       {:ok, view, _html} = live(conn, ~p"/settings/providers")
       # dm_badge uses <slot /> which renders empty; check for badge-error class
@@ -260,15 +249,12 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
     end
 
     test "shows base_url when set", %{conn: conn} do
-      {:ok, _} =
-        %Synapsis.ProviderConfig{}
-        |> Synapsis.ProviderConfig.changeset(%{
-          name: "url_prov_#{:rand.uniform(100_000)}",
-          type: "openai_compat",
-          api_key_encrypted: "sk-key",
-          base_url: "https://custom.api.example.com"
-        })
-        |> Synapsis.Repo.insert()
+      create_provider(%{
+        name: "url_prov_#{:rand.uniform(100_000)}",
+        type: "openai_compat",
+        api_key_encrypted: "sk-key",
+        base_url: "https://custom.api.example.com"
+      })
 
       {:ok, _view, html} = live(conn, ~p"/settings/providers")
       assert html =~ "https://custom.api.example.com"
@@ -289,5 +275,16 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       {:ok, _view, html} = live(conn, ~p"/settings/providers")
       assert html =~ "No providers configured"
     end
+  end
+
+  # ADR-006 C4: providers live in the file-backed Config.Store, not Ecto.
+  defp create_provider(attrs) do
+    {:ok, provider} = Synapsis.Providers.create(attrs)
+    provider
+  end
+
+  defp clear_providers do
+    {:ok, providers} = Synapsis.Providers.list()
+    Enum.each(providers, fn p -> Synapsis.Providers.delete(p.id) end)
   end
 end

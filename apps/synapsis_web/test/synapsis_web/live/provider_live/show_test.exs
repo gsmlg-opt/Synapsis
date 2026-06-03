@@ -3,13 +3,11 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
 
   setup do
     {:ok, provider} =
-      %Synapsis.ProviderConfig{}
-      |> Synapsis.ProviderConfig.changeset(%{
+      Synapsis.Providers.create(%{
         name: "test-show-provider-#{:rand.uniform(100_000)}",
         type: "anthropic",
         api_key_encrypted: "sk-ant-test-key"
       })
-      |> Synapsis.Repo.insert()
 
     {:ok, provider: provider}
   end
@@ -104,12 +102,10 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
 
     test "provider without api_key does not show 'Key is set'", %{conn: conn} do
       {:ok, no_key_provider} =
-        %Synapsis.ProviderConfig{}
-        |> Synapsis.ProviderConfig.changeset(%{
+        Synapsis.Providers.create(%{
           name: "no-key-prov-#{:rand.uniform(100_000)}",
           type: "openai_compat"
         })
-        |> Synapsis.Repo.insert()
 
       {:ok, _view, html} = live(conn, ~p"/settings/providers/#{no_key_provider.id}")
       refute html =~ "Key is set"
@@ -179,15 +175,13 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       end)
 
       {:ok, provider} =
-        %Synapsis.ProviderConfig{}
-        |> Synapsis.ProviderConfig.changeset(%{
+        Synapsis.Providers.create(%{
           name: "refreshable-provider-#{:rand.uniform(100_000)}",
           type: "openai",
           base_url: "http://localhost:#{bypass.port}/v1",
           api_key_encrypted: "sk-test",
           config: %{"available_models" => [%{"id" => "old-model", "name" => "Old Model"}]}
         })
-        |> Synapsis.Repo.insert()
 
       {:ok, view, html} = live(conn, ~p"/settings/providers/#{provider.id}")
       assert html =~ "Old Model"
@@ -233,14 +227,12 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
 
     test "disabled models shown differently from enabled", %{conn: conn} do
       {:ok, provider} =
-        %Synapsis.ProviderConfig{}
-        |> Synapsis.ProviderConfig.changeset(%{
+        Synapsis.Providers.create(%{
           name: "filtered-prov-#{:rand.uniform(100_000)}",
           type: "anthropic",
           api_key_encrypted: "sk-key",
           config: %{"enabled_models" => ["claude-sonnet-4-6"]}
         })
-        |> Synapsis.Repo.insert()
 
       {:ok, _view, html} = live(conn, ~p"/settings/providers/#{provider.id}")
       # Should not show "All models enabled" since a filter is set

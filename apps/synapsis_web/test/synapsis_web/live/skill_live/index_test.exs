@@ -19,13 +19,7 @@ defmodule SynapsisWeb.SkillLive.IndexTest do
     end
 
     test "lists existing skills", %{conn: conn} do
-      %Synapsis.Skill{}
-      |> Synapsis.Skill.changeset(%{
-        name: "my-skill",
-        scope: "global",
-        description: "A test skill"
-      })
-      |> Synapsis.Repo.insert!()
+      Synapsis.Skills.create(%{name: "my-skill", scope: "global", description: "A test skill"})
 
       {:ok, _view, html} = live(conn, ~p"/settings/skills")
       assert html =~ "my-skill"
@@ -34,9 +28,7 @@ defmodule SynapsisWeb.SkillLive.IndexTest do
 
     test "deletes a skill", %{conn: conn} do
       {:ok, skill} =
-        %Synapsis.Skill{}
-        |> Synapsis.Skill.changeset(%{name: "to-delete", scope: "global", description: "bye"})
-        |> Synapsis.Repo.insert()
+        Synapsis.Skills.create(%{name: "to-delete", scope: "global", description: "bye"})
 
       {:ok, view, html} = live(conn, ~p"/settings/skills")
       assert html =~ "to-delete"
@@ -66,13 +58,7 @@ defmodule SynapsisWeb.SkillLive.IndexTest do
 
     test "built-in skill does not show delete button", %{conn: conn} do
       {:ok, skill} =
-        %Synapsis.Skill{}
-        |> Synapsis.Skill.changeset(%{
-          name: "builtin-skill",
-          scope: "global",
-          is_builtin: true
-        })
-        |> Synapsis.Repo.insert()
+        Synapsis.Skills.create(%{name: "builtin-skill", scope: "global", is_builtin: true})
 
       {:ok, view, html} = live(conn, ~p"/settings/skills")
       assert html =~ "builtin-skill"
@@ -96,9 +82,7 @@ defmodule SynapsisWeb.SkillLive.IndexTest do
 
     test "skills are listed in order", %{conn: conn} do
       for name <- ["alpha-skill", "beta-skill", "gamma-skill"] do
-        %Synapsis.Skill{}
-        |> Synapsis.Skill.changeset(%{name: name, scope: "global"})
-        |> Synapsis.Repo.insert!()
+        Synapsis.Skills.create(%{name: name, scope: "global"})
       end
 
       {:ok, _view, html} = live(conn, ~p"/settings/skills")
@@ -108,19 +92,14 @@ defmodule SynapsisWeb.SkillLive.IndexTest do
     end
 
     test "skill links to its show page", %{conn: conn} do
-      {:ok, skill} =
-        %Synapsis.Skill{}
-        |> Synapsis.Skill.changeset(%{name: "link-test-skill", scope: "global"})
-        |> Synapsis.Repo.insert()
+      {:ok, skill} = Synapsis.Skills.create(%{name: "link-test-skill", scope: "global"})
 
       {:ok, _view, html} = live(conn, ~p"/settings/skills")
       assert html =~ "/settings/skills/#{skill.id}"
     end
 
     test "skill with global scope shows 'global' label", %{conn: conn} do
-      %Synapsis.Skill{}
-      |> Synapsis.Skill.changeset(%{name: "global-scoped", scope: "global"})
-      |> Synapsis.Repo.insert!()
+      Synapsis.Skills.create(%{name: "global-scoped", scope: "global"})
 
       {:ok, _view, html} = live(conn, ~p"/settings/skills")
       assert html =~ "global-scoped"

@@ -1,7 +1,7 @@
 defmodule SynapsisWeb.MCPLive.IndexTest do
   use SynapsisWeb.ConnCase
 
-  alias Synapsis.{Repo, PluginConfig}
+  alias Synapsis.PluginConfigs
 
   defmodule FakeMCPPlugin do
     use GenServer
@@ -23,9 +23,8 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
   end
 
   defp create_mcp_config(attrs) do
-    %PluginConfig{}
-    |> PluginConfig.changeset(Map.merge(%{type: "mcp", transport: "stdio"}, attrs))
-    |> Repo.insert!()
+    {:ok, config} = PluginConfigs.create(Map.merge(%{type: "mcp", transport: "stdio"}, attrs))
+    config
   end
 
   describe "MCP servers page" do
@@ -171,7 +170,7 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
       flash = assert_redirect(view, "/settings/mcp")
       assert flash["info"] == "MCP server added"
 
-      config = Repo.get_by!(PluginConfig, name: "http-test", type: "mcp")
+      config = PluginConfigs.get_by_name_type("http-test", "mcp")
       assert config.transport == "http"
       assert config.url == "http://localhost:7331/mcp"
       assert config.command in [nil, ""]
@@ -211,7 +210,7 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
       |> render_click()
 
       # Verify the config was toggled in the DB
-      updated = Synapsis.Repo.get!(Synapsis.PluginConfig, config.id)
+      updated = PluginConfigs.get(config.id)
       assert updated.auto_start == true
     end
 

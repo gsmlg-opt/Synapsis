@@ -9,6 +9,14 @@ defmodule SynapsisServer.ProviderControllerTest do
     "api_key" => "sk-ant-secret"
   }
 
+  # ADR-006 C4: providers persist in the global Config.Store (no Ecto sandbox),
+  # so wipe them before each test for isolation.
+  setup do
+    {:ok, providers} = Providers.list()
+    Enum.each(providers, &Providers.delete(&1.id))
+    :ok
+  end
+
   defp create_provider(_ctx) do
     {:ok, provider} =
       Providers.create(%{
@@ -231,7 +239,7 @@ defmodule SynapsisServer.ProviderControllerTest do
       # ADR-006 C4: remove seeded providers (Config.Store) so env detection starts clean.
       for name <- ["anthropic", "openai", "google"] do
         case Synapsis.Providers.get_by_name(name) do
-          {:ok, p} -> Synapsis.Providers.delete(p["id"])
+          {:ok, p} -> Synapsis.Providers.delete(p.id)
           _ -> :ok
         end
       end

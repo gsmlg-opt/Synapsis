@@ -3,14 +3,12 @@ defmodule SynapsisWeb.SkillLive.ShowTest do
 
   setup do
     {:ok, skill} =
-      %Synapsis.Skill{}
-      |> Synapsis.Skill.changeset(%{
+      Synapsis.Skills.create(%{
         name: "test-skill",
         scope: "global",
         description: "A test skill for show page",
         system_prompt_fragment: "You are helpful."
       })
-      |> Synapsis.Repo.insert()
 
     {:ok, skill: skill}
   end
@@ -95,7 +93,7 @@ defmodule SynapsisWeb.SkillLive.ShowTest do
       })
       |> render_submit()
 
-      updated = Synapsis.Repo.get(Synapsis.Skill, skill.id)
+      updated = Synapsis.Skills.get(skill.id)
       assert updated.scope == "global"
     end
 
@@ -111,7 +109,7 @@ defmodule SynapsisWeb.SkillLive.ShowTest do
       })
       |> render_submit()
 
-      updated = Synapsis.Repo.get(Synapsis.Skill, skill.id)
+      updated = Synapsis.Skills.get(skill.id)
       assert updated.system_prompt_fragment == "New specialized prompt for testing."
     end
 

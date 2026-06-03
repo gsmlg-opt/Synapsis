@@ -2,43 +2,30 @@ defmodule Synapsis.Providers do
   @moduledoc "Public API for provider configuration management."
 
   # ADR-006 C4: provider configs persist in the file-backed Config.Store
-  # (TOML), keyed by id, as plain string-keyed maps; the in-memory
-  # Provider.Registry remains the runtime authority.
-  alias Synapsis.Config.Store
+  # (TOML), keyed by id. Records round-trip as `%ProviderConfig{}` structs
+  # (the PluginConfigs pattern); the in-memory Provider.Registry remains the
+  # runtime authority.
+  alias Synapsis.{Config.Store, ProviderConfig}
   alias Synapsis.Provider.Registry, as: ProviderRegistry
 
   @store_type :provider
 
   def create(attrs) do
-    record =
-      attrs
-      |> stringify()
-      |> Map.put_new("id", Ecto.UUID.generate())
-      |> Map.put_new("enabled", true)
-
-    case Store.put(@store_type, record) do
-      :ok ->
-        sync_to_registry(record)
-        {:ok, record}
-
-      {:ok, _} ->
-        sync_to_registry(record)
-        {:ok, record}
-
-      error ->
-        error
-    end
+    %ProviderConfig{}
+    |> ProviderConfig.changeset(attrs)
+    |> check_unique_name(nil)
+    |> persist()
   end
 
   def get(id) do
     case Store.get(@store_type, id) do
-      nil -> {:error, :not_found}
-      provider -> {:ok, provider}
+      {:ok, map} -> {:ok, to_struct(map)}
+      {:error, :not_found} -> {:error, :not_found}
     end
   end
 
   def get_by_name(name) do
-    case Enum.find(all(), &(&1["name"] == name)) do
+    case Enum.find(all(), &(&1.name == name)) do
       nil -> {:error, :not_found}
       provider -> {:ok, provider}
     end
@@ -47,48 +34,39 @@ defmodule Synapsis.Providers do
   def list(opts \\ []) do
     providers =
       all()
-      |> Enum.sort_by(&(&1["name"] || ""))
+      |> Enum.sort_by(&(&1.name || ""))
       |> filter_enabled(Keyword.get(opts, :enabled))
 
     {:ok, providers}
   end
 
-  defp all, do: Store.list(@store_type)
+  defp all, do: @store_type |> Store.list() |> Enum.map(&to_struct/1)
 
   defp filter_enabled(providers, nil), do: providers
 
   defp filter_enabled(providers, enabled) when is_boolean(enabled),
-    do: Enum.filter(providers, &(truthy(&1["enabled"]) == enabled))
+    do: Enum.filter(providers, &(&1.enabled == enabled))
 
   def update(id, attrs) do
     with {:ok, provider} <- get(id) do
-      updated = Map.merge(provider, stringify(attrs))
-
-      case Store.put(@store_type, updated) do
-        :ok ->
-          sync_to_registry(updated)
-          {:ok, updated}
-
-        {:ok, _} ->
-          sync_to_registry(updated)
-          {:ok, updated}
-
-        error ->
-          error
-      end
+      provider
+      |> ProviderConfig.changeset(attrs)
+      |> check_unique_name(id)
+      |> persist()
     end
   end
 
   def delete(id) do
     with {:ok, provider} <- get(id) do
-      ProviderRegistry.unregister(provider["name"])
+      ProviderRegistry.unregister(provider.name)
       Store.delete(@store_type, id)
+      {:ok, provider}
     end
   end
 
   def models(id) do
     with {:ok, provider} <- get(id),
-         {:ok, mod} <- ProviderRegistry.module_for(provider["type"]) do
+         {:ok, mod} <- ProviderRegistry.module_for(provider.type) do
       config = build_runtime_config(provider)
       mod.models(config)
     end
@@ -137,7 +115,7 @@ defmodule Synapsis.Providers do
     with {:ok, provider} <- get(id),
          {:ok, models} <- fetch_models(provider) do
       config =
-        (provider["config"] || %{})
+        (provider.config || %{})
         |> Map.merge(%{
           "available_models" => Enum.map(models, &stringify_model/1),
           "models_refreshed_at" => DateTime.utc_now() |> DateTime.to_iso8601()
@@ -156,15 +134,17 @@ defmodule Synapsis.Providers do
   end
 
   @doc "Return cached discovered models for a provider."
-  def cached_models(%{"config" => %{"available_models" => models}})
-      when is_list(models) do
-    Enum.map(models, &normalize_model/1)
-  end
-
+  def cached_models(%ProviderConfig{config: config}), do: cached_models_from(config)
+  def cached_models(%{"config" => config}), do: cached_models_from(config)
   def cached_models(_), do: []
 
+  defp cached_models_from(%{"available_models" => models}) when is_list(models),
+    do: Enum.map(models, &normalize_model/1)
+
+  defp cached_models_from(_), do: []
+
   @doc "Return the list of enabled model IDs for a provider. Empty list means all models enabled."
-  def enabled_models(%{"config" => %{"enabled_models" => models}}) when is_list(models),
+  def enabled_models(%ProviderConfig{config: %{"enabled_models" => models}}) when is_list(models),
     do: models
 
   def enabled_models(_), do: []
@@ -207,7 +187,7 @@ defmodule Synapsis.Providers do
   def save_oauth_tokens(id, tokens) do
     with {:ok, provider} <- get(id) do
       oauth_config = Synapsis.Provider.OAuth.OpenAI.build_token_config(tokens)
-      merged_config = Map.merge(provider["config"] || %{}, oauth_config)
+      merged_config = Map.merge(provider.config || %{}, oauth_config)
 
       update(id, %{
         api_key_encrypted: tokens.access_token,
@@ -220,7 +200,7 @@ defmodule Synapsis.Providers do
   def refresh_oauth_if_needed(id) do
     with {:ok, provider} <- get(id),
          true <- oauth_provider?(provider),
-         true <- Synapsis.Provider.OAuth.OpenAI.needs_refresh?(provider["config"]) do
+         true <- Synapsis.Provider.OAuth.OpenAI.needs_refresh?(provider.config) do
       do_refresh_oauth(provider)
     else
       false -> get(id)
@@ -240,18 +220,18 @@ defmodule Synapsis.Providers do
   end
 
   @doc "Check if a provider uses OAuth authentication."
-  def oauth_provider?(%{"config" => %{"auth_mode" => "oauth_device"}}), do: true
+  def oauth_provider?(%ProviderConfig{config: %{"auth_mode" => "oauth_device"}}), do: true
   def oauth_provider?(_), do: false
 
   defp do_refresh_oauth(provider) do
-    case Synapsis.Provider.OAuth.OpenAI.refresh_token_from_config(provider["config"]) do
+    case Synapsis.Provider.OAuth.OpenAI.refresh_token_from_config(provider.config) do
       nil ->
         {:error, :no_refresh_token}
 
       refresh_token ->
         case Synapsis.Provider.OAuth.OpenAI.refresh_token(refresh_token) do
           {:ok, new_tokens} ->
-            save_oauth_tokens(provider["id"], new_tokens)
+            save_oauth_tokens(provider.id, new_tokens)
 
           {:error, {:token_expired, _code}} ->
             {:error, :oauth_reauth_required}
@@ -285,11 +265,10 @@ defmodule Synapsis.Providers do
 
   @doc "Insert default providers (idempotent — skips existing names)."
   def seed_defaults do
-    existing = MapSet.new(all(), & &1["name"])
+    existing = MapSet.new(all(), & &1.name)
 
     Enum.each(@default_providers, fn attrs ->
-      attrs = stringify(attrs)
-      unless MapSet.member?(existing, attrs["name"]), do: create(attrs)
+      unless MapSet.member?(existing, attrs.name), do: create(attrs)
     end)
 
     :ok
@@ -305,35 +284,35 @@ defmodule Synapsis.Providers do
     :ok
   end
 
-  defp sync_to_registry(provider) when is_map(provider) do
-    if truthy(provider["enabled"]) do
-      ProviderRegistry.register(provider["name"], build_runtime_config(provider))
+  defp sync_to_registry(%ProviderConfig{} = provider) do
+    if provider.enabled do
+      ProviderRegistry.register(provider.name, build_runtime_config(provider))
     else
-      ProviderRegistry.unregister(provider["name"])
+      ProviderRegistry.unregister(provider.name)
     end
   end
 
-  defp build_runtime_config(provider) when is_map(provider) do
-    config = provider["config"] || %{}
+  defp build_runtime_config(%ProviderConfig{} = provider) do
+    config = provider.config || %{}
 
     # For OAuth providers, prefer the access_token from config (may be fresher)
     api_key =
       case Synapsis.Provider.OAuth.OpenAI.access_token_from_config(config) do
-        nil -> provider["api_key_encrypted"]
+        nil -> provider.api_key_encrypted
         token -> token
       end
 
     base = %{
       api_key: api_key,
-      type: provider["type"],
-      provider_id: provider["id"]
+      type: provider.type,
+      provider_id: provider.id
     }
 
     base =
-      if provider["base_url"] do
-        Map.put(base, :base_url, provider["base_url"])
+      if provider.base_url do
+        Map.put(base, :base_url, provider.base_url)
       else
-        Map.put(base, :base_url, default_base_url(provider["type"]))
+        Map.put(base, :base_url, default_base_url(provider.type))
       end
 
     # Mark OAuth providers so transport can attempt refresh on 401
@@ -347,13 +326,84 @@ defmodule Synapsis.Providers do
     Map.merge(base, atomize_keys(config))
   end
 
-  # ADR-006 C4 helpers: provider records are string-keyed maps in Config.Store.
-  defp stringify(map) when is_map(map),
-    do: Map.new(map, fn {k, v} -> {to_string(k), v} end)
+  # ADR-006 C4 store <-> struct mapping (the PluginConfigs pattern).
+  defp persist(%Ecto.Changeset{valid?: true} = changeset) do
+    record =
+      changeset
+      |> Ecto.Changeset.apply_changes()
+      |> ensure_id()
+      |> ensure_timestamps()
 
-  defp truthy(true), do: true
-  defp truthy("true"), do: true
-  defp truthy(_), do: false
+    case Store.put(@store_type, to_store_map(record)) do
+      :ok ->
+        sync_to_registry(record)
+        {:ok, record}
+
+      {:ok, _} ->
+        sync_to_registry(record)
+        {:ok, record}
+
+      error ->
+        error
+    end
+  end
+
+  defp persist(%Ecto.Changeset{} = changeset), do: {:error, changeset}
+
+  defp check_unique_name(%Ecto.Changeset{valid?: false} = changeset, _id), do: changeset
+
+  defp check_unique_name(changeset, id) do
+    name = Ecto.Changeset.get_field(changeset, :name)
+
+    if Enum.any?(all(), &(&1.name == name and &1.id != id)) do
+      Ecto.Changeset.add_error(changeset, :name, "has already been taken")
+    else
+      changeset
+    end
+  end
+
+  defp ensure_id(%ProviderConfig{id: nil} = record), do: %{record | id: Ecto.UUID.generate()}
+  defp ensure_id(record), do: record
+
+  defp ensure_timestamps(%ProviderConfig{} = record) do
+    now = DateTime.utc_now()
+    %{record | inserted_at: record.inserted_at || now, updated_at: now}
+  end
+
+  defp to_struct(map) do
+    %ProviderConfig{}
+    |> ProviderConfig.changeset(map)
+    |> Ecto.Changeset.apply_changes()
+    |> restore_meta(map)
+  end
+
+  defp restore_meta(%ProviderConfig{} = record, map) do
+    %{
+      record
+      | id: map[:id] || map["id"] || record.id,
+        inserted_at: map[:inserted_at] || map["inserted_at"] || record.inserted_at,
+        updated_at: map[:updated_at] || map["updated_at"] || record.updated_at
+    }
+  end
+
+  defp to_store_map(%ProviderConfig{} = r) do
+    %{
+      "id" => r.id,
+      "name" => r.name,
+      "type" => r.type,
+      "base_url" => r.base_url,
+      "api_key_encrypted" => r.api_key_encrypted,
+      "config" => r.config || %{},
+      "enabled" => r.enabled,
+      "inserted_at" => encode_time(r.inserted_at),
+      "updated_at" => encode_time(r.updated_at)
+    }
+    |> Enum.reject(fn {_k, v} -> is_nil(v) end)
+    |> Map.new()
+  end
+
+  defp encode_time(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
+  defp encode_time(other), do: other
 
   @doc "Default base URL for a provider type or named provider."
   def default_base_url("anthropic"), do: "https://api.anthropic.com"
