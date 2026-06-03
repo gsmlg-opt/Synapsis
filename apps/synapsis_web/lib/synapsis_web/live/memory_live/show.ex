@@ -97,7 +97,7 @@ defmodule SynapsisWeb.MemoryLive.Show do
 
   def handle_event("archive", _params, socket) do
     case Synapsis.Memory.archive_semantic(socket.assigns.memory) do
-      {:ok, _} ->
+      :ok ->
         {:noreply,
          socket
          |> put_flash(:info, "Memory archived")

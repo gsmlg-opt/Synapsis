@@ -77,6 +77,7 @@ defmodule Synapsis.Memory.FileAdapter do
         _ -> []
       end
     end)
+    |> Enum.reject(& &1[:archived_at])
   end
 
   @impl Synapsis.Memory.Adapter
@@ -204,6 +205,7 @@ defmodule Synapsis.Memory.FileAdapter do
         "contributed_by" => Map.get(memory, :contributed_by),
         "evidence_event_ids" => Map.get(memory, :evidence_event_ids, []),
         "access_count" => Map.get(memory, :access_count, 0),
+        "archived_at" => format_dt(Map.get(memory, :archived_at)),
         "inserted_at" => format_dt(memory.inserted_at),
         "updated_at" => format_dt(memory.updated_at)
       }
@@ -254,6 +256,7 @@ defmodule Synapsis.Memory.FileAdapter do
                contributed_by: fm["contributed_by"] || "",
                evidence_event_ids: fm["evidence_event_ids"] || [],
                access_count: fm["access_count"] || 0,
+               archived_at: parse_dt(fm["archived_at"]),
                inserted_at: parse_dt(fm["inserted_at"]),
                updated_at: parse_dt(fm["updated_at"])
              }}
