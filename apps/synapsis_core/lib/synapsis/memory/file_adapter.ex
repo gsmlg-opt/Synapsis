@@ -135,6 +135,8 @@ defmodule Synapsis.Memory.FileAdapter do
       {:error, reason} ->
         {:reply, {:error, reason}, state}
     end
+  rescue
+    e -> {:reply, {:error, Exception.message(e)}, state}
   end
 
   def handle_call({:update, id, attrs}, _from, state) do
@@ -158,6 +160,8 @@ defmodule Synapsis.Memory.FileAdapter do
       error ->
         {:reply, error, state}
     end
+  rescue
+    e -> {:reply, {:error, Exception.message(e)}, state}
   end
 
   def handle_call({:archive, id}, _from, state) do
@@ -171,6 +175,8 @@ defmodule Synapsis.Memory.FileAdapter do
       _ ->
         {:reply, {:error, :not_found}, state}
     end
+  rescue
+    e -> {:reply, {:error, Exception.message(e)}, state}
   end
 
   # --- Private ---
