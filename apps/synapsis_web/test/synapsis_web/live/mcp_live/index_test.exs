@@ -3,6 +3,11 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
 
   alias Synapsis.PluginConfigs
 
+  setup do
+    Synapsis.DataCase.clear_config_store(:plugin)
+    :ok
+  end
+
   defmodule FakeMCPPlugin do
     use GenServer
 

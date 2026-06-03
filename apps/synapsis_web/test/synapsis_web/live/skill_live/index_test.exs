@@ -1,6 +1,11 @@
 defmodule SynapsisWeb.SkillLive.IndexTest do
   use SynapsisWeb.ConnCase
 
+  setup do
+    Synapsis.DataCase.clear_config_store(:skill)
+    :ok
+  end
+
   describe "skills page" do
     test "mounts and renders heading", %{conn: conn} do
       {:ok, view, html} = live(conn, ~p"/settings/skills")

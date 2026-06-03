@@ -119,6 +119,9 @@ defmodule Synapsis.Memory.FileAdapter do
         confidence: Map.get(attrs, :confidence, 0.5),
         freshness: Map.get(attrs, :freshness, 1.0),
         source: to_str(Map.get(attrs, :source, "agent")),
+        contributed_by: to_str(Map.get(attrs, :contributed_by, "")),
+        evidence_event_ids: List.wrap(Map.get(attrs, :evidence_event_ids, [])),
+        access_count: Map.get(attrs, :access_count, 0),
         inserted_at: DateTime.utc_now(),
         updated_at: DateTime.utc_now()
       }
@@ -198,6 +201,9 @@ defmodule Synapsis.Memory.FileAdapter do
         "confidence" => memory.confidence,
         "freshness" => memory.freshness,
         "source" => memory.source,
+        "contributed_by" => Map.get(memory, :contributed_by),
+        "evidence_event_ids" => Map.get(memory, :evidence_event_ids, []),
+        "access_count" => Map.get(memory, :access_count, 0),
         "inserted_at" => format_dt(memory.inserted_at),
         "updated_at" => format_dt(memory.updated_at)
       }
@@ -245,6 +251,9 @@ defmodule Synapsis.Memory.FileAdapter do
                confidence: fm["confidence"] || 0.5,
                freshness: fm["freshness"] || 1.0,
                source: fm["source"] || "agent",
+               contributed_by: fm["contributed_by"] || "",
+               evidence_event_ids: fm["evidence_event_ids"] || [],
+               access_count: fm["access_count"] || 0,
                inserted_at: parse_dt(fm["inserted_at"]),
                updated_at: parse_dt(fm["updated_at"])
              }}

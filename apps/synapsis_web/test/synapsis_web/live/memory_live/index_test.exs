@@ -21,16 +21,8 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
     memory
   end
 
-  defp clean_semantic_memories do
-    dir = Application.get_env(:synapsis_core, :memory_dir)
-    if dir, do: File.rm_rf!(dir)
-
-    if :ets.info(:synapsis_memory_file_index) != :undefined,
-      do: :ets.delete_all_objects(:synapsis_memory_file_index)
-  end
-
   setup do
-    clean_semantic_memories()
+    Synapsis.DataCase.reset_memory_store()
     :ok
   end
 

@@ -23,12 +23,7 @@ defmodule SynapsisWeb.MemoryLive.ShowTest do
   end
 
   setup do
-    dir = Application.get_env(:synapsis_core, :memory_dir)
-    if dir, do: File.rm_rf!(dir)
-
-    if :ets.info(:synapsis_memory_file_index) != :undefined,
-      do: :ets.delete_all_objects(:synapsis_memory_file_index)
-
+    Synapsis.DataCase.reset_memory_store()
     :ok
   end
 

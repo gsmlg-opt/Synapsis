@@ -32,6 +32,27 @@ defmodule Synapsis.DataCase do
     :ok
   end
 
+  @doc """
+  Ensure the active memory adapter process is alive (it is a supervised singleton
+  that an earlier test may have crashed past its restart budget) and start from a
+  clean file store.
+  """
+  def reset_memory_store do
+    adapter = Synapsis.Memory.Adapter.active()
+
+    dir = Application.get_env(:synapsis_core, :memory_dir)
+    if dir, do: File.rm_rf!(dir)
+
+    if function_exported?(adapter, :start_link, 1) and is_nil(Process.whereis(adapter)) do
+      {:ok, _} = adapter.start_link([])
+    end
+
+    if :ets.info(:synapsis_memory_file_index) != :undefined,
+      do: :ets.delete_all_objects(:synapsis_memory_file_index)
+
+    :ok
+  end
+
   @doc "Delete every Concord key under a coordination prefix (test isolation)."
   def clear_coord(prefix) when is_binary(prefix) do
     case Concord.prefix_scan(prefix) do

@@ -3,6 +3,11 @@ defmodule SynapsisWeb.SettingsLayoutTest do
 
   alias Synapsis.{Memory, PluginConfigs, Providers, Skills}
 
+  setup do
+    Synapsis.DataCase.reset_memory_store()
+    :ok
+  end
+
   @static_settings_paths [
     "/settings",
     "/settings/providers",
