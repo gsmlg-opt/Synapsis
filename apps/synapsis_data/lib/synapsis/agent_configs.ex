@@ -101,17 +101,34 @@ defmodule Synapsis.AgentConfigs do
     end
   end
 
+  # ADR-006 C4: built-in agents formerly shipped as separate "assistant"/"build"/
+  # "plan" defaults; they are consolidated into "main" and pruned on seed.
+  @retired_builtins ~w(assistant build plan)
+
   @doc "Seed default agents if they don't exist. Called on application startup."
   def seed_defaults do
+    Enum.each(@retired_builtins, &prune_retired/1)
+
     for attrs <- default_attrs() do
       case get_by_name(attrs.name) do
         nil -> create(attrs)
-        _existing -> :ok
+        existing -> ensure_default(existing)
       end
     end
 
     :ok
   end
+
+  # Force-remove a retired built-in (bypasses delete/1's protection guard).
+  defp prune_retired(name) do
+    case get_by_name(name) do
+      %AgentConfig{id: id} -> Store.delete(@store_type, id)
+      _ -> :ok
+    end
+  end
+
+  defp ensure_default(%AgentConfig{is_default: true}), do: :ok
+  defp ensure_default(%AgentConfig{} = agent), do: update(agent, %{is_default: true})
 
   # ── internals ──────────────────────────────────────────────────────────────
 
