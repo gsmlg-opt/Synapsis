@@ -1,6 +1,21 @@
 defmodule SynapsisWeb.WorkspaceLive.ExplorerTest do
   use SynapsisWeb.ConnCase
 
+  # ADR-006 C4: workspace docs are file-backed under SYNAPSIS_WORKSPACE_ROOT
+  # (defaults to File.cwd!); isolate each test in a fresh tmp root.
+  setup do
+    root = Path.join(System.tmp_dir!(), "synapsis_ws_#{System.unique_integer([:positive])}")
+    File.mkdir_p!(root)
+    System.put_env("SYNAPSIS_WORKSPACE_ROOT", root)
+
+    on_exit(fn ->
+      System.delete_env("SYNAPSIS_WORKSPACE_ROOT")
+      File.rm_rf(root)
+    end)
+
+    :ok
+  end
+
   describe "explorer page" do
     test "mounts and renders heading", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/workspace")
