@@ -1,37 +1,45 @@
 defmodule Synapsis.ToolCall do
-  @moduledoc "Persists tool invocations for audit and replay."
+  @moduledoc """
+  Tool invocation record (audit/replay).
+
+  ADR-006 C4: an `embedded_schema` (no DB table). Tool calls are session-scoped
+  data captured in the session's Concord turns / live process state; this struct
+  is the in-memory shape and changeset surface.
+  """
   use Ecto.Schema
   import Ecto.Changeset
 
-  @primary_key {:id, :binary_id, autogenerate: true}
+  @primary_key {:id, :binary_id, autogenerate: false}
   @foreign_key_type :binary_id
 
-  schema "tool_calls" do
-    belongs_to :session, Synapsis.Session
-    belongs_to :message, Synapsis.Message
+  embedded_schema do
+    field(:session_id, :binary_id)
+    field(:message_id, :binary_id)
 
-    field :tool_name, :string
-    field :input, :map
-    field :output, :map
-    field :status, Ecto.Enum,
+    field(:tool_name, :string)
+    field(:input, :map)
+    field(:output, :map)
+
+    field(:status, Ecto.Enum,
       values: [:pending, :approved, :denied, :completed, :error],
       default: :pending
-    field :duration_ms, :integer
-    field :error_message, :string
+    )
 
-    timestamps(type: :utc_datetime_usec)
+    field(:duration_ms, :integer)
+    field(:error_message, :string)
+
+    field(:inserted_at, :utc_datetime_usec)
+    field(:updated_at, :utc_datetime_usec)
   end
 
   @required_fields ~w(session_id tool_name input)a
-  @optional_fields ~w(message_id output status duration_ms error_message)a
+  @optional_fields ~w(id message_id output status duration_ms error_message)a
 
   def changeset(tool_call, attrs) do
     tool_call
     |> cast(attrs, @required_fields ++ @optional_fields)
     |> validate_required(@required_fields)
     |> validate_length(:tool_name, max: 255)
-    |> foreign_key_constraint(:session_id)
-    |> foreign_key_constraint(:message_id)
   end
 
   def complete_changeset(tool_call, attrs) do
@@ -40,11 +48,6 @@ defmodule Synapsis.ToolCall do
     |> validate_inclusion(:status, [:completed, :error])
   end
 
-  def approve_changeset(tool_call) do
-    change(tool_call, status: :approved)
-  end
-
-  def deny_changeset(tool_call) do
-    change(tool_call, status: :denied)
-  end
+  def approve_changeset(tool_call), do: change(tool_call, status: :approved)
+  def deny_changeset(tool_call), do: change(tool_call, status: :denied)
 end

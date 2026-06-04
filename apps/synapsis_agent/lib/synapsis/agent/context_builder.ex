@@ -147,7 +147,7 @@ defmodule Synapsis.Agent.ContextBuilder do
         "Available skills:\n#{lines}"
     end
   rescue
-    e in [RuntimeError, Ecto.QueryError, DBConnection.ConnectionError] ->
+    e in [RuntimeError, Ecto.QueryError] ->
       Logger.warning("skills_manifest_failed", error: Exception.message(e))
       nil
   end
@@ -184,7 +184,7 @@ defmodule Synapsis.Agent.ContextBuilder do
         nil
     end
   rescue
-    e in [RuntimeError, Ecto.QueryError, DBConnection.ConnectionError] ->
+    e in [RuntimeError, Ecto.QueryError] ->
       Logger.warning("memory_context_failed", error: Exception.message(e))
       nil
   end

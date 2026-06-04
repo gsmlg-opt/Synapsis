@@ -570,7 +570,8 @@ defmodule SynapsisWeb.AgentLive.Sessions do
               />
               <div class="min-w-0">
                 <h2 class="font-medium text-sm truncate">
-                  {@current_session.title || "Session #{String.slice(@current_session.id, 0..7)}"}
+                  {@current_session.title ||
+                    "Session #{String.slice(@current_session.id || "", 0..7)}"}
                 </h2>
                 <div class="text-xs text-on-surface-variant">
                   <span class="text-primary/70">

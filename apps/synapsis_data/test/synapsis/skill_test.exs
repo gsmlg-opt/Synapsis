@@ -1,7 +1,7 @@
 defmodule Synapsis.SkillTest do
   use Synapsis.DataCase
 
-  alias Synapsis.{Skill, Repo}
+  alias Synapsis.{Skill, Skills}
 
   describe "changeset/2" do
     test "valid with required fields" do
@@ -42,29 +42,18 @@ defmodule Synapsis.SkillTest do
     end
   end
 
-  describe "persistence" do
-    test "inserts and retrieves skill" do
+  describe "Skills context persistence" do
+    test "creates and retrieves skill" do
       {:ok, skill} =
-        %Skill{}
-        |> Skill.changeset(%{
+        Skills.create(%{
           name: "persist-skill",
           scope: "global",
           description: "A test skill"
         })
-        |> Repo.insert()
 
-      found = Repo.get!(Skill, skill.id)
+      found = Skills.get(skill.id)
       assert found.name == "persist-skill"
       assert found.description == "A test skill"
-    end
-
-    test "enforces unique names in a scope" do
-      attrs = %{name: "unique-skill", scope: "global"}
-
-      {:ok, _} = %Skill{} |> Skill.changeset(attrs) |> Repo.insert()
-      {:error, changeset} = %Skill{} |> Skill.changeset(attrs) |> Repo.insert()
-
-      assert %{scope: ["has already been taken"]} = errors_on(changeset)
     end
   end
 end

@@ -1,12 +1,19 @@
 defmodule Synapsis.Session do
-  @moduledoc "Session entity - an agent-owned conversation workspace."
+  @moduledoc """
+  Session entity — an agent-owned conversation workspace.
+
+  ADR-006 C4: an `embedded_schema` (no DB table). Sessions are persisted in the
+  node-local Concord store via `Synapsis.Session.Store`; this struct is the
+  in-memory shape and changeset/validation surface. IDs are assigned by the
+  persistence context (see `Synapsis.Sessions`).
+  """
   use Ecto.Schema
   import Ecto.Changeset
 
-  @primary_key {:id, :binary_id, autogenerate: true}
+  @primary_key {:id, :binary_id, autogenerate: false}
   @foreign_key_type :binary_id
 
-  schema "sessions" do
+  embedded_schema do
     field(:title, :string)
     field(:agent, :string, default: "main")
     field(:provider, :string)
@@ -15,21 +22,35 @@ defmodule Synapsis.Session do
     field(:config, :map, default: %{})
     field(:debug, :boolean, default: false)
 
-    has_many(:messages, Synapsis.Message)
-    has_many(:failed_attempts, Synapsis.FailedAttempt)
-    has_many(:patches, Synapsis.Patch)
-    has_many(:tool_calls, Synapsis.ToolCall)
-    has_one(:permission, Synapsis.SessionPermission)
-    has_many(:todos, Synapsis.SessionTodo)
+    # Associations are denormalized in C4: messages/turns live in Concord under
+    # the session key; permissions/todos are session-scoped Concord entries.
+    # `:messages` is a runtime-only convenience populated by the context (it is
+    # never cast/persisted); turns are the durable form.
+    field(:messages, {:array, :map}, default: [])
 
-    timestamps(type: :utc_datetime_usec)
+    field(:inserted_at, :utc_datetime_usec)
+    field(:updated_at, :utc_datetime_usec)
   end
 
   @valid_statuses ~w(idle streaming tool_executing error)
+  @meta_fields ~w(id title agent provider model status config debug inserted_at updated_at)a
+
+  @doc "Build the durable `meta` map (atom keys) for Concord from a session."
+  def to_meta(%__MODULE__{} = session, extra \\ %{}) do
+    session
+    |> Map.take(@meta_fields)
+    |> Map.merge(Map.new(extra))
+  end
+
+  @doc "Reconstruct a `%Session{}` from a Concord `meta` map (atom or string keys)."
+  def from_meta(meta) when is_map(meta) do
+    attrs = Map.new(@meta_fields, fn k -> {k, meta[k] || meta[Atom.to_string(k)]} end)
+    struct(__MODULE__, attrs)
+  end
 
   def changeset(session, attrs) do
     session
-    |> cast(attrs, [:title, :agent, :provider, :model, :status, :config, :debug])
+    |> cast(attrs, [:id, :title, :agent, :provider, :model, :status, :config, :debug])
     |> validate_required([:provider, :model, :agent])
     |> validate_inclusion(:status, @valid_statuses)
     |> validate_length(:title, max: 500)

@@ -1,15 +1,15 @@
 defmodule Synapsis.Session.Sharing do
   @moduledoc "Export session as a shareable JSON file."
 
-  alias Synapsis.{Repo, Session, Message}
-  import Ecto.Query
+  alias Synapsis.{Message, Session, Sessions}
+  alias Synapsis.Session.Store
 
   def export(session_id) do
-    case Repo.get(Session, session_id) do
-      nil ->
+    case Sessions.get(session_id) do
+      {:error, :not_found} ->
         {:error, :not_found}
 
-      session ->
+      {:ok, session} ->
         messages = load_messages(session_id)
 
         data = %{
@@ -20,7 +20,7 @@ defmodule Synapsis.Session.Sharing do
             agent: session.agent,
             provider: session.provider,
             model: session.model,
-            created_at: session.inserted_at |> DateTime.to_iso8601()
+            created_at: iso8601(session.inserted_at)
           },
           messages: Enum.map(messages, &export_message/1)
         }
@@ -59,40 +59,33 @@ defmodule Synapsis.Session.Sharing do
   end
 
   defp do_import(session_data, messages_data, agent_name) do
-    attrs = %{
+    now = DateTime.utc_now()
+
+    session = %Session{
+      id: Ecto.UUID.generate(),
       provider: session_data["provider"] || "anthropic",
       model: session_data["model"] || Synapsis.Providers.default_model("anthropic"),
       agent: agent_name || session_data["agent"] || "main",
-      title: "[Imported] #{session_data["title"] || "session"}"
+      title: "[Imported] #{session_data["title"] || "session"}",
+      config: %{},
+      status: "idle",
+      inserted_at: now,
+      updated_at: now
     }
 
-    Repo.transaction(fn ->
-      session =
-        case %Session{}
-             |> Session.changeset(attrs)
-             |> Repo.insert() do
-          {:ok, s} -> s
-          {:error, changeset} -> Repo.rollback(changeset)
-        end
+    messages =
+      Enum.map(messages_data, fn msg_data ->
+        %Message{
+          session_id: session.id,
+          role: msg_data["role"] || "user",
+          parts: import_parts(msg_data["parts"] || []),
+          token_count: msg_data["token_count"] || 0
+        }
+      end)
 
-      for msg_data <- messages_data do
-        parts = import_parts(msg_data["parts"] || [])
-
-        case %Message{}
-             |> Message.changeset(%{
-               session_id: session.id,
-               role: msg_data["role"] || "user",
-               parts: parts,
-               token_count: msg_data["token_count"] || 0
-             })
-             |> Repo.insert() do
-          {:ok, _} -> :ok
-          {:error, changeset} -> Repo.rollback(changeset)
-        end
-      end
-
-      session
-    end)
+    Store.put_meta(session.id, Session.to_meta(session))
+    :ok = Message.persist_list(session.id, messages)
+    {:ok, session}
   end
 
   defp export_message(message) do
@@ -100,9 +93,12 @@ defmodule Synapsis.Session.Sharing do
       role: message.role,
       parts: Enum.map(message.parts, &export_part/1),
       token_count: message.token_count,
-      timestamp: message.inserted_at |> DateTime.to_iso8601()
+      timestamp: iso8601(message.inserted_at)
     }
   end
+
+  defp iso8601(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
+  defp iso8601(_), do: nil
 
   defp export_part(%Synapsis.Part.Text{content: c}), do: %{type: "text", content: c}
 
@@ -137,10 +133,5 @@ defmodule Synapsis.Session.Sharing do
     end)
   end
 
-  defp load_messages(session_id) do
-    Message
-    |> where([m], m.session_id == ^session_id)
-    |> order_by([m], asc: m.inserted_at)
-    |> Repo.all()
-  end
+  defp load_messages(session_id), do: Message.list_by_session(session_id)
 end

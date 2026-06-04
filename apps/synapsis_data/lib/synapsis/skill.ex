@@ -1,13 +1,18 @@
 defmodule Synapsis.Skill do
-  @moduledoc "A global skill definition assignable to agents."
+  @moduledoc """
+  A global skill definition assignable to agents.
+
+  ADR-006 C4: an `embedded_schema` (no DB table). Skills persist in the
+  file-backed `Config.Store` (`skills.toml`) via `Synapsis.Skills`.
+  """
   use Ecto.Schema
   import Ecto.Changeset
 
   @valid_scopes ~w(global)
 
-  @primary_key {:id, :binary_id, autogenerate: true}
+  @primary_key {:id, :binary_id, autogenerate: false}
   @foreign_key_type :binary_id
-  schema "skills" do
+  embedded_schema do
     field(:scope, :string, default: "global")
     field(:name, :string)
     field(:description, :string)
@@ -16,12 +21,14 @@ defmodule Synapsis.Skill do
     field(:config_overrides, :map, default: %{})
     field(:is_builtin, :boolean, default: false)
 
-    timestamps(type: :utc_datetime_usec)
+    field(:inserted_at, :utc_datetime_usec)
+    field(:updated_at, :utc_datetime_usec)
   end
 
   def changeset(skill, attrs) do
     skill
     |> cast(attrs, [
+      :id,
       :scope,
       :name,
       :description,
@@ -35,6 +42,5 @@ defmodule Synapsis.Skill do
     |> validate_length(:name, max: 255)
     |> validate_length(:description, max: 2_000)
     |> validate_length(:system_prompt_fragment, max: 50_000)
-    |> unique_constraint([:scope, :name])
   end
 end

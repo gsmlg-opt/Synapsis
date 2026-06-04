@@ -1,27 +1,21 @@
 defmodule Synapsis.Workspace.TestCase do
-  @moduledoc "Shared test helpers for workspace tests."
+  @moduledoc "Shared test helpers for workspace tests (ADR-006 C4: Concord-backed)."
   use ExUnit.CaseTemplate
 
   using do
     quote do
       alias Synapsis.Workspace
       alias Synapsis.Workspace.Resource
-      alias Synapsis.Repo
-      import Ecto.Query
     end
   end
 
   setup do
-    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Synapsis.Repo)
+    Synapsis.Session.Store.ensure_started()
 
     agent_id = "ws-test-#{System.unique_integer([:positive])}"
 
     {:ok, session} =
-      Synapsis.Repo.insert(%Synapsis.Session{
-        agent: agent_id,
-        provider: "anthropic",
-        model: "claude-3-5-sonnet"
-      })
+      Synapsis.Sessions.create(agent_id, %{provider: "anthropic", model: "claude-3-5-sonnet"})
 
     %{agent_id: agent_id, session: session}
   end

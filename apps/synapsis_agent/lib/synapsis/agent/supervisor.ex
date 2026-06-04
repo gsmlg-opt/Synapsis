@@ -12,9 +12,10 @@ defmodule Synapsis.Agent.Supervisor do
 
   @impl true
   def init(_opts) do
+    # ADR-006 C4: Agent.AgentRegistry (ETS GenServer + full-table scan) removed;
+    # parent→child links and statuses ride the session + agent-coordination data.
     children = [
-      {Registry, keys: :unique, name: Synapsis.Agent.Runtime.RunRegistry},
-      Synapsis.Agent.AgentRegistry
+      {Registry, keys: :unique, name: Synapsis.Agent.Runtime.RunRegistry}
     ]
 
     Supervisor.init(children, strategy: :one_for_one)

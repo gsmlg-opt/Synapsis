@@ -133,7 +133,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
       refute html =~ "Generating..."
       refute has_element?(view, "el-dm-chat-input#message-input[disabled]")
-      assert Synapsis.Repo.get!(Synapsis.Session, session.id).status == "idle"
+      assert {:ok, %{status: "idle"}} = Synapsis.Sessions.get(session.id)
     end
 
     test "chat input uses DuskMoon chat input send event", %{conn: conn} do

@@ -1,21 +1,29 @@
 defmodule Synapsis.Session.WorkerTest do
   use Synapsis.Agent.DataCase, async: false
 
-  alias Synapsis.{Repo, Session}
+  alias Synapsis.Session
   alias Synapsis.Agent.Graphs.CodingLoop
   alias Synapsis.Session.Worker
   alias Synapsis.Session.Worker.IOHandler
 
+  # ADR-006 C4: sessions live in the Concord-backed Session.Store, not Ecto.
+  defp build_session(attrs) do
+    %Session{}
+    |> Session.changeset(
+      Map.merge(%{provider: "anthropic", model: "test-model", agent: "main"}, attrs)
+    )
+    |> Ecto.Changeset.apply_changes()
+    |> Map.put(:id, Ecto.UUID.generate())
+  end
+
+  defp persist_session(attrs) do
+    session = build_session(attrs)
+    :ok = Session.Store.put_meta(session.id, Session.to_meta(session))
+    session
+  end
+
   test "cancel resets engine to idle and bumps epoch" do
-    {:ok, session} =
-      %Session{}
-      |> Session.changeset(%{
-        provider: "anthropic",
-        model: "test-model",
-        agent: "main",
-        status: "streaming"
-      })
-      |> Repo.insert()
+    session = persist_session(%{status: "streaming"})
 
     {:ok, graph} = CodingLoop.build()
     old_epoch = System.monotonic_time()
@@ -40,7 +48,8 @@ defmodule Synapsis.Session.WorkerTest do
     assert new_state.pending_tool_count == 0
     assert map_size(new_state.tool_tasks) == 0
     assert new_state.engine_node == graph.start
-    assert Repo.get!(Session, session.id).status == "idle"
+    {:ok, meta} = Session.Store.get_meta(session.id)
+    assert Session.from_meta(meta).status == "idle"
   end
 
   test "engine_ready? is true only when parked at :receive with awaiting_input" do
@@ -63,15 +72,7 @@ defmodule Synapsis.Session.WorkerTest do
   # --- A2: tool execution robustness ---
 
   test "handle_dispatch_tools skips already-executed tool_use_ids (idempotency guard)" do
-    {:ok, session} =
-      %Session{}
-      |> Session.changeset(%{
-        provider: "anthropic",
-        model: "test-model",
-        agent: "main",
-        status: "streaming"
-      })
-      |> Repo.insert()
+    session = build_session(%{status: "streaming"})
 
     {:ok, graph} = CodingLoop.build()
 
@@ -108,15 +109,7 @@ defmodule Synapsis.Session.WorkerTest do
   end
 
   test "handle_dispatch_tools tracks fresh tool_use_ids in executed_tool_ids" do
-    {:ok, session} =
-      %Session{}
-      |> Session.changeset(%{
-        provider: "anthropic",
-        model: "test-model",
-        agent: "main",
-        status: "streaming"
-      })
-      |> Repo.insert()
+    session = build_session(%{status: "streaming"})
 
     {:ok, graph} = CodingLoop.build()
 

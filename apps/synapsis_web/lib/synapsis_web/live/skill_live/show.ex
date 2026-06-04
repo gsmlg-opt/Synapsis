@@ -3,7 +3,7 @@ defmodule SynapsisWeb.SkillLive.Show do
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
-    case Synapsis.Repo.get(Synapsis.Skill, id) do
+    case Synapsis.Skills.get(id) do
       nil ->
         {:ok,
          socket
@@ -24,9 +24,7 @@ defmodule SynapsisWeb.SkillLive.Show do
       scope: params["scope"]
     }
 
-    changeset = Synapsis.Skill.changeset(socket.assigns.skill, attrs)
-
-    case Synapsis.Repo.update(changeset) do
+    case Synapsis.Skills.update(socket.assigns.skill, attrs) do
       {:ok, skill} ->
         {:noreply,
          socket

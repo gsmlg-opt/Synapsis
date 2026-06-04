@@ -241,10 +241,9 @@ defmodule Synapsis.Agent.QueryLoopTest do
   end
 
   describe "run/2 — context assembly" do
-    # Uses DB (via ContextBuilder -> load_soul) so needs sandbox ownership
+    # ADR-006 C4: Concord-backed; no Ecto sandbox.
     setup do
-      pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Synapsis.Repo, shared: false)
-      on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
+      Synapsis.Session.Store.ensure_started()
       :ok
     end
 

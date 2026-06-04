@@ -1,11 +1,7 @@
 import Config
 
-# Database configuration for test
-# Note: socket_dir is set in runtime.exs to pick up PGHOST at startup time
-config :synapsis_data, Synapsis.Repo,
-  database: "synapsis_test#{System.get_env("MIX_TEST_PARTITION")}",
-  pool: Ecto.Adapters.SQL.Sandbox,
-  pool_size: System.schedulers_online() * 2
+# ADR-006 C4: no PostgreSQL. Concord runs node-local in test with an isolated
+# per-partition data dir (see the :concord / :ra config below).
 
 config :synapsis_server, SynapsisServer.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4002],
@@ -20,6 +16,10 @@ config :phoenix, :plug_init_mode, :runtime
 config :phoenix, sort_verified_routes_query_params: true
 
 config :synapsis_core, :file_system_enabled, false
+
+# Memory port: isolated per-partition file store for tests.
+config :synapsis_core,
+  memory_dir: Path.expand("../tmp/memory_test#{System.get_env("MIX_TEST_PARTITION")}", __DIR__)
 
 # Concord: isolated per-partition data dir, clustering off (single node).
 config :concord,

@@ -47,7 +47,33 @@ defmodule Synapsis.Session.Store do
   def turn_key(id, n) when is_binary(id) and is_integer(n) and n >= 0,
     do: turns_prefix(id) <> pad(n)
 
+  @doc "Prefix covering every key for a session."
+  def session_prefix(id) when is_binary(id), do: "sessions/" <> id <> "/"
+
+  @doc "Key for an arbitrary session-scoped value (todos, permission, …)."
+  def value_key(id, suffix) when is_binary(id) and is_binary(suffix),
+    do: session_prefix(id) <> suffix
+
   defp pad(n), do: n |> Integer.to_string() |> String.pad_leading(@turn_pad, "0")
+
+  # ── session-scoped values (todos, permission, …) ──────────────────────────
+
+  @doc "Write a session-scoped value under `sessions/<id>/<suffix>`."
+  def put_value(id, suffix, value) when is_binary(id) and is_binary(suffix) do
+    case Concord.put(value_key(id, suffix), value) do
+      :ok -> :ok
+      {:ok, _} -> :ok
+      other -> normalize_error(other)
+    end
+  end
+
+  @doc "Read a session-scoped value, returning `default` when absent."
+  def get_value(id, suffix, default \\ nil) when is_binary(id) and is_binary(suffix) do
+    case Concord.get(value_key(id, suffix)) do
+      {:ok, value} -> value
+      _ -> default
+    end
+  end
 
   # ── meta ─────────────────────────────────────────────────────────────────
 
@@ -57,6 +83,23 @@ defmodule Synapsis.Session.Store do
       :ok -> :ok
       {:ok, _} -> :ok
       other -> normalize_error(other)
+    end
+  end
+
+  @doc "List every session's metadata snapshot (scans all `sessions/*/meta` keys)."
+  def list_metas do
+    case Concord.prefix_scan("sessions/") do
+      {:ok, pairs} ->
+        # WORKAROUND(upstream): gsmlg-dev/concord#23 — prefix_scan skips decompression.
+        metas =
+          for {key, value} <- pairs,
+              String.ends_with?(key, "/meta"),
+              do: Concord.Compression.decompress(value)
+
+        {:ok, metas}
+
+      other ->
+        normalize_error(other)
     end
   end
 
@@ -89,10 +132,11 @@ defmodule Synapsis.Session.Store do
   def list_turns(id) when is_binary(id) do
     case Concord.prefix_scan(turns_prefix(id)) do
       {:ok, pairs} ->
+        # WORKAROUND(upstream): gsmlg-dev/concord#23 — prefix_scan skips decompression.
         turns =
           pairs
           |> Enum.sort_by(fn {k, _v} -> k end)
-          |> Enum.map(fn {_k, v} -> v end)
+          |> Enum.map(fn {_k, v} -> Concord.Compression.decompress(v) end)
 
         {:ok, turns}
 
@@ -120,15 +164,44 @@ defmodule Synapsis.Session.Store do
     end
   end
 
-  @doc "Delete a whole session: its meta snapshot and every turn."
-  def delete_session(id) when is_binary(id) do
-    turn_keys =
+  @doc """
+  Replace the full ordered turn list for a session in one atomic batch: drops the
+  existing `turns/*` and writes `turns/0..n-1` from `turn_maps`. Meta is left
+  untouched. Used by the message write path (a message == a turn).
+  """
+  def replace_turns(id, turn_maps) when is_binary(id) and is_list(turn_maps) do
+    old_keys =
       case Concord.prefix_scan(turns_prefix(id)) do
         {:ok, pairs} -> Enum.map(pairs, fn {k, _v} -> k end)
         _ -> []
       end
 
-    case Concord.delete_many([meta_key(id) | turn_keys]) do
+    new_puts =
+      turn_maps
+      |> Enum.with_index()
+      |> Enum.map(fn {turn, n} -> {turn_key(id, n), turn} end)
+
+    # Delete stale higher-index turns (when the list shrank), then write the new set.
+    stale = old_keys -- Enum.map(new_puts, fn {k, _v} -> k end)
+    if stale != [], do: Concord.delete_many(stale)
+
+    case new_puts do
+      [] -> :ok
+      puts -> with {:ok, _} <- Concord.put_many(puts), do: :ok
+    end
+  end
+
+  @doc "Delete a whole session: meta, turns, and every session-scoped value."
+  def delete_session(id) when is_binary(id) do
+    keys =
+      case Concord.prefix_scan(session_prefix(id)) do
+        {:ok, pairs} -> Enum.map(pairs, fn {k, _v} -> k end)
+        _ -> []
+      end
+
+    keys = Enum.uniq([meta_key(id) | keys])
+
+    case Concord.delete_many(keys) do
       {:ok, _} -> :ok
       :ok -> :ok
       other -> normalize_error(other)

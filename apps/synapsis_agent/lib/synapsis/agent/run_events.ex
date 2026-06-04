@@ -55,17 +55,16 @@ defmodule Synapsis.Agent.RunEvents do
          function_exported?(Synapsis.Memory, :append_event, 1) do
       {scope, scope_id} = memory_scope(run)
 
-      case Synapsis.Memory.append_event(%{
-             scope: scope,
-             scope_id: scope_id,
-             agent_id: run.assistant_name || "daemon",
-             run_id: run.id,
-             type: event_type,
-             payload: payload
-           }) do
-        {:ok, _event} -> :ok
-        {:error, reason} -> log_failure("memory_event", reason)
-      end
+      Synapsis.Memory.append_event(%{
+        scope: scope,
+        scope_id: scope_id,
+        agent_id: run.assistant_name || "daemon",
+        run_id: run.id,
+        type: event_type,
+        payload: payload
+      })
+
+      :ok
     end
   rescue
     error -> log_failure("memory_event", error)

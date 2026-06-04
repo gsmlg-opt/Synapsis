@@ -2,13 +2,19 @@ defmodule Synapsis.Agent.Heartbeat.TemplatesTest do
   use Synapsis.Agent.DataCase
 
   alias Synapsis.Agent.Heartbeat.Templates
-  alias Synapsis.{HeartbeatConfig, Repo}
+  alias Synapsis.HeartbeatConfig
+
+  setup do
+    # ADR-006 C4: heartbeat configs live in the global Config.Store; isolate.
+    Synapsis.DataCase.clear_config_store(:heartbeat)
+    :ok
+  end
 
   describe "seed_defaults/0" do
     test "creates morning-briefing template" do
       Templates.seed_defaults()
 
-      config = Repo.get_by(HeartbeatConfig, name: "morning-briefing")
+      config = HeartbeatConfig.get_by_name("morning-briefing")
       assert config != nil
       assert config.schedule == "30 7 * * 1-5"
       assert config.prompt =~ "Summarize overnight"
@@ -17,7 +23,7 @@ defmodule Synapsis.Agent.Heartbeat.TemplatesTest do
     test "creates stale-pr-check template" do
       Templates.seed_defaults()
 
-      config = Repo.get_by(HeartbeatConfig, name: "stale-pr-check")
+      config = HeartbeatConfig.get_by_name("stale-pr-check")
       assert config != nil
       assert config.schedule == "0 10 * * 1-5"
     end
@@ -25,7 +31,7 @@ defmodule Synapsis.Agent.Heartbeat.TemplatesTest do
     test "creates daily-summary template" do
       Templates.seed_defaults()
 
-      config = Repo.get_by(HeartbeatConfig, name: "daily-summary")
+      config = HeartbeatConfig.get_by_name("daily-summary")
       assert config != nil
       assert config.keep_history == true
     end
@@ -33,7 +39,7 @@ defmodule Synapsis.Agent.Heartbeat.TemplatesTest do
     test "all templates disabled by default" do
       Templates.seed_defaults()
 
-      configs = Repo.all(HeartbeatConfig)
+      configs = HeartbeatConfig.list_all()
       assert Enum.all?(configs, &(&1.enabled == false))
     end
 
@@ -41,7 +47,7 @@ defmodule Synapsis.Agent.Heartbeat.TemplatesTest do
       Templates.seed_defaults()
       Templates.seed_defaults()
 
-      configs = Repo.all(HeartbeatConfig)
+      configs = HeartbeatConfig.list_all()
       assert length(configs) == 3
     end
   end

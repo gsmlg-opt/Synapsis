@@ -54,7 +54,7 @@ defmodule Synapsis.Memory.Retriever do
             try do
               Synapsis.Memory.touch_accessed(ids)
             rescue
-              _e in [Ecto.QueryError, DBConnection.ConnectionError] -> :ok
+              _e in [Ecto.QueryError] -> :ok
             end
           end)
         end

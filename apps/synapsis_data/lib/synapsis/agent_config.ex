@@ -1,9 +1,15 @@
 defmodule Synapsis.AgentConfig do
-  @moduledoc "Schema for persisted agent configurations."
+  @moduledoc """
+  Agent configuration entity.
+
+  ADR-006 C4: an `embedded_schema` (no DB table). Agent configs persist in the
+  file-backed `Config.Store` (`agents.toml`) via `Synapsis.AgentConfigs`; this
+  struct is the in-memory shape and changeset/validation surface.
+  """
   use Ecto.Schema
   import Ecto.Changeset
 
-  @primary_key {:id, :binary_id, autogenerate: true}
+  @primary_key {:id, :binary_id, autogenerate: false}
   @foreign_key_type :binary_id
 
   @name_format ~r/^[a-z0-9][a-z0-9_-]*$/
@@ -11,7 +17,7 @@ defmodule Synapsis.AgentConfig do
   @valid_permission_modes ~w(yolo ask restrict)
   @valid_reasoning_efforts ~w(low medium high)
 
-  schema "agent_configs" do
+  embedded_schema do
     field(:name, :string)
     field(:label, :string)
     field(:icon, :string, default: "robot-outline")
@@ -30,14 +36,14 @@ defmodule Synapsis.AgentConfig do
     field(:enabled, :boolean, default: true)
     field(:config, :map, default: %{})
     field(:toolset_ids, {:array, :string}, default: [])
+    field(:toolset_id, :binary_id)
 
-    belongs_to(:toolset, Synapsis.Toolset)
-
-    timestamps(type: :utc_datetime_usec)
+    field(:inserted_at, :utc_datetime_usec)
+    field(:updated_at, :utc_datetime_usec)
   end
 
   @required_fields ~w(name)a
-  @optional_fields ~w(label icon description provider model system_prompt tools
+  @optional_fields ~w(id label icon description provider model system_prompt tools
                        reasoning_effort read_only max_tokens model_tier
                        permission_mode fallback_models is_default enabled config toolset_id toolset_ids)a
 
@@ -53,7 +59,6 @@ defmodule Synapsis.AgentConfig do
     |> validate_inclusion(:permission_mode, @valid_permission_modes)
     |> validate_inclusion(:reasoning_effort, @valid_reasoning_efforts)
     |> validate_number(:max_tokens, greater_than: 0)
-    |> unique_constraint(:name)
   end
 
   def update_changeset(agent_config, attrs) do
@@ -63,7 +68,6 @@ defmodule Synapsis.AgentConfig do
     |> validate_inclusion(:permission_mode, @valid_permission_modes)
     |> validate_inclusion(:reasoning_effort, @valid_reasoning_efforts)
     |> validate_number(:max_tokens, greater_than: 0)
-    |> unique_constraint(:name)
   end
 
   def valid_model_tiers, do: @valid_model_tiers

@@ -1,7 +1,13 @@
 defmodule Synapsis.Agent.RunsTest do
-  use Synapsis.Agent.DataCase, async: true
+  use Synapsis.Agent.DataCase, async: false
 
   alias Synapsis.Agent.Runs
+
+  setup do
+    # ADR-006 C4: runs live in the global Concord coord store; isolate per test.
+    Synapsis.DataCase.clear_coord("coord/agent_runs/")
+    :ok
+  end
 
   @valid_attrs %{
     kind: "manual",

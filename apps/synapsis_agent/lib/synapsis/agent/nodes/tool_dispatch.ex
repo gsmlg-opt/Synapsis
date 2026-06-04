@@ -3,18 +3,19 @@ defmodule Synapsis.Agent.Nodes.ToolDispatch do
   @behaviour Synapsis.Agent.Runtime.Node
 
   alias Synapsis.Agent.ToolDispatcher
-  alias Synapsis.{Repo, Session}
+  alias Synapsis.Session
+  alias Synapsis.Session.Store
 
   @impl true
   @spec run(map(), map()) :: {:next, atom(), map()}
   def run(state, _ctx) do
-    case Repo.get(Session, state.session_id) do
-      nil ->
+    case Store.get_meta(state.session_id) do
+      {:error, :not_found} ->
         {:next, :all_approved,
          Map.put(state, :classified_tools, Enum.map(state.tool_uses, &{:approved, &1}))}
 
-      session ->
-        run_with_session(state, session)
+      {:ok, meta} ->
+        run_with_session(state, Session.from_meta(meta))
     end
   end
 

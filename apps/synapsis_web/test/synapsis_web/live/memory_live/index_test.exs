@@ -1,7 +1,7 @@
 defmodule SynapsisWeb.MemoryLive.IndexTest do
   use SynapsisWeb.ConnCase
 
-  alias Synapsis.{SemanticMemory, Repo}
+  alias Synapsis.Memory
 
   defp create_semantic_memory(attrs) do
     defaults = %{
@@ -17,17 +17,12 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
       freshness: 1.0
     }
 
-    %SemanticMemory{}
-    |> SemanticMemory.changeset(Map.merge(defaults, attrs))
-    |> Repo.insert!()
-  end
-
-  defp clean_semantic_memories do
-    Repo.delete_all(SemanticMemory)
+    {:ok, memory} = Memory.store_semantic(Map.merge(defaults, attrs))
+    memory
   end
 
   setup do
-    clean_semantic_memories()
+    Synapsis.DataCase.reset_memory_store()
     :ok
   end
 

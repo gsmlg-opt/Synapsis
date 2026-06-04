@@ -50,6 +50,10 @@ defmodule Synapsis.Agent.Runtime.CheckpointStore do
     |> Map.new(fn
       {:graph, %Graph{} = g} -> {:graph, serialize_graph(g)}
       {:graph, g} when is_map(g) -> {:graph, g}
+      # node/status are runtime atoms; the schema stores them as strings and
+      # to_checkpoint/1 reconstructs the atoms on read.
+      {:node, n} when is_atom(n) and not is_nil(n) -> {:node, Atom.to_string(n)}
+      {:status, s} when is_atom(s) and not is_nil(s) -> {:status, Atom.to_string(s)}
       {k, v} -> {k, v}
     end)
   end

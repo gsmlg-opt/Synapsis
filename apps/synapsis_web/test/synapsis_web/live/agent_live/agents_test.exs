@@ -1,11 +1,11 @@
 defmodule SynapsisWeb.AgentLive.AgentsTest do
   use SynapsisWeb.ConnCase
 
-  alias Synapsis.{AgentConfig, AgentConfigs, AgentSkills, ProviderConfig, Repo, Skill, Toolsets}
+  alias Synapsis.{AgentConfigs, AgentSkills, Providers, Skills, Toolsets}
 
   setup do
-    Repo.delete_all(ProviderConfig)
-    Repo.delete_all(AgentConfig)
+    Synapsis.DataCase.clear_config_store(:provider)
+    Synapsis.DataCase.clear_config_store(:agent)
     :ok
   end
 
@@ -56,7 +56,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
         "skill_ids" => []
       })
 
-      agent = Repo.get_by!(AgentConfig, name: "researcher")
+      agent = AgentConfigs.get_by_name("researcher")
       assert agent.label == "Researcher"
       assert agent.toolset_id == toolset.id
       assert agent.toolset_ids == [toolset.id]
@@ -94,7 +94,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       })
       |> render_submit()
 
-      updated = Repo.get!(AgentConfig, agent.id)
+      updated = AgentConfigs.get(agent.id)
       assert updated.label == "Updated Editor"
       assert updated.config["workspace_path"] == "~/.synapsis/agents/editor"
       assert updated.toolset_ids == []
@@ -133,7 +133,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
         "skill_ids" => []
       })
 
-      assert Repo.get!(AgentConfig, agent.id).permission_mode == "restrict"
+      assert AgentConfigs.get(agent.id).permission_mode == "restrict"
       :ok = refute_redirected(view)
       assert has_element?(view, "select[name='agent[permission_mode]']")
     end
@@ -160,7 +160,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
         "skill_ids" => []
       })
 
-      updated = Repo.get!(AgentConfig, agent.id)
+      updated = AgentConfigs.get(agent.id)
       assert updated.provider == "openai"
       assert updated.model == "gpt-4.1"
       :ok = refute_redirected(view)
@@ -176,8 +176,8 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
           tool_names: ["file_read", "bash"]
         })
 
-      skill =
-        Repo.insert!(%Skill{
+      {:ok, skill} =
+        Skills.create(%{
           name: "code-review",
           description: "Review code before shipping.",
           system_prompt_fragment: "Check for regressions."
@@ -309,7 +309,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       })
       |> render_submit()
 
-      updated = Repo.get!(AgentConfig, agent.id)
+      updated = AgentConfigs.get(agent.id)
       assert updated.toolset_ids == [reader_toolset.id, mcp_toolset.id]
       assert updated.toolset_id == reader_toolset.id
       assert render(view) =~ "mcp:docs:search"
@@ -326,7 +326,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       })
       |> render_submit()
 
-      updated = Repo.get!(AgentConfig, agent.id)
+      updated = AgentConfigs.get(agent.id)
       assert updated.toolset_ids == [mcp_toolset.id]
       assert updated.toolset_id == mcp_toolset.id
 
@@ -337,21 +337,21 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
     end
 
     test "provider model cascader lists enabled provider configs", %{conn: conn} do
-      Repo.insert!(%ProviderConfig{
+      Providers.create(%{
         name: "custom-anthropic",
         type: "anthropic",
         base_url: "https://api.example.com/anthropic",
         enabled: true
       })
 
-      Repo.insert!(%ProviderConfig{
+      Providers.create(%{
         name: "custom-openai",
         type: "openai",
         base_url: "https://api.example.com/openai",
         enabled: true
       })
 
-      Repo.insert!(%ProviderConfig{
+      Providers.create(%{
         name: "disabled-openai",
         type: "openai",
         base_url: "https://api.example.com/disabled",
@@ -368,7 +368,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
 
     test "provider model cascader prefers provider family models over transport type models",
          %{conn: conn} do
-      Repo.insert!(%ProviderConfig{
+      Providers.create(%{
         name: "minimax-cn",
         type: "anthropic",
         base_url: "https://api.minimaxi.com/anthropic",
@@ -384,7 +384,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
     end
 
     test "provider model cascader only lists models supported by each provider", %{conn: conn} do
-      Repo.insert!(%ProviderConfig{
+      Providers.create(%{
         name: "anthropic",
         type: "anthropic",
         base_url: "https://api.anthropic.com",
@@ -392,7 +392,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
         enabled: true
       })
 
-      Repo.insert!(%ProviderConfig{
+      Providers.create(%{
         name: "openai",
         type: "openai",
         base_url: "https://api.openai.com",
@@ -415,7 +415,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
 
     test "provider model cascader uses saved provider model filters when registry has no match",
          %{conn: conn} do
-      Repo.insert!(%ProviderConfig{
+      Providers.create(%{
         name: "custom-anthropic",
         type: "anthropic",
         base_url: "https://api.example.com/anthropic",
@@ -462,13 +462,13 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       |> element("el-dm-button[phx-click='set_agent_enabled'][phx-value-enabled='false']")
       |> render_click()
 
-      refute Repo.get!(AgentConfig, agent.id).enabled
+      refute AgentConfigs.get(agent.id).enabled
 
       view
       |> element("el-dm-button[phx-click='set_agent_enabled'][phx-value-enabled='true']")
       |> render_click()
 
-      assert Repo.get!(AgentConfig, agent.id).enabled
+      assert AgentConfigs.get(agent.id).enabled
     end
 
     test "removes an agent only after exact long confirmation", %{conn: conn} do
@@ -486,7 +486,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       })
       |> render_submit()
 
-      assert Repo.get(AgentConfig, agent.id)
+      assert AgentConfigs.get(agent.id)
       assert render(view) =~ "Type delete agent temporary to confirm"
 
       view
@@ -495,7 +495,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       })
       |> render_submit()
 
-      refute Repo.get(AgentConfig, agent.id)
+      refute AgentConfigs.get(agent.id)
       assert_redirect(view, ~p"/agent/agents")
     end
 
@@ -516,13 +516,16 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
   end
 
   defp insert_provider(name, type) do
-    Repo.insert!(%ProviderConfig{
-      name: name,
-      type: type,
-      base_url: "https://api.example.com",
-      api_key_encrypted: "sk-test",
-      enabled: true
-    })
+    {:ok, provider} =
+      Providers.create(%{
+        name: name,
+        type: type,
+        base_url: "https://api.example.com",
+        api_key_encrypted: "sk-test",
+        enabled: true
+      })
+
+    provider
   end
 
   defp cascader_options(html) do

@@ -28,10 +28,12 @@ defmodule Synapsis.Workspace do
   """
   @spec read(String.t()) :: {:ok, Resource.t()} | {:error, :not_found}
   def read(path_or_id) do
-    if uuid?(path_or_id) do
-      read_by_id(path_or_id)
-    else
+    # Workspace paths are canonically leading-slash; anything else (UUID or the
+    # file-backed md5 document id) is resolved by id.
+    if is_binary(path_or_id) and String.starts_with?(path_or_id, "/") do
       read_by_path(path_or_id)
+    else
+      read_by_id(path_or_id)
     end
   end
 
@@ -93,7 +95,8 @@ defmodule Synapsis.Workspace do
       case Resources.upsert(path, content_body, opts) do
         {:ok, doc} ->
           doc = if blob_ref, do: %{doc | blob_ref: blob_ref}, else: doc
-          resource = Resource.from_document(doc)
+          # Load blob content (as read/2 does) so the returned resource carries body.
+          resource = doc |> maybe_load_blob() |> Resource.from_document()
           action = if is_new, do: :created, else: :updated
           broadcast_change(path, action, doc.id, doc.agent_id)
           {:ok, resource}
@@ -112,10 +115,10 @@ defmodule Synapsis.Workspace do
   @spec delete(String.t()) :: :ok | {:error, :not_found}
   def delete(path_or_id) do
     result =
-      if uuid?(path_or_id) do
-        Resources.get_by_id(path_or_id)
-      else
+      if is_binary(path_or_id) and String.starts_with?(path_or_id, "/") do
         Resources.get_by_path(path_or_id)
+      else
+        Resources.get_by_id(path_or_id)
       end
 
     case result do
@@ -247,7 +250,7 @@ defmodule Synapsis.Workspace do
         {:error, "path exceeds maximum length of #{@max_path_length} bytes"}
 
       not String.starts_with?(path, "/shared/") and
-          not String.starts_with?(path, "/agents/") and
+        not String.starts_with?(path, "/agents/") and
           not String.starts_with?(path, "/global/") ->
         {:error, "path must start with /shared/, /agents/, or /global/"}
 
@@ -265,7 +268,8 @@ defmodule Synapsis.Workspace do
             {:error, "path must not contain empty segments"}
 
           not Enum.all?(segments, &valid_segment?/1) ->
-            {:error, "path segments must be lowercase alphanumeric, hyphens, underscores, or dots"}
+            {:error,
+             "path segments must be lowercase alphanumeric, hyphens, underscores, or dots"}
 
           true ->
             :ok
@@ -326,15 +330,6 @@ defmodule Synapsis.Workspace do
   defp sort_resources(resources, _),
     do: Enum.sort_by(resources, & &1.path)
 
-  defp uuid?("/" <> _), do: false
-
-  defp uuid?(string) do
-    case Ecto.UUID.cast(string) do
-      {:ok, _} -> true
-      :error -> false
-    end
-  end
-
   defp maybe_load_blob(%{content_body: nil, blob_ref: ref} = doc) when is_binary(ref) do
     blob_store = blob_store_module()
 
@@ -343,7 +338,12 @@ defmodule Synapsis.Workspace do
         %{doc | content_body: content}
 
       {:error, reason} ->
-        Logger.warning("blob_load_failed", blob_ref: ref, document_id: doc.id, reason: inspect(reason))
+        Logger.warning("blob_load_failed",
+          blob_ref: ref,
+          document_id: doc.id,
+          reason: inspect(reason)
+        )
+
         doc
     end
   end

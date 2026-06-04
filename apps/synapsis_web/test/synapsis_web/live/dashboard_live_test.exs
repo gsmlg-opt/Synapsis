@@ -37,52 +37,24 @@ defmodule SynapsisWeb.DashboardLiveTest do
 
     test "lists enabled agents with session counts", %{conn: conn} do
       {:ok, _agent} =
-        %Synapsis.AgentConfig{}
-        |> Synapsis.AgentConfig.changeset(%{
+        Synapsis.AgentConfigs.create(%{
           name: "coder",
           label: "Coder",
           description: "Coding agent",
           enabled: true
         })
-        |> Synapsis.Repo.insert()
 
       {:ok, _disabled} =
-        %Synapsis.AgentConfig{}
-        |> Synapsis.AgentConfig.changeset(%{
+        Synapsis.AgentConfigs.create(%{
           name: "paused",
           label: "Paused",
           description: "Disabled agent",
           enabled: false
         })
-        |> Synapsis.Repo.insert()
 
-      {:ok, _session} =
-        %Synapsis.Session{}
-        |> Synapsis.Session.changeset(%{
-          provider: "anthropic",
-          model: "claude-sonnet-4-20250514",
-          agent: "coder",
-          title: "Coder Session"
-        })
-        |> Synapsis.Repo.insert()
-
-      {:ok, _second_session} =
-        %Synapsis.Session{}
-        |> Synapsis.Session.changeset(%{
-          provider: "anthropic",
-          model: "claude-sonnet-4-20250514",
-          agent: "coder"
-        })
-        |> Synapsis.Repo.insert()
-
-      {:ok, _disabled_session} =
-        %Synapsis.Session{}
-        |> Synapsis.Session.changeset(%{
-          provider: "anthropic",
-          model: "claude-sonnet-4-20250514",
-          agent: "paused"
-        })
-        |> Synapsis.Repo.insert()
+      put_session(%{agent: "coder", title: "Coder Session"})
+      put_session(%{agent: "coder"})
+      put_session(%{agent: "paused"})
 
       {:ok, view, html} = live(conn, ~p"/")
       assert html =~ "Coder"
@@ -100,5 +72,30 @@ defmodule SynapsisWeb.DashboardLiveTest do
   defp theme_switcher_hook_source do
     Path.expand("../../../assets/js/app.ts", __DIR__)
     |> File.read!()
+  end
+
+  # ADR-006 C4: write a session meta directly (no worker) for dashboard counts.
+  defp put_session(attrs) do
+    now = DateTime.utc_now()
+
+    session =
+      struct(
+        Synapsis.Session,
+        Map.merge(
+          %{
+            id: Ecto.UUID.generate(),
+            provider: "anthropic",
+            model: "claude-sonnet-4-20250514",
+            status: "idle",
+            config: %{},
+            inserted_at: now,
+            updated_at: now
+          },
+          attrs
+        )
+      )
+
+    :ok = Synapsis.Session.Store.put_meta(session.id, Synapsis.Session.to_meta(session))
+    session
   end
 end

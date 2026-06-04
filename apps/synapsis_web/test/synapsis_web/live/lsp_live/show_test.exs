@@ -1,18 +1,18 @@
 defmodule SynapsisWeb.LSPLive.ShowTest do
   use SynapsisWeb.ConnCase
 
-  alias Synapsis.{Repo, PluginConfig}
+  alias Synapsis.PluginConfigs
 
   setup do
+    Synapsis.DataCase.clear_config_store(:plugin)
+
     {:ok, config} =
-      %PluginConfig{}
-      |> PluginConfig.changeset(%{
+      PluginConfigs.create(%{
         type: "lsp",
         name: "elixir",
         command: "elixir-ls",
         args: ["--stdio"]
       })
-      |> Repo.insert()
 
     %{config: config}
   end
@@ -91,7 +91,7 @@ defmodule SynapsisWeb.LSPLive.ShowTest do
     |> form("form", %{"command" => config.command, "root_path" => "/home/user/project"})
     |> render_submit()
 
-    updated = Repo.get(PluginConfig, config.id)
+    updated = PluginConfigs.get(config.id)
     assert updated.root_path == "/home/user/project"
   end
 
@@ -102,7 +102,7 @@ defmodule SynapsisWeb.LSPLive.ShowTest do
     |> form("form", %{"command" => config.command, "auto_start" => "false"})
     |> render_submit()
 
-    updated = Repo.get(PluginConfig, config.id)
+    updated = PluginConfigs.get(config.id)
     assert updated.auto_start == false
   end
 end

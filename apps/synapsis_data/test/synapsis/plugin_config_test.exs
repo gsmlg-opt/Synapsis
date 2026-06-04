@@ -1,7 +1,12 @@
 defmodule Synapsis.PluginConfigTest do
   use Synapsis.DataCase
 
-  alias Synapsis.{PluginConfig, Repo}
+  alias Synapsis.{PluginConfig, PluginConfigs}
+
+  setup do
+    clear_config_store(:plugin)
+    :ok
+  end
 
   describe "changeset/2" do
     test "valid with required fields" do
@@ -73,37 +78,17 @@ defmodule Synapsis.PluginConfigTest do
     end
   end
 
-  describe "unique_constraint" do
-    test "enforces uniqueness of name + scope" do
-      attrs = %{type: "mcp", name: "unique-plugin", scope: "global"}
-
-      {:ok, _} =
-        %PluginConfig{}
-        |> PluginConfig.changeset(attrs)
-        |> Repo.insert()
-
-      {:error, changeset} =
-        %PluginConfig{}
-        |> PluginConfig.changeset(attrs)
-        |> Repo.insert()
-
-      assert not changeset.valid? or changeset.errors != []
-    end
-  end
-
-  describe "persistence" do
-    test "inserts and retrieves config" do
+  describe "PluginConfigs context persistence" do
+    test "creates and retrieves config" do
       {:ok, config} =
-        %PluginConfig{}
-        |> PluginConfig.changeset(%{
+        PluginConfigs.create(%{
           type: "mcp",
           name: "test-mcp",
           transport: "stdio",
           command: "npx test-server"
         })
-        |> Repo.insert()
 
-      found = Repo.get!(PluginConfig, config.id)
+      found = PluginConfigs.get(config.id)
       assert found.type == "mcp"
       assert found.name == "test-mcp"
       assert found.command == "npx test-server"
@@ -111,17 +96,15 @@ defmodule Synapsis.PluginConfigTest do
 
     test "stores args and settings" do
       {:ok, config} =
-        %PluginConfig{}
-        |> PluginConfig.changeset(%{
+        PluginConfigs.create(%{
           type: "lsp",
           name: "test-lsp",
           command: "elixir-ls",
           args: ["--stdio"],
           settings: %{"rootPath" => "/tmp"}
         })
-        |> Repo.insert()
 
-      found = Repo.get!(PluginConfig, config.id)
+      found = PluginConfigs.get(config.id)
       assert found.args == ["--stdio"]
       assert found.settings == %{"rootPath" => "/tmp"}
     end

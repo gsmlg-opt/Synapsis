@@ -1,37 +1,43 @@
 defmodule Synapsis.AgentSummaries do
-  @moduledoc "Query/persistence boundary for agent summaries."
+  @moduledoc """
+  Agent/task/global summary rollups.
 
-  import Ecto.Query
-  alias Synapsis.{AgentSummary, Repo}
+  ADR-006 C4: node-local coordination data in Concord under `coord/agent_summaries/`,
+  keyed by `scope/scope_id/kind` (upsert overwrites in place).
+  """
+  alias Synapsis.AgentSummary
+
+  @prefix "coord/agent_summaries/"
 
   @spec put(map()) :: :ok | {:error, term()}
   def put(attrs) when is_map(attrs) do
-    attrs = stringify_atoms(attrs)
+    changeset = AgentSummary.changeset(%AgentSummary{}, attrs)
 
-    case %AgentSummary{}
-         |> AgentSummary.changeset(attrs)
-         |> Repo.insert(
-           on_conflict: {:replace, [:content, :metadata, :updated_at]},
-           conflict_target: [:scope, :scope_id, :kind]
-         ) do
-      {:ok, _} -> :ok
-      {:error, changeset} -> {:error, changeset}
+    if changeset.valid? do
+      now = DateTime.utc_now()
+
+      record =
+        changeset
+        |> Ecto.Changeset.apply_changes()
+        |> then(&%{&1 | id: &1.id || Ecto.UUID.generate(), updated_at: now})
+        |> then(&%{&1 | inserted_at: &1.inserted_at || now})
+
+      case Concord.put(key(record.scope, record.scope_id, record.kind), Map.from_struct(record)) do
+        :ok -> :ok
+        {:ok, _} -> :ok
+        other -> {:error, other}
+      end
+    else
+      {:error, changeset}
     end
   end
 
   @spec get(atom() | String.t(), String.t(), atom() | String.t()) ::
           {:ok, AgentSummary.t()} | {:error, :not_found}
   def get(scope, scope_id, kind) do
-    scope_str = to_string(scope)
-    kind_str = to_string(kind)
-
-    case Repo.one(
-           from(s in AgentSummary,
-             where: s.scope == ^scope_str and s.scope_id == ^scope_id and s.kind == ^kind_str
-           )
-         ) do
-      nil -> {:error, :not_found}
-      summary -> {:ok, summary}
+    case Concord.get(key(to_string(scope), scope_id, to_string(kind))) do
+      {:ok, map} -> {:ok, struct(AgentSummary, map)}
+      _ -> {:error, :not_found}
     end
   end
 
@@ -39,38 +45,31 @@ defmodule Synapsis.AgentSummaries do
   def list(filters \\ []) do
     {limit, filters} = Keyword.pop(filters, :limit, 200)
 
-    AgentSummary
-    |> apply_filters(filters)
-    |> order_by([s], desc: s.updated_at)
-    |> limit(^limit)
-    |> Repo.all()
+    scan()
+    |> Enum.filter(&matches?(&1, filters))
+    |> Enum.sort_by(& &1.updated_at, {:desc, DateTime})
+    |> Enum.take(limit)
   end
 
-  defp apply_filters(query, []), do: query
+  defp key(scope, scope_id, kind), do: @prefix <> "#{scope}/#{scope_id}/#{kind}"
 
-  defp apply_filters(query, [{:scope, val} | rest]) do
-    str = to_string(val)
-    query |> where([s], s.scope == ^str) |> apply_filters(rest)
+  defp scan do
+    case Concord.prefix_scan(@prefix) do
+      # WORKAROUND(upstream): gsmlg-dev/concord#23 — prefix_scan skips decompression.
+      {:ok, pairs} ->
+        Enum.map(pairs, fn {_k, v} -> struct(AgentSummary, Concord.Compression.decompress(v)) end)
+
+      _ ->
+        []
+    end
   end
 
-  defp apply_filters(query, [{:scope_id, val} | rest]) when is_binary(val) do
-    query |> where([s], s.scope_id == ^val) |> apply_filters(rest)
-  end
-
-  defp apply_filters(query, [{:kind, val} | rest]) do
-    str = to_string(val)
-    query |> where([s], s.kind == ^str) |> apply_filters(rest)
-  end
-
-  defp apply_filters(query, [_ | rest]), do: apply_filters(query, rest)
-
-  defp stringify_atoms(attrs) do
-    attrs
-    |> Map.new(fn
-      {:scope, v} when is_atom(v) -> {"scope", Atom.to_string(v)}
-      {:kind, v} when is_atom(v) -> {"kind", Atom.to_string(v)}
-      {k, v} when is_atom(k) -> {Atom.to_string(k), v}
-      {k, v} -> {k, v}
+  defp matches?(summary, filters) do
+    Enum.all?(filters, fn
+      {:scope, v} -> summary.scope == to_string(v)
+      {:scope_id, v} -> summary.scope_id == v
+      {:kind, v} -> summary.kind == to_string(v)
+      _ -> true
     end)
   end
 end

@@ -3,12 +3,8 @@
 # help of the Config module.
 import Config
 
-# Ecto Repo configuration
-config :synapsis_data, ecto_repos: [Synapsis.Repo]
-
-config :synapsis_data, Synapsis.Repo,
-  migration_primary_key: [type: :binary_id],
-  migration_timestamps: [type: :utc_datetime_usec]
+# ADR-006 C4: PostgreSQL removed — no Ecto Repo. Session/agent state lives in
+# Concord (below); configs are files; memory is the memory port.
 
 # Concord 2.x embedded KV store (ADR-006 session storage).
 # Node-local mode: `clustering: false` disables libcluster (no leader-election
@@ -17,6 +13,12 @@ config :synapsis_data, Synapsis.Repo,
 # off, so no further host-side config is needed.
 config :concord,
   clustering: false,
+  # Disable value compression: it provides no benefit for a node-local
+  # single-member store, and Concord 2.1.0's Raft state machine crashes on
+  # compressed values during apply (terminates the leader → :cluster_not_ready).
+  # See gsmlg-dev/concord#23 (prefix_scan) and the apply/state-machine crash.
+  # TODO(upstream): gsmlg-dev/concord — remove once compression is crash-safe.
+  compression: [enabled: false],
   data_dir: Path.expand("../tmp/concord/#{node()}", __DIR__)
 
 # Keep the embedded :ra system's on-disk data under tmp/ as well; without this

@@ -52,11 +52,7 @@ defmodule Synapsis.Tool.VFS do
         {:error, "Workspace document not found"}
 
       nil ->
-        # Fallback to direct DB query
-        case Synapsis.WorkspaceDocuments.get_by_path(ws_path) do
-          nil -> {:error, "Workspace document not found"}
-          doc -> {:ok, apply_offset_limit(doc.content_body || "", opts[:offset], opts[:limit])}
-        end
+        {:error, "Workspace unavailable"}
     end
   end
 
@@ -139,19 +135,7 @@ defmodule Synapsis.Tool.VFS do
         {:ok, entries}
 
       nil ->
-        # Fallback: direct DB listing
-        prefix = if String.ends_with?(ws_path, "/"), do: ws_path, else: ws_path <> "/"
-        docs = Synapsis.WorkspaceDocuments.list_by_prefix(prefix, depth: depth)
-
-        entries =
-          docs
-          |> Enum.map(fn doc ->
-            display_path = add_prefix(doc.path)
-            "#{display_path} [#{doc.kind}]"
-          end)
-          |> Enum.join("\n")
-
-        {:ok, entries}
+        {:ok, ""}
     end
   end
 
@@ -170,7 +154,7 @@ defmodule Synapsis.Tool.VFS do
         []
       end
 
-    results = Synapsis.WorkspaceDocuments.grep(pattern, query_opts)
+    results = workspace_call(:grep, [pattern, query_opts]) || []
 
     output =
       results
@@ -201,7 +185,7 @@ defmodule Synapsis.Tool.VFS do
         []
       end
 
-    results = Synapsis.WorkspaceDocuments.glob(pattern, query_opts)
+    results = workspace_call(:glob, [pattern, query_opts]) || []
 
     output =
       results

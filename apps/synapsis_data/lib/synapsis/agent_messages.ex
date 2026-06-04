@@ -1,121 +1,129 @@
 defmodule Synapsis.AgentMessages do
-  @moduledoc "Data access for persistent agent-to-agent messages."
+  @moduledoc """
+  Agent-to-agent message delivery.
 
-  import Ecto.Query
-  alias Synapsis.{AgentMessage, Repo}
+  ADR-006 C4: node-local coordination data in Concord under `coord/agent_messages/`,
+  keyed by id. Secondary lookups (by recipient, ref, thread) scan the prefix and
+  filter in memory — message volume is small and node-local. (Cluster delivery is
+  future work — ADR-006 §10.)
+  """
+  alias Synapsis.AgentMessage
 
-  @doc "Insert a new agent message."
+  @prefix "coord/agent_messages/"
+
   @spec create(map()) :: {:ok, AgentMessage.t()} | {:error, Ecto.Changeset.t()}
   def create(attrs) do
-    %AgentMessage{}
-    |> AgentMessage.changeset(attrs)
-    |> Repo.insert()
-  end
+    changeset = AgentMessage.changeset(%AgentMessage{}, attrs)
 
-  @doc "Get a message by ID."
-  @spec get(String.t()) :: AgentMessage.t() | nil
-  def get(id), do: Repo.get(AgentMessage, id)
+    if changeset.valid? do
+      now = DateTime.utc_now()
 
-  @doc "Get a message by ref."
-  @spec get_by_ref(String.t()) :: AgentMessage.t() | nil
-  def get_by_ref(ref) do
-    Repo.get_by(AgentMessage, ref: ref)
-  end
+      record =
+        changeset
+        |> Ecto.Changeset.apply_changes()
+        |> then(&%{&1 | id: &1.id || Ecto.UUID.generate(), inserted_at: now, updated_at: now})
 
-  @doc "List unread messages for an agent."
-  @spec unread(String.t(), keyword()) :: [AgentMessage.t()]
-  def unread(agent_id, opts \\ []) do
-    limit = Keyword.get(opts, :limit, 20)
-    type = Keyword.get(opts, :type)
-
-    AgentMessage
-    |> where([m], m.to_agent_id == ^agent_id and m.status == "delivered")
-    |> maybe_filter_type(type)
-    |> order_by([m], asc: m.inserted_at)
-    |> limit(^limit)
-    |> Repo.all()
-  end
-
-  @doc "List message history for an agent."
-  @spec history(String.t(), keyword()) :: [AgentMessage.t()]
-  def history(agent_id, opts \\ []) do
-    limit = Keyword.get(opts, :limit, 20)
-    since = Keyword.get(opts, :since)
-    type = Keyword.get(opts, :type)
-
-    AgentMessage
-    |> where([m], m.to_agent_id == ^agent_id or m.from_agent_id == ^agent_id)
-    |> maybe_filter_since(since)
-    |> maybe_filter_type(type)
-    |> order_by([m], desc: m.inserted_at)
-    |> limit(^limit)
-    |> Repo.all()
-  end
-
-  @doc "Get a thread by following a ref chain."
-  @spec thread(String.t(), keyword()) :: [AgentMessage.t()]
-  def thread(ref, opts \\ []) do
-    limit = Keyword.get(opts, :limit, 50)
-
-    AgentMessage
-    |> where(
-      [m],
-      m.ref == ^ref or
-        m.in_reply_to in subquery(from(am in AgentMessage, where: am.ref == ^ref, select: am.id))
-    )
-    |> order_by([m], asc: m.inserted_at)
-    |> limit(^limit)
-    |> Repo.all()
-  end
-
-  @doc "Mark a message as read."
-  @spec mark_read(AgentMessage.t()) :: {:ok, AgentMessage.t()} | {:error, Ecto.Changeset.t()}
-  def mark_read(%AgentMessage{} = message) do
-    message
-    |> AgentMessage.mark_read_changeset()
-    |> Repo.update()
-  end
-
-  @doc "Mark all unread messages for agent as read."
-  @spec mark_all_read(String.t()) :: {non_neg_integer(), nil}
-  def mark_all_read(agent_id) do
-    AgentMessage
-    |> where([m], m.to_agent_id == ^agent_id and m.status == "delivered")
-    |> Repo.update_all(set: [status: "read", updated_at: DateTime.utc_now()])
-  end
-
-  @doc "Update message status."
-  @spec update_status(AgentMessage.t(), String.t()) ::
-          {:ok, AgentMessage.t()} | {:error, Ecto.Changeset.t()}
-  def update_status(%AgentMessage{} = message, status) do
-    message
-    |> AgentMessage.changeset(%{status: status})
-    |> Repo.update()
-  end
-
-  @doc "Expire old undelivered requests."
-  @spec expire_stale() :: {non_neg_integer(), nil}
-  def expire_stale do
-    now = DateTime.utc_now()
-
-    AgentMessage
-    |> where([m], m.status == "delivered" and not is_nil(m.expires_at) and m.expires_at < ^now)
-    |> Repo.update_all(set: [status: "expired", updated_at: now])
-  end
-
-  defp maybe_filter_type(query, nil), do: query
-  defp maybe_filter_type(query, type), do: where(query, [m], m.type == ^type)
-
-  defp maybe_filter_since(query, nil), do: query
-
-  defp maybe_filter_since(query, since) when is_binary(since) do
-    case DateTime.from_iso8601(since) do
-      {:ok, dt, _} -> where(query, [m], m.inserted_at >= ^dt)
-      _ -> query
+      :ok = persist(record)
+      {:ok, record}
+    else
+      {:error, changeset}
     end
   end
 
-  defp maybe_filter_since(query, %DateTime{} = since) do
-    where(query, [m], m.inserted_at >= ^since)
+  @spec get(String.t()) :: AgentMessage.t() | nil
+  def get(id) do
+    case Concord.get(@prefix <> id) do
+      {:ok, map} -> struct(AgentMessage, map)
+      _ -> nil
+    end
+  end
+
+  @spec get_by_ref(String.t()) :: AgentMessage.t() | nil
+  def get_by_ref(ref), do: Enum.find(scan(), &(&1.ref == ref))
+
+  @spec unread(String.t(), keyword()) :: [AgentMessage.t()]
+  def unread(agent_id, opts \\ []) do
+    scan()
+    |> Enum.filter(&(&1.to_agent_id == agent_id and &1.status == "delivered"))
+    |> recent(opts)
+  end
+
+  @spec history(String.t(), keyword()) :: [AgentMessage.t()]
+  def history(agent_id, opts \\ []) do
+    scan()
+    |> Enum.filter(&(&1.from_agent_id == agent_id or &1.to_agent_id == agent_id))
+    |> recent(opts)
+  end
+
+  @spec thread(String.t(), keyword()) :: [AgentMessage.t()]
+  def thread(ref, opts \\ []) do
+    scan()
+    |> Enum.filter(&(&1.ref == ref or &1.in_reply_to == ref))
+    |> Enum.sort_by(& &1.inserted_at, DateTime)
+    |> take(opts)
+  end
+
+  @spec mark_read(AgentMessage.t()) :: {:ok, AgentMessage.t()}
+  def mark_read(%AgentMessage{} = message), do: update_status(message, "read")
+
+  @spec mark_all_read(String.t()) :: :ok
+  def mark_all_read(agent_id) do
+    agent_id |> unread() |> Enum.each(&update_status(&1, "read"))
+    :ok
+  end
+
+  @spec update_status(AgentMessage.t(), String.t()) :: {:ok, AgentMessage.t()}
+  def update_status(%AgentMessage{} = message, status) do
+    updated = %{message | status: status, updated_at: DateTime.utc_now()}
+    :ok = persist(updated)
+    {:ok, updated}
+  end
+
+  @spec expire_stale() :: :ok
+  def expire_stale do
+    now = DateTime.utc_now()
+
+    scan()
+    |> Enum.filter(fn m ->
+      m.status != "expired" and m.expires_at != nil and
+        DateTime.compare(m.expires_at, now) == :lt
+    end)
+    |> Enum.each(&update_status(&1, "expired"))
+
+    :ok
+  end
+
+  # ── internals ──────────────────────────────────────────────────────────────
+
+  defp persist(%AgentMessage{} = record) do
+    case Concord.put(@prefix <> record.id, Map.from_struct(record)) do
+      :ok -> :ok
+      {:ok, _} -> :ok
+      _ -> :ok
+    end
+  end
+
+  defp scan do
+    case Concord.prefix_scan(@prefix) do
+      # WORKAROUND(upstream): gsmlg-dev/concord#23 — prefix_scan skips decompression.
+      {:ok, pairs} ->
+        Enum.map(pairs, fn {_k, v} -> struct(AgentMessage, Concord.Compression.decompress(v)) end)
+
+      _ ->
+        []
+    end
+  end
+
+  defp recent(messages, opts) do
+    messages
+    |> Enum.sort_by(& &1.inserted_at, {:desc, DateTime})
+    |> take(opts)
+  end
+
+  defp take(messages, opts) do
+    case Keyword.get(opts, :limit) do
+      nil -> messages
+      limit -> Enum.take(messages, limit)
+    end
   end
 end

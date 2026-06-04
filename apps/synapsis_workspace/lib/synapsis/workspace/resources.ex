@@ -164,23 +164,20 @@ defmodule Synapsis.Workspace.Resources do
   defp maybe_create_version(%WorkspaceDocument{} = doc) do
     content_hash = hash_content(doc.content_body || "")
 
-    case WorkspaceDocuments.insert_version(%{
-           document_id: doc.id,
-           version: doc.version,
-           content_body: doc.content_body,
-           blob_ref: doc.blob_ref,
-           content_hash: content_hash,
-           changed_by: doc.updated_by
-         }) do
-      {:ok, _version} ->
-        # Prune old versions for drafts (configurable retention)
-        if doc.lifecycle == :draft do
-          keep = draft_version_retention()
-          WorkspaceDocuments.prune_versions(doc.id, keep)
-        end
+    {:ok, _version} =
+      WorkspaceDocuments.insert_version(%{
+        document_id: doc.id,
+        version: doc.version,
+        content_body: doc.content_body,
+        blob_ref: doc.blob_ref,
+        content_hash: content_hash,
+        changed_by: doc.updated_by
+      })
 
-      {:error, _changeset} ->
-        WorkspaceDocuments.rollback(:version_insert_failed)
+    # Prune old versions for drafts (configurable retention)
+    if doc.lifecycle == :draft do
+      keep = draft_version_retention()
+      WorkspaceDocuments.prune_versions(doc.id, keep)
     end
   end
 

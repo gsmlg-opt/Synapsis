@@ -2,7 +2,7 @@ defmodule Synapsis.Tool.TodoRead do
   @moduledoc "Read the current session todo list."
   use Synapsis.Tool
 
-  import Ecto.Query
+  alias Synapsis.Session.Store
 
   @impl true
   def name, do: "todo_read"
@@ -34,17 +34,15 @@ defmodule Synapsis.Tool.TodoRead do
 
       session_id ->
         todos =
-          from(t in Synapsis.SessionTodo,
-            where: t.session_id == ^session_id,
-            order_by: [asc: t.sort_order]
-          )
-          |> Synapsis.Repo.all()
+          session_id
+          |> Store.get_value("todos", [])
+          |> Enum.sort_by(&(&1["sort_order"] || 0))
           |> Enum.map(fn todo ->
             %{
-              id: todo.todo_id,
-              content: todo.content,
-              status: to_string(todo.status),
-              sort_order: todo.sort_order
+              id: todo["todo_id"],
+              content: todo["content"],
+              status: to_string(todo["status"] || "pending"),
+              sort_order: todo["sort_order"] || 0
             }
           end)
 

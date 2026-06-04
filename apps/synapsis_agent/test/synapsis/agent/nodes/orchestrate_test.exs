@@ -1,12 +1,12 @@
 defmodule Synapsis.Agent.Nodes.OrchestrateTest do
   use Synapsis.Agent.DataCase, async: false
 
-  alias Synapsis.{Repo, Session}
+  alias Synapsis.Session
   alias Synapsis.Agent.Nodes.Orchestrate
   alias Synapsis.Session.Monitor
 
   test "pause decision is observed but does not stop the tool loop" do
-    {:ok, session} =
+    session =
       %Session{}
       |> Session.changeset(%{
         provider: "anthropic",
@@ -14,7 +14,10 @@ defmodule Synapsis.Agent.Nodes.OrchestrateTest do
         agent: "main",
         status: "streaming"
       })
-      |> Repo.insert()
+      |> Ecto.Changeset.apply_changes()
+      |> Map.put(:id, Ecto.UUID.generate())
+
+    :ok = Session.Store.put_meta(session.id, Session.to_meta(session))
 
     Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}")
 
@@ -32,6 +35,7 @@ defmodule Synapsis.Agent.Nodes.OrchestrateTest do
 
     refute_receive {"orchestrator_pause", _}, 50
     refute_receive {"session_status", _}, 50
-    assert Repo.get!(Session, session.id).status == "streaming"
+    {:ok, meta} = Session.Store.get_meta(session.id)
+    assert Session.from_meta(meta).status == "streaming"
   end
 end

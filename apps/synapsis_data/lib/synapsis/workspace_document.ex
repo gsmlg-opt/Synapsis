@@ -1,12 +1,15 @@
 defmodule Synapsis.WorkspaceDocument do
   @moduledoc """
-  Schema for workspace documents — the backing store for unstructured workspace content
-  (notes, plans, ideas, scratch, handoffs, attachments).
+  Workspace document — backing shape for unstructured workspace content.
+
+  ADR-006 C4: an `embedded_schema` (no DB table). Workspace documents are stored
+  as files (see `Synapsis.Workspace.FileDocuments`); this struct is the in-memory
+  shape and changeset surface.
   """
   use Ecto.Schema
   import Ecto.Changeset
 
-  @primary_key {:id, :binary_id, autogenerate: true}
+  @primary_key {:id, :binary_id, autogenerate: false}
   @foreign_key_type :binary_id
 
   @kind_values ~w(document attachment handoff session_scratch)a
@@ -14,7 +17,7 @@ defmodule Synapsis.WorkspaceDocument do
   @lifecycle_values ~w(scratch draft shared published archived)a
   @content_format_values ~w(markdown yaml json text binary)a
 
-  schema "workspace_documents" do
+  embedded_schema do
     field(:path, :string)
     field(:kind, Ecto.Enum, values: @kind_values, default: :document)
     field(:visibility, Ecto.Enum, values: @visibility_values, default: :private)
@@ -29,16 +32,14 @@ defmodule Synapsis.WorkspaceDocument do
     field(:last_accessed_at, :utc_datetime_usec)
     field(:deleted_at, :utc_datetime_usec)
     field(:agent_id, :string)
+    field(:session_id, :binary_id)
 
-    belongs_to(:session, Synapsis.Session)
-
-    has_many(:versions, Synapsis.WorkspaceDocumentVersion, foreign_key: :document_id)
-
-    timestamps(type: :utc_datetime_usec)
+    field(:inserted_at, :utc_datetime_usec)
+    field(:updated_at, :utc_datetime_usec)
   end
 
   @required_fields ~w(path created_by updated_by)a
-  @optional_fields ~w(kind visibility lifecycle content_format content_body blob_ref
+  @optional_fields ~w(id kind visibility lifecycle content_format content_body blob_ref
                        metadata version agent_id session_id last_accessed_at deleted_at)a
 
   def changeset(document, attrs) do
@@ -46,7 +47,6 @@ defmodule Synapsis.WorkspaceDocument do
     |> cast(attrs, @required_fields ++ @optional_fields)
     |> validate_required(@required_fields)
     |> validate_path()
-    |> unique_constraint(:path, name: :workspace_documents_path_unique_active)
   end
 
   def create_changeset(document, attrs) do

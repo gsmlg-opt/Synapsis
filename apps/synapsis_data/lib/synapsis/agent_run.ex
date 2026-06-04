@@ -1,10 +1,14 @@
 defmodule Synapsis.AgentRun do
-  @moduledoc "Persistent daemon run record for manual, heartbeat, dream, and scheduled work."
+  @moduledoc """
+  Daemon run record for manual, heartbeat, dream, and scheduled work.
 
+  ADR-006 C4: an `embedded_schema` (no DB table). Run records are node-local
+  coordination data; this struct is the in-memory shape and changeset surface.
+  """
   use Ecto.Schema
   import Ecto.Changeset
 
-  @primary_key {:id, :binary_id, autogenerate: true}
+  @primary_key {:id, :binary_id, autogenerate: false}
   @foreign_key_type :binary_id
 
   @type t :: %__MODULE__{}
@@ -14,7 +18,7 @@ defmodule Synapsis.AgentRun do
   @sources ~w(web system oban)
   @tool_profiles ~w(read_only reflect heartbeat coding maintenance dangerous)
 
-  schema "agent_runs" do
+  embedded_schema do
     field(:kind, :string)
     field(:status, :string, default: "queued")
     field(:source, :string, default: "system")
@@ -32,12 +36,14 @@ defmodule Synapsis.AgentRun do
     field(:finished_at, :utc_datetime_usec)
     field(:metadata, :map, default: %{})
 
-    timestamps(type: :utc_datetime_usec)
+    field(:inserted_at, :utc_datetime_usec)
+    field(:updated_at, :utc_datetime_usec)
   end
 
   def changeset(run, attrs) do
     run
     |> cast(attrs, [
+      :id,
       :kind,
       :status,
       :source,
@@ -60,7 +66,5 @@ defmodule Synapsis.AgentRun do
     |> validate_inclusion(:status, @statuses)
     |> validate_inclusion(:source, @sources)
     |> validate_inclusion(:tool_profile, @tool_profiles)
-    |> foreign_key_constraint(:session_id)
-    |> foreign_key_constraint(:heartbeat_id)
   end
 end

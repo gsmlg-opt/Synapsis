@@ -32,26 +32,20 @@ defmodule Synapsis.Tool.EnterPlanMode do
         {:error, "No session context"}
 
       session_id ->
-        case Synapsis.Repo.get(Synapsis.Session, session_id) do
-          nil ->
+        case Synapsis.Session.Store.get_meta(session_id) do
+          {:error, :not_found} ->
             {:error, "Session not found: #{session_id}"}
 
-          session ->
-            case session
-                 |> Synapsis.Session.changeset(%{agent: "main"})
-                 |> Synapsis.Repo.update() do
-              {:ok, _updated} ->
-                Phoenix.PubSub.broadcast(
-                  Synapsis.PubSub,
-                  "session:#{session_id}",
-                  {:agent_mode_changed, :main}
-                )
+          {:ok, meta} ->
+            Synapsis.Session.Store.put_meta(session_id, Map.put(meta, :agent, "main"))
 
-                {:ok, "Entered plan mode"}
+            Phoenix.PubSub.broadcast(
+              Synapsis.PubSub,
+              "session:#{session_id}",
+              {:agent_mode_changed, :main}
+            )
 
-              {:error, _changeset} ->
-                {:error, "Failed to enter plan mode"}
-            end
+            {:ok, "Entered plan mode"}
         end
     end
   end

@@ -1,5 +1,11 @@
 defmodule Synapsis.PluginConfig do
-  @moduledoc "Unified configuration for plugins (MCP, LSP, custom)."
+  @moduledoc """
+  Unified configuration for plugins (MCP, LSP, custom).
+
+  ADR-006 C4: an `embedded_schema` (no DB table). Plugin configs persist in the
+  file-backed `Config.Store` (`plugins.toml`); this struct is the in-memory shape
+  and changeset surface.
+  """
   use Ecto.Schema
   import Ecto.Changeset
 
@@ -7,9 +13,9 @@ defmodule Synapsis.PluginConfig do
   @valid_transports ~w(stdio http sse tcp)
   @valid_scopes ~w(global)
 
-  @primary_key {:id, :binary_id, autogenerate: true}
+  @primary_key {:id, :binary_id, autogenerate: false}
   @foreign_key_type :binary_id
-  schema "plugin_configs" do
+  embedded_schema do
     field(:type, :string)
     field(:name, :string)
     field(:transport, :string, default: "stdio")
@@ -22,12 +28,14 @@ defmodule Synapsis.PluginConfig do
     field(:auto_start, :boolean, default: false)
     field(:scope, :string, default: "global")
 
-    timestamps(type: :utc_datetime_usec)
+    field(:inserted_at, :utc_datetime_usec)
+    field(:updated_at, :utc_datetime_usec)
   end
 
   def changeset(plugin_config, attrs) do
     plugin_config
     |> cast(attrs, [
+      :id,
       :type,
       :name,
       :transport,
@@ -48,6 +56,5 @@ defmodule Synapsis.PluginConfig do
     |> validate_length(:command, max: 4_096)
     |> validate_length(:url, max: 2_048)
     |> validate_length(:root_path, max: 4_096)
-    |> unique_constraint([:name, :scope])
   end
 end

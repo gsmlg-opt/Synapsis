@@ -1,19 +1,22 @@
 defmodule Synapsis.HeartbeatConfig do
   @moduledoc """
-  Schema for heartbeat configuration (AI-6).
+  Heartbeat configuration — scheduled agent invocations.
 
-  Heartbeats are scheduled agent invocations that run via Oban cron jobs.
-  Each config defines a schedule, prompt, and behavior for proactive execution.
+  ADR-006 C4: an `embedded_schema` (no DB table). Heartbeat configs persist in
+  the file-backed `Config.Store` (`heartbeats.toml`). The scheduler is the
+  node-local cron (`Synapsis.Agent.Heartbeat.LocalScheduler`), not Oban.
   """
   use Ecto.Schema
   import Ecto.Changeset
-  import Ecto.Query
+
+  alias Synapsis.Config.Store
 
   @type t :: %__MODULE__{}
+  @store_type :heartbeat
 
-  @primary_key {:id, :binary_id, autogenerate: true}
+  @primary_key {:id, :binary_id, autogenerate: false}
   @foreign_key_type :binary_id
-  schema "heartbeat_configs" do
+  embedded_schema do
     field(:name, :string)
     field(:schedule, :string)
     field(:agent_type, Ecto.Enum, values: [:global, :agent])
@@ -24,12 +27,14 @@ defmodule Synapsis.HeartbeatConfig do
     field(:session_isolation, Ecto.Enum, values: [:isolated, :main], default: :isolated)
     field(:keep_history, :boolean, default: false)
 
-    timestamps(type: :utc_datetime_usec)
+    field(:inserted_at, :utc_datetime_usec)
+    field(:updated_at, :utc_datetime_usec)
   end
 
   def changeset(config, attrs) do
     config
     |> cast(attrs, [
+      :id,
       :name,
       :schedule,
       :agent_type,
@@ -45,56 +50,101 @@ defmodule Synapsis.HeartbeatConfig do
     |> validate_length(:schedule, max: 255)
     |> validate_length(:prompt, max: 50_000)
     |> validate_cron_expression(:schedule)
-    |> unique_constraint(:name)
   end
 
-  # -- Context API --
+  # ── Context API (Config.Store-backed) ──────────────────────────────────────
 
-  @doc "Get a heartbeat config by ID."
   @spec get(String.t()) :: t() | nil
-  def get(id), do: Synapsis.Repo.get(__MODULE__, id)
-
-  @doc "Get a heartbeat config by name."
-  @spec get_by_name(String.t()) :: t() | nil
-  def get_by_name(name), do: Synapsis.Repo.get_by(__MODULE__, name: name)
-
-  @doc "List all enabled heartbeat configs."
-  @spec list_enabled() :: [t()]
-  def list_enabled do
-    __MODULE__
-    |> where([c], c.enabled == true)
-    |> Synapsis.Repo.all()
+  def get(id) do
+    case Store.get(@store_type, id) do
+      {:ok, map} -> to_struct(map)
+      _ -> nil
+    end
   end
 
-  @doc "List all heartbeat configs."
+  @spec get_by_name(String.t()) :: t() | nil
+  def get_by_name(name), do: Enum.find(list_all(), &(&1.name == name))
+
+  @spec list_enabled() :: [t()]
+  def list_enabled, do: Enum.filter(list_all(), & &1.enabled)
+
   @spec list_all() :: [t()]
   def list_all do
-    __MODULE__
-    |> order_by([c], asc: c.name)
-    |> Synapsis.Repo.all()
+    @store_type
+    |> Store.list()
+    |> Enum.map(&to_struct/1)
+    |> Enum.sort_by(& &1.name)
   end
 
-  @doc "Insert a new heartbeat config."
   @spec create(map()) :: {:ok, t()} | {:error, Ecto.Changeset.t()}
   def create(attrs) do
-    %__MODULE__{}
-    |> changeset(attrs)
-    |> Synapsis.Repo.insert()
+    changeset = changeset(%__MODULE__{}, attrs)
+
+    if changeset.valid? do
+      record = changeset |> apply_changes() |> ensure_id()
+
+      case Store.put(@store_type, to_store_map(record)) do
+        :ok -> {:ok, record}
+        {:ok, _} -> {:ok, record}
+        error -> error
+      end
+    else
+      {:error, changeset}
+    end
   end
 
-  @doc "Update an existing heartbeat config."
   @spec update_config(t(), map()) :: {:ok, t()} | {:error, Ecto.Changeset.t()}
   def update_config(%__MODULE__{} = config, attrs) do
-    config
-    |> changeset(attrs)
-    |> Synapsis.Repo.update()
+    changeset = changeset(config, attrs)
+
+    if changeset.valid? do
+      record = apply_changes(changeset)
+
+      case Store.put(@store_type, to_store_map(record)) do
+        :ok -> {:ok, record}
+        {:ok, _} -> {:ok, record}
+        error -> error
+      end
+    else
+      {:error, changeset}
+    end
   end
 
-  @doc "Delete a heartbeat config."
-  @spec delete_config(t()) :: {:ok, t()} | {:error, Ecto.Changeset.t()}
-  def delete_config(%__MODULE__{} = config) do
-    Synapsis.Repo.delete(config)
+  @spec delete_config(t()) :: :ok
+  def delete_config(%__MODULE__{id: id}), do: Store.delete(@store_type, id)
+
+  # ── internals ──────────────────────────────────────────────────────────────
+
+  defp ensure_id(%__MODULE__{id: nil} = record), do: %{record | id: Ecto.UUID.generate()}
+  defp ensure_id(record), do: record
+
+  # Build a struct from a Config.Store string-keyed map; cast handles enums.
+  defp to_struct(map) do
+    %__MODULE__{} |> changeset(map) |> apply_changes() |> set_id(map)
   end
+
+  defp set_id(record, map), do: %{record | id: map["id"] || record.id}
+
+  # Convert a struct to a flat string-keyed map for TOML persistence.
+  defp to_store_map(%__MODULE__{} = record) do
+    %{
+      "id" => record.id,
+      "name" => record.name,
+      "schedule" => record.schedule,
+      "agent_type" => to_string_or_nil(record.agent_type),
+      "agent_name" => record.agent_name,
+      "prompt" => record.prompt,
+      "enabled" => record.enabled,
+      "notify_user" => record.notify_user,
+      "session_isolation" => to_string_or_nil(record.session_isolation),
+      "keep_history" => record.keep_history
+    }
+    |> Enum.reject(fn {_k, v} -> is_nil(v) end)
+    |> Map.new()
+  end
+
+  defp to_string_or_nil(nil), do: nil
+  defp to_string_or_nil(atom), do: Atom.to_string(atom)
 
   defp validate_cron_expression(changeset, field) do
     validate_change(changeset, field, fn _field, value ->

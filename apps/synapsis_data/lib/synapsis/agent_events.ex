@@ -1,16 +1,35 @@
 defmodule Synapsis.AgentEvents do
-  @moduledoc "Query/persistence boundary for agent events."
+  @moduledoc """
+  Append-only agent event log.
 
-  import Ecto.Query
-  alias Synapsis.{AgentEvent, Repo}
+  ADR-006 C4: node-local coordination data in Concord under `coord/agent_events/`.
+  (The cluster/replicated form is future work — ADR-006 §10.)
+  """
+  alias Synapsis.AgentEvent
+
+  @prefix "coord/agent_events/"
 
   @spec append(map()) :: :ok | {:error, term()}
   def append(attrs) when is_map(attrs) do
-    attrs = stringify_atoms(attrs)
+    changeset = AgentEvent.changeset(%AgentEvent{}, attrs)
 
-    case %AgentEvent{} |> AgentEvent.changeset(attrs) |> Repo.insert() do
-      {:ok, _} -> :ok
-      {:error, changeset} -> {:error, changeset}
+    if changeset.valid? do
+      now = DateTime.utc_now()
+
+      record =
+        changeset
+        |> Ecto.Changeset.apply_changes()
+        |> Map.merge(%{id: Ecto.UUID.generate(), inserted_at: now})
+
+      key = @prefix <> DateTime.to_iso8601(now) <> "-" <> record.id
+
+      case Concord.put(key, Map.from_struct(record)) do
+        :ok -> :ok
+        {:ok, _} -> :ok
+        other -> {:error, other}
+      end
+    else
+      {:error, changeset}
     end
   end
 
@@ -18,57 +37,29 @@ defmodule Synapsis.AgentEvents do
   def list(filters \\ []) do
     {limit, filters} = Keyword.pop(filters, :limit, 500)
 
-    AgentEvent
-    |> apply_filters(filters)
-    |> order_by([e], asc: e.inserted_at)
-    |> limit(^limit)
-    |> Repo.all()
+    scan()
+    |> Enum.filter(&matches?(&1, filters))
+    |> Enum.sort_by(& &1.inserted_at, DateTime)
+    |> Enum.take(limit)
   end
 
-  defp apply_filters(query, []), do: query
+  defp scan do
+    case Concord.prefix_scan(@prefix) do
+      # WORKAROUND(upstream): gsmlg-dev/concord#23 — prefix_scan skips decompression.
+      {:ok, pairs} ->
+        Enum.map(pairs, fn {_k, v} -> struct(AgentEvent, Concord.Compression.decompress(v)) end)
 
-  defp apply_filters(query, [{:agent_id, val} | rest]) when is_binary(val) do
-    query |> where([e], e.agent_id == ^val) |> apply_filters(rest)
+      _ ->
+        []
+    end
   end
 
-  defp apply_filters(query, [{:work_id, val} | rest]) when is_binary(val) do
-    query |> where([e], e.work_id == ^val) |> apply_filters(rest)
-  end
-
-  defp apply_filters(query, [{:event_type, val} | rest]) when is_atom(val) do
-    str = Atom.to_string(val)
-    query |> where([e], e.event_type == ^str) |> apply_filters(rest)
-  end
-
-  defp apply_filters(query, [{:event_type, val} | rest]) when is_binary(val) do
-    query |> where([e], e.event_type == ^val) |> apply_filters(rest)
-  end
-
-  defp apply_filters(query, [_ | rest]), do: apply_filters(query, rest)
-
-  defp stringify_atoms(attrs) do
-    attrs
-    |> Map.new(fn
-      {:event_type, v} when is_atom(v) -> {"event_type", Atom.to_string(v)}
-      {:payload, v} when is_map(v) -> {"payload", json_safe(v)}
-      {k, v} when is_atom(k) -> {Atom.to_string(k), v}
-      {k, v} -> {k, v}
+  defp matches?(event, filters) do
+    Enum.all?(filters, fn
+      {:agent_id, v} -> event.agent_id == v
+      {:work_id, v} -> event.work_id == v
+      {:event_type, v} -> event.event_type == to_string(v)
+      _ -> true
     end)
   end
-
-  defp json_safe(value) when is_map(value) and not is_struct(value) do
-    Map.new(value, fn {k, v} -> {to_string(k), json_safe(v)} end)
-  end
-
-  defp json_safe(value) when is_list(value), do: Enum.map(value, &json_safe/1)
-  defp json_safe(true), do: true
-  defp json_safe(false), do: false
-  defp json_safe(nil), do: nil
-  defp json_safe(value) when is_atom(value), do: Atom.to_string(value)
-  defp json_safe(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
-  defp json_safe(%NaiveDateTime{} = dt), do: NaiveDateTime.to_iso8601(dt)
-  defp json_safe(%Date{} = d), do: Date.to_iso8601(d)
-  defp json_safe(value) when is_struct(value), do: json_safe(Map.from_struct(value))
-  defp json_safe(value) when is_tuple(value), do: inspect(value)
-  defp json_safe(value), do: value
 end

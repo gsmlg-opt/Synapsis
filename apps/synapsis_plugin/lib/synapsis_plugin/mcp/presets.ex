@@ -6,8 +6,7 @@ defmodule SynapsisPlugin.MCP.Presets do
   of default configurations into the database.
   """
 
-  alias Synapsis.{Repo, PluginConfig}
-  import Ecto.Query, only: [from: 2]
+  alias Synapsis.PluginConfigs
 
   @presets [
     %{
@@ -36,7 +35,8 @@ defmodule SynapsisPlugin.MCP.Presets do
     },
     %{
       name: "chrome-devtools",
-      description: "Chrome DevTools for AI agents — debugging, performance tracing, network inspection",
+      description:
+        "Chrome DevTools for AI agents — debugging, performance tracing, network inspection",
       command: "npx",
       args: ["-y", "chrome-devtools-mcp@latest"],
       env: %{},
@@ -44,10 +44,14 @@ defmodule SynapsisPlugin.MCP.Presets do
     },
     %{
       name: "gitlab",
-      description: "GitLab repository management — issues, merge requests, pipelines, code search",
+      description:
+        "GitLab repository management — issues, merge requests, pipelines, code search",
       command: "npx",
       args: ["-y", "@modelcontextprotocol/server-gitlab"],
-      env: %{"GITLAB_PERSONAL_ACCESS_TOKEN" => "", "GITLAB_API_URL" => "https://gitlab.com/api/v4"},
+      env: %{
+        "GITLAB_PERSONAL_ACCESS_TOKEN" => "",
+        "GITLAB_API_URL" => "https://gitlab.com/api/v4"
+      },
       transport: "stdio"
     },
     %{
@@ -141,27 +145,22 @@ defmodule SynapsisPlugin.MCP.Presets do
   end
 
   @doc "Return names of presets already configured in the database."
-  def configured_names do
-    Repo.all(from(p in PluginConfig, where: p.type == "mcp", select: p.name))
-  end
+  def configured_names, do: PluginConfigs.names_by_type("mcp")
 
-  @doc "Insert all presets into plugin_configs as type \"mcp\" (idempotent)."
+  @doc "Insert all presets into the Config.Store as type \"mcp\" (idempotent)."
   def seed_defaults do
     Enum.each(@presets, fn preset ->
-      %PluginConfig{}
-      |> PluginConfig.changeset(%{
-        type: "mcp",
-        name: preset.name,
-        transport: preset.transport,
-        command: preset.command,
-        args: preset.args,
-        env: preset.env,
-        auto_start: false
-      })
-      |> Repo.insert(
-        on_conflict: :nothing,
-        conflict_target: [:name, :scope]
-      )
+      unless PluginConfigs.get_by_name_type(preset.name, "mcp") do
+        PluginConfigs.create(%{
+          type: "mcp",
+          name: preset.name,
+          transport: preset.transport,
+          command: preset.command,
+          args: preset.args,
+          env: preset.env,
+          auto_start: false
+        })
+      end
     end)
 
     :ok

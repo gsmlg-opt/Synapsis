@@ -6,30 +6,10 @@ on:
 
 env:
   MIX_ENV: test
-  PGUSER: postgres
-  PGPASSWORD: postgres
-  PGDATABASE: synapsis_test
-  PGHOST: localhost
-  PGPORT: 5432
 
 jobs:
   test:
     runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: synapsis_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
 
     steps:
       - name: Checkout code
@@ -58,8 +38,7 @@ jobs:
           mix local.rebar --force
           mix deps.get
 
-      - name: Setup database
-        run: mix ecto.setup
-
+      # ADR-006 C4: no PostgreSQL. Storage is the embedded Concord store
+      # (node-local Ra), files, and the memory port — all started by the apps.
       - name: Run tests
         run: mix test

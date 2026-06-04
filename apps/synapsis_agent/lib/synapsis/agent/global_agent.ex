@@ -10,7 +10,7 @@ defmodule Synapsis.Agent.GlobalAgent do
 
   use GenServer
 
-  alias Synapsis.Agent.{AgentRegistry, Memory.EventStore}
+  alias Synapsis.Agent.Memory.EventStore
   alias Synapsis.Agent.Runtime.Engine
   alias Synapsis.Agent.Graphs.ConversationalLoop
   alias Synapsis.Session.Worker.{Boot, IOHandler, Persistence}
@@ -167,7 +167,6 @@ defmodule Synapsis.Agent.GlobalAgent do
   end
 
   def handle_info({:coding_session_completed, _ref, child_session_id}, state) do
-    AgentRegistry.update_status(child_session_id, :complete)
     summary = fetch_session_summary(child_session_id)
 
     EventStore.append(%{
@@ -197,8 +196,6 @@ defmodule Synapsis.Agent.GlobalAgent do
   end
 
   def handle_info({:coding_session_failed, _ref, child_session_id}, state) do
-    AgentRegistry.update_status(child_session_id, :failed)
-
     Phoenix.PubSub.broadcast(
       Synapsis.PubSub,
       "session:#{state.session_id}",
@@ -208,8 +205,7 @@ defmodule Synapsis.Agent.GlobalAgent do
     {:noreply, state, @timeout}
   end
 
-  def handle_info({:coding_session_timeout, _ref, child_session_id}, state) do
-    AgentRegistry.update_status(child_session_id, :failed)
+  def handle_info({:coding_session_timeout, _ref, _child_session_id}, state) do
     {:noreply, state, @timeout}
   end
 

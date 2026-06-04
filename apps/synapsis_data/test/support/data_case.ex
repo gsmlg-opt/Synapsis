@@ -4,22 +4,60 @@ defmodule Synapsis.DataCase do
 
   using do
     quote do
-      alias Synapsis.Repo
-      import Ecto
       import Ecto.Changeset
-      import Ecto.Query
       import Synapsis.DataCase
     end
   end
 
+  # ADR-006 C4: no Ecto sandbox — the embedded Concord store is node-local; tests
+  # isolate via unique ids rather than per-test DB transactions.
   setup tags do
-    Synapsis.DataCase.setup_sandbox(tags)
+    setup_sandbox(tags)
     :ok
   end
 
-  def setup_sandbox(tags) do
-    pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Synapsis.Repo, shared: not tags[:async])
-    on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
+  @doc "Kept for ConnCase/ChannelCase compatibility — ensures the store is up."
+  def setup_sandbox(_tags) do
+    Synapsis.Session.Store.ensure_started()
+    :ok
+  end
+
+  @doc """
+  Clear all rows of a `Config.Store` type's ETS table (test isolation for
+  Config.Store-backed contexts, which have no per-test transaction rollback).
+  """
+  def clear_config_store(type) do
+    table = :"synapsis_config_#{type}"
+    if :ets.info(table) != :undefined, do: :ets.delete_all_objects(table)
+    :ok
+  end
+
+  @doc """
+  Ensure the active memory adapter process is alive (it is a supervised singleton
+  that an earlier test may have crashed past its restart budget) and start from a
+  clean file store.
+  """
+  def reset_memory_store do
+    dir = Application.get_env(:synapsis_core, :memory_dir)
+    if dir, do: File.rm_rf!(dir)
+
+    if :ets.info(:synapsis_memory_file_index) != :undefined,
+      do: :ets.delete_all_objects(:synapsis_memory_file_index)
+
+    if :ets.info(Synapsis.Memory.EventLog) != :undefined,
+      do: :ets.delete_all_objects(Synapsis.Memory.EventLog)
+
+    :ok
+  end
+
+  @doc "Delete every Concord key under a coordination prefix (test isolation)."
+  def clear_coord(prefix) when is_binary(prefix) do
+    case Concord.prefix_scan(prefix) do
+      {:ok, pairs} -> Concord.delete_many(Enum.map(pairs, fn {k, _} -> k end))
+      _ -> :ok
+    end
+
+    :ok
   end
 
   def errors_on(changeset) do

@@ -84,34 +84,31 @@ defmodule Synapsis.Workspace.GC do
   # ---------------------------------------------------------------------------
 
   defp do_gc do
-    if repo_available?() do
-      started_at = System.monotonic_time(:millisecond)
+    # ADR-006 C4: GC operates over the file-backed workspace store via
+    # WorkspaceDocuments; there is no Repo to gate on anymore.
+    started_at = System.monotonic_time(:millisecond)
 
-      scratch_count = cleanup_session_scratch()
-      version_count = prune_draft_versions()
-      blob_count = cleanup_orphaned_blobs()
-      expired_count = hard_delete_expired()
+    scratch_count = cleanup_session_scratch()
+    version_count = prune_draft_versions()
+    blob_count = cleanup_orphaned_blobs()
+    expired_count = hard_delete_expired()
 
-      elapsed_ms = System.monotonic_time(:millisecond) - started_at
+    elapsed_ms = System.monotonic_time(:millisecond) - started_at
 
-      Logger.info("workspace_gc_complete",
-        scratch_deleted: scratch_count,
-        draft_versions_pruned: version_count,
-        orphaned_blobs_deleted: blob_count,
-        expired_docs_deleted: expired_count,
-        elapsed_ms: elapsed_ms
-      )
+    Logger.info("workspace_gc_complete",
+      scratch_deleted: scratch_count,
+      draft_versions_pruned: version_count,
+      orphaned_blobs_deleted: blob_count,
+      expired_docs_deleted: expired_count,
+      elapsed_ms: elapsed_ms
+    )
 
-      %{
-        scratch_deleted: scratch_count,
-        draft_versions_pruned: version_count,
-        orphaned_blobs_deleted: blob_count,
-        expired_docs_deleted: expired_count
-      }
-    else
-      Logger.info("workspace_gc_skipped", reason: "repo_unavailable")
-      %{scratch_deleted: 0, draft_versions_pruned: 0, orphaned_blobs_deleted: 0, expired_docs_deleted: 0}
-    end
+    %{
+      scratch_deleted: scratch_count,
+      draft_versions_pruned: version_count,
+      orphaned_blobs_deleted: blob_count,
+      expired_docs_deleted: expired_count
+    }
   end
 
   # ---------------------------------------------------------------------------
@@ -126,7 +123,9 @@ defmodule Synapsis.Workspace.GC do
   retention window (i.e. it is idle/finished).
   """
   def cleanup_session_scratch do
-    retention_days = gc_config(:session_scratch_retention_days, @default_session_scratch_retention_days)
+    retention_days =
+      gc_config(:session_scratch_retention_days, @default_session_scratch_retention_days)
+
     cutoff = DateTime.add(DateTime.utc_now(), -retention_days, :day)
 
     ids = WorkspaceDocuments.stale_session_scratch_ids(cutoff)
@@ -268,12 +267,5 @@ defmodule Synapsis.Workspace.GC do
   defp blob_ref_to_path(root, ref) do
     <<a::binary-size(2), b::binary-size(2), rest::binary>> = ref
     Path.join([root, a, b, rest])
-  end
-
-  defp repo_available? do
-    case Process.whereis(Synapsis.Repo) do
-      nil -> false
-      _pid -> true
-    end
   end
 end

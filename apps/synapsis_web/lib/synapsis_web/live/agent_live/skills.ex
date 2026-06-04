@@ -41,7 +41,7 @@ defmodule SynapsisWeb.AgentLive.Skills do
 
     case result do
       {:ok, %Skill{} = skill} ->
-        {:ok, _agents} = AgentSkills.assign_agents(skill, agent_ids)
+        :ok = AgentSkills.assign_agents(skill, agent_ids)
 
         {:noreply,
          socket

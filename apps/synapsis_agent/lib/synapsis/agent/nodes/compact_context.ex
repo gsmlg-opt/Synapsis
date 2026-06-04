@@ -63,11 +63,6 @@ defmodule Synapsis.Agent.Nodes.CompactContext do
         )
 
         {:next, :default, state}
-
-      {:error, reason} ->
-        Logger.warning("compaction_failed", session_id: session_id, reason: inspect(reason))
-        # Don't block the pipeline on compaction failure
-        {:next, :default, state}
     end
   end
 end

@@ -15,7 +15,7 @@ defmodule SynapsisWeb.SkillLive.Index do
       description: params["description"]
     }
 
-    case Synapsis.Repo.insert(Synapsis.Skill.changeset(%Synapsis.Skill{}, attrs)) do
+    case Synapsis.Skills.create(attrs) do
       {:ok, skill} ->
         {:noreply,
          socket
@@ -27,22 +27,19 @@ defmodule SynapsisWeb.SkillLive.Index do
   end
 
   def handle_event("delete_skill", %{"id" => id}, socket) do
-    case Synapsis.Repo.get(Synapsis.Skill, id) do
+    case Synapsis.Skills.get(id) do
       nil ->
         {:noreply, socket}
 
       skill ->
-        case Synapsis.Repo.delete(skill) do
+        case Synapsis.Skills.delete(skill) do
           {:ok, _} -> {:noreply, assign(socket, skills: list_skills())}
           {:error, _} -> {:noreply, put_flash(socket, :error, "Failed to delete skill")}
         end
     end
   end
 
-  defp list_skills do
-    import Ecto.Query
-    Synapsis.Repo.all(from(s in Synapsis.Skill, order_by: [asc: s.name]))
-  end
+  defp list_skills, do: Synapsis.Skills.list()
 
   @impl true
   def render(assigns) do

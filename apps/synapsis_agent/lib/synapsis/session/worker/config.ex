@@ -1,7 +1,8 @@
 defmodule Synapsis.Session.Worker.Config do
   @moduledoc "Provider, agent, and mode resolution for Session.Worker."
 
-  alias Synapsis.{Repo, Session}
+  alias Synapsis.Session
+  alias Synapsis.Session.Store
 
   @valid_modes ~w(bypass_permissions ask_before_edits edit_automatically plan_mode assistant_mode)
   @mode_configs %{
@@ -114,7 +115,7 @@ defmodule Synapsis.Session.Worker.Config do
   def do_switch_agent(agent_name, session) do
     name_str = to_string(agent_name)
 
-    case session |> Session.changeset(%{agent: name_str}) |> Repo.update() do
+    case persist_session(session, %{agent: name_str}) do
       {:ok, updated_session} ->
         agent = resolve_agent(updated_session)
 
@@ -133,10 +134,23 @@ defmodule Synapsis.Session.Worker.Config do
     end
   end
 
+  # ADR-006 C4: persist a session field change to the Concord meta snapshot.
+  defp persist_session(%Session{} = session, attrs) do
+    changeset = Session.changeset(session, attrs)
+
+    if changeset.valid? do
+      updated =
+        changeset |> Ecto.Changeset.apply_changes() |> Map.put(:updated_at, DateTime.utc_now())
+
+      Store.put_meta(updated.id, Session.to_meta(updated))
+      {:ok, updated}
+    else
+      {:error, :db_update_failed}
+    end
+  end
+
   def do_switch_model(provider_name, model, state) do
-    case state.session
-         |> Session.changeset(%{provider: provider_name, model: model})
-         |> Repo.update() do
+    case persist_session(state.session, %{provider: provider_name, model: model}) do
       {:ok, updated_session} ->
         provider_config = resolve_provider_config(provider_name)
         agent = Map.put(state.agent, :model, model)
@@ -158,8 +172,7 @@ defmodule Synapsis.Session.Worker.Config do
         _ -> state.execution_mode
       end
 
-    with {:ok, updated_session} <-
-           state.session |> Session.changeset(%{agent: config.agent}) |> Repo.update(),
+    with {:ok, updated_session} <- persist_session(state.session, %{agent: config.agent}),
          {:ok, _} <-
            Synapsis.Tool.Permission.update_config(state.session_id, config.permission) do
       Phoenix.PubSub.broadcast(

@@ -821,7 +821,7 @@ defmodule SynapsisWeb.CoreComponents do
       </span>
       <div class="flex-1 min-w-0">
         <div class="truncate font-medium">
-          {@session.title || "Session #{String.slice(@session.id, 0..7)}"}
+          {@session.title || "Session #{String.slice(@session.id || "", 0..7)}"}
         </div>
         <div class={[
           "text-xs truncate",

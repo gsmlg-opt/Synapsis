@@ -1,15 +1,15 @@
 defmodule Synapsis.Session.Fork do
   @moduledoc "Fork a session at a given message, creating a new branch."
 
-  alias Synapsis.{Repo, Session, Message}
-  import Ecto.Query
+  alias Synapsis.{Message, Session, Sessions}
+  alias Synapsis.Session.Store
 
   def fork(session_id, opts \\ []) do
     message_id = Keyword.get(opts, :at_message)
 
-    case Repo.get(Session, session_id) do
-      nil -> {:error, :not_found}
-      session -> do_fork(session, message_id)
+    case Sessions.get(session_id) do
+      {:error, :not_found} -> {:error, :not_found}
+      {:ok, session} -> do_fork(session, message_id)
     end
   end
 
@@ -32,48 +32,35 @@ defmodule Synapsis.Session.Fork do
     if messages_to_copy == :message_not_found do
       {:error, :message_not_found}
     else
-      title = "Fork of #{session.title || session.id}"
+      now = DateTime.utc_now()
 
-      attrs = %{
+      new_session = %Session{
+        id: Ecto.UUID.generate(),
         provider: session.provider,
         model: session.model,
         agent: session.agent,
-        title: title,
-        config: session.config
+        title: "Fork of #{session.title || session.id}",
+        config: session.config || %{},
+        status: "idle",
+        inserted_at: now,
+        updated_at: now
       }
 
-      Repo.transaction(fn ->
-        new_session =
-          case %Session{}
-               |> Session.changeset(attrs)
-               |> Repo.insert() do
-            {:ok, s} -> s
-            {:error, changeset} -> Repo.rollback(changeset)
-          end
+      copied =
+        Enum.map(messages_to_copy, fn msg ->
+          %Message{
+            session_id: new_session.id,
+            role: msg.role,
+            parts: msg.parts,
+            token_count: msg.token_count
+          }
+        end)
 
-        for msg <- messages_to_copy do
-          case %Message{}
-               |> Message.changeset(%{
-                 session_id: new_session.id,
-                 role: msg.role,
-                 parts: msg.parts,
-                 token_count: msg.token_count
-               })
-               |> Repo.insert() do
-            {:ok, _} -> :ok
-            {:error, changeset} -> Repo.rollback(changeset)
-          end
-        end
-
-        new_session
-      end)
+      Store.put_meta(new_session.id, Session.to_meta(new_session))
+      :ok = Message.persist_list(new_session.id, copied)
+      {:ok, new_session}
     end
   end
 
-  defp load_messages(session_id) do
-    Message
-    |> where([m], m.session_id == ^session_id)
-    |> order_by([m], asc: m.inserted_at)
-    |> Repo.all()
-  end
+  defp load_messages(session_id), do: Message.list_by_session(session_id)
 end

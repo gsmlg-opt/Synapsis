@@ -1,18 +1,18 @@
 defmodule SynapsisWeb.MCPLive.ShowTest do
   use SynapsisWeb.ConnCase
 
-  alias Synapsis.{Repo, PluginConfig}
+  alias Synapsis.PluginConfigs
 
   setup do
+    Synapsis.DataCase.clear_config_store(:plugin)
+
     {:ok, config} =
-      %PluginConfig{}
-      |> PluginConfig.changeset(%{
+      PluginConfigs.create(%{
         type: "mcp",
         name: "test-server",
         transport: "stdio",
         command: "npx test-server"
       })
-      |> Repo.insert()
 
     %{config: config}
   end
@@ -81,14 +81,13 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
 
   test "shows URL field", %{conn: conn, config: config} do
     {:ok, http_config} =
-      PluginConfig.changeset(config, %{
+      PluginConfigs.update(config, %{
         transport: "http",
         command: "",
         args: [],
         env: %{},
         url: "http://example.com/mcp"
       })
-      |> Repo.update()
 
     {:ok, _view, html} = live(conn, ~p"/settings/mcp/#{http_config.id}")
 
@@ -129,15 +128,13 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
 
   test "config with env vars displays them formatted", %{conn: conn} do
     {:ok, config_with_env} =
-      %PluginConfig{}
-      |> PluginConfig.changeset(%{
+      PluginConfigs.create(%{
         type: "mcp",
         name: "env-show-test",
         transport: "stdio",
         command: "test",
         env: %{"TOKEN" => "abc123", "SECRET" => "xyz789"}
       })
-      |> Repo.insert()
 
     {:ok, _view, html} = live(conn, ~p"/settings/mcp/#{config_with_env.id}")
     assert html =~ "TOKEN=abc123"
@@ -146,15 +143,13 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
 
   test "config with args displays them one per line", %{conn: conn} do
     {:ok, config_with_args} =
-      %PluginConfig{}
-      |> PluginConfig.changeset(%{
+      PluginConfigs.create(%{
         type: "mcp",
         name: "args-show-test",
         transport: "stdio",
         command: "test",
         args: ["--verbose", "--port=8080"]
       })
-      |> Repo.insert()
 
     {:ok, _view, html} = live(conn, ~p"/settings/mcp/#{config_with_args.id}")
     assert html =~ "--verbose"
@@ -222,7 +217,7 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     html = render(view)
     assert html =~ "MCP server updated"
 
-    updated = Repo.get!(PluginConfig, config.id)
+    updated = PluginConfigs.get(config.id)
     assert updated.transport == "http"
     assert updated.url == "http://example.com/mcp"
     assert updated.command in [nil, ""]

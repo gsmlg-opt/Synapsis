@@ -11,7 +11,7 @@ defmodule SynapsisCore.Application do
 
     children =
       [
-        Synapsis.Repo,
+        # ADR-006 C4: Synapsis.Repo removed; storage is Concord + files + memory port.
         {Phoenix.PubSub, name: Synapsis.PubSub},
         {Task.Supervisor, name: Synapsis.Provider.TaskSupervisor},
         Synapsis.Provider.Registry,
@@ -19,7 +19,9 @@ defmodule SynapsisCore.Application do
         Synapsis.Tool.Registry,
         {Registry, keys: :unique, name: Synapsis.FileWatcher.Registry},
         Synapsis.Session.Quarantine,
-        Synapsis.Config.Store.Supervisor,
+        # Config.Store now boots in SynapsisData.Application (data/storage layer)
+        # so lower apps (e.g. synapsis_provider) can read configs without
+        # depending upward on synapsis_core.
         Synapsis.Memory.Supervisor
       ] ++
         maybe_child(Synapsis.Workspace.GC) ++
@@ -36,7 +38,7 @@ defmodule SynapsisCore.Application do
         try do
           Synapsis.Providers.load_all_into_registry()
         rescue
-          e in [RuntimeError, Ecto.QueryError, DBConnection.ConnectionError] ->
+          e in [RuntimeError, Ecto.QueryError] ->
             Logger.warning("provider_registry_load_failed", error: Exception.message(e))
         end
 
@@ -85,7 +87,7 @@ defmodule SynapsisCore.Application do
     try do
       Synapsis.AgentConfigs.seed_defaults()
     rescue
-      e in [RuntimeError, Ecto.QueryError, DBConnection.ConnectionError] ->
+      e in [RuntimeError, Ecto.QueryError] ->
         Logger.warning("agent_config_seed_failed", error: Exception.message(e))
     end
   end
@@ -93,7 +95,7 @@ defmodule SynapsisCore.Application do
   defp seed_heartbeat_templates do
     maybe_apply(Synapsis.Agent.Heartbeat.Templates, :seed_defaults, [])
   rescue
-    e in [RuntimeError, Ecto.QueryError, DBConnection.ConnectionError] ->
+    e in [RuntimeError, Ecto.QueryError] ->
       Logger.warning("heartbeat_seed_failed", error: Exception.message(e))
   end
 

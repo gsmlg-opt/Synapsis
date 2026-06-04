@@ -1,7 +1,12 @@
 defmodule Synapsis.AgentMessagesTest do
-  use Synapsis.DataCase, async: true
+  use Synapsis.DataCase, async: false
 
   alias Synapsis.{AgentMessage, AgentMessages}
+
+  setup do
+    clear_coord("coord/agent_messages/")
+    :ok
+  end
 
   @valid_attrs %{
     ref: "test-ref-001",
@@ -132,9 +137,7 @@ defmodule Synapsis.AgentMessagesTest do
         AgentMessages.create(%{@valid_attrs | ref: "bulk-#{i}"})
       end
 
-      {count, _} = AgentMessages.mark_all_read("agent-b")
-      assert count == 3
-
+      assert :ok = AgentMessages.mark_all_read("agent-b")
       assert Enum.empty?(AgentMessages.unread("agent-b"))
     end
   end
@@ -146,8 +149,7 @@ defmodule Synapsis.AgentMessagesTest do
       {:ok, _} =
         AgentMessages.create(Map.merge(@valid_attrs, %{ref: "expired-ref", expires_at: past}))
 
-      {count, _} = AgentMessages.expire_stale()
-      assert count == 1
+      assert :ok = AgentMessages.expire_stale()
 
       msg = AgentMessages.get_by_ref("expired-ref")
       assert msg.status == "expired"

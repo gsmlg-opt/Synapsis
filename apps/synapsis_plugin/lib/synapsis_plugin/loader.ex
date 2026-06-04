@@ -23,17 +23,23 @@ defmodule SynapsisPlugin.Loader do
 
       :ok
     rescue
-      e in [RuntimeError, Ecto.QueryError, DBConnection.ConnectionError] ->
+      e in [RuntimeError, Ecto.QueryError] ->
         Logger.warning("plugin_loader_error", error: Exception.message(e))
         :ok
     end
   end
 
   defp load_plugin_configs do
-    import Ecto.Query
-    Synapsis.Repo.all(from(p in Synapsis.PluginConfig, where: p.auto_start == true))
+    # ADR-006 C4: plugin configs live in the file-backed Config.Store.
+    :plugin
+    |> Synapsis.Config.Store.list()
+    |> Enum.filter(&(&1["auto_start"] == true))
+    |> Enum.map(fn map ->
+      Synapsis.PluginConfig.changeset(%Synapsis.PluginConfig{}, map)
+      |> Ecto.Changeset.apply_changes()
+    end)
   rescue
-    _e in [Ecto.QueryError, DBConnection.ConnectionError] -> []
+    _e -> []
   end
 
   defp module_for_type("mcp"), do: SynapsisPlugin.MCP

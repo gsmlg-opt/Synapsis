@@ -18,19 +18,19 @@ defmodule Synapsis.Session.Snapshot do
   require Logger
 
   alias Synapsis.Session.Store
-  alias Synapsis.{Repo, Session, Message}
+  alias Synapsis.{Session, Message}
 
-  @doc "Build the durable `meta` snapshot for a session."
+  @doc """
+  Build the durable `meta` snapshot for a session.
+
+  Carries the full session fields (so `Sessions.from_meta/1` can reconstruct a
+  `%Session{}`) plus the turn count and a snapshot timestamp.
+  """
   def build_meta(%Session{} = session, turn_count) when is_integer(turn_count) do
-    %{
-      status: session.status,
-      agent: session.agent,
-      provider: session.provider,
-      model: session.model,
-      title: session.title,
+    Session.to_meta(session, %{
       turn_count: turn_count,
       snapshotted_at: DateTime.to_iso8601(DateTime.utc_now())
-    }
+    })
   end
 
   @doc """
@@ -39,13 +39,13 @@ defmodule Synapsis.Session.Snapshot do
   overwrites in place). Returns `:ok` or `{:error, reason}`.
   """
   def snapshot_session(session_id) when is_binary(session_id) do
-    case Repo.get(Session, session_id) do
-      nil ->
+    case Store.get_meta(session_id) do
+      {:error, :not_found} ->
         {:error, :session_not_found}
 
-      %Session{} = session ->
+      {:ok, meta} ->
         messages = Message.list_by_session(session_id)
-        meta = build_meta(session, length(messages))
+        meta = Map.put(meta, :turn_count, length(messages))
         write_turns(session_id, messages, meta)
     end
   end
@@ -99,41 +99,16 @@ defmodule Synapsis.Session.Snapshot do
     end
   end
 
-  @doc "Encode a persisted message into a JSON-friendly turn map."
-  def encode_message(%Message{} = message) do
-    %{
-      role: message.role,
-      token_count: message.token_count,
-      parts: Enum.map(message.parts || [], &encode_part/1)
-    }
-  end
+  @doc "Encode a persisted message into a durable turn map (delegates to Message)."
+  defdelegate encode_message(message), to: Message, as: :encode
 
   # ── internals ────────────────────────────────────────────────────────────
 
   defp write_turns(session_id, [], meta), do: Store.put_meta(session_id, meta)
 
   defp write_turns(session_id, messages, meta) do
-    messages
-    |> Enum.with_index()
-    |> Enum.reduce_while(:ok, fn {message, index}, :ok ->
-      case Store.commit_turn(session_id, index, encode_message(message), meta) do
-        :ok -> {:cont, :ok}
-        {:error, _} = err -> {:halt, err}
-      end
-    end)
+    with :ok <- Store.replace_turns(session_id, Enum.map(messages, &Message.encode/1)) do
+      Store.put_meta(session_id, meta)
+    end
   end
-
-  defp encode_part(%Synapsis.Part.Text{content: content}),
-    do: %{type: "text", text: content || ""}
-
-  defp encode_part(%Synapsis.Part.ToolUse{tool: name, tool_use_id: id, input: input}),
-    do: %{type: "tool_use", id: id, name: name, input: input || %{}}
-
-  defp encode_part(%Synapsis.Part.ToolResult{tool_use_id: id, content: content, is_error: err}),
-    do: %{type: "tool_result", tool_use_id: id, content: content || "", is_error: err || false}
-
-  defp encode_part(%Synapsis.Part.Image{media_type: mt}),
-    do: %{type: "image", media_type: mt}
-
-  defp encode_part(other), do: %{type: "unknown", raw: inspect(other)}
 end

@@ -5,7 +5,7 @@ defmodule Synapsis.Agent.ResponseFlusher do
   Extracted from Session.Worker.flush_pending/1 and build_assistant_parts/1.
   """
 
-  alias Synapsis.{Repo, Message, ContextWindow}
+  alias Synapsis.{Message, ContextWindow}
   require Logger
 
   @type acc :: %{
@@ -162,7 +162,7 @@ defmodule Synapsis.Agent.ResponseFlusher do
 
     {:ok, repaired}
   rescue
-    e in [Ecto.QueryError, Ecto.StaleEntryError, DBConnection.ConnectionError] ->
+    e in [Ecto.QueryError, Ecto.StaleEntryError] ->
       Logger.warning("ensure_tool_results_failed",
         session_id: session_id,
         error: Exception.message(e)
@@ -172,17 +172,13 @@ defmodule Synapsis.Agent.ResponseFlusher do
   end
 
   defp update_tool_use_status(session_id, tool_use_id, new_status) do
-    import Ecto.Query, only: [from: 2]
-
-    # Find the assistant message containing this tool_use_id
-    query =
-      from(m in Message,
-        where: m.session_id == ^session_id and m.role == "assistant",
-        order_by: [desc: m.inserted_at],
-        limit: 5
-      )
-
-    messages = Repo.all(query)
+    # Find the most recent assistant messages containing this tool_use_id.
+    messages =
+      session_id
+      |> Message.list_by_session()
+      |> Enum.filter(&(&1.role == "assistant"))
+      |> Enum.reverse()
+      |> Enum.take(5)
 
     Enum.find_value(messages, fn msg ->
       updated_parts =
@@ -195,14 +191,12 @@ defmodule Synapsis.Agent.ResponseFlusher do
         end)
 
       if updated_parts != msg.parts do
-        case msg |> Ecto.Changeset.change(parts: updated_parts) |> Repo.update() do
-          {:ok, _} -> true
-          {:error, _} -> nil
-        end
+        Message.update_message(%{msg | parts: updated_parts})
+        true
       end
     end)
   rescue
-    e in [Ecto.QueryError, Ecto.StaleEntryError, DBConnection.ConnectionError] ->
+    e ->
       Logger.warning("update_tool_use_status_failed",
         session_id: session_id,
         tool_use_id: tool_use_id,
@@ -211,18 +205,7 @@ defmodule Synapsis.Agent.ResponseFlusher do
   end
 
   defp safe_insert_message(session_id, attrs) do
-    case %Message{} |> Message.changeset(attrs) |> Repo.insert() do
-      {:ok, msg} ->
-        {:ok, msg}
-
-      {:error, changeset} ->
-        Logger.warning("message_insert_failed",
-          session_id: session_id,
-          errors: inspect(changeset.errors)
-        )
-
-        {:error, changeset}
-    end
+    Message.append(session_id, attrs)
   end
 
   defp ensure_next_tool_results(_assistant, %{role: "user"} = user, ids, result, is_error) do
@@ -238,12 +221,13 @@ defmodule Synapsis.Agent.ResponseFlusher do
       remaining_parts = reject_tool_results(user.parts, ids)
       extra_tokens = length(missing_ids) * ContextWindow.estimate_tokens(result)
 
-      case user
-           |> Ecto.Changeset.change(
-             parts: result_parts ++ remaining_parts,
-             token_count: (user.token_count || 0) + extra_tokens
-           )
-           |> Repo.update() do
+      updated = %{
+        user
+        | parts: result_parts ++ remaining_parts,
+          token_count: (user.token_count || 0) + extra_tokens
+      }
+
+      case Message.update_message(updated) do
         {:ok, _} ->
           mark_tool_uses(user.session_id, missing_ids, status)
           {:ok, length(missing_ids)}
@@ -327,17 +311,11 @@ defmodule Synapsis.Agent.ResponseFlusher do
   end
 
   defp mark_tool_uses(session_id, ids, new_status) do
-    import Ecto.Query, only: [from: 2]
-
     ids = MapSet.new(ids)
 
-    query =
-      from(m in Message,
-        where: m.session_id == ^session_id and m.role == "assistant"
-      )
-
-    query
-    |> Repo.all()
+    session_id
+    |> Message.list_by_session()
+    |> Enum.filter(&(&1.role == "assistant"))
     |> Enum.each(fn msg ->
       updated_parts =
         Enum.map(msg.parts, fn
@@ -349,9 +327,7 @@ defmodule Synapsis.Agent.ResponseFlusher do
         end)
 
       if updated_parts != msg.parts do
-        msg
-        |> Ecto.Changeset.change(parts: updated_parts)
-        |> Repo.update()
+        Message.update_message(%{msg | parts: updated_parts})
       end
     end)
   end

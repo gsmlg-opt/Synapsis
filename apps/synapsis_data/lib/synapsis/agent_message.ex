@@ -1,15 +1,22 @@
 defmodule Synapsis.AgentMessage do
-  @moduledoc "Persistent agent-to-agent message for reliable delivery."
+  @moduledoc """
+  Agent-to-agent message for reliable delivery.
+
+  ADR-006 C4: an `embedded_schema` (no DB table). Messages are node-local
+  coordination data persisted in Concord via `Synapsis.AgentMessages`.
+  """
   use Ecto.Schema
   import Ecto.Changeset
 
-  @primary_key {:id, :binary_id, autogenerate: true}
+  @primary_key {:id, :binary_id, autogenerate: false}
   @foreign_key_type :binary_id
+
+  @type t :: %__MODULE__{}
 
   @types ~w(request response notification delegation handoff completion)
   @statuses ~w(delivered read acknowledged expired)
 
-  schema "agent_messages" do
+  embedded_schema do
     field(:ref, :string)
     field(:from_agent_id, :string)
     field(:to_agent_id, :string)
@@ -20,11 +27,12 @@ defmodule Synapsis.AgentMessage do
     field(:session_id, :binary_id)
     field(:expires_at, :utc_datetime_usec)
 
-    timestamps(type: :utc_datetime_usec)
+    field(:inserted_at, :utc_datetime_usec)
+    field(:updated_at, :utc_datetime_usec)
   end
 
   @required_fields ~w(ref from_agent_id to_agent_id)a
-  @optional_fields ~w(type in_reply_to payload status session_id expires_at)a
+  @optional_fields ~w(id type in_reply_to payload status session_id expires_at)a
 
   def changeset(message, attrs) do
     message
@@ -32,19 +40,5 @@ defmodule Synapsis.AgentMessage do
     |> validate_required(@required_fields)
     |> validate_inclusion(:type, @types)
     |> validate_inclusion(:status, @statuses)
-    |> validate_length(:from_agent_id, max: 255)
-    |> validate_length(:to_agent_id, max: 255)
-  end
-
-  def mark_read_changeset(message) do
-    change(message, status: "read")
-  end
-
-  def mark_acknowledged_changeset(message) do
-    change(message, status: "acknowledged")
-  end
-
-  def mark_expired_changeset(message) do
-    change(message, status: "expired")
   end
 end

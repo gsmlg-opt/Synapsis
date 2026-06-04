@@ -1,7 +1,7 @@
 defmodule Synapsis.AgentSkillsTest do
   use Synapsis.DataCase
 
-  alias Synapsis.{AgentConfigs, AgentSkills, Skill, Skills}
+  alias Synapsis.{AgentConfig, AgentConfigs, AgentSkills, Skill, Skills}
 
   describe "assign_skills/2" do
     test "stores the exact skills assigned to an agent" do
@@ -9,12 +9,10 @@ defmodule Synapsis.AgentSkillsTest do
       {:ok, first} = Skills.create(%{name: "brief", scope: "global"})
       {:ok, second} = Skills.create(%{name: "review", scope: "global"})
 
-      assert {:ok, skills} = AgentSkills.assign_skills(agent, [first.id, second.id])
-      assert Enum.map(skills, & &1.name) == ["brief", "review"]
+      assert {:ok, %AgentConfig{}} = AgentSkills.assign_skills(agent, [first.id, second.id])
       assert AgentSkills.list_skill_ids(agent.id) == [first.id, second.id]
 
-      assert {:ok, skills} = AgentSkills.assign_skills(agent, [second.id])
-      assert Enum.map(skills, & &1.name) == ["review"]
+      assert {:ok, %AgentConfig{}} = AgentSkills.assign_skills(agent, [second.id])
       assert AgentSkills.list_skill_ids(agent.id) == [second.id]
     end
 
@@ -23,12 +21,12 @@ defmodule Synapsis.AgentSkillsTest do
       {:ok, second_agent} = AgentConfigs.create(%{name: "second-agent"})
       {:ok, skill} = Skills.create(%{name: "planning", scope: "global"})
 
-      assert {:ok, agents} = AgentSkills.assign_agents(skill, [first_agent.id, second_agent.id])
-      assert Enum.map(agents, & &1.name) == ["first-agent", "second-agent"]
-      assert AgentSkills.list_agent_ids(skill.id) == [first_agent.id, second_agent.id]
+      assert :ok = AgentSkills.assign_agents(skill, [first_agent.id, second_agent.id])
 
-      assert {:ok, agents} = AgentSkills.assign_agents(skill, [second_agent.id])
-      assert Enum.map(agents, & &1.name) == ["second-agent"]
+      assert Enum.sort(AgentSkills.list_agent_ids(skill.id)) ==
+               Enum.sort([first_agent.id, second_agent.id])
+
+      assert :ok = AgentSkills.assign_agents(skill, [second_agent.id])
       assert AgentSkills.list_agent_ids(skill.id) == [second_agent.id]
     end
   end
