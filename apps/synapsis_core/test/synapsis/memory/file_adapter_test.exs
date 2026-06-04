@@ -169,7 +169,13 @@ defmodule Synapsis.Memory.FileAdapterTest do
       })
 
     # Stop the adapter process; direct file reads must still serve search.
-    if pid = Process.whereis(FileAdapter), do: catch_exit(GenServer.stop(pid))
+    if pid = Process.whereis(FileAdapter) do
+      try do
+        GenServer.stop(pid)
+      catch
+        :exit, _ -> :ok
+      end
+    end
 
     results = FileAdapter.search("persisted", [])
     assert Enum.any?(results, &(&1.id == m.id))
