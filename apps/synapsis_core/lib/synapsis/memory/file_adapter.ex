@@ -23,38 +23,49 @@ defmodule Synapsis.Memory.FileAdapter do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
+  # ADR-006 C4: markdown files are the durable fallback store. Operations are
+  # direct file I/O — they must not depend on the (best-effort) GenServer index,
+  # so a down/restarting adapter process never surfaces `:noproc` to callers.
   @impl Synapsis.Memory.Adapter
   def store(attrs) do
-    GenServer.call(__MODULE__, {:store, attrs})
+    memory = build_memory(attrs)
+
+    case write_file(memory) do
+      :ok ->
+        safe_index(memory)
+        {:ok, memory}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   @impl Synapsis.Memory.Adapter
   def search(query, filters \\ []) do
-    candidate_ids = search_index(query, filters)
+    tokens = query |> to_string() |> String.downcase() |> String.split(~r/\W+/, trim: true)
+    want_tags = filters |> Keyword.get(:tags, []) |> Enum.map(&String.downcase/1)
     scope_filter = Keyword.get(filters, :scope)
     scope_id_filter = Keyword.get(filters, :scope_id)
     kind_filter = Keyword.get(filters, :kinds)
 
-    candidate_ids
-    |> Enum.flat_map(fn id ->
-      case read_by_id(id) do
-        {:ok, m} -> [m]
-        _ -> []
-      end
-    end)
+    list()
     |> Enum.filter(fn m ->
-      scope_ok = is_nil(scope_filter) or m.scope == to_string(scope_filter)
-      scope_id_ok = is_nil(scope_id_filter) or m.scope_id == scope_id_filter
-      kind_ok = is_nil(kind_filter) or m.kind in kind_filter
-      scope_ok and scope_id_ok and kind_ok
+      mem_tags = m.tags |> List.wrap() |> Enum.map(&String.downcase(to_string(&1)))
+      text = [m.title, m.summary, Enum.join(mem_tags, " ")] |> Enum.join(" ") |> String.downcase()
+
+      # Match if any query token appears (token index semantics) and, when a tag
+      # filter is given, the memory carries one of the requested tags.
+      (tokens == [] or Enum.any?(tokens, &String.contains?(text, &1))) and
+        (want_tags == [] or Enum.any?(want_tags, &(&1 in mem_tags))) and
+        (is_nil(scope_filter) or m.scope == to_string(scope_filter)) and
+        (is_nil(scope_id_filter) or m.scope_id == scope_id_filter) and
+        (is_nil(kind_filter) or m.kind in kind_filter)
     end)
     |> Enum.sort_by(& &1.importance, :desc)
   end
 
   @impl Synapsis.Memory.Adapter
-  def get(id) do
-    read_by_id(id)
-  end
+  def get(id), do: read_by_id(id)
 
   @impl Synapsis.Memory.Adapter
   def list(filters \\ []) do
@@ -82,12 +93,38 @@ defmodule Synapsis.Memory.FileAdapter do
 
   @impl Synapsis.Memory.Adapter
   def update(id, attrs) do
-    GenServer.call(__MODULE__, {:update, id, attrs})
+    case read_by_id(id) do
+      {:ok, existing} ->
+        updated =
+          existing
+          |> Map.merge(atomize_keys(attrs))
+          |> Map.put(:updated_at, DateTime.utc_now())
+
+        case write_file(updated) do
+          :ok ->
+            safe_reindex(id, updated)
+            {:ok, updated}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
+
+      error ->
+        error
+    end
   end
 
   @impl Synapsis.Memory.Adapter
   def archive(id) do
-    GenServer.call(__MODULE__, {:archive, id})
+    case read_by_id(id) do
+      {:ok, memory} ->
+        write_file(Map.put(memory, :archived_at, DateTime.utc_now()))
+        safe_remove_from_index(id)
+        :ok
+
+      _ ->
+        {:error, :not_found}
+    end
   end
 
   @impl Synapsis.Memory.Adapter
@@ -113,84 +150,55 @@ defmodule Synapsis.Memory.FileAdapter do
     {:ok, %{}}
   end
 
+  # GenServer call paths delegate to the direct (file-I/O) public API for
+  # backward compatibility; the index ETS table is maintained best-effort.
   @impl true
-  def handle_call({:store, attrs}, _from, state) do
-    id = Map.get(attrs, :id) || Map.get(attrs, "id") || generate_id()
-
-    memory =
-      %{
-        id: id,
-        scope: to_str(Map.get(attrs, :scope, "shared")),
-        scope_id: to_str(Map.get(attrs, :scope_id, "")),
-        kind: to_str(Map.get(attrs, :kind, "fact")),
-        title: to_str(Map.get(attrs, :title, "")),
-        summary: to_str(Map.get(attrs, :summary, "")),
-        detail: Map.get(attrs, :detail, %{}),
-        tags: List.wrap(Map.get(attrs, :tags, [])),
-        importance: Map.get(attrs, :importance, 0.5),
-        confidence: Map.get(attrs, :confidence, 0.5),
-        freshness: Map.get(attrs, :freshness, 1.0),
-        source: to_str(Map.get(attrs, :source, "agent")),
-        contributed_by: to_str(Map.get(attrs, :contributed_by, "")),
-        evidence_event_ids: List.wrap(Map.get(attrs, :evidence_event_ids, [])),
-        access_count: Map.get(attrs, :access_count, 0),
-        inserted_at: DateTime.utc_now(),
-        updated_at: DateTime.utc_now()
-      }
-
-    case write_file(memory) do
-      :ok ->
-        index_memory(memory)
-        {:reply, {:ok, memory}, state}
-
-      {:error, reason} ->
-        {:reply, {:error, reason}, state}
-    end
-  rescue
-    e -> {:reply, {:error, Exception.message(e)}, state}
-  end
-
-  def handle_call({:update, id, attrs}, _from, state) do
-    case read_by_id(id) do
-      {:ok, existing} ->
-        updated =
-          existing
-          |> Map.merge(atomize_keys(attrs))
-          |> Map.put(:updated_at, DateTime.utc_now())
-
-        case write_file(updated) do
-          :ok ->
-            remove_from_index(id)
-            index_memory(updated)
-            {:reply, {:ok, updated}, state}
-
-          {:error, reason} ->
-            {:reply, {:error, reason}, state}
-        end
-
-      error ->
-        {:reply, error, state}
-    end
-  rescue
-    e -> {:reply, {:error, Exception.message(e)}, state}
-  end
-
-  def handle_call({:archive, id}, _from, state) do
-    case read_by_id(id) do
-      {:ok, memory} ->
-        archived = Map.put(memory, :archived_at, DateTime.utc_now())
-        write_file(archived)
-        remove_from_index(id)
-        {:reply, :ok, state}
-
-      _ ->
-        {:reply, {:error, :not_found}, state}
-    end
-  rescue
-    e -> {:reply, {:error, Exception.message(e)}, state}
-  end
+  def handle_call({:store, attrs}, _from, state), do: {:reply, store(attrs), state}
+  def handle_call({:update, id, attrs}, _from, state), do: {:reply, update(id, attrs), state}
+  def handle_call({:archive, id}, _from, state), do: {:reply, archive(id), state}
 
   # --- Private ---
+
+  defp build_memory(attrs) do
+    %{
+      id: Map.get(attrs, :id) || Map.get(attrs, "id") || generate_id(),
+      scope: to_str(Map.get(attrs, :scope, "shared")),
+      scope_id: to_str(Map.get(attrs, :scope_id, "")),
+      kind: to_str(Map.get(attrs, :kind, "fact")),
+      title: to_str(Map.get(attrs, :title, "")),
+      summary: to_str(Map.get(attrs, :summary, "")),
+      detail: Map.get(attrs, :detail, %{}),
+      tags: List.wrap(Map.get(attrs, :tags, [])),
+      importance: Map.get(attrs, :importance, 0.5),
+      confidence: Map.get(attrs, :confidence, 0.5),
+      freshness: Map.get(attrs, :freshness, 1.0),
+      source: to_str(Map.get(attrs, :source, "agent")),
+      contributed_by: to_str(Map.get(attrs, :contributed_by, "")),
+      evidence_event_ids: List.wrap(Map.get(attrs, :evidence_event_ids, [])),
+      access_count: Map.get(attrs, :access_count, 0),
+      inserted_at: DateTime.utc_now(),
+      updated_at: DateTime.utc_now()
+    }
+  end
+
+  # Best-effort inverted-index maintenance (search works without it via list/0).
+  defp safe_index(memory), do: safe(fn -> index_memory(memory) end)
+
+  defp safe_reindex(id, memory),
+    do:
+      safe(fn ->
+        remove_from_index(id)
+        index_memory(memory)
+      end)
+
+  defp safe_remove_from_index(id), do: safe(fn -> remove_from_index(id) end)
+
+  defp safe(fun) do
+    fun.()
+    :ok
+  rescue
+    _ -> :ok
+  end
 
   defp memory_dir do
     System.get_env("SYNAPSIS_MEMORY_DIR") ||
@@ -235,9 +243,10 @@ defmodule Synapsis.Memory.FileAdapter do
     File.write(path, content)
   end
 
+  # The file name is the id, so resolve it by direct wildcard (no ETS/GenServer).
   defp read_by_id(id) do
-    case :ets.lookup(@table, {:id, id}) do
-      [{_, path}] -> read_file(path)
+    case Path.wildcard(Path.join(memory_dir(), "**/#{id}.md")) do
+      [path | _] -> read_file(path)
       [] -> {:error, :not_found}
     end
   rescue
@@ -331,35 +340,6 @@ defmodule Synapsis.Memory.FileAdapter do
     :ets.match_delete(@table, {{:id, id}, :_})
     :ets.match_delete(@table, {{:tag, :_}, id})
     :ets.match_delete(@table, {{:token, :_}, id})
-  end
-
-  defp search_index(query, filters) do
-    tags = Keyword.get(filters, :tags, [])
-
-    tag_ids =
-      Enum.flat_map(tags, fn tag ->
-        :ets.lookup(@table, {:tag, String.downcase(tag)})
-        |> Enum.map(fn {_, id} -> id end)
-      end)
-      |> MapSet.new()
-
-    token_ids =
-      query
-      |> String.downcase()
-      |> String.split(~r/\W+/, trim: true)
-      |> Enum.flat_map(fn token ->
-        :ets.lookup(@table, {:token, token})
-        |> Enum.map(fn {_, id} -> id end)
-      end)
-      |> MapSet.new()
-
-    cond do
-      tags != [] and query == "" -> MapSet.to_list(tag_ids)
-      tags != [] -> MapSet.to_list(MapSet.intersection(tag_ids, token_ids))
-      true -> MapSet.to_list(token_ids)
-    end
-  rescue
-    _ -> []
   end
 
   defp generate_id do

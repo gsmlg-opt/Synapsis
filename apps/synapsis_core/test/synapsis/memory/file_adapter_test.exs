@@ -6,21 +6,13 @@ defmodule Synapsis.Memory.FileAdapterTest do
   @moduletag :tmp_dir
 
   setup %{tmp_dir: tmp_dir} do
+    # ADR-006 C4: FileAdapter ops are direct file I/O and read the memory dir
+    # dynamically, so pointing the env at a tmp dir is all the isolation needed
+    # (no process restart — that would race the supervisor).
     original = System.get_env("SYNAPSIS_MEMORY_DIR")
     System.put_env("SYNAPSIS_MEMORY_DIR", tmp_dir)
 
-    # Restart FileAdapter so it picks up the tmp dir.
-    if pid = Process.whereis(FileAdapter), do: GenServer.stop(pid)
-    {:ok, _pid} = FileAdapter.start_link([])
-
     on_exit(fn ->
-      # Use try/catch because another test may have already stopped the adapter.
-      try do
-        if pid = Process.whereis(FileAdapter), do: GenServer.stop(pid)
-      catch
-        :exit, _ -> :ok
-      end
-
       if original,
         do: System.put_env("SYNAPSIS_MEMORY_DIR", original),
         else: System.delete_env("SYNAPSIS_MEMORY_DIR")
@@ -164,7 +156,7 @@ defmodule Synapsis.Memory.FileAdapterTest do
     assert updated.summary == "First version."
   end
 
-  test "ETS index is rebuilt from disk on restart" do
+  test "search reads from disk even when the adapter process is down" do
     {:ok, m} =
       FileAdapter.store(%{
         scope: "agent",
@@ -176,11 +168,9 @@ defmodule Synapsis.Memory.FileAdapterTest do
         importance: 0.5
       })
 
-    # Restart adapter (simulates crash/reboot).
-    if pid = Process.whereis(FileAdapter), do: GenServer.stop(pid)
-    {:ok, _} = FileAdapter.start_link([])
+    # Stop the adapter process; direct file reads must still serve search.
+    if pid = Process.whereis(FileAdapter), do: catch_exit(GenServer.stop(pid))
 
-    # Index should be rebuilt from disk.
     results = FileAdapter.search("persisted", [])
     assert Enum.any?(results, &(&1.id == m.id))
   end

@@ -50,31 +50,6 @@ defmodule Synapsis.DataCase do
     :ok
   end
 
-  @doc """
-  Ensure the supervised memory adapter (and event log) are alive. A prior test
-  that crashed can take the singleton down past its restart budget; we restart it
-  **unlinked** so it survives the transient test process.
-  """
-  def ensure_memory_adapter do
-    Enum.each(
-      [Synapsis.Memory.Adapter.active(), Synapsis.Memory.EventLog],
-      &ensure_alive/1
-    )
-
-    :ok
-  end
-
-  defp ensure_alive(mod) do
-    if function_exported?(mod, :start_link, 1) and not is_pid(Process.whereis(mod)) do
-      case mod.start_link([]) do
-        {:ok, pid} -> Process.unlink(pid)
-        _ -> :ok
-      end
-    end
-
-    :ok
-  end
-
   @doc "Delete every Concord key under a coordination prefix (test isolation)."
   def clear_coord(prefix) when is_binary(prefix) do
     case Concord.prefix_scan(prefix) do
