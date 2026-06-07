@@ -12,6 +12,13 @@ config :synapsis_data, encryption_key: "test-encryption-key-32bytes!!!!!"
 
 config :logger, level: :warning
 
+config_store_dir =
+  Path.expand("../tmp/config_store_test#{System.get_env("MIX_TEST_PARTITION")}", __DIR__)
+
+File.rm_rf!(config_store_dir)
+File.mkdir_p!(config_store_dir)
+System.put_env("SYNAPSIS_CONFIG_DIR", config_store_dir)
+
 config :phoenix, :plug_init_mode, :runtime
 config :phoenix, sort_verified_routes_query_params: true
 

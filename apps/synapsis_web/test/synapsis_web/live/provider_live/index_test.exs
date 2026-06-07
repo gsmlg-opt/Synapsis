@@ -105,6 +105,25 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       assert flash["info"] == "Provider created"
     end
 
+    test "created provider survives a fresh page load from the config file", %{conn: conn} do
+      name = "persisted-provider-#{:rand.uniform(100_000)}"
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/new")
+
+      view
+      |> element(~s(button[phx-click="select_preset"][phx-value-name="anthropic"]))
+      |> render_click()
+
+      view
+      |> form("form[phx-submit]", %{"name" => name, "api_key" => "sk-test-123"})
+      |> render_submit()
+
+      assert_redirected(view, ~p"/settings/providers")
+      :ok = Synapsis.Config.Store.reload(:provider)
+
+      {:ok, _view, html} = live(conn, ~p"/settings/providers")
+      assert html =~ name
+    end
+
     test "same preset can be added twice with different names", %{conn: conn} do
       # Create first
       {:ok, view, _html} = live(conn, ~p"/settings/providers/new")

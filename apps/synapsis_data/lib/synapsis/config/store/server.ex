@@ -169,6 +169,7 @@ defmodule Synapsis.Config.Store.Server do
       fields =
         Enum.flat_map(entry, fn
           {_k, nil} -> []
+          {_k, v} when is_map(v) and map_size(v) == 0 -> []
           {k, v} -> ["#{k} = #{encode_toml_value(v)}\n"]
         end)
 

@@ -23,10 +23,14 @@ defmodule Synapsis.DataCase do
   end
 
   @doc """
-  Clear all rows of a `Config.Store` type's ETS table (test isolation for
+  Clear a `Config.Store` type's backing file and ETS table (test isolation for
   Config.Store-backed contexts, which have no per-test transaction rollback).
   """
   def clear_config_store(type) do
+    type
+    |> Synapsis.Config.Store.file_path()
+    |> File.rm()
+
     table = :"synapsis_config_#{type}"
     if :ets.info(table) != :undefined, do: :ets.delete_all_objects(table)
     :ok

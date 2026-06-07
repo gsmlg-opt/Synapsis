@@ -48,6 +48,18 @@ defmodule Synapsis.Config.StoreTest do
     assert String.contains?(content, "persisted")
   end
 
+  test "put omits empty map fields so entries reload with their ids" do
+    Store.put(:provider, %{id: "p1", name: "provider-one", type: "anthropic", config: %{}})
+
+    path = Store.file_path(:provider)
+    assert File.read!(path) =~ ~s(id = "p1")
+    refute File.read!(path) =~ "config = {}"
+
+    Store.reload(:provider)
+    assert {:ok, entry} = Store.get(:provider, "p1")
+    assert entry["name"] == "provider-one"
+  end
+
   test "delete removes entry from ETS and persists" do
     Store.put(:toolset, %{id: "del-me", name: "to-delete", tool_names: []})
     assert {:ok, _} = Store.get(:toolset, "del-me")

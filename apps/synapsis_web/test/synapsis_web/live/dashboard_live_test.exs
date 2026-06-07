@@ -1,6 +1,12 @@
 defmodule SynapsisWeb.DashboardLiveTest do
   use SynapsisWeb.ConnCase
 
+  setup do
+    Synapsis.DataCase.clear_config_store(:agent)
+    Synapsis.DataCase.clear_coord("sessions/")
+    :ok
+  end
+
   describe "dashboard page" do
     test "mounts and renders heading", %{conn: conn} do
       {:ok, view, html} = live(conn, ~p"/")
