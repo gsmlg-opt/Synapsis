@@ -90,12 +90,12 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
     end
 
     test "selects MCP source tools from configured servers", %{conn: conn} do
-      PluginConfigs.create(%{
-        name: "demo",
-        type: "mcp",
-        transport: "stdio"
-      })
-      |> elem(1)
+      {:ok, _plugin} =
+        PluginConfigs.create(%{
+          name: "demo",
+          type: "mcp",
+          transport: "stdio"
+        })
 
       Synapsis.Tool.Registry.register_process("mcp:demo:search_docs", self(),
         description: "Search docs",
@@ -163,12 +163,12 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
     test "shows empty MCP source when the configured server has no registered tools", %{
       conn: conn
     } do
-      PluginConfigs.create(%{
-        name: "empty",
-        type: "mcp",
-        transport: "stdio"
-      })
-      |> elem(1)
+      {:ok, _plugin} =
+        PluginConfigs.create(%{
+          name: "empty",
+          type: "mcp",
+          transport: "stdio"
+        })
 
       {:ok, view, _html} = live(conn, ~p"/agent/tools/new")
 

@@ -96,6 +96,28 @@ defmodule Synapsis.Agent.QueryLoopTest do
     Context.new(Keyword.merge(defaults, opts))
   end
 
+  defp start_silent_subscriber do
+    spawn(fn -> silent_subscriber_loop() end)
+  end
+
+  defp silent_subscriber_loop do
+    receive do
+      :stop -> :ok
+      _message -> silent_subscriber_loop()
+    end
+  end
+
+  defp stop_silent_subscriber(pid) do
+    ref = Process.monitor(pid)
+    send(pid, :stop)
+
+    receive do
+      {:DOWN, ^ref, :process, ^pid, _reason} -> :ok
+    after
+      1_000 -> flunk("silent subscriber did not stop")
+    end
+  end
+
   describe "run/2 -- completion (no tools)" do
     test "completes when LLM returns no tool_use blocks" do
       test_pid = self()
@@ -309,9 +331,8 @@ defmodule Synapsis.Agent.QueryLoopTest do
 
   describe "run/2 — abort handling" do
     test "aborts when subscriber process is dead before first turn" do
-      # Start and immediately stop a process
-      {:ok, pid} = Agent.start(fn -> :ok end)
-      Agent.stop(pid)
+      pid = start_silent_subscriber()
+      stop_silent_subscriber(pid)
 
       ctx =
         Context.new(
@@ -330,7 +351,7 @@ defmodule Synapsis.Agent.QueryLoopTest do
 
     test "aborts between turns when subscriber dies mid-execution" do
       test_pid = self()
-      {:ok, subscriber} = Agent.start(fn -> :ok end)
+      subscriber = start_silent_subscriber()
       turn = :counters.new(1, [:atomics])
 
       mock_stream = fn _request, _config ->
@@ -344,7 +365,7 @@ defmodule Synapsis.Agent.QueryLoopTest do
           send(test_pid, {:provider_chunk, :content_block_stop})
           send(test_pid, {:provider_chunk, :done})
           # Kill subscriber between turns (after first turn completes)
-          Agent.stop(subscriber)
+          stop_silent_subscriber(subscriber)
         else
           send(test_pid, {:provider_chunk, {:text_delta, "done"}})
           send(test_pid, {:provider_chunk, :content_block_stop})

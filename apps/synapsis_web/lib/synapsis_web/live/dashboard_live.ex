@@ -140,7 +140,10 @@ defmodule SynapsisWeb.DashboardLive do
     case AgentConfigs.list_enabled() do
       [] ->
         Enum.map(AgentConfigs.default_attrs(), fn attrs ->
-          struct(AgentConfigLite, Map.take(attrs, [:name, :label, :icon, :description]))
+          struct(
+            __MODULE__.AgentConfigLite,
+            Map.take(attrs, [:name, :label, :icon, :description])
+          )
         end)
 
       agents ->
