@@ -119,6 +119,42 @@ defmodule Synapsis.Agent.QueryLoopTest do
   end
 
   describe "run/2 -- completion (no tools)" do
+    test "formats OpenAI provider requests with function tools" do
+      test_pid = self()
+      tool_name = "mcp:backplane:web::search"
+
+      mock_stream = fn request, config ->
+        send(test_pid, {:request_seen, request, config})
+        send(test_pid, {:provider_chunk, {:text_delta, "done"}})
+        send(test_pid, {:provider_chunk, :content_block_stop})
+        send(test_pid, {:provider_chunk, :done})
+        :ok
+      end
+
+      ctx =
+        make_ctx(
+          provider_config: %{type: "openai"},
+          tools: [
+            %{
+              name: tool_name,
+              description: "Search the web",
+              parameters: %{"type" => "object"}
+            }
+          ],
+          agent_config: %{stream_fn: mock_stream}
+        )
+
+      state = State.new(messages: [%{role: "user", content: "search"}])
+
+      assert {:ok, :completed, _final_state} = QueryLoop.run(state, ctx)
+      assert_received {:request_seen, request, %{type: "openai"}}
+
+      [tool] = request.tools
+      assert tool.type == "function"
+      assert tool.function.name == "syn_bWNwOmJhY2twbGFuZTp3ZWI6OnNlYXJjaA"
+      refute Map.has_key?(tool, :input_schema)
+    end
+
     test "completes when LLM returns no tool_use blocks" do
       test_pid = self()
 
@@ -240,7 +276,14 @@ defmodule Synapsis.Agent.QueryLoopTest do
       end
 
       tools = [%{name: "file_read", description: "Read a file", parameters: %{type: "object"}}]
-      ctx = make_ctx(agent_config: %{stream_fn: mock_stream}, tools: tools)
+
+      ctx =
+        make_ctx(
+          agent_config: %{stream_fn: mock_stream},
+          provider_config: %{type: "anthropic"},
+          tools: tools
+        )
+
       state = State.new(messages: [%{role: "user", content: "hi"}])
       {:ok, :completed, _} = QueryLoop.run(state, ctx)
 
@@ -286,7 +329,7 @@ defmodule Synapsis.Agent.QueryLoopTest do
           system_prompt: "I am a static prompt.",
           tools: [],
           model: "test",
-          provider_config: %{type: "test"},
+          provider_config: %{type: "anthropic"},
           subscriber: test_pid,
           agent_config: %{stream_fn: mock_stream}
         )
@@ -314,7 +357,7 @@ defmodule Synapsis.Agent.QueryLoopTest do
           system_prompt: :dynamic,
           tools: [],
           model: "test",
-          provider_config: %{type: "test"},
+          provider_config: %{type: "anthropic"},
           subscriber: test_pid,
           agent_config: %{stream_fn: mock_stream, agent_type: :conversational}
         )

@@ -19,6 +19,8 @@ defmodule Synapsis.Provider.EventMapper do
     :ignore
   """
 
+  alias Synapsis.Provider.ToolName
+
   # ---------------------------------------------------------------------------
   # Anthropic — mostly passthrough, already canonical
   # ---------------------------------------------------------------------------
@@ -144,7 +146,7 @@ defmodule Synapsis.Provider.EventMapper do
   # ---------------------------------------------------------------------------
 
   defp parse_openai_tool_call(%{"index" => _, "id" => id, "function" => %{"name" => name}}) do
-    {:tool_use_start, name, id}
+    {:tool_use_start, ToolName.decode(name), id}
   end
 
   defp parse_openai_tool_call(%{"function" => %{"arguments" => args}}) when is_binary(args) do

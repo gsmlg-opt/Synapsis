@@ -224,6 +224,26 @@ defmodule Synapsis.Provider.MessageMapperTest do
       assert tool.function.parameters == %{"type" => "object"}
     end
 
+    test "aliases MCP tool names to OpenAI-safe function names" do
+      request =
+        MessageMapper.build_request(
+          :openai,
+          [],
+          [
+            %{
+              name: "mcp:backplane:web::search",
+              description: "Search the web",
+              parameters: %{"type" => "object"}
+            }
+          ],
+          %{}
+        )
+
+      [tool] = request.tools
+      assert tool.function.name == "syn_bWNwOmJhY2twbGFuZTp3ZWI6OnNlYXJjaA"
+      refute String.contains?(tool.function.name, ":")
+    end
+
     test "uses default model" do
       request = MessageMapper.build_request(:openai, [], [], %{})
       assert request.model == Synapsis.Providers.default_model("openai")
@@ -272,6 +292,25 @@ defmodule Synapsis.Provider.MessageMapperTest do
       assert tc.id == "id1"
       assert tc.type == "function"
       assert tc.function.name == "bash"
+    end
+
+    test "aliases MCP tool_use names to OpenAI-safe tool_calls" do
+      msg = %{
+        role: :assistant,
+        parts: [
+          %Synapsis.Part.ToolUse{
+            tool: "mcp:backplane:web::search",
+            tool_use_id: "id1",
+            input: %{"query" => "dogs"},
+            status: :pending
+          }
+        ]
+      }
+
+      request = MessageMapper.build_request(:openai, [msg], [], %{})
+      [m] = request.messages
+      [tc] = m.tool_calls
+      assert tc.function.name == "syn_bWNwOmJhY2twbGFuZTp3ZWI6OnNlYXJjaA"
     end
 
     test "formats tool_result parts" do

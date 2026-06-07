@@ -8,6 +8,8 @@ defmodule Synapsis.Provider.MessageMapper do
   - Tool formatting per provider
   """
 
+  alias Synapsis.Provider.ToolName
+
   # ---------------------------------------------------------------------------
   # Public API
   # ---------------------------------------------------------------------------
@@ -182,7 +184,7 @@ defmodule Synapsis.Provider.MessageMapper do
               id: id,
               type: "function",
               function: %{
-                name: tool,
+                name: ToolName.encode(tool),
                 arguments:
                   case Jason.encode(input) do
                     {:ok, json} -> json
@@ -239,7 +241,7 @@ defmodule Synapsis.Provider.MessageMapper do
     %{
       type: "function",
       function: %{
-        name: tool.name,
+        name: ToolName.encode(tool.name),
         description: tool.description,
         parameters: tool.parameters
       }

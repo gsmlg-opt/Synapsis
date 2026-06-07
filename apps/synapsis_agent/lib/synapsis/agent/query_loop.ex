@@ -425,21 +425,102 @@ defmodule Synapsis.Agent.QueryLoop do
   end
 
   defp build_request(state, ctx) do
-    tool_defs =
-      Enum.map(ctx.tools, fn
-        %{name: n, description: d, parameters: p} -> %{name: n, description: d, input_schema: p}
-        other -> other
-      end)
+    provider_type =
+      ctx.provider_config
+      |> provider_config_type()
+      |> Synapsis.Provider.Adapter.resolve_transport_type()
 
-    %{
+    messages = Enum.map(state.messages, &normalize_request_message/1)
+
+    Synapsis.Provider.Adapter.format_request(messages, ctx.tools, %{
       model: ctx.model,
       system: ctx.system_prompt,
-      messages: state.messages,
-      tools: tool_defs,
+      system_prompt: ctx.system_prompt,
       max_tokens: 8192,
-      stream: true
-    }
+      provider_type: provider_type
+    })
   end
+
+  defp provider_config_type(config) when is_map(config) do
+    config[:type] || config["type"] || "anthropic"
+  end
+
+  defp provider_config_type(_config), do: "anthropic"
+
+  defp normalize_request_message(%{role: role, parts: parts}), do: %{role: role, parts: parts}
+
+  defp normalize_request_message(%{"role" => role, "parts" => parts}),
+    do: %{role: role, parts: parts}
+
+  defp normalize_request_message(%{role: role, content: content}) do
+    %{role: role, parts: normalize_request_parts(content)}
+  end
+
+  defp normalize_request_message(%{"role" => role, "content" => content}) do
+    %{role: role, parts: normalize_request_parts(content)}
+  end
+
+  defp normalize_request_message(message), do: message
+
+  defp normalize_request_parts(content) when is_binary(content) do
+    [%Synapsis.Part.Text{content: content}]
+  end
+
+  defp normalize_request_parts(content) when is_list(content) do
+    content
+    |> Enum.map(&normalize_request_part/1)
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp normalize_request_parts(_content), do: []
+
+  defp normalize_request_part(%module{} = part)
+       when module in [
+              Synapsis.Part.Text,
+              Synapsis.Part.ToolUse,
+              Synapsis.Part.ToolResult,
+              Synapsis.Part.Reasoning,
+              Synapsis.Part.Image
+            ],
+       do: part
+
+  defp normalize_request_part(%{} = part) do
+    case value(part, :type, "type") do
+      type when type in ["text", :text] ->
+        %Synapsis.Part.Text{
+          content: value(part, :text, "text") || value(part, :content, "content") || ""
+        }
+
+      type when type in ["tool_use", :tool_use] ->
+        %Synapsis.Part.ToolUse{
+          tool: value(part, :name, "name") || value(part, :tool, "tool"),
+          tool_use_id: value(part, :id, "id") || value(part, :tool_use_id, "tool_use_id"),
+          input: value(part, :input, "input") || %{}
+        }
+
+      type when type in ["tool_result", :tool_result] ->
+        %Synapsis.Part.ToolResult{
+          tool_use_id: value(part, :tool_use_id, "tool_use_id"),
+          content: value(part, :content, "content") || "",
+          is_error: value(part, :is_error, "is_error") || false
+        }
+
+      type when type in ["thinking", :thinking, "reasoning", :reasoning] ->
+        %Synapsis.Part.Reasoning{
+          content:
+            value(part, :thinking, "thinking") || value(part, :content, "content") ||
+              value(part, :text, "text") || "",
+          signature: value(part, :signature, "signature")
+        }
+
+      _ ->
+        nil
+    end
+  end
+
+  defp normalize_request_part(_part), do: nil
+
+  defp value(map, atom_key, string_key), do: Map.get(map, atom_key) || Map.get(map, string_key)
 
   defp filter_fork_tools(tools, :read_only) do
     Enum.filter(tools, fn tool ->

@@ -147,6 +147,27 @@ defmodule Synapsis.Provider.EventMapperTest do
       assert {:tool_use_start, "bash", "call_123"} = EventMapper.map_event(:openai, chunk)
     end
 
+    test "decodes OpenAI-safe tool call aliases" do
+      chunk = %{
+        "choices" => [
+          %{
+            "delta" => %{
+              "tool_calls" => [
+                %{
+                  "index" => 0,
+                  "id" => "call_123",
+                  "function" => %{"name" => "syn_bWNwOmJhY2twbGFuZTp3ZWI6OnNlYXJjaA"}
+                }
+              ]
+            }
+          }
+        ]
+      }
+
+      assert {:tool_use_start, "mcp:backplane:web::search", "call_123"} =
+               EventMapper.map_event(:openai, chunk)
+    end
+
     test "parses tool_calls arguments delta" do
       chunk = %{
         "choices" => [

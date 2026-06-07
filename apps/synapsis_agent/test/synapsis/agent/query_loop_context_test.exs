@@ -22,7 +22,7 @@ defmodule Synapsis.Agent.QueryLoopContextTest do
           system_prompt: :dynamic,
           tools: [%{name: "file_read", description: "Reads a file", parameters: %{}}],
           model: "test",
-          provider_config: %{type: "test"},
+          provider_config: %{type: "anthropic"},
           subscriber: test_pid,
           agent_config: %{stream_fn: mock_stream, agent_type: :conversational}
         )
@@ -53,7 +53,7 @@ defmodule Synapsis.Agent.QueryLoopContextTest do
           system_prompt: "You are a static test prompt.",
           tools: [],
           model: "test",
-          provider_config: %{type: "test"},
+          provider_config: %{type: "anthropic"},
           subscriber: test_pid,
           agent_config: %{stream_fn: mock_stream}
         )
