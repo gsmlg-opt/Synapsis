@@ -172,6 +172,34 @@ defmodule Synapsis.Provider.AdapterTest do
       text_deltas = for {:text_delta, text} <- chunks, do: text
       assert "Hi" in text_deltas
     end
+
+    test "does not append duplicate v1 when base_url already ends in v1", %{
+      bypass: bypass,
+      port: port
+    } do
+      Bypass.expect_once(bypass, "POST", "/api/v1/chat/completions", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("text/event-stream")
+        |> Plug.Conn.send_resp(200, """
+        data: {"id":"1","choices":[{"index":0,"delta":{"content":"OK"},"finish_reason":null}]}
+
+        data: {"id":"1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+        data: [DONE]
+
+        """)
+      end)
+
+      config = %{api_key: "test-key", base_url: "http://localhost:#{port}/api/v1", type: "openai"}
+      request = Adapter.format_request([], [], %{model: "gpt-4o", provider_type: "openai"})
+
+      assert {:ok, ref} = Adapter.stream(request, config)
+
+      chunks = collect_chunks(ref)
+      text_deltas = for {:text_delta, text} <- chunks, do: text
+      assert "OK" in text_deltas
+      assert :done in chunks
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -299,6 +327,29 @@ defmodule Synapsis.Provider.AdapterTest do
 
       assert {:ok, text} = Adapter.complete(request, config)
       assert text == "Hello"
+    end
+
+    test "OpenAI complete does not append duplicate v1 when base_url already ends in v1", %{
+      bypass: bypass,
+      port: port
+    } do
+      Bypass.expect_once(bypass, "POST", "/api/v1/chat/completions", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(
+          200,
+          Jason.encode!(%{
+            "choices" => [
+              %{"message" => %{"role" => "assistant", "content" => "OK"}}
+            ]
+          })
+        )
+      end)
+
+      config = %{api_key: "test-key", base_url: "http://localhost:#{port}/api/v1", type: "openai"}
+      request = Adapter.format_request([], [], %{model: "gpt-4o", provider_type: "openai"})
+
+      assert {:ok, "OK"} = Adapter.complete(request, config)
     end
 
     test "returns error on 401 unauthorized", %{bypass: bypass, port: port} do

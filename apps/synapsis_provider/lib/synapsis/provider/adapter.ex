@@ -267,7 +267,7 @@ defmodule Synapsis.Provider.Adapter do
           [{"content-type", "application/json"}] ++
             if(config[:api_key], do: [{"authorization", "Bearer #{config[:api_key]}"}], else: [])
 
-        {"#{base_url}/v1/chat/completions", headers, request}
+        {openai_chat_completions_url(base_url), headers, request}
       end
 
     request_id = Ecto.UUID.generate()
@@ -412,7 +412,7 @@ defmodule Synapsis.Provider.Adapter do
 
   defp do_openai_complete(request, config) do
     base_url = config[:base_url] || Transport.OpenAI.default_base_url()
-    url = "#{base_url}/v1/chat/completions"
+    url = openai_chat_completions_url(base_url)
 
     body = Map.merge(request, %{stream: false})
 
@@ -439,6 +439,16 @@ defmodule Synapsis.Provider.Adapter do
 
       {:error, exception} ->
         {:error, Exception.message(exception)}
+    end
+  end
+
+  defp openai_chat_completions_url(base_url) do
+    base_url = base_url |> to_string() |> String.trim_trailing("/")
+
+    if String.ends_with?(base_url, "/v1") do
+      "#{base_url}/chat/completions"
+    else
+      "#{base_url}/v1/chat/completions"
     end
   end
 
