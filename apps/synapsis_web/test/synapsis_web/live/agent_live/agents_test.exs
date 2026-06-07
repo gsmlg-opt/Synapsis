@@ -166,6 +166,35 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       :ok = refute_redirected(view)
     end
 
+    test "config page lists provider available_models in model picker", %{conn: conn} do
+      insert_provider("backplane", "openai", %{
+        config: %{
+          "available_models" => [
+            %{"id" => "openai-codex/gpt-5.5", "name" => "openai-codex/gpt-5.5"},
+            %{"id" => "fast", "name" => "fast"}
+          ]
+        }
+      })
+
+      {:ok, agent} =
+        AgentConfigs.create(%{
+          name: "backplane-agent",
+          label: "Backplane Agent",
+          provider: "backplane",
+          model: "openai-codex/gpt-5.5"
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+      options = cascader_options(html)
+
+      assert cascader_model_values(options, "backplane") == [
+               "openai-codex/gpt-5.5",
+               "fast"
+             ]
+
+      refute "gpt-4.1" in cascader_model_values(options, "backplane")
+    end
+
     test "configures an agent from a rich vertical-tab workspace", %{conn: conn} do
       insert_provider("openai", "openai")
 
@@ -515,15 +544,17 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
     end
   end
 
-  defp insert_provider(name, type) do
+  defp insert_provider(name, type, attrs \\ %{}) do
     {:ok, provider} =
-      Providers.create(%{
+      %{
         name: name,
         type: type,
         base_url: "https://api.example.com",
         api_key_encrypted: "sk-test",
         enabled: true
-      })
+      }
+      |> Map.merge(attrs)
+      |> Providers.create()
 
     provider
   end

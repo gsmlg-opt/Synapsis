@@ -1213,9 +1213,12 @@ defmodule SynapsisWeb.AgentLive.Agents do
   defp provider_configured_models(nil), do: []
 
   defp provider_configured_models(provider) do
-    provider
-    |> provider_config_map()
-    |> Map.get("models", [])
+    config = provider_config_map(provider)
+
+    case Map.get(config, "models") do
+      models when is_list(models) and models != [] -> models
+      _ -> Map.get(config, "available_models", [])
+    end
     |> normalize_configured_models()
   end
 
