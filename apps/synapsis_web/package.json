@@ -5,16 +5,16 @@
   "dependencies": {
     "@duskmoon-dev/core": "1.17.0",
     "@duskmoon-dev/css-art": "1.17.0",
-    "@duskmoon-dev/elements": "1.5.4",
-    "@duskmoon-dev/art-elements": "1.5.4",
-    "@duskmoon-dev/el-markdown": "1.5.4",
-    "@duskmoon-dev/el-markdown-input": "1.5.4",
+    "@duskmoon-dev/elements": "1.5.5",
+    "@duskmoon-dev/art-elements": "1.5.5",
+    "@duskmoon-dev/el-markdown": "1.5.5",
+    "@duskmoon-dev/el-markdown-input": "1.5.5",
     "@mdi/svg": "^7.4.47",
     "@synapsis/hooks": "workspace:*",
     "bootstrap-icons": "^1.13.1",
     "phoenix": "1.8.7",
     "phoenix_html": "4.3.0",
-    "phoenix_live_view": "1.1.30"
+    "phoenix_live_view": "1.1.31"
   },
   "devDependencies": {
     "@types/phoenix": "^1.6.7",
