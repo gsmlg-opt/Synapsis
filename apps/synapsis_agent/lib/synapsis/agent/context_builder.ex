@@ -124,7 +124,7 @@ defmodule Synapsis.Agent.ContextBuilder do
   def build_skills_manifest(agent_id, agent_config \\ %{})
 
   def build_skills_manifest(_agent_id, agent_config) do
-    tool_names = Map.get(agent_config, :tools) || Map.get(agent_config, "tools") || []
+    tool_names = assigned_tool_names(agent_config)
 
     tools =
       Synapsis.Tool.Registry.list_for_llm()
@@ -257,11 +257,26 @@ defmodule Synapsis.Agent.ContextBuilder do
 
   defp maybe_filter_tools(tools, []), do: tools
   defp maybe_filter_tools(tools, nil), do: tools
+  defp maybe_filter_tools(_tools, :none), do: []
+  defp maybe_filter_tools(tools, :all), do: tools
 
   defp maybe_filter_tools(tools, tool_names) when is_list(tool_names) do
     names = MapSet.new(tool_names)
     Enum.filter(tools, &(MapSet.member?(names, &1.name) || MapSet.member?(names, &1[:name])))
   end
+
+  defp assigned_tool_names(agent_config) when is_map(agent_config) do
+    cond do
+      Map.has_key?(agent_config, :tools) -> explicit_tool_names(Map.get(agent_config, :tools))
+      Map.has_key?(agent_config, "tools") -> explicit_tool_names(Map.get(agent_config, "tools"))
+      true -> :all
+    end
+  end
+
+  defp assigned_tool_names(_agent_config), do: :all
+  defp explicit_tool_names([]), do: :none
+  defp explicit_tool_names(nil), do: :none
+  defp explicit_tool_names(tool_names), do: tool_names
 
   defp build_assigned_skills(agent_config) do
     skills = Map.get(agent_config, :skills) || Map.get(agent_config, "skills") || []

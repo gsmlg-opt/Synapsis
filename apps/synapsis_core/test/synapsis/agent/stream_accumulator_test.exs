@@ -63,6 +63,60 @@ defmodule Synapsis.Agent.StreamAccumulatorTest do
       assert tu.input == %{"pattern" => "foo"}
     end
 
+    test "accumulates concurrent OpenAI tool_call deltas by index", %{acc: acc} do
+      events = [
+        {:tool_call_delta, 0, "call_1", "mcp:backplane:web::search",
+         ~s({"query": "trending Python repositories on GitHub today"})},
+        {:tool_call_delta, 1, "call_2", "mcp:backplane:web::search",
+         ~s({"query": "trending Rust repositories on GitHub today"})},
+        {:tool_call_delta, 2, "call_3", "mcp:backplane:web::search",
+         ~s({"query": "trending Zig repositories on GitHub today"})},
+        {:tool_call_delta, 3, "call_4", "mcp:backplane:web::search",
+         ~s({"query": "trending Erlang repositories on GitHub today"})},
+        {:tool_call_delta, 4, "call_5", "mcp:backplane:web::search", "{"},
+        {:tool_call_delta, 4, nil, nil, ~s("query": "trending Go repositories on GitHub today"})}
+      ]
+
+      {broadcasts, acc} =
+        Enum.reduce(events, {[], acc}, fn event, {all_broadcasts, acc} ->
+          {broadcasts, acc} = StreamAccumulator.accumulate(event, acc)
+          {all_broadcasts ++ broadcasts, acc}
+        end)
+
+      assert [
+               {"tool_use", %{tool: "mcp:backplane:web::search", tool_use_id: "call_1"}},
+               {"tool_use", %{tool: "mcp:backplane:web::search", tool_use_id: "call_2"}},
+               {"tool_use", %{tool: "mcp:backplane:web::search", tool_use_id: "call_3"}},
+               {"tool_use", %{tool: "mcp:backplane:web::search", tool_use_id: "call_4"}},
+               {"tool_use", %{tool: "mcp:backplane:web::search", tool_use_id: "call_5"}}
+             ] = broadcasts
+
+      {_, acc} = StreamAccumulator.accumulate(:done, acc)
+
+      assert [
+               %{
+                 tool_use_id: "call_1",
+                 input: %{"query" => "trending Python repositories on GitHub today"}
+               },
+               %{
+                 tool_use_id: "call_2",
+                 input: %{"query" => "trending Rust repositories on GitHub today"}
+               },
+               %{
+                 tool_use_id: "call_3",
+                 input: %{"query" => "trending Zig repositories on GitHub today"}
+               },
+               %{
+                 tool_use_id: "call_4",
+                 input: %{"query" => "trending Erlang repositories on GitHub today"}
+               },
+               %{
+                 tool_use_id: "call_5",
+                 input: %{"query" => "trending Go repositories on GitHub today"}
+               }
+             ] = acc.tool_uses
+    end
+
     test "reasoning_delta appends to pending_reasoning", %{acc: acc} do
       {broadcasts, acc} = StreamAccumulator.accumulate({:reasoning_delta, "thinking..."}, acc)
       assert acc.pending_reasoning == "thinking..."
@@ -179,6 +233,7 @@ defmodule Synapsis.Agent.StreamAccumulatorTest do
       assert acc.pending_text == ""
       assert acc.pending_tool_use == nil
       assert acc.pending_tool_input == ""
+      assert acc.pending_tool_calls == %{}
       assert acc.pending_reasoning == ""
       assert acc.pending_reasoning_signature == ""
       assert acc.tool_uses == []

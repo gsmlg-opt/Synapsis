@@ -155,6 +155,33 @@ defmodule Synapsis.Agent.QueryLoopTest do
       refute Map.has_key?(tool, :input_schema)
     end
 
+    test "formats MiniMax OpenAI-compatible requests with reasoning split" do
+      test_pid = self()
+
+      mock_stream = fn request, config ->
+        send(test_pid, {:request_seen, request, config})
+        send(test_pid, {:provider_chunk, {:text_delta, "done"}})
+        send(test_pid, {:provider_chunk, :done})
+        :ok
+      end
+
+      ctx =
+        make_ctx(
+          model: "MiniMax-M3",
+          provider_config: %{
+            type: "openai",
+            base_url: "https://api.minimaxi.com/v1"
+          },
+          agent_config: %{stream_fn: mock_stream}
+        )
+
+      state = State.new(messages: [%{role: "user", content: "search"}])
+
+      assert {:ok, :completed, _final_state} = QueryLoop.run(state, ctx)
+      assert_received {:request_seen, request, _config}
+      assert request.reasoning_split == true
+    end
+
     test "completes when LLM returns no tool_use blocks" do
       test_pid = self()
 
@@ -517,6 +544,113 @@ defmodule Synapsis.Agent.QueryLoopTest do
       assert_received {:query_event, {:tool_result, "tu_1", _}}
     end
 
+    test "executes OpenAI tool_calls that finish without content_block_stop" do
+      test_pid = self()
+      turn = :counters.new(1, [:atomics])
+
+      mock_stream = fn _request, _config ->
+        count = :counters.get(turn, 1)
+        :counters.add(turn, 1, 1)
+
+        if count == 0 do
+          send(test_pid, {:provider_chunk, {:tool_use_start, "echo", "call_1"}})
+          send(test_pid, {:provider_chunk, {:tool_input_delta, "{\"text\":"}})
+          send(test_pid, {:provider_chunk, {:tool_input_delta, "\"hello\"}"}})
+          send(test_pid, {:provider_chunk, :done})
+        else
+          send(test_pid, {:provider_chunk, {:text_delta, "The echo says hello."}})
+          send(test_pid, {:provider_chunk, :done})
+        end
+
+        :ok
+      end
+
+      ctx =
+        Context.new(
+          session_id: "test",
+          system_prompt: "test",
+          tools: [%{name: "echo", description: "echoes", parameters: %{}}],
+          model: "test",
+          provider_config: %{type: "openai"},
+          subscriber: test_pid,
+          streaming_tools_enabled: false,
+          agent_config: %{stream_fn: mock_stream, tool_modules: %{"echo" => EchoTool}}
+        )
+
+      state = State.new(messages: [%{role: "user", content: "echo hello"}])
+
+      assert {:ok, :completed, final_state} = QueryLoop.run(state, ctx)
+      assert final_state.turn_count == 2
+      assert [_, assistant_msg, _, _] = final_state.messages
+      assert Enum.any?(assistant_msg.content, &match?(%{type: "tool_use", name: "echo"}, &1))
+      assert_received {:query_event, {:tool_result, "call_1", %{content: "hello"}}}
+    end
+
+    test "executes indexed OpenAI tool_call deltas from MiniMax streams" do
+      test_pid = self()
+      turn = :counters.new(1, [:atomics])
+
+      mock_stream = fn _request, _config ->
+        count = :counters.get(turn, 1)
+        :counters.add(turn, 1, 1)
+
+        if count == 0 do
+          send(
+            test_pid,
+            {:provider_chunk, {:tool_call_delta, 0, "call_1", "echo", ~s({"text":"one"})}}
+          )
+
+          send(
+            test_pid,
+            {:provider_chunk, {:tool_call_delta, 1, "call_2", "echo", ~s({"text":"two"})}}
+          )
+
+          send(test_pid, {:provider_chunk, {:tool_call_delta, 2, "call_3", "echo", "{"}})
+          send(test_pid, {:provider_chunk, {:tool_call_delta, 2, nil, nil, ~s("text":"three"})}})
+          send(test_pid, {:provider_chunk, :done})
+        else
+          send(test_pid, {:provider_chunk, {:text_delta, "done"}})
+          send(test_pid, {:provider_chunk, :done})
+        end
+
+        :ok
+      end
+
+      ctx =
+        Context.new(
+          session_id: "test",
+          system_prompt: "test",
+          tools: [%{name: "echo", description: "echoes", parameters: %{}}],
+          model: "test",
+          provider_config: %{type: "openai"},
+          subscriber: test_pid,
+          streaming_tools_enabled: false,
+          agent_config: %{stream_fn: mock_stream, tool_modules: %{"echo" => EchoTool}}
+        )
+
+      state = State.new(messages: [%{role: "user", content: "echo three times"}])
+
+      assert {:ok, :completed, final_state} = QueryLoop.run(state, ctx)
+      assert final_state.turn_count == 2
+      assert [_, assistant_msg, tool_results_msg, _] = final_state.messages
+
+      assert [
+               %{type: "tool_use", id: "call_1", name: "echo", input: %{"text" => "one"}},
+               %{type: "tool_use", id: "call_2", name: "echo", input: %{"text" => "two"}},
+               %{type: "tool_use", id: "call_3", name: "echo", input: %{"text" => "three"}}
+             ] = assistant_msg.content
+
+      assert [
+               %{type: "tool_result", tool_use_id: "call_1", content: "one"},
+               %{type: "tool_result", tool_use_id: "call_2", content: "two"},
+               %{type: "tool_result", tool_use_id: "call_3", content: "three"}
+             ] = tool_results_msg.content
+
+      assert_received {:query_event, {:tool_result, "call_1", %{content: "one"}}}
+      assert_received {:query_event, {:tool_result, "call_2", %{content: "two"}}}
+      assert_received {:query_event, {:tool_result, "call_3", %{content: "three"}}}
+    end
+
     test "respects max_turns limit during tool loop" do
       test_pid = self()
 
@@ -599,6 +733,50 @@ defmodule Synapsis.Agent.QueryLoopTest do
 
       # Verify tool result was delivered
       assert_received {:query_event, {:tool_result, "tu_1", %{content: "hello", is_error: false}}}
+    end
+
+    test "streaming executor finalizes OpenAI tool_calls on done" do
+      test_pid = self()
+      turn = :counters.new(1, [:atomics])
+
+      mock_stream = fn _request, _config ->
+        count = :counters.get(turn, 1)
+        :counters.add(turn, 1, 1)
+
+        if count == 0 do
+          send(test_pid, {:provider_chunk, {:tool_use_start, "echo", "call_stream"}})
+          send(test_pid, {:provider_chunk, {:tool_input_delta, "{\"text\":"}})
+          send(test_pid, {:provider_chunk, {:tool_input_delta, "\"streaming\"}"}})
+          send(test_pid, {:provider_chunk, :done})
+        else
+          send(test_pid, {:provider_chunk, {:text_delta, "Streaming echo says hello."}})
+          send(test_pid, {:provider_chunk, :done})
+        end
+
+        :ok
+      end
+
+      ctx =
+        Context.new(
+          session_id: "test",
+          system_prompt: "test",
+          tools: [
+            %{name: "echo", description: "echoes", parameters: %{}, permission_level: :read}
+          ],
+          model: "test",
+          provider_config: %{type: "openai"},
+          subscriber: test_pid,
+          streaming_tools_enabled: true,
+          agent_config: %{stream_fn: mock_stream, tool_modules: %{"echo" => EchoTool}}
+        )
+
+      state = State.new(messages: [%{role: "user", content: "echo streaming"}])
+
+      assert {:ok, :completed, final} = QueryLoop.run(state, ctx)
+      assert final.turn_count == 2
+      assert [_, assistant_msg, _, _] = final.messages
+      assert Enum.any?(assistant_msg.content, &match?(%{type: "tool_use", name: "echo"}, &1))
+      assert_received {:query_event, {:tool_result, "call_stream", %{content: "streaming"}}}
     end
 
     test "streaming executor handles multiple tools eagerly" do

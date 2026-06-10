@@ -164,7 +164,7 @@ defmodule Synapsis.Provider.Adapter do
 
             for chunk <- events do
               event = EventMapper.map_event(:anthropic, chunk)
-              send(caller, {:provider_chunk, event})
+              send_provider_event(caller, event)
             end
 
             {:cont, {req, %{resp | body: buffer}}}
@@ -225,7 +225,7 @@ defmodule Synapsis.Provider.Adapter do
 
             for chunk <- events do
               event = EventMapper.map_event(:google, chunk)
-              send(caller, {:provider_chunk, event})
+              send_provider_event(caller, event)
             end
 
             {:cont, {req, %{resp | body: buffer}}}
@@ -299,7 +299,7 @@ defmodule Synapsis.Provider.Adapter do
 
             for chunk <- events do
               event = EventMapper.map_event(:openai, chunk)
-              send(caller, {:provider_chunk, event})
+              send_provider_event(caller, event)
             end
 
             {:cont, {req, %{resp | body: buffer}}}
@@ -323,6 +323,12 @@ defmodule Synapsis.Provider.Adapter do
   # ---------------------------------------------------------------------------
   # Stream response handling — uses accumulated raw data for error extraction
   # ---------------------------------------------------------------------------
+
+  defp send_provider_event(caller, {:events, events}) do
+    Enum.each(events, &send_provider_event(caller, &1))
+  end
+
+  defp send_provider_event(caller, event), do: send(caller, {:provider_chunk, event})
 
   defp handle_stream_response(resp, caller) do
     if resp.status >= 400 do

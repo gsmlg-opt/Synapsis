@@ -131,11 +131,33 @@ defmodule Synapsis.Provider.EventMapperTest do
       assert :done = EventMapper.map_event(:openai, "[DONE]")
     end
 
-    test "parses tool_calls start" do
+    test "parses OpenAI tool call deltas with id, name, and arguments" do
       chunk = %{
         "choices" => [
           %{
             "delta" => %{
+              "tool_calls" => [
+                %{
+                  "index" => 0,
+                  "id" => "call_123",
+                  "function" => %{"name" => "bash", "arguments" => ~s({"command":"pwd"})}
+                }
+              ]
+            }
+          }
+        ]
+      }
+
+      assert {:tool_call_delta, 0, "call_123", "bash", ~s({"command":"pwd"})} =
+               EventMapper.map_event(:openai, chunk)
+    end
+
+    test "prefers tool_calls over empty content in the same OpenAI delta" do
+      chunk = %{
+        "choices" => [
+          %{
+            "delta" => %{
+              "content" => "",
               "tool_calls" => [
                 %{"index" => 0, "id" => "call_123", "function" => %{"name" => "bash"}}
               ]
@@ -144,7 +166,8 @@ defmodule Synapsis.Provider.EventMapperTest do
         ]
       }
 
-      assert {:tool_use_start, "bash", "call_123"} = EventMapper.map_event(:openai, chunk)
+      assert {:tool_call_delta, 0, "call_123", "bash", nil} =
+               EventMapper.map_event(:openai, chunk)
     end
 
     test "decodes OpenAI-safe tool call aliases" do
@@ -164,24 +187,25 @@ defmodule Synapsis.Provider.EventMapperTest do
         ]
       }
 
-      assert {:tool_use_start, "mcp:backplane:web::search", "call_123"} =
+      assert {:tool_call_delta, 0, "call_123", "mcp:backplane:web::search", nil} =
                EventMapper.map_event(:openai, chunk)
     end
 
-    test "parses tool_calls arguments delta" do
+    test "parses indexed tool_calls arguments delta" do
       chunk = %{
         "choices" => [
           %{
             "delta" => %{
               "tool_calls" => [
-                %{"function" => %{"arguments" => "{\"command\":"}}
+                %{"index" => 4, "function" => %{"arguments" => "{\"command\":"}}
               ]
             }
           }
         ]
       }
 
-      assert {:tool_input_delta, "{\"command\":"} = EventMapper.map_event(:openai, chunk)
+      assert {:tool_call_delta, 4, nil, nil, "{\"command\":"} =
+               EventMapper.map_event(:openai, chunk)
     end
 
     test "parses reasoning_content" do
@@ -190,6 +214,24 @@ defmodule Synapsis.Provider.EventMapperTest do
       }
 
       assert {:reasoning_delta, "thinking deeply"} = EventMapper.map_event(:openai, chunk)
+    end
+
+    test "parses MiniMax reasoning_details text" do
+      chunk = %{
+        "choices" => [
+          %{
+            "delta" => %{
+              "reasoning_details" => [
+                %{"type" => "text", "text" => "checking the previous tool result"}
+              ]
+            },
+            "index" => 0
+          }
+        ]
+      }
+
+      assert {:reasoning_delta, "checking the previous tool result"} =
+               EventMapper.map_event(:openai, chunk)
     end
 
     test "unknown events return ignore" do
@@ -212,7 +254,7 @@ defmodule Synapsis.Provider.EventMapperTest do
       assert :ignore = EventMapper.map_event(:openai, chunk)
     end
 
-    test "processes only the first tool_call when multiple are present" do
+    test "preserves all tool_calls when multiple are present in one delta" do
       chunk = %{
         "choices" => [
           %{
@@ -226,7 +268,11 @@ defmodule Synapsis.Provider.EventMapperTest do
         ]
       }
 
-      assert {:tool_use_start, "bash", "call_first"} = EventMapper.map_event(:openai, chunk)
+      assert {:events,
+              [
+                {:tool_call_delta, 0, "call_first", "bash", nil},
+                {:tool_call_delta, 1, "call_second", "grep", nil}
+              ]} = EventMapper.map_event(:openai, chunk)
     end
   end
 

@@ -67,6 +67,37 @@ defmodule Synapsis.Agent.ContextBuilderTest do
       # Either nil or a string with tool listings
       assert is_nil(result) or is_binary(result)
     end
+
+    test "returns nil when agent has an explicit empty tools list" do
+      Synapsis.Tool.Registry.register_module("context_test_tool", Synapsis.Tool.Glob,
+        description: "Context test tool",
+        parameters: %{
+          type: "object",
+          properties: %{pattern: %{type: "string"}},
+          required: ["pattern"]
+        }
+      )
+
+      on_exit(fn -> Synapsis.Tool.Registry.unregister("context_test_tool") end)
+
+      assert ContextBuilder.build_skills_manifest(nil, %{tools: []}) == nil
+    end
+
+    test "lists only tools assigned to the agent" do
+      Synapsis.Tool.Registry.register_module("context_test_tool", Synapsis.Tool.Glob,
+        description: "Context test tool",
+        parameters: %{
+          type: "object",
+          properties: %{pattern: %{type: "string"}},
+          required: ["pattern"]
+        }
+      )
+
+      on_exit(fn -> Synapsis.Tool.Registry.unregister("context_test_tool") end)
+
+      manifest = ContextBuilder.build_skills_manifest(nil, %{tools: ["context_test_tool"]})
+      assert manifest =~ "context_test_tool"
+    end
   end
 
   describe "load_base_prompt/2" do

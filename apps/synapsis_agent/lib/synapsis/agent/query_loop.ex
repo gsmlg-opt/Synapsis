@@ -237,9 +237,23 @@ defmodule Synapsis.Agent.QueryLoop do
           working_dir: ctx.working_dir
         })
 
-      collect_loop_streaming(ctx, %{text: "", tools: [], building_tool: nil}, executor)
+      collect_loop_streaming(
+        ctx,
+        %{
+          text: "",
+          tools: [],
+          building_tool: nil,
+          pending_tool_calls: %{}
+        },
+        executor
+      )
     else
-      collect_loop(ctx, %{text: "", tools: [], building_tool: nil})
+      collect_loop(ctx, %{
+        text: "",
+        tools: [],
+        building_tool: nil,
+        pending_tool_calls: %{}
+      })
     end
   end
 
@@ -247,16 +261,23 @@ defmodule Synapsis.Agent.QueryLoop do
     receive do
       {:provider_chunk, :done} ->
         flush_provider_done()
+        {acc, _tools} = finalize_tools(acc)
         assistant_msg = build_assistant_message(acc.text, acc.tools)
         {:ok, assistant_msg, acc.tools}
 
       :provider_done ->
+        {acc, _tools} = finalize_tools(acc)
         assistant_msg = build_assistant_message(acc.text, acc.tools)
         {:ok, assistant_msg, acc.tools}
 
       {:provider_chunk, {:text_delta, text}} ->
-        notify(ctx, {:stream_chunk, {:text_delta, text}})
+        maybe_notify_text(ctx, text)
         collect_loop(ctx, %{acc | text: acc.text <> text})
+
+      {:provider_chunk, {:tool_call_delta, index, id, name, arguments}} ->
+        {start_event, acc} = accumulate_tool_call_delta(acc, index, id, name, arguments)
+        maybe_notify_tool_start(ctx, start_event)
+        collect_loop(ctx, acc)
 
       {:provider_chunk, {:tool_use_start, name, id}} ->
         notify(ctx, {:stream_chunk, {:tool_use_start, name, id}})
@@ -313,19 +334,28 @@ defmodule Synapsis.Agent.QueryLoop do
     receive do
       {:provider_chunk, :done} ->
         flush_provider_done()
+        {acc, tools} = finalize_tools(acc)
+        executor = Enum.reduce(tools, executor, &maybe_add_streaming_tool(ctx, &2, &1))
         # Wait for all in-flight tools to complete
         {results, _exec} = StreamingExecutor.get_remaining_results(executor)
         assistant_msg = build_assistant_message(acc.text, acc.tools)
         {:ok, assistant_msg, acc.tools, results}
 
       :provider_done ->
+        {acc, tools} = finalize_tools(acc)
+        executor = Enum.reduce(tools, executor, &maybe_add_streaming_tool(ctx, &2, &1))
         {results, _exec} = StreamingExecutor.get_remaining_results(executor)
         assistant_msg = build_assistant_message(acc.text, acc.tools)
         {:ok, assistant_msg, acc.tools, results}
 
       {:provider_chunk, {:text_delta, text}} ->
-        notify(ctx, {:stream_chunk, {:text_delta, text}})
+        maybe_notify_text(ctx, text)
         collect_loop_streaming(ctx, %{acc | text: acc.text <> text}, executor)
+
+      {:provider_chunk, {:tool_call_delta, index, id, name, arguments}} ->
+        {start_event, acc} = accumulate_tool_call_delta(acc, index, id, name, arguments)
+        maybe_notify_tool_start(ctx, start_event)
+        collect_loop_streaming(ctx, acc, executor)
 
       {:provider_chunk, {:tool_use_start, name, id}} ->
         notify(ctx, {:stream_chunk, {:tool_use_start, name, id}})
@@ -408,6 +438,103 @@ defmodule Synapsis.Agent.QueryLoop do
     end
   end
 
+  defp maybe_notify_text(_ctx, ""), do: :ok
+  defp maybe_notify_text(ctx, text), do: notify(ctx, {:stream_chunk, {:text_delta, text}})
+  defp maybe_notify_tool_start(_ctx, nil), do: :ok
+
+  defp maybe_notify_tool_start(ctx, %{name: name, id: id}),
+    do: notify(ctx, {:stream_chunk, {:tool_use_start, name, id}})
+
+  defp accumulate_tool_call_delta(acc, index, id, name, arguments) do
+    pending = Map.get(acc.pending_tool_calls, index, new_pending_tool_call())
+
+    updated =
+      pending
+      |> maybe_put(:id, id)
+      |> maybe_put(:name, name)
+      |> append_tool_arguments(arguments)
+
+    {start_event, updated} = maybe_mark_tool_started(updated)
+
+    {start_event, %{acc | pending_tool_calls: Map.put(acc.pending_tool_calls, index, updated)}}
+  end
+
+  defp new_pending_tool_call, do: %{id: nil, name: nil, json: "", started: false}
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
+
+  defp append_tool_arguments(tool_call, arguments) when is_binary(arguments) do
+    Map.update!(tool_call, :json, &(&1 <> arguments))
+  end
+
+  defp append_tool_arguments(tool_call, _arguments), do: tool_call
+
+  defp maybe_mark_tool_started(%{started: false, id: id, name: name} = tool_call)
+       when is_binary(id) and is_binary(name) do
+    {%{id: id, name: name}, %{tool_call | started: true}}
+  end
+
+  defp maybe_mark_tool_started(tool_call), do: {nil, tool_call}
+
+  defp finalize_tools(acc) do
+    {acc, legacy_tool} = finalize_building_tool(acc)
+    {acc, indexed_tools} = finalize_pending_tool_calls(acc)
+    {acc, Enum.reject([legacy_tool | indexed_tools], &is_nil/1)}
+  end
+
+  defp finalize_building_tool(%{building_tool: nil} = acc), do: {acc, nil}
+
+  defp finalize_building_tool(%{building_tool: %{name: name, id: id, json: json}} = acc) do
+    if Enum.any?(acc.tools, &(&1.id == id)) do
+      {%{acc | building_tool: nil}, nil}
+    else
+      args =
+        case Jason.decode(json) do
+          {:ok, parsed} -> parsed
+          _ -> %{}
+        end
+
+      tool = %{id: id, name: name, input: args}
+      {%{acc | tools: acc.tools ++ [tool], building_tool: nil}, tool}
+    end
+  end
+
+  defp finalize_pending_tool_calls(%{pending_tool_calls: pending_tool_calls} = acc)
+       when map_size(pending_tool_calls) == 0 do
+    {acc, []}
+  end
+
+  defp finalize_pending_tool_calls(%{pending_tool_calls: pending_tool_calls} = acc) do
+    tools =
+      pending_tool_calls
+      |> Enum.sort_by(fn {index, _tool_call} -> index end)
+      |> Enum.flat_map(fn {_index, tool_call} ->
+        case tool_call do
+          %{id: id, name: name, json: json} when is_binary(id) and is_binary(name) ->
+            [%{id: id, name: name, input: decode_tool_json(json)}]
+
+          _ ->
+            []
+        end
+      end)
+
+    {%{acc | tools: acc.tools ++ tools, pending_tool_calls: %{}}, tools}
+  end
+
+  defp decode_tool_json(json) do
+    case Jason.decode(json || "") do
+      {:ok, parsed} -> parsed
+      _ -> %{}
+    end
+  end
+
+  defp maybe_add_streaming_tool(_ctx, executor, nil), do: executor
+
+  defp maybe_add_streaming_tool(ctx, executor, tool) do
+    notify(ctx, {:stream_chunk, {:tool_use_start, tool.name, tool.id}})
+    StreamingExecutor.add_tool(executor, tool)
+  end
+
   defp build_assistant_message(text, tools) do
     content =
       case {text, tools} do
@@ -434,6 +561,10 @@ defmodule Synapsis.Agent.QueryLoop do
 
     Synapsis.Provider.Adapter.format_request(messages, ctx.tools, %{
       model: ctx.model,
+      base_url: value(ctx.provider_config, :base_url, "base_url"),
+      provider_name:
+        value(ctx.provider_config, :provider_name, "provider_name") ||
+          value(ctx.provider_config, :name, "name"),
       system: ctx.system_prompt,
       system_prompt: ctx.system_prompt,
       max_tokens: 8192,

@@ -41,11 +41,13 @@ defmodule Synapsis.Provider.MessageMapper do
   end
 
   def build_request(:openai, messages, tools, opts) do
-    request = %{
-      model: opts[:model] || Synapsis.Providers.default_model(opts[:provider_name] || "openai"),
-      stream: true,
-      messages: format_openai_messages(messages, opts)
-    }
+    request =
+      %{
+        model: opts[:model] || Synapsis.Providers.default_model(opts[:provider_name] || "openai"),
+        stream: true,
+        messages: format_openai_messages(messages, opts)
+      }
+      |> maybe_put_openai_reasoning_split(opts)
 
     case tools do
       [] -> request
@@ -236,6 +238,37 @@ defmodule Synapsis.Provider.MessageMapper do
 
   defp merge_text_content([single]) when is_binary(single), do: single
   defp merge_text_content(parts), do: Enum.join(parts, "\n")
+
+  defp maybe_put_openai_reasoning_split(request, opts) do
+    cond do
+      is_boolean(opts[:reasoning_split]) ->
+        Map.put(request, :reasoning_split, opts[:reasoning_split])
+
+      minimax_openai?(opts) ->
+        Map.put(request, :reasoning_split, true)
+
+      true ->
+        request
+    end
+  end
+
+  defp minimax_openai?(opts) do
+    [
+      opts[:provider_name],
+      opts["provider_name"],
+      opts[:base_url],
+      opts["base_url"],
+      opts[:model],
+      opts["model"]
+    ]
+    |> Enum.any?(&contains_minimax?/1)
+  end
+
+  defp contains_minimax?(value) when is_binary(value) do
+    value |> String.downcase() |> String.contains?("minimax")
+  end
+
+  defp contains_minimax?(_value), do: false
 
   defp format_openai_tool(tool) do
     %{

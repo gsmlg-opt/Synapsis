@@ -85,7 +85,8 @@ defmodule Synapsis.Session.Worker.IOHandler do
 
   def handle_provider_done(state) do
     detach_debug(state.debug_handler_id)
-    new_ctx = Map.put(state.engine_ctx, :stream_acc, state.stream_acc)
+    {_broadcasts, stream_acc} = StreamAccumulator.accumulate(:done, state.stream_acc)
+    new_ctx = Map.put(state.engine_ctx, :stream_acc, stream_acc)
 
     {:noreply,
      Worker.step_engine(%{state | stream_ref: nil, debug_handler_id: nil, engine_ctx: new_ctx}),

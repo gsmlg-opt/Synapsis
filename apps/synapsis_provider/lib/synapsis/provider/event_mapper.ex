@@ -9,6 +9,7 @@ defmodule Synapsis.Provider.EventMapper do
     {:tool_use_start, tool_name, tool_use_id}
     {:tool_input_delta, partial_json}
     {:tool_use_complete, name, args}
+    {:tool_call_delta, index, tool_use_id | nil, tool_name | nil, partial_json | nil}
     :reasoning_start
     {:reasoning_delta, text}
     :content_block_stop
@@ -106,18 +107,31 @@ defmodule Synapsis.Provider.EventMapper do
 
   def map_event(:openai, "[DONE]"), do: :done
 
-  def map_event(:openai, %{"choices" => [%{"delta" => %{"content" => content}} | _]})
-      when is_binary(content) do
-    {:text_delta, content}
+  def map_event(:openai, %{"choices" => [%{"delta" => %{"tool_calls" => calls}} | _]})
+      when is_list(calls) do
+    calls
+    |> Enum.map(&parse_openai_tool_call/1)
+    |> Enum.reject(&(&1 == :ignore))
+    |> case do
+      [] -> :ignore
+      [event] -> event
+      events -> {:events, events}
+    end
   end
 
-  def map_event(:openai, %{"choices" => [%{"delta" => %{"tool_calls" => [call | _]}} | _]}) do
-    parse_openai_tool_call(call)
+  def map_event(:openai, %{"choices" => [%{"delta" => %{"reasoning_details" => details}} | _]})
+      when is_list(details) do
+    parse_reasoning_details(details)
   end
 
   def map_event(:openai, %{"choices" => [%{"delta" => %{"reasoning_content" => content}} | _]})
       when is_binary(content) do
     {:reasoning_delta, content}
+  end
+
+  def map_event(:openai, %{"choices" => [%{"delta" => %{"content" => content}} | _]})
+      when is_binary(content) do
+    if content == "", do: :ignore, else: {:text_delta, content}
   end
 
   def map_event(:openai, %{"choices" => [%{"finish_reason" => reason} | _]})
@@ -145,15 +159,36 @@ defmodule Synapsis.Provider.EventMapper do
   # Private helpers
   # ---------------------------------------------------------------------------
 
-  defp parse_openai_tool_call(%{"index" => _, "id" => id, "function" => %{"name" => name}}) do
-    {:tool_use_start, ToolName.decode(name), id}
-  end
+  defp parse_openai_tool_call(%{"index" => index} = call) do
+    function = Map.get(call, "function", %{})
+    id = Map.get(call, "id")
+    name = function |> Map.get("name") |> decode_tool_name()
+    arguments = Map.get(function, "arguments")
 
-  defp parse_openai_tool_call(%{"function" => %{"arguments" => args}}) when is_binary(args) do
-    {:tool_input_delta, args}
+    if id || name || arguments do
+      {:tool_call_delta, index, id, name, arguments}
+    else
+      :ignore
+    end
   end
 
   defp parse_openai_tool_call(_), do: :ignore
+
+  defp decode_tool_name(nil), do: nil
+  defp decode_tool_name(name), do: ToolName.decode(name)
+
+  defp parse_reasoning_details(details) do
+    details
+    |> Enum.find_value(fn
+      %{"text" => text} when is_binary(text) -> text
+      %{text: text} when is_binary(text) -> text
+      _ -> nil
+    end)
+    |> case do
+      nil -> :ignore
+      text -> {:reasoning_delta, text}
+    end
+  end
 
   defp parse_google_parts([%{"text" => text} | _]) when is_binary(text) do
     {:text_delta, text}

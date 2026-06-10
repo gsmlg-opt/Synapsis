@@ -244,6 +244,16 @@ defmodule Synapsis.Provider.MessageMapperTest do
       refute String.contains?(tool.function.name, ":")
     end
 
+    test "enables MiniMax reasoning split for OpenAI-compatible requests" do
+      request =
+        MessageMapper.build_request(:openai, [@text_msg], [], %{
+          model: "MiniMax-M3",
+          base_url: "https://api.minimaxi.com/v1"
+        })
+
+      assert request.reasoning_split == true
+    end
+
     test "uses default model" do
       request = MessageMapper.build_request(:openai, [], [], %{})
       assert request.model == Synapsis.Providers.default_model("openai")
