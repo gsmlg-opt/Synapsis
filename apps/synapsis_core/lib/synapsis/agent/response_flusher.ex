@@ -106,17 +106,47 @@ defmodule Synapsis.Agent.ResponseFlusher do
       is_error: is_error
     }
 
-    safe_insert_message(session_id, %{
-      session_id: session_id,
-      role: "user",
-      parts: [result_part],
-      token_count: ContextWindow.estimate_tokens(result)
-    })
+    # Keep all of a turn's tool results in the single user message adjacent to
+    # the assistant message (Anthropic requires it; OpenAI-compatible providers
+    # reject histories where results scatter across messages).
+    case open_results_message(session_id, tool_use_id) do
+      %Message{} = open ->
+        Message.update_message(%{
+          open
+          | parts: open.parts ++ [result_part],
+            token_count: (open.token_count || 0) + ContextWindow.estimate_tokens(result)
+        })
+
+      nil ->
+        safe_insert_message(session_id, %{
+          session_id: session_id,
+          role: "user",
+          parts: [result_part],
+          token_count: ContextWindow.estimate_tokens(result)
+        })
+    end
 
     # Update the ToolUse part status in the original assistant message
     update_tool_use_status(session_id, tool_use_id, if(is_error, do: :error, else: :completed))
 
     :ok
+  end
+
+  # The trailing user message carrying the current turn's tool results, when
+  # the most recent assistant message contains this tool_use_id.
+  defp open_results_message(session_id, tool_use_id) do
+    case session_id |> Message.list_by_session() |> Enum.reverse() do
+      [%Message{role: "user", parts: parts} = user | earlier] ->
+        assistant = Enum.find(earlier, &(&1.role == "assistant"))
+
+        if assistant && tool_use_id in assistant_tool_use_ids(assistant) &&
+             Enum.any?(parts || [], &match?(%Synapsis.Part.ToolResult{}, &1)) do
+          user
+        end
+
+      _ ->
+        nil
+    end
   end
 
   defp tool_result_exists?(session_id, tool_use_id) do
@@ -131,36 +161,32 @@ defmodule Synapsis.Agent.ResponseFlusher do
   end
 
   @doc """
-  Ensures every assistant tool_use is followed by a user tool_result block.
+  Ensures every assistant tool_use is answered by exactly one user tool_result.
 
-  This repairs turns that were interrupted before a tool result was persisted.
-  For Anthropic, the matching tool_result must be in the immediately following
-  user message, so existing user text is kept after the inserted result blocks.
+  This repairs turns that were interrupted before a tool result was persisted,
+  and consolidates results that scattered across multiple user messages into
+  the message immediately following the assistant (Anthropic requires
+  adjacency; OpenAI-compatible providers reject duplicate or orphaned
+  tool_call ids). Existing user text is kept after the result blocks.
+
+  Looks for results in *all* messages up to the next assistant message — a
+  result that arrived late, after a placeholder was already backfilled, wins
+  over the placeholder instead of becoming a duplicate answer.
   """
   @spec ensure_tool_results(String.t(), String.t(), boolean()) ::
           {:ok, non_neg_integer()} | {:error, term()}
   def ensure_tool_results(session_id, result, is_error) do
     messages = Message.list_by_session(session_id)
+    {repaired, added, changed} = repair_messages(messages, session_id, result, is_error)
 
-    repaired =
-      messages
-      |> Enum.with_index()
-      |> Enum.reduce(0, fn {message, index}, count ->
-        tool_use_ids = assistant_tool_use_ids(message)
-
-        if tool_use_ids == [] do
-          count
-        else
-          next_message = Enum.at(messages, index + 1)
-
-          case ensure_next_tool_results(message, next_message, tool_use_ids, result, is_error) do
-            {:ok, added} -> count + added
-            {:error, _reason} -> count
-          end
-        end
-      end)
-
-    {:ok, repaired}
+    if changed do
+      case Message.persist_list(session_id, repaired) do
+        :ok -> {:ok, added}
+        {:error, reason} -> {:error, reason}
+      end
+    else
+      {:ok, 0}
+    end
   rescue
     e in [Ecto.QueryError, Ecto.StaleEntryError] ->
       Logger.warning("ensure_tool_results_failed",
@@ -169,6 +195,133 @@ defmodule Synapsis.Agent.ResponseFlusher do
       )
 
       {:error, e}
+  end
+
+  defp repair_messages(messages, session_id, result, is_error) do
+    do_repair(messages, session_id, result, is_error, [], 0, false)
+  end
+
+  defp do_repair([], _session_id, _result, _is_error, acc, added, changed) do
+    {Enum.reverse(acc), added, changed}
+  end
+
+  defp do_repair(
+         [%Message{role: "assistant"} = assistant | rest],
+         session_id,
+         result,
+         is_error,
+         acc,
+         added,
+         changed
+       ) do
+    case assistant_tool_use_ids(assistant) do
+      [] ->
+        do_repair(rest, session_id, result, is_error, [assistant | acc], added, changed)
+
+      ids ->
+        {window, tail} = Enum.split_while(rest, &(&1.role != "assistant"))
+
+        {new_assistant, new_window, group_added, group_changed} =
+          repair_group(assistant, window, ids, session_id, result, is_error)
+
+        acc = Enum.reverse(new_window) ++ [new_assistant | acc]
+
+        do_repair(
+          tail,
+          session_id,
+          result,
+          is_error,
+          acc,
+          added + group_added,
+          changed or group_changed
+        )
+    end
+  end
+
+  defp do_repair([message | rest], session_id, result, is_error, acc, added, changed) do
+    do_repair(rest, session_id, result, is_error, [message | acc], added, changed)
+  end
+
+  # Repairs one assistant-with-tools message and its window (the messages up
+  # to the next assistant message): exactly one result per tool_use_id, all
+  # results in the adjacent user message, later (real) results win over
+  # earlier placeholders, emptied carrier messages are dropped.
+  defp repair_group(assistant, window, ids, session_id, result, is_error) do
+    id_set = MapSet.new(ids)
+
+    collected =
+      window
+      |> Enum.flat_map(fn msg ->
+        Enum.filter(msg.parts || [], &match?(%Synapsis.Part.ToolResult{}, &1))
+      end)
+      |> Enum.filter(&MapSet.member?(id_set, &1.tool_use_id))
+      |> Enum.reduce(%{}, fn r, acc -> Map.put(acc, r.tool_use_id, r) end)
+
+    missing = Enum.reject(ids, &Map.has_key?(collected, &1))
+
+    blocks =
+      Enum.map(ids, fn id ->
+        Map.get(collected, id) ||
+          %Synapsis.Part.ToolResult{tool_use_id: id, content: result, is_error: is_error}
+      end)
+
+    {adjacent, others} =
+      case window do
+        [%Message{role: "user"} = user | rest] -> {user, rest}
+        other -> {nil, other}
+      end
+
+    stripped_others =
+      others
+      |> Enum.map(fn msg -> %{msg | parts: reject_tool_results(msg.parts || [], ids)} end)
+      |> Enum.reject(&(&1.role == "user" and &1.parts == []))
+
+    new_adjacent =
+      case adjacent do
+        %Message{} = user ->
+          %{
+            user
+            | parts: blocks ++ reject_tool_results(user.parts || [], ids),
+              token_count:
+                (user.token_count || 0) + length(missing) * ContextWindow.estimate_tokens(result)
+          }
+
+        nil ->
+          %Message{
+            id: Ecto.UUID.generate(),
+            session_id: session_id,
+            role: "user",
+            parts: blocks,
+            token_count: length(ids) * ContextWindow.estimate_tokens(result),
+            inserted_at: DateTime.utc_now()
+          }
+      end
+
+    new_assistant = mark_assistant(assistant, missing, tool_use_status(is_error))
+    new_window = [new_adjacent | stripped_others]
+
+    group_changed =
+      Enum.map(new_window, & &1.parts) != Enum.map(window, & &1.parts) or
+        new_assistant.parts != assistant.parts
+
+    {new_assistant, new_window, length(missing), group_changed}
+  end
+
+  defp mark_assistant(assistant, [], _status), do: assistant
+
+  defp mark_assistant(assistant, missing_ids, status) do
+    missing = MapSet.new(missing_ids)
+
+    parts =
+      Enum.map(assistant.parts, fn
+        %Synapsis.Part.ToolUse{tool_use_id: id} = tu ->
+          if MapSet.member?(missing, id), do: %{tu | status: status}, else: tu
+
+        part ->
+          part
+      end)
+
+    %{assistant | parts: parts}
   end
 
   defp update_tool_use_status(session_id, tool_use_id, new_status) do
@@ -208,55 +361,6 @@ defmodule Synapsis.Agent.ResponseFlusher do
     Message.append(session_id, attrs)
   end
 
-  defp ensure_next_tool_results(_assistant, %{role: "user"} = user, ids, result, is_error) do
-    existing = existing_tool_results(user.parts, ids)
-    missing_ids = Enum.reject(ids, &Map.has_key?(existing, &1))
-    prefix_ids = tool_result_prefix_ids(user.parts, length(ids))
-    status = tool_use_status(is_error)
-
-    if missing_ids == [] and prefix_ids == ids do
-      {:ok, 0}
-    else
-      result_parts = tool_result_blocks(ids, existing, result, is_error)
-      remaining_parts = reject_tool_results(user.parts, ids)
-      extra_tokens = length(missing_ids) * ContextWindow.estimate_tokens(result)
-
-      updated = %{
-        user
-        | parts: result_parts ++ remaining_parts,
-          token_count: (user.token_count || 0) + extra_tokens
-      }
-
-      case Message.update_message(updated) do
-        {:ok, _} ->
-          mark_tool_uses(user.session_id, missing_ids, status)
-          {:ok, length(missing_ids)}
-
-        {:error, reason} ->
-          {:error, reason}
-      end
-    end
-  end
-
-  defp ensure_next_tool_results(assistant, _next, ids, result, is_error) do
-    result_parts = tool_result_blocks(ids, %{}, result, is_error)
-    status = tool_use_status(is_error)
-
-    case safe_insert_message(assistant.session_id, %{
-           session_id: assistant.session_id,
-           role: "user",
-           parts: result_parts,
-           token_count: length(ids) * ContextWindow.estimate_tokens(result)
-         }) do
-      {:ok, _} ->
-        mark_tool_uses(assistant.session_id, ids, status)
-        {:ok, length(ids)}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
   defp assistant_tool_use_ids(%Message{role: "assistant", parts: parts}) do
     parts
     |> Enum.flat_map(fn
@@ -267,68 +371,12 @@ defmodule Synapsis.Agent.ResponseFlusher do
 
   defp assistant_tool_use_ids(_message), do: []
 
-  defp existing_tool_results(parts, ids) do
-    allowed = MapSet.new(ids)
-
-    parts
-    |> Enum.flat_map(fn
-      %Synapsis.Part.ToolResult{tool_use_id: id} = result ->
-        if MapSet.member?(allowed, id), do: [{id, result}], else: []
-
-      _ ->
-        []
-    end)
-    |> Map.new()
-  end
-
-  defp tool_result_prefix_ids(parts, count) do
-    parts
-    |> Enum.take(count)
-    |> Enum.map(fn
-      %Synapsis.Part.ToolResult{tool_use_id: id} -> id
-      _ -> nil
-    end)
-  end
-
-  defp tool_result_blocks(ids, existing, result, is_error) do
-    Enum.map(ids, fn id ->
-      Map.get(existing, id) ||
-        %Synapsis.Part.ToolResult{
-          tool_use_id: id,
-          content: result,
-          is_error: is_error
-        }
-    end)
-  end
-
   defp reject_tool_results(parts, ids) do
     ids = MapSet.new(ids)
 
     Enum.reject(parts, fn
       %Synapsis.Part.ToolResult{tool_use_id: id} -> MapSet.member?(ids, id)
       _ -> false
-    end)
-  end
-
-  defp mark_tool_uses(session_id, ids, new_status) do
-    ids = MapSet.new(ids)
-
-    session_id
-    |> Message.list_by_session()
-    |> Enum.filter(&(&1.role == "assistant"))
-    |> Enum.each(fn msg ->
-      updated_parts =
-        Enum.map(msg.parts, fn
-          %Synapsis.Part.ToolUse{tool_use_id: id} = tu ->
-            if MapSet.member?(ids, id), do: %{tu | status: new_status}, else: tu
-
-          part ->
-            part
-        end)
-
-      if updated_parts != msg.parts do
-        Message.update_message(%{msg | parts: updated_parts})
-      end
     end)
   end
 
