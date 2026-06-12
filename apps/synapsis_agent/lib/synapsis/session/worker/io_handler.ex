@@ -1,5 +1,12 @@
 defmodule Synapsis.Session.Worker.IOHandler do
-  @moduledoc "Handles async I/O events for Worker: streams, tools, auditor."
+  @moduledoc """
+  Handles async I/O events for Worker: streams, tools, auditor.
+
+  Every handler takes the worker data struct and returns the updated struct.
+  The owning process shell (the `:gen_statem` Worker, or GlobalAgent's
+  GenServer) wraps the result in its own behaviour return shape — handlers
+  stay process-agnostic.
+  """
 
   require Logger
 
@@ -15,18 +22,17 @@ defmodule Synapsis.Session.Worker.IOHandler do
 
     case SessionStream.start_stream(request, config, provider) do
       {:ok, ref} ->
-        {:noreply,
-         %{
-           state
-           | stream_ref: ref,
-             stream_acc: StreamAccumulator.new(),
-             debug_handler_id: debug_handler
-         }, Worker.timeout()}
+        %{
+          state
+          | stream_ref: ref,
+            stream_acc: StreamAccumulator.new(),
+            debug_handler_id: debug_handler
+        }
 
       {:error, reason} ->
         detach_debug(debug_handler)
         new_ctx = Map.put(state.engine_ctx, :stream_error, reason)
-        {:noreply, Worker.step_engine(%{state | engine_ctx: new_ctx}), Worker.timeout()}
+        Worker.step_engine(%{state | engine_ctx: new_ctx})
     end
   end
 
@@ -54,20 +60,19 @@ defmodule Synapsis.Session.Worker.IOHandler do
         end
       )
 
-    {:noreply,
-     %{
-       state
-       | pending_tool_count: length(fresh),
-         stream_acc: Map.put(state.stream_acc, :tool_call_hashes, hashes),
-         tool_tasks: Map.merge(state.tool_tasks, task_map),
-         executed_tool_ids: new_executed
-     }, Worker.timeout()}
+    %{
+      state
+      | pending_tool_count: length(fresh),
+        stream_acc: Map.put(state.stream_acc, :tool_call_hashes, hashes),
+        tool_tasks: Map.merge(state.tool_tasks, task_map),
+        executed_tool_ids: new_executed
+    }
   end
 
   def handle_start_auditor(params, state) do
     task = Auditor.start_async(params, state)
     Process.monitor(task.pid)
-    {:noreply, state, Worker.timeout()}
+    state
   end
 
   def handle_provider_chunk(event, state) do
@@ -77,9 +82,9 @@ defmodule Synapsis.Session.Worker.IOHandler do
       for {name, payload} <- broadcasts,
           do: Persistence.broadcast(state.session_id, name, payload)
 
-      {:noreply, %{state | stream_acc: new_acc}, Worker.timeout()}
+      %{state | stream_acc: new_acc}
     else
-      {:noreply, state, Worker.timeout()}
+      state
     end
   end
 
@@ -88,9 +93,7 @@ defmodule Synapsis.Session.Worker.IOHandler do
     {_broadcasts, stream_acc} = StreamAccumulator.accumulate(:done, state.stream_acc)
     new_ctx = Map.put(state.engine_ctx, :stream_acc, stream_acc)
 
-    {:noreply,
-     Worker.step_engine(%{state | stream_ref: nil, debug_handler_id: nil, engine_ctx: new_ctx}),
-     Worker.timeout()}
+    Worker.step_engine(%{state | stream_ref: nil, debug_handler_id: nil, engine_ctx: new_ctx})
   end
 
   def handle_provider_error(reason, state) do
@@ -98,9 +101,7 @@ defmodule Synapsis.Session.Worker.IOHandler do
     Logger.warning("provider_error", session_id: state.session_id, reason: inspect(reason))
     new_ctx = Map.put(state.engine_ctx, :stream_error, reason)
 
-    {:noreply,
-     Worker.step_engine(%{state | stream_ref: nil, debug_handler_id: nil, engine_ctx: new_ctx}),
-     Worker.timeout()}
+    Worker.step_engine(%{state | stream_ref: nil, debug_handler_id: nil, engine_ctx: new_ctx})
   end
 
   def handle_tool_result(id, result, is_error, state) do
@@ -115,9 +116,9 @@ defmodule Synapsis.Session.Worker.IOHandler do
     remaining = state.pending_tool_count - 1
 
     if remaining <= 0 do
-      {:noreply, Worker.step_engine(%{state | pending_tool_count: 0}), Worker.timeout()}
+      Worker.step_engine(%{state | pending_tool_count: 0})
     else
-      {:noreply, %{state | pending_tool_count: remaining}, Worker.timeout()}
+      %{state | pending_tool_count: remaining}
     end
   end
 
@@ -126,7 +127,7 @@ defmodule Synapsis.Session.Worker.IOHandler do
 
     if reason == :normal do
       # Task sent its {:tool_result, ...} message before exiting cleanly — nothing to do.
-      {:noreply, %{state | tool_tasks: new_tool_tasks}, Worker.timeout()}
+      %{state | tool_tasks: new_tool_tasks}
     else
       Logger.warning("tool_task_down",
         session_id: state.session_id,
@@ -151,19 +152,16 @@ defmodule Synapsis.Session.Worker.IOHandler do
       remaining = state.pending_tool_count - 1
 
       if remaining <= 0 do
-        {:noreply,
-         Worker.step_engine(%{state | pending_tool_count: 0, tool_tasks: new_tool_tasks}),
-         Worker.timeout()}
+        Worker.step_engine(%{state | pending_tool_count: 0, tool_tasks: new_tool_tasks})
       else
-        {:noreply, %{state | pending_tool_count: remaining, tool_tasks: new_tool_tasks},
-         Worker.timeout()}
+        %{state | pending_tool_count: remaining, tool_tasks: new_tool_tasks}
       end
     end
   end
 
   # --- QueryLoop event handlers ---
 
-  def handle_query_loop_event({:stream_start}, state), do: {:noreply, state, Worker.timeout()}
+  def handle_query_loop_event({:stream_start}, state), do: state
 
   def handle_query_loop_event({:stream_chunk, chunk}, state) do
     case chunk do
@@ -177,11 +175,10 @@ defmodule Synapsis.Session.Worker.IOHandler do
         :ok
     end
 
-    {:noreply, state, Worker.timeout()}
+    state
   end
 
-  def handle_query_loop_event({:stream_end, _assistant_msg}, state),
-    do: {:noreply, state, Worker.timeout()}
+  def handle_query_loop_event({:stream_end, _assistant_msg}, state), do: state
 
   def handle_query_loop_event({:tool_start, id, name, input}, state) do
     Persistence.broadcast(state.session_id, "tool_start", %{
@@ -190,7 +187,7 @@ defmodule Synapsis.Session.Worker.IOHandler do
       input: input
     })
 
-    {:noreply, state, Worker.timeout()}
+    state
   end
 
   def handle_query_loop_event({:tool_result, id, result}, state) do
@@ -200,11 +197,10 @@ defmodule Synapsis.Session.Worker.IOHandler do
       is_error: result.is_error
     })
 
-    {:noreply, state, Worker.timeout()}
+    state
   end
 
-  def handle_query_loop_event({:turn_complete, _turn}, state),
-    do: {:noreply, state, Worker.timeout()}
+  def handle_query_loop_event({:turn_complete, _turn}, state), do: state
 
   def handle_query_loop_event({:terminal, reason, _final_state}, state) do
     status = if reason == :completed, do: "idle", else: "error"
@@ -215,10 +211,10 @@ defmodule Synapsis.Session.Worker.IOHandler do
       reason: to_string(reason)
     })
 
-    {:noreply, state, Worker.timeout()}
+    state
   end
 
-  def handle_query_loop_event(_event, state), do: {:noreply, state, Worker.timeout()}
+  def handle_query_loop_event(_event, state), do: state
 
   # --- Private ---
 

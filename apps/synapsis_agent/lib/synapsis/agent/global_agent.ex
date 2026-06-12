@@ -138,28 +138,33 @@ defmodule Synapsis.Agent.GlobalAgent do
 
   @impl true
   def handle_info({:node_request, :start_stream, req}, s),
-    do: IOHandler.handle_start_stream(req, s)
+    do: {:noreply, IOHandler.handle_start_stream(req, s), @timeout}
 
   def handle_info({:node_request, :dispatch_tools, c, o}, s),
-    do: IOHandler.handle_dispatch_tools(c, o, s)
+    do: {:noreply, IOHandler.handle_dispatch_tools(c, o, s), @timeout}
 
   def handle_info({:node_request, :request_approvals, ids}, s),
     do: {:noreply, %{s | pending_approvals: MapSet.new(ids), approval_decisions: %{}}, @timeout}
 
   def handle_info({:node_request, :start_auditor, p}, s),
-    do: IOHandler.handle_start_auditor(p, s)
+    do: {:noreply, IOHandler.handle_start_auditor(p, s), @timeout}
 
-  def handle_info({:provider_chunk, event}, s), do: IOHandler.handle_provider_chunk(event, s)
-  def handle_info(:provider_done, s), do: IOHandler.handle_provider_done(s)
-  def handle_info({:provider_error, r}, s), do: IOHandler.handle_provider_error(r, s)
+  def handle_info({:provider_chunk, event}, s),
+    do: {:noreply, IOHandler.handle_provider_chunk(event, s), @timeout}
+
+  def handle_info(:provider_done, s),
+    do: {:noreply, IOHandler.handle_provider_done(s), @timeout}
+
+  def handle_info({:provider_error, r}, s),
+    do: {:noreply, IOHandler.handle_provider_error(r, s), @timeout}
 
   def handle_info({:tool_result, epoch, id, res, err}, %{epoch: epoch} = s),
-    do: IOHandler.handle_tool_result(id, res, err, s)
+    do: {:noreply, IOHandler.handle_tool_result(id, res, err, s), @timeout}
 
   def handle_info({:tool_result, _stale, _id, _res, _err}, s), do: {:noreply, s, @timeout}
 
   def handle_info({:tool_result, id, res, err}, s) when is_binary(id),
-    do: IOHandler.handle_tool_result(id, res, err, s)
+    do: {:noreply, IOHandler.handle_tool_result(id, res, err, s), @timeout}
 
   def handle_info({:auditor_completed, _}, s) do
     new_ctx = Map.put(s.engine_ctx, :auditor_completed, true)
@@ -211,8 +216,11 @@ defmodule Synapsis.Agent.GlobalAgent do
 
   def handle_info({:DOWN, ref, :process, _pid, reason}, s) when is_reference(ref) do
     case Map.fetch(s.tool_tasks, ref) do
-      {:ok, tool_use_id} -> IOHandler.handle_tool_task_down(ref, tool_use_id, reason, s)
-      :error -> {:noreply, s, @timeout}
+      {:ok, tool_use_id} ->
+        {:noreply, IOHandler.handle_tool_task_down(ref, tool_use_id, reason, s), @timeout}
+
+      :error ->
+        {:noreply, s, @timeout}
     end
   end
 

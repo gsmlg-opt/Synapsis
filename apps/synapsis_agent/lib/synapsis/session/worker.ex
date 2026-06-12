@@ -1,11 +1,29 @@
 defmodule Synapsis.Session.Worker do
   @moduledoc """
-  Per-session GenServer. Owns the graph engine and all I/O state.
+  Per-session `:gen_statem`. Owns the graph engine and all I/O state.
 
   The engine (pure functions in `Runtime.Engine`) is stepped inline — no
   separate Runner process, no cross-process resume dance. Long-running I/O
   (LLM streaming, tool execution) is delegated via messages to the Worker's
   mailbox and coordinated by IOHandler.
+
+  ## States
+
+  Session states are explicit (ADR-008, realizing the harness Phase 4 plan
+  against the graph engine):
+
+    * `:booting`           — engine not yet parked (init only)
+    * `:idle`              — engine parked at `:receive`, awaiting user input
+    * `:generating`        — provider stream in flight
+    * `:executing_tools`   — tool tasks outstanding
+    * `:awaiting_approval` — blocked on user permission decisions
+    * `:busy`              — engine running between waits (compaction, auditor, …)
+    * `:query_loop`        — assistant-mode turn delegated to a QueryLoop task
+
+  The state is derived from the data after every event (`derive_state/1`), so
+  the machine can never disagree with the engine. Event handlers use the state
+  for policy: a new user prompt is accepted only in `:idle` — the busy-reject
+  policy lives in exactly one clause (see `handle_event` for `:send_message`).
 
   ## Epoch fencing
 
@@ -14,7 +32,7 @@ defmodule Synapsis.Session.Worker do
   does not match the current one, so results from a dead incarnation (surviving
   after a `rest_for_one` restart) are silently discarded.
   """
-  use GenServer
+  @behaviour :gen_statem
   require Logger
 
   alias Synapsis.Session.Stream, as: SessionStream
@@ -55,38 +73,53 @@ defmodule Synapsis.Session.Worker do
     executed_tool_ids: MapSet.new()
   ]
 
+  def child_spec(opts) do
+    %{
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, [opts]},
+      restart: :permanent,
+      shutdown: 5_000,
+      type: :worker
+    }
+  end
+
   def start_link(opts) do
     session_id = Keyword.fetch!(opts, :session_id)
-    GenServer.start_link(__MODULE__, opts, name: via(session_id))
+    :gen_statem.start_link(via(session_id), __MODULE__, opts, [])
   end
 
   def send_message(session_id, content, image_parts \\ []),
-    do: GenServer.call(via(session_id), {:send_message, content, image_parts}, 30_000)
+    do: :gen_statem.call(via(session_id), {:send_message, content, image_parts}, 30_000)
 
-  def cancel(session_id), do: GenServer.cast(via(session_id), :cancel)
-  def retry(session_id), do: GenServer.call(via(session_id), :retry, 30_000)
-  def approve_tool(session_id, id), do: GenServer.cast(via(session_id), {:approve_tool, id})
-  def deny_tool(session_id, id), do: GenServer.cast(via(session_id), {:deny_tool, id})
-  def switch_agent(session_id, n), do: GenServer.call(via(session_id), {:switch_agent, n}, 10_000)
+  def cancel(session_id), do: :gen_statem.cast(via(session_id), :cancel)
+  def retry(session_id), do: :gen_statem.call(via(session_id), :retry, 30_000)
+  def approve_tool(session_id, id), do: :gen_statem.cast(via(session_id), {:approve_tool, id})
+  def deny_tool(session_id, id), do: :gen_statem.cast(via(session_id), {:deny_tool, id})
+
+  def switch_agent(session_id, n),
+    do: :gen_statem.call(via(session_id), {:switch_agent, n}, 10_000)
 
   def switch_model(session_id, p, m),
-    do: GenServer.call(via(session_id), {:switch_model, p, m}, 10_000)
+    do: :gen_statem.call(via(session_id), {:switch_model, p, m}, 10_000)
 
   def switch_mode(session_id, mode),
-    do: GenServer.call(via(session_id), {:switch_mode, mode}, 10_000)
+    do: :gen_statem.call(via(session_id), {:switch_mode, mode}, 10_000)
 
-  def get_status(session_id), do: GenServer.call(via(session_id), :get_status, 10_000)
+  def get_status(session_id), do: :gen_statem.call(via(session_id), :get_status, 10_000)
 
   @doc """
   Live read snapshot of the session (ADR-006 B2): the process is the read
   authority during a turn. Returns the current status, session record, and the
   in-flight assistant text accumulated so far this turn.
   """
-  def snapshot(session_id), do: GenServer.call(via(session_id), :snapshot, 10_000)
+  def snapshot(session_id), do: :gen_statem.call(via(session_id), :snapshot, 10_000)
 
   defp via(id), do: {:via, Registry, {Synapsis.Session.Registry, id}}
 
-  @impl true
+  @impl :gen_statem
+  def callback_mode, do: :handle_event_function
+
+  @impl :gen_statem
   def init(opts) do
     session_id = Keyword.fetch!(opts, :session_id)
 
@@ -101,7 +134,7 @@ defmodule Synapsis.Session.Worker do
           Synapsis.Session.Quarantine.clear(session.id)
           Logger.info("session_worker_started", session_id: session.id)
 
-          state = %__MODULE__{
+          data = %__MODULE__{
             session_id: session.id,
             session: session,
             agent: agent,
@@ -117,7 +150,7 @@ defmodule Synapsis.Session.Worker do
           }
 
           # Park the engine at :receive after init so the Worker is registered first.
-          {:ok, state, {:continue, :init_engine}}
+          {:ok, :booting, data, [{:next_event, :internal, :init_engine}]}
       end
     rescue
       e ->
@@ -138,242 +171,286 @@ defmodule Synapsis.Session.Worker do
     end
   end
 
-  @impl true
-  def handle_continue(:init_engine, state) do
-    {:noreply, step_engine(state), @timeout}
+  @impl :gen_statem
+  def handle_event(:internal, :init_engine, :booting, data) do
+    advance(step_engine(data))
   end
 
-  @impl true
-  def handle_call({:send_message, content, image_parts}, _from, state) do
-    case state.execution_mode do
-      :query_loop ->
-        case persist_user_message(state, content, image_parts) do
+  def handle_event({:call, from}, {:send_message, content, image_parts}, state, data) do
+    case {data.execution_mode, state} do
+      {:query_loop, _} ->
+        case persist_user_message(data, content, image_parts) do
           :ok ->
-            new_state = start_query_loop(content, state)
-            {:reply, :ok, new_state, @timeout}
+            advance(start_query_loop(content, data), [{:reply, from, :ok}])
 
           {:error, reason} ->
-            {:reply, {:error, reason}, state, @timeout}
+            keep(data, [{:reply, from, {:error, reason}}])
         end
 
-      :graph ->
-        if engine_ready?(state) do
-          case persist_user_message(state, content, image_parts) do
-            :ok ->
-              new_engine_ctx =
-                state.engine_ctx
-                |> Map.put(:user_input, content)
-                |> Map.put(:image_parts, image_parts)
+      {:graph, :idle} ->
+        case persist_user_message(data, content, image_parts) do
+          :ok ->
+            new_engine_ctx =
+              data.engine_ctx
+              |> Map.put(:user_input, content)
+              |> Map.put(:image_parts, image_parts)
 
-              # Reset per-turn idempotency guard on each new user message.
-              new_state =
-                step_engine(%{
-                  state
-                  | engine_ctx: new_engine_ctx,
-                    executed_tool_ids: MapSet.new()
-                })
+            # Reset per-turn idempotency guard on each new user message.
+            new_data =
+              step_engine(%{
+                data
+                | engine_ctx: new_engine_ctx,
+                  executed_tool_ids: MapSet.new()
+              })
 
-              {:reply, :ok, new_state, @timeout}
+            advance(new_data, [{:reply, from, :ok}])
 
-            {:error, reason} ->
-              {:reply, {:error, reason}, state, @timeout}
-          end
-        else
-          {:reply, {:error, {:engine_not_ready, state.engine_node}}, state, @timeout}
+          {:error, reason} ->
+            keep(data, [{:reply, from, {:error, reason}}])
         end
+
+      {:graph, _busy} ->
+        # The only place the mid-turn-prompt policy lives (harness ADR-0006):
+        # a session that is not :idle rejects new prompts; abort first.
+        keep(data, [{:reply, from, {:error, {:engine_not_ready, data.engine_node}}}])
     end
   end
 
-  def handle_call(:retry, _from, state) do
-    if Persistence.has_messages?(state.session_id) do
-      Persistence.set_status(state.session_id, "streaming")
-      new_state = step_engine(state)
-      {:reply, :ok, new_state, @timeout}
+  def handle_event({:call, from}, :retry, _state, data) do
+    if Persistence.has_messages?(data.session_id) do
+      Persistence.set_status(data.session_id, "streaming")
+      advance(step_engine(data), [{:reply, from, :ok}])
     else
-      {:reply, {:error, :no_messages}, state, @timeout}
+      keep(data, [{:reply, from, {:error, :no_messages}}])
     end
   end
 
-  def handle_call(:get_status, _from, state) do
-    status =
-      cond do
-        not engine_ready?(state) -> :running
-        true -> :waiting
-      end
-
-    {:reply, status, state, @timeout}
+  def handle_event({:call, from}, :get_status, state, data) do
+    keep(data, [{:reply, from, external_status(state)}])
   end
 
-  def handle_call(:snapshot, _from, state) do
-    status = if engine_ready?(state), do: :waiting, else: :running
-
+  def handle_event({:call, from}, :snapshot, state, data) do
     snapshot = %{
       source: :live,
-      status: status,
-      session: state.session,
-      in_flight_text: Map.get(state.stream_acc, :pending_text, "")
+      status: external_status(state),
+      session: data.session,
+      in_flight_text: Map.get(data.stream_acc, :pending_text, "")
     }
 
-    {:reply, snapshot, state, @timeout}
+    keep(data, [{:reply, from, snapshot}])
   end
 
-  def handle_call({:switch_agent, name}, _from, state) do
-    case Config.do_switch_agent(name, state.session) do
+  def handle_event({:call, from}, {:switch_agent, name}, _state, data) do
+    case Config.do_switch_agent(name, data.session) do
       {:ok, agent, session} ->
-        Persistence.broadcast(state.session_id, "agent_switched", %{agent: to_string(name)})
-        {:reply, :ok, %{state | agent: agent, session: session}, @timeout}
+        Persistence.broadcast(data.session_id, "agent_switched", %{agent: to_string(name)})
+        keep(%{data | agent: agent, session: session}, [{:reply, from, :ok}])
 
       {:error, reason} ->
-        {:reply, {:error, reason}, state, @timeout}
+        keep(data, [{:reply, from, {:error, reason}}])
     end
   end
 
-  def handle_call({:switch_model, prov, model}, _from, state) do
-    case Config.do_switch_model(prov, model, state) do
+  def handle_event({:call, from}, {:switch_model, prov, model}, _state, data) do
+    case Config.do_switch_model(prov, model, data) do
       {:ok, session, pc, agent} ->
-        Persistence.broadcast(state.session_id, "model_switched", %{provider: prov, model: model})
-        {:reply, :ok, %{state | session: session, agent: agent, provider_config: pc}, @timeout}
+        Persistence.broadcast(data.session_id, "model_switched", %{
+          provider: prov,
+          model: model
+        })
+
+        keep(%{data | session: session, agent: agent, provider_config: pc}, [
+          {:reply, from, :ok}
+        ])
 
       {:error, reason} ->
-        {:reply, {:error, reason}, state, @timeout}
+        keep(data, [{:reply, from, {:error, reason}}])
     end
   end
 
-  def handle_call({:switch_mode, mode}, _from, state) do
-    case Config.apply_mode(mode, state) do
-      {:ok, s} -> {:reply, :ok, s, @timeout}
-      {:error, r} -> {:reply, {:error, r}, state, @timeout}
+  def handle_event({:call, from}, {:switch_mode, mode}, _state, data) do
+    case Config.apply_mode(mode, data) do
+      # execution_mode may change — re-derive the state.
+      {:ok, d} -> advance(d, [{:reply, from, :ok}])
+      {:error, r} -> keep(data, [{:reply, from, {:error, r}}])
     end
   end
 
-  @impl true
-  def handle_cast(:cancel, state) do
-    case state.execution_mode do
+  def handle_event(:cast, :cancel, _state, data) do
+    case data.execution_mode do
       :query_loop ->
-        if state.query_loop_task, do: Task.shutdown(state.query_loop_task, :brutal_kill)
-        close_open_tool_uses(state.session_id)
-        Persistence.set_status(state.session_id, "idle")
-        {:noreply, %{state | query_loop_task: nil}, @timeout}
+        if data.query_loop_task, do: Task.shutdown(data.query_loop_task, :brutal_kill)
+        close_open_tool_uses(data.session_id)
+        Persistence.set_status(data.session_id, "idle")
+        advance(%{data | query_loop_task: nil})
 
       :graph ->
-        if state.stream_ref,
-          do: SessionStream.cancel_stream(state.stream_ref, state.session.provider)
+        if data.stream_ref,
+          do: SessionStream.cancel_stream(data.stream_ref, data.session.provider)
 
-        close_open_tool_uses(state.session_id)
-        Persistence.set_status(state.session_id, "idle")
+        close_open_tool_uses(data.session_id)
+        Persistence.set_status(data.session_id, "idle")
 
         # Bump epoch so surviving I/O task results from this turn are dropped.
         new_epoch = new_epoch()
 
-        # Reset engine back to :receive/idle
-        initial = reset_engine_state(state)
+        # Reset engine, then re-park it at :receive (same maneuver as boot) so
+        # the session is immediately ready for the next prompt.
+        new_data =
+          step_engine(%{
+            data
+            | stream_ref: nil,
+              epoch: new_epoch,
+              engine_state: reset_engine_state(data),
+              engine_node: data.graph.start,
+              pending_tool_count: 0,
+              pending_approvals: MapSet.new(),
+              approval_decisions: %{},
+              tool_tasks: %{},
+              executed_tool_ids: MapSet.new()
+          })
 
-        {:noreply,
-         %{
-           state
-           | stream_ref: nil,
-             epoch: new_epoch,
-             engine_state: initial,
-             engine_node: state.graph.start,
-             pending_tool_count: 0,
-             pending_approvals: MapSet.new(),
-             approval_decisions: %{},
-             tool_tasks: %{},
-             executed_tool_ids: MapSet.new()
-         }, @timeout}
+        advance(new_data)
     end
   end
 
-  def handle_cast({:approve_tool, id}, state), do: collect_approval(state, id, :approved)
-  def handle_cast({:deny_tool, id}, state), do: collect_approval(state, id, :denied)
+  def handle_event(:cast, {:approve_tool, id}, _state, data),
+    do: collect_approval(data, id, :approved)
 
-  @impl true
-  def handle_info({:node_request, :start_stream, req}, s),
-    do: IOHandler.handle_start_stream(req, s)
+  def handle_event(:cast, {:deny_tool, id}, _state, data),
+    do: collect_approval(data, id, :denied)
 
-  def handle_info({:node_request, :dispatch_tools, c, o}, s),
-    do: IOHandler.handle_dispatch_tools(c, o, s)
+  def handle_event(:info, {:node_request, :start_stream, req}, _state, data),
+    do: advance(IOHandler.handle_start_stream(req, data))
 
-  def handle_info({:node_request, :request_approvals, ids}, s),
-    do: {:noreply, %{s | pending_approvals: MapSet.new(ids), approval_decisions: %{}}, @timeout}
+  def handle_event(:info, {:node_request, :dispatch_tools, c, o}, _state, data),
+    do: advance(IOHandler.handle_dispatch_tools(c, o, data))
 
-  def handle_info({:node_request, :start_auditor, p}, s), do: IOHandler.handle_start_auditor(p, s)
-  def handle_info({:provider_chunk, event}, s), do: IOHandler.handle_provider_chunk(event, s)
-  def handle_info(:provider_done, s), do: IOHandler.handle_provider_done(s)
-  def handle_info({:provider_error, r}, s), do: IOHandler.handle_provider_error(r, s)
+  def handle_event(:info, {:node_request, :request_approvals, ids}, _state, data),
+    do: advance(%{data | pending_approvals: MapSet.new(ids), approval_decisions: %{}})
+
+  def handle_event(:info, {:node_request, :start_auditor, p}, _state, data),
+    do: advance(IOHandler.handle_start_auditor(p, data))
+
+  def handle_event(:info, {:provider_chunk, event}, _state, data),
+    do: advance(IOHandler.handle_provider_chunk(event, data))
+
+  def handle_event(:info, :provider_done, _state, data),
+    do: advance(IOHandler.handle_provider_done(data))
+
+  def handle_event(:info, {:provider_error, r}, _state, data),
+    do: advance(IOHandler.handle_provider_error(r, data))
 
   # Epoch-fenced tool results — drop if epoch does not match current incarnation.
-  def handle_info({:tool_result, epoch, id, res, err}, %{epoch: epoch} = s),
-    do: IOHandler.handle_tool_result(id, res, err, s)
+  def handle_event(:info, {:tool_result, epoch, id, res, err}, _state, %{epoch: epoch} = data),
+    do: advance(IOHandler.handle_tool_result(id, res, err, data))
 
-  def handle_info({:tool_result, _stale_epoch, _id, _res, _err}, s),
-    do: {:noreply, s, @timeout}
+  def handle_event(:info, {:tool_result, _stale_epoch, _id, _res, _err}, _state, data),
+    do: keep(data)
 
   # Legacy unfenced tool results (from global TaskSupervisor path) — still handled.
-  def handle_info({:tool_result, id, res, err}, s) when is_binary(id),
-    do: IOHandler.handle_tool_result(id, res, err, s)
+  def handle_event(:info, {:tool_result, id, res, err}, _state, data) when is_binary(id),
+    do: advance(IOHandler.handle_tool_result(id, res, err, data))
 
-  def handle_info({:auditor_completed, _}, s) do
-    new_ctx = Map.put(s.engine_ctx, :auditor_completed, true)
-    {:noreply, step_engine(%{s | engine_ctx: new_ctx}), @timeout}
+  def handle_event(:info, {:auditor_completed, _}, _state, data) do
+    new_ctx = Map.put(data.engine_ctx, :auditor_completed, true)
+    advance(step_engine(%{data | engine_ctx: new_ctx}))
   end
 
   # QueryLoop events
-  def handle_info({:query_event, event}, %{execution_mode: :query_loop} = s),
-    do: IOHandler.handle_query_loop_event(event, s)
+  def handle_event(:info, {:query_event, event}, _state, %{execution_mode: :query_loop} = data),
+    do: advance(IOHandler.handle_query_loop_event(event, data))
 
   # QueryLoop Task completion (success)
-  def handle_info(
+  def handle_event(
+        :info,
         {ref, {:ok, _reason, _final_state}},
-        %{query_loop_task: %Task{ref: task_ref}} = s
+        _state,
+        %{query_loop_task: %Task{ref: task_ref}} = data
       )
       when ref == task_ref do
     Process.demonitor(ref, [:flush])
-    Persistence.set_status(s.session_id, "idle")
-    {:noreply, %{s | query_loop_task: nil}, @timeout}
+    Persistence.set_status(data.session_id, "idle")
+    advance(%{data | query_loop_task: nil})
   end
 
   # QueryLoop Task DOWN
-  def handle_info(
+  def handle_event(
+        :info,
         {:DOWN, ref, :process, _pid, reason},
-        %{query_loop_task: %Task{ref: task_ref}} = s
+        _state,
+        %{query_loop_task: %Task{ref: task_ref}} = data
       )
       when ref == task_ref do
-    Logger.warning("query_loop_task_down", session_id: s.session_id, reason: inspect(reason))
-    Persistence.set_status(s.session_id, "idle")
-    {:noreply, %{s | query_loop_task: nil}, @timeout}
+    Logger.warning("query_loop_task_down", session_id: data.session_id, reason: inspect(reason))
+    Persistence.set_status(data.session_id, "idle")
+    advance(%{data | query_loop_task: nil})
   end
 
   # Tool task monitor — abnormal exit without having sent a tool_result.
-  def handle_info({:DOWN, ref, :process, _pid, reason}, s) when is_reference(ref) do
-    case Map.fetch(s.tool_tasks, ref) do
-      {:ok, tool_use_id} -> IOHandler.handle_tool_task_down(ref, tool_use_id, reason, s)
-      :error -> {:noreply, s, @timeout}
+  def handle_event(:info, {:DOWN, ref, :process, _pid, reason}, _state, data)
+      when is_reference(ref) do
+    case Map.fetch(data.tool_tasks, ref) do
+      {:ok, tool_use_id} ->
+        advance(IOHandler.handle_tool_task_down(ref, tool_use_id, reason, data))
+
+      :error ->
+        keep(data)
     end
   end
 
-  def handle_info(:timeout, s) do
-    Logger.info("session_inactivity_timeout", session_id: s.session_id)
-    Persistence.update_session_status(s.session_id, "idle")
-    {:stop, :normal, s}
+  def handle_event(:timeout, :inactivity, _state, data) do
+    Logger.info("session_inactivity_timeout", session_id: data.session_id)
+    Persistence.update_session_status(data.session_id, "idle")
+    {:stop, :normal}
   end
 
-  def handle_info(_msg, s), do: {:noreply, s, @timeout}
+  def handle_event(:info, _msg, _state, data), do: keep(data)
 
-  @impl true
-  def terminate(reason, state) do
+  @impl :gen_statem
+  def terminate(reason, _state, data) do
     Logger.info("session_worker_terminated",
-      session_id: state.session_id,
+      session_id: data.session_id,
       reason: inspect(reason)
     )
 
     if Code.ensure_loaded?(Synapsis.Tool.Teammate) and
          function_exported?(Synapsis.Tool.Teammate, :delete_all, 1) do
-      Synapsis.Tool.Teammate.delete_all(state.session_id)
+      Synapsis.Tool.Teammate.delete_all(data.session_id)
     end
 
     :ok
   end
+
+  # --- State machine helpers ---
+
+  @doc """
+  Derive the machine state from the data. Called after every event so the
+  state can never disagree with the engine/I-O fields it summarizes.
+  """
+  def derive_state(%__MODULE__{} = d) do
+    cond do
+      d.execution_mode == :query_loop and d.query_loop_task != nil -> :query_loop
+      MapSet.size(d.pending_approvals) > 0 -> :awaiting_approval
+      d.stream_ref != nil -> :generating
+      d.pending_tool_count > 0 -> :executing_tools
+      engine_ready?(d) -> :idle
+      true -> :busy
+    end
+  end
+
+  defp advance(%__MODULE__{} = data, actions \\ []) do
+    {:next_state, derive_state(data), data, actions ++ [timeout_action()]}
+  end
+
+  defp keep(%__MODULE__{} = _data, actions \\ []) do
+    {:keep_state_and_data, actions ++ [timeout_action()]}
+  end
+
+  defp timeout_action, do: {:timeout, @timeout, :inactivity}
+
+  defp external_status(:idle), do: :waiting
+  defp external_status(_state), do: :running
 
   # --- Engine helpers ---
 
@@ -432,25 +509,25 @@ defmodule Synapsis.Session.Worker do
     end
   end
 
-  defp collect_approval(state, tool_use_id, decision) do
-    decisions = Map.put(state.approval_decisions, tool_use_id, decision)
-    state = %{state | approval_decisions: decisions}
+  defp collect_approval(data, tool_use_id, decision) do
+    decisions = Map.put(data.approval_decisions, tool_use_id, decision)
+    data = %{data | approval_decisions: decisions}
 
-    if MapSet.size(state.pending_approvals) > 0 and
-         Enum.all?(state.pending_approvals, &Map.has_key?(decisions, &1)) do
-      new_ctx = Map.put(state.engine_ctx, :approval_decisions, decisions)
+    if MapSet.size(data.pending_approvals) > 0 and
+         Enum.all?(data.pending_approvals, &Map.has_key?(decisions, &1)) do
+      new_ctx = Map.put(data.engine_ctx, :approval_decisions, decisions)
 
-      new_state =
+      new_data =
         step_engine(%{
-          state
+          data
           | engine_ctx: new_ctx,
             pending_approvals: MapSet.new(),
             approval_decisions: %{}
         })
 
-      {:noreply, new_state, @timeout}
+      advance(new_data)
     else
-      {:noreply, state, @timeout}
+      advance(data)
     end
   end
 
