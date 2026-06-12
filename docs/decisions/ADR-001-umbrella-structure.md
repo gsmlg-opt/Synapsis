@@ -31,12 +31,12 @@ Only `synapsis_core` defines an OTP application with a supervision tree (`Synaps
 
 ### App Responsibilities
 
-- **synapsis_data** — Ecto schemas (Project, Session, Message, Provider, MemoryEntry, Skill, MCPConfig, LSPConfig), Repo, migrations, custom types (Part). All PostgreSQL persistence goes through this package.
+- **synapsis_data** — `Session.Store` (embedded Concord KV), `Config.Store` (TOML + watchers), embedded Ecto types (Part, encrypted fields). All durable session/config storage goes through this package (no SQL database — see ADR-006).
 - **synapsis_provider** — `Synapsis.Provider.Behaviour`, unified Adapter, transport plugins (Anthropic, OpenAI, Google), SSE parser, EventMapper, MessageMapper, ModelRegistry.
 - **synapsis_core** — Session system (Worker, Stream, Context, DynamicSupervisor), Tool system (Behaviour, Registry, Executor, built-in tools), Agent resolver, Config, MCP Supervisor. Starts all supervision trees.
 - **synapsis_server** — Phoenix Endpoint, Router, Plug pipelines, REST controllers (Session, Provider, Config, SSE), Channels (UserSocket, SessionChannel), Telemetry. Supervisor started by synapsis_core at runtime.
-- **synapsis_web** — 15 LiveView pages, HEEx templates, CoreComponents, Layouts, Gettext. Workspace packages (`@synapsis/hooks`, `@synapsis/ui`, `@synapsis/channel`) for React chat widget. Bun build pipeline for JS/CSS.
-- **synapsis_lsp** — LSP client management, JSON-RPC protocol, language server lifecycle. Supervisor started by synapsis_core.
+- **synapsis_web** — LiveView pages, HEEx templates, CoreComponents, Layouts, Gettext. Workspace package `@synapsis/hooks` for DOM hooks (pure LiveView UI per ADR-007). Bun build pipeline for JS/CSS.
+- **synapsis_plugin** — plugin loader, MCP protocol, LSP client management (JSON-RPC, server lifecycle). Supervisor started by synapsis_core.
 - **synapsis_cli** — Standalone escript, connects over HTTP/WS to running server.
 
 ## Rationale

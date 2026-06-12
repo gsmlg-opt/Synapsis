@@ -1,5 +1,15 @@
 # 07 — Agent System
 
+> **Partially historical.** Written before the
+> [ADR-006](../decisions/ADR-006-in-process-sessions-and-concord-storage.md)
+> cutover. Two claims below are outdated: `synapsis_agent` is now an **OTP
+> application** with its own supervision tree (registries +
+> `Session.DynamicSupervisor`), and agent state is **not** persisted to
+> PostgreSQL — event/summary stores are Concord-backed and the database is
+> gone. The graph runtime, node, and orchestration descriptions remain
+> accurate. See `00_SYSTEM_OVERVIEW.md` for the current boot tree and storage
+> model.
+
 ## What This System Does
 
 The agent system provides a persistent orchestration layer for coordinating long-running development workflows across multiple projects. It implements a LangGraph-inspired state machine runtime for composing LLM-driven workflows in Elixir.

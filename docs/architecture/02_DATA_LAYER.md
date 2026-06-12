@@ -1,13 +1,13 @@
 # 02 — Data Layer
 
-> **Describes the current (legacy) model. Direction superseded by
-> [ADR-006](../decisions/ADR-006-in-process-sessions-and-concord-storage.md).**
-> The system still runs on PostgreSQL/Ecto as documented here, but the decided
-> direction is: **no Postgres** — TOML files for configs, Markdown files for
-> workspace docs, a memory plugin port for semantic memory, and embedded
-> **Concord** (node-local) holding sessions as per-turn snapshots, with the
-> session process as the live source of truth. This page will be rewritten at
-> cutover; until then it reflects what is actually deployed.
+> **HISTORICAL — this page describes the removed PostgreSQL/Ecto model.**
+> The [ADR-006](../decisions/ADR-006-in-process-sessions-and-concord-storage.md)
+> cutover has landed: there is no Postgres, no `Synapsis.Repo`, no migrations.
+> Storage is now TOML files for configs, Markdown files for workspace docs and
+> memory (behind the memory port), and embedded **Concord** (node-local)
+> holding sessions as per-turn snapshots, with the session process as the live
+> source of truth. See `00_SYSTEM_OVERVIEW.md` § Storage Model for the current
+> layout. Everything below is kept only as a record of the old schema.
 
 ## Storage Strategy
 

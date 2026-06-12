@@ -8,9 +8,9 @@ Phoenix umbrella project with 9 apps across a strict dependency hierarchy:
 
 ```text
 apps/
-|-- synapsis_data/       # Ecto schemas, Repo, migrations
+|-- synapsis_data/       # Concord session store, TOML config store (no SQL database)
 |-- synapsis_provider/   # LLM provider transports (Anthropic, OpenAI, Google SSE)
-|-- synapsis_core/       # OTP app: sessions, tools, memory, harness, Oban, PubSub
+|-- synapsis_core/       # OTP app: sessions, tools, memory, harness, PubSub
 |-- synapsis_agent/      # OTP app: agent graph executor, session workers, heartbeats
 |-- synapsis_plugin/     # LSP + MCP clients (started by synapsis_core)
 |-- synapsis_workspace/  # Workspace/file management, blob store, path resolution
@@ -25,8 +25,8 @@ apps/
 - **Graph-based agent execution**: Two graph types - `coding_loop` (build mode) and `conversational_loop` (chat mode) - with composable nodes (build_prompt, llm_stream, process_response, tool_dispatch, act, respond)
 - **Provider-agnostic streaming**: SSE transport adapters per provider (Anthropic, OpenAI, Google), unified via `EventMapper`/`MessageMapper`
 - **Tool system**: 30+ built-in tools (filesystem, search, bash, web, planning, orchestration, memory, agent communication, LSP diagnostics) implementing `Synapsis.Tool.Behaviour` with 5-level permissions and parallel batch execution
-- **Memory system**: Working memory (in-process) + semantic memory (Postgres) + Oban-based summarizer
-- **Heartbeat agents**: Oban-scheduled recurring agent runs for autonomous background work
+- **Storage without a database** (ADR-006): session transcripts as per-turn snapshots in an embedded Concord (`ra`-based) KV store, configs as TOML files with watchers, memory as Markdown files behind a memory port — no PostgreSQL, no migrations
+- **Heartbeat agents**: node-local cron-scheduled recurring agent runs for autonomous background work
 - **MCP + LSP**: Plugin system with per-server GenServers over Port (stdio) or SSE (HTTP)
 - **Phoenix LiveView UI**: Real-time web interface using `phoenix_duskmoon` component library
 
@@ -37,21 +37,17 @@ apps/
 | Language / Runtime | Elixir 1.18+ / OTP 28+ |
 | Web framework | Phoenix 1.8+ (Bandit), Phoenix LiveView 1.0+ |
 | UI components | `phoenix_duskmoon` 9.x, `@duskmoon-dev/core` |
-| Database | PostgreSQL 16+ via Ecto (UUID PKs, JSONB) |
+| Storage | Embedded Concord (`ra`-based KV) + TOML/Markdown files (UUID IDs) |
 | HTTP client | Req + Finch (SSE streaming) |
-| Background jobs | Oban 2.x |
+| Background work | Supervised Tasks + node-local cron scheduler |
 | JS build | Bun + Tailwind CSS v4 |
 
 ## Getting Started
 
 ```bash
-# Start PostgreSQL (or use docker-compose up postgres)
-docker-compose up -d postgres
-
-# Install and migrate
+# Install dependencies (no database needed — storage is embedded)
 mix deps.get
-mix ecto.setup
-cd apps/synapsis_web && bun install && cd ../..
+bun install
 
 # Start server (http://localhost:4657)
 mix phx.server

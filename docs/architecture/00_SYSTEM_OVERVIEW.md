@@ -2,152 +2,128 @@
 
 ## What This System Does
 
-Synapsis.ex is an AI coding agent that runs as a local Phoenix server. Developers interact with it through a web UI (LiveView + React hybrid) or CLI to get AI assistance with coding tasks. The AI can read files, search code, execute commands, edit files, and manage LSP diagnostics — all through a permission-controlled tool system.
+Synapsis is an AI coding agent that runs as a local Phoenix server. Developers interact with it through a Phoenix LiveView web UI or the CLI to get AI assistance with coding tasks. The AI can read files, search code, execute commands, edit files, and use LSP/MCP integrations — all through a permission-controlled tool system.
+
+Storage follows [ADR-006](../decisions/ADR-006-in-process-sessions-and-concord-storage.md): there is **no SQL database**. Session transcripts live in an embedded Concord (`ra`-based) KV store as per-turn snapshots, configs are TOML files, and workspace documents/memory are files behind a memory port.
 
 ## High-Level Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                         Clients                              │
-│  ┌──────────┐  ┌───────────────────┐  ┌──────────────────┐  │
-│  │   CLI    │  │  Web UI           │  │  IDE Extension   │  │
-│  │ (escript)│  │ (LiveView+React)  │  │  (future)        │  │
-│  └────┬─────┘  └──────┬────────────┘  └────────┬─────────┘  │
-│       │ WebSocket      │ LiveView+Channel       │ HTTP/WS    │
-└───────┼────────────────┼────────────────────────┼────────────┘
-        │                │                        │
-┌───────▼────────────────▼────────────────────────▼────────────┐
-│              synapsis_web (LiveView pages)                    │
-│  ┌──────────────┐ ┌──────────────┐ ┌───────────────────────┐│
-│  │ DashboardLive│ │ ProjectLive  │ │ SessionLive.Show      ││
-│  │ SettingsLive │ │ ProviderLive │ │  └─ChatApp (React)    ││
-│  │ MemoryLive   │ │ SkillLive    │ │    via phx-hook       ││
-│  │ MCPLive      │ │ LSPLive      │ │    phx-update="ignore"││
-│  └──────────────┘ └──────────────┘ └───────────────────────┘│
-│                                                              │
-│  Workspace packages: @synapsis/hooks, @synapsis/ui,          │
-│                      @synapsis/channel                       │
+│  ┌──────────┐  ┌───────────────────┐                         │
+│  │   CLI    │  │  Web UI           │                         │
+│  │ (escript)│  │ (LiveView)        │                         │
+│  └────┬─────┘  └──────┬────────────┘                         │
+│       │ HTTP/WS/SSE    │ LiveView + Channel                  │
+└───────┼────────────────┼─────────────────────────────────────┘
+        │                │
+┌───────▼────────────────▼─────────────────────────────────────┐
+│  synapsis_web   — LiveView pages (AgentLive.Sessions chat,   │
+│                   AgentLive.Agents, Workspace, MCP, LSP, …)  │
+│  synapsis_server — Endpoint, Router, SessionChannel,         │
+│                   REST + SSE controllers, telemetry          │
 ├──────────────────────────────────────────────────────────────┤
-│              synapsis_server (Phoenix infra)                  │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
-│  │  Endpoint    │  │  REST API    │  │  SSE Stream  │       │
-│  │  Router      │  │  /api/...    │  │  /events     │       │
-│  │  Plugs       │  └──────┬───────┘  └──────┬───────┘       │
-│  ├──────────────┤  ┌──────────────┐                          │
-│  │ SessionChannel│ │ Browser pipe │                          │
-│  │ UserSocket   │  │ CSRF+Session │                          │
-│  └──────┬───────┘  └──────────────┘                          │
-│         │    PubSub                                          │
-└─────────┼────────────────────────────────────────────────────┘
-          │
-┌─────────▼────────────────────────────────────────────────────┐
-│                    synapsis_core (THE application)            │
-│  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐ │
-│  │ Session.Sup  │  │ Provider.Reg │  │   Tool.Supervisor  │ │
-│  │  ├─Worker    │  │ Tool.Reg     │  │    ├─FileEdit      │ │
-│  │  ├─Stream    │  │              │  │    ├─BashExec      │ │
-│  │  └─Context   │  │              │  │    ├─FileSearch    │ │
-│  └──────────────┘  └──────────────┘  │    └─Diagnostics   │ │
-│                                      └────────────────────┘ │
-│  ┌──────────────┐                    ┌────────────────────┐ │
-│  │ MCP.Supervisor│                   │ SynapsisLsp.Sup    │ │
-│  │  ├─Server1   │                   │  ├─LSP.Server      │ │
-│  │  └─Server2   │                   │  └─LSP.Server      │ │
-│  └──────────────┘                    └────────────────────┘ │
+│  synapsis_agent — per-session supervision trees:             │
+│                   Session.Worker owns the graph Engine       │
+│                   inline (coding_loop / conversational_loop) │
+│  synapsis_plugin — MCP + LSP client GenServers               │
+│  synapsis_workspace — file-backed workspace docs, blob       │
+│                   store, projections, search                 │
 ├──────────────────────────────────────────────────────────────┤
-│              synapsis_provider (library)                      │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
-│  │  Adapter     │  │ EventMapper  │  │ MessageMapper│       │
-│  │ (unified)    │  │ (normalize)  │  │ (build req)  │       │
-│  ├──────────────┤  ├──────────────┤  ├──────────────┤       │
-│  │ Transport:   │  │ SSE.Parser   │  │ ModelRegistry│       │
-│  │  Anthropic   │  │ (shared)     │  │              │       │
-│  │  OpenAI      │  └──────────────┘  └──────────────┘       │
-│  │  Google      │                                            │
-│  └──────────────┘                                            │
+│  synapsis_core  — PubSub, Tool.Registry/Executor,            │
+│                   Provider.Registry, Memory port,            │
+│                   heartbeat scheduler, git/worktree          │
+│  synapsis_provider — Adapter + transports (Anthropic,        │
+│                   OpenAI-compatible, Google), Event/Message  │
+│                   mappers, model registry                    │
 ├──────────────────────────────────────────────────────────────┤
-│              synapsis_data (library)                          │
-│  ┌──────────────┐  ┌──────────────────────────────────────┐ │
-│  │ Synapsis.Repo│  │ Schemas: Project, Session, Message,  │ │
-│  │ (PostgreSQL) │  │ MemoryEntry, Skill, MCPConfig,       │ │
-│  │              │  │ LspConfig, Provider, Part (custom)   │ │
-│  └──────────────┘  └──────────────────────────────────────┘ │
+│  synapsis_data  — Session.Store (Concord), Config.Store      │
+│                   (TOML + watchers), embedded Ecto types     │
 └──────────────────────────────────────────────────────────────┘
 ```
 
 ### Dependency Graph (acyclic, strictly enforced)
 
 ```
-synapsis_data        (schemas, Repo, migrations — no umbrella deps, no application)
+synapsis_data        (Concord session store, TOML config store — OTP app)
   ↑
-synapsis_provider    (provider behaviour + implementations — depends on synapsis_data, no application)
+synapsis_provider    (provider adapters/transports — library)
   ↑
-synapsis_core        (sessions, tools, agents, config — THE application, starts all supervision)
+synapsis_core        (shared services, tools, memory, PubSub — OTP app)
   ↑
-synapsis_server      (Endpoint, Router, Controllers, Channels — no application)
+synapsis_workspace   (workspace resources — library)
   ↑
-synapsis_web         (LiveView pages, HEEx templates, React hooks — no application)
+synapsis_agent       (session/agent runtime — OTP app)
+  ↑
+synapsis_plugin      (MCP/LSP protocol — library, supervised from core)
+  ↑
+synapsis_server      (Phoenix infrastructure — OTP app)
+  ↑
+synapsis_web         (LiveView UI — library)
 
-synapsis_lsp         (LSP client management — depends on synapsis_core, no application)
-synapsis_cli         (standalone escript — communicates via HTTP/WS)
+synapsis_cli         (standalone escript — talks HTTP/WS/SSE)
 ```
 
-Only `synapsis_core` defines an OTP application with a supervision tree. All other umbrella sub-apps are pure library packages.
+Four umbrella apps define OTP applications with supervision trees: `synapsis_data`, `synapsis_core`, `synapsis_agent`, and `synapsis_server`. The rest are library packages.
 
 ## Supervision Tree
 
-All processes are started by `SynapsisCore.Application` (the only OTP application):
-
 ```
-SynapsisCore.Application
-├── Synapsis.Repo (Ecto — PostgreSQL)
+SynapsisData.Application
+└── Synapsis.Config.Store.Supervisor     — TOML loaders + ETS cache + file watchers
+    (Concord/:ra is brought up at core boot via Session.Store.ensure_started/0)
+
+SynapsisCore.Application (one_for_one)
 ├── Phoenix.PubSub (name: Synapsis.PubSub)
-├── Task.Supervisor (name: Synapsis.Provider.TaskSupervisor)
+├── Task.Supervisor (Synapsis.Provider.TaskSupervisor)
 ├── Synapsis.Provider.Registry           — ETS-backed provider lookup
-├── Task.Supervisor (name: Synapsis.Tool.TaskSupervisor)
+├── Task.Supervisor (Synapsis.Tool.TaskSupervisor)
 ├── Synapsis.Tool.Registry               — ETS-backed tool lookup
-├── Registry (name: Synapsis.Session.Registry)
-├── Registry (name: Synapsis.Session.SupervisorRegistry)
-├── Registry (name: Synapsis.MCP.Registry)
-├── Registry (name: Synapsis.FileWatcher.Registry)
+├── Registry (Synapsis.FileWatcher.Registry)
+├── Synapsis.Session.Quarantine          — poison-session isolation
+├── Synapsis.Memory.Supervisor           — memory port (file / service adapters)
+├── Synapsis.Workspace.GC                — blob/scratch cleanup
+├── Synapsis.Agent.Heartbeat.LocalScheduler — node-local cron (heartbeats.toml)
+└── SynapsisPlugin.Supervisor            — MCP/LSP plugin processes (optional)
+
+SynapsisAgent.Application (rest_for_one)
+├── Registries: Session.Registry, Session.SupervisorRegistry,
+│               Session.TaskSupervisorRegistry, Agent.Registry
 ├── Synapsis.Session.DynamicSupervisor
-│   └── (per session)
-│       ├── Synapsis.Session.Worker      — state machine, orchestrates agent loop
-│       ├── Synapsis.Session.Stream      — manages provider SSE connection
-│       └── Synapsis.Session.Context     — token counting, compaction
-├── Synapsis.MCP.Supervisor              — one GenServer per MCP connection
-├── SynapsisLsp.Supervisor               — DynamicSupervisor for LSP servers
-│   ├── Synapsis.LSP.Server (gopls)
-│   ├── Synapsis.LSP.Server (typescript-language-server)
-│   └── ...
-└── SynapsisServer.Supervisor            — Phoenix infrastructure (runtime reference)
-    ├── SynapsisServer.Telemetry
-    └── SynapsisServer.Endpoint
+│   └── Session.Supervisor (rest_for_one, one per session)
+│       ├── Task.Supervisor              — survives a Worker-only restart
+│       └── Synapsis.Session.Worker      — owns the graph Engine inline;
+│                                          epoch-fenced I/O (ADR-006)
+└── Synapsis.Agent.Supervisor
+
+SynapsisServer.Application
+├── SynapsisServer.Telemetry
+└── SynapsisServer.Endpoint              — Bandit, LiveView, channels, REST/SSE
 ```
 
-Note: `SynapsisServer.Supervisor` is referenced at runtime (an atom), not a compile-time dependency. This avoids a circular dependency since `synapsis_server` depends on `synapsis_core`.
+## Storage Model (ADR-006)
+
+| Tier | What lives there |
+|------|------------------|
+| Process memory | The live turn. `Session.Worker` is the read authority; readers use `Synapsis.Session.Read.live_snapshot/1`. |
+| Concord (embedded, node-local, `tmp/concord/`) | `sessions/<id>/meta` + `sessions/<id>/turns/<n>` per-turn snapshots; agent events and summaries under `coord/…`. |
+| Files | TOML configs (agents, providers, MCP, LSP, heartbeats, toolsets) loaded by `Config.Store` with watchers; Markdown workspace documents; Markdown memory entries (file adapter + ETS index). |
+
+Writes are append-per-turn, fire-and-forget, atomic per turn. A crash can lose at most the whole last turn — never half a turn; files/git are the agent's real ground truth. On restart the Worker rehydrates from Concord's last turn, bumps its epoch (stale task results are fenced off), and waits for input.
 
 ## Data Flow: User Message → AI Response
 
-1. User types in the ChatView (React, mounted via LiveView hook). React sends message via Phoenix Channel `push("user_message", %{content: "..."})`.
-2. `SessionChannel` looks up or creates session, calls `Session.Worker.send_message/2`
-3. `Session.Worker` (GenServer):
-   - Persists user message to Ecto/PostgreSQL
-   - Builds provider request (system prompt + messages + tools)
-   - Starts streaming via `Session.Stream`
-4. `Session.Stream` opens HTTP SSE connection to provider (Anthropic/OpenAI/etc)
-   - Receives chunks, sends `{:chunk, part}` to `Session.Worker`
-5. `Session.Worker` processes parts:
-   - `TextPart` → broadcast to PubSub
-   - `ToolUsePart` → check permission → execute via `Tool.TaskSupervisor` → feed result back
-   - `ReasoningPart` → broadcast to PubSub
-6. On stream completion, `Session.Worker` persists assistant message
-7. PubSub → Channel → Client renders incrementally
+1. User sends a message from the LiveView chat (`AgentLive.Sessions`) or via `SessionChannel`/CLI.
+2. `Synapsis.Sessions.send_message/2` → `Synapsis.Session.Worker.send_message/3`.
+3. `Session.Worker` (GenServer) steps the pure graph **Engine** inline (`coding_loop` for build mode, `conversational_loop` for chat mode) until the graph waits on I/O.
+4. I/O nodes delegate to the Worker's `IOHandler`: provider streaming runs as a supervised Task using `Synapsis.Provider.Adapter` (SSE); tool calls are classified by `ToolDispatcher` (permission check) and executed via `Tool.Executor` under `Tool.TaskSupervisor`.
+5. Streaming deltas broadcast live over `Synapsis.PubSub`; LiveView/Channel/SSE subscribers render incrementally.
+6. At the turn boundary the Worker writes the whole turn to Concord as one transaction (fire-and-forget) and the engine loops or completes.
 
 ## Performance Targets
 
-- Session startup: <50ms
-- Message persistence: <10ms
+- Session startup: <50ms (Concord is node-local and synchronously available)
 - First token to client: <200ms after provider responds
 - Tool execution timeout: configurable, default 30s
 - Concurrent sessions: 100+ per node (process-isolated)

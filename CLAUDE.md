@@ -7,18 +7,17 @@ This file provides guidance to Claude Code when working with code in this reposi
 Run commands from the umbrella root unless noted.
 
 ```bash
-# Setup
+# Setup (no database needed — storage is embedded)
 mix deps.get
-mix ecto.setup
-cd apps/synapsis_web && bun install && cd ../..
+bun install   # root Bun workspaces cover packages/* and apps/*
 
-# Run server
+# Run server (http://localhost:4657)
 mix phx.server
 
 # Tests
 mix test
 mix test apps/synapsis_core/test
-mix test apps/synapsis_web/test/synapsis_web/live/session_live/show_test.exs
+mix test apps/synapsis_web/test/synapsis_web/live/agent_live/sessions_test.exs
 mix test path/to/test_file.exs:42
 
 # Code quality
@@ -26,21 +25,19 @@ mix compile --warnings-as-errors
 mix format --check-formatted
 mix format
 
-# Database
-mix ecto.create && mix ecto.migrate
-mix ecto.reset
-
 # Assets
 cd apps/synapsis_web && mix assets.build
 cd apps/synapsis_web && mix assets.deploy
 ```
+
+LLM providers are loaded from environment variables at startup: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`.
 
 ## App Structure
 
 The umbrella has 9 apps:
 
 ```text
-synapsis_data        - Ecto schemas, Repo, migrations, persistence contexts
+synapsis_data        - Concord session store, TOML config store, embedded Ecto types (no Repo/SQL)
 synapsis_provider    - Anthropic/OpenAI/Google transports, model registry, retry, sanitization
 synapsis_core        - shared tools, config, PubSub, memory, git/worktree helpers, file watching
 synapsis_agent       - agent graph runtime, session workers, supervisors, heartbeats
@@ -50,6 +47,8 @@ synapsis_server      - Phoenix endpoint, channels, REST/SSE controllers, telemet
 synapsis_web         - Phoenix LiveView UI, HEEx, DuskMoon components, TypeScript hooks
 synapsis_cli         - escript CLI and HTTP/SSE client code
 ```
+
+TypeScript packages live under `packages/*` as Bun workspaces — only `@synapsis/hooks` (LiveView DOM hooks; see ADR-007, the UI is pure LiveView with no React).
 
 Dependency direction is strict:
 
@@ -86,9 +85,17 @@ The web interface is Phoenix LiveView, not React. It uses `phoenix_duskmoon` and
 - Keep UI dense, operational, accessible, and responsive.
 - For LiveView changes, run the focused `apps/synapsis_web/test` files. For hook or asset changes, also run `cd apps/synapsis_web && mix assets.build` when practical.
 
+## Storage Model (ADR-006)
+
+There is no PostgreSQL/Ecto Repo/Oban. Storage is three-tier:
+
+- **Concord** (embedded, `ra`-based KV under `tmp/concord/`): session transcripts as per-turn snapshots (`sessions/<id>/meta`, `sessions/<id>/turns/<n>`), agent events/summaries.
+- **Files**: TOML for configs (agents, providers, MCP, LSP, heartbeats, toolsets — loaded by `Synapsis.Config.Store` with file watchers), Markdown for workspace documents and memory (file adapter with ETS index).
+- **Process memory**: the live `Session.Worker` is the read authority for the in-flight turn; readers use `Synapsis.Session.Read.live_snapshot/1` and fall back to Concord when the process is down.
+
 ## Guardrails
 
-- Database is the source of truth. Persist before broadcasting via `Synapsis.PubSub`.
+- The session process is the live source of truth. Broadcast live via `Synapsis.PubSub`; snapshot the whole turn to Concord at the turn boundary (fire-and-forget, atomic per turn).
 - Never make synchronous LLM calls in request or worker paths.
 - Use `Port` for shell/tool execution, not `System.cmd`.
 - Validate every tool path against the project root and reject traversal.
@@ -101,8 +108,8 @@ The web interface is Phoenix LiveView, not React. It uses `phoenix_duskmoon` and
 
 ## Data Layer
 
-- `synapsis_data` owns schemas, migrations, Repo access, Ecto queries, and transaction boundaries.
-- Other apps should use `synapsis_data` contexts instead of defining schemas or calling `Synapsis.Repo` directly.
+- `synapsis_data` owns `Synapsis.Session.Store` (Concord), `Synapsis.Config.Store` (TOML + watchers), and the embedded Ecto types (`Part`, `Encrypted.Binary` — `ecto` is a modeling dependency only; there is no `ecto_sql`/`postgrex` and no `Synapsis.Repo`).
+- Other apps go through `synapsis_data` store APIs instead of touching Concord keys or config files directly.
 - Use UUID/binary IDs for persisted records.
 - Keep agent runtime, orchestration, Phoenix, provider streaming, and tool execution logic out of `synapsis_data`.
 
@@ -125,6 +132,12 @@ If a dependency from `gsmlg*`, `duskmoon-dev`, `Gao-OS`, or related internal Git
 - Add a `# TODO(upstream): org/repo#issue` comment for blockers.
 - For non-blocking temporary workarounds, add `# WORKAROUND(upstream): org/repo#issue`.
 - If the upstream issue blocks the task, stop the blocked task and report the dependency.
+
+## Git
+
+- Use Conventional Commit style (`feat(scope): ...`, `fix(streaming): ...`, `test(provider): ...`).
+- Do not include `Generated with Claude Code` or `Co-Authored-By: Claude` in commit messages.
+- Put repo-local worktrees under `.trees/<branch-name>`.
 
 ## Graphify And GitNexus
 

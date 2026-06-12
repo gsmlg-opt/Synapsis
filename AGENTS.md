@@ -2,9 +2,9 @@
 
 ## Project Structure And Module Organization
 
-This is an Elixir umbrella project with a Phoenix server/web surface, OTP-backed agent runtime, Ecto persistence, and TypeScript workspace packages.
+This is an Elixir umbrella project with a Phoenix server/web surface, OTP-backed agent runtime, embedded Concord/file persistence (no PostgreSQL), and TypeScript workspace packages.
 
-- `apps/synapsis_data`: Ecto schemas, Repo, migrations, persistence contexts, encrypted fields, and database-facing APIs.
+- `apps/synapsis_data`: `Synapsis.Session.Store` (embedded Concord KV), `Synapsis.Config.Store` (TOML + file watchers), embedded Ecto types and encrypted fields. `ecto` is a modeling dependency only — there is no `ecto_sql`/`postgrex` and no `Synapsis.Repo`.
 - `apps/synapsis_provider`: provider adapters and streaming transport for Anthropic, OpenAI-compatible, Google, model registry, retry, sanitization, and provider event/message mapping.
 - `apps/synapsis_core`: shared domain services, session orchestration helpers, tool registry/executor, permissions, config, PubSub, memory, git/worktree helpers, and file watching.
 - `apps/synapsis_agent`: supervised agent/session runtime, agent graphs, query loop, runtime checkpoints, work items, heartbeats, messaging, and session worker implementation.
@@ -13,13 +13,13 @@ This is an Elixir umbrella project with a Phoenix server/web surface, OTP-backed
 - `apps/synapsis_plugin`: plugin loader, plugin servers, MCP protocol support, and LSP protocol/manager support.
 - `apps/synapsis_workspace`: workspace resource model, local blob store, projections, path resolution, search, permissions, and workspace tools.
 - `apps/synapsis_cli`: escript CLI and HTTP/SSE client code.
-- `packages/*`: Bun workspaces for TypeScript packages (`@synapsis/channel`, `@synapsis/hooks`, `@synapsis/ui`).
+- `packages/*`: Bun workspaces for TypeScript packages — only `@synapsis/hooks` (LiveView DOM hooks; the UI is pure LiveView per ADR-007).
 - `docs/`: architecture docs, ADRs, guardrails, PRDs, designs, and implementation plans. Read the relevant docs before changing behavior.
 
 ## Architecture Boundaries
 
-- Database is the source of truth for projects, sessions, messages, tool calls, memory, agent events, and workspace records. GenServers may hold transient operational state only.
-- `synapsis_data` owns schemas, migrations, Repo access, queries, and transactions. Other apps should go through `synapsis_data` contexts instead of defining schemas or using `Synapsis.Repo` directly.
+- Storage follows ADR-006: the live session process is the read authority for the in-flight turn; Concord holds durable per-turn session snapshots and agent events/summaries; configs are TOML files; workspace documents and memory are files. There is no database.
+- `synapsis_data` owns the Concord session store and the TOML config store. Other apps go through its store APIs instead of touching Concord keys or config files directly.
 - `synapsis_provider` owns provider-specific request/response formats. Core and agent code should operate on domain structs/events, not hardcoded provider payload shapes.
 - `synapsis_core` owns shared tool, config, PubSub, memory, git, and session-domain services. Keep Phoenix endpoint/router/controller concerns out of core.
 - `synapsis_agent` owns the agent runtime and supervised session/agent processes. Tool registration happens there at startup.
@@ -29,7 +29,7 @@ This is an Elixir umbrella project with a Phoenix server/web surface, OTP-backed
 
 ## Guardrails
 
-- Persist before broadcasting. Write to the database first, then publish via `Synapsis.PubSub`.
+- Broadcast live, snapshot after (ADR-006): publish deltas via `Synapsis.PubSub` from process state; write the whole turn to Concord at the turn boundary as one atomic, fire-and-forget transaction.
 - Never make synchronous LLM calls in request or worker paths; stream asynchronously and delegate slow work to supervised tasks.
 - Use `Port` for shell/tool execution, not `System.cmd`, so output streaming, timeouts, and cancellation remain possible.
 - Validate every tool path against the project root and reject path traversal.
@@ -45,12 +45,10 @@ This is an Elixir umbrella project with a Phoenix server/web surface, OTP-backed
 Run commands from the repository root unless noted.
 
 - `mix deps.get`: fetch Elixir dependencies.
-- `mix ecto.create && mix ecto.migrate`: create and migrate the configured database.
-- `mix ecto.setup`: create, migrate, and seed when appropriate.
-- `mix phx.server`: start the Phoenix endpoint on the configured dev port (`4657` by default).
+- `mix phx.server`: start the Phoenix endpoint on the configured dev port (`4657` by default). No database setup is needed; the embedded Concord store writes under `tmp/`.
 - `mix test`: run the full umbrella test suite.
 - `mix test apps/synapsis_core/test`: run one app's tests by path.
-- `mix test apps/synapsis_web/test/synapsis_web/live/session_live/show_test.exs`: run a focused test file.
+- `mix test apps/synapsis_web/test/synapsis_web/live/agent_live/sessions_test.exs`: run a focused test file.
 - `mix format --check-formatted`: verify Elixir formatting.
 - `cd apps/synapsis_web && mix assets.setup`: install Bun and Tailwind CLIs if missing.
 - `cd apps/synapsis_web && mix assets.build`: build web assets.
@@ -71,9 +69,9 @@ Use scoped tests for scoped changes. For PRD work, modify only files in the stat
 
 ## Data Layer Rules
 
-- Put migrations in `apps/synapsis_data/priv/repo/migrations`.
+- Session/agent durable state goes through `Synapsis.Session.Store` and the Concord-backed stores in `synapsis_data`; config reads/writes go through `Synapsis.Config.Store` (TOML).
 - Use UUID/binary IDs for persisted records. Do not add auto-increment integer primary keys.
-- Encapsulate Ecto queries and transaction boundaries in `synapsis_data`.
+- Append per-turn; never rewrite a whole session transcript in one write.
 - Keep `synapsis_data` free of agent runtime, orchestration, Phoenix, provider streaming, tool execution, and UI logic.
 - When a task explicitly targets `synapsis_data`, keep the change data-only. If the requested behavior truly needs cross-package API or architecture changes, explain the required boundary change before broadening the edit.
 
@@ -81,7 +79,7 @@ Use scoped tests for scoped changes. For PRD work, modify only files in the stat
 
 - Every tool implements `Synapsis.Tool.Behaviour`; every provider adapter follows the provider behavior/transport patterns already in `synapsis_provider`.
 - Tools must include project context, validate inputs, honor permissions, persist auditable calls where required, and broadcast side effects only after persistence.
-- Session and agent workers must not block on provider streams, tool execution, database work that can be slow, or external processes.
+- Session and agent workers must not block on provider streams, tool execution, store writes that can be slow, or external processes.
 - Agent graph changes should include focused tests in `apps/synapsis_agent/test`.
 - Tool changes should include focused tests in `apps/synapsis_core/test/synapsis/tool`.
 - Provider changes should include parser/transport tests in `apps/synapsis_provider/test` with `Bypass` for HTTP.
