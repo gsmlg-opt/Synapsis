@@ -5,17 +5,9 @@
   "type": "module",
   "main": "src/index.ts",
   "dependencies": {
-    "@synapsis/ui": "workspace:*",
-    "@synapsis/channel": "workspace:*",
     "phoenix": "1.8.8",
     "phoenix_html": "4.3.0",
     "phoenix_live_view": "1.1.32",
-    "preact": "^10.29.2",
-    "react": "19.2.7",
-    "react-dom": "19.2.7"
-  },
-  "devDependencies": {
-    "@types/react": "19.2.17",
-    "@types/react-dom": "19.2.3"
+    "preact": "^10.29.2"
   }
 }

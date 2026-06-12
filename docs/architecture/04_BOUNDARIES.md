@@ -57,34 +57,30 @@ LiveView:  /live socket (for LiveView connections)
 
 ### synapsis_web → LiveView Pages
 
-`synapsis_web` owns all LiveView modules, HEEx templates, function components, and React hook bridges. It depends on `synapsis_server` and defines no OTP application.
+`synapsis_web` owns all LiveView modules, HEEx templates, and function components. It depends on `synapsis_server` and defines no OTP application. The UI is pure LiveView — no React (see [ADR-007](../decisions/ADR-007-pure-liveview-ui.md)).
 
-**15 LiveView pages** (all under `SynapsisWeb.*` namespace, routed from `SynapsisServer.Router`):
+**LiveView pages** (all under `SynapsisWeb.*` namespace, routed from `SynapsisServer.Router`):
 
 ```
-GET  /                                  DashboardLive       — projects + recent sessions
-GET  /projects                          ProjectLive.Index   — project CRUD
-GET  /projects/:id                      ProjectLive.Show    — project detail + sessions
-GET  /projects/:project_id/sessions     SessionLive.Index   — session list
-GET  /projects/:project_id/sessions/:id SessionLive.Show    — chat view (React ChatApp hook)
-GET  /settings                          SettingsLive        — settings hub
-GET  /settings/providers                ProviderLive.Index  — provider CRUD
-GET  /settings/providers/:id            ProviderLive.Show   — provider edit
-GET  /settings/memory                   MemoryLive.Index    — memory entries
-GET  /settings/skills                   SkillLive.Index     — skill CRUD
-GET  /settings/skills/:id              SkillLive.Show      — skill edit
-GET  /settings/mcp                      MCPLive.Index       — MCP server CRUD
-GET  /settings/mcp/:id                  MCPLive.Show        — MCP config edit
-GET  /settings/lsp                      LSPLive.Index       — LSP server CRUD
-GET  /settings/lsp/:id                  LSPLive.Show        — LSP config edit
+GET  /                                        DashboardLive        — landing
+GET  /agent/agents[/new|/:id/config]          AgentLive.Agents     — agent CRUD + config
+GET  /agent/tools[/new|/:id/edit]             AgentLive.Toolsets   — toolset CRUD
+GET  /agent/skills[/new|/:id/edit]            AgentLive.Skills     — skill CRUD
+GET  /agent/agents/:agent_id/sessions[/:id]   AgentLive.Sessions   — chat view
+GET  /workspace                               WorkspaceLive.Explorer
+GET  /settings                                SettingsLive         — settings hub
+GET  /settings/providers[/new|/:id]           ProviderLive.Index/Show
+GET  /settings/models                         ModelTierLive.Index
+GET  /settings/memory[/new|/:id]              MemoryLive.Index/Show
+GET  /settings/skills[/:id]                   SkillLive.Index/Show
+GET  /settings/mcp[/new|/:id]                 MCPLive.Index/Show
+GET  /settings/lsp[/new|/:id]                 LSPLive.Index/Show
 ```
 
-`SessionLive.Show` is the core chat view. LiveView owns the page chrome (sidebar, header, agent mode toggle). React `ChatApp` is mounted via `phx-hook="ChatApp"` with `phx-update="ignore"` — React owns the DOM for the chat widget and manages its own Phoenix Channel connection for streaming.
+`AgentLive.Sessions` is the core chat view: pure LiveView with small DOM hooks (`ScrollBottom`, `StreamingText`) for streaming UX.
 
 **Workspace packages** (Bun workspaces in `packages/`):
-- `@synapsis/hooks` — LiveView hooks: `ChatApp`, `MarkdownRenderer`, `DiffViewer`, `TerminalOutput`
-- `@synapsis/ui` — React components + Redux store (chatSlice, uiSlice, sessionSlice)
-- `@synapsis/channel` — Phoenix Socket singleton, session channel factory, Redux middleware
+- `@synapsis/hooks` — LiveView DOM hooks: `ScrollBottom`, `StreamingText`, `AgentModelPicker` (Preact)
 
 ### synapsis_server → Channel Protocol
 

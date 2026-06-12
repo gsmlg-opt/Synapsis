@@ -1,6 +1,9 @@
 # ADR-005: LiveView + React Hybrid (Supersedes ADR-003)
 
-## Status: Accepted (revised)
+## Status: Partially superseded by [ADR-007](ADR-007-pure-liveview-ui.md)
+
+The LiveView-owns-pages decision stands. The React ChatApp island was never
+mounted and has been removed — the UI is pure LiveView (ADR-007).
 
 ## Context
 
