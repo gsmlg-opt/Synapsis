@@ -51,6 +51,7 @@ defmodule Synapsis.Tool.Registry do
   @doc "Register a process-based tool (plugin GenServer)."
   def register_process(name, pid, opts \\ []) do
     :ets.insert(@table, {name, {:process, pid, opts}})
+    GenServer.cast(__MODULE__, {:monitor, name, pid})
     broadcast_tool_registry_changed(:registered, name)
     :ok
   end
@@ -233,7 +234,39 @@ defmodule Synapsis.Tool.Registry do
     # Create the swarm ETS table here so the long-lived Registry process owns it,
     # preventing table loss when transient Task processes exit.
     Synapsis.Tool.Teammate.ensure_table()
-    {:ok, table}
+    {:ok, %{table: table, monitors: %{}, pids: %{}}}
+  end
+
+  @impl true
+  def handle_cast({:monitor, name, pid}, state) do
+    case Map.get(state.pids, pid) do
+      nil ->
+        ref = Process.monitor(pid)
+        monitors = Map.put(state.monitors, ref, {pid, MapSet.new([name])})
+        pids = Map.put(state.pids, pid, ref)
+        {:noreply, %{state | monitors: monitors, pids: pids}}
+
+      ref ->
+        {^pid, names} = Map.fetch!(state.monitors, ref)
+        monitors = Map.put(state.monitors, ref, {pid, MapSet.put(names, name)})
+        {:noreply, %{state | monitors: monitors}}
+    end
+  end
+
+  @impl true
+  def handle_info({:DOWN, ref, :process, pid, _reason}, state) do
+    case Map.pop(state.monitors, ref) do
+      {nil, _} ->
+        {:noreply, state}
+
+      {{^pid, names}, monitors} ->
+        Enum.each(names, fn name ->
+          :ets.delete(@table, name)
+          broadcast_tool_registry_changed(:unregistered, name)
+        end)
+
+        {:noreply, %{state | monitors: monitors, pids: Map.delete(state.pids, pid)}}
+    end
   end
 
   # ---------------------------------------------------------------------------
