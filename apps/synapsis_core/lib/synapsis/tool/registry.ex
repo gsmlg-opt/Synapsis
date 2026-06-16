@@ -20,6 +20,7 @@ defmodule Synapsis.Tool.Registry do
   - `:enabled` (boolean) — overrides the module's `enabled?/0` callback.
   """
   use GenServer
+  require Logger
 
   @table :synapsis_tools
 
@@ -234,7 +235,22 @@ defmodule Synapsis.Tool.Registry do
     # Create the swarm ETS table here so the long-lived Registry process owns it,
     # preventing table loss when transient Task processes exit.
     Synapsis.Tool.Teammate.ensure_table()
-    {:ok, %{table: table, monitors: %{}, pids: %{}}}
+    # Re-register built-ins after (re)creating the table so a Registry restart
+    # self-heals: the named ETS table is recreated empty on every init, and
+    # nothing else re-registers built-ins after boot.
+    {:ok, %{table: table, monitors: %{}, pids: %{}}, {:continue, :register_builtins}}
+  end
+
+  @impl true
+  def handle_continue(:register_builtins, state) do
+    try do
+      Synapsis.Tool.Builtin.register_all()
+    rescue
+      e ->
+        Logger.error("builtin_tool_registration_failed", reason: Exception.message(e))
+    end
+
+    {:noreply, state}
   end
 
   @impl true

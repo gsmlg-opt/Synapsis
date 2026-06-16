@@ -104,6 +104,17 @@ defmodule Synapsis.Tool.RegistryTest do
     end
   end
 
+  describe "built-in self-registration" do
+    test "built-in tools are registered on init (survive a Registry restart)" do
+      # Nothing in this test registers them — they must come from Registry.init's
+      # handle_continue, which re-runs on every (re)start so the registry self-heals.
+      names = Registry.list() |> Enum.map(& &1.name)
+      assert "file_read" in names
+      assert "bash" in names
+      assert "grep" in names
+    end
+  end
+
   describe "list/0" do
     test "includes registered module tools" do
       Registry.register_module("test_tool", FakeTool)
