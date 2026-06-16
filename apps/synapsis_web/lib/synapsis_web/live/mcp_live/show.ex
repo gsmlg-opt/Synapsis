@@ -1,18 +1,12 @@
 defmodule SynapsisWeb.MCPLive.Show do
   use SynapsisWeb, :live_view
 
-  alias Synapsis.{PluginConfig, PluginConfigs}
+  alias Synapsis.{MCPConfig, MCPConfigs}
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
-    case PluginConfigs.get(id) do
-      nil ->
-        {:ok,
-         socket
-         |> put_flash(:error, "MCP server not found")
-         |> push_navigate(to: ~p"/settings/mcp")}
-
-      %PluginConfig{type: "mcp"} = config ->
+    case MCPConfigs.get(id) do
+      %MCPConfig{} = config ->
         {:ok,
          assign(socket,
            config: config,
@@ -20,10 +14,10 @@ defmodule SynapsisWeb.MCPLive.Show do
            form_values: form_values_from_config(config)
          )}
 
-      _other ->
+      nil ->
         {:ok,
          socket
-         |> put_flash(:error, "Not an MCP configuration")
+         |> put_flash(:error, "MCP server not found")
          |> push_navigate(to: ~p"/settings/mcp")}
     end
   end
@@ -42,11 +36,11 @@ defmodule SynapsisWeb.MCPLive.Show do
       url: url_for_transport(transport, params),
       transport: transport,
       env: env_for_transport(transport, params),
-      settings: settings_for_transport(transport, params),
-      auto_start: params["auto_start"] == "true"
+      headers: headers_for_transport(transport, params),
+      enabled: params["enabled"] == "true"
     }
 
-    case PluginConfigs.update(socket.assigns.config, attrs) do
+    case MCPConfigs.update(socket.assigns.config, attrs) do
       {:ok, config} ->
         {:noreply,
          socket
@@ -112,18 +106,18 @@ defmodule SynapsisWeb.MCPLive.Show do
   defp args_for_transport("stdio", params), do: parse_args(params["args"])
   defp args_for_transport(_transport, _params), do: []
 
-  defp url_for_transport(transport, params) when transport in ["http", "sse"], do: params["url"]
+  defp url_for_transport(transport, params) when transport in ["streamable_http", "sse"],
+    do: params["url"]
+
   defp url_for_transport(_transport, _params), do: nil
 
   defp env_for_transport("stdio", params), do: parse_env(params["env"])
   defp env_for_transport(_transport, _params), do: %{}
 
-  defp settings_for_transport(transport, params) when transport in ["http", "sse"] do
-    headers = parse_headers(params["headers"])
-    if headers == %{}, do: %{}, else: %{"headers" => headers}
-  end
+  defp headers_for_transport(transport, params) when transport in ["streamable_http", "sse"],
+    do: parse_headers(params["headers"])
 
-  defp settings_for_transport(_transport, _params), do: %{}
+  defp headers_for_transport(_transport, _params), do: %{}
 
   defp format_args(args) when is_list(args), do: Enum.join(args, "\n")
   defp format_args(_), do: ""
@@ -134,28 +128,20 @@ defmodule SynapsisWeb.MCPLive.Show do
 
   defp format_env(_), do: ""
 
-  defp format_headers(settings) when is_map(settings) do
-    settings
-    |> Map.get("headers", %{})
-    |> case do
-      headers when is_map(headers) ->
-        headers |> Enum.sort() |> Enum.map_join("\n", fn {k, v} -> "#{k}: #{v}" end)
-
-      _ ->
-        ""
-    end
+  defp format_headers(headers) when is_map(headers) do
+    headers |> Enum.sort() |> Enum.map_join("\n", fn {k, v} -> "#{k}: #{v}" end)
   end
 
-  defp format_headers(_settings), do: ""
+  defp format_headers(_headers), do: ""
 
-  defp form_values_from_config(%PluginConfig{} = config) do
+  defp form_values_from_config(%MCPConfig{} = config) do
     %{
       "transport" => config.transport || "stdio",
       "command" => config.command || "",
       "args" => format_args(config.args),
       "url" => config.url || "",
       "env" => format_env(config.env),
-      "headers" => format_headers(config.settings)
+      "headers" => format_headers(config.headers)
     }
   end
 
@@ -180,7 +166,11 @@ defmodule SynapsisWeb.MCPLive.Show do
           <.dm_select
             name="transport"
             label="Transport"
-            options={[{"stdio", "stdio"}, {"http", "HTTP"}]}
+            options={[
+              {"stdio", "stdio"},
+              {"streamable_http", "Streamable HTTP"},
+              {"sse", "SSE"}
+            ]}
             value={form_value(@form_values, "transport", "stdio")}
           />
 
@@ -208,7 +198,7 @@ defmodule SynapsisWeb.MCPLive.Show do
             />
           </div>
 
-          <div :if={form_value(@form_values, "transport", "stdio") in ["http", "sse"]}>
+          <div :if={form_value(@form_values, "transport", "stdio") in ["streamable_http", "sse"]}>
             <.dm_input
               type="text"
               name="url"
@@ -226,12 +216,12 @@ defmodule SynapsisWeb.MCPLive.Show do
           </div>
 
           <div>
-            <input type="hidden" name="auto_start" value="false" />
+            <input type="hidden" name="enabled" value="false" />
             <.dm_checkbox
-              name="auto_start"
+              name="enabled"
               value="true"
-              checked={@config.auto_start}
-              label="Auto-start on startup"
+              checked={@config.enabled}
+              label="Enabled"
             />
           </div>
 

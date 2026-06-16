@@ -1,14 +1,13 @@
 defmodule SynapsisWeb.MCPLive.ShowTest do
   use SynapsisWeb.ConnCase
 
-  alias Synapsis.PluginConfigs
+  alias Synapsis.MCPConfigs
 
   setup do
-    Synapsis.DataCase.clear_config_store(:plugin)
+    Synapsis.DataCase.clear_config_store(:mcp)
 
     {:ok, config} =
-      PluginConfigs.create(%{
-        type: "mcp",
+      MCPConfigs.create(%{
         name: "test-server",
         transport: "stdio",
         command: "npx test-server"
@@ -50,13 +49,13 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     {:ok, _view, html} = live(conn, ~p"/settings/mcp/#{config.id}")
     assert html =~ "Transport"
     assert html =~ "stdio"
-    assert html =~ "HTTP"
+    assert html =~ "Streamable HTTP"
   end
 
-  test "shows auto-start checkbox", %{conn: conn, config: config} do
+  test "shows enabled checkbox", %{conn: conn, config: config} do
     {:ok, _view, html} = live(conn, ~p"/settings/mcp/#{config.id}")
-    assert html =~ "Auto-start on startup"
-    assert html =~ ~s(name="auto_start")
+    assert html =~ "Enabled"
+    assert html =~ ~s(name="enabled")
   end
 
   test "heading displays config name", %{conn: conn, config: config} do
@@ -81,8 +80,8 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
 
   test "shows URL field", %{conn: conn, config: config} do
     {:ok, http_config} =
-      PluginConfigs.update(config, %{
-        transport: "http",
+      MCPConfigs.update(config, %{
+        transport: "streamable_http",
         command: "",
         args: [],
         env: %{},
@@ -116,7 +115,7 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
 
     html =
       view
-      |> form("form", %{"transport" => "http"})
+      |> form("form", %{"transport" => "streamable_http"})
       |> render_change()
 
     assert html =~ "URL"
@@ -128,8 +127,7 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
 
   test "config with env vars displays them formatted", %{conn: conn} do
     {:ok, config_with_env} =
-      PluginConfigs.create(%{
-        type: "mcp",
+      MCPConfigs.create(%{
         name: "env-show-test",
         transport: "stdio",
         command: "test",
@@ -143,8 +141,7 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
 
   test "config with args displays them one per line", %{conn: conn} do
     {:ok, config_with_args} =
-      PluginConfigs.create(%{
-        type: "mcp",
+      MCPConfigs.create(%{
         name: "args-show-test",
         transport: "stdio",
         command: "test",
@@ -203,12 +200,12 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
 
     view
-    |> form("form", %{"transport" => "http"})
+    |> form("form", %{"transport" => "streamable_http"})
     |> render_change()
 
     view
     |> form("form", %{
-      "transport" => "http",
+      "transport" => "streamable_http",
       "url" => "http://example.com/mcp",
       "headers" => "Authorization: Bearer test-token\nX-Client: synapsis\ninvalid"
     })
@@ -217,26 +214,24 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     html = render(view)
     assert html =~ "MCP server updated"
 
-    updated = PluginConfigs.get(config.id)
-    assert updated.transport == "http"
+    updated = MCPConfigs.get(config.id)
+    assert updated.transport == "streamable_http"
     assert updated.url == "http://example.com/mcp"
     assert updated.command in [nil, ""]
     assert updated.args == []
     assert updated.env == %{}
 
-    assert updated.settings == %{
-             "headers" => %{
-               "Authorization" => "Bearer test-token",
-               "X-Client" => "synapsis"
-             }
+    assert updated.headers == %{
+             "Authorization" => "Bearer test-token",
+             "X-Client" => "synapsis"
            }
   end
 
-  test "auto_start checkbox — submitting with false value", %{conn: conn, config: config} do
+  test "enabled checkbox — submitting with false value", %{conn: conn, config: config} do
     {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
 
     view
-    |> form("form", %{"command" => "test", "auto_start" => "false"})
+    |> form("form", %{"command" => "test", "enabled" => "false"})
     |> render_submit()
 
     assert render(view) =~ "MCP server updated"

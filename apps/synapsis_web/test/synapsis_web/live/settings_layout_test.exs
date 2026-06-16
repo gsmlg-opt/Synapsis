@@ -1,7 +1,7 @@
 defmodule SynapsisWeb.SettingsLayoutTest do
   use SynapsisWeb.ConnCase
 
-  alias Synapsis.{Memory, PluginConfigs, Providers, Skills}
+  alias Synapsis.{MCPConfigs, Memory, Providers, Skills}
 
   setup do
     Synapsis.DataCase.reset_memory_store()
@@ -17,9 +17,7 @@ defmodule SynapsisWeb.SettingsLayoutTest do
     "/settings/memory/new",
     "/settings/skills",
     "/settings/mcp",
-    "/settings/mcp/new",
-    "/settings/lsp",
-    "/settings/lsp/new"
+    "/settings/mcp/new"
   ]
 
   test "all settings pages render the shared left menu with MCP servers", %{conn: conn} do
@@ -114,27 +112,17 @@ defmodule SynapsisWeb.SettingsLayoutTest do
       })
 
     {:ok, mcp_config} =
-      PluginConfigs.create(%{
-        type: "mcp",
+      MCPConfigs.create(%{
         name: "layout-mcp-#{System.unique_integer([:positive])}",
         transport: "stdio",
         command: "npx"
-      })
-
-    {:ok, lsp_config} =
-      PluginConfigs.create(%{
-        type: "lsp",
-        name: "layout-lsp-#{System.unique_integer([:positive])}",
-        command: "elixir-ls",
-        args: ["--stdio"]
       })
 
     [
       "/settings/providers/#{provider.id}",
       "/settings/memory/#{memory.id}",
       "/settings/skills/#{skill.id}",
-      "/settings/mcp/#{mcp_config.id}",
-      "/settings/lsp/#{lsp_config.id}"
+      "/settings/mcp/#{mcp_config.id}"
     ]
   end
 end

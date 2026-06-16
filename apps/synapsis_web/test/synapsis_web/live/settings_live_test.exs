@@ -36,7 +36,7 @@ defmodule SynapsisWeb.SettingsLiveTest do
 
     test "does not render LSP servers link", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/settings")
-      refute html =~ ~p"/settings/lsp"
+      refute html =~ "/settings/lsp"
       refute html =~ "LSP Servers"
       refute html =~ "Configure Language Server Protocol integrations."
     end
@@ -65,7 +65,7 @@ defmodule SynapsisWeb.SettingsLiveTest do
       assert html =~ ~p"/settings/models"
       assert html =~ ~p"/settings/memory"
       assert html =~ ~p"/settings/mcp"
-      refute html =~ ~p"/settings/lsp"
+      refute html =~ "/settings/lsp"
     end
 
     test "each card has a heading and description", %{conn: conn} do

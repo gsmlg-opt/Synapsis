@@ -2,7 +2,7 @@ defmodule SynapsisWeb.MCPLive.Index do
   use SynapsisWeb, :live_view
   require Logger
 
-  alias Synapsis.PluginConfigs
+  alias Synapsis.MCPConfigs
 
   @impl true
   def mount(_params, _session, socket) do
@@ -26,11 +26,11 @@ defmodule SynapsisWeb.MCPLive.Index do
   end
 
   defp apply_action(socket, :new, _params) do
-    assign(socket, show_form: true, selected_preset: nil, show_import: false)
+    assign(socket, show_form: true, show_import: false, custom_form: %{"transport" => "stdio"})
   end
 
   defp apply_action(socket, :index, _params) do
-    assign(socket, show_form: false, selected_preset: nil, show_import: false)
+    assign(socket, show_form: false, show_import: false)
   end
 
   @impl true
@@ -69,57 +69,29 @@ defmodule SynapsisWeb.MCPLive.Index do
     end
   end
 
-  def handle_event("select_preset", %{"name" => name}, socket) do
-    preset =
-      SynapsisPlugin.MCP.Presets.all()
-      |> Enum.find(&(&1.name == name))
-
-    {:noreply, assign(socket, selected_preset: preset, custom_form: %{})}
-  end
-
-  def handle_event("select_custom", _params, socket) do
-    custom = %{
-      name: "",
-      description: "Custom MCP server",
-      command: "",
-      args: [],
-      env: %{},
-      transport: "stdio",
-      custom: true
-    }
-
-    {:noreply, assign(socket, selected_preset: custom, custom_form: %{"transport" => "stdio"})}
-  end
-
-  def handle_event("back_to_presets", _params, socket) do
-    {:noreply, assign(socket, selected_preset: nil, custom_form: %{})}
-  end
-
   def handle_event("change_custom_config", params, socket) do
     {:noreply, assign(socket, custom_form: Map.drop(params, ["_target"]))}
   end
 
   def handle_event("create_config", params, socket) do
-    preset = socket.assigns.selected_preset
-    transport = params["transport"] || preset.transport
+    transport = params["transport"] || "stdio"
 
     attrs = %{
-      type: "mcp",
-      name: params["name"] || preset.name,
+      name: params["name"],
       transport: transport,
-      command: command_for_transport(transport, params, preset),
+      command: command_for_transport(transport, params),
       url: url_for_transport(transport, params),
-      args: args_for_transport(transport, params, preset),
-      env: env_for_transport(transport, params, preset),
-      settings: settings_for_transport(transport, params),
-      auto_start: params["auto_start"] == "true"
+      args: args_for_transport(transport, params),
+      env: env_for_transport(transport, params),
+      headers: headers_for_transport(transport, params),
+      enabled: params["enabled"] == "true"
     }
 
-    case PluginConfigs.create(attrs) do
+    case MCPConfigs.create(attrs) do
       {:ok, _config} ->
         {:noreply,
          socket
-         |> assign(configs: list_configs(), show_form: false, selected_preset: nil)
+         |> assign(configs: list_configs(), show_form: false)
          |> put_flash(:info, "MCP server added")
          |> push_navigate(to: ~p"/settings/mcp")}
 
@@ -138,12 +110,12 @@ defmodule SynapsisWeb.MCPLive.Index do
   end
 
   def handle_event("toggle_enabled", %{"id" => id}, socket) do
-    case PluginConfigs.get(id) do
+    case MCPConfigs.get(id) do
       nil ->
         {:noreply, socket}
 
       config ->
-        case PluginConfigs.update(config, %{auto_start: !config.auto_start}) do
+        case MCPConfigs.update(config, %{enabled: !config.enabled}) do
           {:ok, _} -> {:noreply, assign(socket, configs: list_configs())}
           {:error, _} -> {:noreply, put_flash(socket, :error, "Failed to update config")}
         end
@@ -151,13 +123,13 @@ defmodule SynapsisWeb.MCPLive.Index do
   end
 
   def handle_event("delete_config", %{"id" => id}, socket) do
-    case PluginConfigs.get(id) do
+    case MCPConfigs.get(id) do
       nil ->
         :ok
 
       config ->
-        SynapsisPlugin.stop_plugin(config.name)
-        PluginConfigs.delete(config)
+        Synapsis.MCP.stop(config.name)
+        MCPConfigs.delete(config)
     end
 
     configs = list_configs()
@@ -165,31 +137,12 @@ defmodule SynapsisWeb.MCPLive.Index do
   end
 
   def handle_event("start_plugin", %{"name" => name}, socket) do
-    case PluginConfigs.get_by_name_type(name, "mcp") do
+    case MCPConfigs.get_by_name(name) do
       nil ->
         {:noreply, put_flash(socket, :error, "Config not found")}
 
       config ->
-        plugin_config = %{
-          name: config.name,
-          transport: config.transport,
-          command: config.command,
-          url: config.url,
-          args: config.args || [],
-          env: config.env || %{},
-          settings: config.settings || %{}
-        }
-
-        result =
-          try do
-            SynapsisPlugin.start_plugin(SynapsisPlugin.MCP, config.name, plugin_config)
-          rescue
-            e in [RuntimeError, ArgumentError] -> {:error, Exception.message(e)}
-          catch
-            _, _reason -> {:error, "plugin start failed"}
-          end
-
-        case result do
+        case Synapsis.MCP.start(config) do
           {:ok, _pid} ->
             Process.send_after(self(), :refresh_plugin_states, 3000)
 
@@ -200,13 +153,47 @@ defmodule SynapsisWeb.MCPLive.Index do
 
           {:error, reason} ->
             Logger.warning("mcp_start_failed", name: name, reason: inspect(reason))
-            {:noreply, put_flash(socket, :error, "Failed to start MCP server")}
+
+            {:noreply,
+             put_flash(
+               socket,
+               :error,
+               "Failed to start MCP server '#{name}': #{format_start_error(reason)}"
+             )}
+        end
+    end
+  end
+
+  def handle_event("restart_plugin", %{"name" => name}, socket) do
+    case MCPConfigs.get_by_name(name) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Config not found")}
+
+      config ->
+        case Synapsis.MCP.restart(config) do
+          :ok ->
+            Process.send_after(self(), :refresh_plugin_states, 3000)
+
+            {:noreply,
+             socket
+             |> refresh_states()
+             |> put_flash(:info, "MCP server '#{name}' restarting...")}
+
+          {:error, reason} ->
+            Logger.warning("mcp_restart_failed", name: name, reason: inspect(reason))
+
+            {:noreply,
+             put_flash(
+               socket,
+               :error,
+               "Failed to restart MCP server '#{name}': #{format_start_error(reason)}"
+             )}
         end
     end
   end
 
   def handle_event("stop_plugin", %{"name" => name}, socket) do
-    SynapsisPlugin.stop_plugin(name)
+    Synapsis.MCP.stop(name)
     configs = list_configs()
 
     {:noreply,
@@ -227,34 +214,25 @@ defmodule SynapsisWeb.MCPLive.Index do
     assign(socket, configs: configs, plugin_states: load_plugin_states(configs))
   end
 
-  defp list_configs, do: PluginConfigs.list_by_type("mcp")
+  defp list_configs, do: MCPConfigs.list()
 
+  # Derive running status from Synapsis.MCP.list/0 and tool names from the tool
+  # registry: MCP tools are registered as "mcp:<server_name>:<tool>".
   defp load_plugin_states(configs) do
-    stopped = %{running: false, initialized: false, server_info: nil, tools: []}
+    running = MapSet.new(Synapsis.MCP.list())
 
     for config <- configs, into: %{} do
-      info =
-        try do
-          case SynapsisPlugin.get_plugin_state(config.name) do
-            {:ok, %SynapsisPlugin.MCP{} = state} ->
-              %{
-                running: true,
-                initialized: state.initialized || false,
-                server_info: state.server_info,
-                tools: state.tools || []
-              }
-
-            _ ->
-              stopped
-          end
-        rescue
-          _e in [RuntimeError, ArgumentError] -> stopped
-        catch
-          _, _ -> stopped
-        end
-
-      {config.name, info}
+      running? = MapSet.member?(running, config.name)
+      tools = if running?, do: tools_for_server(config.name), else: []
+      {config.name, %{running: running?, tools: tools}}
     end
+  end
+
+  defp tools_for_server(name) do
+    prefix = "mcp:#{name}:"
+
+    Synapsis.Tool.Registry.list()
+    |> Enum.filter(fn tool -> String.starts_with?(to_string(tool.name), prefix) end)
   end
 
   defp parse_mcp_json(json) do
@@ -284,17 +262,16 @@ defmodule SynapsisWeb.MCPLive.Index do
         {imported, skipped + 1}
       else
         attrs = %{
-          type: "mcp",
           name: name,
           transport: Map.get(config, "transport", "stdio"),
           command: Map.get(config, "command", ""),
           url: Map.get(config, "url"),
           args: Map.get(config, "args", []),
           env: Map.get(config, "env", %{}),
-          auto_start: Map.get(config, "autoStart", false)
+          enabled: Map.get(config, "enabled", false)
         }
 
-        case PluginConfigs.create(attrs) do
+        case MCPConfigs.create(attrs) do
           {:ok, _} -> {imported + 1, skipped}
           {:error, _} -> {imported, skipped + 1}
         end
@@ -350,42 +327,31 @@ defmodule SynapsisWeb.MCPLive.Index do
     end)
   end
 
-  defp command_for_transport("stdio", params, preset), do: params["command"] || preset.command
-  defp command_for_transport(_transport, _params, _preset), do: ""
+  defp command_for_transport("stdio", params), do: params["command"]
+  defp command_for_transport(_transport, _params), do: ""
 
-  defp url_for_transport(transport, params) when transport in ["http", "sse"], do: params["url"]
+  defp url_for_transport(transport, params) when transport in ["streamable_http", "sse"],
+    do: params["url"]
+
   defp url_for_transport(_transport, _params), do: nil
 
-  defp args_for_transport("stdio", params, preset) do
-    if(params["args"], do: parse_args(params["args"]), else: preset.args)
-  end
+  defp args_for_transport("stdio", params), do: parse_args(params["args"])
+  defp args_for_transport(_transport, _params), do: []
 
-  defp args_for_transport(_transport, _params, _preset), do: []
+  defp env_for_transport("stdio", params), do: parse_env(params["env"])
+  defp env_for_transport(_transport, _params), do: %{}
 
-  defp env_for_transport("stdio", params, preset) do
-    if(params["env"], do: parse_env(params["env"]), else: preset.env)
-  end
+  defp headers_for_transport(transport, params) when transport in ["streamable_http", "sse"],
+    do: parse_headers(params["headers"])
 
-  defp env_for_transport(_transport, _params, _preset), do: %{}
-
-  defp settings_for_transport(transport, params) when transport in ["http", "sse"] do
-    headers = parse_headers(params["headers"])
-    if headers == %{}, do: %{}, else: %{"headers" => headers}
-  end
-
-  defp settings_for_transport(_transport, _params), do: %{}
+  defp headers_for_transport(_transport, _params), do: %{}
 
   @impl true
   def render(assigns) do
-    presets = SynapsisPlugin.MCP.Presets.all()
-    configured = Enum.map(assigns.configs, & &1.name)
-
     assigns =
       assign(assigns,
-        presets: presets,
-        configured_names: configured,
         custom_form: Map.get(assigns, :custom_form, %{}),
-        custom_transport: custom_transport(assigns)
+        custom_transport: form_value(Map.get(assigns, :custom_form, %{}), "transport", "stdio")
       )
 
     ~H"""
@@ -444,199 +410,87 @@ defmodule SynapsisWeb.MCPLive.Index do
       </.dm_card>
 
       <%= if @show_form do %>
-        <%= if @selected_preset do %>
-          <.dm_card variant="bordered" class="mb-6">
-            <div class="flex items-center gap-3 mb-4">
-              <.dm_btn variant="ghost" size="sm" phx-click="back_to_presets">
-                &larr; Back
-              </.dm_btn>
-              <h2 class="text-lg font-semibold">
-                <%= if Map.get(@selected_preset, :custom) do %>
-                  New Custom MCP Server
-                <% else %>
-                  Add {@selected_preset.name}
-                <% end %>
-              </h2>
-            </div>
-            <.dm_form
-              for={%{}}
-              phx-submit="create_config"
-              phx-change={if Map.get(@selected_preset, :custom), do: "change_custom_config"}
+        <.dm_card variant="bordered" class="mb-6">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold">New MCP Server</h2>
+            <.dm_link
+              navigate={~p"/settings/mcp"}
+              class="text-on-surface-variant hover:text-on-surface text-sm"
             >
-              <%= if Map.get(@selected_preset, :custom) do %>
-                <.dm_input
-                  type="text"
-                  name="name"
-                  value={form_value(@custom_form, "name")}
-                  placeholder="Server name"
-                  required
-                  label="Name"
-                />
-              <% else %>
-                <.readonly_field label="Name" value={@selected_preset.name} />
-              <% end %>
-              <%= if Map.get(@selected_preset, :custom) do %>
-                <.dm_select
-                  name="transport"
-                  label="Transport"
-                  options={[{"stdio", "stdio"}, {"http", "HTTP"}]}
-                  value={@custom_transport}
-                />
-              <% else %>
-                <.readonly_field label="Transport" value={@selected_preset.transport} />
-              <% end %>
-              <div :if={Map.get(@selected_preset, :custom) && @custom_transport in ["http", "sse"]}>
-                <.dm_input
-                  type="text"
-                  name="url"
-                  value={form_value(@custom_form, "url")}
-                  placeholder="http://localhost:7331/mcp"
-                  label="URL"
-                />
-                <.dm_textarea
-                  name="headers"
-                  value={form_value(@custom_form, "headers")}
-                  rows={4}
-                  placeholder="Authorization: Bearer token"
-                  label="Headers (Name: Value, one per line)"
-                />
-              </div>
-              <%= if Map.get(@selected_preset, :custom) && @custom_transport == "stdio" do %>
-                <.dm_input
-                  type="text"
-                  name="command"
-                  value={form_value(@custom_form, "command")}
-                  placeholder="e.g. npx"
-                  label="Command"
-                />
-              <% else %>
-                <%= if !Map.get(@selected_preset, :custom) do %>
-                  <.dm_input
-                    type="text"
-                    name="command"
-                    value={@selected_preset.command}
-                    readonly
-                    label="Command"
-                  />
-                <% end %>
-              <% end %>
-              <%= if Map.get(@selected_preset, :custom) && @custom_transport == "stdio" do %>
-                <.dm_textarea
-                  name="args"
-                  value={form_value(@custom_form, "args")}
-                  rows={3}
-                  placeholder="One argument per line"
-                  label="Arguments (one per line)"
-                />
-              <% else %>
-                <%= if !Map.get(@selected_preset, :custom) do %>
-                  <.readonly_field
-                    label="Arguments (one per line)"
-                    value={Enum.join(@selected_preset.args, "\n")}
-                    monospace
-                  />
-                <% end %>
-              <% end %>
-              <div :if={
-                (Map.get(@selected_preset, :custom) && @custom_transport == "stdio") ||
-                  (!Map.get(@selected_preset, :custom) && map_size(@selected_preset.env) > 0)
-              }>
-                <.dm_textarea
-                  name="env"
-                  rows={3}
-                  placeholder="KEY=VALUE"
-                  label="Environment Variables (KEY=VALUE, one per line)"
-                  value={
-                    if Map.get(@selected_preset, :custom),
-                      do: form_value(@custom_form, "env"),
-                      else: format_env_for_form(@selected_preset.env)
-                  }
-                />
-                <div
-                  :if={!Map.get(@selected_preset, :custom) && has_required_env?(@selected_preset)}
-                  class="text-xs text-warning mt-1"
-                >
-                  Fill in the required environment variable values above
-                </div>
-              </div>
-              <div>
-                <input type="hidden" name="auto_start" value="false" />
-                <.dm_checkbox
-                  name="auto_start"
-                  value="true"
-                  label="Auto-start on startup"
-                />
-              </div>
-              <.dm_btn type="submit" variant="primary">
-                Add MCP Server
-              </.dm_btn>
-            </.dm_form>
-          </.dm_card>
-        <% else %>
-          <div class="mb-6">
-            <div class="flex items-center justify-between mb-4">
-              <h2 class="text-lg font-semibold">Select an MCP Server</h2>
-              <.dm_link
-                navigate={~p"/settings/mcp"}
-                class="text-on-surface-variant hover:text-on-surface text-sm"
-              >
-                Cancel
-              </.dm_link>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              <div
-                :for={preset <- @presets}
-                phx-click={if(preset.name not in @configured_names, do: "select_preset")}
-                phx-value-name={preset.name}
-                class={[
-                  "w-full text-left",
-                  if(preset.name not in @configured_names, do: "cursor-pointer")
-                ]}
-                role="button"
-                tabindex="0"
-              >
-                <.dm_card
-                  variant="bordered"
-                  class={[
-                    if(preset.name in @configured_names,
-                      do: "opacity-50 cursor-not-allowed",
-                      else: "cursor-pointer hover:border-primary"
-                    )
-                  ]}
-                >
-                  <div class="font-medium">{preset.name}</div>
-                  <div class="text-xs text-on-surface-variant mt-1">{preset.description}</div>
-                  <div class="text-xs text-on-surface-variant mt-1 font-mono">
-                    {preset.command} {Enum.join(preset.args, " ")}
-                  </div>
-                  <div
-                    :if={preset.name in @configured_names}
-                    class="text-xs text-on-surface-variant mt-1"
-                  >
-                    Already configured
-                  </div>
-                </.dm_card>
-              </div>
-            </div>
-
-            <h3 class="text-sm font-semibold text-on-surface-variant mt-6 mb-3">Custom</h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              <div
-                phx-click="select_custom"
-                class="w-full text-left cursor-pointer"
-                role="button"
-                tabindex="0"
-              >
-                <.dm_card variant="bordered" class="cursor-pointer border-dashed hover:border-primary">
-                  <div class="font-medium">Custom MCP Server</div>
-                  <div class="text-xs text-on-surface-variant mt-1">
-                    Configure a custom stdio or HTTP server
-                  </div>
-                </.dm_card>
-              </div>
-            </div>
+              Cancel
+            </.dm_link>
           </div>
-        <% end %>
+          <.dm_form for={%{}} phx-submit="create_config" phx-change="change_custom_config">
+            <.dm_input
+              type="text"
+              name="name"
+              value={form_value(@custom_form, "name")}
+              placeholder="Server name"
+              required
+              label="Name"
+            />
+            <.dm_select
+              name="transport"
+              label="Transport"
+              options={[
+                {"stdio", "stdio"},
+                {"streamable_http", "Streamable HTTP"},
+                {"sse", "SSE"}
+              ]}
+              value={@custom_transport}
+            />
+            <div :if={@custom_transport in ["streamable_http", "sse"]}>
+              <.dm_input
+                type="text"
+                name="url"
+                value={form_value(@custom_form, "url")}
+                placeholder="http://localhost:7331/mcp"
+                label="URL"
+              />
+              <.dm_textarea
+                name="headers"
+                value={form_value(@custom_form, "headers")}
+                rows={4}
+                placeholder="Authorization: Bearer token"
+                label="Headers (Name: Value, one per line)"
+              />
+            </div>
+            <div :if={@custom_transport == "stdio"}>
+              <.dm_input
+                type="text"
+                name="command"
+                value={form_value(@custom_form, "command")}
+                placeholder="e.g. npx"
+                label="Command"
+              />
+              <.dm_textarea
+                name="args"
+                value={form_value(@custom_form, "args")}
+                rows={3}
+                placeholder="One argument per line"
+                label="Arguments (one per line)"
+              />
+              <.dm_textarea
+                name="env"
+                rows={3}
+                placeholder="KEY=VALUE"
+                label="Environment Variables (KEY=VALUE, one per line)"
+                value={form_value(@custom_form, "env")}
+              />
+            </div>
+            <div>
+              <input type="hidden" name="enabled" value="false" />
+              <.dm_checkbox
+                name="enabled"
+                value="true"
+                label="Enabled"
+              />
+            </div>
+            <.dm_btn type="submit" variant="primary">
+              Add MCP Server
+            </.dm_btn>
+          </.dm_form>
+        </.dm_card>
       <% end %>
 
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -644,7 +498,7 @@ defmodule SynapsisWeb.MCPLive.Index do
           :for={config <- @configs}
           variant="bordered"
         >
-          <% ps = Map.get(@plugin_states, config.name, %{running: false}) %>
+          <% ps = Map.get(@plugin_states, config.name, %{running: false, tools: []}) %>
           <div class="flex justify-between items-start mb-2">
             <.dm_link
               navigate={~p"/settings/mcp/#{config.id}"}
@@ -655,7 +509,7 @@ defmodule SynapsisWeb.MCPLive.Index do
             <div class="flex items-center gap-2">
               <.dm_switch
                 name={"toggle_#{config.id}"}
-                checked={config.auto_start}
+                checked={config.enabled}
                 phx-click="toggle_enabled"
                 phx-value-id={config.id}
               />
@@ -684,37 +538,15 @@ defmodule SynapsisWeb.MCPLive.Index do
           <div :if={map_size(config.env || %{}) > 0} class="text-xs text-warning mt-1">
             {"#{map_size(config.env)} env var(s)"}
           </div>
-          <%!-- Server info from initialize response --%>
-          <div
-            :if={ps[:running] && ps[:server_info]}
-            class="mt-2 p-2 bg-surface-container rounded text-xs"
-          >
-            <div class="font-semibold text-on-surface-variant mb-1">Server Info</div>
-            <div :if={ps[:server_info]["serverInfo"]} class="text-on-surface-variant">
-              {ps[:server_info]["serverInfo"]["name"]}
-              <span :if={ps[:server_info]["serverInfo"]["version"]}>
-                v{ps[:server_info]["serverInfo"]["version"]}
-              </span>
-            </div>
-            <div :if={ps[:server_info]["protocolVersion"]} class="text-on-surface-variant">
-              Protocol: {ps[:server_info]["protocolVersion"]}
-            </div>
-            <div :if={ps[:server_info]["capabilities"]} class="text-on-surface-variant">
-              Capabilities: {ps[:server_info]["capabilities"] |> Map.keys() |> Enum.join(", ")}
-            </div>
-          </div>
           <div class="mt-2 flex items-center gap-2 flex-wrap">
-            <span :if={config.auto_start} class="badge badge-sm badge-success">
-              Auto-start
+            <span :if={config.enabled} class="badge badge-sm badge-success">
+              Enabled
             </span>
-            <span :if={!config.auto_start} class="badge badge-sm badge-ghost">
-              Manual
+            <span :if={!config.enabled} class="badge badge-sm badge-ghost">
+              Disabled
             </span>
-            <span :if={ps[:running] && ps[:initialized]} class="badge badge-sm badge-info">
+            <span :if={ps[:running]} class="badge badge-sm badge-info">
               Running
-            </span>
-            <span :if={ps[:running] && !ps[:initialized]} class="badge badge-sm badge-warning">
-              Initializing
             </span>
             <span :if={!ps[:running]} class="badge badge-sm badge-ghost">
               Stopped
@@ -727,6 +559,15 @@ defmodule SynapsisWeb.MCPLive.Index do
               phx-value-name={config.name}
             >
               Start
+            </.dm_btn>
+            <.dm_btn
+              :if={ps[:running]}
+              variant="ghost"
+              size="xs"
+              phx-click="restart_plugin"
+              phx-value-name={config.name}
+            >
+              Restart
             </.dm_btn>
             <.dm_btn
               :if={ps[:running]}
@@ -763,18 +604,10 @@ defmodule SynapsisWeb.MCPLive.Index do
                     class="border-b border-outline-variant last:border-b-0 py-3"
                   >
                     <div class="font-mono text-sm font-semibold text-primary">
-                      {tool["name"]}
+                      {tool.name}
                     </div>
-                    <div :if={tool["description"]} class="text-sm text-on-surface-variant mt-1">
-                      {tool["description"]}
-                    </div>
-                    <div :if={tool["inputSchema"]} class="mt-2">
-                      <details class="cursor-pointer">
-                        <summary class="text-xs text-on-surface-variant hover:text-on-surface-variant">
-                          Input Schema
-                        </summary>
-                        <pre class="text-xs bg-surface-container p-2 rounded mt-1 overflow-x-auto"><code>{Jason.encode!(tool["inputSchema"], pretty: true)}</code></pre>
-                      </details>
+                    <div :if={tool.description} class="text-sm text-on-surface-variant mt-1">
+                      {tool.description}
                     </div>
                   </div>
                 </div>
@@ -791,28 +624,32 @@ defmodule SynapsisWeb.MCPLive.Index do
     """
   end
 
-  defp format_env_for_form(env) when is_map(env) and map_size(env) > 0 do
-    env |> Enum.sort() |> Enum.map_join("\n", fn {k, v} -> "#{k}=#{v}" end)
-  end
+  # Turn a plugin start failure into a concise, actionable flash message. The
+  # raw reason (full body, stacktrace) is still logged via mcp_start_failed.
+  defp format_start_error({:http_error, status, body}),
+    do: "server returned HTTP #{status} — #{first_line(body)}"
 
-  defp format_env_for_form(_), do: ""
+  defp format_start_error({:no_binary, command}), do: "executable not found: #{command}"
+  defp format_start_error({:missing_url, _name}), do: "no URL configured for HTTP transport"
+
+  defp format_start_error({:unsupported_transport, transport}),
+    do: "unsupported transport: #{transport}"
+
+  defp format_start_error({:already_started, _pid}), do: "already running"
+  defp format_start_error(reason) when is_binary(reason), do: first_line(reason)
+  defp format_start_error(reason), do: first_line(inspect(reason))
+
+  defp first_line(value) do
+    value
+    |> to_string()
+    |> String.split("\n", trim: true)
+    |> List.first("")
+    |> String.slice(0, 200)
+  end
 
   defp form_value(form, key, default \\ "") when is_map(form) do
     Map.get(form, key, default) || default
   end
-
-  defp custom_transport(%{selected_preset: %{custom: true}, custom_form: form}) do
-    form_value(form || %{}, "transport", "stdio")
-  end
-
-  defp custom_transport(%{selected_preset: %{transport: transport}}), do: transport || "stdio"
-  defp custom_transport(_assigns), do: "stdio"
-
-  defp has_required_env?(%{env: env}) when is_map(env) do
-    Enum.any?(env, fn {_k, v} -> v == "" end)
-  end
-
-  defp has_required_env?(_), do: false
 
   defp mcp_import_example do
     Jason.encode!(

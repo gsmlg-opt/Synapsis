@@ -19,8 +19,6 @@ defmodule SynapsisServer.Router do
               SynapsisWeb.SkillLive.Show,
               SynapsisWeb.MCPLive.Index,
               SynapsisWeb.MCPLive.Show,
-              SynapsisWeb.LSPLive.Index,
-              SynapsisWeb.LSPLive.Show,
               SynapsisWeb.ModelTierLive.Index,
               SynapsisWeb.WorkspaceLive.Explorer
             ]}
@@ -108,9 +106,5 @@ defmodule SynapsisServer.Router do
     live "/settings/mcp", MCPLive.Index, :index
     live "/settings/mcp/new", MCPLive.Index, :new
     live "/settings/mcp/:id", MCPLive.Show, :show
-
-    live "/settings/lsp", LSPLive.Index, :index
-    live "/settings/lsp/new", LSPLive.Index, :new
-    live "/settings/lsp/:id", LSPLive.Show, :show
   end
 end
