@@ -13,12 +13,29 @@ defmodule Synapsis.MCP.TransportTest do
     assert opts[:env] == %{"K" => "v"}
   end
 
-  test "builds a streamable_http tuple with base_url and headers" do
+  test "builds a streamable_http tuple splitting url into base_url + mcp_path" do
     cfg = %MCPConfig{transport: "streamable_http", url: "https://h/mcp", headers: %{"A" => "b"}}
 
     assert {:streamable_http, opts} = Transport.build(cfg)
-    assert opts[:base_url] == "https://h/mcp"
+    assert opts[:base_url] == "https://h"
+    assert opts[:mcp_path] == "/mcp"
     assert opts[:headers] == %{"A" => "b"}
+  end
+
+  test "streamable_http preserves a custom endpoint path (no double /mcp)" do
+    cfg = %MCPConfig{transport: "streamable_http", url: "http://10.0.0.1:4220/api/mcp"}
+
+    assert {:streamable_http, opts} = Transport.build(cfg)
+    assert opts[:base_url] == "http://10.0.0.1:4220"
+    assert opts[:mcp_path] == "/api/mcp"
+  end
+
+  test "streamable_http defaults mcp_path to /mcp when url has no path" do
+    cfg = %MCPConfig{transport: "streamable_http", url: "http://localhost:8000"}
+
+    assert {:streamable_http, opts} = Transport.build(cfg)
+    assert opts[:base_url] == "http://localhost:8000"
+    assert opts[:mcp_path] == "/mcp"
   end
 
   test "builds an sse tuple with nested server base_url and top-level headers" do
