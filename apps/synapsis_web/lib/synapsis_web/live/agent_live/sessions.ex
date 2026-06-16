@@ -75,6 +75,17 @@ defmodule SynapsisWeb.AgentLive.Sessions do
          socket
          |> put_flash(:error, "Session not found")
          |> push_navigate(to: ~p"/agent/agents/#{agent_id}/sessions")}
+
+      {:error, reason} ->
+        # Storage layer unavailable (e.g. Concord not ready) — degrade instead of
+        # crashing the LiveView mount.
+        Logger.warning("session_load_failed", session_id: session_id, reason: inspect(reason))
+
+        {:noreply,
+         socket
+         |> assign(agent_id: agent_id, sessions: sessions, current_session: nil, messages: [])
+         |> put_flash(:error, "Could not load session — storage is temporarily unavailable")
+         |> push_navigate(to: ~p"/agent/agents/#{agent_id}/sessions")}
     end
   end
 
@@ -196,6 +207,36 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     end
 
     {:noreply, socket}
+  end
+
+  def handle_event("regenerate", %{"id" => message_id}, socket) do
+    case socket.assigns.current_session do
+      nil ->
+        {:noreply, socket}
+
+      session ->
+        socket =
+          socket
+          |> assign(:session_status, "streaming")
+          |> assign(:tool_calls, %{})
+
+        case Sessions.regenerate(session.id, message_id) do
+          :ok ->
+            {:noreply, assign(socket, :messages, Sessions.get_messages(session.id))}
+
+          {:error, reason} ->
+            Logger.warning("session_regenerate_failed",
+              session_id: session.id,
+              reason: inspect(reason)
+            )
+
+            {:noreply,
+             socket
+             |> assign(:session_status, "idle")
+             |> assign(:messages, Sessions.get_messages(session.id))
+             |> put_flash(:error, "Could not regenerate response")}
+        end
+    end
   end
 
   def handle_event("approve_tool", %{"tool-use-id" => tool_use_id}, socket) do
@@ -609,6 +650,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
               message={msg}
               assistant_label={agent_display_name(@agent_config, @agent_id)}
               assistant_avatar={agent_avatar(@agent_config)}
+              can_regenerate={@session_status != "streaming"}
             />
 
             <.reasoning_block

@@ -367,6 +367,77 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       assert html =~ ~s(time="16:29:00")
       assert html =~ ~s(status="out: 99")
     end
+
+    test "message_parts renders a regenerate button for assistant messages when allowed", _ctx do
+      message = %Synapsis.Message{
+        id: "msg-123",
+        role: "assistant",
+        parts: [%Synapsis.Part.Text{content: "hello"}]
+      }
+
+      html =
+        render_component(
+          fn assigns ->
+            ~H"""
+            <SynapsisWeb.CoreComponents.message_parts
+              message={assigns.message}
+              can_regenerate={true}
+            />
+            """
+          end,
+          %{message: message}
+        )
+
+      assert html =~ ~s(phx-click="regenerate")
+      assert html =~ ~s(phx-value-id="msg-123")
+      assert html =~ "Regenerate"
+    end
+
+    test "message_parts hides the regenerate button while streaming", _ctx do
+      message = %Synapsis.Message{
+        id: "msg-123",
+        role: "assistant",
+        parts: [%Synapsis.Part.Text{content: "hello"}]
+      }
+
+      html =
+        render_component(
+          fn assigns ->
+            ~H"""
+            <SynapsisWeb.CoreComponents.message_parts
+              message={assigns.message}
+              can_regenerate={false}
+            />
+            """
+          end,
+          %{message: message}
+        )
+
+      refute html =~ ~s(phx-click="regenerate")
+    end
+
+    test "message_parts never offers regenerate for user messages", _ctx do
+      message = %Synapsis.Message{
+        id: "user-1",
+        role: "user",
+        parts: [%Synapsis.Part.Text{content: "a question"}]
+      }
+
+      html =
+        render_component(
+          fn assigns ->
+            ~H"""
+            <SynapsisWeb.CoreComponents.message_parts
+              message={assigns.message}
+              can_regenerate={true}
+            />
+            """
+          end,
+          %{message: message}
+        )
+
+      refute html =~ ~s(phx-click="regenerate")
+    end
   end
 
   defp assert_eventually(fun, attempts \\ 20)

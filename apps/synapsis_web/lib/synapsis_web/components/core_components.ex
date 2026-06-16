@@ -567,6 +567,7 @@ defmodule SynapsisWeb.CoreComponents do
   attr :message, :map, required: true
   attr :assistant_label, :string, default: nil
   attr :assistant_avatar, :string, default: nil
+  attr :can_regenerate, :boolean, default: false
   attr :class, :string, default: nil
 
   def message_parts(assigns) do
@@ -630,6 +631,21 @@ defmodule SynapsisWeb.CoreComponents do
         <% _ -> %>
           <div></div>
       <% end %>
+    </div>
+
+    <div
+      :if={@message.role == "assistant" and @can_regenerate}
+      class="flex justify-start pl-1 -mt-2"
+    >
+      <.dm_btn
+        variant="ghost"
+        size="xs"
+        phx-click="regenerate"
+        phx-value-id={@message.id}
+        class="gap-1 text-on-surface-variant/60 hover:text-on-surface-variant"
+      >
+        <.dm_mdi name="refresh" class="w-3.5 h-3.5" /> Regenerate
+      </.dm_btn>
     </div>
     """
   end
