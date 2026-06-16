@@ -4,10 +4,16 @@ defmodule SynapsisMcp.Application do
 
   @impl true
   def start(_type, _args) do
-    # NOTE: real children (Synapsis.MCP.Supervisor) wired in Task 9. Empty for now
-    # so the umbrella boots while the MCP modules are being built.
-    children = []
-    opts = [strategy: :one_for_one, name: SynapsisMcp.Supervisor]
-    Supervisor.start_link(children, opts)
+    children = [Synapsis.MCP.Supervisor]
+    opts = [strategy: :one_for_one, name: SynapsisMcp.RootSupervisor]
+
+    case Supervisor.start_link(children, opts) do
+      {:ok, pid} ->
+        Synapsis.MCP.start_enabled()
+        {:ok, pid}
+
+      other ->
+        other
+    end
   end
 end

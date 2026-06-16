@@ -44,8 +44,10 @@ defmodule Synapsis.MCP.Server do
 
   @spec start_link(MCPConfig.t()) :: GenServer.on_start()
   def start_link(%MCPConfig{} = config) do
-    GenServer.start_link(__MODULE__, config)
+    GenServer.start_link(__MODULE__, config, name: via(config.name))
   end
+
+  defp via(name), do: {:via, Elixir.Registry, {Synapsis.MCP.Registry, name}}
 
   # --------------------------------------------------------------------------
   # Callbacks
