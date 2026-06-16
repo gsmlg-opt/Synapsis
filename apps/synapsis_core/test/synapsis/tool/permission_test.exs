@@ -14,7 +14,6 @@ defmodule Synapsis.Tool.PermissionTest do
       assert :read = Permissions.level("grep")
       assert :read = Permissions.level("glob")
       assert :read = Permissions.level("list_dir")
-      assert :read = Permissions.level("diagnostics")
     end
 
     test "classifies write tools" do
@@ -335,7 +334,6 @@ defmodule Synapsis.Tool.PermissionTest do
       assert :approved = Permission.check("file_read", nil)
       assert :approved = Permission.check("grep", nil)
       assert :approved = Permission.check("glob", nil)
-      assert :approved = Permission.check("diagnostics", nil)
       assert :approved = Permission.check("list_dir", nil)
     end
 

@@ -16,7 +16,6 @@ defmodule Synapsis.AgentConfigs do
     todo_read todo_write enter_plan_mode exit_plan_mode
     task skill tool_search ask_user sleep
     memory_save memory_search memory_update session_summarize
-    diagnostics
   )
 
   @doc "List all agent configs, ordered by name."

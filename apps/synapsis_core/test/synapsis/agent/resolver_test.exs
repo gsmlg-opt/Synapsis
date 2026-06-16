@@ -46,14 +46,13 @@ defmodule Synapsis.Agent.ResolverTest do
       agent = Resolver.resolve("main")
 
       # Filesystem + Search + Execution + Web + Planning + Orchestration +
-      # Interaction + Session + Memory + Workflow + Diagnostics
+      # Interaction + Session + Memory + Workflow
       for tool <- ~w(
         file_read file_edit file_write multi_edit file_delete file_move list_dir
         grep glob bash
         todo_read todo_write enter_plan_mode exit_plan_mode
         task skill tool_search ask_user sleep
         memory_save memory_search memory_update session_summarize
-        diagnostics
       ) do
         assert tool in agent.tools, "expected #{tool} in main agent tools"
       end

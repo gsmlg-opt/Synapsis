@@ -409,15 +409,6 @@ defmodule Synapsis.Tool.ToolsTest do
     end
   end
 
-  describe "Diagnostics tool metadata" do
-    test "has correct name and parameters" do
-      alias Synapsis.Tool.Diagnostics
-      assert Diagnostics.name() == "diagnostics"
-      assert is_binary(Diagnostics.description())
-      assert %{"type" => "object"} = Diagnostics.parameters()
-    end
-  end
-
   describe "FileDelete" do
     test "deletes a file" do
       delete_path = Path.join(@test_dir, "to_delete.txt")

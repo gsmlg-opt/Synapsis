@@ -28,8 +28,7 @@ defmodule Synapsis.Config do
             "file_write",
             "bash",
             "grep",
-            "glob",
-            "diagnostics"
+            "glob"
           ],
           "model" => nil,
           "modelTier" => "default",

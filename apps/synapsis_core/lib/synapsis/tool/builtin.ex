@@ -9,7 +9,6 @@ defmodule Synapsis.Tool.Builtin do
     Synapsis.Tool.Bash,
     Synapsis.Tool.Grep,
     Synapsis.Tool.Glob,
-    Synapsis.Tool.Diagnostics,
     Synapsis.Tool.ListDir,
     Synapsis.Tool.FileDelete,
     Synapsis.Tool.FileMove,

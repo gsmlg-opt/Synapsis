@@ -11,7 +11,6 @@ defmodule Synapsis.Tool.BuiltinTest do
     "bash",
     "grep",
     "glob",
-    "diagnostics",
     "list_dir",
     "file_delete",
     "file_move",
@@ -45,7 +44,6 @@ defmodule Synapsis.Tool.BuiltinTest do
     "bash" => 30_000,
     "grep" => 10_000,
     "glob" => 5_000,
-    "diagnostics" => 10_000,
     "list_dir" => 5_000,
     "file_delete" => 5_000,
     "file_move" => 5_000,
@@ -59,7 +57,7 @@ defmodule Synapsis.Tool.BuiltinTest do
   # We do NOT unregister them — we verify the app-startup state.
 
   describe "register_all/0 total tool count" do
-    test "Registry.list/0 returns exactly 28 tools from builtin set" do
+    test "Registry.list/0 returns exactly 27 tools from builtin set" do
       all_tools = Registry.list()
       all_names = Enum.map(all_tools, & &1.name) |> MapSet.new()
 
@@ -69,12 +67,12 @@ defmodule Synapsis.Tool.BuiltinTest do
       end
 
       builtin_tools = Enum.filter(all_tools, &(&1.name in @all_expected_tools))
-      assert length(builtin_tools) == 28
+      assert length(builtin_tools) == 27
     end
   end
 
   describe "enabled tools" do
-    test "27 tools are enabled" do
+    test "26 tools are enabled" do
       enabled_count =
         @all_expected_tools
         |> Enum.count(fn name ->
@@ -82,7 +80,7 @@ defmodule Synapsis.Tool.BuiltinTest do
           not (function_exported?(mod, :enabled?, 0) and not mod.enabled?())
         end)
 
-      assert enabled_count == 27
+      assert enabled_count == 26
     end
 
     test "all expected enabled tools respond to enabled? as true or default" do
@@ -193,7 +191,7 @@ defmodule Synapsis.Tool.BuiltinTest do
       # Count should stay stable after re-registration.
       all_tools = Registry.list()
       builtin_tools = Enum.filter(all_tools, &(&1.name in @all_expected_tools))
-      assert length(builtin_tools) == 28
+      assert length(builtin_tools) == 27
     end
   end
 end
