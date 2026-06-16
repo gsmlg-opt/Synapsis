@@ -16,7 +16,9 @@ config :synapsis_server, SynapsisServer.Endpoint,
 
 config :synapsis_server, dev_routes: true
 
-config :logger, :default_formatter, format: "[$level] $message\n"
+config :logger, :default_formatter,
+  format: "[$level] $message $metadata\n",
+  metadata: [:reason]
 
 config :phoenix, :stacktrace_depth, 20
 config :phoenix, :plug_init_mode, :runtime
