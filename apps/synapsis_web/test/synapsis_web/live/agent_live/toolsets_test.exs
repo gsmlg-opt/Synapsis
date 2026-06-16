@@ -160,10 +160,6 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
       assert has_element?(view, "input[name='tool_names[]'][value='mcp:live:list_tools']")
     end
 
-    # Depends on Synapsis.Toolsets.list_mcp_sources/0 (synapsis_data), which still
-    # reads the legacy :plugin store rather than the new :mcp store written by
-    # MCPConfigs. Re-enable once that data-layer reader is migrated to :mcp.
-    @tag :skip
     test "shows empty MCP source when the configured server has no registered tools", %{
       conn: conn
     } do

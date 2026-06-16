@@ -4,7 +4,7 @@ defmodule Synapsis.Toolsets do
 
   ADR-006 C4: toolsets persist in the file-backed `Config.Store` (`toolsets.toml`).
   """
-  alias Synapsis.{Config.Store, PluginConfig, Toolset}
+  alias Synapsis.{Config.Store, MCPConfigs, Toolset}
 
   @store_type :toolset
 
@@ -31,14 +31,9 @@ defmodule Synapsis.Toolsets do
     |> Enum.flat_map(fn id -> List.wrap(Map.get(by_id, id)) end)
   end
 
-  @doc "List configured MCP plugin sources ordered by name."
+  @doc "List configured MCP sources ordered by name."
   def list_mcp_sources do
-    # Store.list/1 returns atom-keyed maps; build structs first, then filter by type.
-    :plugin
-    |> Store.list()
-    |> Enum.map(&plugin_to_struct/1)
-    |> Enum.filter(&(&1.type == "mcp"))
-    |> Enum.sort_by(& &1.name)
+    MCPConfigs.list()
   end
 
   @doc "Create a toolset."
@@ -89,9 +84,5 @@ defmodule Synapsis.Toolsets do
     }
     |> Enum.reject(fn {_k, v} -> is_nil(v) end)
     |> Map.new()
-  end
-
-  defp plugin_to_struct(map) do
-    %PluginConfig{} |> PluginConfig.changeset(map) |> Ecto.Changeset.apply_changes()
   end
 end

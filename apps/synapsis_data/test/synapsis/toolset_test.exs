@@ -1,11 +1,11 @@
 defmodule Synapsis.ToolsetTest do
   use Synapsis.DataCase
 
-  alias Synapsis.{PluginConfigs, Toolset, Toolsets}
+  alias Synapsis.{MCPConfigs, Toolset, Toolsets}
 
   setup do
     clear_config_store(:toolset)
-    clear_config_store(:plugin)
+    clear_config_store(:mcp)
     :ok
   end
 
@@ -66,9 +66,8 @@ defmodule Synapsis.ToolsetTest do
     end
 
     test "lists configured MCP sources ordered by name" do
-      {:ok, _} = PluginConfigs.create(%{type: "mcp", name: "z-docs", transport: "stdio"})
-      {:ok, _} = PluginConfigs.create(%{type: "lsp", name: "gopls", transport: "stdio"})
-      {:ok, _} = PluginConfigs.create(%{type: "mcp", name: "a-files", transport: "stdio"})
+      {:ok, _} = MCPConfigs.create(%{name: "z-docs", transport: "stdio", command: "x"})
+      {:ok, _} = MCPConfigs.create(%{name: "a-files", transport: "stdio", command: "x"})
 
       assert Toolsets.list_mcp_sources() |> Enum.map(& &1.name) == ["a-files", "z-docs"]
     end
