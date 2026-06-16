@@ -5,10 +5,6 @@ defmodule SynapsisCore.Application do
 
   @impl true
   def start(_type, _args) do
-    optional_children =
-      [SynapsisPlugin.Supervisor]
-      |> Enum.filter(&Code.ensure_loaded?/1)
-
     children =
       [
         # ADR-006 C4: Synapsis.Repo removed; storage is Concord + files + memory port.
@@ -25,8 +21,7 @@ defmodule SynapsisCore.Application do
         Synapsis.Memory.Supervisor
       ] ++
         maybe_child(Synapsis.Workspace.GC) ++
-        maybe_child(Synapsis.Agent.Heartbeat.LocalScheduler) ++
-        optional_children
+        maybe_child(Synapsis.Agent.Heartbeat.LocalScheduler)
 
     opts = [strategy: :one_for_one, name: SynapsisCore.Supervisor]
     result = Supervisor.start_link(children, opts)
@@ -45,8 +40,6 @@ defmodule SynapsisCore.Application do
         register_env_providers()
         seed_default_agents()
         seed_heartbeat_templates()
-
-        maybe_apply(SynapsisPlugin.Loader, :start_auto_plugins, [])
 
         result
 
