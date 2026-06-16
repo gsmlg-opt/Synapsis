@@ -53,11 +53,19 @@ defmodule Synapsis.Provider.AdapterTest do
       Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(401, Jason.encode!(%{"error" => %{"type" => "authentication_error"}}))
+        |> Plug.Conn.send_resp(
+          401,
+          Jason.encode!(%{"error" => %{"type" => "authentication_error"}})
+        )
       end)
 
       config = %{api_key: "bad-key", base_url: "http://localhost:#{port}", type: "anthropic"}
-      request = Adapter.format_request([], [], %{model: "claude-sonnet-4-20250514", provider_type: "anthropic"})
+
+      request =
+        Adapter.format_request([], [], %{
+          model: "claude-sonnet-4-20250514",
+          provider_type: "anthropic"
+        })
 
       assert {:ok, _ref} = Adapter.stream(request, config)
 
@@ -200,6 +208,43 @@ defmodule Synapsis.Provider.AdapterTest do
       assert "OK" in text_deltas
       assert :done in chunks
     end
+
+    test "stream guard aborts a forbidden pattern split across text deltas", %{
+      bypass: bypass,
+      port: port
+    } do
+      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("text/event-stream")
+        |> Plug.Conn.send_resp(200, """
+        data: {"id":"1","choices":[{"index":0,"delta":{"content":"prefix se"},"finish_reason":null}]}
+
+        data: {"id":"1","choices":[{"index":0,"delta":{"content":"cret suffix"},"finish_reason":null}]}
+
+        data: {"id":"1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+        data: [DONE]
+
+        """)
+      end)
+
+      config = %{
+        api_key: "test-key",
+        base_url: "http://localhost:#{port}",
+        type: "openai",
+        stream_guard_rules: ["secret"]
+      }
+
+      request = Adapter.format_request([], [], %{model: "gpt-4o", provider_type: "openai"})
+
+      assert {:ok, _ref} = Adapter.stream(request, config)
+
+      assert_receive {:provider_chunk, {:text_delta, "pref"}}, 5000
+      # The matched rule is redacted: rules may guard secrets and the
+      # error reason is logged downstream.
+      assert_receive {:provider_error, {:stream_violation, "[redacted 6-byte pattern]"}}, 5000
+      refute_receive :provider_done, 100
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -263,7 +308,9 @@ defmodule Synapsis.Provider.AdapterTest do
       )
 
       config = %{api_key: "secret-key", base_url: "http://localhost:#{port}", type: "google"}
-      request = Adapter.format_request([], [], %{model: "gemini-2.0-flash", provider_type: "google"})
+
+      request =
+        Adapter.format_request([], [], %{model: "gemini-2.0-flash", provider_type: "google"})
 
       assert {:ok, ref} = Adapter.stream(request, config)
       collect_chunks(ref)
@@ -375,22 +422,27 @@ defmodule Synapsis.Provider.AdapterTest do
     end
 
     test "Google complete sends API key in header not URL", %{bypass: bypass, port: port} do
-      Bypass.expect_once(bypass, "POST", "/v1beta/models/gemini-2.0-flash:generateContent", fn conn ->
-        headers = Map.new(conn.req_headers)
-        assert headers["x-goog-api-key"] == "secret-key"
-        refute conn.query_string =~ "key="
+      Bypass.expect_once(
+        bypass,
+        "POST",
+        "/v1beta/models/gemini-2.0-flash:generateContent",
+        fn conn ->
+          headers = Map.new(conn.req_headers)
+          assert headers["x-goog-api-key"] == "secret-key"
+          refute conn.query_string =~ "key="
 
-        conn
-        |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(
-          200,
-          Jason.encode!(%{
-            "candidates" => [
-              %{"content" => %{"parts" => [%{"text" => "Gemini response"}]}}
-            ]
-          })
-        )
-      end)
+          conn
+          |> Plug.Conn.put_resp_content_type("application/json")
+          |> Plug.Conn.send_resp(
+            200,
+            Jason.encode!(%{
+              "candidates" => [
+                %{"content" => %{"parts" => [%{"text" => "Gemini response"}]}}
+              ]
+            })
+          )
+        end
+      )
 
       config = %{api_key: "secret-key", base_url: "http://localhost:#{port}", type: "google"}
 
@@ -401,7 +453,10 @@ defmodule Synapsis.Provider.AdapterTest do
       assert {:ok, "Gemini response"} = Adapter.complete(request, config)
     end
 
-    test "Anthropic complete returns error for unexpected response format", %{bypass: bypass, port: port} do
+    test "Anthropic complete returns error for unexpected response format", %{
+      bypass: bypass,
+      port: port
+    } do
       Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
@@ -420,7 +475,10 @@ defmodule Synapsis.Provider.AdapterTest do
       assert reason =~ "unexpected response"
     end
 
-    test "OpenAI complete returns error for unexpected response format", %{bypass: bypass, port: port} do
+    test "OpenAI complete returns error for unexpected response format", %{
+      bypass: bypass,
+      port: port
+    } do
       Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
@@ -436,12 +494,20 @@ defmodule Synapsis.Provider.AdapterTest do
       assert reason =~ "unexpected response"
     end
 
-    test "Google complete returns error for unexpected response format", %{bypass: bypass, port: port} do
-      Bypass.expect_once(bypass, "POST", "/v1beta/models/gemini-2.0-flash:generateContent", fn conn ->
-        conn
-        |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(200, Jason.encode!(%{"unexpected" => "format"}))
-      end)
+    test "Google complete returns error for unexpected response format", %{
+      bypass: bypass,
+      port: port
+    } do
+      Bypass.expect_once(
+        bypass,
+        "POST",
+        "/v1beta/models/gemini-2.0-flash:generateContent",
+        fn conn ->
+          conn
+          |> Plug.Conn.put_resp_content_type("application/json")
+          |> Plug.Conn.send_resp(200, Jason.encode!(%{"unexpected" => "format"}))
+        end
+      )
 
       config = %{api_key: "test-key", base_url: "http://localhost:#{port}", type: "google"}
 
@@ -453,7 +519,10 @@ defmodule Synapsis.Provider.AdapterTest do
       assert reason =~ "unexpected response"
     end
 
-    test "OpenAI complete without api_key omits Authorization header", %{bypass: bypass, port: port} do
+    test "OpenAI complete without api_key omits Authorization header", %{
+      bypass: bypass,
+      port: port
+    } do
       Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
         headers = Map.new(conn.req_headers)
         refute Map.has_key?(headers, "authorization")
@@ -475,7 +544,10 @@ defmodule Synapsis.Provider.AdapterTest do
       assert {:ok, "Hi"} = Adapter.complete(request, config)
     end
 
-    test "OpenAI complete returns error message from error response body", %{bypass: bypass, port: port} do
+    test "OpenAI complete returns error message from error response body", %{
+      bypass: bypass,
+      port: port
+    } do
       Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
@@ -620,7 +692,6 @@ defmodule Synapsis.Provider.AdapterTest do
       assert :openai = Adapter.resolve_transport_type(:unknown_custom)
       assert :openai = Adapter.resolve_transport_type(:foo)
     end
-
   end
 
   # ---------------------------------------------------------------------------

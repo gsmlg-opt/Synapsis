@@ -341,6 +341,36 @@ defmodule Synapsis.Provider.MessageMapperTest do
       assert m.tool_call_id == "id1"
       assert m.content == "output"
     end
+
+    test "expands parallel tool_results into one tool message per tool_call id" do
+      # An assistant turn with two parallel tool_calls, answered by a single
+      # user message carrying both results (Anthropic storage convention).
+      # OpenAI/minimax require one `role: "tool"` reply per id — collapsing them
+      # drops answers and trips "tool call and result not match".
+      assistant = %{
+        role: :assistant,
+        parts: [
+          %Synapsis.Part.ToolUse{tool: "bash", tool_use_id: "id1", input: %{}, status: :pending},
+          %Synapsis.Part.ToolUse{tool: "bash", tool_use_id: "id2", input: %{}, status: :pending}
+        ]
+      }
+
+      results = %{
+        role: :user,
+        parts: [
+          %Synapsis.Part.ToolResult{tool_use_id: "id1", content: "out1", is_error: false},
+          %Synapsis.Part.ToolResult{tool_use_id: "id2", content: "out2", is_error: false}
+        ]
+      }
+
+      request = MessageMapper.build_request(:openai, [assistant, results], [], %{})
+
+      assert [
+               %{role: "assistant", tool_calls: [%{id: "id1"}, %{id: "id2"}]},
+               %{role: "tool", tool_call_id: "id1", content: "out1"},
+               %{role: "tool", tool_call_id: "id2", content: "out2"}
+             ] = request.messages
+    end
   end
 
   # ---------------------------------------------------------------------------

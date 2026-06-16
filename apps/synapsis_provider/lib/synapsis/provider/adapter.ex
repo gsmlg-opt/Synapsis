@@ -11,13 +11,15 @@ defmodule Synapsis.Provider.Adapter do
   - `format_request/3` — builds provider-specific request body
   """
 
-  alias Synapsis.Provider.{EventMapper, MessageMapper, ModelRegistry}
+  alias Synapsis.Provider.{EventMapper, MessageMapper, ModelRegistry, StreamGuard}
   alias Synapsis.Provider.Transport
   alias SynapsisProvider.Sanitizer
 
   @anthropic_api_version "2023-06-01"
   @stream_timeout_ms 300_000
   @request_timeout_ms 60_000
+  @stream_guard_key :synapsis_stream_guard
+  @stream_guard_violation_key :synapsis_stream_guard_violation
 
   require Logger
 
@@ -138,6 +140,7 @@ defmodule Synapsis.Provider.Adapter do
     request_id = Ecto.UUID.generate()
     session_id = config[:session_id]
     start_time = System.monotonic_time()
+    stream_guard = stream_guard_state(config)
 
     emit_request_telemetry(
       session_id,
@@ -161,18 +164,30 @@ defmodule Synapsis.Provider.Adapter do
           redirect: false,
           into: fn {:data, data}, {req, resp} ->
             {events, buffer} = Transport.SSE.accumulate_and_parse(data, resp.body || "")
+            stream_guard = response_stream_guard(resp, stream_guard)
 
-            for chunk <- events do
-              event = EventMapper.map_event(:anthropic, chunk)
-              send_provider_event(caller, event)
+            case emit_mapped_events(:anthropic, events, caller, stream_guard) do
+              {:ok, stream_guard} ->
+                {:cont, {req, put_stream_response_state(resp, buffer, stream_guard)}}
+
+              {:violation, stream_guard} ->
+                resp =
+                  resp
+                  |> put_stream_response_state(buffer, stream_guard)
+                  |> mark_stream_guard_violation()
+
+                {:halt, {req, resp}}
             end
-
-            {:cont, {req, %{resp | body: buffer}}}
           end
         )
 
+      resp = finish_stream_guard(resp, caller)
+
       emit_response_telemetry(session_id, request_id, resp, start_time)
-      handle_stream_response(resp, caller)
+
+      unless stream_guard_violation?(resp) do
+        handle_stream_response(resp, caller)
+      end
     rescue
       e in [Req.TransportError, RuntimeError, Jason.DecodeError] ->
         emit_error_telemetry(session_id, request_id, e, start_time)
@@ -208,6 +223,7 @@ defmodule Synapsis.Provider.Adapter do
     request_id = Ecto.UUID.generate()
     session_id = config[:session_id]
     start_time = System.monotonic_time()
+    stream_guard = stream_guard_state(config)
 
     emit_request_telemetry(session_id, request_id, :post, url, headers, body, :google, model)
 
@@ -222,18 +238,30 @@ defmodule Synapsis.Provider.Adapter do
           redirect: false,
           into: fn {:data, data}, {req, resp} ->
             {events, buffer} = Transport.SSE.accumulate_and_parse(data, resp.body || "")
+            stream_guard = response_stream_guard(resp, stream_guard)
 
-            for chunk <- events do
-              event = EventMapper.map_event(:google, chunk)
-              send_provider_event(caller, event)
+            case emit_mapped_events(:google, events, caller, stream_guard) do
+              {:ok, stream_guard} ->
+                {:cont, {req, put_stream_response_state(resp, buffer, stream_guard)}}
+
+              {:violation, stream_guard} ->
+                resp =
+                  resp
+                  |> put_stream_response_state(buffer, stream_guard)
+                  |> mark_stream_guard_violation()
+
+                {:halt, {req, resp}}
             end
-
-            {:cont, {req, %{resp | body: buffer}}}
           end
         )
 
+      resp = finish_stream_guard(resp, caller)
+
       emit_response_telemetry(session_id, request_id, resp, start_time)
-      handle_stream_response(resp, caller)
+
+      unless stream_guard_violation?(resp) do
+        handle_stream_response(resp, caller)
+      end
     rescue
       e in [Req.TransportError, RuntimeError, Jason.DecodeError] ->
         emit_error_telemetry(session_id, request_id, e, start_time)
@@ -273,6 +301,7 @@ defmodule Synapsis.Provider.Adapter do
     request_id = Ecto.UUID.generate()
     session_id = config[:session_id]
     start_time = System.monotonic_time()
+    stream_guard = stream_guard_state(config)
 
     emit_request_telemetry(
       session_id,
@@ -296,22 +325,36 @@ defmodule Synapsis.Provider.Adapter do
           redirect: false,
           into: fn {:data, data}, {req, resp} ->
             {events, buffer} = Transport.SSE.accumulate_and_parse(data, resp.body || "")
+            stream_guard = response_stream_guard(resp, stream_guard)
 
-            for chunk <- events do
-              event = EventMapper.map_event(:openai, chunk)
-              send_provider_event(caller, event)
+            case emit_mapped_events(:openai, events, caller, stream_guard) do
+              {:ok, stream_guard} ->
+                {:cont, {req, put_stream_response_state(resp, buffer, stream_guard)}}
+
+              {:violation, stream_guard} ->
+                resp =
+                  resp
+                  |> put_stream_response_state(buffer, stream_guard)
+                  |> mark_stream_guard_violation()
+
+                {:halt, {req, resp}}
             end
-
-            {:cont, {req, %{resp | body: buffer}}}
           end
         )
 
+      resp = finish_stream_guard(resp, caller)
+
       emit_response_telemetry(session_id, request_id, resp, start_time)
 
-      if resp.status == 401 and config[:oauth] do
-        {:retry_auth, resp}
-      else
-        handle_stream_response(resp, caller)
+      cond do
+        stream_guard_violation?(resp) ->
+          :ok
+
+        resp.status == 401 and config[:oauth] ->
+          {:retry_auth, resp}
+
+        true ->
+          handle_stream_response(resp, caller)
       end
     rescue
       e in [Req.TransportError, RuntimeError, Jason.DecodeError] ->
@@ -323,6 +366,173 @@ defmodule Synapsis.Provider.Adapter do
   # ---------------------------------------------------------------------------
   # Stream response handling — uses accumulated raw data for error extraction
   # ---------------------------------------------------------------------------
+
+  defp emit_mapped_events(provider, events, caller, stream_guard) do
+    Enum.reduce_while(events, {:ok, stream_guard}, fn chunk, {:ok, stream_guard} ->
+      event = EventMapper.map_event(provider, chunk)
+
+      case emit_provider_event(caller, event, stream_guard) do
+        {:ok, stream_guard} -> {:cont, {:ok, stream_guard}}
+        {:violation, stream_guard} -> {:halt, {:violation, stream_guard}}
+      end
+    end)
+  end
+
+  defp emit_provider_event(caller, event, nil) do
+    send_provider_event(caller, event)
+    {:ok, nil}
+  end
+
+  defp emit_provider_event(caller, {:events, events}, stream_guard) do
+    Enum.reduce_while(events, {:ok, stream_guard}, fn event, {:ok, stream_guard} ->
+      case emit_provider_event(caller, event, stream_guard) do
+        {:ok, stream_guard} -> {:cont, {:ok, stream_guard}}
+        {:violation, stream_guard} -> {:halt, {:violation, stream_guard}}
+      end
+    end)
+  end
+
+  defp emit_provider_event(caller, event, stream_guard) do
+    case guarded_delta(event) do
+      {:ok, kind, chunk, rebuild} ->
+        with {:ok, stream_guard} <- flush_guard_for_kind(caller, stream_guard, kind) do
+          scan_and_emit_guarded_delta(caller, stream_guard, kind, chunk, rebuild)
+        end
+
+      :skip ->
+        with {:ok, stream_guard} <- maybe_flush_guard_before_event(caller, stream_guard, event) do
+          send_provider_event(caller, event)
+          {:ok, stream_guard}
+        end
+    end
+  end
+
+  defp guarded_delta({:text_delta, text}) when is_binary(text),
+    do: {:ok, :text_delta, text, &{:text_delta, &1}}
+
+  defp guarded_delta({:reasoning_delta, text}) when is_binary(text),
+    do: {:ok, :reasoning_delta, text, &{:reasoning_delta, &1}}
+
+  defp guarded_delta({:tool_input_delta, json}) when is_binary(json),
+    do: {:ok, :tool_input_delta, json, &{:tool_input_delta, &1}}
+
+  defp guarded_delta({:tool_call_delta, index, id, name, args}) when is_binary(args) do
+    rebuild = &{:tool_call_delta, index, id, name, &1}
+    {:ok, {:tool_call_delta, index, id, name}, args, rebuild}
+  end
+
+  defp guarded_delta(_event), do: :skip
+
+  defp flush_guard_for_kind(_caller, %{kind: kind} = stream_guard, kind), do: {:ok, stream_guard}
+  defp flush_guard_for_kind(_caller, %{kind: nil} = stream_guard, _kind), do: {:ok, stream_guard}
+
+  defp flush_guard_for_kind(caller, stream_guard, _kind),
+    do: flush_stream_guard(caller, stream_guard)
+
+  defp scan_and_emit_guarded_delta(caller, stream_guard, kind, chunk, rebuild) do
+    case StreamGuard.scan(stream_guard.scanner, chunk) do
+      {:ok, "", scanner} ->
+        {:ok, %{stream_guard | scanner: scanner, kind: kind, rebuild: rebuild}}
+
+      {:ok, emit, scanner} ->
+        send(caller, {:provider_chunk, rebuild.(emit)})
+        {:ok, %{stream_guard | scanner: scanner, kind: kind, rebuild: rebuild}}
+
+      {:violation, rule} ->
+        # Redacted: rules may guard secrets and the reason is logged downstream.
+        send(caller, {:provider_error, {:stream_violation, StreamGuard.redact(rule)}})
+        {:violation, stream_guard}
+    end
+  end
+
+  defp maybe_flush_guard_before_event(_caller, stream_guard, :ignore), do: {:ok, stream_guard}
+
+  defp maybe_flush_guard_before_event(caller, stream_guard, _event) do
+    flush_stream_guard(caller, stream_guard)
+  end
+
+  defp flush_stream_guard(_caller, %{rebuild: nil} = stream_guard), do: {:ok, stream_guard}
+
+  defp flush_stream_guard(caller, stream_guard) do
+    case StreamGuard.finish(stream_guard.scanner) do
+      {:ok, ""} ->
+        {:ok, reset_stream_guard(stream_guard)}
+
+      {:ok, emit} ->
+        send(caller, {:provider_chunk, stream_guard.rebuild.(emit)})
+        {:ok, reset_stream_guard(stream_guard)}
+
+      {:violation, rule} ->
+        send(caller, {:provider_error, {:stream_violation, StreamGuard.redact(rule)}})
+        {:violation, stream_guard}
+    end
+  end
+
+  defp reset_stream_guard(stream_guard) do
+    scanner = %{stream_guard.scanner | held: <<>>}
+    %{stream_guard | scanner: scanner, kind: nil, rebuild: nil}
+  end
+
+  defp stream_guard_state(config) do
+    config
+    |> stream_guard_rules()
+    |> case do
+      [] -> nil
+      rules -> %{scanner: StreamGuard.new(rules), kind: nil, rebuild: nil}
+    end
+  end
+
+  defp stream_guard_rules(config) do
+    rules = config[:stream_guard_rules] || config["stream_guard_rules"] || []
+
+    case rules do
+      rules when is_list(rules) ->
+        Enum.filter(rules, &(is_binary(&1) and &1 != ""))
+
+      _ ->
+        []
+    end
+  end
+
+  defp response_stream_guard(resp, initial_stream_guard) do
+    Map.get(resp.private || %{}, @stream_guard_key, initial_stream_guard)
+  end
+
+  defp put_stream_response_state(resp, buffer, stream_guard) do
+    private = Map.put(resp.private || %{}, @stream_guard_key, stream_guard)
+    %{resp | body: buffer, private: private}
+  end
+
+  defp finish_stream_guard(resp, caller) do
+    cond do
+      stream_guard_violation?(resp) ->
+        resp
+
+      stream_guard = Map.get(resp.private || %{}, @stream_guard_key) ->
+        case flush_stream_guard(caller, stream_guard) do
+          {:ok, stream_guard} ->
+            private = Map.put(resp.private || %{}, @stream_guard_key, stream_guard)
+            %{resp | private: private}
+
+          {:violation, stream_guard} ->
+            resp
+            |> put_stream_response_state(resp.body, stream_guard)
+            |> mark_stream_guard_violation()
+        end
+
+      true ->
+        resp
+    end
+  end
+
+  defp mark_stream_guard_violation(resp) do
+    private = Map.put(resp.private || %{}, @stream_guard_violation_key, true)
+    %{resp | private: private}
+  end
+
+  defp stream_guard_violation?(resp) do
+    Map.get(resp.private || %{}, @stream_guard_violation_key, false)
+  end
 
   defp send_provider_event(caller, {:events, events}) do
     Enum.each(events, &send_provider_event(caller, &1))

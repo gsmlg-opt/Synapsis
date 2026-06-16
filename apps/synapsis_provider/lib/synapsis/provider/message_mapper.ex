@@ -147,7 +147,10 @@ defmodule Synapsis.Provider.MessageMapper do
         prompt -> [%{role: "system", content: prompt}]
       end
 
-    system_messages ++ Enum.map(messages, &format_openai_message/1)
+    # One source message can expand into several OpenAI messages: a user turn
+    # carrying N parallel tool results becomes N separate `role: "tool"` messages.
+    system_messages ++
+      Enum.flat_map(messages, fn msg -> List.wrap(format_openai_message(msg)) end)
   end
 
   defp format_openai_message(msg) do
@@ -159,14 +162,17 @@ defmodule Synapsis.Provider.MessageMapper do
 
     cond do
       tool_results != [] ->
-        # ToolResult messages become role: "tool" in OpenAI format
-        result = hd(tool_results)
-
-        %{
-          role: "tool",
-          tool_call_id: result.tool_use_id,
-          content: result.content
-        }
+        # Each tool_result becomes its own `role: "tool"` message. OpenAI-style
+        # APIs (incl. minimax) require exactly one tool reply per tool_call id;
+        # collapsing parallel results into one message drops answers and trips
+        # "tool call and result not match".
+        Enum.map(tool_results, fn result ->
+          %{
+            role: "tool",
+            tool_call_id: result.tool_use_id,
+            content: result.content
+          }
+        end)
 
       tool_uses != [] ->
         # Assistant messages with tool_use become tool_calls
