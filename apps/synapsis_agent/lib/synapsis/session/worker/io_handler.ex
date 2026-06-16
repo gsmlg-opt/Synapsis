@@ -11,7 +11,7 @@ defmodule Synapsis.Session.Worker.IOHandler do
   require Logger
 
   alias Synapsis.Session.Stream, as: SessionStream
-  alias Synapsis.Session.Worker.{Auditor, Persistence}
+  alias Synapsis.Session.Worker.{Auditor, Checkpoint, Persistence}
   alias Synapsis.Agent.{StreamAccumulator, ResponseFlusher}
   alias Synapsis.Session.Worker
 
@@ -102,6 +102,40 @@ defmodule Synapsis.Session.Worker.IOHandler do
     new_ctx = Map.put(state.engine_ctx, :stream_error, reason)
 
     Worker.step_engine(%{state | stream_ref: nil, debug_handler_id: nil, engine_ctx: new_ctx})
+  end
+
+  # Worker-only (GlobalAgent has no checkpoint stack): a stream-guard
+  # violation rolls back to the last checkpoint and resumes from the restored
+  # engine node. The rule arrives pre-redacted from the adapter, so logging
+  # it leaks nothing.
+  def handle_stream_violation({:stream_violation, rule} = reason, state) do
+    detach_debug(state.debug_handler_id)
+    Logger.warning("stream_guard_violation", session_id: state.session_id, rule: inspect(rule))
+    state = %{state | stream_ref: nil, debug_handler_id: nil}
+
+    case state.checkpoints do
+      [_ | _] ->
+        case Checkpoint.rollback(state, "stream guard violation (#{inspect(rule)})") do
+          {:ok, new_state, _checkpoint} ->
+            Worker.step_engine(new_state)
+
+          {:error, rollback_error} ->
+            Logger.warning("checkpoint_rollback_failed",
+              session_id: state.session_id,
+              reason: inspect(rollback_error)
+            )
+
+            stream_error(state, reason)
+        end
+
+      [] ->
+        stream_error(state, reason)
+    end
+  end
+
+  defp stream_error(state, reason) do
+    new_ctx = Map.put(state.engine_ctx, :stream_error, reason)
+    Worker.step_engine(%{state | engine_ctx: new_ctx})
   end
 
   def handle_tool_result(id, result, is_error, state) do

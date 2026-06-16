@@ -145,6 +145,14 @@ defmodule Synapsis.Session.Store do
     end
   end
 
+  @doc "Count durable turns without decoding their payloads."
+  def count_turns(id) when is_binary(id) do
+    case Concord.prefix_scan(turns_prefix(id)) do
+      {:ok, pairs} -> {:ok, length(pairs)}
+      other -> normalize_error(other)
+    end
+  end
+
   @doc """
   Atomically commit a whole turn: writes the turn entry and the updated session
   meta snapshot together via `Concord.put_many/2`, which the Raft state machine

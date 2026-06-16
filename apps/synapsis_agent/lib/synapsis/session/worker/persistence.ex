@@ -46,6 +46,53 @@ defmodule Synapsis.Session.Worker.Persistence do
     Message.list_by_session(session_id) != []
   end
 
+  @doc """
+  Truncates the durable transcript so a target assistant message can be
+  regenerated: keeps every message *before* the target, drops the target and
+  everything after it (later turns were conditioned on the response being
+  regenerated and are no longer valid).
+
+  Returns `{:ok, user_text}` where `user_text` is the most recent user
+  message in the kept prefix (drives the receive node and memory search; the
+  prompt itself is rebuilt from the truncated transcript). Rejects a target
+  that is missing, not an assistant message, or has no preceding user message.
+  """
+  def truncate_to_regenerate(session_id, message_id) do
+    messages = Message.list_by_session(session_id)
+
+    case Enum.split_while(messages, &(&1.id != message_id)) do
+      {_prefix, []} ->
+        {:error, :message_not_found}
+
+      {prefix, [%Message{role: "assistant"} | _]} ->
+        case latest_user_text(prefix) do
+          nil ->
+            {:error, :no_user_context}
+
+          user_text ->
+            with :ok <- Message.persist_list(session_id, prefix), do: {:ok, user_text}
+        end
+
+      {_prefix, [_other | _]} ->
+        {:error, :not_assistant_message}
+    end
+  end
+
+  defp latest_user_text(messages) do
+    messages
+    |> Enum.reverse()
+    |> Enum.find_value(fn
+      %Message{role: "user", parts: parts} when is_list(parts) ->
+        Enum.find_value(parts, fn
+          %Synapsis.Part.Text{content: c} when is_binary(c) -> c
+          _ -> nil
+        end)
+
+      _ ->
+        nil
+    end)
+  end
+
   def set_status(session_id, status) do
     _ = update_session_status(session_id, status)
     broadcast(session_id, "session_status", %{status: status})

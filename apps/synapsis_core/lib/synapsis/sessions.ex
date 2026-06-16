@@ -52,6 +52,9 @@ defmodule Synapsis.Sessions do
     case Store.get_meta(session_id) do
       {:ok, meta} -> {:ok, with_messages(Session.from_meta(meta))}
       {:error, :not_found} -> {:error, :not_found}
+      # Propagate storage-layer errors (e.g. {:error, :badarg} when the Concord
+      # store is unavailable) instead of raising a CaseClauseError on the caller.
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -220,6 +223,18 @@ defmodule Synapsis.Sessions do
   def retry(session_id) do
     ensure_session_running(session_id)
     Synapsis.Session.Worker.retry(session_id)
+  catch
+    :exit, reason -> {:error, exit_reason(reason)}
+  end
+
+  @doc """
+  Regenerates the assistant message `message_id`: truncates the transcript
+  back to before that reply and re-runs the agent loop. Valid only while the
+  session is idle.
+  """
+  def regenerate(session_id, message_id) do
+    ensure_session_running(session_id)
+    Synapsis.Session.Worker.regenerate(session_id, message_id)
   catch
     :exit, reason -> {:error, exit_reason(reason)}
   end

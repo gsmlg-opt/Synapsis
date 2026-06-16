@@ -4,7 +4,8 @@ defmodule Synapsis.Session.WorkerTest do
   alias Synapsis.Session
   alias Synapsis.Agent.Graphs.CodingLoop
   alias Synapsis.Session.Worker
-  alias Synapsis.Session.Worker.IOHandler
+  alias Synapsis.Session.Worker.{IOHandler, Persistence}
+  alias Synapsis.{Message, Part}
 
   # ADR-006 C4: sessions live in the Concord-backed Session.Store, not Ecto.
   defp build_session(attrs) do
@@ -223,5 +224,350 @@ defmodule Synapsis.Session.WorkerTest do
       assert {:reply, ^from, {:error, {:engine_not_ready, :llm_stream}}} =
                List.keyfind(actions, :reply, 0)
     end
+  end
+
+  describe "regenerate" do
+    test "truncates the transcript to before the target assistant message" do
+      session = persist_session(%{status: "idle"})
+      {:ok, _q1} = Message.append(session.id, text_message("user", "q1"))
+      {:ok, _a1} = Message.append(session.id, text_message("assistant", "a1"))
+      {:ok, _q2} = Message.append(session.id, text_message("user", "q2"))
+      {:ok, a2} = Message.append(session.id, text_message("assistant", "a2"))
+
+      assert {:ok, "q2"} = Persistence.truncate_to_regenerate(session.id, a2.id)
+
+      assert [
+               %Message{role: "user", parts: [%Part.Text{content: "q1"}]},
+               %Message{role: "assistant", parts: [%Part.Text{content: "a1"}]},
+               %Message{role: "user", parts: [%Part.Text{content: "q2"}]}
+             ] = Message.list_by_session(session.id)
+    end
+
+    test "regenerating an earlier reply discards every later turn" do
+      session = persist_session(%{status: "idle"})
+      {:ok, _q1} = Message.append(session.id, text_message("user", "q1"))
+      {:ok, a1} = Message.append(session.id, text_message("assistant", "a1"))
+      {:ok, _q2} = Message.append(session.id, text_message("user", "q2"))
+      {:ok, _a2} = Message.append(session.id, text_message("assistant", "a2"))
+
+      assert {:ok, "q1"} = Persistence.truncate_to_regenerate(session.id, a1.id)
+
+      assert [%Message{role: "user", parts: [%Part.Text{content: "q1"}]}] =
+               Message.list_by_session(session.id)
+    end
+
+    test "rejects a non-assistant target without mutating the transcript" do
+      session = persist_session(%{status: "idle"})
+      {:ok, q1} = Message.append(session.id, text_message("user", "q1"))
+      {:ok, _a1} = Message.append(session.id, text_message("assistant", "a1"))
+
+      assert {:error, :not_assistant_message} =
+               Persistence.truncate_to_regenerate(session.id, q1.id)
+
+      assert [%Message{role: "user"}, %Message{role: "assistant"}] =
+               Message.list_by_session(session.id)
+    end
+
+    test "rejects an unknown message id" do
+      session = persist_session(%{status: "idle"})
+      {:ok, _a1} = Message.append(session.id, text_message("assistant", "a1"))
+
+      assert {:error, :message_not_found} =
+               Persistence.truncate_to_regenerate(session.id, Ecto.UUID.generate())
+    end
+
+    test "rejects when no user message precedes the target" do
+      session = persist_session(%{status: "idle"})
+      {:ok, a1} = Message.append(session.id, text_message("assistant", "a1"))
+
+      assert {:error, :no_user_context} =
+               Persistence.truncate_to_regenerate(session.id, a1.id)
+    end
+
+    test "the worker rejects regenerate outside :idle" do
+      {:ok, graph} = CodingLoop.build()
+
+      data = %Worker{
+        session_id: "test",
+        graph: graph,
+        engine_node: :llm_stream,
+        engine_state: %{},
+        engine_ctx: %{},
+        epoch: 1,
+        execution_mode: :graph
+      }
+
+      from = {self(), make_ref()}
+
+      {:keep_state_and_data, actions} =
+        Worker.handle_event({:call, from}, {:regenerate, "msg-1"}, :generating, data)
+
+      assert {:reply, ^from, {:error, {:engine_not_ready, :llm_stream}}} =
+               List.keyfind(actions, :reply, 0)
+    end
+  end
+
+  describe "session checkpoints" do
+    test "push_checkpoint captures worker and message state" do
+      session = persist_session(%{status: "streaming"})
+      {:ok, graph} = CodingLoop.build()
+      {:ok, _message} = Message.append(session.id, text_message("user", "before edit"))
+
+      state = %Worker{
+        session_id: session.id,
+        session: session,
+        graph: graph,
+        engine_node: :tool_execute,
+        engine_state: %{phase: :before},
+        engine_ctx: %{context: :before},
+        epoch: 1,
+        execution_mode: :graph,
+        executed_tool_ids: MapSet.new(["tool-before"])
+      }
+
+      from = {self(), make_ref()}
+
+      {:next_state, _next_state, new_state, actions} =
+        Worker.handle_event({:call, from}, {:push_checkpoint, "before patch"}, :busy, state)
+
+      assert {:reply, ^from, {:ok, checkpoint_id}} = List.keyfind(actions, :reply, 0)
+      assert is_binary(checkpoint_id)
+
+      assert [%{id: ^checkpoint_id, reason: "before patch", turn_count: 1}] =
+               new_state.checkpoints
+
+      # GUARDRAILS NEVER #1: the stack is in-memory only — no separate durable key.
+      assert Session.Store.get_value(session.id, "checkpoints", :missing) == :missing
+    end
+
+    test "rollback_checkpoint restores worker state and durable messages" do
+      session = persist_session(%{status: "streaming"})
+      {:ok, graph} = CodingLoop.build()
+      {:ok, _message} = Message.append(session.id, text_message("user", "before edit"))
+
+      before_state = %Worker{
+        session_id: session.id,
+        session: session,
+        graph: graph,
+        engine_node: :build_prompt,
+        engine_state: %{phase: :before},
+        engine_ctx: %{context: :before},
+        epoch: 1,
+        execution_mode: :graph,
+        executed_tool_ids: MapSet.new(["tool-before"])
+      }
+
+      {:next_state, _next_state, checkpointed_state, _actions} =
+        Worker.handle_event(
+          {:call, {self(), make_ref()}},
+          {:push_checkpoint, "before patch"},
+          :busy,
+          before_state
+        )
+
+      {:ok, _message} = Message.append(session.id, text_message("assistant", "bad patch"))
+
+      after_state = %{
+        checkpointed_state
+        | engine_node: :tool_execute,
+          engine_state: %{phase: :after},
+          engine_ctx: %{context: :after},
+          executed_tool_ids: MapSet.new(["tool-after"])
+      }
+
+      from = {self(), make_ref()}
+
+      {:next_state, _next_state, rolled_back_state, actions} =
+        Worker.handle_event(
+          {:call, from},
+          {:rollback_checkpoint, "patch failed"},
+          :executing_tools,
+          after_state
+        )
+
+      assert {:reply, ^from, {:ok, checkpoint_id}} = List.keyfind(actions, :reply, 0)
+      assert is_binary(checkpoint_id)
+      assert rolled_back_state.engine_node == :build_prompt
+      assert rolled_back_state.engine_state == %{phase: :before}
+      assert %{context: :before, checkpoint_rollback: rollback} = rolled_back_state.engine_ctx
+      assert rollback.reason == "patch failed"
+      assert rolled_back_state.executed_tool_ids == MapSet.new(["tool-before"])
+      assert rolled_back_state.checkpoints == []
+
+      assert [
+               %Message{role: "user", parts: [%Part.Text{content: "before edit"}]},
+               %Message{role: "system", parts: [%Part.Text{content: correction}]}
+             ] = Message.list_by_session(session.id)
+
+      assert correction =~ "Checkpoint rollback"
+      assert correction =~ "patch failed"
+      refute correction =~ "bad patch"
+    end
+
+    test "rollback_checkpoint reports empty stack without changing state" do
+      session = persist_session(%{status: "streaming"})
+      {:ok, graph} = CodingLoop.build()
+
+      state = %Worker{
+        session_id: session.id,
+        session: session,
+        graph: graph,
+        engine_node: :tool_execute,
+        engine_state: %{phase: :current},
+        engine_ctx: %{context: :current},
+        epoch: 1,
+        execution_mode: :graph
+      }
+
+      from = {self(), make_ref()}
+
+      {:keep_state_and_data, actions} =
+        Worker.handle_event(
+          {:call, from},
+          {:rollback_checkpoint, "patch failed"},
+          :executing_tools,
+          state
+        )
+
+      assert {:reply, ^from, {:error, :no_checkpoint}} = List.keyfind(actions, :reply, 0)
+    end
+
+    @tag :tmp_dir
+    test "rollback_checkpoint restores git workspace files", %{tmp_dir: tmp_dir} do
+      init_git_repo!(tmp_dir)
+      File.write!(Path.join(tmp_dir, "src.txt"), "clean\n")
+      git!(tmp_dir, ["add", "."])
+      git!(tmp_dir, ["commit", "-q", "-m", "baseline"])
+
+      session = persist_session(%{status: "streaming"})
+      {:ok, graph} = CodingLoop.build()
+      {:ok, _message} = Message.append(session.id, text_message("user", "edit src.txt"))
+
+      state = %Worker{
+        session_id: session.id,
+        session: session,
+        graph: graph,
+        engine_node: :build_prompt,
+        engine_state: %{phase: :before},
+        engine_ctx: %{},
+        epoch: 1,
+        execution_mode: :graph,
+        project_path: tmp_dir
+      }
+
+      {:next_state, _next, checkpointed, _actions} =
+        Worker.handle_event(
+          {:call, {self(), make_ref()}},
+          {:push_checkpoint, "before patch"},
+          :busy,
+          state
+        )
+
+      assert [%{workspace_ref: %{head: head}}] = checkpointed.checkpoints
+      assert head =~ ~r/^[0-9a-f]{40}$/
+
+      File.write!(Path.join(tmp_dir, "src.txt"), "corrupted by failed patch\n")
+
+      {:next_state, _next, _rolled_back, actions} =
+        Worker.handle_event(
+          {:call, {self(), make_ref()}},
+          {:rollback_checkpoint, "patch failed"},
+          :executing_tools,
+          checkpointed
+        )
+
+      assert {:reply, _from, {:ok, _id}} = List.keyfind(actions, :reply, 0)
+      assert File.read!(Path.join(tmp_dir, "src.txt")) == "clean\n"
+
+      assert [_user, %Message{role: "system", parts: [%Part.Text{content: correction}]}] =
+               Message.list_by_session(session.id)
+
+      assert correction =~ "Workspace files were restored"
+    end
+
+    test "stream violation with a checkpoint rolls back and resumes the engine" do
+      session = persist_session(%{status: "streaming"})
+      {:ok, graph} = CodingLoop.build()
+      {:ok, _message} = Message.append(session.id, text_message("user", "hello"))
+
+      state = %Worker{
+        session_id: session.id,
+        session: session,
+        graph: graph,
+        engine_node: graph.start,
+        engine_state: CodingLoop.initial_state(%{session_id: session.id}),
+        engine_ctx: %{},
+        epoch: 1,
+        execution_mode: :graph
+      }
+
+      {:next_state, _next, checkpointed, _actions} =
+        Worker.handle_event(
+          {:call, {self(), make_ref()}},
+          {:push_checkpoint, "before stream"},
+          :busy,
+          state
+        )
+
+      {:ok, _message} = Message.append(session.id, text_message("assistant", "forbidden output"))
+
+      {:next_state, _next, rolled_back, _actions} =
+        Worker.handle_event(
+          :info,
+          {:provider_error, {:stream_violation, "[redacted 6-byte pattern]"}},
+          :generating,
+          checkpointed
+        )
+
+      assert rolled_back.checkpoints == []
+
+      assert [
+               %Message{role: "user"},
+               %Message{role: "system", parts: [%Part.Text{content: correction}]}
+             ] = Message.list_by_session(session.id)
+
+      assert correction =~ "stream guard violation"
+      refute correction =~ "forbidden output"
+    end
+
+    test "stream violation without a checkpoint falls through to provider error handling" do
+      session = persist_session(%{status: "streaming"})
+      {:ok, graph} = CodingLoop.build()
+
+      state = %Worker{
+        session_id: session.id,
+        session: session,
+        graph: graph,
+        engine_node: :llm_stream,
+        engine_state: CodingLoop.initial_state(%{session_id: session.id}),
+        engine_ctx: %{},
+        epoch: 1,
+        execution_mode: :graph
+      }
+
+      {:next_state, _next, new_state, _actions} =
+        Worker.handle_event(
+          :info,
+          {:provider_error, {:stream_violation, "[redacted]"}},
+          :generating,
+          state
+        )
+
+      assert new_state.engine_ctx[:stream_error] == {:stream_violation, "[redacted]"}
+    end
+  end
+
+  defp init_git_repo!(dir) do
+    git!(dir, ["init", "-q"])
+    git!(dir, ["config", "user.email", "test@synapsis.local"])
+    git!(dir, ["config", "user.name", "Synapsis Test"])
+  end
+
+  defp git!(dir, args) do
+    {_out, 0} = System.cmd("git", args, cd: dir, stderr_to_stdout: true)
+  end
+
+  defp text_message(role, content) do
+    %Message{role: role, parts: [%Part.Text{content: content}], token_count: 1}
   end
 end

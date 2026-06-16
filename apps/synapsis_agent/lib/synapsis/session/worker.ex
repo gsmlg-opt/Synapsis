@@ -36,7 +36,7 @@ defmodule Synapsis.Session.Worker do
   require Logger
 
   alias Synapsis.Session.Stream, as: SessionStream
-  alias Synapsis.Session.Worker.{Boot, Config, IOHandler, Persistence}
+  alias Synapsis.Session.Worker.{Boot, Checkpoint, Config, IOHandler, Persistence}
   alias Synapsis.Agent.Graphs.CodingLoop
   alias Synapsis.Agent.ResponseFlusher
   alias Synapsis.Agent.Runtime.Engine
@@ -67,6 +67,7 @@ defmodule Synapsis.Session.Worker do
     approval_decisions: %{},
     execution_mode: :graph,
     query_loop_task: nil,
+    checkpoints: [],
     # Map of task_ref => tool_use_id; allows error tool_result flush on abnormal task exit.
     tool_tasks: %{},
     # Set of tool_use_ids already executed this turn; guards against soft-retry re-execution.
@@ -93,6 +94,16 @@ defmodule Synapsis.Session.Worker do
 
   def cancel(session_id), do: :gen_statem.cast(via(session_id), :cancel)
   def retry(session_id), do: :gen_statem.call(via(session_id), :retry, 30_000)
+
+  def regenerate(session_id, message_id),
+    do: :gen_statem.call(via(session_id), {:regenerate, message_id}, 30_000)
+
+  def push_checkpoint(session_id, reason \\ nil),
+    do: :gen_statem.call(via(session_id), {:push_checkpoint, reason}, 10_000)
+
+  def rollback_checkpoint(session_id, reason \\ nil),
+    do: :gen_statem.call(via(session_id), {:rollback_checkpoint, reason}, 30_000)
+
   def approve_tool(session_id, id), do: :gen_statem.cast(via(session_id), {:approve_tool, id})
   def deny_tool(session_id, id), do: :gen_statem.cast(via(session_id), {:deny_tool, id})
 
@@ -225,6 +236,66 @@ defmodule Synapsis.Session.Worker do
     end
   end
 
+  # Regenerate an assistant response: only valid while idle (engine parked at
+  # :receive) in graph mode. Truncates the transcript to drop the target reply
+  # and everything after, then drives the loop exactly like send_message's
+  # idle branch — minus persisting a new user message, since the prompting
+  # message is already in the (now trailing) transcript.
+  def handle_event(
+        {:call, from},
+        {:regenerate, message_id},
+        :idle,
+        %{execution_mode: :graph} = data
+      ) do
+    case Persistence.truncate_to_regenerate(data.session_id, message_id) do
+      {:ok, user_text} ->
+        new_ctx =
+          data.engine_ctx
+          |> Map.put(:user_input, user_text)
+          |> Map.put(:image_parts, [])
+
+        Persistence.set_status(data.session_id, "streaming")
+        new_data = step_engine(%{data | engine_ctx: new_ctx, executed_tool_ids: MapSet.new()})
+        advance(new_data, [{:reply, from, :ok}])
+
+      {:error, reason} ->
+        keep(data, [{:reply, from, {:error, reason}}])
+    end
+  end
+
+  def handle_event({:call, from}, {:regenerate, _message_id}, _state, data),
+    do: keep(data, [{:reply, from, {:error, {:engine_not_ready, data.engine_node}}}])
+
+  def handle_event({:call, from}, {:push_checkpoint, reason}, _state, data) do
+    case Checkpoint.push(data, reason) do
+      {:ok, new_data, checkpoint} ->
+        advance(new_data, [{:reply, from, {:ok, checkpoint.id}}])
+
+      {:error, reason} ->
+        keep(data, [{:reply, from, {:error, reason}}])
+    end
+  end
+
+  def handle_event(
+        {:call, from},
+        {:rollback_checkpoint, reason},
+        _state,
+        %{checkpoints: [_ | _]} = data
+      ) do
+    case Checkpoint.rollback(data, reason) do
+      {:ok, new_data, checkpoint} ->
+        advance(new_data, [{:reply, from, {:ok, checkpoint.id}}])
+
+      {:error, reason} ->
+        keep(data, [{:reply, from, {:error, reason}}])
+    end
+  end
+
+  # An empty stack is a caller error at this boundary; Checkpoint itself has
+  # no empty-stack clause (an internal rollback without a push must crash).
+  def handle_event({:call, from}, {:rollback_checkpoint, _reason}, _state, data),
+    do: keep(data, [{:reply, from, {:error, :no_checkpoint}}])
+
   def handle_event({:call, from}, :get_status, state, data) do
     keep(data, [{:reply, from, external_status(state)}])
   end
@@ -337,6 +408,12 @@ defmodule Synapsis.Session.Worker do
 
   def handle_event(:info, :provider_done, _state, data),
     do: advance(IOHandler.handle_provider_done(data))
+
+  # Stream-guard violations roll back to the last checkpoint when one exists
+  # and resume from the restored engine node; without a checkpoint they fall
+  # through to regular provider-error handling.
+  def handle_event(:info, {:provider_error, {:stream_violation, _} = r}, _state, data),
+    do: advance(IOHandler.handle_stream_violation(r, data))
 
   def handle_event(:info, {:provider_error, r}, _state, data),
     do: advance(IOHandler.handle_provider_error(r, data))
