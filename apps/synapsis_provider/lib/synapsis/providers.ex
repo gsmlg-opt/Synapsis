@@ -3,8 +3,8 @@ defmodule Synapsis.Providers do
 
   # ADR-006 C4: provider configs persist in the file-backed Config.Store
   # (TOML), keyed by id. Records round-trip as `%ProviderConfig{}` structs
-  # (the PluginConfigs pattern); the in-memory Provider.Registry remains the
-  # runtime authority.
+  # (the Config.Store struct-mapping pattern); the in-memory Provider.Registry
+  # remains the runtime authority.
   alias Synapsis.{Config.Store, ProviderConfig}
   alias Synapsis.Provider.Registry, as: ProviderRegistry
 
@@ -326,7 +326,7 @@ defmodule Synapsis.Providers do
     Map.merge(base, atomize_keys(config))
   end
 
-  # ADR-006 C4 store <-> struct mapping (the PluginConfigs pattern).
+  # ADR-006 C4 store <-> struct mapping (the Config.Store struct-mapping pattern).
   defp persist(%Ecto.Changeset{valid?: true} = changeset) do
     record =
       changeset

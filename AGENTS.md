@@ -10,7 +10,8 @@ This is an Elixir umbrella project with a Phoenix server/web surface, OTP-backed
 - `apps/synapsis_agent`: supervised agent/session runtime, agent graphs, query loop, runtime checkpoints, work items, heartbeats, messaging, and session worker implementation.
 - `apps/synapsis_server`: Phoenix endpoint, router, channels, REST/SSE controllers, telemetry, and debug store.
 - `apps/synapsis_web`: Phoenix LiveView UI, HEEx layouts, DuskMoon-based components, TypeScript hooks, and asset entrypoints.
-- `apps/synapsis_plugin`: plugin loader, plugin servers, MCP protocol support, and LSP protocol/manager support.
+- `apps/synapsis_mcp`: MCP client built on `anubis_mcp` — one `Anubis.Client` per configured server (`Synapsis.MCP` facade), bridging discovered tools into `Synapsis.Tool.Registry`.
+- `apps/synapsis_sandbox`: JSON-RPC stdio bridge for sandbox runtimes, routing sandbox-initiated calls through `Synapsis.Tool.Executor`.
 - `apps/synapsis_workspace`: workspace resource model, local blob store, projections, path resolution, search, permissions, and workspace tools.
 - `apps/synapsis_cli`: escript CLI and HTTP/SSE client code.
 - `packages/*`: Bun workspaces for TypeScript packages — only `@synapsis/hooks` (LiveView DOM hooks; the UI is pure LiveView per ADR-007).
@@ -23,8 +24,8 @@ This is an Elixir umbrella project with a Phoenix server/web surface, OTP-backed
 - `synapsis_provider` owns provider-specific request/response formats. Core and agent code should operate on domain structs/events, not hardcoded provider payload shapes.
 - `synapsis_core` owns shared tool, config, PubSub, memory, git, and session-domain services. Keep Phoenix endpoint/router/controller concerns out of core.
 - `synapsis_agent` owns the agent runtime and supervised session/agent processes. Tool registration happens there at startup.
-- `synapsis_server` and `synapsis_web` are presentation layers. They depend inward on core/agent/provider/plugin/workspace APIs.
-- `synapsis_plugin` and `synapsis_workspace` are support layers. Keep plugin/LSP/MCP protocol concerns in plugin modules and virtual workspace concerns in workspace modules.
+- `synapsis_server` and `synapsis_web` are presentation layers. They depend inward on core/agent/provider/mcp/sandbox/workspace APIs.
+- `synapsis_mcp`, `synapsis_sandbox`, and `synapsis_workspace` are support layers. Keep MCP client concerns in `synapsis_mcp`, sandbox bridging in `synapsis_sandbox`, and virtual workspace concerns in workspace modules.
 - Preserve dependency direction shown by `mix.exs` files. Do not introduce cycles or broad cross-app calls just for convenience.
 
 ## Guardrails
@@ -34,11 +35,11 @@ This is an Elixir umbrella project with a Phoenix server/web surface, OTP-backed
 - Use `Port` for shell/tool execution, not `System.cmd`, so output streaming, timeouts, and cancellation remain possible.
 - Validate every tool path against the project root and reject path traversal.
 - Always run permission checks, even when dev config auto-approves a risk level.
-- Give Port, task, HTTP, provider, LSP, and MCP operations explicit timeouts.
-- Handle monitored process exits and `:DOWN` messages for stream processes, tool tasks, LSP/MCP processes, and agent work.
+- Give Port, task, HTTP, provider, and MCP operations explicit timeouts.
+- Handle monitored process exits and `:DOWN` messages for stream processes, tool tasks, MCP processes, and agent work.
 - Use structured logging such as `Logger.info("session_started", session_id: id)`. Do not interpolate secrets or API keys into logs.
 - Test provider HTTP behavior with `Bypass`; never hit real provider APIs in tests.
-- Keep `.opencode.json` compatibility for agents, providers, MCP servers, and LSP config unless a task explicitly changes that contract.
+- Keep `.opencode.json` compatibility for agents and providers. MCP server config now uses the dedicated `mcp.toml` schema (`Synapsis.MCPConfigs`, anubis_mcp transports) and is no longer bound to the `.opencode.json` contract.
 
 ## Build, Test, And Development Commands
 
@@ -144,7 +145,7 @@ This project has a knowledge graph at `graphify-out/` with god nodes, community 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **Synapsis** (2389 symbols, 2437 relationships, 5 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **Synapsis** (2496 symbols, 2544 relationships, 5 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

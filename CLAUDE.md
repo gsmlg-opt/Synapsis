@@ -34,14 +34,15 @@ LLM providers are loaded from environment variables at startup: `ANTHROPIC_API_K
 
 ## App Structure
 
-The umbrella has 9 apps:
+The umbrella has 10 apps:
 
 ```text
 synapsis_data        - Concord session store, TOML config store, embedded Ecto types (no Repo/SQL)
 synapsis_provider    - Anthropic/OpenAI/Google transports, model registry, retry, sanitization
 synapsis_core        - shared tools, config, PubSub, memory, git/worktree helpers, file watching
 synapsis_agent       - agent graph runtime, session workers, supervisors, heartbeats
-synapsis_plugin      - plugin loader, MCP protocol, LSP protocol and managers
+synapsis_mcp         - MCP client (anubis_mcp) per server, tool-registry bridge, supervisor/facade
+synapsis_sandbox     - JSON-RPC stdio bridge for sandbox runtimes (routes via Tool.Executor)
 synapsis_workspace   - workspace resources, blob store, projections, path resolution, search
 synapsis_server      - Phoenix endpoint, channels, REST/SSE controllers, telemetry
 synapsis_web         - Phoenix LiveView UI, HEEx, DuskMoon components, TypeScript hooks
@@ -58,7 +59,8 @@ synapsis_data
   <- synapsis_core
   <- synapsis_workspace
   <- synapsis_agent
-  <- synapsis_plugin
+  <- synapsis_mcp
+  <- synapsis_sandbox
   <- synapsis_server
   <- synapsis_web
 ```
@@ -90,7 +92,7 @@ The web interface is Phoenix LiveView, not React. It uses `phoenix_duskmoon` and
 There is no PostgreSQL/Ecto Repo/Oban. Storage is three-tier:
 
 - **Concord** (embedded, `ra`-based KV under `tmp/concord/`): session transcripts as per-turn snapshots (`sessions/<id>/meta`, `sessions/<id>/turns/<n>`), agent events/summaries.
-- **Files**: TOML for configs (agents, providers, MCP, LSP, heartbeats, toolsets — loaded by `Synapsis.Config.Store` with file watchers), Markdown for workspace documents and memory (file adapter with ETS index).
+- **Files**: TOML for configs (agents, providers, MCP, heartbeats, toolsets — loaded by `Synapsis.Config.Store` with file watchers), Markdown for workspace documents and memory (file adapter with ETS index).
 - **Process memory**: the live `Session.Worker` is the read authority for the in-flight turn; readers use `Synapsis.Session.Read.live_snapshot/1` and fall back to Concord when the process is down.
 
 ## Guardrails
@@ -100,11 +102,11 @@ There is no PostgreSQL/Ecto Repo/Oban. Storage is three-tier:
 - Use `Port` for shell/tool execution, not `System.cmd`.
 - Validate every tool path against the project root and reject traversal.
 - Run permission checks even when dev config auto-approves a risk level.
-- Give Port, task, HTTP, provider, LSP, and MCP operations explicit timeouts.
+- Give Port, task, HTTP, provider, and MCP operations explicit timeouts.
 - Handle monitored process exits and `:DOWN` messages for long-running processes.
 - Use structured logging and never log secrets or API keys.
 - Test provider HTTP behavior with `Bypass`; never hit real provider APIs in tests.
-- Keep `.opencode.json` compatibility unless a task explicitly changes that contract.
+- Keep `.opencode.json` compatibility for agents and providers. MCP server config now uses the dedicated `mcp.toml` schema (`Synapsis.MCPConfigs`, anubis_mcp transports) and is no longer bound to the `.opencode.json` contract.
 
 ## Data Layer
 
@@ -150,7 +152,7 @@ If a dependency from `gsmlg*`, `duskmoon-dev`, `Gao-OS`, or related internal Git
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **Synapsis** (2389 symbols, 2437 relationships, 5 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **Synapsis** (2496 symbols, 2544 relationships, 5 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
