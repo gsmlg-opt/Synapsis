@@ -24,10 +24,10 @@ defmodule Synapsis.Agent.Nodes.NodeTest do
   end
 
   describe "ProcessResponse" do
-    test "routes to :no_tools when no tool_uses" do
+    test "routes to :no_tools when the response is text with no tool_uses" do
       state = %{
         session_id: Ecto.UUID.generate(),
-        pending_text: "",
+        pending_text: "here is the answer",
         pending_tool_use: nil,
         pending_tool_input: "",
         pending_reasoning: "",
@@ -38,7 +38,7 @@ defmodule Synapsis.Agent.Nodes.NodeTest do
       assert {:next, :no_tools, new_state} = Nodes.ProcessResponse.run(state, %{})
 
       assert new_state.iteration_activity == %{
-               text_emitted: false,
+               text_emitted: true,
                tool_calls_emitted: 0,
                tool_results_received: 0
              }

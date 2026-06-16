@@ -28,7 +28,11 @@ defmodule Synapsis.Agent.Graphs.CodingLoop do
         compact_context: :build_prompt,
         build_prompt: :llm_stream,
         llm_stream: %{default: :process_response, error: :process_response},
-        process_response: %{has_tools: :tool_dispatch, no_tools: :complete},
+        process_response: %{
+          has_tools: :tool_dispatch,
+          no_tools: :complete,
+          retry: :build_prompt
+        },
         tool_dispatch: %{all_approved: :tool_execute, needs_approval: :approval_gate},
         approval_gate: %{approved: :tool_execute, denied: :build_prompt},
         tool_execute: :orchestrate,
@@ -65,7 +69,8 @@ defmodule Synapsis.Agent.Graphs.CodingLoop do
       decision: nil,
       tool_call_hashes: MapSet.new(),
       user_input: nil,
-      approval_decisions: %{}
+      approval_decisions: %{},
+      empty_completion_retries: 0
     }
   end
 end

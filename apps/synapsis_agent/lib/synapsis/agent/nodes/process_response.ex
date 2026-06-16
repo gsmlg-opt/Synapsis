@@ -2,7 +2,16 @@ defmodule Synapsis.Agent.Nodes.ProcessResponse do
   @moduledoc "Flushes accumulated text/tools to DB via ResponseFlusher. Routes based on tool presence."
   @behaviour Synapsis.Agent.Runtime.Node
 
+  require Logger
+
   alias Synapsis.Agent.ResponseFlusher
+  alias Synapsis.{Message, Part}
+
+  # An iteration that produced no answer text and no tool call is a degenerate
+  # "empty completion" (e.g. the provider returned only reasoning, or its output
+  # could not be parsed). Retry the model a bounded number of times, then surface
+  # a visible notice rather than letting the loop go idle with no answer.
+  @default_max_empty_retries 1
 
   @impl true
   @spec run(map(), map()) :: {:next, atom(), map()}
@@ -35,10 +44,50 @@ defmodule Synapsis.Agent.Nodes.ProcessResponse do
         }
       })
 
-    if Enum.empty?(acc.tool_uses) do
-      {:next, :no_tools, new_state}
-    else
-      {:next, :has_tools, new_state}
+    cond do
+      acc.tool_uses != [] ->
+        {:next, :has_tools, Map.put(new_state, :empty_completion_retries, 0)}
+
+      acc.pending_text != "" ->
+        {:next, :no_tools, Map.put(new_state, :empty_completion_retries, 0)}
+
+      true ->
+        handle_empty_completion(session_id, new_state)
     end
+  end
+
+  defp handle_empty_completion(session_id, state) do
+    retries = Map.get(state, :empty_completion_retries, 0)
+
+    max_retries =
+      Application.get_env(
+        :synapsis_core,
+        :max_empty_completion_retries,
+        @default_max_empty_retries
+      )
+
+    if retries < max_retries do
+      Logger.warning("empty_completion_retry", session_id: session_id, attempt: retries + 1)
+      # Re-run the model with the same context; bounded by the retry counter.
+      {:next, :retry, Map.put(state, :empty_completion_retries, retries + 1)}
+    else
+      Logger.warning("empty_completion_surfaced", session_id: session_id)
+      persist_empty_notice(session_id)
+      {:next, :no_tools, Map.put(state, :empty_completion_retries, 0)}
+    end
+  end
+
+  defp persist_empty_notice(session_id) do
+    Message.append(session_id, %Message{
+      role: "system",
+      parts: [
+        %Part.Text{
+          content:
+            "The model finished without producing an answer (it returned only reasoning, " <>
+              "or its output could not be parsed). Try resending your message."
+        }
+      ],
+      token_count: 0
+    })
   end
 end
