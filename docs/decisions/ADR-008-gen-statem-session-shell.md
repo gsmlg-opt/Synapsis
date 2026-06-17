@@ -35,17 +35,26 @@ Key properties:
   computed by `derive_state/1` from the same data fields the GenServer already
   maintained. The machine can never disagree with the engine; the migration
   introduced no second source of truth.
-- **The mid-turn-prompt policy lives in one clause** (harness ADR-0006 v1):
-  in graph mode `send_message` is accepted only in `:idle`; every other state
-  replies `{:error, {:engine_not_ready, node}}` (existing error shape kept for
-  client compatibility).
+- **The mid-turn-input policy lives in one clause.** Normal `send_message` starts
+  immediately while the graph is idle. While a graph turn or QueryLoop turn is
+  running it is persisted to Concord's `pending_inputs` queue and starts
+  automatically after the current turn reaches a safe input wait. This keeps
+  transcript ordering correct because queued prompts are not appended as durable
+  user messages until the worker starts them.
+- **Steer is explicit and advisory.** `steer_message` is a separate current-step
+  action. In graph-running states it records a steer input that `BuildPrompt`
+  injects into the next LLM system prompt for the same turn; it does not interrupt
+  streams/tools and does not create a durable user message. In QueryLoop mode,
+  where there is no prompt-build injection point, steer falls back to a queued
+  normal prompt. When the graph is idle, the web UI hides steer and treats normal
+  Send as the way to start a turn.
 - **IOHandler is process-agnostic.** Its handlers take and return the worker
   data struct; each shell (the gen_statem Worker, GlobalAgent's GenServer)
   wraps results in its own behaviour return shape.
 - **Public API unchanged.** `send_message/3`, `cancel/1`, `retry/1`,
   `approve_tool/2`, `deny_tool/2`, `switch_*`, `get_status/1`, `snapshot/1`
-  keep their signatures; callers (`Synapsis.Sessions`, channels, LiveViews)
-  needed no changes. External status remains `:waiting | :running`.
+  keep their signatures; `steer_message/2` is added as the explicit steer API.
+  External status remains `:waiting | :running`.
 - **Epoch fencing, inactivity timeout, poison-quarantine boot, and the
   per-turn Concord snapshot are retained** (event timeout replaces the
   GenServer timeout; semantics identical).
@@ -64,3 +73,7 @@ performs the same parking maneuver as boot and lands the machine in `:idle`.
   ADR; the harness reducer remains unwired and is a deletion candidate.
 - Tests assert state transitions directly (`derive_state/1`,
   `handle_event/4`) without spawning processes.
+- Cancel clears queued/inflight steer records for the interrupted turn but
+  preserves queued normal prompts. Late provider terminal messages after cancel
+  are ignored once `stream_ref` is cleared so preserved prompts are not consumed
+  by stale stream completions.

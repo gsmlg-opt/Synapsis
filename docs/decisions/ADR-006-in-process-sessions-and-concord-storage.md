@@ -94,10 +94,18 @@ results.)
 ```
 /sessions/<id>/meta      -> {status, cursor, epoch, parent_id, model, turn_count}
 /sessions/<id>/turns/<n> -> {parts for that turn}
+/sessions/<id>/pending_inputs -> [{id, kind, status, content, image_parts, inserted_at}]
 ```
 
 Append per-turn (no rewrite of the whole transcript → no Raft write amplification).
 Rehydrate = read `meta` + range-read `turns/*`.
+
+`pending_inputs` is a session-scoped coordination value, not part of the durable
+transcript. It stores normal prompts submitted while a turn is running and
+advisory steer messages for the in-flight turn. Prompt records are appended as
+real user messages only when the worker starts them, preserving transcript order.
+Steer records are consumed by prompt assembly and injected into the system prompt;
+they never become durable `Synapsis.Message` entries.
 
 ### 7. Snapshot durability: fire-and-forget, atomic per-turn
 
@@ -115,6 +123,12 @@ REST/SSE, CLI) fetches a snapshot via `GenServer.call` (in-mem state incl. the
 in-flight turn) and subscribes to PubSub for live deltas; if the process is down it
 falls back to Concord's last durable turn. The guardrail flips from
 **persist-then-broadcast** to **broadcast-live, snapshot-after**.
+
+Mid-turn input follows the same live-first rule. The worker broadcasts
+`input_queued` when it records pending input and `input_started` after a queued
+prompt has been promoted to the next turn. UI clients render queued prompts as
+transient state keyed by the pending input id and remove them only when the
+matching `input_started` arrives or when the user switches sessions.
 
 ### 9. Sessions and agents are node-local
 
