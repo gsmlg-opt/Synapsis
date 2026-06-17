@@ -19,7 +19,7 @@ defmodule Synapsis.Session.PendingInputStore do
     :kind,
     :status,
     :content,
-    :attachments,
+    :image_parts,
     :inserted_at,
     :updated_at
   ]
@@ -30,16 +30,17 @@ defmodule Synapsis.Session.PendingInputStore do
           kind: String.t(),
           status: String.t(),
           content: String.t(),
-          attachments: list(),
+          image_parts: list(),
           inserted_at: String.t(),
           updated_at: String.t()
         }
 
   @doc "List all pending input records for a session in insertion order."
   def list(session_id) when is_binary(session_id) do
-    session_id
-    |> load()
-    |> sort_inputs()
+    case load(session_id) do
+      {:ok, inputs} -> sort_inputs(inputs)
+      {:error, :invalid_pending_inputs} -> []
+    end
   end
 
   @doc "List queued prompts for a session in FIFO order."
@@ -57,9 +58,9 @@ defmodule Synapsis.Session.PendingInputStore do
   end
 
   @doc "Append a prompt for the next turn."
-  def append_prompt(session_id, content, attachments)
-      when is_binary(session_id) and is_binary(content) and is_list(attachments) do
-    append(session_id, "prompt", content, attachments)
+  def append_prompt(session_id, content, image_parts)
+      when is_binary(session_id) and is_binary(content) and is_list(image_parts) do
+    append(session_id, "prompt", content, image_parts)
   end
 
   @doc "Append a text-only steering instruction for the current turn."
@@ -71,16 +72,18 @@ defmodule Synapsis.Session.PendingInputStore do
   Mark the first queued prompt inflight and return its original queued record.
   """
   def take_next_prompt(session_id) when is_binary(session_id) do
-    inputs = list(session_id)
+    with {:ok, entries} <- load_entries(session_id) do
+      inputs = entries_to_inputs(entries)
 
-    case Enum.find(inputs, &match_input?(&1, "prompt", "queued")) do
-      nil ->
-        :none
+      case Enum.find(inputs, &match_input?(&1, "prompt", "queued")) do
+        nil ->
+          :empty
 
-      input ->
-        with :ok <- update_statuses(session_id, inputs, &mark_id(&1, input.id, "inflight")) do
-          {:ok, input}
-        end
+        input ->
+          with :ok <- update_matching(session_id, entries, &(&1.id == input.id), "inflight") do
+            {:ok, input}
+          end
+      end
     end
   end
 
@@ -88,76 +91,112 @@ defmodule Synapsis.Session.PendingInputStore do
   Mark all queued steers inflight and return their original queued records.
   """
   def take_queued_steers(session_id) when is_binary(session_id) do
-    inputs = list(session_id)
-    steers = Enum.filter(inputs, &match_input?(&1, "steer", "queued"))
+    with {:ok, entries} <- load_entries(session_id) do
+      steers =
+        entries
+        |> entries_to_inputs()
+        |> Enum.filter(&match_input?(&1, "steer", "queued"))
 
-    with :ok <-
-           update_statuses(session_id, inputs, fn input ->
-             if match_input?(input, "steer", "queued"),
-               do: touch(%{input | status: "inflight"}),
-               else: input
-           end) do
-      steers
+      case steers do
+        [] ->
+          []
+
+        steers ->
+          steer_ids = MapSet.new(steers, & &1.id)
+
+          with :ok <-
+                 update_matching(
+                   session_id,
+                   entries,
+                   &MapSet.member?(steer_ids, &1.id),
+                   "inflight"
+                 ) do
+            steers
+          end
+      end
     end
   end
 
   @doc "Mark one pending input consumed."
   def mark_consumed(session_id, input_id) when is_binary(session_id) and is_binary(input_id) do
-    update_statuses(session_id, list(session_id), &mark_id(&1, input_id, "consumed"))
+    with {:ok, entries} <- load_entries(session_id) do
+      update_matching(session_id, entries, &(&1.id == input_id), "consumed")
+    end
   end
 
   @doc "Cancel queued or inflight steers without touching prompts."
   def cancel_steers(session_id) when is_binary(session_id) do
-    update_statuses(session_id, list(session_id), fn input ->
-      if input.kind == "steer" and input.status in @pending_statuses,
-        do: touch(%{input | status: "cancelled"}),
-        else: input
-    end)
+    with {:ok, entries} <- load_entries(session_id) do
+      update_matching(
+        session_id,
+        entries,
+        &(&1.kind == "steer" and &1.status in @pending_statuses),
+        "cancelled"
+      )
+    end
   end
 
   @doc "Recover all inflight inputs to queued status after a worker restart."
   def recover_inflight(session_id) when is_binary(session_id) do
-    update_statuses(session_id, list(session_id), fn input ->
-      if input.status == "inflight", do: touch(%{input | status: "queued"}), else: input
-    end)
+    with {:ok, entries} <- load_entries(session_id) do
+      update_matching(session_id, entries, &(&1.status == "inflight"), "queued")
+    end
   end
 
-  defp append(session_id, kind, content, attachments) do
-    inputs = list(session_id)
+  defp append(session_id, kind, content, image_parts) do
+    with {:ok, entries} <- load_entries(session_id) do
+      inputs = entries_to_inputs(entries)
 
-    if pending_count(inputs) >= @pending_limit do
-      {:error, :queue_full}
-    else
-      now = next_inserted_at(inputs)
+      if pending_count(inputs) >= @pending_limit do
+        {:error, :queue_full}
+      else
+        now = next_inserted_at(inputs)
 
-      input = %__MODULE__{
-        id: Ecto.UUID.generate(),
-        session_id: session_id,
-        kind: kind,
-        status: "queued",
-        content: content,
-        attachments: attachments,
-        inserted_at: now,
-        updated_at: now
-      }
+        input = %__MODULE__{
+          id: Ecto.UUID.generate(),
+          session_id: session_id,
+          kind: kind,
+          status: "queued",
+          content: content,
+          image_parts: image_parts,
+          inserted_at: now,
+          updated_at: now
+        }
 
-      with :ok <- persist(session_id, inputs ++ [input]) do
-        {:ok, input}
+        with :ok <- persist(session_id, entries ++ [stored_input(input)]) do
+          {:ok, input}
+        end
       end
     end
   end
 
   defp load(session_id) do
-    session_id
-    |> Store.get_value(@suffix, [])
-    |> normalize_inputs()
+    with {:ok, entries} <- load_entries(session_id) do
+      {:ok, entries_to_inputs(entries)}
+    end
   end
 
-  defp normalize_inputs(inputs) when is_list(inputs), do: Enum.map(inputs, &normalize_input/1)
-  defp normalize_inputs(_inputs), do: []
+  defp load_entries(session_id) do
+    case Store.get_value(session_id, @suffix, []) do
+      inputs when is_list(inputs) -> validate_entries(inputs)
+      _inputs -> {:error, :invalid_pending_inputs}
+    end
+  end
+
+  defp validate_entries(inputs) do
+    if Enum.all?(inputs, &is_map/1),
+      do: {:ok, inputs},
+      else: {:error, :invalid_pending_inputs}
+  end
+
+  defp entries_to_inputs(entries) do
+    entries
+    |> Enum.map(&normalize_input/1)
+    |> sort_inputs()
+  end
 
   defp normalize_input(%__MODULE__{} = input) do
-    %{input | attachments: input.attachments || []}
+    %{input | image_parts: input.image_parts || []}
   end
 
   defp normalize_input(input) when is_map(input) do
@@ -167,7 +206,7 @@ defmodule Synapsis.Session.PendingInputStore do
       kind: value(input, :kind),
       status: value(input, :status),
       content: value(input, :content),
-      attachments: value(input, :attachments) || [],
+      image_parts: value(input, :image_parts) || value(input, :attachments) || [],
       inserted_at: value(input, :inserted_at),
       updated_at: value(input, :updated_at)
     }
@@ -177,20 +216,62 @@ defmodule Synapsis.Session.PendingInputStore do
     Map.get(map, key) || Map.get(map, Atom.to_string(key))
   end
 
-  defp persist(session_id, inputs) do
-    Store.put_value(session_id, @suffix, Enum.map(inputs, &Map.from_struct/1))
+  defp persist(session_id, entries) do
+    Store.put_value(session_id, @suffix, Enum.map(entries, &stored_entry/1))
   end
 
-  defp update_statuses(session_id, inputs, fun) do
-    persist(session_id, Enum.map(inputs, fun))
+  defp update_matching(session_id, entries, matcher, status) do
+    {updated_entries, changed?} =
+      Enum.map_reduce(entries, false, fn entry, changed? ->
+        input = normalize_input(entry)
+
+        if matcher.(input) do
+          updated_input = touch(%{input | status: status})
+          {merge_input(entry, updated_input), true}
+        else
+          {entry, changed?}
+        end
+      end)
+
+    if changed?, do: persist(session_id, updated_entries), else: :ok
   end
 
-  defp mark_id(input, id, status) do
-    if input.id == id, do: touch(%{input | status: status}), else: input
+  defp stored_input(%__MODULE__{} = input) do
+    Map.from_struct(input)
   end
 
-  defp touch(%__MODULE__{} = input) do
-    %{input | updated_at: now_iso8601()}
+  defp stored_entry(%__MODULE__{} = input), do: stored_input(input)
+  defp stored_entry(entry) when is_map(entry), do: entry
+
+  defp merge_input(%__MODULE__{} = _entry, %__MODULE__{} = input), do: stored_input(input)
+
+  defp merge_input(entry, %__MODULE__{} = input) when is_map(entry) do
+    entry
+    |> put_known_key(:id, input.id)
+    |> put_known_key(:session_id, input.session_id)
+    |> put_known_key(:kind, input.kind)
+    |> put_known_key(:status, input.status)
+    |> put_known_key(:content, input.content)
+    |> put_known_key(:image_parts, input.image_parts)
+    |> put_known_key(:inserted_at, input.inserted_at)
+    |> put_known_key(:updated_at, input.updated_at)
+    |> drop_known_key(:attachments)
+  end
+
+  defp put_known_key(map, key, value) do
+    string_key = Atom.to_string(key)
+
+    cond do
+      Map.has_key?(map, key) -> Map.put(map, key, value)
+      Map.has_key?(map, string_key) -> Map.put(map, string_key, value)
+      true -> Map.put(map, key, value)
+    end
+  end
+
+  defp drop_known_key(map, key) do
+    map
+    |> Map.delete(key)
+    |> Map.delete(Atom.to_string(key))
   end
 
   defp pending_count(inputs) do
@@ -199,6 +280,10 @@ defmodule Synapsis.Session.PendingInputStore do
 
   defp match_input?(%__MODULE__{kind: kind, status: status}, kind, status), do: true
   defp match_input?(_input, _kind, _status), do: false
+
+  defp touch(%__MODULE__{} = input) do
+    %{input | updated_at: now_iso8601()}
+  end
 
   defp sort_inputs(inputs) do
     Enum.sort_by(inputs, &sort_value(&1.inserted_at))
