@@ -27,7 +27,7 @@
 - Queued prompts become real durable user messages only when they are about to run. This preserves transcript order.
 - When a turn finishes, the worker starts the next queued prompt automatically.
 - Steer while running: store advisory text for the current turn, return success, and inject all queued steer text into the next `BuildPrompt` request made by that running turn.
-- Steer while idle: treat it like normal Send and start a turn, because there is no current step to steer.
+- Steer outside graph-running states: reject with `:no_active_turn`; the UI hides steer while idle and normal Send remains the way to start or queue durable prompts.
 - Cancel: cancel current stream/tools as today, cancel queued steers for the interrupted turn, and preserve queued normal prompts.
 - Retry/regenerate: keep existing behavior; do not consume queued prompts until the regenerated turn reaches its normal boundary.
 - Session delete: existing `Session.Store.delete_session/1` removes pending inputs through the session prefix.
@@ -437,19 +437,13 @@ Required steer policy shape:
 def handle_event({:call, from}, {:steer_message, content}, state, data) do
   case {data.execution_mode, state} do
     {:graph, :idle} ->
-      start_graph_turn(data, content, [], [{:reply, from, :ok}])
+      keep(data, [{:reply, from, {:error, :no_active_turn}}])
 
     {:graph, _busy} ->
       reply_queue_result(data, from, Synapsis.Session.PendingInputStore.append_steer(data.session_id, content))
 
-    {:query_loop, :query_loop} ->
-      reply_queue_result(data, from, Synapsis.Session.PendingInputStore.append_prompt(data.session_id, content, []))
-
     {:query_loop, _} ->
-      case persist_user_message(data, content, []) do
-        :ok -> advance(start_query_loop(content, data), [{:reply, from, :ok}])
-        {:error, reason} -> keep(data, [{:reply, from, {:error, reason}}])
-      end
+      keep(data, [{:reply, from, {:error, :no_active_turn}}])
   end
 end
 ```
@@ -595,7 +589,7 @@ devenv shell mix test apps/synapsis_agent/test/synapsis/agent/nodes/build_prompt
 ## Task 6: Implement Steer Injection In BuildPrompt
 
 - [ ] Edit `apps/synapsis_agent/lib/synapsis/agent/nodes/build_prompt.ex`.
-- [ ] Take queued steers immediately before the request is built.
+- [ ] Read queued steers immediately before the request is built.
 - [ ] Append steer guidance to the system prompt only, not to durable messages.
 - [ ] Mark steers consumed after request construction succeeds.
 
@@ -603,7 +597,7 @@ Required helper:
 
 ```elixir
 defp append_steer_context(prompt, session_id) do
-  steers = Synapsis.Session.PendingInputStore.take_queued_steers(session_id)
+  steers = Synapsis.Session.PendingInputStore.queued_steers(session_id)
 
   case steers do
     [] ->

@@ -66,6 +66,18 @@ defmodule Synapsis.Agent.Nodes.BuildPromptTest do
     assert id == steer.id
   end
 
+  test "keeps queued steers queued when request construction raises", %{session: session} do
+    {:ok, _message} = append_user_message(session.id, "fix it")
+    {:ok, steer} = PendingInputStore.append_steer(session.id, "do not lose this")
+
+    assert_raise FunctionClauseError, fn ->
+      BuildPrompt.run(build_state(session, %{tools: :invalid}), %{})
+    end
+
+    assert [%{id: id, status: "queued"}] = steer_inputs(session.id)
+    assert id == steer.id
+  end
+
   defp persist_session do
     session =
       %Session{}
@@ -83,12 +95,17 @@ defmodule Synapsis.Agent.Nodes.BuildPromptTest do
   end
 
   defp build_state(session) do
+    build_state(session, %{})
+  end
+
+  defp build_state(session, overrides) do
     %{
       session_id: session.id,
       messages: [],
       user_input: nil,
       agent_config: %{provider: session.provider, name: session.agent, model: session.model}
     }
+    |> update_in([:agent_config], &Map.merge(&1, overrides))
   end
 
   defp steer_inputs(session_id) do

@@ -20,7 +20,7 @@ defmodule Synapsis.Session.Worker.IOHandler do
     config = Map.put(state.provider_config, :session_id, state.session_id)
     debug_handler = maybe_attach_debug(state)
 
-    case SessionStream.start_stream(request, config, provider) do
+    case start_stream(request, config, provider, state) do
       {:ok, ref} ->
         %{
           state
@@ -34,6 +34,14 @@ defmodule Synapsis.Session.Worker.IOHandler do
         new_ctx = Map.put(state.engine_ctx, :stream_error, reason)
         Worker.step_engine(%{state | engine_ctx: new_ctx})
     end
+  end
+
+  defp start_stream(request, config, provider, %Worker{}) do
+    SessionStream.start_stream(request, config, provider, forward_to: self())
+  end
+
+  defp start_stream(request, config, provider, _state) do
+    SessionStream.start_stream(request, config, provider)
   end
 
   def handle_dispatch_tools(classified, opts, state) do

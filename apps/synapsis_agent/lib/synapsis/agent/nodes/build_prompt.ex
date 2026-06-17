@@ -73,16 +73,8 @@ defmodule Synapsis.Agent.Nodes.BuildPrompt do
   end
 
   defp append_steer_context(prompt, session_id) do
-    case PendingInputStore.take_queued_steers(session_id) do
+    case PendingInputStore.queued_steers(session_id) do
       [] ->
-        {prompt, []}
-
-      {:error, reason} ->
-        Logger.warning("queued_steer_take_failed",
-          session_id: session_id,
-          reason: inspect(reason)
-        )
-
         {prompt, []}
 
       steers when is_list(steers) ->

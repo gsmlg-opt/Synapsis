@@ -222,26 +222,15 @@ defmodule Synapsis.Session.Worker do
   def handle_event({:call, from}, {:steer_message, content}, state, data) do
     case {data.execution_mode, state} do
       {:graph, :idle} ->
-        case start_graph_turn(data, content, []) do
-          {:ok, new_data} -> advance(new_data, [{:reply, from, :ok}])
-          {:error, reason} -> keep(data, [{:reply, from, {:error, reason}}])
-        end
+        keep(data, [{:reply, from, {:error, :no_active_turn}}])
 
       {:graph, _running} ->
         data
         |> queue_steer(content)
         |> reply_queue_result(from, data)
 
-      {:query_loop, :query_loop} ->
-        data
-        |> queue_prompt(content, [])
-        |> reply_queue_result(from, data)
-
       {:query_loop, _} ->
-        case start_query_loop_turn(data, content, []) do
-          {:ok, new_data} -> advance(new_data, [{:reply, from, :ok}])
-          {:error, reason} -> keep(data, [{:reply, from, {:error, reason}}])
-        end
+        keep(data, [{:reply, from, {:error, :no_active_turn}}])
     end
   end
 
@@ -431,14 +420,59 @@ defmodule Synapsis.Session.Worker do
   def handle_event(:info, {:node_request, :start_auditor, p}, _state, data),
     do: advance(IOHandler.handle_start_auditor(p, data))
 
+  def handle_event(
+        :info,
+        {:provider_chunk, stream_ref, event},
+        _state,
+        %{stream_ref: stream_ref} = data
+      ),
+      do: advance(IOHandler.handle_provider_chunk(event, data))
+
+  def handle_event(:info, {:provider_chunk, _stream_ref, _event}, _state, data),
+    do: keep(data)
+
+  def handle_event(:info, {:provider_chunk, _event}, _state, %{stream_ref: %{tag: _}} = data),
+    do: keep(data)
+
   def handle_event(:info, {:provider_chunk, event}, _state, data),
     do: advance(IOHandler.handle_provider_chunk(event, data))
+
+  def handle_event(:info, {:provider_done, stream_ref}, _state, %{stream_ref: stream_ref} = data),
+    do: advance(IOHandler.handle_provider_done(data))
+
+  def handle_event(:info, {:provider_done, _stream_ref}, _state, data),
+    do: keep(data)
+
+  def handle_event(:info, :provider_done, _state, %{stream_ref: %{tag: _}} = data),
+    do: keep(data)
 
   def handle_event(:info, :provider_done, _state, %{stream_ref: nil} = data),
     do: keep(data)
 
   def handle_event(:info, :provider_done, _state, data),
     do: advance(IOHandler.handle_provider_done(data))
+
+  def handle_event(
+        :info,
+        {:provider_error, stream_ref, {:stream_violation, _} = r},
+        _state,
+        %{stream_ref: stream_ref} = data
+      ),
+      do: advance(IOHandler.handle_stream_violation(r, data))
+
+  def handle_event(
+        :info,
+        {:provider_error, stream_ref, r},
+        _state,
+        %{stream_ref: stream_ref} = data
+      ),
+      do: advance(IOHandler.handle_provider_error(r, data))
+
+  def handle_event(:info, {:provider_error, _stream_ref, _reason}, _state, data),
+    do: keep(data)
+
+  def handle_event(:info, {:provider_error, _reason}, _state, %{stream_ref: %{tag: _}} = data),
+    do: keep(data)
 
   def handle_event(:info, {:provider_error, _reason}, _state, %{stream_ref: nil} = data),
     do: keep(data)

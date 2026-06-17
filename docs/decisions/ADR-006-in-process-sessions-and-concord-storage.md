@@ -105,7 +105,9 @@ transcript. It stores normal prompts submitted while a turn is running and
 advisory steer messages for the in-flight turn. Prompt records are appended as
 real user messages only when the worker starts them, preserving transcript order.
 Steer records are consumed by prompt assembly and injected into the system prompt;
-they never become durable `Synapsis.Message` entries.
+they never become durable `Synapsis.Message` entries. The worker only accepts
+steer records for graph-running turns; idle and QueryLoop steer requests are
+rejected rather than converted into durable prompts.
 
 ### 7. Snapshot durability: fire-and-forget, atomic per-turn
 

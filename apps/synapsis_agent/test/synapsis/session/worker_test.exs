@@ -276,7 +276,7 @@ defmodule Synapsis.Session.WorkerTest do
       assert [] = Message.list_by_session(session.id)
     end
 
-    test "steer_message starts a turn while graph is idle" do
+    test "steer_message rejects advisory input while graph is idle" do
       session = persist_session(%{status: "idle"})
       {:ok, graph} = CodingLoop.build()
 
@@ -295,7 +295,7 @@ defmodule Synapsis.Session.WorkerTest do
 
       from = {self(), make_ref()}
 
-      assert {:next_state, _state, _new_data, actions} =
+      assert {:keep_state_and_data, actions} =
                Worker.handle_event(
                  {:call, from},
                  {:steer_message, "start from idle"},
@@ -303,11 +303,9 @@ defmodule Synapsis.Session.WorkerTest do
                  data
                )
 
-      assert {:reply, ^from, :ok} = Enum.find(actions, &match?({:reply, ^from, :ok}, &1))
+      assert {:reply, ^from, {:error, :no_active_turn}} = List.keyfind(actions, :reply, 0)
 
-      assert [%Message{role: "user", parts: [%Part.Text{content: "start from idle"}]}] =
-               Message.list_by_session(session.id)
-
+      assert [] = Message.list_by_session(session.id)
       assert [] = PendingInputStore.queued_steers(session.id)
     end
 
@@ -399,6 +397,50 @@ defmodule Synapsis.Session.WorkerTest do
       assert [] = Message.list_by_session(session.id)
     end
 
+    test "untagged provider_done is ignored when active stream is fenced" do
+      session = persist_session(%{status: "streaming"})
+      {:ok, graph} = CodingLoop.build()
+
+      data = %Worker{
+        session_id: session.id,
+        session: session,
+        graph: graph,
+        engine_node: :llm_stream,
+        engine_state: CodingLoop.initial_state(%{session_id: session.id}),
+        engine_ctx: %{},
+        epoch: System.monotonic_time(),
+        execution_mode: :graph,
+        stream_ref: %{tag: make_ref(), provider_ref: make_ref(), proxy_pid: self()}
+      }
+
+      assert {:keep_state_and_data, _actions} =
+               Worker.handle_event(:info, :provider_done, :generating, data)
+
+      assert [] = Message.list_by_session(session.id)
+    end
+
+    test "untagged provider_error is ignored when active stream is fenced" do
+      session = persist_session(%{status: "streaming"})
+      {:ok, graph} = CodingLoop.build()
+
+      data = %Worker{
+        session_id: session.id,
+        session: session,
+        graph: graph,
+        engine_node: :llm_stream,
+        engine_state: CodingLoop.initial_state(%{session_id: session.id}),
+        engine_ctx: %{},
+        epoch: System.monotonic_time(),
+        execution_mode: :graph,
+        stream_ref: %{tag: make_ref(), provider_ref: make_ref(), proxy_pid: self()}
+      }
+
+      assert {:keep_state_and_data, _actions} =
+               Worker.handle_event(:info, {:provider_error, :late_error}, :generating, data)
+
+      assert [] = Message.list_by_session(session.id)
+    end
+
     test "send_message queues while query-loop turn is running" do
       session = persist_session(%{status: "streaming"})
       {:ok, graph} = CodingLoop.build()
@@ -432,6 +474,71 @@ defmodule Synapsis.Session.WorkerTest do
       assert [%{content: "queued for later", status: "queued"}] =
                PendingInputStore.queued_prompts(session.id)
 
+      assert [] = Message.list_by_session(session.id)
+    end
+
+    test "steer_message rejects while query-loop turn is running" do
+      session = persist_session(%{status: "streaming"})
+      {:ok, graph} = CodingLoop.build()
+      task = %Task{ref: make_ref(), pid: self(), owner: self(), mfa: {__MODULE__, :noop, 0}}
+
+      data = %Worker{
+        session_id: session.id,
+        session: session,
+        graph: graph,
+        engine_node: :receive,
+        engine_state: %{awaiting_input: true},
+        engine_ctx: %{},
+        epoch: System.monotonic_time(),
+        execution_mode: :query_loop,
+        query_loop_task: task
+      }
+
+      from = {self(), make_ref()}
+
+      assert {:keep_state_and_data, actions} =
+               Worker.handle_event(
+                 {:call, from},
+                 {:steer_message, "do not persist"},
+                 :query_loop,
+                 data
+               )
+
+      assert {:reply, ^from, {:error, :no_active_turn}} = List.keyfind(actions, :reply, 0)
+      assert [] = PendingInputStore.queued_prompts(session.id)
+      assert [] = PendingInputStore.queued_steers(session.id)
+      assert [] = Message.list_by_session(session.id)
+    end
+
+    test "steer_message rejects before a query-loop turn starts" do
+      session = persist_session(%{status: "idle"})
+      {:ok, graph} = CodingLoop.build()
+
+      data = %Worker{
+        session_id: session.id,
+        session: session,
+        graph: graph,
+        engine_node: :receive,
+        engine_state: %{awaiting_input: true},
+        engine_ctx: %{},
+        epoch: System.monotonic_time(),
+        execution_mode: :query_loop,
+        query_loop_task: nil
+      }
+
+      from = {self(), make_ref()}
+
+      assert {:keep_state_and_data, actions} =
+               Worker.handle_event(
+                 {:call, from},
+                 {:steer_message, "do not start"},
+                 :idle,
+                 data
+               )
+
+      assert {:reply, ^from, {:error, :no_active_turn}} = List.keyfind(actions, :reply, 0)
+      assert [] = PendingInputStore.queued_prompts(session.id)
+      assert [] = PendingInputStore.queued_steers(session.id)
       assert [] = Message.list_by_session(session.id)
     end
 

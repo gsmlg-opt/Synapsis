@@ -44,10 +44,11 @@ Key properties:
 - **Steer is explicit and advisory.** `steer_message` is a separate current-step
   action. In graph-running states it records a steer input that `BuildPrompt`
   injects into the next LLM system prompt for the same turn; it does not interrupt
-  streams/tools and does not create a durable user message. In QueryLoop mode,
-  where there is no prompt-build injection point, steer falls back to a queued
-  normal prompt. When the graph is idle, the web UI hides steer and treats normal
-  Send as the way to start a turn.
+  streams/tools and does not create a durable user message. When the graph is
+  idle, or when the session is in QueryLoop mode where there is no prompt-build
+  injection point, the worker rejects steer with `:no_active_turn`. The web UI
+  hides steer outside running graph turns and treats normal Send as the way to
+  start or queue durable user prompts.
 - **IOHandler is process-agnostic.** Its handlers take and return the worker
   data struct; each shell (the gen_statem Worker, GlobalAgent's GenServer)
   wraps results in its own behaviour return shape.
@@ -74,6 +75,7 @@ performs the same parking maneuver as boot and lands the machine in `:idle`.
 - Tests assert state transitions directly (`derive_state/1`,
   `handle_event/4`) without spawning processes.
 - Cancel clears queued/inflight steer records for the interrupted turn but
-  preserves queued normal prompts. Late provider terminal messages after cancel
-  are ignored once `stream_ref` is cleared so preserved prompts are not consumed
-  by stale stream completions.
+  preserves queued normal prompts. Provider stream messages for graph sessions
+  are fenced with a worker-local stream reference, so late chunks or terminal
+  messages from a cancelled stream cannot complete a newer stream or consume
+  preserved queued prompts.

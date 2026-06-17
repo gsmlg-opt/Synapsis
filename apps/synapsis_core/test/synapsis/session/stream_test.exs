@@ -46,6 +46,26 @@ defmodule Synapsis.Session.StreamTest do
     end
   end
 
+  defp collect_fenced_stream_events(ref, timeout \\ 5000) do
+    collect_fenced_stream_events(ref, [], timeout)
+  end
+
+  defp collect_fenced_stream_events(ref, acc, timeout) do
+    receive do
+      {:provider_chunk, ^ref, chunk} ->
+        collect_fenced_stream_events(ref, [{:chunk, chunk} | acc], timeout)
+
+      {:provider_done, ^ref} ->
+        Enum.reverse([{:done, nil} | acc])
+
+      {:provider_error, ^ref, reason} ->
+        Enum.reverse([{:error, reason} | acc])
+    after
+      timeout ->
+        Enum.reverse(acc)
+    end
+  end
+
   # ---------------------------------------------------------------------------
   # start_stream/3 — error paths (unknown / nil / empty provider)
   # ---------------------------------------------------------------------------
@@ -125,6 +145,45 @@ defmodule Synapsis.Session.StreamTest do
       assert "Hello" in text_deltas
       assert " from" in text_deltas
       assert " stream" in text_deltas
+      assert Enum.any?(events, fn {type, _} -> type == :done end)
+    end
+
+    test "start_stream/4 forwards fenced stream events to the owner", %{
+      bypass: bypass,
+      port: port
+    } do
+      provider_name = unique_provider_name()
+      config = register_provider(provider_name, "anthropic", port)
+
+      Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("text/event-stream")
+        |> Plug.Conn.send_resp(200, """
+        data: {"type":"message_start","message":{"id":"msg_stream_01"}}
+
+        data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+        data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Fenced"}}
+
+        data: {"type":"message_stop"}
+
+        """)
+      end)
+
+      request = %{
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 100,
+        messages: [%{role: "user", content: "hi"}],
+        stream: true
+      }
+
+      assert {:ok, %Stream.Ref{} = ref} =
+               Stream.start_stream(request, config, provider_name, forward_to: self())
+
+      events = collect_fenced_stream_events(ref)
+      chunk_events = for {:chunk, c} <- events, do: c
+
+      assert {:text_delta, "Fenced"} in chunk_events
       assert Enum.any?(events, fn {type, _} -> type == :done end)
     end
 
