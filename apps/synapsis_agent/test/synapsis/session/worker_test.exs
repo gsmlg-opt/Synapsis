@@ -3,6 +3,7 @@ defmodule Synapsis.Session.WorkerTest do
 
   alias Synapsis.Session
   alias Synapsis.Agent.Graphs.CodingLoop
+  alias Synapsis.Session.PendingInputStore
   alias Synapsis.Session.Worker
   alias Synapsis.Session.Worker.{IOHandler, Persistence}
   alias Synapsis.{Message, Part}
@@ -203,26 +204,208 @@ defmodule Synapsis.Session.WorkerTest do
   end
 
   describe "busy-prompt policy (harness ADR-0006)" do
-    test "send_message is rejected outside :idle in graph mode" do
+    test "send_message queues outside :idle in graph mode" do
+      session = persist_session(%{status: "streaming"})
       {:ok, graph} = CodingLoop.build()
 
       data = %Worker{
-        session_id: "test",
+        session_id: session.id,
+        session: session,
         graph: graph,
         engine_node: :llm_stream,
-        engine_state: %{},
+        engine_state: CodingLoop.initial_state(%{session_id: session.id}),
         engine_ctx: %{},
-        epoch: 1,
+        epoch: System.monotonic_time(),
+        execution_mode: :graph,
+        stream_ref: make_ref()
+      }
+
+      from = {self(), make_ref()}
+
+      assert {:next_state, :generating, _new_data, actions} =
+               Worker.handle_event(
+                 {:call, from},
+                 {:send_message, "queued", []},
+                 :generating,
+                 data
+               )
+
+      assert {:reply, ^from, :ok} = Enum.find(actions, &match?({:reply, ^from, :ok}, &1))
+
+      assert [%{content: "queued", status: "queued"}] =
+               PendingInputStore.queued_prompts(session.id)
+
+      assert [] = Message.list_by_session(session.id)
+    end
+
+    test "steer_message/2 public API exists" do
+      assert function_exported?(Worker, :steer_message, 2)
+    end
+
+    test "steer_message stores advisory text while graph is running" do
+      session = persist_session(%{status: "streaming"})
+      {:ok, graph} = CodingLoop.build()
+
+      data = %Worker{
+        session_id: session.id,
+        session: session,
+        graph: graph,
+        engine_node: :tool_execute,
+        engine_state: CodingLoop.initial_state(%{session_id: session.id}),
+        engine_ctx: %{},
+        epoch: System.monotonic_time(),
+        execution_mode: :graph,
+        pending_tool_count: 1
+      }
+
+      from = {self(), make_ref()}
+
+      assert {:next_state, :executing_tools, _new_data, actions} =
+               Worker.handle_event(
+                 {:call, from},
+                 {:steer_message, "prefer small patch"},
+                 :executing_tools,
+                 data
+               )
+
+      assert {:reply, ^from, :ok} = Enum.find(actions, &match?({:reply, ^from, :ok}, &1))
+
+      assert [%{content: "prefer small patch", status: "queued"}] =
+               PendingInputStore.queued_steers(session.id)
+
+      assert [] = Message.list_by_session(session.id)
+    end
+
+    test "steer_message starts a turn while graph is idle" do
+      session = persist_session(%{status: "idle"})
+      {:ok, graph} = CodingLoop.build()
+
+      data = %Worker{
+        session_id: session.id,
+        session: session,
+        graph: graph,
+        engine_node: :receive,
+        engine_state:
+          CodingLoop.initial_state(%{session_id: session.id})
+          |> Map.put(:awaiting_input, true),
+        engine_ctx: %{},
+        epoch: System.monotonic_time(),
         execution_mode: :graph
       }
 
       from = {self(), make_ref()}
 
-      {:keep_state_and_data, actions} =
-        Worker.handle_event({:call, from}, {:send_message, "hi", []}, :generating, data)
+      assert {:next_state, _state, _new_data, actions} =
+               Worker.handle_event(
+                 {:call, from},
+                 {:steer_message, "start from idle"},
+                 :idle,
+                 data
+               )
 
-      assert {:reply, ^from, {:error, {:engine_not_ready, :llm_stream}}} =
-               List.keyfind(actions, :reply, 0)
+      assert {:reply, ^from, :ok} = Enum.find(actions, &match?({:reply, ^from, :ok}, &1))
+
+      assert [%Message{role: "user", parts: [%Part.Text{content: "start from idle"}]}] =
+               Message.list_by_session(session.id)
+
+      assert [] = PendingInputStore.queued_steers(session.id)
+    end
+
+    test "cancel preserves queued prompts and cancels queued steers" do
+      session = persist_session(%{status: "streaming"})
+      {:ok, graph} = CodingLoop.build()
+      assert {:ok, _prompt} = PendingInputStore.append_prompt(session.id, "next turn", [])
+      assert {:ok, _steer} = PendingInputStore.append_steer(session.id, "forget that")
+
+      data = %Worker{
+        session_id: session.id,
+        session: session,
+        graph: graph,
+        engine_node: :llm_stream,
+        engine_state: CodingLoop.initial_state(%{session_id: session.id}),
+        engine_ctx: %{},
+        epoch: System.monotonic_time(),
+        execution_mode: :graph,
+        stream_ref: make_ref()
+      }
+
+      assert {:next_state, :idle, _new_data, _actions} =
+               Worker.handle_event(:cast, :cancel, :generating, data)
+
+      assert [%{content: "next turn", status: "queued"}] =
+               PendingInputStore.queued_prompts(session.id)
+
+      assert [%{content: "forget that", status: "cancelled"}] =
+               PendingInputStore.list(session.id) |> Enum.filter(&(&1.kind == "steer"))
+    end
+
+    test "send_message queues while query-loop turn is running" do
+      session = persist_session(%{status: "streaming"})
+      {:ok, graph} = CodingLoop.build()
+      task = %Task{ref: make_ref(), pid: self(), owner: self(), mfa: {__MODULE__, :noop, 0}}
+
+      data = %Worker{
+        session_id: session.id,
+        session: session,
+        graph: graph,
+        engine_node: :receive,
+        engine_state: %{awaiting_input: true},
+        engine_ctx: %{},
+        epoch: System.monotonic_time(),
+        execution_mode: :query_loop,
+        query_loop_task: task
+      }
+
+      from = {self(), make_ref()}
+
+      assert {:next_state, :query_loop, new_data, actions} =
+               Worker.handle_event(
+                 {:call, from},
+                 {:send_message, "queued for later", []},
+                 :query_loop,
+                 data
+               )
+
+      assert new_data.query_loop_task == task
+      assert {:reply, ^from, :ok} = Enum.find(actions, &match?({:reply, ^from, :ok}, &1))
+
+      assert [%{content: "queued for later", status: "queued"}] =
+               PendingInputStore.queued_prompts(session.id)
+
+      assert [] = Message.list_by_session(session.id)
+    end
+
+    test "step_engine starts next queued prompt when graph is parked at receive" do
+      session = persist_session(%{status: "idle"})
+      {:ok, graph} = CodingLoop.build()
+      assert {:ok, queued} = PendingInputStore.append_prompt(session.id, "queued turn", [])
+
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}")
+
+      data = %Worker{
+        session_id: session.id,
+        session: session,
+        graph: graph,
+        engine_node: :receive,
+        engine_state:
+          CodingLoop.initial_state(%{session_id: session.id})
+          |> Map.put(:awaiting_input, true),
+        engine_ctx: %{},
+        epoch: System.monotonic_time(),
+        execution_mode: :graph,
+        executed_tool_ids: MapSet.new(["previous-tool"])
+      }
+
+      new_data = Worker.step_engine(data)
+
+      assert [%Message{role: "user", parts: [%Part.Text{content: "queued turn"}]}] =
+               Message.list_by_session(session.id)
+
+      assert [%{id: id, status: "consumed"}] = PendingInputStore.list(session.id)
+      assert id == queued.id
+      assert new_data.executed_tool_ids == MapSet.new()
+
+      assert_receive {"input_started", %{id: ^id, kind: "prompt", content: "queued turn"}}
     end
   end
 

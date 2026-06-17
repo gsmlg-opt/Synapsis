@@ -40,6 +40,7 @@ defmodule Synapsis.Session.Worker do
   alias Synapsis.Agent.Graphs.CodingLoop
   alias Synapsis.Agent.ResponseFlusher
   alias Synapsis.Agent.Runtime.Engine
+  alias Synapsis.Session.PendingInputStore
 
   @timeout :timer.minutes(30)
 
@@ -92,6 +93,9 @@ defmodule Synapsis.Session.Worker do
   def send_message(session_id, content, image_parts \\ []),
     do: :gen_statem.call(via(session_id), {:send_message, content, image_parts}, 30_000)
 
+  def steer_message(session_id, content),
+    do: :gen_statem.call(via(session_id), {:steer_message, content}, 30_000)
+
   def cancel(session_id), do: :gen_statem.cast(via(session_id), :cancel)
   def retry(session_id), do: :gen_statem.call(via(session_id), :retry, 30_000)
 
@@ -143,6 +147,7 @@ defmodule Synapsis.Session.Worker do
         {session, agent, pc, graph, engine_state, engine_ctx, project_path} ->
           # Successful boot clears the poison-protection failure counter.
           Synapsis.Session.Quarantine.clear(session.id)
+          recover_pending_inputs(session.id)
           Logger.info("session_worker_started", session_id: session.id)
 
           data = %__MODULE__{
@@ -189,48 +194,60 @@ defmodule Synapsis.Session.Worker do
 
   def handle_event({:call, from}, {:send_message, content, image_parts}, state, data) do
     case {data.execution_mode, state} do
-      {:query_loop, _} ->
-        case persist_user_message(data, content, image_parts) do
-          :ok ->
-            advance(start_query_loop(content, data), [{:reply, from, :ok}])
+      {:query_loop, :query_loop} ->
+        data
+        |> queue_prompt(content, image_parts)
+        |> reply_queue_result(from, data)
 
-          {:error, reason} ->
-            keep(data, [{:reply, from, {:error, reason}}])
+      {:query_loop, _} ->
+        case start_query_loop_turn(data, content, image_parts) do
+          {:ok, new_data} -> advance(new_data, [{:reply, from, :ok}])
+          {:error, reason} -> keep(data, [{:reply, from, {:error, reason}}])
         end
 
       {:graph, :idle} ->
-        case persist_user_message(data, content, image_parts) do
-          :ok ->
-            new_engine_ctx =
-              data.engine_ctx
-              |> Map.put(:user_input, content)
-              |> Map.put(:image_parts, image_parts)
-
-            # Reset per-turn idempotency guard on each new user message.
-            new_data =
-              step_engine(%{
-                data
-                | engine_ctx: new_engine_ctx,
-                  executed_tool_ids: MapSet.new()
-              })
-
-            advance(new_data, [{:reply, from, :ok}])
-
-          {:error, reason} ->
-            keep(data, [{:reply, from, {:error, reason}}])
+        case start_graph_turn(data, content, image_parts) do
+          {:ok, new_data} -> advance(new_data, [{:reply, from, :ok}])
+          {:error, reason} -> keep(data, [{:reply, from, {:error, reason}}])
         end
 
-      {:graph, _busy} ->
-        # The only place the mid-turn-prompt policy lives (harness ADR-0006):
-        # a session that is not :idle rejects new prompts; abort first.
-        keep(data, [{:reply, from, {:error, {:engine_not_ready, data.engine_node}}}])
+      {:graph, _running} ->
+        data
+        |> queue_prompt(content, image_parts)
+        |> reply_queue_result(from, data)
+    end
+  end
+
+  def handle_event({:call, from}, {:steer_message, content}, state, data) do
+    case {data.execution_mode, state} do
+      {:graph, :idle} ->
+        case start_graph_turn(data, content, []) do
+          {:ok, new_data} -> advance(new_data, [{:reply, from, :ok}])
+          {:error, reason} -> keep(data, [{:reply, from, {:error, reason}}])
+        end
+
+      {:graph, _running} ->
+        data
+        |> queue_steer(content)
+        |> reply_queue_result(from, data)
+
+      {:query_loop, :query_loop} ->
+        data
+        |> queue_prompt(content, [])
+        |> reply_queue_result(from, data)
+
+      {:query_loop, _} ->
+        case start_query_loop_turn(data, content, []) do
+          {:ok, new_data} -> advance(new_data, [{:reply, from, :ok}])
+          {:error, reason} -> keep(data, [{:reply, from, {:error, reason}}])
+        end
     end
   end
 
   def handle_event({:call, from}, :retry, _state, data) do
     if Persistence.has_messages?(data.session_id) do
       Persistence.set_status(data.session_id, "streaming")
-      advance(step_engine(data), [{:reply, from, :ok}])
+      advance(step_engine(data, drain_before?: false), [{:reply, from, :ok}])
     else
       keep(data, [{:reply, from, {:error, :no_messages}}])
     end
@@ -255,7 +272,12 @@ defmodule Synapsis.Session.Worker do
           |> Map.put(:image_parts, [])
 
         Persistence.set_status(data.session_id, "streaming")
-        new_data = step_engine(%{data | engine_ctx: new_ctx, executed_tool_ids: MapSet.new()})
+
+        new_data =
+          step_engine(%{data | engine_ctx: new_ctx, executed_tool_ids: MapSet.new()},
+            drain_before?: false
+          )
+
         advance(new_data, [{:reply, from, :ok}])
 
       {:error, reason} ->
@@ -348,6 +370,8 @@ defmodule Synapsis.Session.Worker do
   end
 
   def handle_event(:cast, :cancel, _state, data) do
+    cancel_pending_steers(data.session_id)
+
     case data.execution_mode do
       :query_loop ->
         if data.query_loop_task, do: Task.shutdown(data.query_loop_task, :brutal_kill)
@@ -368,18 +392,21 @@ defmodule Synapsis.Session.Worker do
         # Reset engine, then re-park it at :receive (same maneuver as boot) so
         # the session is immediately ready for the next prompt.
         new_data =
-          step_engine(%{
-            data
-            | stream_ref: nil,
-              epoch: new_epoch,
-              engine_state: reset_engine_state(data),
-              engine_node: data.graph.start,
-              pending_tool_count: 0,
-              pending_approvals: MapSet.new(),
-              approval_decisions: %{},
-              tool_tasks: %{},
-              executed_tool_ids: MapSet.new()
-          })
+          step_engine(
+            %{
+              data
+              | stream_ref: nil,
+                epoch: new_epoch,
+                engine_state: reset_engine_state(data),
+                engine_node: data.graph.start,
+                pending_tool_count: 0,
+                pending_approvals: MapSet.new(),
+                approval_decisions: %{},
+                tool_tasks: %{},
+                executed_tool_ids: MapSet.new()
+            },
+            start_queued?: false
+          )
 
         advance(new_data)
     end
@@ -448,7 +475,7 @@ defmodule Synapsis.Session.Worker do
       when ref == task_ref do
     Process.demonitor(ref, [:flush])
     Persistence.set_status(data.session_id, "idle")
-    advance(%{data | query_loop_task: nil})
+    advance(maybe_start_next_prompt(%{data | query_loop_task: nil}))
   end
 
   # QueryLoop Task DOWN
@@ -533,28 +560,46 @@ defmodule Synapsis.Session.Worker do
 
   @doc false
   def step_engine(%__MODULE__{} = state) do
-    case Engine.run_until_wait(
-           state.graph,
-           state.engine_node,
-           state.engine_state,
-           state.engine_ctx
-         ) do
-      {:waiting, node, new_workflow_state} ->
-        %{state | engine_node: node, engine_state: new_workflow_state}
+    step_engine(state, start_queued?: true)
+  end
 
-      {:done, _new_workflow_state} ->
-        # Turn boundary: graph reached :end. Snapshot the whole turn to Concord
-        # fire-and-forget (ADR-006 B1) — never blocks the worker — then reset to
-        # start for the next turn.
-        Synapsis.Session.Snapshot.snapshot_async(state.session_id)
-        %{state | engine_node: state.graph.start, engine_state: reset_engine_state(state)}
+  defp step_engine(%__MODULE__{} = state, opts) do
+    start_queued? = Keyword.get(opts, :start_queued?, true)
 
-      {:error, reason, new_workflow_state} ->
-        Logger.warning("engine_error", session_id: state.session_id, reason: inspect(reason))
-        Persistence.update_session_status(state.session_id, "error")
-        Persistence.broadcast(state.session_id, "error", %{message: "Agent engine error"})
-        Persistence.broadcast(state.session_id, "session_status", %{status: "error"})
-        %{state | engine_state: new_workflow_state}
+    if start_queued? and Keyword.get(opts, :drain_before?, true) and
+         can_start_queued_prompt?(state) do
+      start_queued_graph_prompt(state)
+    else
+      new_state =
+        case Engine.run_until_wait(
+               state.graph,
+               state.engine_node,
+               state.engine_state,
+               state.engine_ctx
+             ) do
+          {:waiting, node, new_workflow_state} ->
+            %{state | engine_node: node, engine_state: new_workflow_state}
+
+          {:done, _new_workflow_state} ->
+            # Turn boundary: graph reached :end. Snapshot the whole turn to Concord
+            # fire-and-forget (ADR-006 B1) — never blocks the worker — then reset to
+            # start for the next turn.
+            Synapsis.Session.Snapshot.snapshot_async(state.session_id)
+            %{state | engine_node: state.graph.start, engine_state: reset_engine_state(state)}
+
+          {:error, reason, new_workflow_state} ->
+            Logger.warning("engine_error", session_id: state.session_id, reason: inspect(reason))
+            Persistence.update_session_status(state.session_id, "error")
+            Persistence.broadcast(state.session_id, "error", %{message: "Agent engine error"})
+            Persistence.broadcast(state.session_id, "session_status", %{status: "error"})
+            %{state | engine_state: new_workflow_state}
+        end
+
+      if start_queued? do
+        maybe_start_next_prompt(new_state)
+      else
+        new_state
+      end
     end
   end
 
@@ -573,6 +618,200 @@ defmodule Synapsis.Session.Worker do
       provider_config: state.provider_config,
       agent_config: state.agent
     })
+  end
+
+  defp recover_pending_inputs(session_id) do
+    case PendingInputStore.recover_inflight(session_id) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning("pending_input_recovery_failed",
+          session_id: session_id,
+          reason: inspect(reason)
+        )
+    end
+  end
+
+  defp start_graph_turn(state, content, image_parts, opts \\ []) do
+    case persist_user_message(state, content, image_parts) do
+      :ok ->
+        new_engine_ctx =
+          state.engine_ctx
+          |> Map.put(:user_input, content)
+          |> Map.put(:image_parts, image_parts)
+
+        new_state =
+          step_engine(
+            %{
+              state
+              | engine_ctx: new_engine_ctx,
+                executed_tool_ids: MapSet.new()
+            },
+            start_queued?: Keyword.get(opts, :start_queued?, true),
+            drain_before?: false
+          )
+
+        {:ok, new_state}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp start_query_loop_turn(state, content, image_parts) do
+    case persist_user_message(state, content, image_parts) do
+      :ok -> {:ok, start_query_loop(content, state)}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp queue_prompt(state, content, image_parts) do
+    state.session_id
+    |> PendingInputStore.append_prompt(content, image_parts)
+    |> broadcast_queued_input(state.session_id)
+  end
+
+  defp queue_steer(state, content) do
+    state.session_id
+    |> PendingInputStore.append_steer(content)
+    |> broadcast_queued_input(state.session_id)
+  end
+
+  defp broadcast_queued_input({:ok, input}, session_id) do
+    Persistence.broadcast(session_id, "input_queued", %{
+      id: input.id,
+      kind: input.kind,
+      content: input.content
+    })
+
+    {:ok, input}
+  end
+
+  defp broadcast_queued_input({:error, _reason} = error, _session_id), do: error
+
+  defp reply_queue_result({:ok, _input}, from, data),
+    do: advance(data, [{:reply, from, :ok}])
+
+  defp reply_queue_result({:error, reason}, from, data),
+    do: keep(data, [{:reply, from, {:error, reason}}])
+
+  defp cancel_pending_steers(session_id) do
+    case PendingInputStore.cancel_steers(session_id) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning("pending_steer_cancel_failed",
+          session_id: session_id,
+          reason: inspect(reason)
+        )
+    end
+  end
+
+  defp maybe_start_next_prompt(%{execution_mode: :graph} = state) do
+    if can_start_queued_prompt?(state) do
+      start_queued_graph_prompt(state)
+    else
+      state
+    end
+  end
+
+  defp maybe_start_next_prompt(%{execution_mode: :query_loop, query_loop_task: nil} = state) do
+    start_queued_query_loop_prompt(state)
+  end
+
+  defp maybe_start_next_prompt(state), do: state
+
+  defp can_start_queued_prompt?(state) do
+    engine_ready?(state) and state.stream_ref == nil and state.pending_tool_count == 0 and
+      MapSet.size(state.pending_approvals) == 0
+  end
+
+  defp start_queued_graph_prompt(state) do
+    case PendingInputStore.take_next_prompt(state.session_id) do
+      {:ok, input} ->
+        case start_graph_turn(state, input.content, input.image_parts, start_queued?: false) do
+          {:ok, new_state} ->
+            broadcast_started_input(state.session_id, input)
+            mark_pending_input_consumed(state.session_id, input)
+            new_state
+
+          {:error, reason} ->
+            Logger.warning("queued_prompt_start_failed",
+              session_id: state.session_id,
+              input_id: input.id,
+              reason: inspect(reason)
+            )
+
+            state
+        end
+
+      :empty ->
+        state
+
+      {:error, reason} ->
+        Logger.warning("queued_prompt_take_failed",
+          session_id: state.session_id,
+          reason: inspect(reason)
+        )
+
+        state
+    end
+  end
+
+  defp start_queued_query_loop_prompt(state) do
+    case PendingInputStore.take_next_prompt(state.session_id) do
+      {:ok, input} ->
+        case start_query_loop_turn(state, input.content, input.image_parts) do
+          {:ok, new_state} ->
+            broadcast_started_input(state.session_id, input)
+            mark_pending_input_consumed(state.session_id, input)
+            new_state
+
+          {:error, reason} ->
+            Logger.warning("queued_prompt_start_failed",
+              session_id: state.session_id,
+              input_id: input.id,
+              reason: inspect(reason)
+            )
+
+            state
+        end
+
+      :empty ->
+        state
+
+      {:error, reason} ->
+        Logger.warning("queued_prompt_take_failed",
+          session_id: state.session_id,
+          reason: inspect(reason)
+        )
+
+        state
+    end
+  end
+
+  defp broadcast_started_input(session_id, input) do
+    Persistence.broadcast(session_id, "input_started", %{
+      id: input.id,
+      kind: input.kind,
+      content: input.content
+    })
+  end
+
+  defp mark_pending_input_consumed(session_id, input) do
+    case PendingInputStore.mark_consumed(session_id, input.id) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning("pending_input_consume_failed",
+          session_id: session_id,
+          input_id: input.id,
+          reason: inspect(reason)
+        )
+    end
   end
 
   defp persist_user_message(state, content, image_parts) do
