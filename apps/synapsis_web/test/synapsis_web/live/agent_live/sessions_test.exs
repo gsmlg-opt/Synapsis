@@ -208,6 +208,73 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       assert Sessions.get_messages(session.id) == []
     end
 
+    test "renders duplicate queued prompts with different ids", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      assert {:ok, _session} = SessionPersistence.update_session_status(session.id, "streaming")
+      send(view.pid, {"session_status", %{status: "streaming"}})
+
+      send(
+        view.pid,
+        {"input_queued", %{id: "queued-prompt-1", kind: "prompt", content: "same prompt"}}
+      )
+
+      send(
+        view.pid,
+        {"input_queued", %{id: "queued-prompt-2", kind: "prompt", content: "same prompt"}}
+      )
+
+      html = render(view)
+
+      assert html =~ ~s(id="queued-input-queued-prompt-1")
+      assert html =~ ~s(id="queued-input-queued-prompt-2")
+      assert occurrence_count(html, "same prompt") == 2
+      assert Sessions.get_messages(session.id) == []
+    end
+
+    test "send hook queues prompt while worker is running", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      set_worker_running(session)
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}")
+      render_hook(view, "send_message", %{"value" => "queued through hook"})
+
+      assert_receive {"input_queued",
+                      %{id: _id, kind: "prompt", content: "queued through hook"} = payload}
+
+      send(view.pid, {"input_queued", payload})
+      html = render(view)
+
+      assert html =~ "queued through hook"
+      assert Sessions.get_messages(session.id) == []
+    end
+
+    test "steer hook queues advisory input while running without rendering a bubble", %{
+      conn: conn
+    } do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      set_worker_running(session)
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}")
+      html = render_hook(view, "steer_message", %{"value" => "keep edits minimal"})
+
+      assert_receive {"input_queued", %{id: _id, kind: "steer", content: "keep edits minimal"}}
+
+      refute html =~ "keep edits minimal"
+      assert Sessions.get_messages(session.id) == []
+    end
+
     test "queued steer input is advisory and does not render as a durable user bubble", %{
       conn: conn
     } do
@@ -534,4 +601,20 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
   end
 
   defp assert_eventually(_fun, 0), do: flunk("condition was not met before timeout")
+
+  defp set_worker_running(session) do
+    assert {:ok, _session} = SessionPersistence.update_session_status(session.id, "streaming")
+    assert [{pid, _}] = Registry.lookup(Synapsis.Session.Registry, session.id)
+
+    :sys.replace_state(pid, fn {:idle, data} ->
+      {:generating, %{data | stream_ref: make_ref(), engine_node: :llm_stream}}
+    end)
+  end
+
+  defp occurrence_count(text, pattern) do
+    text
+    |> String.split(pattern)
+    |> length()
+    |> Kernel.-(1)
+  end
 end

@@ -333,14 +333,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
         case Sessions.send_message(session_id, content) do
           :ok ->
             if running? do
-              queued = %{
-                id: "local-#{Ecto.UUID.generate()}",
-                kind: "prompt",
-                content: content,
-                local?: true
-              }
-
-              {:noreply, update(socket, :queued_inputs, &append_unique_input(&1, queued))}
+              {:noreply, socket}
             else
               # Reload from DB to get the real persisted message with correct ID/timestamps
               {:noreply, assign(socket, :messages, Sessions.get_messages(session_id))}
@@ -960,28 +953,8 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   end
 
   defp append_unique_input(inputs, queued) do
-    cond do
-      Enum.any?(inputs, &(&1.id == queued.id)) ->
-        inputs
-
-      index = Enum.find_index(inputs, &same_queued_content?(&1, queued)) ->
-        existing = Enum.at(inputs, index)
-
-        if Map.get(existing, :local?) && !Map.get(queued, :local?) do
-          List.replace_at(inputs, index, queued)
-        else
-          inputs
-        end
-
-      true ->
-        inputs ++ [queued]
-    end
+    if Enum.any?(inputs, &(&1.id == queued.id)), do: inputs, else: inputs ++ [queued]
   end
-
-  defp same_queued_content?(%{kind: kind, content: content}, %{kind: kind, content: content}),
-    do: true
-
-  defp same_queued_content?(_existing, _queued), do: false
 
   defp queued_prompt(assigns) do
     ~H"""
