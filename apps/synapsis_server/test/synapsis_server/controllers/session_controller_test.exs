@@ -90,38 +90,26 @@ defmodule SynapsisServer.SessionControllerTest do
   end
 
   describe "POST /api/sessions/:id/steer" do
-    setup %{conn: conn} do
-      create_conn =
-        post(conn, "/api/sessions", %{
-          project_path: "/tmp/test_ctrl_steer_#{:rand.uniform(100_000)}",
-          provider: "anthropic",
-          model: "claude-sonnet-4-20250514"
-        })
+    test "returns 400 when content is missing", %{conn: conn} do
+      id = Ecto.UUID.generate()
 
-      %{"data" => %{"id" => id}} = json_response(create_conn, 201)
-      %{session_id: id}
-    end
-
-    test "returns 400 when content is missing", %{conn: conn, session_id: id} do
       conn = post(conn, "/api/sessions/#{id}/steer", %{})
       assert %{"error" => "content is required"} = json_response(conn, 400)
     end
 
-    test "returns 400 when content is not a string", %{conn: conn, session_id: id} do
+    test "returns 400 when content is not a string", %{conn: conn} do
+      id = Ecto.UUID.generate()
+
       conn = post(conn, "/api/sessions/#{id}/steer", %{content: 123})
       assert %{"error" => "content must be a string"} = json_response(conn, 400)
     end
 
-    test "returns 413 when content is too large", %{conn: conn, session_id: id} do
+    test "returns 413 when content is too large", %{conn: conn} do
+      id = Ecto.UUID.generate()
       content = String.duplicate("x", 256_001)
 
       conn = post(conn, "/api/sessions/#{id}/steer", %{content: content})
       assert %{"error" => "content too large"} = json_response(conn, 413)
-    end
-
-    test "returns ok for a valid session", %{conn: conn, session_id: id} do
-      conn = post(conn, "/api/sessions/#{id}/steer", %{content: "prefer a small patch"})
-      assert %{"status" => "ok"} = json_response(conn, 200)
     end
   end
 

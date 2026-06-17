@@ -126,9 +126,22 @@ defmodule SynapsisServer.SessionChannel do
             {:reply, :ok, socket}
 
           {:error, reason} ->
+            Logger.warning("session_channel_error",
+              event: "session:steer",
+              reason: inspect(reason)
+            )
+
             {:reply, {:error, %{reason: format_error(reason)}}, socket}
         end
     end
+  catch
+    :exit, _ ->
+      Logger.warning("session_channel_error",
+        event: "session:steer",
+        reason: "worker_unavailable"
+      )
+
+      {:reply, {:error, %{reason: "worker_unavailable"}}, socket}
   end
 
   def handle_in("session:steer", _payload, socket) do

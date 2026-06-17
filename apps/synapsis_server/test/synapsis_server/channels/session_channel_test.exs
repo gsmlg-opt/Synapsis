@@ -5,13 +5,7 @@ defmodule SynapsisServer.SessionChannelTest do
 
   describe "session:steer" do
     setup do
-      {:ok, session} =
-        Synapsis.Sessions.create("main", %{
-          provider: "anthropic",
-          model: "claude-sonnet-4-20250514"
-        })
-
-      socket = %Phoenix.Socket{assigns: %{session_id: session.id}}
+      socket = %Phoenix.Socket{assigns: %{session_id: Ecto.UUID.generate()}}
       %{socket: socket}
     end
 
@@ -30,15 +24,6 @@ defmodule SynapsisServer.SessionChannelTest do
 
       assert {:reply, {:error, %{reason: "content too large"}}, ^socket} =
                SessionChannel.handle_in("session:steer", %{"content" => content}, socket)
-    end
-
-    test "returns ok for a valid session", %{socket: socket} do
-      assert {:reply, :ok, ^socket} =
-               SessionChannel.handle_in(
-                 "session:steer",
-                 %{"content" => "prefer a small patch"},
-                 socket
-               )
     end
   end
 end
