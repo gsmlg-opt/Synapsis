@@ -10,6 +10,7 @@ defmodule Synapsis.Agent.Nodes.BuildPrompt do
   alias Synapsis.Message
   alias Synapsis.Agent.ContextBuilder
   alias Synapsis.Agent.ResponseFlusher
+  alias Synapsis.Session.PendingInputStore
   require Logger
 
   @impl true
@@ -50,6 +51,8 @@ defmodule Synapsis.Agent.Nodes.BuildPrompt do
         system_prompt
       end
 
+    {full_prompt, consumed_steers} = append_steer_context(full_prompt, session_id)
+
     # Override agent config with assembled system prompt
     enriched_config = Map.put(agent_config, :system_prompt, full_prompt)
 
@@ -61,10 +64,59 @@ defmodule Synapsis.Agent.Nodes.BuildPrompt do
         provider
       )
 
+    mark_steers_consumed(session_id, consumed_steers)
+
     new_state = %{state | messages: messages, user_input: nil}
     new_state = Map.put(new_state, :request, request)
 
     {:next, :default, new_state}
+  end
+
+  defp append_steer_context(prompt, session_id) do
+    case PendingInputStore.take_queued_steers(session_id) do
+      [] ->
+        {prompt, []}
+
+      {:error, reason} ->
+        Logger.warning("queued_steer_take_failed",
+          session_id: session_id,
+          reason: inspect(reason)
+        )
+
+        {prompt, []}
+
+      steers when is_list(steers) ->
+        steer_text =
+          steers
+          |> Enum.map(&trim_steer_content/1)
+          |> Enum.reject(&(&1 == ""))
+          |> Enum.join("\n\n")
+
+        if steer_text == "" do
+          {prompt, steers}
+        else
+          {prompt <> "\n\nMid-turn user guidance:\n" <> steer_text, steers}
+        end
+    end
+  end
+
+  defp trim_steer_content(%{content: content}) when is_binary(content), do: String.trim(content)
+  defp trim_steer_content(_steer), do: ""
+
+  defp mark_steers_consumed(session_id, steers) do
+    Enum.each(steers, fn steer ->
+      case PendingInputStore.mark_consumed(session_id, steer.id) do
+        :ok ->
+          :ok
+
+        {:error, reason} ->
+          Logger.warning("queued_steer_consume_failed",
+            session_id: session_id,
+            input_id: steer.id,
+            reason: inspect(reason)
+          )
+      end
+    end)
   end
 
   defp extract_latest_user_message(messages) do
