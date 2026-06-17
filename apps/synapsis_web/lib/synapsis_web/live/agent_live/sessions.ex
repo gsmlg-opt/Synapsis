@@ -5,6 +5,8 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
   alias Synapsis.Sessions
 
+  @running_statuses ~w(streaming tool_executing)
+
   @impl true
   def mount(%{"agent_id" => agent_id}, _session, socket) do
     agent_config = Synapsis.Agent.Resolver.resolve(agent_id)
@@ -23,6 +25,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
        sessions: [],
        current_session: nil,
        messages: [],
+       queued_inputs: [],
        streaming_text: "",
        streaming_reasoning: "",
        tool_calls: %{},
@@ -61,6 +64,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
            sessions: sessions,
            current_session: session,
            messages: messages,
+           queued_inputs: [],
            streaming_text: in_flight,
            streaming_reasoning: "",
            tool_calls: %{},
@@ -83,7 +87,13 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
         {:noreply,
          socket
-         |> assign(agent_id: agent_id, sessions: sessions, current_session: nil, messages: [])
+         |> assign(
+           agent_id: agent_id,
+           sessions: sessions,
+           current_session: nil,
+           messages: [],
+           queued_inputs: []
+         )
          |> put_flash(:error, "Could not load session — storage is temporarily unavailable")
          |> push_navigate(to: ~p"/agent/agents/#{agent_id}/sessions")}
     end
@@ -102,6 +112,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
        sessions: sessions,
        current_session: nil,
        messages: [],
+       queued_inputs: [],
        streaming_text: "",
        streaming_reasoning: "",
        tool_calls: %{},
@@ -141,6 +152,14 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
   def handle_event("send_message", %{"content" => content}, socket) do
     send_message(content, socket)
+  end
+
+  def handle_event("steer_message", %{"value" => content}, socket) do
+    steer_message(content, socket)
+  end
+
+  def handle_event("steer_message", %{"content" => content}, socket) do
+    steer_message(content, socket)
   end
 
   def handle_event("toggle_new_session", _params, socket) do
@@ -290,26 +309,42 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
       true ->
         session_id = socket.assigns.current_session.id
-
-        # Optimistic update: show the user message immediately
-        optimistic_msg = %Synapsis.Message{
-          id: Ecto.UUID.generate(),
-          session_id: session_id,
-          role: "user",
-          parts: [%Synapsis.Part.Text{content: content}],
-          inserted_at: DateTime.utc_now()
-        }
+        running? = running_session_status?(socket.assigns.session_status)
 
         socket =
-          socket
-          |> update(:messages, &(&1 ++ [optimistic_msg]))
-          |> assign(:session_status, "streaming")
-          |> assign(:tool_calls, %{})
+          if running? do
+            socket
+          else
+            # Optimistic update: show the user message immediately for a new turn.
+            optimistic_msg = %Synapsis.Message{
+              id: Ecto.UUID.generate(),
+              session_id: session_id,
+              role: "user",
+              parts: [%Synapsis.Part.Text{content: content}],
+              inserted_at: DateTime.utc_now()
+            }
+
+            socket
+            |> update(:messages, &(&1 ++ [optimistic_msg]))
+            |> assign(:session_status, "streaming")
+            |> assign(:tool_calls, %{})
+          end
 
         case Sessions.send_message(session_id, content) do
           :ok ->
-            # Reload from DB to get the real persisted message with correct ID/timestamps
-            {:noreply, assign(socket, :messages, Sessions.get_messages(session_id))}
+            if running? do
+              queued = %{
+                id: "local-#{Ecto.UUID.generate()}",
+                kind: "prompt",
+                content: content,
+                local?: true
+              }
+
+              {:noreply, update(socket, :queued_inputs, &append_unique_input(&1, queued))}
+            else
+              # Reload from DB to get the real persisted message with correct ID/timestamps
+              {:noreply, assign(socket, :messages, Sessions.get_messages(session_id))}
+            end
 
           {:error, reason} ->
             Logger.warning("session_send_failed", session_id: session_id, reason: inspect(reason))
@@ -324,6 +359,36 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   end
 
   defp send_message(_content, socket), do: {:noreply, socket}
+
+  defp steer_message(content, socket) when is_binary(content) do
+    content = String.trim(content)
+
+    cond do
+      content == "" or is_nil(socket.assigns.current_session) ->
+        {:noreply, socket}
+
+      byte_size(content) > @max_content_bytes ->
+        {:noreply, put_flash(socket, :error, "Message too large")}
+
+      true ->
+        session_id = socket.assigns.current_session.id
+
+        case Sessions.steer_message(session_id, content) do
+          :ok ->
+            {:noreply, socket}
+
+          {:error, reason} ->
+            Logger.warning("session_steer_failed",
+              session_id: session_id,
+              reason: inspect(reason)
+            )
+
+            {:noreply, put_flash(socket, :error, "Failed to steer session")}
+        end
+    end
+  end
+
+  defp steer_message(_content, socket), do: {:noreply, socket}
 
   # --- PubSub handle_info ---
 
@@ -375,6 +440,19 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     {:noreply, update(socket, :permission_requests, &(tools ++ &1))}
   end
 
+  def handle_info({"input_queued", %{id: id, kind: "prompt", content: content}}, socket) do
+    queued = %{id: id, kind: "prompt", content: content}
+    {:noreply, update(socket, :queued_inputs, &append_unique_input(&1, queued))}
+  end
+
+  def handle_info({"input_queued", %{kind: "steer"}}, socket) do
+    {:noreply, socket}
+  end
+
+  def handle_info({"input_started", %{id: id}}, socket) do
+    {:noreply, update(socket, :queued_inputs, &Enum.reject(&1, fn input -> input.id == id end))}
+  end
+
   def handle_info({"done", _}, socket) do
     name = socket.assigns.agent_id
 
@@ -397,6 +475,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
      assign(socket,
        messages: messages,
        sessions: sessions,
+       queued_inputs: [],
        streaming_text: "",
        streaming_reasoning: "",
        tool_calls: error_tool_calls,
@@ -653,6 +732,12 @@ defmodule SynapsisWeb.AgentLive.Sessions do
               can_regenerate={@session_status != "streaming"}
             />
 
+            <.queued_prompt
+              :for={input <- @queued_inputs}
+              id={"queued-input-#{input.id}"}
+              content={input.content}
+            />
+
             <.reasoning_block
               :if={@streaming_reasoning != ""}
               content={@streaming_reasoning}
@@ -728,18 +813,20 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
           <%!-- Input area --%>
           <div class="border-t border-outline-variant bg-surface-container-low p-3">
+            <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#41 --%>
             <.dm_chat_input
               id="message-input"
               name="content"
               value=""
               placeholder="Send a message... (Ctrl/Cmd+Enter)"
-              disabled={@session_status not in ~w(idle error)}
-              send_label="Send"
+              disabled={chat_input_disabled?(@session_status)}
+              send_label={if running_session_status?(@session_status), do: "Queue", else: "Send"}
               clear_on_send
               duskmoon-send-send="send_message"
+              duskmoon-send-quick-action="steer_message"
               class={[
                 "synapsis-chat-input w-full",
-                if(@session_status not in ~w(idle error), do: "opacity-50 cursor-not-allowed")
+                if(chat_input_disabled?(@session_status), do: "opacity-50 cursor-not-allowed")
               ]}
             />
           </div>
@@ -831,6 +918,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     socket
     |> maybe_refresh_current_session()
     |> clear_transient_generation()
+    |> assign(:queued_inputs, [])
     |> assign(:messages, messages)
     |> assign(:session_status, status)
   end
@@ -850,6 +938,11 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
   defp fetch_current_session(_socket), do: {:error, :not_found}
 
+  defp running_session_status?(status), do: status in @running_statuses
+
+  defp chat_input_disabled?(status),
+    do: status not in ~w(idle error streaming tool_executing)
+
   defp clear_transient_generation(socket) do
     # Preserve tool calls with error status so failed tools remain visible in chat
     error_tool_calls =
@@ -861,8 +954,51 @@ defmodule SynapsisWeb.AgentLive.Sessions do
       streaming_text: "",
       streaming_reasoning: "",
       tool_calls: error_tool_calls,
-      permission_requests: []
+      permission_requests: [],
+      queued_inputs: []
     )
+  end
+
+  defp append_unique_input(inputs, queued) do
+    cond do
+      Enum.any?(inputs, &(&1.id == queued.id)) ->
+        inputs
+
+      index = Enum.find_index(inputs, &same_queued_content?(&1, queued)) ->
+        existing = Enum.at(inputs, index)
+
+        if Map.get(existing, :local?) && !Map.get(queued, :local?) do
+          List.replace_at(inputs, index, queued)
+        else
+          inputs
+        end
+
+      true ->
+        inputs ++ [queued]
+    end
+  end
+
+  defp same_queued_content?(%{kind: kind, content: content}, %{kind: kind, content: content}),
+    do: true
+
+  defp same_queued_content?(_existing, _queued), do: false
+
+  defp queued_prompt(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      data-queued-input={@id}
+      class="ml-auto flex max-w-[min(42rem,85%)] flex-col items-end gap-1 rounded-md border border-primary/30 bg-primary-container/30 px-3 py-2 text-on-surface"
+    >
+      <div class="flex items-center gap-1 text-[0.7rem] font-medium uppercase text-primary">
+        <.dm_mdi name="clock-outline" class="h-3.5 w-3.5" />
+        <span>Queued</span>
+      </div>
+      <p class="max-w-full whitespace-pre-wrap break-words text-sm leading-relaxed">
+        {@content}
+      </p>
+    </div>
+    """
   end
 
   defp update_code_agent(socket, sub_id, "tool_use", %{tool: name}) do

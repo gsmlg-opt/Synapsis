@@ -3,6 +3,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
   import Phoenix.Component
 
+  alias Synapsis.Session.Worker.Persistence, as: SessionPersistence
   alias Synapsis.Sessions
 
   describe "agent sessions page" do
@@ -144,8 +145,89 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
       assert has_element?(view, "el-dm-chat-input#message-input[phx-hook='WebComponentHook']")
 
+      assert has_element?(
+               view,
+               "el-dm-chat-input#message-input[duskmoon-send-quick-action='steer_message']"
+             )
+
       render_hook(view, "send_message", %{"value" => "   "})
 
+      assert Sessions.get_messages(session.id) == []
+    end
+
+    test "chat input remains enabled while session is running", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      for status <- ~w(streaming tool_executing) do
+        assert {:ok, _session} = SessionPersistence.update_session_status(session.id, status)
+
+        send(view.pid, {"session_status", %{status: status}})
+
+        html = render(view)
+        refute has_element?(view, "el-dm-chat-input#message-input[disabled]")
+
+        assert has_element?(
+                 view,
+                 "el-dm-chat-input#message-input[duskmoon-send-quick-action='steer_message']"
+               )
+
+        assert html =~ ~s(send-label="Queue")
+      end
+    end
+
+    test "renders queued prompts as transient pending input and removes them when started", %{
+      conn: conn
+    } do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      assert {:ok, _session} = SessionPersistence.update_session_status(session.id, "streaming")
+      send(view.pid, {"session_status", %{status: "streaming"}})
+
+      send(
+        view.pid,
+        {"input_queued", %{id: "queued-prompt-1", kind: "prompt", content: "queued follow-up"}}
+      )
+
+      html = render(view)
+
+      assert html =~ "queued follow-up"
+      assert html =~ "Queued"
+      assert Sessions.get_messages(session.id) == []
+
+      send(view.pid, {"input_started", %{id: "queued-prompt-1", kind: "prompt"}})
+
+      html = render(view)
+
+      refute html =~ "queued follow-up"
+      assert Sessions.get_messages(session.id) == []
+    end
+
+    test "queued steer input is advisory and does not render as a durable user bubble", %{
+      conn: conn
+    } do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      assert {:ok, _session} = SessionPersistence.update_session_status(session.id, "streaming")
+      send(view.pid, {"session_status", %{status: "streaming"}})
+
+      send(
+        view.pid,
+        {"input_queued",
+         %{id: "queued-steer-1", kind: "steer", content: "prefer a smaller patch"}}
+      )
+
+      html = render(view)
+
+      refute html =~ "prefer a smaller patch"
       assert Sessions.get_messages(session.id) == []
     end
 
