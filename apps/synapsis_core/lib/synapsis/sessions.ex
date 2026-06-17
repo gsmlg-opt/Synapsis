@@ -216,6 +216,13 @@ defmodule Synapsis.Sessions do
     :exit, reason -> {:error, exit_reason(reason)}
   end
 
+  def steer_message(session_id, content) when is_binary(content) do
+    ensure_session_running(session_id)
+    Synapsis.Session.Worker.steer_message(session_id, content)
+  catch
+    :exit, reason -> {:error, exit_reason(reason)}
+  end
+
   def cancel(session_id) do
     Synapsis.Session.Worker.cancel(session_id)
   end

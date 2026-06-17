@@ -112,6 +112,29 @@ defmodule SynapsisServer.SessionChannel do
       {:reply, {:error, %{reason: "worker_unavailable"}}, socket}
   end
 
+  def handle_in("session:steer", %{"content" => content}, socket) do
+    cond do
+      not is_binary(content) ->
+        {:reply, {:error, %{reason: "content must be a string"}}, socket}
+
+      byte_size(content) > @max_content_bytes ->
+        {:reply, {:error, %{reason: "content too large"}}, socket}
+
+      true ->
+        case Synapsis.Sessions.steer_message(socket.assigns.session_id, content) do
+          :ok ->
+            {:reply, :ok, socket}
+
+          {:error, reason} ->
+            {:reply, {:error, %{reason: format_error(reason)}}, socket}
+        end
+    end
+  end
+
+  def handle_in("session:steer", _payload, socket) do
+    {:reply, {:error, %{reason: "content is required"}}, socket}
+  end
+
   def handle_in("session:cancel", _payload, socket) do
     Synapsis.Sessions.cancel(socket.assigns.session_id)
     {:reply, :ok, socket}

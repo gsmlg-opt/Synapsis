@@ -157,6 +157,29 @@ defmodule SynapsisServer.SessionController do
     conn |> put_status(400) |> json(%{error: "content is required"})
   end
 
+  def steer(conn, %{"id" => id, "content" => content}) do
+    cond do
+      not is_binary(content) ->
+        conn |> put_status(400) |> json(%{error: "content must be a string"})
+
+      byte_size(content) > @max_content_bytes ->
+        conn |> put_status(413) |> json(%{error: "content too large"})
+
+      true ->
+        case Sessions.steer_message(id, content) do
+          :ok ->
+            json(conn, %{status: "ok"})
+
+          {:error, reason} ->
+            conn |> put_status(422) |> json(%{error: format_error(reason)})
+        end
+    end
+  end
+
+  def steer(conn, %{"id" => _}) do
+    conn |> put_status(400) |> json(%{error: "content is required"})
+  end
+
   def fork(conn, %{"id" => id} = params) do
     opts =
       case params["at_message"] do

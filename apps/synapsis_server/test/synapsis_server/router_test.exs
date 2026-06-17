@@ -49,6 +49,16 @@ defmodule SynapsisServer.RouterTest do
                )
     end
 
+    test "POST /api/sessions/:id/steer" do
+      assert %{plug: SynapsisServer.SessionController, plug_opts: :steer} =
+               Phoenix.Router.route_info(
+                 SynapsisServer.Router,
+                 "POST",
+                 "/api/sessions/#{@uuid}/steer",
+                 ""
+               )
+    end
+
     test "POST /api/sessions/:id/fork" do
       assert %{plug: SynapsisServer.SessionController, plug_opts: :fork} =
                Phoenix.Router.route_info(

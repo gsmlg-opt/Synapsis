@@ -43,6 +43,7 @@ defmodule SynapsisServer.Router do
 
     resources "/sessions", SessionController, only: [:index, :show, :create, :delete]
     post "/sessions/:id/messages", SessionController, :send_message
+    post "/sessions/:id/steer", SessionController, :steer
     post "/sessions/:id/fork", SessionController, :fork
     get "/sessions/:id/export", SessionController, :export_session
     post "/sessions/:id/compact", SessionController, :compact
