@@ -342,11 +342,15 @@ defmodule SynapsisWeb.AgentLive.Sessions do
           {:error, reason} ->
             Logger.warning("session_send_failed", session_id: session_id, reason: inspect(reason))
 
-            {:noreply,
-             socket
-             |> assign(:messages, Sessions.get_messages(session_id))
-             |> assign(:session_status, "error")
-             |> put_flash(:error, "Failed to send message")}
+            if running? do
+              {:noreply, put_flash(socket, :error, "Failed to queue message")}
+            else
+              {:noreply,
+               socket
+               |> assign(:messages, Sessions.get_messages(session_id))
+               |> assign(:session_status, "error")
+               |> put_flash(:error, "Failed to send message")}
+            end
         end
     end
   end
@@ -358,6 +362,9 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
     cond do
       content == "" or is_nil(socket.assigns.current_session) ->
+        {:noreply, socket}
+
+      not running_session_status?(socket.assigns.session_status) ->
         {:noreply, socket}
 
       byte_size(content) > @max_content_bytes ->
@@ -468,7 +475,6 @@ defmodule SynapsisWeb.AgentLive.Sessions do
      assign(socket,
        messages: messages,
        sessions: sessions,
-       queued_inputs: [],
        streaming_text: "",
        streaming_reasoning: "",
        tool_calls: error_tool_calls,
@@ -816,7 +822,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
               send_label={if running_session_status?(@session_status), do: "Queue", else: "Send"}
               clear_on_send
               duskmoon-send-send="send_message"
-              duskmoon-send-quick-action="steer_message"
+              {steer_quick_action_attrs(@session_status)}
               class={[
                 "synapsis-chat-input w-full",
                 if(chat_input_disabled?(@session_status), do: "opacity-50 cursor-not-allowed")
@@ -911,7 +917,6 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     socket
     |> maybe_refresh_current_session()
     |> clear_transient_generation()
-    |> assign(:queued_inputs, [])
     |> assign(:messages, messages)
     |> assign(:session_status, status)
   end
@@ -947,13 +952,20 @@ defmodule SynapsisWeb.AgentLive.Sessions do
       streaming_text: "",
       streaming_reasoning: "",
       tool_calls: error_tool_calls,
-      permission_requests: [],
-      queued_inputs: []
+      permission_requests: []
     )
   end
 
   defp append_unique_input(inputs, queued) do
     if Enum.any?(inputs, &(&1.id == queued.id)), do: inputs, else: inputs ++ [queued]
+  end
+
+  defp steer_quick_action_attrs(status) do
+    if running_session_status?(status) do
+      %{"duskmoon-send-quick-action" => "steer_message"}
+    else
+      %{}
+    end
   end
 
   defp queued_prompt(assigns) do

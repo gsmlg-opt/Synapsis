@@ -3,6 +3,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
   import Phoenix.Component
 
+  alias Synapsis.Session.PendingInputStore
   alias Synapsis.Session.Worker.Persistence, as: SessionPersistence
   alias Synapsis.Sessions
 
@@ -137,7 +138,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       assert {:ok, %{status: "idle"}} = Synapsis.Sessions.get(session.id)
     end
 
-    test "chat input uses DuskMoon chat input send event", %{conn: conn} do
+    test "chat input uses DuskMoon send event and hides idle steer quick action", %{conn: conn} do
       {:ok, session} =
         Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
 
@@ -145,13 +146,16 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
       assert has_element?(view, "el-dm-chat-input#message-input[phx-hook='WebComponentHook']")
 
-      assert has_element?(
+      refute has_element?(
                view,
                "el-dm-chat-input#message-input[duskmoon-send-quick-action='steer_message']"
              )
 
       render_hook(view, "send_message", %{"value" => "   "})
 
+      html = render_hook(view, "steer_message", %{"value" => "idle steer should not persist"})
+
+      refute html =~ "idle steer should not persist"
       assert Sessions.get_messages(session.id) == []
     end
 
@@ -208,6 +212,73 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       assert Sessions.get_messages(session.id) == []
     end
 
+    test "queued prompts survive done until each matching input starts", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      assert {:ok, _session} = SessionPersistence.update_session_status(session.id, "streaming")
+      send(view.pid, {"session_status", %{status: "streaming"}})
+
+      send(
+        view.pid,
+        {"input_queued", %{id: "queued-prompt-1", kind: "prompt", content: "first pending"}}
+      )
+
+      send(
+        view.pid,
+        {"input_queued", %{id: "queued-prompt-2", kind: "prompt", content: "second pending"}}
+      )
+
+      html = render(view)
+      assert html =~ "first pending"
+      assert html =~ "second pending"
+
+      send(view.pid, {"done", %{}})
+
+      html = render(view)
+      assert html =~ "first pending"
+      assert html =~ "second pending"
+
+      send(view.pid, {"input_started", %{id: "queued-prompt-1", kind: "prompt"}})
+
+      html = render(view)
+      refute html =~ "first pending"
+      assert html =~ "second pending"
+
+      send(view.pid, {"input_started", %{id: "queued-prompt-2", kind: "prompt"}})
+
+      html = render(view)
+      refute html =~ "first pending"
+      refute html =~ "second pending"
+    end
+
+    test "queued prompt survives idle status until it starts", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      assert {:ok, _session} = SessionPersistence.update_session_status(session.id, "streaming")
+      send(view.pid, {"session_status", %{status: "streaming"}})
+
+      send(
+        view.pid,
+        {"input_queued", %{id: "queued-prompt-1", kind: "prompt", content: "survives idle"}}
+      )
+
+      send(view.pid, {"session_status", %{status: "idle"}})
+
+      html = render(view)
+      assert html =~ "survives idle"
+
+      send(view.pid, {"input_started", %{id: "queued-prompt-1", kind: "prompt"}})
+
+      html = render(view)
+      refute html =~ "survives idle"
+    end
+
     test "renders duplicate queued prompts with different ids", %{conn: conn} do
       {:ok, session} =
         Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
@@ -253,6 +324,28 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       html = render(view)
 
       assert html =~ "queued through hook"
+      assert Sessions.get_messages(session.id) == []
+    end
+
+    test "running queue failure keeps running UI status", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      set_worker_running(session)
+
+      for index <- 1..25 do
+        assert {:ok, _input} =
+                 PendingInputStore.append_prompt(session.id, "stored prompt #{index}", [])
+      end
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      html = render_hook(view, "send_message", %{"value" => "overflow prompt"})
+
+      assert html =~ "Failed to queue message"
+      assert html =~ ~s(send-label="Queue")
+      refute html =~ "Retry"
+      refute has_element?(view, "el-dm-chat-input#message-input[disabled]")
       assert Sessions.get_messages(session.id) == []
     end
 
