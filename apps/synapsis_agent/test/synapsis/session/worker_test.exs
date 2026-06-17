@@ -339,6 +339,66 @@ defmodule Synapsis.Session.WorkerTest do
                PendingInputStore.list(session.id) |> Enum.filter(&(&1.kind == "steer"))
     end
 
+    test "stale provider_done after cancel does not start queued prompt" do
+      session = persist_session(%{status: "streaming"})
+      {:ok, graph} = CodingLoop.build()
+      assert {:ok, queued} = PendingInputStore.append_prompt(session.id, "after cancel", [])
+
+      data = %Worker{
+        session_id: session.id,
+        session: session,
+        graph: graph,
+        engine_node: :llm_stream,
+        engine_state: CodingLoop.initial_state(%{session_id: session.id}),
+        engine_ctx: %{},
+        epoch: System.monotonic_time(),
+        execution_mode: :graph,
+        stream_ref: make_ref()
+      }
+
+      assert {:next_state, :idle, cancelled_data, _actions} =
+               Worker.handle_event(:cast, :cancel, :generating, data)
+
+      assert {:keep_state_and_data, _actions} =
+               Worker.handle_event(:info, :provider_done, :idle, cancelled_data)
+
+      assert [%{id: id, content: "after cancel", status: "queued"}] =
+               PendingInputStore.queued_prompts(session.id)
+
+      assert id == queued.id
+      assert [] = Message.list_by_session(session.id)
+    end
+
+    test "stale provider_error after cancel does not start queued prompt" do
+      session = persist_session(%{status: "streaming"})
+      {:ok, graph} = CodingLoop.build()
+      assert {:ok, queued} = PendingInputStore.append_prompt(session.id, "after cancel error", [])
+
+      data = %Worker{
+        session_id: session.id,
+        session: session,
+        graph: graph,
+        engine_node: :llm_stream,
+        engine_state: CodingLoop.initial_state(%{session_id: session.id}),
+        engine_ctx: %{},
+        epoch: System.monotonic_time(),
+        execution_mode: :graph,
+        stream_ref: make_ref()
+      }
+
+      assert {:next_state, :idle, cancelled_data, _actions} =
+               Worker.handle_event(:cast, :cancel, :generating, data)
+
+      assert {:keep_state_and_data, _actions} =
+               Worker.handle_event(:info, {:provider_error, :late_error}, :idle, cancelled_data)
+
+      assert [%{id: id, content: "after cancel error", status: "queued"}] =
+               PendingInputStore.queued_prompts(session.id)
+
+      assert id == queued.id
+      assert [] = Message.list_by_session(session.id)
+    end
+
     test "send_message queues while query-loop turn is running" do
       session = persist_session(%{status: "streaming"})
       {:ok, graph} = CodingLoop.build()
@@ -798,7 +858,8 @@ defmodule Synapsis.Session.WorkerTest do
         engine_state: CodingLoop.initial_state(%{session_id: session.id}),
         engine_ctx: %{},
         epoch: 1,
-        execution_mode: :graph
+        execution_mode: :graph,
+        stream_ref: make_ref()
       }
 
       {:next_state, _next, checkpointed, _actions} =
@@ -842,7 +903,8 @@ defmodule Synapsis.Session.WorkerTest do
         engine_state: CodingLoop.initial_state(%{session_id: session.id}),
         engine_ctx: %{},
         epoch: 1,
-        execution_mode: :graph
+        execution_mode: :graph,
+        stream_ref: make_ref()
       }
 
       {:next_state, _next, new_state, _actions} =

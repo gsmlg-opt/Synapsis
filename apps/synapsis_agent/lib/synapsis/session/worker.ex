@@ -22,8 +22,9 @@ defmodule Synapsis.Session.Worker do
 
   The state is derived from the data after every event (`derive_state/1`), so
   the machine can never disagree with the engine. Event handlers use the state
-  for policy: a new user prompt is accepted only in `:idle` — the busy-reject
-  policy lives in exactly one clause (see `handle_event` for `:send_message`).
+  for policy: graph-mode user prompts start immediately in `:idle` and are
+  queued while the graph is running; assistant-mode query-loop prompts queue
+  behind the active turn.
 
   ## Epoch fencing
 
@@ -433,8 +434,14 @@ defmodule Synapsis.Session.Worker do
   def handle_event(:info, {:provider_chunk, event}, _state, data),
     do: advance(IOHandler.handle_provider_chunk(event, data))
 
+  def handle_event(:info, :provider_done, _state, %{stream_ref: nil} = data),
+    do: keep(data)
+
   def handle_event(:info, :provider_done, _state, data),
     do: advance(IOHandler.handle_provider_done(data))
+
+  def handle_event(:info, {:provider_error, _reason}, _state, %{stream_ref: nil} = data),
+    do: keep(data)
 
   # Stream-guard violations roll back to the last checkpoint when one exists
   # and resume from the restored engine node; without a checkpoint they fall
@@ -771,8 +778,10 @@ defmodule Synapsis.Session.Worker do
   defp start_queued_prompt(state, input, starter) do
     case starter.() do
       {:ok, new_state} ->
-        broadcast_started_input(state.session_id, input)
-        mark_pending_input_consumed(state.session_id, input)
+        if mark_pending_input_consumed(state.session_id, input) == :ok do
+          broadcast_started_input(state.session_id, input)
+        end
+
         new_state
 
       {:error, reason} ->
@@ -828,6 +837,8 @@ defmodule Synapsis.Session.Worker do
           input_id: input.id,
           reason: inspect(reason)
         )
+
+        {:error, reason}
     end
   end
 
