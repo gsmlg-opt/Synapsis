@@ -407,6 +407,123 @@ defmodule Synapsis.Session.WorkerTest do
 
       assert_receive {"input_started", %{id: ^id, kind: "prompt", content: "queued turn"}}
     end
+
+    test "failed graph queued prompt start is requeued" do
+      session = persist_session(%{status: "idle"})
+      {:ok, graph} = CodingLoop.build()
+      queued = put_malformed_queued_prompt(session.id, "bad graph prompt")
+
+      data = %Worker{
+        session_id: session.id,
+        session: session,
+        graph: graph,
+        engine_node: :receive,
+        engine_state:
+          CodingLoop.initial_state(%{session_id: session.id})
+          |> Map.put(:awaiting_input, true),
+        engine_ctx: %{},
+        epoch: System.monotonic_time(),
+        execution_mode: :graph
+      }
+
+      result =
+        try do
+          {:ok, Worker.step_engine(data)}
+        rescue
+          error -> {:raised, error}
+        end
+
+      assert {:ok, _new_data} = result
+
+      assert [%{id: id, content: "bad graph prompt", status: "queued"}] =
+               PendingInputStore.queued_prompts(session.id)
+
+      assert id == queued.id
+      assert [] = Message.list_by_session(session.id)
+    end
+
+    test "failed query-loop queued prompt start is requeued" do
+      session = persist_session(%{status: "idle"})
+      {:ok, graph} = CodingLoop.build()
+      queued = put_malformed_queued_prompt(session.id, "bad query prompt")
+      task_ref = make_ref()
+      task = %Task{ref: task_ref, pid: self(), owner: self(), mfa: {__MODULE__, :noop, 0}}
+
+      data = %Worker{
+        session_id: session.id,
+        session: session,
+        graph: graph,
+        engine_node: :receive,
+        engine_state: %{awaiting_input: true},
+        engine_ctx: %{},
+        epoch: System.monotonic_time(),
+        execution_mode: :query_loop,
+        query_loop_task: task
+      }
+
+      result =
+        try do
+          {:ok,
+           Worker.handle_event(
+             :info,
+             {task_ref, {:ok, :completed, %{}}},
+             :query_loop,
+             data
+           )}
+        rescue
+          error -> {:raised, error}
+        end
+
+      assert {:ok, {:next_state, :idle, _new_data, _actions}} = result
+
+      assert [%{id: id, content: "bad query prompt", status: "queued"}] =
+               PendingInputStore.queued_prompts(session.id)
+
+      assert id == queued.id
+      assert [] = Message.list_by_session(session.id)
+    end
+
+    test "query-loop task down starts next queued prompt" do
+      session = persist_session(%{status: "streaming"})
+      {:ok, graph} = CodingLoop.build()
+      assert {:ok, queued} = PendingInputStore.append_prompt(session.id, "after crash", [])
+      task_ref = make_ref()
+      task = %Task{ref: task_ref, pid: self(), owner: self(), mfa: {__MODULE__, :noop, 0}}
+
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}")
+
+      data = %Worker{
+        session_id: session.id,
+        session: session,
+        graph: graph,
+        engine_node: :receive,
+        engine_state: %{awaiting_input: true},
+        engine_ctx: %{},
+        epoch: System.monotonic_time(),
+        execution_mode: :query_loop,
+        query_loop_task: task
+      }
+
+      assert {:next_state, :query_loop, new_data, _actions} =
+               Worker.handle_event(
+                 :info,
+                 {:DOWN, task_ref, :process, self(), :crash},
+                 :query_loop,
+                 data
+               )
+
+      assert %Task{} = new_data.query_loop_task
+      assert new_data.query_loop_task.ref != task_ref
+
+      assert [%Message{role: "user", parts: [%Part.Text{content: "after crash"}]}] =
+               Message.list_by_session(session.id)
+
+      assert [%{id: id, status: "consumed"}] = PendingInputStore.list(session.id)
+      assert id == queued.id
+      assert_receive {"input_started", %{id: ^id, kind: "prompt", content: "after crash"}}
+
+      Task.shutdown(new_data.query_loop_task, :brutal_kill)
+    end
   end
 
   describe "regenerate" do
@@ -752,5 +869,23 @@ defmodule Synapsis.Session.WorkerTest do
 
   defp text_message(role, content) do
     %Message{role: role, parts: [%Part.Text{content: content}], token_count: 1}
+  end
+
+  defp put_malformed_queued_prompt(session_id, content) do
+    now = DateTime.utc_now() |> DateTime.to_iso8601()
+
+    input = %{
+      id: Ecto.UUID.generate(),
+      session_id: session_id,
+      kind: "prompt",
+      status: "queued",
+      content: content,
+      image_parts: "invalid image parts",
+      inserted_at: now,
+      updated_at: now
+    }
+
+    :ok = Session.Store.put_value(session_id, "pending_inputs", [input])
+    input
   end
 end

@@ -488,7 +488,7 @@ defmodule Synapsis.Session.Worker do
       when ref == task_ref do
     Logger.warning("query_loop_task_down", session_id: data.session_id, reason: inspect(reason))
     Persistence.set_status(data.session_id, "idle")
-    advance(%{data | query_loop_task: nil})
+    advance(maybe_start_next_prompt(%{data | query_loop_task: nil}))
   end
 
   # Tool task monitor — abnormal exit without having sent a tool_result.
@@ -731,21 +731,9 @@ defmodule Synapsis.Session.Worker do
   defp start_queued_graph_prompt(state) do
     case PendingInputStore.take_next_prompt(state.session_id) do
       {:ok, input} ->
-        case start_graph_turn(state, input.content, input.image_parts, start_queued?: false) do
-          {:ok, new_state} ->
-            broadcast_started_input(state.session_id, input)
-            mark_pending_input_consumed(state.session_id, input)
-            new_state
-
-          {:error, reason} ->
-            Logger.warning("queued_prompt_start_failed",
-              session_id: state.session_id,
-              input_id: input.id,
-              reason: inspect(reason)
-            )
-
-            state
-        end
+        start_queued_prompt(state, input, fn ->
+          start_graph_turn(state, input.content, input.image_parts, start_queued?: false)
+        end)
 
       :empty ->
         state
@@ -763,21 +751,9 @@ defmodule Synapsis.Session.Worker do
   defp start_queued_query_loop_prompt(state) do
     case PendingInputStore.take_next_prompt(state.session_id) do
       {:ok, input} ->
-        case start_query_loop_turn(state, input.content, input.image_parts) do
-          {:ok, new_state} ->
-            broadcast_started_input(state.session_id, input)
-            mark_pending_input_consumed(state.session_id, input)
-            new_state
-
-          {:error, reason} ->
-            Logger.warning("queued_prompt_start_failed",
-              session_id: state.session_id,
-              input_id: input.id,
-              reason: inspect(reason)
-            )
-
-            state
-        end
+        start_queued_prompt(state, input, fn ->
+          start_query_loop_turn(state, input.content, input.image_parts)
+        end)
 
       :empty ->
         state
@@ -790,6 +766,47 @@ defmodule Synapsis.Session.Worker do
 
         state
     end
+  end
+
+  defp start_queued_prompt(state, input, starter) do
+    case starter.() do
+      {:ok, new_state} ->
+        broadcast_started_input(state.session_id, input)
+        mark_pending_input_consumed(state.session_id, input)
+        new_state
+
+      {:error, reason} ->
+        recover_queued_prompt_start_failure(state.session_id, input, reason)
+        state
+    end
+  rescue
+    exception ->
+      recover_queued_prompt_start_failure(state.session_id, input, exception)
+      state
+  catch
+    kind, reason ->
+      recover_queued_prompt_start_failure(state.session_id, input, {kind, reason})
+      state
+  end
+
+  defp recover_queued_prompt_start_failure(session_id, input, reason) do
+    case PendingInputStore.recover_inflight(session_id) do
+      :ok ->
+        :ok
+
+      {:error, recover_reason} ->
+        Logger.warning("queued_prompt_requeue_failed",
+          session_id: session_id,
+          input_id: input.id,
+          reason: inspect(recover_reason)
+        )
+    end
+
+    Logger.warning("queued_prompt_start_failed",
+      session_id: session_id,
+      input_id: input.id,
+      reason: inspect(reason)
+    )
   end
 
   defp broadcast_started_input(session_id, input) do
