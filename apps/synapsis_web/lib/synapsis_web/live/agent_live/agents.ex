@@ -421,6 +421,34 @@ defmodule SynapsisWeb.AgentLive.Agents do
                     />
                   </div>
                 </div>
+                <div class="form-group">
+                  <label for="agent-backup-model-picker-provider" class="form-label">
+                    <span>Backup model</span>
+                  </label>
+                  <div
+                    id="agent-backup-model-picker"
+                    phx-hook="AgentBackupModelPicker"
+                    phx-update="ignore"
+                    data-agent-id={@agent.id || "new"}
+                    data-options={Jason.encode!(provider_model_cascader_options(@providers))}
+                    data-backup-model={@agent.fallback_models || ""}
+                    data-value-input="agent-fallback-models-hidden"
+                    data-state-input="agent-fallback-model-state"
+                  >
+                    <input
+                      id="agent-fallback-models-hidden"
+                      type="hidden"
+                      name="agent[fallback_models]"
+                      value={@agent.fallback_models || ""}
+                    />
+                    <input
+                      id="agent-fallback-model-state"
+                      type="hidden"
+                      name="agent[fallback_model_state]"
+                      value={fallback_model_state_value(@agent)}
+                    />
+                  </div>
+                </div>
                 <.dm_textarea
                   name="agent[description]"
                   value={@agent.description}
@@ -430,18 +458,9 @@ defmodule SynapsisWeb.AgentLive.Agents do
                 />
               </div>
 
-              <div class="mt-5">
-                <div class="text-xs text-on-surface-variant mb-3">Fallback Models</div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <.dm_input
-                    type="text"
-                    name="agent[fallback_models]"
-                    value={@agent.fallback_models}
-                    label="Fallbacks"
-                    placeholder="gpt-4o, o3"
-                  />
-                </div>
-                <div :if={@fallback_tokens != []} class="flex flex-wrap gap-2 mt-3">
+              <div :if={@fallback_tokens != []} class="mt-5">
+                <div class="text-xs text-on-surface-variant mb-3">Backup model</div>
+                <div class="flex flex-wrap gap-2 mt-3">
                   <span
                     :for={model <- @fallback_tokens}
                     class="text-xs font-mono px-2 py-1 rounded-full bg-surface-container-high text-on-surface-variant"
@@ -885,7 +904,9 @@ defmodule SynapsisWeb.AgentLive.Agents do
 
     attrs
     |> merge_provider_model_state()
+    |> merge_fallback_model_state()
     |> Map.delete("provider_model_state")
+    |> Map.delete("fallback_model_state")
     |> normalize_toolset_attrs()
     |> normalize_blank("provider")
     |> normalize_blank("model")
@@ -897,6 +918,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
   end
 
   defp preview_agent(%AgentConfig{} = agent, attrs, providers) do
+    attrs = merge_fallback_model_state(attrs)
     provider = normalize_form_value(Map.get(attrs, "provider", agent.provider))
     models = models_for_provider(providers, provider)
     model = normalize_form_value(Map.get(attrs, "model", agent.model))
@@ -1010,6 +1032,41 @@ defmodule SynapsisWeb.AgentLive.Agents do
   end
 
   defp decode_provider_model_state(_value), do: :error
+
+  defp merge_fallback_model_state(attrs) do
+    case decode_provider_model_state(Map.get(attrs, "fallback_model_state")) do
+      {:ok, state} ->
+        merge_fallback_model_value(attrs, fallback_models_from_state(state))
+
+      :error ->
+        attrs
+    end
+  end
+
+  defp merge_fallback_model_value(attrs, state_value) do
+    case {normalize_form_value(Map.get(attrs, "fallback_models")),
+          normalize_form_value(state_value)} do
+      {nil, nil} -> attrs
+      {nil, value} -> Map.put(attrs, "fallback_models", value)
+      {_value, _state_value} -> attrs
+    end
+  end
+
+  defp fallback_models_from_state(%{"fallbackModels" => models}) when is_list(models) do
+    models
+    |> normalize_model_ids()
+    |> Enum.join(", ")
+  end
+
+  defp fallback_models_from_state(%{"provider" => provider, "model" => model}) do
+    provider = normalize_form_value(provider)
+    model = normalize_form_value(model)
+
+    if provider && model, do: "#{provider}/#{model}"
+  end
+
+  defp fallback_models_from_state(%{"model" => model}) when is_binary(model), do: model
+  defp fallback_models_from_state(_state), do: nil
 
   defp normalize_permission_mode(attrs, agent) do
     existing_mode = if match?(%AgentConfig{}, agent), do: agent.permission_mode, else: nil
@@ -1167,6 +1224,31 @@ defmodule SynapsisWeb.AgentLive.Agents do
       model: agent.model || ""
     })
   end
+
+  defp fallback_model_state_value(%AgentConfig{} = agent) do
+    {provider, model} = backup_provider_model(agent.fallback_models)
+
+    Jason.encode!(%{
+      provider: provider || "",
+      model: model || ""
+    })
+  end
+
+  defp backup_provider_model(fallbacks) do
+    case fallback_tokens(fallbacks) do
+      [token | _rest] -> split_provider_model(token)
+      [] -> {nil, nil}
+    end
+  end
+
+  defp split_provider_model(token) when is_binary(token) do
+    case String.split(token, "/", parts: 2) do
+      [provider, model] when provider != "" and model != "" -> {provider, model}
+      _ -> {nil, nil}
+    end
+  end
+
+  defp split_provider_model(_token), do: {nil, nil}
 
   defp models_for_provider(_providers, nil), do: []
   defp models_for_provider(_providers, ""), do: []
@@ -1397,7 +1479,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
 
     case fallback_count(agent.fallback_models) do
       0 -> base
-      count -> "#{base} (+#{count} fallback)"
+      count -> "#{base} (+#{count} backup)"
     end
   end
 

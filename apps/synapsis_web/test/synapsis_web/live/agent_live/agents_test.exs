@@ -166,6 +166,34 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       :ok = refute_redirected(view)
     end
 
+    test "saves backup model from client-managed provider/model picker state when hidden value is stale",
+         %{conn: conn} do
+      insert_provider("openai", "openai")
+
+      {:ok, agent} =
+        AgentConfigs.create(%{
+          name: "fallback_picker",
+          label: "Fallback Picker",
+          provider: "openai",
+          model: "gpt-4.1"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+
+      render_submit(view, "save_agent", %{
+        "agent" => %{
+          "label" => "Fallback Picker",
+          "fallback_models" => "",
+          "fallback_model_state" => Jason.encode!(%{provider: "openai", model: "gpt-4o"})
+        },
+        "skill_ids" => []
+      })
+
+      updated = AgentConfigs.get(agent.id)
+      assert updated.fallback_models == "openai/gpt-4o"
+      :ok = refute_redirected(view)
+    end
+
     test "config page lists provider available_models in model picker", %{conn: conn} do
       insert_provider("backplane", "openai", %{
         config: %{
@@ -219,7 +247,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
           description: "Builds changes",
           provider: "openai",
           model: "gpt-4.1",
-          fallback_models: "gpt-4o, o3",
+          fallback_models: "openai/gpt-4o",
           reasoning_effort: "high",
           model_tier: "expert",
           permission_mode: "ask",
@@ -242,7 +270,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       assert html =~ "Management"
       assert html =~ "Configuration Wizard"
       assert html =~ "Primary Model"
-      assert html =~ "openai/gpt-4.1 (+2 fallback)"
+      assert html =~ "openai/gpt-4.1 (+1 backup)"
       assert html =~ "Workspace tools"
       assert html =~ "~/.synapsis/agents/builder"
       assert html =~ "code-review"
@@ -268,9 +296,11 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       refute has_element?(view, "button[phx-click='switch_config_tab'][phx-value-tab='delete']")
       assert has_element?(view, "el-dm-button[phx-click='start_wizard']", "Start Wizard")
       assert has_element?(view, "#agent-provider-model-picker[phx-hook='AgentModelPicker']")
+      assert has_element?(view, "#agent-backup-model-picker[phx-hook='AgentBackupModelPicker']")
       assert has_element?(view, "input[name='agent[provider]']")
       assert has_element?(view, "input[name='agent[model]']")
       assert has_element?(view, "input[name='agent[fallback_models]']")
+      assert has_element?(view, "input[name='agent[fallback_model_state]']")
       assert has_element?(view, "input[name='agent[workspace_path]']")
       assert has_element?(view, "select[name='agent[reasoning_effort]']")
       assert has_element?(view, "select[name='agent[model_tier]']")
@@ -442,6 +472,47 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       refute "claude-sonnet-4-6" in openai_models
     end
 
+    test "backup model picker selects a provider and model separately from the primary picker",
+         %{conn: conn} do
+      Providers.create(%{
+        name: "openai",
+        type: "openai",
+        base_url: "https://api.openai.com",
+        api_key_encrypted: "sk-openai-test",
+        config: %{"enabled_models" => ["gpt-4.1", "gpt-4o", "o3"]},
+        enabled: true
+      })
+
+      {:ok, agent} =
+        AgentConfigs.create(%{
+          name: "fallback_options",
+          label: "Fallback Options",
+          provider: "openai",
+          model: "gpt-4.1",
+          fallback_models: "openai/gpt-4o"
+        })
+
+      {:ok, view, html} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+      options = cascader_options(html)
+
+      assert has_element?(view, "#agent-provider-model-picker[phx-hook='AgentModelPicker']")
+      assert has_element?(view, "#agent-backup-model-picker[phx-hook='AgentBackupModelPicker']")
+      refute has_element?(view, "#agent-provider-model-picker input#agent-fallback-models-hidden")
+
+      assert has_element?(
+               view,
+               "#agent-backup-model-picker input#agent-fallback-models-hidden[name='agent[fallback_models]']"
+             )
+
+      assert has_element?(
+               view,
+               "#agent-backup-model-picker input#agent-fallback-model-state[name='agent[fallback_model_state]']"
+             )
+
+      assert cascader_model_values(options, "openai") == ["gpt-4.1", "gpt-4o", "o3"]
+      assert fallback_model_state(html) == %{"provider" => "openai", "model" => "gpt-4o"}
+    end
+
     test "provider model cascader uses saved provider model filters when registry has no match",
          %{conn: conn} do
       Providers.create(%{
@@ -577,6 +648,14 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
 
     [state["provider"], state["model"]]
     |> Enum.reject(&(&1 in [nil, ""]))
+  end
+
+  defp fallback_model_state(html) do
+    ~r/<input[^>]*id="agent-fallback-model-state"[^>]*value="([^"]*)"/
+    |> Regex.run(html)
+    |> List.last()
+    |> html_attribute_unescape()
+    |> Jason.decode!()
   end
 
   defp html_attribute_unescape(value) do

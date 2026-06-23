@@ -34,12 +34,11 @@ defmodule Synapsis.Session.Worker.Boot do
     Process.flag(:trap_exit, true)
 
     graph_module = Keyword.get(opts, :graph_module, CodingLoop)
-    agent = Config.resolve_agent(session)
-    provider = agent[:provider] || session.provider
-    provider_config = Config.resolve_provider_config(provider)
-    workspace_path = normalize_workspace_path(agent[:workspace_path])
 
-    with {:ok, workspace_path} <- ensure_workspace_path(workspace_path),
+    with {:ok, session, agent, provider, provider_config} <-
+           Config.resolve_session_defaults(session),
+         workspace_path = normalize_workspace_path(agent[:workspace_path]),
+         {:ok, workspace_path} <- ensure_workspace_path(workspace_path),
          {:ok, graph} <- graph_module.build() do
       engine_state =
         graph_module.initial_state(%{

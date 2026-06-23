@@ -129,6 +129,29 @@ defmodule Synapsis.Agent.Nodes.NodeTest do
       assert new_state[:pending_text] == "Provider error: connection_failed"
     end
 
+    test "retries a failed stream with the configured fallback model" do
+      state =
+        CodingLoop.initial_state(%{
+          session_id: "s1",
+          agent_config: %{
+            provider: "anthropic",
+            model: "primary-model",
+            fallback_models: "openai/gpt-4o"
+          }
+        })
+        |> Map.put(:awaiting_stream, true)
+        |> Map.put(:request, %{model: "primary-model", messages: [], stream: true})
+
+      assert {:wait, new_state} = Nodes.LLMStream.run(state, %{stream_error: "HTTP 500"})
+
+      assert new_state.awaiting_stream == true
+      assert new_state.request.model == "gpt-4o"
+      assert new_state.agent_config.provider == "openai"
+      assert new_state.agent_config.model == "gpt-4o"
+      refute Map.has_key?(new_state, :stream_error)
+      refute Map.has_key?(new_state, :pending_text)
+    end
+
     test "handles resumed legacy state without reasoning signature" do
       state =
         CodingLoop.initial_state(%{session_id: "s1"})

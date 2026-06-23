@@ -68,6 +68,33 @@ defmodule Synapsis.Session.Worker.Config do
     ensure_agent_model(agent, session)
   end
 
+  def resolve_session_defaults(%Session{} = session) do
+    agent = resolve_agent(session)
+    provider = agent[:provider] || session.provider
+    model = agent[:model] || session.model
+    agent = agent |> Map.put(:provider, provider) |> Map.put(:model, model)
+
+    with {:ok, updated_session} <-
+           persist_session_if_changed(session, %{provider: provider, model: model}) do
+      {:ok, updated_session, agent, provider, resolve_provider_config(provider)}
+    end
+  end
+
+  def refresh_agent_defaults(%{session: %Session{} = session} = state) do
+    with {:ok, updated_session, agent, provider, provider_config} <-
+           resolve_session_defaults(session) do
+      {:ok,
+       %{
+         state
+         | session: updated_session,
+           agent: agent,
+           provider_config: provider_config,
+           engine_ctx: refresh_engine_ctx(state.engine_ctx, provider, agent[:model]),
+           engine_state: refresh_engine_state(state.engine_state, agent)
+       }}
+    end
+  end
+
   def ensure_agent_model(agent, session) do
     cond do
       not is_nil(agent[:model]) ->
@@ -148,6 +175,29 @@ defmodule Synapsis.Session.Worker.Config do
       {:error, :db_update_failed}
     end
   end
+
+  defp persist_session_if_changed(%Session{} = session, attrs) do
+    provider = attrs[:provider]
+    model = attrs[:model]
+
+    if session.provider == provider and session.model == model do
+      {:ok, session}
+    else
+      persist_session(session, attrs)
+    end
+  end
+
+  defp refresh_engine_ctx(ctx, provider, model) do
+    (ctx || %{})
+    |> Map.put(:provider, provider)
+    |> Map.put(:model, model)
+  end
+
+  defp refresh_engine_state(engine_state, agent) when is_map(engine_state) do
+    Map.put(engine_state, :agent_config, agent)
+  end
+
+  defp refresh_engine_state(engine_state, _agent), do: engine_state
 
   def do_switch_model(provider_name, model, state) do
     case persist_session(state.session, %{provider: provider_name, model: model}) do

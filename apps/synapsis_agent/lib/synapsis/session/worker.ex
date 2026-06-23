@@ -235,11 +235,13 @@ defmodule Synapsis.Session.Worker do
   end
 
   def handle_event({:call, from}, :retry, _state, data) do
-    if Persistence.has_messages?(data.session_id) do
+    with true <- Persistence.has_messages?(data.session_id),
+         {:ok, data} <- Config.refresh_agent_defaults(data) do
       Persistence.set_status(data.session_id, "streaming")
       advance(step_engine(data, drain_before?: false), [{:reply, from, :ok}])
     else
-      keep(data, [{:reply, from, {:error, :no_messages}}])
+      false -> keep(data, [{:reply, from, {:error, :no_messages}}])
+      {:error, reason} -> keep(data, [{:reply, from, {:error, reason}}])
     end
   end
 
@@ -256,19 +258,24 @@ defmodule Synapsis.Session.Worker do
       ) do
     case Persistence.truncate_to_regenerate(data.session_id, message_id) do
       {:ok, user_text} ->
-        new_ctx =
-          data.engine_ctx
-          |> Map.put(:user_input, user_text)
-          |> Map.put(:image_parts, [])
+        with {:ok, data} <- Config.refresh_agent_defaults(data) do
+          new_ctx =
+            data.engine_ctx
+            |> Map.put(:user_input, user_text)
+            |> Map.put(:image_parts, [])
 
-        Persistence.set_status(data.session_id, "streaming")
+          Persistence.set_status(data.session_id, "streaming")
 
-        new_data =
-          step_engine(%{data | engine_ctx: new_ctx, executed_tool_ids: MapSet.new()},
-            drain_before?: false
-          )
+          new_data =
+            step_engine(%{data | engine_ctx: new_ctx, executed_tool_ids: MapSet.new()},
+              drain_before?: false
+            )
 
-        advance(new_data, [{:reply, from, :ok}])
+          advance(new_data, [{:reply, from, :ok}])
+        else
+          {:error, reason} ->
+            keep(data, [{:reply, from, {:error, reason}}])
+        end
 
       {:error, reason} ->
         keep(data, [{:reply, from, {:error, reason}}])
@@ -371,7 +378,11 @@ defmodule Synapsis.Session.Worker do
 
       :graph ->
         if data.stream_ref,
-          do: SessionStream.cancel_stream(data.stream_ref, data.session.provider)
+          do:
+            SessionStream.cancel_stream(
+              data.stream_ref,
+              data.agent[:provider] || data.session.provider
+            )
 
         close_open_tool_uses(data.session_id)
         Persistence.set_status(data.session_id, "idle")
@@ -407,6 +418,9 @@ defmodule Synapsis.Session.Worker do
 
   def handle_event(:cast, {:deny_tool, id}, _state, data),
     do: collect_approval(data, id, :denied)
+
+  def handle_event(:info, {:node_request, :start_stream, req, provider}, _state, data),
+    do: advance(IOHandler.handle_start_stream(req, data, provider))
 
   def handle_event(:info, {:node_request, :start_stream, req}, _state, data),
     do: advance(IOHandler.handle_start_stream(req, data))
@@ -675,35 +689,32 @@ defmodule Synapsis.Session.Worker do
   end
 
   defp start_graph_turn(state, content, image_parts, opts \\ []) do
-    case persist_user_message(state, content, image_parts) do
-      :ok ->
-        new_engine_ctx =
-          state.engine_ctx
-          |> Map.put(:user_input, content)
-          |> Map.put(:image_parts, image_parts)
+    with {:ok, state} <- Config.refresh_agent_defaults(state),
+         :ok <- persist_user_message(state, content, image_parts) do
+      new_engine_ctx =
+        state.engine_ctx
+        |> Map.put(:user_input, content)
+        |> Map.put(:image_parts, image_parts)
 
-        new_state =
-          step_engine(
-            %{
-              state
-              | engine_ctx: new_engine_ctx,
-                executed_tool_ids: MapSet.new()
-            },
-            start_queued?: Keyword.get(opts, :start_queued?, true),
-            drain_before?: false
-          )
+      new_state =
+        step_engine(
+          %{
+            state
+            | engine_ctx: new_engine_ctx,
+              executed_tool_ids: MapSet.new()
+          },
+          start_queued?: Keyword.get(opts, :start_queued?, true),
+          drain_before?: false
+        )
 
-        {:ok, new_state}
-
-      {:error, reason} ->
-        {:error, reason}
+      {:ok, new_state}
     end
   end
 
   defp start_query_loop_turn(state, content, image_parts) do
-    case persist_user_message(state, content, image_parts) do
-      :ok -> {:ok, start_query_loop(content, state)}
-      {:error, reason} -> {:error, reason}
+    with {:ok, state} <- Config.refresh_agent_defaults(state),
+         :ok <- persist_user_message(state, content, image_parts) do
+      {:ok, start_query_loop(content, state)}
     end
   end
 

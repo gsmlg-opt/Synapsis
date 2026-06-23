@@ -1,8 +1,9 @@
 import { ScrollBottomHook } from "./scroll-bottom"
 import { StreamingTextHook } from "./streaming-text"
-import { AgentModelPickerHook } from "./agent-model-picker"
+import { AgentBackupModelPickerHook, AgentModelPickerHook } from "./agent-model-picker"
 
 export const Hooks = {
+  AgentBackupModelPicker: AgentBackupModelPickerHook,
   AgentModelPicker: AgentModelPickerHook,
   ScrollBottom: ScrollBottomHook,
   StreamingText: StreamingTextHook,
@@ -10,4 +11,4 @@ export const Hooks = {
 
 export { ScrollBottomHook } from "./scroll-bottom"
 export { StreamingTextHook } from "./streaming-text"
-export { AgentModelPickerHook } from "./agent-model-picker"
+export { AgentBackupModelPickerHook, AgentModelPickerHook } from "./agent-model-picker"

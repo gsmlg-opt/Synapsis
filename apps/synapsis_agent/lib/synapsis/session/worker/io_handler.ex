@@ -11,14 +11,20 @@ defmodule Synapsis.Session.Worker.IOHandler do
   require Logger
 
   alias Synapsis.Session.Stream, as: SessionStream
-  alias Synapsis.Session.Worker.{Auditor, Checkpoint, Persistence}
+  alias Synapsis.Session.Worker.{Auditor, Checkpoint, Config, Persistence}
   alias Synapsis.Agent.{StreamAccumulator, ResponseFlusher}
   alias Synapsis.Session.Worker
 
-  def handle_start_stream(request, state) do
-    provider = state.agent[:provider] || state.session.provider
-    config = Map.put(state.provider_config, :session_id, state.session_id)
+  def handle_start_stream(request, state, provider_override \\ nil) do
+    provider = provider_override || state.agent[:provider] || state.session.provider
+    provider_config = provider_config(provider, state)
+    config = Map.put(provider_config, :session_id, state.session_id)
     debug_handler = maybe_attach_debug(state)
+
+    state =
+      state
+      |> clear_stream_result_ctx()
+      |> align_stream_provider(provider, provider_config, request)
 
     case start_stream(request, config, provider, state) do
       {:ok, ref} ->
@@ -34,6 +40,37 @@ defmodule Synapsis.Session.Worker.IOHandler do
         new_ctx = Map.put(state.engine_ctx, :stream_error, reason)
         Worker.step_engine(%{state | engine_ctx: new_ctx})
     end
+  end
+
+  defp provider_config(provider, state) do
+    current_provider = state.agent[:provider] || state.session.provider
+
+    if provider == current_provider do
+      state.provider_config
+    else
+      Config.resolve_provider_config(provider)
+    end
+  end
+
+  defp align_stream_provider(state, provider, provider_config, request) do
+    agent =
+      (state.agent || %{})
+      |> Map.put(:provider, provider)
+      |> maybe_put_model(request[:model] || request["model"])
+
+    %{state | agent: agent, provider_config: provider_config}
+  end
+
+  defp maybe_put_model(agent, model) when model in [nil, ""], do: agent
+  defp maybe_put_model(agent, model), do: Map.put(agent, :model, model)
+
+  defp clear_stream_result_ctx(state) do
+    engine_ctx =
+      (state.engine_ctx || %{})
+      |> Map.delete(:stream_error)
+      |> Map.delete(:stream_acc)
+
+    %{state | engine_ctx: engine_ctx}
   end
 
   defp start_stream(request, config, provider, %Worker{}) do

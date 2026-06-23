@@ -6,7 +6,7 @@ defmodule Synapsis.Session.WorkerTest do
   alias Synapsis.Session.PendingInputStore
   alias Synapsis.Session.Worker
   alias Synapsis.Session.Worker.{IOHandler, Persistence}
-  alias Synapsis.{Message, Part}
+  alias Synapsis.{AgentConfigs, Config.Store, Message, Part}
 
   # ADR-006 C4: sessions live in the Concord-backed Session.Store, not Ecto.
   defp build_session(attrs) do
@@ -72,6 +72,76 @@ defmodule Synapsis.Session.WorkerTest do
     assert Worker.engine_ready?(base)
     refute Worker.engine_ready?(%{base | engine_node: :llm_stream})
     refute Worker.engine_ready?(%{base | engine_state: %{}})
+  end
+
+  @tag :tmp_dir
+  test "send_message refreshes changed agent defaults before building the provider request", %{
+    tmp_dir: tmp_dir
+  } do
+    isolate_agent_config_store(tmp_dir)
+
+    agent_name = "agent-#{System.unique_integer([:positive])}"
+
+    {:ok, _agent} =
+      AgentConfigs.create(%{
+        name: agent_name,
+        provider: "anthropic",
+        model: "new-default-model",
+        tools: [],
+        config: %{"workspace_path" => tmp_dir}
+      })
+
+    session =
+      persist_session(%{
+        agent: agent_name,
+        provider: "anthropic",
+        model: "old-stale-model",
+        status: "idle"
+      })
+
+    {:ok, graph} = CodingLoop.build()
+
+    stale_agent = %{
+      name: agent_name,
+      provider: "anthropic",
+      model: "old-stale-model",
+      tools: [],
+      max_tokens: 8192,
+      fallback_models: ""
+    }
+
+    state = %Worker{
+      session_id: session.id,
+      session: session,
+      agent: stale_agent,
+      provider_config: %{type: "anthropic"},
+      graph: graph,
+      engine_node: :receive,
+      engine_state:
+        CodingLoop.initial_state(%{
+          session_id: session.id,
+          provider_config: %{type: "anthropic"},
+          agent_config: stale_agent
+        })
+        |> Map.put(:awaiting_input, true),
+      engine_ctx: %{provider: "anthropic", model: "old-stale-model"},
+      epoch: 1,
+      execution_mode: :graph
+    }
+
+    from = {self(), make_ref()}
+
+    assert {:next_state, _next, new_state, _actions} =
+             Worker.handle_event({:call, from}, {:send_message, "hello", []}, :idle, state)
+
+    assert new_state.agent.model == "new-default-model"
+    assert new_state.session.model == "new-default-model"
+    assert new_state.engine_ctx.model == "new-default-model"
+    assert new_state.engine_state.agent_config.model == "new-default-model"
+    assert new_state.engine_state.request.model == "new-default-model"
+
+    assert {:ok, meta} = Session.Store.get_meta(session.id)
+    assert Session.from_meta(meta).model == "new-default-model"
   end
 
   # --- A2: tool execution robustness ---
@@ -1056,5 +1126,22 @@ defmodule Synapsis.Session.WorkerTest do
 
     :ok = Session.Store.put_value(session_id, "pending_inputs", [input])
     input
+  end
+
+  defp isolate_agent_config_store(tmp_dir) do
+    original_config_dir = System.get_env("SYNAPSIS_CONFIG_DIR")
+    config_dir = Path.join(tmp_dir, "config")
+    System.put_env("SYNAPSIS_CONFIG_DIR", config_dir)
+    Store.reload(:agent)
+
+    on_exit(fn ->
+      if original_config_dir do
+        System.put_env("SYNAPSIS_CONFIG_DIR", original_config_dir)
+      else
+        System.delete_env("SYNAPSIS_CONFIG_DIR")
+      end
+
+      Store.reload(:agent)
+    end)
   end
 end
