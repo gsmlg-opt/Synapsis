@@ -3,6 +3,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   use SynapsisWeb, :live_view
   require Logger
 
+  alias Synapsis.ContextWindow
   alias Synapsis.Sessions
 
   @running_statuses ~w(streaming tool_executing)
@@ -33,7 +34,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
        heartbeat_notifications: [],
        code_agent_sessions: %{},
        session_status: "idle",
-       show_new_session: false,
+       delete_session: nil,
        show_sidebar: true,
        current_mode: agent_id
      )}
@@ -162,10 +163,6 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     steer_message(content, socket)
   end
 
-  def handle_event("toggle_new_session", _params, socket) do
-    {:noreply, assign(socket, :show_new_session, !socket.assigns.show_new_session)}
-  end
-
   def handle_event("toggle_sidebar", _params, socket) do
     {:noreply, assign(socket, :show_sidebar, !socket.assigns.show_sidebar)}
   end
@@ -183,7 +180,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
         {:noreply,
          socket
-         |> assign(sessions: sessions, show_new_session: false)
+         |> assign(sessions: sessions)
          |> push_patch(to: ~p"/agent/agents/#{agent_id}/sessions/#{session.id}")}
 
       {:error, reason} ->
@@ -197,18 +194,46 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     {:noreply, push_patch(socket, to: ~p"/agent/agents/#{agent_id}/sessions/#{session_id}")}
   end
 
+  def handle_event("confirm_delete_session", %{"id" => session_id}, socket) do
+    delete_session = Enum.find(socket.assigns.sessions, &(&1.id == session_id))
+    {:noreply, assign(socket, :delete_session, delete_session)}
+  end
+
+  def handle_event("cancel_delete_session", _params, socket) do
+    {:noreply, assign(socket, :delete_session, nil)}
+  end
+
   def handle_event("delete_session", %{"id" => session_id}, socket) do
     agent_id = socket.assigns.agent_id
-    Sessions.delete(session_id)
-    sessions = Enum.reject(socket.assigns.sessions, &(&1.id == session_id))
 
-    if socket.assigns.current_session && socket.assigns.current_session.id == session_id do
-      {:noreply,
-       socket
-       |> assign(:sessions, sessions)
-       |> push_navigate(to: ~p"/agent/agents/#{agent_id}/sessions")}
-    else
-      {:noreply, assign(socket, :sessions, sessions)}
+    case Sessions.delete(session_id) do
+      {:ok, _session_id} ->
+        sessions = Enum.reject(socket.assigns.sessions, &(&1.id == session_id))
+        socket = assign(socket, sessions: sessions, delete_session: nil)
+
+        if socket.assigns.current_session && socket.assigns.current_session.id == session_id do
+          {:noreply,
+           socket
+           |> push_navigate(to: ~p"/agent/agents/#{agent_id}/sessions")}
+        else
+          {:noreply, socket}
+        end
+
+      {:error, :not_found} ->
+        sessions = Enum.reject(socket.assigns.sessions, &(&1.id == session_id))
+
+        {:noreply,
+         socket
+         |> assign(sessions: sessions, delete_session: nil)
+         |> put_flash(:error, "Session not found")}
+
+      {:error, reason} ->
+        Logger.warning("session_delete_failed", session_id: session_id, reason: inspect(reason))
+
+        {:noreply,
+         socket
+         |> assign(:delete_session, nil)
+         |> put_flash(:error, "Failed to delete session")}
     end
   end
 
@@ -616,8 +641,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
               </h2>
               <p class="text-xs text-on-surface-variant truncate">
                 <%= if @provider_configured do %>
-                  {@agent_config.provider}/{@agent_config.model ||
-                    Synapsis.Providers.default_model(@agent_config.provider)}
+                  Ready to chat
                 <% else %>
                   Provider not configured
                 <% end %>
@@ -626,7 +650,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
           </div>
 
           <%= if @provider_configured do %>
-            <.dm_btn variant="primary" class="w-full mt-3" phx-click="toggle_new_session">
+            <.dm_btn variant="primary" class="w-full mt-3" phx-click="create_session">
               <.dm_mdi name="plus" class="w-4 h-4" /> New Session
             </.dm_btn>
           <% else %>
@@ -640,20 +664,6 @@ defmodule SynapsisWeb.AgentLive.Sessions do
               </.dm_btn>
             </.dm_tooltip>
           <% end %>
-        </div>
-
-        <%!-- New session confirm --%>
-        <div
-          :if={@show_new_session && @provider_configured}
-          class="m-3 rounded-md border border-outline-variant bg-surface-container-high p-3"
-        >
-          <div class="text-xs text-on-surface-variant mb-2">
-            {@agent_config.provider} / {@agent_config.model ||
-              Synapsis.Providers.default_model(@agent_config.provider)}
-          </div>
-          <.dm_btn variant="outline" size="sm" class="w-full" phx-click="create_session">
-            Create Session
-          </.dm_btn>
         </div>
 
         <%!-- Session list --%>
@@ -693,11 +703,9 @@ defmodule SynapsisWeb.AgentLive.Sessions do
                     "Session #{String.slice(@current_session.id || "", 0..7)}"}
                 </h2>
                 <div class="text-xs text-on-surface-variant">
-                  <span class="text-primary/70">
+                  <span class="text-primary/70" data-session-agent-meta>
                     {@agent_config.label || String.capitalize(@agent_id)}
                   </span>
-                  <span class="mx-1">&middot;</span>
-                  {@current_session.provider}/{@current_session.model}
                 </div>
               </div>
             </div>
@@ -834,6 +842,8 @@ defmodule SynapsisWeb.AgentLive.Sessions do
           <.session_status_bar
             current_mode={@current_mode}
             session_status={@session_status}
+            context_label={session_context_size_label(@messages)}
+            model_label={session_model_label(@current_session)}
             on_mode_change="switch_mode"
             has_session={true}
           />
@@ -851,7 +861,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
             >
               <:action>
                 <%= if @provider_configured do %>
-                  <.dm_btn variant="secondary" phx-click="toggle_new_session">
+                  <.dm_btn variant="secondary" phx-click="create_session">
                     <.dm_mdi name="plus" class="w-4 h-4" /> New Session
                   </.dm_btn>
                 <% else %>
@@ -866,6 +876,47 @@ defmodule SynapsisWeb.AgentLive.Sessions do
           </div>
         <% end %>
       </main>
+
+      <div
+        :if={@delete_session}
+        id="delete-session-modal"
+        class="fixed inset-0 z-50 flex items-center justify-center px-4 py-6"
+        role="presentation"
+      >
+        <button
+          type="button"
+          class="absolute inset-0 bg-scrim/50"
+          aria-label="Cancel delete session"
+          phx-click="cancel_delete_session"
+        >
+        </button>
+        <section
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-session-title"
+          class="relative w-full max-w-sm rounded-md border border-outline-variant bg-surface-container-high text-on-surface shadow-xl"
+        >
+          <div class="flex items-start gap-3 border-b border-outline-variant p-4">
+            <div class="mt-0.5 rounded-md bg-error-container p-2 text-on-error-container">
+              <.dm_mdi name="delete-outline" class="h-5 w-5" />
+            </div>
+            <div class="min-w-0">
+              <h2 id="delete-session-title" class="text-base font-semibold">Delete session?</h2>
+              <p class="mt-1 text-sm text-on-surface-variant">
+                This removes <span class="font-medium text-on-surface">{session_title(@delete_session)}</span>.
+              </p>
+            </div>
+          </div>
+          <div class="flex justify-end gap-2 p-4">
+            <.dm_btn variant="ghost" phx-click="cancel_delete_session">
+              Cancel
+            </.dm_btn>
+            <.dm_btn variant="error" phx-click="delete_session" phx-value-id={@delete_session.id}>
+              Delete
+            </.dm_btn>
+          </div>
+        </section>
+      </div>
     </div>
     """
   end
@@ -876,6 +927,14 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     {:ok, sessions} = Sessions.list(agent_name, limit: 50)
     sessions
   end
+
+  defp session_title(%{title: title}) when is_binary(title) and title != "", do: title
+
+  defp session_title(%{id: id}) when is_binary(id) do
+    "Session #{String.slice(id, 0..7)}"
+  end
+
+  defp session_title(_session), do: "this session"
 
   defp agent_display_name(agent_config, agent_id) do
     base =
@@ -940,6 +999,42 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
   defp chat_input_disabled?(status),
     do: status not in ~w(idle error streaming tool_executing)
+
+  defp session_context_size_label(messages) when is_list(messages) do
+    tokens = ContextWindow.total_tokens(messages)
+    "#{format_context_tokens(tokens)} #{token_unit(tokens)}"
+  end
+
+  defp session_context_size_label(_messages), do: "0 tokens"
+
+  defp session_model_label(%{model: model}) when is_binary(model) and model != "", do: model
+  defp session_model_label(_session), do: nil
+
+  defp format_context_tokens(tokens) when tokens >= 1_000_000 do
+    compact_number(tokens / 1_000_000, "M")
+  end
+
+  defp format_context_tokens(tokens) when tokens >= 1_000 do
+    compact_number(tokens / 1_000, "K")
+  end
+
+  defp format_context_tokens(tokens), do: Integer.to_string(tokens)
+
+  defp compact_number(value, suffix) do
+    rounded = Float.round(value, 1)
+
+    formatted =
+      if rounded == trunc(rounded) do
+        Integer.to_string(trunc(rounded))
+      else
+        :erlang.float_to_binary(rounded, decimals: 1)
+      end
+
+    formatted <> suffix
+  end
+
+  defp token_unit(1), do: "token"
+  defp token_unit(_count), do: "tokens"
 
   defp clear_transient_generation(socket) do
     # Preserve tool calls with error status so failed tools remain visible in chat

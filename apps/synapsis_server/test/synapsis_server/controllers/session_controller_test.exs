@@ -1,6 +1,8 @@
 defmodule SynapsisServer.SessionControllerTest do
   use SynapsisServer.ConnCase
 
+  alias Synapsis.Session.Store
+
   describe "POST /api/sessions" do
     test "creates a session", %{conn: conn} do
       conn =
@@ -65,6 +67,37 @@ defmodule SynapsisServer.SessionControllerTest do
 
       conn = delete(conn, "/api/sessions/#{id}")
       assert response(conn, 204)
+
+      conn = get(conn, "/api/sessions/#{id}")
+      assert json_response(conn, 404)
+    end
+
+    test "deletes sessions that span multiple Concord delete batches", %{conn: conn} do
+      create_conn =
+        post(conn, "/api/sessions", %{
+          project_path: "/tmp/test_ctrl_large_del_#{:rand.uniform(100_000)}",
+          provider: "anthropic",
+          model: "claude-sonnet-4-20250514"
+        })
+
+      %{"data" => %{"id" => id}} = json_response(create_conn, 201)
+
+      values =
+        for n <- 1..501 do
+          {Store.value_key(id, "bulk/#{n}"), %{n: n}}
+        end
+
+      for chunk <- Enum.chunk_every(values, 500) do
+        assert {:ok, _results} = Concord.put_many(chunk)
+      end
+
+      conn = delete(conn, "/api/sessions/#{id}")
+      assert response(conn, 204)
+
+      conn = get(conn, "/api/sessions/#{id}")
+      assert json_response(conn, 404)
+
+      assert {:ok, []} = Concord.prefix_scan(Store.session_prefix(id))
     end
 
     test "returns 404 for unknown session", %{conn: conn} do

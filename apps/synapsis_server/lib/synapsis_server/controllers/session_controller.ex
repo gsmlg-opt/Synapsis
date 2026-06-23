@@ -102,6 +102,13 @@ defmodule SynapsisServer.SessionController do
 
       {:error, :not_found} ->
         conn |> put_status(404) |> json(%{error: "Session not found"})
+
+      {:error, reason} ->
+        Logger.warning("session_delete_failed", session_id: id, reason: inspect(reason))
+
+        conn
+        |> put_status(500)
+        |> json(%{error: "Failed to delete session"})
     end
   end
 

@@ -34,6 +34,7 @@ defmodule Synapsis.Session.Store do
   """
 
   @turn_pad 12
+  @default_batch_size 500
 
   # ── key helpers ──────────────────────────────────────────────────────────
 
@@ -209,10 +210,21 @@ defmodule Synapsis.Session.Store do
 
     keys = Enum.uniq([meta_key(id) | keys])
 
-    case Concord.delete_many(keys) do
-      {:ok, _} -> :ok
-      :ok -> :ok
-      other -> normalize_error(other)
+    keys
+    |> Enum.chunk_every(concord_batch_size())
+    |> Enum.reduce_while(:ok, fn chunk, :ok ->
+      case Concord.delete_many(chunk) do
+        {:ok, _} -> {:cont, :ok}
+        :ok -> {:cont, :ok}
+        other -> {:halt, normalize_error(other)}
+      end
+    end)
+  end
+
+  defp concord_batch_size do
+    case Application.get_env(:concord, :max_batch_size, @default_batch_size) do
+      size when is_integer(size) and size > 0 -> size
+      _ -> @default_batch_size
     end
   end
 

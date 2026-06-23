@@ -5,7 +5,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
   alias Synapsis.Session.PendingInputStore
   alias Synapsis.Session.Worker.Persistence, as: SessionPersistence
-  alias Synapsis.Sessions
+  alias Synapsis.{AgentConfigs, Sessions}
 
   describe "agent sessions page" do
     test "renders empty state when no session selected", %{conn: conn} do
@@ -24,7 +24,144 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       assert has_element?(view, "div[data-session-row='#{session.id}'][aria-current='page']")
       assert html =~ "Sessions"
       assert html =~ "New Session"
-      assert html =~ "anthropic/test"
+      refute has_element?(view, "div[data-session-row='#{session.id}']", "anthropic/test")
+    end
+
+    test "new session button creates a session directly without confirmation step", %{conn: conn} do
+      name = "instant_#{System.unique_integer([:positive])}"
+
+      {:ok, agent} =
+        AgentConfigs.create(%{
+          name: name,
+          label: "Instant",
+          provider: "openai",
+          model: "gpt-4.1"
+        })
+
+      {:ok, view, html} = live(conn, ~p"/agent/agents/#{agent.name}/sessions")
+
+      refute html =~ "Create Session"
+
+      assert has_element?(
+               view,
+               "aside el-dm-button[phx-click='create_session'][variant='primary']",
+               "New Session"
+             )
+
+      view
+      |> element(
+        "aside el-dm-button[phx-click='create_session'][variant='primary']",
+        "New Session"
+      )
+      |> render_click()
+
+      {:ok, [session]} = Sessions.list(agent.name, limit: 10)
+      assert session.provider == "openai"
+      assert session.model == "gpt-4.1"
+      assert_patch(view, ~p"/agent/agents/#{agent.name}/sessions/#{session.id}")
+    end
+
+    test "session delete uses an in-app confirmation modal", %{conn: conn} do
+      {:ok, active_session} =
+        Sessions.create("__global__", %{
+          provider: "anthropic",
+          model: "test",
+          agent: "main",
+          title: "Keep me"
+        })
+
+      {:ok, doomed_session} =
+        Sessions.create("__global__", %{
+          provider: "anthropic",
+          model: "test",
+          agent: "main",
+          title: "Delete me"
+        })
+
+      {:ok, view, html} = live(conn, ~p"/agent/agents/main/sessions/#{active_session.id}")
+
+      refute html =~ "Delete session?"
+      refute has_element?(view, "el-dm-button[data-confirm]")
+      refute has_element?(view, "el-dm-button[onclick='event.stopPropagation()']")
+
+      assert has_element?(
+               view,
+               "button[type='button'][phx-click='confirm_delete_session'][phx-value-id='#{doomed_session.id}']"
+             )
+
+      view
+      |> element(
+        "button[phx-click='confirm_delete_session'][phx-value-id='#{doomed_session.id}']"
+      )
+      |> render_click()
+
+      html = render(view)
+      assert html =~ "Delete session?"
+      assert html =~ "Delete me"
+      assert {:ok, _session} = Sessions.get(doomed_session.id)
+
+      view
+      |> element(
+        "#delete-session-modal el-dm-button[phx-click='cancel_delete_session']",
+        "Cancel"
+      )
+      |> render_click()
+
+      refute render(view) =~ "Delete session?"
+      assert {:ok, _session} = Sessions.get(doomed_session.id)
+
+      view
+      |> element(
+        "button[phx-click='confirm_delete_session'][phx-value-id='#{doomed_session.id}']"
+      )
+      |> render_click()
+
+      view
+      |> element("#delete-session-modal el-dm-button[phx-click='delete_session']", "Delete")
+      |> render_click()
+
+      assert {:error, :not_found} = Sessions.get(doomed_session.id)
+      refute has_element?(view, "div[data-session-row='#{doomed_session.id}']")
+    end
+
+    test "session metadata shows only the agent label without model", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, view, html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      assert has_element?(view, "[data-session-agent-meta]", "Main")
+      refute has_element?(view, "[data-session-agent-meta]", "anthropic/test")
+      refute html =~ "Main · anthropic/test"
+      refute has_element?(view, "div[data-session-row='#{session.id}']", "anthropic/test")
+      assert has_element?(view, "div[data-session-row='#{session.id}']", "Main")
+    end
+
+    test "renders session context and current model next to status", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      assert {:ok, _message} =
+               Synapsis.Message.append(session.id, %Synapsis.Message{
+                 role: "user",
+                 parts: [%Synapsis.Part.Text{content: "hello"}],
+                 token_count: 420
+               })
+
+      assert {:ok, _message} =
+               Synapsis.Message.append(session.id, %Synapsis.Message{
+                 role: "assistant",
+                 parts: [%Synapsis.Part.Text{content: "world"}],
+                 token_count: 1080
+               })
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      assert has_element?(
+               view,
+               "[data-session-status-meta]",
+               "Context: 1.5K tokens Model: test idle"
+             )
     end
 
     test "renders personality indicator with primary/70 style in session header", %{conn: conn} do
@@ -35,8 +172,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       # Personality name appears in the styled span (text-primary/70 class)
       assert html =~ "text-primary/70"
       assert html =~ "Main"
-      # Provider/model info in subtext
-      assert html =~ "anthropic/test"
+      refute html =~ "anthropic/test"
     end
 
     test "handles session_compacted PubSub event and reloads messages", %{conn: conn} do
@@ -100,7 +236,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       send(view.pid, {:system_message, %{type: :info, text: "Some info message", metadata: %{}}})
 
       # View should not crash
-      assert render(view) =~ "anthropic/test"
+      assert render(view) =~ "Main"
     end
 
     test "receives heartbeat notification via PubSub", %{conn: conn} do

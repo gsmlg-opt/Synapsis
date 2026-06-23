@@ -413,6 +413,8 @@ defmodule SynapsisWeb.CoreComponents do
   attr :session_status, :string, default: "idle"
   attr :on_mode_change, :string, required: true
   attr :has_session, :boolean, default: true
+  attr :context_label, :string, default: nil
+  attr :model_label, :string, default: nil
   attr :class, :string, default: nil
 
   @session_modes [
@@ -445,7 +447,25 @@ defmodule SynapsisWeb.CoreComponents do
       <div :if={!@has_session} class="text-xs text-on-surface-variant">
         No active session
       </div>
-      <div class="flex items-center gap-1.5 text-xs text-on-surface-variant">
+      <div
+        data-session-status-meta
+        class="flex min-w-0 items-center gap-3 text-xs text-on-surface-variant"
+      >
+        <span
+          :if={@context_label not in [nil, ""]}
+          data-session-context-size
+          class="hidden font-mono tabular-nums sm:inline"
+        >
+          Context: {@context_label}
+        </span>
+        <span
+          :if={@model_label not in [nil, ""]}
+          data-session-model
+          class="hidden max-w-48 truncate font-mono sm:inline"
+          title={@model_label}
+        >
+          Model: {@model_label}
+        </span>
         <span class={[
           "inline-block w-2 h-2 rounded-full",
           status_dot_color(@session_status)
@@ -805,7 +825,7 @@ defmodule SynapsisWeb.CoreComponents do
   end
 
   @doc """
-  Session list sidebar item with title, provider/model, status, and delete button.
+  Session list sidebar item with title, agent, status dot, and delete button.
   """
   attr :session, :map, required: true
   attr :active, :boolean, default: false
@@ -815,11 +835,7 @@ defmodule SynapsisWeb.CoreComponents do
     ~H"""
     <div
       data-session-row={@session.id}
-      role="button"
-      tabindex="0"
       aria-current={if @active, do: "page", else: nil}
-      phx-click="switch_session"
-      phx-value-id={@session.id}
       class={[
         "group flex items-center gap-3 rounded-md border px-3 py-2.5 cursor-pointer transition-colors text-sm",
         if(@active,
@@ -830,33 +846,60 @@ defmodule SynapsisWeb.CoreComponents do
         @class
       ]}
     >
-      <span class={[
-        "inline-block w-2 h-2 rounded-full shrink-0",
-        status_dot_color(@session.status || "idle")
-      ]}>
-      </span>
-      <div class="flex-1 min-w-0">
-        <div class="truncate font-medium">
-          {@session.title || "Session #{String.slice(@session.id || "", 0..7)}"}
-        </div>
-        <div class={[
-          "text-xs truncate",
-          if(@active, do: "text-on-primary-container/70", else: "text-on-surface-variant")
-        ]}>
-          {@session.provider}/{@session.model}
-        </div>
-      </div>
-      <.dm_btn
-        variant="ghost"
-        size="xs"
-        phx-click="delete_session"
+      <button
+        type="button"
+        phx-click="switch_session"
         phx-value-id={@session.id}
-        data-confirm="Delete this session?"
-        class="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+        class="flex min-w-0 flex-1 items-center gap-3 border-0 bg-transparent p-0 text-left text-inherit"
+      >
+        <span class={[
+          "inline-block w-2 h-2 rounded-full shrink-0",
+          status_dot_color(@session.status || "idle")
+        ]}>
+        </span>
+        <div class="min-w-0 flex-1">
+          <div class="truncate font-medium">
+            {@session.title || "Session #{String.slice(@session.id || "", 0..7)}"}
+          </div>
+          <div class={[
+            "text-xs truncate",
+            if(@active, do: "text-on-primary-container/70", else: "text-on-surface-variant")
+          ]}>
+            {session_agent_label(@session)}
+          </div>
+        </div>
+      </button>
+      <button
+        type="button"
+        phx-click="confirm_delete_session"
+        phx-value-id={@session.id}
+        aria-label={"Delete #{session_title(@session)}"}
+        class={[
+          "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border-0 bg-transparent p-0 text-inherit opacity-0 transition-opacity",
+          "hover:bg-surface-container-high focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-primary/60",
+          "group-hover:opacity-100 group-focus-within:opacity-100"
+        ]}
       >
         <.dm_mdi name="delete-outline" class="w-3.5 h-3.5" />
-      </.dm_btn>
+      </button>
     </div>
     """
   end
+
+  defp session_title(%{title: title}) when is_binary(title) and title != "", do: title
+
+  defp session_title(%{id: id}) when is_binary(id) do
+    "Session #{String.slice(id, 0..7)}"
+  end
+
+  defp session_title(_session), do: "session"
+
+  defp session_agent_label(%{agent: agent}) when is_binary(agent) and agent != "" do
+    agent
+    |> String.replace(["_", "-"], " ")
+    |> String.split()
+    |> Enum.map_join(" ", &String.capitalize/1)
+  end
+
+  defp session_agent_label(_session), do: "Main"
 end

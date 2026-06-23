@@ -11,7 +11,7 @@ defmodule Synapsis.Session.StoreTest do
   setup do
     assert Store.ensure_started() == :ok
     # Unique id per test keeps the shared node-local store isolated.
-    {:ok, id: "sess-" <> (System.unique_integer([:positive]) |> Integer.to_string())}
+    {:ok, id: "sess-" <> Ecto.UUID.generate()}
   end
 
   describe "meta round-trip" do
@@ -91,6 +91,24 @@ defmodule Synapsis.Session.StoreTest do
 
       assert Store.get_meta(id) == {:error, :not_found}
       assert {:ok, []} = Store.list_turns(id)
+    end
+
+    test "deletes sessions with more keys than Concord's batch limit", %{id: id} do
+      assert Store.put_meta(id, %{id: id, agent: "main", status: "idle"}) == :ok
+
+      values =
+        for n <- 1..501 do
+          {Store.value_key(id, "bulk/#{n}"), %{n: n}}
+        end
+
+      for chunk <- Enum.chunk_every(values, 500) do
+        assert {:ok, _results} = Concord.put_many(chunk)
+      end
+
+      assert Store.delete_session(id) == :ok
+      assert Store.get_meta(id) == {:error, :not_found}
+
+      assert {:ok, []} = Concord.prefix_scan(Store.session_prefix(id))
     end
   end
 end

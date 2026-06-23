@@ -121,12 +121,20 @@ defmodule Synapsis.Sessions do
           {:error, :not_found}
 
         {:ok, _meta} ->
-          Store.delete_session(session_id)
-          {:ok, session_id}
+          case Store.delete_session(session_id) do
+            :ok -> {:ok, session_id}
+            {:error, reason} -> {:error, reason}
+          end
+
+        {:error, reason} ->
+          {:error, reason}
       end
 
-    Synapsis.Session.DynamicSupervisor.stop_session(session_id)
-    clear_debug_entries(session_id)
+    if match?({:ok, _}, result) do
+      Synapsis.Session.DynamicSupervisor.stop_session(session_id)
+      clear_debug_entries(session_id)
+    end
+
     result
   end
 
