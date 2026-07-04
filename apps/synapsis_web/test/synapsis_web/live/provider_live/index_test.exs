@@ -174,6 +174,9 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
     end
 
     test "custom provider creation with base_url", %{conn: conn} do
+      bypass = Bypass.open()
+      Bypass.down(bypass)
+
       {:ok, view, _html} = live(conn, ~p"/settings/providers/new")
 
       view
@@ -183,7 +186,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       view
       |> form("form[phx-submit]", %{
         "name" => "my-local-llm",
-        "base_url" => "http://localhost:11434",
+        "base_url" => "http://localhost:#{bypass.port}",
         "api_key" => "none"
       })
       |> render_submit()
