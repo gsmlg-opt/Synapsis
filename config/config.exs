@@ -11,6 +11,13 @@ import Config
 # gating in the session path) — a single-member Ra cluster on this node. Concord
 # 2.x starts the :ra default system itself and defaults its Prometheus exporter
 # off, so no further host-side config is needed.
+#
+# WORKAROUND(upstream): gsmlg-dev/concord#30 — Concord 2.3.0 can crash while
+# replaying older local Ra logs that reference :concord_store before the ETS
+# table exists. Keep new node-local tmp stores under a Concord generation
+# segment so old incompatible tmp state is preserved but no longer replayed.
+concord_store_generation = "concord-2.3"
+
 config :concord,
   clustering: false,
   # Disable value compression: it provides no benefit for a node-local
@@ -19,11 +26,14 @@ config :concord,
   # See gsmlg-dev/concord#23 (prefix_scan) and the apply/state-machine crash.
   # TODO(upstream): gsmlg-dev/concord — remove once compression is crash-safe.
   compression: [enabled: false],
-  data_dir: Path.expand("../tmp/concord/#{node()}", __DIR__)
+  data_dir: Path.expand("../tmp/concord/#{concord_store_generation}/#{node()}", __DIR__)
 
 # Keep the embedded :ra system's on-disk data under tmp/ as well; without this
 # ra writes its WAL/segments to ./<node> at the cwd (repo root).
-config :ra, data_dir: Path.expand("../tmp/ra/#{node()}", __DIR__) |> to_charlist()
+config :ra,
+  data_dir:
+    Path.expand("../tmp/ra/#{concord_store_generation}/#{node()}", __DIR__)
+    |> to_charlist()
 
 # General application configuration
 config :synapsis_server,

@@ -29,11 +29,23 @@ config :synapsis_core,
   memory_dir: Path.expand("../tmp/memory_test#{System.get_env("MIX_TEST_PARTITION")}", __DIR__)
 
 # Concord: isolated per-partition data dir, clustering off (single node).
+# WORKAROUND(upstream): gsmlg-dev/concord#30 — keep test stores under the
+# Concord generation segment too, so older Ra logs are never replayed.
+concord_test_partition = System.get_env("MIX_TEST_PARTITION") || "default"
+concord_test_generation = "concord-2.3"
+
+concord_test_data_dir =
+  Path.expand("../tmp/concord_test/#{concord_test_generation}/#{concord_test_partition}", __DIR__)
+
+ra_test_data_dir =
+  Path.expand("../tmp/ra_test/#{concord_test_generation}/#{concord_test_partition}", __DIR__)
+
+File.rm_rf!(concord_test_data_dir)
+File.rm_rf!(ra_test_data_dir)
+
 config :concord,
   clustering: false,
-  data_dir: Path.expand("../tmp/concord_test#{System.get_env("MIX_TEST_PARTITION")}", __DIR__)
+  data_dir: concord_test_data_dir
 
 config :ra,
-  data_dir:
-    Path.expand("../tmp/ra_test#{System.get_env("MIX_TEST_PARTITION")}", __DIR__)
-    |> to_charlist()
+  data_dir: to_charlist(ra_test_data_dir)
