@@ -1,5 +1,5 @@
 defmodule Synapsis.MCP do
-  @moduledoc "Public API for managing MCP servers (anubis_mcp clients)."
+  @moduledoc "Public API for managing MCP servers."
   require Logger
 
   alias Synapsis.MCP.Server

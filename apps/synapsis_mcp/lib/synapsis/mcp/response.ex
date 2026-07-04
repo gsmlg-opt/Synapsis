@@ -1,5 +1,5 @@
 defmodule Synapsis.MCP.Response do
-  @moduledoc "Normalizes anubis_mcp result maps into Synapsis tool shapes."
+  @moduledoc "Normalizes MCP result maps into Synapsis tool shapes."
 
   @doc "Map a tools/list result map to Synapsis.Tool.Registry tool definitions."
   def tools(result, server_name) when is_map(result) do

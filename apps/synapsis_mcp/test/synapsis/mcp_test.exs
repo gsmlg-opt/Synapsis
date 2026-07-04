@@ -42,7 +42,7 @@ defmodule Synapsis.MCPTest do
     |> Plug.Conn.resp(200, Jason.encode!(%{"jsonrpc" => "2.0", "id" => id, "result" => result}))
   end
 
-  defp handle(conn, _notification), do: Plug.Conn.resp(conn, 200, "")
+  defp handle(conn, _notification), do: Plug.Conn.resp(conn, 202, "")
 
   test "start, restart resets tools, stop removes them", %{bypass: bypass} do
     name = "facade_#{System.unique_integer([:positive])}"

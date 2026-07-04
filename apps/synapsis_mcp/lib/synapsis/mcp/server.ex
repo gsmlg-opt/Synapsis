@@ -1,11 +1,12 @@
 defmodule Synapsis.MCP.Server do
   @moduledoc """
-  A GenServer that owns one `Anubis.Client` for a configured MCP server.
+  A GenServer that owns one `Backplane.McpProtocol.Client` for a configured MCP
+  server.
 
   Responsibilities:
 
-    * Start (and link to) an `Anubis.Client` supervision tree built from a
-      `Synapsis.MCPConfig` via `Synapsis.MCP.Transport.build/1`.
+    * Start (and link to) a `Backplane.McpProtocol.Client` supervision tree
+      built from a `Synapsis.MCPConfig` via `Synapsis.MCP.Transport.build/1`.
     * Discover the server's tools and register each into
       `Synapsis.Tool.Registry` as a process-dispatch tool pointing at this
       GenServer.
@@ -18,7 +19,7 @@ defmodule Synapsis.MCP.Server do
   `start_link/1` starts this GenServer *unnamed* and returns `{:ok, pid}`. The
   caller (and, in Task 9, the `Synapsis.MCP.DynamicSupervisor` /
   `Synapsis.MCP.Registry`) is responsible for any name registration. The
-  underlying `Anubis.Client` is named with a unique atom derived from the
+  underlying Backplane client is named with a unique atom derived from the
   config name so its API functions (`await_ready/1`, `list_tools/1`,
   `call_tool/4`) can address it.
   """
@@ -27,6 +28,8 @@ defmodule Synapsis.MCP.Server do
 
   require Logger
 
+  alias Backplane.McpProtocol.Client, as: MCPClient
+  alias Backplane.McpProtocol.MCP.Response, as: ProtocolResponse
   alias Synapsis.MCP.Response
   alias Synapsis.MCP.Transport
   alias Synapsis.MCPConfig
@@ -34,7 +37,6 @@ defmodule Synapsis.MCP.Server do
 
   @client_info %{"name" => "synapsis", "version" => "0.1.0"}
   @capabilities %{"roots" => %{}}
-  @protocol_version "2025-06-18"
   @await_timeout 15_000
   @tool_timeout 30_000
 
@@ -64,10 +66,10 @@ defmodule Synapsis.MCP.Server do
       transport: Transport.build(config),
       client_info: @client_info,
       capabilities: @capabilities,
-      protocol_version: @protocol_version
+      protocol_version: Transport.protocol_version(config)
     ]
 
-    case Anubis.Client.start_link(opts) do
+    case MCPClient.start_link(opts) do
       {:ok, supervisor} ->
         state = %{
           config: config,
@@ -85,9 +87,9 @@ defmodule Synapsis.MCP.Server do
 
   @impl true
   def handle_continue(:discover, %{client: client, config: config} = state) do
-    with :ok <- Anubis.Client.await_ready(client, timeout: @await_timeout),
-         {:ok, response} <- Anubis.Client.list_tools(client) do
-      tools = Response.tools(Anubis.MCP.Response.unwrap(response), config.name)
+    with :ok <- MCPClient.await_ready(client, timeout: @await_timeout),
+         {:ok, response} <- MCPClient.list_tools(client) do
+      tools = Response.tools(ProtocolResponse.unwrap(response), config.name)
       names = Enum.map(tools, &register_tool/1)
       {:noreply, %{state | tool_names: names}}
     else
@@ -100,9 +102,9 @@ defmodule Synapsis.MCP.Server do
   def handle_call({:execute, full_tool_name, input, _ctx}, _from, %{client: client} = state) do
     raw = Response.raw_tool_name(full_tool_name)
 
-    case Anubis.Client.call_tool(client, raw, input, timeout: @tool_timeout) do
+    case MCPClient.call_tool(client, raw, input, timeout: @tool_timeout) do
       {:ok, response} ->
-        {:reply, {:ok, Response.content(Anubis.MCP.Response.unwrap(response))}, state}
+        {:reply, {:ok, Response.content(ProtocolResponse.unwrap(response))}, state}
 
       {:error, error} ->
         {:reply, {:error, inspect(error)}, state}

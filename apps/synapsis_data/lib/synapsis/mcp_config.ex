@@ -1,6 +1,6 @@
 defmodule Synapsis.MCPConfig do
   @moduledoc """
-  Configuration for a single MCP server (anubis_mcp client).
+  Configuration for a single MCP server client.
 
   Persisted in the file-backed `Config.Store` (`mcp.toml`). Embedded schema only.
   """

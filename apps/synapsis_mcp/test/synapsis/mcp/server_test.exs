@@ -17,7 +17,7 @@ defmodule Synapsis.MCP.ServerTest do
       handle_rpc(conn, req, server_name)
     end)
 
-    # tolerate any other requests anubis makes (GET sse channel, etc.)
+    # tolerate any other requests the MCP client makes (GET sse channel, etc.)
     Bypass.stub(bypass, "GET", "/mcp", fn conn ->
       Plug.Conn.resp(conn, 200, "")
     end)
@@ -57,7 +57,7 @@ defmodule Synapsis.MCP.ServerTest do
   end
 
   defp handle_rpc(conn, _notification, _server_name) do
-    Plug.Conn.resp(conn, 200, "")
+    Plug.Conn.resp(conn, 202, "")
   end
 
   test "discovers tools, routes calls, and purges on stop", %{bypass: bypass} do

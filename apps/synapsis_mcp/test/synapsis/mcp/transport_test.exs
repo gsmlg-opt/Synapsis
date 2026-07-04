@@ -45,4 +45,10 @@ defmodule Synapsis.MCP.TransportTest do
     assert opts[:server][:base_url] == "https://h"
     assert opts[:headers] == %{"A" => "b"}
   end
+
+  test "selects the protocol version supported by the configured transport" do
+    assert Transport.protocol_version(%MCPConfig{transport: "stdio"}) == "2025-06-18"
+    assert Transport.protocol_version(%MCPConfig{transport: "streamable_http"}) == "2025-06-18"
+    assert Transport.protocol_version(%MCPConfig{transport: "sse"}) == "2024-11-05"
+  end
 end
