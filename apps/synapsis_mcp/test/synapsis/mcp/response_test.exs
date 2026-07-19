@@ -16,6 +16,24 @@ defmodule Synapsis.MCP.ResponseTest do
     assert tool.parameters == %{"type" => "object"}
   end
 
+  test "tools/2 preserves JSON Schema type arrays" do
+    schema = %{
+      "type" => "object",
+      "properties" => %{
+        "label" => %{"type" => ["string", "null"], "description" => "optional label"}
+      }
+    }
+
+    result = %{
+      "tools" => [
+        %{"name" => "list_notes", "description" => "List notes", "inputSchema" => schema}
+      ]
+    }
+
+    assert [tool] = Response.tools(result, "agent-note")
+    assert tool.parameters["properties"]["label"]["type"] == ["string", "null"]
+  end
+
   test "content/1 joins text content blocks" do
     result = %{
       "content" => [%{"type" => "text", "text" => "a"}, %{"type" => "text", "text" => "b"}]

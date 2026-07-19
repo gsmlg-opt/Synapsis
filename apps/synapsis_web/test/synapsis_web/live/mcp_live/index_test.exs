@@ -203,6 +203,37 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
       refute html =~ "showModal()"
     end
 
+    test "running server refreshes tools after registry change", %{conn: conn} do
+      config = create_mcp_config(%{name: "refresh-tools-server", command: "test"})
+
+      {:ok, _pid} =
+        DynamicSupervisor.start_child(
+          Synapsis.MCP.DynamicSupervisor,
+          %{
+            id: {:fake, config.name},
+            start: {FakeMCPServer, :start_link, [[name: config.name]]},
+            restart: :temporary
+          }
+        )
+
+      {:ok, view, html} = live(conn, ~p"/settings/mcp")
+
+      assert html =~ "Running"
+      refute html =~ "1 tool(s)"
+
+      tool_name = "mcp:#{config.name}:search_docs"
+
+      Synapsis.Tool.Registry.register_process(tool_name, self(),
+        description: "Search docs",
+        parameters: %{},
+        plugin: :mcp
+      )
+
+      on_exit(fn -> Synapsis.Tool.Registry.unregister(tool_name) end)
+
+      assert wait_until(fn -> render(view) =~ "1 tool(s)" end)
+    end
+
     test "lists multiple MCP configs", %{conn: conn} do
       create_mcp_config(%{name: "server-a", command: "cmd-a"})
       create_mcp_config(%{name: "server-b", command: "cmd-b"})
@@ -221,6 +252,20 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
     test "empty state message shown when no configs", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/settings/mcp")
       assert html =~ "No MCP servers configured"
+    end
+  end
+
+  defp wait_until(fun, tries \\ 100) do
+    cond do
+      tries <= 0 ->
+        false
+
+      fun.() ->
+        true
+
+      true ->
+        Process.sleep(20)
+        wait_until(fun, tries - 1)
     end
   end
 end

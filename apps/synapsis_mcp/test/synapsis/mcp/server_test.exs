@@ -81,6 +81,30 @@ defmodule Synapsis.MCP.ServerTest do
     assert wait_until(fn -> match?({:error, :not_found}, Registry.lookup(tool)) end)
   end
 
+  test "re-registers discovered tools after tool registry restart", %{bypass: bypass} do
+    name = "srv_#{System.unique_integer([:positive])}"
+    stub_mcp(bypass, name)
+
+    cfg = %MCPConfig{
+      name: name,
+      transport: "streamable_http",
+      url: "http://localhost:#{bypass.port}"
+    }
+
+    {:ok, pid} = Server.start_link(cfg)
+
+    tool = "mcp:#{name}:echo"
+    assert wait_until(fn -> match?({:ok, {:process, ^pid, _opts}}, Registry.lookup(tool)) end)
+
+    :ok = Supervisor.terminate_child(SynapsisCore.Supervisor, Synapsis.Tool.Registry)
+    {:ok, _pid} = Supervisor.restart_child(SynapsisCore.Supervisor, Synapsis.Tool.Registry)
+
+    assert wait_until(fn -> match?({:ok, {:process, ^pid, _opts}}, Registry.lookup(tool)) end)
+
+    GenServer.stop(pid)
+    assert wait_until(fn -> match?({:error, :not_found}, Registry.lookup(tool)) end)
+  end
+
   defp wait_until(fun, tries \\ 100) do
     cond do
       tries <= 0 ->

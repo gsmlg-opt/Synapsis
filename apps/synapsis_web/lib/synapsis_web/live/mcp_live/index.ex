@@ -6,6 +6,10 @@ defmodule SynapsisWeb.MCPLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "tool_registry")
+    end
+
     {:ok,
      assign(socket,
        configs: [],
@@ -204,6 +208,10 @@ defmodule SynapsisWeb.MCPLive.Index do
 
   @impl true
   def handle_info(:refresh_plugin_states, socket) do
+    {:noreply, refresh_states(socket)}
+  end
+
+  def handle_info({:tool_registry_changed, _payload}, socket) do
     {:noreply, refresh_states(socket)}
   end
 

@@ -39,6 +39,7 @@ defmodule Synapsis.MCP.Server do
   @capabilities %{"roots" => %{}}
   @await_timeout 15_000
   @tool_timeout 30_000
+  @registry_retry_ms 100
 
   # --------------------------------------------------------------------------
   # Public API
@@ -64,6 +65,7 @@ defmodule Synapsis.MCP.Server do
     opts = [
       name: client_name,
       transport: Transport.build(config),
+      # TODO(upstream): gsmlg-opt/backplane#19 validator cache keys collide across clients.
       client_info: @client_info,
       capabilities: @capabilities,
       protocol_version: Transport.protocol_version(config)
@@ -75,6 +77,8 @@ defmodule Synapsis.MCP.Server do
           config: config,
           client: client_name,
           supervisor: supervisor,
+          tool_registry_ref: monitor_tool_registry(),
+          tools: [],
           tool_names: []
         }
 
@@ -90,8 +94,14 @@ defmodule Synapsis.MCP.Server do
     with :ok <- MCPClient.await_ready(client, timeout: @await_timeout),
          {:ok, response} <- MCPClient.list_tools(client) do
       tools = Response.tools(ProtocolResponse.unwrap(response), config.name)
-      names = Enum.map(tools, &register_tool/1)
-      {:noreply, %{state | tool_names: names}}
+
+      case register_tools(tools) do
+        {:ok, names} ->
+          {:noreply, %{state | tools: tools, tool_names: names}}
+
+        {:error, reason} ->
+          {:stop, {:tool_registration_failed, reason}, state}
+      end
     else
       {:error, reason} ->
         {:stop, {:discover_failed, reason}, state}
@@ -116,6 +126,24 @@ defmodule Synapsis.MCP.Server do
     {:stop, {:client_exited, reason}, state}
   end
 
+  def handle_info({:DOWN, ref, :process, _pid, _reason}, %{tool_registry_ref: ref} = state) do
+    Process.send_after(self(), :reregister_tools, @registry_retry_ms)
+    {:noreply, %{state | tool_registry_ref: nil, tool_names: []}}
+  end
+
+  def handle_info(:reregister_tools, %{tools: tools} = state) do
+    with :ok <- tool_registry_ready(),
+         {:ok, names} <- register_tools(tools),
+         {:ok, ref} <- monitor_tool_registry_ready() do
+      Logger.info("mcp_tools_reregistered", server: state.config.name, count: length(names))
+      {:noreply, %{state | tool_registry_ref: ref, tool_names: names}}
+    else
+      {:error, _reason} ->
+        Process.send_after(self(), :reregister_tools, @registry_retry_ms)
+        {:noreply, state}
+    end
+  end
+
   def handle_info(_msg, state), do: {:noreply, state}
 
   @impl true
@@ -130,6 +158,14 @@ defmodule Synapsis.MCP.Server do
   # Helpers
   # --------------------------------------------------------------------------
 
+  defp register_tools(tools) do
+    {:ok, Enum.map(tools, &register_tool/1)}
+  rescue
+    e in ArgumentError -> {:error, Exception.message(e)}
+  catch
+    :exit, reason -> {:error, reason}
+  end
+
   defp register_tool(%{name: name, description: description, parameters: parameters}) do
     Registry.register_process(name, self(),
       description: description,
@@ -139,6 +175,24 @@ defmodule Synapsis.MCP.Server do
     )
 
     name
+  end
+
+  defp monitor_tool_registry do
+    case Process.whereis(Registry) do
+      nil -> nil
+      pid -> Process.monitor(pid)
+    end
+  end
+
+  defp tool_registry_ready do
+    if Process.whereis(Registry), do: :ok, else: {:error, :registry_not_started}
+  end
+
+  defp monitor_tool_registry_ready do
+    case Process.whereis(Registry) do
+      nil -> {:error, :registry_not_started}
+      pid -> {:ok, Process.monitor(pid)}
+    end
   end
 
   defp client_name(%MCPConfig{name: name}) do
