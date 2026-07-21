@@ -10,6 +10,7 @@ defmodule Synapsis.MixProject do
       start_permanent: Mix.env() == :prod,
       listeners: [Phoenix.CodeReloader],
       deps: deps(),
+      aliases: aliases(),
       releases: releases()
     ]
   end
@@ -34,5 +35,11 @@ defmodule Synapsis.MixProject do
 
   defp deps do
     []
+  end
+
+  defp aliases do
+    [
+      "synapsis.run": ["phx.server"]
+    ]
   end
 end
