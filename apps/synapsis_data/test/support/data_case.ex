@@ -56,8 +56,8 @@ defmodule Synapsis.DataCase do
 
   @doc "Delete every Concord key under a coordination prefix (test isolation)."
   def clear_coord(prefix) when is_binary(prefix) do
-    case Concord.prefix_scan(prefix) do
-      {:ok, pairs} -> Concord.delete_many(Enum.map(pairs, fn {k, _} -> k end))
+    case Concord.Turso.prefix_scan(prefix) do
+      {:ok, pairs} -> Concord.Turso.delete_many(Enum.map(pairs, fn {k, _} -> k end))
       _ -> :ok
     end
 

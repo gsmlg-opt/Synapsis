@@ -5,6 +5,7 @@ defmodule Synapsis.Agent.Runs do
   ADR-006 C4: node-local coordination data in Concord under `coord/agent_runs/`,
   keyed by id (ADR-006 §10 — cluster form is future work).
   """
+  alias Concord.Turso, as: KV
   alias Synapsis.AgentRun
 
   @prefix "coord/agent_runs/"
@@ -35,7 +36,7 @@ defmodule Synapsis.Agent.Runs do
 
   @spec get(String.t()) :: AgentRun.t() | nil
   def get(id) do
-    case Concord.get(@prefix <> id) do
+    case KV.get(@prefix <> id) do
       {:ok, map} -> struct(AgentRun, map)
       _ -> nil
     end
@@ -112,7 +113,7 @@ defmodule Synapsis.Agent.Runs do
   end
 
   defp persist(%AgentRun{} = run) do
-    case Concord.put(@prefix <> run.id, Map.from_struct(run)) do
+    case KV.put(@prefix <> run.id, Map.from_struct(run)) do
       :ok -> :ok
       {:ok, _} -> :ok
       _ -> :ok
@@ -120,7 +121,7 @@ defmodule Synapsis.Agent.Runs do
   end
 
   defp scan do
-    case Concord.prefix_scan(@prefix) do
+    case KV.prefix_scan(@prefix) do
       # WORKAROUND(upstream): gsmlg-dev/concord#23 — prefix_scan skips decompression.
       {:ok, pairs} ->
         Enum.map(pairs, fn {_k, v} -> struct(AgentRun, Concord.Compression.decompress(v)) end)

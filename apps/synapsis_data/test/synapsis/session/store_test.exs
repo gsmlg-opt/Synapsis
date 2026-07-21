@@ -6,6 +6,7 @@ defmodule Synapsis.Session.StoreTest do
   """
   use ExUnit.Case, async: false
 
+  alias Concord.Turso, as: KV
   alias Synapsis.Session.Store
 
   setup do
@@ -52,20 +53,16 @@ defmodule Synapsis.Session.StoreTest do
   end
 
   describe "atomicity (single-command multi-key commit)" do
-    # commit_turn relies on put_many being applied as one Raft log entry, so a
-    # whole turn (turn entry + meta) lands together or not at all. The
-    # all-or-nothing-under-crash property is structural (a single state-machine
-    # apply) and not externally injectable; here we assert the observable half:
-    # every key in the batch commits together.
+    # commit_turn relies on put_many persisting a whole turn batch together.
     test "put_many commits all keys in the batch together", %{id: id} do
       key_a = "atomic/" <> id <> "/a"
       key_b = "atomic/" <> id <> "/b"
 
       assert {:ok, %{^key_a => :ok, ^key_b => :ok}} =
-               Concord.put_many([{key_a, %{v: 1}}, {key_b, %{v: 2}}])
+               KV.put_many([{key_a, %{v: 1}}, {key_b, %{v: 2}}])
 
-      assert {:ok, %{v: 1}} = Concord.get(key_a)
-      assert {:ok, %{v: 2}} = Concord.get(key_b)
+      assert {:ok, %{v: 1}} = KV.get(key_a)
+      assert {:ok, %{v: 2}} = KV.get(key_b)
     end
   end
 
@@ -102,13 +99,13 @@ defmodule Synapsis.Session.StoreTest do
         end
 
       for chunk <- Enum.chunk_every(values, 500) do
-        assert {:ok, _results} = Concord.put_many(chunk)
+        assert {:ok, _results} = KV.put_many(chunk)
       end
 
       assert Store.delete_session(id) == :ok
       assert Store.get_meta(id) == {:error, :not_found}
 
-      assert {:ok, []} = Concord.prefix_scan(Store.session_prefix(id))
+      assert {:ok, []} = KV.prefix_scan(Store.session_prefix(id))
     end
   end
 end

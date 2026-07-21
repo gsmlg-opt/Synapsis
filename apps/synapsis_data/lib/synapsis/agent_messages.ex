@@ -7,6 +7,7 @@ defmodule Synapsis.AgentMessages do
   filter in memory — message volume is small and node-local. (Cluster delivery is
   future work — ADR-006 §10.)
   """
+  alias Concord.Turso, as: KV
   alias Synapsis.AgentMessage
 
   @prefix "coord/agent_messages/"
@@ -32,7 +33,7 @@ defmodule Synapsis.AgentMessages do
 
   @spec get(String.t()) :: AgentMessage.t() | nil
   def get(id) do
-    case Concord.get(@prefix <> id) do
+    case KV.get(@prefix <> id) do
       {:ok, map} -> struct(AgentMessage, map)
       _ -> nil
     end
@@ -96,7 +97,7 @@ defmodule Synapsis.AgentMessages do
   # ── internals ──────────────────────────────────────────────────────────────
 
   defp persist(%AgentMessage{} = record) do
-    case Concord.put(@prefix <> record.id, Map.from_struct(record)) do
+    case KV.put(@prefix <> record.id, Map.from_struct(record)) do
       :ok -> :ok
       {:ok, _} -> :ok
       _ -> :ok
@@ -104,7 +105,7 @@ defmodule Synapsis.AgentMessages do
   end
 
   defp scan do
-    case Concord.prefix_scan(@prefix) do
+    case KV.prefix_scan(@prefix) do
       # WORKAROUND(upstream): gsmlg-dev/concord#23 — prefix_scan skips decompression.
       {:ok, pairs} ->
         Enum.map(pairs, fn {_k, v} -> struct(AgentMessage, Concord.Compression.decompress(v)) end)

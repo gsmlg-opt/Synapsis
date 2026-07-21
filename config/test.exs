@@ -28,10 +28,9 @@ config :synapsis_core, :file_system_enabled, false
 config :synapsis_core,
   memory_dir: Path.expand("../tmp/memory_test#{System.get_env("MIX_TEST_PARTITION")}", __DIR__)
 
-# Concord: isolated per-partition data dir, single-node local VSR cluster.
+# Concord: isolated per-partition data dir, node-local Turso engine.
 concord_test_partition = System.get_env("MIX_TEST_PARTITION") || "default"
 concord_test_generation = "concord-3.0"
-concord_test_node = :"synapsis-test-#{concord_test_partition}"
 
 concord_test_data_dir =
   Path.expand("../tmp/concord_test/#{concord_test_generation}/#{concord_test_partition}", __DIR__)
@@ -39,12 +38,10 @@ concord_test_data_dir =
 File.rm_rf!(concord_test_data_dir)
 
 config :concord,
-  cluster_enabled: true,
+  cluster_enabled: false,
   data_dir: concord_test_data_dir,
-  vsr: [
-    replica_id: concord_test_node,
-    members: [%{id: concord_test_node, endpoint: concord_test_node}],
-    transport: :local,
-    bootstrap: true,
-    storage: :memory
+  turso: [
+    enabled: true,
+    database: Path.join(concord_test_data_dir, "turso.db"),
+    pool_size: 1
   ]

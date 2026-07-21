@@ -1,6 +1,7 @@
 defmodule SynapsisServer.SessionControllerTest do
   use SynapsisServer.ConnCase
 
+  alias Concord.Turso, as: KV
   alias Synapsis.Session.Store
 
   describe "POST /api/sessions" do
@@ -88,7 +89,7 @@ defmodule SynapsisServer.SessionControllerTest do
         end
 
       for chunk <- Enum.chunk_every(values, 500) do
-        assert {:ok, _results} = Concord.put_many(chunk)
+        assert {:ok, _results} = KV.put_many(chunk)
       end
 
       conn = delete(conn, "/api/sessions/#{id}")
@@ -97,7 +98,7 @@ defmodule SynapsisServer.SessionControllerTest do
       conn = get(conn, "/api/sessions/#{id}")
       assert json_response(conn, 404)
 
-      assert {:ok, []} = Concord.prefix_scan(Store.session_prefix(id))
+      assert {:ok, []} = KV.prefix_scan(Store.session_prefix(id))
     end
 
     test "returns 404 for unknown session", %{conn: conn} do

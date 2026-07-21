@@ -5,6 +5,7 @@ defmodule Synapsis.AgentEvents do
   ADR-006 C4: node-local coordination data in Concord under `coord/agent_events/`.
   (The cluster/replicated form is future work — ADR-006 §10.)
   """
+  alias Concord.Turso, as: KV
   alias Synapsis.AgentEvent
 
   @prefix "coord/agent_events/"
@@ -23,7 +24,7 @@ defmodule Synapsis.AgentEvents do
 
       key = @prefix <> DateTime.to_iso8601(now) <> "-" <> record.id
 
-      case Concord.put(key, Map.from_struct(record)) do
+      case KV.put(key, Map.from_struct(record)) do
         :ok -> :ok
         {:ok, _} -> :ok
         other -> {:error, other}
@@ -44,7 +45,7 @@ defmodule Synapsis.AgentEvents do
   end
 
   defp scan do
-    case Concord.prefix_scan(@prefix) do
+    case KV.prefix_scan(@prefix) do
       # WORKAROUND(upstream): gsmlg-dev/concord#23 — prefix_scan skips decompression.
       {:ok, pairs} ->
         Enum.map(pairs, fn {_k, v} -> struct(AgentEvent, Concord.Compression.decompress(v)) end)

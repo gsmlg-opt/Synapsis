@@ -5,6 +5,7 @@ defmodule Synapsis.AgentCheckpoints do
   ADR-006 C4: node-local coordination data in Concord under `coord/agent_checkpoints/`,
   keyed by `run_id` (upsert overwrites in place).
   """
+  alias Concord.Turso, as: KV
   alias Synapsis.AgentCheckpoint
 
   @prefix "coord/agent_checkpoints/"
@@ -22,7 +23,7 @@ defmodule Synapsis.AgentCheckpoints do
         |> then(&%{&1 | id: &1.id || Ecto.UUID.generate(), updated_at: now})
         |> then(&%{&1 | inserted_at: &1.inserted_at || now})
 
-      case Concord.put(@prefix <> record.run_id, Map.from_struct(record)) do
+      case KV.put(@prefix <> record.run_id, Map.from_struct(record)) do
         :ok -> :ok
         {:ok, _} -> :ok
         other -> {:error, other}
@@ -34,7 +35,7 @@ defmodule Synapsis.AgentCheckpoints do
 
   @spec get(String.t()) :: {:ok, AgentCheckpoint.t()} | {:error, :not_found}
   def get(run_id) when is_binary(run_id) do
-    case Concord.get(@prefix <> run_id) do
+    case KV.get(@prefix <> run_id) do
       {:ok, map} -> {:ok, struct(AgentCheckpoint, map)}
       _ -> {:error, :not_found}
     end
@@ -42,7 +43,7 @@ defmodule Synapsis.AgentCheckpoints do
 
   @spec delete(String.t()) :: :ok
   def delete(run_id) when is_binary(run_id) do
-    Concord.delete(@prefix <> run_id)
+    KV.delete(@prefix <> run_id)
     :ok
   end
 
@@ -57,8 +58,8 @@ defmodule Synapsis.AgentCheckpoints do
 
   @spec clear() :: :ok
   def clear do
-    case Concord.prefix_scan(@prefix) do
-      {:ok, pairs} -> Concord.delete_many(Enum.map(pairs, fn {k, _v} -> k end))
+    case KV.prefix_scan(@prefix) do
+      {:ok, pairs} -> KV.delete_many(Enum.map(pairs, fn {k, _v} -> k end))
       _ -> :ok
     end
 
@@ -66,7 +67,7 @@ defmodule Synapsis.AgentCheckpoints do
   end
 
   defp scan do
-    case Concord.prefix_scan(@prefix) do
+    case KV.prefix_scan(@prefix) do
       # WORKAROUND(upstream): gsmlg-dev/concord#23 — prefix_scan skips decompression.
       {:ok, pairs} ->
         Enum.map(pairs, fn {_k, v} ->

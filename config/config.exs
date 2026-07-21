@@ -7,25 +7,35 @@ import Config
 # Concord (below); configs are files; memory is the memory port.
 
 # Concord embedded KV store (ADR-006 session storage).
-# Concord 3.x uses Viewstamped Replication instead of Ra, and it does not read
-# or migrate Ra storage. Keep the local store under a new generation segment.
+# Synapsis uses Concord 3.x's node-local Turso engine, not the VSR cluster
+# runtime. Keep the local store under a new generation segment.
 concord_store_generation = "concord-3.0"
 concord_node = node()
+concord_project = Path.basename(Path.expand("..", __DIR__))
+
+concord_data_dir =
+  System.get_env("SYNAPSIS_CONCORD_DATA_DIR") ||
+    Path.join([
+      System.tmp_dir!(),
+      concord_project,
+      "concord",
+      concord_store_generation,
+      Atom.to_string(concord_node)
+    ])
 
 config :concord,
-  cluster_enabled: true,
+  cluster_enabled: false,
   # Disable value compression: it provides no benefit for a node-local
   # single-member store, and older Concord 2.x state machines crashed on
   # compressed values during apply.
   # See gsmlg-dev/concord#23 (prefix_scan) and the apply/state-machine crash.
   # TODO(upstream): gsmlg-dev/concord — remove once compression is crash-safe.
   compression: [enabled: false],
-  data_dir: Path.expand("../tmp/concord/#{concord_store_generation}/#{concord_node}", __DIR__),
-  vsr: [
-    replica_id: concord_node,
-    members: [%{id: concord_node, endpoint: concord_node}],
-    transport: :local,
-    bootstrap: true
+  data_dir: concord_data_dir,
+  turso: [
+    enabled: true,
+    database: Path.join(concord_data_dir, "turso.db"),
+    pool_size: 1
   ]
 
 # General application configuration

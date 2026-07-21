@@ -7,6 +7,7 @@ defmodule Synapsis.ToolApproval do
   """
   use Ecto.Schema
   import Ecto.Changeset
+  alias Concord.Turso, as: KV
 
   @type t :: %__MODULE__{}
   @prefix "coord/tool_approvals/"
@@ -30,11 +31,11 @@ defmodule Synapsis.ToolApproval do
     |> validate_pattern(:pattern)
   end
 
-  # ── context (Concord-backed) ────────────────────────────────────────────────
+  # ── context (Concord-backed Turso) ──────────────────────────────────────────
 
   @spec get(String.t()) :: t() | nil
   def get(id) do
-    case Concord.get(@prefix <> id) do
+    case KV.get(@prefix <> id) do
       {:ok, map} -> struct(__MODULE__, map)
       _ -> nil
     end
@@ -87,7 +88,7 @@ defmodule Synapsis.ToolApproval do
 
   @spec delete(t()) :: {:ok, t()}
   def delete(%__MODULE__{id: id} = approval) do
-    Concord.delete(@prefix <> id)
+    KV.delete(@prefix <> id)
     {:ok, approval}
   end
 
@@ -102,7 +103,7 @@ defmodule Synapsis.ToolApproval do
       |> then(&%{&1 | id: &1.id || Ecto.UUID.generate(), updated_at: now})
       |> then(&%{&1 | inserted_at: &1.inserted_at || now})
 
-    case Concord.put(@prefix <> record.id, Map.from_struct(record)) do
+    case KV.put(@prefix <> record.id, Map.from_struct(record)) do
       :ok -> {:ok, record}
       {:ok, _} -> {:ok, record}
       other -> {:error, other}
@@ -112,7 +113,7 @@ defmodule Synapsis.ToolApproval do
   defp persist(%Ecto.Changeset{} = changeset), do: {:error, changeset}
 
   defp scan do
-    case Concord.prefix_scan(@prefix) do
+    case KV.prefix_scan(@prefix) do
       # WORKAROUND(upstream): gsmlg-dev/concord#23 — prefix_scan skips decompression.
       {:ok, pairs} ->
         Enum.map(pairs, fn {_k, v} -> struct(__MODULE__, Concord.Compression.decompress(v)) end)

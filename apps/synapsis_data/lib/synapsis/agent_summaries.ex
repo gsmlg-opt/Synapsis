@@ -5,6 +5,7 @@ defmodule Synapsis.AgentSummaries do
   ADR-006 C4: node-local coordination data in Concord under `coord/agent_summaries/`,
   keyed by `scope/scope_id/kind` (upsert overwrites in place).
   """
+  alias Concord.Turso, as: KV
   alias Synapsis.AgentSummary
 
   @prefix "coord/agent_summaries/"
@@ -22,7 +23,7 @@ defmodule Synapsis.AgentSummaries do
         |> then(&%{&1 | id: &1.id || Ecto.UUID.generate(), updated_at: now})
         |> then(&%{&1 | inserted_at: &1.inserted_at || now})
 
-      case Concord.put(key(record.scope, record.scope_id, record.kind), Map.from_struct(record)) do
+      case KV.put(key(record.scope, record.scope_id, record.kind), Map.from_struct(record)) do
         :ok -> :ok
         {:ok, _} -> :ok
         other -> {:error, other}
@@ -35,7 +36,7 @@ defmodule Synapsis.AgentSummaries do
   @spec get(atom() | String.t(), String.t(), atom() | String.t()) ::
           {:ok, AgentSummary.t()} | {:error, :not_found}
   def get(scope, scope_id, kind) do
-    case Concord.get(key(to_string(scope), scope_id, to_string(kind))) do
+    case KV.get(key(to_string(scope), scope_id, to_string(kind))) do
       {:ok, map} -> {:ok, struct(AgentSummary, map)}
       _ -> {:error, :not_found}
     end
@@ -54,7 +55,7 @@ defmodule Synapsis.AgentSummaries do
   defp key(scope, scope_id, kind), do: @prefix <> "#{scope}/#{scope_id}/#{kind}"
 
   defp scan do
-    case Concord.prefix_scan(@prefix) do
+    case KV.prefix_scan(@prefix) do
       # WORKAROUND(upstream): gsmlg-dev/concord#23 — prefix_scan skips decompression.
       {:ok, pairs} ->
         Enum.map(pairs, fn {_k, v} -> struct(AgentSummary, Concord.Compression.decompress(v)) end)
