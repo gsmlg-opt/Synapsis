@@ -1,7 +1,7 @@
 import Config
 
 # ADR-006 C4: no PostgreSQL. Concord runs node-local in test with an isolated
-# per-partition data dir (see the :concord / :ra config below).
+# per-partition data dir.
 
 config :synapsis_server, SynapsisServer.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4002],
@@ -28,24 +28,23 @@ config :synapsis_core, :file_system_enabled, false
 config :synapsis_core,
   memory_dir: Path.expand("../tmp/memory_test#{System.get_env("MIX_TEST_PARTITION")}", __DIR__)
 
-# Concord: isolated per-partition data dir, clustering off (single node).
-# WORKAROUND(upstream): gsmlg-dev/concord#30 — keep test stores under the
-# Concord generation segment too, so older Ra logs are never replayed.
+# Concord: isolated per-partition data dir, single-node local VSR cluster.
 concord_test_partition = System.get_env("MIX_TEST_PARTITION") || "default"
-concord_test_generation = "concord-2.3"
+concord_test_generation = "concord-3.0"
+concord_test_node = :"synapsis-test-#{concord_test_partition}"
 
 concord_test_data_dir =
   Path.expand("../tmp/concord_test/#{concord_test_generation}/#{concord_test_partition}", __DIR__)
 
-ra_test_data_dir =
-  Path.expand("../tmp/ra_test/#{concord_test_generation}/#{concord_test_partition}", __DIR__)
-
 File.rm_rf!(concord_test_data_dir)
-File.rm_rf!(ra_test_data_dir)
 
 config :concord,
-  clustering: false,
-  data_dir: concord_test_data_dir
-
-config :ra,
-  data_dir: to_charlist(ra_test_data_dir)
+  cluster_enabled: true,
+  data_dir: concord_test_data_dir,
+  vsr: [
+    replica_id: concord_test_node,
+    members: [%{id: concord_test_node, endpoint: concord_test_node}],
+    transport: :local,
+    bootstrap: true,
+    storage: :memory
+  ]

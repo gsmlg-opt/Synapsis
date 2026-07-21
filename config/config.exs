@@ -6,34 +6,27 @@ import Config
 # ADR-006 C4: PostgreSQL removed — no Ecto Repo. Session/agent state lives in
 # Concord (below); configs are files; memory is the memory port.
 
-# Concord 2.x embedded KV store (ADR-006 session storage).
-# Node-local mode: `clustering: false` disables libcluster (no leader-election
-# gating in the session path) — a single-member Ra cluster on this node. Concord
-# 2.x starts the :ra default system itself and defaults its Prometheus exporter
-# off, so no further host-side config is needed.
-#
-# WORKAROUND(upstream): gsmlg-dev/concord#30 — Concord 2.3.0 can crash while
-# replaying older local Ra logs that reference :concord_store before the ETS
-# table exists. Keep new node-local tmp stores under a Concord generation
-# segment so old incompatible tmp state is preserved but no longer replayed.
-concord_store_generation = "concord-2.3"
+# Concord embedded KV store (ADR-006 session storage).
+# Concord 3.x uses Viewstamped Replication instead of Ra, and it does not read
+# or migrate Ra storage. Keep the local store under a new generation segment.
+concord_store_generation = "concord-3.0"
+concord_node = node()
 
 config :concord,
-  clustering: false,
+  cluster_enabled: true,
   # Disable value compression: it provides no benefit for a node-local
-  # single-member store, and Concord 2.1.0's Raft state machine crashes on
-  # compressed values during apply (terminates the leader → :cluster_not_ready).
+  # single-member store, and older Concord 2.x state machines crashed on
+  # compressed values during apply.
   # See gsmlg-dev/concord#23 (prefix_scan) and the apply/state-machine crash.
   # TODO(upstream): gsmlg-dev/concord — remove once compression is crash-safe.
   compression: [enabled: false],
-  data_dir: Path.expand("../tmp/concord/#{concord_store_generation}/#{node()}", __DIR__)
-
-# Keep the embedded :ra system's on-disk data under tmp/ as well; without this
-# ra writes its WAL/segments to ./<node> at the cwd (repo root).
-config :ra,
-  data_dir:
-    Path.expand("../tmp/ra/#{concord_store_generation}/#{node()}", __DIR__)
-    |> to_charlist()
+  data_dir: Path.expand("../tmp/concord/#{concord_store_generation}/#{concord_node}", __DIR__),
+  vsr: [
+    replica_id: concord_node,
+    members: [%{id: concord_node, endpoint: concord_node}],
+    transport: :local,
+    bootstrap: true
+  ]
 
 # General application configuration
 config :synapsis_server,
