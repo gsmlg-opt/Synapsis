@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.gsmlg.synapsis</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/sh</string>
+    <string>-lc</string>
+    <string>set -a; [ -f "$HOME/.config/synapsis/synapsis.env" ] &amp;&amp; . "$HOME/.config/synapsis/synapsis.env"; set +a; export SYNAPSIS_CONFIG_DIR="${SYNAPSIS_CONFIG_DIR:-$HOME/.config/synapsis}" SYNAPSIS_CONCORD_DATA_DIR="${SYNAPSIS_CONCORD_DATA_DIR:-$HOME/.local/state/synapsis/concord}" SYNAPSIS_MEMORY_DIR="${SYNAPSIS_MEMORY_DIR:-$HOME/.local/state/synapsis/memory}" SYNAPSIS_WORKSPACE_ROOT="${SYNAPSIS_WORKSPACE_ROOT:-$HOME}"; exec "$HOME/.local/opt/synapsis/bin/synapsis" start</string>
+  </array>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/synapsis.out.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/tmp/synapsis.err.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>__HOME__</string>
+    <key>LANG</key>
+    <string>en_US.UTF-8</string>
+  </dict>
+</dict>
+</plist>

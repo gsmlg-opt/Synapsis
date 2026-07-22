@@ -1,0 +1,19 @@
+[Unit]
+Description=Synapsis
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/synapsis/synapsis.env
+Environment=SYNAPSIS_CONFIG_DIR=%h/.config/synapsis
+Environment=SYNAPSIS_CONCORD_DATA_DIR=%h/.local/state/synapsis/concord
+Environment=SYNAPSIS_MEMORY_DIR=%h/.local/state/synapsis/memory
+Environment=SYNAPSIS_WORKSPACE_ROOT=%h
+ExecStart=%h/.local/opt/synapsis/bin/synapsis start
+ExecStop=%h/.local/opt/synapsis/bin/synapsis stop
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
