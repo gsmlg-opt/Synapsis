@@ -469,8 +469,7 @@ defmodule SynapsisWeb.CoreComponents do
         <span class={[
           "inline-block w-2 h-2 rounded-full",
           status_dot_color(@session_status)
-        ]}>
-        </span>
+        ]}></span>
         {@session_status}
       </div>
     </div>
@@ -855,8 +854,7 @@ defmodule SynapsisWeb.CoreComponents do
         <span class={[
           "inline-block w-2 h-2 rounded-full shrink-0",
           status_dot_color(@session.status || "idle")
-        ]}>
-        </span>
+        ]}></span>
         <div class="min-w-0 flex-1">
           <div class="truncate font-medium">
             {@session.title || "Session #{String.slice(@session.id || "", 0..7)}"}

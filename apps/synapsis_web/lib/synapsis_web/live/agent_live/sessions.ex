@@ -888,8 +888,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
           class="absolute inset-0 bg-scrim/50"
           aria-label="Cancel delete session"
           phx-click="cancel_delete_session"
-        >
-        </button>
+        ></button>
         <section
           role="dialog"
           aria-modal="true"
