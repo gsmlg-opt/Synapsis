@@ -30,7 +30,7 @@ in
   languages.javascript.bun.package = pkgs-stable.bun;
 
   processes.synapsis = {
-    exec = "mix phx.server";
+    exec = "mix synapsis.run";
   };
 
   # PostgreSQL database service
