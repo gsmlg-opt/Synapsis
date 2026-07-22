@@ -12,6 +12,9 @@ concurrency:
   group: release
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 env:
   MIX_ENV: prod
   PGUSER: postgres
