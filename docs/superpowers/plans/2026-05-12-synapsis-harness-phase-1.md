@@ -1,5 +1,15 @@
 # Synapsis Harness Phase 1 Implementation Plan
 
+> [!WARNING]
+> **Superseded historical plan.** Do not resume this PostgreSQL-era harness
+> implementation. The active architecture is documented in
+> [ADR-006](../../decisions/ADR-006-in-process-sessions-and-concord-storage.md),
+> [ADR-007](../../decisions/ADR-007-pure-liveview-ui.md),
+> [ADR-008](../../decisions/ADR-008-gen-statem-session-shell.md), and
+> [`docs/architecture/`](../../architecture/). The orphaned harness reducer was
+> removed by the
+> [v0.1.3 release-readiness plan](2026-08-11-v0.1.3-release-readiness.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add the harness data-model and pure context fold foundation without changing the current session runtime, REST API, channel API, or LiveView behavior.

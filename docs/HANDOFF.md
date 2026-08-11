@@ -1,5 +1,15 @@
 # HANDOFF — Implementation Plan
 
+> [!WARNING]
+> **Superseded historical handoff.** Its PostgreSQL, React, and former umbrella
+> layout assumptions are not the current product architecture. Use
+> [ADR-006](decisions/ADR-006-in-process-sessions-and-concord-storage.md),
+> [ADR-007](decisions/ADR-007-pure-liveview-ui.md),
+> [ADR-008](decisions/ADR-008-gen-statem-session-shell.md),
+> [`docs/architecture/`](architecture/), and the
+> [v0.1.3 release-readiness plan](superpowers/plans/2026-08-11-v0.1.3-release-readiness.md)
+> instead.
+
 ## Project: Synapsis.ex
 
 ### Umbrella Structure (7 apps)
