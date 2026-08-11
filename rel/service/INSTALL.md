@@ -16,7 +16,16 @@ $HOME/.config/synapsis/synapsis.env
 
 ```sh
 mkdir -p "$HOME/.local/opt/synapsis" "$HOME/.config/synapsis" "$HOME/.local/state/synapsis"
-tar -xzf synapsis-*.tar.gz -C "$HOME/.local/opt/synapsis"
+tar -xzf synapsis-<version>-<platform>.tar.gz -C "$HOME/.local/opt/synapsis"
+```
+
+Use the archive matching your host:
+
+```text
+synapsis-<version>-linux-amd64.tar.gz
+synapsis-<version>-linux-arm64.tar.gz
+synapsis-<version>-macos-amd64.tar.gz
+synapsis-<version>-macos-arm64.tar.gz
 ```
 
 Create the user service environment:
