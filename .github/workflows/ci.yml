@@ -116,6 +116,9 @@ jobs:
       - name: Install JavaScript dependencies
         run: bun install
 
+      - name: Run hook tests
+        run: bun test packages/hooks/test
+
       - name: Build production assets
         working-directory: apps/synapsis_web
         run: |
