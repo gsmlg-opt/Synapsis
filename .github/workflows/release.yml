@@ -190,9 +190,81 @@ jobs:
           path: _build/prod/synapsis-${{ inputs.version }}-${{ matrix.target }}.tar.gz
           if-no-files-found: error
 
+  smoke:
+    name: Installed Linux Smoke
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Linux archive
+        uses: actions/download-artifact@v4
+        with:
+          name: synapsis-${{ inputs.version }}-linux-amd64
+          path: dist
+
+      - name: Boot installed release on loopback
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          smoke_root="$RUNNER_TEMP/synapsis-smoke"
+          release_root="$smoke_root/release"
+          mkdir -p "$release_root" "$smoke_root/config" "$smoke_root/concord" "$smoke_root/memory" "$smoke_root/workspace"
+          tar -xzf "dist/synapsis-${RELEASE_VERSION}-linux-amd64.tar.gz" -C "$release_root"
+
+          test "$("$release_root/bin/synapsis" version)" = "synapsis ${RELEASE_VERSION}"
+
+          release_manifest="$release_root/releases/${RELEASE_VERSION}/synapsis.rel"
+          for app in synapsis_data synapsis_agent synapsis_provider synapsis_core synapsis_server synapsis_workspace synapsis_web synapsis_mcp synapsis_sandbox; do
+            grep -Fq "{${app},\"${RELEASE_VERSION}\",permanent}" "$release_manifest"
+          done
+
+          export PHX_HOST=localhost
+          export PORT=4664
+          export SECRET_KEY_BASE=0123456789012345678901234567890123456789012345678901234567890123
+          export SYNAPSIS_ENCRYPTION_KEY=01234567890123456789012345678901
+          export SYNAPSIS_CONFIG_DIR="$smoke_root/config"
+          export SYNAPSIS_CONCORD_DATA_DIR="$smoke_root/concord"
+          export SYNAPSIS_MEMORY_DIR="$smoke_root/memory"
+          export SYNAPSIS_WORKSPACE_ROOT="$smoke_root/workspace"
+          unset PHX_IP
+
+          "$release_root/bin/synapsis" start >"$smoke_root/release.log" 2>&1 &
+          release_pid=$!
+          cleanup() {
+            kill -TERM "$release_pid" 2>/dev/null || true
+            wait "$release_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          for _attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error http://127.0.0.1:4664/api/health >"$smoke_root/health.json"; then
+              break
+            fi
+            if ! kill -0 "$release_pid" 2>/dev/null; then
+              cat "$smoke_root/release.log"
+              exit 1
+            fi
+            sleep 1
+          done
+
+          curl --fail --silent --show-error http://127.0.0.1:4664/api/health >"$smoke_root/health.json"
+          jq -e --arg version "$RELEASE_VERSION" '.ok == true and .version == $version' "$smoke_root/health.json"
+
+          listen_address="$(ss -H -ltn 'sport = :4664' | awk 'NR == 1 { print $4 }')"
+          test "$listen_address" = "127.0.0.1:4664"
+
+          curl --fail --silent --show-error \
+            -X POST http://127.0.0.1:4664/api/sessions \
+            -H 'content-type: application/json' \
+            --data '{"title":"Release smoke"}' \
+            >"$smoke_root/session.json"
+          jq -e '.data.id | type == "string" and length > 0' "$smoke_root/session.json"
+
   release:
     name: Publish Release
-    needs: [verify, build]
+    needs: [verify, build, smoke]
     runs-on: ubuntu-latest
     permissions:
       contents: write
