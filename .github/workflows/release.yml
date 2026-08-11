@@ -67,7 +67,10 @@ jobs:
 
       - name: Set version in mix.exs files
         run: |
-          perl -pi -e 's/@version ".*"/@version "${{ inputs.version }}"/' mix.exs apps/*/mix.exs
+          for file in mix.exs apps/*/mix.exs; do
+            awk 'BEGIN { version = "${{ inputs.version }}" } $1 == "@version" { print "  @version \"" version "\""; next } { print }' "$file" > "$file.tmp"
+            mv "$file.tmp" "$file"
+          done
 
       - name: Install dependencies
         run: |
