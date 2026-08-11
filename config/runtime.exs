@@ -54,6 +54,7 @@ if config_env() == :prod do
     end
 
   config :synapsis_server, SynapsisServer.Endpoint,
+    server: true,
     url: [host: host, port: 443, scheme: "https"],
     http: [
       ip: ip,

@@ -28,6 +28,11 @@ synapsis-<version>-macos-amd64.tar.gz
 synapsis-<version>-macos-arm64.tar.gz
 ```
 
+Linux archives require glibc plus the runtime libraries that provide
+`libtinfo.so.6` and `libz.so.1` (commonly the ncurses/tinfo and zlib packages).
+On NixOS, expose those libraries through `nix-ld` or an equivalent explicit
+library path before starting the release.
+
 Create the user service environment:
 
 ```sh
@@ -43,7 +48,7 @@ The release listens on `127.0.0.1` by default. `PHX_HOST` controls generated
 URLs; it does not widen the listening socket. To bind another interface, set
 `PHX_IP` to an explicit IPv4 or IPv6 address.
 
-> **Warning:** Synapsis v0.1.3 has no authentication boundary for HTTP,
+> **Warning:** Synapsis v0.1.4 has no authentication boundary for HTTP,
 > LiveView, channels, or SSE. Setting `PHX_IP=0.0.0.0`, `PHX_IP=::`, or another
 > non-loopback address exposes the local agent to the network. Put an
 > authenticating reverse proxy in front of it before opting in to remote access.
