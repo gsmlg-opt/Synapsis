@@ -2,6 +2,11 @@ import { ScrollBottomHook } from "./scroll-bottom"
 import { StreamingTextHook } from "./streaming-text"
 import { AgentBackupModelPickerHook, AgentModelPickerHook } from "./agent-model-picker"
 
+export {
+  observeChatInputFieldSemantics,
+  syncChatInputFieldSemantics,
+} from "./chat-input-field-semantics"
+
 export const Hooks = {
   AgentBackupModelPicker: AgentBackupModelPickerHook,
   AgentModelPicker: AgentModelPickerHook,
