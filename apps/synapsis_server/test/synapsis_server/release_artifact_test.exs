@@ -5,7 +5,10 @@ defmodule SynapsisServer.ReleaseArtifactTest do
 
   test "every Mix project exposes the version attribute used by release stamping" do
     mix_projects =
-      [Path.join(@project_root, "mix.exs") | Path.wildcard(Path.join(@project_root, "apps/*/mix.exs"))]
+      [
+        Path.join(@project_root, "mix.exs")
+        | Path.wildcard(Path.join(@project_root, "apps/*/mix.exs"))
+      ]
 
     Enum.each(mix_projects, fn path ->
       source = File.read!(path)
