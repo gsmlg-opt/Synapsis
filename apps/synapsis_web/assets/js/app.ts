@@ -7,6 +7,8 @@ import { LiveSocket } from "phoenix_live_view"
 import "@duskmoon-dev/el-markdown-input/register"
 import "@duskmoon-dev/el-markdown/register"
 import "@duskmoon-dev/elements/register"
+// WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#137
+// @ts-expect-error Phoenix DuskMoon does not yet publish declarations for this JS entry.
 import * as DuskmoonHooks from "../../../../deps/phoenix_duskmoon/assets/js/hooks/index.js"
 import { Hooks, observeChatInputFieldSemantics } from "@synapsis/hooks"
 
@@ -16,14 +18,14 @@ import { Hooks, observeChatInputFieldSemantics } from "@synapsis/hooks"
 const DuskmoonWebComponentHook = DuskmoonHooks.WebComponentHook as any
 const WebComponentHook = {
   ...DuskmoonWebComponentHook,
-  mounted(this: { el: HTMLElement; fieldSemanticsObserver?: MutationObserver }) {
+  mounted(this: { el: HTMLElement; fieldSemanticsObserver?: { disconnect(): void } }) {
     DuskmoonWebComponentHook.mounted.call(this)
     this.fieldSemanticsObserver = observeChatInputFieldSemantics(this.el) || undefined
   },
   updated(this: { el: HTMLElement }) {
     DuskmoonWebComponentHook.updated.call(this)
   },
-  destroyed(this: { fieldSemanticsObserver?: MutationObserver }) {
+  destroyed(this: { fieldSemanticsObserver?: { disconnect(): void } }) {
     this.fieldSemanticsObserver?.disconnect()
     DuskmoonWebComponentHook.destroyed.call(this)
   },
