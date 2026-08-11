@@ -258,6 +258,7 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
       <.dm_form
         for={%{}}
         as={:toolset}
+        id="toolset-form"
         phx-submit="save_toolset"
         phx-change="change_toolset_form"
         class="space-y-4"

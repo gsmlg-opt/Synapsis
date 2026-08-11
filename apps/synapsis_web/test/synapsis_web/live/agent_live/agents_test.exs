@@ -113,6 +113,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       assert html =~ agent.id
       assert has_element?(view, "form#agent-config-form")
       assert has_element?(view, "button[phx-click='switch_config_tab'][phx-value-tab='overview']")
+      assert_unique_form_ids(html)
     end
 
     test "does not reset permission mode when save payload omits the select", %{conn: conn} do

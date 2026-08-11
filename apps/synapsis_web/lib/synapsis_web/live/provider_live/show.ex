@@ -678,7 +678,12 @@ defmodule SynapsisWeb.ProviderLive.Show do
         <div :if={@chat_open} class="space-y-4">
           <%!-- Model selector --%>
           <div :if={@all_models != []} class="flex items-center gap-3">
-            <.dm_form for={to_form(%{})} phx-change="chat_select_model" class="flex-1">
+            <.dm_form
+              for={to_form(%{})}
+              id="provider-chat-model-form"
+              phx-change="chat_select_model"
+              class="flex-1"
+            >
               <.dm_select
                 name="model"
                 label="Model"

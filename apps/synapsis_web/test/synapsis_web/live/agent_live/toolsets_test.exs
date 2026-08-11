@@ -43,12 +43,14 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
     end
 
     test "groups available tools by category on the toolset form", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/agent/tools/new")
+      {:ok, view, html} = live(conn, ~p"/agent/tools/new")
 
+      assert has_element?(view, "form#toolset-form")
       assert has_element?(view, "[data-tool-category='filesystem']", "Files")
       assert has_element?(view, "[data-tool-category='filesystem'] input[value='file_read']")
       assert has_element?(view, "[data-tool-category='search']", "Search")
       assert has_element?(view, "[data-tool-category='search'] input[value='grep']")
+      assert_unique_form_ids(html)
     end
 
     test "hides retired tools even if they remain registered in the running registry", %{
