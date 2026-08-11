@@ -1,14 +1,14 @@
-name: Test
+name: Full Test Suite
 
 on:
-  pull_request:
-    branches: [main]
+  workflow_call:
 
 env:
   MIX_ENV: test
 
 jobs:
   test:
+    name: Test
     runs-on: ubuntu-latest
 
     steps:

@@ -18,19 +18,77 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
-
-env:
-  MIX_ENV: prod
-  PGUSER: postgres
-  PGPASSWORD: postgres
-  PGHOST: localhost
-  PGPORT: 5432
+  contents: read
 
 jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    env:
+      MIX_ENV: test
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_ref }}
+
+      - name: Set up Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: '1.18'
+          otp-version: '28'
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.4'
+
+      - name: Restore dependencies cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-verify-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-verify-
+            ${{ runner.os }}-mix-
+
+      - name: Install Elixir dependencies
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+          mix deps.get
+
+      - name: Install JavaScript dependencies
+        run: bun install
+
+      - name: Check code formatting
+        run: mix format --check-formatted
+
+      - name: Compile with warnings as errors
+        run: mix compile --warnings-as-errors
+
+      - name: Run tests
+        run: mix test
+
+      - name: Build production assets
+        working-directory: apps/synapsis_web
+        env:
+          MIX_ENV: prod
+          SECRET_KEY_BASE: build-only-placeholder-key-that-is-at-least-64-bytes-long-for-phoenix
+          SYNAPSIS_ENCRYPTION_KEY: build-only-encryption-key-32bytes
+        run: |
+          mix assets.setup
+          mix assets.deploy
+
   build:
     name: Build ${{ matrix.target }}
+    needs: verify
     runs-on: ${{ matrix.runner }}
+    env:
+      MIX_ENV: prod
     strategy:
       fail-fast: false
       matrix:
@@ -56,6 +114,11 @@ jobs:
           elixir-version: '1.18'
           otp-version: '28'
 
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.4'
+
       - name: Restore dependencies cache
         uses: actions/cache@v4
         with:
@@ -77,6 +140,18 @@ jobs:
           mix local.hex --force
           mix local.rebar --force
           mix deps.get --only prod
+
+      - name: Install JavaScript dependencies
+        run: bun install
+
+      - name: Build production assets
+        working-directory: apps/synapsis_web
+        env:
+          SECRET_KEY_BASE: build-only-placeholder-key-that-is-at-least-64-bytes-long-for-phoenix
+          SYNAPSIS_ENCRYPTION_KEY: build-only-encryption-key-32bytes
+        run: |
+          mix assets.setup
+          mix assets.deploy
 
       - name: Compile
         run: mix compile
@@ -103,8 +178,10 @@ jobs:
 
   release:
     name: Publish Release
-    runs-on: ubuntu-latest
     needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repo
