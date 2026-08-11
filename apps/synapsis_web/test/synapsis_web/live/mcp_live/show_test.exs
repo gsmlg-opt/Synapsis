@@ -17,9 +17,11 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
   end
 
   test "renders config details", %{conn: conn, config: config} do
-    {:ok, _view, html} = live(conn, ~p"/settings/mcp/#{config.id}")
+    {:ok, view, html} = live(conn, ~p"/settings/mcp/#{config.id}")
     assert html =~ "test-server"
     assert html =~ "npx test-server"
+    assert has_element?(view, "form#mcp-config-form")
+    assert_unique_form_ids(html)
   end
 
   test "redirects for missing config", %{conn: conn} do

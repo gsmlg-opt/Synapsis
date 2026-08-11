@@ -46,11 +46,13 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
     end
 
     test "shows new server form on /new", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/settings/mcp/new")
+      {:ok, view, html} = live(conn, ~p"/settings/mcp/new")
       assert html =~ "New MCP Server"
       assert html =~ "Command"
       assert html =~ "Arguments (one per line)"
       assert html =~ "Environment Variables"
+      assert has_element?(view, "form#mcp-create-form")
+      assert_unique_form_ids(html)
     end
 
     test "new form switches HTTP transport fields", %{conn: conn} do
@@ -70,6 +72,7 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
       refute html =~ "Command"
       refute html =~ "Arguments (one per line)"
       refute html =~ "Environment Variables"
+      assert_unique_form_ids(html)
     end
 
     test "creates MCP config from stdio form", %{conn: conn} do

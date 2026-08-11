@@ -1,5 +1,15 @@
 # Synapsis Harness Design Package
 
+> [!WARNING]
+> **Superseded historical design.** Do not use this package as the current
+> implementation plan. The active architecture is documented in
+> [ADR-006](../../decisions/ADR-006-in-process-sessions-and-concord-storage.md),
+> [ADR-007](../../decisions/ADR-007-pure-liveview-ui.md),
+> [ADR-008](../../decisions/ADR-008-gen-statem-session-shell.md), and
+> [`docs/architecture/`](../../architecture/). The orphaned harness reducer was
+> removed by the
+> [v0.1.3 release-readiness plan](../../superpowers/plans/2026-08-11-v0.1.3-release-readiness.md).
+
 This directory contains the May 2026 harness refactor design package imported
 from `synapsis-harness.zip`.
 

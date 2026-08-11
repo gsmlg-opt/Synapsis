@@ -71,7 +71,8 @@ performs the same parking maneuver as boot and lands the machine in `:idle`.
 - New per-state policies (e.g. queueing prompts instead of rejecting,
   approval-specific timeouts) become single clauses on `handle_event/4`.
 - `Synapsis.Harness.Loop` and the harness Phase 4 docs are superseded by this
-  ADR; the harness reducer remains unwired and is a deletion candidate.
+  ADR. The unwired harness reducer and its self-contained tests were removed in
+  v0.1.3.
 - Tests assert state transitions directly (`derive_state/1`,
   `handle_event/4`) without spawning processes.
 - Cancel clears queued/inflight steer records for the interrupted turn but

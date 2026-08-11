@@ -273,6 +273,8 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
 
       assert html =~ "Claude"
       assert html =~ ~s(phx-change="chat_select_model")
+      assert has_element?(view, "form#provider-chat-model-form")
+      assert_unique_form_ids(html)
     end
 
     test "chat_select_model changes selected model", %{conn: conn, provider: provider} do

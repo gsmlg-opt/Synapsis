@@ -12,17 +12,21 @@ defmodule SynapsisServer.HealthController do
       provider_registry: check_process(Synapsis.Provider.Registry),
       session_supervisor: check_process(Synapsis.Session.DynamicSupervisor),
       agent_supervisor: check_process(Synapsis.Agent.Supervisor),
-      agent_daemon: check_agent_daemon(),
+      agent_runtime: check_process(SynapsisAgent.Supervisor),
       endpoint: check_process(SynapsisServer.Endpoint)
     }
 
+    ok = healthy?(checks)
+
     payload =
       checks
-      |> Map.put(:ok, healthy?(checks))
+      |> Map.put(:ok, ok)
       |> Map.put(:version, version())
       |> Map.put(:scheduler_entries, scheduler_entries())
 
-    json(conn, payload)
+    conn
+    |> put_status(response_status(checks))
+    |> json(payload)
   end
 
   # ADR-006 C4: the embedded node-local Concord store replaces Postgres.
@@ -58,17 +62,11 @@ defmodule SynapsisServer.HealthController do
         end)
       rescue
         _ -> []
+      catch
+        :exit, _reason -> []
       end
     else
       []
-    end
-  end
-
-  defp check_agent_daemon do
-    if Code.ensure_loaded?(Synapsis.Agent.Daemon) do
-      check_process(Synapsis.Agent.Daemon)
-    else
-      "error: not_started"
     end
   end
 
@@ -79,13 +77,18 @@ defmodule SynapsisServer.HealthController do
     end
   end
 
-  defp healthy?(checks) do
+  @doc false
+  def healthy?(checks) do
     Enum.all?(checks, fn
       {:scheduler, status} -> status in ["ok", "not_configured"]
-      {:agent_daemon, "error: not_started"} -> false
       {_name, "ok"} -> true
       {_name, _status} -> false
     end)
+  end
+
+  @doc false
+  def response_status(checks) do
+    if healthy?(checks), do: :ok, else: :service_unavailable
   end
 
   defp version do

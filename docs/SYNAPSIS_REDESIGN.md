@@ -1,5 +1,15 @@
 # Synapsis v2 — Agent Management & Runtime Platform
 
+> [!WARNING]
+> **Superseded historical redesign.** Its PostgreSQL, React, and Backplane-only
+> assumptions are not the current product architecture. Use
+> [ADR-006](decisions/ADR-006-in-process-sessions-and-concord-storage.md),
+> [ADR-007](decisions/ADR-007-pure-liveview-ui.md),
+> [ADR-008](decisions/ADR-008-gen-statem-session-shell.md),
+> [`docs/architecture/`](architecture/), and the
+> [v0.1.3 release-readiness plan](superpowers/plans/2026-08-11-v0.1.3-release-readiness.md)
+> instead.
+
 **Status:** Design locked. Ready for scaffolding.
 **Date:** 2026-05-12
 

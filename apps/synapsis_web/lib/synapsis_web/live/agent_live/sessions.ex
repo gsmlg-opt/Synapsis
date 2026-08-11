@@ -821,6 +821,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
           <%!-- Input area --%>
           <div class="border-t border-outline-variant bg-surface-container-low p-3">
             <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#41 --%>
+            <%!-- # WORKAROUND(upstream): duskmoon-dev/duskmoon-elements#73 --%>
             <.dm_chat_input
               id="message-input"
               name="content"

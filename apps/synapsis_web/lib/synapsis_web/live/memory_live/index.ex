@@ -223,6 +223,7 @@ defmodule SynapsisWeb.MemoryLive.Index do
       <%= if @active_tab == "knowledge" do %>
         <div class="mb-4 flex flex-wrap gap-2 items-center">
           <.dm_select
+            id="memory-scope-filter"
             name="scope"
             value={@scope_filter}
             options={[
@@ -235,6 +236,7 @@ defmodule SynapsisWeb.MemoryLive.Index do
           />
 
           <.dm_select
+            id="memory-kind-filter"
             name="kind"
             value={@kind_filter}
             options={[
@@ -251,6 +253,7 @@ defmodule SynapsisWeb.MemoryLive.Index do
           />
 
           <.dm_select
+            id="memory-source-filter"
             name="source"
             value={@source_filter}
             options={[
@@ -393,6 +396,7 @@ defmodule SynapsisWeb.MemoryLive.Index do
       <%= if @active_tab == "events" do %>
         <div class="mb-4">
           <.dm_select
+            id="memory-event-type-filter"
             name="type"
             value={@events_type_filter}
             options={[

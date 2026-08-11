@@ -428,7 +428,12 @@ defmodule SynapsisWeb.MCPLive.Index do
               Cancel
             </.dm_link>
           </div>
-          <.dm_form for={%{}} phx-submit="create_config" phx-change="change_custom_config">
+          <.dm_form
+            for={%{}}
+            id="mcp-create-form"
+            phx-submit="create_config"
+            phx-change="change_custom_config"
+          >
             <.dm_input
               type="text"
               name="name"

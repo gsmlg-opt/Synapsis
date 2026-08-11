@@ -7,8 +7,29 @@ import { LiveSocket } from "phoenix_live_view"
 import "@duskmoon-dev/el-markdown-input/register"
 import "@duskmoon-dev/el-markdown/register"
 import "@duskmoon-dev/elements/register"
+// WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#137
+// @ts-expect-error Phoenix DuskMoon does not yet publish declarations for this JS entry.
 import * as DuskmoonHooks from "../../../../deps/phoenix_duskmoon/assets/js/hooks/index.js"
-import { Hooks } from "@synapsis/hooks"
+import { Hooks, observeChatInputFieldSemantics } from "@synapsis/hooks"
+
+// WORKAROUND(upstream): duskmoon-dev/duskmoon-elements#73
+// Preserve the upstream bridge while propagating field identity into the
+// nested shadow-DOM textarea used by el-dm-chat-input.
+const DuskmoonWebComponentHook = DuskmoonHooks.WebComponentHook as any
+const WebComponentHook = {
+  ...DuskmoonWebComponentHook,
+  mounted(this: { el: HTMLElement; fieldSemanticsObserver?: { disconnect(): void } }) {
+    DuskmoonWebComponentHook.mounted.call(this)
+    this.fieldSemanticsObserver = observeChatInputFieldSemantics(this.el) || undefined
+  },
+  updated(this: { el: HTMLElement }) {
+    DuskmoonWebComponentHook.updated.call(this)
+  },
+  destroyed(this: { fieldSemanticsObserver?: { disconnect(): void } }) {
+    this.fieldSemanticsObserver?.disconnect()
+    DuskmoonWebComponentHook.destroyed.call(this)
+  },
+}
 
 // Client-only theme switcher — upstream hook pushes "theme_changed" to the
 // server which has no handler, causing a disconnect flash. We handle
@@ -57,7 +78,7 @@ try {
 const liveSocket = new LiveSocket("/live", Socket, {
   transport: window.WebSocket,
   params: { _csrf_token: csrfToken },
-  hooks: { ...DuskmoonHooks, ThemeSwitcher, ...Hooks },
+  hooks: { ...DuskmoonHooks, WebComponentHook, ThemeSwitcher, ...Hooks },
 })
 
 liveSocket.connect()

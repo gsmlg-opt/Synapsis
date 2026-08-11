@@ -162,7 +162,12 @@ defmodule SynapsisWeb.MCPLive.Show do
       <h1 class="text-2xl font-bold mb-6">{@config.name}</h1>
 
       <.dm_card variant="bordered">
-        <.dm_form for={%{}} phx-submit="update_config" phx-change="change_config_form">
+        <.dm_form
+          for={%{}}
+          id="mcp-config-form"
+          phx-submit="update_config"
+          phx-change="change_config_form"
+        >
           <.dm_select
             name="transport"
             label="Transport"

@@ -33,7 +33,10 @@ defmodule SynapsisProvider.MixProject do
       {:req, "~> 0.5"},
       {:finch, "~> 0.18"},
       {:jason, "~> 1.4"},
-      {:bypass, "~> 2.1", only: :test}
+      {:bypass, "~> 2.1", only: :test},
+      # Security floors for Bypass's test-only Plug/Cowboy transport.
+      {:cowboy, "~> 2.18", only: :test},
+      {:cowlib, "~> 2.19", only: :test}
     ]
   end
 end

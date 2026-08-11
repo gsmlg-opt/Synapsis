@@ -22,6 +22,8 @@ System.put_env("SYNAPSIS_CONFIG_DIR", config_store_dir)
 config :phoenix, :plug_init_mode, :runtime
 config :phoenix, sort_verified_routes_query_params: true
 
+config :phoenix_live_view, :test_warnings, missing_form_id: :raise
+
 config :synapsis_core, :file_system_enabled, false
 
 # Memory port: isolated per-partition file store for tests.

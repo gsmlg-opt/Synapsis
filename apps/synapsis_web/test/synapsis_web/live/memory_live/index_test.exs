@@ -34,10 +34,14 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
     end
 
     test "shows Knowledge tab by default", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/settings/memory")
+      {:ok, view, html} = live(conn, ~p"/settings/memory")
       assert html =~ "Knowledge"
       assert html =~ "Events"
       assert html =~ "Checkpoints"
+      assert has_element?(view, "#memory-scope-filter")
+      assert has_element?(view, "#memory-kind-filter")
+      assert has_element?(view, "#memory-source-filter")
+      assert_unique_form_ids(html)
     end
 
     test "shows empty state when no memories", %{conn: conn} do
@@ -72,6 +76,7 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
       {:ok, view, _html} = live(conn, ~p"/settings/memory")
       view |> element("el-dm-button", "New Memory") |> render_click()
       assert has_element?(view, "#create-memory-form")
+      assert_unique_form_ids(render(view))
     end
 
     test "create form can save a new memory", %{conn: conn} do
@@ -98,6 +103,8 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
       view |> element("el-dm-button", "Events") |> render_click()
       html = render(view)
       assert html =~ "No events yet"
+      assert has_element?(view, "#memory-event-type-filter")
+      assert_unique_form_ids(html)
     end
 
     test "switching to Checkpoints tab shows checkpoints section", %{conn: conn} do
