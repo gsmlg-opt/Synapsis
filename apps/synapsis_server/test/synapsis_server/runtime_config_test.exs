@@ -28,6 +28,10 @@ defmodule SynapsisServer.RuntimeConfigTest do
     assert endpoint_ip(nil) == {127, 0, 0, 1}
   end
 
+  test "enables the endpoint in production releases" do
+    assert read_endpoint_config() |> Keyword.fetch!(:server)
+  end
+
   test "accepts an explicit IPv4 bind address" do
     assert endpoint_ip("0.0.0.0") == {0, 0, 0, 0}
   end
@@ -51,11 +55,15 @@ defmodule SynapsisServer.RuntimeConfigTest do
   end
 
   defp read_endpoint_ip do
+    read_endpoint_config()
+    |> Keyword.fetch!(:http)
+    |> Keyword.fetch!(:ip)
+  end
+
+  defp read_endpoint_config do
     @runtime_config
     |> Config.Reader.read!(env: :prod)
     |> Keyword.fetch!(:synapsis_server)
     |> Keyword.fetch!(SynapsisServer.Endpoint)
-    |> Keyword.fetch!(:http)
-    |> Keyword.fetch!(:ip)
   end
 end
