@@ -24,6 +24,8 @@ jobs:
   verify:
     name: Verify
     runs-on: ubuntu-latest
+    outputs:
+      source_sha: ${{ steps.source.outputs.sha }}
     env:
       MIX_ENV: test
 
@@ -32,6 +34,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.git_ref }}
+
+      - name: Resolve release commit
+        id: source
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Set up Elixir
         uses: erlef/setup-beam@v1
@@ -106,7 +112,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.git_ref }}
+          ref: ${{ needs.verify.outputs.source_sha }}
 
       - name: Set up Elixir
         uses: erlef/setup-beam@v1
@@ -178,7 +184,7 @@ jobs:
 
   release:
     name: Publish Release
-    needs: build
+    needs: [verify, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -187,7 +193,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.git_ref }}
+          ref: ${{ needs.verify.outputs.source_sha }}
 
       - name: Download release archives
         uses: actions/download-artifact@v4
