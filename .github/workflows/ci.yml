@@ -119,6 +119,11 @@ jobs:
       - name: Run hook tests
         run: bun test packages/hooks/test
 
+      - name: Check TypeScript
+        run: |
+          bun x tsc --noEmit -p apps/synapsis_web/tsconfig.json
+          bun x tsc --noEmit -p packages/hooks/tsconfig.json
+
       - name: Build production assets
         working-directory: apps/synapsis_web
         run: |
