@@ -7,8 +7,6 @@ import { LiveSocket } from "phoenix_live_view"
 import "@duskmoon-dev/el-markdown-input/register"
 import "@duskmoon-dev/el-markdown/register"
 import "@duskmoon-dev/elements/register"
-// WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#137
-// @ts-expect-error Phoenix DuskMoon does not yet publish declarations for this JS entry.
 import * as DuskmoonHooks from "../../../../deps/phoenix_duskmoon/assets/js/hooks/index.js"
 import { Hooks, observeChatInputFieldSemantics } from "@synapsis/hooks"
 
