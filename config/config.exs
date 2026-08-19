@@ -61,23 +61,60 @@ config :logger, :default_formatter,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
-# Configure bun for JS bundling
-config :bun,
-  version: "1.3.4",
-  synapsis_web: [
-    args: ~w(build assets/js/app.ts --outdir=priv/static/assets
-             --format=esm --external=/fonts/* --external=/images/*),
-    cd: Path.expand("../apps/synapsis_web", __DIR__),
-    env: %{}
+# DuskmoonBundler — JS/TS + Tailwind v4 (replaces bun + Tailwind CLI)
+config :duskmoon_bundler,
+  target: :es2020,
+  sourcemap: :hidden,
+  format: :esm
+
+config :duskmoon_bundler, :synapsis_web,
+  root: Path.expand("../apps/synapsis_web/assets", __DIR__),
+  entry: Path.expand("../apps/synapsis_web/assets/js/app.ts", __DIR__),
+  outdir: Path.expand("../apps/synapsis_web/priv/static/assets", __DIR__),
+  resolve_dirs: [
+    Path.expand("..", __DIR__),
+    Path.expand("../apps", __DIR__),
+    Path.expand("../deps", __DIR__)
+  ],
+  external: ~w(/fonts/* /images/*),
+  tailwind: [
+    css: Path.expand("../apps/synapsis_web/assets/css/app.css", __DIR__),
+    sources: [
+      %{
+        base: Path.expand("../apps/synapsis_web/lib", __DIR__),
+        pattern: "**/*.{ex,exs,heex}"
+      },
+      %{
+        base: Path.expand("../apps/synapsis_web/assets", __DIR__),
+        pattern: "**/*.{css,js,ts,jsx,tsx}"
+      },
+      %{
+        base: Path.expand("../deps/phoenix_duskmoon/lib", __DIR__),
+        pattern: "**/*.{ex,heex}"
+      }
+    ]
+  ],
+  server: [
+    prefix: "/assets",
+    watch_dirs: [
+      Path.expand("../apps/synapsis_web/lib", __DIR__),
+      Path.expand("../apps/synapsis_web/assets", __DIR__)
+    ]
   ]
 
-# Configure tailwind for CSS bundling
-config :tailwind,
-  version: "4.1.18",
-  synapsis_web: [
-    args: ~w(--input=assets/css/app.css --output=priv/static/assets/app.css),
-    cd: Path.expand("../apps/synapsis_web", __DIR__)
-  ]
+config :duskmoon_bundler, :format,
+  print_width: 100,
+  semi: false,
+  single_quote: true,
+  trailing_comma: :none,
+  arrow_parens: :always
+
+config :duskmoon_bundler, :lint,
+  plugins: [:typescript],
+  rules: %{
+    "no-debugger" => :deny,
+    "eqeqeq" => :deny
+  }
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

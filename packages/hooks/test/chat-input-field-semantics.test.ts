@@ -1,8 +1,9 @@
-import { expect, test } from "bun:test"
+import assert from "node:assert/strict"
+import { test } from "node:test"
 import {
   observeChatInputFieldSemantics,
   syncChatInputFieldSemantics,
-} from "../src/chat-input-field-semantics"
+} from "../src/chat-input-field-semantics.ts"
 
 function fieldFixture() {
   let textarea = newTextarea()
@@ -53,8 +54,8 @@ test("copies chat input field semantics into the nested editor", () => {
 
   syncChatInputFieldSemantics(fixture.chatInput)
 
-  expect(fixture.currentTextarea().id).toBe("message-input-editor")
-  expect(fixture.currentTextarea().attributes.get("name")).toBe("content")
+  assert.equal(fixture.currentTextarea().id, "message-input-editor")
+  assert.equal(fixture.currentTextarea().attributes.get("name"), "content")
 })
 
 test("reapplies field semantics when DuskMoon replaces the shadow subtree", () => {
@@ -66,11 +67,11 @@ test("reapplies field semantics when DuskMoon replaces the shadow subtree", () =
     return { disconnect() {}, observe() {} }
   })
 
-  expect(observer).not.toBeNull()
+  assert.notEqual(observer, null)
 
   fixture.replaceTextarea()
   mutationCallback()
 
-  expect(fixture.currentTextarea().id).toBe("message-input-editor")
-  expect(fixture.currentTextarea().attributes.get("name")).toBe("content")
+  assert.equal(fixture.currentTextarea().id, "message-input-editor")
+  assert.equal(fixture.currentTextarea().attributes.get("name"), "content")
 })

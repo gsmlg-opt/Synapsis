@@ -7,7 +7,15 @@
     <title>Synapsis</title>
     <link rel="icon" type="image/png" href={~p"/favicon.png"} />
     <link rel="apple-touch-icon" href={~p"/apple-touch-icon.png"} />
-    <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
+    <link
+      phx-track-static
+      rel="stylesheet"
+      href={
+        DuskmoonBundler.static_path(SynapsisServer.Endpoint, "/assets/css/app.css",
+          profile: :synapsis_web
+        )
+      }
+    />
     <script>
       // Restore saved theme before first paint to avoid flash.
       // Validate against known themes to avoid applying a stale/invalid value
@@ -22,8 +30,22 @@
         }
       })();
     </script>
-    <script defer phx-track-static type="module" src={~p"/assets/app.js"}>
+    <script
+      defer
+      phx-track-static
+      type="module"
+      src={
+        DuskmoonBundler.static_path(SynapsisServer.Endpoint, "/assets/js/app.js",
+          profile: :synapsis_web
+        )
+      }
+    >
     </script>
+    {raw(
+      DuskmoonBundler.Preload.tags(SynapsisServer.Endpoint, "/assets/js/app.js",
+        profile: :synapsis_web
+      )
+    )}
   </head>
   <body class="bg-surface text-on-surface min-h-screen overflow-x-hidden">
     {@inner_content}

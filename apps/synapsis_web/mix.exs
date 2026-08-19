@@ -40,21 +40,20 @@ defmodule SynapsisWeb.MixProject do
       {:phoenix_duskmoon, "~> 9.1"},
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.4"},
-      {:bun, "~> 2.0", runtime: Mix.env() == :dev},
-      {:tailwind, "~> 0.2", runtime: Mix.env() == :dev},
-      {:lazy_html, ">= 0.1.0", only: :test}
+      {:duskmoon_bundler_runtime, "~> 9.7"},
+      {:duskmoon_bundler, "~> 9.7", runtime: Mix.env() in [:dev, :test]},
+      {:lazy_html, ">= 0.1.0"}
     ]
   end
 
   defp aliases do
     [
-      setup: ["deps.get", "assets.setup"],
-      "assets.setup": ["tailwind.install --if-missing", "bun.install --if-missing"],
-      "assets.build": ["tailwind synapsis_web", "bun synapsis_web"],
+      setup: ["deps.get", "npm.install", "assets.build"],
+      "assets.setup": ["npm.install"],
+      "assets.build": ["duskmoon_bundler.build synapsis_web --tailwind"],
       "assets.deploy": [
         "phx.digest.clean",
-        "tailwind synapsis_web --minify",
-        "bun synapsis_web --minify",
+        "duskmoon_bundler.build synapsis_web --tailwind",
         "phx.digest"
       ]
     ]

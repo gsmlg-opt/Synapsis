@@ -14,7 +14,7 @@ This is an Elixir umbrella project with a Phoenix server/web surface, OTP-backed
 - `apps/synapsis_sandbox`: JSON-RPC stdio bridge for sandbox runtimes, routing sandbox-initiated calls through `Synapsis.Tool.Executor`.
 - `apps/synapsis_workspace`: workspace resource model, local blob store, projections, path resolution, search, permissions, and workspace tools.
 - `apps/synapsis_cli`: escript CLI and HTTP/SSE client code.
-- `packages/*`: Bun workspaces for TypeScript packages — only `@synapsis/hooks` (LiveView DOM hooks; the UI is pure LiveView per ADR-007).
+- `packages/*`: npm workspaces (via `duskmoon_npm`) for TypeScript packages — only `@synapsis/hooks` (LiveView DOM hooks; the UI is pure LiveView per ADR-007).
 - `docs/`: architecture docs, ADRs, guardrails, PRDs, designs, and implementation plans. Read the relevant docs before changing behavior.
 
 ## Architecture Boundaries
@@ -51,10 +51,10 @@ Run commands from the repository root unless noted.
 - `mix test apps/synapsis_core/test`: run one app's tests by path.
 - `mix test apps/synapsis_web/test/synapsis_web/live/agent_live/sessions_test.exs`: run a focused test file.
 - `mix format --check-formatted`: verify Elixir formatting.
-- `cd apps/synapsis_web && mix assets.setup`: install Bun and Tailwind CLIs if missing.
-- `cd apps/synapsis_web && mix assets.build`: build web assets.
-- `cd apps/synapsis_web && mix assets.deploy`: build minified production assets with digest.
-- `bun install`: install Bun workspace dependencies for `packages/*` and app packages.
+- `cd apps/synapsis_web && mix assets.setup`: install JS packages via `mix npm.install`.
+- `cd apps/synapsis_web && mix assets.build`: build web assets with DuskmoonBundler.
+- `cd apps/synapsis_web && mix assets.deploy`: build production assets with digest.
+- `mix npm.install`: install workspace JS dependencies for `packages/*` and `apps/synapsis_web`.
 
 Use scoped tests for scoped changes. For PRD work, modify only files in the stated scope, run only scoped tests unless told otherwise, and stop once the in-scope checklist is complete and tests pass. If unrelated tests fail, report them and stop instead of fixing outside scope.
 
@@ -88,9 +88,10 @@ Use scoped tests for scoped changes. For PRD work, modify only files in the stat
 ## Web And UI Rules
 
 - This project uses Phoenix LiveView plus TypeScript hooks and DuskMoon UI. Prefer `phoenix_duskmoon` components and DuskMoon packages for new UI work.
+- Assets are built with `duskmoon_bundler` / `duskmoon_npm` (not esbuild, Tailwind CLI, or bun). Use `mix npm.install` for JS packages and `mix assets.build` / `mix assets.deploy` for builds.
 - Do not add DaisyUI or another CSS component library.
 - Treat `SynapsisWeb.CoreComponents` as legacy/local glue. Do not expand it when a DuskMoon component fits the job.
-- Tailwind CSS is built through the configured Tailwind CLI and `@duskmoon-dev/core` assets/packages.
+- Tailwind CSS is compiled by DuskmoonBundler with `@duskmoon-dev/core`.
 - Keep UI changes consistent with the existing dashboard/application style: dense, operational, accessible, and responsive.
 - For LiveView changes, run the relevant `apps/synapsis_web/test` files. For hook/package changes, also build assets when practical.
 

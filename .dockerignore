@@ -2,19 +2,19 @@
 _build/
 deps/
 .elixir_ls/
+node_modules/
+**/node_modules/
 
 # Git
 .git/
 .gitignore
 .trees/
 
-# Node/Bun artifacts
-apps/synapsis_web/node_modules/
-apps/synapsis_web/dist/
-
 # Development
 .loki/
 .claude/
+.devenv/
+.direnv/
 docs/
 *.md
 !README.md
@@ -22,6 +22,7 @@ docs/
 # Test
 cover/
 test/
+**/test/
 
 # IDE
 .vscode/
@@ -30,3 +31,7 @@ test/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local secrets / data
+.secrets.toml
+tmp/

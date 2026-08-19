@@ -22,8 +22,7 @@
             elixir
             erlang
             pkgs.postgresql_16
-            pkgs.bun
-            pkgs.tailwindcss_4
+            pkgs.nodejs_22
             pkgs.git
             pkgs.ripgrep
           ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
@@ -34,13 +33,11 @@
           ];
 
           shellHook = ''
-            export MIX_BUN_PATH="${pkgs.lib.getExe pkgs.bun}"
-            export MIX_TAILWIND_PATH="${pkgs.lib.getExe pkgs.tailwindcss_4}"
             export ERL_AFLAGS="-kernel shell_history enabled"
             echo "Synapsis dev environment loaded"
             echo "  Elixir: $(elixir --version | tail -1)"
             echo "  PostgreSQL: $(postgres --version)"
-            echo "  Bun: $(bun --version)"
+            echo "  Node: $(node --version)"
           '';
         };
       }

@@ -9,7 +9,7 @@ Run commands from the umbrella root unless noted.
 ```bash
 # Setup (no database needed — storage is embedded)
 mix deps.get
-bun install   # root Bun workspaces cover packages/* and apps/*
+mix npm.install   # root workspaces cover packages/* and apps/synapsis_web
 
 # Run server (http://localhost:4657)
 mix phx.server
@@ -25,7 +25,7 @@ mix compile --warnings-as-errors
 mix format --check-formatted
 mix format
 
-# Assets
+# Assets (DuskmoonBundler — no bun/Tailwind CLI)
 cd apps/synapsis_web && mix assets.build
 cd apps/synapsis_web && mix assets.deploy
 ```
@@ -49,7 +49,7 @@ synapsis_web         - Phoenix LiveView UI, HEEx, DuskMoon components, TypeScrip
 synapsis_cli         - escript CLI and HTTP/SSE client code
 ```
 
-TypeScript packages live under `packages/*` as Bun workspaces — only `@synapsis/hooks` (LiveView DOM hooks; see ADR-007, the UI is pure LiveView with no React).
+TypeScript packages live under `packages/*` as npm workspaces via `duskmoon_npm` — only `@synapsis/hooks` (LiveView DOM hooks; see ADR-007, the UI is pure LiveView with no React).
 
 Dependency direction is strict:
 
@@ -79,13 +79,14 @@ Do not introduce cycles or direct higher-layer dependencies for convenience.
 
 ## Web UI
 
-The web interface is Phoenix LiveView, not React. It uses `phoenix_duskmoon` and DuskMoon packages.
+The web interface is Phoenix LiveView, not React. It uses the DuskMoon UI system:
 
-- Prefer `phoenix_duskmoon` components for new UI.
-- Do not add DaisyUI or another CSS component library.
-- Treat `SynapsisWeb.CoreComponents` as legacy/local glue; do not expand it when DuskMoon has a suitable component.
-- Keep UI dense, operational, accessible, and responsive.
-- For LiveView changes, run the focused `apps/synapsis_web/test` files. For hook or asset changes, also run `cd apps/synapsis_web && mix assets.build` when practical.
+- **`phoenix_duskmoon`** — Phoenix LiveView UI component library (primary web UI)
+- **`duskmoon_bundler`** / **`duskmoon_bundler_runtime`** — Elixir-native asset bundler (replaces esbuild/Tailwind CLI/bun)
+- **`@duskmoon-dev/core`** — Core Tailwind CSS plugin and utilities
+- **`@duskmoon-dev/elements`** — Base web components
+
+Prefer `phoenix_duskmoon` components for new UI. Do not add DaisyUI or another CSS component library. Do not add `esbuild`, `tailwind`, or `bun` Mix deps — `duskmoon_bundler` replaces them. Treat `SynapsisWeb.CoreComponents` as legacy/local glue; do not expand it when DuskMoon has a suitable component. Keep UI dense, operational, accessible, and responsive. For LiveView changes, run the focused `apps/synapsis_web/test` files. For hook or asset changes, also run `cd apps/synapsis_web && mix assets.build` when practical.
 
 ## Storage Model (ADR-006)
 

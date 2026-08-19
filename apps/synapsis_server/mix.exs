@@ -44,7 +44,8 @@ defmodule SynapsisServer.MixProject do
       {:jason, "~> 1.4"},
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.6"},
-      {:cors_plug, "~> 3.0"}
+      {:cors_plug, "~> 3.0"},
+      {:duskmoon_bundler, "~> 9.7", runtime: Mix.env() in [:dev, :test]}
     ]
   end
 end

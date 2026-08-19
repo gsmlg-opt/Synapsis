@@ -2,12 +2,8 @@
 FROM hexpm/elixir:1.18.4-erlang-28.3-debian-bookworm-20260316-slim AS build
 
 RUN apt-get update -y && \
-    apt-get install -y build-essential git curl unzip && \
+    apt-get install -y build-essential git curl ca-certificates && \
     apt-get clean && rm -f /var/lib/apt/lists/*_*
-
-# Install Bun for JS bundling
-RUN curl -fsSL https://bun.sh/install | bash
-ENV PATH="/root/.bun/bin:${PATH}"
 
 WORKDIR /app
 
@@ -15,31 +11,42 @@ WORKDIR /app
 RUN mix local.hex --force && mix local.rebar --force
 
 ENV MIX_ENV=prod
+# Placeholder secrets for compile/release config evaluation only.
+# Override at runtime via docker-compose / orchestration.
+ENV SECRET_KEY_BASE=build-only-placeholder-key-that-is-at-least-64-bytes-long-for-phoenix
+ENV SYNAPSIS_ENCRYPTION_KEY=build-only-encryption-key-32bytes
 
-# Install mix deps
+# Install mix deps (layer-cached)
 COPY mix.exs mix.lock ./
+COPY apps/synapsis_agent/mix.exs apps/synapsis_agent/
+COPY apps/synapsis_cli/mix.exs apps/synapsis_cli/
 COPY apps/synapsis_core/mix.exs apps/synapsis_core/
 COPY apps/synapsis_data/mix.exs apps/synapsis_data/
+COPY apps/synapsis_mcp/mix.exs apps/synapsis_mcp/
 COPY apps/synapsis_provider/mix.exs apps/synapsis_provider/
+COPY apps/synapsis_sandbox/mix.exs apps/synapsis_sandbox/
 COPY apps/synapsis_server/mix.exs apps/synapsis_server/
-COPY apps/synapsis_cli/mix.exs apps/synapsis_cli/
 COPY apps/synapsis_web/mix.exs apps/synapsis_web/
-COPY apps/synapsis_lsp/mix.exs apps/synapsis_lsp/
-COPY apps/synapsis_plugin/mix.exs apps/synapsis_plugin/
+COPY apps/synapsis_workspace/mix.exs apps/synapsis_workspace/
 
 RUN mix deps.get --only prod
 RUN mix deps.compile
 
-# Build JS assets
-COPY apps/synapsis_web/package.json apps/synapsis_web/bun.lock* apps/synapsis_web/
-RUN cd apps/synapsis_web && bun install --frozen-lockfile 2>/dev/null || bun install
+# Install JS packages via duskmoon_npm (Phoenix JS comes from deps/ via file:)
+COPY package.json package-lock.json ./
+COPY apps/synapsis_web/package.json apps/synapsis_web/
+COPY packages/hooks/package.json packages/hooks/
+RUN mix npm.ci
 
-# Copy all source code
+# Copy application source
 COPY config config
 COPY apps apps
+COPY packages packages
 
-# Build assets
-RUN cd apps/synapsis_web && bun run build 2>/dev/null || true
+# Build production assets with DuskmoonBundler
+WORKDIR /app/apps/synapsis_web
+RUN mix assets.deploy
+WORKDIR /app
 
 # Compile and build release
 RUN mix compile

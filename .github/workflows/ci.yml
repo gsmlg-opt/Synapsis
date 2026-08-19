@@ -80,6 +80,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       MIX_ENV: prod
+      SECRET_KEY_BASE: build-only-placeholder-key-that-is-at-least-64-bytes-long-for-phoenix
+      SYNAPSIS_ENCRYPTION_KEY: build-only-encryption-key-32bytes
 
     steps:
       - name: Checkout code
@@ -91,10 +93,10 @@ jobs:
           elixir-version: '1.18'
           otp-version: '28'
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          bun-version: '1.3.4'
+          node-version: '22'
 
       - name: Restore dependencies cache
         uses: actions/cache@v4
@@ -102,7 +104,7 @@ jobs:
           path: |
             deps
             _build
-          key: ${{ runner.os }}-mix-assets-${{ hashFiles('**/mix.lock') }}
+          key: ${{ runner.os }}-mix-assets-${{ hashFiles('**/mix.lock', 'package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-mix-assets-
             ${{ runner.os }}-mix-
@@ -114,18 +116,14 @@ jobs:
           mix deps.get
 
       - name: Install JavaScript dependencies
-        run: bun install
+        run: mix npm.ci
 
       - name: Run hook tests
-        run: bun test packages/hooks/test
+        run: mix npm.run test:hooks
 
       - name: Check TypeScript
-        run: |
-          bun x tsc --noEmit -p apps/synapsis_web/tsconfig.json
-          bun x tsc --noEmit -p packages/hooks/tsconfig.json
+        run: mix npm.run typecheck
 
       - name: Build production assets
         working-directory: apps/synapsis_web
-        run: |
-          mix assets.setup
-          mix assets.deploy
+        run: mix assets.deploy

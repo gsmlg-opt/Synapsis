@@ -57,14 +57,14 @@ TypeScript lives under `packages/*` as Bun workspaces — currently only `@synap
 | Storage | Embedded Concord 3.x (Turso KV) + TOML/Markdown files (UUID IDs) |
 | HTTP client | Req + Finch (SSE streaming) |
 | Background work | Supervised Tasks + node-local cron scheduler |
-| JS build | Bun + Tailwind CSS v4 |
+| JS build | DuskmoonBundler + Tailwind CSS v4 (`@duskmoon-dev/core`) |
 
 ## Getting Started
 
 ```bash
 # Install dependencies (no database needed — storage is embedded)
 mix deps.get
-bun install
+mix npm.install
 
 # Start server (http://localhost:4657)
 mix phx.server

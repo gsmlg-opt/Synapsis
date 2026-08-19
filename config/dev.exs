@@ -10,8 +10,7 @@ config :synapsis_server, SynapsisServer.Endpoint,
   debug_errors: true,
   secret_key_base: "TjwSh47B1XL2p3O5I35a8EPbvKCYse5R3MPmCr+YBd72WQ8roU/ucfo1Ioir4p9P",
   watchers: [
-    tailwind: {Tailwind, :install_and_run, [:synapsis_web, ~w(--watch)]},
-    bun: {Bun, :install_and_run, [:synapsis_web, ~w(--sourcemap=inline --watch)]}
+    duskmoon_bundler: {Mix.Tasks.DuskmoonBundler.Dev, :run, [["synapsis_web"]]}
   ]
 
 config :synapsis_server, dev_routes: true

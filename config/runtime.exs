@@ -5,15 +5,6 @@ import Config
 # application is started, so it is typically used to load production
 # configuration and secrets from environment variables or elsewhere.
 
-# Use devenv-provided binaries when available
-if System.get_env("MIX_BUN_PATH") do
-  config :bun, path: System.get_env("MIX_BUN_PATH")
-end
-
-if System.get_env("MIX_TAILWIND_PATH") do
-  config :tailwind, path: System.get_env("MIX_TAILWIND_PATH")
-end
-
 # ADR-006 C4: PostgreSQL removed — no Repo runtime config. Session/agent state is
 # in the embedded Concord store (configured in config.exs).
 
@@ -61,12 +52,4 @@ if config_env() == :prod do
       port: port
     ],
     secret_key_base: secret_key_base
-end
-
-if System.get_env("MIX_BUN_PATH") do
-  config :bun, path: System.get_env("MIX_BUN_PATH")
-end
-
-if System.get_env("MIX_TAILWIND_PATH") do
-  config :tailwind, path: System.get_env("MIX_TAILWIND_PATH")
 end

@@ -1,7 +1,16 @@
 {
+  "name": "synapsis",
   "private": true,
+  "type": "module",
   "workspaces": [
     "packages/*",
-    "apps/*"
-  ]
+    "apps/synapsis_web"
+  ],
+  "scripts": {
+    "test:hooks": "node --experimental-strip-types --test packages/hooks/test/*.test.ts",
+    "typecheck": "tsc --noEmit -p apps/synapsis_web/tsconfig.json && tsc --noEmit -p packages/hooks/tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3"
+  }
 }
