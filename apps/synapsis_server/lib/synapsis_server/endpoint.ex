@@ -16,6 +16,15 @@ defmodule SynapsisServer.Endpoint do
     websocket: true,
     longpoll: false
 
+  # Serve source modules / HMR before digested static files so /assets/js/*
+  # resolves through DuskmoonBundler in development.
+  if code_reloading? do
+    plug DuskmoonBundler.DevServer,
+      profile: :synapsis_web,
+      root: Path.expand("../../../synapsis_web/assets/js", __DIR__),
+      prefix: "/assets/js"
+  end
+
   plug Plug.Static,
     at: "/",
     from: {:synapsis_web, "priv/static"},
@@ -25,11 +34,6 @@ defmodule SynapsisServer.Endpoint do
 
   if code_reloading? do
     plug Phoenix.CodeReloader
-
-    plug DuskmoonBundler.DevServer,
-      profile: :synapsis_web,
-      root: Path.expand("../../../synapsis_web/assets/js", __DIR__),
-      prefix: "/assets/js"
   end
 
   plug Plug.RequestId

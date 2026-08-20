@@ -7,7 +7,7 @@ import { LiveSocket } from 'phoenix_live_view'
 import '@duskmoon-dev/el-markdown-input/register'
 import '@duskmoon-dev/el-markdown/register'
 import '@duskmoon-dev/elements/register'
-import * as DuskmoonHooks from '../../../../deps/phoenix_duskmoon/assets/js/hooks/index.js'
+import * as DuskmoonHooks from 'phoenix_duskmoon/hooks'
 import { Hooks, observeChatInputFieldSemantics } from '@synapsis/hooks'
 
 // WORKAROUND(upstream): duskmoon-dev/duskmoon-elements#73
