@@ -596,14 +596,14 @@ defmodule SynapsisWeb.MCPLive.Index do
               :if={ps[:running] && ps[:tools] != []}
               id={"tools-modal-#{config.id}"}
               size="lg"
-              backdrop
             >
               <:trigger :let={dialog_id}>
                 <.dm_btn
                   variant="ghost"
                   size="xs"
                   class="text-primary"
-                  onclick={"document.getElementById('#{dialog_id}').show()"}
+                  command="show-modal"
+                  commandfor={dialog_id}
                 >
                   <.dm_mdi name="puzzle-outline" class="w-3 h-3 mr-1" />
                   {length(ps[:tools])} tool(s)

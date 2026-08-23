@@ -74,7 +74,7 @@ defmodule SynapsisWeb.AgentLive.SkillsTest do
       {:ok, view, _html} = live(conn, ~p"/agent/skills")
 
       view
-      |> element(~s(el-dm-button[phx-click="delete_skill"][phx-value-id="#{skill.id}"]))
+      |> element(~s(button[phx-click="delete_skill"][phx-value-id="#{skill.id}"]))
       |> render_click()
 
       refute Skills.get(skill.id)

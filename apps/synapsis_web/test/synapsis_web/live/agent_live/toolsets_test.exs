@@ -224,7 +224,7 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
       {:ok, view, _html} = live(conn, ~p"/agent/tools")
 
       view
-      |> element(~s(el-dm-button[phx-click="delete_toolset"][phx-value-id="#{toolset.id}"]))
+      |> element(~s(button[phx-click="delete_toolset"][phx-value-id="#{toolset.id}"]))
       |> render_click()
 
       refute Toolsets.get(toolset.id)

@@ -39,7 +39,7 @@ defmodule SynapsisWeb.SkillLive.IndexTest do
       assert html =~ "to-delete"
 
       view
-      |> element(~s(el-dm-button[phx-click="delete_skill"][phx-value-id="#{skill.id}"]))
+      |> element(~s(button[phx-click="delete_skill"][phx-value-id="#{skill.id}"]))
       |> render_click()
 
       html = render(view)
@@ -70,7 +70,7 @@ defmodule SynapsisWeb.SkillLive.IndexTest do
       # Built-in skills should not have a delete button
       refute has_element?(
                view,
-               ~s(el-dm-button[phx-click="delete_skill"][phx-value-id="#{skill.id}"])
+               ~s(button[phx-click="delete_skill"][phx-value-id="#{skill.id}"])
              )
     end
 

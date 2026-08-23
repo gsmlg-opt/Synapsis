@@ -11,6 +11,6 @@
     "typecheck": "tsc --noEmit -p apps/synapsis_web/tsconfig.json && tsc --noEmit -p packages/hooks/tsconfig.json"
   },
   "devDependencies": {
-    "typescript": "6.0.3"
+    "typescript": "7.0.2"
   }
 }

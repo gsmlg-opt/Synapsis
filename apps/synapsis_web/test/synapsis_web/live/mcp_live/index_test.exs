@@ -132,7 +132,7 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
       assert html =~ "deletable"
 
       view
-      |> element(~s(el-dm-button[phx-click="delete_config"][phx-value-id="#{config.id}"]))
+      |> element(~s(button[phx-click="delete_config"][phx-value-id="#{config.id}"]))
       |> render_click()
 
       html = render(view)
@@ -198,12 +198,18 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
 
       on_exit(fn -> Synapsis.Tool.Registry.unregister(tool_name) end)
 
-      {:ok, _view, html} = live(conn, ~p"/settings/mcp")
+      {:ok, view, html} = live(conn, ~p"/settings/mcp")
 
       assert html =~ "Running"
       assert html =~ "1 tool(s)"
-      assert html =~ ".show()"
-      refute html =~ "showModal()"
+
+      assert has_element?(
+               view,
+               ~s(button[command="show-modal"][commandfor="tools-modal-#{config.id}"]),
+               "1 tool(s)"
+             )
+
+      refute html =~ ".show()"
     end
 
     test "running server refreshes tools after registry change", %{conn: conn} do
