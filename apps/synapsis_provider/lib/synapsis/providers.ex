@@ -242,6 +242,16 @@ defmodule Synapsis.Providers do
     end
   end
 
+  @backplane_preset %{
+    name: "backplane",
+    label: "Backplane",
+    type: "openai",
+    base_url: "https://backplane.gsmlg.net/v1",
+    base_url_editable: true,
+    api_key_required: false,
+    discover_models: true
+  }
+
   @default_providers [
     %{name: "anthropic", type: "anthropic", base_url: "https://api.anthropic.com"},
     %{name: "openai", type: "openai", base_url: "https://api.openai.com"},
@@ -260,8 +270,10 @@ defmodule Synapsis.Providers do
     %{name: "openrouter", type: "openrouter", base_url: "https://openrouter.ai/api"}
   ]
 
-  @doc "Return the list of known provider presets (name, type, base_url)."
-  def preset_providers, do: @default_providers
+  @provider_presets [@backplane_preset | @default_providers]
+
+  @doc "Return the list of known provider presets and their UI metadata."
+  def preset_providers, do: @provider_presets
 
   @doc "Insert default providers (idempotent — skips existing names)."
   def seed_defaults do

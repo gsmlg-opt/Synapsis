@@ -208,6 +208,30 @@ defmodule Synapsis.ProvidersTest do
     test "returns error for unknown provider id" do
       assert {:error, :not_found} = Providers.models(Ecto.UUID.generate())
     end
+
+    test "loads keyless Backplane models without authorization" do
+      bypass = Bypass.open()
+
+      Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+        headers = Map.new(conn.req_headers)
+        refute Map.has_key?(headers, "authorization")
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "backplane-model"}]}))
+      end)
+
+      preset = Enum.find(Providers.preset_providers(), &(&1.name == "backplane"))
+      assert %{name: "backplane"} = preset
+
+      attrs =
+        preset
+        |> Map.take([:name, :type])
+        |> Map.put(:base_url, "http://localhost:#{bypass.port}")
+
+      assert {:ok, provider} = Providers.create(attrs)
+      assert {:ok, [%{id: "backplane-model"}]} = Providers.models(provider.id)
+    end
   end
 
   describe "test_connection/1" do
@@ -536,6 +560,23 @@ defmodule Synapsis.ProvidersTest do
       assert "anthropic" in names
       assert "openai" in names
       assert "openrouter" in names
+    end
+
+    test "includes Backplane as an opt-in OpenAI provider preset" do
+      assert %{
+               name: "backplane",
+               label: "Backplane",
+               type: "openai",
+               base_url: "https://backplane.gsmlg.net/v1",
+               base_url_editable: true,
+               api_key_required: false,
+               discover_models: true
+             } = Enum.find(Providers.preset_providers(), &(&1.name == "backplane"))
+    end
+
+    test "does not seed Backplane before the user adds it" do
+      assert :ok = Providers.seed_defaults()
+      assert {:error, :not_found} = Providers.get_by_name("backplane")
     end
   end
 
