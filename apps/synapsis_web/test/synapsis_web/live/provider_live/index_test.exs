@@ -61,6 +61,71 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       assert html =~ "Add anthropic"
       assert html =~ "API Key"
       assert html =~ ~s(value="anthropic")
+      assert has_element?(view, ~s(input[name="api_key"][required]))
+    end
+
+    test "selecting Backplane shows an editable URL and optional access token", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/new")
+
+      html =
+        view
+        |> element(~s(button[phx-click="select_preset"][phx-value-name="backplane"]))
+        |> render_click()
+
+      assert html =~ "Add Backplane"
+      assert html =~ "http://localhost:4220/v1"
+
+      assert has_element?(
+               view,
+               ~s(input[name="base_url"][value="https://backplane.gsmlg.net/v1"])
+             )
+
+      assert has_element?(view, ~s(input#provider-name[name="name"]))
+      assert has_element?(view, ~s(input#provider-base-url[name="base_url"]))
+      assert has_element?(view, ~s(input#provider-api-key[name="api_key"]))
+      assert has_element?(view, ~s(label[for="provider-base-url"]), "Base URL")
+      assert has_element?(view, ~s(label[for="provider-api-key"]), "Access Token (optional)")
+      assert has_element?(view, ~s(input[name="api_key"]))
+      refute has_element?(view, ~s(input[name="api_key"][required]))
+      assert html =~ "Access Token (optional)"
+    end
+
+    test "creates keyless Backplane provider and discovers models without authorization", %{
+      conn: conn
+    } do
+      bypass = Bypass.open()
+
+      Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+        headers = Map.new(conn.req_headers)
+        refute Map.has_key?(headers, "authorization")
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "backplane-model"}]}))
+      end)
+
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/new")
+
+      view
+      |> element(~s(button[phx-click="select_preset"][phx-value-name="backplane"]))
+      |> render_click()
+
+      view
+      |> form("form[phx-submit]", %{
+        "name" => "backplane-dev",
+        "base_url" => "http://localhost:#{bypass.port}/v1",
+        "api_key" => ""
+      })
+      |> render_submit()
+
+      flash = assert_redirected(view, ~p"/settings/providers")
+      assert flash["info"] == "Provider created and models loaded"
+
+      assert {:ok, provider} = Synapsis.Providers.get_by_name("backplane-dev")
+      assert provider.type == "openai"
+      assert provider.base_url == "http://localhost:#{bypass.port}/v1"
+      assert is_nil(provider.api_key_encrypted)
+      assert [%{"id" => "backplane-model"}] = provider.config["available_models"]
     end
 
     test "selecting custom shows form with editable base_url", %{conn: conn} do

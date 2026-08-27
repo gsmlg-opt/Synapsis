@@ -51,11 +51,15 @@ defmodule SynapsisWeb.ProviderLive.Index do
     attrs = %{
       name: params["name"],
       type: preset.type,
-      base_url: if(preset.custom, do: params["base_url"], else: preset.base_url),
+      base_url:
+        if(preset.custom or Map.get(preset, :base_url_editable, false),
+          do: params["base_url"],
+          else: preset.base_url
+        ),
       api_key_encrypted: params["api_key"]
     }
 
-    # For OAuth providers, api_key is optional
+    # Do not persist blank credentials; keyless presets omit the field.
     attrs =
       if attrs.api_key_encrypted in [nil, ""] do
         Map.delete(attrs, :api_key_encrypted)
@@ -107,14 +111,16 @@ defmodule SynapsisWeb.ProviderLive.Index do
     end
   end
 
-  defp maybe_refresh_models_on_create(provider, %{custom: true}) do
-    case Synapsis.Providers.refresh_models(provider.id) do
-      {:ok, updated} -> {updated, "Provider created and models loaded"}
-      {:error, _reason} -> {provider, "Provider created; model loading failed"}
+  defp maybe_refresh_models_on_create(provider, preset) do
+    if preset.custom or Map.get(preset, :discover_models, false) do
+      case Synapsis.Providers.refresh_models(provider.id) do
+        {:ok, updated} -> {updated, "Provider created and models loaded"}
+        {:error, _reason} -> {provider, "Provider created; model loading failed"}
+      end
+    else
+      {provider, "Provider created"}
     end
   end
-
-  defp maybe_refresh_models_on_create(provider, _preset), do: {provider, "Provider created"}
 
   @impl true
   def render(assigns) do
@@ -155,13 +161,14 @@ defmodule SynapsisWeb.ProviderLive.Index do
                   <%= if @selected_preset.custom do %>
                     New {@selected_preset.label}
                   <% else %>
-                    Add {@selected_preset.name}
+                    Add {Map.get(@selected_preset, :label, @selected_preset.name)}
                   <% end %>
                 </span>
               </div>
             </:title>
             <.dm_form for={to_form(%{})} phx-submit="create_provider" class="space-y-3">
               <.dm_input
+                id="provider-name"
                 type="text"
                 name="name"
                 value={@selected_preset.name}
@@ -170,18 +177,23 @@ defmodule SynapsisWeb.ProviderLive.Index do
                 required
               />
               <.readonly_field label="Type" value={@selected_preset.type} />
-              <%= if @selected_preset.custom do %>
+              <%= if @selected_preset.custom or Map.get(@selected_preset, :base_url_editable, false) do %>
                 <.dm_input
+                  id="provider-base-url"
                   type="text"
                   name="base_url"
-                  value=""
-                  placeholder="https://api.example.com"
+                  value={@selected_preset.base_url}
+                  placeholder="https://api.example.com/v1"
                   label="Base URL"
                   required
                 />
               <% else %>
                 <.readonly_field label="Base URL" value={@selected_preset.base_url} />
               <% end %>
+              <.dm_alert :if={@selected_preset.name == "backplane"} variant="info">
+                Production requires an access token. For local development, use
+                http://localhost:4220/v1 and leave the token empty.
+              </.dm_alert>
               <%= if @selected_preset.name == "openai-sub" do %>
                 <div class="bg-info/10 border border-info/30 rounded-lg px-3 py-2 text-sm text-info">
                   This provider uses OAuth authentication. After creating, you'll be redirected
@@ -189,12 +201,21 @@ defmodule SynapsisWeb.ProviderLive.Index do
                 </div>
               <% else %>
                 <.dm_input
+                  id="provider-api-key"
                   type="password"
                   name="api_key"
                   value=""
-                  placeholder="Enter API key"
-                  label="API Key"
-                  required
+                  placeholder={
+                    if @selected_preset.name == "backplane",
+                      do: "Optional for local development",
+                      else: "Enter API key"
+                  }
+                  label={
+                    if @selected_preset.name == "backplane",
+                      do: "Access Token (optional)",
+                      else: "API Key"
+                  }
+                  required={Map.get(@selected_preset, :api_key_required, true)}
                 />
               <% end %>
               <:actions>
@@ -232,7 +253,7 @@ defmodule SynapsisWeb.ProviderLive.Index do
                   variant="bordered"
                   class="cursor-pointer hover:border-primary hover:bg-surface-container-high transition-colors h-full"
                 >
-                  <div class="font-medium">{preset.name}</div>
+                  <div class="font-medium">{Map.get(preset, :label, preset.name)}</div>
                   <div class="text-xs text-on-surface-variant mt-1">{preset.type}</div>
                 </.dm_card>
               </button>
