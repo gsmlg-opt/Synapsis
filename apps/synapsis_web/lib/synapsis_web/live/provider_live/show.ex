@@ -72,20 +72,25 @@ defmodule SynapsisWeb.ProviderLive.Show do
   end
 
   def handle_event("clear_api_key", _params, socket) do
-    if Synapsis.Providers.oauth_provider?(socket.assigns.provider) do
-      {:noreply,
-       put_flash(socket, :error, "OAuth credentials must be managed through OAuth login")}
-    else
-      case Synapsis.Providers.update(socket.assigns.provider.id, %{api_key_encrypted: nil}) do
-        {:ok, provider} ->
-          {:noreply,
-           socket
-           |> assign(provider: provider)
-           |> put_flash(:info, "Access token cleared")}
+    case Synapsis.Providers.clear_api_key(socket.assigns.provider.id) do
+      {:ok, provider} ->
+        {:noreply,
+         socket
+         |> assign(provider: provider)
+         |> put_flash(:info, "Access token cleared")}
 
-        {:error, _reason} ->
-          {:noreply, put_flash(socket, :error, "Failed to clear access token")}
-      end
+      {:error, :oauth_provider} ->
+        socket =
+          case Synapsis.Providers.get(socket.assigns.provider.id) do
+            {:ok, provider} -> assign(socket, provider: provider)
+            {:error, _} -> socket
+          end
+
+        {:noreply,
+         put_flash(socket, :error, "OAuth credentials must be managed through OAuth login")}
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to clear access token")}
     end
   end
 

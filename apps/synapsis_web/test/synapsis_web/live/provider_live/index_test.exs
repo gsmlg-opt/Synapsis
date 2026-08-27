@@ -258,6 +258,12 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
 
       flash = assert_redirected(view, ~p"/settings/providers")
       assert flash["info"] == "Provider created; model loading failed"
+
+      assert {:ok, provider} = Synapsis.Providers.get_by_name("my-local-llm")
+      assert provider.base_url == "http://localhost:#{bypass.port}"
+      assert provider.type == "openai"
+      refute Map.has_key?(provider.config, "available_models")
+      assert {:ok, _config} = Synapsis.Provider.Registry.get("my-local-llm")
     end
 
     test "custom compatible provider creation loads models", %{conn: conn} do

@@ -210,6 +210,39 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
                Synapsis.Provider.Registry.get(provider.name)
     end
 
+    test "rejects a stale clear event after the provider switches to OAuth", %{conn: conn} do
+      {:ok, provider} =
+        Synapsis.Providers.create(%{
+          name: "stale-clear-oauth-#{:rand.uniform(100_000)}",
+          type: "openai",
+          base_url: "http://localhost:4220/v1",
+          api_key_encrypted: "stored-api-key",
+          config: %{"available_models" => [%{"id" => "cached-model", "name" => "Cached Model"}]}
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+
+      assert {:ok, _} =
+               Synapsis.Providers.update(provider.id, %{
+                 config: %{
+                   "auth_mode" => "oauth_device",
+                   "available_models" => [%{"id" => "cached-model", "name" => "Cached Model"}],
+                   "oauth_tokens" => %{"access_token" => "oauth-token"}
+                 }
+               })
+
+      html = render_hook(view, "clear_api_key", %{})
+      assert html =~ "OAuth credentials must be managed through OAuth login"
+      refute html =~ "Clear stored token"
+      refute html =~ "Key is set"
+
+      assert {:ok, updated} = Synapsis.Providers.get(provider.id)
+      assert updated.api_key_encrypted == "stored-api-key"
+
+      assert {:ok, %{api_key: "oauth-token", oauth: true}} =
+               Synapsis.Provider.Registry.get(provider.name)
+    end
+
     test "provider without api_key does not show 'Key is set'", %{conn: conn} do
       {:ok, no_key_provider} =
         Synapsis.Providers.create(%{

@@ -199,6 +199,43 @@ defmodule Synapsis.ProvidersTest do
     end
   end
 
+  describe "clear_api_key/1" do
+    test "clears a non-OAuth stored key in persistence and the runtime registry" do
+      {:ok, provider} =
+        Providers.create(%{
+          name: "clear-key-provider",
+          type: "openai",
+          api_key_encrypted: "stored-api-key",
+          config: %{"available_models" => [%{"id" => "cached-model"}]}
+        })
+
+      assert {:ok, updated} = Providers.clear_api_key(provider.id)
+      assert is_nil(updated.api_key_encrypted)
+      assert {:ok, persisted} = Providers.get(provider.id)
+      assert is_nil(persisted.api_key_encrypted)
+      assert {:ok, %{api_key: nil}} = ProviderRegistry.get(provider.name)
+    end
+
+    test "rejects OAuth providers without changing stored or runtime credentials" do
+      {:ok, provider} =
+        Providers.create(%{
+          name: "oauth-clear-key-provider",
+          type: "openai",
+          api_key_encrypted: "stored-api-key",
+          config: %{
+            "auth_mode" => "oauth_device",
+            "available_models" => [%{"id" => "cached-model"}],
+            "oauth_tokens" => %{"access_token" => "oauth-token"}
+          }
+        })
+
+      assert {:error, :oauth_provider} = Providers.clear_api_key(provider.id)
+      assert {:ok, persisted} = Providers.get(provider.id)
+      assert persisted.api_key_encrypted == "stored-api-key"
+      assert {:ok, %{api_key: "oauth-token", oauth: true}} = ProviderRegistry.get(provider.name)
+    end
+  end
+
   describe "load_all_into_registry/0" do
     test "loads enabled providers into registry" do
       {:ok, _} = Providers.create(@valid_attrs)

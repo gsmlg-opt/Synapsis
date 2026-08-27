@@ -183,6 +183,17 @@ defmodule Synapsis.Providers do
     update(id, %{api_key_encrypted: api_key})
   end
 
+  @doc "Clear a stored API key unless OAuth config owns the active credential."
+  def clear_api_key(id) do
+    with {:ok, provider} <- get(id),
+         false <- oauth_provider?(provider) do
+      update(id, %{api_key_encrypted: nil})
+    else
+      true -> {:error, :oauth_provider}
+      error -> error
+    end
+  end
+
   @doc "Store OAuth tokens in the provider's config JSONB and set the access_token as api_key."
   def save_oauth_tokens(id, tokens) do
     with {:ok, provider} <- get(id) do
