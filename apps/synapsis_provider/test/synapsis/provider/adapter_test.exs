@@ -79,8 +79,61 @@ defmodule Synapsis.Provider.AdapterTest do
   # ---------------------------------------------------------------------------
 
   describe "stream/2 OpenAI" do
+    test "string-key config uses custom base URL and bearer credentials", %{
+      bypass: bypass,
+      port: port
+    } do
+      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+        headers = Map.new(conn.req_headers)
+        assert headers["authorization"] == "Bearer string-key"
+
+        conn
+        |> Plug.Conn.put_resp_content_type("text/event-stream")
+        |> Plug.Conn.send_resp(200, "data: [DONE]\n\n")
+      end)
+
+      config = %{
+        "api_key" => "string-key",
+        "base_url" => "http://localhost:#{port}",
+        "type" => "openai"
+      }
+
+      request = Adapter.format_request([], [], %{model: "gpt-4o", provider_type: "openai"})
+
+      assert {:ok, ref} = Adapter.stream(request, config)
+      assert :done in collect_chunks(ref)
+    end
+
+    test "empty api_key omits Authorization header while streaming", %{
+      bypass: bypass,
+      port: port
+    } do
+      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+        headers = Map.new(conn.req_headers)
+        refute Map.has_key?(headers, "authorization")
+
+        conn
+        |> Plug.Conn.put_resp_content_type("text/event-stream")
+        |> Plug.Conn.send_resp(200, """
+        data: {"id":"1","choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":null}]}
+
+        data: [DONE]
+
+        """)
+      end)
+
+      config = %{api_key: "", base_url: "http://localhost:#{port}", type: "openai"}
+      request = Adapter.format_request([], [], %{model: "gpt-4o", provider_type: "openai"})
+
+      assert {:ok, ref} = Adapter.stream(request, config)
+      assert :done in collect_chunks(ref)
+    end
+
     test "receives streaming chunks", %{bypass: bypass, port: port} do
       Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+        headers = Map.new(conn.req_headers)
+        assert headers["authorization"] == "Bearer test-key"
+
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.send_resp(200, """
@@ -352,6 +405,9 @@ defmodule Synapsis.Provider.AdapterTest do
 
     test "OpenAI synchronous completion returns text", %{bypass: bypass, port: port} do
       Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+        headers = Map.new(conn.req_headers)
+        assert headers["authorization"] == "Bearer test-key"
+
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
@@ -374,6 +430,30 @@ defmodule Synapsis.Provider.AdapterTest do
 
       assert {:ok, text} = Adapter.complete(request, config)
       assert text == "Hello"
+    end
+
+    test "OpenAI complete with empty api_key omits Authorization header", %{
+      bypass: bypass,
+      port: port
+    } do
+      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+        headers = Map.new(conn.req_headers)
+        refute Map.has_key?(headers, "authorization")
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(
+          200,
+          Jason.encode!(%{
+            "choices" => [%{"message" => %{"role" => "assistant", "content" => "Hi"}}]
+          })
+        )
+      end)
+
+      config = %{api_key: "", base_url: "http://localhost:#{port}", type: "openai"}
+      request = Adapter.format_request([], [], %{model: "gpt-4o", provider_type: "openai"})
+
+      assert {:ok, "Hi"} = Adapter.complete(request, config)
     end
 
     test "OpenAI complete does not append duplicate v1 when base_url already ends in v1", %{

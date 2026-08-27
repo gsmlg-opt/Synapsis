@@ -274,26 +274,24 @@ defmodule Synapsis.Provider.Adapter do
   # ---------------------------------------------------------------------------
 
   defp do_openai_stream(request, config, caller) do
-    base_url = config[:base_url] || Transport.OpenAI.default_base_url()
+    base_url = config[:base_url] || config["base_url"] || Transport.OpenAI.default_base_url()
 
     {url, headers, body} =
-      if config[:azure] do
+      if config[:azure] || config["azure"] do
         model = request[:model] || "gpt-4.1"
-        api_version = config[:api_version] || "2024-02-15-preview"
+        api_version = config[:api_version] || config["api_version"] || "2024-02-15-preview"
 
         url =
           "#{base_url}/openai/deployments/#{model}/chat/completions?api-version=#{api_version}"
 
         headers = [
-          {"api-key", config[:api_key]},
+          {"api-key", config[:api_key] || config["api_key"]},
           {"content-type", "application/json"}
         ]
 
         {url, headers, Map.drop(request, [:model])}
       else
-        headers =
-          [{"content-type", "application/json"}] ++
-            if(config[:api_key], do: [{"authorization", "Bearer #{config[:api_key]}"}], else: [])
+        headers = [{"content-type", "application/json"}] ++ openai_auth_headers(config)
 
         {openai_chat_completions_url(base_url), headers, request}
       end
@@ -627,14 +625,12 @@ defmodule Synapsis.Provider.Adapter do
   # ---------------------------------------------------------------------------
 
   defp do_openai_complete(request, config) do
-    base_url = config[:base_url] || Transport.OpenAI.default_base_url()
+    base_url = config[:base_url] || config["base_url"] || Transport.OpenAI.default_base_url()
     url = openai_chat_completions_url(base_url)
 
     body = Map.merge(request, %{stream: false})
 
-    headers =
-      [{"content-type", "application/json"}] ++
-        if(config[:api_key], do: [{"authorization", "Bearer #{config[:api_key]}"}], else: [])
+    headers = [{"content-type", "application/json"}] ++ openai_auth_headers(config)
 
     case Req.post(url, headers: headers, json: body, receive_timeout: @request_timeout_ms) do
       {:ok, response} ->
@@ -655,6 +651,16 @@ defmodule Synapsis.Provider.Adapter do
 
       {:error, exception} ->
         {:error, Exception.message(exception)}
+    end
+  end
+
+  defp openai_auth_headers(config) do
+    case config[:api_key] || config["api_key"] do
+      api_key when is_binary(api_key) and api_key != "" ->
+        [{"authorization", "Bearer #{api_key}"}]
+
+      _other ->
+        []
     end
   end
 
