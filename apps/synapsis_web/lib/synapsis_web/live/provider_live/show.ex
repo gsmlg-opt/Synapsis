@@ -71,6 +71,24 @@ defmodule SynapsisWeb.ProviderLive.Show do
     end
   end
 
+  def handle_event("clear_api_key", _params, socket) do
+    if Synapsis.Providers.oauth_provider?(socket.assigns.provider) do
+      {:noreply,
+       put_flash(socket, :error, "OAuth credentials must be managed through OAuth login")}
+    else
+      case Synapsis.Providers.update(socket.assigns.provider.id, %{api_key_encrypted: nil}) do
+        {:ok, provider} ->
+          {:noreply,
+           socket
+           |> assign(provider: provider)
+           |> put_flash(:info, "Access token cleared")}
+
+        {:error, _reason} ->
+          {:noreply, put_flash(socket, :error, "Failed to clear access token")}
+      end
+    end
+  end
+
   def handle_event("toggle_edit_models", _params, socket) do
     {:noreply, assign(socket, editing_models: !socket.assigns.editing_models)}
   end
@@ -495,8 +513,26 @@ defmodule SynapsisWeb.ProviderLive.Show do
               placeholder="Leave empty to keep current key"
               label="API Key"
             />
-            <div :if={@provider.api_key_encrypted} class="text-xs text-success mt-1">
-              Key is set
+            <div
+              :if={
+                @provider.api_key_encrypted not in [nil, ""] and
+                  not Synapsis.Providers.oauth_provider?(@provider)
+              }
+              class="flex items-center justify-between gap-3 text-xs text-success mt-1"
+            >
+              <span>Key is set</span>
+              <.dm_btn
+                id="clear-provider-api-key"
+                type="button"
+                variant="error"
+                size="xs"
+                phx-click="clear_api_key"
+                confirm="Clear the stored access token?"
+                confirm_title="Clear stored token?"
+                confirm_text="Clear token"
+              >
+                Clear stored token
+              </.dm_btn>
             </div>
           </div>
 

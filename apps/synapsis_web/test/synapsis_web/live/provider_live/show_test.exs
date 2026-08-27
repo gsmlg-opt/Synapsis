@@ -100,6 +100,116 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       assert html =~ "Provider updated"
     end
 
+    test "clears a stored token and refreshes models without authorization", %{conn: conn} do
+      bypass = Bypass.open()
+
+      Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+        headers = Map.new(conn.req_headers)
+        refute Map.has_key?(headers, "authorization")
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "backplane-model"}]}))
+      end)
+
+      {:ok, provider} =
+        Synapsis.Providers.create(%{
+          name: "backplane-clear-#{:rand.uniform(100_000)}",
+          type: "openai",
+          base_url: "http://localhost:#{bypass.port}/v1",
+          api_key_encrypted: "placeholder-token",
+          config: %{"available_models" => [%{"id" => "old-model", "name" => "Old Model"}]}
+        })
+
+      {:ok, view, html} = live(conn, ~p"/settings/providers/#{provider.id}")
+      assert html =~ "Key is set"
+      assert html =~ "Clear stored token"
+      assert has_element?(view, ~s(#clear-provider-api-key[command="show-modal"]))
+      assert has_element?(view, ~s(dialog[data-dm-confirm-dialog="true"]))
+
+      assert has_element?(
+               view,
+               ~s(button[data-dm-confirm-action="true"][phx-click="clear_api_key"]),
+               "Clear token"
+             )
+
+      html =
+        view
+        |> element(~s(button[data-dm-confirm-action="true"][phx-click="clear_api_key"]))
+        |> render_click()
+
+      assert html =~ "Access token cleared"
+      refute html =~ "Key is set"
+
+      assert {:ok, updated} = Synapsis.Providers.get(provider.id)
+      assert is_nil(updated.api_key_encrypted)
+      assert {:ok, %{api_key: nil}} = Synapsis.Provider.Registry.get(provider.name)
+
+      assert :ok = Synapsis.Config.Store.reload(:provider)
+      assert {:ok, raw} = Synapsis.Config.Store.get(:provider, provider.id)
+      refute Map.has_key?(raw, "api_key_encrypted")
+
+      html =
+        view
+        |> element(~s(el-dm-button[phx-click="refresh_models"]))
+        |> render_click()
+
+      assert html =~ "Models refreshed"
+      assert html =~ "backplane-model"
+    end
+
+    test "clearing an absent token remains keyless", %{conn: conn} do
+      {:ok, provider} =
+        Synapsis.Providers.create(%{
+          name: "already-keyless-#{:rand.uniform(100_000)}",
+          type: "openai",
+          base_url: "http://localhost:4220/v1",
+          config: %{"available_models" => [%{"id" => "cached-model", "name" => "Cached Model"}]}
+        })
+
+      {:ok, view, html} = live(conn, ~p"/settings/providers/#{provider.id}")
+      refute html =~ "Key is set"
+
+      html = render_hook(view, "clear_api_key", %{})
+      assert html =~ "Access token cleared"
+
+      assert {:ok, updated} = Synapsis.Providers.get(provider.id)
+      assert is_nil(updated.api_key_encrypted)
+      assert {:ok, %{api_key: nil}} = Synapsis.Provider.Registry.get(provider.name)
+    end
+
+    test "does not offer or clear a stored token for an OAuth provider", %{conn: conn} do
+      {:ok, provider} =
+        Synapsis.Providers.create(%{
+          name: "oauth-keyed-#{:rand.uniform(100_000)}",
+          type: "openai",
+          base_url: "http://localhost:4220/v1",
+          api_key_encrypted: "stored-api-key",
+          config: %{
+            "auth_mode" => "oauth_device",
+            "available_models" => [%{"id" => "cached-model", "name" => "Cached Model"}],
+            "oauth_tokens" => %{"access_token" => "oauth-access-token"}
+          }
+        })
+
+      {:ok, view, html} = live(conn, ~p"/settings/providers/#{provider.id}")
+      refute html =~ "Clear stored token"
+      refute has_element?(view, "#clear-provider-api-key")
+
+      assert {:ok, %{api_key: "oauth-access-token", oauth: true}} =
+               Synapsis.Provider.Registry.get(provider.name)
+
+      html = render_hook(view, "clear_api_key", %{})
+      assert html =~ "OAuth credentials must be managed through OAuth login"
+
+      assert {:ok, updated} = Synapsis.Providers.get(provider.id)
+      assert updated.api_key_encrypted == "stored-api-key"
+      assert updated.config["oauth_tokens"]["access_token"] == "oauth-access-token"
+
+      assert {:ok, %{api_key: "oauth-access-token", oauth: true}} =
+               Synapsis.Provider.Registry.get(provider.name)
+    end
+
     test "provider without api_key does not show 'Key is set'", %{conn: conn} do
       {:ok, no_key_provider} =
         Synapsis.Providers.create(%{
