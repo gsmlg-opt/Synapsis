@@ -77,6 +77,22 @@ defmodule SynapsisServer.ProviderControllerTest do
       refute Map.has_key?(provider, "api_key")
     end
 
+    test "reports an empty api key as not configured", %{conn: conn} do
+      conn =
+        post(conn, "/api/providers", %{
+          "name" => "keyless-openai",
+          "type" => "openai",
+          "base_url" => "http://localhost:4220/v1",
+          "api_key" => ""
+        })
+
+      %{"data" => provider} = json_response(conn, 201)
+      assert provider["has_api_key"] == false
+
+      assert {:ok, persisted} = Providers.get(provider["id"])
+      assert is_nil(persisted.api_key_encrypted)
+    end
+
     test "returns 422 for invalid attrs", %{conn: conn} do
       conn = post(conn, "/api/providers", %{"name" => "", "type" => ""})
       assert %{"errors" => errors} = json_response(conn, 422)

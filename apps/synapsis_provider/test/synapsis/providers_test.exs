@@ -30,6 +30,24 @@ defmodule Synapsis.ProvidersTest do
       assert config.type == "anthropic"
     end
 
+    test "normalizes an empty api key to no credential" do
+      assert {:ok, provider} =
+               Providers.create(%{
+                 name: "keyless-openai",
+                 type: "openai",
+                 base_url: "http://localhost:4220/v1",
+                 api_key_encrypted: ""
+               })
+
+      assert is_nil(provider.api_key_encrypted)
+      assert {:ok, %{api_key: nil}} = ProviderRegistry.get("keyless-openai")
+      assert :ok = Synapsis.Config.Store.reload(:provider)
+      assert {:ok, raw} = Synapsis.Config.Store.get(:provider, provider.id)
+      refute Map.has_key?(raw, "api_key_encrypted")
+      assert {:ok, persisted} = Providers.get(provider.id)
+      assert is_nil(persisted.api_key_encrypted)
+    end
+
     test "returns error for invalid attrs" do
       assert {:error, %Ecto.Changeset{}} = Providers.create(%{name: "", type: ""})
     end
