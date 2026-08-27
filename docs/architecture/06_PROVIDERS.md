@@ -67,6 +67,20 @@ The adapter maps provider type strings to transport atoms:
 | `"openai"`, `"openai_compat"`, `"local"`, `"openrouter"`, `"groq"`, `"deepseek"` | `:openai` |
 | `"google"`                                            | `:google` |
 
+### Backplane Preset
+
+Backplane is a named provider preset that uses the existing `openai` transport.
+The hosted endpoint defaults to `https://backplane.gsmlg.net/v1` and requires an
+access token. Local development commonly uses `http://localhost:4220/v1` and may
+run without authentication. Synapsis sends `Authorization: Bearer <token>` only
+when a non-empty token is configured.
+
+The Backplane preset is opt-in rather than startup-seeded. Its base URL is
+editable during creation. Creation attempts model discovery through the
+OpenAI-compatible models endpoint (`<base_url>/models` when the URL already ends
+in `/v1`, otherwise `<base_url>/v1/models`) and caches models when discovery
+succeeds; a discovery failure leaves the provider configured for later retry.
+
 ## Internal Event Protocol
 
 `Session.Worker` receives these canonical Anthropic-shaped events via
