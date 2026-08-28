@@ -98,7 +98,8 @@ config :duskmoon_bundler, :synapsis_web,
     prefix: "/assets",
     watch_dirs: [
       Path.expand("../apps/synapsis_web/lib", __DIR__),
-      Path.expand("../apps/synapsis_web/assets", __DIR__)
+      Path.expand("../apps/synapsis_web/assets", __DIR__),
+      Path.expand("../deps/phoenix_duskmoon/lib", __DIR__)
     ]
   ]
 
