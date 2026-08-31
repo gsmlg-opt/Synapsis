@@ -3,8 +3,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   use SynapsisWeb, :live_view
   require Logger
 
-  alias Synapsis.ContextWindow
-  alias Synapsis.Sessions
+  alias Synapsis.{ContextWindow, Image, Sessions}
 
   @running_statuses ~w(streaming tool_executing)
 
@@ -147,12 +146,24 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   @impl true
   @max_content_bytes 256_000
 
+  def handle_event("send_message", %{"value" => content, "images" => images}, socket) do
+    send_message_with_images(content, images, socket)
+  end
+
+  def handle_event("send_message", %{"content" => content, "images" => images}, socket) do
+    send_message_with_images(content, images, socket)
+  end
+
   def handle_event("send_message", %{"value" => content}, socket) do
-    send_message(content, socket)
+    send_message(content, [], socket)
   end
 
   def handle_event("send_message", %{"content" => content}, socket) do
-    send_message(content, socket)
+    send_message(content, [], socket)
+  end
+
+  def handle_event("image_attachment_error", _params, socket) do
+    {:noreply, put_flash(socket, :error, "Could not read image attachment")}
   end
 
   def handle_event("steer_message", %{"value" => content}, socket) do
@@ -322,11 +333,19 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     {:noreply, assign(socket, :current_mode, mode)}
   end
 
-  defp send_message(content, socket) when is_binary(content) do
+  defp send_message_with_images(content, images, socket) do
+    case Image.decode_payloads(images) do
+      {:ok, image_parts} -> send_message(content, image_parts, socket)
+      {:error, {_reason, message}} -> {:noreply, put_flash(socket, :error, message)}
+    end
+  end
+
+  defp send_message(content, image_parts, socket)
+       when is_binary(content) and is_list(image_parts) do
     content = String.trim(content)
 
     cond do
-      content == "" or is_nil(socket.assigns.current_session) ->
+      (content == "" and image_parts == []) or is_nil(socket.assigns.current_session) ->
         {:noreply, socket}
 
       byte_size(content) > @max_content_bytes ->
@@ -345,7 +364,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
               id: Ecto.UUID.generate(),
               session_id: session_id,
               role: "user",
-              parts: [%Synapsis.Part.Text{content: content}],
+              parts: optimistic_user_parts(content, image_parts),
               inserted_at: DateTime.utc_now()
             }
 
@@ -355,14 +374,17 @@ defmodule SynapsisWeb.AgentLive.Sessions do
             |> assign(:tool_calls, %{})
           end
 
-        case Sessions.send_message(session_id, content) do
+        case Sessions.send_message(session_id, content, image_parts) do
           :ok ->
-            if running? do
-              {:noreply, socket}
-            else
-              # Reload from DB to get the real persisted message with correct ID/timestamps
-              {:noreply, assign(socket, :messages, Sessions.get_messages(session_id))}
-            end
+            socket =
+              if running? do
+                socket
+              else
+                # Reload from DB to get the real persisted message with correct ID/timestamps
+                assign(socket, :messages, Sessions.get_messages(session_id))
+              end
+
+            {:noreply, push_event(socket, "clear_chat_input", %{})}
 
           {:error, reason} ->
             Logger.warning("session_send_failed", session_id: session_id, reason: inspect(reason))
@@ -380,7 +402,12 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     end
   end
 
-  defp send_message(_content, socket), do: {:noreply, socket}
+  defp send_message(_content, _image_parts, socket), do: {:noreply, socket}
+
+  defp optimistic_user_parts("", [_image | _] = image_parts), do: image_parts
+
+  defp optimistic_user_parts(content, image_parts),
+    do: [%Synapsis.Part.Text{content: content} | image_parts]
 
   defp steer_message(content, socket) when is_binary(content) do
     content = String.trim(content)
@@ -829,7 +856,6 @@ defmodule SynapsisWeb.AgentLive.Sessions do
               placeholder="Send a message... (Ctrl/Cmd+Enter)"
               disabled={chat_input_disabled?(@session_status)}
               send_label={if running_session_status?(@session_status), do: "Queue", else: "Send"}
-              clear_on_send
               duskmoon-send-send="send_message"
               {steer_quick_action_attrs(@session_status)}
               class={[

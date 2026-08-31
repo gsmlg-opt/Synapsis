@@ -281,6 +281,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
 
       assert has_element?(view, "el-dm-chat-input#message-input[phx-hook='WebComponentHook']")
+      refute has_element?(view, "el-dm-chat-input#message-input[clear-on-send]")
 
       refute has_element?(
                view,
@@ -292,6 +293,96 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       html = render_hook(view, "steer_message", %{"value" => "idle steer should not persist"})
 
       refute html =~ "idle steer should not persist"
+      assert Sessions.get_messages(session.id) == []
+    end
+
+    test "send hook persists Base64 JSON images and clears after acceptance", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      render_hook(view, "send_message", %{
+        "value" => "describe",
+        "images" => [png_image_payload()]
+      })
+
+      assert_push_event(view, "clear_chat_input", %{})
+
+      assert %Synapsis.Message{
+               parts: [
+                 %Synapsis.Part.Text{content: "describe"},
+                 %Synapsis.Part.Image{media_type: "image/png", data: data}
+               ]
+             } = Enum.find(Sessions.get_messages(session.id), &(&1.role == "user"))
+
+      assert data == png_image_payload()["data"]
+    end
+
+    test "send hook accepts an image-only prompt", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      render_hook(view, "send_message", %{"value" => "", "images" => [png_image_payload()]})
+
+      assert_push_event(view, "clear_chat_input", %{})
+
+      assert %Synapsis.Message{parts: [%Synapsis.Part.Image{media_type: "image/png"}]} =
+               Enum.find(Sessions.get_messages(session.id), &(&1.role == "user"))
+    end
+
+    test "send hook retains image parts in a queued prompt", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      set_worker_running(session)
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      render_hook(view, "send_message", %{
+        "value" => "queued image",
+        "images" => [png_image_payload()]
+      })
+
+      assert_push_event(view, "clear_chat_input", %{})
+
+      assert [
+               %{
+                 content: "queued image",
+                 image_parts: [%Synapsis.Part.Image{media_type: "image/png"}]
+               }
+             ] = PendingInputStore.queued_prompts(session.id)
+    end
+
+    test "send hook rejects malformed image JSON without text-only fallback", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      html =
+        render_hook(view, "send_message", %{
+          "value" => "must not be sent",
+          "images" => [%{png_image_payload() | "data" => "not-base64!"}]
+        })
+
+      assert html =~ "Invalid image attachment"
+      refute_push_event(view, "clear_chat_input", %{})
+      assert Sessions.get_messages(session.id) == []
+      assert PendingInputStore.queued_prompts(session.id) == []
+    end
+
+    test "client image read errors use a fixed safe message", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      html = render_hook(view, "image_attachment_error", %{"message" => "private detail"})
+
+      assert html =~ "Could not read image attachment"
+      refute html =~ "private detail"
       assert Sessions.get_messages(session.id) == []
     end
 
@@ -845,5 +936,14 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
     |> String.split(pattern)
     |> length()
     |> Kernel.-(1)
+  end
+
+  defp png_image_payload do
+    %{
+      "name" => "pixel.png",
+      "media_type" => "image/png",
+      "data" =>
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVQI12P4z8AAAAACAAHiIbwzAAAAAElFTkSuQmCC"
+    }
   end
 end
