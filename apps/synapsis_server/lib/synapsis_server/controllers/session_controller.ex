@@ -300,6 +300,10 @@ defmodule SynapsisServer.SessionController do
     %{type: "file", path: path, content: content}
   end
 
+  defp serialize_part(%Synapsis.Part.Image{media_type: media_type, data: data}) do
+    %{type: "image", media_type: media_type, data: data}
+  end
+
   defp serialize_part(%Synapsis.Part.Agent{agent: agent, message: message}) do
     %{type: "agent", agent: agent, message: message}
   end

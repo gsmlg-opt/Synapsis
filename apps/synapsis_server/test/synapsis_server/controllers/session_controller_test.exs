@@ -474,7 +474,7 @@ defmodule SynapsisServer.SessionControllerTest do
       assert part["message"] == "Starting build..."
     end
 
-    test "serialize_part catch-all returns unknown type for Image parts", %{
+    test "serializes Image parts as Base64 JSON", %{
       conn: conn,
       session: session
     } do
@@ -489,7 +489,12 @@ defmodule SynapsisServer.SessionControllerTest do
       %{"data" => %{"messages" => messages}} = json_response(conn, 200)
 
       part = messages |> List.last() |> Map.get("parts") |> hd()
-      assert part["type"] == "unknown"
+
+      assert part == %{
+               "type" => "image",
+               "media_type" => "image/png",
+               "data" => "base64data"
+             }
     end
   end
 end

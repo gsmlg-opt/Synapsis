@@ -647,6 +647,22 @@ defmodule SynapsisWeb.CoreComponents do
             </div>
             <pre class="whitespace-pre-wrap max-h-64 overflow-y-auto">{content}</pre>
           </div>
+        <% %Synapsis.Part.Image{media_type: media_type, data: data} -> %>
+          <.chat_bubble
+            role={@message.role}
+            label={@message_label}
+            avatar={@message_avatar}
+            time={@message_time}
+            status={@message_status}
+          >
+            <img
+              src={"data:#{media_type};base64,#{data}"}
+              alt="Attached image"
+              loading="lazy"
+              decoding="async"
+              class="block max-h-96 max-w-full rounded-lg border border-outline-variant object-contain"
+            />
+          </.chat_bubble>
         <% _ -> %>
           <div></div>
       <% end %>

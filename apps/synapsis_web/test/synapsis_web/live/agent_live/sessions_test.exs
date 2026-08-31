@@ -297,8 +297,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
     end
 
     test "send hook persists Base64 JSON images and clears after acceptance", %{conn: conn} do
-      {:ok, session} =
-        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+      session = create_image_session()
 
       {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
 
@@ -317,11 +316,12 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
              } = Enum.find(Sessions.get_messages(session.id), &(&1.role == "user"))
 
       assert data == png_image_payload()["data"]
+      assert_receive {:image_provider_request, request}
+      assert provider_request_has_image?(request)
     end
 
     test "send hook accepts an image-only prompt", %{conn: conn} do
-      {:ok, session} =
-        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+      session = create_image_session()
 
       {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
 
@@ -331,6 +331,9 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
       assert %Synapsis.Message{parts: [%Synapsis.Part.Image{media_type: "image/png"}]} =
                Enum.find(Sessions.get_messages(session.id), &(&1.role == "user"))
+
+      assert_receive {:image_provider_request, request}
+      assert provider_request_has_image?(request)
     end
 
     test "send hook retains image parts in a queued prompt", %{conn: conn} do
@@ -837,6 +840,31 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       assert html =~ ~s(status="out: 99")
     end
 
+    test "message_parts renders a durable image part", _ctx do
+      message = %Synapsis.Message{
+        role: "user",
+        inserted_at: ~U[2026-05-26 16:29:00.000000Z],
+        parts: [%Synapsis.Part.Image{media_type: "image/png", data: "base64data", path: nil}]
+      }
+
+      html =
+        render_component(
+          fn assigns ->
+            ~H"""
+            <SynapsisWeb.CoreComponents.message_parts message={assigns.message} />
+            """
+          end,
+          %{message: message}
+        )
+
+      assert html =~ ~s(alt="Attached image")
+      assert html =~ ~s(src="data:image/png;base64,base64data")
+      assert html =~ "max-w-full"
+      assert html =~ "max-h-96"
+      assert html =~ "rounded-lg"
+      assert html =~ "border-outline-variant"
+    end
+
     test "message_parts renders a regenerate button for assistant messages when allowed", _ctx do
       message = %Synapsis.Message{
         id: "msg-123",
@@ -945,5 +973,53 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       "data" =>
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVQI12P4z8AAAAACAAHiIbwzAAAAAElFTkSuQmCC"
     }
+  end
+
+  defp create_image_session do
+    bypass = Bypass.open()
+    provider_name = "image_chat_#{System.unique_integer([:positive])}"
+    test_pid = self()
+
+    assert :ok =
+             Synapsis.Provider.Registry.register(provider_name, %{
+               type: "anthropic",
+               api_key: "test-key",
+               base_url: "http://localhost:#{bypass.port}"
+             })
+
+    on_exit(fn -> Synapsis.Provider.Registry.unregister(provider_name) end)
+
+    Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      send(test_pid, {:image_provider_request, Jason.decode!(body)})
+
+      conn
+      |> Plug.Conn.put_resp_content_type("text/event-stream")
+      |> Plug.Conn.send_resp(200, """
+      data: {"type":"message_start","message":{"id":"msg_image"}}
+
+      data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+      data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ack"}}
+
+      data: {"type":"message_stop"}
+
+      """)
+    end)
+
+    assert {:ok, session} =
+             Sessions.create("__global__", %{
+               provider: provider_name,
+               model: "test-model",
+               agent: "main"
+             })
+
+    session
+  end
+
+  defp provider_request_has_image?(request) do
+    Enum.any?(request["messages"], fn message ->
+      Enum.any?(message["content"], &(&1["type"] == "image"))
+    end)
   end
 end
