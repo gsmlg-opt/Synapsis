@@ -8,6 +8,10 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
   alias Synapsis.{AgentConfigs, Sessions}
 
   describe "agent sessions page" do
+    test "disables LiveView parameter logging for Base64 image payloads" do
+      assert %{log: false} = SynapsisWeb.AgentLive.Sessions.__live__()
+    end
+
     test "renders empty state when no session selected", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/agent/agents/main/sessions")
       assert html =~ "Main Agent"

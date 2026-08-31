@@ -10,10 +10,11 @@ defmodule SynapsisWeb do
     do:
       ~w(assets fonts images favicon.ico favicon.png robots.txt apple-touch-icon.png apple-touch-icon-precomposed.png)
 
-  def live_view do
+  def live_view(opts \\ []) do
+    opts = Keyword.put_new(opts, :layout, {SynapsisWeb.Layouts, :app})
+
     quote do
-      use Phoenix.LiveView,
-        layout: {SynapsisWeb.Layouts, :app}
+      use Phoenix.LiveView, unquote(opts)
 
       unquote(html_helpers())
     end
@@ -66,5 +67,9 @@ defmodule SynapsisWeb do
   """
   defmacro __using__(which) when is_atom(which) do
     apply(__MODULE__, which, [])
+  end
+
+  defmacro __using__({which, opts}) when is_atom(which) and is_list(opts) do
+    apply(__MODULE__, which, [opts])
   end
 end

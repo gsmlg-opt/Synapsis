@@ -1,6 +1,6 @@
 defmodule SynapsisWeb.AgentLive.Sessions do
   @moduledoc "Chat interface for a named agent with session sidebar and PubSub streaming."
-  use SynapsisWeb, :live_view
+  use SynapsisWeb, {:live_view, log: false}
   require Logger
 
   alias Synapsis.{ContextWindow, Image, Sessions}
