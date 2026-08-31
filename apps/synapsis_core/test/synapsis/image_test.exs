@@ -159,6 +159,76 @@ defmodule Synapsis.ImageTest do
     end
   end
 
+  describe "decode_payloads/1" do
+    test "decodes supported Base64 JSON image payloads" do
+      fixtures = [
+        {"image/png", @minimal_png},
+        {"image/jpeg", <<0xFF, 0xD8, 0xFF, 0xE0, 0x00>>},
+        {"image/gif", <<"GIF89a", 0x00>>},
+        {"image/webp", <<"RIFF", 0x00, 0x00, 0x00, 0x00, "WEBP", 0x00>>}
+      ]
+
+      for {media_type, bytes} <- fixtures do
+        encoded = Base.encode64(bytes)
+
+        assert {:ok, [%Synapsis.Part.Image{media_type: ^media_type, data: ^encoded}]} =
+                 Image.decode_payloads([
+                   %{"name" => "image", "media_type" => media_type, "data" => encoded}
+                 ])
+      end
+    end
+
+    test "accepts an empty image list" do
+      assert {:ok, []} = Image.decode_payloads([])
+    end
+
+    test "rejects malformed payloads and Base64 atomically" do
+      valid = image_payload("image/png", @minimal_png)
+
+      assert {:error, {:invalid_payload, "Invalid image attachment"}} =
+               Image.decode_payloads("not-a-list")
+
+      assert {:error, {:invalid_payload, "Invalid image attachment"}} =
+               Image.decode_payloads([%{"media_type" => "image/png"}])
+
+      assert {:error, {:invalid_base64, "Invalid image attachment"}} =
+               Image.decode_payloads([valid, %{valid | "data" => "not-base64!"}])
+
+      assert {:error, {:invalid_image, "Invalid image attachment"}} =
+               Image.decode_payloads([%{valid | "data" => ""}])
+    end
+
+    test "rejects unsupported and mismatched media types" do
+      assert {:error, {:unsupported_media_type, "Unsupported image type"}} =
+               Image.decode_payloads([image_payload("image/bmp", <<"BM", 0x00>>)])
+
+      assert {:error, {:media_type_mismatch, "Image content does not match its type"}} =
+               Image.decode_payloads([image_payload("image/jpeg", @minimal_png)])
+    end
+
+    test "rejects more than four images" do
+      images = List.duplicate(image_payload("image/png", @minimal_png), 5)
+
+      assert {:error, {:too_many_images, "Attach at most 4 images"}} =
+               Image.decode_payloads(images)
+    end
+
+    test "rejects an image larger than 5 MiB" do
+      oversized = @minimal_png <> :binary.copy(<<0>>, 5 * 1024 * 1024)
+
+      assert {:error, {:image_too_large, "Each image must be 5 MiB or smaller"}} =
+               Image.decode_payloads([image_payload("image/png", oversized)])
+    end
+
+    test "rejects more than 10 MiB of decoded images" do
+      four_mib_png = @minimal_png <> :binary.copy(<<0>>, 4 * 1024 * 1024)
+      images = List.duplicate(image_payload("image/png", four_mib_png), 3)
+
+      assert {:error, {:images_too_large, "Images must total 10 MiB or less"}} =
+               Image.decode_payloads(images)
+    end
+  end
+
   describe "media_type/1" do
     test "returns correct type for .png" do
       assert Image.media_type(".png") == "image/png"
@@ -282,5 +352,13 @@ defmodule Synapsis.ImageTest do
       assert result["inlineData"]["mimeType"] == "image/jpeg"
       assert result["inlineData"]["data"] == "xyz789"
     end
+  end
+
+  defp image_payload(media_type, bytes) do
+    %{
+      "name" => "image",
+      "media_type" => media_type,
+      "data" => Base.encode64(bytes)
+    }
   end
 end
