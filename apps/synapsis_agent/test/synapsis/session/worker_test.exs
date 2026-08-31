@@ -763,6 +763,54 @@ defmodule Synapsis.Session.WorkerTest do
     end
   end
 
+  describe "user image persistence" do
+    test "persists an image-only prompt without an empty text part" do
+      session = persist_session(%{status: "idle"})
+      image = %Part.Image{media_type: "image/png", data: "base64data", path: nil}
+
+      assert :ok = Persistence.persist_user_message(session.id, "   ", [image])
+
+      assert [
+               %Message{
+                 role: "user",
+                 parts: [%Part.Image{media_type: "image/png", data: "base64data"}]
+               }
+             ] = Message.list_by_session(session.id)
+    end
+
+    test "persists nonblank text before image parts" do
+      session = persist_session(%{status: "idle"})
+      image = %Part.Image{media_type: "image/png", data: "base64data", path: nil}
+
+      assert :ok = Persistence.persist_user_message(session.id, "describe", [image])
+
+      assert [
+               %Message{
+                 role: "user",
+                 parts: [
+                   %Part.Text{content: "describe"},
+                   %Part.Image{media_type: "image/png", data: "base64data"}
+                 ]
+               }
+             ] = Message.list_by_session(session.id)
+    end
+
+    test "Sessions.send_message/3 accepts canonical image parts" do
+      session = persist_session(%{status: "idle"})
+      image = %Part.Image{media_type: "image/png", data: "base64data", path: nil}
+
+      assert :ok = Synapsis.Sessions.send_message(session.id, "describe", [image])
+
+      assert [
+               %Message{
+                 role: "user",
+                 parts: [%Part.Text{content: "describe"}, %Part.Image{}]
+               }
+               | _rest
+             ] = Message.list_by_session(session.id)
+    end
+  end
+
   describe "regenerate" do
     test "truncates the transcript to before the target assistant message" do
       session = persist_session(%{status: "idle"})

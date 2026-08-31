@@ -9,7 +9,7 @@ defmodule Synapsis.Session.Worker.Persistence do
   @image_token_estimate 1_000
 
   def persist_user_message(session_id, content, image_parts) do
-    parts = [%Synapsis.Part.Text{content: content} | image_parts]
+    parts = user_parts(content, image_parts)
 
     token_count =
       ContextWindow.estimate_tokens(content) + length(image_parts) * @image_token_estimate
@@ -20,6 +20,17 @@ defmodule Synapsis.Session.Worker.Persistence do
       {:error, _} = err -> err
     end
   end
+
+  defp user_parts(content, [_image | _] = image_parts) do
+    if String.trim(content) == "" do
+      image_parts
+    else
+      [%Synapsis.Part.Text{content: content} | image_parts]
+    end
+  end
+
+  defp user_parts(content, image_parts),
+    do: [%Synapsis.Part.Text{content: content} | image_parts]
 
   def update_session_status(session_id, status) do
     case Store.get_meta(session_id) do

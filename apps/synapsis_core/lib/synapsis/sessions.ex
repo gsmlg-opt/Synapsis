@@ -224,6 +224,18 @@ defmodule Synapsis.Sessions do
     :exit, reason -> {:error, exit_reason(reason)}
   end
 
+  def send_message(session_id, content, image_parts)
+      when is_binary(content) and is_list(image_parts) do
+    if Enum.all?(image_parts, &match?(%Synapsis.Part.Image{}, &1)) do
+      ensure_session_running(session_id)
+      Synapsis.Session.Worker.send_message(session_id, content, image_parts)
+    else
+      {:error, :invalid_image_parts}
+    end
+  catch
+    :exit, reason -> {:error, exit_reason(reason)}
+  end
+
   def steer_message(session_id, content) when is_binary(content) do
     ensure_session_running(session_id)
     Synapsis.Session.Worker.steer_message(session_id, content)
