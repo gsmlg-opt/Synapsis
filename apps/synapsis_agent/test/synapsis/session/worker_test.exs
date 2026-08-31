@@ -798,16 +798,23 @@ defmodule Synapsis.Session.WorkerTest do
     test "Sessions.send_message/3 accepts canonical image parts" do
       session = persist_session(%{status: "idle"})
       image = %Part.Image{media_type: "image/png", data: "base64data", path: nil}
+      assert :ok = Synapsis.Sessions.ensure_running(session.id)
+      assert [{pid, _}] = Registry.lookup(Synapsis.Session.Registry, session.id)
+
+      :sys.replace_state(pid, fn {:idle, data} ->
+        {:generating, %{data | stream_ref: make_ref(), engine_node: :llm_stream}}
+      end)
 
       assert :ok = Synapsis.Sessions.send_message(session.id, "describe", [image])
 
       assert [
-               %Message{
-                 role: "user",
-                 parts: [%Part.Text{content: "describe"}, %Part.Image{}]
+               %{
+                 content: "describe",
+                 image_parts: [%Part.Image{media_type: "image/png", data: "base64data"}]
                }
-               | _rest
-             ] = Message.list_by_session(session.id)
+             ] = PendingInputStore.queued_prompts(session.id)
+
+      assert Message.list_by_session(session.id) == []
     end
   end
 
