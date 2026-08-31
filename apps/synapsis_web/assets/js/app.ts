@@ -8,24 +8,38 @@ import '@duskmoon-dev/el-markdown-input/register'
 import '@duskmoon-dev/el-markdown/register'
 import '@duskmoon-dev/elements/register'
 import * as DuskmoonHooks from 'phoenix_duskmoon/hooks'
-import { Hooks, observeChatInputFieldSemantics } from '@synapsis/hooks'
+import { ChatImageInputHook, Hooks, observeChatInputFieldSemantics } from '@synapsis/hooks'
 
 // WORKAROUND(upstream): duskmoon-dev/duskmoon-elements#73
 // Preserve the upstream bridge while propagating field identity into the
 // nested shadow-DOM textarea used by el-dm-chat-input.
 const DuskmoonWebComponentHook = DuskmoonHooks.WebComponentHook as any
+const SynapsisChatImageInputHook = ChatImageInputHook as any
 const WebComponentHook = {
   ...DuskmoonWebComponentHook,
-  mounted(this: { el: HTMLElement; fieldSemanticsObserver?: { disconnect(): void } }) {
-    DuskmoonWebComponentHook.mounted.call(this)
-    this.fieldSemanticsObserver = observeChatInputFieldSemantics(this.el) || undefined
+  mounted(this: {
+    el: HTMLElement
+    fieldSemanticsObserver?: { disconnect(): void }
+    observeFieldSemantics?: () => { disconnect(): void } | null
+  }) {
+    if (this.el.tagName === 'EL-DM-CHAT-INPUT') {
+      this.observeFieldSemantics = () => observeChatInputFieldSemantics(this.el)
+      SynapsisChatImageInputHook.mounted.call(this)
+    } else {
+      DuskmoonWebComponentHook.mounted.call(this)
+    }
   },
   updated(this: { el: HTMLElement }) {
-    DuskmoonWebComponentHook.updated.call(this)
+    if (this.el.tagName !== 'EL-DM-CHAT-INPUT') {
+      DuskmoonWebComponentHook.updated.call(this)
+    }
   },
-  destroyed(this: { fieldSemanticsObserver?: { disconnect(): void } }) {
-    this.fieldSemanticsObserver?.disconnect()
-    DuskmoonWebComponentHook.destroyed.call(this)
+  destroyed(this: { el: HTMLElement; fieldSemanticsObserver?: { disconnect(): void } }) {
+    if (this.el.tagName === 'EL-DM-CHAT-INPUT') {
+      SynapsisChatImageInputHook.destroyed.call(this)
+    } else {
+      DuskmoonWebComponentHook.destroyed.call(this)
+    }
   }
 }
 
