@@ -73,6 +73,10 @@ defmodule Synapsis.Agent.Daemon.StatusPublisher do
     end
   end
 
+  def handle_info({:retry, {sequence, _status}}, %{sequence: latest} = state)
+      when sequence < latest,
+      do: {:noreply, state}
+
   def handle_info({:retry, snapshot}, %{current: nil} = state),
     do: {:noreply, start_publish(state, state.dirty || snapshot)}
 

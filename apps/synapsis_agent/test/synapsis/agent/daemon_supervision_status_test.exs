@@ -191,6 +191,45 @@ defmodule Synapsis.Agent.DaemonSupervisionStatusTest do
     assert publisher_state.last_error =~ "status_publish_failed"
   end
 
+  test "a newer status supersedes an older delayed retry" do
+    {:ok, status_agent} = Agent.start_link(fn -> %{attempt: 0, mode: :error} end)
+    Application.put_env(:synapsis_agent, :daemon_status_agent, status_agent)
+
+    {daemon, _task_supervisor} =
+      start_test_daemon(
+        run_events: ControlledStatusRunEvents,
+        status_retry_ms: 5_000
+      )
+
+    assert_receive {:status_publish_started, _first, 1, first_sequence, first_status}, 1_000
+
+    publisher = Process.whereis(status_publisher_name(daemon))
+
+    assert {:ok, _state} =
+             wait_for(fn ->
+               state = :sys.get_state(publisher)
+
+               if is_nil(state.current) and is_binary(state.last_error),
+                 do: {:ok, state},
+                 else: :retry
+             end)
+
+    Agent.update(status_agent, &%{&1 | mode: :block})
+    send(Process.whereis(daemon), :status_changed)
+
+    assert_receive {:status_publish_started, second, 2, second_sequence, second_status}, 1_000
+    assert second_sequence > first_sequence
+
+    send(publisher, {:retry, {first_sequence, first_status}})
+    _state = :sys.get_state(publisher)
+
+    Agent.update(status_agent, &%{&1 | mode: :pass})
+    send(second, :release_status)
+
+    assert_receive {:status_published, 2, ^second_sequence, ^second_status}, 1_000
+    refute_receive {:status_publish_started, _worker, 3, ^first_sequence, ^first_status}, 100
+  end
+
   test "status stays responsive while session cancellation is blocked" do
     {daemon, _task_supervisor} = start_test_daemon(sessions: BlockingCancelSessions)
     assert {:ok, run} = Daemon.submit(daemon, "wait for cancel", %{})
