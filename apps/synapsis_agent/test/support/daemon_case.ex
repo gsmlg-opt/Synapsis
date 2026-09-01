@@ -846,7 +846,8 @@ defmodule Synapsis.Agent.DaemonCase do
          operation_timeout: Keyword.get(opts, :operation_timeout, 5_000),
          runs: Keyword.get(opts, :runs, Runs),
          run_events: Keyword.get(opts, :run_events, Synapsis.Agent.RunEvents),
-         sessions: Keyword.get(opts, :sessions, Synapsis.Sessions)
+         sessions: Keyword.get(opts, :sessions, Synapsis.Sessions),
+         permission: Keyword.get(opts, :permission, Synapsis.Tool.Permission)
        ]}
     )
 

@@ -19,7 +19,10 @@ defmodule Synapsis.AgentRun do
     completed failed cancelled interrupted timed_out unknown_outcome
   )
   @sources ~w(web system oban scheduler)
-  @tool_profiles ~w(read_only reflect heartbeat coding maintenance dangerous)
+  @tool_profiles ~w(
+    assistant_basic assistant_workspace assistant_coding
+    read_only reflect heartbeat coding maintenance dangerous
+  )
   @terminal_statuses ~w(completed failed cancelled interrupted timed_out unknown_outcome)
 
   @cast_fields [
@@ -71,7 +74,7 @@ defmodule Synapsis.AgentRun do
     field(:scheduled_for, :utc_datetime_usec)
     field(:deadline_at, :utc_datetime_usec)
     field(:prompt, :string)
-    field(:tool_profile, :string, default: "read_only")
+    field(:tool_profile, :string, default: "assistant_basic")
     field(:policy_snapshot, :map, default: %{})
     field(:capability_snapshot, :map, default: %{})
     field(:model, :string)

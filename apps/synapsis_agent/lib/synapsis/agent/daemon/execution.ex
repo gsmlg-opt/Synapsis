@@ -2,11 +2,20 @@ defmodule Synapsis.Agent.Daemon.Execution do
   @moduledoc false
 
   alias Synapsis.Agent.RunEvents
+  alias Synapsis.Agent.Daemon.Toolsets
 
   @max_option_length 255
   @max_error_length 500
   @string_options ~w(assistant_name provider model source tool_profile)a
   @terminal_statuses ~w(completed failed cancelled interrupted)
+  @daemon_permission %{
+    mode: :autonomous,
+    allow_read: :allow,
+    allow_write: :allow,
+    allow_execute: :allow,
+    allow_destructive: :deny,
+    tool_overrides: %{}
+  }
 
   def manual_attrs(prompt, opts) when is_map(opts) do
     with :ok <- validate_prompt(prompt), :ok <- validate_options(opts) do
@@ -17,7 +26,7 @@ defmodule Synapsis.Agent.Daemon.Execution do
          source: option(opts, :source, "web"),
          assistant_name: option(opts, :assistant_name, "main"),
          prompt: prompt,
-         tool_profile: option(opts, :tool_profile, "read_only"),
+         tool_profile: option(opts, :tool_profile, "assistant_basic"),
          provider: option(opts, :provider),
          model: option(opts, :model),
          metadata: option(opts, :metadata, %{})
@@ -472,35 +481,63 @@ defmodule Synapsis.Agent.Daemon.Execution do
   end
 
   defp execute_session(outer, daemon, deps, task_supervisor, event_timeout, run) do
-    case create_session(deps.sessions, run) do
-      {:ok, session} ->
-        send(outer, {:inner_session_created, self(), session.id})
-        send(daemon, {:session_created, outer, run.id, session.id})
+    with {:ok, tool_names} <- Toolsets.resolve(run.tool_profile),
+         {:ok, session} <- create_session(deps.sessions, run, tool_names) do
+      permission = Map.get(deps, :permission, Synapsis.Tool.Permission)
 
-        outcome =
-          with :ok <- Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}"),
-               {:ok, running} <- deps.runs.mark_running(run, %{session_id: session.id}),
-               event_errors =
-                 emit_run_event(
-                   task_supervisor,
-                   event_timeout,
-                   deps,
-                   :started,
-                   running
-                 ),
-               :ok <- announce_running(outer, daemon, running, event_errors),
-               :ok <- deps.sessions.send_message(session.id, run.prompt) do
-            {await_session(deps.sessions, session.id, []), running, event_errors}
-          else
-            {:error, reason} -> {{:error, reason}, fetch_current(deps.runs, run), []}
-          end
+      case permission.update_config(session.id, @daemon_permission) do
+        {:ok, _permission} ->
+          execute_configured_session(
+            outer,
+            daemon,
+            deps,
+            task_supervisor,
+            event_timeout,
+            run,
+            session
+          )
 
-        {result, current_run, event_errors} = outcome
-        {result, current_run, session.id, event_errors}
-
-      {:error, reason} ->
-        {{:error, reason}, fetch_current(deps.runs, run), nil, []}
+        {:error, reason} ->
+          {{:error, {:permission_setup_failed, reason}}, fetch_current(deps.runs, run),
+           session.id, []}
+      end
+    else
+      {:error, reason} -> {{:error, reason}, fetch_current(deps.runs, run), nil, []}
     end
+  end
+
+  defp execute_configured_session(
+         outer,
+         daemon,
+         deps,
+         task_supervisor,
+         event_timeout,
+         run,
+         session
+       ) do
+    send(outer, {:inner_session_created, self(), session.id})
+    send(daemon, {:session_created, outer, run.id, session.id})
+
+    outcome =
+      with :ok <- Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}"),
+           {:ok, running} <- deps.runs.mark_running(run, %{session_id: session.id}),
+           event_errors =
+             emit_run_event(
+               task_supervisor,
+               event_timeout,
+               deps,
+               :started,
+               running
+             ),
+           :ok <- announce_running(outer, daemon, running, event_errors),
+           :ok <- deps.sessions.send_message(session.id, run.prompt) do
+        {await_session(deps.sessions, session.id, []), running, event_errors}
+      else
+        {:error, reason} -> {{:error, reason}, fetch_current(deps.runs, run), []}
+      end
+
+    {result, current_run, event_errors} = outcome
+    {result, current_run, session.id, event_errors}
   end
 
   defp announce_running(outer, daemon, run, event_errors) do
@@ -619,13 +656,14 @@ defmodule Synapsis.Agent.Daemon.Execution do
 
   defp assistant_text(_message), do: nil
 
-  defp create_session(sessions, run) do
+  defp create_session(sessions, run, tool_names) do
     opts =
       %{
         agent: run.assistant_name || "main",
         provider: run.provider,
         model: run.model,
-        title: "Agent run #{run.id}"
+        title: "Agent run #{run.id}",
+        config: %{"daemon_run_tool_names" => tool_names}
       }
       |> Enum.reject(fn {_key, value} -> is_nil(value) end)
       |> Map.new()
@@ -774,9 +812,17 @@ defmodule Synapsis.Agent.Daemon.Execution do
       end)
 
     cond do
-      invalid? -> {:error, :invalid_options}
-      not is_map(option(opts, :metadata, %{})) -> {:error, :invalid_options}
-      true -> :ok
+      invalid? ->
+        {:error, :invalid_options}
+
+      not is_map(option(opts, :metadata, %{})) ->
+        {:error, :invalid_options}
+
+      match?({:error, _reason}, Toolsets.resolve(option(opts, :tool_profile, "assistant_basic"))) ->
+        {:error, :invalid_options}
+
+      true ->
+        :ok
     end
   end
 

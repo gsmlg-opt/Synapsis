@@ -21,7 +21,10 @@ defmodule Synapsis.Agent.Nodes.ToolDispatch do
   end
 
   defp run_with_session(state, session) do
-    {classified, monitor} = ToolDispatcher.classify(state.tool_uses, session, state.monitor)
+    available_tools = get_in(state, [:agent_config, :tools])
+
+    {classified, monitor} =
+      ToolDispatcher.classify(state.tool_uses, session, state.monitor, available_tools)
 
     needs_approval = Enum.any?(classified, fn {status, _} -> status == :requires_approval end)
 

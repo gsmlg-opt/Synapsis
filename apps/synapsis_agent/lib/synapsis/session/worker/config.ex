@@ -64,9 +64,19 @@ defmodule Synapsis.Session.Worker.Config do
   }
 
   def resolve_agent(session) do
-    agent = Synapsis.Agent.Resolver.resolve(session.agent, session.config)
+    agent =
+      session.agent
+      |> Synapsis.Agent.Resolver.resolve(session.config)
+      |> apply_daemon_run_tools(session.config)
+
     ensure_agent_model(agent, session)
   end
+
+  defp apply_daemon_run_tools(agent, %{"daemon_run_tool_names" => tool_names})
+       when is_list(tool_names),
+       do: Map.put(agent, :tools, tool_names)
+
+  defp apply_daemon_run_tools(agent, _config), do: agent
 
   def resolve_session_defaults(%Session{} = session) do
     agent = resolve_agent(session)

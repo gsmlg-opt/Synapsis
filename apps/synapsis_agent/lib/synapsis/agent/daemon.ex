@@ -79,7 +79,8 @@ defmodule Synapsis.Agent.Daemon do
         deps: %{
           runs: Keyword.get(opts, :runs, Runs),
           run_events: Keyword.get(opts, :run_events, RunEvents),
-          sessions: Keyword.get(opts, :sessions, Sessions)
+          sessions: Keyword.get(opts, :sessions, Sessions),
+          permission: Keyword.get(opts, :permission, Synapsis.Tool.Permission)
         },
         last_error: nil,
         recovery_error: nil

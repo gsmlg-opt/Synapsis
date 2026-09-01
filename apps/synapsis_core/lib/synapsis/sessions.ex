@@ -16,7 +16,7 @@ defmodule Synapsis.Sessions do
   def create(agent_name \\ "main", opts \\ %{}) do
     agent = opts[:agent] || agent_name || "main"
     agent_config = Synapsis.Agent.Resolver.resolve(agent)
-    config = %{}
+    config = opts[:config] || %{}
     provider = opts[:provider] || agent_config.provider || default_provider(config, agent)
     model = opts[:model] || agent_config.model || default_model(config, provider, agent)
 
