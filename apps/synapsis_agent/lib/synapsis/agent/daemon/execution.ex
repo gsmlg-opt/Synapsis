@@ -682,7 +682,7 @@ defmodule Synapsis.Agent.Daemon.Execution do
   end
 
   defp start_event_task(task_supervisor, function) do
-    {:ok, Task.Supervisor.async_nolink(task_supervisor, fn -> protect(function) end)}
+    {:ok, Task.Supervisor.async(task_supervisor, fn -> protect(function) end)}
   rescue
     error -> {:error, {:event_task_start_failed, error}}
   catch

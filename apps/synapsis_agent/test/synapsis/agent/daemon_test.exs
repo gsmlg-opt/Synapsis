@@ -1188,6 +1188,63 @@ defmodule Synapsis.Agent.DaemonTest do
     send(second_inner, :complete_session)
   end
 
+  test "hung started-event child dies with its killed run owner" do
+    Application.put_env(:synapsis_agent, :daemon_hanging_event, :append_run_started)
+
+    {daemon, task_supervisor} =
+      start_test_daemon(
+        sessions: FakeSessions,
+        run_events: HangingRunEvents,
+        event_timeout: 5_000
+      )
+
+    assert {:ok, run} = Daemon.submit(daemon, "kill owner during started event", %{})
+    assert_receive {:hanging_event, :append_run_started, event_task, run_id}, 1_000
+    assert run_id == run.id
+    assert event_task in Task.Supervisor.children(task_supervisor)
+
+    outer = :sys.get_state(Process.whereis(daemon)).active_run.task_pid
+    Process.exit(outer, :kill)
+
+    assert {:ok, _failed} = wait_for_run(run.id, "failed")
+    assert {:ok, :gone} = wait_for_task_exit(event_task)
+    refute event_task in Task.Supervisor.children(task_supervisor)
+
+    assert {:ok, %{ready: true, active_run_id: nil}} =
+             wait_for_status(daemon, &is_nil(&1.active_run_id))
+  end
+
+  test "hung terminal-event child dies with its killed finalizer owner" do
+    Application.put_env(:synapsis_agent, :daemon_hanging_event, :append_run_completed)
+    Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :controlled_done)
+
+    {daemon, task_supervisor} =
+      start_test_daemon(
+        sessions: FakeSessions,
+        run_events: HangingRunEvents,
+        event_timeout: 5_000
+      )
+
+    assert {:ok, run} = Daemon.submit(daemon, "kill owner during terminal event", %{})
+    assert_receive {:controlled_session, inner, _session_id}, 1_000
+    send(inner, :complete_session)
+    assert_receive {:hanging_event, :append_run_completed, event_task, run_id}, 1_000
+    assert run_id == run.id
+    assert event_task in Task.Supervisor.children(task_supervisor)
+    assert %{status: "completed"} = Runs.get(run.id)
+
+    outer = :sys.get_state(Process.whereis(daemon)).active_run.task_pid
+    Process.exit(outer, :kill)
+
+    assert {:ok, :gone} = wait_for_task_exit(event_task)
+    refute event_task in Task.Supervisor.children(task_supervisor)
+
+    assert {:ok, %{ready: true, active_run_id: nil}} =
+             wait_for_status(daemon, &is_nil(&1.active_run_id))
+
+    assert %{status: "completed"} = Runs.get(run.id)
+  end
+
   test "chatty session events do not reset the absolute run timeout" do
     Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :chatty)
     {daemon, _task_supervisor} = start_test_daemon(sessions: FakeSessions, run_timeout: 100)
@@ -1859,6 +1916,10 @@ defmodule Synapsis.Agent.DaemonTest do
       status = Daemon.status(daemon)
       if predicate.(status), do: {:ok, status}, else: :retry
     end)
+  end
+
+  defp wait_for_task_exit(pid) do
+    wait_for(fn -> if Process.alive?(pid), do: :retry, else: {:ok, :gone} end, 500)
   end
 
   defp restore_application_env(key, :missing), do: Application.delete_env(:synapsis_agent, key)
