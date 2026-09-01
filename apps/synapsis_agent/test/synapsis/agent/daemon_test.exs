@@ -253,6 +253,107 @@ defmodule Synapsis.Agent.DaemonTest do
     defdelegate mark_interrupted(run, reason), to: Runs
   end
 
+  defmodule DeadlineRuns do
+    alias Synapsis.Agent.Runs
+
+    def create(attrs) do
+      case mode(:create) do
+        :persist_then_hang ->
+          {:ok, run} = result = Runs.create(attrs)
+          hang(:create_after_persist, run)
+          result
+
+        :hang ->
+          hang(:create, attrs)
+          Runs.create(attrs)
+
+        _other ->
+          notify(:create, Map.get(attrs, :prompt))
+          Runs.create(attrs)
+      end
+    end
+
+    def fetch(id) do
+      if mode(:fetch) == :hang do
+        hang(:fetch, id)
+      else
+        Runs.fetch(id)
+      end
+    end
+
+    def mark_cancelled(run, attrs \\ %{}) do
+      if mode(:cancel) == :hang do
+        hang(:cancel, run)
+      else
+        Runs.mark_cancelled(run, attrs)
+      end
+    end
+
+    def list_by_status_result(status, opts) do
+      if mode({:scan, status}) == :hang do
+        hang({:scan, status}, status)
+      else
+        Runs.list_by_status_result(status, opts)
+      end
+    end
+
+    defdelegate get(id), to: Runs
+    defdelegate mark_running(run, attrs), to: Runs
+    defdelegate mark_completed(run, summary), to: Runs
+    defdelegate mark_completed(run, summary, attrs), to: Runs
+    defdelegate mark_failed(run, error), to: Runs
+    defdelegate mark_failed(run, error, attrs), to: Runs
+    defdelegate mark_interrupted(run, reason), to: Runs
+
+    defp mode(key) do
+      Agent.get(Application.fetch_env!(:synapsis_agent, :daemon_deadline_agent), fn state ->
+        Map.get(state, key, :pass)
+      end)
+    end
+
+    defp hang(operation, value) do
+      send(
+        Application.fetch_env!(:synapsis_agent, :daemon_test_owner),
+        {:durable_operation_hung, operation, self(), value}
+      )
+
+      receive do
+        :never -> :ok
+      end
+    end
+
+    defp notify(operation, value) do
+      send(
+        Application.fetch_env!(:synapsis_agent, :daemon_test_owner),
+        {:durable_operation_called, operation, value}
+      )
+    end
+  end
+
+  defmodule DeadlinePutIfKV do
+    def put(key, value), do: Concord.Turso.put(key, value)
+    def get(key), do: Concord.Turso.get(key)
+    def prefix_scan(prefix), do: Concord.Turso.prefix_scan(prefix)
+
+    def put_if(key, value, opts) do
+      status = Map.get(value, :status) || Map.get(value, "status")
+      agent = Application.fetch_env!(:synapsis_agent, :daemon_deadline_agent)
+
+      if Agent.get(agent, &MapSet.member?(Map.get(&1, :hang_put_if, MapSet.new()), status)) do
+        send(
+          Application.fetch_env!(:synapsis_agent, :daemon_test_owner),
+          {:durable_operation_hung, {:put_if, status}, self(), key}
+        )
+
+        receive do
+          :never -> :ok
+        end
+      else
+        Concord.Turso.put_if(key, value, opts)
+      end
+    end
+  end
+
   defmodule MarkRunningFailRuns do
     alias Synapsis.Agent.Runs
 
@@ -332,6 +433,48 @@ defmodule Synapsis.Agent.DaemonTest do
         end
       end
     end
+  end
+
+  defmodule ControlledStatusRunEvents do
+    alias Synapsis.Agent.RunEvents
+
+    def publish_daemon_status(status, sequence) do
+      agent = Application.fetch_env!(:synapsis_agent, :daemon_status_agent)
+
+      {attempt, mode} =
+        Agent.get_and_update(agent, fn state ->
+          attempt = state.attempt + 1
+          {{attempt, state.mode}, %{state | attempt: attempt}}
+        end)
+
+      owner = Application.fetch_env!(:synapsis_agent, :daemon_test_owner)
+      send(owner, {:status_publish_started, self(), attempt, sequence, status})
+
+      case mode do
+        :block ->
+          receive do
+            :release_status -> :ok
+          end
+
+        :hang ->
+          receive do
+            :never -> :ok
+          end
+
+        :pass ->
+          :ok
+      end
+
+      send(owner, {:status_published, attempt, sequence, status})
+      :ok
+    end
+
+    defdelegate append_run_created(run), to: RunEvents
+    defdelegate append_run_started(run), to: RunEvents
+    defdelegate append_run_completed(run), to: RunEvents
+    defdelegate append_run_failed(run), to: RunEvents
+    defdelegate append_run_cancelled(run), to: RunEvents
+    defdelegate append_run_interrupted(run), to: RunEvents
   end
 
   defmodule FailingTerminalRunEvents do
@@ -599,47 +742,67 @@ defmodule Synapsis.Agent.DaemonTest do
       Application.delete_env(:synapsis_agent, :daemon_recovery_fault_agent)
       Application.delete_env(:synapsis_agent, :daemon_refill_scan_agent)
       Application.delete_env(:synapsis_agent, :daemon_cleanup_call_agent)
+      Application.delete_env(:synapsis_agent, :daemon_deadline_agent)
+      Application.delete_env(:synapsis_agent, :daemon_status_agent)
     end)
 
     :ok
   end
 
-  test "starts permanently under the agent supervisor and restarts after a crash" do
-    pid = Process.whereis(Daemon)
-    old_task_supervisor = Process.whereis(Synapsis.Agent.Daemon.RunTaskSupervisor)
-    assert is_pid(pid)
+  test "daemon and run task supervisor restart together under a nested supervisor" do
+    nested = Process.whereis(Synapsis.Agent.Daemon.Supervisor)
+    runtime_registry = Process.whereis(Synapsis.Agent.Runtime.RunRegistry)
+    daemon = Process.whereis(Daemon)
+    task_supervisor = Process.whereis(Synapsis.Agent.Daemon.RunTaskSupervisor)
 
-    child =
-      Synapsis.Agent.Supervisor
-      |> Supervisor.which_children()
-      |> Enum.find(fn {_id, child_pid, _type, modules} ->
-        child_pid == pid and Daemon in modules
-      end)
+    assert Enum.any?(
+             Supervisor.which_children(Synapsis.Agent.Supervisor),
+             &match?(
+               {Synapsis.Agent.Daemon.Supervisor, ^nested, :supervisor, _modules},
+               &1
+             )
+           )
 
-    assert {Daemon, ^pid, :worker, [Daemon]} = child
-
-    ref = Process.monitor(pid)
-    Process.exit(pid, :kill)
-    assert_receive {:DOWN, ^ref, :process, ^pid, :killed}
-
-    assert {:ok, restarted_pid} =
-             wait_for(fn ->
-               case Process.whereis(Daemon) do
-                 new_pid when is_pid(new_pid) and new_pid != pid -> {:ok, new_pid}
-                 _other -> :retry
+    assert {:ok, worker} =
+             Task.Supervisor.start_child(Synapsis.Agent.Daemon.RunTaskSupervisor, fn ->
+               receive do
+                 :never -> :ok
                end
              end)
 
-    assert Process.alive?(restarted_pid)
+    Process.exit(daemon, :kill)
 
-    assert {:ok, new_task_supervisor} =
-             wait_for(fn ->
-               case Process.whereis(Synapsis.Agent.Daemon.RunTaskSupervisor) do
-                 new_pid when is_pid(new_pid) and new_pid != old_task_supervisor -> {:ok, new_pid}
-                 _other -> :retry
+    assert {:ok, {new_daemon, new_task_supervisor}} =
+             wait_for_daemon_pair(daemon, task_supervisor)
+
+    refute Process.alive?(worker)
+    assert Process.whereis(Synapsis.Agent.Runtime.RunRegistry) == runtime_registry
+    assert Process.whereis(Synapsis.Agent.Daemon.Supervisor) == nested
+    assert Process.alive?(new_daemon)
+    assert Process.alive?(new_task_supervisor)
+    assert {:ok, %{ready: true}} = wait_for_ready()
+  end
+
+  test "run task supervisor death also restarts daemon and reaps workers" do
+    runtime_registry = Process.whereis(Synapsis.Agent.Runtime.RunRegistry)
+    daemon = Process.whereis(Daemon)
+    task_supervisor = Process.whereis(Synapsis.Agent.Daemon.RunTaskSupervisor)
+
+    assert {:ok, worker} =
+             Task.Supervisor.start_child(task_supervisor, fn ->
+               receive do
+                 :never -> :ok
                end
              end)
 
+    Process.exit(task_supervisor, :kill)
+
+    assert {:ok, {new_daemon, new_task_supervisor}} =
+             wait_for_daemon_pair(daemon, task_supervisor)
+
+    refute Process.alive?(worker)
+    assert Process.whereis(Synapsis.Agent.Runtime.RunRegistry) == runtime_registry
+    assert Process.alive?(new_daemon)
     assert Process.alive?(new_task_supervisor)
     assert {:ok, %{ready: true}} = wait_for_ready()
   end
@@ -668,6 +831,46 @@ defmodule Synapsis.Agent.DaemonTest do
 
     assert [] = Runs.list_recent()
     assert %{active_run_id: nil, queued_count: 0} = Daemon.status(daemon)
+  end
+
+  test "rejects non-positive and non-integer daemon timeouts at init" do
+    {_daemon, task_supervisor} = start_test_daemon()
+    Process.flag(:trap_exit, true)
+
+    for {key, value} <- [
+          run_timeout: -1,
+          cleanup_timeout: -1,
+          event_timeout: :infinity,
+          operation_timeout: "slow"
+        ] do
+      name = String.to_atom("invalid_daemon_timeout_#{System.unique_integer([:positive])}")
+
+      assert {:error, {:invalid_timeout, ^key}} =
+               Daemon.start_link(
+                 [name: name, task_supervisor: task_supervisor, recover?: false] ++ [{key, value}]
+               )
+    end
+  end
+
+  test "submit and cancel calls remain alive beyond the ordinary call timeout" do
+    {daemon, _task_supervisor} = start_test_daemon()
+    daemon_pid = Process.whereis(daemon)
+    :ok = :sys.suspend(daemon_pid)
+
+    on_exit(fn ->
+      if Process.alive?(daemon_pid), do: :sys.resume(daemon_pid)
+    end)
+
+    submit = Task.async(fn -> Daemon.submit(daemon, "delayed public submit", %{}) end)
+    cancel = Task.async(fn -> Daemon.cancel(daemon, Ecto.UUID.generate()) end)
+    Process.sleep(5_100)
+
+    assert Process.alive?(submit.pid)
+    assert Process.alive?(cancel.pid)
+    :ok = :sys.resume(daemon_pid)
+
+    assert {:ok, _run} = Task.await(submit, 2_000)
+    assert {:error, :not_found} = Task.await(cancel, 2_000)
   end
 
   @tag :tmp_dir
@@ -1133,6 +1336,57 @@ defmodule Synapsis.Agent.DaemonTest do
 
     assert {:ok, %{ready: true}} = status_result
     assert {:ok, _run} = Task.await(submit_task, 2_000)
+  end
+
+  test "status publication coalesces dirty snapshots and preserves sequence order" do
+    {:ok, status_agent} = Agent.start_link(fn -> %{attempt: 0, mode: :block} end)
+    Application.put_env(:synapsis_agent, :daemon_status_agent, status_agent)
+
+    {daemon, task_supervisor} =
+      start_test_daemon(run_events: ControlledStatusRunEvents, event_timeout: 5_000)
+
+    assert_receive {:status_publish_started, publisher, 1, first_sequence, first_status}, 1_000
+    assert first_status.ready
+    Agent.update(status_agent, &%{&1 | mode: :pass})
+
+    daemon_pid = Process.whereis(daemon)
+    Enum.each(1..5, fn _index -> send(daemon_pid, :status_changed) end)
+    Process.sleep(100)
+    assert Task.Supervisor.children(task_supervisor) == [publisher]
+
+    send(publisher, :release_status)
+    assert_receive {:status_published, 1, ^first_sequence, ^first_status}, 1_000
+    assert_receive {:status_publish_started, _publisher, 2, latest_sequence, latest_status}, 1_000
+    assert_receive {:status_published, 2, ^latest_sequence, ^latest_status}, 1_000
+    assert latest_sequence > first_sequence
+    assert latest_status == Daemon.status(daemon)
+    refute_receive {:status_publish_started, _publisher, 3, _sequence, _status}, 100
+  end
+
+  test "hung status publication keeps at most one child and retries the latest snapshot" do
+    {:ok, status_agent} = Agent.start_link(fn -> %{attempt: 0, mode: :hang} end)
+    Application.put_env(:synapsis_agent, :daemon_status_agent, status_agent)
+
+    {daemon, task_supervisor} =
+      start_test_daemon(run_events: ControlledStatusRunEvents, event_timeout: 50)
+
+    assert_receive {:status_publish_started, first, 1, first_sequence, _status}, 1_000
+    daemon_pid = Process.whereis(daemon)
+    Enum.each(1..5, fn _index -> send(daemon_pid, :status_changed) end)
+    assert {:ok, :gone} = wait_for_task_exit(first)
+
+    assert_receive {:status_publish_started, second, 2, second_sequence, _status}, 1_000
+    assert Task.Supervisor.children(task_supervisor) == [second]
+    assert second_sequence > first_sequence
+    Agent.update(status_agent, &%{&1 | mode: :pass})
+    assert {:ok, :gone} = wait_for_task_exit(second)
+
+    assert_receive {:status_publish_started, third, 3, latest_sequence, latest_status}, 1_000
+    assert_receive {:status_published, 3, ^latest_sequence, ^latest_status}, 1_000
+    assert latest_sequence >= second_sequence
+    assert latest_status == Daemon.status(daemon)
+    assert {:ok, []} = wait_for_task_children(task_supervisor, [])
+    refute Process.alive?(third)
   end
 
   test "submission responds within the event bound when created-event append hangs forever" do
@@ -1852,11 +2106,155 @@ defmodule Synapsis.Agent.DaemonTest do
     assert %{status: "queued"} = Runs.get(later.id)
   end
 
+  test "durable submit create and fetch timeouts reconcile the same FIFO head" do
+    {:ok, deadline_agent} =
+      Agent.start_link(fn -> %{create: :persist_then_hang, fetch: :hang} end)
+
+    Application.put_env(:synapsis_agent, :daemon_deadline_agent, deadline_agent)
+    Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :waiting)
+
+    {daemon, _task_supervisor} =
+      start_test_daemon(
+        runs: DeadlineRuns,
+        sessions: FakeSessions,
+        operation_timeout: 50
+      )
+
+    first_caller = Task.async(fn -> Daemon.submit(daemon, "deadline first", %{}) end)
+    assert_receive {:durable_operation_hung, :create_after_persist, create_task, created}, 1_000
+    second_caller = Task.async(fn -> Daemon.submit(daemon, "deadline second", %{}) end)
+    assert {:ok, :gone} = wait_for_task_exit(create_task)
+
+    assert_receive {:durable_operation_hung, :fetch, fetch_task, run_id}, 1_000
+    assert run_id == created.id
+    assert %{ready: true} = Daemon.status(daemon)
+    refute_receive {:durable_operation_called, :create, "deadline second"}, 100
+    assert {:ok, :gone} = wait_for_task_exit(fetch_task)
+
+    Agent.update(deadline_agent, &Map.merge(&1, %{create: :pass, fetch: :pass}))
+
+    assert {:ok, first} = Task.await(first_caller, 2_000)
+    assert first.id == created.id
+    assert_receive {:durable_operation_called, :create, "deadline second"}, 1_000
+    assert {:ok, second} = Task.await(second_caller, 2_000)
+    assert_receive {:waiting_session, _session_id}, 1_000
+
+    assert %{active_run_id: first_id, queued_ids: [second_id]} = Daemon.status(daemon)
+    assert first_id == first.id
+    assert second_id == second.id
+  end
+
+  test "durable cancel timeout retries until the caller gets one conclusive reply" do
+    {:ok, deadline_agent} = Agent.start_link(fn -> %{cancel: :hang} end)
+    Application.put_env(:synapsis_agent, :daemon_deadline_agent, deadline_agent)
+    Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :waiting)
+
+    {daemon, _task_supervisor} =
+      start_test_daemon(
+        runs: DeadlineRuns,
+        sessions: FakeSessions,
+        operation_timeout: 50
+      )
+
+    assert {:ok, active} = Daemon.submit(daemon, "hold during cancel deadline", %{})
+    assert_receive {:waiting_session, _session_id}, 1_000
+    assert {:ok, queued} = Daemon.submit(daemon, "cancel after deadline", %{})
+
+    cancel_caller = Task.async(fn -> Daemon.cancel(daemon, queued.id) end)
+    assert_receive {:durable_operation_hung, :cancel, cancel_task, _run}, 1_000
+    assert %{active_run_id: active_id} = Daemon.status(daemon)
+    assert active_id == active.id
+    assert {:ok, :gone} = wait_for_task_exit(cancel_task)
+
+    Agent.update(deadline_agent, &Map.put(&1, :cancel, :pass))
+    assert {:ok, %{status: "cancelled"}} = Task.await(cancel_caller, 2_000)
+    assert %{status: "cancelled"} = Runs.get(queued.id)
+  end
+
+  test "recovery operation timeout stays responsive and becomes ready after scan unblocks" do
+    attrs = %{
+      kind: "manual",
+      status: "queued",
+      source: "web",
+      prompt: "recover after operation deadline",
+      tool_profile: "read_only"
+    }
+
+    assert {:ok, queued} = Runs.create(attrs)
+    {:ok, deadline_agent} = Agent.start_link(fn -> %{{:scan, "running"} => :hang} end)
+    Application.put_env(:synapsis_agent, :daemon_deadline_agent, deadline_agent)
+    Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :waiting)
+
+    {daemon, _task_supervisor} =
+      start_test_daemon(
+        recover?: true,
+        runs: DeadlineRuns,
+        sessions: FakeSessions,
+        operation_timeout: 50
+      )
+
+    assert_receive {:durable_operation_hung, {:scan, "running"}, scan_task, _status}, 1_000
+    assert %{ready: false} = Daemon.status(daemon)
+    assert {:ok, :gone} = wait_for_task_exit(scan_task)
+    Agent.update(deadline_agent, &Map.put(&1, {:scan, "running"}, :pass))
+
+    assert_receive {:waiting_session, _session_id}, 2_000
+    assert {:ok, %{ready: true, active_run_id: active_id}} =
+             wait_for_status(daemon, &(&1.ready and &1.active_run_id == queued.id))
+
+    assert active_id == queued.id
+  end
+
+  test "terminal put_if timeout retries the same completion intent" do
+    previous_adapter = Application.get_env(:synapsis_agent, :agent_runs_kv_adapter, :missing)
+    Application.put_env(:synapsis_agent, :agent_runs_kv_adapter, DeadlinePutIfKV)
+    on_exit(fn -> restore_application_env(:agent_runs_kv_adapter, previous_adapter) end)
+
+    {:ok, deadline_agent} =
+      Agent.start_link(fn -> %{hang_put_if: MapSet.new(["completed"])} end)
+
+    Application.put_env(:synapsis_agent, :daemon_deadline_agent, deadline_agent)
+    Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :controlled_done)
+
+    {daemon, _task_supervisor} =
+      start_test_daemon(
+        sessions: FakeSessions,
+        operation_timeout: 50
+      )
+
+    assert {:ok, run} = Daemon.submit(daemon, "retry terminal put_if", %{})
+    assert_receive {:controlled_session, inner, _session_id}, 1_000
+    send(inner, :complete_session)
+    assert_receive {:durable_operation_hung, {:put_if, "completed"}, terminal_task, _key}, 1_000
+    assert %{active_run_id: run_id} = Daemon.status(daemon)
+    assert run_id == run.id
+    assert {:ok, :gone} = wait_for_task_exit(terminal_task)
+
+    Agent.update(deadline_agent, &Map.put(&1, :hang_put_if, MapSet.new()))
+    assert {:ok, completed} = wait_for_run(run.id, "completed")
+    assert completed.summary == "(no assistant response)"
+    assert {:ok, %{active_run_id: nil}} = wait_for_status(daemon, &is_nil(&1.active_run_id))
+  end
+
   defp wait_for_ready do
     wait_for(fn ->
       case Daemon.status() do
         %{ready: true} = status -> {:ok, status}
         _other -> :retry
+      end
+    end)
+  end
+
+  defp wait_for_daemon_pair(old_daemon, old_task_supervisor) do
+    wait_for(fn ->
+      daemon = Process.whereis(Daemon)
+      task_supervisor = Process.whereis(Synapsis.Agent.Daemon.RunTaskSupervisor)
+
+      if is_pid(daemon) and daemon != old_daemon and is_pid(task_supervisor) and
+           task_supervisor != old_task_supervisor do
+        {:ok, {daemon, task_supervisor}}
+      else
+        :retry
       end
     end)
   end
@@ -1878,6 +2276,7 @@ defmodule Synapsis.Agent.DaemonTest do
          run_timeout: Keyword.get(opts, :run_timeout, :timer.minutes(30)),
          cleanup_timeout: Keyword.get(opts, :cleanup_timeout, 1_000),
          event_timeout: Keyword.get(opts, :event_timeout, 1_000),
+         operation_timeout: Keyword.get(opts, :operation_timeout, 5_000),
          runs: Keyword.get(opts, :runs, Runs),
          run_events: Keyword.get(opts, :run_events, Synapsis.Agent.RunEvents),
          sessions: Keyword.get(opts, :sessions, Synapsis.Sessions)
@@ -1982,6 +2381,13 @@ defmodule Synapsis.Agent.DaemonTest do
 
   defp wait_for_task_exit(pid) do
     wait_for(fn -> if Process.alive?(pid), do: :retry, else: {:ok, :gone} end, 500)
+  end
+
+  defp wait_for_task_children(task_supervisor, expected) do
+    wait_for(fn ->
+      children = Task.Supervisor.children(task_supervisor)
+      if children == expected, do: {:ok, children}, else: :retry
+    end)
   end
 
   defp restore_application_env(key, :missing), do: Application.delete_env(:synapsis_agent, key)

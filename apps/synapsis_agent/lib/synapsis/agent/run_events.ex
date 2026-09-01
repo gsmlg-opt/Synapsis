@@ -5,6 +5,9 @@ defmodule Synapsis.Agent.RunEvents do
 
   alias Synapsis.AgentRun
 
+  @topic "agent:daemon"
+  @max_payload_length 500
+
   def append_run_created(%AgentRun{} = run), do: append(run, "agent_run_created", "run_created")
   def append_run_started(%AgentRun{} = run), do: append(run, "agent_run_started", "task_received")
 
@@ -19,6 +22,36 @@ defmodule Synapsis.Agent.RunEvents do
   def append_run_interrupted(%AgentRun{} = run),
     do: append(run, "agent_run_interrupted", "task_failed")
 
+  def emit_lifecycle(adapter, event, %AgentRun{} = run, payload \\ %{}) do
+    append_function = String.to_existing_atom("append_run_#{event}")
+
+    with :ok <- normalize_result(apply(adapter, append_function, [run])) do
+      publish_lifecycle(lifecycle_topic(event), run, lifecycle_payload(event, run, payload))
+    end
+  rescue
+    error -> {:error, error}
+  catch
+    kind, reason -> {:error, {kind, reason}}
+  end
+
+  def publish_status(adapter, status, sequence) do
+    if function_exported?(adapter, :publish_daemon_status, 2) do
+      adapter.publish_daemon_status(status, sequence)
+    else
+      Phoenix.PubSub.broadcast(
+        Synapsis.PubSub,
+        @topic,
+        {:agent_daemon_event,
+         %{
+           event: "agent.daemon.status",
+           status: status,
+           sequence: sequence,
+           at: DateTime.utc_now()
+         }}
+      )
+    end
+  end
+
   def append_tool_event(%AgentRun{} = run, event) do
     append_agent_event(
       run,
@@ -32,6 +65,43 @@ defmodule Synapsis.Agent.RunEvents do
     append_agent_event(run, "agent_run_dream_summary", payload)
     append_memory_event(run, "summary_created", payload)
   end
+
+  defp publish_lifecycle(event, run, payload) do
+    Phoenix.PubSub.broadcast(
+      Synapsis.PubSub,
+      @topic,
+      {:agent_daemon_event,
+       %{
+         event: event,
+         run_id: run.id,
+         kind: run.kind,
+         status: run.status,
+         payload: bound_payload(payload),
+         at: DateTime.utc_now()
+       }}
+    )
+  end
+
+  defp lifecycle_payload(:failed, run, payload), do: Map.put(payload, :error, run.error)
+  defp lifecycle_payload(_event, _run, payload), do: payload
+
+  defp lifecycle_topic(:created), do: "agent.run.queued"
+  defp lifecycle_topic(event), do: "agent.run.#{event}"
+
+  defp bound_payload(payload) do
+    Map.new(payload, fn
+      {key, value} when is_binary(value) ->
+        {key, String.slice(value, 0, @max_payload_length)}
+
+      pair ->
+        pair
+    end)
+  end
+
+  defp normalize_result(:ok), do: :ok
+  defp normalize_result({:ok, _value}), do: :ok
+  defp normalize_result({:error, reason}), do: {:error, reason}
+  defp normalize_result(_other), do: :ok
 
   defp append(%AgentRun{} = run, agent_event_type, memory_event_type) do
     payload = base_payload(run)

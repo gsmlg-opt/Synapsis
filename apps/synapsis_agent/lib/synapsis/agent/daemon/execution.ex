@@ -1,7 +1,8 @@
 defmodule Synapsis.Agent.Daemon.Execution do
   @moduledoc false
 
-  @topic "agent:daemon"
+  alias Synapsis.Agent.RunEvents
+
   @max_option_length 255
   @max_error_length 500
   @string_options ~w(assistant_name provider model source tool_profile)a
@@ -66,7 +67,7 @@ defmodule Synapsis.Agent.Daemon.Execution do
   def run(daemon, deps, task_supervisor, run, timeout, cleanup_timeout, event_timeout) do
     deadline = System.monotonic_time(:millisecond) + timeout
 
-    result =
+    {current_run, outcome, session_id, warnings} =
       case start_inner(daemon, deps, task_supervisor, run, event_timeout) do
         {:ok, inner_pid, inner_ref} ->
           case await_inner(inner_pid, inner_ref, deadline, run, nil) do
@@ -83,15 +84,7 @@ defmodule Synapsis.Agent.Daemon.Execution do
                   []
                 end
 
-              finalize(
-                deps,
-                current_run,
-                outcome,
-                session_id,
-                task_supervisor,
-                event_timeout
-              )
-              |> add_errors(event_errors ++ cleanup_errors)
+              {current_run, outcome, session_id, event_errors ++ cleanup_errors}
 
             {:timeout, current_run, session_id} ->
               stop_process(inner_pid)
@@ -104,15 +97,7 @@ defmodule Synapsis.Agent.Daemon.Execution do
                   cleanup_timeout
                 )
 
-              finalize(
-                deps,
-                current_run,
-                {:error, :session_timeout},
-                session_id,
-                task_supervisor,
-                event_timeout
-              )
-              |> add_errors(cleanup_errors)
+              {current_run, {:error, :session_timeout}, session_id, cleanup_errors}
 
             {:exit, reason, current_run, session_id} ->
               cleanup_errors =
@@ -123,29 +108,31 @@ defmodule Synapsis.Agent.Daemon.Execution do
                   cleanup_timeout
                 )
 
-              finalize(
-                deps,
-                current_run,
-                {:error, "run task exited: #{bounded_error(reason)}"},
-                session_id,
-                task_supervisor,
-                event_timeout
-              )
-              |> add_errors(cleanup_errors)
+              {current_run, {:error, "run task exited: #{bounded_error(reason)}"}, session_id,
+               cleanup_errors}
           end
 
         {:error, reason} ->
-          finalize(
-            deps,
-            run,
-            {:error, {:inner_task_start_failed, reason}},
-            nil,
-            task_supervisor,
-            event_timeout
-          )
+          {run, {:error, {:inner_task_start_failed, reason}}, nil, []}
       end
 
+    :ok = announce_finalizing(daemon, run.id, current_run, outcome, session_id, warnings)
+
+    result =
+      finalize(deps, current_run, outcome, session_id, task_supervisor, event_timeout)
+      |> add_errors(warnings)
+
     send(daemon, {:runner_result, self(), run.id, result})
+  end
+
+  defp announce_finalizing(daemon, run_id, run, outcome, session_id, warnings) do
+    send(daemon, {:runner_finalizing, self(), run_id, run, outcome, session_id, warnings})
+
+    receive do
+      {:runner_finalizing_ack, ^run_id} -> :ok
+    after
+      5_000 -> :ok
+    end
   end
 
   def finalize(deps, run, {:ok, summary}, session_id, task_supervisor, event_timeout) do
@@ -160,6 +147,18 @@ defmodule Synapsis.Agent.Daemon.Execution do
     finalize_transition(deps, run, :failed, task_supervisor, event_timeout, fn ->
       deps.runs.mark_failed(run, error, %{session_id: session_id})
     end)
+  end
+
+  def finalize_intent(deps, task_supervisor, event_timeout, intent) do
+    finalize(
+      deps,
+      intent.run,
+      intent.outcome,
+      intent.session_id,
+      task_supervisor,
+      event_timeout
+    )
+    |> add_errors(intent.warnings)
   end
 
   def finalize_crashed_outer(
@@ -319,45 +318,6 @@ defmodule Synapsis.Agent.Daemon.Execution do
     kind, reason -> {:error, {:task_exit, kind, reason}}
   end
 
-  def publish_status(status) do
-    Phoenix.PubSub.broadcast(
-      Synapsis.PubSub,
-      @topic,
-      {:agent_daemon_event,
-       %{event: "agent.daemon.status", status: status, at: DateTime.utc_now()}}
-    )
-  end
-
-  def append_event(deps, event, run) do
-    function = String.to_existing_atom("append_run_#{event}")
-
-    case apply(deps.run_events, function, [run]) do
-      :ok -> :ok
-      {:error, reason} -> {:error, reason}
-      _other -> :ok
-    end
-  rescue
-    error -> {:error, error}
-  catch
-    kind, reason -> {:error, {kind, reason}}
-  end
-
-  def publish_run(event, run, payload \\ %{}) do
-    Phoenix.PubSub.broadcast(
-      Synapsis.PubSub,
-      @topic,
-      {:agent_daemon_event,
-       %{
-         event: event,
-         run_id: run.id,
-         kind: run.kind,
-         status: run.status,
-         payload: bound_payload(payload),
-         at: DateTime.utc_now()
-       }}
-    )
-  end
-
   def emit_run_event(
         task_supervisor,
         event_timeout,
@@ -367,14 +327,17 @@ defmodule Synapsis.Agent.Daemon.Execution do
         publish_event_name,
         payload \\ %{}
       ) do
-    deadline = System.monotonic_time(:millisecond) + event_timeout
+    _publish_event_name = publish_event_name
 
-    [
-      fn -> append_event(deps, append_event_name, run) end,
-      fn -> publish_run(publish_event_name, run, payload) end
-    ]
-    |> Enum.map(&start_event_task(task_supervisor, &1))
-    |> Enum.flat_map(&await_event_task(&1, deadline))
+    bounded_task(
+      task_supervisor,
+      event_timeout,
+      fn -> RunEvents.emit_lifecycle(deps.run_events, append_event_name, run, payload) end,
+      :event_timeout,
+      :event_task_start_failed,
+      :event_task_exit,
+      :unexpected_event_result
+    )
   end
 
   def bounded_error(%Ecto.Changeset{}), do: "invalid run attributes"
@@ -568,7 +531,7 @@ defmodule Synapsis.Agent.Daemon.Execution do
             event,
             terminal_run,
             "agent.run.#{event}",
-            terminal_payload(event, terminal_run)
+            %{}
           )
 
         {:ok, terminal_run, errors}
@@ -678,45 +641,26 @@ defmodule Synapsis.Agent.Daemon.Execution do
   defp bounded_session_cleanup(_task_supervisor, _sessions, nil, _timeout), do: []
 
   defp bounded_session_cleanup(task_supervisor, sessions, session_id, timeout) do
-    bounded_cleanup(task_supervisor, timeout, fn -> sessions.cancel(session_id) end)
+    bounded_task(
+      task_supervisor,
+      timeout,
+      fn -> sessions.cancel(session_id) end,
+      :cleanup_timeout,
+      :cleanup_task_start_failed,
+      :cleanup_task_exit,
+      :unexpected_cleanup_result
+    )
   end
 
-  defp start_event_task(task_supervisor, function) do
-    {:ok, Task.Supervisor.async(task_supervisor, fn -> protect(function) end)}
-  rescue
-    error -> {:error, {:event_task_start_failed, error}}
-  catch
-    :exit, reason -> {:error, {:event_task_start_failed, reason}}
-  end
-
-  defp await_event_task({:error, reason}, _deadline), do: [bounded_error(reason)]
-
-  defp await_event_task({:ok, task}, deadline) do
-    remaining = max(deadline - System.monotonic_time(:millisecond), 0)
-
-    case Task.yield(task, remaining) do
-      {:ok, :ok} ->
-        []
-
-      {:ok, {:ok, _value}} ->
-        []
-
-      {:ok, {:error, reason}} ->
-        [bounded_error(reason)]
-
-      {:ok, other} ->
-        [bounded_error({:unexpected_event_result, other})]
-
-      {:exit, reason} ->
-        [bounded_error({:event_task_exit, reason})]
-
-      nil ->
-        _ = Task.shutdown(task, :brutal_kill)
-        [bounded_error(:event_timeout)]
-    end
-  end
-
-  defp bounded_cleanup(task_supervisor, timeout, function) do
+  defp bounded_task(
+         task_supervisor,
+         timeout,
+         function,
+         timeout_reason,
+         start_error,
+         exit_error,
+         unexpected_error
+       ) do
     task = Task.Supervisor.async(task_supervisor, fn -> protect(function) end)
 
     case Task.yield(task, timeout) do
@@ -730,17 +674,19 @@ defmodule Synapsis.Agent.Daemon.Execution do
         [bounded_error(reason)]
 
       {:ok, other} ->
-        [bounded_error({:unexpected_cleanup_result, other})]
+        [bounded_error({unexpected_error, other})]
 
       {:exit, reason} ->
-        [bounded_error({:cleanup_task_exit, reason})]
+        [bounded_error({exit_error, reason})]
 
       nil ->
         _ = Task.shutdown(task, :brutal_kill)
-        [bounded_error(:cleanup_timeout)]
+        [bounded_error(timeout_reason)]
     end
+  rescue
+    error -> [bounded_error({start_error, error})]
   catch
-    :exit, reason -> [bounded_error({:cleanup_task_start_failed, reason})]
+    :exit, reason -> [bounded_error({start_error, reason})]
   end
 
   defp stop_process(nil), do: :ok
@@ -758,16 +704,6 @@ defmodule Synapsis.Agent.Daemon.Execution do
 
   defp add_errors({:ok, run, errors}, extra), do: {:ok, run, errors ++ extra}
   defp add_errors(error, _extra), do: error
-
-  defp terminal_payload(:failed, run), do: %{error: bounded_error(run.error)}
-  defp terminal_payload(_event, _run), do: %{}
-
-  defp bound_payload(payload) do
-    Map.new(payload, fn
-      {key, value} when is_binary(value) -> {key, String.slice(value, 0, @max_error_length)}
-      pair -> pair
-    end)
-  end
 
   defp session_error(%{message: message}) when is_binary(message), do: message
   defp session_error(%{"message" => message}) when is_binary(message), do: message
