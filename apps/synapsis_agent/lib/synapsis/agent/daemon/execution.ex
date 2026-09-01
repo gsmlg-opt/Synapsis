@@ -212,8 +212,7 @@ defmodule Synapsis.Agent.Daemon.Execution do
               event_timeout,
               deps,
               :cancelled,
-              cancelled,
-              "agent.run.cancelled"
+              cancelled
             )
 
         {:ok, cancelled, errors}
@@ -269,8 +268,7 @@ defmodule Synapsis.Agent.Daemon.Execution do
             event_timeout,
             deps,
             :cancelled,
-            cancelled,
-            "agent.run.cancelled"
+            cancelled
           )
 
         {:ok, cancelled, errors}
@@ -322,17 +320,17 @@ defmodule Synapsis.Agent.Daemon.Execution do
         task_supervisor,
         event_timeout,
         deps,
-        append_event_name,
+        event,
         run,
-        publish_event_name,
         payload \\ %{}
       ) do
-    _publish_event_name = publish_event_name
-
-    bounded_task(
+    bounded_tasks(
       task_supervisor,
       event_timeout,
-      fn -> RunEvents.emit_lifecycle(deps.run_events, append_event_name, run, payload) end,
+      [
+        fn -> RunEvents.append_lifecycle(deps.run_events, event, run) end,
+        fn -> RunEvents.publish_lifecycle(event, run, payload) end
+      ],
       :event_timeout,
       :event_task_start_failed,
       :event_task_exit,
@@ -367,8 +365,7 @@ defmodule Synapsis.Agent.Daemon.Execution do
         event_timeout,
         deps,
         :created,
-        run,
-        "agent.run.queued"
+        run
       )
 
     {:ok, run, errors}
@@ -489,8 +486,7 @@ defmodule Synapsis.Agent.Daemon.Execution do
                    event_timeout,
                    deps,
                    :started,
-                   running,
-                   "agent.run.started"
+                   running
                  ),
                :ok <- announce_running(outer, daemon, running, event_errors),
                :ok <- deps.sessions.send_message(session.id, run.prompt) do
@@ -530,7 +526,6 @@ defmodule Synapsis.Agent.Daemon.Execution do
             deps,
             event,
             terminal_run,
-            "agent.run.#{event}",
             %{}
           )
 
@@ -641,10 +636,10 @@ defmodule Synapsis.Agent.Daemon.Execution do
   defp bounded_session_cleanup(_task_supervisor, _sessions, nil, _timeout), do: []
 
   defp bounded_session_cleanup(task_supervisor, sessions, session_id, timeout) do
-    bounded_task(
+    bounded_tasks(
       task_supervisor,
       timeout,
-      fn -> sessions.cancel(session_id) end,
+      [fn -> sessions.cancel(session_id) end],
       :cleanup_timeout,
       :cleanup_task_start_failed,
       :cleanup_task_exit,
@@ -652,18 +647,51 @@ defmodule Synapsis.Agent.Daemon.Execution do
     )
   end
 
-  defp bounded_task(
+  defp bounded_tasks(
          task_supervisor,
          timeout,
-         function,
+         functions,
          timeout_reason,
          start_error,
          exit_error,
          unexpected_error
        ) do
-    task = Task.Supervisor.async(task_supervisor, fn -> protect(function) end)
+    deadline = System.monotonic_time(:millisecond) + timeout
 
-    case Task.yield(task, timeout) do
+    functions
+    |> Enum.map(&start_bounded_task(task_supervisor, &1, start_error))
+    |> Enum.flat_map(
+      &await_bounded_task(
+        &1,
+        deadline,
+        timeout_reason,
+        exit_error,
+        unexpected_error
+      )
+    )
+  end
+
+  defp start_bounded_task(task_supervisor, function, start_error) do
+    {:ok, Task.Supervisor.async(task_supervisor, fn -> protect(function) end)}
+  rescue
+    error -> {:error, {start_error, error}}
+  catch
+    :exit, reason -> {:error, {start_error, reason}}
+  end
+
+  defp await_bounded_task({:error, reason}, _deadline, _timeout, _exit, _unexpected),
+    do: [bounded_error(reason)]
+
+  defp await_bounded_task(
+         {:ok, task},
+         deadline,
+         timeout_reason,
+         exit_error,
+         unexpected_error
+       ) do
+    remaining = max(deadline - System.monotonic_time(:millisecond), 0)
+
+    case Task.yield(task, remaining) do
       {:ok, :ok} ->
         []
 
@@ -683,10 +711,6 @@ defmodule Synapsis.Agent.Daemon.Execution do
         _ = Task.shutdown(task, :brutal_kill)
         [bounded_error(timeout_reason)]
     end
-  rescue
-    error -> [bounded_error({start_error, error})]
-  catch
-    :exit, reason -> [bounded_error({start_error, reason})]
   end
 
   defp stop_process(nil), do: :ok

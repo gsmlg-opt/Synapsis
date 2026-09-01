@@ -22,20 +22,21 @@ defmodule Synapsis.Agent.RunEvents do
   def append_run_interrupted(%AgentRun{} = run),
     do: append(run, "agent_run_interrupted", "task_failed")
 
-  def emit_lifecycle(adapter, event, %AgentRun{} = run, payload \\ %{}) do
+  def append_lifecycle(adapter, event, %AgentRun{} = run) do
     append_function = String.to_existing_atom("append_run_#{event}")
-
-    with :ok <- normalize_result(apply(adapter, append_function, [run])) do
-      publish_lifecycle(lifecycle_topic(event), run, lifecycle_payload(event, run, payload))
-    end
+    normalize_result(apply(adapter, append_function, [run]))
   rescue
     error -> {:error, error}
   catch
     kind, reason -> {:error, {kind, reason}}
   end
 
+  def publish_lifecycle(event, %AgentRun{} = run, payload \\ %{}) do
+    publish(lifecycle_topic(event), run, lifecycle_payload(event, run, payload))
+  end
+
   def publish_status(adapter, status, sequence) do
-    if function_exported?(adapter, :publish_daemon_status, 2) do
+    if Code.ensure_loaded?(adapter) and function_exported?(adapter, :publish_daemon_status, 2) do
       adapter.publish_daemon_status(status, sequence)
     else
       Phoenix.PubSub.broadcast(
@@ -66,7 +67,7 @@ defmodule Synapsis.Agent.RunEvents do
     append_memory_event(run, "summary_created", payload)
   end
 
-  defp publish_lifecycle(event, run, payload) do
+  defp publish(event, run, payload) do
     Phoenix.PubSub.broadcast(
       Synapsis.PubSub,
       @topic,

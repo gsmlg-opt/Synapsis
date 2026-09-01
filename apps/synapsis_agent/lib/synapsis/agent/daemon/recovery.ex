@@ -44,7 +44,6 @@ defmodule Synapsis.Agent.Daemon.Recovery do
               deps,
               :interrupted,
               terminal,
-              "agent.run.interrupted",
               %{reason: "daemon_restarted"}
             )
 

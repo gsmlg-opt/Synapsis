@@ -12,7 +12,7 @@ defmodule Synapsis.Agent.Daemon do
   use GenServer
 
   alias Synapsis.Agent.{RunEvents, Runs}
-  alias Synapsis.Agent.Daemon.{Execution, Recovery}
+  alias Synapsis.Agent.Daemon.{Execution, Operations, StatusPublisher}
   alias Synapsis.AgentRun
   alias Synapsis.Sessions
 
@@ -62,9 +62,7 @@ defmodule Synapsis.Agent.Daemon do
         queue: :queue.new(),
         submit_queue: :queue.new(),
         submit_task: nil,
-        status_publisher: nil,
-        status_dirty: nil,
-        status_sequence: 0,
+        status_publisher: Keyword.get(opts, :status_publisher, StatusPublisher),
         cancelling_ids: MapSet.new(),
         pending: %{},
         recovery_backlog_count: 0,
@@ -122,17 +120,9 @@ defmodule Synapsis.Agent.Daemon do
         {:reply, {:error, :cancellation_in_progress}, state}
 
       {:active, active} ->
-        op = %{type: :cancel, from: from, run_id: run_id, location: :active}
+        op = %{type: :cancel, from: from, run_id: run_id, location: :active, active: active}
 
-        case start_operation(state, op, fn ->
-               Execution.cancel_active(
-                 state.deps,
-                 state.task_supervisor,
-                 active,
-                 state.cleanup_timeout,
-                 state.event_timeout
-               )
-             end) do
+        case start_operation(state, op) do
           {:ok, state} ->
             active = %{active | cancelling: true, phase: :cancelling}
             {:noreply, %{state | active_run: active}}
@@ -142,16 +132,9 @@ defmodule Synapsis.Agent.Daemon do
         end
 
       {:queued, run} ->
-        op = %{type: :cancel, from: from, run_id: run_id, location: :queued}
+        op = %{type: :cancel, from: from, run_id: run_id, location: :queued, run: run}
 
-        case start_operation(state, op, fn ->
-               Execution.cancel_queued(
-                 state.deps,
-                 state.task_supervisor,
-                 state.event_timeout,
-                 run
-               )
-             end) do
+        case start_operation(state, op) do
           {:ok, state} ->
             {:noreply, %{state | cancelling_ids: MapSet.put(state.cancelling_ids, run_id)}}
 
@@ -162,7 +145,7 @@ defmodule Synapsis.Agent.Daemon do
       :unknown ->
         op = %{type: :cancel, from: from, run_id: run_id, location: :unknown}
 
-        case start_operation(state, op, fn -> Execution.classify(state.deps.runs, run_id) end) do
+        case start_operation(state, op) do
           {:ok, state} -> {:noreply, state}
           {:error, reason} -> {:reply, {:error, reason}, put_error(state, reason)}
         end
@@ -174,14 +157,7 @@ defmodule Synapsis.Agent.Daemon do
     if pending_type?(state, :recovery) do
       {:noreply, state}
     else
-      case start_operation(state, %{type: :recovery}, fn ->
-             Recovery.run(
-               state.deps,
-               state.queue_capacity,
-               state.task_supervisor,
-               state.event_timeout
-             )
-           end) do
+      case start_operation(state, %{type: :recovery, capacity: state.queue_capacity}) do
         {:ok, state} -> {:noreply, state}
         {:error, reason} -> {:noreply, schedule_recovery_retry(state, reason)}
       end
@@ -242,12 +218,16 @@ defmodule Synapsis.Agent.Daemon do
         {:noreply, state}
 
       true ->
-        op = %{type: :refill, reserved_slots: available}
         excluded = owned_run_ids(state)
 
-        case start_operation(state, op, fn ->
-               Recovery.refill(state.deps, excluded, available)
-             end) do
+        op = %{
+          type: :refill,
+          reserved_slots: available,
+          excluded: excluded,
+          limit: available
+        }
+
+        case start_operation(state, op) do
           {:ok, state} -> {:noreply, state}
           {:error, reason} -> {:noreply, schedule_refill_retry(state, reason)}
         end
@@ -259,60 +239,6 @@ defmodule Synapsis.Agent.Daemon do
     {:noreply, state}
   end
 
-  def handle_info({:status_snapshot, status}, state) do
-    sequence = state.status_sequence + 1
-    snapshot = {sequence, status}
-    state = %{state | status_sequence: sequence}
-
-    case state.status_publisher do
-      nil -> {:noreply, start_status_publisher(state, snapshot)}
-      _publisher -> {:noreply, %{state | status_dirty: snapshot}}
-    end
-  end
-
-  def handle_info({:retry_status, snapshot}, state) do
-    case state.status_publisher do
-      nil -> {:noreply, start_status_publisher(state, state.status_dirty || snapshot)}
-      _publisher -> {:noreply, %{state | status_dirty: state.status_dirty || snapshot}}
-    end
-  end
-
-  def handle_info({:status_publish_timeout, ref, pid}, state) do
-    case state.status_publisher do
-      %{ref: ^ref, pid: ^pid} ->
-        Process.exit(pid, :kill)
-        state = put_error(state, {:operation_timeout, :status_publish})
-        sequence = state.status_sequence + 1
-        snapshot = {sequence, Execution.status(state)}
-        {:noreply, %{state | status_sequence: sequence, status_dirty: snapshot}}
-
-      _other ->
-        {:noreply, state}
-    end
-  end
-
-  def handle_info({:status_publish_result, pid, sequence, result}, state) do
-    case state.status_publisher do
-      %{pid: ^pid, ref: ref, timer_ref: timer_ref, sequence: ^sequence} = publisher ->
-        Process.demonitor(ref, [:flush])
-        cancel_timer(timer_ref)
-        state = %{state | status_publisher: nil}
-
-        snapshot =
-          case result do
-            :ok -> state.status_dirty
-            {:ok, _value} -> state.status_dirty
-            _error -> state.status_dirty || publisher.snapshot
-          end
-
-        state = %{state | status_dirty: nil}
-        {:noreply, maybe_start_status_publisher(state, snapshot)}
-
-      _other ->
-        {:noreply, state}
-    end
-  end
-
   def handle_info({:retry_submit, run_id}, state) do
     case submit_head(state) do
       %{run_id: ^run_id} -> {:noreply, start_submit_head(state)}
@@ -321,7 +247,7 @@ defmodule Synapsis.Agent.Daemon do
   end
 
   def handle_info({:retry_operation, op}, state) do
-    case start_operation(state, op, op.fun) do
+    case start_operation(state, op) do
       {:ok, state} ->
         {:noreply, state}
 
@@ -484,9 +410,6 @@ defmodule Synapsis.Agent.Daemon do
 
       state.active_run && state.active_run.task_ref == ref ->
         handle_runner_down(pid, reason, state)
-
-      state.status_publisher && state.status_publisher.ref == ref ->
-        handle_status_publisher_down(reason, state)
 
       true ->
         handle_operation_down(ref, reason, state)
@@ -749,23 +672,20 @@ defmodule Synapsis.Agent.Daemon do
   end
 
   defp handle_operation_down(ref, reason, state) do
-    case Map.pop(state.pending, ref) do
-      {nil, _pending} ->
+    case Operations.pop_by_ref(state.pending, ref) do
+      :error ->
         {:noreply, state}
 
-      {%{type: :recovery, timer_ref: timer_ref}, pending} ->
-        cancel_timer(timer_ref)
+      {:ok, %{type: :recovery}, pending} ->
         state = %{state | pending: pending}
         {:noreply, schedule_recovery_retry(state, {:recovery_task_exit, reason})}
 
-      {%{type: :refill, timer_ref: timer_ref}, pending} ->
-        cancel_timer(timer_ref)
+      {:ok, %{type: :refill}, pending} ->
         state = %{state | pending: pending}
         {:noreply, schedule_refill_retry(state, {:refill_task_exit, reason})}
 
-      {op, pending} ->
-        cancel_timer(op.timer_ref)
-        retry_op = Map.drop(op, [:pid, :timer_ref])
+      {:ok, op, pending} ->
+        retry_op = Operations.retry(op)
         Process.send_after(self(), {:retry_operation, retry_op}, @submit_retry_ms)
 
         state =
@@ -783,32 +703,15 @@ defmodule Synapsis.Agent.Daemon do
         state
 
       entry ->
-        daemon = self()
-
-        case Execution.start_monitored_task(state.task_supervisor, fn ->
-               result =
-                 Execution.persist_submission(
-                   state.deps,
-                   entry.attrs,
-                   entry.mode,
-                   state.task_supervisor,
-                   state.event_timeout
-                 )
-
-               send(daemon, {:submit_result, self(), entry.run_id, result})
-             end) do
-          {:ok, pid, ref} ->
-            timer_ref =
-              Process.send_after(
-                self(),
-                {:submit_operation_timeout, ref, pid, entry.run_id},
-                state.operation_timeout
-              )
-
-            %{
-              state
-              | submit_task: %{pid: pid, ref: ref, run_id: entry.run_id, timer_ref: timer_ref}
-            }
+        case Operations.start_submit(
+               self(),
+               state.task_supervisor,
+               state.operation_timeout,
+               entry,
+               operation_context(state)
+             ) do
+          {:ok, submit_task} ->
+            %{state | submit_task: submit_task}
 
           {:error, reason} ->
             Process.send_after(self(), {:retry_submit, entry.run_id}, @submit_retry_ms)
@@ -822,27 +725,19 @@ defmodule Synapsis.Agent.Daemon do
 
   defp start_submit_head(state), do: state
 
-  defp start_operation(state, op, fun) do
-    daemon = self()
-
-    case Execution.start_monitored_task(state.task_supervisor, fn ->
-           result = Execution.protect(fun)
-           send(daemon, {:operation_result, self(), result})
-         end) do
-      {:ok, pid, ref} ->
-        timer_ref =
-          Process.send_after(self(), {:operation_timeout, ref, pid}, state.operation_timeout)
-
-        pending_op =
-          op
-          |> Map.put(:pid, pid)
-          |> Map.put(:timer_ref, timer_ref)
-          |> Map.put(:fun, fun)
-
+  defp start_operation(state, op) do
+    case Operations.start(
+           self(),
+           state.task_supervisor,
+           state.operation_timeout,
+           op,
+           operation_context(state)
+         ) do
+      {:ok, ref, pending_op} ->
         {:ok, %{state | pending: Map.put(state.pending, ref, pending_op)}}
 
       {:error, reason} ->
-        {:error, {:task_start_failed, Execution.bounded_error(reason)}}
+        {:error, reason}
     end
   end
 
@@ -907,68 +802,11 @@ defmodule Synapsis.Agent.Daemon do
   end
 
   defp dispatch_status(state) do
-    status = Execution.status(state)
-    send(self(), {:status_snapshot, status})
-    :ok
-  end
-
-  defp start_status_publisher(state, nil), do: state
-
-  defp start_status_publisher(state, {sequence, status} = snapshot) do
-    daemon = self()
-
-    case Execution.start_monitored_task(state.task_supervisor, fn ->
-           result =
-             Execution.protect(fn ->
-               RunEvents.publish_status(state.deps.run_events, status, sequence)
-             end)
-
-           send(daemon, {:status_publish_result, self(), sequence, result})
-         end) do
-      {:ok, pid, ref} ->
-        timer_ref =
-          Process.send_after(self(), {:status_publish_timeout, ref, pid}, state.event_timeout)
-
-        publisher = %{
-          pid: pid,
-          ref: ref,
-          timer_ref: timer_ref,
-          sequence: sequence,
-          snapshot: snapshot
-        }
-
-        %{state | status_publisher: publisher, status_dirty: nil}
-
-      {:error, reason} ->
-        Process.send_after(self(), {:retry_status, snapshot}, @submit_retry_ms)
-        put_error(state, {:status_publish_start_failed, reason})
+    if publisher = Map.get(state, :status_publisher) do
+      StatusPublisher.publish(publisher, Execution.status(state))
     end
-  end
 
-  defp maybe_start_status_publisher(state, nil), do: state
-  defp maybe_start_status_publisher(state, snapshot), do: start_status_publisher(state, snapshot)
-
-  defp handle_status_publisher_down(reason, state) do
-    publisher = state.status_publisher
-    cancel_timer(publisher.timer_ref)
-    state = %{state | status_publisher: nil}
-
-    {state, snapshot} =
-      case reason do
-        :killed ->
-          {state, state.status_dirty || publisher.snapshot}
-
-        _other ->
-          state = put_error(state, {:status_publish_task_exit, reason})
-          sequence = state.status_sequence + 1
-          state = %{state | status_sequence: sequence}
-          {state, {sequence, Execution.status(state)}}
-      end
-
-    Process.send_after(self(), {:retry_status, snapshot}, @submit_retry_ms)
-    state = %{state | status_dirty: nil}
-
-    {:noreply, state}
+    :ok
   end
 
   defp locate_run(state, run_id) do
@@ -980,13 +818,11 @@ defmodule Synapsis.Agent.Daemon do
   end
 
   defp pop_operation(state, pid) do
-    case Enum.find(state.pending, fn {_ref, op} -> op.pid == pid end) do
-      {ref, op} ->
-        Process.demonitor(ref, [:flush])
-        cancel_timer(op.timer_ref)
-        {:ok, op, %{state | pending: Map.delete(state.pending, ref)}}
+    case Operations.pop_by_pid(state.pending, pid) do
+      {:ok, op, pending} ->
+        {:ok, op, %{state | pending: pending}}
 
-      nil ->
+      :error ->
         :error
     end
   end
@@ -1091,6 +927,14 @@ defmodule Synapsis.Agent.Daemon do
     end
   end
 
-  defp cancel_timer(ref) when is_reference(ref), do: Process.cancel_timer(ref)
-  defp cancel_timer(_ref), do: :ok
+  defp operation_context(state) do
+    %{
+      deps: state.deps,
+      task_supervisor: state.task_supervisor,
+      cleanup_timeout: state.cleanup_timeout,
+      event_timeout: state.event_timeout
+    }
+  end
+
+  defp cancel_timer(ref), do: Operations.cancel_timer(ref)
 end
