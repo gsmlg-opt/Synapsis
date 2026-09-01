@@ -18,6 +18,7 @@ defmodule Synapsis.Agent.Daemon do
   @queue_capacity 25
   @run_timeout :timer.minutes(30)
   @cleanup_timeout 1_000
+  @event_timeout 1_000
   @submit_retry_ms 50
 
   def start_link(opts \\ []) do
@@ -60,6 +61,7 @@ defmodule Synapsis.Agent.Daemon do
       task_supervisor: Keyword.get(opts, :task_supervisor, @task_supervisor),
       run_timeout: Keyword.get(opts, :run_timeout, @run_timeout),
       cleanup_timeout: Keyword.get(opts, :cleanup_timeout, @cleanup_timeout),
+      event_timeout: Keyword.get(opts, :event_timeout, @event_timeout),
       deps: %{
         runs: Keyword.get(opts, :runs, Runs),
         run_events: Keyword.get(opts, :run_events, RunEvents),
@@ -108,7 +110,8 @@ defmodule Synapsis.Agent.Daemon do
                  state.deps,
                  state.task_supervisor,
                  active,
-                 state.cleanup_timeout
+                 state.cleanup_timeout,
+                 state.event_timeout
                )
              end) do
           {:ok, state} ->
@@ -122,7 +125,14 @@ defmodule Synapsis.Agent.Daemon do
       {:queued, run} ->
         op = %{type: :cancel, from: from, run_id: run_id, location: :queued}
 
-        case start_operation(state, op, fn -> Execution.cancel_queued(state.deps, run) end) do
+        case start_operation(state, op, fn ->
+               Execution.cancel_queued(
+                 state.deps,
+                 state.task_supervisor,
+                 state.event_timeout,
+                 run
+               )
+             end) do
           {:ok, state} ->
             {:noreply, %{state | cancelling_ids: MapSet.put(state.cancelling_ids, run_id)}}
 
@@ -146,7 +156,12 @@ defmodule Synapsis.Agent.Daemon do
       {:noreply, state}
     else
       case start_operation(state, %{type: :recovery}, fn ->
-             Recovery.run(state.deps, state.queue_capacity)
+             Recovery.run(
+               state.deps,
+               state.queue_capacity,
+               state.task_supervisor,
+               state.event_timeout
+             )
            end) do
         {:ok, state} -> {:noreply, state}
         {:error, reason} -> {:noreply, schedule_recovery_retry(state, reason)}
@@ -254,16 +269,22 @@ defmodule Synapsis.Agent.Daemon do
     do: {:noreply, state}
 
   def handle_info(
-        {:runner_started, task_pid, %AgentRun{} = run},
+        {:runner_started, task_pid, %AgentRun{} = run, event_errors},
         %{active_run: %{task_pid: task_pid, run: %{id: run_id}} = active} = state
       )
       when run.id == run_id do
-    state = %{state | active_run: %{active | run: run, phase: :running}}
+    state = %{
+      state
+      | active_run: %{active | run: run, phase: :running},
+        last_error: join_errors(event_errors) || state.last_error
+    }
+
     dispatch_status(state)
     {:noreply, state}
   end
 
-  def handle_info({:runner_started, _task_pid, _run}, state), do: {:noreply, state}
+  def handle_info({:runner_started, _task_pid, _run, _event_errors}, state),
+    do: {:noreply, state}
 
   def handle_info({:submit_result, task_pid, run_id, result}, state) do
     case state.submit_task do
@@ -402,14 +423,18 @@ defmodule Synapsis.Agent.Daemon do
     {:noreply, state}
   end
 
-  defp handle_operation_result(%{type: :recovery}, {:ok, queued, backlog}, state) do
+  defp handle_operation_result(
+         %{type: :recovery},
+         {:ok, queued, backlog, event_errors},
+         state
+       ) do
     state = %{
       state
       | ready: true,
         queue: :queue.from_list(queued),
         recovery_backlog_count: backlog,
         recovery_error: nil,
-        last_error: nil
+        last_error: join_errors(event_errors)
     }
 
     dispatch_status(state)
@@ -565,7 +590,15 @@ defmodule Synapsis.Agent.Daemon do
         daemon = self()
 
         case Execution.start_monitored_task(state.task_supervisor, fn ->
-               result = Execution.persist_submission(state.deps, entry.attrs, entry.mode)
+               result =
+                 Execution.persist_submission(
+                   state.deps,
+                   entry.attrs,
+                   entry.mode,
+                   state.task_supervisor,
+                   state.event_timeout
+                 )
+
                send(daemon, {:submit_result, self(), entry.run_id, result})
              end) do
           {:ok, pid, ref} ->
@@ -608,7 +641,8 @@ defmodule Synapsis.Agent.Daemon do
         state.task_supervisor,
         run,
         state.run_timeout,
-        Map.get(state, :cleanup_timeout, @cleanup_timeout)
+        Map.get(state, :cleanup_timeout, @cleanup_timeout),
+        Map.get(state, :event_timeout, @event_timeout)
       )
     end)
   end
@@ -624,7 +658,8 @@ defmodule Synapsis.Agent.Daemon do
             state.task_supervisor,
             active,
             reason,
-            state.cleanup_timeout
+            state.cleanup_timeout,
+            state.event_timeout
           )
         end)
 

@@ -3,17 +3,20 @@ defmodule Synapsis.Agent.Daemon.Recovery do
 
   alias Synapsis.Agent.Daemon.Execution
 
-  def run(deps, capacity) do
+  def run(deps, capacity, task_supervisor, event_timeout) do
     {running, running_errors} = load_status(deps.runs, "running")
     {waiting, waiting_errors} = load_status(deps.runs, "waiting_approval")
     {queued, queued_errors} = load_status(deps.runs, "queued")
     scan_errors = running_errors ++ waiting_errors ++ queued_errors
-    {interrupt_errors, _interrupted} = interrupt(deps, running ++ waiting)
+
+    {interrupt_errors, event_errors, _interrupted} =
+      interrupt(deps, task_supervisor, event_timeout, running ++ waiting)
+
     errors = scan_errors ++ interrupt_errors
 
     if errors == [] do
       {selected, backlog} = select(queued, MapSet.new(), capacity)
-      {:ok, selected, backlog}
+      {:ok, selected, backlog, event_errors}
     else
       {:retry, errors}
     end
@@ -30,19 +33,25 @@ defmodule Synapsis.Agent.Daemon.Recovery do
     end
   end
 
-  defp interrupt(deps, runs) do
-    Enum.reduce(runs, {[], []}, fn run, {errors, interrupted} ->
+  defp interrupt(deps, task_supervisor, event_timeout, runs) do
+    Enum.reduce(runs, {[], [], []}, fn run, {errors, event_errors, interrupted} ->
       case deps.runs.mark_interrupted(run, "daemon_restarted") do
         {:ok, terminal} ->
-          _ = Execution.append_event(deps, :interrupted, terminal)
+          warnings =
+            Execution.emit_run_event(
+              task_supervisor,
+              event_timeout,
+              deps,
+              :interrupted,
+              terminal,
+              "agent.run.interrupted",
+              %{reason: "daemon_restarted"}
+            )
 
-          _ =
-            Execution.publish_run("agent.run.interrupted", terminal, %{reason: "daemon_restarted"})
-
-          {errors, [terminal | interrupted]}
+          {errors, event_errors ++ warnings, [terminal | interrupted]}
 
         {:error, reason} ->
-          {[{run.id, reason} | errors], interrupted}
+          {[{run.id, reason} | errors], event_errors, interrupted}
       end
     end)
   end

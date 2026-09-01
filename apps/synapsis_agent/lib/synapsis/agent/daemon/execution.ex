@@ -44,25 +44,33 @@ defmodule Synapsis.Agent.Daemon.Execution do
     }
   end
 
-  def persist_submission(deps, attrs, :create), do: create_submission(deps, attrs)
+  def persist_submission(deps, attrs, :create, task_supervisor, event_timeout),
+    do: create_submission(deps, attrs, task_supervisor, event_timeout)
 
-  def persist_submission(deps, attrs, :reconcile) do
+  def persist_submission(deps, attrs, :reconcile, task_supervisor, event_timeout) do
     case deps.runs.fetch(attrs.id) do
-      {:ok, %{status: "queued"} = run} -> submission_persisted(deps, run)
-      {:ok, run} -> {:error, {:unexpected_submission_status, run.status}}
-      :not_found -> create_submission(deps, attrs)
-      {:error, reason} -> {:retry, {:submission_read_failed, reason}}
+      {:ok, %{status: "queued"} = run} ->
+        submission_persisted(deps, run, task_supervisor, event_timeout)
+
+      {:ok, run} ->
+        {:error, {:unexpected_submission_status, run.status}}
+
+      :not_found ->
+        create_submission(deps, attrs, task_supervisor, event_timeout)
+
+      {:error, reason} ->
+        {:retry, {:submission_read_failed, reason}}
     end
   end
 
-  def run(daemon, deps, task_supervisor, run, timeout, cleanup_timeout) do
+  def run(daemon, deps, task_supervisor, run, timeout, cleanup_timeout, event_timeout) do
     deadline = System.monotonic_time(:millisecond) + timeout
 
     result =
-      case start_inner(daemon, deps, task_supervisor, run) do
+      case start_inner(daemon, deps, task_supervisor, run, event_timeout) do
         {:ok, inner_pid, inner_ref} ->
           case await_inner(inner_pid, inner_ref, deadline, run, nil) do
-            {:result, outcome, current_run, session_id} ->
+            {:result, outcome, current_run, session_id, event_errors} ->
               cleanup_errors =
                 if match?({:error, _reason}, outcome) do
                   bounded_session_cleanup(
@@ -75,8 +83,15 @@ defmodule Synapsis.Agent.Daemon.Execution do
                   []
                 end
 
-              finalize(deps, current_run, outcome, session_id)
-              |> add_errors(cleanup_errors)
+              finalize(
+                deps,
+                current_run,
+                outcome,
+                session_id,
+                task_supervisor,
+                event_timeout
+              )
+              |> add_errors(event_errors ++ cleanup_errors)
 
             {:timeout, current_run, session_id} ->
               stop_process(inner_pid)
@@ -89,7 +104,14 @@ defmodule Synapsis.Agent.Daemon.Execution do
                   cleanup_timeout
                 )
 
-              finalize(deps, current_run, {:error, :session_timeout}, session_id)
+              finalize(
+                deps,
+                current_run,
+                {:error, :session_timeout},
+                session_id,
+                task_supervisor,
+                event_timeout
+              )
               |> add_errors(cleanup_errors)
 
             {:exit, reason, current_run, session_id} ->
@@ -105,33 +127,49 @@ defmodule Synapsis.Agent.Daemon.Execution do
                 deps,
                 current_run,
                 {:error, "run task exited: #{bounded_error(reason)}"},
-                session_id
+                session_id,
+                task_supervisor,
+                event_timeout
               )
               |> add_errors(cleanup_errors)
           end
 
         {:error, reason} ->
-          finalize(deps, run, {:error, {:inner_task_start_failed, reason}}, nil)
+          finalize(
+            deps,
+            run,
+            {:error, {:inner_task_start_failed, reason}},
+            nil,
+            task_supervisor,
+            event_timeout
+          )
       end
 
     send(daemon, {:runner_result, self(), run.id, result})
   end
 
-  def finalize(deps, run, {:ok, summary}, session_id) do
-    finalize_transition(deps, run, :completed, fn ->
+  def finalize(deps, run, {:ok, summary}, session_id, task_supervisor, event_timeout) do
+    finalize_transition(deps, run, :completed, task_supervisor, event_timeout, fn ->
       deps.runs.mark_completed(run, summary, %{session_id: session_id})
     end)
   end
 
-  def finalize(deps, run, {:error, reason}, session_id) do
+  def finalize(deps, run, {:error, reason}, session_id, task_supervisor, event_timeout) do
     error = bounded_error(reason)
 
-    finalize_transition(deps, run, :failed, fn ->
+    finalize_transition(deps, run, :failed, task_supervisor, event_timeout, fn ->
       deps.runs.mark_failed(run, error, %{session_id: session_id})
     end)
   end
 
-  def finalize_crashed_outer(deps, task_supervisor, active, reason, cleanup_timeout) do
+  def finalize_crashed_outer(
+        deps,
+        task_supervisor,
+        active,
+        reason,
+        cleanup_timeout,
+        event_timeout
+      ) do
     stop_process(active.inner_pid)
 
     cleanup_errors =
@@ -148,12 +186,14 @@ defmodule Synapsis.Agent.Daemon.Execution do
       deps,
       current_run,
       {:error, "run task exited: #{bounded_error(reason)}"},
-      active.session_id
+      active.session_id,
+      task_supervisor,
+      event_timeout
     )
     |> add_errors(cleanup_errors)
   end
 
-  def cancel_active(deps, task_supervisor, active, cleanup_timeout) do
+  def cancel_active(deps, task_supervisor, active, cleanup_timeout, event_timeout) do
     {session_id, preparation_errors} = prepare_active_cancel(active, cleanup_timeout)
 
     result =
@@ -168,10 +208,14 @@ defmodule Synapsis.Agent.Daemon.Execution do
               cancelled.session_id,
               cleanup_timeout
             ) ++
-            collect_errors([
-              fn -> append_event(deps, :cancelled, cancelled) end,
-              fn -> publish_run("agent.run.cancelled", cancelled) end
-            ])
+            emit_run_event(
+              task_supervisor,
+              event_timeout,
+              deps,
+              :cancelled,
+              cancelled,
+              "agent.run.cancelled"
+            )
 
         {:ok, cancelled, errors}
       else
@@ -217,14 +261,18 @@ defmodule Synapsis.Agent.Daemon.Execution do
     {active.session_id, []}
   end
 
-  def cancel_queued(deps, run) do
+  def cancel_queued(deps, task_supervisor, event_timeout, run) do
     case deps.runs.mark_cancelled(run) do
       {:ok, cancelled} ->
         errors =
-          collect_errors([
-            fn -> append_event(deps, :cancelled, cancelled) end,
-            fn -> publish_run("agent.run.cancelled", cancelled) end
-          ])
+          emit_run_event(
+            task_supervisor,
+            event_timeout,
+            deps,
+            :cancelled,
+            cancelled,
+            "agent.run.cancelled"
+          )
 
         {:ok, cancelled, errors}
 
@@ -310,6 +358,25 @@ defmodule Synapsis.Agent.Daemon.Execution do
     )
   end
 
+  def emit_run_event(
+        task_supervisor,
+        event_timeout,
+        deps,
+        append_event_name,
+        run,
+        publish_event_name,
+        payload \\ %{}
+      ) do
+    deadline = System.monotonic_time(:millisecond) + event_timeout
+
+    [
+      fn -> append_event(deps, append_event_name, run) end,
+      fn -> publish_run(publish_event_name, run, payload) end
+    ]
+    |> Enum.map(&start_event_task(task_supervisor, &1))
+    |> Enum.flat_map(&await_event_task(&1, deadline))
+  end
+
   def bounded_error(%Ecto.Changeset{}), do: "invalid run attributes"
   def bounded_error(reason) when is_binary(reason), do: String.slice(reason, 0, @max_error_length)
 
@@ -322,25 +389,29 @@ defmodule Synapsis.Agent.Daemon.Execution do
   def valid_capacity(capacity, _default) when is_integer(capacity) and capacity > 0, do: capacity
   def valid_capacity(_capacity, default), do: default
 
-  defp create_submission(deps, attrs) do
+  defp create_submission(deps, attrs, task_supervisor, event_timeout) do
     case deps.runs.create(attrs) do
-      {:ok, run} -> submission_persisted(deps, run)
+      {:ok, run} -> submission_persisted(deps, run, task_supervisor, event_timeout)
       {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
       {:error, reason} -> {:retry, {:submission_write_failed, reason}}
     end
   end
 
-  defp submission_persisted(deps, run) do
+  defp submission_persisted(deps, run, task_supervisor, event_timeout) do
     errors =
-      collect_errors([
-        fn -> append_event(deps, :created, run) end,
-        fn -> publish_run("agent.run.queued", run) end
-      ])
+      emit_run_event(
+        task_supervisor,
+        event_timeout,
+        deps,
+        :created,
+        run,
+        "agent.run.queued"
+      )
 
     {:ok, run, errors}
   end
 
-  defp start_inner(daemon, deps, task_supervisor, run) do
+  defp start_inner(daemon, deps, task_supervisor, run, event_timeout) do
     outer = self()
     token = make_ref()
 
@@ -353,10 +424,20 @@ defmodule Synapsis.Agent.Daemon.Execution do
                  send(outer, {:inner_started, self()})
                  send(daemon, {:runner_inner, outer, run.id, self()})
 
-                 {outcome, current_run, session_id} =
-                   execute_session(outer, daemon, deps, run)
+                 {outcome, current_run, session_id, event_errors} =
+                   execute_session(
+                     outer,
+                     daemon,
+                     deps,
+                     task_supervisor,
+                     event_timeout,
+                     run
+                   )
 
-                 send(outer, {:inner_result, self(), outcome, current_run, session_id})
+                 send(
+                   outer,
+                   {:inner_result, self(), outcome, current_run, session_id, event_errors}
+                 )
              end
            end) do
       ref = Process.monitor(pid)
@@ -378,10 +459,10 @@ defmodule Synapsis.Agent.Daemon.Execution do
       {:inner_running, ^inner_pid, running} ->
         await_inner(inner_pid, inner_ref, deadline, running, session_id)
 
-      {:inner_result, ^inner_pid, outcome, result_run, result_session_id} ->
+      {:inner_result, ^inner_pid, outcome, result_run, result_session_id, event_errors} ->
         Process.unlink(inner_pid)
         Process.demonitor(inner_ref, [:flush])
-        {:result, outcome, result_run, result_session_id || session_id}
+        {:result, outcome, result_run, result_session_id || session_id, event_errors}
 
       {:prepare_cancel, cancel_task, cancel_ref} ->
         Process.unlink(inner_pid)
@@ -413,7 +494,7 @@ defmodule Synapsis.Agent.Daemon.Execution do
       {:inner_running, ^inner_pid, running} ->
         drain_inner_progress(inner_pid, running, session_id)
 
-      {:inner_result, ^inner_pid, _outcome, result_run, result_session_id} ->
+      {:inner_result, ^inner_pid, _outcome, result_run, result_session_id, _event_errors} ->
         drain_inner_progress(inner_pid, result_run, result_session_id || session_id)
     after
       0 -> {current_run, session_id}
@@ -430,7 +511,7 @@ defmodule Synapsis.Agent.Daemon.Execution do
     end
   end
 
-  defp execute_session(outer, daemon, deps, run) do
+  defp execute_session(outer, daemon, deps, task_supervisor, event_timeout, run) do
     case create_session(deps.sessions, run) do
       {:ok, session} ->
         send(outer, {:inner_session_created, self(), session.id})
@@ -439,43 +520,56 @@ defmodule Synapsis.Agent.Daemon.Execution do
         outcome =
           with :ok <- Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}"),
                {:ok, running} <- deps.runs.mark_running(run, %{session_id: session.id}),
-               :ok <- append_event(deps, :started, running),
-               :ok <- publish_run("agent.run.started", running),
-               :ok <- announce_running(outer, daemon, running),
+               event_errors =
+                 emit_run_event(
+                   task_supervisor,
+                   event_timeout,
+                   deps,
+                   :started,
+                   running,
+                   "agent.run.started"
+                 ),
+               :ok <- announce_running(outer, daemon, running, event_errors),
                :ok <- deps.sessions.send_message(session.id, run.prompt) do
-            {await_session(deps.sessions, session.id, []), running}
+            {await_session(deps.sessions, session.id, []), running, event_errors}
           else
-            {:error, reason} -> {{:error, reason}, fetch_current(deps.runs, run)}
+            {:error, reason} -> {{:error, reason}, fetch_current(deps.runs, run), []}
           end
 
-        {result, current_run} = outcome
-        {result, current_run, session.id}
+        {result, current_run, event_errors} = outcome
+        {result, current_run, session.id, event_errors}
 
       {:error, reason} ->
-        {{:error, reason}, fetch_current(deps.runs, run), nil}
+        {{:error, reason}, fetch_current(deps.runs, run), nil, []}
     end
   end
 
-  defp announce_running(outer, daemon, run) do
+  defp announce_running(outer, daemon, run, event_errors) do
     send(outer, {:inner_running, self(), run})
-    send(daemon, {:runner_started, outer, run})
+    send(daemon, {:runner_started, outer, run, event_errors})
     :ok
   end
 
-  defp finalize_transition(deps, original_run, event, transition) do
+  defp finalize_transition(
+         deps,
+         original_run,
+         event,
+         task_supervisor,
+         event_timeout,
+         transition
+       ) do
     case transition.() do
       {:ok, terminal_run} ->
         errors =
-          collect_errors([
-            fn -> append_event(deps, event, terminal_run) end,
-            fn ->
-              publish_run(
-                "agent.run.#{event}",
-                terminal_run,
-                terminal_payload(event, terminal_run)
-              )
-            end
-          ])
+          emit_run_event(
+            task_supervisor,
+            event_timeout,
+            deps,
+            event,
+            terminal_run,
+            "agent.run.#{event}",
+            terminal_payload(event, terminal_run)
+          )
 
         {:ok, terminal_run, errors}
 
@@ -587,6 +681,41 @@ defmodule Synapsis.Agent.Daemon.Execution do
     bounded_cleanup(task_supervisor, timeout, fn -> sessions.cancel(session_id) end)
   end
 
+  defp start_event_task(task_supervisor, function) do
+    {:ok, Task.Supervisor.async_nolink(task_supervisor, fn -> protect(function) end)}
+  rescue
+    error -> {:error, {:event_task_start_failed, error}}
+  catch
+    :exit, reason -> {:error, {:event_task_start_failed, reason}}
+  end
+
+  defp await_event_task({:error, reason}, _deadline), do: [bounded_error(reason)]
+
+  defp await_event_task({:ok, task}, deadline) do
+    remaining = max(deadline - System.monotonic_time(:millisecond), 0)
+
+    case Task.yield(task, remaining) do
+      {:ok, :ok} ->
+        []
+
+      {:ok, {:ok, _value}} ->
+        []
+
+      {:ok, {:error, reason}} ->
+        [bounded_error(reason)]
+
+      {:ok, other} ->
+        [bounded_error({:unexpected_event_result, other})]
+
+      {:exit, reason} ->
+        [bounded_error({:event_task_exit, reason})]
+
+      nil ->
+        _ = Task.shutdown(task, :brutal_kill)
+        [bounded_error(:event_timeout)]
+    end
+  end
+
   defp bounded_cleanup(task_supervisor, timeout, function) do
     task = Task.Supervisor.async_nolink(task_supervisor, fn -> protect(function) end)
 
@@ -625,17 +754,6 @@ defmodule Synapsis.Agent.Daemon.Execution do
     end
 
     :ok
-  end
-
-  defp collect_errors(functions) do
-    Enum.flat_map(functions, fn function ->
-      case protect(function) do
-        :ok -> []
-        {:ok, _value} -> []
-        {:error, reason} -> [bounded_error(reason)]
-        other -> [bounded_error({:unexpected_cleanup_result, other})]
-      end
-    end)
   end
 
   defp add_errors({:ok, run, errors}, extra), do: {:ok, run, errors ++ extra}

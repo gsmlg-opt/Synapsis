@@ -308,6 +308,32 @@ defmodule Synapsis.Agent.DaemonTest do
     end
   end
 
+  defmodule HangingRunEvents do
+    alias Synapsis.Agent.RunEvents
+
+    for function <- [
+          :append_run_created,
+          :append_run_started,
+          :append_run_completed,
+          :append_run_failed,
+          :append_run_cancelled,
+          :append_run_interrupted
+        ] do
+      def unquote(function)(run) do
+        if Application.get_env(:synapsis_agent, :daemon_hanging_event) == unquote(function) do
+          owner = Application.fetch_env!(:synapsis_agent, :daemon_test_owner)
+          send(owner, {:hanging_event, unquote(function), self(), run.id})
+
+          receive do
+            :never -> :ok
+          end
+        else
+          apply(RunEvents, unquote(function), [run])
+        end
+      end
+    end
+  end
+
   defmodule FailingTerminalRunEvents do
     alias Synapsis.Agent.RunEvents
 
@@ -532,6 +558,7 @@ defmodule Synapsis.Agent.DaemonTest do
     on_exit(fn ->
       restore_application_env(:daemon_test_owner, previous_owner)
       Application.delete_env(:synapsis_agent, :daemon_block_event)
+      Application.delete_env(:synapsis_agent, :daemon_hanging_event)
       Application.delete_env(:synapsis_agent, :daemon_fake_session_mode)
       Application.delete_env(:synapsis_agent, :daemon_selective_put_if)
       Application.delete_env(:synapsis_agent, :daemon_reconcile_fault_agent)
@@ -986,6 +1013,43 @@ defmodule Synapsis.Agent.DaemonTest do
     assert Process.alive?(Process.whereis(daemon))
   end
 
+  test "recovery becomes ready after a durable interruption event append hangs forever" do
+    attrs = %{
+      kind: "manual",
+      source: "web",
+      prompt: "recover after hung interruption event",
+      tool_profile: "read_only"
+    }
+
+    assert {:ok, running} = Runs.create(Map.put(attrs, :status, "queued"))
+    assert {:ok, running} = Runs.mark_running(running)
+    assert {:ok, queued} = Runs.create(Map.put(attrs, :status, "queued"))
+
+    Application.put_env(:synapsis_agent, :daemon_hanging_event, :append_run_interrupted)
+    Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :waiting)
+
+    {daemon, _task_supervisor} =
+      start_test_daemon(
+        recover?: true,
+        sessions: FakeSessions,
+        run_events: HangingRunEvents,
+        event_timeout: 50
+      )
+
+    assert_receive {:hanging_event, :append_run_interrupted, event_task, running_id}, 1_000
+    assert running_id == running.id
+    assert_receive {:waiting_session, _session_id}, 500
+
+    assert {:ok, status} =
+             wait_for_status(daemon, fn status ->
+               status.ready and status.active_run_id == queued.id
+             end)
+
+    assert %{status: "interrupted"} = Runs.get(running.id)
+    refute Process.alive?(event_task)
+    assert status.last_error =~ "event_timeout"
+  end
+
   @tag :tmp_dir
   test "recovery resumes never-started queued runs oldest first", %{tmp_dir: tmp_dir} do
     owner = self()
@@ -1036,6 +1100,29 @@ defmodule Synapsis.Agent.DaemonTest do
     assert {:ok, _run} = Task.await(submit_task, 2_000)
   end
 
+  test "submission responds within the event bound when created-event append hangs forever" do
+    Application.put_env(:synapsis_agent, :daemon_hanging_event, :append_run_created)
+    Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :waiting)
+
+    {daemon, _task_supervisor} =
+      start_test_daemon(
+        sessions: FakeSessions,
+        run_events: HangingRunEvents,
+        event_timeout: 50
+      )
+
+    started_at = System.monotonic_time(:millisecond)
+    submit_task = Task.async(fn -> Daemon.submit(daemon, "bounded created event", %{}) end)
+    assert_receive {:hanging_event, :append_run_created, event_task, run_id}, 1_000
+    result = Task.yield(submit_task, 500) || Task.shutdown(submit_task, :brutal_kill)
+
+    assert {:ok, {:ok, run}} = result
+    assert run.id == run_id
+    refute Process.alive?(event_task)
+    assert System.monotonic_time(:millisecond) - started_at < 500
+    assert Daemon.status(daemon).last_error =~ "event_timeout"
+  end
+
   test "status stays responsive while session cancellation is blocked" do
     {daemon, _task_supervisor} = start_test_daemon(sessions: BlockingCancelSessions)
     assert {:ok, run} = Daemon.submit(daemon, "wait for cancel", %{})
@@ -1071,6 +1158,34 @@ defmodule Synapsis.Agent.DaemonTest do
     assert run_id == run.id
     assert {:ok, _completed} = wait_for_run(run.id, "completed")
     assert {:ok, %{active_run_id: nil}} = wait_for_status(daemon, &is_nil(&1.active_run_id))
+  end
+
+  test "durable completion drains when completed-event append hangs forever" do
+    Application.put_env(:synapsis_agent, :daemon_hanging_event, :append_run_completed)
+    Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :controlled_done)
+
+    {daemon, _task_supervisor} =
+      start_test_daemon(
+        sessions: FakeSessions,
+        run_events: HangingRunEvents,
+        event_timeout: 50
+      )
+
+    assert {:ok, first} = Daemon.submit(daemon, "hung terminal event", %{})
+    assert_receive {:controlled_session, first_inner, _session_id}, 1_000
+    assert {:ok, second} = Daemon.submit(daemon, "drain after hung terminal event", %{})
+    send(first_inner, :complete_session)
+
+    assert_receive {:hanging_event, :append_run_completed, event_task, first_id}, 1_000
+    assert first_id == first.id
+    assert {:ok, _completed} = wait_for_run(first.id, "completed")
+    assert_receive {:controlled_session, second_inner, _session_id}, 500
+    refute Process.alive?(event_task)
+
+    status = Daemon.status(daemon)
+    assert status.active_run_id == second.id
+    assert status.last_error =~ "event_timeout"
+    send(second_inner, :complete_session)
   end
 
   test "chatty session events do not reset the absolute run timeout" do
@@ -1508,6 +1623,62 @@ defmodule Synapsis.Agent.DaemonTest do
     assert status.queued_ids == []
   end
 
+  test "durable active cancel drains when cancelled-event append hangs forever" do
+    Application.put_env(:synapsis_agent, :daemon_hanging_event, :append_run_cancelled)
+    Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :waiting)
+
+    {daemon, _task_supervisor} =
+      start_test_daemon(
+        sessions: FakeSessions,
+        run_events: HangingRunEvents,
+        event_timeout: 50
+      )
+
+    assert {:ok, first} = Daemon.submit(daemon, "cancel with hung event", %{})
+    assert_receive {:waiting_session, _first_session_id}, 1_000
+    assert {:ok, second} = Daemon.submit(daemon, "drain after hung cancel event", %{})
+
+    cancel_task = Task.async(fn -> Daemon.cancel(daemon, first.id) end)
+    assert_receive {:hanging_event, :append_run_cancelled, event_task, first_id}, 1_000
+    assert first_id == first.id
+    result = Task.yield(cancel_task, 500) || Task.shutdown(cancel_task, :brutal_kill)
+
+    assert {:ok, {:ok, %{status: "cancelled"}}} = result
+    assert_receive {:waiting_session, _second_session_id}, 500
+    refute Process.alive?(event_task)
+
+    status = Daemon.status(daemon)
+    assert status.active_run_id == second.id
+    assert status.last_error =~ "event_timeout"
+  end
+
+  test "queued cancel responds when cancelled-event append hangs forever" do
+    Application.put_env(:synapsis_agent, :daemon_hanging_event, :append_run_cancelled)
+    Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :waiting)
+
+    {daemon, _task_supervisor} =
+      start_test_daemon(
+        sessions: FakeSessions,
+        run_events: HangingRunEvents,
+        event_timeout: 50
+      )
+
+    assert {:ok, active} = Daemon.submit(daemon, "hold active for queued cancel", %{})
+    assert_receive {:waiting_session, _session_id}, 1_000
+    assert {:ok, queued} = Daemon.submit(daemon, "queued hung cancel event", %{})
+
+    cancel_task = Task.async(fn -> Daemon.cancel(daemon, queued.id) end)
+    assert_receive {:hanging_event, :append_run_cancelled, event_task, queued_id}, 1_000
+    assert queued_id == queued.id
+    result = Task.yield(cancel_task, 500) || Task.shutdown(cancel_task, :brutal_kill)
+
+    assert {:ok, {:ok, %{status: "cancelled"}}} = result
+    refute Process.alive?(event_task)
+    assert %{active_run_id: active_id, queued_ids: [], last_error: error} = Daemon.status(daemon)
+    assert active_id == active.id
+    assert error =~ "event_timeout"
+  end
+
   test "submit task death after create reconciles the pre-generated durable run" do
     Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :waiting)
 
@@ -1587,6 +1758,7 @@ defmodule Synapsis.Agent.DaemonTest do
          queue_capacity: Keyword.get(opts, :queue_capacity, 10),
          run_timeout: Keyword.get(opts, :run_timeout, :timer.minutes(30)),
          cleanup_timeout: Keyword.get(opts, :cleanup_timeout, 1_000),
+         event_timeout: Keyword.get(opts, :event_timeout, 1_000),
          runs: Keyword.get(opts, :runs, Runs),
          run_events: Keyword.get(opts, :run_events, Synapsis.Agent.RunEvents),
          sessions: Keyword.get(opts, :sessions, Synapsis.Sessions)
