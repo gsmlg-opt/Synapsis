@@ -58,10 +58,24 @@ defmodule Synapsis.Agent.Runs do
 
   @spec list_by_status(String.t(), keyword()) :: [AgentRun.t()]
   def list_by_status(status, opts \\ []) when is_binary(status) do
-    scan()
-    |> Enum.filter(&(&1.status == status))
-    |> recent()
-    |> Enum.take(Keyword.get(opts, :limit, 50))
+    case list_by_status_result(status, opts) do
+      {:ok, runs} -> runs
+      {:error, _reason} -> []
+    end
+  end
+
+  @doc "Lists runs by status while preserving storage errors for recovery callers."
+  @spec list_by_status_result(String.t(), keyword()) ::
+          {:ok, [AgentRun.t()]} | {:error, term()}
+  def list_by_status_result(status, opts \\ []) when is_binary(status) do
+    with {:ok, runs} <- scan_result() do
+      filtered = runs |> Enum.filter(&(&1.status == status)) |> recent()
+
+      case Keyword.get(opts, :limit, 50) do
+        :all -> {:ok, filtered}
+        limit when is_integer(limit) and limit >= 0 -> {:ok, Enum.take(filtered, limit)}
+      end
+    end
   end
 
   @spec persist(AgentRun.t()) :: {:ok, AgentRun.t()} | {:error, term()}
