@@ -44,47 +44,78 @@ defmodule Synapsis.Agent.Daemon.Execution do
     }
   end
 
-  def submit(deps, attrs) do
-    case deps.runs.create(attrs) do
-      {:ok, run} ->
-        _ = append_event(deps, :created, run)
-        _ = publish_run("agent.run.queued", run)
-        {:ok, run}
+  def persist_submission(deps, attrs, :create), do: create_submission(deps, attrs)
 
-      {:error, reason} ->
-        {:error, reason}
+  def persist_submission(deps, attrs, :reconcile) do
+    case deps.runs.fetch(attrs.id) do
+      {:ok, %{status: "queued"} = run} -> submission_persisted(deps, run)
+      {:ok, run} -> {:error, {:unexpected_submission_status, run.status}}
+      :not_found -> create_submission(deps, attrs)
+      {:error, reason} -> {:retry, {:submission_read_failed, reason}}
     end
   end
 
-  def reconcile_submit(deps, run_id) do
-    case deps.runs.get(run_id) do
-      %{status: "queued"} = run ->
-        _ = append_event(deps, :created, run)
-        _ = publish_run("agent.run.queued", run)
-        {:ok, run}
-
-      nil ->
-        {:error, :submission_not_persisted}
-
-      run ->
-        {:error, {:unexpected_submission_status, run.status}}
-    end
-  end
-
-  def run(daemon, deps, run, timeout) do
+  def run(daemon, deps, task_supervisor, run, timeout, cleanup_timeout) do
     deadline = System.monotonic_time(:millisecond) + timeout
-    {outcome, current_run, session_id} = execute_session(daemon, deps, run, deadline)
 
-    cleanup_errors =
-      if match?({:error, _reason}, outcome),
-        do: collect_errors([fn -> maybe_cancel_session(deps.sessions, session_id) end]),
-        else: []
+    result =
+      case start_inner(daemon, deps, task_supervisor, run) do
+        {:ok, inner_pid, inner_ref} ->
+          case await_inner(inner_pid, inner_ref, deadline, run, nil) do
+            {:result, outcome, current_run, session_id} ->
+              cleanup_errors =
+                if match?({:error, _reason}, outcome) do
+                  bounded_session_cleanup(
+                    task_supervisor,
+                    deps.sessions,
+                    session_id,
+                    cleanup_timeout
+                  )
+                else
+                  []
+                end
 
-    terminal = finalize(deps, current_run, outcome, session_id) |> add_errors(cleanup_errors)
-    send(daemon, {:runner_result, self(), run.id, terminal})
+              finalize(deps, current_run, outcome, session_id)
+              |> add_errors(cleanup_errors)
+
+            {:timeout, current_run, session_id} ->
+              stop_process(inner_pid)
+
+              cleanup_errors =
+                bounded_session_cleanup(
+                  task_supervisor,
+                  deps.sessions,
+                  session_id,
+                  cleanup_timeout
+                )
+
+              finalize(deps, current_run, {:error, :session_timeout}, session_id)
+              |> add_errors(cleanup_errors)
+
+            {:exit, reason, current_run, session_id} ->
+              cleanup_errors =
+                bounded_session_cleanup(
+                  task_supervisor,
+                  deps.sessions,
+                  session_id,
+                  cleanup_timeout
+                )
+
+              finalize(
+                deps,
+                current_run,
+                {:error, "run task exited: #{bounded_error(reason)}"},
+                session_id
+              )
+              |> add_errors(cleanup_errors)
+          end
+
+        {:error, reason} ->
+          finalize(deps, run, {:error, {:inner_task_start_failed, reason}}, nil)
+      end
+
+    send(daemon, {:runner_result, self(), run.id, result})
   end
-
-  def finalize(deps, run, outcome), do: finalize(deps, run, outcome, run.session_id)
 
   def finalize(deps, run, {:ok, summary}, session_id) do
     finalize_transition(deps, run, :completed, fn ->
@@ -100,24 +131,90 @@ defmodule Synapsis.Agent.Daemon.Execution do
     end)
   end
 
-  def cancel_active(deps, task_supervisor, active) do
-    run = deps.runs.get(active.run.id) || active.run
+  def finalize_crashed_outer(deps, task_supervisor, active, reason, cleanup_timeout) do
+    stop_process(active.inner_pid)
 
-    case deps.runs.mark_cancelled(run, %{session_id: active.session_id || run.session_id}) do
-      {:ok, cancelled} ->
+    cleanup_errors =
+      bounded_session_cleanup(
+        task_supervisor,
+        deps.sessions,
+        active.session_id,
+        cleanup_timeout
+      )
+
+    current_run = fetch_current(deps.runs, active.run)
+
+    finalize(
+      deps,
+      current_run,
+      {:error, "run task exited: #{bounded_error(reason)}"},
+      active.session_id
+    )
+    |> add_errors(cleanup_errors)
+  end
+
+  def cancel_active(deps, task_supervisor, active, cleanup_timeout) do
+    {session_id, preparation_errors} = prepare_active_cancel(active, cleanup_timeout)
+
+    result =
+      with {:ok, run} <- fetch_owned(deps.runs, active.run.id),
+           {:ok, cancelled} <-
+             deps.runs.mark_cancelled(run, %{session_id: session_id || run.session_id}) do
         errors =
-          collect_errors([
-            fn -> append_event(deps, :cancelled, cancelled) end,
-            fn -> publish_run("agent.run.cancelled", cancelled) end,
-            fn -> maybe_cancel_session(deps.sessions, cancelled.session_id) end,
-            fn -> terminate_runner(task_supervisor, active.task_pid) end
-          ])
+          preparation_errors ++
+            bounded_session_cleanup(
+              task_supervisor,
+              deps.sessions,
+              cancelled.session_id,
+              cleanup_timeout
+            ) ++
+            collect_errors([
+              fn -> append_event(deps, :cancelled, cancelled) end,
+              fn -> publish_run("agent.run.cancelled", cancelled) end
+            ])
 
         {:ok, cancelled, errors}
+      else
+        {:error, reason} ->
+          case terminal_or_error(deps.runs, active.run.id, reason) do
+            {:ok, terminal, errors} ->
+              {:ok, terminal, preparation_errors ++ errors}
 
-      {:error, reason} ->
-        {:error, reason}
+            {:error, persistence_reason} ->
+              cleanup_errors =
+                bounded_session_cleanup(
+                  task_supervisor,
+                  deps.sessions,
+                  session_id,
+                  cleanup_timeout
+                )
+
+              {:degraded, persistence_reason, active.run, preparation_errors ++ cleanup_errors}
+          end
+      end
+
+    stop_process(active.inner_pid)
+    stop_process(active.task_pid)
+    result
+  end
+
+  defp prepare_active_cancel(%{task_pid: task_pid} = active, timeout)
+       when is_pid(task_pid) do
+    ref = make_ref()
+    send(task_pid, {:prepare_cancel, self(), ref})
+
+    receive do
+      {:cancel_prepared, ^ref, session_id} -> {session_id || active.session_id, []}
+    after
+      timeout ->
+        stop_process(active.inner_pid)
+        {active.session_id, [bounded_error(:cancel_prepare_timeout)]}
     end
+  end
+
+  defp prepare_active_cancel(active, _timeout) do
+    stop_process(active.inner_pid)
+    {active.session_id, []}
   end
 
   def cancel_queued(deps, run) do
@@ -132,28 +229,16 @@ defmodule Synapsis.Agent.Daemon.Execution do
         {:ok, cancelled, errors}
 
       {:error, reason} ->
-        {:error, reason}
+        terminal_or_error(deps.runs, run.id, reason)
     end
   end
 
-  def timeout(deps, task_supervisor, active) do
-    cleanup_errors =
-      collect_errors([
-        fn -> maybe_cancel_session(deps.sessions, active.session_id) end,
-        fn -> terminate_runner(task_supervisor, active.task_pid) end
-      ])
-
-    run = deps.runs.get(active.run.id) || active.run
-
-    finalize(deps, run, {:error, :session_timeout}, active.session_id)
-    |> add_errors(cleanup_errors)
-  end
-
   def classify(runs, run_id) do
-    case runs.get(run_id) do
-      nil -> {:error, :not_found}
-      %{status: status} when status in @terminal_statuses -> {:error, :terminal}
-      _run -> {:error, :not_owned}
+    case runs.fetch(run_id) do
+      :not_found -> {:error, :not_found}
+      {:ok, %{status: status}} when status in @terminal_statuses -> {:error, :terminal}
+      {:ok, _run} -> {:error, :not_owned}
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -237,28 +322,144 @@ defmodule Synapsis.Agent.Daemon.Execution do
   def valid_capacity(capacity, _default) when is_integer(capacity) and capacity > 0, do: capacity
   def valid_capacity(_capacity, default), do: default
 
-  defp execute_session(daemon, deps, run, deadline) do
+  defp create_submission(deps, attrs) do
+    case deps.runs.create(attrs) do
+      {:ok, run} -> submission_persisted(deps, run)
+      {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
+      {:error, reason} -> {:retry, {:submission_write_failed, reason}}
+    end
+  end
+
+  defp submission_persisted(deps, run) do
+    errors =
+      collect_errors([
+        fn -> append_event(deps, :created, run) end,
+        fn -> publish_run("agent.run.queued", run) end
+      ])
+
+    {:ok, run, errors}
+  end
+
+  defp start_inner(daemon, deps, task_supervisor, run) do
+    outer = self()
+    token = make_ref()
+
+    with {:ok, pid} <-
+           start_task(task_supervisor, fn ->
+             Process.link(outer)
+
+             receive do
+               {:start_inner, ^token} ->
+                 send(outer, {:inner_started, self()})
+                 send(daemon, {:runner_inner, outer, run.id, self()})
+
+                 {outcome, current_run, session_id} =
+                   execute_session(outer, daemon, deps, run)
+
+                 send(outer, {:inner_result, self(), outcome, current_run, session_id})
+             end
+           end) do
+      ref = Process.monitor(pid)
+      send(pid, {:start_inner, token})
+      {:ok, pid, ref}
+    end
+  end
+
+  defp await_inner(inner_pid, inner_ref, deadline, current_run, session_id) do
+    remaining = max(deadline - System.monotonic_time(:millisecond), 0)
+
+    receive do
+      {:inner_started, ^inner_pid} ->
+        await_inner(inner_pid, inner_ref, deadline, current_run, session_id)
+
+      {:inner_session_created, ^inner_pid, created_session_id} ->
+        await_inner(inner_pid, inner_ref, deadline, current_run, created_session_id)
+
+      {:inner_running, ^inner_pid, running} ->
+        await_inner(inner_pid, inner_ref, deadline, running, session_id)
+
+      {:inner_result, ^inner_pid, outcome, result_run, result_session_id} ->
+        Process.unlink(inner_pid)
+        Process.demonitor(inner_ref, [:flush])
+        {:result, outcome, result_run, result_session_id || session_id}
+
+      {:prepare_cancel, cancel_task, cancel_ref} ->
+        Process.unlink(inner_pid)
+        Process.demonitor(inner_ref, [:flush])
+        stop_process(inner_pid)
+
+        {current_run, session_id} =
+          drain_inner_progress(inner_pid, current_run, session_id)
+
+        send(cancel_task, {:cancel_prepared, cancel_ref, session_id})
+        await_cancel_termination(deadline, current_run, session_id)
+
+      {:DOWN, ^inner_ref, :process, ^inner_pid, reason} ->
+        Process.unlink(inner_pid)
+        {:exit, reason, current_run, session_id}
+    after
+      remaining ->
+        Process.unlink(inner_pid)
+        Process.demonitor(inner_ref, [:flush])
+        {:timeout, current_run, session_id}
+    end
+  end
+
+  defp drain_inner_progress(inner_pid, current_run, session_id) do
+    receive do
+      {:inner_session_created, ^inner_pid, created_session_id} ->
+        drain_inner_progress(inner_pid, current_run, created_session_id)
+
+      {:inner_running, ^inner_pid, running} ->
+        drain_inner_progress(inner_pid, running, session_id)
+
+      {:inner_result, ^inner_pid, _outcome, result_run, result_session_id} ->
+        drain_inner_progress(inner_pid, result_run, result_session_id || session_id)
+    after
+      0 -> {current_run, session_id}
+    end
+  end
+
+  defp await_cancel_termination(deadline, current_run, session_id) do
+    remaining = max(deadline - System.monotonic_time(:millisecond), 0)
+
+    receive do
+      _message -> await_cancel_termination(deadline, current_run, session_id)
+    after
+      remaining -> {:timeout, current_run, session_id}
+    end
+  end
+
+  defp execute_session(outer, daemon, deps, run) do
     case create_session(deps.sessions, run) do
       {:ok, session} ->
+        send(outer, {:inner_session_created, self(), session.id})
+        send(daemon, {:session_created, outer, run.id, session.id})
+
         outcome =
-          with :ok <- announce_session_created(daemon, run.id, session.id),
-               :ok <- Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}"),
+          with :ok <- Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}"),
                {:ok, running} <- deps.runs.mark_running(run, %{session_id: session.id}),
                :ok <- append_event(deps, :started, running),
                :ok <- publish_run("agent.run.started", running),
-               :ok <- announce_started(daemon, running),
+               :ok <- announce_running(outer, daemon, running),
                :ok <- deps.sessions.send_message(session.id, run.prompt) do
-            {await_session(deps.sessions, session.id, deadline, []), running}
+            {await_session(deps.sessions, session.id, []), running}
           else
-            {:error, reason} -> {{:error, reason}, deps.runs.get(run.id) || run}
+            {:error, reason} -> {{:error, reason}, fetch_current(deps.runs, run)}
           end
 
         {result, current_run} = outcome
         {result, current_run, session.id}
 
       {:error, reason} ->
-        {{:error, reason}, deps.runs.get(run.id) || run, nil}
+        {{:error, reason}, fetch_current(deps.runs, run), nil}
     end
+  end
+
+  defp announce_running(outer, daemon, run) do
+    send(outer, {:inner_running, self(), run})
+    send(daemon, {:runner_started, outer, run})
+    :ok
   end
 
   defp finalize_transition(deps, original_run, event, transition) do
@@ -279,37 +480,61 @@ defmodule Synapsis.Agent.Daemon.Execution do
         {:ok, terminal_run, errors}
 
       {:error, reason} ->
-        {:error, {:terminal_persistence_failed, reason}, original_run}
+        case terminal_run(deps.runs, original_run.id) do
+          {:ok, terminal} -> {:ok, terminal, [bounded_error(reason)]}
+          _other -> {:error, {:terminal_persistence_failed, reason}, original_run}
+        end
     end
   end
 
-  defp await_session(sessions, session_id, deadline, chunks) do
-    remaining = deadline - System.monotonic_time(:millisecond)
+  defp terminal_or_error(runs, run_id, reason) do
+    case terminal_run(runs, run_id) do
+      {:ok, terminal} -> {:ok, terminal, [bounded_error(reason)]}
+      _other -> {:error, reason}
+    end
+  end
 
-    if remaining <= 0 do
-      {:error, :session_timeout}
-    else
-      receive do
-        {"text_delta", %{text: text}} when is_binary(text) ->
-          await_session(sessions, session_id, deadline, [text | chunks])
+  defp terminal_run(runs, run_id) do
+    case runs.fetch(run_id) do
+      {:ok, %{status: status} = run} when status in @terminal_statuses -> {:ok, run}
+      _other -> :error
+    end
+  end
 
-        {"done", _payload} ->
-          {:ok, final_summary(sessions, session_id, chunks)}
+  defp fetch_owned(runs, run_id) do
+    case runs.fetch(run_id) do
+      {:ok, run} -> {:ok, run}
+      :not_found -> {:error, :not_found}
+      {:error, reason} -> {:error, reason}
+    end
+  end
 
-        {"error", payload} ->
-          {:error, session_error(payload)}
+  defp fetch_current(runs, fallback) do
+    case runs.fetch(fallback.id) do
+      {:ok, run} -> run
+      _other -> fallback
+    end
+  end
 
-        {"session_status", %{status: "error"} = payload} ->
-          {:error, session_error(payload)}
+  defp await_session(sessions, session_id, chunks) do
+    receive do
+      {"text_delta", %{text: text}} when is_binary(text) ->
+        await_session(sessions, session_id, [text | chunks])
 
-        {"session_status", %{status: "idle"}} ->
-          {:ok, final_summary(sessions, session_id, chunks)}
+      {"done", _payload} ->
+        {:ok, final_summary(sessions, session_id, chunks)}
 
-        _other ->
-          await_session(sessions, session_id, deadline, chunks)
-      after
-        remaining -> {:error, :session_timeout}
-      end
+      {"error", payload} ->
+        {:error, session_error(payload)}
+
+      {"session_status", %{status: "error"} = payload} ->
+        {:error, session_error(payload)}
+
+      {"session_status", %{status: "idle"}} ->
+        {:ok, final_summary(sessions, session_id, chunks)}
+
+      _other ->
+        await_session(sessions, session_id, chunks)
     end
   end
 
@@ -356,36 +581,50 @@ defmodule Synapsis.Agent.Daemon.Execution do
     sessions.create(run.assistant_name || "main", opts)
   end
 
-  defp announce_session_created(daemon, run_id, session_id) do
-    send(daemon, {:session_created, self(), run_id, session_id})
+  defp bounded_session_cleanup(_task_supervisor, _sessions, nil, _timeout), do: []
 
-    receive do
-      {:session_created_ack, ^run_id} -> :ok
-    after
-      5_000 -> {:error, :daemon_session_ack_timeout}
-    end
+  defp bounded_session_cleanup(task_supervisor, sessions, session_id, timeout) do
+    bounded_cleanup(task_supervisor, timeout, fn -> sessions.cancel(session_id) end)
   end
 
-  defp announce_started(daemon, run) do
-    send(daemon, {:runner_started, self(), run})
+  defp bounded_cleanup(task_supervisor, timeout, function) do
+    task = Task.Supervisor.async_nolink(task_supervisor, fn -> protect(function) end)
 
-    receive do
-      {:runner_started_ack, run_id} when run_id == run.id -> :ok
-    after
-      5_000 -> {:error, :daemon_start_ack_timeout}
+    case Task.yield(task, timeout) do
+      {:ok, :ok} ->
+        []
+
+      {:ok, {:ok, _value}} ->
+        []
+
+      {:ok, {:error, reason}} ->
+        [bounded_error(reason)]
+
+      {:ok, other} ->
+        [bounded_error({:unexpected_cleanup_result, other})]
+
+      {:exit, reason} ->
+        [bounded_error({:cleanup_task_exit, reason})]
+
+      nil ->
+        _ = Task.shutdown(task, :brutal_kill)
+        [bounded_error(:cleanup_timeout)]
     end
+  catch
+    :exit, reason -> [bounded_error({:cleanup_task_start_failed, reason})]
   end
 
-  defp maybe_cancel_session(_sessions, nil), do: :ok
-  defp maybe_cancel_session(sessions, session_id), do: sessions.cancel(session_id)
-  defp terminate_runner(_task_supervisor, nil), do: :ok
+  defp stop_process(nil), do: :ok
 
-  defp terminate_runner(task_supervisor, pid) do
-    case Task.Supervisor.terminate_child(task_supervisor, pid) do
-      :ok -> :ok
-      {:error, :not_found} -> :ok
-      {:error, reason} -> {:error, reason}
+  defp stop_process(pid) when is_pid(pid) do
+    ref = Process.monitor(pid)
+    if Process.alive?(pid), do: Process.exit(pid, :kill)
+
+    receive do
+      {:DOWN, ^ref, :process, ^pid, _reason} -> :ok
     end
+
+    :ok
   end
 
   defp collect_errors(functions) do

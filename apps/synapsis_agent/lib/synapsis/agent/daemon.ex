@@ -3,7 +3,7 @@ defmodule Synapsis.Agent.Daemon do
   Permanently supervised FIFO coordinator for durable manual agent runs.
 
   The GenServer owns only queue and monitor state. Store, event, PubSub, and
-  session work runs in unlinked tasks under `RunTaskSupervisor`.
+  session work runs in supervised tasks under `RunTaskSupervisor`.
   """
 
   use GenServer
@@ -17,6 +17,8 @@ defmodule Synapsis.Agent.Daemon do
   @task_supervisor Synapsis.Agent.Daemon.RunTaskSupervisor
   @queue_capacity 25
   @run_timeout :timer.minutes(30)
+  @cleanup_timeout 1_000
+  @submit_retry_ms 50
 
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: Keyword.get(opts, :name, __MODULE__))
@@ -45,12 +47,10 @@ defmodule Synapsis.Agent.Daemon do
       ready: not recover?,
       active_run: nil,
       queue: :queue.new(),
+      submit_queue: :queue.new(),
+      submit_task: nil,
       cancelling_ids: MapSet.new(),
       pending: %{},
-      next_submit_seq: 0,
-      next_submit_reply_seq: 0,
-      submit_outcomes: %{},
-      reconcile_retries: %{},
       recovery_backlog_count: 0,
       recovery_retry_ms: Keyword.get(opts, :recovery_retry_ms, 100),
       queue_capacity:
@@ -59,6 +59,7 @@ defmodule Synapsis.Agent.Daemon do
         |> Execution.valid_capacity(@queue_capacity),
       task_supervisor: Keyword.get(opts, :task_supervisor, @task_supervisor),
       run_timeout: Keyword.get(opts, :run_timeout, @run_timeout),
+      cleanup_timeout: Keyword.get(opts, :cleanup_timeout, @cleanup_timeout),
       deps: %{
         runs: Keyword.get(opts, :runs, Runs),
         run_events: Keyword.get(opts, :run_events, RunEvents),
@@ -80,21 +81,17 @@ defmodule Synapsis.Agent.Daemon do
       not state.ready ->
         {:reply, {:error, :not_ready}, state}
 
+      state.recovery_backlog_count > 0 ->
+        {:reply, {:error, :queue_full}, state}
+
       queue_load(state) >= state.queue_capacity ->
         {:reply, {:error, :queue_full}, state}
 
       true ->
-        seq = state.next_submit_seq
         run_id = Ecto.UUID.generate()
-        attrs = Map.put(attrs, :id, run_id)
-        op = %{type: :submit, from: from, seq: seq, run_id: run_id}
-
-        case start_operation(state, op, fn ->
-               Execution.submit(state.deps, attrs)
-             end) do
-          {:ok, state} -> {:noreply, %{state | next_submit_seq: seq + 1}}
-          {:error, reason} -> {:reply, {:error, reason}, put_error(state, reason)}
-        end
+        entry = %{from: from, run_id: run_id, attrs: Map.put(attrs, :id, run_id), mode: :create}
+        state = %{state | submit_queue: :queue.in(entry, state.submit_queue)}
+        {:noreply, start_submit_head(state)}
     end
   end
 
@@ -107,10 +104,15 @@ defmodule Synapsis.Agent.Daemon do
         op = %{type: :cancel, from: from, run_id: run_id, location: :active}
 
         case start_operation(state, op, fn ->
-               Execution.cancel_active(state.deps, state.task_supervisor, active)
+               Execution.cancel_active(
+                 state.deps,
+                 state.task_supervisor,
+                 active,
+                 state.cleanup_timeout
+               )
              end) do
           {:ok, state} ->
-            active = %{active | cancelling: true}
+            active = %{active | cancelling: true, phase: :cancelling}
             {:noreply, %{state | active_run: active}}
 
           {:error, reason} ->
@@ -140,15 +142,15 @@ defmodule Synapsis.Agent.Daemon do
 
   @impl true
   def handle_info(:recover, state) do
-    case start_operation(state, %{type: :recovery}, fn ->
-           Recovery.run(state.deps, state.queue_capacity)
-         end) do
-      {:ok, state} ->
-        {:noreply, state}
-
-      {:error, _reason} ->
-        Process.send_after(self(), :recover, 25)
-        {:noreply, state}
+    if pending_type?(state, :recovery) do
+      {:noreply, state}
+    else
+      case start_operation(state, %{type: :recovery}, fn ->
+             Recovery.run(state.deps, state.queue_capacity)
+           end) do
+        {:ok, state} -> {:noreply, state}
+        {:error, reason} -> {:noreply, schedule_recovery_retry(state, reason)}
+      end
     end
   end
 
@@ -162,14 +164,11 @@ defmodule Synapsis.Agent.Daemon do
             {:ok, task_pid, task_ref} ->
               {{:value, ^run}, queue} = :queue.out(state.queue)
 
-              deadline_ref =
-                Process.send_after(self(), {:run_deadline, run.id}, state.run_timeout)
-
               active = %{
                 run: run,
                 task_pid: task_pid,
                 task_ref: task_ref,
-                deadline_ref: deadline_ref,
+                inner_pid: nil,
                 session_id: nil,
                 phase: :starting,
                 cancelling: false,
@@ -177,15 +176,15 @@ defmodule Synapsis.Agent.Daemon do
                 error: nil
               }
 
-              new_state = %{state | queue: queue, active_run: active}
+              state = %{state | queue: queue, active_run: active}
               send(self(), :refill)
-              {:noreply, new_state}
+              {:noreply, state}
 
             {:error, reason} ->
               Process.send_after(self(), :drain, 100)
-              new_state = put_error(state, {:run_task_start_failed, reason})
-              dispatch_status(new_state)
-              {:noreply, new_state}
+              state = put_error(state, {:run_task_start_failed, reason})
+              dispatch_status(state)
+              {:noreply, state}
           end
         end
 
@@ -207,8 +206,8 @@ defmodule Synapsis.Agent.Daemon do
         {:noreply, state}
 
       true ->
-        excluded = owned_run_ids(state)
         op = %{type: :refill, reserved_slots: available}
+        excluded = owned_run_ids(state)
 
         case start_operation(state, op, fn ->
                Recovery.refill(state.deps, excluded, available)
@@ -224,36 +223,57 @@ defmodule Synapsis.Agent.Daemon do
     {:noreply, state}
   end
 
-  def handle_info({:retry_submit_reconcile, seq}, state) do
-    case Map.pop(state.reconcile_retries, seq) do
-      {nil, _retries} ->
-        {:noreply, state}
-
-      {{op, reason}, retries} ->
-        state = %{state | reconcile_retries: retries}
-        {:noreply, start_submit_reconcile(state, op, reason)}
+  def handle_info({:retry_submit, run_id}, state) do
+    case submit_head(state) do
+      %{run_id: ^run_id} -> {:noreply, start_submit_head(state)}
+      _other -> {:noreply, state}
     end
   end
+
+  def handle_info(
+        {:runner_inner, task_pid, run_id, inner_pid},
+        %{active_run: %{task_pid: task_pid, run: %{id: run_id}} = active} = state
+      ) do
+    state = %{state | active_run: %{active | inner_pid: inner_pid}}
+    dispatch_status(state)
+    {:noreply, state}
+  end
+
+  def handle_info({:runner_inner, _task_pid, _run_id, _inner_pid}, state), do: {:noreply, state}
 
   def handle_info(
         {:session_created, task_pid, run_id, session_id},
         %{active_run: %{task_pid: task_pid, run: %{id: run_id}} = active} = state
       ) do
-    send(task_pid, {:session_created_ack, run_id})
-    new_state = %{state | active_run: %{active | session_id: session_id}}
-    dispatch_status(new_state)
-    {:noreply, new_state}
+    state = %{state | active_run: %{active | session_id: session_id}}
+    dispatch_status(state)
+    {:noreply, state}
   end
+
+  def handle_info({:session_created, _task_pid, _run_id, _session_id}, state),
+    do: {:noreply, state}
 
   def handle_info(
         {:runner_started, task_pid, %AgentRun{} = run},
         %{active_run: %{task_pid: task_pid, run: %{id: run_id}} = active} = state
       )
       when run.id == run_id do
-    send(task_pid, {:runner_started_ack, run.id})
-    new_state = %{state | active_run: %{active | run: run, phase: :running}}
-    dispatch_status(new_state)
-    {:noreply, new_state}
+    state = %{state | active_run: %{active | run: run, phase: :running}}
+    dispatch_status(state)
+    {:noreply, state}
+  end
+
+  def handle_info({:runner_started, _task_pid, _run}, state), do: {:noreply, state}
+
+  def handle_info({:submit_result, task_pid, run_id, result}, state) do
+    case state.submit_task do
+      %{pid: ^task_pid, ref: ref, run_id: ^run_id} ->
+        Process.demonitor(ref, [:flush])
+        handle_submit_result(result, %{state | submit_task: nil})
+
+      _other ->
+        {:noreply, state}
+    end
   end
 
   def handle_info({:operation_result, task_pid, result}, state) do
@@ -273,31 +293,11 @@ defmodule Synapsis.Agent.Daemon do
 
   def handle_info({:runner_result, _task_pid, _run_id, _result}, state), do: {:noreply, state}
 
-  def handle_info(
-        {:run_deadline, run_id},
-        %{active_run: %{run: %{id: run_id}, cancelling: false, degraded: false} = active} = state
-      ) do
-    op = %{type: :timeout, run_id: run_id}
-
-    case start_operation(state, op, fn ->
-           Execution.timeout(state.deps, state.task_supervisor, active)
-         end) do
-      {:ok, state} ->
-        active = %{active | deadline_ref: nil, cancelling: true, phase: :timing_out}
-        {:noreply, %{state | active_run: active}}
-
-      {:error, reason} ->
-        Process.send_after(self(), {:run_deadline, run_id}, 25)
-        new_state = put_error(state, {:timeout_task_start_failed, reason})
-        dispatch_status(new_state)
-        {:noreply, new_state}
-    end
-  end
-
-  def handle_info({:run_deadline, _run_id}, state), do: {:noreply, state}
-
   def handle_info({:DOWN, ref, :process, pid, reason}, state) do
     cond do
+      state.submit_task && state.submit_task.ref == ref ->
+        handle_submit_down(reason, state)
+
       state.active_run && state.active_run.task_ref == ref ->
         handle_runner_down(pid, reason, state)
 
@@ -306,89 +306,104 @@ defmodule Synapsis.Agent.Daemon do
     end
   end
 
-  defp handle_operation_result(%{type: type} = op, result, state)
-       when type in [:submit, :submit_reconcile] do
-    outcomes = Map.put(state.submit_outcomes, op.seq, {op, result})
-    {new_state, processed?} = flush_submit_outcomes(%{state | submit_outcomes: outcomes})
+  defp handle_submit_result({:ok, run, errors}, state) do
+    {entry, state} = pop_submit_head(state)
+    GenServer.reply(entry.from, {:ok, run})
+    state = %{state | queue: :queue.in(run, state.queue), last_error: join_errors(errors)}
+    dispatch_status(state)
+    send(self(), :drain)
+    {:noreply, start_submit_head(state)}
+  end
 
-    if processed? do
-      dispatch_status(new_state)
-      send(self(), :drain)
-    end
+  defp handle_submit_result({:error, reason}, state) do
+    {entry, state} = pop_submit_head(state)
+    GenServer.reply(entry.from, {:error, reason})
+    state = put_error(state, reason)
+    dispatch_status(state)
+    {:noreply, start_submit_head(state)}
+  end
 
-    {:noreply, new_state}
+  defp handle_submit_result({:retry, reason}, state) do
+    entry = submit_head(state)
+    Process.send_after(self(), {:retry_submit, entry.run_id}, @submit_retry_ms)
+    state = state |> set_submit_head_mode(:reconcile) |> put_error(reason)
+    dispatch_status(state)
+    {:noreply, state}
   end
 
   defp handle_operation_result(
          %{type: :cancel, from: from, run_id: id, location: location},
-         {:ok, cancelled, errors},
+         {:ok, terminal, errors},
          state
        ) do
-    GenServer.reply(from, {:ok, cancelled})
+    GenServer.reply(from, {:ok, terminal})
 
-    new_state =
-      case location do
-        :active ->
-          cancel_deadline(state.active_run)
-          %{state | active_run: nil}
-
-        :queued ->
-          %{state | queue: remove_queued(state.queue, id)}
-      end
+    state =
+      state
+      |> clear_cancelled_owner(location, id)
       |> Map.update!(:cancelling_ids, &MapSet.delete(&1, id))
       |> Map.put(:last_error, join_errors(errors))
 
-    dispatch_status(new_state)
+    dispatch_status(state)
     send(self(), :drain)
     send(self(), :refill)
-    {:noreply, new_state}
+    {:noreply, state}
+  end
+
+  defp handle_operation_result(
+         %{type: :cancel, from: from, run_id: id, location: :active},
+         {:degraded, reason, run, errors},
+         state
+       ) do
+    GenServer.reply(from, {:error, reason})
+    error = join_errors([reason | errors])
+
+    state =
+      case state.active_run do
+        %{run: %{id: ^id}} = active ->
+          degraded = %{
+            active
+            | run: run || active.run,
+              task_pid: nil,
+              task_ref: nil,
+              inner_pid: nil,
+              phase: :degraded,
+              degraded: true,
+              cancelling: false,
+              error: error
+          }
+
+          %{state | active_run: degraded}
+
+        _other ->
+          state
+      end
+
+    state = %{
+      state
+      | cancelling_ids: MapSet.delete(state.cancelling_ids, id),
+        last_error: error
+    }
+
+    dispatch_status(state)
+    {:noreply, state}
   end
 
   defp handle_operation_result(%{type: :cancel, from: from} = op, {:error, reason}, state) do
     GenServer.reply(from, {:error, reason})
 
-    new_state =
+    state =
       state
       |> Map.update!(:cancelling_ids, &MapSet.delete(&1, op.run_id))
       |> maybe_reset_cancelling(op)
       |> put_error(reason)
 
-    dispatch_status(new_state)
-    {:noreply, new_state}
-  end
-
-  defp handle_operation_result(%{type: :timeout}, {:ok, terminal_run, errors}, state) do
-    cancel_deadline(state.active_run)
-    last_error = terminal_errors(terminal_run, errors)
-    new_state = %{state | active_run: nil, last_error: last_error}
-    dispatch_status(new_state)
-    send(self(), :drain)
-    send(self(), :refill)
-    {:noreply, new_state}
-  end
-
-  defp handle_operation_result(%{type: :timeout}, {:error, reason, run}, state) do
-    error = Execution.bounded_error(reason)
-    active = state.active_run
-
-    degraded = %{
-      active
-      | run: run || active.run,
-        task_pid: nil,
-        task_ref: nil,
-        deadline_ref: nil,
-        phase: :degraded,
-        degraded: true,
-        error: error
-    }
-
-    new_state = %{state | active_run: degraded, last_error: error}
-    dispatch_status(new_state)
-    {:noreply, new_state}
+    dispatch_status(state)
+    {:noreply, state}
   end
 
   defp handle_operation_result(%{type: :recovery}, {:ok, queued, backlog}, state) do
-    new_state = %{
+    state = %{
       state
       | ready: true,
         queue: :queue.from_list(queued),
@@ -397,9 +412,9 @@ defmodule Synapsis.Agent.Daemon do
         last_error: nil
     }
 
-    dispatch_status(new_state)
+    dispatch_status(state)
     send(self(), :drain)
-    {:noreply, new_state}
+    {:noreply, state}
   end
 
   defp handle_operation_result(%{type: :recovery}, {:retry, errors}, state),
@@ -411,7 +426,7 @@ defmodule Synapsis.Agent.Daemon do
   defp handle_operation_result(%{type: :refill}, {:ok, queued, backlog}, state) do
     queue = Enum.reduce(queued, state.queue, &:queue.in/2)
 
-    new_state = %{
+    state = %{
       state
       | ready: true,
         queue: queue,
@@ -420,9 +435,9 @@ defmodule Synapsis.Agent.Daemon do
         last_error: nil
     }
 
-    dispatch_status(new_state)
+    dispatch_status(state)
     send(self(), :drain)
-    {:noreply, new_state}
+    {:noreply, state}
   end
 
   defp handle_operation_result(%{type: :refill}, {:retry, errors}, state),
@@ -431,18 +446,20 @@ defmodule Synapsis.Agent.Daemon do
   defp handle_operation_result(%{type: :refill}, {:error, reason}, state),
     do: {:noreply, schedule_refill_retry(state, reason)}
 
-  defp handle_runner_result({:ok, terminal_run, errors}, active, state) do
-    cancel_deadline(active)
-    last_error = terminal_errors(terminal_run, errors)
-    new_state = %{state | active_run: nil, last_error: last_error}
-    dispatch_status(new_state)
+  defp handle_runner_result({:ok, terminal_run, errors}, _active, state) do
+    state = %{
+      state
+      | active_run: nil,
+        last_error: terminal_errors(terminal_run, errors)
+    }
+
+    dispatch_status(state)
     send(self(), :drain)
     send(self(), :refill)
-    {:noreply, new_state}
+    {:noreply, state}
   end
 
   defp handle_runner_result({:error, reason, run}, active, state) do
-    cancel_deadline(active)
     error = Execution.bounded_error(reason)
 
     degraded = %{
@@ -450,28 +467,46 @@ defmodule Synapsis.Agent.Daemon do
       | run: run || active.run,
         task_pid: nil,
         task_ref: nil,
-        deadline_ref: nil,
+        inner_pid: nil,
         phase: :degraded,
         degraded: true,
         error: error
     }
 
-    new_state = %{state | active_run: degraded, last_error: error}
-    dispatch_status(new_state)
-    {:noreply, new_state}
+    state = %{state | active_run: degraded, last_error: error}
+    dispatch_status(state)
+    {:noreply, state}
+  end
+
+  defp handle_submit_down(reason, state) do
+    entry = submit_head(state)
+    Process.send_after(self(), {:retry_submit, entry.run_id}, @submit_retry_ms)
+
+    state =
+      %{state | submit_task: nil}
+      |> set_submit_head_mode(:reconcile)
+      |> put_error({:submit_task_exit, reason})
+
+    dispatch_status(state)
+    {:noreply, state}
   end
 
   defp handle_runner_down(_pid, _reason, %{active_run: %{cancelling: true} = active} = state) do
-    active = %{active | task_pid: nil, task_ref: nil, phase: :cancelling}
+    active = %{active | task_pid: nil, task_ref: nil, inner_pid: nil, phase: :cancelling}
     {:noreply, %{state | active_run: active}}
   end
 
   defp handle_runner_down(_pid, reason, %{active_run: active} = state) do
-    error = "run task exited: #{Execution.bounded_error(reason)}"
-
-    case start_finalizer(state, active.run, {:error, error}) do
+    case start_finalizer(state, active, reason) do
       {:ok, task_pid, task_ref} ->
-        active = %{active | task_pid: task_pid, task_ref: task_ref, phase: :finalizing}
+        active = %{
+          active
+          | task_pid: task_pid,
+            task_ref: task_ref,
+            inner_pid: nil,
+            phase: :finalizing
+        }
+
         {:noreply, %{state | active_run: active}}
 
       {:error, start_reason} ->
@@ -481,14 +516,15 @@ defmodule Synapsis.Agent.Daemon do
           active
           | task_pid: nil,
             task_ref: nil,
+            inner_pid: nil,
             phase: :degraded,
             degraded: true,
             error: error
         }
 
-        new_state = %{state | active_run: active, last_error: error}
-        dispatch_status(new_state)
-        {:noreply, new_state}
+        state = %{state | active_run: active, last_error: error}
+        dispatch_status(state)
+        {:noreply, state}
     end
   end
 
@@ -496,10 +532,6 @@ defmodule Synapsis.Agent.Daemon do
     case Map.pop(state.pending, ref) do
       {nil, _pending} ->
         {:noreply, state}
-
-      {%{type: :submit} = op, pending} ->
-        state = %{state | pending: pending}
-        {:noreply, start_submit_reconcile(state, op, reason)}
 
       {%{from: from} = op, pending} ->
         error = Execution.bounded_error({:operation_task_exit, reason})
@@ -511,6 +543,7 @@ defmodule Synapsis.Agent.Daemon do
           |> maybe_reset_cancelling(op)
           |> put_error(error)
 
+        dispatch_status(state)
         {:noreply, state}
 
       {%{type: :recovery}, pending} ->
@@ -520,13 +553,35 @@ defmodule Synapsis.Agent.Daemon do
       {%{type: :refill}, pending} ->
         state = %{state | pending: pending}
         {:noreply, schedule_refill_retry(state, {:refill_task_exit, reason})}
-
-      {%{type: :timeout}, pending} ->
-        state = %{state | pending: pending}
-        Process.send_after(self(), {:run_deadline, state.active_run.run.id}, 25)
-        {:noreply, put_error(state, {:timeout_task_exit, reason})}
     end
   end
+
+  defp start_submit_head(%{submit_task: nil} = state) do
+    case submit_head(state) do
+      nil ->
+        state
+
+      entry ->
+        daemon = self()
+
+        case Execution.start_monitored_task(state.task_supervisor, fn ->
+               result = Execution.persist_submission(state.deps, entry.attrs, entry.mode)
+               send(daemon, {:submit_result, self(), entry.run_id, result})
+             end) do
+          {:ok, pid, ref} ->
+            %{state | submit_task: %{pid: pid, ref: ref, run_id: entry.run_id}}
+
+          {:error, reason} ->
+            Process.send_after(self(), {:retry_submit, entry.run_id}, @submit_retry_ms)
+
+            state
+            |> set_submit_head_mode(:reconcile)
+            |> put_error({:submit_task_start_failed, reason})
+        end
+    end
+  end
+
+  defp start_submit_head(state), do: state
 
   defp start_operation(state, op, fun) do
     daemon = self()
@@ -546,29 +601,38 @@ defmodule Synapsis.Agent.Daemon do
   defp start_runner(state, run) do
     daemon = self()
 
-    with {:ok, pid, ref} <-
-           Execution.start_monitored_task(state.task_supervisor, fn ->
-             Execution.run(daemon, state.deps, run, state.run_timeout)
-           end) do
-      {:ok, pid, ref}
-    end
+    Execution.start_monitored_task(state.task_supervisor, fn ->
+      Execution.run(
+        daemon,
+        state.deps,
+        state.task_supervisor,
+        run,
+        state.run_timeout,
+        Map.get(state, :cleanup_timeout, @cleanup_timeout)
+      )
+    end)
   end
 
-  defp start_finalizer(state, run, result) do
+  defp start_finalizer(state, active, reason) do
     daemon = self()
 
-    with {:ok, pid, ref} <-
-           Execution.start_monitored_task(state.task_supervisor, fn ->
-             terminal =
-               case Execution.protect(fn -> Execution.finalize(state.deps, run, result) end) do
-                 {:error, reason} -> {:error, reason, run}
-                 terminal -> terminal
-               end
+    Execution.start_monitored_task(state.task_supervisor, fn ->
+      result =
+        Execution.protect(fn ->
+          Execution.finalize_crashed_outer(
+            state.deps,
+            state.task_supervisor,
+            active,
+            reason,
+            state.cleanup_timeout
+          )
+        end)
 
-             send(daemon, {:runner_result, self(), run.id, terminal})
-           end) do
-      {:ok, pid, ref}
-    end
+      result =
+        if match?({:error, _reason}, result), do: {:error, result, active.run}, else: result
+
+      send(daemon, {:runner_result, self(), active.run.id, result})
+    end)
   end
 
   defp dispatch_status(state) do
@@ -596,6 +660,40 @@ defmodule Synapsis.Agent.Daemon do
     end
   end
 
+  defp submit_head(state) do
+    case :queue.peek(state.submit_queue) do
+      {:value, entry} -> entry
+      :empty -> nil
+    end
+  end
+
+  defp pop_submit_head(state) do
+    {{:value, entry}, submit_queue} = :queue.out(state.submit_queue)
+    {entry, %{state | submit_queue: submit_queue}}
+  end
+
+  defp set_submit_head_mode(state, mode) do
+    case :queue.out(state.submit_queue) do
+      {{:value, entry}, rest} ->
+        %{state | submit_queue: :queue.in_r(%{entry | mode: mode}, rest)}
+
+      {:empty, _queue} ->
+        state
+    end
+  end
+
+  defp clear_cancelled_owner(state, :active, id) do
+    case state.active_run do
+      %{run: %{id: ^id}} -> %{state | active_run: nil}
+      _other -> state
+    end
+  end
+
+  defp clear_cancelled_owner(state, :queued, id),
+    do: %{state | queue: remove_queued(state.queue, id)}
+
+  defp clear_cancelled_owner(state, :unknown, _id), do: state
+
   defp maybe_reset_cancelling(state, %{type: :cancel, location: :active, run_id: id}) do
     case state.active_run do
       %{run: %{id: ^id}} = active -> %{state | active_run: %{active | cancelling: false}}
@@ -609,86 +707,24 @@ defmodule Synapsis.Agent.Daemon do
     queue |> :queue.to_list() |> Enum.reject(&(&1.id == run_id)) |> :queue.from_list()
   end
 
-  defp flush_submit_outcomes(state) do
-    case Map.pop(state.submit_outcomes, state.next_submit_reply_seq) do
-      {nil, _outcomes} ->
-        {state, false}
-
-      {{op, result}, outcomes} ->
-        GenServer.reply(op.from, result)
-
-        state = %{
-          state
-          | submit_outcomes: outcomes,
-            next_submit_reply_seq: state.next_submit_reply_seq + 1
-        }
-
-        state =
-          case result do
-            {:ok, run} -> %{state | queue: :queue.in(run, state.queue)}
-            {:error, reason} -> put_error(state, reason)
-          end
-
-        {state, _processed?} = flush_submit_outcomes(state)
-        {state, true}
-    end
-  end
-
-  defp start_submit_reconcile(state, op, reason) do
-    reconcile_op = %{op | type: :submit_reconcile}
-
-    case start_operation(state, reconcile_op, fn ->
-           Execution.reconcile_submit(state.deps, op.run_id)
-         end) do
-      {:ok, state} ->
-        state
-
-      {:error, start_reason} ->
-        retries = Map.put(state.reconcile_retries, op.seq, {op, reason})
-        Process.send_after(self(), {:retry_submit_reconcile, op.seq}, 50)
-        %{state | reconcile_retries: retries} |> put_error(start_reason)
-    end
-  end
-
   defp pending_type?(state, type),
     do: Enum.any?(state.pending, fn {_ref, op} -> op.type == type end)
 
   defp owned_run_ids(state) do
-    ids = Enum.map(:queue.to_list(state.queue), & &1.id)
-    ids = if state.active_run, do: [state.active_run.run.id | ids], else: ids
-
-    pending_ids =
-      for {_ref, %{type: type, run_id: id}} <- state.pending,
-          type in [:submit, :submit_reconcile],
-          do: id
-
-    outcome_ids = for {_seq, {op, _result}} <- state.submit_outcomes, do: op.run_id
-    retry_ids = for {_seq, {op, _reason}} <- state.reconcile_retries, do: op.run_id
-    MapSet.new(ids ++ pending_ids ++ outcome_ids ++ retry_ids)
+    queued_ids = Enum.map(:queue.to_list(state.queue), & &1.id)
+    active_ids = if state.active_run, do: [state.active_run.run.id], else: []
+    submit_ids = Enum.map(:queue.to_list(state.submit_queue), & &1.run_id)
+    MapSet.new(active_ids ++ queued_ids ++ submit_ids)
   end
 
   defp queue_load(state) do
-    reserved =
+    refill_reservations =
       Enum.reduce(state.pending, 0, fn {_ref, op}, total ->
-        cond do
-          op.type in [:submit, :submit_reconcile] -> total + 1
-          op.type == :refill -> total + op.reserved_slots
-          true -> total
-        end
+        if op.type == :refill, do: total + op.reserved_slots, else: total
       end)
 
-    :queue.len(state.queue) + reserved + map_size(state.submit_outcomes) +
-      map_size(state.reconcile_retries)
+    :queue.len(state.queue) + :queue.len(state.submit_queue) + refill_reservations
   end
-
-  defp cancel_deadline(nil), do: :ok
-
-  defp cancel_deadline(%{deadline_ref: ref}) when is_reference(ref) do
-    Process.cancel_timer(ref)
-    :ok
-  end
-
-  defp cancel_deadline(_active), do: :ok
 
   defp terminal_errors(run, errors) do
     base = if run.status == "failed", do: [run.error], else: []
@@ -698,21 +734,21 @@ defmodule Synapsis.Agent.Daemon do
   defp schedule_recovery_retry(state, errors) do
     error = join_errors(List.wrap(errors)) || Execution.bounded_error(errors)
     Process.send_after(self(), :recover, state.recovery_retry_ms)
-    new_state = %{state | ready: false, recovery_error: error, last_error: error}
-    dispatch_status(new_state)
-    new_state
+    state = %{state | ready: false, recovery_error: error, last_error: error}
+    dispatch_status(state)
+    state
   end
 
   defp schedule_refill_retry(state, errors) do
     error = join_errors(List.wrap(errors)) || Execution.bounded_error(errors)
     Process.send_after(self(), :refill, state.recovery_retry_ms)
-    new_state = %{state | ready: false, recovery_error: error, last_error: error}
-    dispatch_status(new_state)
-    new_state
+    state = %{state | ready: false, recovery_error: error, last_error: error}
+    dispatch_status(state)
+    state
   end
 
   defp put_error(state, reason), do: %{state | last_error: Execution.bounded_error(reason)}
 
   defp join_errors([]), do: nil
-  defp join_errors(errors), do: Execution.bounded_error({:recovery_partial_failure, errors})
+  defp join_errors(errors), do: Execution.bounded_error({:operation_warnings, errors})
 end

@@ -51,6 +51,16 @@ defmodule Synapsis.Agent.Runs do
     end
   end
 
+  @doc "Fetches a run without collapsing absence and storage failures."
+  @spec fetch(String.t()) :: {:ok, AgentRun.t()} | :not_found | {:error, term()}
+  def fetch(id) when is_binary(id) do
+    case fetch_run(id) do
+      {:ok, run, _durable_value} -> {:ok, run}
+      {:error, :not_found} -> :not_found
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   @spec list_recent(keyword()) :: [AgentRun.t()]
   def list_recent(opts \\ []) do
     scan() |> recent() |> Enum.take(Keyword.get(opts, :limit, 50))
