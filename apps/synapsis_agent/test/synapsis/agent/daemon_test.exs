@@ -530,6 +530,40 @@ defmodule Synapsis.Agent.DaemonTest do
     end
   end
 
+  defmodule FirstCleanupHangsSessions do
+    def create(_agent, _opts), do: {:ok, %{id: Ecto.UUID.generate()}}
+    def get_messages(_session_id), do: []
+
+    def send_message(session_id, _prompt) do
+      send(
+        Application.fetch_env!(:synapsis_agent, :daemon_test_owner),
+        {:owner_death_inner, self(), session_id}
+      )
+
+      receive do
+        :never -> :ok
+      end
+    end
+
+    def cancel(session_id) do
+      agent = Application.fetch_env!(:synapsis_agent, :daemon_cleanup_call_agent)
+      attempt = Agent.get_and_update(agent, &{&1 + 1, &1 + 1})
+
+      if attempt == 1 do
+        send(
+          Application.fetch_env!(:synapsis_agent, :daemon_test_owner),
+          {:owner_death_cleanup, self(), session_id}
+        )
+
+        receive do
+          :never -> :ok
+        end
+      else
+        :ok
+      end
+    end
+  end
+
   defmodule TerminalCountingKV do
     def put(key, value), do: Concord.Turso.put(key, value)
     def get(key), do: Concord.Turso.get(key)
@@ -564,6 +598,7 @@ defmodule Synapsis.Agent.DaemonTest do
       Application.delete_env(:synapsis_agent, :daemon_reconcile_fault_agent)
       Application.delete_env(:synapsis_agent, :daemon_recovery_fault_agent)
       Application.delete_env(:synapsis_agent, :daemon_refill_scan_agent)
+      Application.delete_env(:synapsis_agent, :daemon_cleanup_call_agent)
     end)
 
     :ok
@@ -1620,6 +1655,33 @@ defmodule Synapsis.Agent.DaemonTest do
 
     assert {:ok, status} = wait_for_status(daemon, &is_nil(&1.active_run_id))
     assert status.last_error =~ "cleanup_timeout"
+  end
+
+  test "hung cleanup child dies with its killed outer owner" do
+    {:ok, cleanup_agent} = Agent.start_link(fn -> 0 end)
+    Application.put_env(:synapsis_agent, :daemon_cleanup_call_agent, cleanup_agent)
+
+    {daemon, task_supervisor} =
+      start_test_daemon(
+        sessions: FirstCleanupHangsSessions,
+        run_timeout: 50,
+        cleanup_timeout: 5_000
+      )
+
+    assert {:ok, run} = Daemon.submit(daemon, "kill owner during cleanup", %{})
+    assert_receive {:owner_death_inner, _inner, session_id}, 1_000
+    assert_receive {:owner_death_cleanup, cleanup_task, ^session_id}, 500
+    assert cleanup_task in Task.Supervisor.children(task_supervisor)
+
+    outer = :sys.get_state(Process.whereis(daemon)).active_run.task_pid
+    Process.exit(outer, :kill)
+
+    assert {:ok, _failed} = wait_for_run(run.id, "failed")
+    assert {:ok, :gone} = wait_for_task_exit(cleanup_task)
+    refute cleanup_task in Task.Supervisor.children(task_supervisor)
+
+    assert {:ok, %{ready: true, active_run_id: nil}} =
+             wait_for_status(daemon, &is_nil(&1.active_run_id))
   end
 
   test "mark_running failure retains and cancels the volatile created session" do

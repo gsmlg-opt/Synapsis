@@ -717,7 +717,7 @@ defmodule Synapsis.Agent.Daemon.Execution do
   end
 
   defp bounded_cleanup(task_supervisor, timeout, function) do
-    task = Task.Supervisor.async_nolink(task_supervisor, fn -> protect(function) end)
+    task = Task.Supervisor.async(task_supervisor, fn -> protect(function) end)
 
     case Task.yield(task, timeout) do
       {:ok, :ok} ->
