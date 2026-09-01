@@ -38,6 +38,7 @@ defmodule Synapsis.Agent.Daemon.Execution do
       active_run_id: active && active.id,
       queued_count: length(queued_ids),
       queued_ids: queued_ids,
+      recovery_backlog_count: Map.get(state, :recovery_backlog_count, 0),
       last_error: bound_optional(state.last_error),
       recovery_error: bound_optional(state.recovery_error)
     }
@@ -55,54 +56,97 @@ defmodule Synapsis.Agent.Daemon.Execution do
     end
   end
 
+  def reconcile_submit(deps, run_id) do
+    case deps.runs.get(run_id) do
+      %{status: "queued"} = run ->
+        _ = append_event(deps, :created, run)
+        _ = publish_run("agent.run.queued", run)
+        {:ok, run}
+
+      nil ->
+        {:error, :submission_not_persisted}
+
+      run ->
+        {:error, {:unexpected_submission_status, run.status}}
+    end
+  end
+
   def run(daemon, deps, run, timeout) do
     deadline = System.monotonic_time(:millisecond) + timeout
+    {outcome, current_run, session_id} = execute_session(daemon, deps, run, deadline)
 
-    result =
-      with {:ok, session} <- create_session(deps.sessions, run),
-           :ok <- Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}"),
-           {:ok, running} <- deps.runs.mark_running(run, %{session_id: session.id}),
-           :ok <- append_event(deps, :started, running),
-           :ok <- publish_run("agent.run.started", running),
-           :ok <- announce_started(daemon, running),
-           :ok <- deps.sessions.send_message(session.id, run.prompt) do
-        {await_session(deps.sessions, session.id, deadline, []), running}
-      else
-        {:error, reason} -> {{:error, reason}, deps.runs.get(run.id) || run}
-      end
+    cleanup_errors =
+      if match?({:error, _reason}, outcome),
+        do: collect_errors([fn -> maybe_cancel_session(deps.sessions, session_id) end]),
+        else: []
 
-    {outcome, current_run} = result
-    terminal = finalize(deps, current_run, outcome)
+    terminal = finalize(deps, current_run, outcome, session_id) |> add_errors(cleanup_errors)
     send(daemon, {:runner_result, self(), run.id, terminal})
   end
 
-  def finalize(deps, run, {:ok, summary}) do
-    finalize_transition(deps, run, :completed, fn -> deps.runs.mark_completed(run, summary) end)
+  def finalize(deps, run, outcome), do: finalize(deps, run, outcome, run.session_id)
+
+  def finalize(deps, run, {:ok, summary}, session_id) do
+    finalize_transition(deps, run, :completed, fn ->
+      deps.runs.mark_completed(run, summary, %{session_id: session_id})
+    end)
   end
 
-  def finalize(deps, run, {:error, reason}) do
+  def finalize(deps, run, {:error, reason}, session_id) do
     error = bounded_error(reason)
-    finalize_transition(deps, run, :failed, fn -> deps.runs.mark_failed(run, error) end)
+
+    finalize_transition(deps, run, :failed, fn ->
+      deps.runs.mark_failed(run, error, %{session_id: session_id})
+    end)
   end
 
   def cancel_active(deps, task_supervisor, active) do
     run = deps.runs.get(active.run.id) || active.run
 
-    with {:ok, cancelled} <- deps.runs.mark_cancelled(run),
-         :ok <- append_event(deps, :cancelled, cancelled),
-         :ok <- publish_run("agent.run.cancelled", cancelled),
-         :ok <- maybe_cancel_session(deps.sessions, cancelled.session_id),
-         :ok <- terminate_runner(task_supervisor, active.task_pid) do
-      {:ok, cancelled}
+    case deps.runs.mark_cancelled(run, %{session_id: active.session_id || run.session_id}) do
+      {:ok, cancelled} ->
+        errors =
+          collect_errors([
+            fn -> append_event(deps, :cancelled, cancelled) end,
+            fn -> publish_run("agent.run.cancelled", cancelled) end,
+            fn -> maybe_cancel_session(deps.sessions, cancelled.session_id) end,
+            fn -> terminate_runner(task_supervisor, active.task_pid) end
+          ])
+
+        {:ok, cancelled, errors}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
   def cancel_queued(deps, run) do
-    with {:ok, cancelled} <- deps.runs.mark_cancelled(run),
-         :ok <- append_event(deps, :cancelled, cancelled),
-         :ok <- publish_run("agent.run.cancelled", cancelled) do
-      {:ok, cancelled}
+    case deps.runs.mark_cancelled(run) do
+      {:ok, cancelled} ->
+        errors =
+          collect_errors([
+            fn -> append_event(deps, :cancelled, cancelled) end,
+            fn -> publish_run("agent.run.cancelled", cancelled) end
+          ])
+
+        {:ok, cancelled, errors}
+
+      {:error, reason} ->
+        {:error, reason}
     end
+  end
+
+  def timeout(deps, task_supervisor, active) do
+    cleanup_errors =
+      collect_errors([
+        fn -> maybe_cancel_session(deps.sessions, active.session_id) end,
+        fn -> terminate_runner(task_supervisor, active.task_pid) end
+      ])
+
+    run = deps.runs.get(active.run.id) || active.run
+
+    finalize(deps, run, {:error, :session_timeout}, active.session_id)
+    |> add_errors(cleanup_errors)
   end
 
   def classify(runs, run_id) do
@@ -193,20 +237,46 @@ defmodule Synapsis.Agent.Daemon.Execution do
   def valid_capacity(capacity, _default) when is_integer(capacity) and capacity > 0, do: capacity
   def valid_capacity(_capacity, default), do: default
 
+  defp execute_session(daemon, deps, run, deadline) do
+    case create_session(deps.sessions, run) do
+      {:ok, session} ->
+        outcome =
+          with :ok <- announce_session_created(daemon, run.id, session.id),
+               :ok <- Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}"),
+               {:ok, running} <- deps.runs.mark_running(run, %{session_id: session.id}),
+               :ok <- append_event(deps, :started, running),
+               :ok <- publish_run("agent.run.started", running),
+               :ok <- announce_started(daemon, running),
+               :ok <- deps.sessions.send_message(session.id, run.prompt) do
+            {await_session(deps.sessions, session.id, deadline, []), running}
+          else
+            {:error, reason} -> {{:error, reason}, deps.runs.get(run.id) || run}
+          end
+
+        {result, current_run} = outcome
+        {result, current_run, session.id}
+
+      {:error, reason} ->
+        {{:error, reason}, deps.runs.get(run.id) || run, nil}
+    end
+  end
+
   defp finalize_transition(deps, original_run, event, transition) do
     case transition.() do
       {:ok, terminal_run} ->
-        with :ok <- append_event(deps, event, terminal_run),
-             :ok <-
-               publish_run(
-                 "agent.run.#{event}",
-                 terminal_run,
-                 terminal_payload(event, terminal_run)
-               ) do
-          {:ok, terminal_run}
-        else
-          {:error, reason} -> {:error, {:terminal_event_failed, reason}, terminal_run}
-        end
+        errors =
+          collect_errors([
+            fn -> append_event(deps, event, terminal_run) end,
+            fn ->
+              publish_run(
+                "agent.run.#{event}",
+                terminal_run,
+                terminal_payload(event, terminal_run)
+              )
+            end
+          ])
+
+        {:ok, terminal_run, errors}
 
       {:error, reason} ->
         {:error, {:terminal_persistence_failed, reason}, original_run}
@@ -286,6 +356,16 @@ defmodule Synapsis.Agent.Daemon.Execution do
     sessions.create(run.assistant_name || "main", opts)
   end
 
+  defp announce_session_created(daemon, run_id, session_id) do
+    send(daemon, {:session_created, self(), run_id, session_id})
+
+    receive do
+      {:session_created_ack, ^run_id} -> :ok
+    after
+      5_000 -> {:error, :daemon_session_ack_timeout}
+    end
+  end
+
   defp announce_started(daemon, run) do
     send(daemon, {:runner_started, self(), run})
 
@@ -307,6 +387,20 @@ defmodule Synapsis.Agent.Daemon.Execution do
       {:error, reason} -> {:error, reason}
     end
   end
+
+  defp collect_errors(functions) do
+    Enum.flat_map(functions, fn function ->
+      case protect(function) do
+        :ok -> []
+        {:ok, _value} -> []
+        {:error, reason} -> [bounded_error(reason)]
+        other -> [bounded_error({:unexpected_cleanup_result, other})]
+      end
+    end)
+  end
+
+  defp add_errors({:ok, run, errors}, extra), do: {:ok, run, errors ++ extra}
+  defp add_errors(error, _extra), do: error
 
   defp terminal_payload(:failed, run), do: %{error: bounded_error(run.error)}
   defp terminal_payload(_event, _run), do: %{}
@@ -331,7 +425,7 @@ defmodule Synapsis.Agent.Daemon.Execution do
       kind: run.kind,
       status: run.status,
       assistant_name: bound_optional(run.assistant_name, @max_option_length),
-      session_id: run.session_id,
+      session_id: active.session_id || run.session_id,
       provider: bound_optional(run.provider, @max_option_length),
       model: bound_optional(run.model, @max_option_length),
       started_at: run.started_at,

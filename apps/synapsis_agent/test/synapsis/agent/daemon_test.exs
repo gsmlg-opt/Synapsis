@@ -44,8 +44,90 @@ defmodule Synapsis.Agent.DaemonTest do
     defdelegate get(id), to: Runs
     defdelegate mark_running(run, attrs), to: Runs
     defdelegate mark_completed(run, summary), to: Runs
+    defdelegate mark_completed(run, summary, attrs), to: Runs
     defdelegate mark_failed(run, error), to: Runs
+    defdelegate mark_failed(run, error, attrs), to: Runs
     defdelegate mark_cancelled(run), to: Runs
+    defdelegate mark_cancelled(run, attrs), to: Runs
+    defdelegate mark_interrupted(run, reason), to: Runs
+    defdelegate list_by_status_result(status, opts), to: Runs
+  end
+
+  defmodule SlowFirstRuns do
+    alias Synapsis.Agent.Runs
+
+    def create(%{prompt: "slow first"} = attrs) do
+      owner = Application.fetch_env!(:synapsis_agent, :daemon_test_owner)
+      send(owner, {:slow_submit, self()})
+
+      receive do
+        :release_slow_submit -> Runs.create(attrs)
+      end
+    end
+
+    def create(attrs) do
+      result = Runs.create(attrs)
+      send(Application.fetch_env!(:synapsis_agent, :daemon_test_owner), {:fast_submit, result})
+      result
+    end
+
+    defdelegate get(id), to: Runs
+    defdelegate mark_running(run, attrs), to: Runs
+    defdelegate mark_completed(run, summary), to: Runs
+    defdelegate mark_completed(run, summary, attrs), to: Runs
+    defdelegate mark_failed(run, error), to: Runs
+    defdelegate mark_failed(run, error, attrs), to: Runs
+    defdelegate mark_cancelled(run), to: Runs
+    defdelegate mark_cancelled(run, attrs), to: Runs
+    defdelegate mark_interrupted(run, reason), to: Runs
+    defdelegate list_by_status_result(status, opts), to: Runs
+  end
+
+  defmodule KillAfterCreateRuns do
+    alias Synapsis.Agent.Runs
+
+    def create(attrs) do
+      {:ok, run} = result = Runs.create(attrs)
+
+      send(
+        Application.fetch_env!(:synapsis_agent, :daemon_test_owner),
+        {:submit_created, self(), run}
+      )
+
+      receive do
+        :never -> result
+      end
+    end
+
+    defdelegate get(id), to: Runs
+    defdelegate mark_running(run, attrs), to: Runs
+    defdelegate mark_completed(run, summary), to: Runs
+    defdelegate mark_completed(run, summary, attrs), to: Runs
+    defdelegate mark_failed(run, error), to: Runs
+    defdelegate mark_failed(run, error, attrs), to: Runs
+    defdelegate mark_cancelled(run), to: Runs
+    defdelegate mark_cancelled(run, attrs), to: Runs
+    defdelegate mark_interrupted(run, reason), to: Runs
+    defdelegate list_by_status_result(status, opts), to: Runs
+  end
+
+  defmodule MarkRunningFailRuns do
+    alias Synapsis.Agent.Runs
+
+    defdelegate create(attrs), to: Runs
+    defdelegate get(id), to: Runs
+
+    def mark_running(_run, _attrs) do
+      send(Application.fetch_env!(:synapsis_agent, :daemon_test_owner), :mark_running_failed)
+      {:error, :mark_running_failed}
+    end
+
+    defdelegate mark_completed(run, summary), to: Runs
+    defdelegate mark_completed(run, summary, attrs), to: Runs
+    defdelegate mark_failed(run, error), to: Runs
+    defdelegate mark_failed(run, error, attrs), to: Runs
+    defdelegate mark_cancelled(run), to: Runs
+    defdelegate mark_cancelled(run, attrs), to: Runs
     defdelegate mark_interrupted(run, reason), to: Runs
     defdelegate list_by_status_result(status, opts), to: Runs
   end
@@ -79,12 +161,36 @@ defmodule Synapsis.Agent.DaemonTest do
     end
   end
 
+  defmodule FailingTerminalRunEvents do
+    alias Synapsis.Agent.RunEvents
+
+    def append_run_completed(_run),
+      do: {:error, String.duplicate("terminal event failure ", 100)}
+
+    defdelegate append_run_created(run), to: RunEvents
+    defdelegate append_run_started(run), to: RunEvents
+    defdelegate append_run_failed(run), to: RunEvents
+    defdelegate append_run_cancelled(run), to: RunEvents
+    defdelegate append_run_interrupted(run), to: RunEvents
+  end
+
   defmodule FakeSessions do
     def create(_agent, _opts), do: {:ok, %{id: Ecto.UUID.generate()}}
     def get_messages(_session_id), do: []
-    def cancel(_session_id), do: :ok
 
-    def send_message(session_id, _prompt) do
+    def cancel(session_id) do
+      if Application.get_env(:synapsis_agent, :daemon_fake_session_mode) ==
+           :mark_running_failure do
+        send(
+          Application.fetch_env!(:synapsis_agent, :daemon_test_owner),
+          {:session_cancelled, session_id}
+        )
+      end
+
+      :ok
+    end
+
+    def send_message(session_id, prompt) do
       owner = Application.fetch_env!(:synapsis_agent, :daemon_test_owner)
 
       case Application.fetch_env!(:synapsis_agent, :daemon_fake_session_mode) do
@@ -138,9 +244,69 @@ defmodule Synapsis.Agent.DaemonTest do
 
         :waiting ->
           send(owner, {:waiting_session, session_id})
+
+        :ordered ->
+          send(owner, {:ordered_session, prompt, self(), session_id})
+
+          receive do
+            :complete_ordered ->
+              Phoenix.PubSub.broadcast(
+                Synapsis.PubSub,
+                "session:#{session_id}",
+                {"done", %{}}
+              )
+          end
       end
 
       :ok
+    end
+  end
+
+  defmodule BlockingSendSessions do
+    def create(_agent, _opts), do: {:ok, %{id: Ecto.UUID.generate()}}
+    def get_messages(_session_id), do: []
+
+    def send_message(session_id, _prompt) do
+      send(
+        Application.fetch_env!(:synapsis_agent, :daemon_test_owner),
+        {:blocking_send, self(), session_id}
+      )
+
+      receive do
+        :release_send -> :ok
+      end
+    end
+
+    def cancel(session_id) do
+      send(
+        Application.fetch_env!(:synapsis_agent, :daemon_test_owner),
+        {:watchdog_cancel, session_id}
+      )
+
+      :ok
+    end
+  end
+
+  defmodule CleanupFailSessions do
+    def create(_agent, _opts), do: {:ok, %{id: Ecto.UUID.generate()}}
+    def get_messages(_session_id), do: []
+
+    def send_message(session_id, _prompt) do
+      send(
+        Application.fetch_env!(:synapsis_agent, :daemon_test_owner),
+        {:cleanup_waiting, session_id}
+      )
+
+      :ok
+    end
+
+    def cancel(session_id) do
+      send(
+        Application.fetch_env!(:synapsis_agent, :daemon_test_owner),
+        {:cleanup_cancel, session_id}
+      )
+
+      {:error, String.duplicate("cleanup failure ", 100)}
     end
   end
 
@@ -551,7 +717,7 @@ defmodule Synapsis.Agent.DaemonTest do
     assert {:ok, status} =
              wait_for(fn ->
                case Daemon.status(daemon) do
-                 %{ready: true, recovery_error: error} = status when is_binary(error) ->
+                 %{ready: false, recovery_error: error} = status when is_binary(error) ->
                    {:ok, status}
 
                  _other ->
@@ -561,6 +727,10 @@ defmodule Synapsis.Agent.DaemonTest do
 
     assert status.recovery_error =~ "store_unavailable"
     assert Process.alive?(Process.whereis(daemon))
+
+    restore_application_env(:agent_runs_kv_adapter, previous)
+    assert {:ok, recovered} = wait_for_status(daemon, & &1.ready)
+    assert recovered.recovery_error == nil
   end
 
   @tag :tmp_dir
@@ -735,21 +905,30 @@ defmodule Synapsis.Agent.DaemonTest do
     {daemon, _task_supervisor} =
       start_test_daemon(recover?: true, sessions: FakeSessions, queue_capacity: 1)
 
-    assert_receive {:waiting_session, _session_id}, 1_000
+    assert {:ok, blocked} =
+             wait_for_status(daemon, fn status ->
+               not status.ready and is_binary(status.recovery_error)
+             end)
+
+    assert blocked.recovery_error =~ "store failure"
+    assert %{status: "running"} = Runs.get(running.id)
+    assert %{status: "interrupted"} = Runs.get(waiting.id)
+
+    Application.put_env(:synapsis_agent, :daemon_selective_put_if, [])
+    assert_receive {:waiting_session, _session_id}, 2_000
 
     assert {:ok, status} =
              wait_for_status(daemon, fn status ->
                status.ready and status.active_run_id == queued.id
              end)
 
-    assert status.recovery_error =~ "store failure"
-    assert %{status: "running"} = Runs.get(running.id)
-    assert %{status: "interrupted"} = Runs.get(waiting.id)
+    assert status.recovery_error == nil
+    assert %{status: "interrupted"} = Runs.get(running.id)
     assert %{status: "running"} = Runs.get(queued.id)
   end
 
   test "recovery owns queued overflow instead of dropping durable runs" do
-    Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :waiting)
+    Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :ordered)
 
     attrs = %{
       kind: "manual",
@@ -766,16 +945,31 @@ defmodule Synapsis.Agent.DaemonTest do
     {daemon, _task_supervisor} =
       start_test_daemon(recover?: true, sessions: FakeSessions, queue_capacity: 1)
 
-    assert_receive {:waiting_session, _session_id}, 1_000
+    assert_receive {:ordered_session, "first", first_runner, _session_id}, 1_000
 
     assert {:ok, status} =
              wait_for_status(daemon, fn status ->
-               status.active_run_id == first.id and status.queued_count == 2
+               status.active_run_id == first.id and status.queued_count == 1
              end)
 
-    assert status.queued_ids == [second.id, third.id]
+    assert status.queued_ids == [second.id]
+    assert status.recovery_backlog_count == 1
     assert {:error, :queue_full} = Daemon.submit(daemon, "new work", %{})
-    assert Enum.all?([first.id, second.id, third.id], &Runs.get(&1))
+
+    send(first_runner, :complete_ordered)
+    assert_receive {:ordered_session, "second", second_runner, _session_id}, 2_000
+    assert length(Daemon.status(daemon).queued_ids) <= 1
+    send(second_runner, :complete_ordered)
+    assert_receive {:ordered_session, "third", third_runner, _session_id}, 2_000
+    assert length(Daemon.status(daemon).queued_ids) <= 1
+    send(third_runner, :complete_ordered)
+
+    assert {:ok, _completed} = wait_for_run(first.id, "completed")
+    assert {:ok, _completed} = wait_for_run(second.id, "completed")
+    assert {:ok, _completed} = wait_for_run(third.id, "completed")
+
+    assert {:ok, %{queued_ids: [], recovery_backlog_count: 0}} =
+             wait_for_status(daemon, &is_nil(&1.active_run_id))
   end
 
   test "rejects oversized option fields and bounds volatile errors" do
@@ -843,6 +1037,132 @@ defmodule Synapsis.Agent.DaemonTest do
     assert retained.active_run == nil
     assert retained.last_error =~ "run_task_start_failed"
     assert %{status: "queued"} = Runs.get(run.id)
+  end
+
+  test "concurrent submit persistence outcomes are replied and enqueued in call order" do
+    Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :waiting)
+    {daemon, _task_supervisor} = start_test_daemon(runs: SlowFirstRuns, sessions: FakeSessions)
+    {:ok, first_attrs} = Synapsis.Agent.Daemon.Execution.manual_attrs("slow first", %{})
+    {:ok, second_attrs} = Synapsis.Agent.Daemon.Execution.manual_attrs("fast second", %{})
+    first_ref = make_ref()
+    second_ref = make_ref()
+    daemon_pid = Process.whereis(daemon)
+
+    send(daemon_pid, {:"$gen_call", {self(), first_ref}, {:submit, first_attrs}})
+    assert_receive {:slow_submit, slow_task}, 1_000
+    send(daemon_pid, {:"$gen_call", {self(), second_ref}, {:submit, second_attrs}})
+    assert_receive {:fast_submit, {:ok, fast_run}}, 1_000
+    refute_receive {^second_ref, _result}, 100
+
+    send(slow_task, :release_slow_submit)
+    assert_receive {^first_ref, {:ok, first_run}}, 1_000
+    assert_receive {^second_ref, {:ok, second_run}}, 1_000
+    assert second_run.id == fast_run.id
+    assert_receive {:waiting_session, _session_id}, 1_000
+
+    assert %{active_run_id: active_id, queued_ids: [queued_id]} = Daemon.status(daemon)
+    assert active_id == first_run.id
+    assert queued_id == second_run.id
+  end
+
+  test "daemon watchdog cancels a blocked send and durably times out before draining" do
+    {daemon, _task_supervisor} =
+      start_test_daemon(sessions: BlockingSendSessions, run_timeout: 100)
+
+    started_at = System.monotonic_time(:millisecond)
+    assert {:ok, run} = Daemon.submit(daemon, "block send", %{})
+    assert_receive {:blocking_send, runner, session_id}, 1_000
+    assert Process.alive?(runner)
+
+    assert_receive {:watchdog_cancel, ^session_id}, 500
+
+    assert {:ok, failed} =
+             wait_for(
+               fn ->
+                 case Runs.get(run.id) do
+                   %{status: "failed"} = failed -> {:ok, failed}
+                   _other -> :retry
+                 end
+               end,
+               700
+             )
+
+    assert failed.error =~ "session_timeout"
+    assert failed.session_id == session_id
+    refute Process.alive?(runner)
+    assert System.monotonic_time(:millisecond) - started_at < 700
+    assert %{active_run_id: nil} = Daemon.status(daemon)
+    refute_receive {:watchdog_cancel, ^session_id}, 150
+  end
+
+  test "mark_running failure retains and cancels the volatile created session" do
+    Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :mark_running_failure)
+
+    {daemon, _task_supervisor} =
+      start_test_daemon(runs: MarkRunningFailRuns, sessions: FakeSessions)
+
+    assert {:ok, run} = Daemon.submit(daemon, "fail after create", %{})
+    assert_receive :mark_running_failed, 1_000
+    assert_receive {:session_cancelled, session_id}, 1_000
+    assert {:ok, failed} = wait_for_run(run.id, "failed")
+    assert failed.session_id == session_id
+    assert failed.error =~ "mark_running_failed"
+    assert %{active_run_id: nil} = Daemon.status(daemon)
+  end
+
+  test "durable completion drains even when terminal event append fails" do
+    Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :controlled_done)
+
+    {daemon, _task_supervisor} =
+      start_test_daemon(sessions: FakeSessions, run_events: FailingTerminalRunEvents)
+
+    assert {:ok, first} = Daemon.submit(daemon, "first terminal event failure", %{})
+    assert_receive {:controlled_session, first_runner, _session_id}, 1_000
+    assert {:ok, second} = Daemon.submit(daemon, "second still drains", %{})
+    send(first_runner, :complete_session)
+
+    assert {:ok, _completed} = wait_for_run(first.id, "completed")
+    assert_receive {:controlled_session, second_runner, _session_id}, 1_000
+
+    status = Daemon.status(daemon)
+    assert status.active_run_id == second.id
+    assert status.last_error =~ "terminal event failure"
+    assert String.length(status.last_error) <= 500
+    send(second_runner, :complete_session)
+  end
+
+  test "durable active cancel drains despite session cleanup failure" do
+    {daemon, _task_supervisor} = start_test_daemon(sessions: CleanupFailSessions)
+    assert {:ok, run} = Daemon.submit(daemon, "cancel cleanup failure", %{})
+    assert_receive {:cleanup_waiting, session_id}, 1_000
+    assert {:ok, _running} = wait_for_run(run.id, "running")
+    runner = :sys.get_state(Process.whereis(daemon)).active_run.task_pid
+
+    assert {:ok, cancelled} = Daemon.cancel(daemon, run.id)
+    assert cancelled.status == "cancelled"
+    assert_receive {:cleanup_cancel, ^session_id}, 1_000
+    refute Process.alive?(runner)
+    assert %{active_run_id: nil, last_error: error} = Daemon.status(daemon)
+    assert error =~ "cleanup failure"
+    assert String.length(error) <= 500
+  end
+
+  test "submit task death after create reconciles the pre-generated durable run" do
+    Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :waiting)
+
+    {daemon, _task_supervisor} =
+      start_test_daemon(runs: KillAfterCreateRuns, sessions: FakeSessions)
+
+    caller = Task.async(fn -> Daemon.submit(daemon, "reconcile created run", %{}) end)
+    assert_receive {:submit_created, submit_task, created}, 1_000
+    Process.exit(submit_task, :kill)
+
+    assert {:ok, reconciled} = Task.await(caller, 2_000)
+    assert reconciled.id == created.id
+    assert_receive {:waiting_session, session_id}, 1_000
+    assert {:ok, running} = wait_for_run(created.id, "running")
+    assert running.session_id == session_id
+    assert Daemon.status(daemon).active_run_id == created.id
   end
 
   defp wait_for_ready do
