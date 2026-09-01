@@ -124,6 +124,16 @@ defmodule Synapsis.Agent.Runs do
     transition(run, "run.cancelled", attrs)
   end
 
+  @spec mark_interrupted(AgentRun.t(), String.t() | map()) ::
+          {:ok, AgentRun.t()} | {:error, term()}
+  def mark_interrupted(%AgentRun{} = run, reason) when is_binary(reason) do
+    mark_interrupted(run, %{error: reason, metadata: %{"interruption_reason" => reason}})
+  end
+
+  def mark_interrupted(%AgentRun{} = run, attrs) when is_map(attrs) do
+    transition(run, "run.interrupted", attrs)
+  end
+
   @spec mark_timed_out(AgentRun.t(), map()) :: {:ok, AgentRun.t()} | {:error, term()}
   def mark_timed_out(%AgentRun{} = run, attrs \\ %{}) do
     transition(run, "run.timed_out", attrs)

@@ -16,11 +16,11 @@ defmodule Synapsis.AgentRun do
   @kinds ~w(manual heartbeat dream schedule)
   @statuses ~w(
     queued starting running waiting_approval sleeping
-    completed failed cancelled timed_out unknown_outcome
+    completed failed cancelled interrupted timed_out unknown_outcome
   )
   @sources ~w(web system oban scheduler)
   @tool_profiles ~w(read_only reflect heartbeat coding maintenance dangerous)
-  @terminal_statuses ~w(completed failed cancelled timed_out unknown_outcome)
+  @terminal_statuses ~w(completed failed cancelled interrupted timed_out unknown_outcome)
 
   @cast_fields [
     :id,
