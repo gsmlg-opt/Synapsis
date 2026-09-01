@@ -2,9 +2,9 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
   use SynapsisWeb.ConnCase
 
   setup do
-    {:ok, provider} =
-      Synapsis.Providers.create(%{
-        name: "test-show-provider-#{:rand.uniform(100_000)}",
+    provider =
+      create_provider!(%{
+        name: "test-show-provider",
         type: "anthropic",
         api_key_encrypted: "sk-ant-test-key"
       })
@@ -112,9 +112,9 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
         |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "backplane-model"}]}))
       end)
 
-      {:ok, provider} =
-        Synapsis.Providers.create(%{
-          name: "backplane-clear-#{:rand.uniform(100_000)}",
+      provider =
+        create_provider!(%{
+          name: "backplane-clear",
           type: "openai",
           base_url: "http://localhost:#{bypass.port}/v1",
           api_key_encrypted: "placeholder-token",
@@ -159,9 +159,9 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
     end
 
     test "clearing an absent token remains keyless", %{conn: conn} do
-      {:ok, provider} =
-        Synapsis.Providers.create(%{
-          name: "already-keyless-#{:rand.uniform(100_000)}",
+      provider =
+        create_provider!(%{
+          name: "already-keyless",
           type: "openai",
           base_url: "http://localhost:4220/v1",
           config: %{"available_models" => [%{"id" => "cached-model", "name" => "Cached Model"}]}
@@ -179,9 +179,9 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
     end
 
     test "does not offer or clear a stored token for an OAuth provider", %{conn: conn} do
-      {:ok, provider} =
-        Synapsis.Providers.create(%{
-          name: "oauth-keyed-#{:rand.uniform(100_000)}",
+      provider =
+        create_provider!(%{
+          name: "oauth-keyed",
           type: "openai",
           base_url: "http://localhost:4220/v1",
           api_key_encrypted: "stored-api-key",
@@ -211,9 +211,9 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
     end
 
     test "rejects a stale clear event after the provider switches to OAuth", %{conn: conn} do
-      {:ok, provider} =
-        Synapsis.Providers.create(%{
-          name: "stale-clear-oauth-#{:rand.uniform(100_000)}",
+      provider =
+        create_provider!(%{
+          name: "stale-clear-oauth",
           type: "openai",
           base_url: "http://localhost:4220/v1",
           api_key_encrypted: "stored-api-key",
@@ -244,9 +244,9 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
     end
 
     test "provider without api_key does not show 'Key is set'", %{conn: conn} do
-      {:ok, no_key_provider} =
-        Synapsis.Providers.create(%{
-          name: "no-key-prov-#{:rand.uniform(100_000)}",
+      no_key_provider =
+        create_provider!(%{
+          name: "no-key-prov",
           type: "openai_compat"
         })
 
@@ -317,9 +317,9 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
         |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "fresh-model"}]}))
       end)
 
-      {:ok, provider} =
-        Synapsis.Providers.create(%{
-          name: "refreshable-provider-#{:rand.uniform(100_000)}",
+      provider =
+        create_provider!(%{
+          name: "refreshable-provider",
           type: "openai",
           base_url: "http://localhost:#{bypass.port}/v1",
           api_key_encrypted: "sk-test",
@@ -369,9 +369,9 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
     end
 
     test "disabled models shown differently from enabled", %{conn: conn} do
-      {:ok, provider} =
-        Synapsis.Providers.create(%{
-          name: "filtered-prov-#{:rand.uniform(100_000)}",
+      provider =
+        create_provider!(%{
+          name: "filtered-prov",
           type: "anthropic",
           api_key_encrypted: "sk-key",
           config: %{"enabled_models" => ["claude-sonnet-4-6"]}
@@ -503,5 +503,12 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       html = render(view)
       assert html =~ "Error: HTTP 401"
     end
+  end
+
+  defp create_provider!(attrs) do
+    attrs = Map.update!(attrs, :name, &"#{&1}-#{Ecto.UUID.generate()}")
+    {:ok, provider} = Synapsis.Providers.create(attrs)
+    on_exit(fn -> Synapsis.Providers.delete(provider.id) end)
+    provider
   end
 end
