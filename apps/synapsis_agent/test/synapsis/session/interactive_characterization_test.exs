@@ -29,6 +29,8 @@ defmodule Synapsis.Session.InteractiveCharacterizationTest do
 
     assert :ok = Synapsis.Sessions.send_message(harness.session.id, "say hello")
 
+    assert_receive {:run_event, %{type: "session.completed", session_id: session_id}}, 15_000
+    assert session_id == harness.session.id
     assert_receive {"done", %{}}, 15_000
     assert_receive {"session_status", %{status: "idle"}}, 15_000
     assert :waiting = Worker.get_status(harness.session.id)
@@ -58,6 +60,7 @@ defmodule Synapsis.Session.InteractiveCharacterizationTest do
 
     assert :ok = Synapsis.Sessions.send_message(harness.session.id, "this will fail")
 
+    assert_receive {:run_event, %{type: "session.failed"}}, 15_000
     assert_receive {"error", %{message: message}}, 15_000
     assert message =~ "Provider error"
     assert_receive {"session_status", %{status: "error"}}, 15_000

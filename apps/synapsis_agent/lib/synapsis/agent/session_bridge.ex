@@ -5,6 +5,7 @@ defmodule Synapsis.Agent.SessionBridge do
 
   require Logger
 
+  alias Synapsis.Agent.Events.{RunEvent, TerminalWaiter}
   alias Synapsis.Sessions
 
   @type spawn_opts :: %{
@@ -13,7 +14,8 @@ defmodule Synapsis.Agent.SessionBridge do
           optional(:agent) => String.t(),
           optional(:context) => String.t(),
           optional(:notify_pid) => pid(),
-          optional(:notify_ref) => String.t()
+          optional(:notify_ref) => String.t(),
+          optional(:timeout_ms) => non_neg_integer()
         }
 
   @doc """
@@ -26,8 +28,8 @@ defmodule Synapsis.Agent.SessionBridge do
           {:ok, String.t()} | {:error, term()}
   def spawn_coding_session(agent_name, initial_message, opts \\ %{}) do
     with {:ok, session} <- create_session(agent_name, opts),
-         :ok <- maybe_send_message(session.id, initial_message),
-         :ok <- maybe_subscribe_completion(session.id, opts) do
+         :ok <- maybe_subscribe_completion(session.id, opts),
+         :ok <- maybe_send_message(session.id, initial_message) do
       Logger.info("coding_session_spawned",
         agent: session.agent,
         session_id: session.id
@@ -80,27 +82,78 @@ defmodule Synapsis.Agent.SessionBridge do
     Synapsis.Session.Worker.send_message(session_id, message)
   end
 
-  defp maybe_subscribe_completion(session_id, %{notify_pid: pid, notify_ref: ref})
+  defp maybe_subscribe_completion(session_id, %{notify_pid: pid, notify_ref: ref} = opts)
        when is_pid(pid) do
-    Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session_id}")
+    timeout_ms = Map.get(opts, :timeout_ms, :timer.minutes(30))
+    caller = self()
+    ready_ref = make_ref()
 
-    Task.Supervisor.start_child(Synapsis.Tool.TaskSupervisor, fn ->
-      receive do
-        {"session_status", %{status: "idle"}} ->
-          send(pid, {:coding_session_completed, ref, session_id})
+    # Subscribe and receive in the *same* Task process. Confirm subscription to
+    # the caller before send_message so completion cannot race the watcher.
+    {:ok, _task} =
+      Task.Supervisor.start_child(Synapsis.Tool.TaskSupervisor, fn ->
+        topic = "session:#{session_id}"
+        :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, topic)
+        send(caller, {:session_bridge_watching, ready_ref})
 
-        {"error", _} ->
-          send(pid, {:coding_session_failed, ref, session_id})
-      after
-        :timer.minutes(30) ->
-          send(pid, {:coding_session_timeout, ref, session_id})
-      end
-    end)
+        try do
+          deadline = System.monotonic_time(:millisecond) + timeout_ms
 
-    :ok
+          outcome =
+            await_already_subscribed(session_id, deadline)
+
+          case outcome do
+            {:completed, _} ->
+              send(pid, {:coding_session_completed, ref, session_id})
+
+            {:failed, _} ->
+              send(pid, {:coding_session_failed, ref, session_id})
+
+            {:cancelled, _} ->
+              send(pid, {:coding_session_failed, ref, session_id})
+
+            {:timed_out, _} ->
+              send(pid, {:coding_session_failed, ref, session_id})
+
+            {:waiter_timeout, _} ->
+              send(pid, {:coding_session_timeout, ref, session_id})
+          end
+        after
+          Phoenix.PubSub.unsubscribe(Synapsis.PubSub, topic)
+        end
+      end)
+
+    receive do
+      {:session_bridge_watching, ^ready_ref} -> :ok
+    after
+      5_000 -> {:error, :completion_watch_failed}
+    end
   end
 
   defp maybe_subscribe_completion(_session_id, _opts), do: :ok
+
+  defp await_already_subscribed(session_id, deadline) do
+    remaining = deadline - System.monotonic_time(:millisecond)
+
+    if remaining <= 0 do
+      {:waiter_timeout, "timed out waiting for session #{session_id}"}
+    else
+      receive do
+        {:run_event, %RunEvent{} = event} ->
+          if TerminalWaiter.matches?(event, session_id) do
+            {TerminalWaiter.classify(event), event}
+          else
+            await_already_subscribed(session_id, deadline)
+          end
+
+        _other ->
+          await_already_subscribed(session_id, deadline)
+      after
+        remaining ->
+          {:waiter_timeout, "timed out waiting for session #{session_id}"}
+      end
+    end
+  end
 
   defp build_file_tree(project_path) do
     if File.dir?(project_path) do

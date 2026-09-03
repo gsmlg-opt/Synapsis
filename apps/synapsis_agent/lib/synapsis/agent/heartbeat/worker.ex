@@ -6,6 +6,7 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
   Results are written to workspace and user notified via PubSub.
   """
 
+  alias Synapsis.Agent.Events.TerminalWaiter
   alias Synapsis.Workspace
   require Logger
 
@@ -50,39 +51,30 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
 
     timestamp = DateTime.utc_now() |> DateTime.to_iso8601()
 
-    # Create a headless session for the heartbeat
-    result_content = run_heartbeat_session(config, timestamp)
+    case run_heartbeat_session(config, timestamp) do
+      {:ok, result_content} ->
+        write_results(config, timestamp, result_content)
+        maybe_notify(config, timestamp, result_content, :completed)
 
-    # Write latest result to workspace
-    latest_path = "/global/heartbeats/#{config.name}/latest.md"
-    Workspace.write(latest_path, result_content, %{author: "system", lifecycle: :scratch})
+        Logger.info("heartbeat_completed",
+          name: config.name,
+          heartbeat_id: config.id
+        )
 
-    # Write history entry if configured
-    if config.keep_history do
-      history_path = "/global/heartbeats/#{config.name}/history/#{timestamp}.md"
-      Workspace.write(history_path, result_content, %{author: "system", lifecycle: :draft})
+        :ok
+
+      {:error, reason, result_content} ->
+        write_results(config, timestamp, result_content)
+        maybe_notify(config, timestamp, result_content, :failed)
+
+        Logger.error("heartbeat_execution_failed",
+          name: config.name,
+          heartbeat_id: config.id,
+          error: reason
+        )
+
+        {:error, reason}
     end
-
-    # Notify user if configured
-    if config.notify_user do
-      Phoenix.PubSub.broadcast(
-        Synapsis.PubSub,
-        "heartbeat:notifications",
-        {:heartbeat_completed, config.id,
-         %{
-           name: config.name,
-           executed_at: timestamp,
-           result: result_content
-         }}
-      )
-    end
-
-    Logger.info("heartbeat_completed",
-      name: config.name,
-      heartbeat_id: config.id
-    )
-
-    :ok
   rescue
     e ->
       Logger.error("heartbeat_failed",
@@ -95,26 +87,54 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
       {:error, Exception.message(e)}
   end
 
+  defp write_results(config, timestamp, result_content) do
+    latest_path = "/global/heartbeats/#{config.name}/latest.md"
+    Workspace.write(latest_path, result_content, %{author: "system", lifecycle: :scratch})
+
+    if config.keep_history do
+      history_path = "/global/heartbeats/#{config.name}/history/#{timestamp}.md"
+      Workspace.write(history_path, result_content, %{author: "system", lifecycle: :draft})
+    end
+  end
+
+  defp maybe_notify(config, timestamp, result_content, execution_status) do
+    if config.notify_user do
+      event =
+        case execution_status do
+          :completed -> :heartbeat_completed
+          :failed -> :heartbeat_failed
+        end
+
+      Phoenix.PubSub.broadcast(
+        Synapsis.PubSub,
+        "heartbeat:notifications",
+        {event, config.id,
+         %{
+           name: config.name,
+           executed_at: timestamp,
+           result: result_content,
+           execution_status: execution_status
+         }}
+      )
+    end
+  end
+
   defp run_heartbeat_session(config, timestamp) do
     case create_heartbeat_session(config) do
       {:ok, session} ->
-        case Synapsis.Sessions.send_message(session.id, config.prompt) do
-          :ok ->
-            # Wait for the agent to finish (with timeout)
-            result = await_session_completion(session.id)
+        # Subscribe before send_message so completion cannot race the waiter.
+        watch =
+          TerminalWaiter.await_after(session.id, [], fn ->
+            Synapsis.Sessions.send_message(session.id, config.prompt)
+          end)
 
-            # Clean up the ephemeral session
-            Synapsis.Sessions.delete(session.id)
+        result = interpret_watch(config, timestamp, session.id, watch)
+        Synapsis.Sessions.delete(session.id)
+        result
 
-            format_result(config, timestamp, result)
-
-          {:error, _reason} ->
-            Synapsis.Sessions.delete(session.id)
-            format_error(config, timestamp, "send_message failed")
-        end
-
-      {:error, _reason} ->
-        format_error(config, timestamp, "session creation failed")
+      {:error, reason} ->
+        {:error, "session creation failed: #{inspect(reason)}",
+         format_error(config, timestamp, "session creation failed")}
     end
   end
 
@@ -128,50 +148,49 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
     })
   end
 
-  # Wait for session completion via PubSub subscription instead of polling.
-  defp await_session_completion(session_id, timeout_ms \\ 120_000) do
-    topic = "session:#{session_id}"
-    Phoenix.PubSub.subscribe(Synapsis.PubSub, topic)
-
-    result =
-      receive do
-        {:session_completed, ^session_id, _result} ->
-          fetch_last_assistant_response(session_id)
-
-        {:session_error, ^session_id, _reason} ->
-          {:timeout, "session error"}
-      after
-        timeout_ms ->
-          # Fallback: check messages directly before declaring timeout
-          case fetch_last_assistant_response(session_id) do
-            {:ok, _} = ok -> ok
-            _ -> {:timeout, "heartbeat session timed out after #{div(timeout_ms, 1_000)}s"}
-          end
+  # Typed terminals are authoritative. Transcript is only read after success.
+  defp interpret_watch(config, timestamp, session_id, {:completed, _event}) do
+    content =
+      case fetch_last_assistant_response(session_id) do
+        {:ok, text} -> text
+        {:missing, placeholder} -> placeholder
       end
 
-    Phoenix.PubSub.unsubscribe(Synapsis.PubSub, topic)
-    flush_mailbox(session_id)
-    result
+    {:ok, format_success(config, timestamp, content)}
   end
 
-  # Drain any remaining PubSub messages for this session from the process mailbox
-  # to prevent mailbox pollution in the Oban worker process.
-  defp flush_mailbox(session_id) do
-    receive do
-      {_, ^session_id, _} -> flush_mailbox(session_id)
-    after
-      0 -> :ok
-    end
+  defp interpret_watch(config, timestamp, _session_id, {:failed, event}) do
+    reason = event.payload["message"] || "session failed"
+    {:error, reason, format_error(config, timestamp, reason)}
+  end
+
+  defp interpret_watch(config, timestamp, _session_id, {:cancelled, event}) do
+    reason = event.payload["message"] || "session cancelled"
+    {:error, reason, format_error(config, timestamp, reason)}
+  end
+
+  defp interpret_watch(config, timestamp, _session_id, {:timed_out, event}) do
+    reason = event.payload["message"] || "session timed out"
+    {:error, reason, format_error(config, timestamp, reason)}
+  end
+
+  defp interpret_watch(config, timestamp, _session_id, {:waiter_timeout, reason}) do
+    {:error, reason, format_error(config, timestamp, reason)}
+  end
+
+  defp interpret_watch(config, timestamp, _session_id, {:trigger_error, reason}) do
+    message = "send_message failed: #{inspect(reason)}"
+    {:error, message, format_error(config, timestamp, message)}
   end
 
   defp fetch_last_assistant_response(session_id) do
     messages = Synapsis.Sessions.get_messages(session_id)
 
     messages
-    |> Enum.filter(fn msg -> msg.role == :assistant end)
+    |> Enum.filter(fn msg -> msg.role == :assistant or msg.role == "assistant" end)
     |> List.last()
     |> case do
-      nil -> {:timeout, "no assistant response"}
+      nil -> {:missing, "(no assistant response)"}
       msg -> {:ok, extract_text_content(msg)}
     end
   end
@@ -188,7 +207,7 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
 
   defp extract_text_content(_), do: "(no content)"
 
-  defp format_result(config, timestamp, {:ok, content}) do
+  defp format_success(config, timestamp, content) do
     """
     # Heartbeat: #{config.name}
     **Executed at:** #{timestamp}
@@ -198,10 +217,6 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
 
     #{content}
     """
-  end
-
-  defp format_result(config, timestamp, {:timeout, reason}) do
-    format_error(config, timestamp, reason)
   end
 
   defp format_error(config, timestamp, error) do

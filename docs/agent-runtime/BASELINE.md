@@ -46,5 +46,5 @@ Earlier material (including the removed `SYNAPSIS_AGENT_DAEMON_DESIGN_FOR_CODEX.
 ## Start order
 
 1. **PR-00 / Track A** — deterministic test harness and interactive-session characterization (this baseline).
-2. **Wave 1** — Tracks B (typed events), C (capability policy), D (run facts/reducer) in parallel after contracts freeze.
+2. **Wave 1** — Tracks B (typed events), C (capability policy), D (run facts/reducer) in parallel after contracts freeze. See [WAVE1_CONTRACTS.md](WAVE1_CONTRACTS.md).
 3. **PR-04 / Track E** — Daemon + RunCoordinator only after B/C/D merge.

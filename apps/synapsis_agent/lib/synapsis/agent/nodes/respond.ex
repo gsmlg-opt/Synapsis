@@ -3,13 +3,16 @@ defmodule Synapsis.Agent.Nodes.Respond do
   Finalises a conversational response and loops back to receive_message.
 
   Unlike `Complete` (which terminates the graph), `Respond` keeps the
-  conversation alive: it broadcasts the done/idle signals, resets per-turn
-  state, and returns `{:next, :loop, state}` so the graph runner advances to
-  the :receive edge defined in ConversationalLoop.
+  conversation alive: it broadcasts turn-complete typed events plus the
+  done/idle UI projections, resets per-turn state, and returns
+  `{:next, :loop, state}` so the graph runner advances to the :receive edge
+  defined in ConversationalLoop.
   """
   @behaviour Synapsis.Agent.Runtime.Node
 
   require Logger
+
+  alias Synapsis.Agent.Events.Emitter
 
   @impl true
   @spec run(map(), map()) :: {:next, atom(), map()}
@@ -17,18 +20,7 @@ defmodule Synapsis.Agent.Nodes.Respond do
     session_id = state.session_id
 
     Synapsis.Session.Worker.Persistence.update_session_status(session_id, "idle")
-
-    Phoenix.PubSub.broadcast(
-      Synapsis.PubSub,
-      "session:#{session_id}",
-      {"done", %{}}
-    )
-
-    Phoenix.PubSub.broadcast(
-      Synapsis.PubSub,
-      "session:#{session_id}",
-      {"session_status", %{status: "idle"}}
-    )
+    Emitter.emit_turn_completed(session_id)
 
     new_state =
       Map.merge(state, %{

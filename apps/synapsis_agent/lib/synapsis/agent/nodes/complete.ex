@@ -4,6 +4,8 @@ defmodule Synapsis.Agent.Nodes.Complete do
 
   require Logger
 
+  alias Synapsis.Agent.Events.Emitter
+
   @impl true
   @spec run(map(), map()) :: {:next, atom(), map()}
   def run(state, _ctx) do
@@ -11,28 +13,14 @@ defmodule Synapsis.Agent.Nodes.Complete do
     status = if Map.get(state, :stream_error), do: "error", else: "idle"
     message = stream_error_message(state)
 
-    # Persist terminal status to DB so page reloads show correct state.
+    # Persist terminal status so page reloads show correct state.
     Synapsis.Session.Worker.Persistence.update_session_status(session_id, status)
 
     if message do
-      Phoenix.PubSub.broadcast(
-        Synapsis.PubSub,
-        "session:#{session_id}",
-        {"error", %{message: message}}
-      )
+      Emitter.emit_session_failed(session_id, message)
     else
-      Phoenix.PubSub.broadcast(
-        Synapsis.PubSub,
-        "session:#{session_id}",
-        {"done", %{}}
-      )
+      Emitter.emit_session_completed(session_id)
     end
-
-    Phoenix.PubSub.broadcast(
-      Synapsis.PubSub,
-      "session:#{session_id}",
-      {"session_status", %{status: status}}
-    )
 
     Logger.info("coding_loop_complete",
       session_id: session_id,

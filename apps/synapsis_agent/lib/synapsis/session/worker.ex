@@ -645,8 +645,12 @@ defmodule Synapsis.Session.Worker do
           {:error, reason, new_workflow_state} ->
             Logger.warning("engine_error", session_id: state.session_id, reason: inspect(reason))
             Persistence.update_session_status(state.session_id, "error")
-            Persistence.broadcast(state.session_id, "error", %{message: "Agent engine error"})
-            Persistence.broadcast(state.session_id, "session_status", %{status: "error"})
+
+            Synapsis.Agent.Events.Emitter.emit_session_failed(
+              state.session_id,
+              "Agent engine error"
+            )
+
             %{state | engine_state: new_workflow_state}
         end
 

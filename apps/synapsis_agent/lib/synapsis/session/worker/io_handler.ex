@@ -285,10 +285,15 @@ defmodule Synapsis.Session.Worker.IOHandler do
     status = if reason == :completed, do: "idle", else: "error"
     Persistence.update_session_status(state.session_id, status)
 
-    Persistence.broadcast(state.session_id, "session_status", %{
-      status: status,
-      reason: to_string(reason)
-    })
+    if reason == :completed do
+      Synapsis.Agent.Events.Emitter.emit_session_completed(state.session_id)
+    else
+      Synapsis.Agent.Events.Emitter.emit_session_failed(
+        state.session_id,
+        "Query loop terminated: #{reason}",
+        reason: reason
+      )
+    end
 
     state
   end
