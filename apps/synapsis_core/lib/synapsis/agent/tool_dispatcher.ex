@@ -3,9 +3,14 @@ defmodule Synapsis.Agent.ToolDispatcher do
   Handles tool permission checks, async dispatch, and result collection.
 
   Extracted from Session.Worker.process_tool_uses/1 and execute_tool_async/2.
+  Classification and execution go through CapabilityPolicy / Tool.Gateway (Track C).
   """
 
   alias Synapsis.Session.Monitor
+  alias Synapsis.Tool.Capability.PolicySnapshot
+  alias Synapsis.Tool.CapabilityPolicy
+  alias Synapsis.Tool.Gateway
+  alias Synapsis.Tool.Permission
   require Logger
 
   @type dispatch_result ::
@@ -29,14 +34,21 @@ defmodule Synapsis.Agent.ToolDispatcher do
         mon
       end)
 
+    session_id = extract_session_id(session)
+    snapshot = policy_snapshot_for(session_id)
+
     classified =
       Enum.map(tool_uses, fn tool_use ->
-        permission = Synapsis.Tool.Permission.check(tool_use.tool, session)
+        input = tool_use.input || %{}
 
-        case permission do
-          :approved -> {:approved, tool_use}
-          :requires_approval -> {:requires_approval, tool_use}
-          :denied -> {:denied, tool_use}
+        case CapabilityPolicy.evaluate(
+               %{name: tool_use.tool, input: input},
+               snapshot,
+               %{session_id: session_id, input: input}
+             ) do
+          {:allow, _grant} -> {:approved, tool_use}
+          {:approval_required, _req} -> {:requires_approval, tool_use}
+          {:deny, _reason} -> {:denied, tool_use}
         end
       end)
 
@@ -58,20 +70,25 @@ defmodule Synapsis.Agent.ToolDispatcher do
     session_id = opts[:session_id]
     agent_id = opts[:agent_id] || "default"
     tool_call_hashes = opts[:tool_call_hashes] || MapSet.new()
+    operator_approval = opts[:operator_approval] in [true, :approved]
 
     call_hash = :erlang.phash2({tool_use.tool, tool_use.input})
     is_duplicate = MapSet.member?(tool_call_hashes, call_hash)
 
     Task.Supervisor.async_nolink(Synapsis.Tool.TaskSupervisor, fn ->
       try do
-        result =
-          Synapsis.Tool.Executor.execute_approved(tool_use.tool, tool_use.input, %{
-            project_path: effective_path,
-            session_id: session_id,
-            working_dir: effective_path,
-            agent_id: agent_id,
-            agent_scope: :agent
-          })
+        context = %{
+          project_path: effective_path,
+          session_id: session_id,
+          working_dir: effective_path,
+          agent_id: agent_id,
+          agent_scope: :agent,
+          permission_mode: opts[:permission_mode],
+          operator_approval: operator_approval,
+          attended?: Map.get(opts, :attended?, true)
+        }
+
+        result = Gateway.execute(tool_use.tool, tool_use.input || %{}, context)
 
         case result do
           {:ok, output} ->
@@ -131,7 +148,12 @@ defmodule Synapsis.Agent.ToolDispatcher do
   end
 
   defp error_message(:timeout), do: "Tool execution timed out"
+  defp error_message(:requires_approval), do: "Tool requires approval"
+  defp error_message(:approval_unavailable), do: "Tool approval unavailable for unattended run"
+  defp error_message(:capability_denied), do: "Tool denied by capability policy"
+  defp error_message(:grant_required), do: "Tool execution requires a capability grant"
   defp error_message(reason) when is_binary(reason), do: reason
+  defp error_message(reason) when is_atom(reason), do: "Tool denied: #{reason}"
   defp error_message(_reason), do: "Tool execution failed"
 
   @doc """
@@ -159,7 +181,13 @@ defmodule Synapsis.Agent.ToolDispatcher do
           case classification do
             :approved ->
               task =
-                execute_async(tool_use, caller_pid, Map.put(opts, :tool_call_hashes, hashes))
+                execute_async(
+                  tool_use,
+                  caller_pid,
+                  opts
+                  |> Map.put(:tool_call_hashes, hashes)
+                  |> Map.put(:operator_approval, true)
+                )
 
               MapSet.put(acc, task.ref)
 
@@ -189,4 +217,20 @@ defmodule Synapsis.Agent.ToolDispatcher do
 
     {new_hashes, task_refs}
   end
+
+  defp policy_snapshot_for(session_id) when is_binary(session_id) do
+    config = Permission.session_config(session_id)
+    config = %{config | session_id: session_id}
+
+    PolicySnapshot.from_session_config(config, attended?: true, session_id: session_id)
+  end
+
+  defp policy_snapshot_for(_session_id) do
+    PolicySnapshot.from_permission_mode("ask", attended?: true)
+  end
+
+  defp extract_session_id(%{id: id}) when is_binary(id), do: id
+  defp extract_session_id(%{session_id: id}) when is_binary(id), do: id
+  defp extract_session_id(id) when is_binary(id), do: id
+  defp extract_session_id(_), do: nil
 end

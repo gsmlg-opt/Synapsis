@@ -3,14 +3,14 @@
 Frozen for Track B (typed completion). Tracks C and D implement against these
 contracts; they are **not** implemented in the Track B PR.
 
-## Track C — Capability policy (next)
+## Track C — Capability policy (implemented in PR-02)
 
 - Single evaluation boundary: `CapabilityPolicy.evaluate(tool_call, policy_snapshot, execution_context)` → `{:allow, grant} | {:approval_required, req} | {:deny, reason}`.
-- Execution accepts a scoped grant via `ToolGateway.execute/3`, not a caller-provided boolean.
-- Ordinary call sites must not use `Executor.execute_approved/3` without an opaque grant.
-- Missing session / policy / workspace context **fail closed**.
+- Execution accepts a scoped grant via `Tool.Gateway.execute/3` / `execute_authorized/4`.
+- `Executor.execute_approved/3` requires `:capability_grant`; bare calls return `:grant_required`.
+- Missing session / policy context **fail closed**.
 - Corrected `ask` semantics: read → allow; write/execute → approval_required; destructive → deny unless explicitly granted; unknown → deny.
-- Unattended runs never wait unbounded for interactive approval.
+- Unattended runs map approval needs to `:approval_unavailable` (never unbounded wait).
 
 ## Track D — Run facts / reducer (next)
 

@@ -11,8 +11,9 @@ defmodule Synapsis.Agent.Nodes.ToolDispatch do
   def run(state, _ctx) do
     case Store.get_meta(state.session_id) do
       {:error, :not_found} ->
-        {:next, :all_approved,
-         Map.put(state, :classified_tools, Enum.map(state.tool_uses, &{:approved, &1}))}
+        # C-004: missing session fails closed — deny all tools.
+        denied = Enum.map(state.tool_uses, &{:denied, &1})
+        {:next, :all_approved, Map.put(state, :classified_tools, denied)}
 
       {:ok, meta} ->
         run_with_session(state, Session.from_meta(meta))

@@ -315,14 +315,18 @@ defmodule Synapsis.Session.Worker.IOHandler do
 
         Task.Supervisor.async_nolink(Synapsis.Tool.TaskSupervisor, fn ->
           try do
+            context = %{
+              project_path: effective_path,
+              session_id: session_id,
+              working_dir: effective_path,
+              agent_id: agent_id,
+              agent_scope: :agent,
+              operator_approval: true,
+              attended?: true
+            }
+
             result =
-              Synapsis.Tool.Executor.execute_approved(tool_use.tool, tool_use.input, %{
-                project_path: effective_path,
-                session_id: session_id,
-                working_dir: effective_path,
-                agent_id: agent_id,
-                agent_scope: :agent
-              })
+              Synapsis.Tool.Gateway.execute(tool_use.tool, tool_use.input || %{}, context)
 
             {output, is_error} =
               case result do
@@ -399,7 +403,17 @@ defmodule Synapsis.Session.Worker.IOHandler do
   end
 
   defp tool_error_message(:timeout), do: "Tool execution timed out"
+  defp tool_error_message(:requires_approval), do: "Tool requires approval"
+
+  defp tool_error_message(:approval_unavailable),
+    do: "Tool approval unavailable for unattended run"
+
+  defp tool_error_message(:capability_denied), do: "Tool denied by capability policy"
+  defp tool_error_message(:grant_required), do: "Tool execution requires a capability grant"
+  defp tool_error_message(:missing_session_context), do: "Tool denied: missing session context"
+  defp tool_error_message(:missing_policy_snapshot), do: "Tool denied: missing policy snapshot"
   defp tool_error_message(reason) when is_binary(reason), do: reason
+  defp tool_error_message(reason) when is_atom(reason), do: "Tool denied: #{reason}"
   defp tool_error_message(_), do: "Tool execution failed"
 
   defp maybe_attach_debug(state) do

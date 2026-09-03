@@ -135,13 +135,14 @@ defmodule Synapsis.Tool.Permission do
         }
 
       _ask ->
+        # C-006: read allow; write/execute require approval; destructive deny by default.
         %{
           mode: :interactive,
           allow_read: :allow,
-          allow_write: :allow,
-          allow_execute: :allow,
-          allow_destructive: :allow,
-          tool_overrides: %{"bash(*)" => "requires_approval"}
+          allow_write: :ask,
+          allow_execute: :ask,
+          allow_destructive: :deny,
+          tool_overrides: %{}
         }
     end
   end

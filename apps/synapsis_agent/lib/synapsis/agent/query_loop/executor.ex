@@ -113,14 +113,20 @@ defmodule Synapsis.Agent.QueryLoop.Executor do
         {:error, "Unknown tool: #{name}"}
 
       {:module, _module, _opts} ->
-        Synapsis.Tool.Executor.execute_approved(name, input, context)
+        Synapsis.Tool.Gateway.execute(name, input, gateway_context(context))
 
       {:process, _pid, _opts} ->
-        Synapsis.Tool.Executor.execute_approved(name, input, context)
+        Synapsis.Tool.Gateway.execute(name, input, gateway_context(context))
 
       mod when is_atom(mod) ->
         execute_module_with_retries(name, mod, input, context)
     end
+  end
+
+  defp gateway_context(context) when is_map(context) do
+    context
+    |> Map.put_new(:attended?, true)
+    |> Map.put_new(:permission_mode, context[:permission_mode] || "ask")
   end
 
   defp execute_module_with_retries(name, mod, input, context) do

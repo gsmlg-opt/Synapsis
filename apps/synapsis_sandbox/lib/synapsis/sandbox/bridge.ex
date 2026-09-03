@@ -243,7 +243,13 @@ defmodule Synapsis.Sandbox.Bridge do
 
     task =
       Task.Supervisor.async_nolink(state.task_supervisor, fn ->
-        Synapsis.Tool.Executor.execute(method, params, state.context)
+        Synapsis.Tool.Executor.execute(
+          method,
+          params,
+          state.context
+          |> Map.put(:allow_missing_session, true)
+          |> Map.put_new(:permission_mode, "yolo")
+        )
       end)
 
     timer_ref = Process.send_after(self(), {:reverse_timeout, task.ref}, state.reverse_timeout_ms)

@@ -74,7 +74,11 @@ defmodule Synapsis.Tool.ParallelTest do
         end
 
       start = System.monotonic_time(:millisecond)
-      results = Executor.execute_batch(calls, %{})
+      results = Executor.execute_batch(calls, %{
+            session_id: "parallel-batch-session",
+            permission_mode: "yolo",
+            attended?: true
+          })
       elapsed = System.monotonic_time(:millisecond) - start
 
       # All 5 should succeed
@@ -95,7 +99,11 @@ defmodule Synapsis.Tool.ParallelTest do
           %{id: "ord_#{i}", name: "parallel_test_slow", input: %{}}
         end
 
-      results = Executor.execute_batch(calls, %{})
+      results = Executor.execute_batch(calls, %{
+            session_id: "parallel-batch-session",
+            permission_mode: "yolo",
+            attended?: true
+          })
       ids = Enum.map(results, fn {id, _} -> id end)
 
       assert ids == ["ord_1", "ord_2", "ord_3", "ord_4", "ord_5"]
@@ -111,7 +119,11 @@ defmodule Synapsis.Tool.ParallelTest do
       # 10 calls * 50ms each, even with limited parallelism, should be well under 2s
       task =
         Task.async(fn ->
-          Executor.execute_batch(calls, %{})
+          Executor.execute_batch(calls, %{
+            session_id: "parallel-batch-session",
+            permission_mode: "yolo",
+            attended?: true
+          })
         end)
 
       results = Task.await(task, 2_000)
@@ -142,7 +154,11 @@ defmodule Synapsis.Tool.ParallelTest do
         %{id: "ok_3", name: "parallel_test_slow", input: %{}}
       ]
 
-      results = Executor.execute_batch(calls, %{})
+      results = Executor.execute_batch(calls, %{
+            session_id: "parallel-batch-session",
+            permission_mode: "yolo",
+            attended?: true
+          })
 
       result_map = Map.new(results)
       assert {:ok, "done"} = result_map["ok_1"]
@@ -164,7 +180,7 @@ defmodule Synapsis.Tool.ParallelTest do
       end)
 
       assert {:ok, "retried"} =
-               Executor.execute_approved(
+               Synapsis.Tool.Executor.dispatch_granted(
                  "parallel_test_flaky_timeout",
                  %{counter: counter},
                  %{tool_max_retries: 1, tool_retry_backoff_ms: 0}
@@ -187,7 +203,7 @@ defmodule Synapsis.Tool.ParallelTest do
       end)
 
       assert {:error, :timeout} =
-               Executor.execute_approved(
+               Synapsis.Tool.Executor.dispatch_granted(
                  "parallel_test_never_reply",
                  %{},
                  %{tool_max_retries: 1, tool_retry_backoff_ms: 0}

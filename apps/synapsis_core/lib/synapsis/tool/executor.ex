@@ -27,21 +27,36 @@ defmodule Synapsis.Tool.Executor do
     timeout * (max_retries + 1) + backoff * max_retries
   end
 
-  @doc "Execute a tool by name with input and context."
+  @doc "Execute a tool by name with input and context via the capability gateway."
   def execute(tool_name, input, context) when is_binary(tool_name) do
-    with {:ok, entry} <- registry_lookup(tool_name),
-         :ok <- check_enabled(entry),
-         :ok <- check_permission(tool_name, context) do
-      dispatch_with_retries(tool_name, entry, input, context)
-    end
+    Synapsis.Tool.Gateway.execute(tool_name, input, context)
   end
 
-  @doc "Execute a tool, skipping the permission check."
+  @doc """
+  Execute a tool with an opaque capability grant.
+
+  Prefer `Synapsis.Tool.Gateway.execute/3` or `execute_authorized/4`.
+  Passing a context without `:capability_grant` is rejected (fail closed).
+  """
   def execute_approved(%{name: name, input: input}, context) do
     execute_approved(name, input, context)
   end
 
   def execute_approved(tool_name, input, context) when is_binary(tool_name) do
+    case Map.get(context, :capability_grant) do
+      %Synapsis.Tool.Capability.Grant{} = grant ->
+        Synapsis.Tool.Gateway.execute_authorized(tool_name, input, context, grant)
+
+      _other ->
+        Logger.warning("execute_approved_rejected_without_grant", tool: tool_name)
+        {:error, :grant_required}
+    end
+  end
+
+  @doc false
+  @spec dispatch_granted(String.t(), map(), map()) :: execute_result()
+  def dispatch_granted(tool_name, input, context)
+      when is_binary(tool_name) and is_map(input) and is_map(context) do
     with {:ok, entry} <- registry_lookup(tool_name),
          :ok <- check_enabled(entry) do
       dispatch_with_retries(tool_name, entry, input, context)
@@ -129,20 +144,6 @@ defmodule Synapsis.Tool.Executor do
   end
 
   defp check_enabled({:process, _pid, _opts}), do: :ok
-
-  defp check_permission(tool_name, context) do
-    session = context[:session] || context[:session_id]
-
-    if session do
-      case Synapsis.Tool.Permission.check(tool_name, session) do
-        :approved -> :ok
-        :denied -> {:error, :denied}
-        :requires_approval -> {:error, :requires_approval}
-      end
-    else
-      :ok
-    end
-  end
 
   defp dispatch(tool_name, {:module, module, opts}, input, context) do
     execute_module(tool_name, module, opts, input, context)

@@ -371,14 +371,14 @@ defmodule Synapsis.Tool.PermissionTest do
              } = Permission.config_for_mode("yolo")
     end
 
-    test "ask only requests approval for bash" do
+    test "ask allows reads, asks for write/execute, denies destructive" do
       assert %{
                mode: :interactive,
                allow_read: :allow,
-               allow_write: :allow,
-               allow_execute: :allow,
-               allow_destructive: :allow,
-               tool_overrides: %{"bash(*)" => "requires_approval"}
+               allow_write: :ask,
+               allow_execute: :ask,
+               allow_destructive: :deny,
+               tool_overrides: %{}
              } = Permission.config_for_mode("ask")
     end
 
