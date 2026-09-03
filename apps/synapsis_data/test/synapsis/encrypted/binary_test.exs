@@ -66,8 +66,11 @@ defmodule Synapsis.Encrypted.BinaryTest do
 
     test "returns error for corrupted data" do
       {:ok, encrypted} = Binary.dump("test")
-      # Corrupt the ciphertext portion
-      corrupted = binary_part(encrypted, 0, byte_size(encrypted) - 1) <> <<0>>
+      # Flip a guaranteed bit in the auth tag (bytes 12..27). Replacing a byte
+      # with <<0>> is nondeterministic when that byte is already zero.
+      <<prefix::binary-12, tag_byte, rest::binary>> = encrypted
+      corrupted = <<prefix::binary, Bitwise.bxor(tag_byte, 0x01), rest::binary>>
+      assert corrupted != encrypted
       assert :error = Binary.load(corrupted)
     end
   end

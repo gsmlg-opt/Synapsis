@@ -1,6 +1,7 @@
 defmodule Synapsis.Session.ReleaseReadinessTest do
   use ExUnit.Case, async: false
 
+  alias Synapsis.Agent.TestSupport.DeterministicProvider
   alias Synapsis.Session.{DynamicSupervisor, Read, Snapshot, Worker}
 
   defmodule GoldenTool do
@@ -72,10 +73,18 @@ defmodule Synapsis.Session.ReleaseReadinessTest do
 
       case request_number do
         1 ->
-          send_sse(conn, [tool_call_chunk(tool_name, tool_call_id), finish_chunk("tool_calls")])
+          DeterministicProvider.send_sse(conn, [
+            DeterministicProvider.tool_call_chunk(tool_name, tool_call_id, %{
+              "value" => "verified"
+            }),
+            DeterministicProvider.finish_chunk("tool_calls")
+          ])
 
         2 ->
-          send_sse(conn, [text_chunk("golden path complete"), finish_chunk("stop")])
+          DeterministicProvider.send_sse(conn, [
+            DeterministicProvider.text_chunk("golden path complete"),
+            DeterministicProvider.finish_chunk("stop")
+          ])
 
         _unexpected ->
           Plug.Conn.send_resp(conn, 500, "unexpected provider request")
@@ -189,56 +198,6 @@ defmodule Synapsis.Session.ReleaseReadinessTest do
     assert messages_after_restart == messages_before_restart
     assert_golden_transcript(messages_after_restart, tool_name, tool_call_id)
     assert_counters(counter)
-  end
-
-  defp tool_call_chunk(tool_name, tool_call_id) do
-    %{
-      "id" => "golden-response-1",
-      "choices" => [
-        %{
-          "index" => 0,
-          "delta" => %{
-            "tool_calls" => [
-              %{
-                "index" => 0,
-                "id" => tool_call_id,
-                "type" => "function",
-                "function" => %{
-                  "name" => tool_name,
-                  "arguments" => Jason.encode!(%{"value" => "verified"})
-                }
-              }
-            ]
-          },
-          "finish_reason" => nil
-        }
-      ]
-    }
-  end
-
-  defp text_chunk(text) do
-    %{
-      "id" => "golden-response-2",
-      "choices" => [
-        %{"index" => 0, "delta" => %{"content" => text}, "finish_reason" => nil}
-      ]
-    }
-  end
-
-  defp finish_chunk(reason) do
-    %{
-      "choices" => [%{"index" => 0, "delta" => %{}, "finish_reason" => reason}]
-    }
-  end
-
-  defp send_sse(conn, chunks) do
-    body =
-      Enum.map_join(chunks, "\n\n", fn chunk -> "data: #{Jason.encode!(chunk)}" end) <>
-        "\n\ndata: [DONE]\n\n"
-
-    conn
-    |> Plug.Conn.put_resp_content_type("text/event-stream")
-    |> Plug.Conn.send_resp(200, body)
   end
 
   defp assert_golden_transcript(messages, tool_name, tool_call_id) do

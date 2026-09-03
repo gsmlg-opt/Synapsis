@@ -34,7 +34,10 @@ defmodule SynapsisAgent.MixProject do
       {:synapsis_core, in_umbrella: true},
       {:synapsis_provider, in_umbrella: true},
       {:synapsis_workspace, in_umbrella: true},
-      {:crontab, "~> 1.1"}
+      {:crontab, "~> 1.1"},
+      {:bypass, "~> 2.1", only: :test},
+      {:cowboy, "~> 2.18", only: :test},
+      {:cowlib, "~> 2.19", only: :test}
     ]
   end
 end
