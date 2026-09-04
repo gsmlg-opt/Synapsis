@@ -128,6 +128,10 @@ defmodule Synapsis.Backplane.SyncTest do
 
     first_artifacts = synced.artifacts
 
+    assert {:ok, _provider} = Providers.update(provider.id, %{enabled: false})
+    assert {:ok, _skill} = Skills.update(skill, %{enabled: false})
+    assert {:ok, _mcp} = MCPConfigs.update(mcp, %{enabled: false})
+
     changed_opts =
       client_opts
       |> Keyword.put(:models, {:ok, [%{"id" => "coding-v2"}]})
@@ -153,13 +157,16 @@ defmodule Synapsis.Backplane.SyncTest do
 
     assert {:ok, [same_provider]} = Providers.list()
     assert same_provider.id == provider.id
+    assert same_provider.enabled == false
     assert same_provider.config["available_models"] == [%{"id" => "coding-v2"}]
 
     assert [same_skill] = Skills.list()
     assert same_skill.id == skill.id
+    assert same_skill.enabled == false
     assert same_skill.system_prompt_fragment == "Inspect the complete diff."
     assert [same_mcp] = MCPConfigs.list()
     assert same_mcp.id == mcp.id
+    assert same_mcp.enabled == false
   end
 
   test "a failed surface preserves last-known-good imports and marks only that surface unavailable" do
@@ -199,7 +206,7 @@ defmodule Synapsis.Backplane.SyncTest do
     assert provider.config["available_models"] == [%{"id" => "stable-model"}]
   end
 
-  test "a successful scan retains disappeared source-owned capabilities as disabled" do
+  test "a successful scan retains disappeared capabilities as unavailable without changing local enablement" do
     {:ok, connection} =
       Connection.create(%{name: "prune", base_url: "https://backplane.example.test"})
 
@@ -245,17 +252,17 @@ defmodule Synapsis.Backplane.SyncTest do
              )
 
     assert synced.artifacts["skill_ids"]["gone"] == gone_id
-    assert %{enabled: false} = gone = Skills.get(gone_id)
+    assert %{enabled: true} = gone = Skills.get(gone_id)
     assert gone.config_overrides["backplane_available"] == false
 
-    assert [%{name: "Gone", enabled: false}, %{name: "Keep", enabled: true}] = Skills.list()
+    assert [%{name: "Gone", enabled: true}, %{name: "Keep", enabled: true}] = Skills.list()
 
     assert {:ok, provider} = Providers.get_by_name("backplane-prune")
-    assert provider.enabled == false
+    assert provider.enabled == true
     assert provider.config["backplane_available"] == false
 
     assert mcp = MCPConfigs.get_by_name("backplane-prune")
-    assert mcp.enabled == false
+    assert mcp.enabled == true
     assert mcp.config["backplane_available"] == false
     assert_receive {:mcp_stopped, "backplane-prune"}
   end

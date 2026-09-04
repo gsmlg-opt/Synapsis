@@ -92,7 +92,7 @@ defmodule Synapsis.Backplane.Sync do
       name: artifact_name(connection),
       type: "openai",
       base_url: connection.base_url <> "/v1",
-      enabled: available?,
+      enabled: true,
       api_key_encrypted: connection.credential,
       config: %{
         "available_models" => models,
@@ -149,7 +149,7 @@ defmodule Synapsis.Backplane.Sync do
     attrs = %{
       name: artifact_name(connection),
       transport: "streamable_http",
-      enabled: available?,
+      enabled: true,
       url: connection.base_url <> "/mcp",
       headers: %{},
       config: %{
@@ -188,7 +188,7 @@ defmodule Synapsis.Backplane.Sync do
           config_overrides =
             Map.put(skill.config_overrides || %{}, "backplane_available", false)
 
-          case Skills.update(skill, %{enabled: false, config_overrides: config_overrides}) do
+          case Skills.update(skill, %{config_overrides: config_overrides}) do
             {:ok, _disabled} -> {:cont, {:ok, retained}}
             {:error, reason} -> {:halt, {:error, {slug, reason}}}
           end
@@ -199,10 +199,13 @@ defmodule Synapsis.Backplane.Sync do
     end)
   end
 
-  defp reconcile_mcp(mcp_runtime, %{enabled: true} = config),
+  defp reconcile_mcp(
+         mcp_runtime,
+         %{enabled: true, config: %{"backplane_available" => true}} = config
+       ),
     do: protect(fn -> mcp_runtime.restart(config) end)
 
-  defp reconcile_mcp(mcp_runtime, %{enabled: false, name: name}) do
+  defp reconcile_mcp(mcp_runtime, %{name: name}) do
     case protect(fn -> mcp_runtime.stop(name) end) do
       {:error, :not_found} -> :ok
       result -> result
@@ -215,7 +218,8 @@ defmodule Synapsis.Backplane.Sync do
     case Providers.get(id) do
       {:ok, provider} ->
         config = Map.merge(provider.config || %{}, attrs.config)
-        Providers.update(id, Map.put(attrs, :config, config))
+        attrs = attrs |> Map.delete(:enabled) |> Map.put(:config, config)
+        Providers.update(id, attrs)
 
       {:error, :not_found} ->
         Providers.create(Map.put(attrs, :id, id))
@@ -227,7 +231,7 @@ defmodule Synapsis.Backplane.Sync do
   defp upsert_skill(id, attrs) do
     case Skills.get(id) do
       nil -> Skills.create(Map.put(attrs, :id, id))
-      skill -> Skills.update(skill, attrs)
+      skill -> Skills.update(skill, Map.delete(attrs, :enabled))
     end
   end
 
@@ -236,7 +240,7 @@ defmodule Synapsis.Backplane.Sync do
   defp upsert_mcp(id, attrs) do
     case MCPConfigs.get(id) do
       nil -> MCPConfigs.create(Map.put(attrs, :id, id))
-      config -> MCPConfigs.update(config, attrs)
+      config -> MCPConfigs.update(config, Map.delete(attrs, :enabled))
     end
   end
 
