@@ -83,8 +83,10 @@ defmodule Synapsis.Agent.RunEvents do
     )
   end
 
-  defp lifecycle_payload(:failed, run, payload), do: Map.put(payload, :error, run.error)
-  defp lifecycle_payload(_event, _run, payload), do: payload
+  defp lifecycle_payload(event, run, payload) do
+    payload = Map.put(payload, :routine_id, run.routine_id)
+    if event == :failed, do: Map.put(payload, :error, run.error), else: payload
+  end
 
   defp lifecycle_topic(:created), do: "agent.run.queued"
   defp lifecycle_topic(event), do: "agent.run.#{event}"

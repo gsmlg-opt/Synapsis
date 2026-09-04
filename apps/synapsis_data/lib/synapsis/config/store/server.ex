@@ -77,10 +77,23 @@ defmodule Synapsis.Config.Store.Server do
     with {:ok, attrs} <- validate_entry(state.type, attrs),
          id when not is_nil(id) <- id_of(attrs) do
       entry = Map.put(atomize_keys(attrs), :id, id)
-      :ets.insert(state.table, {id, entry})
-      persist(state.type)
-      # Expose string-keyed maps consistently with get/2 and list/1.
-      {:reply, {:ok, stringify_keys(entry)}, state}
+
+      candidate_entries =
+        state.table
+        |> :ets.tab2list()
+        |> Map.new()
+        |> Map.put(id, entry)
+        |> Map.values()
+
+      case persist(state.type, candidate_entries) do
+        :ok ->
+          :ets.insert(state.table, {id, entry})
+          # Expose string-keyed maps consistently with get/2 and list/1.
+          {:reply, {:ok, stringify_keys(entry)}, state}
+
+        {:error, reason} ->
+          {:reply, {:error, reason}, state}
+      end
     else
       nil -> {:reply, {:error, :missing_id}, state}
       {:error, reason} -> {:reply, {:error, reason}, state}
@@ -138,26 +151,31 @@ defmodule Synapsis.Config.Store.Server do
   end
 
   defp persist(type) do
-    path = Store.file_path(type)
-    File.mkdir_p!(Path.dirname(path))
-
     entries =
       :ets.tab2list(table(type))
-      |> Enum.map(fn {_id, entry} -> stringify_keys(entry) end)
+      |> Enum.map(fn {_id, entry} -> entry end)
+
+    persist(type, entries)
+  end
+
+  defp persist(type, entries) do
+    path = Store.file_path(type)
 
     table_key = Atom.to_string(type) <> "s"
-    content = encode_toml_array_of_tables(table_key, entries)
+    content = encode_toml_array_of_tables(table_key, Enum.map(entries, &stringify_keys/1))
 
-    case File.write(path, content) do
-      :ok ->
-        :ok
-
+    with :ok <- File.mkdir_p(Path.dirname(path)),
+         :ok <- File.write(path, content) do
+      :ok
+    else
       {:error, reason} ->
         Logger.warning("config_store_write_error",
           type: type,
           path: path,
           reason: inspect(reason)
         )
+
+        {:error, {:persist_failed, reason}}
     end
   end
 
@@ -243,9 +261,10 @@ defmodule Synapsis.Config.Store.Server do
   defp valid_schedule(attrs) do
     case value(attrs, :schedule) do
       schedule when is_binary(schedule) ->
-        if length(String.split(schedule, " ", trim: true)) == 5,
-          do: :ok,
-          else: {:error, :schedule}
+        case Crontab.CronExpression.Parser.parse(schedule) do
+          {:ok, _expression} -> :ok
+          {:error, _reason} -> {:error, :schedule}
+        end
 
       _other ->
         {:error, :schedule}

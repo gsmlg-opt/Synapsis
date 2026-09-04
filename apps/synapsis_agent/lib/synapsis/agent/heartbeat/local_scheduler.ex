@@ -57,6 +57,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
       config_loader: Keyword.get(opts, :config_loader, &load_configs/0),
       config_writer: Keyword.get(opts, :config_writer, &ConfigStore.put/2),
       trigger_fun: Keyword.get(opts, :trigger_fun, &execute_config/2),
+      runs: Keyword.get(opts, :runs, Synapsis.Agent.Runs),
       trigger_timeout_ms: positive_timeout(opts[:trigger_timeout_ms], @trigger_timeout_ms),
       trigger_tasks: %{},
       persistence_tasks: %{},
@@ -72,6 +73,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
         ),
       tracked_runs: %{},
       terminal_events: %{},
+      terminal_results: %{},
       trigger_results: %{},
       reload_interval_ms: Keyword.get(opts, :reload_interval_ms, @reload_interval_ms)
     }
@@ -404,7 +406,10 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
             terminal_events: terminal_events
         }
 
-      {payload, terminal_events} ->
+      {:persisted, _terminal_events} ->
+        state
+
+      {payload, terminal_events} when is_map(payload) ->
         state = %{state | terminal_events: terminal_events}
         persist_terminal(state, tracked, payload.status, payload)
     end
@@ -431,17 +436,65 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
   defp handle_terminal_event(state, run_id, status, payload) do
     case Map.pop(state.tracked_runs, run_id) do
       {nil, tracked_runs} ->
-        terminal_events =
-          if known_config_run?(state.configs, payload),
-            do: put_bounded_terminal(state.terminal_events, run_id, payload),
-            else: state.terminal_events
-
-        %{state | tracked_runs: tracked_runs, terminal_events: terminal_events}
+        state
+        |> Map.put(:tracked_runs, tracked_runs)
+        |> reconcile_terminal_event(run_id, status, payload)
 
       {tracked, tracked_runs} ->
-        state = %{state | tracked_runs: tracked_runs}
-        persist_terminal(state, tracked, status, payload)
+        state
+        |> Map.put(:tracked_runs, tracked_runs)
+        |> put_terminal_event(run_id, :persisted)
+        |> persist_terminal(tracked, status, payload)
     end
+  end
+
+  defp reconcile_terminal_event(state, run_id, status, payload) do
+    cond do
+      Map.get(state.terminal_events, run_id) == :persisted ->
+        state
+
+      true ->
+        case durable_terminal_tracking(state, run_id, status) do
+          {:ok, tracked} ->
+            state
+            |> put_terminal_event(run_id, :persisted)
+            |> persist_terminal(tracked, status, payload)
+
+          :error ->
+            if known_config_run?(state.configs, payload),
+              do: put_terminal_event(state, run_id, payload),
+              else: state
+        end
+    end
+  end
+
+  defp durable_terminal_tracking(state, run_id, status) do
+    with {:ok, run} <- state.runs.fetch(run_id),
+         true <- run.status == status,
+         config when not is_nil(config) <- matching_config(state.configs, run) do
+      name = value(config, :name)
+
+      {:ok,
+       %{
+         name: name,
+         config: config,
+         last_run_at: run.started_at || run.inserted_at,
+         next_run_at: get_in(state.timers, [name, :next_run_at])
+       }}
+    else
+      _unmatched -> :error
+    end
+  end
+
+  defp matching_config(configs, run) do
+    Enum.find(configs, fn config ->
+      value(config, :id) == run.routine_id and
+        value(config, :kind, "heartbeat") == run.kind
+    end)
+  end
+
+  defp put_terminal_event(state, run_id, event) do
+    %{state | terminal_events: put_bounded_terminal(state.terminal_events, run_id, event)}
   end
 
   defp persist_terminal(state, tracked, status, payload) do
@@ -455,7 +508,8 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
 
     state = %{
       state
-      | trigger_results: Map.put(state.trigger_results, tracked.name, observable)
+      | trigger_results: Map.put(state.trigger_results, tracked.name, observable),
+        terminal_results: Map.put(state.terminal_results, tracked.name, observable)
     }
 
     enqueue_persistence(state, tracked.name, config_type(tracked.config), attrs)
@@ -592,14 +646,28 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
   defp persistence_success?({:ok, _value}), do: true
   defp persistence_success?(_result), do: false
 
-  defp apply_persistence_result(state, _task, :ok), do: state
-  defp apply_persistence_result(state, _task, {:ok, _value}), do: state
+  defp apply_persistence_result(state, task, :ok), do: restore_terminal_result(state, task)
+
+  defp apply_persistence_result(state, task, {:ok, _value}),
+    do: restore_terminal_result(state, task)
 
   defp apply_persistence_result(state, task, {:error, reason}),
     do: put_trigger_error(state, task.name, {:config_persist_failed, reason})
 
   defp apply_persistence_result(state, task, other),
     do: put_trigger_error(state, task.name, {:unexpected_config_persist_result, other})
+
+  defp restore_terminal_result(state, %{name: name, attrs: %{"last_status" => _status}}) do
+    case Map.fetch(state.terminal_results, name) do
+      {:ok, observable} ->
+        %{state | trigger_results: Map.put(state.trigger_results, name, observable)}
+
+      :error ->
+        state
+    end
+  end
+
+  defp restore_terminal_result(state, _task), do: state
 
   defp put_trigger_error(state, name, reason) do
     status = %{

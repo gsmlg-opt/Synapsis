@@ -2,6 +2,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
   use Synapsis.Agent.DaemonCase, async: false
 
   alias Synapsis.Agent.Heartbeat.LocalScheduler
+  alias Synapsis.Agent.RunEvents
   alias Synapsis.Config.Store, as: ConfigStore
 
   setup do
@@ -119,6 +120,90 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
     assert terminal_next_run_at == next_run_at
   end
 
+  test "persists a terminal event received before trigger correlation exactly once" do
+    {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
+    owner = self()
+    config = routine(Ecto.UUID.generate(), "early-terminal", "schedule")
+
+    scheduler =
+      start_scheduler([config], daemon, task_supervisor,
+        config_writer: fn type, attrs ->
+          send(owner, {:routine_config_written, type, attrs})
+          {:ok, attrs}
+        end
+      )
+
+    assert_receive {:routine_config_written, :routine, %{"next_run_at" => next_run_at}}, 1_000
+    run = completed_routine_run(config)
+    :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, Daemon.topic())
+
+    assert :ok = RunEvents.publish_lifecycle(:completed, run)
+
+    assert_receive {:agent_daemon_event, %{run_id: run_id, payload: %{routine_id: routine_id}}},
+                   1_000
+
+    assert run_id == run.id
+    assert routine_id == config.id
+
+    GenServer.cast(
+      scheduler,
+      {:track_trigger, config.name, config, {:ok, run}, run.started_at, next_run_at}
+    )
+
+    assert_receive {:routine_config_written, :routine,
+                    %{"last_status" => "completed", "last_run_at" => last_run_at}},
+                   1_000
+
+    assert is_binary(last_run_at)
+
+    _state = :sys.get_state(scheduler)
+    assert :ok = RunEvents.publish_lifecycle(:completed, run)
+
+    refute_receive {:routine_config_written, :routine, %{"last_status" => "completed"}}, 100
+  end
+
+  test "scheduler restart reconciles a terminal run from durable identity exactly once" do
+    Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :controlled_done)
+    {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
+    owner = self()
+    config = routine(Ecto.UUID.generate(), "restart-terminal", "schedule")
+
+    scheduler =
+      start_scheduler([config], daemon, task_supervisor,
+        config_writer: fn type, attrs ->
+          send(owner, {:routine_config_written, type, attrs})
+          {:ok, attrs}
+        end
+      )
+
+    assert_receive {:routine_config_written, :routine, %{"next_run_at" => _next_run_at}}, 1_000
+    assert {:ok, run} = LocalScheduler.trigger(scheduler, config.name)
+    assert_receive {:controlled_session, runner, _session_id}, 1_000
+
+    assert {:ok, true} =
+             wait_for(fn ->
+               if Map.has_key?(:sys.get_state(scheduler).tracked_runs, run.id),
+                 do: {:ok, true},
+                 else: :retry
+             end)
+
+    {:registered_name, scheduler_name} = Process.info(scheduler, :registered_name)
+    Process.exit(scheduler, :kill)
+    restarted = wait_for_restarted_scheduler(scheduler_name, scheduler)
+
+    send(runner, :complete_session)
+    assert {:ok, _completed} = wait_for_run(run.id, "completed")
+
+    assert_receive {:routine_config_written, :routine,
+                    %{"last_status" => "completed", "last_run_at" => last_run_at}},
+                   1_000
+
+    assert is_binary(last_run_at)
+    refute_receive {:routine_config_written, :routine, %{"last_status" => "completed"}}, 100
+
+    assert [%{last_status: "completed"}] = LocalScheduler.status(restarted)
+  end
+
   test "serializes routine persistence so a delayed next-run write cannot erase terminal state" do
     Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :immediate_done)
     {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
@@ -208,6 +293,9 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
              end)
 
     assert is_binary(last_run_at)
+
+    assert [%{last_run_at: ^last_run_at, last_status: "completed", last_error: nil}] =
+             LocalScheduler.status(scheduler)
   end
 
   for failure <- [:timeout, :down] do
@@ -425,6 +513,24 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
       no_overlap: true,
       max_runtime_ms: 1_000
     }
+  end
+
+  defp completed_routine_run(config) do
+    assert {:ok, queued} =
+             Runs.create(%{
+               kind: config.kind,
+               status: "queued",
+               source: "system",
+               assistant_name: config.agent_name,
+               routine_id: config.id,
+               prompt: config.prompt,
+               tool_profile: config.tool_profile,
+               metadata: %{"routine_name" => config.name}
+             })
+
+    assert {:ok, running} = Runs.mark_running(queued)
+    assert {:ok, completed} = Runs.mark_completed(running, "done")
+    completed
   end
 
   defp retrying_config_writer(owner, persisted, terminal_attempts, failure) do

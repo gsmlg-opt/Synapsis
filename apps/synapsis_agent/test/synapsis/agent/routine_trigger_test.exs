@@ -226,6 +226,59 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
   end
 
   @tag :tmp_dir
+  test "dream project status is read-only for a dirty git repository", %{tmp_dir: tmp_dir} do
+    git!(tmp_dir, ["init", "-q"])
+    git!(tmp_dir, ["config", "user.email", "test@synapsis.local"])
+    git!(tmp_dir, ["config", "user.name", "Synapsis Test"])
+    File.write!(Path.join(tmp_dir, "tracked.txt"), "original\n")
+    git!(tmp_dir, ["add", "."])
+    git!(tmp_dir, ["commit", "-q", "-m", "init"])
+    File.write!(Path.join(tmp_dir, "tracked.txt"), "dirty\n")
+    File.write!(Path.join(tmp_dir, "untracked.txt"), "new\n")
+
+    refs_before = git!(tmp_dir, ["show-ref"])
+    objects_before = git!(tmp_dir, ["count-objects", "-v"])
+    owner = self()
+    bypass = Bypass.open()
+
+    dream_json =
+      Jason.encode!(%{
+        "recent_summary" => "Reviewed project status",
+        "memory_candidates" => [],
+        "open_questions" => [],
+        "risks" => [],
+        "proposed_tasks" => [],
+        "ignored_noise" => []
+      })
+
+    Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      send(owner, {:dream_project_status_request, body})
+      send_sse(conn, [text_chunk(dream_json), finish_chunk("stop")])
+    end)
+
+    {provider_name, agent_name} = register_provider_agent(tmp_dir, bypass)
+    {daemon, _task_supervisor} = start_test_daemon()
+
+    assert {:ok, dream} =
+             Daemon.trigger(daemon, :dream, %{
+               routine_id: Ecto.UUID.generate(),
+               prompt: "reflect on project status",
+               assistant_name: agent_name,
+               provider: provider_name,
+               model: "daemon-test-model"
+             })
+
+    assert_receive {:dream_project_status_request, body}, 2_000
+    assert body =~ "Project status:"
+    assert body =~ "- workspace root: #{tmp_dir}"
+    assert body =~ "- working tree: dirty"
+    assert git!(tmp_dir, ["show-ref"]) == refs_before
+    assert git!(tmp_dir, ["count-objects", "-v"]) == objects_before
+    assert {:ok, _completed} = wait_for_run(dream.id, "completed")
+  end
+
+  @tag :tmp_dir
   test "dream prompt bounds and sanitizes run, memory, and per-session message context", %{
     tmp_dir: tmp_dir
   } do
@@ -467,5 +520,10 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
     assert failed.error =~ "invalid_dream_output"
     refute Map.has_key?(failed.metadata, "output")
     assert %{ready: true} = Daemon.status(daemon)
+  end
+
+  defp git!(dir, args) do
+    {out, 0} = System.cmd("git", args, cd: dir, stderr_to_stdout: true)
+    out
   end
 end

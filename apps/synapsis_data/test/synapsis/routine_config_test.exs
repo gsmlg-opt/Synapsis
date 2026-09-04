@@ -30,6 +30,20 @@ defmodule Synapsis.RoutineConfigTest do
     assert [^attrs] = Store.list(:routine)
   end
 
+  test "rejects five-field text that is not a cron expression" do
+    attrs = %{
+      "id" => Ecto.UUID.generate(),
+      "name" => "invalid-schedule",
+      "kind" => "schedule",
+      "enabled" => true,
+      "schedule" => "x x x x x",
+      "prompt" => "This must not be persisted"
+    }
+
+    assert {:error, {:invalid_routine, :schedule}} = Store.put(:routine, attrs)
+    assert [] = Store.list(:routine)
+  end
+
   test "rejects invalid routine fields without changing the store" do
     base = %{
       "id" => Ecto.UUID.generate(),

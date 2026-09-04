@@ -897,9 +897,9 @@ defmodule Synapsis.Agent.Daemon.Execution do
       |> to_string()
       |> Path.expand()
 
-    case Synapsis.Git.capture_ref(project_path) do
-      {:ok, %{head: head, stash: stash}} ->
-        dirty = if stash, do: "dirty", else: "clean"
+    case Synapsis.Git.status(project_path) do
+      {:ok, %{head: head, dirty: dirty?}} ->
+        dirty = if dirty?, do: "dirty", else: "clean"
         "- workspace root: #{project_path}\n- git HEAD: #{head}\n- working tree: #{dirty}"
 
       {:error, _reason} ->

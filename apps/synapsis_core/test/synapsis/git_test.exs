@@ -20,6 +20,24 @@ defmodule Synapsis.GitTest do
     assert head =~ ~r/^[0-9a-f]{40}$/
   end
 
+  test "status reports tracked and untracked changes without creating refs or objects", %{
+    tmp_dir: dir
+  } do
+    File.write!(Path.join(dir, "a.txt"), "dirty\n")
+    File.write!(Path.join(dir, "untracked.txt"), "new\n")
+    refs_before = git!(dir, ["show-ref"])
+    objects_before = git!(dir, ["count-objects", "-v"])
+
+    assert {:ok, %{head: head, dirty: true}} = Git.status(dir)
+    assert head =~ ~r/^[0-9a-f]{40}$/
+
+    File.write!(Path.join(dir, "a.txt"), "original\n")
+    assert {:ok, %{dirty: true}} = Git.status(dir)
+
+    assert git!(dir, ["show-ref"]) == refs_before
+    assert git!(dir, ["count-objects", "-v"]) == objects_before
+  end
+
   test "capture_ref records dirty state without modifying the tree", %{tmp_dir: dir} do
     File.write!(Path.join(dir, "a.txt"), "dirty\n")
 
@@ -55,6 +73,7 @@ defmodule Synapsis.GitTest do
   end
 
   defp git!(dir, args) do
-    {_out, 0} = System.cmd("git", args, cd: dir, stderr_to_stdout: true)
+    {out, 0} = System.cmd("git", args, cd: dir, stderr_to_stdout: true)
+    out
   end
 end

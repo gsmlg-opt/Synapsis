@@ -15,6 +15,18 @@ defmodule Synapsis.Git do
   @timeout_ms 10_000
 
   @type ref :: %{head: String.t(), stash: String.t() | nil}
+  @type status :: %{head: String.t(), dirty: boolean()}
+
+  @doc "Reads the workspace's HEAD and working-tree status without creating git objects."
+  @spec status(String.t()) :: {:ok, status()} | {:error, term()}
+  def status(project_path) when is_binary(project_path) do
+    with :ok <- check_repo(project_path),
+         {:ok, head} <- run(project_path, ["rev-parse", "HEAD"]),
+         {:ok, porcelain} <-
+           run(project_path, ["status", "--porcelain", "--untracked-files=all"]) do
+      {:ok, %{head: head, dirty: porcelain != ""}}
+    end
+  end
 
   @doc "Captures the workspace's current git state without modifying it."
   @spec capture_ref(String.t()) :: {:ok, ref()} | {:error, term()}
