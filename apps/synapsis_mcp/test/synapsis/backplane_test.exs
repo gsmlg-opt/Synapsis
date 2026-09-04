@@ -35,6 +35,11 @@ defmodule Synapsis.BackplaneTest do
     end
   end
 
+  defmodule MCPRuntimeStub do
+    def restart(_config), do: :ok
+    def stop(_name), do: :ok
+  end
+
   setup do
     clear_store()
     on_exit(&clear_store/0)
@@ -195,6 +200,73 @@ defmodule Synapsis.BackplaneTest do
     assert Connection.get(created.id) == {:ok, updated}
   end
 
+  test "delete waits for an in-flight refresh and cannot be undone by its stale result" do
+    assert {:ok, connection} =
+             Backplane.create(%{
+               name: "delete-race-#{System.unique_integer([:positive])}",
+               endpoint: "https://backplane.example.test",
+               enabled: false
+             })
+
+    assert {:ok, connection} = Connection.update(connection, %{enabled: true})
+    parent = self()
+
+    refresh_task =
+      Task.async(fn ->
+        Backplane.refresh(connection.id, sync_opts: blocking_sync_opts(parent))
+      end)
+
+    assert_receive {:refresh_fetch_blocked, refresh_pid}
+
+    delete_task =
+      Task.async(fn ->
+        Backplane.delete(connection.id, sync_opts: [mcp_runtime: MCPRuntimeStub])
+      end)
+
+    delete_while_blocked = Task.yield(delete_task, 100)
+    send(refresh_pid, :release_refresh_fetch)
+
+    assert {:ok, %Connection{}} = Task.await(refresh_task)
+    assert delete_while_blocked == nil
+    assert :ok = Task.await(delete_task)
+    assert {:error, :not_found} = Connection.get(connection.id)
+  end
+
+  test "disable waits for an in-flight refresh and remains disabled after it" do
+    assert {:ok, connection} =
+             Backplane.create(%{
+               name: "disable-race-#{System.unique_integer([:positive])}",
+               endpoint: "https://backplane.example.test",
+               enabled: false
+             })
+
+    assert {:ok, connection} = Connection.update(connection, %{enabled: true})
+    parent = self()
+
+    refresh_task =
+      Task.async(fn ->
+        Backplane.refresh(connection.id, sync_opts: blocking_sync_opts(parent))
+      end)
+
+    assert_receive {:refresh_fetch_blocked, refresh_pid}
+
+    disable_task =
+      Task.async(fn ->
+        Backplane.update(connection.id, %{enabled: false},
+          sync_opts: [mcp_runtime: MCPRuntimeStub]
+        )
+      end)
+
+    disable_while_blocked = Task.yield(disable_task, 100)
+    assert {:ok, %{enabled: true}} = Connection.get(connection.id)
+    send(refresh_pid, :release_refresh_fetch)
+
+    assert {:ok, %Connection{}} = Task.await(refresh_task)
+    assert disable_while_blocked == nil
+    assert {:ok, %Connection{enabled: false}} = Task.await(disable_task)
+    assert {:ok, %Connection{enabled: false}} = Connection.get(connection.id)
+  end
+
   test "delete disables imported capabilities first and never cascades artifact records" do
     provider_id = Ecto.UUID.generate()
 
@@ -309,7 +381,9 @@ defmodule Synapsis.BackplaneTest do
   defp clear_store do
     for {type, table} <- [
           backplane: :synapsis_config_backplane,
-          provider: :synapsis_config_provider
+          provider: :synapsis_config_provider,
+          skill: :synapsis_config_skill,
+          mcp: :synapsis_config_mcp
         ] do
       type |> Store.file_path() |> File.rm()
 
@@ -317,5 +391,24 @@ defmodule Synapsis.BackplaneTest do
     end
 
     :ok
+  end
+
+  defp blocking_sync_opts(test_pid) do
+    client = fn connection, _opts ->
+      send(test_pid, {:refresh_fetch_blocked, self()})
+
+      receive do
+        :release_refresh_fetch ->
+          Snapshot.normalize(connection, %{
+            models: {:ok, [%{"id" => "race-model"}]},
+            skills: {:ok, []},
+            mcp_tools: {:ok, []}
+          })
+      after
+        2_000 -> {:error, :probe_timeout}
+      end
+    end
+
+    [client: client, mcp_runtime: MCPRuntimeStub]
   end
 end

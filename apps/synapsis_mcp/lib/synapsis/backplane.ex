@@ -48,7 +48,10 @@ defmodule Synapsis.Backplane do
   @spec update(String.t(), map(), keyword()) :: {:ok, Connection.t()} | {:error, term()}
   def update(id, attrs, opts \\ []) do
     attrs = editable_attrs(attrs)
+    Sync.with_lock(id, sync_opts(opts), fn -> update_locked(id, attrs, opts) end)
+  end
 
+  defp update_locked(id, attrs, opts) do
     with {:ok, current} <- Connection.get(id),
          {:ok, updated} <- Connection.update(current, attrs) do
       reconcile_update(current, updated, attrs, opts)
@@ -57,6 +60,10 @@ defmodule Synapsis.Backplane do
 
   @spec delete(String.t(), keyword()) :: :ok | {:error, term()}
   def delete(id, opts \\ []) do
+    Sync.with_lock(id, sync_opts(opts), fn -> delete_locked(id, opts) end)
+  end
+
+  defp delete_locked(id, opts) do
     with {:ok, connection} <- Connection.get(id),
          {:ok, _connection} <- set_available(id, false, opts) do
       Connection.delete(connection)
@@ -65,8 +72,12 @@ defmodule Synapsis.Backplane do
 
   @spec refresh(String.t(), keyword()) :: {:ok, Connection.t()} | {:error, term()}
   def refresh(id, opts \\ []) do
+    Sync.with_lock(id, sync_opts(opts), fn -> refresh_locked(id, opts) end)
+  end
+
+  defp refresh_locked(id, opts) do
     case Connection.get(id) do
-      {:ok, %Connection{enabled: true}} -> sync(opts).run(id, sync_opts(opts))
+      {:ok, %Connection{enabled: true}} -> sync(opts).run(id, locked_sync_opts(opts))
       {:ok, %Connection{enabled: false}} -> {:error, :connection_disabled}
       {:error, _reason} = error -> error
     end
@@ -95,7 +106,7 @@ defmodule Synapsis.Backplane do
 
   defp reconcile_update(current, %Connection{enabled: true} = updated, _attrs, opts) do
     if not current.enabled or source_changed?(current, updated),
-      do: refresh_preserving(updated, opts),
+      do: refresh_preserving(updated, opts, true),
       else: {:ok, updated}
   end
 
@@ -108,8 +119,13 @@ defmodule Synapsis.Backplane do
       current.connection_options != updated.connection_options
   end
 
-  defp refresh_preserving(connection, opts) do
-    case refresh(connection.id, opts) do
+  defp refresh_preserving(connection, opts, already_locked \\ false) do
+    result =
+      if already_locked,
+        do: refresh_locked(connection.id, opts),
+        else: refresh(connection.id, opts)
+
+    case result do
       {:ok, %Connection{} = refreshed} -> {:ok, refreshed}
       :ok -> Connection.get(connection.id)
       {:error, _reason} -> Connection.get(connection.id)
@@ -118,7 +134,7 @@ defmodule Synapsis.Backplane do
   end
 
   defp set_available(id, available?, opts) do
-    case sync(opts).set_available(id, available?, sync_opts(opts)) do
+    case sync(opts).set_available(id, available?, locked_sync_opts(opts)) do
       {:ok, %Connection{} = connection} -> {:ok, connection}
       :ok -> Connection.get(id)
       {:error, _reason} = error -> error
@@ -166,5 +182,6 @@ defmodule Synapsis.Backplane do
   defp client(opts), do: Keyword.get(opts, :client, Client)
   defp sync(opts), do: Keyword.get(opts, :sync, Sync)
   defp sync_opts(opts), do: Keyword.get(opts, :sync_opts, [])
+  defp locked_sync_opts(opts), do: Keyword.put(sync_opts(opts), :already_locked, true)
   defp editable_attrs(attrs) when is_map(attrs), do: Map.take(attrs, @editable_fields)
 end
