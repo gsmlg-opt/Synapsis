@@ -35,6 +35,24 @@ defmodule Synapsis.SessionsTest do
              Sessions.recover_unsupported_provider_model(session)
   end
 
+  test "create returns the effective model persisted during worker boot" do
+    provider_name = "create-mixed-provider-#{System.unique_integer([:positive])}"
+
+    assert {:ok, %ProviderConfig{}} =
+             create_mixed_backplane_provider(provider_name, [
+               "disabled-model",
+               "enabled-model"
+             ])
+
+    assert {:ok, session} =
+             Sessions.create("main", %{provider: provider_name, model: "disabled-model"})
+
+    on_exit(fn -> Sessions.delete(session.id) end)
+
+    assert session.model == "enabled-model"
+    assert {:ok, %{model: "enabled-model"}} = Sessions.get(session.id)
+  end
+
   test "does not persist a model when local and Backplane availability have no intersection" do
     provider_name = "no-valid-model-#{System.unique_integer([:positive])}"
 
@@ -46,6 +64,22 @@ defmodule Synapsis.SessionsTest do
 
     assert {:error, :model_unavailable} = Sessions.recover_unsupported_provider_model(session)
     assert {:ok, %{provider: ^provider_name, model: "disabled-model"}} = Sessions.get(session.id)
+  end
+
+  test "failed worker boot removes the new session and session-scoped permission state" do
+    provider_name = "failed-create-provider-#{System.unique_integer([:positive])}"
+    agent_name = "failed-create-agent-#{System.unique_integer([:positive])}"
+
+    assert {:ok, %ProviderConfig{}} =
+             create_mixed_backplane_provider(provider_name, ["disabled-model"])
+
+    assert {:error, _reason} =
+             Sessions.create(agent_name, %{
+               provider: provider_name,
+               model: "disabled-model"
+             })
+
+    assert {:ok, []} = Sessions.list(agent_name)
   end
 
   test "local providers prefer an explicit environment default over cached models" do

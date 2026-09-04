@@ -38,11 +38,7 @@ defmodule Synapsis.Sessions do
         |> Ecto.Changeset.apply_changes()
         |> then(&%{&1 | id: &1.id || Ecto.UUID.generate(), inserted_at: now, updated_at: now})
 
-      with :ok <- Store.put_meta(session.id, Session.to_meta(session)),
-           {:ok, _permission} <- apply_agent_permission(session, agent),
-           {:ok, _pid} <- Synapsis.Session.DynamicSupervisor.start_session(session.id) do
-        {:ok, session}
-      end
+      persist_and_start_session(session, agent)
     else
       {:error, changeset}
     end
@@ -172,6 +168,43 @@ defmodule Synapsis.Sessions do
 
   defp with_messages(%Session{} = session),
     do: %{session | messages: Message.list_by_session(session.id)}
+
+  defp persist_and_start_session(session, agent) do
+    result =
+      with :ok <- Store.put_meta(session.id, Session.to_meta(session)),
+           {:ok, _permission} <- apply_agent_permission(session, agent),
+           {:ok, _pid} <- Synapsis.Session.DynamicSupervisor.start_session(session.id),
+           {:ok, effective_session} <- get(session.id) do
+        {:ok, effective_session}
+      end
+
+    case result do
+      {:ok, _session} = success ->
+        success
+
+      {:error, reason} = error ->
+        case cleanup_failed_create(session.id) do
+          :ok ->
+            error
+
+          {:error, cleanup_reason} ->
+            {:error, {:session_create_failed, reason, {:cleanup_failed, cleanup_reason}}}
+        end
+    end
+  end
+
+  defp cleanup_failed_create(session_id) do
+    stop_result = Synapsis.Session.DynamicSupervisor.stop_session(session_id)
+    delete_result = Store.delete_session(session_id)
+
+    case {stop_result, delete_result} do
+      {stop, :ok} when stop in [:ok, {:error, :not_found}] ->
+        :ok
+
+      results ->
+        {:error, results}
+    end
+  end
 
   defp persist_update(%Session{} = session, attrs) do
     updated = session |> Map.merge(Map.new(attrs)) |> Map.put(:updated_at, DateTime.utc_now())
@@ -384,26 +417,29 @@ defmodule Synapsis.Sessions do
 
     cond do
       present?(agent_config["provider"]) and
-          provider_runtime_candidate?(agent_config["provider"]) ->
+          provider_runtime_candidate?(agent_config["provider"], config) ->
         agent_config["provider"]
 
-      Map.has_key?(providers, "anthropic") and provider_runtime_candidate?("anthropic") ->
+      Map.has_key?(providers, "anthropic") and
+          provider_runtime_candidate?("anthropic", config) ->
         "anthropic"
 
-      Map.has_key?(providers, "openai") and provider_runtime_candidate?("openai") ->
+      Map.has_key?(providers, "openai") and provider_runtime_candidate?("openai", config) ->
         "openai"
 
-      Map.has_key?(providers, "google") and provider_runtime_candidate?("google") ->
+      Map.has_key?(providers, "google") and provider_runtime_candidate?("google", config) ->
         "google"
 
-      provider_runtime_candidate?("anthropic") and
+      provider_runtime_candidate?("anthropic", config) and
           Synapsis.Providers.env_configured?("anthropic") ->
         "anthropic"
 
-      provider_runtime_candidate?("openai") and Synapsis.Providers.env_configured?("openai") ->
+      provider_runtime_candidate?("openai", config) and
+          Synapsis.Providers.env_configured?("openai") ->
         "openai"
 
-      provider_runtime_candidate?("google") and Synapsis.Providers.env_configured?("google") ->
+      provider_runtime_candidate?("google", config) and
+          Synapsis.Providers.env_configured?("google") ->
         "google"
 
       provider = first_enabled_provider_name() ->
@@ -419,14 +455,15 @@ defmodule Synapsis.Sessions do
     configured_model = agent_config["model"]
 
     env_model =
-      if provider_runtime_candidate?(provider),
+      if provider_runtime_candidate?(provider, config),
         do: Synapsis.Providers.env_default_model(provider)
 
     cond do
-      present?(configured_model) and model_runtime_candidate?(provider, configured_model) ->
+      present?(configured_model) and
+          model_runtime_candidate?(provider, configured_model, config) ->
         configured_model
 
-      present?(env_model) and model_runtime_candidate?(provider, env_model) ->
+      present?(env_model) and model_runtime_candidate?(provider, env_model, config) ->
         env_model
 
       model = first_runtime_provider_model(provider) ->
@@ -571,7 +608,7 @@ defmodule Synapsis.Sessions do
     end
   end
 
-  defp model_runtime_candidate?(provider, model) do
+  defp model_runtime_candidate?(provider, model, config) do
     case Synapsis.Providers.get_runtime_by_name(provider) do
       {:ok, provider_config} ->
         Synapsis.Providers.model_runtime_available?(provider_config, model)
@@ -580,7 +617,7 @@ defmodule Synapsis.Sessions do
         false
 
       {:error, :not_found} ->
-        true
+        fallback_configured?(provider, config)
     end
   end
 
@@ -620,8 +657,19 @@ defmodule Synapsis.Sessions do
   defp blank?(value), do: value in [nil, ""]
   defp present?(value), do: is_binary(value) and String.trim(value) != ""
 
-  defp provider_runtime_candidate?(provider) do
-    Synapsis.Providers.get_runtime_by_name(provider) != {:error, :provider_unavailable}
+  defp provider_runtime_candidate?(provider, config \\ %{}) do
+    case Synapsis.Providers.get_runtime_by_name(provider) do
+      {:ok, _provider} -> true
+      {:error, :provider_unavailable} -> false
+      {:error, :not_found} -> fallback_configured?(provider, config)
+    end
+  end
+
+  defp fallback_configured?(provider, config) do
+    auth = Synapsis.Config.load_auth()
+
+    Synapsis.Providers.fallback_configured?(provider, auth) or
+      Synapsis.Providers.fallback_configured?(provider, config)
   end
 
   defp exit_reason({:timeout, _}), do: :worker_timeout
