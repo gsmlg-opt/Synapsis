@@ -225,6 +225,17 @@ defmodule Synapsis.Tool.Registry do
     :ok
   end
 
+  @doc "Unregister a process tool only when it is still owned by `owner_pid`."
+  def unregister(tool_name, owner_pid) when is_pid(owner_pid) do
+    deleted =
+      :ets.select_delete(@table, [
+        {{tool_name, {:process, owner_pid, :"$1"}}, [], [true]}
+      ])
+
+    if deleted > 0, do: broadcast_tool_registry_changed(:unregistered, tool_name)
+    :ok
+  end
+
   # ---------------------------------------------------------------------------
   # GenServer
   # ---------------------------------------------------------------------------
@@ -276,16 +287,7 @@ defmodule Synapsis.Tool.Registry do
         {:noreply, state}
 
       {{^pid, names}, monitors} ->
-        Enum.each(names, fn name ->
-          case :ets.lookup(@table, name) do
-            [{^name, {:process, ^pid, _opts}}] ->
-              :ets.delete(@table, name)
-              broadcast_tool_registry_changed(:unregistered, name)
-
-            _replacement_or_missing ->
-              :ok
-          end
-        end)
+        Enum.each(names, &unregister(&1, pid))
 
         {:noreply, %{state | monitors: monitors, pids: Map.delete(state.pids, pid)}}
     end

@@ -117,6 +117,38 @@ defmodule Synapsis.MCP.ServerTest do
     assert wait_until(fn -> match?({:error, :not_found}, Registry.lookup(tool)) end)
   end
 
+  test "an old server terminate callback preserves a replacement tool owner" do
+    test_pid = self()
+    tool = "mcp:replacement:echo-#{System.unique_integer([:positive])}"
+
+    old_owner =
+      spawn(fn ->
+        :ok = Registry.register_process(tool, self(), description: "old", parameters: %{})
+        send(test_pid, {:old_owner_ready, self()})
+
+        receive do
+          :terminate ->
+            :ok = Server.terminate(:normal, %{tool_names: [tool]})
+            send(test_pid, :old_owner_terminated)
+        end
+      end)
+
+    new_owner = spawn(fn -> Process.sleep(:infinity) end)
+
+    on_exit(fn ->
+      if Process.alive?(old_owner), do: Process.exit(old_owner, :kill)
+      Process.exit(new_owner, :kill)
+      Registry.unregister(tool)
+    end)
+
+    assert_receive {:old_owner_ready, ^old_owner}
+    :ok = Registry.register_process(tool, new_owner, description: "new", parameters: %{})
+
+    send(old_owner, :terminate)
+    assert_receive :old_owner_terminated
+    assert {:ok, {:process, ^new_owner, _opts}} = Registry.lookup(tool)
+  end
+
   test "rejects execution when the persisted config becomes runtime-unavailable", %{
     bypass: bypass
   } do

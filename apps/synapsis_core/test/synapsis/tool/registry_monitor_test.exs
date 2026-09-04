@@ -51,4 +51,25 @@ defmodule Synapsis.Tool.RegistryMonitorTest do
 
     assert {:ok, {:process, ^new_owner, _opts}} = Registry.lookup(name)
   end
+
+  test "owner-conditional unregister preserves a replacement process" do
+    name = "conditional_unregister_#{System.unique_integer([:positive])}"
+    old_owner = spawn(fn -> Process.sleep(:infinity) end)
+    new_owner = spawn(fn -> Process.sleep(:infinity) end)
+
+    on_exit(fn ->
+      Process.exit(old_owner, :kill)
+      Process.exit(new_owner, :kill)
+      Registry.unregister(name)
+    end)
+
+    :ok = Registry.register_process(name, old_owner, description: "old", parameters: %{})
+    :ok = Registry.register_process(name, new_owner, description: "new", parameters: %{})
+
+    assert :ok = Registry.unregister(name, old_owner)
+    assert {:ok, {:process, ^new_owner, _opts}} = Registry.lookup(name)
+
+    assert :ok = Registry.unregister(name, new_owner)
+    assert {:error, :not_found} = Registry.lookup(name)
+  end
 end

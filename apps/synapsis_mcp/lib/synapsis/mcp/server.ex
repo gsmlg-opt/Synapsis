@@ -190,7 +190,7 @@ defmodule Synapsis.MCP.Server do
 
   @impl true
   def terminate(_reason, %{tool_names: names}) do
-    Enum.each(names, &Registry.unregister/1)
+    Enum.each(names, &Registry.unregister(&1, self()))
     :ok
   end
 
