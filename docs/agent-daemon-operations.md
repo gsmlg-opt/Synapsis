@@ -40,7 +40,96 @@ local HTTP endpoint.
 
 ## Deployment boundary
 
-Synapsis does not add a user-authentication system in v1. Keep the Phoenix
-endpoint bound to loopback for local use. For remote administration, terminate
-TLS and client authentication at a reverse proxy (for example Caddy with mTLS)
-and proxy only the API/UI to Synapsis; do not expose the local listener directly.
+Synapsis does not authenticate terminal users. Its HTTP API, SSE endpoint,
+Phoenix Channel, and LiveView all share one external access boundary: Caddy
+must authenticate the client certificate before proxying the request. Keep the
+Phoenix endpoint on `127.0.0.1:4657` (the production default), and never expose
+that listener directly to the public network.
+
+Set the release environment explicitly:
+
+```sh
+PHX_HOST=synapsis.example.com
+PHX_IP=127.0.0.1
+PORT=4657
+```
+
+The following Caddyfile requires a client certificate signed by the configured
+client CA and proxies all HTTP, SSE, WebSocket, and LiveView traffic to the
+loopback listener:
+
+```caddyfile
+synapsis.example.com {
+  tls {
+    client_auth {
+      mode require_and_verify
+      trust_pool file /etc/caddy/synapsis-client-ca.pem
+    }
+  }
+
+  reverse_proxy 127.0.0.1:4657
+}
+```
+
+Caddy sets `X-Forwarded-For`, `X-Forwarded-Host`, and `X-Forwarded-Proto` for
+the upstream by default and ignores spoofed incoming values when it is the
+first proxy. Synapsis uses the forwarded protocol for its production HTTPS
+rewrite. If another proxy sits in front of Caddy, configure Caddy's
+`trusted_proxies` explicitly; do not trust arbitrary forwarded headers at the
+Synapsis listener.
+
+### Issue and verify an administration certificate
+
+Keep the CA private key offline. The following example creates a dedicated
+client CA and one administration certificate; adapt subjects and lifetimes to
+the site's certificate policy:
+
+```sh
+umask 077
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out synapsis-client-ca.key
+openssl req -x509 -new -sha256 -days 3650 \
+  -key synapsis-client-ca.key \
+  -subj '/CN=Synapsis Client CA' \
+  -out synapsis-client-ca.pem
+
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out synapsis-admin.key
+openssl req -new -sha256 \
+  -key synapsis-admin.key \
+  -subj '/CN=synapsis-admin' \
+  -out synapsis-admin.csr
+printf '%s\n' 'basicConstraints=CA:FALSE' 'keyUsage=digitalSignature' \
+  'extendedKeyUsage=clientAuth' > synapsis-admin.ext
+openssl x509 -req -sha256 -days 365 \
+  -in synapsis-admin.csr \
+  -CA synapsis-client-ca.pem \
+  -CAkey synapsis-client-ca.key \
+  -CAcreateserial \
+  -extfile synapsis-admin.ext \
+  -out synapsis-admin.pem
+chmod 600 synapsis-admin.key synapsis-client-ca.key
+```
+
+Install only `synapsis-client-ca.pem` where the Caddy service can read it, then
+reload Caddy. Keep `synapsis-admin.key` on the administrator host. Verify both
+the rejection and acceptance paths:
+
+```sh
+# Must fail during the TLS handshake because no client certificate is supplied.
+curl --fail https://synapsis.example.com/api/health
+
+# Must return the Synapsis health JSON.
+curl --fail \
+  --cert synapsis-admin.pem \
+  --key synapsis-admin.key \
+  https://synapsis.example.com/api/health
+```
+
+A local service monitor may call `http://127.0.0.1:4657/api/health`. A remote
+health monitor is an external client and must use the mTLS endpoint from a
+trusted network with its own client certificate.
+
+Backplane bearer credentials use the existing Backplane connection
+`credential` field. They are encrypted at rest with `SYNAPSIS_ENCRYPTION_KEY`,
+redacted from API responses and events, and should be supplied through the
+trusted API/CLI configuration path. Do not place Backplane credentials in the
+Caddyfile or expose them as URL query parameters.
