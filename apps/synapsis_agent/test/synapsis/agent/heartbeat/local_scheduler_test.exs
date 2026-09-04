@@ -153,6 +153,97 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
     refute Map.has_key?(attrs, "last_status")
   end
 
+  test "scheduler persistence merges only owned fields and never recreates a deleted routine" do
+    {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
+    id = Ecto.UUID.generate()
+    name = "owned-persistence-#{System.unique_integer([:positive])}"
+
+    attrs = %{
+      "id" => id,
+      "name" => name,
+      "kind" => "schedule",
+      "enabled" => true,
+      "schedule" => "* * * * *",
+      "prompt" => "original prompt"
+    }
+
+    assert {:ok, _routine} = ConfigStore.put(:routine, attrs)
+    on_exit(fn -> ConfigStore.delete(:routine, id) end)
+    :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, "agent:daemon")
+
+    scheduler =
+      start_production_writer_scheduler(
+        fn ->
+          ConfigStore.list(:routine)
+          |> Enum.filter(&(&1["id"] == id))
+          |> Enum.map(&Map.put(&1, "__config_type", "routine"))
+        end,
+        daemon,
+        task_supervisor,
+        trigger_fun: fn _config, _daemon -> {:error, :observed} end
+      )
+
+    assert_receive {:agent_daemon_event,
+                    %{event: "agent.routine.updated", routine_id: ^id, kind: "schedule"}},
+                   1_000
+
+    assert {:ok, current} = ConfigStore.get(:routine, id)
+
+    assert {:ok, _updated} =
+             ConfigStore.put(
+               :routine,
+               current
+               |> Map.put("name", "user-renamed")
+               |> Map.put("prompt", "user-edited prompt")
+             )
+
+    %{timers: %{^id => %{token: token}}} = :sys.get_state(scheduler)
+    send(scheduler, {:fire, id, token})
+
+    assert_receive {:agent_daemon_event,
+                    %{event: "agent.routine.updated", routine_id: ^id, kind: "schedule"}},
+                   1_000
+
+    assert {:ok, %{"name" => "user-renamed", "prompt" => "user-edited prompt"}} =
+             ConfigStore.get(:routine, id)
+
+    %{timers: %{^id => %{token: deleted_token}}} = :sys.get_state(scheduler)
+    :ok = ConfigStore.delete(:routine, id)
+    send(scheduler, {:fire, id, deleted_token})
+
+    Process.sleep(400)
+    assert {:error, :not_found} = ConfigStore.get(:routine, id)
+  end
+
+  test "a scheduled submission publishes routine-triggered exactly once" do
+    {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
+    id = Ecto.UUID.generate()
+    config = routine(id, "evented-fire", "schedule")
+    run = %Synapsis.AgentRun{id: Ecto.UUID.generate(), kind: "schedule", status: "queued"}
+    :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, "agent:daemon")
+
+    scheduler =
+      start_scheduler([config], daemon, task_supervisor,
+        trigger_fun: fn _config, _daemon -> {:ok, run} end
+      )
+
+    %{timers: %{^id => %{token: token}}} = :sys.get_state(scheduler)
+    send(scheduler, {:fire, id, token})
+
+    assert_receive {:agent_daemon_event,
+                    %{
+                      event: "agent.routine.triggered",
+                      routine_id: ^id,
+                      run_id: run_id
+                    }},
+                   1_000
+
+    assert run_id == run.id
+
+    refute_receive {:agent_daemon_event, %{event: "agent.routine.triggered", run_id: ^run_id}},
+                   100
+  end
+
   test "persists a routine terminal outcome instead of its queued submission state" do
     Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :immediate_done)
     {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
@@ -367,6 +458,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
     owner = self()
     config = routine(Ecto.UUID.generate(), "retry-terminal-routine", "schedule")
     {:ok, terminal_attempts} = Agent.start_link(fn -> 0 end)
+    assert {:ok, _routine} = ConfigStore.put(:routine, config)
     on_exit(fn -> ConfigStore.delete(:routine, config.id) end)
 
     scheduler =
@@ -380,9 +472,9 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
 
             if attempt == 1,
               do: {:error, :store_unavailable},
-              else: ConfigStore.put(type, attrs)
+              else: merge_owned_config(type, attrs)
           else
-            ConfigStore.put(type, attrs)
+            merge_owned_config(type, attrs)
           end
         end
       )
@@ -588,6 +680,24 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
     start_supervised!({LocalScheduler, scheduler_opts})
   end
 
+  defp start_production_writer_scheduler(config_loader, daemon, task_supervisor, opts) do
+    name = String.to_atom("heartbeat_scheduler_store_#{System.unique_integer([:positive])}")
+
+    scheduler_opts =
+      Keyword.merge(
+        [
+          name: name,
+          daemon: daemon,
+          task_supervisor: task_supervisor,
+          config_loader: config_loader,
+          reload_interval_ms: :timer.hours(1)
+        ],
+        opts
+      )
+
+    start_supervised!({LocalScheduler, scheduler_opts})
+  end
+
   defp wait_for_restarted_scheduler(name, old_pid) do
     {:ok, pid} =
       wait_for(fn ->
@@ -673,5 +783,9 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
         {:ok, attrs}
       end
     end
+  end
+
+  defp merge_owned_config(type, %{"id" => id} = attrs) do
+    ConfigStore.merge_existing(type, id, Map.delete(attrs, "id"))
   end
 end

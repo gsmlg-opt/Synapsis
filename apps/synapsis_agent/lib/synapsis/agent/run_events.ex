@@ -52,6 +52,24 @@ defmodule Synapsis.Agent.RunEvents do
     )
   end
 
+  def publish_routine_updated(routine) when is_map(routine) do
+    publish_routine_updated(value(routine, :id), value(routine, :kind) || "heartbeat")
+  end
+
+  def publish_routine_updated(id, kind) when is_binary(id) do
+    Phoenix.PubSub.broadcast(
+      Synapsis.PubSub,
+      @topic,
+      {:agent_daemon_event,
+       %{
+         event: "agent.routine.updated",
+         routine_id: id,
+         kind: kind,
+         at: DateTime.utc_now()
+       }}
+    )
+  end
+
   def publish_status(adapter, status, sequence) do
     if Code.ensure_loaded?(adapter) and function_exported?(adapter, :publish_daemon_status, 2) do
       adapter.publish_daemon_status(status, sequence)

@@ -44,6 +44,12 @@ defmodule Synapsis.Config.Store do
   @spec put(atom(), map()) :: {:ok, map()} | {:error, term()}
   def put(type, attrs) when type in @types, do: Server.put(type, attrs)
 
+  @doc "Merge fields into an existing entry without changing its stable ID or creating it."
+  @spec merge_existing(atom(), String.t(), map()) :: {:ok, map()} | {:error, term()}
+  def merge_existing(type, id, attrs)
+      when type in @types and is_binary(id) and is_map(attrs),
+      do: Server.merge_existing(type, id, attrs)
+
   @doc "Delete an entry by id."
   @spec delete(atom(), String.t()) :: :ok | {:error, term()}
   def delete(type, id) when type in @types, do: Server.delete(type, id)

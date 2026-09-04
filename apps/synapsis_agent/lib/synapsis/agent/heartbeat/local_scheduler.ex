@@ -10,7 +10,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
   use GenServer
   require Logger
 
-  alias Synapsis.Agent.Daemon
+  alias Synapsis.Agent.{Daemon, RunEvents}
   alias Synapsis.Agent.Heartbeat.Worker
   alias Synapsis.Config.Store, as: ConfigStore
 
@@ -58,7 +58,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
       daemon: Keyword.get(opts, :daemon, Daemon),
       task_supervisor: Keyword.get(opts, :task_supervisor, Synapsis.Tool.TaskSupervisor),
       config_loader: Keyword.get(opts, :config_loader, &load_configs/0),
-      config_writer: Keyword.get(opts, :config_writer, &ConfigStore.put/2),
+      config_writer: Keyword.get(opts, :config_writer, &merge_config/2),
       trigger_fun: Keyword.get(opts, :trigger_fun, &execute_config/2),
       trigger_timeout_ms: positive_timeout(opts[:trigger_timeout_ms], @trigger_timeout_ms),
       trigger_tasks: %{},
@@ -230,13 +230,13 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
 
   def handle_info({:retry_persistence, key, token}, state) do
     case state.persistence_retry_timers[key] do
-      %{token: ^token, type: type, attrs: attrs, attempt: attempt} ->
+      %{token: ^token, type: type, kind: kind, attrs: attrs, attempt: attempt} ->
         state = %{
           state
           | persistence_retry_timers: Map.delete(state.persistence_retry_timers, key)
         }
 
-        {:noreply, start_persistence_task(state, key, type, attrs, attempt)}
+        {:noreply, start_persistence_task(state, key, type, kind, attrs, attempt)}
 
       _stale ->
         {:noreply, state}
@@ -407,16 +407,23 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
   end
 
   defp routine_state(config, status, last_run_at, next_run_at) do
-    config
-    |> Map.new(fn {key, value} -> {to_string(key), value} end)
-    |> Map.drop(["__config_type"])
+    %{"id" => routine_key(config)}
     |> Map.put("last_run_at", encode_datetime(last_run_at))
     |> Map.put("last_status", status)
     |> Map.put("next_run_at", encode_datetime(next_run_at))
   end
 
-  defp track_trigger(state, key, config, {:ok, %{id: run_id}}, last_run_at, next_run_at)
+  defp track_trigger(
+         state,
+         key,
+         config,
+         {:ok, %Synapsis.AgentRun{id: run_id} = run},
+         last_run_at,
+         next_run_at
+       )
        when is_binary(run_id) do
+    RunEvents.publish_routine_triggered(config, run)
+
     tracked = %{
       key: key,
       config: config,
@@ -558,22 +565,33 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
         terminal_results: Map.put(state.terminal_results, tracked.key, observable)
     }
 
-    enqueue_persistence(state, tracked.key, config_type(tracked.config), attrs)
+    enqueue_persistence(
+      state,
+      tracked.key,
+      config_type(tracked.config),
+      value(tracked.config, :kind, "heartbeat"),
+      attrs
+    )
   end
 
   defp persist_next_run(state, _config, nil), do: state
 
   defp persist_next_run(state, config, next_run_at) do
-    attrs =
-      config
-      |> Map.new(fn {key, value} -> {to_string(key), value} end)
-      |> Map.drop(["__config_type"])
-      |> Map.put("next_run_at", encode_datetime(next_run_at))
+    attrs = %{
+      "id" => routine_key(config),
+      "next_run_at" => encode_datetime(next_run_at)
+    }
 
-    enqueue_persistence(state, routine_key(config), config_type(config), attrs)
+    enqueue_persistence(
+      state,
+      routine_key(config),
+      config_type(config),
+      value(config, :kind, "heartbeat"),
+      attrs
+    )
   end
 
-  defp enqueue_persistence(state, key, type, attrs) do
+  defp enqueue_persistence(state, key, type, kind, attrs) do
     attrs = Map.merge(Map.get(state.persistence_snapshots, key, %{}), attrs)
 
     state =
@@ -582,9 +600,9 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
       |> put_in([:persistence_snapshots, key], attrs)
 
     if persistence_active?(state, key) do
-      put_in(state.pending_persistence[key], %{type: type, attrs: attrs})
+      put_in(state.pending_persistence[key], %{type: type, kind: kind, attrs: attrs})
     else
-      start_persistence_task(state, key, type, attrs)
+      start_persistence_task(state, key, type, kind, attrs)
     end
   end
 
@@ -592,7 +610,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
     Enum.any?(state.persistence_tasks, fn {_ref, task} -> task.key == key end)
   end
 
-  defp start_persistence_task(state, key, type, attrs, attempt \\ 0) do
+  defp start_persistence_task(state, key, type, kind, attrs, attempt \\ 0) do
     writer = state.config_writer
 
     try do
@@ -613,6 +631,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
         monitor: task.ref,
         key: key,
         type: type,
+        kind: kind,
         attrs: attrs,
         attempt: attempt,
         timeout_ref: timeout_ref
@@ -635,6 +654,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
 
     cond do
       persistence_success?(result) ->
+        RunEvents.publish_routine_updated(task.key, task.kind)
         start_pending_persistence(state, task.key)
 
       Map.has_key?(state.pending_persistence, task.key) ->
@@ -650,10 +670,10 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
       {nil, pending_persistence} ->
         %{state | pending_persistence: pending_persistence}
 
-      {%{type: type, attrs: attrs}, pending_persistence} ->
+      {%{type: type, kind: kind, attrs: attrs}, pending_persistence} ->
         state
         |> Map.put(:pending_persistence, pending_persistence)
-        |> start_persistence_task(key, type, attrs)
+        |> start_persistence_task(key, type, kind, attrs)
     end
   end
 
@@ -668,6 +688,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
       token: token,
       timer_ref: timer_ref,
       type: task.type,
+      kind: task.kind,
       attrs: Map.get(state.persistence_snapshots, task.key, task.attrs),
       attempt: attempt
     }
@@ -788,6 +809,10 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
       _unknown ->
         if value(config, :kind, "heartbeat") == "heartbeat", do: :heartbeat, else: :routine
     end
+  end
+
+  defp merge_config(type, %{"id" => id} = attrs) do
+    ConfigStore.merge_existing(type, id, Map.delete(attrs, "id"))
   end
 
   defp terminal_error(%{status: "failed", payload: payload}) when is_map(payload),

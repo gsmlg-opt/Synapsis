@@ -47,6 +47,71 @@ defmodule Synapsis.Config.Store.ServerTest do
     assert {:error, :not_found} = Store.get(:provider, "provider-1")
   end
 
+  test "merge-existing preserves stored fields and never recreates a concurrently deleted routine" do
+    clear_config_store(:routine)
+    on_exit(fn -> clear_config_store(:routine) end)
+
+    id = Ecto.UUID.generate()
+
+    routine = %{
+      "id" => id,
+      "name" => "user-owned-name",
+      "kind" => "schedule",
+      "enabled" => true,
+      "schedule" => "* * * * *",
+      "prompt" => "user-owned prompt"
+    }
+
+    assert {:ok, ^routine} = Store.put(:routine, routine)
+
+    assert {:ok, merged} =
+             Store.merge_existing(:routine, id, %{
+               "id" => Ecto.UUID.generate(),
+               "last_status" => "completed"
+             })
+
+    assert %{
+             "id" => ^id,
+             "name" => "user-owned-name",
+             "prompt" => "user-owned prompt",
+             "last_status" => "completed"
+           } = merged
+
+    for _iteration <- 1..10 do
+      assert {:ok, _routine} = Store.put(:routine, routine)
+      parent = self()
+
+      delete =
+        Task.async(fn ->
+          receive do
+            :go -> send(parent, {:delete_result, Store.delete(:routine, id)})
+          end
+        end)
+
+      merge =
+        Task.async(fn ->
+          receive do
+            :go ->
+              send(
+                parent,
+                {:merge_result, Store.merge_existing(:routine, id, %{"next_run_at" => nil})}
+              )
+          end
+        end)
+
+      send(delete.pid, :go)
+      send(merge.pid, :go)
+      assert_receive {:delete_result, delete_result}
+      assert_receive {:merge_result, merge_result}
+      Task.await(delete)
+      Task.await(merge)
+
+      assert delete_result == :ok
+      assert match?({:ok, _routine}, merge_result) or merge_result == {:error, :not_found}
+      assert {:error, :not_found} = Store.get(:routine, id)
+    end
+  end
+
   test "malformed reload preserves the last known good entries" do
     provider = %{"id" => "provider-1", "name" => "Original"}
     assert {:ok, ^provider} = Store.put(:provider, provider)

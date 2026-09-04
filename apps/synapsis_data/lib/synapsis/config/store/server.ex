@@ -44,6 +44,11 @@ defmodule Synapsis.Config.Store.Server do
     GenServer.call(via(type), {:put, attrs})
   end
 
+  @spec merge_existing(atom(), String.t(), map()) :: {:ok, map()} | {:error, term()}
+  def merge_existing(type, id, attrs) do
+    GenServer.call(via(type), {:merge_existing, id, attrs})
+  end
+
   @spec delete(atom(), String.t()) :: :ok | {:error, term()}
   def delete(type, id) do
     GenServer.call(via(type), {:delete, id})
@@ -103,6 +108,39 @@ defmodule Synapsis.Config.Store.Server do
     else
       nil -> {:reply, {:error, :missing_id}, state}
       {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call({:merge_existing, id, attrs}, _from, state) do
+    case :ets.lookup(state.table, id) do
+      [{^id, current}] ->
+        entry =
+          current
+          |> Map.merge(attrs |> atomize_keys() |> Map.delete(:id))
+          |> Map.put(:id, id)
+
+        with {:ok, entry} <- validate_entry(state.type, entry) do
+          candidate_entries =
+            state.table
+            |> :ets.tab2list()
+            |> Map.new()
+            |> Map.put(id, entry)
+            |> Map.values()
+
+          case persist(state.type, candidate_entries) do
+            :ok ->
+              :ets.insert(state.table, {id, entry})
+              {:reply, {:ok, stringify_keys(entry)}, state}
+
+            {:error, reason} ->
+              {:reply, {:error, reason}, state}
+          end
+        else
+          {:error, reason} -> {:reply, {:error, reason}, state}
+        end
+
+      [] ->
+        {:reply, {:error, :not_found}, state}
     end
   end
 

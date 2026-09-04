@@ -42,9 +42,8 @@ defmodule Synapsis.Agent.Routines do
   def create(attrs, opts) when is_map(attrs) and is_list(opts) do
     attrs = attrs |> stringify_keys() |> Map.put("id", Ecto.UUID.generate())
 
-    with {:ok, routine} <- Store.put(:routine, attrs),
-         :ok <- reload_scheduler(opts) do
-      {:ok, routine}
+    with {:ok, routine} <- Store.put(:routine, attrs) do
+      finalize_change(:routine, routine, opts)
     end
   end
 
@@ -59,9 +58,8 @@ defmodule Synapsis.Agent.Routines do
       {:ok, type, current} ->
         updated = current |> Map.merge(stringify_keys(attrs)) |> Map.put("id", id)
 
-        with {:ok, routine} <- persist(type, updated),
-             :ok <- reload_scheduler(opts) do
-          {:ok, normalize(type, routine)}
+        with {:ok, routine} <- persist(type, updated) do
+          finalize_change(type, routine, opts)
         end
 
       :error ->
@@ -77,7 +75,6 @@ defmodule Synapsis.Agent.Routines do
          {:ok, routine} <- get(id),
          :ok <- ensure_enabled(routine),
          {:ok, %AgentRun{} = run} <- LocalScheduler.trigger(scheduler(opts), id) do
-      RunEvents.publish_routine_triggered(routine, run)
       {:ok, run}
     end
   end
@@ -149,6 +146,43 @@ defmodule Synapsis.Agent.Routines do
   defp filter_name(routines, nil), do: routines
   defp filter_name(routines, name), do: Enum.filter(routines, &(&1["name"] == name))
 
-  defp reload_scheduler(opts), do: LocalScheduler.reload(scheduler(opts))
+  defp finalize_change(type, routine, opts) do
+    case reload_scheduler(opts) do
+      :ok ->
+        routine = normalize(type, routine)
+        RunEvents.publish_routine_updated(routine)
+        {:ok, routine}
+
+      {:error, reason} ->
+        fail_closed(type, routine, reason)
+    end
+  end
+
+  defp fail_closed(type, routine, reload_reason) do
+    id = routine["id"] || routine[:id]
+
+    case Store.merge_existing(type, id, %{"enabled" => false}) do
+      {:ok, disabled} ->
+        RunEvents.publish_routine_updated(normalize(type, disabled))
+        {:error, {:scheduler_reload_failed, reload_reason}}
+
+      {:error, persist_reason} ->
+        {:error,
+         {:scheduler_reload_failed, reload_reason, {:fail_closed_persist_failed, persist_reason}}}
+    end
+  end
+
+  defp reload_scheduler(opts) do
+    case LocalScheduler.reload(scheduler(opts)) do
+      :ok -> :ok
+      {:error, reason} -> {:error, reason}
+      other -> {:error, {:unexpected_reload_result, other}}
+    end
+  rescue
+    error -> {:error, {error.__struct__, Exception.message(error)}}
+  catch
+    :exit, reason -> {:error, {:exit, reason}}
+  end
+
   defp scheduler(opts), do: Keyword.get(opts, :scheduler, LocalScheduler)
 end

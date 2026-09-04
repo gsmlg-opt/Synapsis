@@ -34,6 +34,73 @@ defmodule Synapsis.Agent.RoutinesTest do
              Enum.find(Routines.list("schedule"), &(&1["id"] == id))
   end
 
+  test "create and update publish durable routine changes" do
+    scheduler = isolated_scheduler()
+    :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, "agent:daemon")
+
+    assert {:ok, %{"id" => id}} =
+             Routines.create(routine_attrs("evented"), scheduler: scheduler)
+
+    on_exit(fn -> Store.delete(:routine, id) end)
+
+    assert_receive {:agent_daemon_event,
+                    %{
+                      event: "agent.routine.updated",
+                      routine_id: ^id,
+                      kind: "schedule",
+                      at: %DateTime{}
+                    }}
+
+    assert {:ok, %{"name" => "renamed"}} =
+             Routines.update(id, %{"name" => "renamed"}, scheduler: scheduler)
+
+    assert_receive {:agent_daemon_event,
+                    %{
+                      event: "agent.routine.updated",
+                      routine_id: ^id,
+                      kind: "schedule",
+                      at: %DateTime{}
+                    }}
+  end
+
+  test "scheduler reload exits leave created and updated routines durably disabled" do
+    :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, "agent:daemon")
+    dead_scheduler = spawn(fn -> :ok end)
+    ref = Process.monitor(dead_scheduler)
+    assert_receive {:DOWN, ^ref, :process, ^dead_scheduler, _reason}
+
+    name = "reload-down-#{System.unique_integer([:positive])}"
+
+    assert {:error, {:scheduler_reload_failed, _reason}} =
+             Routines.create(routine_attrs(name), scheduler: dead_scheduler)
+
+    assert [%{"id" => id, "enabled" => false}] =
+             Enum.filter(Routines.list("schedule"), &(&1["name"] == name))
+
+    on_exit(fn -> Store.delete(:routine, id) end)
+
+    assert_receive {:agent_daemon_event,
+                    %{
+                      event: "agent.routine.updated",
+                      routine_id: ^id,
+                      kind: "schedule"
+                    }}
+
+    assert {:error, {:scheduler_reload_failed, _reason}} =
+             Routines.update(id, %{"enabled" => true, "prompt" => "updated prompt"},
+               scheduler: dead_scheduler
+             )
+
+    assert {:ok, %{"enabled" => false, "prompt" => "updated prompt"}} = Store.get(:routine, id)
+
+    assert_receive {:agent_daemon_event,
+                    %{
+                      event: "agent.routine.updated",
+                      routine_id: ^id,
+                      kind: "schedule"
+                    }}
+  end
+
   test "update merge-patches a routine without changing its stable ID" do
     scheduler = isolated_scheduler()
     assert {:ok, %{"id" => id}} = Routines.create(routine_attrs("before"), scheduler: scheduler)
