@@ -11,6 +11,13 @@ defmodule Synapsis.Agent.Daemon.Execution do
   @string_options ~w(assistant_name provider model source tool_profile)a
   @terminal_statuses ~w(completed failed cancelled interrupted)
   @dream_list_fields ~w(memory_candidates open_questions risks proposed_tasks ignored_noise)
+  @dream_run_text_limit 500
+  @dream_memory_title_limit 200
+  @dream_memory_summary_limit 1_000
+  @dream_session_message_limit 20
+  @dream_session_summary_limit 1_000
+  @dream_session_title_limit 200
+  @context_control_chars ~r/[[:cntrl:]]/u
   @daemon_permission %{
     mode: :autonomous,
     allow_read: :allow,
@@ -699,7 +706,10 @@ defmodule Synapsis.Agent.Daemon.Execution do
       |> Enum.filter(&(&1.status in @terminal_statuses))
       |> Enum.take(5)
       |> Enum.map_join("\n", fn recent_run ->
-        result = recent_run.summary || recent_run.error || "(no summary)"
+        result =
+          bounded_context_text(recent_run.summary || recent_run.error, @dream_run_text_limit)
+
+        result = if result == "", do: "(no summary)", else: result
         "- #{recent_run.kind} #{recent_run.status}: #{result}"
       end)
 
@@ -708,8 +718,16 @@ defmodule Synapsis.Agent.Daemon.Execution do
       |> MemoryAdapter.search([limit: 5], 500)
       |> Enum.take(5)
       |> Enum.map_join("\n", fn memory ->
-        title = Map.get(memory, :title, Map.get(memory, "title", "Memory"))
-        summary = Map.get(memory, :summary, Map.get(memory, "summary", ""))
+        title =
+          memory
+          |> Map.get(:title, Map.get(memory, "title", "Memory"))
+          |> bounded_context_text(@dream_memory_title_limit)
+
+        summary =
+          memory
+          |> Map.get(:summary, Map.get(memory, "summary", ""))
+          |> bounded_context_text(@dream_memory_summary_limit)
+
         "- #{title}: #{summary}"
       end)
 
@@ -717,20 +735,29 @@ defmodule Synapsis.Agent.Daemon.Execution do
 
     session_summaries =
       sessions
+      |> Enum.filter(&is_binary(&1.summary))
       |> Enum.take(5)
-      |> Enum.map_join("\n", fn {session, messages} ->
-        title = Map.get(session, :title) || "Untitled session"
-        "- #{title}: #{session_summary(messages)}"
+      |> Enum.map_join("\n", fn context ->
+        title =
+          context.session
+          |> Map.get(:title)
+          |> case do
+            nil -> "Untitled session"
+            value -> bounded_context_text(value, @dream_session_title_limit)
+          end
+
+        "- #{title}: #{context.summary}"
       end)
 
     todos =
       sessions
-      |> Enum.flat_map(fn {session, _messages} -> session_todos(session.id) end)
+      |> Enum.flat_map(fn context -> session_todos(context.session.id) end)
       |> Enum.take(10)
       |> Enum.map_join("\n", fn todo ->
         content = Map.get(todo, "content", Map.get(todo, :content, ""))
         status = Map.get(todo, "status", Map.get(todo, :status, "pending"))
-        "- [#{status}] #{String.slice(to_string(content), 0, 500)}"
+
+        "- [#{bounded_context_text(status, 50)}] #{bounded_context_text(content, 500)}"
       end)
 
     workspace = workspace_status(run.assistant_name)
@@ -757,16 +784,13 @@ defmodule Synapsis.Agent.Daemon.Execution do
 
   defp recent_sessions(sessions, assistant_name) do
     if Code.ensure_loaded?(sessions) and function_exported?(sessions, :recent, 1) and
-         function_exported?(sessions, :get_messages, 1) do
+         function_exported?(sessions, :get_messages, 2) do
       sessions.recent(limit: 6, agent: assistant_name)
-      |> Enum.flat_map(fn session ->
-        messages = sessions.get_messages(session.id)
-
-        if session_summary(messages),
-          do: [{session, messages}],
-          else: []
+      |> Enum.take(6)
+      |> Enum.map(fn session ->
+        messages = sessions.get_messages(session.id, limit: @dream_session_message_limit)
+        %{session: session, summary: session_summary(messages)}
       end)
-      |> Enum.take(5)
     else
       []
     end
@@ -793,12 +817,29 @@ defmodule Synapsis.Agent.Daemon.Execution do
       |> Enum.find_value(&assistant_text/1)
 
     case compacted || latest_assistant do
-      text when is_binary(text) and text != "" -> String.slice(text, 0, 1_000)
-      _none -> nil
+      text when is_binary(text) and text != "" ->
+        case bounded_context_text(text, @dream_session_summary_limit) do
+          "" -> nil
+          summary -> summary
+        end
+
+      _none ->
+        nil
     end
   end
 
   defp session_summary(_messages), do: nil
+
+  defp bounded_context_text(value, limit) when is_binary(value) do
+    value
+    |> String.replace_invalid()
+    |> String.replace(@context_control_chars, " ")
+    |> String.replace(~r/\s+/u, " ")
+    |> String.trim()
+    |> String.slice(0, limit)
+  end
+
+  defp bounded_context_text(_value, _limit), do: ""
 
   defp message_text(%{parts: parts}) when is_list(parts) do
     parts

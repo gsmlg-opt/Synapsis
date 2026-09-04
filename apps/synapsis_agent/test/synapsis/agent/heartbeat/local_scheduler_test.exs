@@ -118,6 +118,54 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
     assert terminal_next_run_at == next_run_at
   end
 
+  test "serializes routine persistence so a delayed next-run write cannot erase terminal state" do
+    Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :immediate_done)
+    {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
+    owner = self()
+    config = routine(Ecto.UUID.generate(), "ordered-routine", "schedule")
+    {:ok, writes} = Agent.start_link(fn -> %{count: 0, persisted: nil} end)
+
+    scheduler =
+      start_scheduler([config], daemon, task_supervisor,
+        config_writer: fn type, attrs ->
+          index =
+            Agent.get_and_update(writes, fn state ->
+              {state.count + 1, %{state | count: state.count + 1}}
+            end)
+
+          send(owner, {:routine_write_started, index, type, attrs, self()})
+
+          if index == 1 do
+            receive do
+              :release_next_run_write -> :ok
+            end
+          end
+
+          Agent.update(writes, &%{&1 | persisted: attrs})
+          send(owner, {:routine_write_finished, index, attrs})
+          {:ok, attrs}
+        end
+      )
+
+    assert_receive {:routine_write_started, 1, :routine, next_attrs, delayed_writer}, 1_000
+    refute Map.has_key?(next_attrs, "last_status")
+
+    assert {:ok, run} = LocalScheduler.trigger(scheduler, "ordered-routine")
+    assert {:ok, _completed} = wait_for_run(run.id, "completed")
+
+    refute_receive {:routine_write_started, 2, :routine, _attrs, _writer}, 100
+
+    send(delayed_writer, :release_next_run_write)
+    assert_receive {:routine_write_finished, 1, ^next_attrs}, 1_000
+
+    assert_receive {:routine_write_started, 2, :routine,
+                    %{"last_status" => "completed"} = terminal_attrs, _writer},
+                   1_000
+
+    assert_receive {:routine_write_finished, 2, ^terminal_attrs}, 1_000
+    assert Agent.get(writes, & &1.persisted) == terminal_attrs
+  end
+
   test "persists and exposes a heartbeat terminal outcome without changing its config shape" do
     Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :immediate_done)
     {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)

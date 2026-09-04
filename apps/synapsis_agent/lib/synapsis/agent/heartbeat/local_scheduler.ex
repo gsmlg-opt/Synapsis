@@ -58,6 +58,8 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
       trigger_timeout_ms: positive_timeout(opts[:trigger_timeout_ms], @trigger_timeout_ms),
       trigger_tasks: %{},
       persistence_tasks: %{},
+      pending_persistence: %{},
+      persistence_snapshots: %{},
       tracked_runs: %{},
       terminal_events: %{},
       trigger_results: %{},
@@ -152,8 +154,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
 
       task = Map.get(state.persistence_tasks, ref) ->
         cancel_persistence_task_tracking(task)
-        state = %{state | persistence_tasks: Map.delete(state.persistence_tasks, ref)}
-        {:noreply, apply_persistence_result(state, task, result)}
+        {:noreply, finish_persistence_task(state, ref, task, result)}
 
       true ->
         {:noreply, state}
@@ -182,12 +183,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
         Process.exit(pid, :kill)
         cancel_persistence_task_tracking(task)
 
-        state =
-          state
-          |> Map.put(:persistence_tasks, Map.delete(state.persistence_tasks, ref))
-          |> put_trigger_error(task.name, :config_persist_timeout)
-
-        {:noreply, state}
+        {:noreply, finish_persistence_task(state, ref, task, {:error, :config_persist_timeout})}
 
       _stale ->
         {:noreply, state}
@@ -221,12 +217,13 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
       task = Map.get(state.persistence_tasks, monitor) ->
         cancel_timeout(task.timeout_ref)
 
-        state =
-          state
-          |> Map.put(:persistence_tasks, Map.delete(state.persistence_tasks, monitor))
-          |> put_trigger_error(task.name, {:config_persist_task_down, reason})
-
-        {:noreply, state}
+        {:noreply,
+         finish_persistence_task(
+           state,
+           monitor,
+           task,
+           {:error, {:config_persist_task_down, reason}}
+         )}
 
       true ->
         {:noreply, state}
@@ -436,7 +433,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
       | trigger_results: Map.put(state.trigger_results, tracked.name, observable)
     }
 
-    start_persistence_task(state, tracked.name, config_type(tracked.config), attrs)
+    enqueue_persistence(state, tracked.name, config_type(tracked.config), attrs)
   end
 
   defp persist_next_run(state, _config, nil), do: state
@@ -448,7 +445,22 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
       |> Map.drop(["__config_type"])
       |> Map.put("next_run_at", encode_datetime(next_run_at))
 
-    start_persistence_task(state, value(config, :name), config_type(config), attrs)
+    enqueue_persistence(state, value(config, :name), config_type(config), attrs)
+  end
+
+  defp enqueue_persistence(state, name, type, attrs) do
+    attrs = Map.merge(Map.get(state.persistence_snapshots, name, %{}), attrs)
+    state = put_in(state.persistence_snapshots[name], attrs)
+
+    if persistence_active?(state, name) do
+      put_in(state.pending_persistence[name], %{type: type, attrs: attrs})
+    else
+      start_persistence_task(state, name, type, attrs)
+    end
+  end
+
+  defp persistence_active?(state, name) do
+    Enum.any?(state.persistence_tasks, fn {_ref, task} -> task.name == name end)
   end
 
   defp start_persistence_task(state, name, type, attrs) do
@@ -481,6 +493,25 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
     catch
       :exit, reason ->
         put_trigger_error(state, name, {:config_persist_task_start_failed, reason})
+    end
+  end
+
+  defp finish_persistence_task(state, ref, task, result) do
+    state
+    |> Map.put(:persistence_tasks, Map.delete(state.persistence_tasks, ref))
+    |> apply_persistence_result(task, result)
+    |> start_pending_persistence(task.name)
+  end
+
+  defp start_pending_persistence(state, name) do
+    case Map.pop(state.pending_persistence, name) do
+      {nil, pending_persistence} ->
+        %{state | pending_persistence: pending_persistence}
+
+      {%{type: type, attrs: attrs}, pending_persistence} ->
+        state
+        |> Map.put(:pending_persistence, pending_persistence)
+        |> start_persistence_task(name, type, attrs)
     end
   end
 

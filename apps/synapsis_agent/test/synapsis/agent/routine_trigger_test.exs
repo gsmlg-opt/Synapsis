@@ -9,22 +9,25 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
         filters
       })
 
-      [
-        %{
-          id: "dream-memory",
-          scope: "shared",
-          scope_id: "",
-          kind: "lesson",
-          title: "Deployment lesson",
-          summary: "Verify the live endpoint after restart",
-          tags: [],
-          contributed_by: "test",
-          importance: 0.8,
-          confidence: 0.9,
-          freshness: 1.0,
-          inserted_at: DateTime.utc_now()
-        }
-      ]
+      memories =
+        Application.get_env(:synapsis_agent, :dream_test_memories, [
+          %{
+            id: "dream-memory",
+            scope: "shared",
+            scope_id: "",
+            kind: "lesson",
+            title: "Deployment lesson",
+            summary: "Verify the live endpoint after restart",
+            tags: [],
+            contributed_by: "test",
+            importance: 0.8,
+            confidence: 0.9,
+            freshness: 1.0,
+            inserted_at: DateTime.utc_now()
+          }
+        ])
+
+      if is_function(memories, 1), do: memories.(query), else: memories
     end
 
     def touch_accessed(_ids), do: :ok
@@ -162,6 +165,23 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
                }
              ])
 
+    assert {:ok, todo_only_session} =
+             Synapsis.Sessions.create(agent_name, %{
+               provider: provider_name,
+               model: "daemon-test-model",
+               title: "Session without a summary"
+             })
+
+    assert :ok =
+             Synapsis.Session.Store.put_value(todo_only_session.id, "todos", [
+               %{
+                 "todo_id" => Ecto.UUID.generate(),
+                 "content" => "Follow up even without a session summary",
+                 "status" => "pending",
+                 "sort_order" => 0
+               }
+             ])
+
     workspace_path =
       "/agents/#{agent_name}/plans/dream-context-#{System.unique_integer([:positive])}.md"
 
@@ -172,6 +192,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
 
     on_exit(fn ->
       Synapsis.Sessions.delete(recent_session.id)
+      Synapsis.Sessions.delete(todo_only_session.id)
       Synapsis.Workspace.delete(workspace_path)
     end)
 
@@ -197,9 +218,138 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
     assert body =~ "Deployment lesson"
     assert body =~ "Verify the live endpoint after restart"
     assert body =~ "Recheck the deploy tomorrow"
+    assert body =~ "Follow up even without a session summary"
     assert body =~ workspace_path
     assert body =~ "recent_summary"
     assert body =~ "ignored_noise"
+    assert {:ok, _completed} = wait_for_run(dream.id, "completed")
+  end
+
+  @tag :tmp_dir
+  test "dream prompt bounds and sanitizes run, memory, and per-session message context", %{
+    tmp_dir: tmp_dir
+  } do
+    previous_adapter = Application.get_env(:synapsis_core, :memory_adapter)
+    Application.put_env(:synapsis_core, :memory_adapter, DreamMemoryAdapter)
+
+    oversized_memory = %{
+      id: "oversized-dream-memory",
+      scope: "shared",
+      scope_id: "",
+      kind: "lesson",
+      title: "Memory " <> String.duplicate("T", 1_000) <> "MEMORY_TITLE_TAIL",
+      summary: "Memory safe\0text " <> String.duplicate("M", 2_000) <> "MEMORY_SUMMARY_TAIL",
+      tags: [],
+      contributed_by: "test",
+      importance: 0.8,
+      confidence: 0.9,
+      freshness: 1.0,
+      inserted_at: DateTime.utc_now()
+    }
+
+    Application.put_env(:synapsis_agent, :dream_test_memories, fn
+      "reflect on bounded inputs" -> [oversized_memory]
+      _other_query -> []
+    end)
+
+    on_exit(fn ->
+      Application.delete_env(:synapsis_agent, :dream_test_memories)
+
+      if previous_adapter,
+        do: Application.put_env(:synapsis_core, :memory_adapter, previous_adapter),
+        else: Application.delete_env(:synapsis_core, :memory_adapter)
+    end)
+
+    assert {:ok, _recent} =
+             Runs.create(%{
+               kind: "heartbeat",
+               status: "failed",
+               source: "system",
+               heartbeat_id: Ecto.UUID.generate(),
+               routine_id: Ecto.UUID.generate(),
+               prompt: "oversized prior heartbeat",
+               tool_profile: "assistant_basic",
+               error:
+                 "Bounded failure " <>
+                   String.duplicate("R", 2_000) <> "AGENT_RUN_ERROR_TAIL"
+             })
+
+    owner = self()
+    bypass = Bypass.open()
+
+    dream_json =
+      Jason.encode!(%{
+        "recent_summary" => "Reviewed bounded context",
+        "memory_candidates" => [],
+        "open_questions" => [],
+        "risks" => [],
+        "proposed_tasks" => [],
+        "ignored_noise" => []
+      })
+
+    Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      send(owner, {:bounded_dream_request, body})
+      send_sse(conn, [text_chunk(dream_json), finish_chunk("stop")])
+    end)
+
+    {provider_name, agent_name} = register_provider_agent(tmp_dir, bypass)
+
+    assert {:ok, recent_session} =
+             Synapsis.Sessions.create(agent_name, %{
+               provider: provider_name,
+               model: "daemon-test-model",
+               title: "Bounded history session"
+             })
+
+    assert {:ok, _message} =
+             Synapsis.Message.append(recent_session.id, %{
+               role: "assistant",
+               parts: [%Synapsis.Part.Text{content: "Summary inside the bounded slice"}]
+             })
+
+    for index <- 1..19 do
+      assert {:ok, _message} =
+               Synapsis.Message.append(recent_session.id, %{
+                 role: "user",
+                 parts: [%Synapsis.Part.Text{content: "bounded filler #{index}"}]
+               })
+    end
+
+    assert {:ok, _message} =
+             Synapsis.Message.append(recent_session.id, %{
+               role: "assistant",
+               parts: [
+                 %Synapsis.Part.Text{
+                   content:
+                     "Outside slice " <>
+                       String.duplicate("S", 2_000) <> "SESSION_HISTORY_TAIL"
+                 }
+               ]
+             })
+
+    on_exit(fn -> Synapsis.Sessions.delete(recent_session.id) end)
+
+    {daemon, _task_supervisor} = start_test_daemon()
+
+    assert {:ok, dream} =
+             Daemon.trigger(daemon, :dream, %{
+               routine_id: Ecto.UUID.generate(),
+               prompt: "reflect on bounded inputs",
+               assistant_name: agent_name,
+               provider: provider_name,
+               model: "daemon-test-model"
+             })
+
+    assert_receive {:bounded_dream_request, body}, 2_000
+    assert body =~ "Bounded failure"
+    assert body =~ "Memory safe text"
+    assert body =~ "Summary inside the bounded slice"
+    refute body =~ "AGENT_RUN_ERROR_TAIL"
+    refute body =~ "MEMORY_TITLE_TAIL"
+    refute body =~ "MEMORY_SUMMARY_TAIL"
+    refute body =~ "SESSION_HISTORY_TAIL"
+    refute body =~ "\\u0000"
     assert {:ok, _completed} = wait_for_run(dream.id, "completed")
   end
 
