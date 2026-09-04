@@ -23,4 +23,32 @@ defmodule Synapsis.Tool.RegistryMonitorTest do
     Process.sleep(50)
     assert {:error, :not_found} = Registry.lookup(name)
   end
+
+  test "a previous owner's delayed DOWN does not remove its replacement" do
+    name = "replacement_tool_#{System.unique_integer([:positive])}"
+    old_owner = spawn(fn -> Process.sleep(:infinity) end)
+    new_owner = spawn(fn -> Process.sleep(:infinity) end)
+
+    on_exit(fn ->
+      Process.exit(old_owner, :kill)
+      Process.exit(new_owner, :kill)
+      Registry.unregister(name)
+    end)
+
+    :ok = Registry.register_process(name, old_owner, description: "old", parameters: %{})
+    _state = :sys.get_state(Registry)
+
+    :ok = :sys.suspend(Registry)
+
+    try do
+      :ok = Registry.register_process(name, new_owner, description: "new", parameters: %{})
+      Process.exit(old_owner, :kill)
+    after
+      :ok = :sys.resume(Registry)
+    end
+
+    _state = :sys.get_state(Registry)
+
+    assert {:ok, {:process, ^new_owner, _opts}} = Registry.lookup(name)
+  end
 end

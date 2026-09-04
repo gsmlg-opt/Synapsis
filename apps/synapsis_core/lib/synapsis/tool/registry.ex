@@ -277,8 +277,14 @@ defmodule Synapsis.Tool.Registry do
 
       {{^pid, names}, monitors} ->
         Enum.each(names, fn name ->
-          :ets.delete(@table, name)
-          broadcast_tool_registry_changed(:unregistered, name)
+          case :ets.lookup(@table, name) do
+            [{^name, {:process, ^pid, _opts}}] ->
+              :ets.delete(@table, name)
+              broadcast_tool_registry_changed(:unregistered, name)
+
+            _replacement_or_missing ->
+              :ok
+          end
         end)
 
         {:noreply, %{state | monitors: monitors, pids: Map.delete(state.pids, pid)}}
