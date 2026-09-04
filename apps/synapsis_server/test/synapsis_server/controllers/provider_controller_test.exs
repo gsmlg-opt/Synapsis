@@ -212,6 +212,61 @@ defmodule SynapsisServer.ProviderControllerTest do
       assert length(models) > 0
     end
 
+    test "rejects an unavailable Backplane provider before calling its adapter", %{conn: conn} do
+      bypass = Bypass.open()
+      parent = self()
+
+      Bypass.stub(bypass, "GET", "/v1/models", fn request_conn ->
+        send(parent, :unavailable_provider_adapter_called)
+
+        request_conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "forbidden"}]}))
+      end)
+
+      {:ok, provider} =
+        Providers.create(%{
+          name: "unavailable-backplane",
+          type: "openai",
+          base_url: "http://127.0.0.1:#{bypass.port}/v1",
+          enabled: true,
+          config: %{
+            "managed_by" => "backplane",
+            "backplane_source_id" => "source-1",
+            "backplane_available" => false
+          }
+        })
+
+      Synapsis.Provider.Registry.register(provider.name, %{
+        type: "openai",
+        base_url: provider.base_url
+      })
+
+      on_exit(fn -> Synapsis.Provider.Registry.unregister(provider.name) end)
+
+      conn = get(conn, "/api/providers/by-name/#{provider.name}/models")
+
+      assert %{"error" => "Provider unavailable"} = json_response(conn, 422)
+      refute_receive :unavailable_provider_adapter_called
+    end
+
+    test "keeps the environment fallback for a nonpersisted provider", %{conn: conn} do
+      previous_key = System.get_env("ANTHROPIC_API_KEY")
+      Synapsis.Provider.Registry.unregister("anthropic")
+      System.put_env("ANTHROPIC_API_KEY", "sk-ant-env-models")
+
+      on_exit(fn ->
+        if previous_key,
+          do: System.put_env("ANTHROPIC_API_KEY", previous_key),
+          else: System.delete_env("ANTHROPIC_API_KEY")
+      end)
+
+      conn = get(conn, "/api/providers/by-name/anthropic/models")
+
+      assert %{"data" => models} = json_response(conn, 200)
+      assert is_list(models) and models != []
+    end
+
     test "returns 404 for unknown provider", %{conn: conn} do
       conn = get(conn, "/api/providers/by-name/unknown_xyz/models")
       assert json_response(conn, 404)

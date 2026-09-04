@@ -104,21 +104,19 @@ defmodule SynapsisServer.ProviderController do
   end
 
   def models_by_name(conn, %{"name" => name}) do
-    case Synapsis.Provider.Registry.module_for(name) do
-      {:ok, mod} ->
-        config = get_provider_config(name)
+    case models_for_name(name) do
+      {:ok, models} ->
+        json(conn, %{data: models})
 
-        case mod.models(config) do
-          {:ok, models} ->
-            json(conn, %{data: models})
+      {:error, :provider_unavailable} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "Provider unavailable"})
 
-          {:error, reason} ->
-            Logger.warning("provider_models_by_name_error", name: name, reason: inspect(reason))
-            conn |> put_status(500) |> json(%{error: "Failed to retrieve models"})
-        end
-
-      {:error, _} ->
+      {:error, reason} when reason in [:not_found, :unknown_provider] ->
         conn |> put_status(:not_found) |> json(%{error: "Unknown provider"})
+
+      {:error, reason} ->
+        Logger.warning("provider_models_by_name_error", name: name, reason: inspect(reason))
+        conn |> put_status(500) |> json(%{error: "Failed to retrieve models"})
     end
   end
 
@@ -328,6 +326,18 @@ defmodule SynapsisServer.ProviderController do
     case Synapsis.Provider.Registry.get(name) do
       {:ok, config} -> config
       {:error, _} -> %{api_key: get_env_key(name), type: name}
+    end
+  end
+
+  defp models_for_name(name) do
+    case Providers.get_by_name(name) do
+      {:ok, _provider} ->
+        Providers.models_for(name)
+
+      {:error, :not_found} ->
+        with {:ok, mod} <- Synapsis.Provider.Registry.module_for(name) do
+          mod.models(get_provider_config(name))
+        end
     end
   end
 
