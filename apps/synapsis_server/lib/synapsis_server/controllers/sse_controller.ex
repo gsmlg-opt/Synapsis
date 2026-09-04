@@ -39,9 +39,10 @@ defmodule SynapsisServer.SSEController do
 
         # ADR-006 B2: first frame is the current state from the live read
         # authority (process snapshot, or Concord fallback), then live deltas.
-        conn
-        |> send_initial_state(session_id)
-        |> sse_loop(session_id)
+        case send_initial_state(conn, session_id) do
+          {:ok, conn} -> sse_loop(conn, session_id)
+          {:error, conn} -> conn
+        end
     end
   end
 
@@ -63,12 +64,12 @@ defmodule SynapsisServer.SSEController do
     case Jason.encode(payload) do
       {:ok, data} ->
         case chunk(conn, "event: session_state\ndata: #{data}\n\n") do
-          {:ok, conn} -> conn
-          {:error, _} -> conn
+          {:ok, conn} -> {:ok, conn}
+          {:error, _} -> {:error, conn}
         end
 
       {:error, _} ->
-        conn
+        {:error, conn}
     end
   end
 

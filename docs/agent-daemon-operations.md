@@ -48,8 +48,21 @@ The escript provides `agent status|run|runs|cancel`, `heartbeat run [name]`,
 `backplane list|add|test|sync`. Schedule and Backplane names resolve to exactly
 one stable ID or fail as ambiguous. Backplane connections are keyless unless
 `backplane add` is given `--credential-env VAR`; the credential is read from
-that environment variable and is never printed. Use `--host` to select the
-local HTTP endpoint.
+that environment variable and is never printed. The CLI refuses to send that
+credential through a non-loopback plaintext CLI host or to configure it for a
+non-loopback plaintext Backplane endpoint.
+
+Use `--host` to select the endpoint. For the production mTLS boundary, pass the
+client certificate and private key as a pair; use `--ca-cert` when the server CA
+is not in the system trust store:
+
+```sh
+synapsis agent status \
+  --host https://synapsis.example.com \
+  --client-cert /etc/synapsis/admin.pem \
+  --client-key /etc/synapsis/admin.key \
+  --ca-cert /etc/synapsis/server-ca.pem
+```
 
 The operational LiveView is available at `/agent/daemon`. It subscribes to the
 daemon topic and provides runtime status, durable run history and controls,

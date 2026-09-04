@@ -39,6 +39,7 @@ defmodule SynapsisServer.Router do
 
   scope "/api", SynapsisServer do
     get "/agent/events", SSEController, :agent_events
+    get "/sessions/:id/events", SSEController, :events
   end
 
   scope "/api", SynapsisServer do
@@ -52,8 +53,6 @@ defmodule SynapsisServer.Router do
     post "/sessions/:id/fork", SessionController, :fork
     get "/sessions/:id/export", SessionController, :export_session
     post "/sessions/:id/compact", SessionController, :compact
-    get "/sessions/:id/events", SSEController, :events
-
     resources "/providers", ProviderController, only: [:index, :show, :create, :update, :delete]
     get "/providers/:id/models", ProviderController, :models
     post "/providers/:id/test", ProviderController, :test_connection

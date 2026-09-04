@@ -292,6 +292,88 @@ defmodule SynapsisCli.DaemonCommandsTest do
     refute_receive {:unexpected_request, _method, _path}, 50
   end
 
+  test "client certificate and key are required as a pair" do
+    assert {:error, :mtls_pair_required} =
+             Main.run([
+               "agent",
+               "status",
+               "--host",
+               "https://synapsis.example.com",
+               "--client-cert",
+               "/tmp/client.pem"
+             ])
+
+    assert {:error, :mtls_pair_required} =
+             Main.run([
+               "agent",
+               "status",
+               "--host",
+               "https://synapsis.example.com",
+               "--client-key",
+               "/tmp/client.key"
+             ])
+  end
+
+  test "mTLS options use the Req and Finch transport option contract" do
+    options =
+      Main.request_options(
+        [
+          client_cert: "/secure/client.pem",
+          client_key: "/secure/client.key",
+          ca_cert: "/secure/ca.pem"
+        ],
+        12_345
+      )
+
+    assert options[:receive_timeout] == 12_345
+    assert options[:request_timeout] == 12_345
+    assert options[:retry] == false
+
+    assert options[:connect_options][:transport_opts] == [
+             certfile: "/secure/client.pem",
+             keyfile: "/secure/client.key",
+             cacertfile: "/secure/ca.pem"
+           ]
+
+    assert %Req.Request{} = Req.new([url: "https://synapsis.example.com"] ++ options)
+  end
+
+  test "does not send a Backplane credential over non-loopback plaintext HTTP" do
+    env_name = "SYNAPSIS_TEST_REMOTE_CREDENTIAL_#{System.unique_integer([:positive])}"
+    secret = "must-never-cross-plaintext"
+    System.put_env(env_name, secret)
+    on_exit(fn -> System.delete_env(env_name) end)
+
+    output =
+      capture_io(fn ->
+        assert {:error, :plaintext_credential_forbidden} =
+                 Main.run([
+                   "backplane",
+                   "add",
+                   "remote",
+                   "https://backplane.internal",
+                   "--credential-env",
+                   env_name,
+                   "--host",
+                   "http://synapsis.example.com:4657"
+                 ])
+      end)
+
+    refute output =~ secret
+
+    assert {:error, :plaintext_credential_forbidden} =
+             Main.run([
+               "backplane",
+               "add",
+               "remote-backplane",
+               "http://backplane.example.com",
+               "--credential-env",
+               env_name,
+               "--host",
+               "http://127.0.0.1:4657"
+             ])
+  end
+
   test "bare daemon command namespaces return usage without starting a session" do
     bypass = Bypass.open()
     host = "http://localhost:#{bypass.port}"

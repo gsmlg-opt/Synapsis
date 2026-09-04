@@ -75,6 +75,30 @@ defmodule SynapsisServer.AgentEventsControllerTest do
     assert {"daemon_status", %{"status" => _status}} = decode_frame(initial_frame)
   end
 
+  test "the routed session endpoint accepts the event-stream media type", %{conn: conn} do
+    create_conn =
+      post(conn, "/api/sessions", %{
+        project_path: "/tmp/sse-route-#{System.unique_integer([:positive])}",
+        provider: "anthropic",
+        model: "claude-sonnet-4-20250514"
+      })
+
+    %{"data" => %{"id" => session_id}} = json_response(create_conn, 201)
+    on_exit(fn -> Synapsis.Sessions.delete(session_id) end)
+
+    conn =
+      build_conn(:get, "/api/sessions/#{session_id}/events")
+      |> put_req_header("accept", "text/event-stream")
+      |> closing_stream(1)
+
+    conn = SynapsisServer.Router.call(conn, SynapsisServer.Router.init([]))
+
+    assert %Plug.Conn{status: 200, state: :chunked} = conn
+    assert_receive {:sse_chunk, _request_pid, initial_frame}
+    assert {"session_state", %{"status" => status}} = decode_frame(initial_frame)
+    assert status in ["idle", "waiting"]
+  end
+
   defp closing_stream(%Plug.Conn{adapter: {Plug.Adapters.Test.Conn, state}} = conn, close_after) do
     state = Map.put(state, :close_after, close_after)
     %{conn | adapter: {ClosingStreamAdapter, state}}

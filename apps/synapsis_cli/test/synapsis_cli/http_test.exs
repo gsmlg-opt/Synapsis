@@ -410,7 +410,8 @@ defmodule SynapsisCli.HTTPTest do
       stderr =
         capture_io(:stderr, fn ->
           capture_io(fn ->
-            SynapsisCli.Main.main(["--prompt", "test", "--host", ctx.host])
+            assert {:error, {:sse_error, "rate limited"}} =
+                     SynapsisCli.Main.run(["--prompt", "test", "--host", ctx.host])
           end)
         end)
 
@@ -420,8 +421,125 @@ defmodule SynapsisCli.HTTPTest do
 
   # ── Message send warning on non-200 ───────────────────────────────
 
-  describe "message send warning" do
-    test "prints warning to stderr on non-200 message response" do
+  describe "SSE stream transport" do
+    test "subscribes before submission, preserves split UTF-8 frames, and halts on done" do
+      bypass = Bypass.open()
+      host = "http://localhost:#{bypass.port}"
+      session_id = "ordered-session-#{System.unique_integer([:positive])}"
+
+      state =
+        start_supervised!(
+          {Agent, fn -> %{subscribed: false, initial_sent: false, stream: nil} end}
+        )
+
+      Bypass.expect_once(bypass, "POST", "/api/sessions", fn conn ->
+        json(conn, 201, %{"data" => %{"id" => session_id}})
+      end)
+
+      Bypass.stub(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
+        stream = self()
+        Agent.update(state, &%{&1 | subscribed: true, stream: stream})
+
+        conn =
+          conn
+          |> Plug.Conn.put_resp_content_type("text/event-stream")
+          |> Plug.Conn.send_chunked(200)
+
+        {:ok, conn} =
+          Plug.Conn.chunk(conn, "event: session_state\ndata: {\"status\":\"waiting\"}\n\n")
+
+        Agent.update(state, &%{&1 | initial_sent: true})
+
+        receive do
+          :message_submitted -> :ok
+        after
+          1_000 -> flunk("message was not submitted after the stream became ready")
+        end
+
+        payload =
+          "event: text_delta\r\ndata: #{Jason.encode!(%{"text" => "A🌙"})}\r\n\r\n" <>
+            "event: text_delta\ndata: #{Jason.encode!(%{"text" => "B"})}\n\n" <>
+            "event: done\ndata: {}\n\n" <>
+            "event: text_delta\ndata: #{Jason.encode!(%{"text" => "NEVER"})}\n\n"
+
+        {moon_offset, _length} = :binary.match(payload, "🌙")
+        split_at = moon_offset + 2
+        <<first::binary-size(split_at), rest::binary>> = payload
+        {:ok, conn} = Plug.Conn.chunk(conn, first)
+        {:ok, conn} = Plug.Conn.chunk(conn, rest)
+        conn
+      end)
+
+      Bypass.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
+        assert %{subscribed: true, initial_sent: true, stream: stream} = Agent.get(state, & &1)
+        send(stream, :message_submitted)
+        json(conn, 200, %{"ok" => true})
+      end)
+
+      output =
+        capture_io(fn ->
+          assert :ok = SynapsisCli.Main.run(["--prompt", "test", "--host", host])
+        end)
+
+      assert output =~ "A🌙B"
+      refute output =~ "NEVER"
+    end
+
+    test "returns a non-2xx stream response without submitting a message" do
+      bypass = Bypass.open()
+      host = "http://localhost:#{bypass.port}"
+      session_id = "failed-stream-#{System.unique_integer([:positive])}"
+      owner = self()
+
+      Bypass.expect_once(bypass, "POST", "/api/sessions", fn conn ->
+        json(conn, 201, %{"data" => %{"id" => session_id}})
+      end)
+
+      Bypass.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
+        json(conn, 503, %{"error" => "unavailable"})
+      end)
+
+      Bypass.stub(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
+        send(owner, :unexpected_message_submission)
+        json(conn, 200, %{})
+      end)
+
+      assert capture_io(fn ->
+               assert {:error, {:http_error, 503}} =
+                        SynapsisCli.Main.run(["--prompt", "test", "--host", host])
+             end) == ""
+
+      refute_receive :unexpected_message_submission, 50
+    end
+
+    test "returns an error when the stream closes without a terminal event" do
+      bypass = Bypass.open()
+      host = "http://localhost:#{bypass.port}"
+      session_id = "closed-stream-#{System.unique_integer([:positive])}"
+
+      Bypass.expect_once(bypass, "POST", "/api/sessions", fn conn ->
+        json(conn, 201, %{"data" => %{"id" => session_id}})
+      end)
+
+      Bypass.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("text/event-stream")
+        |> Plug.Conn.resp(200, "event: text_delta\ndata: {\"text\":\"partial\"}\n\n")
+      end)
+
+      Bypass.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
+        json(conn, 200, %{"ok" => true})
+      end)
+
+      assert capture_io(fn ->
+               assert {:error, :sse_closed_before_terminal} =
+                        SynapsisCli.Main.run(["--prompt", "test", "--host", host])
+             end) == "partial"
+    end
+  end
+
+  describe "message send failure" do
+    test "returns the non-200 message response" do
       bypass = Bypass.open()
       host = "http://localhost:#{bypass.port}"
       session_id = "test-session-#{System.unique_integer([:positive])}"
@@ -441,17 +559,19 @@ defmodule SynapsisCli.HTTPTest do
       Bypass.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
-        |> Plug.Conn.resp(200, "event: done\ndata: \n\n")
+        |> Plug.Conn.resp(200, "event: session_state\ndata: {\"status\":\"waiting\"}\n\n")
       end)
 
-      stderr =
-        capture_io(:stderr, fn ->
-          capture_io(fn ->
-            SynapsisCli.Main.main(["--prompt", "test", "--host", host])
-          end)
-        end)
-
-      assert stderr =~ "Warning"
+      assert capture_io(fn ->
+               assert {:error, {:http_error, 422}} =
+                        SynapsisCli.Main.run(["--prompt", "test", "--host", host])
+             end) == ""
     end
+  end
+
+  defp json(conn, status, body) do
+    conn
+    |> Plug.Conn.put_resp_content_type("application/json")
+    |> Plug.Conn.resp(status, Jason.encode!(body))
   end
 end

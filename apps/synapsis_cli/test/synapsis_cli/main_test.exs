@@ -31,6 +31,9 @@ defmodule SynapsisCli.MainTest do
       assert output =~ "synapsis schedule run <name>"
       assert output =~ "synapsis backplane add <name> <endpoint>"
       assert output =~ "--credential-env VAR"
+      assert output =~ "--client-cert PATH"
+      assert output =~ "--client-key PATH"
+      assert output =~ "--ca-cert PATH"
       assert output =~ "default: http://localhost:4657"
     end
 
