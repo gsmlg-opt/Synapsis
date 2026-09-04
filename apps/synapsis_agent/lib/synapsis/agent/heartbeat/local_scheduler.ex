@@ -26,7 +26,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
   @doc "Manually submit a loaded heartbeat through the daemon."
   def trigger(server \\ __MODULE__, name) when is_binary(name) do
     case GenServer.call(server, {:lookup, name}) do
-      {:ok, config, daemon} -> Worker.execute(config, daemon)
+      {:ok, config, daemon} -> execute_config(config, daemon)
       :error -> {:error, :not_found}
     end
   end
@@ -84,7 +84,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
         Logger.info("heartbeat_firing", name: name)
 
         case Task.Supervisor.start_child(state.task_supervisor, fn ->
-               Worker.execute(config, state.daemon)
+               execute_config(config, state.daemon)
              end) do
           {:ok, _pid} -> :ok
           {:error, reason} -> Logger.warning("heartbeat_trigger_failed", reason: inspect(reason))
@@ -159,9 +159,30 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
   end
 
   defp load_configs do
-    ConfigStore.list(:heartbeat)
+    ConfigStore.list(:heartbeat) ++ ConfigStore.list(:routine)
   rescue
     _error -> Synapsis.Heartbeats.list_enabled()
+  end
+
+  defp execute_config(config, daemon) do
+    case value(config, :kind, "heartbeat") do
+      "heartbeat" -> Worker.execute(config, daemon)
+      "schedule" -> Daemon.trigger(daemon, :schedule, routine_options(config))
+      "dream" -> Daemon.trigger(daemon, :dream, routine_options(config))
+      _unknown -> {:error, :unsupported_routine_kind}
+    end
+  end
+
+  defp routine_options(config) do
+    %{
+      routine_id: value(config, :id),
+      prompt: value(config, :prompt),
+      assistant_name: value(config, :agent_name, "main") || "main",
+      tool_profile: value(config, :tool_profile, "assistant_basic") || "assistant_basic",
+      no_overlap: value(config, :no_overlap, true) != false,
+      max_runtime_ms: value(config, :max_runtime_ms, :timer.minutes(2)),
+      metadata: %{"routine_name" => value(config, :name)}
+    }
   end
 
   defp cancel_timer(%{ref: ref}) when is_reference(ref), do: Process.cancel_timer(ref)

@@ -77,6 +77,44 @@ defmodule Synapsis.Agent.Daemon.Execution do
 
   def heartbeat_attrs(_opts), do: {:error, :invalid_options}
 
+  def routine_attrs(kind, opts) when kind in [:schedule, :dream] and is_map(opts) do
+    prompt = option(opts, :prompt)
+    routine_id = option(opts, :routine_id)
+    no_overlap = option(opts, :no_overlap, true)
+    max_runtime_ms = option(opts, :max_runtime_ms, :timer.minutes(2))
+    metadata = option(opts, :metadata, %{})
+
+    with :ok <- validate_prompt(prompt),
+         true <- is_binary(routine_id) and match?({:ok, _}, Ecto.UUID.cast(routine_id)),
+         true <- is_boolean(no_overlap),
+         true <- is_integer(max_runtime_ms) and max_runtime_ms > 0,
+         true <- is_map(metadata),
+         :ok <- validate_options(opts) do
+      metadata =
+        metadata
+        |> Map.put("no_overlap", no_overlap)
+        |> Map.put("max_runtime_ms", max_runtime_ms)
+
+      {:ok,
+       %{
+         kind: Atom.to_string(kind),
+         status: "queued",
+         source: option(opts, :source, "system"),
+         assistant_name: option(opts, :assistant_name, "main"),
+         routine_id: routine_id,
+         prompt: prompt,
+         tool_profile: option(opts, :tool_profile, "assistant_basic"),
+         provider: option(opts, :provider),
+         model: option(opts, :model),
+         metadata: metadata
+       }}
+    else
+      _invalid -> {:error, :invalid_options}
+    end
+  end
+
+  def routine_attrs(_kind, _opts), do: {:error, :invalid_options}
+
   def run_timeout(%{metadata: metadata}, default) when is_map(metadata) do
     case Map.get(metadata, "max_runtime_ms", Map.get(metadata, :max_runtime_ms)) do
       timeout when is_integer(timeout) and timeout > 0 -> timeout
@@ -194,7 +232,11 @@ defmodule Synapsis.Agent.Daemon.Execution do
 
   def finalize(deps, run, {:ok, summary}, session_id, task_supervisor, event_timeout) do
     finalize_transition(deps, run, :completed, task_supervisor, event_timeout, fn ->
-      deps.runs.mark_completed(run, summary, %{session_id: session_id})
+      deps.runs.mark_completed(
+        run,
+        summary,
+        terminal_attrs(run, "completed", summary, session_id)
+      )
     end)
   end
 
@@ -202,7 +244,7 @@ defmodule Synapsis.Agent.Daemon.Execution do
     error = bounded_error(reason)
 
     finalize_transition(deps, run, :failed, task_supervisor, event_timeout, fn ->
-      deps.runs.mark_failed(run, error, %{session_id: session_id})
+      deps.runs.mark_failed(run, error, terminal_attrs(run, "failed", error, session_id))
     end)
   end
 
@@ -578,7 +620,7 @@ defmodule Synapsis.Agent.Daemon.Execution do
                running
              ),
            :ok <- announce_running(outer, daemon, running, event_errors),
-           :ok <- deps.sessions.send_message(session.id, run.prompt) do
+           :ok <- deps.sessions.send_message(session.id, execution_prompt(deps, run)) do
         {await_session(deps.sessions, session.id, []), running, event_errors}
       else
         {:error, reason} -> {{:error, reason}, fetch_current(deps.runs, run), []}
@@ -593,6 +635,33 @@ defmodule Synapsis.Agent.Daemon.Execution do
     send(daemon, {:runner_started, outer, run, event_errors})
     :ok
   end
+
+  defp execution_prompt(deps, %{kind: "dream"} = run) do
+    recent =
+      deps.runs.list_recent(limit: 10)
+      |> Enum.reject(&(&1.id == run.id))
+      |> Enum.filter(&(&1.status in @terminal_statuses))
+      |> Enum.take(5)
+      |> Enum.map_join("\n", fn recent_run ->
+        result = recent_run.summary || recent_run.error || "(no summary)"
+        "- #{recent_run.kind} #{recent_run.status}: #{result}"
+      end)
+
+    if recent == "", do: run.prompt, else: run.prompt <> "\n\nRecent AgentRuns:\n" <> recent
+  end
+
+  defp execution_prompt(_deps, run), do: run.prompt
+
+  defp terminal_attrs(%{kind: kind, metadata: metadata}, status, result, session_id)
+       when kind in ["schedule", "dream"] do
+    output = %{"kind" => kind, "status" => status, result_key(status) => result}
+    %{session_id: session_id, metadata: Map.put(metadata || %{}, "output", output)}
+  end
+
+  defp terminal_attrs(_run, _status, _result, session_id), do: %{session_id: session_id}
+
+  defp result_key("completed"), do: "summary"
+  defp result_key("failed"), do: "error"
 
   defp finalize_transition(
          deps,

@@ -47,6 +47,12 @@ defmodule Synapsis.Agent.Daemon do
     end
   end
 
+  def trigger(server, kind, opts) when kind in [:schedule, :dream] do
+    with {:ok, attrs} <- Execution.routine_attrs(kind, opts) do
+      GenServer.call(server, {:submit, attrs}, :infinity)
+    end
+  end
+
   def trigger(_server, _kind, _opts), do: {:error, :unsupported_trigger}
 
   def cancel(run_id), do: cancel(__MODULE__, run_id)

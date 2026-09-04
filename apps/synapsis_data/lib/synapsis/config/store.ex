@@ -17,7 +17,7 @@ defmodule Synapsis.Config.Store do
 
   alias Synapsis.Config.Store.Server
 
-  @types [:agent, :provider, :plugin, :heartbeat, :toolset, :mcp, :lsp, :skill]
+  @types [:agent, :provider, :plugin, :heartbeat, :routine, :toolset, :mcp, :lsp, :skill]
 
   def types, do: @types
 
@@ -55,6 +55,7 @@ defmodule Synapsis.Config.Store do
         :provider -> "providers.toml"
         :plugin -> "plugins.toml"
         :heartbeat -> "heartbeats.toml"
+        :routine -> "routines.toml"
         :toolset -> "toolsets.toml"
         :mcp -> "mcp.toml"
         :lsp -> "lsp.toml"

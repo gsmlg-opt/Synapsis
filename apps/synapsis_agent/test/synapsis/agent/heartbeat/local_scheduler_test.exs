@@ -65,6 +65,34 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
     assert [] = Enum.filter(Runs.list_recent(limit: 10), &(&1.kind == "heartbeat"))
   end
 
+  test "manual and due generic routines dispatch their configured kind" do
+    {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
+
+    configs = [
+      routine(Ecto.UUID.generate(), "scheduled", "schedule"),
+      routine(Ecto.UUID.generate(), "reflection", "dream")
+    ]
+
+    scheduler = start_scheduler(configs, daemon, task_supervisor)
+
+    assert {:ok, schedule} = LocalScheduler.trigger(scheduler, "scheduled")
+    assert schedule.kind == "schedule"
+    assert_receive {:waiting_session, _session_id}, 1_000
+
+    %{timers: %{"reflection" => %{token: dream_token}}} = :sys.get_state(scheduler)
+    send(scheduler, {:fire, "reflection", dream_token})
+
+    assert {:ok, _queued_dream} =
+             wait_for(fn ->
+               case Enum.find(Runs.list_recent(limit: 10), &(&1.kind == "dream")) do
+                 nil -> :retry
+                 run -> {:ok, run}
+               end
+             end)
+
+    assert {:ok, _cancelled} = Daemon.cancel(daemon, schedule.id)
+  end
+
   defp start_scheduler(configs_or_loader, daemon, task_supervisor) do
     name = String.to_atom("heartbeat_scheduler_test_#{System.unique_integer([:positive])}")
 
@@ -108,6 +136,21 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
       max_runtime_ms: 1_000,
       keep_history: false,
       notify_user: false
+    }
+  end
+
+  defp routine(id, name, kind) do
+    %{
+      id: id,
+      name: name,
+      kind: kind,
+      schedule: "* * * * *",
+      enabled: true,
+      prompt: "#{name} prompt",
+      agent_name: "main",
+      tool_profile: "assistant_basic",
+      no_overlap: true,
+      max_runtime_ms: 1_000
     }
   end
 end

@@ -77,6 +77,27 @@ defmodule Synapsis.Config.StoreTest do
     assert ids == ["h1", "h2"]
   end
 
+  test "routine configs round-trip through routines.toml" do
+    routine = %{
+      id: "daily-reflection",
+      name: "daily reflection",
+      kind: "dream",
+      enabled: true,
+      schedule: "0 21 * * *",
+      prompt: "reflect",
+      no_overlap: true,
+      max_runtime_ms: 60_000
+    }
+
+    assert {:ok, saved} = Store.put(:routine, routine)
+    assert saved["kind"] == "dream"
+    assert Store.file_path(:routine) |> File.read!() =~ "[[routines]]"
+
+    Store.reload(:routine)
+    assert {:ok, fetched} = Store.get(:routine, "daily-reflection")
+    assert fetched["max_runtime_ms"] == 60_000
+  end
+
   test "reload reads entries written directly to TOML file" do
     path = Store.file_path(:agent)
     File.mkdir_p!(Path.dirname(path))
