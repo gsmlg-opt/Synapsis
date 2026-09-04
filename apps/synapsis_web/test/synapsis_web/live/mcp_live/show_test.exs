@@ -3,6 +3,29 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
 
   alias Synapsis.MCPConfigs
 
+  defmodule FakeMCPServer do
+    use GenServer
+
+    def start_link(name) do
+      GenServer.start_link(__MODULE__, :ok, name: {:via, Registry, {Synapsis.MCP.Registry, name}})
+    end
+
+    @impl true
+    def init(state), do: {:ok, state}
+
+    @impl true
+    def handle_call({:register_tool, tool_name}, _from, state) do
+      :ok =
+        Synapsis.Tool.Registry.register_process(tool_name, self(),
+          description: "Fake tool",
+          parameters: %{},
+          plugin: :mcp
+        )
+
+      {:reply, :ok, state}
+    end
+  end
+
   setup do
     Synapsis.DataCase.clear_config_store(:mcp)
 
@@ -237,5 +260,59 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     |> render_submit()
 
     assert render(view) =~ "MCP server updated"
+  end
+
+  test "disabling a running server stops it and unregisters its tools", %{
+    conn: conn,
+    config: config
+  } do
+    {:ok, pid} =
+      DynamicSupervisor.start_child(
+        Synapsis.MCP.DynamicSupervisor,
+        %{
+          id: {:show_fake, config.name},
+          start: {FakeMCPServer, :start_link, [config.name]},
+          restart: :temporary
+        }
+      )
+
+    on_exit(fn ->
+      if Process.alive?(pid) do
+        DynamicSupervisor.terminate_child(Synapsis.MCP.DynamicSupervisor, pid)
+      end
+    end)
+
+    tool_name = "mcp:#{config.name}:fake"
+    assert :ok = GenServer.call(pid, {:register_tool, tool_name})
+    assert {:ok, {:process, ^pid, _opts}} = Synapsis.Tool.Registry.lookup(tool_name)
+
+    {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
+
+    view
+    |> form("form", %{"command" => config.command, "enabled" => "false"})
+    |> render_submit()
+
+    refute MCPConfigs.get(config.id).enabled
+    assert wait_until(fn -> not Process.alive?(pid) end)
+
+    assert wait_until(fn ->
+             Synapsis.Tool.Registry.lookup(tool_name) == {:error, :not_found}
+           end)
+
+    refute config.name in Synapsis.MCP.list()
+  end
+
+  defp wait_until(fun, tries \\ 100) do
+    cond do
+      tries <= 0 ->
+        false
+
+      fun.() ->
+        true
+
+      true ->
+        Process.sleep(20)
+        wait_until(fun, tries - 1)
+    end
   end
 end

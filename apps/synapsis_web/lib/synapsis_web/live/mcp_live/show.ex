@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.MCPLive.Show do
   use SynapsisWeb, :live_view
+  require Logger
 
   alias Synapsis.{MCPConfig, MCPConfigs}
 
@@ -42,13 +43,34 @@ defmodule SynapsisWeb.MCPLive.Show do
 
     case MCPConfigs.update(socket.assigns.config, attrs) do
       {:ok, config} ->
-        {:noreply,
-         socket
-         |> assign(config: config, form_values: form_values_from_config(config))
-         |> put_flash(:info, "MCP server updated")}
+        {:noreply, finish_update(socket, config)}
 
       {:error, _} ->
         {:noreply, put_flash(socket, :error, "Failed to update")}
+    end
+  end
+
+  defp finish_update(socket, config) do
+    socket = assign(socket, config: config, form_values: form_values_from_config(config))
+
+    if config.enabled do
+      put_flash(socket, :info, "MCP server updated")
+    else
+      stop_disabled_server(socket, config.name)
+    end
+  end
+
+  defp stop_disabled_server(socket, name) do
+    case Synapsis.MCP.stop(name) do
+      :ok ->
+        put_flash(socket, :info, "MCP server updated")
+
+      {:error, :not_found} ->
+        put_flash(socket, :info, "MCP server updated")
+
+      {:error, reason} ->
+        Logger.warning("mcp_disable_stop_failed", name: name, reason: inspect(reason))
+        put_flash(socket, :error, "MCP server was disabled but could not be stopped")
     end
   end
 
