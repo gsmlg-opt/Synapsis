@@ -6,24 +6,40 @@ defmodule Synapsis.Config.StoreTest do
   @moduletag :tmp_dir
 
   setup %{tmp_dir: tmp_dir} do
-    # Point the config dir at a temp directory for isolation.
+    # Point the config dir at a temp directory and isolate the live ETS cache.
     original = System.get_env("SYNAPSIS_CONFIG_DIR")
+    original_entries = snapshot_entries()
     System.put_env("SYNAPSIS_CONFIG_DIR", tmp_dir)
-
-    # Reload from the empty tmp dir so boot-seeded entries don't pollute the test.
-    Enum.each(Store.types(), &Store.reload/1)
+    replace_entries(%{})
 
     on_exit(fn ->
       if original,
         do: System.put_env("SYNAPSIS_CONFIG_DIR", original),
         else: System.delete_env("SYNAPSIS_CONFIG_DIR")
 
-      # Reload all types from the now-empty tmp dir to reset ETS state.
-      Enum.each(Store.types(), &Store.reload/1)
+      replace_entries(original_entries)
     end)
 
     %{tmp_dir: tmp_dir}
   end
+
+  defp snapshot_entries do
+    Map.new(Store.types(), fn type -> {type, :ets.tab2list(table(type))} end)
+  end
+
+  defp replace_entries(entries) do
+    Enum.each(Store.types(), fn type ->
+      table = table(type)
+      :ets.delete_all_objects(table)
+
+      case Map.get(entries, type, []) do
+        [] -> :ok
+        values -> :ets.insert(table, values)
+      end
+    end)
+  end
+
+  defp table(type), do: :"synapsis_config_#{type}"
 
   test "list returns empty list when no file exists" do
     assert Store.list(:toolset) == []
