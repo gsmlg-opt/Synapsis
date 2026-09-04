@@ -75,6 +75,38 @@ defmodule Synapsis.Agent.DaemonSupervisionStatusTest do
     refute Map.has_key?(status, :prompt)
   end
 
+  test "periodic liveness updates status, publishes it, and requests a due-routine check" do
+    owner = self()
+
+    due_check =
+      spawn_link(fn ->
+        receive do
+          :check_due_routines -> send(owner, :due_routines_checked)
+        end
+      end)
+
+    assert :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, Daemon.topic())
+
+    {daemon, _task_supervisor} =
+      start_test_daemon(liveness_interval_ms: 25, liveness_target: due_check)
+
+    assert %{last_seen_at: %DateTime{} = first_seen} = Daemon.status(daemon)
+    assert_receive :due_routines_checked, 250
+
+    assert {:ok, %{last_seen_at: later_seen}} =
+             wait_for_status(daemon, fn status ->
+               DateTime.compare(status.last_seen_at, first_seen) == :gt
+             end)
+
+    assert DateTime.compare(later_seen, first_seen) == :gt
+
+    assert_receive {:agent_daemon_event,
+                    %{event: "agent.daemon.status", status: %{last_seen_at: %DateTime{}}}},
+                   500
+
+    assert [] = Runs.list_recent()
+  end
+
   test "rejects blank prompts and invalid options before persistence" do
     {daemon, _task_supervisor} = start_test_daemon()
 

@@ -29,6 +29,9 @@ defmodule Synapsis.HeartbeatConfig do
     field(:tool_profile, :string, default: "assistant_basic")
     field(:no_overlap, :boolean, default: true)
     field(:max_runtime_ms, :integer, default: 120_000)
+    field(:last_run_at, :utc_datetime_usec)
+    field(:next_run_at, :utc_datetime_usec)
+    field(:last_status, :string)
 
     field(:inserted_at, :utc_datetime_usec)
     field(:updated_at, :utc_datetime_usec)
@@ -49,7 +52,10 @@ defmodule Synapsis.HeartbeatConfig do
       :keep_history,
       :tool_profile,
       :no_overlap,
-      :max_runtime_ms
+      :max_runtime_ms,
+      :last_run_at,
+      :next_run_at,
+      :last_status
     ])
     |> validate_required([:name, :schedule, :prompt])
     |> validate_length(:name, max: 255)
@@ -148,7 +154,10 @@ defmodule Synapsis.HeartbeatConfig do
       "keep_history" => record.keep_history,
       "tool_profile" => record.tool_profile,
       "no_overlap" => record.no_overlap,
-      "max_runtime_ms" => record.max_runtime_ms
+      "max_runtime_ms" => record.max_runtime_ms,
+      "last_run_at" => datetime_to_string(record.last_run_at),
+      "next_run_at" => datetime_to_string(record.next_run_at),
+      "last_status" => record.last_status
     }
     |> Enum.reject(fn {_k, v} -> is_nil(v) end)
     |> Map.new()
@@ -156,6 +165,9 @@ defmodule Synapsis.HeartbeatConfig do
 
   defp to_string_or_nil(nil), do: nil
   defp to_string_or_nil(atom), do: Atom.to_string(atom)
+
+  defp datetime_to_string(%DateTime{} = datetime), do: DateTime.to_iso8601(datetime)
+  defp datetime_to_string(nil), do: nil
 
   defp validate_cron_expression(changeset, field) do
     validate_change(changeset, field, fn _field, value ->

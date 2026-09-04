@@ -28,7 +28,14 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
   def trigger(server \\ __MODULE__, name) when is_binary(name) do
     case GenServer.call(server, {:lookup, name}) do
       {:ok, config, context} ->
-        {result, _persist_result, _attrs} = execute_and_persist(config, context)
+        last_run_at = DateTime.utc_now()
+        result = protect(fn -> context.trigger_fun.(config, context.daemon) end)
+
+        GenServer.cast(
+          server,
+          {:track_trigger, name, config, result, last_run_at, context.next_run_at}
+        )
+
         result
 
       :error ->
@@ -50,10 +57,14 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
       trigger_fun: Keyword.get(opts, :trigger_fun, &execute_config/2),
       trigger_timeout_ms: positive_timeout(opts[:trigger_timeout_ms], @trigger_timeout_ms),
       trigger_tasks: %{},
+      persistence_tasks: %{},
+      tracked_runs: %{},
+      terminal_events: %{},
       trigger_results: %{},
       reload_interval_ms: Keyword.get(opts, :reload_interval_ms, @reload_interval_ms)
     }
 
+    :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, Daemon.topic())
     send(self(), :tick)
     {:ok, state}
   end
@@ -83,15 +94,27 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
   end
 
   @impl true
+  def handle_cast({:track_trigger, name, config, result, last_run_at, next_run_at}, state) do
+    {:noreply, track_trigger(state, name, config, result, last_run_at, next_run_at)}
+  end
+
+  @impl true
   def handle_info(:tick, state) do
-    configs = state.config_loader.() |> Enum.filter(&(value(&1, :enabled, true) != false))
-    timers = reconcile_timers(state.timers, configs)
+    state = reload_configs(state)
     Process.send_after(self(), :tick, state.reload_interval_ms)
-    {:noreply, %{state | timers: timers, configs: configs}}
+    {:noreply, state}
   rescue
     error ->
       Logger.warning("heartbeat_reload_failed", reason: Exception.message(error))
       Process.send_after(self(), :tick, state.reload_interval_ms)
+      {:noreply, state}
+  end
+
+  def handle_info(:check_due_routines, state) do
+    {:noreply, reload_configs(state)}
+  rescue
+    error ->
+      Logger.warning("heartbeat_due_check_failed", reason: Exception.message(error))
       {:noreply, state}
   end
 
@@ -100,7 +123,11 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
       {%{token: ^token}, config} when not is_nil(config) ->
         Logger.info("heartbeat_firing", name: name)
         timers = state.timers |> Map.delete(name) |> schedule_config(config)
-        state = %{state | timers: timers}
+
+        state =
+          state
+          |> Map.put(:timers, timers)
+          |> persist_next_run(config, get_in(timers, [name, :next_run_at]))
 
         {:noreply, start_trigger_task(state, name, config, get_in(timers, [name, :next_run_at]))}
 
@@ -110,16 +137,25 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
   end
 
   def handle_info({ref, result}, state) when is_reference(ref) do
-    case Enum.find(state.trigger_tasks, fn {_name, task} -> task.monitor == ref end) do
-      {name, task} ->
+    cond do
+      trigger = Enum.find(state.trigger_tasks, fn {_name, task} -> task.monitor == ref end) ->
+        {name, task} = trigger
         cancel_trigger_task_tracking(task)
+        {config, trigger_result, last_run_at, next_run_at} = result
 
-        {:noreply,
-         state
-         |> delete_trigger_task(name)
-         |> put_trigger_result(name, result)}
+        state =
+          state
+          |> delete_trigger_task(name)
+          |> track_trigger(name, config, trigger_result, last_run_at, next_run_at)
 
-      nil ->
+        {:noreply, state}
+
+      task = Map.get(state.persistence_tasks, ref) ->
+        cancel_persistence_task_tracking(task)
+        state = %{state | persistence_tasks: Map.delete(state.persistence_tasks, ref)}
+        {:noreply, apply_persistence_result(state, task, result)}
+
+      true ->
         {:noreply, state}
     end
   end
@@ -140,9 +176,41 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
     end
   end
 
+  def handle_info({:persistence_timeout, ref, pid}, state) do
+    case state.persistence_tasks[ref] do
+      %{pid: ^pid} = task ->
+        Process.exit(pid, :kill)
+        cancel_persistence_task_tracking(task)
+
+        state =
+          state
+          |> Map.put(:persistence_tasks, Map.delete(state.persistence_tasks, ref))
+          |> put_trigger_error(task.name, :config_persist_timeout)
+
+        {:noreply, state}
+
+      _stale ->
+        {:noreply, state}
+    end
+  end
+
+  def handle_info(
+        {:agent_daemon_event, %{event: event, run_id: run_id, status: status} = payload},
+        state
+      )
+      when event in [
+             "agent.run.completed",
+             "agent.run.failed",
+             "agent.run.cancelled",
+             "agent.run.interrupted"
+           ] do
+    {:noreply, handle_terminal_event(state, run_id, status, payload)}
+  end
+
   def handle_info({:DOWN, monitor, :process, _pid, reason}, state) do
-    case Enum.find(state.trigger_tasks, fn {_name, task} -> task.monitor == monitor end) do
-      {name, task} ->
+    cond do
+      trigger = Enum.find(state.trigger_tasks, fn {_name, task} -> task.monitor == monitor end) ->
+        {name, task} = trigger
         cancel_timeout(task.timeout_ref)
 
         {:noreply,
@@ -150,7 +218,17 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
          |> delete_trigger_task(name)
          |> put_trigger_error(name, {:trigger_task_down, reason})}
 
-      nil ->
+      task = Map.get(state.persistence_tasks, monitor) ->
+        cancel_timeout(task.timeout_ref)
+
+        state =
+          state
+          |> Map.put(:persistence_tasks, Map.delete(state.persistence_tasks, monitor))
+          |> put_trigger_error(task.name, {:config_persist_task_down, reason})
+
+        {:noreply, state}
+
+      true ->
         {:noreply, state}
     end
   end
@@ -158,6 +236,21 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
   def handle_info({:EXIT, _pid, _reason}, state), do: {:noreply, state}
 
   def handle_info(_message, state), do: {:noreply, state}
+
+  defp reload_configs(state) do
+    configs = state.config_loader.() |> Enum.filter(&(value(&1, :enabled, true) != false))
+    timers = reconcile_timers(state.timers, configs)
+
+    state = %{state | timers: timers, configs: configs}
+
+    Enum.reduce(configs, state, fn config, acc ->
+      next_run_at = get_in(timers, [value(config, :name), :next_run_at])
+
+      if same_datetime?(value(config, :next_run_at), next_run_at),
+        do: acc,
+        else: persist_next_run(acc, config, next_run_at)
+    end)
+  end
 
   defp reconcile_timers(timers, configs) do
     names = MapSet.new(configs, &value(&1, :name))
@@ -218,9 +311,13 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
   end
 
   defp load_configs do
-    ConfigStore.list(:heartbeat) ++ ConfigStore.list(:routine)
+    Enum.map(ConfigStore.list(:heartbeat), &Map.put(&1, "__config_type", "heartbeat")) ++
+      Enum.map(ConfigStore.list(:routine), &Map.put(&1, "__config_type", "routine"))
   rescue
-    _error -> Synapsis.Heartbeats.list_enabled()
+    _error ->
+      Enum.map(Synapsis.Heartbeats.list_enabled(), fn config ->
+        config |> Map.from_struct() |> Map.put("__config_type", "heartbeat")
+      end)
   end
 
   defp execute_config(config, daemon) do
@@ -240,8 +337,10 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
         context = trigger_context(state, next_run_at)
 
         task =
-          Task.Supervisor.async(state.task_supervisor, fn ->
-            execute_and_persist(config, context)
+          Task.Supervisor.async_nolink(state.task_supervisor, fn ->
+            last_run_at = DateTime.utc_now()
+            result = protect(fn -> context.trigger_fun.(config, context.daemon) end)
+            {config, result, last_run_at, context.next_run_at}
           end)
 
         timeout_ref =
@@ -257,44 +356,142 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
     end
   end
 
-  defp execute_and_persist(config, context) do
-    last_run_at = DateTime.utc_now() |> DateTime.to_iso8601()
-    result = protect(fn -> context.trigger_fun.(config, context.daemon) end)
-    attrs = routine_state(config, result, last_run_at, context.next_run_at)
-
-    persist_result =
-      if value(config, :kind, "heartbeat") in ["schedule", "dream"] do
-        protect(fn -> context.config_writer.(:routine, attrs) end)
-      else
-        :ok
-      end
-
-    {result, persist_result, attrs}
-  end
-
-  defp routine_state(config, result, last_run_at, next_run_at) do
+  defp routine_state(config, status, last_run_at, next_run_at) do
     config
     |> Map.new(fn {key, value} -> {to_string(key), value} end)
-    |> Map.put("last_run_at", last_run_at)
-    |> Map.put("last_status", trigger_status(result))
+    |> Map.drop(["__config_type"])
+    |> Map.put("last_run_at", encode_datetime(last_run_at))
+    |> Map.put("last_status", status)
     |> Map.put("next_run_at", encode_datetime(next_run_at))
   end
 
-  defp trigger_status({:ok, %{status: status}}) when is_binary(status), do: status
-  defp trigger_status({:ok, _value}), do: "ok"
-  defp trigger_status(_error), do: "error"
+  defp track_trigger(state, name, config, {:ok, %{id: run_id}}, last_run_at, next_run_at)
+       when is_binary(run_id) do
+    tracked = %{
+      name: name,
+      config: config,
+      last_run_at: last_run_at,
+      next_run_at: next_run_at
+    }
 
-  defp put_trigger_result(state, name, {result, persist_result, attrs}) do
-    error = trigger_error(result) || persist_error(persist_result)
+    case Map.pop(state.terminal_events, run_id) do
+      {nil, terminal_events} ->
+        %{
+          state
+          | tracked_runs: Map.put(state.tracked_runs, run_id, tracked),
+            terminal_events: terminal_events
+        }
 
+      {payload, terminal_events} ->
+        state = %{state | terminal_events: terminal_events}
+        persist_terminal(state, tracked, payload.status, payload)
+    end
+  end
+
+  defp track_trigger(state, name, _config, {:error, reason}, last_run_at, _next_run_at) do
     status = %{
-      last_run_at: attrs["last_run_at"],
-      last_status: attrs["last_status"],
-      last_error: error
+      last_run_at: encode_datetime(last_run_at),
+      last_status: "error",
+      last_error: bounded_error(reason)
     }
 
     %{state | trigger_results: Map.put(state.trigger_results, name, status)}
   end
+
+  defp track_trigger(state, name, _config, _result, last_run_at, _next_run_at) do
+    put_trigger_error(
+      state,
+      name,
+      {:unexpected_trigger_result, encode_datetime(last_run_at)}
+    )
+  end
+
+  defp handle_terminal_event(state, run_id, status, payload) do
+    case Map.pop(state.tracked_runs, run_id) do
+      {nil, tracked_runs} ->
+        terminal_events =
+          if known_config_run?(state.configs, payload),
+            do: put_bounded_terminal(state.terminal_events, run_id, payload),
+            else: state.terminal_events
+
+        %{state | tracked_runs: tracked_runs, terminal_events: terminal_events}
+
+      {tracked, tracked_runs} ->
+        state = %{state | tracked_runs: tracked_runs}
+        persist_terminal(state, tracked, status, payload)
+    end
+  end
+
+  defp persist_terminal(state, tracked, status, payload) do
+    attrs = routine_state(tracked.config, status, tracked.last_run_at, tracked.next_run_at)
+
+    observable = %{
+      last_run_at: attrs["last_run_at"],
+      last_status: status,
+      last_error: terminal_error(payload)
+    }
+
+    state = %{
+      state
+      | trigger_results: Map.put(state.trigger_results, tracked.name, observable)
+    }
+
+    start_persistence_task(state, tracked.name, config_type(tracked.config), attrs)
+  end
+
+  defp persist_next_run(state, _config, nil), do: state
+
+  defp persist_next_run(state, config, next_run_at) do
+    attrs =
+      config
+      |> Map.new(fn {key, value} -> {to_string(key), value} end)
+      |> Map.drop(["__config_type"])
+      |> Map.put("next_run_at", encode_datetime(next_run_at))
+
+    start_persistence_task(state, value(config, :name), config_type(config), attrs)
+  end
+
+  defp start_persistence_task(state, name, type, attrs) do
+    writer = state.config_writer
+
+    try do
+      task =
+        Task.Supervisor.async_nolink(state.task_supervisor, fn ->
+          protect(fn -> writer.(type, attrs) end)
+        end)
+
+      timeout_ref =
+        Process.send_after(
+          self(),
+          {:persistence_timeout, task.ref, task.pid},
+          state.trigger_timeout_ms
+        )
+
+      tracked = %{
+        pid: task.pid,
+        monitor: task.ref,
+        name: name,
+        attrs: attrs,
+        timeout_ref: timeout_ref
+      }
+
+      %{state | persistence_tasks: Map.put(state.persistence_tasks, task.ref, tracked)}
+    rescue
+      error -> put_trigger_error(state, name, {:config_persist_task_start_failed, error})
+    catch
+      :exit, reason ->
+        put_trigger_error(state, name, {:config_persist_task_start_failed, reason})
+    end
+  end
+
+  defp apply_persistence_result(state, _task, :ok), do: state
+  defp apply_persistence_result(state, _task, {:ok, _value}), do: state
+
+  defp apply_persistence_result(state, task, {:error, reason}),
+    do: put_trigger_error(state, task.name, {:config_persist_failed, reason})
+
+  defp apply_persistence_result(state, task, other),
+    do: put_trigger_error(state, task.name, {:unexpected_config_persist_result, other})
 
   defp put_trigger_error(state, name, reason) do
     status = %{
@@ -307,17 +504,10 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
     %{state | trigger_results: Map.put(state.trigger_results, name, status)}
   end
 
-  defp trigger_error({:error, reason}), do: bounded_error(reason)
-  defp trigger_error(_result), do: nil
-
-  defp persist_error({:error, reason}), do: bounded_error({:config_persist_failed, reason})
-  defp persist_error(_result), do: nil
-
   defp trigger_context(state, next_run_at) do
     %{
       daemon: state.daemon,
       trigger_fun: state.trigger_fun,
-      config_writer: state.config_writer,
       next_run_at: next_run_at
     }
   end
@@ -327,6 +517,11 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
 
   defp cancel_trigger_task_tracking(task) do
     Process.unlink(task.pid)
+    Process.demonitor(task.monitor, [:flush])
+    cancel_timeout(task.timeout_ref)
+  end
+
+  defp cancel_persistence_task_tracking(task) do
     Process.demonitor(task.monitor, [:flush])
     cancel_timeout(task.timeout_ref)
   end
@@ -348,6 +543,44 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
   defp encode_datetime(%DateTime{} = datetime), do: DateTime.to_iso8601(datetime)
   defp encode_datetime(value) when is_binary(value), do: value
   defp encode_datetime(_value), do: nil
+
+  defp same_datetime?(value, %DateTime{} = datetime) when is_binary(value),
+    do: value == DateTime.to_iso8601(datetime)
+
+  defp same_datetime?(%DateTime{} = value, %DateTime{} = datetime),
+    do: DateTime.compare(value, datetime) == :eq
+
+  defp same_datetime?(_value, _datetime), do: false
+
+  defp config_type(config) do
+    case value(config, :__config_type) do
+      "routine" ->
+        :routine
+
+      "heartbeat" ->
+        :heartbeat
+
+      _unknown ->
+        if value(config, :kind, "heartbeat") == "heartbeat", do: :heartbeat, else: :routine
+    end
+  end
+
+  defp terminal_error(%{status: "failed", payload: payload}) when is_map(payload),
+    do: Map.get(payload, :error, Map.get(payload, "error"))
+
+  defp terminal_error(_payload), do: nil
+
+  defp known_config_run?(configs, %{payload: payload}) when is_map(payload) do
+    routine_id = Map.get(payload, :routine_id, Map.get(payload, "routine_id"))
+    Enum.any?(configs, &(value(&1, :id) == routine_id))
+  end
+
+  defp known_config_run?(_configs, _payload), do: false
+
+  defp put_bounded_terminal(events, run_id, payload) when map_size(events) >= 100,
+    do: %{run_id => payload}
+
+  defp put_bounded_terminal(events, run_id, payload), do: Map.put(events, run_id, payload)
 
   defp bounded_error(reason), do: reason |> inspect() |> String.slice(0, 500)
 

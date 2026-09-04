@@ -74,16 +74,16 @@ defmodule Synapsis.Config.Store.Server do
 
   @impl true
   def handle_call({:put, attrs}, _from, state) do
-    id = id_of(attrs)
-
-    if is_nil(id) do
-      {:reply, {:error, :missing_id}, state}
-    else
+    with {:ok, attrs} <- validate_entry(state.type, attrs),
+         id when not is_nil(id) <- id_of(attrs) do
       entry = Map.put(atomize_keys(attrs), :id, id)
       :ets.insert(state.table, {id, entry})
       persist(state.type)
       # Expose string-keyed maps consistently with get/2 and list/1.
       {:reply, {:ok, stringify_keys(entry)}, state}
+    else
+      nil -> {:reply, {:error, :missing_id}, state}
+      {:error, reason} -> {:reply, {:error, reason}, state}
     end
   end
 
@@ -112,11 +112,12 @@ defmodule Synapsis.Config.Store.Server do
             entries = Map.get(map, Atom.to_string(type) <> "s", [])
 
             Enum.each(entries, fn raw ->
-              entry = atomize_keys(raw)
-              id = Map.get(entry, :id)
-
-              if id do
+              with {:ok, raw} <- validate_entry(type, raw),
+                   entry = atomize_keys(raw),
+                   id when not is_nil(id) <- Map.get(entry, :id) do
                 :ets.insert(tab, {id, entry})
+              else
+                _invalid -> :ok
               end
             end)
 
@@ -197,6 +198,114 @@ defmodule Synapsis.Config.Store.Server do
   defp id_of(attrs) do
     Map.get(attrs, :id) || Map.get(attrs, "id")
   end
+
+  defp validate_entry(:routine, attrs) when is_map(attrs) do
+    with :ok <- required_string(attrs, :id),
+         :ok <- required_string(attrs, :name),
+         :ok <- valid_kind(attrs),
+         :ok <- required_boolean(attrs, :enabled),
+         :ok <- valid_schedule(attrs),
+         :ok <- required_string(attrs, :prompt),
+         :ok <- optional_string(attrs, :tool_profile),
+         :ok <- optional_boolean(attrs, :no_overlap),
+         :ok <- optional_positive_integer(attrs, :max_runtime_ms),
+         :ok <- optional_datetime(attrs, :last_run_at),
+         :ok <- optional_datetime(attrs, :next_run_at),
+         :ok <- optional_string(attrs, :last_status),
+         :ok <- optional_map(attrs, :metadata) do
+      {:ok, attrs}
+    else
+      {:error, reason} -> {:error, {:invalid_routine, reason}}
+    end
+  end
+
+  defp validate_entry(:routine, _attrs), do: {:error, {:invalid_routine, :not_a_map}}
+  defp validate_entry(_type, attrs), do: {:ok, attrs}
+
+  defp required_string(attrs, key) do
+    case value(attrs, key) do
+      value when is_binary(value) ->
+        if String.trim(value) == "", do: {:error, key}, else: :ok
+
+      _other ->
+        {:error, key}
+    end
+  end
+
+  defp required_boolean(attrs, key) do
+    if is_boolean(value(attrs, key)), do: :ok, else: {:error, key}
+  end
+
+  defp valid_kind(attrs) do
+    if value(attrs, :kind) in ~w(heartbeat dream schedule), do: :ok, else: {:error, :kind}
+  end
+
+  defp valid_schedule(attrs) do
+    case value(attrs, :schedule) do
+      schedule when is_binary(schedule) ->
+        if length(String.split(schedule, " ", trim: true)) == 5,
+          do: :ok,
+          else: {:error, :schedule}
+
+      _other ->
+        {:error, :schedule}
+    end
+  end
+
+  defp optional_string(attrs, key) do
+    case value(attrs, key, :missing) do
+      :missing -> :ok
+      nil -> :ok
+      value when is_binary(value) -> if String.trim(value) == "", do: {:error, key}, else: :ok
+      _other -> {:error, key}
+    end
+  end
+
+  defp optional_boolean(attrs, key) do
+    case value(attrs, key, :missing) do
+      :missing -> :ok
+      value when is_boolean(value) -> :ok
+      _other -> {:error, key}
+    end
+  end
+
+  defp optional_positive_integer(attrs, key) do
+    case value(attrs, key, :missing) do
+      :missing -> :ok
+      value when is_integer(value) and value > 0 -> :ok
+      _other -> {:error, key}
+    end
+  end
+
+  defp optional_datetime(attrs, key) do
+    case value(attrs, key, :missing) do
+      :missing ->
+        :ok
+
+      nil ->
+        :ok
+
+      value when is_binary(value) ->
+        case DateTime.from_iso8601(value) do
+          {:ok, _datetime, _offset} -> :ok
+          _invalid -> {:error, key}
+        end
+
+      _other ->
+        {:error, key}
+    end
+  end
+
+  defp optional_map(attrs, key) do
+    case value(attrs, key, :missing) do
+      :missing -> :ok
+      value when is_map(value) -> :ok
+      _other -> {:error, key}
+    end
+  end
+
+  defp value(attrs, key, default \\ nil),
+    do: Map.get(attrs, key, Map.get(attrs, Atom.to_string(key), default))
 
   defp atomize_keys(map) when is_map(map) do
     Map.new(map, fn

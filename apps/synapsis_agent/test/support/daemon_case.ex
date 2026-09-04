@@ -844,6 +844,9 @@ defmodule Synapsis.Agent.DaemonCase do
          cleanup_timeout: Keyword.get(opts, :cleanup_timeout, 1_000),
          event_timeout: Keyword.get(opts, :event_timeout, 1_000),
          operation_timeout: Keyword.get(opts, :operation_timeout, 5_000),
+         liveness_interval_ms: Keyword.get(opts, :liveness_interval_ms, :timer.seconds(30)),
+         liveness_target:
+           Keyword.get(opts, :liveness_target, Synapsis.Agent.Heartbeat.LocalScheduler),
          runs: Keyword.get(opts, :runs, Runs),
          run_events: Keyword.get(opts, :run_events, Synapsis.Agent.RunEvents),
          sessions: Keyword.get(opts, :sessions, Synapsis.Sessions),

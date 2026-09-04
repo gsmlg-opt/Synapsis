@@ -75,6 +75,27 @@ defmodule Synapsis.HeartbeatConfigTest do
       assert {:ok, updated} = HeartbeatConfig.update_config(config, %{enabled: true})
       assert updated.enabled == true
     end
+
+    test "persists optional scheduler outcome fields" do
+      name = "runtime-state-test-#{System.unique_integer([:positive])}"
+      {:ok, config} = HeartbeatConfig.create(%{@valid_attrs | name: name})
+
+      attrs = %{
+        last_run_at: ~U[2026-09-04 01:00:00Z],
+        next_run_at: ~U[2026-09-04 07:30:00Z],
+        last_status: "failed"
+      }
+
+      assert {:ok, updated} = HeartbeatConfig.update_config(config, attrs)
+      assert DateTime.compare(updated.last_run_at, attrs.last_run_at) == :eq
+      assert DateTime.compare(updated.next_run_at, attrs.next_run_at) == :eq
+      assert updated.last_status == "failed"
+
+      persisted = HeartbeatConfig.get(config.id)
+      assert DateTime.compare(persisted.last_run_at, attrs.last_run_at) == :eq
+      assert DateTime.compare(persisted.next_run_at, attrs.next_run_at) == :eq
+      assert persisted.last_status == "failed"
+    end
   end
 
   describe "update_config/2 toggle enabled" do

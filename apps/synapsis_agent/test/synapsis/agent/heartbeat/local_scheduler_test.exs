@@ -65,6 +65,89 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
     assert [] = Enum.filter(Runs.list_recent(limit: 10), &(&1.kind == "heartbeat"))
   end
 
+  test "persists the next run when a routine schedule is loaded" do
+    {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
+    owner = self()
+    config = routine(Ecto.UUID.generate(), "persisted-next-run", "schedule")
+
+    _scheduler =
+      start_scheduler([config], daemon, task_supervisor,
+        config_writer: fn type, attrs ->
+          send(owner, {:routine_config_written, type, attrs})
+          {:ok, attrs}
+        end
+      )
+
+    assert_receive {:routine_config_written, :routine, attrs}, 1_000
+    assert attrs["id"] == config.id
+    assert is_binary(attrs["next_run_at"])
+    refute Map.has_key?(attrs, "last_status")
+  end
+
+  test "persists a routine terminal outcome instead of its queued submission state" do
+    Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :immediate_done)
+    {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
+    owner = self()
+    config = routine(Ecto.UUID.generate(), "terminal-routine", "schedule")
+
+    scheduler =
+      start_scheduler([config], daemon, task_supervisor,
+        config_writer: fn type, attrs ->
+          send(owner, {:routine_config_written, type, attrs})
+          {:ok, attrs}
+        end
+      )
+
+    assert_receive {:routine_config_written, :routine, %{"next_run_at" => next_run_at}}, 1_000
+    assert is_binary(next_run_at)
+
+    assert {:ok, run} = LocalScheduler.trigger(scheduler, "terminal-routine")
+    assert {:ok, _completed} = wait_for_run(run.id, "completed")
+
+    refute_receive {:routine_config_written, :routine, %{"last_status" => "queued"}}, 100
+
+    assert_receive {:routine_config_written, :routine,
+                    %{
+                      "last_status" => "completed",
+                      "last_run_at" => last_run_at,
+                      "next_run_at" => terminal_next_run_at
+                    }},
+                   1_000
+
+    assert is_binary(last_run_at)
+    assert terminal_next_run_at == next_run_at
+  end
+
+  test "persists and exposes a heartbeat terminal outcome without changing its config shape" do
+    Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :immediate_done)
+    {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
+    owner = self()
+    heartbeat_id = Ecto.UUID.generate()
+    config = heartbeat(heartbeat_id, "terminal-heartbeat")
+
+    scheduler =
+      start_scheduler([config], daemon, task_supervisor,
+        config_writer: fn type, attrs ->
+          send(owner, {:routine_config_written, type, attrs})
+          {:ok, attrs}
+        end
+      )
+
+    assert_receive {:routine_config_written, :heartbeat, %{"next_run_at" => next_run_at}}, 1_000
+    assert is_binary(next_run_at)
+    assert {:ok, run} = LocalScheduler.trigger(scheduler, "terminal-heartbeat")
+    assert {:ok, _completed} = wait_for_run(run.id, "completed")
+
+    assert_receive {:routine_config_written, :heartbeat,
+                    %{"last_status" => "completed", "last_run_at" => last_run_at}},
+                   1_000
+
+    assert is_binary(last_run_at)
+
+    assert [%{last_status: "completed", last_run_at: ^last_run_at}] =
+             LocalScheduler.status(scheduler)
+  end
+
   test "manual and due generic routines dispatch their configured kind" do
     {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
     owner = self()
@@ -84,10 +167,6 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
 
     assert {:ok, schedule} = LocalScheduler.trigger(scheduler, "scheduled")
     assert schedule.kind == "schedule"
-    assert_receive {:routine_config_written, :routine, schedule_config}, 1_000
-    assert schedule_config["last_status"] == "queued"
-    assert is_binary(schedule_config["last_run_at"])
-    assert is_binary(schedule_config["next_run_at"])
     assert_receive {:waiting_session, _session_id}, 1_000
 
     %{timers: %{"reflection" => %{token: dream_token}}} = :sys.get_state(scheduler)

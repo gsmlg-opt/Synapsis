@@ -4,6 +4,7 @@ defmodule Synapsis.Agent.Daemon.Execution do
   alias Synapsis.Agent.RunEvents
   alias Synapsis.Agent.Daemon.Toolsets
   alias Synapsis.Memory.Adapter, as: MemoryAdapter
+  alias Synapsis.Session.Store, as: SessionStore
 
   @max_option_length 255
   @max_error_length 500
@@ -157,6 +158,7 @@ defmodule Synapsis.Agent.Daemon.Execution do
       active_run_id: active && active.id,
       queued_count: length(queued_ids),
       queued_ids: queued_ids,
+      last_seen_at: state.last_seen_at,
       recovery_backlog_count: Map.get(state, :recovery_backlog_count, 0),
       last_error: bound_optional(state.last_error),
       recovery_error: bound_optional(state.recovery_error)
@@ -250,6 +252,37 @@ defmodule Synapsis.Agent.Daemon.Execution do
       {:runner_finalizing_ack, ^run_id} -> :ok
     after
       5_000 -> :ok
+    end
+  end
+
+  def finalize(
+        deps,
+        %{kind: "dream"} = run,
+        {:ok, summary},
+        session_id,
+        task_supervisor,
+        event_timeout
+      ) do
+    case validate_dream_output(summary) do
+      {:ok, output} ->
+        attrs = %{
+          session_id: session_id,
+          metadata: Map.put(run.metadata || %{}, "output", output)
+        }
+
+        finalize_transition(deps, run, :completed, task_supervisor, event_timeout, fn ->
+          deps.runs.mark_completed(run, summary, attrs)
+        end)
+
+      {:error, reason} ->
+        finalize(
+          deps,
+          run,
+          {:error, reason},
+          session_id,
+          task_supervisor,
+          event_timeout
+        )
     end
   end
 
@@ -680,10 +713,41 @@ defmodule Synapsis.Agent.Daemon.Execution do
         "- #{title}: #{summary}"
       end)
 
+    sessions = recent_sessions(deps.sessions, run.assistant_name)
+
+    session_summaries =
+      sessions
+      |> Enum.take(5)
+      |> Enum.map_join("\n", fn {session, messages} ->
+        title = Map.get(session, :title) || "Untitled session"
+        "- #{title}: #{session_summary(messages)}"
+      end)
+
+    todos =
+      sessions
+      |> Enum.flat_map(fn {session, _messages} -> session_todos(session.id) end)
+      |> Enum.take(10)
+      |> Enum.map_join("\n", fn todo ->
+        content = Map.get(todo, "content", Map.get(todo, :content, ""))
+        status = Map.get(todo, "status", Map.get(todo, :status, "pending"))
+        "- [#{status}] #{String.slice(to_string(content), 0, 500)}"
+      end)
+
+    workspace = workspace_status(run.assistant_name)
+    project = project_status(run.assistant_name)
+
     [
       run.prompt,
       if(recent == "", do: nil, else: "Recent AgentRuns:\n" <> recent),
-      if(memories == "", do: nil, else: "Relevant memory:\n" <> memories)
+      if(session_summaries == "",
+        do: nil,
+        else: "Recent Session summaries:\n" <> session_summaries
+      ),
+      if(memories == "", do: nil, else: "Relevant memory:\n" <> memories),
+      if(todos == "", do: nil, else: "Current todos:\n" <> todos),
+      if(workspace == "", do: nil, else: "Workspace status:\n" <> workspace),
+      if(project == "", do: nil, else: "Project status:\n" <> project),
+      dream_output_contract()
     ]
     |> Enum.reject(&is_nil/1)
     |> Enum.join("\n\n")
@@ -691,9 +755,136 @@ defmodule Synapsis.Agent.Daemon.Execution do
 
   defp execution_prompt(_deps, run), do: run.prompt
 
-  defp terminal_attrs(%{kind: "dream", metadata: metadata}, _status, result, session_id) do
-    %{session_id: session_id, metadata: Map.put(metadata || %{}, "output", dream_output(result))}
+  defp recent_sessions(sessions, assistant_name) do
+    if Code.ensure_loaded?(sessions) and function_exported?(sessions, :recent, 1) and
+         function_exported?(sessions, :get_messages, 1) do
+      sessions.recent(limit: 6, agent: assistant_name)
+      |> Enum.flat_map(fn session ->
+        messages = sessions.get_messages(session.id)
+
+        if session_summary(messages),
+          do: [{session, messages}],
+          else: []
+      end)
+      |> Enum.take(5)
+    else
+      []
+    end
+  rescue
+    _error -> []
+  catch
+    _kind, _reason -> []
   end
+
+  defp session_summary(messages) when is_list(messages) do
+    compacted =
+      Enum.find_value(messages, fn
+        %{role: "system"} = message ->
+          text = message_text(message)
+          if is_binary(text) and String.contains?(String.downcase(text), "summary"), do: text
+
+        _other ->
+          nil
+      end)
+
+    latest_assistant =
+      messages
+      |> Enum.reverse()
+      |> Enum.find_value(&assistant_text/1)
+
+    case compacted || latest_assistant do
+      text when is_binary(text) and text != "" -> String.slice(text, 0, 1_000)
+      _none -> nil
+    end
+  end
+
+  defp session_summary(_messages), do: nil
+
+  defp message_text(%{parts: parts}) when is_list(parts) do
+    parts
+    |> Enum.flat_map(fn
+      %Synapsis.Part.Text{content: text} when is_binary(text) -> [text]
+      _other -> []
+    end)
+    |> Enum.join()
+    |> case do
+      "" -> nil
+      text -> text
+    end
+  end
+
+  defp message_text(_message), do: nil
+
+  defp session_todos(session_id) when is_binary(session_id) do
+    session_id
+    |> SessionStore.get_value("todos", [])
+    |> List.wrap()
+    |> Enum.filter(&is_map/1)
+  rescue
+    _error -> []
+  catch
+    _kind, _reason -> []
+  end
+
+  defp workspace_status(assistant_name) do
+    prefix = "/agents/#{assistant_name || "main"}"
+
+    case Synapsis.Workspace.list(prefix, limit: 10, sort: :recent) do
+      {:ok, resources} ->
+        resources
+        |> Enum.take(10)
+        |> Enum.map_join("\n", fn resource ->
+          "- #{resource.path} (#{resource.kind})"
+        end)
+
+      _error ->
+        ""
+    end
+  rescue
+    _error -> ""
+  catch
+    _kind, _reason -> ""
+  end
+
+  defp project_status(assistant_name) do
+    project_path =
+      assistant_name
+      |> then(&Synapsis.Agent.Resolver.resolve(&1 || "main"))
+      |> Map.get(:workspace_path)
+      |> to_string()
+      |> Path.expand()
+
+    case Synapsis.Git.capture_ref(project_path) do
+      {:ok, %{head: head, stash: stash}} ->
+        dirty = if stash, do: "dirty", else: "clean"
+        "- workspace root: #{project_path}\n- git HEAD: #{head}\n- working tree: #{dirty}"
+
+      {:error, _reason} ->
+        "- workspace root: #{project_path}\n- git: unavailable"
+    end
+  rescue
+    _error -> ""
+  catch
+    _kind, _reason -> ""
+  end
+
+  defp dream_output_contract do
+    """
+    Return only a JSON object with exactly these six fields:
+    - recent_summary: non-empty string
+    - memory_candidates: list of strings
+    - open_questions: list of strings
+    - risks: list of strings
+    - proposed_tasks: list of strings
+    - ignored_noise: list of strings
+
+    Persist memory candidates only with the available memory tools. Update todos only when the
+    todo_write tool is explicitly available for this run.
+    """
+  end
+
+  defp terminal_attrs(%{kind: "dream"}, _status, _result, session_id),
+    do: %{session_id: session_id}
 
   defp terminal_attrs(%{kind: "schedule", metadata: metadata}, status, result, session_id) do
     kind = "schedule"
@@ -706,34 +897,25 @@ defmodule Synapsis.Agent.Daemon.Execution do
   defp result_key("completed"), do: "summary"
   defp result_key("failed"), do: "error"
 
-  defp dream_output(result) do
-    fallback = if is_binary(result), do: String.trim(result), else: ""
+  defp validate_dream_output(result) when is_binary(result) do
+    expected_keys = MapSet.new(["recent_summary" | @dream_list_fields])
 
-    decoded =
-      with true <- fallback != "",
-           {:ok, map} when is_map(map) <- Jason.decode(fallback) do
-        map
-      else
-        _other -> %{}
-      end
-
-    %{"recent_summary" => dream_summary(decoded, fallback)}
-    |> Map.merge(Map.new(@dream_list_fields, &{&1, dream_list(decoded[&1])}))
+    with trimmed when trimmed != "" <- String.trim(result),
+         {:ok, decoded} when is_map(decoded) <- Jason.decode(trimmed),
+         true <- MapSet.new(Map.keys(decoded)) == expected_keys,
+         summary when is_binary(summary) <- decoded["recent_summary"],
+         true <- String.trim(summary) != "",
+         true <- Enum.all?(@dream_list_fields, &list_of_strings?(decoded[&1])) do
+      {:ok, decoded}
+    else
+      _invalid -> {:error, :invalid_dream_output}
+    end
   end
 
-  defp dream_summary(%{"recent_summary" => value}, _fallback) when is_binary(value),
-    do: String.trim(value)
+  defp validate_dream_output(_result), do: {:error, :invalid_dream_output}
 
-  defp dream_summary(_decoded, fallback), do: fallback
-
-  defp dream_list(values) when is_list(values) do
-    values
-    |> Enum.filter(&is_binary/1)
-    |> Enum.map(&String.trim/1)
-    |> Enum.reject(&(&1 == ""))
-  end
-
-  defp dream_list(_values), do: []
+  defp list_of_strings?(values) when is_list(values), do: Enum.all?(values, &is_binary/1)
+  defp list_of_strings?(_values), do: false
 
   defp finalize_transition(
          deps,

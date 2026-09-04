@@ -24,6 +24,7 @@ defmodule Synapsis.Agent.Daemon do
   @event_timeout 1_000
   @operation_timeout 5_000
   @submit_retry_ms 50
+  @liveness_interval_ms :timer.seconds(30)
 
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: Keyword.get(opts, :name, __MODULE__))
@@ -71,7 +72,9 @@ defmodule Synapsis.Agent.Daemon do
          {:ok, cleanup_timeout} <- timeout_option(opts, :cleanup_timeout, @cleanup_timeout),
          {:ok, event_timeout} <- timeout_option(opts, :event_timeout, @event_timeout),
          {:ok, operation_timeout} <-
-           timeout_option(opts, :operation_timeout, @operation_timeout) do
+           timeout_option(opts, :operation_timeout, @operation_timeout),
+         {:ok, liveness_interval_ms} <-
+           timeout_option(opts, :liveness_interval_ms, @liveness_interval_ms) do
       state = %{
         ready: not recover?,
         active_run: nil,
@@ -92,6 +95,10 @@ defmodule Synapsis.Agent.Daemon do
         cleanup_timeout: cleanup_timeout,
         event_timeout: event_timeout,
         operation_timeout: operation_timeout,
+        liveness_interval_ms: liveness_interval_ms,
+        liveness_target:
+          Keyword.get(opts, :liveness_target, Synapsis.Agent.Heartbeat.LocalScheduler),
+        last_seen_at: DateTime.utc_now(),
         deps: %{
           runs: Keyword.get(opts, :runs, Runs),
           run_events: Keyword.get(opts, :run_events, RunEvents),
@@ -102,6 +109,7 @@ defmodule Synapsis.Agent.Daemon do
         recovery_error: nil
       }
 
+      Process.send_after(self(), :liveness_check, liveness_interval_ms)
       send(self(), if(recover?, do: :recover, else: :status_changed))
       {:ok, state}
     else
@@ -255,6 +263,16 @@ defmodule Synapsis.Agent.Daemon do
   end
 
   def handle_info(:status_changed, state) do
+    dispatch_status(state)
+    {:noreply, state}
+  end
+
+  def handle_info(:liveness_check, state) do
+    state = %{state | last_seen_at: DateTime.utc_now()}
+    request_due_routine_check(state.liveness_target)
+    send(self(), :drain)
+    send(self(), :refill)
+    Process.send_after(self(), :liveness_check, state.liveness_interval_ms)
     dispatch_status(state)
     {:noreply, state}
   end
@@ -971,6 +989,22 @@ defmodule Synapsis.Agent.Daemon do
       event_timeout: state.event_timeout
     }
   end
+
+  defp request_due_routine_check(pid) when is_pid(pid) do
+    if Process.alive?(pid), do: send(pid, :check_due_routines)
+    :ok
+  end
+
+  defp request_due_routine_check(name) when is_atom(name) do
+    case Process.whereis(name) do
+      pid when is_pid(pid) -> send(pid, :check_due_routines)
+      nil -> :ok
+    end
+
+    :ok
+  end
+
+  defp request_due_routine_check(_target), do: :ok
 
   defp cancel_timer(ref), do: Operations.cancel_timer(ref)
 end

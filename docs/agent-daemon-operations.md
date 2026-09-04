@@ -2,6 +2,21 @@
 
 The daemon is a local, supervised execution boundary. It owns manual, heartbeat,
 schedule, and dream runs and persists each run in the embedded session store.
+Its status includes a periodically refreshed `last_seen_at`; each liveness tick
+also asks the local scheduler to reconcile due routines without starting an LLM
+run itself. Status snapshots continue to publish on `agent:daemon`.
+
+Routine definitions are validated TOML-backed config maps. The scheduler writes
+`next_run_at` when it calculates a schedule, then records `last_run_at` and
+`last_status` only after the associated AgentRun reaches a terminal state.
+
+Dream runs receive bounded recent AgentRun, Session-summary, memory, todo,
+workspace, and project context. A successful result must be an exact six-field
+JSON object (`recent_summary` plus five list-of-string fields); the validated
+object is kept in AgentRun metadata. Memory candidates are persisted only when
+the Dream uses its memory tools. Todo changes likewise require the explicitly
+enabled `assistant_dream_todo` tool profile; the daemon does not apply either
+candidate set automatically.
 
 ## HTTP API
 
