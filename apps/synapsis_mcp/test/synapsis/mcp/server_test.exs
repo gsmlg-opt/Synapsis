@@ -11,11 +11,17 @@ defmodule Synapsis.MCP.ServerTest do
     {:ok, bypass: bypass}
   end
 
-  defp stub_mcp(bypass, server_name, call_observer \\ nil) do
+  defp stub_mcp(bypass, server_name, call_observer \\ nil, tools \\ nil) do
+    tools =
+      tools ||
+        [
+          %{"name" => "echo", "description" => "e", "inputSchema" => %{"type" => "object"}}
+        ]
+
     Bypass.stub(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       req = Jason.decode!(body)
-      handle_rpc(conn, req, server_name, call_observer)
+      handle_rpc(conn, req, server_name, call_observer, tools)
     end)
 
     # tolerate any other requests the MCP client makes (GET sse channel, etc.)
@@ -28,7 +34,7 @@ defmodule Synapsis.MCP.ServerTest do
     end)
   end
 
-  defp handle_rpc(conn, %{"id" => id} = req, server_name, call_observer) do
+  defp handle_rpc(conn, %{"id" => id} = req, server_name, call_observer, tools) do
     result =
       case req["method"] do
         "initialize" ->
@@ -39,11 +45,7 @@ defmodule Synapsis.MCP.ServerTest do
           }
 
         "tools/list" ->
-          %{
-            "tools" => [
-              %{"name" => "echo", "description" => "e", "inputSchema" => %{"type" => "object"}}
-            ]
-          }
+          %{"tools" => tools}
 
         "tools/call" ->
           if call_observer, do: send(call_observer, {:mcp_tool_called, req["params"]})
@@ -58,7 +60,7 @@ defmodule Synapsis.MCP.ServerTest do
     |> Plug.Conn.resp(200, Jason.encode!(%{"jsonrpc" => "2.0", "id" => id, "result" => result}))
   end
 
-  defp handle_rpc(conn, _notification, _server_name, _call_observer) do
+  defp handle_rpc(conn, _notification, _server_name, _call_observer, _tools) do
     Plug.Conn.resp(conn, 202, "")
   end
 
@@ -116,7 +118,8 @@ defmodule Synapsis.MCP.ServerTest do
     source_config = %{
       "managed_by" => "backplane",
       "backplane_source_id" => "source-1",
-      "backplane_available" => true
+      "backplane_available" => true,
+      "backplane_tools" => [%{"external_id" => "echo", "backplane_available" => true}]
     }
 
     {:ok, config} =
@@ -127,10 +130,9 @@ defmodule Synapsis.MCP.ServerTest do
         config: source_config
       })
 
-    {:ok, pid} = Server.start_link(config)
+    pid = start_supervised!({Server, config})
 
     on_exit(fn ->
-      if Process.alive?(pid), do: GenServer.stop(pid)
       if current = MCPConfigs.get(config.id), do: MCPConfigs.delete(current)
     end)
 
@@ -148,6 +150,78 @@ defmodule Synapsis.MCP.ServerTest do
              GenServer.call(pid, {:execute, tool, %{"text" => "blocked"}, %{}}, 10_000)
 
     refute_receive {:mcp_tool_called, _params}, 100
+  end
+
+  test "registers and executes only available tools for a source-managed config", %{
+    bypass: bypass
+  } do
+    name = "mixed_#{System.unique_integer([:positive])}"
+
+    tools = [
+      %{"name" => "enabled::tool", "description" => "enabled", "inputSchema" => %{}},
+      %{"name" => "disabled::tool", "description" => "disabled", "inputSchema" => %{}}
+    ]
+
+    stub_mcp(bypass, name, self(), tools)
+
+    {:ok, config} =
+      MCPConfigs.create(%{
+        name: name,
+        transport: "streamable_http",
+        url: "http://localhost:#{bypass.port}",
+        config: %{
+          "managed_by" => "backplane",
+          "backplane_source_id" => "source-1",
+          "backplane_available" => true,
+          "backplane_tools" => [
+            %{"external_id" => "enabled::tool", "backplane_available" => true},
+            %{"external_id" => "disabled::tool", "backplane_available" => false}
+          ]
+        }
+      })
+
+    on_exit(fn ->
+      if current = MCPConfigs.get(config.id), do: MCPConfigs.delete(current)
+    end)
+
+    pid = start_supervised!({Server, config})
+    enabled_tool = "mcp:#{name}:enabled::tool"
+    disabled_tool = "mcp:#{name}:disabled::tool"
+
+    assert wait_until(fn ->
+             match?({:ok, {:process, ^pid, _opts}}, Registry.lookup(enabled_tool))
+           end)
+
+    assert {:error, :not_found} = Registry.lookup(disabled_tool)
+
+    assert {:ok, "allowed"} =
+             GenServer.call(pid, {:execute, enabled_tool, %{"text" => "allowed"}, %{}}, 10_000)
+
+    assert_receive {:mcp_tool_called, %{"name" => "enabled::tool"}}
+
+    assert {:error, :mcp_unavailable} =
+             GenServer.call(pid, {:execute, disabled_tool, %{"text" => "blocked"}, %{}}, 10_000)
+
+    refute_receive {:mcp_tool_called, %{"name" => "disabled::tool"}}, 100
+
+    markers =
+      Enum.map(config.config["backplane_tools"], fn
+        %{"external_id" => "enabled::tool"} = marker ->
+          Map.put(marker, "backplane_available", false)
+
+        marker ->
+          marker
+      end)
+
+    assert {:ok, _current} =
+             MCPConfigs.update(config, %{
+               config: Map.put(config.config, "backplane_tools", markers)
+             })
+
+    assert {:error, :mcp_unavailable} =
+             GenServer.call(pid, {:execute, enabled_tool, %{"text" => "stale"}, %{}}, 10_000)
+
+    refute_receive {:mcp_tool_called, %{"name" => "enabled::tool"}}, 100
   end
 
   defp wait_until(fun, tries \\ 100) do

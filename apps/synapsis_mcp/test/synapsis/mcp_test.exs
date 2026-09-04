@@ -80,7 +80,8 @@ defmodule Synapsis.MCPTest do
     source_config = %{
       "managed_by" => "backplane",
       "backplane_source_id" => "source-1",
-      "backplane_available" => true
+      "backplane_available" => true,
+      "backplane_tools" => [%{"external_id" => "echo", "backplane_available" => true}]
     }
 
     available = %MCPConfig{
@@ -162,6 +163,88 @@ defmodule Synapsis.MCPTest do
     refute_receive {:mcp_request, _method}, 200
     assert {:error, :mcp_unavailable} = result
     refute name in Synapsis.MCP.list()
+  end
+
+  test "restart stops a renamed runtime by persisted config id after deletion", %{bypass: bypass} do
+    old_name = "stale_rename_old_#{System.unique_integer([:positive])}"
+    new_name = "stale_rename_new_#{System.unique_integer([:positive])}"
+
+    {:ok, stale} =
+      MCPConfigs.create(%{
+        name: old_name,
+        transport: "streamable_http",
+        url: "http://localhost:#{bypass.port}",
+        enabled: true
+      })
+
+    on_exit(fn ->
+      Enum.each([old_name, new_name], &Synapsis.MCP.stop/1)
+      if current = MCPConfigs.get(stale.id), do: MCPConfigs.delete(current)
+    end)
+
+    assert {:ok, renamed} = MCPConfigs.update(stale, %{name: new_name})
+    assert {:ok, pid} = Synapsis.MCP.start(stale)
+
+    tool = "mcp:#{new_name}:echo"
+    assert wait_until(fn -> match?({:ok, _}, Registry.lookup(tool)) end)
+    assert new_name in Synapsis.MCP.list()
+
+    assert {:ok, _deleted} = MCPConfigs.delete(renamed)
+    assert {:error, :mcp_unavailable} = Synapsis.MCP.restart(stale)
+
+    assert wait_until(fn -> not Process.alive?(pid) end)
+    assert wait_until(fn -> match?({:error, :not_found}, Registry.lookup(tool)) end)
+    refute new_name in Synapsis.MCP.list()
+  end
+
+  test "restart replaces an intermediate renamed runtime by config id", %{bypass: bypass} do
+    old_name = "multi_rename_old_#{System.unique_integer([:positive])}"
+    middle_name = "multi_rename_middle_#{System.unique_integer([:positive])}"
+    new_name = "multi_rename_new_#{System.unique_integer([:positive])}"
+
+    {:ok, stale} =
+      MCPConfigs.create(%{
+        name: old_name,
+        transport: "streamable_http",
+        url: "http://localhost:#{bypass.port}",
+        enabled: true
+      })
+
+    on_exit(fn ->
+      Enum.each([old_name, middle_name, new_name], &Synapsis.MCP.stop/1)
+      if current = MCPConfigs.get(stale.id), do: MCPConfigs.delete(current)
+    end)
+
+    assert {:ok, middle} = MCPConfigs.update(stale, %{name: middle_name})
+    assert {:ok, middle_pid} = Synapsis.MCP.start(stale)
+
+    middle_tool = "mcp:#{middle_name}:echo"
+    assert wait_until(fn -> match?({:ok, _}, Registry.lookup(middle_tool)) end)
+
+    assert {:ok, _current} = MCPConfigs.update(middle, %{name: new_name})
+    assert {:error, _reason} = Synapsis.MCP.start(stale)
+
+    assert [{^middle_pid, _value}] =
+             Elixir.Registry.lookup(Synapsis.MCP.Registry, {:config_id, stale.id})
+
+    refute new_name in Synapsis.MCP.list()
+
+    assert :ok = Synapsis.MCP.restart(stale)
+
+    new_tool = "mcp:#{new_name}:echo"
+    assert wait_until(fn -> not Process.alive?(middle_pid) end)
+    assert wait_until(fn -> match?({:error, :not_found}, Registry.lookup(middle_tool)) end)
+    assert wait_until(fn -> match?({:ok, _}, Registry.lookup(new_tool)) end)
+
+    assert [{new_pid, _value}] =
+             Elixir.Registry.lookup(Synapsis.MCP.Registry, {:config_id, stale.id})
+
+    assert Process.alive?(new_pid)
+    assert Enum.all?(Synapsis.MCP.list(), &is_binary/1)
+
+    assert Enum.filter(Synapsis.MCP.list(), &(&1 in [old_name, middle_name, new_name])) == [
+             new_name
+           ]
   end
 
   defp wait_until(fun, tries \\ 100) do

@@ -16,12 +16,11 @@ defmodule Synapsis.MCP.Server do
 
   ## Process naming
 
-  `start_link/1` starts this GenServer *unnamed* and returns `{:ok, pid}`. The
-  caller (and, in Task 9, the `Synapsis.MCP.DynamicSupervisor` /
-  `Synapsis.MCP.Registry`) is responsible for any name registration. The
-  underlying Backplane client is named with a unique atom derived from the
-  config name so its API functions (`await_ready/1`, `list_tools/1`,
-  `call_tool/4`) can address it.
+  `start_link/1` registers the GenServer by config name. Persisted configs also
+  register a config-id key so renames cannot create duplicate runtimes. The
+  underlying Backplane client is named with a unique atom derived from the config
+  name so its API functions (`await_ready/1`, `list_tools/1`, `call_tool/4`) can
+  address it.
   """
 
   use GenServer
@@ -61,29 +60,35 @@ defmodule Synapsis.MCP.Server do
   def init(%MCPConfig{} = config) do
     Process.flag(:trap_exit, true)
 
-    client_name = client_name(config)
+    case register_config_id(config) do
+      :ok ->
+        client_name = client_name(config)
 
-    opts = [
-      name: client_name,
-      transport: Transport.build(config),
-      # TODO(upstream): gsmlg-opt/backplane#19 validator cache keys collide across clients.
-      client_info: @client_info,
-      capabilities: @capabilities,
-      protocol_version: Transport.protocol_version(config)
-    ]
+        opts = [
+          name: client_name,
+          transport: Transport.build(config),
+          # TODO(upstream): gsmlg-opt/backplane#19 validator cache keys collide across clients.
+          client_info: @client_info,
+          capabilities: @capabilities,
+          protocol_version: Transport.protocol_version(config)
+        ]
 
-    case MCPClient.start_link(opts) do
-      {:ok, supervisor} ->
-        state = %{
-          config: config,
-          client: client_name,
-          supervisor: supervisor,
-          tool_registry_ref: monitor_tool_registry(),
-          tools: [],
-          tool_names: []
-        }
+        case MCPClient.start_link(opts) do
+          {:ok, supervisor} ->
+            state = %{
+              config: config,
+              client: client_name,
+              supervisor: supervisor,
+              tool_registry_ref: monitor_tool_registry(),
+              tools: [],
+              tool_names: []
+            }
 
-        {:ok, state, {:continue, :discover}}
+            {:ok, state, {:continue, :discover}}
+
+          {:error, reason} ->
+            {:stop, reason}
+        end
 
       {:error, reason} ->
         {:stop, reason}
@@ -94,7 +99,11 @@ defmodule Synapsis.MCP.Server do
   def handle_continue(:discover, %{client: client, config: config} = state) do
     with :ok <- MCPClient.await_ready(client, timeout: @await_timeout),
          {:ok, response} <- MCPClient.list_tools(client) do
-      tools = Response.tools(ProtocolResponse.unwrap(response), config.name)
+      tools =
+        response
+        |> ProtocolResponse.unwrap()
+        |> Response.tools(config.name)
+        |> runtime_available_tools(config)
 
       case register_tools(tools) do
         {:ok, names} ->
@@ -111,7 +120,8 @@ defmodule Synapsis.MCP.Server do
 
   @impl true
   def handle_call({:execute, full_tool_name, input, _ctx}, _from, state) do
-    if current_runtime_available?(state.config) do
+    if discovered_tool?(state.tools, full_tool_name) and
+         current_runtime_available?(state.config, full_tool_name) do
       execute_tool(state.client, full_tool_name, input, state)
     else
       {:reply, {:error, :mcp_unavailable}, state}
@@ -204,14 +214,64 @@ defmodule Synapsis.MCP.Server do
     end
   end
 
-  defp current_runtime_available?(%MCPConfig{id: nil} = config) do
-    MCPConfigs.runtime_available?(config)
+  defp current_runtime_available?(%MCPConfig{id: nil} = config, full_tool_name) do
+    MCPConfigs.runtime_available?(config) and tool_runtime_available?(config, full_tool_name)
   end
 
-  defp current_runtime_available?(%MCPConfig{id: id}) do
+  defp current_runtime_available?(%MCPConfig{id: id}, full_tool_name) do
     case MCPConfigs.get(id) do
-      nil -> false
-      config -> MCPConfigs.runtime_available?(config)
+      nil ->
+        false
+
+      config ->
+        MCPConfigs.runtime_available?(config) and
+          tool_runtime_available?(config, full_tool_name)
+    end
+  end
+
+  defp runtime_available_tools(tools, config) do
+    if MCPConfigs.runtime_available?(config) do
+      Enum.filter(tools, &tool_runtime_available?(config, &1.name))
+    else
+      []
+    end
+  end
+
+  defp tool_runtime_available?(%MCPConfig{config: config}, full_tool_name) do
+    not backplane_managed?(config) or
+      backplane_tool_available?(config, Response.raw_tool_name(full_tool_name))
+  end
+
+  defp backplane_managed?(config) when is_map(config) do
+    Map.get(config, "managed_by", Map.get(config, :managed_by)) == "backplane" or
+      not is_nil(Map.get(config, "backplane_source_id", Map.get(config, :backplane_source_id)))
+  end
+
+  defp backplane_managed?(_config), do: false
+
+  defp backplane_tool_available?(config, raw_name) do
+    case Map.get(config, "backplane_tools", Map.get(config, :backplane_tools)) do
+      tools when is_list(tools) ->
+        Enum.any?(tools, fn tool ->
+          is_map(tool) and
+            Map.get(tool, "external_id", Map.get(tool, :external_id)) == raw_name and
+            Map.get(tool, "backplane_available", Map.get(tool, :backplane_available)) == true
+        end)
+
+      _other ->
+        false
+    end
+  end
+
+  defp discovered_tool?(tools, full_tool_name),
+    do: Enum.any?(tools, &(&1.name == full_tool_name))
+
+  defp register_config_id(%MCPConfig{id: nil}), do: :ok
+
+  defp register_config_id(%MCPConfig{id: id}) do
+    case Elixir.Registry.register(Synapsis.MCP.Registry, {:config_id, id}, nil) do
+      {:ok, _owner} -> :ok
+      {:error, {:already_registered, pid}} -> {:error, {:already_started, pid}}
     end
   end
 

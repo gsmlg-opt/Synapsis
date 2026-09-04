@@ -31,6 +31,7 @@ defmodule Synapsis.MCP do
   def restart(%MCPConfig{} = config) do
     case current_config(config) do
       {:ok, current} ->
+        stop_by_config_id(config.id)
         Enum.each(Enum.uniq([config.name, current.name]), &stop_and_wait/1)
 
         case start(current) do
@@ -39,6 +40,7 @@ defmodule Synapsis.MCP do
         end
 
       {:error, _} = error ->
+        stop_by_config_id(config.id)
         stop_and_wait(config.name)
         error
     end
@@ -48,10 +50,9 @@ defmodule Synapsis.MCP do
     Synapsis.MCP.DynamicSupervisor
     |> DynamicSupervisor.which_children()
     |> Enum.flat_map(fn {_, pid, _, _} ->
-      case Registry.keys(Synapsis.MCP.Registry, pid) do
-        [name | _] -> [name]
-        [] -> []
-      end
+      Synapsis.MCP.Registry
+      |> Registry.keys(pid)
+      |> Enum.filter(&is_binary/1)
     end)
   end
 
@@ -95,6 +96,20 @@ defmodule Synapsis.MCP do
   defp stop_and_wait(name) do
     _ = stop(name)
     wait_gone(name)
+  end
+
+  defp stop_by_config_id(nil), do: :ok
+
+  defp stop_by_config_id(id) do
+    key = {:config_id, id}
+
+    Synapsis.MCP.Registry
+    |> Registry.lookup(key)
+    |> Enum.each(fn {pid, _value} ->
+      _ = DynamicSupervisor.terminate_child(Synapsis.MCP.DynamicSupervisor, pid)
+    end)
+
+    wait_gone(key)
   end
 
   defp start_resolved(config) do
