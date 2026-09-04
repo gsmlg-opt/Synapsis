@@ -1,12 +1,20 @@
 defmodule Synapsis.MCP.ServerTest do
   use ExUnit.Case, async: false
 
+  alias Synapsis.Config.Store
   alias Synapsis.MCP.Server
   alias Synapsis.MCPConfig
   alias Synapsis.MCPConfigs
   alias Synapsis.Tool.Registry
 
   setup do
+    Synapsis.DataCase.clear_config_store(:backplane)
+
+    assert {:ok, _connection} =
+             Store.put(:backplane, %{"id" => "source-1", "enabled" => true})
+
+    on_exit(fn -> Synapsis.DataCase.clear_config_store(:backplane) end)
+
     bypass = Bypass.open()
     {:ok, bypass: bypass}
   end

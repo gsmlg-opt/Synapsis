@@ -22,7 +22,8 @@ defmodule Synapsis.MCPConfigs do
     config = config || %{}
 
     not backplane_managed?(config) or
-      Map.get(config, "backplane_available", Map.get(config, :backplane_available)) != false
+      (Map.get(config, "backplane_available", Map.get(config, :backplane_available)) != false and
+         source_connection_enabled?(config))
   end
 
   def runtime_available?(_config), do: false
@@ -58,6 +59,22 @@ defmodule Synapsis.MCPConfigs do
   defp backplane_managed?(config) do
     Map.get(config, "managed_by", Map.get(config, :managed_by)) == "backplane" or
       not is_nil(Map.get(config, "backplane_source_id", Map.get(config, :backplane_source_id)))
+  end
+
+  defp source_connection_enabled?(config) do
+    case Map.get(config, "backplane_source_id", Map.get(config, :backplane_source_id)) do
+      source_id when is_binary(source_id) and source_id != "" ->
+        case Store.get(:backplane, source_id) do
+          {:ok, connection} when is_map(connection) ->
+            Map.get(connection, "enabled", Map.get(connection, :enabled)) == true
+
+          _missing_or_malformed ->
+            false
+        end
+
+      _missing_or_malformed ->
+        false
+    end
   end
 
   defp persist(%Ecto.Changeset{valid?: true} = changeset) do

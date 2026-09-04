@@ -1,7 +1,14 @@
 defmodule Synapsis.AgentSkillsTest do
   use Synapsis.DataCase
 
+  alias Synapsis.Config.Store
   alias Synapsis.{AgentConfig, AgentConfigs, AgentSkills, Skill, Skills}
+
+  setup do
+    clear_config_store(:backplane)
+    on_exit(fn -> clear_config_store(:backplane) end)
+    :ok
+  end
 
   describe "assign_skills/2" do
     test "stores the exact skills assigned to an agent" do
@@ -35,6 +42,13 @@ defmodule Synapsis.AgentSkillsTest do
     test "omits locally disabled and unavailable managed skills without changing assignments" do
       suffix = System.unique_integer([:positive])
       {:ok, agent} = AgentConfigs.create(%{name: "availability-agent-#{suffix}"})
+
+      assert {:ok, _connection} =
+               Store.put(:backplane, %{
+                 "id" => "source-1",
+                 "name" => "source-1",
+                 "enabled" => true
+               })
 
       {:ok, local} =
         Skills.create(%{
@@ -80,6 +94,44 @@ defmodule Synapsis.AgentSkillsTest do
 
       assert AgentSkills.list_skill_ids(assigned_agent.id) == assigned
       assert Enum.all?(assigned, &Skills.get(&1))
+    end
+
+    test "managed skills require a present, enabled, well-formed source connection" do
+      suffix = System.unique_integer([:positive])
+      source_id = Ecto.UUID.generate()
+      {:ok, agent} = AgentConfigs.create(%{name: "source-guard-agent-#{suffix}"})
+
+      {:ok, skill} =
+        Skills.create(%{
+          name: "source-guard-skill-#{suffix}",
+          scope: "global",
+          config_overrides: %{
+            "managed_by" => "backplane",
+            "backplane_source_id" => source_id,
+            "backplane_available" => true
+          }
+        })
+
+      assert {:ok, assigned_agent} = AgentSkills.assign_skills(agent, [skill.id])
+      assert Skills.list_skills_for_agent(assigned_agent) == []
+
+      assert {:ok, _connection} =
+               Store.put(:backplane, %{"id" => source_id, "enabled" => false})
+
+      assert Skills.list_skills_for_agent(assigned_agent) == []
+
+      assert {:ok, _connection} =
+               Store.put(:backplane, %{"id" => source_id, "enabled" => "true"})
+
+      assert Skills.list_skills_for_agent(assigned_agent) == []
+
+      assert {:ok, _connection} =
+               Store.put(:backplane, %{"id" => source_id, "enabled" => true})
+
+      assert Enum.map(Skills.list_skills_for_agent(assigned_agent), & &1.id) == [skill.id]
+
+      assert :ok = Store.delete(:backplane, source_id)
+      assert Skills.list_skills_for_agent(assigned_agent) == []
     end
 
     test "protects built-in skills from deletion" do
