@@ -414,20 +414,21 @@ defmodule Synapsis.Sessions do
 
   defp default_model(config, provider, agent) do
     agent_config = agent_config(config, agent)
+    configured_model = agent_config["model"]
 
     env_model =
       if provider_runtime_candidate?(provider),
         do: Synapsis.Providers.env_default_model(provider)
 
     cond do
-      present?(agent_config["model"]) ->
-        agent_config["model"]
+      present?(configured_model) and model_runtime_candidate?(provider, configured_model) ->
+        configured_model
 
-      model = first_enabled_provider_model(provider) ->
+      model = first_runtime_provider_model(provider) ->
         model
 
-      model = env_model ->
-        model
+      present?(env_model) and model_runtime_candidate?(provider, env_model) ->
+        env_model
 
       true ->
         Synapsis.Providers.default_model(provider)
@@ -470,14 +471,26 @@ defmodule Synapsis.Sessions do
 
   defp provider_name(_provider), do: nil
 
-  defp first_enabled_provider_model(provider) when provider in [nil, ""], do: nil
+  defp first_runtime_provider_model(provider) when provider in [nil, ""], do: nil
 
-  defp first_enabled_provider_model(provider) do
+  defp first_runtime_provider_model(provider) do
     case Synapsis.Providers.get_runtime_by_name(provider) do
       {:ok, provider_config} ->
-        provider_config
-        |> Synapsis.Providers.enabled_models()
-        |> Enum.find(&present?/1)
+        configured = Synapsis.Providers.enabled_models(provider_config)
+
+        candidates =
+          if configured == [] do
+            provider_config
+            |> Synapsis.Providers.cached_models()
+            |> Enum.map(& &1.id)
+          else
+            configured
+          end
+
+        Enum.find(candidates, fn model ->
+          present?(model) and
+            Synapsis.Providers.model_runtime_available?(provider_config, model)
+        end)
 
       {:error, _} ->
         nil
@@ -495,9 +508,11 @@ defmodule Synapsis.Sessions do
   end
 
   defp recovered_provider_model(session) do
+    env_model = env_recovery_model(session.provider, session.model)
+
     cond do
-      model = env_recovery_model(session.provider, session.model) ->
-        {session.provider, model}
+      present?(env_model) and model_supported?(session.provider, env_model) ->
+        {session.provider, env_model}
 
       provider_model_supported?(session.provider, session.model) ->
         {session.provider, session.model}
@@ -522,7 +537,7 @@ defmodule Synapsis.Sessions do
       model_supported?(provider, fallback_model) ->
         fallback_model
 
-      fallback = first_enabled_provider_model(provider) ->
+      fallback = first_runtime_provider_model(provider) ->
         fallback
 
       true ->
@@ -549,16 +564,26 @@ defmodule Synapsis.Sessions do
   defp model_supported?(provider, model) do
     case Synapsis.Providers.get_runtime_by_name(provider) do
       {:ok, provider_config} ->
-        case Synapsis.Providers.enabled_models(provider_config) do
-          [] -> true
-          models -> model in models
-        end
+        Synapsis.Providers.model_runtime_available?(provider_config, model)
 
       {:error, :provider_unavailable} ->
         false
 
       {:error, :not_found} ->
         Synapsis.Providers.env_configured?(provider)
+    end
+  end
+
+  defp model_runtime_candidate?(provider, model) do
+    case Synapsis.Providers.get_runtime_by_name(provider) do
+      {:ok, provider_config} ->
+        Synapsis.Providers.model_runtime_available?(provider_config, model)
+
+      {:error, :provider_unavailable} ->
+        false
+
+      {:error, :not_found} ->
+        true
     end
   end
 

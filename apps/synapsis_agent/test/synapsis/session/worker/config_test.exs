@@ -96,5 +96,70 @@ defmodule Synapsis.Session.Worker.ConfigTest do
              Config.resolve_provider_config(name)
 
     assert provider_id == provider.id
+
+    session = %Session{
+      id: Ecto.UUID.generate(),
+      agent: "main",
+      provider: name,
+      model: "old-local-model",
+      config: %{}
+    }
+
+    state = %{session: session, agent: %{model: session.model}}
+
+    assert {:ok, %{model: "arbitrary-local-model"}, _provider_config, _agent} =
+             Config.do_switch_model(name, "arbitrary-local-model", state)
+
+    on_exit(fn -> Synapsis.Session.Store.delete_session(session.id) end)
+  end
+
+  test "rejects switching directly to a source-disabled model without persisting it" do
+    name = "mixed-provider-#{System.unique_integer([:positive])}"
+
+    assert {:ok, _provider} =
+             Providers.create(%{
+               name: name,
+               type: "openai",
+               enabled: true,
+               config: %{
+                 "managed_by" => "backplane",
+                 "backplane_source_id" => "source-1",
+                 "backplane_available" => true,
+                 "enabled_models" => ["disabled-model", "enabled-model"],
+                 "backplane_models" => [
+                   %{
+                     "external_id" => "disabled-model",
+                     "source_available" => false,
+                     "backplane_available" => false
+                   },
+                   %{
+                     "external_id" => "enabled-model",
+                     "source_available" => true,
+                     "backplane_available" => true
+                   }
+                 ]
+               }
+             })
+
+    session = %Session{
+      id: Ecto.UUID.generate(),
+      agent: "main",
+      provider: name,
+      model: "enabled-model",
+      config: %{}
+    }
+
+    :ok = Synapsis.Session.Store.put_meta(session.id, Session.to_meta(session))
+    on_exit(fn -> Synapsis.Session.Store.delete_session(session.id) end)
+
+    state = %{session: session, agent: %{model: session.model}}
+
+    assert {:error, :model_unavailable} = Config.do_switch_model(name, "disabled-model", state)
+
+    assert {:ok, persisted} = Synapsis.Session.Store.get_meta(session.id)
+    assert Session.from_meta(persisted).model == "enabled-model"
+
+    assert {:ok, %{model: "enabled-model"}, _provider_config, %{model: "enabled-model"}} =
+             Config.do_switch_model(name, "enabled-model", state)
   end
 end

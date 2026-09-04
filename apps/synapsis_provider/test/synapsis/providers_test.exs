@@ -191,6 +191,47 @@ defmodule Synapsis.ProvidersTest do
     end
   end
 
+  describe "model_runtime_available?/2" do
+    test "rejects a source-disabled Backplane model while accepting its enabled sibling" do
+      provider = %ProviderConfig{
+        enabled: true,
+        config: %{
+          "managed_by" => "backplane",
+          "backplane_available" => true,
+          "enabled_models" => [],
+          "backplane_models" => [
+            %{
+              "external_id" => "disabled-model",
+              "source_available" => false,
+              "backplane_available" => false
+            },
+            %{
+              "external_id" => "enabled-model",
+              "source_available" => true,
+              "backplane_available" => true
+            }
+          ]
+        }
+      }
+
+      refute Providers.model_runtime_available?(provider, "disabled-model")
+      assert Providers.model_runtime_available?(provider, "enabled-model")
+      refute Providers.model_runtime_available?(provider, "missing-model")
+    end
+
+    test "preserves local empty-means-all semantics and honors explicit local model selection" do
+      provider = %ProviderConfig{enabled: true, config: %{"enabled_models" => []}}
+
+      assert Providers.model_runtime_available?(provider, "any-local-model")
+
+      restricted = %{provider | config: %{"enabled_models" => ["allowed-model"]}}
+      assert Providers.model_runtime_available?(restricted, "allowed-model")
+      refute Providers.model_runtime_available?(restricted, "other-model")
+
+      refute Providers.model_runtime_available?(%{provider | enabled: false}, "any-local-model")
+    end
+  end
+
   describe "refresh_models/1" do
     test "loads compatible provider models and stores them in config" do
       bypass = Bypass.open()

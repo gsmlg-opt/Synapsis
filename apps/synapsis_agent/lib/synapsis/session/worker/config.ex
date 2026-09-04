@@ -208,13 +208,27 @@ defmodule Synapsis.Session.Worker.Config do
 
   def do_switch_model(provider_name, model, state) do
     with {:ok, provider_config} <- resolve_provider_config(provider_name),
+         :ok <- ensure_model_runtime_available(provider_name, model),
          {:ok, updated_session} <-
            persist_session(state.session, %{provider: provider_name, model: model}) do
       agent = Map.put(state.agent, :model, model)
       {:ok, updated_session, provider_config, agent}
     else
       {:error, :provider_unavailable} = error -> error
+      {:error, :model_unavailable} = error -> error
       {:error, _changeset} -> {:error, :db_update_failed}
+    end
+  end
+
+  defp ensure_model_runtime_available(provider_name, model) do
+    case Synapsis.Providers.get_by_name(provider_name) do
+      {:ok, provider} ->
+        if Synapsis.Providers.model_runtime_available?(provider, model),
+          do: :ok,
+          else: {:error, :model_unavailable}
+
+      {:error, :not_found} ->
+        :ok
     end
   end
 

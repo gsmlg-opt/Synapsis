@@ -44,6 +44,19 @@ defmodule Synapsis.Providers do
 
   def runtime_available?(_provider), do: false
 
+  @doc "Whether a model may participate in runtime operations for a persisted provider."
+  def model_runtime_available?(provider, model)
+      when is_map(provider) and is_binary(model) and model != "" do
+    config = Map.get(provider, :config, Map.get(provider, "config", %{})) || %{}
+    enabled_models = Map.get(config, "enabled_models", Map.get(config, :enabled_models, []))
+
+    runtime_available?(provider) and
+      (not is_list(enabled_models) or enabled_models == [] or model in enabled_models) and
+      source_model_available?(config, model)
+  end
+
+  def model_runtime_available?(_provider, _model), do: false
+
   @doc "Fetch a persisted provider only when it is available to runtime callers."
   def get_runtime_by_name(name) do
     case get_by_name(name) do
@@ -358,6 +371,20 @@ defmodule Synapsis.Providers do
   defp backplane_managed?(config) do
     Map.get(config, "managed_by", Map.get(config, :managed_by)) == "backplane" or
       not is_nil(Map.get(config, "backplane_source_id", Map.get(config, :backplane_source_id)))
+  end
+
+  defp source_model_available?(config, model) do
+    if backplane_managed?(config) do
+      config
+      |> Map.get("backplane_models", Map.get(config, :backplane_models, []))
+      |> Enum.any?(fn markers ->
+        Map.get(markers, "external_id", Map.get(markers, :external_id)) == model and
+          Map.get(markers, "source_available", Map.get(markers, :source_available)) == true and
+          Map.get(markers, "backplane_available", Map.get(markers, :backplane_available)) == true
+      end)
+    else
+      true
+    end
   end
 
   defp ensure_runtime_available(provider) do
