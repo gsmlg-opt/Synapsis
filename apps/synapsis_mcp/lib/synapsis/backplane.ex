@@ -65,9 +65,16 @@ defmodule Synapsis.Backplane do
 
   defp delete_locked(id, opts) do
     with {:ok, connection} <- Connection.get(id),
+         {:ok, connection} <- disable_before_delete(connection),
          {:ok, _connection} <- set_available(id, false, opts) do
       Connection.delete(connection)
     end
+  end
+
+  defp disable_before_delete(%Connection{enabled: false} = connection), do: {:ok, connection}
+
+  defp disable_before_delete(%Connection{} = connection) do
+    Connection.update(connection, %{enabled: false})
   end
 
   @spec refresh(String.t(), keyword()) :: {:ok, Connection.t()} | {:error, term()}

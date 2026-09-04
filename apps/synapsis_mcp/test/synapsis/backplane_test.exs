@@ -4,6 +4,7 @@ defmodule Synapsis.BackplaneTest do
   alias Synapsis.Backplane
   alias Synapsis.Backplane.{Connection, Snapshot}
   alias Synapsis.Config.Store
+  alias Synapsis.{MCPConfigs, Providers, Skills}
 
   defmodule SyncStub do
     alias Synapsis.Backplane.Connection
@@ -38,6 +39,11 @@ defmodule Synapsis.BackplaneTest do
   defmodule MCPRuntimeStub do
     def restart(_config), do: :ok
     def stop(_name), do: :ok
+  end
+
+  defmodule FailingProviderStore do
+    def list, do: Synapsis.Providers.list()
+    def update(_id, _attrs), do: {:error, :provider_write_failed}
   end
 
   setup do
@@ -321,6 +327,66 @@ defmodule Synapsis.BackplaneTest do
     assert {:ok, %{id: ^connection_id}} = Connection.get(connection.id)
   end
 
+  test "failed delete retains a disabled connection so every imported surface fails closed" do
+    assert {:ok, connection} =
+             Backplane.create(%{
+               name: "delete-fail-closed",
+               endpoint: "https://backplane.example.test",
+               enabled: false
+             })
+
+    assert {:ok, connection} = Connection.update(connection, %{enabled: true})
+    markers = managed_markers(connection.id)
+
+    assert {:ok, provider} =
+             Providers.create(%{
+               name: "delete-fail-closed-provider",
+               type: "openai",
+               enabled: true,
+               config: markers
+             })
+
+    assert {:ok, skill} =
+             Skills.create(%{
+               name: "Delete Fail Closed Skill",
+               enabled: true,
+               system_prompt_fragment: "prompt",
+               config_overrides: %{markers | "kind" => "skill"}
+             })
+
+    assert {:ok, mcp} =
+             MCPConfigs.create(%{
+               name: "delete-fail-closed-mcp",
+               transport: "streamable_http",
+               enabled: true,
+               url: "https://backplane.example.test/mcp",
+               config: %{markers | "kind" => "mcp_server"}
+             })
+
+    assert Providers.runtime_available?(provider)
+    assert Skills.runtime_available?(skill)
+    assert MCPConfigs.runtime_available?(mcp)
+
+    assert {:error, {:availability_failed, %{"models" => :provider_write_failed}}} =
+             Backplane.delete(connection.id,
+               sync_opts: [
+                 provider_store: FailingProviderStore,
+                 mcp_runtime: MCPRuntimeStub
+               ]
+             )
+
+    assert {:ok, %{enabled: false}} = Connection.get(connection.id)
+    assert {:ok, retained_provider} = Providers.get(provider.id)
+    refute Providers.runtime_available?(retained_provider)
+    refute Skills.runtime_available?(Skills.get(skill.id))
+    refute MCPConfigs.runtime_available?(MCPConfigs.get(mcp.id))
+
+    assert :ok =
+             Backplane.delete(connection.id, sync_opts: [mcp_runtime: MCPRuntimeStub])
+
+    assert {:error, :not_found} = Connection.get(connection.id)
+  end
+
   test "refresh rejects disabled connections without invoking sync" do
     assert {:ok, connection} =
              Backplane.create(%{
@@ -410,5 +476,16 @@ defmodule Synapsis.BackplaneTest do
     end
 
     [client: client, mcp_runtime: MCPRuntimeStub]
+  end
+
+  defp managed_markers(connection_id) do
+    %{
+      "managed_by" => "backplane",
+      "source" => "backplane",
+      "backplane_source_id" => connection_id,
+      "kind" => "provider",
+      "external_id" => "delete-fail-closed",
+      "backplane_available" => true
+    }
   end
 end
