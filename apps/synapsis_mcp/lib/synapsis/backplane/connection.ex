@@ -1,6 +1,8 @@
 defmodule Synapsis.Backplane.Connection do
   @moduledoc "Persisted Backplane capability-source connection."
 
+  require Logger
+
   alias Synapsis.Config.Store
   alias Synapsis.Encrypted.Binary, as: EncryptedBinary
 
@@ -42,10 +44,10 @@ defmodule Synapsis.Backplane.Connection do
          {:ok, endpoint} <- validate_url(endpoint),
          {:ok, id} <- validate_id(value(attrs, :id, Ecto.UUID.generate())),
          {:ok, credential} <- load_credential(attrs),
-         {:ok, artifacts} <- load_artifacts(attrs),
-         :ok <- validate_map(value(attrs, :connection_options, %{}), :connection_options),
-         :ok <- validate_map(value(attrs, :metadata, %{}), :metadata),
-         :ok <- validate_map(value(attrs, :counts, %{}), :counts),
+         {:ok, connection_options} <- load_json_map(attrs, :connection_options),
+         {:ok, metadata} <- load_json_map(attrs, :metadata),
+         {:ok, counts} <- load_json_map(attrs, :counts),
+         {:ok, artifacts} <- load_json_map(attrs, :artifacts),
          :ok <- validate_boolean(value(attrs, :sync_on_start, true), :sync_on_start),
          :ok <- validate_boolean(value(attrs, :enabled, true), :enabled),
          :ok <- validate_boolean(value(attrs, :stale, true), :stale),
@@ -58,7 +60,7 @@ defmodule Synapsis.Backplane.Connection do
          base_url: endpoint,
          credential: credential,
          credential_configured: is_binary(credential),
-         connection_options: value(attrs, :connection_options, %{}),
+         connection_options: connection_options,
          sync_on_start: value(attrs, :sync_on_start, true),
          enabled: value(attrs, :enabled, true),
          stale: value(attrs, :stale, true),
@@ -69,9 +71,9 @@ defmodule Synapsis.Backplane.Connection do
          last_error: value(attrs, :last_error),
          source_revision: value(attrs, :source_revision),
          unavailable: value(attrs, :unavailable, []),
-         counts: value(attrs, :counts, %{}),
+         counts: counts,
          artifacts: artifacts,
-         metadata: value(attrs, :metadata, %{})
+         metadata: metadata
        }}
     end
   end
@@ -96,9 +98,19 @@ defmodule Synapsis.Backplane.Connection do
   def list do
     @store_type
     |> Store.list()
-    |> Enum.map(fn attrs ->
-      {:ok, connection} = new(attrs)
-      connection
+    |> Enum.reduce([], fn attrs, connections ->
+      case new(attrs) do
+        {:ok, connection} ->
+          [connection | connections]
+
+        {:error, reason} ->
+          Logger.warning("backplane_connection_invalid",
+            connection_id: value(attrs, :id, "unknown"),
+            reason: inspect(reason)
+          )
+
+          connections
+      end
     end)
     |> Enum.sort_by(& &1.name)
   end
@@ -144,9 +156,6 @@ defmodule Synapsis.Backplane.Connection do
 
   defp validate_url(_url), do: {:error, :invalid_endpoint}
 
-  defp validate_map(value, _field) when is_map(value), do: :ok
-  defp validate_map(_value, field), do: {:error, invalid_field(field)}
-
   defp validate_boolean(value, _field) when is_boolean(value), do: :ok
   defp validate_boolean(_value, field), do: {:error, invalid_field(field)}
 
@@ -189,8 +198,14 @@ defmodule Synapsis.Backplane.Connection do
     |> redacted()
     |> Map.from_struct()
     |> Map.delete(:credential)
+    |> Map.delete(:connection_options)
+    |> Map.delete(:metadata)
+    |> Map.delete(:counts)
     |> Map.delete(:artifacts)
-    |> Map.put(:artifacts_json, encode_artifacts(connection.artifacts))
+    |> Map.put(:connection_options_json, encode_json_map(connection.connection_options))
+    |> Map.put(:metadata_json, encode_json_map(connection.metadata))
+    |> Map.put(:counts_json, encode_json_map(connection.counts))
+    |> Map.put(:artifacts_json, encode_json_map(connection.artifacts))
     |> Map.put(:credential_encrypted, encrypted)
     |> stringify_keys()
     |> Enum.reject(fn {_key, value} -> is_nil(value) end)
@@ -234,32 +249,48 @@ defmodule Synapsis.Backplane.Connection do
 
   defp decrypt_credential(_value), do: {:error, :invalid_credential}
 
-  defp load_artifacts(attrs) do
-    case value(attrs, :artifacts, :missing) do
-      artifacts when is_map(artifacts) ->
-        {:ok, artifacts}
+  defp load_json_map(attrs, field) do
+    case value(attrs, field, :missing) do
+      map when is_map(map) ->
+        normalize_json_map(map, field)
 
       :missing ->
-        decode_artifacts(value(attrs, :artifacts_json))
+        decode_json_map(value(attrs, json_field(field)), field)
 
       _invalid ->
-        {:error, :invalid_artifacts}
+        {:error, invalid_field(field)}
     end
   end
 
-  defp decode_artifacts(nil), do: {:ok, %{}}
+  defp decode_json_map(nil, _field), do: {:ok, %{}}
 
-  defp decode_artifacts(encoded) when is_binary(encoded) do
+  defp decode_json_map(encoded, field) when is_binary(encoded) do
     case Jason.decode(encoded) do
-      {:ok, artifacts} when is_map(artifacts) -> {:ok, artifacts}
-      _invalid -> {:error, :invalid_artifacts}
+      {:ok, map} when is_map(map) -> {:ok, map}
+      _invalid -> {:error, invalid_field(field)}
     end
   end
 
-  defp decode_artifacts(_invalid), do: {:error, :invalid_artifacts}
+  defp decode_json_map(_invalid, field), do: {:error, invalid_field(field)}
 
-  defp encode_artifacts(artifacts) when map_size(artifacts) == 0, do: nil
-  defp encode_artifacts(artifacts), do: Jason.encode!(artifacts)
+  defp normalize_json_map(map, field) do
+    with {:ok, encoded} <- Jason.encode(map),
+         {:ok, normalized} when is_map(normalized) <- Jason.decode(encoded) do
+      {:ok, normalized}
+    else
+      _invalid -> {:error, invalid_field(field)}
+    end
+  rescue
+    Protocol.UndefinedError -> {:error, invalid_field(field)}
+  end
+
+  defp encode_json_map(map) when map_size(map) == 0, do: nil
+  defp encode_json_map(map), do: Jason.encode!(map)
+
+  defp json_field(:connection_options), do: :connection_options_json
+  defp json_field(:metadata), do: :metadata_json
+  defp json_field(:counts), do: :counts_json
+  defp json_field(:artifacts), do: :artifacts_json
 
   defp value(attrs, key, default \\ nil),
     do: Map.get(attrs, key, Map.get(attrs, Atom.to_string(key), default))

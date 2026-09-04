@@ -227,6 +227,28 @@ defmodule Synapsis.Backplane.ClientTest do
     end
   end
 
+  test "enforces a total request timeout against drip-fed response chunks" do
+    bypass = Bypass.open()
+    connection = connection!(bypass)
+
+    Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+      conn =
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_chunked(200)
+
+      send_slow_chunks(
+        conn,
+        Jason.encode!(%{"data" => [%{"id" => String.duplicate("m", 100)}]}),
+        8,
+        20
+      )
+    end)
+
+    assert {:error, %{reason: :timeout}} = Client.fetch_models(connection, timeout: 60)
+    Bypass.pass(bypass)
+  end
+
   test "accepts more than 100 models when the bounded response is valid" do
     bypass = Bypass.open()
     connection = connection!(bypass)
@@ -426,7 +448,35 @@ defmodule Synapsis.Backplane.ClientTest do
              Client.fetch_skill(connection, "rooted", timeout: 500)
   end
 
-  test "bounds archive directory entries as well as regular files", %{test: test} do
+  test "reads a GNU PAX archive accepted by Backplane archive inspection" do
+    bypass = Bypass.open()
+    connection = connection!(bypass)
+    content = valid_skill_md("pax-skill")
+    archive = pax_archive!("./pax/SKILL.md", content)
+
+    assert {:ok, [{name, :regular, size, _mtime, _mode, _uid, _gid}]} =
+             :erl_tar.table({:binary, archive}, [:compressed, :verbose])
+
+    assert IO.chardata_to_string(name) == "./pax/SKILL.md"
+    assert size == byte_size(content)
+
+    Bypass.expect_once(bypass, "GET", "/skills/pax", fn conn ->
+      json(conn, %{
+        "slug" => "pax",
+        "source_kind" => "archive",
+        "content_hash" => sha256(archive)
+      })
+    end)
+
+    Bypass.expect_once(bypass, "GET", "/skills/pax/archive", fn conn ->
+      Plug.Conn.send_resp(conn, 200, archive)
+    end)
+
+    assert {:ok, %{"content" => ^content}} =
+             Client.fetch_skill(connection, "pax", timeout: 500)
+  end
+
+  test "allows valid directory metadata below the total-entry guard", %{test: test} do
     bypass = Bypass.open()
     connection = connection!(bypass)
     regular = archive!(test, "bounded", "Bounded body.") |> :zlib.gunzip()
@@ -450,8 +500,69 @@ defmodule Synapsis.Backplane.ClientTest do
       Plug.Conn.send_resp(conn, 200, archive)
     end)
 
-    assert {:error, :archive_entry_limit_exceeded} =
+    assert {:ok, %{"content" => "Bounded body."}} =
              Client.fetch_skill(connection, "bounded", timeout: 500)
+  end
+
+  test "matches Backplane's 500 regular-file archive limit", %{test: test} do
+    bypass = Bypass.open()
+    connection = connection!(bypass)
+
+    for {slug, count, expected} <- [
+          {"five-hundred", 500, :ok},
+          {"five-hundred-one", 501, {:error, :archive_file_limit_exceeded}}
+        ] do
+      entries =
+        [{"#{slug}/SKILL.md", "Limit body."}] ++
+          for(index <- 2..count, do: {"#{slug}/file-#{index}.txt", ""})
+
+      archive = archive_entries!(test, slug, entries)
+
+      Bypass.expect_once(bypass, "GET", "/skills/#{slug}", fn conn ->
+        json(conn, %{
+          "slug" => slug,
+          "source_kind" => "archive",
+          "content_hash" => sha256(archive)
+        })
+      end)
+
+      Bypass.expect_once(bypass, "GET", "/skills/#{slug}/archive", fn conn ->
+        Plug.Conn.send_resp(conn, 200, archive)
+      end)
+
+      case expected do
+        :ok ->
+          assert {:ok, %{"content" => "Limit body."}} =
+                   Client.fetch_skill(connection, slug, timeout: 500)
+
+        {:error, reason} ->
+          assert {:error, ^reason} = Client.fetch_skill(connection, slug, timeout: 500)
+      end
+    end
+  end
+
+  test "rejects symlink and special archive entries before extraction" do
+    bypass = Bypass.open()
+    connection = connection!(bypass)
+
+    for {slug, type} <- [{"symlink", "2"}, {"character-device", "3"}] do
+      archive = unsafe_type_archive!(slug, type)
+
+      Bypass.expect_once(bypass, "GET", "/skills/#{slug}", fn conn ->
+        json(conn, %{
+          "slug" => slug,
+          "source_kind" => "archive",
+          "content_hash" => sha256(archive)
+        })
+      end)
+
+      Bypass.expect_once(bypass, "GET", "/skills/#{slug}/archive", fn conn ->
+        Plug.Conn.send_resp(conn, 200, archive)
+      end)
+
+      assert {:error, :unsafe_archive_entry} =
+               Client.fetch_skill(connection, slug, timeout: 500)
+    end
   end
 
   test "rejects an archive with a corrupt tar header checksum", %{test: test} do
@@ -549,17 +660,78 @@ defmodule Synapsis.Backplane.ClientTest do
     :zlib.gzip(tar_directory_header(slug <> "/") <> regular)
   end
 
+  defp pax_archive!(path, content) do
+    record = pax_record("path", path)
+
+    tar =
+      tar_header("PaxHeaders/skill", "x", byte_size(record)) <>
+        tar_payload(record) <>
+        tar_header("placeholder", "0", byte_size(content)) <>
+        tar_payload(content) <>
+        :binary.copy(<<0>>, 1_024)
+
+    :zlib.gzip(tar)
+  end
+
+  defp valid_skill_md(name) do
+    """
+    ---
+    name: #{name}
+    description: PAX archive compatibility test
+    tags: [archive, test]
+    version: "1.0.0"
+    ---
+
+    # #{name}
+    """
+  end
+
+  defp unsafe_type_archive!(slug, type) do
+    skill = "#{slug}/SKILL.md"
+
+    tar =
+      tar_header(skill, "0", byte_size("Body.")) <>
+        tar_payload("Body.") <>
+        tar_header("#{slug}/unsafe", type, 0, "#{slug}/SKILL.md") <>
+        :binary.copy(<<0>>, 1_024)
+
+    :zlib.gzip(tar)
+  end
+
+  defp pax_record(key, value, expected_size \\ 0) do
+    record = "#{expected_size} #{key}=#{value}\n"
+    actual_size = byte_size(record)
+
+    if actual_size == expected_size,
+      do: record,
+      else: pax_record(key, value, actual_size)
+  end
+
+  defp tar_payload(content) do
+    padding = rem(512 - rem(byte_size(content), 512), 512)
+    content <> :binary.copy(<<0>>, padding)
+  end
+
   defp tar_directory_header(name) do
+    tar_header(name, "5", 0)
+  end
+
+  defp tar_header(name, type, size, link_name \\ "") do
     header =
       :binary.copy(<<0>>, 512)
       |> put_tar_field(0, 100, name)
       |> put_tar_field(100, 8, "0000755\0")
       |> put_tar_field(108, 8, "0000000\0")
       |> put_tar_field(116, 8, "0000000\0")
-      |> put_tar_field(124, 12, "00000000000\0")
+      |> put_tar_field(
+        124,
+        12,
+        size |> Integer.to_string(8) |> String.pad_leading(11, "0") |> Kernel.<>(<<0>>)
+      )
       |> put_tar_field(136, 12, "00000000000\0")
       |> put_tar_field(148, 8, "        ")
-      |> put_tar_field(156, 1, "5")
+      |> put_tar_field(156, 1, type)
+      |> put_tar_field(157, 100, link_name)
       |> put_tar_field(257, 6, "ustar\0")
       |> put_tar_field(263, 2, "00")
 
@@ -610,6 +782,19 @@ defmodule Synapsis.Backplane.ClientTest do
 
     case safe_chunk(conn, chunk) do
       {:ok, conn} -> send_chunks(conn, rest, chunk_size)
+      {:error, _closed} -> conn
+    end
+  end
+
+  defp send_slow_chunks(conn, "", _chunk_size, _delay_ms), do: conn
+
+  defp send_slow_chunks(conn, body, chunk_size, delay_ms) do
+    Process.sleep(delay_ms)
+    size = min(byte_size(body), chunk_size)
+    <<chunk::binary-size(size), rest::binary>> = body
+
+    case safe_chunk(conn, chunk) do
+      {:ok, conn} -> send_slow_chunks(conn, rest, chunk_size, delay_ms)
       {:error, _closed} -> conn
     end
   end

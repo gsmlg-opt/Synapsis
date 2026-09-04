@@ -12,7 +12,8 @@ defmodule Synapsis.Backplane.Client do
   @default_max_archive_bytes 4 * 1_024 * 1_024
   @default_max_expanded_bytes 8 * 1_024 * 1_024
   @default_max_skill_content_bytes 1 * 1_024 * 1_024
-  @max_archive_entries 256
+  @max_archive_files 500
+  @max_archive_entries 1_000
 
   @callback fetch_models(Connection.t(), keyword()) :: {:ok, [map()]} | {:error, term()}
   @callback list_skills(Connection.t(), keyword()) :: {:ok, [map()]} | {:error, term()}
@@ -363,7 +364,13 @@ defmodule Synapsis.Backplane.Client do
 
   defp request_opts(opts) do
     timeout = option(opts, :timeout, @default_timeout)
-    [receive_timeout: timeout, connect_options: [timeout: timeout], retry: false]
+
+    [
+      receive_timeout: timeout,
+      request_timeout: timeout,
+      connect_options: [timeout: timeout],
+      retry: false
+    ]
   end
 
   defp response_bound(opts, key, default, too_large_error) do
@@ -375,10 +382,11 @@ defmodule Synapsis.Backplane.Client do
     max_content = option(opts, :max_skill_content_bytes, @default_max_skill_content_bytes)
 
     with {:ok, tar} <- decompress_archive(archive, max_expanded),
-         {:ok, entries} <- parse_tar(tar, max_expanded),
-         :ok <- validate_archive_entries(entries),
-         [{_path, content}] <- Enum.filter(entries, &(Path.basename(elem(&1, 0)) == "SKILL.md")),
-         true <- byte_size(content) <= max_content do
+         {:ok, table_entries} <- archive_table(tar),
+         {:ok, entries} <- validate_archive_entries(table_entries, max_expanded),
+         [skill_entry] <- Enum.filter(entries, &skill_md_entry?/1),
+         true <- skill_entry.size <= max_content,
+         {:ok, content} <- extract_archive_entry(tar, skill_entry) do
       {:ok, content}
     else
       [] -> {:error, :skill_md_not_found}
@@ -442,106 +450,133 @@ defmodule Synapsis.Backplane.Client do
       else: {:error, :archive_expanded_too_large}
   end
 
-  defp parse_tar(tar, max_bytes), do: parse_tar(tar, max_bytes, 0, 0, [])
+  defp archive_table(tar) do
+    case :erl_tar.table({:binary, tar}, [:verbose]) do
+      {:ok, entries} -> {:ok, entries}
+      {:error, _reason} -> {:error, :invalid_archive}
+    end
+  catch
+    _kind, _reason -> {:error, :invalid_archive}
+  end
 
-  defp parse_tar(<<>>, _max_bytes, _total, _entry_count, entries),
-    do: {:ok, Enum.reverse(entries)}
+  defp validate_archive_entries(entries, max_bytes) when is_list(entries) do
+    with :ok <- validate_archive_entry_count(entries),
+         {:ok, normalized} <- normalize_archive_entries(entries),
+         :ok <- validate_archive_file_count(normalized),
+         :ok <- validate_archive_size(normalized, max_bytes) do
+      {:ok, normalized}
+    end
+  end
 
-  defp parse_tar(<<header::binary-size(512), rest::binary>>, max_bytes, total, count, entries) do
-    if zero_block?(header) do
-      {:ok, Enum.reverse(entries)}
-    else
-      with :ok <- validate_tar_checksum(header),
-           {:ok, name} <- tar_name(header),
-           {:ok, size} <- tar_size(header),
-           {:ok, type} <- tar_entry_type(header, size),
-           :ok <- validate_entry_count(count),
-           true <- total + size <= max_bytes,
-           padded_size <- div(size + 511, 512) * 512,
-           true <- byte_size(rest) >= padded_size,
-           <<content::binary-size(size), _padding::binary-size(padded_size - size), tail::binary>> <-
-             rest do
-        entries = if type == :regular, do: [{name, content} | entries], else: entries
-        parse_tar(tail, max_bytes, total + size, count + 1, entries)
+  defp validate_archive_entries(_entries, _max_bytes), do: {:error, :invalid_archive}
+
+  defp validate_archive_entry_count(entries) do
+    if length(entries) <= @max_archive_entries,
+      do: :ok,
+      else: {:error, :archive_entry_limit_exceeded}
+  end
+
+  defp validate_archive_file_count(entries) do
+    if Enum.count(entries, &(&1.type == :regular)) <= @max_archive_files,
+      do: :ok,
+      else: {:error, :archive_file_limit_exceeded}
+  end
+
+  defp validate_archive_size(entries, max_bytes) do
+    size = entries |> Enum.filter(&(&1.type == :regular)) |> Enum.sum_by(& &1.size)
+    if size <= max_bytes, do: :ok, else: {:error, :archive_expanded_too_large}
+  end
+
+  defp normalize_archive_entries(entries) do
+    Enum.reduce_while(entries, {:ok, []}, fn entry, {:ok, normalized} ->
+      with {:ok, name, type, size} <- normalize_archive_entry(entry),
+           {:ok, path} <- normalize_archive_path(name),
+           :ok <- validate_archive_entry_type(type),
+           true <- is_integer(size) and size >= 0 do
+        {:cont, {:ok, [%{name: name, path: path, type: type, size: size} | normalized]}}
       else
-        false -> {:error, :archive_expanded_too_large}
-        {:error, _reason} = error -> error
-        _invalid -> {:error, :invalid_archive}
+        false -> {:halt, {:error, :invalid_archive}}
+        {:error, _reason} = error -> {:halt, error}
       end
+    end)
+    |> case do
+      {:ok, normalized} -> {:ok, Enum.reverse(normalized)}
+      {:error, _reason} = error -> error
     end
   end
 
-  defp parse_tar(_invalid, _max_bytes, _total, _count, _entries),
-    do: {:error, :invalid_archive}
-
-  defp validate_entry_count(count) when count < @max_archive_entries, do: :ok
-  defp validate_entry_count(_count), do: {:error, :archive_entry_limit_exceeded}
-
-  defp validate_tar_checksum(header) do
-    stored = header |> binary_part(148, 8) |> c_string() |> String.trim()
-    checksum_header = replace_binary_part(header, 148, 8, "        ")
-    calculated = checksum_header |> :binary.bin_to_list() |> Enum.sum()
-
-    case Integer.parse(stored, 8) do
-      {^calculated, ""} -> :ok
-      _invalid -> {:error, :invalid_archive}
-    end
+  defp normalize_archive_entry({name, type, size, _mtime, _mode, _uid, _gid}) do
+    {:ok, IO.chardata_to_string(name), type, size}
+  rescue
+    _error -> {:error, :invalid_archive}
   end
 
-  defp tar_name(header) do
-    name = header |> binary_part(0, 100) |> c_string()
-    prefix = header |> binary_part(345, 155) |> c_string()
-    path = if prefix == "", do: name, else: prefix <> "/" <> name
-    segments = String.split(path, "/", trim: false)
+  defp normalize_archive_entry({name, size, type}) do
+    {:ok, IO.chardata_to_string(name), type, size}
+  rescue
+    _error -> {:error, :invalid_archive}
+  end
+
+  defp normalize_archive_entry(_entry), do: {:error, :invalid_archive}
+
+  defp normalize_archive_path(name) do
+    segments = String.split(name, "/", trim: false)
 
     cond do
-      path == "" -> {:error, :invalid_archive_path}
-      Path.type(path) != :relative -> {:error, :unsafe_archive_path}
-      String.contains?(path, "\\") -> {:error, :unsafe_archive_path}
-      Enum.any?(segments, &(&1 in [".", ".."])) -> {:error, :unsafe_archive_path}
-      Enum.any?(segments, &Regex.match?(~r/^[A-Za-z]:/, &1)) -> {:error, :unsafe_archive_path}
-      Enum.any?(segments, &Regex.match?(~r/%2e/i, &1)) -> {:error, :unsafe_archive_path}
-      true -> {:ok, path}
+      name == "" ->
+        {:error, :unsafe_archive_path}
+
+      Path.type(name) != :relative ->
+        {:error, :unsafe_archive_path}
+
+      String.contains?(name, "\\") ->
+        {:error, :unsafe_archive_path}
+
+      Enum.any?(segments, &(&1 == "..")) ->
+        {:error, :unsafe_archive_path}
+
+      Enum.any?(segments, &Regex.match?(~r/^[A-Za-z]:/, &1)) ->
+        {:error, :unsafe_archive_path}
+
+      Enum.any?(segments, &Regex.match?(~r/%2e/i, &1)) ->
+        {:error, :unsafe_archive_path}
+
+      true ->
+        path = segments |> Enum.reject(&(&1 in ["", "."])) |> Enum.join("/")
+        if path == "", do: {:error, :unsafe_archive_path}, else: {:ok, path}
     end
   end
 
-  defp tar_size(header) do
-    size = header |> binary_part(124, 12) |> c_string() |> String.trim()
+  defp validate_archive_entry_type(type) when type in [:regular, :directory], do: :ok
+  defp validate_archive_entry_type(_type), do: {:error, :unsafe_archive_entry}
 
-    case Integer.parse(size, 8) do
-      {value, ""} when value >= 0 -> {:ok, value}
-      _invalid -> {:error, :invalid_archive}
+  defp skill_md_entry?(%{type: :regular, path: path}), do: Path.basename(path) == "SKILL.md"
+  defp skill_md_entry?(_entry), do: false
+
+  defp extract_archive_entry(tar, skill_entry) do
+    files = [String.to_charlist(skill_entry.name)]
+
+    case :erl_tar.extract({:binary, tar}, [:memory, {:files, files}]) do
+      {:ok, extracted} -> extracted_skill_content(extracted, skill_entry.path)
+      {:error, _reason} -> {:error, :invalid_archive}
     end
+  catch
+    _kind, _reason -> {:error, :invalid_archive}
   end
 
-  defp tar_entry_type(header, _size) when binary_part(header, 156, 1) in [<<0>>, "0"],
-    do: {:ok, :regular}
+  defp extracted_skill_content(extracted, expected_path) do
+    Enum.reduce_while(extracted, {:error, :skill_md_not_found}, fn
+      {name, content}, _acc ->
+        case normalize_archive_path(IO.chardata_to_string(name)) do
+          {:ok, ^expected_path} -> {:halt, {:ok, IO.iodata_to_binary(content)}}
+          _other -> {:cont, {:error, :skill_md_not_found}}
+        end
 
-  defp tar_entry_type(header, 0) when binary_part(header, 156, 1) == "5",
-    do: {:ok, :directory}
-
-  defp tar_entry_type(_header, _size), do: {:error, :unsafe_archive_entry}
-
-  defp validate_archive_entries(entries) do
-    if Enum.all?(entries, fn {path, content} ->
-         is_binary(path) and is_binary(content) and byte_size(path) <= 255
-       end),
-       do: :ok,
-       else: {:error, :invalid_archive}
-  end
-
-  defp zero_block?(header), do: header == :binary.copy(<<0>>, 512)
-
-  defp c_string(binary) do
-    case :binary.match(binary, <<0>>) do
-      {index, 1} -> binary_part(binary, 0, index)
-      :nomatch -> binary
-    end
-  end
-
-  defp replace_binary_part(binary, offset, length, replacement) do
-    <<prefix::binary-size(offset), _old::binary-size(length), suffix::binary>> = binary
-    prefix <> replacement <> suffix
+      _invalid, _acc ->
+        {:halt, {:error, :invalid_archive}}
+    end)
+  rescue
+    _error -> {:error, :invalid_archive}
   end
 
   defp mcp_result(%{"result" => _result}), do: :ok
