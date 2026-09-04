@@ -35,12 +35,31 @@ defmodule Synapsis.Agent.Daemon do
           {:ok, AgentRun.t()} | {:error, term()}
   def trigger(kind, routine_id, opts \\ [])
 
-  def trigger(kind, _routine_id, _opts)
-      when kind in [:heartbeat, :dream, :schedule] do
+  def trigger(:heartbeat, routine_id, opts)
+      when is_binary(routine_id) or is_nil(routine_id) do
+    GenServer.call(
+      __MODULE__,
+      {:trigger, :heartbeat, routine_id, normalize_opts(opts)},
+      30_000
+    )
+  end
+
+  def trigger(kind, _routine_id, _opts) when kind in [:dream, :schedule] do
     {:error, :not_implemented}
   end
 
   def trigger(_kind, _routine_id, _opts), do: {:error, :invalid_kind}
+
+  @doc """
+  Record LLM-heartbeat routine outcome for streak / last-success projection.
+
+  Does not affect cheap daemon liveness pulse.
+  """
+  @spec record_heartbeat_outcome(String.t(), :completed | :failed, keyword()) :: :ok
+  def record_heartbeat_outcome(routine_id, outcome, opts \\ [])
+      when is_binary(routine_id) and outcome in [:completed, :failed] do
+    GenServer.cast(__MODULE__, {:heartbeat_outcome, routine_id, outcome, opts})
+  end
 
   @spec cancel(String.t(), term()) :: :ok | {:error, term()}
   def cancel(run_id, reason \\ :operator_request) when is_binary(run_id) do
@@ -56,7 +75,10 @@ defmodule Synapsis.Agent.Daemon do
       liveness_at: DateTime.utc_now(),
       last_reconcile_at: nil,
       storage_degraded?: false,
-      pulse_ref: schedule_pulse()
+      pulse_ref: schedule_pulse(),
+      last_heartbeat_success_at: nil,
+      heartbeat_failure_streak: 0,
+      heartbeat_streaks: %{}
     }
 
     {:ok, state, {:continue, :boot_reconcile}}
@@ -83,6 +105,17 @@ defmodule Synapsis.Agent.Daemon do
     end
   end
 
+  def handle_call({:trigger, :heartbeat, routine_id, opts}, _from, state) do
+    case do_trigger_heartbeat(routine_id, opts) do
+      {:ok, _run} = ok ->
+        {:reply, ok, %{state | storage_degraded?: false}}
+
+      {:error, reason} = err ->
+        degraded = storage_error?(reason)
+        {:reply, err, %{state | storage_degraded?: state.storage_degraded? or degraded}}
+    end
+  end
+
   def handle_call({:cancel, run_id, reason}, _from, state) do
     {:reply, do_cancel(run_id, reason), state}
   end
@@ -90,6 +123,11 @@ defmodule Synapsis.Agent.Daemon do
   def handle_call(:reconcile, _from, state) do
     new_state = do_reconcile(state)
     {:reply, {:ok, build_status(new_state)}, new_state}
+  end
+
+  @impl true
+  def handle_cast({:heartbeat_outcome, routine_id, outcome, opts}, state) do
+    {:noreply, apply_heartbeat_outcome(state, routine_id, outcome, opts)}
   end
 
   @impl true
@@ -121,16 +159,68 @@ defmodule Synapsis.Agent.Daemon do
       metadata: Map.get(opts, :metadata, %{})
     }
 
+    start_run_from_attrs(attrs)
+  end
+
+  defp do_trigger_heartbeat(routine_id, opts) do
+    prompt = Map.get(opts, :prompt) || Map.get(opts, "prompt")
+
+    if not is_binary(prompt) or prompt == "" do
+      {:error, :missing_prompt}
+    else
+      idempotency_key =
+        Map.get(opts, :idempotency_key) ||
+          Map.get(opts, "idempotency_key") ||
+          "#{routine_id || "heartbeat"}:#{Ecto.UUID.generate()}"
+
+      heartbeat_id =
+        Map.get(opts, :heartbeat_id) || Map.get(opts, "heartbeat_id") || routine_id
+
+      assistant =
+        Map.get(opts, :agent) || Map.get(opts, :assistant_name) || "main"
+
+      attrs = %{
+        kind: "heartbeat",
+        source: "scheduler",
+        assistant_name: assistant,
+        prompt: prompt,
+        tool_profile: "heartbeat",
+        idempotency_key: idempotency_key,
+        routine_id: routine_id,
+        heartbeat_id: heartbeat_id,
+        provider: Map.get(opts, :provider),
+        model: Map.get(opts, :model),
+        deadline_at: Map.get(opts, :deadline_at),
+        policy_snapshot: %{"tool_profile" => "heartbeat", "attended" => false},
+        capability_snapshot: %{"profile" => "heartbeat"},
+        metadata: Map.get(opts, :metadata, %{})
+      }
+
+      start_run_from_attrs(attrs, %{
+        agent: assistant,
+        provider: attrs.provider,
+        model: attrs.model
+      })
+    end
+  end
+
+  defp start_run_from_attrs(attrs, coord_opts \\ %{}) do
     with {:ok, run} <- Runs.create(attrs) do
       if AgentRun.terminal?(run) do
         {:ok, run}
       else
-        case RunSupervisor.start_run(%{
-               run_id: run.id,
-               agent: attrs.assistant_name,
-               provider: attrs.provider,
-               model: attrs.model
-             }) do
+        start_opts =
+          Map.merge(
+            %{
+              run_id: run.id,
+              agent: attrs.assistant_name,
+              provider: attrs.provider,
+              model: attrs.model
+            },
+            coord_opts
+          )
+
+        case RunSupervisor.start_run(start_opts) do
           {:ok, _pid} -> {:ok, Runs.get(run.id) || run}
           {:error, reason} -> {:error, reason}
         end
@@ -198,6 +288,42 @@ defmodule Synapsis.Agent.Daemon do
       %{state | storage_degraded?: true, last_reconcile_at: DateTime.utc_now()}
   end
 
+  defp apply_heartbeat_outcome(state, routine_id, :completed, opts) do
+    finished_at = Keyword.get(opts, :finished_at, DateTime.utc_now())
+
+    streaks =
+      Map.put(state.heartbeat_streaks, routine_id, %{
+        failure_streak: 0,
+        last_success_at: finished_at
+      })
+
+    %{
+      state
+      | last_heartbeat_success_at: finished_at,
+        heartbeat_failure_streak: 0,
+        heartbeat_streaks: streaks
+    }
+  end
+
+  defp apply_heartbeat_outcome(state, routine_id, :failed, _opts) do
+    prev = Map.get(state.heartbeat_streaks, routine_id, %{failure_streak: 0})
+    streak = Map.get(prev, :failure_streak, 0) + 1
+
+    streaks =
+      Map.put(state.heartbeat_streaks, routine_id, %{
+        failure_streak: streak,
+        last_success_at: Map.get(prev, :last_success_at)
+      })
+
+    global_streak =
+      streaks
+      |> Map.values()
+      |> Enum.map(&Map.get(&1, :failure_streak, 0))
+      |> Enum.max(fn -> 0 end)
+
+    %{state | heartbeat_failure_streak: global_streak, heartbeat_streaks: streaks}
+  end
+
   defp build_status(state) do
     active_ids = RunSupervisor.list_active_run_ids()
 
@@ -211,7 +337,9 @@ defmodule Synapsis.Agent.Daemon do
       storage_degraded?: state.storage_degraded?,
       active_run_ids: active_ids,
       active_count: length(active_ids),
-      queued_count: queued_count
+      queued_count: queued_count,
+      last_heartbeat_success_at: state.last_heartbeat_success_at,
+      heartbeat_failure_streak: state.heartbeat_failure_streak
     }
   end
 

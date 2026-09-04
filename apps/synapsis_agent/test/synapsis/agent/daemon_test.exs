@@ -24,10 +24,13 @@ defmodule Synapsis.Agent.DaemonTest do
     assert is_integer(status.queued_count)
   end
 
-  test "trigger kinds are reserved for later tracks" do
-    assert {:error, :not_implemented} = Daemon.trigger(:heartbeat, "hb-1")
+  test "trigger kinds reserved for later tracks except heartbeat" do
     assert {:error, :not_implemented} = Daemon.trigger(:dream, "dream-1")
     assert {:error, :invalid_kind} = Daemon.trigger(:nope, nil)
+  end
+
+  test "trigger heartbeat requires prompt" do
+    assert {:error, :missing_prompt} = Daemon.trigger(:heartbeat, "hb-missing")
   end
 
   test "submit forces read_only and is idempotent", %{tmp_dir: tmp_dir} do

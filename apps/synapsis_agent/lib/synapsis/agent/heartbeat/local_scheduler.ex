@@ -2,13 +2,9 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
   @moduledoc """
   Node-local cron scheduler for heartbeats — replaces the Oban-based scheduler.
 
-  On start, loads enabled heartbeat configs from `Config.Store` (heartbeats.toml)
-  and falls back to the Ecto-backed `Heartbeats` context when the file store is
-  empty. Schedules each config using `Process.send_after` with intervals computed
-  via `Crontab`. When a heartbeat fires, execution runs in a supervised Task.
-
-  The scheduler re-reads configs and recomputes intervals on each tick so live
-  edits to heartbeats.toml are picked up within one cron window.
+  Loads enabled heartbeat configs only from `Config.Store` (heartbeats.toml).
+  Empty valid config yields an empty schedule; load failures mark the scheduler
+  degraded instead of silently falling back to Ecto.
   """
 
   use GenServer
@@ -25,8 +21,16 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
-  @doc "Return the current schedule as a list of {name, next_run_at} pairs."
-  @spec status() :: [%{name: String.t(), schedule: String.t(), next_run_at: DateTime.t() | nil}]
+  @doc """
+  Return scheduler snapshot.
+
+  `%{degraded?: boolean, degrade_reason: term() | nil, entries: [map()]}`
+  """
+  @spec status() :: %{
+          degraded?: boolean(),
+          degrade_reason: term() | nil,
+          entries: [%{name: String.t(), schedule: String.t(), next_run_at: DateTime.t() | nil}]
+        }
   def status do
     GenServer.call(__MODULE__, :status)
   end
@@ -35,9 +39,15 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
 
   @impl true
   def init(_opts) do
-    # Initial load after registration so Config.Store is already up.
     send(self(), :tick)
-    {:ok, %{timers: %{}, configs: []}}
+
+    {:ok,
+     %{
+       timers: %{},
+       configs: [],
+       degraded?: false,
+       degrade_reason: nil
+     }}
   end
 
   @impl true
@@ -47,23 +57,25 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
         %{name: name, schedule: sched, next_run_at: nra}
       end)
 
-    {:reply, entries, state}
+    {:reply,
+     %{
+       degraded?: state.degraded?,
+       degrade_reason: state.degrade_reason,
+       entries: entries
+     }, state}
   end
 
   @impl true
   def handle_info(:tick, state) do
-    configs = load_configs()
+    {configs, degraded?, reason} = load_configs()
 
-    # Cancel old timers that no longer exist.
     removed = Map.keys(state.timers) -- Enum.map(configs, & &1.name)
     Enum.each(removed, fn name -> cancel_timer(state.timers[name]) end)
 
-    # Schedule or re-schedule each config.
     new_timers =
       Enum.reduce(configs, %{}, fn config, acc ->
         case schedule_next(config) do
           {:ok, timer_ref, next_run_at} ->
-            # Cancel existing timer for this config (avoid duplicates).
             if old = state.timers[config.name], do: cancel_timer(old)
 
             Map.put(acc, config.name, %{
@@ -72,20 +84,26 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
               schedule: config.schedule
             })
 
-          {:error, reason} ->
+          {:error, skip_reason} ->
             Logger.warning("heartbeat_schedule_skip",
               name: config.name,
-              reason: inspect(reason)
+              reason: inspect(skip_reason)
             )
 
             acc
         end
       end)
 
-    # Re-check after interval (for config hot-reload).
     Process.send_after(self(), :tick, @check_interval_ms)
 
-    {:noreply, %{state | timers: new_timers, configs: configs}}
+    {:noreply,
+     %{
+       state
+       | timers: new_timers,
+         configs: configs,
+         degraded?: degraded?,
+         degrade_reason: reason
+     }}
   end
 
   def handle_info({:fire, name}, state) do
@@ -107,8 +125,6 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
   # --- Private ---
 
   defp load_configs do
-    # Config.Store returns string-keyed maps; normalize to the atom-keyed shape
-    # the scheduler consumes (config.schedule, config.name, …).
     file_configs =
       :heartbeat
       |> ConfigStore.list()
@@ -125,31 +141,20 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
         }
       end)
 
-    configs =
-      if file_configs != [] do
-        file_configs
-      else
-        # Fall back to DB-backed configs when TOML store is empty.
-        Synapsis.Heartbeats.list_enabled()
-        |> Enum.map(fn hb ->
-          %{
-            id: hb.id,
-            name: hb.name,
-            schedule: hb.schedule,
-            enabled: hb.enabled,
-            prompt: Map.get(hb, :prompt, ""),
-            agent_name: Map.get(hb, :agent_name, "main"),
-            keep_history: Map.get(hb, :keep_history, false),
-            notify_user: Map.get(hb, :notify_user, false)
-          }
-        end)
-      end
+    enabled =
+      Enum.filter(file_configs, fn c ->
+        Map.get(c, :enabled, true) != false
+      end)
 
-    Enum.filter(configs, fn c ->
-      Map.get(c, :enabled, true) != false
-    end)
+    {enabled, false, nil}
   rescue
-    _ -> []
+    error ->
+      Logger.warning("heartbeat_config_load_failed", reason: Exception.message(error))
+      {[], true, Exception.message(error)}
+  catch
+    kind, reason ->
+      Logger.warning("heartbeat_config_load_failed", reason: inspect({kind, reason}))
+      {[], true, inspect({kind, reason})}
   end
 
   defp schedule_next(config) do

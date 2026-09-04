@@ -52,8 +52,10 @@ defmodule SynapsisServer.HealthController do
   defp scheduler_entries do
     if Code.ensure_loaded?(Synapsis.Agent.Heartbeat.LocalScheduler) do
       try do
-        Synapsis.Agent.Heartbeat.LocalScheduler.status()
-        |> Enum.map(fn e ->
+        snapshot = Synapsis.Agent.Heartbeat.LocalScheduler.status()
+        entries = Map.get(snapshot, :entries, [])
+
+        Enum.map(entries, fn e ->
           %{
             name: e.name,
             schedule: e.schedule,

@@ -1,16 +1,23 @@
 defmodule Synapsis.Agent.Heartbeat.Worker do
   @moduledoc """
-  Heartbeat execution — called by `LocalScheduler` as a supervised Task.
+  Heartbeat fire path — called by `LocalScheduler` as a supervised Task.
 
-  Runs scheduled agent invocations in isolated sessions.
-  Results are written to workspace and user notified via PubSub.
+  Execution authority is `Daemon.trigger/3` + `RunCoordinator`. This module
+  awaits the run terminal, records streak outcomes, then optionally delivers
+  a report without rewriting execution status.
   """
 
-  alias Synapsis.Agent.Events.TerminalWaiter
-  alias Synapsis.Workspace
+  alias Synapsis.Agent.Daemon
+  alias Synapsis.Agent.Heartbeat.Delivery
+  alias Synapsis.Agent.Runs
+  alias Synapsis.AgentRun
+  alias Synapsis.Config.Store, as: ConfigStore
   require Logger
 
-  @doc "Execute a heartbeat config map (from Config.Store or Ecto, same shape)."
+  @await_poll_ms 100
+  @default_await_ms :timer.minutes(10)
+
+  @doc "Execute a heartbeat config map (from Config.Store)."
   @spec execute(map()) :: :ok | {:error, term()}
   def execute(config) do
     case Map.get(config, :enabled, true) do
@@ -19,17 +26,13 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
         :ok
 
       _ ->
-        case execute_heartbeat(config) do
-          :ok -> :ok
-          {:error, _} = err -> err
-        end
+        execute_heartbeat(config)
     end
   end
 
-  # Legacy entry-point used by old Oban scheduler — keeps callers compiling.
   @doc false
-  def perform_by_id(heartbeat_id) do
-    case Synapsis.Heartbeats.get(heartbeat_id) do
+  def perform_by_id(heartbeat_id) when is_binary(heartbeat_id) do
+    case find_config(heartbeat_id) do
       nil ->
         Logger.warning("heartbeat_config_not_found", heartbeat_id: heartbeat_id)
         {:error, :config_not_found}
@@ -44,35 +47,22 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
   end
 
   defp execute_heartbeat(config) do
-    Logger.info("heartbeat_executing",
-      name: config.name,
-      heartbeat_id: config.id
-    )
+    Logger.info("heartbeat_executing", name: config.name, heartbeat_id: config.id)
 
-    timestamp = DateTime.utc_now() |> DateTime.to_iso8601()
+    opts = trigger_opts(config)
 
-    case run_heartbeat_session(config, timestamp) do
-      {:ok, result_content} ->
-        write_results(config, timestamp, result_content)
-        maybe_notify(config, timestamp, result_content, :completed)
+    case Daemon.trigger(:heartbeat, config.id, opts) do
+      {:ok, run} ->
+        await_and_finish(run.id, config)
 
-        Logger.info("heartbeat_completed",
-          name: config.name,
-          heartbeat_id: config.id
-        )
-
-        :ok
-
-      {:error, reason, result_content} ->
-        write_results(config, timestamp, result_content)
-        maybe_notify(config, timestamp, result_content, :failed)
-
-        Logger.error("heartbeat_execution_failed",
+      {:error, reason} ->
+        Logger.error("heartbeat_trigger_failed",
           name: config.name,
           heartbeat_id: config.id,
-          error: reason
+          error: inspect(reason)
         )
 
+        _ = Daemon.record_heartbeat_outcome(config.id, :failed)
         {:error, reason}
     end
   rescue
@@ -87,144 +77,101 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
       {:error, Exception.message(e)}
   end
 
-  defp write_results(config, timestamp, result_content) do
-    latest_path = "/global/heartbeats/#{config.name}/latest.md"
-    Workspace.write(latest_path, result_content, %{author: "system", lifecycle: :scratch})
+  defp await_and_finish(run_id, config) do
+    timeout_ms = Map.get(config, :await_ms, @default_await_ms)
 
-    if config.keep_history do
-      history_path = "/global/heartbeats/#{config.name}/history/#{timestamp}.md"
-      Workspace.write(history_path, result_content, %{author: "system", lifecycle: :draft})
-    end
-  end
+    case await_terminal(run_id, timeout_ms) do
+      {:ok, %AgentRun{} = run} ->
+        outcome = if run.status == "completed", do: :completed, else: :failed
+        _ = Daemon.record_heartbeat_outcome(config.id, outcome, finished_at: run.finished_at)
 
-  defp maybe_notify(config, timestamp, result_content, execution_status) do
-    if config.notify_user do
-      event =
-        case execution_status do
-          :completed -> :heartbeat_completed
-          :failed -> :heartbeat_failed
+        case Delivery.deliver(run, config) do
+          :ok ->
+            if run.status == "completed", do: :ok, else: {:error, run.error || run.status}
+
+          {:error, delivery_reason} ->
+            Logger.warning("heartbeat_delivery_degraded",
+              run_id: run.id,
+              execution_status: run.status,
+              reason: inspect(delivery_reason)
+            )
+
+            # Never rewrite execution outcome on delivery failure.
+            if run.status == "completed", do: :ok, else: {:error, run.error || run.status}
         end
 
-      Phoenix.PubSub.broadcast(
-        Synapsis.PubSub,
-        "heartbeat:notifications",
-        {event, config.id,
-         %{
-           name: config.name,
-           executed_at: timestamp,
-           result: result_content,
-           execution_status: execution_status
-         }}
-      )
+      {:error, :await_timeout} ->
+        _ = Daemon.record_heartbeat_outcome(config.id, :failed)
+        {:error, :await_timeout}
     end
   end
 
-  defp run_heartbeat_session(config, timestamp) do
-    case create_heartbeat_session(config) do
-      {:ok, session} ->
-        # Subscribe before send_message so completion cannot race the waiter.
-        watch =
-          TerminalWaiter.await_after(session.id, [], fn ->
-            Synapsis.Sessions.send_message(session.id, config.prompt)
-          end)
+  defp await_terminal(run_id, timeout_ms) do
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+    do_await_terminal(run_id, deadline)
+  end
 
-        result = interpret_watch(config, timestamp, session.id, watch)
-        Synapsis.Sessions.delete(session.id)
-        result
+  defp do_await_terminal(run_id, deadline) do
+    case Runs.get(run_id) do
+      %AgentRun{} = run ->
+        if AgentRun.terminal?(run) do
+          {:ok, run}
+        else
+          if System.monotonic_time(:millisecond) >= deadline do
+            {:error, :await_timeout}
+          else
+            Process.sleep(@await_poll_ms)
+            do_await_terminal(run_id, deadline)
+          end
+        end
 
-      {:error, reason} ->
-        {:error, "session creation failed: #{inspect(reason)}",
-         format_error(config, timestamp, "session creation failed")}
+      nil ->
+        {:error, :await_timeout}
     end
   end
 
-  defp create_heartbeat_session(config) do
-    agent_name = config.agent_name || "main"
+  defp trigger_opts(config) do
+    occurrence = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
 
-    Synapsis.Sessions.create(agent_name, %{
-      title: "Heartbeat: #{config.name}",
-      agent: agent_name,
-      metadata: %{type: :heartbeat, heartbeat_id: config.id, heartbeat_name: config.name}
-    })
+    %{
+      prompt: config.prompt || "",
+      agent: config.agent_name || "main",
+      assistant_name: config.agent_name || "main",
+      heartbeat_id: config.id,
+      routine_id: config.id,
+      name: config.name,
+      keep_history: Map.get(config, :keep_history, false),
+      notify_user: Map.get(config, :notify_user, false),
+      provider: Map.get(config, :provider),
+      model: Map.get(config, :model),
+      deadline_at: Map.get(config, :deadline_at),
+      idempotency_key: Map.get(config, :idempotency_key) || "#{config.id}:#{occurrence}",
+      metadata: %{
+        "heartbeat_name" => config.name,
+        "type" => "heartbeat"
+      }
+    }
   end
 
-  # Typed terminals are authoritative. Transcript is only read after success.
-  defp interpret_watch(config, timestamp, session_id, {:completed, _event}) do
-    content =
-      case fetch_last_assistant_response(session_id) do
-        {:ok, text} -> text
-        {:missing, placeholder} -> placeholder
-      end
-
-    {:ok, format_success(config, timestamp, content)}
+  defp find_config(heartbeat_id) do
+    :heartbeat
+    |> ConfigStore.list()
+    |> Enum.map(&normalize_config/1)
+    |> Enum.find(fn c -> c.id == heartbeat_id or c.name == heartbeat_id end)
+  rescue
+    _ -> nil
   end
 
-  defp interpret_watch(config, timestamp, _session_id, {:failed, event}) do
-    reason = event.payload["message"] || "session failed"
-    {:error, reason, format_error(config, timestamp, reason)}
-  end
-
-  defp interpret_watch(config, timestamp, _session_id, {:cancelled, event}) do
-    reason = event.payload["message"] || "session cancelled"
-    {:error, reason, format_error(config, timestamp, reason)}
-  end
-
-  defp interpret_watch(config, timestamp, _session_id, {:timed_out, event}) do
-    reason = event.payload["message"] || "session timed out"
-    {:error, reason, format_error(config, timestamp, reason)}
-  end
-
-  defp interpret_watch(config, timestamp, _session_id, {:waiter_timeout, reason}) do
-    {:error, reason, format_error(config, timestamp, reason)}
-  end
-
-  defp interpret_watch(config, timestamp, _session_id, {:trigger_error, reason}) do
-    message = "send_message failed: #{inspect(reason)}"
-    {:error, message, format_error(config, timestamp, message)}
-  end
-
-  defp fetch_last_assistant_response(session_id) do
-    messages = Synapsis.Sessions.get_messages(session_id)
-
-    messages
-    |> Enum.filter(fn msg -> msg.role == :assistant or msg.role == "assistant" end)
-    |> List.last()
-    |> case do
-      nil -> {:missing, "(no assistant response)"}
-      msg -> {:ok, extract_text_content(msg)}
-    end
-  end
-
-  defp extract_text_content(%Synapsis.Message{parts: parts}) when is_list(parts) do
-    parts
-    |> Enum.filter(fn
-      %Synapsis.Part.Text{} -> true
-      _ -> false
-    end)
-    |> Enum.map(fn %Synapsis.Part.Text{content: content} -> content end)
-    |> Enum.join("\n")
-  end
-
-  defp extract_text_content(_), do: "(no content)"
-
-  defp format_success(config, timestamp, content) do
-    """
-    # Heartbeat: #{config.name}
-    **Executed at:** #{timestamp}
-    **Status:** Completed
-
-    ## Result
-
-    #{content}
-    """
-  end
-
-  defp format_error(config, timestamp, error) do
-    """
-    # Heartbeat: #{config.name}
-    **Executed at:** #{timestamp}
-    **Status:** Error
-    **Error:** #{error}
-    """
+  defp normalize_config(c) when is_map(c) do
+    %{
+      id: c["id"] || c[:id],
+      name: c["name"] || c[:name],
+      schedule: c["schedule"] || c[:schedule],
+      enabled: Map.get(c, "enabled", Map.get(c, :enabled, true)),
+      prompt: c["prompt"] || c[:prompt] || "",
+      agent_name: c["agent_name"] || c[:agent_name] || "main",
+      keep_history: c["keep_history"] || c[:keep_history] || false,
+      notify_user: c["notify_user"] || c[:notify_user] || false
+    }
   end
 end

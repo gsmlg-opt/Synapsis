@@ -219,7 +219,7 @@ defmodule Synapsis.Agent.RunCoordinator do
         Map.get(event.payload, "message") ||
         "completed"
 
-    {"run.completed", %{"summary" => summary}}
+    {"run.completed", %{"summary" => to_string(summary)}}
   end
 
   defp map_session_terminal(%RunEvent{type: "session.failed"} = event) do

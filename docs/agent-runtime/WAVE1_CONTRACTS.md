@@ -28,4 +28,12 @@ contracts; they are **not** implemented in the Track B PR.
 - Coordinators create sessions, consume typed `session.*` terminals, persist via `Runs`; never block the daemon mailbox on model/tool work.
 - `trigger/3` for heartbeat/dream/schedule returns `:not_implemented` until Track F.
 
-## Track F — Heartbeat via Daemon (next)
+## Track F — Heartbeat via Daemon (implemented in PR-05)
+
+- `Daemon.trigger(:heartbeat, …)` creates `AgentRun(kind: heartbeat, tool_profile: heartbeat)` and starts a coordinator.
+- `LocalScheduler` loads **only** TOML/`Config.Store`; load failure → `degraded?` (no Ecto fallback).
+- Execution terminal is authoritative; `Heartbeat.Delivery` is optional and never rewrites run status.
+- Daemon liveness pulse remains separate from `last_heartbeat_success_at` / `heartbeat_failure_streak`.
+- False `heartbeat_completed` on timeout/error is removed.
+
+## Track G — Durable Routine Engine (next)
