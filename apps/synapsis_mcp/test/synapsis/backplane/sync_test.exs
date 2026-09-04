@@ -334,6 +334,10 @@ defmodule Synapsis.Backplane.SyncTest do
             "result" => %{"protocolVersion" => "2025-03-26"}
           })
 
+        "notifications/initialized" ->
+          assert Plug.Conn.get_req_header(conn, "mcp-session-id") == ["session-1"]
+          Plug.Conn.send_resp(conn, 202, "")
+
         "tools/list" ->
           assert Plug.Conn.get_req_header(conn, "mcp-session-id") == ["session-1"]
 
