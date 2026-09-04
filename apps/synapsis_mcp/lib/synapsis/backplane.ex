@@ -10,6 +10,24 @@ defmodule Synapsis.Backplane do
 
   @default_discovery_timeout 5_000
   @max_error_length 500
+  @editable_fields [
+    :name,
+    :endpoint,
+    :base_url,
+    :credential,
+    :connection_options,
+    :sync_on_start,
+    :enabled,
+    :metadata,
+    "name",
+    "endpoint",
+    "base_url",
+    "credential",
+    "connection_options",
+    "sync_on_start",
+    "enabled",
+    "metadata"
+  ]
 
   @spec list() :: [Connection.t()]
   def list, do: Connection.list()
@@ -22,16 +40,18 @@ defmodule Synapsis.Backplane do
 
   @spec create(map(), keyword()) :: {:ok, Connection.t()} | {:error, term()}
   def create(attrs, opts \\ []) do
-    with {:ok, connection} <- Connection.create(attrs) do
+    with {:ok, connection} <- Connection.create(editable_attrs(attrs)) do
       if connection.enabled, do: refresh_preserving(connection, opts), else: {:ok, connection}
     end
   end
 
   @spec update(String.t(), map(), keyword()) :: {:ok, Connection.t()} | {:error, term()}
   def update(id, attrs, opts \\ []) do
+    attrs = editable_attrs(attrs)
+
     with {:ok, current} <- Connection.get(id),
          {:ok, updated} <- Connection.update(current, attrs) do
-      reconcile_update(current, updated, opts)
+      reconcile_update(current, updated, attrs, opts)
     end
   end
 
@@ -44,7 +64,13 @@ defmodule Synapsis.Backplane do
   end
 
   @spec refresh(String.t(), keyword()) :: {:ok, Connection.t()} | {:error, term()}
-  def refresh(id, opts \\ []), do: sync(opts).run(id, sync_opts(opts))
+  def refresh(id, opts \\ []) do
+    case Connection.get(id) do
+      {:ok, %Connection{enabled: true}} -> sync(opts).run(id, sync_opts(opts))
+      {:ok, %Connection{enabled: false}} -> {:error, :connection_disabled}
+      {:error, _reason} = error -> error
+    end
+  end
 
   @spec test(String.t(), keyword()) ::
           {:ok, map()} | {:error, :not_found | {:discovery_failed, map()} | term()}
@@ -60,16 +86,20 @@ defmodule Synapsis.Backplane do
     end
   end
 
-  defp reconcile_update(%Connection{enabled: true}, %Connection{enabled: false} = updated, opts),
-    do: set_available(updated.id, false, opts)
+  defp reconcile_update(_current, %Connection{enabled: false} = updated, attrs, opts)
+       when is_map(attrs) do
+    if Map.get(attrs, :enabled, Map.get(attrs, "enabled")) == false,
+      do: set_available(updated.id, false, opts),
+      else: {:ok, updated}
+  end
 
-  defp reconcile_update(current, %Connection{enabled: true} = updated, opts) do
+  defp reconcile_update(current, %Connection{enabled: true} = updated, _attrs, opts) do
     if not current.enabled or source_changed?(current, updated),
       do: refresh_preserving(updated, opts),
       else: {:ok, updated}
   end
 
-  defp reconcile_update(_current, updated, _opts), do: {:ok, updated}
+  defp reconcile_update(_current, updated, _attrs, _opts), do: {:ok, updated}
 
   defp source_changed?(current, updated) do
     current.name != updated.name or
@@ -136,4 +166,5 @@ defmodule Synapsis.Backplane do
   defp client(opts), do: Keyword.get(opts, :client, Client)
   defp sync(opts), do: Keyword.get(opts, :sync, Sync)
   defp sync_opts(opts), do: Keyword.get(opts, :sync_opts, [])
+  defp editable_attrs(attrs) when is_map(attrs), do: Map.take(attrs, @editable_fields)
 end

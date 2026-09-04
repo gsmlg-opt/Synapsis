@@ -114,6 +114,22 @@ defmodule SynapsisServer.BackplaneConnectionControllerTest do
              |> json_response(404)
   end
 
+  test "refresh returns conflict for a disabled connection", %{conn: conn} do
+    assert %{"data" => connection} =
+             conn
+             |> post("/api/backplane/connections", %{
+               "name" => "disabled-refresh",
+               "base_url" => "https://backplane.example.test",
+               "enabled" => false
+             })
+             |> json_response(201)
+
+    assert %{"error" => "connection disabled"} =
+             conn
+             |> post("/api/backplane/connections/#{connection["id"]}/refresh")
+             |> json_response(409)
+  end
+
   defp stub_backplane(bypass) do
     Bypass.stub(bypass, "GET", "/v1/models", fn conn ->
       conn

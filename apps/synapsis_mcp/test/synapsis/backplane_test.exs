@@ -123,6 +123,78 @@ defmodule Synapsis.BackplaneTest do
     assert_receive {:sync_run, ^connection_id, _opts}
   end
 
+  test "retrying a disable reconciles capabilities after the first shutdown fails" do
+    assert {:ok, connection} =
+             Backplane.create(
+               %{name: "disable-retry", endpoint: "https://backplane.example.test"},
+               sync: SyncStub,
+               sync_opts: [test_pid: self()]
+             )
+
+    assert_receive {:sync_run, connection_id, _opts}
+
+    assert {:error, :mcp_stop_failed} =
+             Backplane.update(connection.id, %{enabled: false},
+               sync: SyncStub,
+               sync_opts: [test_pid: self(), availability_result: {:error, :mcp_stop_failed}]
+             )
+
+    assert_receive {:set_available, ^connection_id, false, _opts}
+    assert {:ok, %{enabled: false}} = Connection.get(connection.id)
+
+    assert {:ok, %{enabled: false}} =
+             Backplane.update(connection.id, %{enabled: false},
+               sync: SyncStub,
+               sync_opts: [test_pid: self()]
+             )
+
+    assert_receive {:set_available, ^connection_id, false, _opts}
+  end
+
+  test "create and update ignore forged sync-owned lifecycle fields" do
+    forged_time = DateTime.utc_now()
+
+    assert {:ok, created} =
+             Backplane.create(%{
+               "name" => "forgery-safe",
+               "endpoint" => "https://backplane.example.test",
+               "enabled" => false,
+               "status" => "ready",
+               "stale" => false,
+               "counts" => %{"models" => 999},
+               "artifacts" => %{"provider_id" => "forged"},
+               "last_error" => "forged-error",
+               "last_attempt_at" => forged_time
+             })
+
+    assert created.status == "never_synced"
+    assert created.stale == true
+    assert created.counts == %{}
+    assert created.artifacts == %{}
+    assert created.last_error == nil
+    assert created.last_attempt_at == nil
+
+    assert {:ok, updated} =
+             Backplane.update(created.id, %{
+               metadata: %{"owner" => "platform"},
+               status: "ready",
+               stale: false,
+               counts: %{"models" => 999},
+               artifacts: %{"provider_id" => "forged"},
+               last_error: "forged-error",
+               last_attempt_at: forged_time
+             })
+
+    assert updated.metadata == %{"owner" => "platform"}
+    assert updated.status == "never_synced"
+    assert updated.stale == true
+    assert updated.counts == %{}
+    assert updated.artifacts == %{}
+    assert updated.last_error == nil
+    assert updated.last_attempt_at == nil
+    assert Connection.get(created.id) == {:ok, updated}
+  end
+
   test "delete disables imported capabilities first and never cascades artifact records" do
     provider_id = Ecto.UUID.generate()
 
@@ -177,6 +249,23 @@ defmodule Synapsis.BackplaneTest do
     assert {:ok, %{id: ^connection_id}} = Connection.get(connection.id)
   end
 
+  test "refresh rejects disabled connections without invoking sync" do
+    assert {:ok, connection} =
+             Backplane.create(%{
+               name: "refresh-disabled",
+               endpoint: "https://backplane.example.test",
+               enabled: false
+             })
+
+    assert {:error, :connection_disabled} =
+             Backplane.refresh(connection.id,
+               sync: SyncStub,
+               sync_opts: [test_pid: self()]
+             )
+
+    refute_receive {:sync_run, _, _}
+  end
+
   test "test performs bounded snapshot discovery without importing and refresh delegates to Sync" do
     assert {:ok, connection} =
              Backplane.create(%{
@@ -202,8 +291,10 @@ defmodule Synapsis.BackplaneTest do
     assert client_opts[:timeout] == 321
     refute_receive {:sync_run, _, _}
 
+    assert {:ok, enabled_connection} = Connection.update(connection, %{enabled: true})
+
     assert {:ok, refreshed} =
-             Backplane.refresh(connection.id,
+             Backplane.refresh(enabled_connection.id,
                sync: SyncStub,
                sync_opts: [test_pid: self()]
              )

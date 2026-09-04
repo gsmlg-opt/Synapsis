@@ -97,6 +97,9 @@ defmodule SynapsisServer.BackplaneConnectionController do
   defp connection_error(conn, reason) when reason in [:invalid_base_url, :invalid_endpoint],
     do: conn |> put_status(:unprocessable_entity) |> json(%{error: "invalid base URL"})
 
+  defp connection_error(conn, :connection_disabled),
+    do: conn |> put_status(:conflict) |> json(%{error: "connection disabled"})
+
   defp connection_error(conn, reason) do
     conn |> put_status(:unprocessable_entity) |> json(%{error: inspect(reason)})
   end
