@@ -2,14 +2,18 @@ defmodule Synapsis.MCPTest do
   use ExUnit.Case, async: false
 
   alias Synapsis.MCPConfig
+  alias Synapsis.MCPConfigs
   alias Synapsis.Tool.Registry
 
   setup do
     bypass = Bypass.open()
+    test_pid = self()
 
     Bypass.stub(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      handle(conn, Jason.decode!(body))
+      request = Jason.decode!(body)
+      send(test_pid, {:mcp_request, request["method"]})
+      handle(conn, request)
     end)
 
     Bypass.stub(bypass, "GET", "/mcp", fn conn -> Plug.Conn.resp(conn, 200, "") end)
@@ -100,6 +104,63 @@ defmodule Synapsis.MCPTest do
 
     assert {:error, :mcp_unavailable} = Synapsis.MCP.restart(unavailable)
     assert wait_until(fn -> match?({:error, :not_found}, Registry.lookup(tool)) end)
+    refute name in Synapsis.MCP.list()
+  end
+
+  test "restart rejects a stale enabled struct after its persisted record is disabled", %{
+    bypass: bypass
+  } do
+    name = "stale_disabled_#{System.unique_integer([:positive])}"
+
+    {:ok, stale} =
+      MCPConfigs.create(%{
+        name: name,
+        transport: "streamable_http",
+        url: "http://localhost:#{bypass.port}",
+        enabled: true
+      })
+
+    on_exit(fn ->
+      Synapsis.MCP.stop(name)
+      if current = MCPConfigs.get(stale.id), do: MCPConfigs.delete(current)
+    end)
+
+    assert {:ok, persisted} = MCPConfigs.update(stale, %{enabled: false})
+    refute persisted.enabled
+    assert stale.enabled
+
+    result = Synapsis.MCP.restart(stale)
+
+    refute_receive {:mcp_request, _method}, 200
+    assert {:error, :mcp_unavailable} = result
+    refute name in Synapsis.MCP.list()
+  end
+
+  test "start rejects a stale enabled struct after its persisted record is deleted", %{
+    bypass: bypass
+  } do
+    name = "stale_deleted_#{System.unique_integer([:positive])}"
+
+    {:ok, stale} =
+      MCPConfigs.create(%{
+        name: name,
+        transport: "streamable_http",
+        url: "http://localhost:#{bypass.port}",
+        enabled: true
+      })
+
+    on_exit(fn ->
+      Synapsis.MCP.stop(name)
+      if current = MCPConfigs.get(stale.id), do: MCPConfigs.delete(current)
+    end)
+
+    assert {:ok, _deleted} = MCPConfigs.delete(stale)
+    assert MCPConfigs.get(stale.id) == nil
+
+    result = Synapsis.MCP.start(stale)
+
+    refute_receive {:mcp_request, _method}, 200
+    assert {:error, :mcp_unavailable} = result
     refute name in Synapsis.MCP.list()
   end
 

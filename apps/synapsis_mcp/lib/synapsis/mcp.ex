@@ -3,13 +3,11 @@ defmodule Synapsis.MCP do
   require Logger
 
   alias Synapsis.MCP.Server
-  alias Synapsis.MCPConfigs
+  alias Synapsis.{MCPConfig, MCPConfigs}
 
-  def start(%Synapsis.MCPConfig{} = config) do
-    if MCPConfigs.runtime_available?(config) do
-      start_available(config)
-    else
-      {:error, :mcp_unavailable}
+  def start(%MCPConfig{} = config) do
+    with {:ok, current} <- current_config(config) do
+      start_resolved(current)
     end
   end
 
@@ -30,13 +28,19 @@ defmodule Synapsis.MCP do
     end
   end
 
-  def restart(%Synapsis.MCPConfig{} = config) do
-    _ = stop(config.name)
-    wait_gone(config.name)
+  def restart(%MCPConfig{} = config) do
+    case current_config(config) do
+      {:ok, current} ->
+        Enum.each(Enum.uniq([config.name, current.name]), &stop_and_wait/1)
 
-    case start(config) do
-      {:ok, _} -> :ok
-      {:error, _} = err -> err
+        case start(current) do
+          {:ok, _} -> :ok
+          {:error, _} = error -> error
+        end
+
+      {:error, _} = error ->
+        stop_and_wait(config.name)
+        error
     end
   end
 
@@ -76,6 +80,28 @@ defmodule Synapsis.MCP do
       true ->
         Process.sleep(20)
         wait_gone(name, tries - 1)
+    end
+  end
+
+  defp current_config(%MCPConfig{id: nil} = config), do: {:ok, config}
+
+  defp current_config(%MCPConfig{id: id}) do
+    case MCPConfigs.get(id) do
+      nil -> {:error, :mcp_unavailable}
+      config -> {:ok, config}
+    end
+  end
+
+  defp stop_and_wait(name) do
+    _ = stop(name)
+    wait_gone(name)
+  end
+
+  defp start_resolved(config) do
+    if MCPConfigs.runtime_available?(config) do
+      start_available(config)
+    else
+      {:error, :mcp_unavailable}
     end
   end
 end
