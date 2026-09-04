@@ -11,7 +11,9 @@ defmodule SynapsisServer.BackplaneConnectionControllerTest do
     :ok
   end
 
-  test "connection CRUD and status never expose credentials", %{conn: conn} do
+  test "connection CRUD, PATCH, and status expose the lifecycle fields but never credentials", %{
+    conn: conn
+  } do
     assert %{"data" => []} = conn |> get("/api/backplane/connections") |> json_response(200)
 
     assert %{"data" => created} =
@@ -19,20 +21,39 @@ defmodule SynapsisServer.BackplaneConnectionControllerTest do
              |> post("/api/backplane/connections", %{
                "name" => "team",
                "base_url" => "https://backplane.example.test",
-               "credential" => "connection-secret"
+               "credential" => "connection-secret",
+               "enabled" => false,
+               "sync_on_start" => true,
+               "connection_options" => %{"tenant" => "engineering"},
+               "metadata" => %{"owner" => "ops"}
              })
              |> json_response(201)
 
     assert created["credential_configured"] == true
+    assert created["endpoint"] == "https://backplane.example.test"
+    assert created["sync_on_start"] == true
+    assert created["stale"] == true
+    assert created["connection_options"] == %{"tenant" => "engineering"}
+    assert created["metadata"] == %{"owner" => "ops"}
     refute Map.has_key?(created, "credential")
     refute inspect(created) =~ "connection-secret"
 
     assert %{"data" => updated} =
              conn
-             |> put("/api/backplane/connections/#{created["id"]}", %{"enabled" => false})
+             |> patch("/api/backplane/connections/#{created["id"]}", %{"sync_on_start" => false})
              |> json_response(200)
 
     assert updated["enabled"] == false
+    assert updated["sync_on_start"] == false
+
+    assert %{"data" => put_updated} =
+             conn
+             |> put("/api/backplane/connections/#{created["id"]}", %{
+               "metadata" => %{"owner" => "platform"}
+             })
+             |> json_response(200)
+
+    assert put_updated["metadata"] == %{"owner" => "platform"}
 
     assert %{"data" => status} =
              conn
@@ -40,6 +61,11 @@ defmodule SynapsisServer.BackplaneConnectionControllerTest do
              |> json_response(200)
 
     assert status["status"] == "never_synced"
+    assert status["last_attempt_at"] == nil
+    assert status["last_success_at"] == nil
+    assert status["source_revision"] == nil
+    assert status["counts"] == %{}
+    assert status["last_error"] == nil
     refute Map.has_key?(status, "credential")
 
     assert response(delete(conn, "/api/backplane/connections/#{created["id"]}"), 204)
@@ -105,18 +131,39 @@ defmodule SynapsisServer.BackplaneConnectionControllerTest do
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
 
-      result =
-        case request["method"] do
-          "initialize" -> %{"protocolVersion" => "2025-03-26", "capabilities" => %{}}
-          "tools/list" -> %{"tools" => []}
-        end
+      case request["method"] do
+        "initialize" ->
+          conn
+          |> Plug.Conn.put_resp_header("mcp-session-id", "controller-session")
+          |> Plug.Conn.put_resp_content_type("application/json")
+          |> Plug.Conn.resp(
+            200,
+            Jason.encode!(%{
+              "jsonrpc" => "2.0",
+              "id" => request["id"],
+              "result" => %{
+                "protocolVersion" => "2025-03-26",
+                "capabilities" => %{"tools" => %{}},
+                "serverInfo" => %{"name" => "controller-test", "version" => "1"}
+              }
+            })
+          )
 
-      conn
-      |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(
-        200,
-        Jason.encode!(%{"jsonrpc" => "2.0", "id" => request["id"], "result" => result})
-      )
+        "notifications/initialized" ->
+          Plug.Conn.resp(conn, 202, "")
+
+        "tools/list" ->
+          conn
+          |> Plug.Conn.put_resp_content_type("application/json")
+          |> Plug.Conn.resp(
+            200,
+            Jason.encode!(%{
+              "jsonrpc" => "2.0",
+              "id" => request["id"],
+              "result" => %{"tools" => []}
+            })
+          )
+      end
     end)
   end
 end
