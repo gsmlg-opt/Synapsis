@@ -57,7 +57,6 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
       config_loader: Keyword.get(opts, :config_loader, &load_configs/0),
       config_writer: Keyword.get(opts, :config_writer, &ConfigStore.put/2),
       trigger_fun: Keyword.get(opts, :trigger_fun, &execute_config/2),
-      runs: Keyword.get(opts, :runs, Synapsis.Agent.Runs),
       trigger_timeout_ms: positive_timeout(opts[:trigger_timeout_ms], @trigger_timeout_ms),
       trigger_tasks: %{},
       persistence_tasks: %{},
@@ -409,9 +408,8 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
       {:persisted, _terminal_events} ->
         state
 
-      {payload, terminal_events} when is_map(payload) ->
-        state = %{state | terminal_events: terminal_events}
-        persist_terminal(state, tracked, payload.status, payload)
+      {_unexpected, terminal_events} ->
+        %{state | terminal_events: terminal_events}
     end
   end
 
@@ -454,31 +452,30 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
         state
 
       true ->
-        case durable_terminal_tracking(state, run_id, status) do
+        case terminal_event_tracking(state, payload) do
           {:ok, tracked} ->
             state
             |> put_terminal_event(run_id, :persisted)
             |> persist_terminal(tracked, status, payload)
 
           :error ->
-            if known_config_run?(state.configs, payload),
-              do: put_terminal_event(state, run_id, payload),
-              else: state
+            state
         end
     end
   end
 
-  defp durable_terminal_tracking(state, run_id, status) do
-    with {:ok, run} <- state.runs.fetch(run_id),
-         true <- run.status == status,
-         config when not is_nil(config) <- matching_config(state.configs, run) do
+  defp terminal_event_tracking(state, %{kind: kind, payload: payload}) when is_map(payload) do
+    routine_id = Map.get(payload, :routine_id, Map.get(payload, "routine_id"))
+
+    with config when not is_nil(config) <- matching_config(state.configs, routine_id, kind),
+         %DateTime{} = last_run_at <- terminal_started_at(payload) do
       name = value(config, :name)
 
       {:ok,
        %{
          name: name,
          config: config,
-         last_run_at: run.started_at || run.inserted_at,
+         last_run_at: last_run_at,
          next_run_at: get_in(state.timers, [name, :next_run_at])
        }}
     else
@@ -486,12 +483,34 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
     end
   end
 
-  defp matching_config(configs, run) do
+  defp terminal_event_tracking(_state, _payload), do: :error
+
+  defp matching_config(configs, routine_id, kind) when is_binary(routine_id) do
     Enum.find(configs, fn config ->
-      value(config, :id) == run.routine_id and
-        value(config, :kind, "heartbeat") == run.kind
+      value(config, :id) == routine_id and value(config, :kind, "heartbeat") == kind
     end)
   end
+
+  defp matching_config(_configs, _routine_id, _kind), do: nil
+
+  defp terminal_started_at(payload) do
+    payload
+    |> Map.get(:started_at, Map.get(payload, "started_at"))
+    |> parse_datetime()
+    |> case do
+      %DateTime{} = datetime -> datetime
+      nil -> payload |> Map.get(:inserted_at, Map.get(payload, "inserted_at")) |> parse_datetime()
+    end
+  end
+
+  defp parse_datetime(value) when is_binary(value) do
+    case DateTime.from_iso8601(value) do
+      {:ok, datetime, _offset} -> datetime
+      {:error, _reason} -> nil
+    end
+  end
+
+  defp parse_datetime(_value), do: nil
 
   defp put_terminal_event(state, run_id, event) do
     %{state | terminal_events: put_bounded_terminal(state.terminal_events, run_id, event)}
@@ -748,13 +767,6 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
     do: Map.get(payload, :error, Map.get(payload, "error"))
 
   defp terminal_error(_payload), do: nil
-
-  defp known_config_run?(configs, %{payload: payload}) when is_map(payload) do
-    routine_id = Map.get(payload, :routine_id, Map.get(payload, "routine_id"))
-    Enum.any?(configs, &(value(&1, :id) == routine_id))
-  end
-
-  defp known_config_run?(_configs, _payload), do: false
 
   defp put_bounded_terminal(events, run_id, payload) when map_size(events) >= 100,
     do: %{run_id => payload}

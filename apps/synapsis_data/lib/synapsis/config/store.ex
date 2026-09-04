@@ -45,7 +45,7 @@ defmodule Synapsis.Config.Store do
   def put(type, attrs) when type in @types, do: Server.put(type, attrs)
 
   @doc "Delete an entry by id."
-  @spec delete(atom(), String.t()) :: :ok
+  @spec delete(atom(), String.t()) :: :ok | {:error, term()}
   def delete(type, id) when type in @types, do: Server.delete(type, id)
 
   @doc "Reload a type's entries from disk (also called automatically on file change)."

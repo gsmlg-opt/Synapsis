@@ -1,6 +1,16 @@
 defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
   use Synapsis.Agent.DaemonCase, async: false
 
+  defmodule BlockingFetchRuns do
+    def fetch(_run_id) do
+      send(Application.fetch_env!(:synapsis_agent, :daemon_test_owner), {:runs_fetch, self()})
+
+      receive do
+        :release_fetch -> :not_found
+      end
+    end
+  end
+
   alias Synapsis.Agent.Heartbeat.LocalScheduler
   alias Synapsis.Agent.RunEvents
   alias Synapsis.Config.Store, as: ConfigStore
@@ -139,11 +149,21 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
 
     assert :ok = RunEvents.publish_lifecycle(:completed, run)
 
-    assert_receive {:agent_daemon_event, %{run_id: run_id, payload: %{routine_id: routine_id}}},
+    assert_receive {:agent_daemon_event,
+                    %{
+                      run_id: run_id,
+                      payload: %{
+                        routine_id: routine_id,
+                        started_at: started_at,
+                        inserted_at: inserted_at
+                      }
+                    }},
                    1_000
 
     assert run_id == run.id
     assert routine_id == config.id
+    assert started_at == DateTime.to_iso8601(run.started_at)
+    assert inserted_at == DateTime.to_iso8601(run.inserted_at)
 
     GenServer.cast(
       scheduler,
@@ -160,6 +180,38 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
     assert :ok = RunEvents.publish_lifecycle(:completed, run)
 
     refute_receive {:routine_config_written, :routine, %{"last_status" => "completed"}}, 100
+  end
+
+  test "ignores an unrelated terminal event without reading the run store" do
+    {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
+    config = routine(Ecto.UUID.generate(), "unrelated-terminal", "schedule")
+
+    scheduler =
+      start_scheduler([config], daemon, task_supervisor,
+        runs: BlockingFetchRuns,
+        config_writer: fn _type, attrs -> {:ok, attrs} end
+      )
+
+    manual_run = %Synapsis.AgentRun{
+      id: Ecto.UUID.generate(),
+      kind: "manual",
+      status: "completed",
+      prompt: "manual work",
+      tool_profile: "assistant_basic",
+      started_at: DateTime.utc_now(),
+      inserted_at: DateTime.utc_now()
+    }
+
+    on_exit(fn ->
+      if Process.alive?(scheduler), do: send(scheduler, :release_fetch)
+    end)
+
+    assert :ok = RunEvents.publish_lifecycle(:completed, manual_run)
+
+    assert [%{name: "unrelated-terminal"}] =
+             GenServer.call(scheduler, :status, 100)
+
+    refute_receive {:runs_fetch, _scheduler}, 100
   end
 
   test "scheduler restart reconciles a terminal run from durable identity exactly once" do

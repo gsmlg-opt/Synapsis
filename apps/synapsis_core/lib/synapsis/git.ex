@@ -13,6 +13,8 @@ defmodule Synapsis.Git do
   require Logger
 
   @timeout_ms 10_000
+  @head_max_bytes 64
+  @max_output_bytes 1_048_576
 
   @type ref :: %{head: String.t(), stash: String.t() | nil}
   @type status :: %{head: String.t(), dirty: boolean()}
@@ -21,10 +23,10 @@ defmodule Synapsis.Git do
   @spec status(String.t()) :: {:ok, status()} | {:error, term()}
   def status(project_path) when is_binary(project_path) do
     with :ok <- check_repo(project_path),
-         {:ok, head} <- run(project_path, ["rev-parse", "HEAD"]),
-         {:ok, porcelain} <-
-           run(project_path, ["status", "--porcelain", "--untracked-files=all"]) do
-      {:ok, %{head: head, dirty: porcelain != ""}}
+         {:ok, head} <- run(project_path, ["rev-parse", "HEAD"], @head_max_bytes),
+         {:ok, dirty?} <-
+           output?(project_path, ["status", "--porcelain", "--untracked-files=all"]) do
+      {:ok, %{head: head, dirty: dirty?}}
     end
   end
 
@@ -69,7 +71,7 @@ defmodule Synapsis.Git do
       else: {:error, :not_a_git_repo}
   end
 
-  defp run(dir, args) do
+  defp run(dir, args, max_bytes \\ @max_output_bytes) do
     case System.find_executable("git") do
       nil ->
         {:error, :git_not_found}
@@ -84,14 +86,37 @@ defmodule Synapsis.Git do
             args: args
           ])
 
-        collect(port, "")
+        collect(port, "", max_bytes, deadline())
     end
   end
 
-  defp collect(port, acc) do
+  defp output?(dir, args) do
+    case System.find_executable("git") do
+      nil ->
+        {:error, :git_not_found}
+
+      git ->
+        port =
+          Port.open({:spawn_executable, git}, [
+            :binary,
+            :exit_status,
+            {:cd, dir},
+            args: args
+          ])
+
+        collect_output?(port, deadline())
+    end
+  end
+
+  defp collect(port, acc, max_bytes, deadline) do
     receive do
       {^port, {:data, data}} ->
-        collect(port, acc <> data)
+        if byte_size(acc) + byte_size(data) <= max_bytes do
+          collect(port, acc <> data, max_bytes, deadline)
+        else
+          close_port(port)
+          {:error, :output_too_large}
+        end
 
       {^port, {:exit_status, 0}} ->
         {:ok, String.trim(acc)}
@@ -99,9 +124,42 @@ defmodule Synapsis.Git do
       {^port, {:exit_status, status}} ->
         {:error, {:git_failed, status, String.trim(acc)}}
     after
-      @timeout_ms ->
-        Port.close(port)
+      remaining_ms(deadline) ->
+        close_port(port)
         {:error, :timeout}
     end
+  end
+
+  defp collect_output?(port, deadline) do
+    receive do
+      {^port, {:data, data}} when byte_size(data) > 0 ->
+        close_port(port)
+        {:ok, true}
+
+      {^port, {:data, _empty}} ->
+        collect_output?(port, deadline)
+
+      {^port, {:exit_status, 0}} ->
+        {:ok, false}
+
+      {^port, {:exit_status, status}} ->
+        {:error, {:git_failed, status, ""}}
+    after
+      remaining_ms(deadline) ->
+        close_port(port)
+        {:error, :timeout}
+    end
+  end
+
+  defp deadline, do: System.monotonic_time(:millisecond) + @timeout_ms
+
+  defp remaining_ms(deadline) do
+    max(deadline - System.monotonic_time(:millisecond), 0)
+  end
+
+  defp close_port(port) do
+    Port.close(port)
+  rescue
+    ArgumentError -> :ok
   end
 end

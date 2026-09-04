@@ -44,7 +44,7 @@ defmodule Synapsis.Config.Store.Server do
     GenServer.call(via(type), {:put, attrs})
   end
 
-  @spec delete(atom(), String.t()) :: :ok
+  @spec delete(atom(), String.t()) :: :ok | {:error, term()}
   def delete(type, id) do
     GenServer.call(via(type), {:delete, id})
   end
@@ -101,9 +101,20 @@ defmodule Synapsis.Config.Store.Server do
   end
 
   def handle_call({:delete, id}, _from, state) do
-    :ets.delete(state.table, id)
-    persist(state.type)
-    {:reply, :ok, state}
+    candidate_entries =
+      state.table
+      |> :ets.tab2list()
+      |> Enum.reject(fn {entry_id, _entry} -> entry_id == id end)
+      |> Enum.map(fn {_id, entry} -> entry end)
+
+    case persist(state.type, candidate_entries) do
+      :ok ->
+        :ets.delete(state.table, id)
+        {:reply, :ok, state}
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
+    end
   end
 
   @impl true
@@ -148,14 +159,6 @@ defmodule Synapsis.Config.Store.Server do
       {:error, reason} ->
         Logger.warning("config_store_read_error", type: type, path: path, reason: inspect(reason))
     end
-  end
-
-  defp persist(type) do
-    entries =
-      :ets.tab2list(table(type))
-      |> Enum.map(fn {_id, entry} -> entry end)
-
-    persist(type, entries)
   end
 
   defp persist(type, entries) do

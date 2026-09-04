@@ -84,9 +84,17 @@ defmodule Synapsis.Agent.RunEvents do
   end
 
   defp lifecycle_payload(event, run, payload) do
-    payload = Map.put(payload, :routine_id, run.routine_id)
+    payload =
+      payload
+      |> Map.put(:routine_id, run.routine_id)
+      |> Map.put(:started_at, encode_datetime(run.started_at))
+      |> Map.put(:inserted_at, encode_datetime(run.inserted_at))
+
     if event == :failed, do: Map.put(payload, :error, run.error), else: payload
   end
+
+  defp encode_datetime(%DateTime{} = datetime), do: DateTime.to_iso8601(datetime)
+  defp encode_datetime(_datetime), do: nil
 
   defp lifecycle_topic(:created), do: "agent.run.queued"
   defp lifecycle_topic(event), do: "agent.run.#{event}"

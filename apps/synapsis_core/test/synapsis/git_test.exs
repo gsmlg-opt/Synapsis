@@ -1,5 +1,5 @@
 defmodule Synapsis.GitTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Synapsis.Git
 
@@ -36,6 +36,46 @@ defmodule Synapsis.GitTest do
 
     assert git!(dir, ["show-ref"]) == refs_before
     assert git!(dir, ["count-objects", "-v"]) == objects_before
+  end
+
+  test "status returns dirty on the first output chunk without collecting the tail", %{
+    tmp_dir: dir
+  } do
+    fake_bin = Path.join(dir, "fake-bin")
+    fake_git = Path.join(fake_bin, "git")
+    File.mkdir_p!(fake_bin)
+
+    File.write!(
+      fake_git,
+      """
+      #!/bin/sh
+      case "$1" in
+        rev-parse)
+          printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\n'
+          ;;
+        status)
+          printf '?'
+          sleep 2
+          head -c 1048576 /dev/zero 2>/dev/null | tr '\\000' x 2>/dev/null
+          ;;
+        *)
+          exit 1
+          ;;
+      esac
+      """
+    )
+
+    File.chmod!(fake_git, 0o700)
+    previous_path = System.fetch_env!("PATH")
+    System.put_env("PATH", fake_bin <> ":" <> previous_path)
+    on_exit(fn -> System.put_env("PATH", previous_path) end)
+
+    started_at = System.monotonic_time(:millisecond)
+
+    assert {:ok, %{head: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", dirty: true}} =
+             Git.status(dir)
+
+    assert System.monotonic_time(:millisecond) - started_at < 1_000
   end
 
   test "capture_ref records dirty state without modifying the tree", %{tmp_dir: dir} do
