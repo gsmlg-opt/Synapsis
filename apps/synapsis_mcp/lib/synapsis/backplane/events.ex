@@ -65,18 +65,28 @@ defmodule Synapsis.Backplane.Events do
 
   defp sanitize(value, credential, _depth) when is_binary(value) do
     value
+    |> valid_utf8()
     |> redact_credential(credential)
     |> truncate_binary()
   end
 
   defp sanitize(value, credential, depth) when is_map(value) do
     value
+    |> Enum.sort_by(fn {key, _value} -> :erlang.term_to_binary(key) end)
     |> Enum.take(@max_collection_entries)
-    |> Map.new(fn {key, nested} ->
-      if sensitive_key?(key),
-        do: {key, "[REDACTED]"},
-        else: {key, sanitize(nested, credential, depth + 1)}
+    |> Enum.reduce({%{}, MapSet.new()}, fn {key, nested}, {sanitized, used_keys} ->
+      key = sanitize_key(key, credential, depth)
+      sensitive? = sensitive_key?(key)
+      {key, used_keys} = unique_key(key, used_keys)
+
+      nested =
+        if sensitive?,
+          do: "[REDACTED]",
+          else: sanitize(nested, credential, depth + 1)
+
+      {Map.put(sanitized, key, nested), used_keys}
     end)
+    |> elem(0)
   end
 
   defp sanitize(value, credential, depth) when is_list(value) do
@@ -107,6 +117,63 @@ defmodule Synapsis.Backplane.Events do
       valid when is_binary(valid) -> valid
       {:incomplete, valid, _rest} -> valid
       {:error, valid, _rest} -> valid
+    end
+  end
+
+  defp sanitize_key(key, credential, _depth) when is_binary(key),
+    do: sanitize(key, credential, 0)
+
+  defp sanitize_key(key, _credential, _depth) when is_atom(key), do: key
+  defp sanitize_key(key, credential, depth), do: sanitize(inspect(key), credential, depth + 1)
+
+  defp unique_key(key, used_keys) do
+    identity = key_identity(key)
+
+    if MapSet.member?(used_keys, identity) do
+      unique_key_with_suffix(key, used_keys, 2)
+    else
+      {key, MapSet.put(used_keys, identity)}
+    end
+  end
+
+  defp unique_key_with_suffix(key, used_keys, index) do
+    suffix = "##{index}"
+    base = key |> to_string() |> truncate_to_bytes(@max_string_bytes - byte_size(suffix))
+    candidate = base <> suffix
+    identity = key_identity(candidate)
+
+    if MapSet.member?(used_keys, identity),
+      do: unique_key_with_suffix(key, used_keys, index + 1),
+      else: {candidate, MapSet.put(used_keys, identity)}
+  end
+
+  defp key_identity(key) when is_atom(key) or is_binary(key), do: to_string(key)
+  defp key_identity(key), do: inspect(key)
+
+  defp truncate_to_bytes(value, max_bytes) when byte_size(value) <= max_bytes, do: value
+
+  defp truncate_to_bytes(value, max_bytes) do
+    value
+    |> binary_part(0, max_bytes)
+    |> valid_utf8()
+  end
+
+  defp valid_utf8(value) do
+    value
+    |> valid_utf8_chunks()
+    |> IO.iodata_to_binary()
+  end
+
+  defp valid_utf8_chunks(value) do
+    case :unicode.characters_to_binary(value, :utf8, :utf8) do
+      valid when is_binary(valid) ->
+        valid
+
+      {:error, valid, <<_invalid, rest::binary>>} ->
+        [valid, "�", valid_utf8_chunks(rest)]
+
+      {:incomplete, valid, _rest} ->
+        [valid, "�"]
     end
   end
 

@@ -1,7 +1,7 @@
 defmodule Synapsis.Backplane.EventsTest do
   use ExUnit.Case, async: false
 
-  alias Synapsis.Backplane.{Connection, Snapshot, Sync}
+  alias Synapsis.Backplane.{Connection, Events, Snapshot, Sync}
   alias Synapsis.Config.Store
 
   defmodule MockMCPRuntime do
@@ -144,6 +144,41 @@ defmodule Synapsis.Backplane.EventsTest do
     assert_receive {:agent_daemon_event, %{event: "backplane.sync.failed", error: error}}
     assert String.valid?(error)
     assert byte_size(error) <= 500
+  end
+
+  test "sanitizes map keys, invalid short binaries, and key collisions deterministically" do
+    secret = "credential-in-key"
+
+    {:ok, connection} =
+      Connection.create(%{
+        name: "hostile-event",
+        endpoint: "https://backplane.example.test",
+        credential: secret
+      })
+
+    connection = %{
+      connection
+      | counts: %{
+          secret => "secret-key-value",
+          "[REDACTED]" => "collision-value",
+          "credential" => secret,
+          <<255>> => <<255>>
+        },
+        last_error: <<255>>
+    }
+
+    assert :ok = Events.failed(connection)
+    assert_receive {:agent_daemon_event, %{event: "backplane.sync.failed"} = first}
+    assert :ok = Events.failed(connection)
+    assert_receive {:agent_daemon_event, %{event: "backplane.sync.failed"} = second}
+
+    refute inspect(first) =~ secret
+    assert first.counts == second.counts
+    assert map_size(first.counts) == 4
+    assert Enum.all?(Map.keys(first.counts), &String.valid?/1)
+    assert Enum.all?(Map.values(first.counts), &String.valid?/1)
+    assert String.valid?(first.error)
+    assert first.counts["credential"] == "[REDACTED]"
   end
 
   test "publishes an availability capability update only after persistence" do

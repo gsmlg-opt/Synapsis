@@ -5,6 +5,7 @@ defmodule Synapsis.Backplane.Sync do
   alias Synapsis.{MCPConfigs, Providers, Skill, Skills}
 
   @max_error_length 500
+  @lock_context_key {__MODULE__, :held_connection_locks}
 
   def status(connection_id) do
     with {:ok, connection} <- Connection.get(connection_id) do
@@ -13,7 +14,7 @@ defmodule Synapsis.Backplane.Sync do
   end
 
   def run(connection_id, opts \\ []) when is_binary(connection_id) do
-    if Keyword.get(opts, :already_locked, false) do
+    if Keyword.get(opts, :already_locked, false) and lock_held?(connection_id) do
       do_run(connection_id, opts)
     else
       with_lock(connection_id, opts, fn -> do_run(connection_id, opts) end)
@@ -26,7 +27,12 @@ defmodule Synapsis.Backplane.Sync do
     with {:ok, retries} <- lock_retries(opts) do
       lock_id = {{__MODULE__, :connection, connection_id}, self()}
 
-      case :global.trans(lock_id, fun, [node()], retries) do
+      case :global.trans(
+             lock_id,
+             fn -> with_lock_context(connection_id, fun) end,
+             [node()],
+             retries
+           ) do
         :aborted -> {:error, :sync_busy}
         result -> result
       end
@@ -47,7 +53,8 @@ defmodule Synapsis.Backplane.Sync do
 
           publish_sync_result(
             result,
-            surface_reconciled?(snapshot) and capabilities_changed?(previous_state, result)
+            surface_reconciled?(snapshot) and
+              (reconciliation.runtime_changed or capabilities_changed?(previous_state, result))
           )
 
         {:error, reason} ->
@@ -78,7 +85,7 @@ defmodule Synapsis.Backplane.Sync do
 
   def set_available(connection_id, available, opts \\ [])
       when is_binary(connection_id) and is_boolean(available) do
-    if Keyword.get(opts, :already_locked, false) do
+    if Keyword.get(opts, :already_locked, false) and lock_held?(connection_id) do
       do_set_available(connection_id, available, opts)
     else
       with_lock(connection_id, opts, fn -> do_set_available(connection_id, available, opts) end)
@@ -87,37 +94,37 @@ defmodule Synapsis.Backplane.Sync do
 
   defp do_set_available(connection_id, available, opts) do
     runtime = Keyword.get(opts, :mcp_runtime, Synapsis.MCP)
+    provider_store = Keyword.get(opts, :provider_store, Providers)
+    skill_store = Keyword.get(opts, :skill_store, Skills)
 
     with {:ok, connection} <- Connection.get(connection_id) do
       previous_state = availability_state(connection)
 
+      errors =
+        [
+          models: set_providers_available(connection_id, available, provider_store),
+          skills: set_skills_available(connection_id, available, skill_store),
+          tools: set_mcps_available(connection_id, available, runtime)
+        ]
+        |> Enum.reduce(%{}, fn
+          {_surface, :ok}, errors -> errors
+          {surface, {:error, reason}}, errors -> Map.put(errors, Atom.to_string(surface), reason)
+        end)
+
       result =
-        with :ok <- set_providers_available(connection_id, available),
-             :ok <- set_skills_available(connection_id, available),
-             :ok <- set_mcps_available(connection_id, available, runtime) do
-          Connection.update(connection, %{
-            stale: not available,
-            status: if(available, do: "ready", else: "degraded"),
-            unavailable: if(available, do: [], else: ~w(models skills tools)),
-            last_error: nil,
-            metadata: Map.put(connection.metadata || %{}, "surface_errors", %{})
-          })
+        if map_size(errors) == 0 do
+          Connection.update(connection, availability_success_attrs(connection, available))
+        else
+          persist_availability_failure(connection, errors)
         end
 
       case result do
         {:ok, persisted} = success ->
           publish_availability_update(previous_state, persisted)
-          success
 
-        {:error, {:mcp_availability_failed, _reason} = reason} ->
-          case persist_availability_failure(connection, available, reason) do
-            {:ok, persisted} ->
-              publish_availability_update(previous_state, persisted)
-              {:error, reason}
-
-            {:error, _reason} = error ->
-              error
-          end
+          if map_size(errors) == 0,
+            do: success,
+            else: {:error, {:availability_failed, errors}}
 
         {:error, _reason} = error ->
           error
@@ -138,19 +145,61 @@ defmodule Synapsis.Backplane.Sync do
     if previous_state != availability_state(persisted), do: Events.capabilities_updated(persisted)
   end
 
-  defp persist_availability_failure(connection, available, reason) do
-    error = format_error(reason, connection.credential)
+  defp availability_success_attrs(connection, false) do
+    %{
+      stale: true,
+      status: "degraded",
+      unavailable: ~w(models skills tools),
+      last_error: nil,
+      metadata: Map.put(connection.metadata || %{}, "surface_errors", %{})
+    }
+  end
+
+  defp availability_success_attrs(connection, true) do
+    if clean_snapshot?(connection) do
+      %{
+        stale: false,
+        status: "ready",
+        unavailable: [],
+        last_error: nil,
+        metadata: Map.put(connection.metadata || %{}, "surface_errors", %{})
+      }
+    else
+      %{}
+    end
+  end
+
+  defp clean_snapshot?(connection) do
+    is_binary(connection.last_success_at) and
+      connection.last_success_at == connection.last_attempt_at and
+      map_size(Map.get(connection.metadata || %{}, "surface_errors", %{})) == 0 and
+      is_nil(connection.last_error)
+  end
+
+  defp persist_availability_failure(connection, errors) do
+    surface_errors =
+      Map.new(errors, fn {surface, reason} ->
+        {surface, format_error(reason, connection.credential)}
+      end)
+
+    error =
+      errors
+      |> Enum.sort_by(&elem(&1, 0))
+      |> Enum.map_join(", ", fn {surface, reason} ->
+        "#{surface}: #{format_error(reason, connection.credential)}"
+      end)
+      |> truncate_error()
 
     Connection.update(connection, %{
       status: "degraded",
       stale: true,
-      unavailable: if(available, do: ["tools"], else: ~w(models skills tools)),
+      unavailable: ~w(models skills tools),
       last_error: error,
       metadata:
         Map.put(
           connection.metadata || %{},
           "surface_errors",
-          %{"tools" => error}
+          surface_errors
         )
     })
   end
@@ -216,12 +265,14 @@ defmodule Synapsis.Backplane.Sync do
 
   defp reconcile_snapshot(connection, %Snapshot{} = snapshot, opts) do
     runtime = Keyword.get(opts, :mcp_runtime, Synapsis.MCP)
+    skill_store = Keyword.get(opts, :skill_store, Skills)
 
     initial = %{
       artifacts: reconstruct_artifacts(connection.id),
       counts: connection.counts || %{},
       revisions: Map.get(connection.metadata || %{}, "surface_revisions", %{}),
-      errors: snapshot.errors
+      errors: snapshot.errors,
+      runtime_changed: false
     }
 
     result =
@@ -231,7 +282,7 @@ defmodule Synapsis.Backplane.Sync do
 
     result =
       reconcile_surface(result, :skills, fn ->
-        reconcile_skills_surface(result, connection, snapshot)
+        reconcile_skills_surface(result, connection, snapshot, skill_store)
       end)
 
     result =
@@ -244,10 +295,20 @@ defmodule Synapsis.Backplane.Sync do
 
   defp reconcile_surface(result, surface, fun) do
     case fun.() do
-      {:ok, updated} -> updated
-      {:error, reason} -> put_in(result, [:errors, surface], reason)
+      {:ok, updated} ->
+        updated
+
+      {:error, reason} ->
+        result
+        |> put_in([:errors, surface], reason)
+        |> maybe_mark_runtime_changed(reason)
     end
   end
+
+  defp maybe_mark_runtime_changed(result, {:mcp_runtime_rollback_failed, _new, _rollback}),
+    do: %{result | runtime_changed: true}
+
+  defp maybe_mark_runtime_changed(result, _reason), do: result
 
   defp reconcile_models_surface(result, connection, snapshot) do
     if Map.has_key?(snapshot.errors, :models) do
@@ -263,11 +324,11 @@ defmodule Synapsis.Backplane.Sync do
     end
   end
 
-  defp reconcile_skills_surface(result, connection, snapshot) do
+  defp reconcile_skills_surface(result, connection, snapshot, skill_store) do
     if Map.has_key?(snapshot.errors, :skills) do
       {:ok, result}
     else
-      with {:ok, skills} <- reconcile_skills(connection, snapshot.skills) do
+      with {:ok, skills} <- reconcile_skills(connection, snapshot.skills, skill_store) do
         ids = Map.new(skills, &{marker(&1.config_overrides, "external_id"), &1.id})
 
         {:ok,
@@ -459,13 +520,38 @@ defmodule Synapsis.Backplane.Sync do
 
   defp reconcile_provider(_connection, _snapshot), do: {:error, :missing_provider_capability}
 
-  defp reconcile_skills(connection, capabilities) do
-    existing =
-      Map.new(owned_skills(connection.id), &{marker(&1.config_overrides, "external_id"), &1})
+  defp reconcile_skills(connection, capabilities, skill_store) do
+    original = owned_skills(connection.id, skill_store)
+    existing = Map.new(original, &{marker(&1.config_overrides, "external_id"), &1})
 
-    with {:ok, prepared} <- prepare_skills(existing, capabilities),
-         {:ok, current} <- persist_skills(prepared),
-         {:ok, stale} <- mark_disappeared_skills(existing, capabilities) do
+    with {:ok, prepared} <- prepare_skills(existing, capabilities) do
+      case persist_skill_surface(skill_store, prepared, existing, capabilities) do
+        {:ok, skills} ->
+          {:ok, skills}
+
+        {:error, reason} ->
+          case rollback_skill_surface(skill_store, connection.id, original) do
+            :ok ->
+              {:error, reason}
+
+            {:error, rollback_reason} ->
+              case fail_closed_skills(skill_store, connection.id) do
+                :ok ->
+                  {:error, {:skill_rollback_failed, reason, rollback_reason}}
+
+                {:error, fail_closed_reason} ->
+                  {:error,
+                   {:skill_rollback_failed, reason, rollback_reason,
+                    {:fail_closed_failed, fail_closed_reason}}}
+              end
+          end
+      end
+    end
+  end
+
+  defp persist_skill_surface(skill_store, prepared, existing, capabilities) do
+    with {:ok, current} <- persist_skills(skill_store, prepared),
+         {:ok, stale} <- mark_disappeared_skills(skill_store, existing, capabilities) do
       {:ok, Enum.reverse(current) ++ stale}
     end
   end
@@ -517,9 +603,12 @@ defmodule Synapsis.Backplane.Sync do
     end
   end
 
-  defp persist_skills(prepared) do
+  defp persist_skills(skill_store, prepared) do
     Enum.reduce_while(prepared, {:ok, []}, fn {external_id, current, attrs}, {:ok, imported} ->
-      result = if current, do: Skills.update(current, attrs), else: Skills.create(attrs)
+      result =
+        if current,
+          do: skill_store.update(current, attrs),
+          else: skill_store.create(attrs)
 
       case result do
         {:ok, skill} -> {:cont, {:ok, [skill | imported]}}
@@ -528,7 +617,7 @@ defmodule Synapsis.Backplane.Sync do
     end)
   end
 
-  defp mark_disappeared_skills(existing, capabilities) do
+  defp mark_disappeared_skills(skill_store, existing, capabilities) do
     current_ids = MapSet.new(capabilities, & &1.external_id)
 
     existing
@@ -536,11 +625,78 @@ defmodule Synapsis.Backplane.Sync do
     |> Enum.reduce_while({:ok, []}, fn {_external_id, skill}, {:ok, stale} ->
       config = mark_disappeared(skill.config_overrides)
 
-      case Skills.update(skill, %{config_overrides: config}) do
+      case skill_store.update(skill, %{config_overrides: config}) do
         {:ok, updated} -> {:cont, {:ok, [updated | stale]}}
         {:error, reason} -> {:halt, {:error, {:skill_disappearance_failed, reason}}}
       end
     end)
+  end
+
+  defp rollback_skill_surface(skill_store, connection_id, original) do
+    original_ids = MapSet.new(original, & &1.id)
+
+    created =
+      connection_id
+      |> owned_skills(skill_store)
+      |> Enum.reject(&MapSet.member?(original_ids, &1.id))
+
+    errors =
+      created
+      |> Enum.sort_by(& &1.id)
+      |> Enum.reduce([], fn skill, errors ->
+        collect_skill_rollback_result(skill_store.delete(skill), {:delete, skill.id}, errors)
+      end)
+
+    errors =
+      original
+      |> Enum.sort_by(& &1.id)
+      |> Enum.reduce(errors, fn skill, errors ->
+        result = skill_store.update(skill, skill_restore_attrs(skill))
+        collect_skill_rollback_result(result, {:restore, skill.id}, errors)
+      end)
+
+    case Enum.reverse(errors) do
+      [] -> :ok
+      errors -> {:error, errors}
+    end
+  end
+
+  defp collect_skill_rollback_result({:ok, _skill}, _operation, errors), do: errors
+
+  defp collect_skill_rollback_result({:error, reason}, operation, errors),
+    do: [{operation, reason} | errors]
+
+  defp skill_restore_attrs(skill) do
+    Map.take(skill, [
+      :scope,
+      :name,
+      :description,
+      :system_prompt_fragment,
+      :tool_allowlist,
+      :config_overrides,
+      :enabled,
+      :is_builtin
+    ])
+  end
+
+  defp fail_closed_skills(skill_store, connection_id) do
+    errors =
+      connection_id
+      |> owned_skills(skill_store)
+      |> Enum.sort_by(& &1.id)
+      |> Enum.reduce([], fn skill, errors ->
+        config = Map.put(skill.config_overrides || %{}, "backplane_available", false)
+
+        case skill_store.update(skill, %{config_overrides: config}) do
+          {:ok, _updated} -> errors
+          {:error, reason} -> [{skill.id, reason} | errors]
+        end
+      end)
+
+    case Enum.reverse(errors) do
+      [] -> :ok
+      errors -> {:error, errors}
+    end
   end
 
   defp reconcile_mcp_config(
@@ -596,8 +752,18 @@ defmodule Synapsis.Backplane.Sync do
 
         {:error, runtime_reason} ->
           case restore_mcp_config(mcp, persisted) do
-            :ok ->
-              {:error, runtime_reason}
+            {:ok, restored} ->
+              case restore_mcp_runtime(runtime, restored, persisted) do
+                :ok ->
+                  {:error, runtime_reason}
+
+                {:error, rollback_runtime_reason} ->
+                  rollback_runtime_reason =
+                    fail_closed_runtime(runtime, persisted.name, rollback_runtime_reason)
+
+                  {:error,
+                   {:mcp_runtime_rollback_failed, runtime_reason, rollback_runtime_reason}}
+              end
 
             {:error, rollback_reason} ->
               {:error, {:mcp_rollback_failed, runtime_reason, rollback_reason}}
@@ -611,7 +777,7 @@ defmodule Synapsis.Backplane.Sync do
 
   defp restore_mcp_config(nil, created) do
     case MCPConfigs.delete(created) do
-      {:ok, _deleted} -> :ok
+      {:ok, _deleted} -> {:ok, nil}
       {:error, reason} -> {:error, reason}
     end
   end
@@ -631,8 +797,24 @@ defmodule Synapsis.Backplane.Sync do
       ])
 
     case MCPConfigs.update(persisted, attrs) do
-      {:ok, _restored} -> :ok
+      {:ok, restored} -> {:ok, restored}
       {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp restore_mcp_runtime(runtime, nil, attempted),
+    do: stop_mcp_runtime(runtime, attempted.name)
+
+  defp restore_mcp_runtime(runtime, restored, _attempted),
+    do: reconcile_runtime_availability(runtime, restored)
+
+  defp fail_closed_runtime(runtime, name, rollback_runtime_reason) do
+    case stop_mcp_runtime(runtime, name) do
+      :ok ->
+        rollback_runtime_reason
+
+      {:error, stop_reason} ->
+        {:rollback_failed, rollback_runtime_reason, {:fail_closed_failed, stop_reason}}
     end
   end
 
@@ -646,63 +828,107 @@ defmodule Synapsis.Backplane.Sync do
     end
   end
 
-  defp owned_skills(connection_id) do
-    Enum.filter(Skills.list(), &owned?(&1.config_overrides, connection_id, "skill"))
+  defp owned_skills(connection_id, skill_store \\ Skills) do
+    Enum.filter(skill_store.list(), &owned?(&1.config_overrides, connection_id, "skill"))
   end
 
   defp find_mcp(connection_id, external_id) do
     Enum.find(MCPConfigs.list(), &owned?(&1.config, connection_id, "mcp_server", external_id))
   end
 
-  defp set_providers_available(connection_id, available) do
+  defp set_providers_available(connection_id, available, provider_store) do
     providers =
-      case Providers.list() do
+      case provider_store.list() do
         {:ok, listed} -> Enum.filter(listed, &owned?(&1.config, connection_id, "provider"))
         _error -> []
       end
 
-    Enum.reduce_while(providers, :ok, fn provider, :ok ->
-      config =
-        provider.config
-        |> put_effective_availability(available)
-        |> update_nested_availability("backplane_models", available)
+    errors =
+      Enum.reduce(providers, [], fn provider, errors ->
+        config =
+          provider.config
+          |> put_effective_availability(available)
+          |> update_nested_availability("backplane_models", available)
 
-      case Providers.update(provider.id, %{config: config}) do
-        {:ok, _provider} -> {:cont, :ok}
-        {:error, reason} -> {:halt, {:error, {:provider_availability_failed, reason}}}
-      end
-    end)
+        case provider_store.update(provider.id, %{config: config}) do
+          {:ok, _provider} -> errors
+          {:error, reason} -> [reason | errors]
+        end
+      end)
+
+    case Enum.reverse(errors) do
+      [] -> :ok
+      [reason] -> {:error, reason}
+      reasons -> {:error, {:multiple_provider_availability_failures, reasons}}
+    end
   end
 
-  defp set_skills_available(connection_id, available) do
-    connection_id
-    |> owned_skills()
-    |> Enum.reduce_while(:ok, fn skill, :ok ->
-      config = put_effective_availability(skill.config_overrides, available)
+  defp set_skills_available(connection_id, available, skill_store) do
+    errors =
+      connection_id
+      |> owned_skills(skill_store)
+      |> Enum.reduce([], fn skill, errors ->
+        config = put_effective_availability(skill.config_overrides, available)
 
-      case Skills.update(skill, %{config_overrides: config}) do
-        {:ok, _skill} -> {:cont, :ok}
-        {:error, reason} -> {:halt, {:error, {:skill_availability_failed, reason}}}
-      end
-    end)
+        case skill_store.update(skill, %{config_overrides: config}) do
+          {:ok, _skill} -> errors
+          {:error, reason} -> [reason | errors]
+        end
+      end)
+
+    case Enum.reverse(errors) do
+      [] -> :ok
+      [reason] -> {:error, reason}
+      reasons -> {:error, {:multiple_skill_availability_failures, reasons}}
+    end
   end
 
   defp set_mcps_available(connection_id, available, runtime) do
-    MCPConfigs.list()
-    |> Enum.filter(&owned?(&1.config, connection_id, "mcp_server"))
-    |> Enum.reduce_while(:ok, fn mcp, :ok ->
-      config =
-        mcp.config
-        |> put_effective_availability(available)
-        |> update_nested_availability("backplane_tools", available)
+    errors =
+      MCPConfigs.list()
+      |> Enum.filter(&owned?(&1.config, connection_id, "mcp_server"))
+      |> Enum.reduce([], fn mcp, errors ->
+        config =
+          mcp.config
+          |> put_effective_availability(available)
+          |> update_nested_availability("backplane_tools", available)
 
-      with {:ok, updated} <- MCPConfigs.update(mcp, %{config: config}),
-           :ok <- reconcile_runtime_availability(runtime, updated) do
-        {:cont, :ok}
-      else
-        {:error, reason} -> {:halt, {:error, {:mcp_availability_failed, reason}}}
-      end
-    end)
+        result =
+          with {:ok, updated} <- MCPConfigs.update(mcp, %{config: config}),
+               :ok <- reconcile_runtime_availability(runtime, updated) do
+            :ok
+          end
+
+        case result do
+          :ok -> errors
+          {:error, reason} -> [reason | errors]
+        end
+      end)
+
+    case Enum.reverse(errors) do
+      [] -> :ok
+      [reason] -> {:error, reason}
+      reasons -> {:error, {:multiple_mcp_availability_failures, reasons}}
+    end
+  end
+
+  defp with_lock_context(connection_id, fun) do
+    held = Process.get(@lock_context_key, MapSet.new())
+    Process.put(@lock_context_key, MapSet.put(held, connection_id))
+
+    try do
+      fun.()
+    after
+      if MapSet.size(held) == 0,
+        do: Process.delete(@lock_context_key),
+        else: Process.put(@lock_context_key, held)
+    end
+  end
+
+  defp lock_held?(connection_id) do
+    @lock_context_key
+    |> Process.get(MapSet.new())
+    |> MapSet.member?(connection_id)
   end
 
   defp update_nested_availability(config, key, available) do
@@ -734,6 +960,10 @@ defmodule Synapsis.Backplane.Sync do
   end
 
   defp reconcile_runtime_availability(runtime, %{name: name}) do
+    stop_mcp_runtime(runtime, name)
+  end
+
+  defp stop_mcp_runtime(runtime, name) do
     case protect(fn -> runtime.stop(name) end) do
       {:error, :not_found} -> :ok
       result -> normalize_runtime_result(result)
