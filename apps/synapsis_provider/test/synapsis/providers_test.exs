@@ -87,6 +87,21 @@ defmodule Synapsis.ProvidersTest do
     end
   end
 
+  describe "fallback_configured?/2" do
+    test "requires a known built-in, environment setting, or explicit local config" do
+      assert Providers.fallback_configured?("anthropic")
+      assert Providers.fallback_configured?("google")
+      assert Providers.fallback_configured?("local")
+
+      assert Providers.fallback_configured?("custom-local", %{
+               "providers" => %{"custom-local" => %{"baseURL" => "http://localhost:11434"}}
+             })
+
+      refute Providers.fallback_configured?("backplane-deleted")
+      refute Providers.fallback_configured?("backplane-malformed", %{"providers" => "bad"})
+    end
+  end
+
   describe "list/1" do
     test "lists all providers" do
       {:ok, initial} = Providers.list()
@@ -254,6 +269,50 @@ defmodule Synapsis.ProvidersTest do
       assert {:error, :not_found} = ProviderRegistry.get(provider.name)
 
       assert :ok = Synapsis.Config.Store.delete(:backplane, source_id)
+      refute Providers.runtime_available?(provider)
+    end
+
+    test "managed providers reject blocked or malformed model runtime surfaces" do
+      source_id = "source-runtime-model-block"
+
+      assert {:ok, _connection} =
+               Synapsis.Config.Store.put(:backplane, %{
+                 "id" => source_id,
+                 "enabled" => true,
+                 "metadata_json" => Jason.encode!(%{"runtime_blocked_surfaces" => ["models"]})
+               })
+
+      assert {:ok, provider} =
+               Providers.create(
+                 Map.merge(@valid_attrs, %{
+                   name: "surface-guarded-provider",
+                   config: %{
+                     "managed_by" => "backplane",
+                     "backplane_source_id" => source_id,
+                     "backplane_available" => true
+                   }
+                 })
+               )
+
+      refute Providers.runtime_available?(provider)
+      assert {:error, :provider_unavailable} = Providers.runtime_config(provider.name)
+
+      assert {:ok, _connection} =
+               Synapsis.Config.Store.put(:backplane, %{
+                 "id" => source_id,
+                 "enabled" => true,
+                 "metadata_json" => "{not-json"
+               })
+
+      refute Providers.runtime_available?(provider)
+
+      assert {:ok, _connection} =
+               Synapsis.Config.Store.put(:backplane, %{
+                 "id" => source_id,
+                 "enabled" => true,
+                 "metadata_json" => Jason.encode!(%{"runtime_blocked_surfaces" => [123]})
+               })
+
       refute Providers.runtime_available?(provider)
     end
 
@@ -532,6 +591,61 @@ defmodule Synapsis.ProvidersTest do
       assert {:ok, [%{id: "enabled-model"}]} = Providers.fetch_models(provider)
       assert {:ok, [%{id: "enabled-model"}]} = Providers.models_for(provider.name)
       assert {:ok, [%{id: "enabled-model"}]} = Providers.models_by_id(provider.id)
+    end
+
+    test "keeps locally unchecked source models in the admin catalog and refreshed cache" do
+      bypass = Bypass.open()
+
+      Bypass.stub(bypass, "GET", "/v1/models", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(
+          200,
+          Jason.encode!(%{
+            "data" => [%{"id" => "enabled-model"}, %{"id" => "unchecked-model"}]
+          })
+        )
+      end)
+
+      assert {:ok, provider} =
+               Providers.create(%{
+                 name: "mixed-local-catalog-provider",
+                 type: "openai",
+                 base_url: "http://localhost:#{bypass.port}",
+                 enabled: true,
+                 config: %{
+                   "managed_by" => "backplane",
+                   "backplane_source_id" => "source-1",
+                   "backplane_available" => true,
+                   "enabled_models" => ["enabled-model"],
+                   "available_models" => [
+                     %{"id" => "enabled-model"},
+                     %{"id" => "unchecked-model"}
+                   ],
+                   "backplane_models" => [
+                     %{
+                       "external_id" => "enabled-model",
+                       "source_available" => true,
+                       "backplane_available" => true
+                     },
+                     %{
+                       "external_id" => "unchecked-model",
+                       "source_available" => true,
+                       "backplane_available" => true
+                     }
+                   ]
+                 }
+               })
+
+      assert {:ok, [%{id: "enabled-model"}, %{id: "unchecked-model"}]} =
+               Providers.models_by_id(provider.id)
+
+      assert {:ok, [%{id: "enabled-model"}]} = Providers.models_for(provider.name)
+
+      assert {:ok, refreshed} = Providers.refresh_models(provider.id)
+
+      assert [%{id: "enabled-model"}, %{id: "unchecked-model"}] =
+               Providers.cached_models(refreshed)
     end
 
     test "rejects every model operation for an unavailable managed provider" do

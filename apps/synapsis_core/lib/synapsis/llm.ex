@@ -132,21 +132,25 @@ defmodule Synapsis.LLM do
       {:error, :not_found} ->
         auth = Synapsis.Config.load_auth()
 
-        api_key =
-          get_in(auth, [provider_name, "apiKey"]) ||
-            Synapsis.Providers.env_api_key(provider_name)
+        if Synapsis.Providers.fallback_configured?(provider_name, auth) do
+          api_key =
+            get_in(auth, [provider_name, "apiKey"]) ||
+              Synapsis.Providers.env_api_key(provider_name)
 
-        base_url = provider_base_url(auth, provider_name)
+          base_url = provider_base_url(auth, provider_name)
 
-        config =
-          %{
-            api_key: api_key,
-            base_url: base_url,
-            type: Synapsis.Providers.provider_type(provider_name)
-          }
-          |> maybe_put(:default_model, Synapsis.Providers.env_default_model(provider_name))
+          config =
+            %{
+              api_key: api_key,
+              base_url: base_url,
+              type: Synapsis.Providers.provider_type(provider_name)
+            }
+            |> maybe_put(:default_model, Synapsis.Providers.env_default_model(provider_name))
 
-        {:ok, config}
+          {:ok, config}
+        else
+          {:error, :provider_unavailable}
+        end
     end
   end
 

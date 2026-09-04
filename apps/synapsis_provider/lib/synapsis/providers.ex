@@ -88,6 +88,25 @@ defmodule Synapsis.Providers do
     end
   end
 
+  @doc "Validate a model against the persisted identity carried by a runtime config."
+  def ensure_model_runtime_available(config, model) when is_map(config) do
+    case Map.get(config, :provider_id, Map.get(config, "provider_id")) do
+      nil ->
+        :ok
+
+      id ->
+        case get(id) do
+          {:ok, provider} ->
+            if model_runtime_available?(provider, model),
+              do: :ok,
+              else: {:error, :model_unavailable}
+
+          {:error, :not_found} ->
+            {:error, :provider_unavailable}
+        end
+    end
+  end
+
   def list(opts \\ []) do
     providers =
       all()
@@ -131,7 +150,7 @@ defmodule Synapsis.Providers do
       config = build_runtime_config(provider)
 
       with {:ok, models} <- mod.models(config) do
-        {:ok, filter_runtime_models(provider, models)}
+        {:ok, filter_catalog_models(provider, models)}
       end
     end
   end
@@ -165,11 +184,11 @@ defmodule Synapsis.Providers do
           config = build_runtime_config(provider)
 
           with {:ok, models} <- Synapsis.Provider.Adapter.models(config) do
-            {:ok, filter_runtime_models(provider, models)}
+            {:ok, filter_catalog_models(provider, models)}
           end
 
         models ->
-          {:ok, filter_runtime_models(provider, models)}
+          {:ok, filter_catalog_models(provider, models)}
       end
     end
   end
@@ -198,7 +217,7 @@ defmodule Synapsis.Providers do
            |> build_runtime_config()
            |> Map.put(:discover_models, true)
            |> Synapsis.Provider.Adapter.models() do
-      {:ok, filter_runtime_models(provider, models)}
+      {:ok, filter_catalog_models(provider, models)}
     end
   end
 
@@ -371,6 +390,16 @@ defmodule Synapsis.Providers do
   @doc "Return the list of known provider presets and their UI metadata."
   def preset_providers, do: @provider_presets
 
+  @doc "Whether a missing persisted provider has an explicit local or environment fallback."
+  def fallback_configured?(provider_name, config \\ %{}) when is_binary(provider_name) do
+    Enum.any?(@provider_presets, &(&1.name == provider_name)) or
+      env_configured?(provider_name) or
+      present?(default_base_url(provider_name)) or
+      present?(env_base_url(provider_name)) or
+      present?(env_default_model(provider_name)) or
+      explicit_provider_config?(config, provider_name)
+  end
+
   @doc "Insert default providers (idempotent — skips existing names)."
   def seed_defaults do
     existing = MapSet.new(all(), & &1.name)
@@ -410,10 +439,28 @@ defmodule Synapsis.Providers do
       Map.get(config, "backplane_source_id", Map.get(config, :backplane_source_id))
 
     with true <- is_binary(source_id) and source_id != "",
-         {:ok, connection} <- Store.get(:backplane, source_id) do
-      Map.get(connection, "enabled", Map.get(connection, :enabled)) == true
+         {:ok, connection} <- Store.get(:backplane, source_id),
+         true <- Map.get(connection, "enabled", Map.get(connection, :enabled)) == true,
+         {:ok, metadata} <- connection_metadata(connection),
+         blocked when is_list(blocked) <- Map.get(metadata, "runtime_blocked_surfaces", []),
+         true <- Enum.all?(blocked, &is_binary/1) do
+      "models" not in blocked
     else
       _error -> false
+    end
+  end
+
+  defp connection_metadata(connection) do
+    case Map.get(connection, "metadata", Map.get(connection, :metadata)) do
+      metadata when is_map(metadata) ->
+        {:ok, metadata}
+
+      _not_embedded ->
+        case Map.get(connection, "metadata_json", Map.get(connection, :metadata_json)) do
+          nil -> {:ok, %{}}
+          encoded when is_binary(encoded) -> Jason.decode(encoded)
+          _malformed -> {:error, :invalid_metadata}
+        end
     end
   end
 
@@ -461,6 +508,23 @@ defmodule Synapsis.Providers do
     end
   end
 
+  defp filter_catalog_models(provider, models) when is_map(provider) and is_list(models) do
+    config = Map.get(provider, :config, Map.get(provider, "config", %{}))
+
+    if backplane_managed?(config || %{}) do
+      Enum.filter(models, fn
+        model when is_map(model) ->
+          model_id = Map.get(model, :id, Map.get(model, "id"))
+          source_model_available?(config, model_id)
+
+        _malformed ->
+          false
+      end)
+    else
+      models
+    end
+  end
+
   defp ensure_runtime_available(provider) do
     if runtime_available?(provider), do: :ok, else: {:error, :provider_unavailable}
   end
@@ -496,7 +560,9 @@ defmodule Synapsis.Providers do
         base
       end
 
-    Map.merge(base, atomize_keys(config))
+    base
+    |> Map.merge(atomize_keys(config))
+    |> Map.put(:provider_id, provider.id)
   end
 
   # ADR-006 C4 store <-> struct mapping (the Config.Store struct-mapping pattern).
@@ -836,6 +902,20 @@ defmodule Synapsis.Providers do
   end
 
   defp safe_to_atom(k), do: k
+
+  defp explicit_provider_config?(config, provider_name) when is_map(config) do
+    direct = Map.get(config, provider_name)
+
+    nested =
+      case Map.get(config, "providers") do
+        providers when is_map(providers) -> Map.get(providers, provider_name)
+        _malformed -> nil
+      end
+
+    is_map(direct) or is_map(nested)
+  end
+
+  defp explicit_provider_config?(_config, _provider_name), do: false
 
   defp infer_fast_from_registry(provider_name) do
     case Synapsis.Provider.Registry.get(provider_name) do

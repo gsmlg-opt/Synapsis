@@ -98,6 +98,33 @@ defmodule Synapsis.LLMTest do
                LLM.complete([%{role: "user", content: "Hello"}], provider: "anthropic")
     end
 
+    test "rejects a deleted imported provider name before default HTTP fallback" do
+      provider_name = "backplane-deleted-#{System.unique_integer([:positive])}"
+
+      assert {:ok, _connection} =
+               Synapsis.Config.Store.put(:backplane, %{"id" => "source-1", "enabled" => true})
+
+      assert {:ok, provider} =
+               Providers.create(%{
+                 name: provider_name,
+                 type: "openai",
+                 enabled: true,
+                 config: %{
+                   "managed_by" => "backplane",
+                   "backplane_source_id" => "source-1",
+                   "backplane_available" => true
+                 }
+               })
+
+      assert {:ok, _deleted} = Providers.delete(provider.id)
+
+      assert {:error, :provider_unavailable} =
+               LLM.complete([%{role: "user", content: "Hello"}],
+                 provider: provider_name,
+                 model: "deleted-model"
+               )
+    end
+
     test "returns error when provider has no valid api key" do
       messages = [%{role: "user", content: "Hello"}]
 

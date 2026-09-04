@@ -368,6 +368,62 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
              ]
     end
 
+    test "source-available unchecked Backplane models can be enabled again", %{conn: conn} do
+      source_id = "source-#{Ecto.UUID.generate()}"
+
+      assert {:ok, _connection} =
+               Synapsis.Config.Store.put(:backplane, %{"id" => source_id, "enabled" => true})
+
+      provider =
+        create_provider!(%{
+          name: "backplane-model-editor",
+          type: "openai",
+          config: %{
+            "managed_by" => "backplane",
+            "backplane_source_id" => source_id,
+            "backplane_available" => true,
+            "enabled_models" => ["enabled-model"],
+            "available_models" => [
+              %{"id" => "enabled-model", "name" => "Enabled Model"},
+              %{"id" => "unchecked-model", "name" => "Unchecked Model"}
+            ],
+            "backplane_models" => [
+              %{
+                "external_id" => "enabled-model",
+                "source_available" => true,
+                "backplane_available" => true
+              },
+              %{
+                "external_id" => "unchecked-model",
+                "source_available" => true,
+                "backplane_available" => true
+              }
+            ]
+          }
+        })
+
+      on_exit(fn -> Synapsis.Config.Store.delete(:backplane, source_id) end)
+
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+
+      html =
+        view
+        |> element(~s(el-dm-button[phx-click="toggle_edit_models"]))
+        |> render_click()
+
+      assert html =~ "Unchecked Model"
+      assert has_element?(view, ~s|input[value="unchecked-model"]:not([checked])|)
+
+      view
+      |> form("form[phx-submit='save_models']", %{
+        "models" => ["enabled-model", "unchecked-model"]
+      })
+      |> render_submit()
+
+      assert {:ok, updated} = Synapsis.Providers.get(provider.id)
+      assert updated.config["enabled_models"] == ["enabled-model", "unchecked-model"]
+    end
+
     test "disabled models shown differently from enabled", %{conn: conn} do
       provider =
         create_provider!(%{

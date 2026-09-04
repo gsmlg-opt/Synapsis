@@ -120,6 +120,74 @@ defmodule Synapsis.Provider.AdapterTest do
       refute_receive :http_called, 100
     end
 
+    test "persisted config cannot erase provider identity before an HTTP stream", %{
+      bypass: bypass,
+      port: port
+    } do
+      Synapsis.DataCase.clear_config_store(:provider)
+      on_exit(fn -> Synapsis.DataCase.clear_config_store(:provider) end)
+      caller = self()
+
+      Bypass.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+        send(caller, :http_called)
+
+        conn
+        |> Plug.Conn.put_resp_content_type("text/event-stream")
+        |> Plug.Conn.send_resp(200, "data: [DONE]\n\n")
+      end)
+
+      config = managed_provider_config(port, "managed-stream-nil-id", nil)
+      request = %Request{model: "disabled-model"}
+
+      assert {:error, :model_unavailable} = Adapter.stream(request, config)
+      refute_receive :http_called, 100
+    end
+
+    test "rejects a locally unchecked source-available model before an HTTP stream", %{
+      bypass: bypass,
+      port: port
+    } do
+      Synapsis.DataCase.clear_config_store(:provider)
+      on_exit(fn -> Synapsis.DataCase.clear_config_store(:provider) end)
+      caller = self()
+      provider_name = "managed-stream-unchecked-model"
+
+      Bypass.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+        send(caller, :http_called)
+
+        conn
+        |> Plug.Conn.put_resp_content_type("text/event-stream")
+        |> Plug.Conn.send_resp(200, "data: [DONE]\n\n")
+      end)
+
+      _config = managed_provider_config(port, provider_name)
+      assert {:ok, provider} = Synapsis.Providers.get_by_name(provider_name)
+
+      config =
+        provider.config
+        |> Map.put("enabled_models", ["enabled-model"])
+        |> Map.put("backplane_models", [
+          %{
+            "external_id" => "disabled-model",
+            "source_available" => true,
+            "backplane_available" => true
+          },
+          %{
+            "external_id" => "enabled-model",
+            "source_available" => true,
+            "backplane_available" => true
+          }
+        ])
+
+      assert {:ok, _updated} = Synapsis.Providers.update(provider.id, %{config: config})
+      assert {:ok, runtime_config} = Synapsis.Providers.runtime_config(provider_name)
+
+      assert {:error, :model_unavailable} =
+               Adapter.stream(%Request{model: "disabled-model"}, runtime_config)
+
+      refute_receive :http_called, 100
+    end
+
     test "string-key config uses custom base URL and bearer credentials", %{
       bypass: bypass,
       port: port
@@ -463,6 +531,36 @@ defmodule Synapsis.Provider.AdapterTest do
       end)
 
       config = managed_provider_config(port, "managed-complete-provider")
+      request = %{model: "disabled-model", messages: []}
+
+      assert {:error, :model_unavailable} = Adapter.complete(request, config)
+      refute_receive :http_called, 100
+    end
+
+    test "persisted config cannot replace provider identity before an HTTP completion", %{
+      bypass: bypass,
+      port: port
+    } do
+      Synapsis.DataCase.clear_config_store(:provider)
+      on_exit(fn -> Synapsis.DataCase.clear_config_store(:provider) end)
+      caller = self()
+
+      Bypass.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+        send(caller, :http_called)
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(
+          200,
+          Jason.encode!(%{
+            "choices" => [%{"message" => %{"role" => "assistant", "content" => "wrong"}}]
+          })
+        )
+      end)
+
+      config =
+        managed_provider_config(port, "managed-complete-wrong-id", Ecto.UUID.generate())
+
       request = %{model: "disabled-model", messages: []}
 
       assert {:error, :model_unavailable} = Adapter.complete(request, config)
@@ -1015,11 +1113,34 @@ defmodule Synapsis.Provider.AdapterTest do
   # Helpers
   # ---------------------------------------------------------------------------
 
-  defp managed_provider_config(port, name) do
+  defp managed_provider_config(port, name, persisted_provider_id \\ :unset) do
     Synapsis.DataCase.clear_config_store(:backplane)
 
     assert {:ok, _connection} =
              Synapsis.Config.Store.put(:backplane, %{"id" => "source-1", "enabled" => true})
+
+    provider_config = %{
+      "managed_by" => "backplane",
+      "backplane_source_id" => "source-1",
+      "backplane_available" => true,
+      "backplane_models" => [
+        %{
+          "external_id" => "disabled-model",
+          "source_available" => false,
+          "backplane_available" => false
+        },
+        %{
+          "external_id" => "enabled-model",
+          "source_available" => true,
+          "backplane_available" => true
+        }
+      ]
+    }
+
+    provider_config =
+      if persisted_provider_id == :unset,
+        do: provider_config,
+        else: Map.put(provider_config, "provider_id", persisted_provider_id)
 
     assert {:ok, provider} =
              Synapsis.Providers.create(%{
@@ -1027,23 +1148,7 @@ defmodule Synapsis.Provider.AdapterTest do
                type: "openai",
                base_url: "http://localhost:#{port}",
                enabled: true,
-               config: %{
-                 "managed_by" => "backplane",
-                 "backplane_source_id" => "source-1",
-                 "backplane_available" => true,
-                 "backplane_models" => [
-                   %{
-                     "external_id" => "disabled-model",
-                     "source_available" => false,
-                     "backplane_available" => false
-                   },
-                   %{
-                     "external_id" => "enabled-model",
-                     "source_available" => true,
-                     "backplane_available" => true
-                   }
-                 ]
-               }
+               config: provider_config
              })
 
     assert {:ok, config} = Synapsis.Providers.runtime_config(provider.name)

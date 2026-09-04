@@ -215,6 +215,7 @@ defmodule Synapsis.Agent.QueryLoop do
          :ok <-
            ensure_model_runtime_available(
              ctx.agent_config[:provider],
+             ctx.provider_config,
              request[:model] || request["model"]
            ) do
       case stream_fn.(request, ctx.provider_config) do
@@ -225,9 +226,17 @@ defmodule Synapsis.Agent.QueryLoop do
     end
   end
 
-  defp ensure_model_runtime_available(nil, _model), do: :ok
+  defp ensure_model_runtime_available(nil, provider_config, model),
+    do: Synapsis.Providers.ensure_model_runtime_available(provider_config, model)
 
-  defp ensure_model_runtime_available(provider, model) do
+  defp ensure_model_runtime_available(provider, provider_config, model) do
+    case Map.get(provider_config, :provider_id, Map.get(provider_config, "provider_id")) do
+      nil -> ensure_named_model_runtime_available(provider, model)
+      _id -> Synapsis.Providers.ensure_model_runtime_available(provider_config, model)
+    end
+  end
+
+  defp ensure_named_model_runtime_available(provider, model) do
     case Synapsis.Providers.get_runtime_by_name(provider) do
       {:ok, provider_config} ->
         if Synapsis.Providers.model_runtime_available?(provider_config, model),
@@ -238,7 +247,9 @@ defmodule Synapsis.Agent.QueryLoop do
         error
 
       {:error, :not_found} ->
-        :ok
+        if Synapsis.Providers.fallback_configured?(provider, Synapsis.Config.load_auth()),
+          do: :ok,
+          else: {:error, :provider_unavailable}
     end
   end
 

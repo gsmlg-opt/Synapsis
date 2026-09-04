@@ -152,24 +152,8 @@ defmodule Synapsis.Provider.Adapter do
   end
 
   defp ensure_model_runtime_available(request, config) do
-    provider_id = Map.get(config, :provider_id, Map.get(config, "provider_id"))
     model = Map.get(request, :model, Map.get(request, "model"))
-
-    case provider_id do
-      nil ->
-        :ok
-
-      id ->
-        case Synapsis.Providers.get(id) do
-          {:ok, provider} ->
-            if Synapsis.Providers.model_runtime_available?(provider, model),
-              do: :ok,
-              else: {:error, :model_unavailable}
-
-          {:error, :not_found} ->
-            {:error, :provider_unavailable}
-        end
-    end
+    Synapsis.Providers.ensure_model_runtime_available(config, model)
   end
 
   # ---------------------------------------------------------------------------

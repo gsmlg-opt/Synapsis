@@ -87,6 +87,82 @@ defmodule Synapsis.Session.Worker.ConfigTest do
     refute_received :provider_called
   end
 
+  test "known built-in providers retain keyless local fallback resolution" do
+    assert {:ok, %{type: "anthropic"} = anthropic} = Config.resolve_provider_config("anthropic")
+    refute Map.has_key?(anthropic, :provider_id)
+
+    assert {:ok, %{type: "google"} = google} = Config.resolve_provider_config("google")
+    refute Map.has_key?(google, :provider_id)
+  end
+
+  test "renamed imported providers do not fall through to local config or custom streams" do
+    old_name = "backplane-old-#{System.unique_integer([:positive])}"
+    new_name = "backplane-new-#{System.unique_integer([:positive])}"
+
+    assert {:ok, provider} =
+             Providers.create(%{
+               name: old_name,
+               type: "openai",
+               enabled: true,
+               config: %{
+                 "managed_by" => "backplane",
+                 "backplane_source_id" => "source-1",
+                 "backplane_available" => true,
+                 "backplane_models" => [
+                   %{
+                     "external_id" => "disabled-model",
+                     "source_available" => false,
+                     "backplane_available" => false
+                   }
+                 ]
+               }
+             })
+
+    assert {:ok, provider_config} = Providers.runtime_config(old_name)
+    assert {:ok, _renamed} = Providers.update(provider.id, %{name: new_name})
+    assert {:error, :provider_unavailable} = Config.resolve_provider_config(old_name)
+
+    caller = self()
+
+    context =
+      Context.new(
+        session_id: Ecto.UUID.generate(),
+        system_prompt: "Test",
+        tools: [],
+        model: "disabled-model",
+        provider_config: provider_config,
+        subscriber: self(),
+        agent_config: %{
+          provider: old_name,
+          stream_fn: fn _request, _config ->
+            send(caller, :provider_called)
+            {:error, :unexpected_provider_call}
+          end
+        }
+      )
+
+    assert {:ok, :model_error, _state} =
+             QueryLoop.run(State.new(messages: [%{role: "user", content: "Hello"}]), context)
+
+    refute_received :provider_called
+
+    assert {:ok, _deleted} = Providers.delete(provider.id)
+    assert {:error, :provider_unavailable} = Config.resolve_provider_config(new_name)
+
+    deleted_context = %{
+      context
+      | agent_config: Map.put(context.agent_config, :provider, new_name)
+    }
+
+    assert {:ok, :model_error, _state} =
+             QueryLoop.run(
+               State.new(messages: [%{role: "user", content: "Hello again"}]),
+               deleted_context
+             )
+
+    refute_received :provider_called
+  end
+
   test "keeps local providers available even when they carry an unrelated false marker" do
     name = "local-provider-#{System.unique_integer([:positive])}"
 
