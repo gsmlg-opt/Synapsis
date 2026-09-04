@@ -111,7 +111,7 @@ defmodule Synapsis.Backplane.Snapshot do
 
   defp normalize_models(connection, {:ok, models}) when is_list(models) do
     with {:ok, capabilities} <- capabilities(connection, "model", models, &model_id/1) do
-      revision = revision(models)
+      revision = collection_revision(models)
 
       provider =
         capability(
@@ -120,7 +120,7 @@ defmodule Synapsis.Backplane.Snapshot do
           revision,
           "Backplane #{connection.name}",
           "provider",
-          connection.enabled,
+          true,
           %{"endpoint" => connection.endpoint, "protocol" => "openai-compatible"}
         )
 
@@ -135,7 +135,7 @@ defmodule Synapsis.Backplane.Snapshot do
 
   defp normalize_mcp(connection, {:ok, tools}) when is_list(tools) do
     with {:ok, capabilities} <- capabilities(connection, "mcp_tool", tools, &tool_id/1) do
-      revision = revision(tools)
+      revision = collection_revision(tools)
 
       server =
         capability(
@@ -144,7 +144,7 @@ defmodule Synapsis.Backplane.Snapshot do
           revision,
           "Backplane #{connection.name}",
           "mcp_server",
-          connection.enabled,
+          true,
           %{"endpoint" => connection.endpoint <> "/mcp", "transport" => "streamable_http"}
         )
 
@@ -160,7 +160,7 @@ defmodule Synapsis.Backplane.Snapshot do
   defp normalize_capability_list(connection, kind, {:ok, entries}, id_fun)
        when is_list(entries) do
     case capabilities(connection, kind, entries, id_fun) do
-      {:ok, normalized} -> {normalized, revision(entries), nil}
+      {:ok, normalized} -> {normalized, collection_revision(entries), nil}
       {:error, reason} -> {[], nil, reason}
     end
   end
@@ -185,7 +185,7 @@ defmodule Synapsis.Backplane.Snapshot do
             external_revision(entry),
             name,
             kind,
-            map_value(entry, "enabled") != false and connection.enabled,
+            map_value(entry, "enabled") != false,
             stringify_keys(entry)
           )
 
@@ -264,15 +264,20 @@ defmodule Synapsis.Backplane.Snapshot do
   end
 
   defp canonical_term(list) when is_list(list) do
-    list
-    |> Enum.map(&canonical_term/1)
-    |> Enum.sort_by(&:erlang.term_to_binary/1)
+    Enum.map(list, &canonical_term/1)
   end
 
   defp canonical_term(tuple) when is_tuple(tuple),
     do: tuple |> Tuple.to_list() |> canonical_term()
 
   defp canonical_term(value), do: value
+
+  defp collection_revision(entries) do
+    entries
+    |> Enum.map(&canonical_term/1)
+    |> Enum.sort_by(&:erlang.term_to_binary/1)
+    |> revision()
+  end
 
   defp now, do: DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
 end

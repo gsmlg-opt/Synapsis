@@ -130,6 +130,66 @@ defmodule Synapsis.Backplane.SnapshotTest do
              Snapshot.normalize(connection!(), surfaces, fetched_at: @fetched_at)
   end
 
+  test "enabled_by_source is independent of local connection enablement" do
+    connection = %{connection!() | enabled: false}
+
+    surfaces = %{
+      models:
+        {:ok, [%{"id" => "enabled-model"}, %{"id" => "disabled-model", "enabled" => false}]},
+      skills: {:ok, [%{"slug" => "enabled-skill", "content" => "Body"}]},
+      mcp_tools: {:ok, [%{"name" => "enabled-tool"}]}
+    }
+
+    assert {:ok, snapshot} = Snapshot.normalize(connection, surfaces, fetched_at: @fetched_at)
+    assert [%{enabled_by_source: true}] = snapshot.providers
+    assert [%{enabled_by_source: false}, %{enabled_by_source: true}] = snapshot.models
+    assert [%{enabled_by_source: true}] = snapshot.skills
+    assert [%{enabled_by_source: true}] = snapshot.mcp_servers
+    assert [%{enabled_by_source: true}] = snapshot.mcp_tools
+  end
+
+  test "preserves nested list order while ignoring top-level capability order" do
+    first_schema = %{
+      "name" => "tool",
+      "inputSchema" => %{
+        "prefixItems" => [%{"type" => "string"}, %{"type" => "integer"}]
+      }
+    }
+
+    reordered_schema =
+      put_in(first_schema, ["inputSchema", "prefixItems"], [
+        %{"type" => "integer"},
+        %{"type" => "string"}
+      ])
+
+    refute Snapshot.revision(first_schema) == Snapshot.revision(reordered_schema)
+
+    base = %{
+      models: {:ok, [%{"id" => "b"}, %{"id" => "a"}]},
+      skills: {:ok, []},
+      mcp_tools: {:ok, [first_schema, %{"name" => "other"}]}
+    }
+
+    assert {:ok, first} = Snapshot.normalize(connection!(), base, fetched_at: @fetched_at)
+
+    reordered = %{
+      base
+      | models: {:ok, Enum.reverse(elem(base.models, 1))},
+        mcp_tools: {:ok, Enum.reverse(elem(base.mcp_tools, 1))}
+    }
+
+    assert {:ok, second} = Snapshot.normalize(connection!(), reordered, fetched_at: @fetched_at)
+    assert first.source_revision == second.source_revision
+    assert first.surface_revisions == second.surface_revisions
+
+    nested_changed = put_in(base, [:mcp_tools], {:ok, [reordered_schema, %{"name" => "other"}]})
+
+    assert {:ok, third} =
+             Snapshot.normalize(connection!(), nested_changed, fetched_at: @fetched_at)
+
+    refute first.surface_revisions.mcp_tools == third.surface_revisions.mcp_tools
+  end
+
   defp connection! do
     {:ok, connection} =
       Connection.new(%{

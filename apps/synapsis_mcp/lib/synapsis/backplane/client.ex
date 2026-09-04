@@ -5,6 +5,10 @@ defmodule Synapsis.Backplane.Client do
 
   @default_timeout 5_000
   @skill_limit 100
+  @default_max_models_response_bytes 4 * 1_024 * 1_024
+  @default_max_skills_response_bytes 2 * 1_024 * 1_024
+  @default_max_skill_detail_response_bytes 2 * 1_024 * 1_024
+  @default_max_mcp_response_bytes 4 * 1_024 * 1_024
   @default_max_archive_bytes 4 * 1_024 * 1_024
   @default_max_expanded_bytes 8 * 1_024 * 1_024
   @default_max_skill_content_bytes 1 * 1_024 * 1_024
@@ -35,11 +39,19 @@ defmodule Synapsis.Backplane.Client do
 
   def fetch_models(%Connection{} = connection, opts \\ []) do
     with {:ok, %{"data" => models}} when is_list(models) <-
-           get_json(connection.endpoint <> "/v1/models", auth_headers(connection), opts),
-         true <- length(models) <= @skill_limit do
+           get_json(
+             connection.endpoint <> "/v1/models",
+             auth_headers(connection),
+             response_bound(
+               opts,
+               :max_models_response_bytes,
+               @default_max_models_response_bytes,
+               :models_response_too_large
+             ),
+             opts
+           ) do
       {:ok, models}
     else
-      false -> {:error, :models_limit_exceeded}
       {:ok, _body} -> {:error, :invalid_models_response}
       error -> error
     end
@@ -50,7 +62,17 @@ defmodule Synapsis.Backplane.Client do
     url = connection.endpoint <> "/skills?limit=#{@skill_limit}"
 
     with {:ok, %{"data" => skills}} when is_list(skills) <-
-           get_json(url, auth_headers(connection), opts),
+           get_json(
+             url,
+             auth_headers(connection),
+             response_bound(
+               opts,
+               :max_skills_response_bytes,
+               @default_max_skills_response_bytes,
+               :skills_response_too_large
+             ),
+             opts
+           ),
          true <- length(skills) <= @skill_limit do
       {:ok, skills}
     else
@@ -67,6 +89,12 @@ defmodule Synapsis.Backplane.Client do
            get_json(
              connection.endpoint <> "/skills/" <> encoded_slug,
              auth_headers(connection),
+             response_bound(
+               opts,
+               :max_skill_detail_response_bytes,
+               @default_max_skill_detail_response_bytes,
+               :skill_detail_response_too_large
+             ),
              opts
            ),
          {:ok, detail} <- maybe_load_skill_content(connection, encoded_slug, detail, opts) do
@@ -98,16 +126,25 @@ defmodule Synapsis.Backplane.Client do
       "params" => %{}
     }
 
-    with {:ok, response} <- post_json(url, initialize, auth_headers, opts),
+    response_bound =
+      response_bound(
+        opts,
+        :max_mcp_response_bytes,
+        @default_max_mcp_response_bytes,
+        :mcp_response_too_large
+      )
+
+    with {:ok, response} <- post_json(url, initialize, auth_headers, response_bound, opts),
          :ok <- mcp_result(response.body),
          session_headers when session_headers != [] <- session_header(response),
          {:ok, _initialized_response} <-
-           post_json(url, initialized, auth_headers ++ session_headers, opts),
+           post_json(url, initialized, auth_headers ++ session_headers, response_bound, opts),
          {:ok, listed} <-
            post_json(
              url,
              %{"jsonrpc" => "2.0", "id" => 2, "method" => "tools/list", "params" => %{}},
              auth_headers ++ session_headers,
+             response_bound,
              opts
            ),
          {:ok, tools} <- tools_result(listed.body) do
@@ -139,100 +176,198 @@ defmodule Synapsis.Backplane.Client do
     end
   end
 
-  defp maybe_load_skill_content(_connection, _slug, %{"content" => content} = detail, opts)
+  defp maybe_load_skill_content(
+         _connection,
+         _slug,
+         %{"source_kind" => "generated", "content" => content} = detail,
+         opts
+       )
        when is_binary(content) do
     if byte_size(content) <=
          option(opts, :max_skill_content_bytes, @default_max_skill_content_bytes) do
-      {:ok, detail}
+      {:ok, Map.put(detail, "content_available", true)}
     else
       {:error, :skill_content_too_large}
     end
   end
 
   defp maybe_load_skill_content(connection, slug, %{"source_kind" => "archive"} = detail, opts) do
-    with {:ok, archive} <-
+    with {:ok, expected_hash} <- archive_content_hash(detail),
+         {:ok, archive} <-
            get_binary(
              connection.endpoint <> "/skills/" <> slug <> "/archive",
              auth_headers(connection),
              option(opts, :max_archive_bytes, @default_max_archive_bytes),
              opts
            ),
+         :ok <- verify_archive_content_hash(archive, expected_hash),
          {:ok, content} <- extract_skill_md(archive, opts) do
-      {:ok, Map.put(detail, "content", content)}
+      {:ok, detail |> Map.put("content", content) |> Map.put("content_available", true)}
     end
   end
 
   defp maybe_load_skill_content(_connection, _slug, %{"source_kind" => "generated"}, _opts),
     do: {:error, :missing_generated_skill_content}
 
-  defp maybe_load_skill_content(connection, slug, %{"files" => files} = detail, opts)
-       when is_list(files),
-       do:
-         maybe_load_skill_content(
-           connection,
-           slug,
-           Map.put(detail, "source_kind", "archive"),
-           opts
-         )
+  # WORKAROUND(upstream): gsmlg-opt/backplane#30
+  defp maybe_load_skill_content(
+         _connection,
+         slug,
+         %{"source_kind" => source_kind} = detail,
+         _opts
+       )
+       when source_kind in ["database", "github"] do
+    {:ok,
+     detail
+     |> Map.put("content_available", false)
+     |> Map.put("content_unavailable_reason", "source_kind_not_exportable")
+     |> Map.put("content_reference", %{
+       "slug" => slug,
+       "source_kind" => source_kind,
+       "upstream_issue" => "gsmlg-opt/backplane#30"
+     })}
+  end
+
+  defp maybe_load_skill_content(_connection, _slug, %{"content" => content} = detail, opts)
+       when is_binary(content) do
+    if byte_size(content) <=
+         option(opts, :max_skill_content_bytes, @default_max_skill_content_bytes) do
+      {:ok, Map.put(detail, "content_available", true)}
+    else
+      {:error, :skill_content_too_large}
+    end
+  end
 
   defp maybe_load_skill_content(_connection, _slug, _detail, _opts),
     do: {:error, :missing_skill_content}
 
-  defp get_json(url, headers, opts) do
-    case Req.get(url, [headers: headers] ++ request_opts(opts)) do
-      {:ok, %Req.Response{status: status, body: body}} when status in 200..299 -> {:ok, body}
-      {:ok, %Req.Response{status: status}} -> {:error, {:http_status, status}}
-      {:error, reason} -> {:error, reason}
+  defp archive_content_hash(%{"content_hash" => hash}) when is_binary(hash) do
+    normalized = String.downcase(hash)
+
+    if Regex.match?(~r/^[a-f0-9]{64}$/, normalized),
+      do: {:ok, normalized},
+      else: {:error, :invalid_archive_content_hash}
+  end
+
+  defp archive_content_hash(_detail), do: {:error, :missing_archive_content_hash}
+
+  defp verify_archive_content_hash(archive, expected_hash) do
+    actual_hash = archive |> then(&:crypto.hash(:sha256, &1)) |> Base.encode16(case: :lower)
+
+    if actual_hash == expected_hash,
+      do: :ok,
+      else: {:error, :archive_content_hash_mismatch}
+  end
+
+  defp get_json(url, headers, response_bound, opts) do
+    with {:ok, {_response, body}} <-
+           request_bounded(:get, url, headers, nil, response_bound, opts),
+         {:ok, decoded} <- decode_json(body) do
+      {:ok, decoded}
     end
   end
 
   defp get_binary(url, headers, max_bytes, opts) do
-    into = fn {:data, data}, {request, response} ->
-      body = response.body || ""
+    with {:ok, {_response, body}} <-
+           request_bounded(
+             :get,
+             url,
+             headers,
+             nil,
+             {max_bytes, :archive_too_large},
+             opts
+           ) do
+      {:ok, body}
+    end
+  end
 
-      if byte_size(body) + byte_size(data) <= max_bytes do
-        {:cont, {request, %{response | body: body <> data}}}
+  defp post_json(url, body, headers, response_bound, opts) do
+    with {:ok, {response, response_body}} <-
+           request_bounded(:post, url, headers, body, response_bound, opts),
+         {:ok, decoded} <- decode_optional_json(response_body) do
+      {:ok, %{response | body: decoded}}
+    end
+  end
+
+  defp request_bounded(method, url, headers, request_body, response_bound, opts) do
+    request_opts =
+      [
+        method: method,
+        url: url,
+        headers: headers,
+        raw: true,
+        into: bounded_into(response_bound)
+      ] ++ request_opts(opts)
+
+    request_opts =
+      if request_body == nil,
+        do: request_opts,
+        else: [{:json, request_body} | request_opts]
+
+    case Req.request(request_opts) do
+      {:ok, %Req.Response{} = response} -> bounded_response(response, response_bound)
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp bounded_into({max_bytes, _too_large_error}) do
+    fn {:data, data}, {request, response} ->
+      {size, chunks} =
+        Req.Response.get_private(response, :synapsis_backplane_body, {0, []})
+
+      next_size = size + byte_size(data)
+
+      if next_size <= max_bytes do
+        response =
+          Req.Response.put_private(
+            response,
+            :synapsis_backplane_body,
+            {next_size, [data | chunks]}
+          )
+
+        {:cont, {request, response}}
       else
         response = Req.Response.put_private(response, :synapsis_backplane_body_limit, true)
         {:halt, {request, response}}
       end
     end
-
-    case Req.get(url, [headers: headers, into: into] ++ request_opts(opts)) do
-      {:ok, %Req.Response{} = response} -> binary_response(response)
-      {:error, reason} -> {:error, reason}
-    end
   end
 
-  defp binary_response(response) do
+  defp bounded_response(response, {_max_bytes, too_large_error}) do
     cond do
       Req.Response.get_private(response, :synapsis_backplane_body_limit, false) ->
-        {:error, :archive_too_large}
+        {:error, too_large_error}
 
       response.status not in 200..299 ->
         {:error, {:http_status, response.status}}
 
-      not is_binary(response.body) ->
-        {:error, :invalid_archive_response}
-
       true ->
-        {:ok, response.body}
+        {_size, chunks} =
+          Req.Response.get_private(response, :synapsis_backplane_body, {0, []})
+
+        body = chunks |> Enum.reverse() |> IO.iodata_to_binary()
+        response = Req.Response.put_private(response, :synapsis_backplane_body, {0, []})
+        {:ok, {response, body}}
     end
   end
 
-  defp post_json(url, body, headers, opts) do
-    request_opts = [json: body, headers: headers] ++ request_opts(opts)
-
-    case Req.post(url, request_opts) do
-      {:ok, %Req.Response{status: status} = response} when status in 200..299 -> {:ok, response}
-      {:ok, %Req.Response{status: status}} -> {:error, {:http_status, status}}
-      {:error, reason} -> {:error, reason}
+  defp decode_json(body) do
+    case Jason.decode(body) do
+      {:ok, decoded} -> {:ok, decoded}
+      {:error, _reason} -> {:error, :invalid_json_response}
     end
   end
+
+  defp decode_optional_json(""), do: {:ok, ""}
+  defp decode_optional_json(body), do: decode_json(body)
 
   defp request_opts(opts) do
     timeout = option(opts, :timeout, @default_timeout)
     [receive_timeout: timeout, connect_options: [timeout: timeout], retry: false]
+  end
+
+  defp response_bound(opts, key, default, too_large_error) do
+    {option(opts, key, default), too_large_error}
   end
 
   defp extract_skill_md(archive, opts) when is_binary(archive) do
