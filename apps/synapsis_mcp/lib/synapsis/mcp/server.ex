@@ -33,6 +33,7 @@ defmodule Synapsis.MCP.Server do
   alias Synapsis.MCP.Response
   alias Synapsis.MCP.Transport
   alias Synapsis.MCPConfig
+  alias Synapsis.MCPConfigs
   alias Synapsis.Tool.Registry
 
   @client_info %{"name" => "synapsis", "version" => "0.1.0"}
@@ -109,7 +110,15 @@ defmodule Synapsis.MCP.Server do
   end
 
   @impl true
-  def handle_call({:execute, full_tool_name, input, _ctx}, _from, %{client: client} = state) do
+  def handle_call({:execute, full_tool_name, input, _ctx}, _from, state) do
+    if current_runtime_available?(state.config) do
+      execute_tool(state.client, full_tool_name, input, state)
+    else
+      {:reply, {:error, :mcp_unavailable}, state}
+    end
+  end
+
+  defp execute_tool(client, full_tool_name, input, state) do
     raw = Response.raw_tool_name(full_tool_name)
 
     case MCPClient.call_tool(client, raw, input, timeout: @tool_timeout) do
@@ -192,6 +201,17 @@ defmodule Synapsis.MCP.Server do
     case Process.whereis(Registry) do
       nil -> {:error, :registry_not_started}
       pid -> {:ok, Process.monitor(pid)}
+    end
+  end
+
+  defp current_runtime_available?(%MCPConfig{id: nil} = config) do
+    MCPConfigs.runtime_available?(config)
+  end
+
+  defp current_runtime_available?(%MCPConfig{id: id}) do
+    case MCPConfigs.get(id) do
+      nil -> false
+      config -> MCPConfigs.runtime_available?(config)
     end
   end
 

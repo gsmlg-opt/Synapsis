@@ -3,6 +3,7 @@ defmodule Synapsis.MCP.ServerTest do
 
   alias Synapsis.MCP.Server
   alias Synapsis.MCPConfig
+  alias Synapsis.MCPConfigs
   alias Synapsis.Tool.Registry
 
   setup do
@@ -10,11 +11,11 @@ defmodule Synapsis.MCP.ServerTest do
     {:ok, bypass: bypass}
   end
 
-  defp stub_mcp(bypass, server_name) do
+  defp stub_mcp(bypass, server_name, call_observer \\ nil) do
     Bypass.stub(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       req = Jason.decode!(body)
-      handle_rpc(conn, req, server_name)
+      handle_rpc(conn, req, server_name, call_observer)
     end)
 
     # tolerate any other requests the MCP client makes (GET sse channel, etc.)
@@ -27,7 +28,7 @@ defmodule Synapsis.MCP.ServerTest do
     end)
   end
 
-  defp handle_rpc(conn, %{"id" => id} = req, server_name) do
+  defp handle_rpc(conn, %{"id" => id} = req, server_name, call_observer) do
     result =
       case req["method"] do
         "initialize" ->
@@ -45,6 +46,7 @@ defmodule Synapsis.MCP.ServerTest do
           }
 
         "tools/call" ->
+          if call_observer, do: send(call_observer, {:mcp_tool_called, req["params"]})
           %{"content" => [%{"type" => "text", "text" => req["params"]["arguments"]["text"]}]}
 
         _ ->
@@ -56,7 +58,7 @@ defmodule Synapsis.MCP.ServerTest do
     |> Plug.Conn.resp(200, Jason.encode!(%{"jsonrpc" => "2.0", "id" => id, "result" => result}))
   end
 
-  defp handle_rpc(conn, _notification, _server_name) do
+  defp handle_rpc(conn, _notification, _server_name, _call_observer) do
     Plug.Conn.resp(conn, 202, "")
   end
 
@@ -103,6 +105,49 @@ defmodule Synapsis.MCP.ServerTest do
 
     GenServer.stop(pid)
     assert wait_until(fn -> match?({:error, :not_found}, Registry.lookup(tool)) end)
+  end
+
+  test "rejects execution when the persisted config becomes runtime-unavailable", %{
+    bypass: bypass
+  } do
+    name = "stale_#{System.unique_integer([:positive])}"
+    stub_mcp(bypass, name, self())
+
+    source_config = %{
+      "managed_by" => "backplane",
+      "backplane_source_id" => "source-1",
+      "backplane_available" => true
+    }
+
+    {:ok, config} =
+      MCPConfigs.create(%{
+        name: name,
+        transport: "streamable_http",
+        url: "http://localhost:#{bypass.port}",
+        config: source_config
+      })
+
+    {:ok, pid} = Server.start_link(config)
+
+    on_exit(fn ->
+      if Process.alive?(pid), do: GenServer.stop(pid)
+      if current = MCPConfigs.get(config.id), do: MCPConfigs.delete(current)
+    end)
+
+    tool = "mcp:#{name}:echo"
+    assert wait_until(fn -> match?({:ok, {:process, ^pid, _opts}}, Registry.lookup(tool)) end)
+
+    assert {:ok, unavailable} =
+             MCPConfigs.update(config, %{
+               config: Map.put(source_config, "backplane_available", false)
+             })
+
+    refute MCPConfigs.runtime_available?(unavailable)
+
+    assert {:error, :mcp_unavailable} =
+             GenServer.call(pid, {:execute, tool, %{"text" => "blocked"}, %{}}, 10_000)
+
+    refute_receive {:mcp_tool_called, _params}, 100
   end
 
   defp wait_until(fun, tries \\ 100) do

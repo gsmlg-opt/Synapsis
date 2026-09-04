@@ -21,6 +21,18 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
 
     @impl true
     def init(state), do: {:ok, state}
+
+    @impl true
+    def handle_call({:register_tool, tool_name}, _from, state) do
+      :ok =
+        Synapsis.Tool.Registry.register_process(tool_name, self(),
+          description: "Fake tool",
+          parameters: %{},
+          plugin: :mcp
+        )
+
+      {:reply, :ok, state}
+    end
   end
 
   defp create_mcp_config(attrs) do
@@ -151,6 +163,46 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
 
       updated = MCPConfigs.get(config.id)
       assert updated.enabled == true
+    end
+
+    test "disabling a running MCP stops it and unregisters its tools", %{conn: conn} do
+      config = create_mcp_config(%{name: "disable-running", command: "test", enabled: true})
+
+      {:ok, pid} =
+        DynamicSupervisor.start_child(
+          Synapsis.MCP.DynamicSupervisor,
+          %{
+            id: {:fake, config.name},
+            start: {FakeMCPServer, :start_link, [[name: config.name]]},
+            restart: :temporary
+          }
+        )
+
+      on_exit(fn ->
+        if Process.alive?(pid) do
+          DynamicSupervisor.terminate_child(Synapsis.MCP.DynamicSupervisor, pid)
+        end
+      end)
+
+      tool_name = "mcp:#{config.name}:fake"
+      assert :ok = GenServer.call(pid, {:register_tool, tool_name})
+      assert {:ok, {:process, ^pid, _opts}} = Synapsis.Tool.Registry.lookup(tool_name)
+
+      {:ok, view, html} = live(conn, ~p"/settings/mcp")
+      assert html =~ "Running"
+
+      view
+      |> element(~s(input[phx-click="toggle_enabled"][phx-value-id="#{config.id}"]))
+      |> render_click()
+
+      refute MCPConfigs.get(config.id).enabled
+      assert wait_until(fn -> not Process.alive?(pid) end)
+
+      assert wait_until(fn ->
+               Synapsis.Tool.Registry.lookup(tool_name) == {:error, :not_found}
+             end)
+
+      refute config.name in Synapsis.MCP.list()
     end
 
     test "displays env var count for config with env", %{conn: conn} do

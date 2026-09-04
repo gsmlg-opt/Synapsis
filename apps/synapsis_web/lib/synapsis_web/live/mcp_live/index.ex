@@ -120,8 +120,18 @@ defmodule SynapsisWeb.MCPLive.Index do
 
       config ->
         case MCPConfigs.update(config, %{enabled: !config.enabled}) do
-          {:ok, _} -> {:noreply, assign(socket, configs: list_configs())}
-          {:error, _} -> {:noreply, put_flash(socket, :error, "Failed to update config")}
+          {:ok, updated} ->
+            socket =
+              if updated.enabled do
+                refresh_states(socket)
+              else
+                stop_disabled_server(socket, updated.name)
+              end
+
+            {:noreply, socket}
+
+          {:error, _} ->
+            {:noreply, put_flash(socket, :error, "Failed to update config")}
         end
     end
   end
@@ -220,6 +230,23 @@ defmodule SynapsisWeb.MCPLive.Index do
   defp refresh_states(socket) do
     configs = list_configs()
     assign(socket, configs: configs, plugin_states: load_plugin_states(configs))
+  end
+
+  defp stop_disabled_server(socket, name) do
+    case Synapsis.MCP.stop(name) do
+      :ok ->
+        refresh_states(socket)
+
+      {:error, :not_found} ->
+        refresh_states(socket)
+
+      {:error, reason} ->
+        Logger.warning("mcp_disable_stop_failed", name: name, reason: inspect(reason))
+
+        socket
+        |> refresh_states()
+        |> put_flash(:error, "MCP server was disabled but could not be stopped")
+    end
   end
 
   defp list_configs, do: MCPConfigs.list()

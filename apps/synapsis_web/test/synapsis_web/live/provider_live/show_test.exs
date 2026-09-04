@@ -443,8 +443,87 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
     end
 
     test "chat_send without registered provider shows error", %{conn: conn, provider: provider} do
-      # Ensure provider is not in the registry
-      Synapsis.Provider.Registry.unregister(provider.name)
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+
+      view
+      |> element(~s(div[phx-click="toggle_chat"]))
+      |> render_click()
+
+      # Simulate a stale open page after its provider has been deleted. Available
+      # persisted providers are intentionally rebuilt by the runtime resolver.
+      assert {:ok, _deleted} = Synapsis.Providers.delete(provider.id)
+
+      html = render_hook(view, "chat_send", %{"message" => "hello"})
+      assert html =~ "Provider not registered"
+    end
+
+    test "chat_send rejects an unavailable provider despite a stale registry entry", %{conn: conn} do
+      bypass = Bypass.open()
+      test_pid = self()
+
+      Bypass.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+        send(test_pid, :provider_http_called)
+
+        conn
+        |> Plug.Conn.put_resp_content_type("text/event-stream")
+        |> Plug.Conn.send_resp(200, "data: [DONE]\n\n")
+      end)
+
+      provider =
+        create_provider!(%{
+          name: "unavailable-chat",
+          type: "openai",
+          base_url: "http://localhost:#{bypass.port}",
+          api_key_encrypted: "stale-secret",
+          config: %{
+            "managed_by" => "backplane",
+            "backplane_source_id" => "source-1",
+            "backplane_available" => false,
+            "available_models" => [%{"id" => "stale-model", "name" => "Stale Model"}]
+          }
+        })
+
+      :ok =
+        Synapsis.Provider.Registry.register(provider.name, %{
+          type: "openai",
+          base_url: "http://localhost:#{bypass.port}",
+          api_key: "stale-secret"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+
+      view
+      |> element(~s(div[phx-click="toggle_chat"]))
+      |> render_click()
+
+      html = render_hook(view, "chat_send", %{"message" => "must not leave the process"})
+
+      refute_receive :provider_http_called, 200
+      assert {:error, :not_found} = Synapsis.Provider.Registry.get(provider.name)
+      assert html =~ "Provider is currently unavailable"
+    end
+
+    test "chat_send preserves available non-Backplane providers", %{conn: conn} do
+      bypass = Bypass.open()
+      test_pid = self()
+
+      Bypass.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+        send(test_pid, :local_provider_http_called)
+
+        conn
+        |> Plug.Conn.put_resp_content_type("text/event-stream")
+        |> Plug.Conn.send_resp(200, "data: [DONE]\n\n")
+      end)
+
+      provider =
+        create_provider!(%{
+          name: "local-chat",
+          type: "openai",
+          base_url: "http://localhost:#{bypass.port}",
+          config: %{
+            "available_models" => [%{"id" => "local-model", "name" => "Local Model"}]
+          }
+        })
 
       {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
 
@@ -453,7 +532,9 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       |> render_click()
 
       html = render_hook(view, "chat_send", %{"message" => "hello"})
-      assert html =~ "Provider not registered"
+
+      assert_receive :local_provider_http_called, 1_000
+      refute html =~ "Provider is currently unavailable"
     end
 
     test "chat_clear resets messages", %{conn: conn, provider: provider} do

@@ -161,7 +161,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
     messages =
       socket.assigns.chat_messages ++ [%{role: "user", content: message}]
 
-    case Synapsis.Provider.Registry.get(provider.name) do
+    case Synapsis.Providers.runtime_config(provider.name) do
       {:ok, config} ->
         request = build_chat_request(config, model, messages)
 
@@ -173,6 +173,14 @@ defmodule SynapsisWeb.ProviderLive.Show do
            chat_streaming: true,
            chat_stream_text: "",
            chat_stream_ref: ref
+         )}
+
+      {:error, :provider_unavailable} ->
+        {:noreply,
+         assign(socket,
+           chat_messages:
+             messages ++
+               [%{role: "error", content: "Provider is currently unavailable."}]
          )}
 
       {:error, _} ->
