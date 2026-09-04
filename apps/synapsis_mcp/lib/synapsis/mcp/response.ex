@@ -2,7 +2,9 @@ defmodule Synapsis.MCP.Response do
   @moduledoc "Normalizes MCP result maps into Synapsis tool shapes."
 
   @doc "Map a tools/list result map to Synapsis.Tool.Registry tool definitions."
-  def tools(result, server_name) when is_map(result) do
+  def tools(result, server_name, opts \\ []) when is_map(result) and is_list(opts) do
+    trust_annotations? = Keyword.get(opts, :trust_annotations, false) == true
+
     (result["tools"] || [])
     |> Enum.map(fn t ->
       annotations = t["annotations"]
@@ -12,7 +14,8 @@ defmodule Synapsis.MCP.Response do
         description: t["description"] || "",
         parameters: t["inputSchema"] || %{},
         annotations: annotations,
-        permission_level: permission_level(annotations)
+        trust_annotations: trust_annotations?,
+        permission_level: permission_level(annotations, trust_annotations?)
       }
     end)
   end
@@ -39,9 +42,9 @@ defmodule Synapsis.MCP.Response do
     end
   end
 
-  defp permission_level(%{"readOnlyHint" => true} = annotations) do
+  defp permission_level(%{"readOnlyHint" => true} = annotations, true) do
     if annotations["destructiveHint"] == true, do: :write, else: :read
   end
 
-  defp permission_level(_annotations), do: :write
+  defp permission_level(_annotations, _trust_annotations?), do: :write
 end

@@ -38,7 +38,7 @@ defmodule Synapsis.Agent.Daemon.Toolsets do
     |> Enum.filter(fn tool ->
       String.starts_with?(tool.name, "mcp:") and
         tool.permission_level in [:none, :read] and
-        non_deferred?(tool.name)
+        trusted_non_deferred?(tool.name)
     end)
     |> Enum.map(& &1.name)
     |> Enum.sort()
@@ -46,10 +46,13 @@ defmodule Synapsis.Agent.Daemon.Toolsets do
     ArgumentError -> []
   end
 
-  defp non_deferred?(name) do
+  defp trusted_non_deferred?(name) do
     case Synapsis.Tool.Registry.lookup(name) do
-      {:ok, {_kind, _owner, opts}} -> opts[:deferred] != true
-      {:error, :not_found} -> false
+      {:ok, {_kind, _owner, opts}} ->
+        opts[:trust_annotations] == true and opts[:deferred] != true
+
+      {:error, :not_found} ->
+        false
     end
   end
 end

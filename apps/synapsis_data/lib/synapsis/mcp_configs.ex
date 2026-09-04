@@ -39,6 +39,22 @@ defmodule Synapsis.MCPConfigs do
 
   def reconciliation_available?(_config), do: false
 
+  @doc "Whether this MCP source may use server-provided tool annotations for daemon safety."
+  def trust_tool_annotations?(%MCPConfig{enabled: true, config: config}) when is_map(config) do
+    with true <- backplane_managed?(config),
+         source_id when is_binary(source_id) and source_id != "" <-
+           Map.get(config, "backplane_source_id", Map.get(config, :backplane_source_id)),
+         {:ok, connection} when is_map(connection) <- Store.get(:backplane, source_id),
+         true <- source_connection_available?(connection, "tools"),
+         {:ok, options} <- connection_options(connection) do
+      Map.get(options, "trust_mcp_annotations") == true
+    else
+      _untrusted -> false
+    end
+  end
+
+  def trust_tool_annotations?(_config), do: false
+
   @doc "Get an MCP config by id."
   def get(id) do
     case Store.get(@store_type, id) do
@@ -135,6 +151,32 @@ defmodule Synapsis.MCPConfigs do
           _malformed ->
             {:error, :invalid_metadata}
         end
+    end
+  end
+
+  defp connection_options(connection) do
+    case Map.get(connection, "connection_options", Map.get(connection, :connection_options)) do
+      options when is_map(options) ->
+        {:ok, options}
+
+      nil ->
+        case Map.get(
+               connection,
+               "connection_options_json",
+               Map.get(connection, :connection_options_json)
+             ) do
+          encoded when is_binary(encoded) ->
+            case Jason.decode(encoded) do
+              {:ok, options} when is_map(options) -> {:ok, options}
+              _invalid -> {:error, :invalid_connection_options}
+            end
+
+          _missing_or_malformed ->
+            {:error, :invalid_connection_options}
+        end
+
+      _malformed ->
+        {:error, :invalid_connection_options}
     end
   end
 

@@ -564,6 +564,12 @@ defmodule SynapsisWeb.AgentLive.Daemon do
                   value="true"
                   label="Sync on start"
                 />
+                <input type="hidden" name="connection[trust_mcp_annotations]" value="false" />
+                <.dm_checkbox
+                  field={@connection_form[:trust_mcp_annotations]}
+                  value="true"
+                  label="Trust MCP read-only hints for autonomous runs"
+                />
               </div>
               <:actions>
                 <span class="text-xs text-on-surface-variant">
@@ -1061,7 +1067,8 @@ defmodule SynapsisWeb.AgentLive.Daemon do
         "endpoint" => "",
         "credential" => "",
         "enabled" => true,
-        "sync_on_start" => true
+        "sync_on_start" => true,
+        "trust_mcp_annotations" => false
       },
       as: :connection
     )
@@ -1072,7 +1079,10 @@ defmodule SynapsisWeb.AgentLive.Daemon do
       name: params |> Map.get("name", "") |> String.trim(),
       endpoint: params |> Map.get("endpoint", "") |> String.trim(),
       enabled: Map.get(params, "enabled") == "true",
-      sync_on_start: Map.get(params, "sync_on_start") == "true"
+      sync_on_start: Map.get(params, "sync_on_start") == "true",
+      connection_options: %{
+        "trust_mcp_annotations" => Map.get(params, "trust_mcp_annotations") == "true"
+      }
     }
 
     case Map.get(params, "credential") do

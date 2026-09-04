@@ -93,7 +93,7 @@ defmodule Synapsis.MCP.ServerTest do
     assert wait_until(fn -> match?({:error, :not_found}, Registry.lookup(tool)) end)
   end
 
-  test "registers MCP annotation-derived permission metadata conservatively", %{bypass: bypass} do
+  test "preserves untrusted MCP annotations without downgrading permission", %{bypass: bypass} do
     name = "metadata_#{System.unique_integer([:positive])}"
 
     tools = [
@@ -126,7 +126,8 @@ defmodule Synapsis.MCP.ServerTest do
 
     assert {:ok, {:process, ^pid, read_opts}} = Registry.lookup("mcp:#{name}:read_notes")
     assert read_opts[:category] == :mcp
-    assert read_opts[:permission_level] == :read
+    assert read_opts[:permission_level] == :write
+    assert read_opts[:trust_annotations] == false
     assert read_opts[:annotations] == %{"readOnlyHint" => true, "openWorldHint" => false}
 
     assert {:ok, {:process, ^pid, destructive_opts}} =
@@ -138,6 +139,57 @@ defmodule Synapsis.MCP.ServerTest do
              Registry.lookup("mcp:#{name}:unannotated")
 
     assert unannotated_opts[:permission_level] == :write
+  end
+
+  test "uses MCP read-only annotations only for an explicitly trusted Backplane source", %{
+    bypass: bypass
+  } do
+    source_id = Ecto.UUID.generate()
+    name = "trusted_metadata_#{System.unique_integer([:positive])}"
+
+    assert {:ok, _connection} =
+             Store.put(:backplane, %{
+               "id" => source_id,
+               "enabled" => true,
+               "connection_options_json" => Jason.encode!(%{"trust_mcp_annotations" => true})
+             })
+
+    tools = [
+      %{
+        "name" => "read_notes",
+        "annotations" => %{"readOnlyHint" => true, "destructiveHint" => false}
+      }
+    ]
+
+    stub_mcp(bypass, name, nil, tools)
+
+    {:ok, config} =
+      MCPConfigs.create(%{
+        name: name,
+        transport: "streamable_http",
+        url: "http://localhost:#{bypass.port}",
+        config: %{
+          "managed_by" => "backplane",
+          "backplane_source_id" => source_id,
+          "backplane_available" => true,
+          "backplane_tools" => [
+            %{"external_id" => "read_notes", "backplane_available" => true}
+          ]
+        }
+      })
+
+    on_exit(fn ->
+      if current = MCPConfigs.get(config.id), do: MCPConfigs.delete(current)
+      Store.delete(:backplane, source_id)
+    end)
+
+    pid = start_supervised!({Server, config})
+    tool = "mcp:#{name}:read_notes"
+
+    assert wait_until(fn -> match?({:ok, {:process, ^pid, _opts}}, Registry.lookup(tool)) end)
+    assert {:ok, {:process, ^pid, opts}} = Registry.lookup(tool)
+    assert opts[:permission_level] == :read
+    assert opts[:trust_annotations] == true
   end
 
   test "re-registers discovered tools after tool registry restart", %{bypass: bypass} do

@@ -52,6 +52,13 @@ that environment variable and is never printed. The CLI refuses to send that
 credential through a non-loopback plaintext CLI host or to configure it for a
 non-loopback plaintext Backplane endpoint.
 
+MCP tool annotations are server-provided hints, not an authorization decision.
+Imported MCP tools remain outside autonomous daemon toolsets unless the operator
+explicitly enables **Trust MCP read-only hints for autonomous runs** when adding
+the Backplane source, or passes `--trust-mcp-annotations` to the CLI. Even then,
+only tools declaring `readOnlyHint: true` without `destructiveHint: true` enter
+the safe daemon profiles.
+
 Use `--host` to select the endpoint. For the production mTLS boundary, pass the
 client certificate and private key as a pair; use `--ca-cert` when the server CA
 is not in the system trust store:

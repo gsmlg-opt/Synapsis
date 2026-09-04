@@ -116,7 +116,11 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
     stub_annotated_mcp(mcp_bypass, server_name, self())
 
     assert {:ok, _connection} =
-             Synapsis.Config.Store.put(:backplane, %{"id" => source_id, "enabled" => true})
+             Synapsis.Config.Store.put(:backplane, %{
+               "id" => source_id,
+               "enabled" => true,
+               "connection_options_json" => Jason.encode!(%{"trust_mcp_annotations" => true})
+             })
 
     assert {:ok, mcp_config} =
              Synapsis.MCPConfigs.create(%{

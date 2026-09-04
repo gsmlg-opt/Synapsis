@@ -493,7 +493,8 @@ defmodule SynapsisWeb.AgentLive.DaemonTest do
             "endpoint" => "https://new-backplane.example",
             "credential" => "create-secret",
             "enabled" => "true",
-            "sync_on_start" => "true"
+            "sync_on_start" => "true",
+            "trust_mcp_annotations" => "true"
           }
         })
         |> render_submit()
@@ -505,7 +506,8 @@ defmodule SynapsisWeb.AgentLive.DaemonTest do
                       endpoint: "https://new-backplane.example",
                       credential: "create-secret",
                       enabled: true,
-                      sync_on_start: true
+                      sync_on_start: true,
+                      connection_options: %{"trust_mcp_annotations" => true}
                     }}
 
     assert_receive {:operation_waiting, :connection_create, operation_pid}

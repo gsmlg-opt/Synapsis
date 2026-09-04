@@ -185,6 +185,63 @@ defmodule Synapsis.MCPConfigsTest do
     end
   end
 
+  test "MCP annotation trust requires an enabled Backplane source and explicit local opt-in" do
+    source_id = Ecto.UUID.generate()
+
+    local = %MCPConfig{name: "local", enabled: true, config: %{}}
+
+    managed = %MCPConfig{
+      name: "managed",
+      enabled: true,
+      config: %{
+        "managed_by" => "backplane",
+        "backplane_source_id" => source_id,
+        "backplane_available" => true
+      }
+    }
+
+    refute MCPConfigs.trust_tool_annotations?(local)
+    refute MCPConfigs.trust_tool_annotations?(managed)
+
+    assert {:ok, _connection} =
+             Store.put(:backplane, %{
+               "id" => source_id,
+               "enabled" => true,
+               "connection_options_json" => Jason.encode!(%{"trust_mcp_annotations" => false})
+             })
+
+    refute MCPConfigs.trust_tool_annotations?(managed)
+
+    assert {:ok, _connection} =
+             Store.put(:backplane, %{
+               "id" => source_id,
+               "enabled" => true,
+               "connection_options_json" => Jason.encode!(%{"trust_mcp_annotations" => true})
+             })
+
+    assert MCPConfigs.trust_tool_annotations?(managed)
+
+    for malformed <- ["true", "null", "[]", "not-json"] do
+      assert {:ok, _connection} =
+               Store.put(:backplane, %{
+                 "id" => source_id,
+                 "enabled" => true,
+                 "connection_options_json" => malformed
+               })
+
+      refute MCPConfigs.trust_tool_annotations?(managed)
+    end
+
+    assert {:ok, _connection} =
+             Store.put(:backplane, %{
+               "id" => source_id,
+               "enabled" => false,
+               "connection_options_json" => Jason.encode!(%{"trust_mcp_annotations" => true})
+             })
+
+    refute MCPConfigs.trust_tool_annotations?(managed)
+  end
+
   defp errors_on(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {msg, _opts} -> msg end)
   end

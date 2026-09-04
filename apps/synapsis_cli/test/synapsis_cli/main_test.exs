@@ -30,6 +30,7 @@ defmodule SynapsisCli.MainTest do
       assert output =~ "synapsis dream run"
       assert output =~ "synapsis schedule run <name>"
       assert output =~ "synapsis backplane add <name> <endpoint>"
+      assert output =~ "--trust-mcp-annotations"
       assert output =~ "--credential-env VAR"
       assert output =~ "--client-cert PATH"
       assert output =~ "--client-key PATH"

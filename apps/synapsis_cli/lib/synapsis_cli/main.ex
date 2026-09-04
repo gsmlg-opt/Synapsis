@@ -25,6 +25,7 @@ defmodule SynapsisCli.Main do
           provider: :string,
           host: :string,
           credential_env: :string,
+          trust_mcp_annotations: :boolean,
           client_cert: :string,
           client_key: :string,
           ca_cert: :string,
@@ -121,6 +122,14 @@ defmodule SynapsisCli.Main do
          :ok <- allow_credential_transport(endpoint, opts[:credential_env]),
          {:ok, credential} <- credential_from_env(opts[:credential_env]) do
       body = %{name: name, endpoint: endpoint} |> put_if_present(:credential, credential)
+
+      body =
+        if opts[:trust_mcp_annotations] do
+          Map.put(body, :connection_options, %{"trust_mcp_annotations" => true})
+        else
+          body
+        end
+
       api_post(host, "/api/backplane/connections", body, opts)
     end
   end
@@ -616,7 +625,7 @@ defmodule SynapsisCli.Main do
       synapsis schedule list
       synapsis schedule run <name>
       synapsis backplane list
-      synapsis backplane add <name> <endpoint> [--credential-env VAR]
+      synapsis backplane add <name> <endpoint> [--credential-env VAR] [--trust-mcp-annotations]
       synapsis backplane test <name>
       synapsis backplane sync <name>
 
@@ -626,6 +635,7 @@ defmodule SynapsisCli.Main do
       --provider PROVIDER          Provider to use: anthropic, openai, google, local
       -h, --host URL               Server URL (default: http://localhost:4657)
       --credential-env VAR         Read a Backplane credential from VAR
+      --trust-mcp-annotations      Trust read-only hints for autonomous MCP use
       --client-cert PATH           Client certificate for mTLS
       --client-key PATH            Client private key for mTLS (required with certificate)
       --ca-cert PATH               Custom server CA certificate

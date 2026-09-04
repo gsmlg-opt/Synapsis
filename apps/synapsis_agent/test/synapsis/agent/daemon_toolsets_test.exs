@@ -22,22 +22,29 @@ defmodule Synapsis.Agent.DaemonToolsetsTest do
     assert {:ok, @dream ++ ["todo_write"]} = Toolsets.resolve("assistant_dream_todo")
   end
 
-  test "appends only enabled non-deferred read-only MCP tools to basic-derived profiles" do
+  test "appends only locally trusted, enabled, non-deferred read-only MCP tools" do
     suffix = System.unique_integer([:positive])
     safe_read = "mcp:notes-#{suffix}:read"
     safe_none = "mcp:notes-#{suffix}:status"
     unsafe_write = "mcp:notes-#{suffix}:write"
     disabled_read = "mcp:notes-#{suffix}:disabled"
     deferred_read = "mcp:notes-#{suffix}:deferred"
-    names = [safe_read, safe_none, unsafe_write, disabled_read, deferred_read]
+    untrusted_read = "mcp:notes-#{suffix}:untrusted"
+    names = [safe_read, safe_none, unsafe_write, disabled_read, deferred_read, untrusted_read]
 
     on_exit(fn -> Enum.each(names, &Synapsis.Tool.Registry.unregister/1) end)
 
     :ok =
-      Synapsis.Tool.Registry.register_process(safe_read, self(), permission_level: :read)
+      Synapsis.Tool.Registry.register_process(safe_read, self(),
+        permission_level: :read,
+        trust_annotations: true
+      )
 
     :ok =
-      Synapsis.Tool.Registry.register_process(safe_none, self(), permission_level: :none)
+      Synapsis.Tool.Registry.register_process(safe_none, self(),
+        permission_level: :none,
+        trust_annotations: true
+      )
 
     :ok =
       Synapsis.Tool.Registry.register_process(unsafe_write, self(), permission_level: :write)
@@ -45,14 +52,19 @@ defmodule Synapsis.Agent.DaemonToolsetsTest do
     :ok =
       Synapsis.Tool.Registry.register_process(disabled_read, self(),
         permission_level: :read,
+        trust_annotations: true,
         enabled: false
       )
 
     :ok =
       Synapsis.Tool.Registry.register_process(deferred_read, self(),
         permission_level: :read,
+        trust_annotations: true,
         deferred: true
       )
+
+    :ok =
+      Synapsis.Tool.Registry.register_process(untrusted_read, self(), permission_level: :read)
 
     for profile <-
           ~w(assistant_basic assistant_workspace assistant_coding assistant_dream assistant_dream_todo) do
@@ -62,6 +74,7 @@ defmodule Synapsis.Agent.DaemonToolsetsTest do
       refute unsafe_write in tools
       refute disabled_read in tools
       refute deferred_read in tools
+      refute untrusted_read in tools
     end
   end
 

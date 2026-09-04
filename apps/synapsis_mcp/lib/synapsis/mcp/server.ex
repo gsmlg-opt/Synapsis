@@ -123,7 +123,9 @@ defmodule Synapsis.MCP.Server do
       tools =
         response
         |> ProtocolResponse.unwrap()
-        |> Response.tools(config.name)
+        |> Response.tools(config.name,
+          trust_annotations: MCPConfigs.trust_tool_annotations?(config)
+        )
         |> runtime_available_tools(config, initial_availability)
 
       case register_tools(tools) do
@@ -222,6 +224,7 @@ defmodule Synapsis.MCP.Server do
          description: description,
          parameters: parameters,
          annotations: annotations,
+         trust_annotations: trust_annotations,
          permission_level: permission_level
        }) do
     Registry.register_process(name, self(),
@@ -231,6 +234,7 @@ defmodule Synapsis.MCP.Server do
       plugin: :mcp,
       category: :mcp,
       permission_level: permission_level,
+      trust_annotations: trust_annotations,
       annotations: annotations
     )
 

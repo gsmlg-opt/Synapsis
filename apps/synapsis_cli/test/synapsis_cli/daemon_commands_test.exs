@@ -127,6 +127,38 @@ defmodule SynapsisCli.DaemonCommandsTest do
            end) =~ "connection-id"
   end
 
+  test "backplane add forwards explicit local trust for MCP annotations" do
+    bypass = Bypass.open()
+    host = "http://localhost:#{bypass.port}"
+
+    Bypass.expect_once(bypass, "POST", "/api/backplane/connections", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+      assert %{
+               "name" => "trusted",
+               "endpoint" => "https://backplane.internal",
+               "connection_options" => %{"trust_mcp_annotations" => true}
+             } = Jason.decode!(body)
+
+      conn
+      |> Plug.Conn.put_resp_content_type("application/json")
+      |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => "trusted-id"}}))
+    end)
+
+    assert capture_io(fn ->
+             assert :ok =
+                      Main.run([
+                        "backplane",
+                        "add",
+                        "trusted",
+                        "https://backplane.internal",
+                        "--trust-mcp-annotations",
+                        "--host",
+                        host
+                      ])
+           end) =~ "trusted-id"
+  end
+
   test "backplane test resolves one exact connection name to its stable ID" do
     bypass = Bypass.open()
     host = "http://localhost:#{bypass.port}"

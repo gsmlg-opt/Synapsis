@@ -16,7 +16,7 @@ defmodule Synapsis.MCP.ResponseTest do
     assert tool.parameters == %{"type" => "object"}
   end
 
-  test "tools/2 preserves annotations and classifies only explicit non-destructive reads as read-only" do
+  test "tools/3 trusts explicit non-destructive read annotations only when locally authorized" do
     tools = [
       %{
         "name" => "read_notes",
@@ -33,7 +33,14 @@ defmodule Synapsis.MCP.ResponseTest do
       %{"name" => "unannotated"}
     ]
 
-    assert [read, destructive, unannotated] = Response.tools(%{"tools" => tools}, "notes")
+    assert [untrusted_read, _destructive, _unannotated] =
+             Response.tools(%{"tools" => tools}, "notes")
+
+    assert untrusted_read.annotations == hd(tools)["annotations"]
+    assert untrusted_read.permission_level == :write
+
+    assert [read, destructive, unannotated] =
+             Response.tools(%{"tools" => tools}, "notes", trust_annotations: true)
 
     assert read.annotations == hd(tools)["annotations"]
     assert read.permission_level == :read
