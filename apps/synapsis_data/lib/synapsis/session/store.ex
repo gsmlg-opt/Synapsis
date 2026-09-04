@@ -140,6 +140,15 @@ defmodule Synapsis.Session.Store do
     end
   end
 
+  @doc "Read at most `limit` newest turns in ascending order without decoding older turns."
+  @spec list_recent_turns(String.t(), pos_integer()) :: {:ok, [map()]} | {:error, term()}
+  def list_recent_turns(id, limit)
+      when is_binary(id) and is_integer(limit) and limit > 0 do
+    with {:ok, turn_count} <- stored_turn_count(id) do
+      read_recent_turn_range(id, turn_count, limit)
+    end
+  end
+
   @doc "Count durable turns without decoding their payloads."
   def count_turns(id) when is_binary(id) do
     case KV.prefix_scan(turns_prefix(id)) do
@@ -159,7 +168,10 @@ defmodule Synapsis.Session.Store do
   """
   def commit_turn(id, n, turn, meta)
       when is_binary(id) and is_integer(n) and n >= 0 and is_map(turn) and is_map(meta) do
-    case KV.put_many([{turn_key(id, n), turn}, {meta_key(id), meta}]) do
+    operations =
+      [{turn_key(id, n), turn}, {meta_key(id), meta}] ++ turn_count_operation(id, meta)
+
+    case KV.put_many(operations) do
       {:ok, _results} -> :ok
       :ok -> :ok
       other -> normalize_error(other)
@@ -168,8 +180,9 @@ defmodule Synapsis.Session.Store do
 
   @doc """
   Replace the full ordered turn list for a session in one atomic batch: drops the
-  existing `turns/*` and writes `turns/0..n-1` from `turn_maps`. Meta is left
-  untouched. Used by the message write path (a message == a turn).
+  existing `turns/*` and writes `turns/0..n-1` from `turn_maps`. A session-scoped
+  turn count is kept current for bounded range reads; session meta is untouched.
+  Used by the message write path (a message == a turn).
   """
   def replace_turns(id, turn_maps) when is_binary(id) and is_list(turn_maps) do
     old_keys =
@@ -187,9 +200,9 @@ defmodule Synapsis.Session.Store do
     stale = old_keys -- Enum.map(new_puts, fn {k, _v} -> k end)
     if stale != [], do: KV.delete_many(stale)
 
-    case new_puts do
-      [] -> :ok
-      puts -> with {:ok, _} <- KV.put_many(puts), do: :ok
+    with :ok <- persist_replacement_turns(new_puts),
+         :ok <- update_stored_turn_count(id, length(turn_maps)) do
+      :ok
     end
   end
 
@@ -218,6 +231,87 @@ defmodule Synapsis.Session.Store do
     case Application.get_env(:concord, :max_batch_size, @default_batch_size) do
       size when is_integer(size) and size > 0 -> size
       _ -> @default_batch_size
+    end
+  end
+
+  defp persist_replacement_turns([]), do: :ok
+
+  defp persist_replacement_turns(puts) do
+    with {:ok, _} <- KV.put_many(puts), do: :ok
+  end
+
+  defp update_stored_turn_count(id, count) do
+    case KV.put(value_key(id, "turn_count"), count) do
+      :ok -> :ok
+      {:ok, _value} -> :ok
+      other -> normalize_error(other)
+    end
+  end
+
+  defp stored_turn_count(id) do
+    case KV.get(value_key(id, "turn_count")) do
+      {:ok, count} when is_integer(count) and count >= 0 -> {:ok, count}
+      {:error, :not_found} -> stored_meta_turn_count(id)
+      {:ok, _invalid} -> stored_meta_turn_count(id)
+      other -> normalize_error(other)
+    end
+  end
+
+  defp stored_meta_turn_count(id) do
+    case get_meta(id) do
+      {:ok, meta} ->
+        case Map.get(meta, :turn_count, Map.get(meta, "turn_count")) do
+          count when is_integer(count) and count >= 0 -> {:ok, count}
+          _missing -> count_turn_keys(id)
+        end
+
+      {:error, :not_found} ->
+        count_turn_keys(id)
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp turn_count_operation(id, meta) do
+    case Map.get(meta, :turn_count, Map.get(meta, "turn_count")) do
+      count when is_integer(count) and count >= 0 -> [{value_key(id, "turn_count"), count}]
+      _missing -> []
+    end
+  end
+
+  defp count_turn_keys(id) do
+    prefix = turns_prefix(id)
+    count_turn_keys(prefix, prefix <> "\u{10FFFF}", 0)
+  end
+
+  defp count_turn_keys(start_key, end_key, count) do
+    case KV.list(range: {start_key, end_key}, limit: 10_000, keys_only: true) do
+      {:ok, records, %{has_more: true, last_key: last_key}} when is_binary(last_key) ->
+        count_turn_keys(last_key <> <<0>>, end_key, count + length(records))
+
+      {:ok, records, _cursor} ->
+        {:ok, count + length(records)}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp read_recent_turn_range(_id, 0, _limit), do: {:ok, []}
+
+  defp read_recent_turn_range(id, turn_count, limit) do
+    first = max(turn_count - limit, 0)
+
+    case KV.list(
+           range: {turn_key(id, first), turn_key(id, turn_count)},
+           limit: limit
+         ) do
+      {:ok, records, _cursor} ->
+        {:ok, Enum.map(records, &Concord.Compression.decompress(&1.value))}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 

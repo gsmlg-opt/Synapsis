@@ -2,6 +2,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
   use Synapsis.Agent.DaemonCase, async: false
 
   alias Synapsis.Agent.Heartbeat.LocalScheduler
+  alias Synapsis.Config.Store, as: ConfigStore
 
   setup do
     Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :waiting)
@@ -166,6 +167,105 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
     assert Agent.get(writes, & &1.persisted) == terminal_attrs
   end
 
+  test "retries a transient terminal persistence failure with the complete snapshot" do
+    Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :immediate_done)
+    {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
+    owner = self()
+    config = routine(Ecto.UUID.generate(), "retry-terminal-routine", "schedule")
+    {:ok, terminal_attempts} = Agent.start_link(fn -> 0 end)
+    on_exit(fn -> ConfigStore.delete(:routine, config.id) end)
+
+    scheduler =
+      start_scheduler([config], daemon, task_supervisor,
+        persistence_retry_backoff_ms: 20,
+        persistence_retry_limit: 2,
+        config_writer: fn type, attrs ->
+          if Map.has_key?(attrs, "last_status") do
+            attempt = Agent.get_and_update(terminal_attempts, &{&1 + 1, &1 + 1})
+            send(owner, {:terminal_persist_attempt, attempt, attrs})
+
+            if attempt == 1,
+              do: {:error, :store_unavailable},
+              else: ConfigStore.put(type, attrs)
+          else
+            ConfigStore.put(type, attrs)
+          end
+        end
+      )
+
+    assert {:ok, run} = LocalScheduler.trigger(scheduler, "retry-terminal-routine")
+    assert {:ok, _completed} = wait_for_run(run.id, "completed")
+    assert_receive {:terminal_persist_attempt, 1, terminal_attrs}, 1_000
+    assert_receive {:terminal_persist_attempt, 2, retried_attrs}, 1_000
+    assert retried_attrs == terminal_attrs
+
+    assert {:ok, %{"last_run_at" => last_run_at, "last_status" => "completed"}} =
+             wait_for(fn ->
+               case ConfigStore.get(:routine, config.id) do
+                 {:ok, %{"last_status" => "completed"} = attrs} -> {:ok, attrs}
+                 _pending -> :retry
+               end
+             end)
+
+    assert is_binary(last_run_at)
+  end
+
+  for failure <- [:timeout, :down] do
+    test "retries terminal persistence after #{failure}" do
+      failure = unquote(failure)
+      Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :immediate_done)
+      {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
+      owner = self()
+      name = "retry-terminal-#{failure}"
+      config = routine(Ecto.UUID.generate(), name, "schedule")
+      {:ok, persisted} = Agent.start_link(fn -> nil end)
+      {:ok, terminal_attempts} = Agent.start_link(fn -> 0 end)
+
+      scheduler =
+        start_scheduler([config], daemon, task_supervisor,
+          trigger_timeout_ms: 30,
+          persistence_retry_backoff_ms: 20,
+          persistence_retry_limit: 2,
+          config_writer: retrying_config_writer(owner, persisted, terminal_attempts, failure)
+        )
+
+      assert {:ok, run} = LocalScheduler.trigger(scheduler, name)
+      assert {:ok, _completed} = wait_for_run(run.id, "completed")
+      assert_receive {:terminal_persist_attempt, 1, terminal_attrs}, 1_000
+      assert_receive {:terminal_persist_attempt, 2, retried_attrs}, 1_000
+      assert retried_attrs == terminal_attrs
+      assert %{"last_status" => "completed"} = Agent.get(persisted, & &1)
+    end
+  end
+
+  test "stops retrying terminal persistence after the configured bound" do
+    Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :immediate_done)
+    {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
+    owner = self()
+    config = routine(Ecto.UUID.generate(), "bounded-terminal-retries", "schedule")
+
+    scheduler =
+      start_scheduler([config], daemon, task_supervisor,
+        persistence_retry_backoff_ms: 10,
+        persistence_retry_limit: 2,
+        config_writer: fn _type, attrs ->
+          if Map.has_key?(attrs, "last_status") do
+            send(owner, {:terminal_persist_failed, attrs})
+            {:error, :store_unavailable}
+          else
+            {:ok, attrs}
+          end
+        end
+      )
+
+    assert {:ok, run} = LocalScheduler.trigger(scheduler, "bounded-terminal-retries")
+    assert {:ok, _completed} = wait_for_run(run.id, "completed")
+    assert_receive {:terminal_persist_failed, _attrs}, 1_000
+    assert_receive {:terminal_persist_failed, _attrs}, 1_000
+    assert_receive {:terminal_persist_failed, _attrs}, 1_000
+    refute_receive {:terminal_persist_failed, _attrs}, 100
+  end
+
   test "persists and exposes a heartbeat terminal outcome without changing its config shape" do
     Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :immediate_done)
     {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
@@ -325,5 +425,31 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
       no_overlap: true,
       max_runtime_ms: 1_000
     }
+  end
+
+  defp retrying_config_writer(owner, persisted, terminal_attempts, failure) do
+    fn _type, attrs ->
+      if Map.has_key?(attrs, "last_status") do
+        attempt = Agent.get_and_update(terminal_attempts, &{&1 + 1, &1 + 1})
+        send(owner, {:terminal_persist_attempt, attempt, attrs})
+
+        case {attempt, failure} do
+          {1, :timeout} ->
+            receive do
+              :never -> :ok
+            end
+
+          {1, :down} ->
+            Process.exit(self(), :kill)
+
+          _retry ->
+            Agent.update(persisted, fn _current -> attrs end)
+            {:ok, attrs}
+        end
+      else
+        Agent.update(persisted, fn _current -> attrs end)
+        {:ok, attrs}
+      end
+    end
   end
 end

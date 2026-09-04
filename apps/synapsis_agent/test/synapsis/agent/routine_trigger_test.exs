@@ -305,7 +305,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
     assert {:ok, _message} =
              Synapsis.Message.append(recent_session.id, %{
                role: "assistant",
-               parts: [%Synapsis.Part.Text{content: "Summary inside the bounded slice"}]
+               parts: [%Synapsis.Part.Text{content: "Oldest summary must be ignored"}]
              })
 
     for index <- 1..19 do
@@ -322,7 +322,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
                parts: [
                  %Synapsis.Part.Text{
                    content:
-                     "Outside slice " <>
+                     "Latest fallback summary " <>
                        String.duplicate("S", 2_000) <> "SESSION_HISTORY_TAIL"
                  }
                ]
@@ -344,7 +344,8 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
     assert_receive {:bounded_dream_request, body}, 2_000
     assert body =~ "Bounded failure"
     assert body =~ "Memory safe text"
-    assert body =~ "Summary inside the bounded slice"
+    assert body =~ "Latest fallback summary"
+    refute body =~ "Oldest summary must be ignored"
     refute body =~ "AGENT_RUN_ERROR_TAIL"
     refute body =~ "MEMORY_TITLE_TAIL"
     refute body =~ "MEMORY_SUMMARY_TAIL"

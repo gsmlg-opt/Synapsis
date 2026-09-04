@@ -16,6 +16,8 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
 
   @reload_interval_ms :timer.seconds(30)
   @trigger_timeout_ms :timer.seconds(5)
+  @persistence_retry_limit 2
+  @persistence_retry_backoff_ms 100
 
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: Keyword.get(opts, :name, __MODULE__))
@@ -60,6 +62,14 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
       persistence_tasks: %{},
       pending_persistence: %{},
       persistence_snapshots: %{},
+      persistence_retry_timers: %{},
+      persistence_retry_limit:
+        non_negative_integer(opts[:persistence_retry_limit], @persistence_retry_limit),
+      persistence_retry_backoff_ms:
+        positive_timeout(
+          opts[:persistence_retry_backoff_ms],
+          @persistence_retry_backoff_ms
+        ),
       tracked_runs: %{},
       terminal_events: %{},
       trigger_results: %{},
@@ -184,6 +194,21 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
         cancel_persistence_task_tracking(task)
 
         {:noreply, finish_persistence_task(state, ref, task, {:error, :config_persist_timeout})}
+
+      _stale ->
+        {:noreply, state}
+    end
+  end
+
+  def handle_info({:retry_persistence, name, token}, state) do
+    case state.persistence_retry_timers[name] do
+      %{token: ^token, type: type, attrs: attrs, attempt: attempt} ->
+        state = %{
+          state
+          | persistence_retry_timers: Map.delete(state.persistence_retry_timers, name)
+        }
+
+        {:noreply, start_persistence_task(state, name, type, attrs, attempt)}
 
       _stale ->
         {:noreply, state}
@@ -450,7 +475,11 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
 
   defp enqueue_persistence(state, name, type, attrs) do
     attrs = Map.merge(Map.get(state.persistence_snapshots, name, %{}), attrs)
-    state = put_in(state.persistence_snapshots[name], attrs)
+
+    state =
+      state
+      |> cancel_persistence_retry(name)
+      |> put_in([:persistence_snapshots, name], attrs)
 
     if persistence_active?(state, name) do
       put_in(state.pending_persistence[name], %{type: type, attrs: attrs})
@@ -463,7 +492,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
     Enum.any?(state.persistence_tasks, fn {_ref, task} -> task.name == name end)
   end
 
-  defp start_persistence_task(state, name, type, attrs) do
+  defp start_persistence_task(state, name, type, attrs, attempt \\ 0) do
     writer = state.config_writer
 
     try do
@@ -483,7 +512,9 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
         pid: task.pid,
         monitor: task.ref,
         name: name,
+        type: type,
         attrs: attrs,
+        attempt: attempt,
         timeout_ref: timeout_ref
       }
 
@@ -497,10 +528,21 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
   end
 
   defp finish_persistence_task(state, ref, task, result) do
-    state
-    |> Map.put(:persistence_tasks, Map.delete(state.persistence_tasks, ref))
-    |> apply_persistence_result(task, result)
-    |> start_pending_persistence(task.name)
+    state =
+      state
+      |> Map.put(:persistence_tasks, Map.delete(state.persistence_tasks, ref))
+      |> apply_persistence_result(task, result)
+
+    cond do
+      persistence_success?(result) ->
+        start_pending_persistence(state, task.name)
+
+      Map.has_key?(state.pending_persistence, task.name) ->
+        start_pending_persistence(state, task.name)
+
+      true ->
+        schedule_persistence_retry(state, task)
+    end
   end
 
   defp start_pending_persistence(state, name) do
@@ -514,6 +556,41 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
         |> start_persistence_task(name, type, attrs)
     end
   end
+
+  defp schedule_persistence_retry(state, task)
+       when task.attempt < state.persistence_retry_limit do
+    attempt = task.attempt + 1
+    delay = state.persistence_retry_backoff_ms * :erlang.bsl(1, attempt - 1)
+    token = make_ref()
+    timer_ref = Process.send_after(self(), {:retry_persistence, task.name, token}, delay)
+
+    retry = %{
+      token: token,
+      timer_ref: timer_ref,
+      type: task.type,
+      attrs: Map.get(state.persistence_snapshots, task.name, task.attrs),
+      attempt: attempt
+    }
+
+    put_in(state.persistence_retry_timers[task.name], retry)
+  end
+
+  defp schedule_persistence_retry(state, _task), do: state
+
+  defp cancel_persistence_retry(state, name) do
+    case Map.pop(state.persistence_retry_timers, name) do
+      {nil, persistence_retry_timers} ->
+        %{state | persistence_retry_timers: persistence_retry_timers}
+
+      {%{timer_ref: timer_ref}, persistence_retry_timers} ->
+        cancel_timeout(timer_ref)
+        %{state | persistence_retry_timers: persistence_retry_timers}
+    end
+  end
+
+  defp persistence_success?(:ok), do: true
+  defp persistence_success?({:ok, _value}), do: true
+  defp persistence_success?(_result), do: false
 
   defp apply_persistence_result(state, _task, :ok), do: state
   defp apply_persistence_result(state, _task, {:ok, _value}), do: state
@@ -570,6 +647,9 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
 
   defp positive_timeout(value, _default) when is_integer(value) and value > 0, do: value
   defp positive_timeout(_value, default), do: default
+
+  defp non_negative_integer(value, _default) when is_integer(value) and value >= 0, do: value
+  defp non_negative_integer(_value, default), do: default
 
   defp encode_datetime(%DateTime{} = datetime), do: DateTime.to_iso8601(datetime)
   defp encode_datetime(value) when is_binary(value), do: value

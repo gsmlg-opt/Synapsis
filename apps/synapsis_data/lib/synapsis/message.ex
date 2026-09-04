@@ -46,6 +46,16 @@ defmodule Synapsis.Message do
     end
   end
 
+  @doc "List at most `limit` newest messages in chronological order."
+  @spec list_recent_by_session(String.t(), pos_integer()) :: [%__MODULE__{}]
+  def list_recent_by_session(session_id, limit)
+      when is_binary(session_id) and is_integer(limit) and limit > 0 do
+    case Store.list_recent_turns(session_id, limit) do
+      {:ok, turns} -> Enum.map(turns, &decode_turn(&1, session_id))
+      _error -> []
+    end
+  end
+
   @doc """
   Append a message to a session's durable turns. Accepts a `%Message{}` or an
   attrs map; assigns an id/timestamp when missing. Returns `{:ok, message}`.

@@ -304,6 +304,13 @@ defmodule Synapsis.Sessions do
     end
   end
 
+  @doc "Return the newest bounded messages in chronological order."
+  @spec get_recent_messages(String.t(), keyword()) :: [Message.t()]
+  def get_recent_messages(session_id, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 20)
+    Message.list_recent_by_session(session_id, limit)
+  end
+
   def fork(session_id, opts \\ []) do
     case Synapsis.Session.Fork.fork(session_id, opts) do
       {:ok, new_session} ->

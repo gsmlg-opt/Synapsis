@@ -784,11 +784,13 @@ defmodule Synapsis.Agent.Daemon.Execution do
 
   defp recent_sessions(sessions, assistant_name) do
     if Code.ensure_loaded?(sessions) and function_exported?(sessions, :recent, 1) and
-         function_exported?(sessions, :get_messages, 2) do
+         function_exported?(sessions, :get_recent_messages, 2) do
       sessions.recent(limit: 6, agent: assistant_name)
       |> Enum.take(6)
       |> Enum.map(fn session ->
-        messages = sessions.get_messages(session.id, limit: @dream_session_message_limit)
+        messages =
+          sessions.get_recent_messages(session.id, limit: @dream_session_message_limit)
+
         %{session: session, summary: session_summary(messages)}
       end)
     else

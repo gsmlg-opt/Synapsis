@@ -228,5 +228,29 @@ defmodule Synapsis.MessageTest do
     test "list_by_session is empty for an unknown session" do
       assert Message.list_by_session(Ecto.UUID.generate()) == []
     end
+
+    test "list_recent_by_session decodes only the latest messages", %{session: session} do
+      assert :ok = Synapsis.Session.Store.put_meta(session.id, %{turn_count: 0})
+
+      messages =
+        for n <- 1..30 do
+          %Message{
+            id: Ecto.UUID.generate(),
+            role: "assistant",
+            session_id: session.id,
+            inserted_at: DateTime.utc_now(),
+            parts: [%Synapsis.Part.Text{content: "message #{n}"}]
+          }
+        end
+
+      assert :ok = Message.persist_list(session.id, messages)
+
+      recent = Message.list_recent_by_session(session.id, 10)
+
+      assert Enum.map(recent, fn message ->
+               assert [%Synapsis.Part.Text{content: content}] = message.parts
+               content
+             end) == Enum.map(21..30, &"message #{&1}")
+    end
   end
 end

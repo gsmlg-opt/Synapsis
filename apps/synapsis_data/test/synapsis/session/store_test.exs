@@ -50,6 +50,25 @@ defmodule Synapsis.Session.StoreTest do
     test "list_turns is empty for an unknown session", %{id: id} do
       assert {:ok, []} = Store.list_turns(id)
     end
+
+    test "list_recent_turns reads only the newest bounded range", %{id: id} do
+      for n <- 0..9 do
+        assert :ok = KV.put(Store.turn_key(id, n), %{n: n, payload: String.duplicate("x", 2_000)})
+      end
+
+      for n <- 10..29 do
+        assert :ok =
+                 KV.put(Store.turn_key(id, n), %{
+                   n: n,
+                   payload: String.duplicate("recent", 500)
+                 })
+      end
+
+      assert Store.put_meta(id, %{turn_count: 30}) == :ok
+
+      assert {:ok, recent} = Store.list_recent_turns(id, 10)
+      assert Enum.map(recent, & &1.n) == Enum.to_list(20..29)
+    end
   end
 
   describe "atomicity (single-command multi-key commit)" do
