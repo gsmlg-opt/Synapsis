@@ -130,6 +130,33 @@ defmodule Synapsis.AgentSkillsTest do
 
       assert Enum.map(Skills.list_skills_for_agent(assigned_agent), & &1.id) == [skill.id]
 
+      assert {:ok, _connection} =
+               Store.put(:backplane, %{
+                 "id" => source_id,
+                 "enabled" => true,
+                 "metadata_json" => Jason.encode!(%{"runtime_blocked_surfaces" => ["skills"]})
+               })
+
+      assert Skills.list_skills_for_agent(assigned_agent) == []
+
+      assert {:ok, _connection} =
+               Store.put(:backplane, %{
+                 "id" => source_id,
+                 "enabled" => true,
+                 "metadata_json" => Jason.encode!(%{"runtime_blocked_surfaces" => ["tools"]})
+               })
+
+      assert Enum.map(Skills.list_skills_for_agent(assigned_agent), & &1.id) == [skill.id]
+
+      assert {:ok, _connection} =
+               Store.put(:backplane, %{
+                 "id" => source_id,
+                 "enabled" => true,
+                 "metadata_json" => "invalid"
+               })
+
+      assert Skills.list_skills_for_agent(assigned_agent) == []
+
       assert :ok = Store.delete(:backplane, source_id)
       assert Skills.list_skills_for_agent(assigned_agent) == []
     end

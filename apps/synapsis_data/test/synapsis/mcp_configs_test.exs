@@ -127,6 +127,33 @@ defmodule Synapsis.MCPConfigsTest do
 
     assert MCPConfigs.runtime_available?(config)
 
+    assert {:ok, _connection} =
+             Store.put(:backplane, %{
+               "id" => source_id,
+               "enabled" => true,
+               "metadata_json" => Jason.encode!(%{"runtime_blocked_surfaces" => ["tools"]})
+             })
+
+    refute MCPConfigs.runtime_available?(config)
+
+    assert {:ok, _connection} =
+             Store.put(:backplane, %{
+               "id" => source_id,
+               "enabled" => true,
+               "metadata_json" => Jason.encode!(%{"runtime_blocked_surfaces" => ["skills"]})
+             })
+
+    assert MCPConfigs.runtime_available?(config)
+
+    assert {:ok, _connection} =
+             Store.put(:backplane, %{
+               "id" => source_id,
+               "enabled" => true,
+               "metadata_json" => "invalid"
+             })
+
+    refute MCPConfigs.runtime_available?(config)
+
     assert :ok = Store.delete(:backplane, source_id)
     refute MCPConfigs.runtime_available?(config)
   end

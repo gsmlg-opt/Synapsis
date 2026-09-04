@@ -128,7 +128,7 @@ defmodule Synapsis.Skills do
       source_id when is_binary(source_id) and source_id != "" ->
         case Store.get(:backplane, source_id) do
           {:ok, connection} when is_map(connection) ->
-            Map.get(connection, "enabled", Map.get(connection, :enabled)) == true
+            source_connection_available?(connection, "skills")
 
           _missing_or_malformed ->
             false
@@ -136,6 +136,31 @@ defmodule Synapsis.Skills do
 
       _missing_or_malformed ->
         false
+    end
+  end
+
+  defp source_connection_available?(connection, surface) do
+    with true <- Map.get(connection, "enabled", Map.get(connection, :enabled)) == true,
+         {:ok, metadata} <- connection_metadata(connection),
+         blocked when is_list(blocked) <- Map.get(metadata, "runtime_blocked_surfaces", []),
+         true <- Enum.all?(blocked, &is_binary/1) do
+      surface not in blocked
+    else
+      _missing_or_malformed -> false
+    end
+  end
+
+  defp connection_metadata(connection) do
+    case Map.get(connection, "metadata", Map.get(connection, :metadata)) do
+      metadata when is_map(metadata) ->
+        {:ok, metadata}
+
+      _not_embedded ->
+        case Map.get(connection, "metadata_json", Map.get(connection, :metadata_json)) do
+          nil -> {:ok, %{}}
+          encoded when is_binary(encoded) -> Jason.decode(encoded)
+          _malformed -> {:error, :invalid_metadata}
+        end
     end
   end
 
