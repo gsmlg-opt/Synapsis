@@ -18,7 +18,39 @@ defmodule Synapsis.Agent.Events.RunEvent do
 
   @turn_types ~w(session.turn_completed)
 
-  @known_types @session_terminal_types ++ @turn_types
+  @run_lifecycle_types ~w(
+    run.created
+    run.starting
+    run.started
+    run.waiting_approval
+    run.resumed
+    run.sleeping
+    run.completed
+    run.failed
+    run.cancelled
+    run.timed_out
+    run.unknown_outcome
+    run.reconciled
+    run.side_effect_intent
+  )
+
+  @critical_run_types MapSet.new(~w(
+    run.created
+    run.starting
+    run.started
+    run.waiting_approval
+    run.resumed
+    run.sleeping
+    run.completed
+    run.failed
+    run.cancelled
+    run.timed_out
+    run.unknown_outcome
+    run.reconciled
+    run.side_effect_intent
+  ))
+
+  @known_types @session_terminal_types ++ @turn_types ++ @run_lifecycle_types
 
   @enforce_keys [:event_id, :type, :schema_version, :occurred_at, :payload]
   defstruct [
@@ -96,9 +128,20 @@ defmodule Synapsis.Agent.Events.RunEvent do
   @spec session_terminal_types() :: [String.t()]
   def session_terminal_types, do: @session_terminal_types
 
+  @spec run_lifecycle_types() :: [String.t()]
+  def run_lifecycle_types, do: @run_lifecycle_types
+
   @spec session_terminal?(t() | String.t()) :: boolean()
   def session_terminal?(%__MODULE__{type: type}), do: session_terminal?(type)
   def session_terminal?(type) when is_binary(type), do: type in @session_terminal_types
+
+  @spec run_lifecycle?(t() | String.t()) :: boolean()
+  def run_lifecycle?(%__MODULE__{type: type}), do: run_lifecycle?(type)
+  def run_lifecycle?(type) when is_binary(type), do: type in @run_lifecycle_types
+
+  @spec critical_run?(t() | String.t()) :: boolean()
+  def critical_run?(%__MODULE__{type: type}), do: critical_run?(type)
+  def critical_run?(type) when is_binary(type), do: MapSet.member?(@critical_run_types, type)
 
   @spec turn_complete?(t() | String.t()) :: boolean()
   def turn_complete?(%__MODULE__{type: type}), do: turn_complete?(type)

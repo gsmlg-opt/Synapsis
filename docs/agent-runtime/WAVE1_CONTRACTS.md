@@ -12,10 +12,12 @@ contracts; they are **not** implemented in the Track B PR.
 - Corrected `ask` semantics: read → allow; write/execute → approval_required; destructive → deny unless explicitly granted; unknown → deny.
 - Unattended runs map approval needs to `:approval_unavailable` (never unbounded wait).
 
-## Track D — Run facts / reducer (next)
+## Track D — Run facts / reducer (implemented in PR-03)
 
 - Extend embedded `Synapsis.AgentRun` (Concord); no Ecto `agent_runs` table.
-- `Synapsis.Agent.Runs.persist/1` must return `{:ok, run} | {:error, reason}` — never report success after a failed write.
-- Critical lifecycle events block transitions on storage failure; observational events may degrade with telemetry.
-- Pure `reduce(run_state, run_event) -> {:ok, new_state} | {:error, invalid_transition}` with no store/PubSub/clock side effects inside the reducer.
-- Restart reconciliation must classify `unknown_outcome` rather than blindly replaying uncertain side effects.
+- `Synapsis.Agent.Runs.persist/1` returns `{:ok, run} | {:error, reason}` — never report success after a failed write.
+- Critical lifecycle events (`RunEvents.append_critical/2`) block transitions on storage failure; observational events may degrade with telemetry.
+- Pure `RunReducer.reduce(run_state, run_event) -> {:ok, new_state} | {:error, reason}` with no store/PubSub/clock side effects.
+- Restart reconciliation via `RunReconciler.classify/2` maps incomplete runs to `failed` / `timed_out` / `unknown_outcome` (never blind side-effect replay).
+
+## Track E — Daemon / RunSupervisor (next)

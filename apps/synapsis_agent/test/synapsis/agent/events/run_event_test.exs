@@ -53,4 +53,17 @@ defmodule Synapsis.Agent.Events.RunEventTest do
     assert RunEvent.turn_complete?(event)
     refute RunEvent.session_terminal?(event)
   end
+
+  test "accepts run lifecycle types with run_id only" do
+    assert {:ok, event} =
+             RunEvent.build("run.started",
+               run_id: "run-9",
+               sequence: 2,
+               payload: %{}
+             )
+
+    assert RunEvent.run_lifecycle?(event)
+    assert RunEvent.critical_run?(event)
+    refute RunEvent.session_terminal?(event)
+  end
 end
