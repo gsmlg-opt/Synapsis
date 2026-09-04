@@ -8,6 +8,7 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
   - `:streamed_success` — multiple text deltas then finish
   - `:provider_failure` — HTTP 500
   - `:timeout` — HTTP 408 (wall-clock hang avoided in CI)
+  - `:hang` — sleep then succeed (for cancel/deadline races; keep sleep short)
   - `:malformed_tool_request` — tool call with invalid JSON arguments
   - `:multi_turn_tool_result` — first turn tool call, second turn text
 
@@ -21,6 +22,7 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
           | :streamed_success
           | :provider_failure
           | :timeout
+          | :hang
           | :malformed_tool_request
           | :multi_turn_tool_result
 
@@ -57,6 +59,7 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
     text = Keyword.get(opts, :text, "deterministic success")
     stream_chunks = Keyword.get(opts, :stream_chunks, ["deterministic ", "streamed ", "success"])
     counter = Keyword.get(opts, :counter)
+    hang_ms = Keyword.get(opts, :hang_ms, 5_000)
 
     bypass = Bypass.open()
 
@@ -66,7 +69,8 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
       tool_name: tool_name,
       tool_call_id: tool_call_id,
       tool_args: tool_args,
-      counter: counter
+      counter: counter,
+      hang_ms: hang_ms
     })
 
     base_url = "http://localhost:#{bypass.port}"
@@ -99,12 +103,20 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
   @doc "Install a scenario handler on an existing Bypass."
   @spec install!(map(), scenario(), map()) :: :ok
   def install!(bypass, scenario, ctx \\ %{}) do
-    Bypass.expect(bypass, "POST", @chat_path, fn conn ->
+    fun = fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
       maybe_record(ctx[:counter], request)
       handle_request(conn, scenario, request, ctx)
-    end)
+    end
+
+    # `:hang` uses stub so cancel/deadline/crash tests that abort mid-request
+    # do not fail Bypass expectation verification on exit.
+    if scenario == :hang do
+      Bypass.stub(bypass, "POST", @chat_path, fun)
+    else
+      Bypass.expect(bypass, "POST", @chat_path, fun)
+    end
 
     :ok
   end
@@ -191,6 +203,11 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
     Plug.Conn.send_resp(conn, 408, "Request Timeout")
   end
 
+  defp handle_request(conn, :hang, _request, ctx) do
+    Process.sleep(Map.get(ctx, :hang_ms, 5_000))
+    send_sse(conn, [text_chunk(ctx[:text] || ctx.text || "hang complete"), finish_chunk("stop")])
+  end
+
   defp handle_request(conn, :malformed_tool_request, _request, ctx) do
     tool_name = ctx.tool_name || raise(":malformed_tool_request requires :tool_name")
     tool_call_id = ctx.tool_call_id
@@ -242,9 +259,13 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
   defp maybe_record(nil, _request), do: :ok
 
   defp maybe_record(counter, request) when is_pid(counter) do
-    Agent.update(counter, fn state ->
-      requests = Map.get(state, :provider_requests, [])
-      Map.put(state, :provider_requests, requests ++ [request])
-    end)
+    if Process.alive?(counter) do
+      Agent.update(counter, fn state ->
+        requests = Map.get(state, :provider_requests, [])
+        Map.put(state, :provider_requests, requests ++ [request])
+      end)
+    else
+      :ok
+    end
   end
 end

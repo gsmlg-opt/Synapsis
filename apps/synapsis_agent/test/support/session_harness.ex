@@ -36,6 +36,7 @@ defmodule Synapsis.Agent.TestSupport.SessionHarness do
       |> maybe_put(:tool_call_id, Keyword.get(opts, :tool_call_id))
       |> maybe_put(:tool_args, Keyword.get(opts, :tool_args, %{"value" => "verified"}))
       |> maybe_put(:stream_chunks, Keyword.get(opts, :stream_chunks))
+      |> maybe_put(:hang_ms, Keyword.get(opts, :hang_ms))
 
     provider = DeterministicProvider.start!(provider_opts)
 

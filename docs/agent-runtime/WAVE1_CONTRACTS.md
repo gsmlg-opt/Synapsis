@@ -20,4 +20,12 @@ contracts; they are **not** implemented in the Track B PR.
 - Pure `RunReducer.reduce(run_state, run_event) -> {:ok, new_state} | {:error, reason}` with no store/PubSub/clock side effects.
 - Restart reconciliation via `RunReconciler.classify/2` maps incomplete runs to `failed` / `timed_out` / `unknown_outcome` (never blind side-effect replay).
 
-## Track E — Daemon / RunSupervisor (next)
+## Track E — Daemon / RunSupervisor (implemented in PR-04)
+
+- `RunSupervisor` + `RunRegistry`: one temporary `RunCoordinator` per `run_id`.
+- Permanent `Daemon`: admission, idempotent `submit/2`, `cancel/2`, `reconcile/0`, liveness pulse, bounded `status/0`.
+- Manual submit forces `tool_profile: "read_only"` (R0 gate).
+- Coordinators create sessions, consume typed `session.*` terminals, persist via `Runs`; never block the daemon mailbox on model/tool work.
+- `trigger/3` for heartbeat/dream/schedule returns `:not_implemented` until Track F.
+
+## Track F — Heartbeat via Daemon (next)

@@ -129,6 +129,11 @@ defmodule Synapsis.Agent.Runs do
     transition(run, "run.timed_out", attrs)
   end
 
+  @spec mark_unknown_outcome(AgentRun.t(), map()) :: {:ok, AgentRun.t()} | {:error, term()}
+  def mark_unknown_outcome(%AgentRun{} = run, attrs \\ %{}) do
+    transition(run, "run.unknown_outcome", attrs)
+  end
+
   @spec mark_side_effect_intent(AgentRun.t(), map()) :: {:ok, AgentRun.t()} | {:error, term()}
   def mark_side_effect_intent(%AgentRun{} = run, attrs \\ %{}) do
     transition(run, "run.side_effect_intent", attrs)
