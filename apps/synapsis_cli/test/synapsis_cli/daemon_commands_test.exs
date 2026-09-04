@@ -266,6 +266,59 @@ defmodule SynapsisCli.DaemonCommandsTest do
            end) == ""
   end
 
+  test "invalid credential options fail before creating a Backplane connection" do
+    bypass = Bypass.open()
+    host = "http://localhost:#{bypass.port}"
+    owner = self()
+
+    Bypass.stub(bypass, "POST", "/api/backplane/connections", fn conn ->
+      send(owner, {:unexpected_request, conn.method, conn.request_path})
+      json(conn, 201, %{"data" => %{"id" => "unexpected"}})
+    end)
+
+    assert capture_io(fn ->
+             assert {:error, :usage} =
+                      Main.run([
+                        "backplane",
+                        "add",
+                        "secure",
+                        "https://backplane.internal",
+                        "--host",
+                        host,
+                        "--credential-env"
+                      ])
+           end) == ""
+
+    refute_receive {:unexpected_request, _method, _path}, 50
+  end
+
+  test "bare daemon command namespaces return usage without starting a session" do
+    bypass = Bypass.open()
+    host = "http://localhost:#{bypass.port}"
+    owner = self()
+
+    Bypass.stub(bypass, "POST", "/api/sessions", fn conn ->
+      send(owner, {:unexpected_session_request, conn.method, conn.request_path})
+      json(conn, 201, %{"data" => %{"id" => "unexpected-session"}})
+    end)
+
+    Bypass.stub(bypass, "POST", "/api/sessions/unexpected-session/messages", fn conn ->
+      json(conn, 200, %{})
+    end)
+
+    Bypass.stub(bypass, "GET", "/api/sessions/unexpected-session/events", fn conn ->
+      Plug.Conn.resp(conn, 200, "")
+    end)
+
+    for namespace <- ~w(agent heartbeat dream schedule backplane) do
+      assert capture_io(fn ->
+               assert {:error, :usage} = Main.run([namespace, "--host", host])
+             end) == ""
+    end
+
+    refute_receive {:unexpected_session_request, _method, _path}, 50
+  end
+
   test "manual run rejects a missing prompt before making an HTTP request" do
     assert capture_io(fn ->
              assert {:error, {:usage, "synapsis agent run <prompt>"}} =

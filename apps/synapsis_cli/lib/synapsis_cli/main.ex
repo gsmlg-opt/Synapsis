@@ -16,7 +16,7 @@ defmodule SynapsisCli.Main do
 
   @doc "Runs a CLI invocation without halting the VM, for embedding and tests."
   def run(args) do
-    {opts, rest, _} =
+    {opts, rest, invalid} =
       OptionParser.parse(args,
         aliases: [p: :prompt, m: :model, h: :host, s: :serve],
         strict: [
@@ -31,6 +31,10 @@ defmodule SynapsisCli.Main do
         ]
       )
 
+    if invalid == [], do: dispatch(opts, rest), else: {:error, :usage}
+  end
+
+  defp dispatch(opts, rest) do
     cond do
       opts[:help] ->
         print_help()
@@ -42,9 +46,7 @@ defmodule SynapsisCli.Main do
         IO.puts("Starting Synapsis server...")
         IO.puts("Run `mix phx.server` from the project root instead.")
 
-      match?(["agent", _ | _], rest) or match?(["heartbeat", _ | _], rest) or
-        match?(["dream", _ | _], rest) or match?(["schedule", _ | _], rest) or
-          match?(["backplane", _ | _], rest) ->
+      match?([namespace | _] when namespace in ~w(agent heartbeat dream schedule backplane), rest) ->
         run_daemon_command(rest, opts[:host] || @default_host, opts)
 
       match?(["code" | _], rest) ->

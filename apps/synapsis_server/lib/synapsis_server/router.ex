@@ -38,6 +38,10 @@ defmodule SynapsisServer.Router do
   end
 
   scope "/api", SynapsisServer do
+    get "/agent/events", SSEController, :agent_events
+  end
+
+  scope "/api", SynapsisServer do
     pipe_through :api
 
     get "/health", HealthController, :show
@@ -64,7 +68,6 @@ defmodule SynapsisServer.Router do
     get "/config", ConfigController, :show
 
     get "/agent/daemon/status", AgentController, :status
-    get "/agent/events", SSEController, :agent_events
     get "/agent/runs", AgentController, :runs
     get "/agent/runs/:id", AgentController, :show_run
     post "/agent/runs", AgentController, :run
