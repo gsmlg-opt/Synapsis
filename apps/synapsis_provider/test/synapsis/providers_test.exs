@@ -316,6 +316,41 @@ defmodule Synapsis.ProvidersTest do
       refute Providers.runtime_available?(provider)
     end
 
+    test "managed providers fail closed for non-object source metadata JSON" do
+      source_id = "source-non-object-metadata"
+
+      assert {:ok, _connection} =
+               Synapsis.Config.Store.put(:backplane, %{
+                 "id" => source_id,
+                 "enabled" => true,
+                 "metadata_json" => "[]"
+               })
+
+      assert {:ok, provider} =
+               Providers.create(
+                 Map.merge(@valid_attrs, %{
+                   name: "non-object-metadata-provider",
+                   config: %{
+                     "managed_by" => "backplane",
+                     "backplane_source_id" => source_id,
+                     "backplane_available" => true
+                   }
+                 })
+               )
+
+      for encoded <- ["[]", "null", "true", "1", ~s("metadata")] do
+        assert {:ok, _connection} =
+                 Synapsis.Config.Store.put(:backplane, %{
+                   "id" => source_id,
+                   "enabled" => true,
+                   "metadata_json" => encoded
+                 })
+
+        refute Providers.runtime_available?(provider)
+        assert {:error, :provider_unavailable} = Providers.runtime_config(provider.name)
+      end
+    end
+
     test "returns error for missing provider" do
       assert {:error, :not_found} = Providers.update(Ecto.UUID.generate(), %{enabled: false})
     end
