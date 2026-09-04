@@ -157,9 +157,17 @@ defmodule Synapsis.Skills do
 
       _not_embedded ->
         case Map.get(connection, "metadata_json", Map.get(connection, :metadata_json)) do
-          nil -> {:ok, %{}}
-          encoded when is_binary(encoded) -> Jason.decode(encoded)
-          _malformed -> {:error, :invalid_metadata}
+          nil ->
+            {:ok, %{}}
+
+          encoded when is_binary(encoded) ->
+            case Jason.decode(encoded) do
+              {:ok, metadata} when is_map(metadata) -> {:ok, metadata}
+              _invalid -> {:error, :invalid_metadata}
+            end
+
+          _malformed ->
+            {:error, :invalid_metadata}
         end
     end
   end

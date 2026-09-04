@@ -158,6 +158,33 @@ defmodule Synapsis.MCPConfigsTest do
     refute MCPConfigs.runtime_available?(config)
   end
 
+  test "managed configs fail closed when source metadata JSON is not an object" do
+    source_id = Ecto.UUID.generate()
+
+    config = %MCPConfig{
+      name: "managed-source-metadata-shape",
+      transport: "stdio",
+      command: "managed-command",
+      enabled: true,
+      config: %{
+        "managed_by" => "backplane",
+        "backplane_source_id" => source_id,
+        "backplane_available" => true
+      }
+    }
+
+    for metadata_json <- ["null", "[]"] do
+      assert {:ok, _connection} =
+               Store.put(:backplane, %{
+                 "id" => source_id,
+                 "enabled" => true,
+                 "metadata_json" => metadata_json
+               })
+
+      refute MCPConfigs.runtime_available?(config)
+    end
+  end
+
   defp errors_on(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {msg, _opts} -> msg end)
   end

@@ -28,6 +28,17 @@ defmodule Synapsis.MCPConfigs do
 
   def runtime_available?(_config), do: false
 
+  @doc false
+  def reconciliation_available?(%MCPConfig{enabled: true, config: config}) do
+    config = config || %{}
+
+    backplane_managed?(config) and
+      Map.get(config, "backplane_available", Map.get(config, :backplane_available)) != false and
+      source_connection_reconcilable?(config)
+  end
+
+  def reconciliation_available?(_config), do: false
+
   @doc "Get an MCP config by id."
   def get(id) do
     case Store.get(@store_type, id) do
@@ -77,6 +88,23 @@ defmodule Synapsis.MCPConfigs do
     end
   end
 
+  defp source_connection_reconcilable?(config) do
+    case Map.get(config, "backplane_source_id", Map.get(config, :backplane_source_id)) do
+      source_id when is_binary(source_id) and source_id != "" ->
+        case Store.get(:backplane, source_id) do
+          {:ok, connection} when is_map(connection) ->
+            Map.get(connection, "enabled", Map.get(connection, :enabled)) == true and
+              match?({:ok, %{}}, connection_metadata(connection))
+
+          _missing_or_malformed ->
+            false
+        end
+
+      _missing_or_malformed ->
+        false
+    end
+  end
+
   defp source_connection_available?(connection, surface) do
     with true <- Map.get(connection, "enabled", Map.get(connection, :enabled)) == true,
          {:ok, metadata} <- connection_metadata(connection),
@@ -95,9 +123,17 @@ defmodule Synapsis.MCPConfigs do
 
       _not_embedded ->
         case Map.get(connection, "metadata_json", Map.get(connection, :metadata_json)) do
-          nil -> {:ok, %{}}
-          encoded when is_binary(encoded) -> Jason.decode(encoded)
-          _malformed -> {:error, :invalid_metadata}
+          nil ->
+            {:ok, %{}}
+
+          encoded when is_binary(encoded) ->
+            case Jason.decode(encoded) do
+              {:ok, metadata} when is_map(metadata) -> {:ok, metadata}
+              _invalid -> {:error, :invalid_metadata}
+            end
+
+          _malformed ->
+            {:error, :invalid_metadata}
         end
     end
   end

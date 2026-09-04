@@ -161,6 +161,36 @@ defmodule Synapsis.AgentSkillsTest do
       assert Skills.list_skills_for_agent(assigned_agent) == []
     end
 
+    test "managed skills fail closed when source metadata JSON is not an object" do
+      suffix = System.unique_integer([:positive])
+      source_id = Ecto.UUID.generate()
+      {:ok, agent} = AgentConfigs.create(%{name: "metadata-shape-agent-#{suffix}"})
+
+      {:ok, skill} =
+        Skills.create(%{
+          name: "metadata-shape-skill-#{suffix}",
+          scope: "global",
+          config_overrides: %{
+            "managed_by" => "backplane",
+            "backplane_source_id" => source_id,
+            "backplane_available" => true
+          }
+        })
+
+      assert {:ok, assigned_agent} = AgentSkills.assign_skills(agent, [skill.id])
+
+      for metadata_json <- ["null", "[]"] do
+        assert {:ok, _connection} =
+                 Store.put(:backplane, %{
+                   "id" => source_id,
+                   "enabled" => true,
+                   "metadata_json" => metadata_json
+                 })
+
+        assert Skills.list_skills_for_agent(assigned_agent) == []
+      end
+    end
+
     test "protects built-in skills from deletion" do
       {:ok, skill} =
         Skills.create(%{
