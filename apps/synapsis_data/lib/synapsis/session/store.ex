@@ -160,7 +160,8 @@ defmodule Synapsis.Session.Store do
   @doc """
   Atomically commit a whole turn: writes the turn entry and the updated session
   meta snapshot together via `Concord.Turso.put_many/2`; the turn and meta
-  either both land or neither does (all-or-nothing).
+  either both land or neither does (all-or-nothing). The session-scoped turn
+  count advances in that same batch and never decreases for an overwrite.
 
   Turn writes are keyed by turn number, so re-committing the same turn is
   naturally idempotent at the data level (the same key is overwritten in place);
@@ -168,13 +169,20 @@ defmodule Synapsis.Session.Store do
   """
   def commit_turn(id, n, turn, meta)
       when is_binary(id) and is_integer(n) and n >= 0 and is_map(turn) and is_map(meta) do
-    operations =
-      [{turn_key(id, n), turn}, {meta_key(id), meta}] ++ turn_count_operation(id, meta)
+    with {:ok, stored_count} <- stored_turn_count(id) do
+      turn_count = max(max(stored_count, n + 1), meta_turn_count(meta))
 
-    case KV.put_many(operations) do
-      {:ok, _results} -> :ok
-      :ok -> :ok
-      other -> normalize_error(other)
+      operations = [
+        {turn_key(id, n), turn},
+        {meta_key(id), meta},
+        {value_key(id, "turn_count"), turn_count}
+      ]
+
+      case KV.put_many(operations) do
+        {:ok, _results} -> :ok
+        :ok -> :ok
+        other -> normalize_error(other)
+      end
     end
   end
 
@@ -273,10 +281,10 @@ defmodule Synapsis.Session.Store do
     end
   end
 
-  defp turn_count_operation(id, meta) do
+  defp meta_turn_count(meta) do
     case Map.get(meta, :turn_count, Map.get(meta, "turn_count")) do
-      count when is_integer(count) and count >= 0 -> [{value_key(id, "turn_count"), count}]
-      _missing -> []
+      count when is_integer(count) and count >= 0 -> count
+      _missing -> 0
     end
   end
 

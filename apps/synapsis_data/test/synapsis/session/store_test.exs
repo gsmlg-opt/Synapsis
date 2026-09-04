@@ -69,6 +69,23 @@ defmodule Synapsis.Session.StoreTest do
       assert {:ok, recent} = Store.list_recent_turns(id, 10)
       assert Enum.map(recent, & &1.n) == Enum.to_list(20..29)
     end
+
+    test "commit_turn advances recent reads after replace_turns without meta count", %{id: id} do
+      assert Store.replace_turns(id, [%{n: 0}, %{n: 1}]) == :ok
+      assert Store.commit_turn(id, 2, %{n: 2}, %{latest_turn: 2}) == :ok
+
+      assert Store.get_value(id, "turn_count") == 3
+      assert {:ok, [%{n: 2}]} = Store.list_recent_turns(id, 1)
+    end
+
+    test "out-of-order commit_turn never decreases the scoped turn count", %{id: id} do
+      assert Store.replace_turns(id, Enum.map(0..3, &%{n: &1})) == :ok
+      assert Store.commit_turn(id, 4, %{n: 4}, %{latest_turn: 4}) == :ok
+      assert Store.commit_turn(id, 1, %{n: 1, overwritten: true}, %{latest_turn: 1}) == :ok
+
+      assert Store.get_value(id, "turn_count") == 5
+      assert {:ok, [%{n: 4}]} = Store.list_recent_turns(id, 1)
+    end
   end
 
   describe "atomicity (single-command multi-key commit)" do
