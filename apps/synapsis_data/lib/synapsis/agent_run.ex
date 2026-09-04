@@ -20,7 +20,7 @@ defmodule Synapsis.AgentRun do
   )
   @sources ~w(web system oban scheduler)
   @tool_profiles ~w(
-    assistant_basic assistant_workspace assistant_coding
+    assistant_basic assistant_workspace assistant_coding assistant_dream assistant_dream_todo
     read_only reflect heartbeat coding maintenance dangerous
   )
   @terminal_statuses ~w(completed failed cancelled interrupted timed_out unknown_outcome)

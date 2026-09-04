@@ -12,11 +12,14 @@ defmodule Synapsis.Agent.DaemonToolsetsTest do
   @workspace @basic ++
                ~w(memory_save memory_update todo_write file_write file_edit multi_edit file_move)
   @coding @workspace ++ ~w(bash task)
+  @dream @basic ++ ~w(memory_save memory_update)
 
   test "resolves explicit safe daemon toolsets" do
     assert {:ok, @basic} = Toolsets.resolve("assistant_basic")
     assert {:ok, @workspace} = Toolsets.resolve("assistant_workspace")
     assert {:ok, @coding} = Toolsets.resolve("assistant_coding")
+    assert {:ok, @dream} = Toolsets.resolve("assistant_dream")
+    assert {:ok, @dream ++ ["todo_write"]} = Toolsets.resolve("assistant_dream_todo")
   end
 
   test "maps legacy profiles onto safe daemon toolsets" do
@@ -34,12 +37,18 @@ defmodule Synapsis.Agent.DaemonToolsetsTest do
   end
 
   test "never includes explicitly destructive tools" do
-    for profile <- ~w(assistant_basic assistant_workspace assistant_coding) do
+    for profile <-
+          ~w(assistant_basic assistant_workspace assistant_coding assistant_dream assistant_dream_todo) do
       assert {:ok, tools} = Toolsets.resolve(profile)
       refute "file_delete" in tools
       refute "team_delete" in tools
       refute "computer" in tools
     end
+
+    assert {:ok, dream_tools} = Toolsets.resolve("assistant_dream")
+    refute "todo_write" in dream_tools
+    refute "file_write" in dream_tools
+    refute "bash" in dream_tools
   end
 
   test "AgentRun accepts v1 profiles and defaults new runs to assistant_basic" do
@@ -50,10 +59,23 @@ defmodule Synapsis.Agent.DaemonToolsetsTest do
     assert %AgentRun{tool_profile: "assistant_basic"} =
              Ecto.Changeset.apply_changes(AgentRun.changeset(%AgentRun{}, attrs))
 
-    for profile <- ~w(assistant_basic assistant_workspace assistant_coding) do
+    for profile <-
+          ~w(assistant_basic assistant_workspace assistant_coding assistant_dream assistant_dream_todo) do
       assert %{valid?: true} =
                AgentRun.changeset(%AgentRun{}, Map.put(attrs, :tool_profile, profile))
     end
+  end
+
+  test "dream routines use the dream-only profile and grant todo writes only explicitly" do
+    opts = %{routine_id: Ecto.UUID.generate(), prompt: "reflect"}
+
+    assert {:ok, %{tool_profile: "assistant_dream"}} = Execution.routine_attrs(:dream, opts)
+
+    assert {:ok, %{tool_profile: "assistant_dream_todo"}} =
+             Execution.routine_attrs(:dream, Map.put(opts, :allow_todo_write, true))
+
+    assert {:error, :invalid_options} =
+             Execution.routine_attrs(:dream, Map.put(opts, :tool_profile, "assistant_coding"))
   end
 
   test "manual submissions default to basic and reject unsafe profiles before persistence" do

@@ -3,11 +3,13 @@ defmodule Synapsis.Agent.Daemon.Execution do
 
   alias Synapsis.Agent.RunEvents
   alias Synapsis.Agent.Daemon.Toolsets
+  alias Synapsis.Memory.Adapter, as: MemoryAdapter
 
   @max_option_length 255
   @max_error_length 500
   @string_options ~w(assistant_name provider model source tool_profile)a
   @terminal_statuses ~w(completed failed cancelled interrupted)
+  @dream_list_fields ~w(memory_candidates open_questions risks proposed_tasks ignored_noise)
   @daemon_permission %{
     mode: :autonomous,
     allow_read: :allow,
@@ -89,7 +91,8 @@ defmodule Synapsis.Agent.Daemon.Execution do
          true <- is_boolean(no_overlap),
          true <- is_integer(max_runtime_ms) and max_runtime_ms > 0,
          true <- is_map(metadata),
-         :ok <- validate_options(opts) do
+         {:ok, tool_profile} <- routine_tool_profile(kind, opts),
+         :ok <- validate_options(Map.put(opts, :tool_profile, tool_profile)) do
       metadata =
         metadata
         |> Map.put("no_overlap", no_overlap)
@@ -103,7 +106,7 @@ defmodule Synapsis.Agent.Daemon.Execution do
          assistant_name: option(opts, :assistant_name, "main"),
          routine_id: routine_id,
          prompt: prompt,
-         tool_profile: option(opts, :tool_profile, "assistant_basic"),
+         tool_profile: tool_profile,
          provider: option(opts, :provider),
          model: option(opts, :model),
          metadata: metadata
@@ -114,6 +117,26 @@ defmodule Synapsis.Agent.Daemon.Execution do
   end
 
   def routine_attrs(_kind, _opts), do: {:error, :invalid_options}
+
+  defp routine_tool_profile(:schedule, opts),
+    do: {:ok, option(opts, :tool_profile, "assistant_basic")}
+
+  defp routine_tool_profile(:dream, opts) do
+    allow_todo_write = option(opts, :allow_todo_write, false)
+
+    profile =
+      option(
+        opts,
+        :tool_profile,
+        if(allow_todo_write == true, do: "assistant_dream_todo", else: "assistant_dream")
+      )
+
+    if is_boolean(allow_todo_write) and profile in ~w(assistant_dream assistant_dream_todo) do
+      {:ok, profile}
+    else
+      {:error, :invalid_options}
+    end
+  end
 
   def run_timeout(%{metadata: metadata}, default) when is_map(metadata) do
     case Map.get(metadata, "max_runtime_ms", Map.get(metadata, :max_runtime_ms)) do
@@ -647,13 +670,33 @@ defmodule Synapsis.Agent.Daemon.Execution do
         "- #{recent_run.kind} #{recent_run.status}: #{result}"
       end)
 
-    if recent == "", do: run.prompt, else: run.prompt <> "\n\nRecent AgentRuns:\n" <> recent
+    memories =
+      run.prompt
+      |> MemoryAdapter.search([limit: 5], 500)
+      |> Enum.take(5)
+      |> Enum.map_join("\n", fn memory ->
+        title = Map.get(memory, :title, Map.get(memory, "title", "Memory"))
+        summary = Map.get(memory, :summary, Map.get(memory, "summary", ""))
+        "- #{title}: #{summary}"
+      end)
+
+    [
+      run.prompt,
+      if(recent == "", do: nil, else: "Recent AgentRuns:\n" <> recent),
+      if(memories == "", do: nil, else: "Relevant memory:\n" <> memories)
+    ]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join("\n\n")
   end
 
   defp execution_prompt(_deps, run), do: run.prompt
 
-  defp terminal_attrs(%{kind: kind, metadata: metadata}, status, result, session_id)
-       when kind in ["schedule", "dream"] do
+  defp terminal_attrs(%{kind: "dream", metadata: metadata}, _status, result, session_id) do
+    %{session_id: session_id, metadata: Map.put(metadata || %{}, "output", dream_output(result))}
+  end
+
+  defp terminal_attrs(%{kind: "schedule", metadata: metadata}, status, result, session_id) do
+    kind = "schedule"
     output = %{"kind" => kind, "status" => status, result_key(status) => result}
     %{session_id: session_id, metadata: Map.put(metadata || %{}, "output", output)}
   end
@@ -662,6 +705,35 @@ defmodule Synapsis.Agent.Daemon.Execution do
 
   defp result_key("completed"), do: "summary"
   defp result_key("failed"), do: "error"
+
+  defp dream_output(result) do
+    fallback = if is_binary(result), do: String.trim(result), else: ""
+
+    decoded =
+      with true <- fallback != "",
+           {:ok, map} when is_map(map) <- Jason.decode(fallback) do
+        map
+      else
+        _other -> %{}
+      end
+
+    %{"recent_summary" => dream_summary(decoded, fallback)}
+    |> Map.merge(Map.new(@dream_list_fields, &{&1, dream_list(decoded[&1])}))
+  end
+
+  defp dream_summary(%{"recent_summary" => value}, _fallback) when is_binary(value),
+    do: String.trim(value)
+
+  defp dream_summary(_decoded, fallback), do: fallback
+
+  defp dream_list(values) when is_list(values) do
+    values
+    |> Enum.filter(&is_binary/1)
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  defp dream_list(_values), do: []
 
   defp finalize_transition(
          deps,

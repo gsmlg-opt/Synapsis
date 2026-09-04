@@ -1,6 +1,35 @@
 defmodule Synapsis.Agent.RoutineTriggerTest do
   use Synapsis.Agent.DaemonCase, async: false
 
+  defmodule DreamMemoryAdapter do
+    def search(query, filters) do
+      send(Application.fetch_env!(:synapsis_agent, :daemon_test_owner), {
+        :dream_memory_search,
+        query,
+        filters
+      })
+
+      [
+        %{
+          id: "dream-memory",
+          scope: "shared",
+          scope_id: "",
+          kind: "lesson",
+          title: "Deployment lesson",
+          summary: "Verify the live endpoint after restart",
+          tags: [],
+          contributed_by: "test",
+          importance: 0.8,
+          confidence: 0.9,
+          freshness: 1.0,
+          inserted_at: DateTime.utc_now()
+        }
+      ]
+    end
+
+    def touch_accessed(_ids), do: :ok
+  end
+
   @tag :tmp_dir
   test "manual schedule and dream triggers persist structured terminal output", %{
     tmp_dir: tmp_dir
@@ -28,7 +57,17 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
              "summary" => "scheduled result"
            }
 
-    {provider_name, agent_name} = register_text_provider(tmp_dir, "dream result")
+    dream_json =
+      Jason.encode!(%{
+        "recent_summary" => "Reviewed recent work",
+        "memory_candidates" => ["Keep the deployment lesson"],
+        "open_questions" => ["Is the retry budget sufficient?"],
+        "risks" => ["Silent scheduler failure"],
+        "proposed_tasks" => ["Add a bounded trigger task"],
+        "ignored_noise" => ["Unrelated UI work"]
+      })
+
+    {provider_name, agent_name} = register_text_provider(tmp_dir, dream_json)
 
     assert {:ok, dream} =
              Daemon.trigger(daemon, :dream, %{
@@ -36,21 +75,36 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
                prompt: "reflect",
                assistant_name: agent_name,
                provider: provider_name,
-               model: "daemon-test-model",
-               tool_profile: "assistant_workspace"
+               model: "daemon-test-model"
              })
 
     assert dream.kind == "dream"
-    assert dream.tool_profile == "assistant_workspace"
+    assert dream.tool_profile == "assistant_dream"
     assert {:ok, completed_dream} = wait_for_run(dream.id, "completed")
-    assert completed_dream.metadata["output"]["kind"] == "dream"
-    assert completed_dream.metadata["output"]["summary"] == "dream result"
+
+    assert completed_dream.metadata["output"] == %{
+             "recent_summary" => "Reviewed recent work",
+             "memory_candidates" => ["Keep the deployment lesson"],
+             "open_questions" => ["Is the retry budget sufficient?"],
+             "risks" => ["Silent scheduler failure"],
+             "proposed_tasks" => ["Add a bounded trigger task"],
+             "ignored_noise" => ["Unrelated UI work"]
+           }
   end
 
   @tag :tmp_dir
-  test "dream prompt includes recent terminal run summaries and defaults to basic tools", %{
+  test "dream prompt includes recent runs and bounded semantic memory context", %{
     tmp_dir: tmp_dir
   } do
+    previous_adapter = Application.get_env(:synapsis_core, :memory_adapter)
+    Application.put_env(:synapsis_core, :memory_adapter, DreamMemoryAdapter)
+
+    on_exit(fn ->
+      if previous_adapter,
+        do: Application.put_env(:synapsis_core, :memory_adapter, previous_adapter),
+        else: Application.delete_env(:synapsis_core, :memory_adapter)
+    end)
+
     assert {:ok, _recent} =
              Runs.create(%{
                kind: "manual",
@@ -82,11 +136,41 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
                model: "daemon-test-model"
              })
 
-    assert dream.tool_profile == "assistant_basic"
+    assert dream.tool_profile == "assistant_dream"
+    assert_receive {:dream_memory_search, "reflect on recent activity", filters}, 2_000
+    assert filters[:limit] == 5
     assert_receive {:dream_request, body}, 2_000
     assert body =~ "reflect on recent activity"
     assert body =~ "prior run summary"
+    assert body =~ "Deployment lesson"
+    assert body =~ "Verify the live endpoint after restart"
     assert {:ok, _completed} = wait_for_run(dream.id, "completed")
+  end
+
+  @tag :tmp_dir
+  test "dream output falls back to a complete six-field structure", %{tmp_dir: tmp_dir} do
+    {provider_name, agent_name} = register_text_provider(tmp_dir, "free-form reflection")
+    {daemon, _task_supervisor} = start_test_daemon()
+
+    assert {:ok, dream} =
+             Daemon.trigger(daemon, :dream, %{
+               routine_id: Ecto.UUID.generate(),
+               prompt: "reflect",
+               assistant_name: agent_name,
+               provider: provider_name,
+               model: "daemon-test-model"
+             })
+
+    assert {:ok, completed} = wait_for_run(dream.id, "completed")
+
+    assert completed.metadata["output"] == %{
+             "recent_summary" => "free-form reflection",
+             "memory_candidates" => [],
+             "open_questions" => [],
+             "risks" => [],
+             "proposed_tasks" => [],
+             "ignored_noise" => []
+           }
   end
 
   test "generic routine no-overlap and max runtime use the daemon protocol" do

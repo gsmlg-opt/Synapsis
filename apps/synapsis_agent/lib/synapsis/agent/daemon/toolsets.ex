@@ -8,11 +8,14 @@ defmodule Synapsis.Agent.Daemon.Toolsets do
   @workspace @basic ++
                ~w(memory_save memory_update todo_write file_write file_edit multi_edit file_move)
   @coding @workspace ++ ~w(bash task)
+  @dream @basic ++ ~w(memory_save memory_update)
 
   @profiles %{
     "assistant_basic" => @basic,
     "assistant_workspace" => @workspace,
     "assistant_coding" => @coding,
+    "assistant_dream" => @dream,
+    "assistant_dream_todo" => @dream ++ ["todo_write"],
     "read_only" => @basic,
     "reflect" => @workspace,
     "heartbeat" => @workspace,

@@ -67,16 +67,27 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
 
   test "manual and due generic routines dispatch their configured kind" do
     {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
+    owner = self()
 
     configs = [
       routine(Ecto.UUID.generate(), "scheduled", "schedule"),
       routine(Ecto.UUID.generate(), "reflection", "dream")
     ]
 
-    scheduler = start_scheduler(configs, daemon, task_supervisor)
+    scheduler =
+      start_scheduler(configs, daemon, task_supervisor,
+        config_writer: fn type, attrs ->
+          send(owner, {:routine_config_written, type, attrs})
+          {:ok, attrs}
+        end
+      )
 
     assert {:ok, schedule} = LocalScheduler.trigger(scheduler, "scheduled")
     assert schedule.kind == "schedule"
+    assert_receive {:routine_config_written, :routine, schedule_config}, 1_000
+    assert schedule_config["last_status"] == "queued"
+    assert is_binary(schedule_config["last_run_at"])
+    assert is_binary(schedule_config["next_run_at"])
     assert_receive {:waiting_session, _session_id}, 1_000
 
     %{timers: %{"reflection" => %{token: dream_token}}} = :sys.get_state(scheduler)
@@ -93,7 +104,40 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
     assert {:ok, _cancelled} = Daemon.cancel(daemon, schedule.id)
   end
 
-  defp start_scheduler(configs_or_loader, daemon, task_supervisor) do
+  test "a due routine trigger is monitored, bounded, and exposes timeout errors" do
+    {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
+    owner = self()
+    config = routine(Ecto.UUID.generate(), "hung", "schedule")
+
+    scheduler =
+      start_scheduler([config], daemon, task_supervisor,
+        trigger_timeout_ms: 50,
+        trigger_fun: fn _config, _daemon ->
+          send(owner, {:routine_trigger_started, self()})
+          receive do: (:never -> :ok)
+        end,
+        config_writer: fn _type, attrs -> {:ok, attrs} end
+      )
+
+    %{timers: %{"hung" => %{token: token}}} = :sys.get_state(scheduler)
+    send(scheduler, {:fire, "hung", token})
+
+    assert_receive {:routine_trigger_started, trigger_pid}, 1_000
+
+    assert {:ok, status} =
+             wait_for(fn ->
+               case LocalScheduler.status(scheduler) do
+                 [%{last_status: "error"} = status] -> {:ok, status}
+                 _other -> :retry
+               end
+             end)
+
+    assert status.last_error =~ "trigger_timeout"
+    refute Process.alive?(trigger_pid)
+    assert Process.alive?(scheduler)
+  end
+
+  defp start_scheduler(configs_or_loader, daemon, task_supervisor, opts \\ []) do
     name = String.to_atom("heartbeat_scheduler_test_#{System.unique_integer([:positive])}")
 
     loader =
@@ -101,14 +145,16 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
         do: configs_or_loader,
         else: fn -> configs_or_loader end
 
-    start_supervised!(
-      {LocalScheduler,
-       name: name,
-       daemon: daemon,
-       task_supervisor: task_supervisor,
-       config_loader: loader,
-       reload_interval_ms: :timer.hours(1)}
-    )
+    scheduler_opts =
+      [
+        name: name,
+        daemon: daemon,
+        task_supervisor: task_supervisor,
+        config_loader: loader,
+        reload_interval_ms: :timer.hours(1)
+      ] ++ opts
+
+    start_supervised!({LocalScheduler, scheduler_opts})
   end
 
   defp wait_for_restarted_scheduler(name, old_pid) do
