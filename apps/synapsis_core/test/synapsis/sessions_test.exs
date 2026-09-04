@@ -4,6 +4,40 @@ defmodule Synapsis.SessionsTest do
   alias Synapsis.{ProviderConfig, Providers, Session, Sessions}
   alias Synapsis.Session.Store
 
+  defmodule FailingSessionRuntime do
+    def configure(mode), do: Process.put({__MODULE__, :mode}, mode)
+
+    def start_session(session_id) do
+      send(self(), {:session_start_attempted, session_id})
+
+      case Process.get({__MODULE__, :mode}) do
+        :raise ->
+          raise "session runtime exploded"
+
+        :exit ->
+          exit(:session_runtime_down)
+
+        :boot_error ->
+          {:error, :boot_failed}
+
+        :boot_error_stop_raises ->
+          {:error, :boot_failed}
+
+        :boot_error_with_failure ->
+          Synapsis.Session.Quarantine.record_failure(session_id)
+          {:error, :boot_failed}
+      end
+    end
+
+    def stop_session(session_id) do
+      send(self(), {:session_stop_attempted, session_id})
+
+      if Process.get({__MODULE__, :mode}) == :boot_error_stop_raises,
+        do: raise("session stop exploded"),
+        else: {:error, :not_found}
+    end
+  end
+
   setup do
     Synapsis.DataCase.clear_config_store(:provider)
     Synapsis.DataCase.clear_config_store(:backplane)
@@ -82,6 +116,90 @@ defmodule Synapsis.SessionsTest do
     assert {:ok, []} = Sessions.list(agent_name)
   end
 
+  test "create cleans persisted state when session startup raises" do
+    provider_name = "raising-create-provider-#{System.unique_integer([:positive])}"
+
+    assert {:ok, %ProviderConfig{}} =
+             create_mixed_backplane_provider(provider_name, ["enabled-model"])
+
+    FailingSessionRuntime.configure(:raise)
+
+    result =
+      Sessions.create("main", %{
+        provider: provider_name,
+        model: "enabled-model",
+        session_runtime: FailingSessionRuntime
+      })
+
+    assert {:error, _reason} = result
+    assert_receive {:session_start_attempted, session_id}
+    assert_receive {:session_stop_attempted, ^session_id}
+    assert {:error, :not_found} = Sessions.get(session_id)
+    assert :missing = Store.get_value(session_id, "permission", :missing)
+  end
+
+  test "create cleans persisted state when session startup exits" do
+    provider_name = "exiting-create-provider-#{System.unique_integer([:positive])}"
+
+    assert {:ok, %ProviderConfig{}} =
+             create_mixed_backplane_provider(provider_name, ["enabled-model"])
+
+    FailingSessionRuntime.configure(:exit)
+
+    assert {:error, {:exit, :session_runtime_down}} =
+             Sessions.create("main", %{
+               provider: provider_name,
+               model: "enabled-model",
+               session_runtime: FailingSessionRuntime
+             })
+
+    assert_receive {:session_start_attempted, session_id}
+    assert_receive {:session_stop_attempted, ^session_id}
+    assert {:error, :not_found} = Sessions.get(session_id)
+    assert :missing = Store.get_value(session_id, "permission", :missing)
+  end
+
+  test "failed create clears session quarantine counters" do
+    provider_name = "quarantined-create-provider-#{System.unique_integer([:positive])}"
+
+    assert {:ok, %ProviderConfig{}} =
+             create_mixed_backplane_provider(provider_name, ["enabled-model"])
+
+    FailingSessionRuntime.configure(:boot_error_with_failure)
+
+    assert {:error, :boot_failed} =
+             Sessions.create("main", %{
+               provider: provider_name,
+               model: "enabled-model",
+               session_runtime: FailingSessionRuntime
+             })
+
+    assert_receive {:session_start_attempted, session_id}
+    assert Synapsis.Session.Quarantine.failure_count(session_id) == 0
+    refute Synapsis.Session.Quarantine.quarantined?(session_id)
+  end
+
+  test "failed create still deletes persisted state when runtime cleanup raises" do
+    provider_name = "cleanup-raising-provider-#{System.unique_integer([:positive])}"
+
+    assert {:ok, %ProviderConfig{}} =
+             create_mixed_backplane_provider(provider_name, ["enabled-model"])
+
+    FailingSessionRuntime.configure(:boot_error_stop_raises)
+
+    assert {:error, {:session_create_failed, :boot_failed, {:cleanup_failed, _reason}}} =
+             Sessions.create("main", %{
+               provider: provider_name,
+               model: "enabled-model",
+               session_runtime: FailingSessionRuntime
+             })
+
+    assert_receive {:session_start_attempted, session_id}
+    assert_receive {:session_stop_attempted, ^session_id}
+    assert {:error, :not_found} = Sessions.get(session_id)
+    assert :missing = Store.get_value(session_id, "permission", :missing)
+  end
+
   test "local providers prefer an explicit environment default over cached models" do
     previous_model = System.get_env("ANTHROPIC_MODEL")
 
@@ -134,6 +252,70 @@ defmodule Synapsis.SessionsTest do
     assert {:ok, %{status: "streaming", model: "disabled-model"}} = Sessions.get(stale.id)
   end
 
+  test "unsupported recovery accepts a keyless built-in provider fallback" do
+    model = Providers.default_model("anthropic")
+    session = persisted_session("anthropic", model)
+    on_exit(fn -> Sessions.delete(session.id) end)
+
+    assert {:ok, %{provider: "anthropic", model: ^model}} =
+             Sessions.recover_unsupported_provider_model(session)
+  end
+
+  test "stale recovery accepts an explicit session-local provider fallback" do
+    provider_name = "session-local-#{System.unique_integer([:positive])}"
+    model = "local-model"
+
+    config = %{
+      "providers" => %{
+        provider_name => %{"baseURL" => "http://localhost:11434/v1"}
+      }
+    }
+
+    session = persisted_session(provider_name, model, config)
+
+    stale = %{
+      session
+      | status: "streaming",
+        updated_at: DateTime.add(DateTime.utc_now(), -60, :second)
+    }
+
+    :ok = Store.put_meta(stale.id, Session.to_meta(stale))
+    on_exit(fn -> Sessions.delete(stale.id) end)
+
+    assert {:ok, %{status: "idle", provider: ^provider_name, model: ^model}} =
+             Sessions.recover_stale_transient_status(stale, after_seconds: 0)
+  end
+
+  test "recovery does not let local fallback override an unavailable imported provider" do
+    model = Providers.default_model("anthropic")
+
+    assert {:ok, %ProviderConfig{}} =
+             Providers.create(%{
+               name: "anthropic",
+               type: "anthropic",
+               enabled: true,
+               config: %{
+                 "managed_by" => "backplane",
+                 "backplane_source_id" => "source-1",
+                 "backplane_available" => false
+               }
+             })
+
+    config = %{
+      "providers" => %{
+        "anthropic" => %{"baseURL" => "http://localhost:11434/v1"}
+      }
+    }
+
+    session = persisted_session("anthropic", model, config)
+    on_exit(fn -> Sessions.delete(session.id) end)
+
+    assert {:error, :model_unavailable} =
+             Sessions.recover_unsupported_provider_model(session)
+
+    assert {:ok, %{provider: "anthropic", model: ^model}} = Sessions.get(session.id)
+  end
+
   defp create_mixed_backplane_provider(provider_name, enabled_models) do
     Providers.create(%{
       name: provider_name,
@@ -161,7 +343,7 @@ defmodule Synapsis.SessionsTest do
     })
   end
 
-  defp persisted_session(provider, model) do
+  defp persisted_session(provider, model, config \\ %{}) do
     now = DateTime.utc_now()
 
     session = %Session{
@@ -169,7 +351,7 @@ defmodule Synapsis.SessionsTest do
       agent: "main",
       provider: provider,
       model: model,
-      config: %{},
+      config: config,
       status: "idle",
       inserted_at: now,
       updated_at: now

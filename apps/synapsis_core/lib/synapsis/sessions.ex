@@ -38,7 +38,8 @@ defmodule Synapsis.Sessions do
         |> Ecto.Changeset.apply_changes()
         |> then(&%{&1 | id: &1.id || Ecto.UUID.generate(), inserted_at: now, updated_at: now})
 
-      persist_and_start_session(session, agent)
+      session_runtime = opts[:session_runtime] || Synapsis.Session.DynamicSupervisor
+      persist_and_start_session(session, agent, session_runtime)
     else
       {:error, changeset}
     end
@@ -169,21 +170,23 @@ defmodule Synapsis.Sessions do
   defp with_messages(%Session{} = session),
     do: %{session | messages: Message.list_by_session(session.id)}
 
-  defp persist_and_start_session(session, agent) do
+  defp persist_and_start_session(session, agent, session_runtime) do
     result =
-      with :ok <- Store.put_meta(session.id, Session.to_meta(session)),
-           {:ok, _permission} <- apply_agent_permission(session, agent),
-           {:ok, _pid} <- Synapsis.Session.DynamicSupervisor.start_session(session.id),
-           {:ok, effective_session} <- get(session.id) do
-        {:ok, effective_session}
-      end
+      protect_operation(fn ->
+        with :ok <- Store.put_meta(session.id, Session.to_meta(session)),
+             {:ok, _permission} <- apply_agent_permission(session, agent),
+             {:ok, _pid} <- session_runtime.start_session(session.id),
+             {:ok, effective_session} <- get(session.id) do
+          {:ok, effective_session}
+        end
+      end)
 
     case result do
       {:ok, _session} = success ->
         success
 
       {:error, reason} = error ->
-        case cleanup_failed_create(session.id) do
+        case cleanup_failed_create(session.id, session_runtime) do
           :ok ->
             error
 
@@ -193,12 +196,23 @@ defmodule Synapsis.Sessions do
     end
   end
 
-  defp cleanup_failed_create(session_id) do
-    stop_result = Synapsis.Session.DynamicSupervisor.stop_session(session_id)
-    delete_result = Store.delete_session(session_id)
+  defp protect_operation(fun) do
+    fun.()
+  rescue
+    exception -> {:error, {:exception, exception.__struct__, Exception.message(exception)}}
+  catch
+    :exit, reason -> {:error, {:exit, reason}}
+  end
 
-    case {stop_result, delete_result} do
-      {stop, :ok} when stop in [:ok, {:error, :not_found}] ->
+  defp cleanup_failed_create(session_id, session_runtime) do
+    stop_result = protect_operation(fn -> session_runtime.stop_session(session_id) end)
+    delete_result = protect_operation(fn -> Store.delete_session(session_id) end)
+
+    quarantine_result =
+      protect_operation(fn -> Synapsis.Session.Quarantine.clear(session_id) end)
+
+    case {stop_result, delete_result, quarantine_result} do
+      {stop, :ok, :ok} when stop in [:ok, {:error, :not_found}] ->
         :ok
 
       results ->
@@ -535,29 +549,31 @@ defmodule Synapsis.Sessions do
 
   defp recoverable_provider_model(session) do
     {provider, model} = recovered_provider_model(session)
+    config = session.config || %{}
 
-    if model_supported?(provider, model),
+    if model_supported?(provider, model, config),
       do: {:ok, {provider, model}},
       else: {:error, :model_unavailable}
   end
 
   defp recovered_provider_model(session) do
-    env_model = env_recovery_model(session.provider, session.model)
+    config = session.config || %{}
+    env_model = env_recovery_model(session.provider, session.model, config)
 
     cond do
-      present?(env_model) and model_supported?(session.provider, env_model) ->
+      present?(env_model) and model_supported?(session.provider, env_model, config) ->
         {session.provider, env_model}
 
-      provider_model_supported?(session.provider, session.model) ->
+      provider_model_supported?(session.provider, session.model, config) ->
         {session.provider, session.model}
 
-      provider_configured?(session.provider) ->
+      provider_configured?(session.provider, config) ->
         {session.provider,
-         supported_model(session.config, session.provider, session.agent, session.model)}
+         supported_model(config, session.provider, session.agent, session.model)}
 
       true ->
-        provider = default_provider(session.config || %{}, session.agent)
-        {provider, supported_model(session.config, provider, session.agent, session.model)}
+        provider = default_provider(config, session.agent)
+        {provider, supported_model(config, provider, session.agent, session.model)}
     end
   end
 
@@ -565,10 +581,10 @@ defmodule Synapsis.Sessions do
     model = default_model(config || %{}, provider, agent)
 
     cond do
-      model_supported?(provider, model) ->
+      model_supported?(provider, model, config) ->
         model
 
-      model_supported?(provider, fallback_model) ->
+      model_supported?(provider, fallback_model, config) ->
         fallback_model
 
       fallback = first_runtime_provider_model(provider) ->
@@ -579,23 +595,23 @@ defmodule Synapsis.Sessions do
     end
   end
 
-  defp provider_model_supported?(provider, model) do
-    provider_configured?(provider) and model_supported?(provider, model)
+  defp provider_model_supported?(provider, model, config) do
+    provider_configured?(provider, config) and model_supported?(provider, model, config)
   end
 
-  defp provider_configured?(provider) when provider in [nil, ""], do: false
+  defp provider_configured?(provider, _config) when provider in [nil, ""], do: false
 
-  defp provider_configured?(provider) do
+  defp provider_configured?(provider, config) do
     case Synapsis.Providers.get_runtime_by_name(provider) do
       {:ok, _provider} -> true
       {:error, :provider_unavailable} -> false
-      {:error, :not_found} -> Synapsis.Providers.env_configured?(provider)
+      {:error, :not_found} -> fallback_configured?(provider, config)
     end
   end
 
-  defp model_supported?(_provider, model) when model in [nil, ""], do: false
+  defp model_supported?(_provider, model, _config) when model in [nil, ""], do: false
 
-  defp model_supported?(provider, model) do
+  defp model_supported?(provider, model, config) do
     case Synapsis.Providers.get_runtime_by_name(provider) do
       {:ok, provider_config} ->
         Synapsis.Providers.model_runtime_available?(provider_config, model)
@@ -604,7 +620,7 @@ defmodule Synapsis.Sessions do
         false
 
       {:error, :not_found} ->
-        Synapsis.Providers.env_configured?(provider)
+        fallback_configured?(provider, config)
     end
   end
 
@@ -621,9 +637,9 @@ defmodule Synapsis.Sessions do
     end
   end
 
-  defp env_recovery_model(provider, model) do
+  defp env_recovery_model(provider, model, config) do
     env_model =
-      if provider_runtime_candidate?(provider),
+      if provider_runtime_candidate?(provider, config),
         do: Synapsis.Providers.env_default_model(provider)
 
     cond do
@@ -657,7 +673,7 @@ defmodule Synapsis.Sessions do
   defp blank?(value), do: value in [nil, ""]
   defp present?(value), do: is_binary(value) and String.trim(value) != ""
 
-  defp provider_runtime_candidate?(provider, config \\ %{}) do
+  defp provider_runtime_candidate?(provider, config) do
     case Synapsis.Providers.get_runtime_by_name(provider) do
       {:ok, _provider} -> true
       {:error, :provider_unavailable} -> false
