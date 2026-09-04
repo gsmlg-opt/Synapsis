@@ -132,6 +132,8 @@ defmodule Synapsis.Skills do
       "description" => r.description,
       "system_prompt_fragment" => r.system_prompt_fragment,
       "tool_allowlist" => r.tool_allowlist || [],
+      "config_overrides" => r.config_overrides || %{},
+      "enabled" => r.enabled,
       "is_builtin" => r.is_builtin
     }
     |> Enum.reject(fn {_k, v} -> is_nil(v) end)

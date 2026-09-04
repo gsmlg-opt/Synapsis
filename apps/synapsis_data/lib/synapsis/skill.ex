@@ -19,6 +19,7 @@ defmodule Synapsis.Skill do
     field(:system_prompt_fragment, :string)
     field(:tool_allowlist, {:array, :string}, default: [])
     field(:config_overrides, :map, default: %{})
+    field(:enabled, :boolean, default: true)
     field(:is_builtin, :boolean, default: false)
 
     field(:inserted_at, :utc_datetime_usec)
@@ -35,6 +36,7 @@ defmodule Synapsis.Skill do
       :system_prompt_fragment,
       :tool_allowlist,
       :config_overrides,
+      :enabled,
       :is_builtin
     ])
     |> validate_required([:scope, :name])

@@ -21,6 +21,7 @@ defmodule Synapsis.MCPConfig do
     field(:env, :map, default: %{})
     field(:url, :string)
     field(:headers, :map, default: %{})
+    field(:config, :map, default: %{})
 
     field(:inserted_at, :utc_datetime_usec)
     field(:updated_at, :utc_datetime_usec)
@@ -28,7 +29,18 @@ defmodule Synapsis.MCPConfig do
 
   def changeset(config, attrs) do
     config
-    |> cast(attrs, [:id, :name, :transport, :enabled, :command, :args, :env, :url, :headers])
+    |> cast(attrs, [
+      :id,
+      :name,
+      :transport,
+      :enabled,
+      :command,
+      :args,
+      :env,
+      :url,
+      :headers,
+      :config
+    ])
     |> validate_required([:name, :transport])
     |> validate_inclusion(:transport, @valid_transports)
     |> validate_length(:name, max: 255)

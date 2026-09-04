@@ -6,6 +6,7 @@ defmodule Synapsis.Providers do
   # (the Config.Store struct-mapping pattern); the in-memory Provider.Registry
   # remains the runtime authority.
   alias Synapsis.{Config.Store, ProviderConfig}
+  alias Synapsis.Encrypted.Binary, as: EncryptedBinary
   alias Synapsis.Provider.Registry, as: ProviderRegistry
 
   @store_type :provider
@@ -395,7 +396,7 @@ defmodule Synapsis.Providers do
 
   defp to_struct(map) do
     %ProviderConfig{}
-    |> ProviderConfig.changeset(map)
+    |> ProviderConfig.changeset(decrypt_api_key(map))
     |> Ecto.Changeset.apply_changes()
     |> restore_meta(map)
   end
@@ -415,7 +416,7 @@ defmodule Synapsis.Providers do
       "name" => r.name,
       "type" => r.type,
       "base_url" => r.base_url,
-      "api_key_encrypted" => r.api_key_encrypted,
+      "api_key_encrypted" => encrypt_api_key(r.api_key_encrypted),
       "config" => r.config || %{},
       "enabled" => r.enabled,
       "inserted_at" => encode_time(r.inserted_at),
@@ -427,6 +428,38 @@ defmodule Synapsis.Providers do
 
   defp encode_time(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
   defp encode_time(other), do: other
+
+  defp encrypt_api_key(nil), do: nil
+
+  defp encrypt_api_key(value) when is_binary(value) do
+    if String.trim(value) == "" do
+      nil
+    else
+      {:ok, encrypted} = EncryptedBinary.dump(value)
+      "enc:v1:" <> Base.encode64(encrypted)
+    end
+  end
+
+  defp decrypt_api_key(map) do
+    key =
+      if Map.has_key?(map, "api_key_encrypted"), do: "api_key_encrypted", else: :api_key_encrypted
+
+    case Map.get(map, key) do
+      "enc:v1:" <> encoded ->
+        value =
+          with {:ok, encrypted} <- Base.decode64(encoded),
+               {:ok, plaintext} <- EncryptedBinary.load(encrypted) do
+            plaintext
+          else
+            _error -> nil
+          end
+
+        Map.put(map, key, value)
+
+      _plaintext_or_nil ->
+        map
+    end
+  end
 
   @doc "Default base URL for a provider type or named provider."
   def default_base_url("anthropic"), do: "https://api.anthropic.com"

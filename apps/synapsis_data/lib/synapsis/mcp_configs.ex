@@ -78,7 +78,8 @@ defmodule Synapsis.MCPConfigs do
       "args" => r.args || [],
       "env" => r.env || %{},
       "url" => r.url,
-      "headers" => r.headers || %{}
+      "headers" => r.headers || %{},
+      "config" => r.config || %{}
     }
     |> Enum.reject(fn {_k, v} -> is_nil(v) end)
     |> Map.new()

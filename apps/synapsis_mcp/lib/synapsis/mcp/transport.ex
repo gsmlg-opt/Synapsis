@@ -29,7 +29,8 @@ defmodule Synapsis.MCP.Transport do
 
   def build(%MCPConfig{transport: "streamable_http"} = c) do
     {base_url, mcp_path} = split_url(c.url)
-    {:streamable_http, base_url: base_url, mcp_path: mcp_path, headers: c.headers || %{}}
+
+    {:streamable_http, base_url: base_url, mcp_path: mcp_path, headers: resolved_headers(c)}
   end
 
   def build(%MCPConfig{transport: "sse"} = c) do
@@ -56,4 +57,20 @@ defmodule Synapsis.MCP.Transport do
 
     {base, path}
   end
+
+  defp resolved_headers(%MCPConfig{} = config) do
+    Map.merge(config.headers || %{}, source_headers(config.config || %{}))
+  end
+
+  defp source_headers(%{"backplane_source_id" => source_id}) do
+    case Synapsis.Backplane.Connection.get(source_id) do
+      {:ok, %{credential: credential}} when is_binary(credential) ->
+        %{"authorization" => "Bearer " <> credential}
+
+      _missing_or_keyless ->
+        %{}
+    end
+  end
+
+  defp source_headers(_config), do: %{}
 end
