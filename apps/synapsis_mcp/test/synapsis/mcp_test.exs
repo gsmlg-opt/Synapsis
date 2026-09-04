@@ -6,6 +6,19 @@ defmodule Synapsis.MCPTest do
   alias Synapsis.MCPConfigs
   alias Synapsis.Tool.Registry
 
+  defmodule AliasRuntime do
+    use GenServer
+
+    def start_link(name) do
+      GenServer.start_link(__MODULE__, :ok,
+        name: {:via, Elixir.Registry, {Synapsis.MCP.Registry, name}}
+      )
+    end
+
+    @impl true
+    def init(:ok), do: {:ok, %{}}
+  end
+
   setup do
     Synapsis.DataCase.clear_config_store(:backplane)
 
@@ -200,6 +213,76 @@ defmodule Synapsis.MCPTest do
     assert Process.alive?(rogue)
   end
 
+  test "restart attempts every identity and alias cleanup and compounds failures", %{
+    bypass: bypass
+  } do
+    old_name = "cleanup_old_#{System.unique_integer([:positive])}"
+    current_name = "cleanup_current_#{System.unique_integer([:positive])}"
+    parent = self()
+
+    {:ok, stale} =
+      MCPConfigs.create(%{
+        name: old_name,
+        transport: "streamable_http",
+        url: "http://localhost:#{bypass.port}",
+        enabled: true
+      })
+
+    assert {:ok, _current} = MCPConfigs.update(stale, %{name: current_name})
+
+    rogue_id =
+      spawn(fn ->
+        key = {:config_id, stale.id}
+        {:ok, _value} = Elixir.Registry.register(Synapsis.MCP.Registry, key, nil)
+        send(parent, {:rogue_registered, key, self()})
+        receive do: (:stop -> :ok)
+      end)
+
+    rogue_old =
+      spawn(fn ->
+        {:ok, _value} = Elixir.Registry.register(Synapsis.MCP.Registry, old_name, nil)
+        send(parent, {:rogue_registered, old_name, self()})
+        receive do: (:stop -> :ok)
+      end)
+
+    current_spec = %{
+      id: {:cleanup_alias, current_name},
+      start: {AliasRuntime, :start_link, [current_name]},
+      restart: :temporary
+    }
+
+    assert {:ok, current_pid} =
+             DynamicSupervisor.start_child(Synapsis.MCP.DynamicSupervisor, current_spec)
+
+    on_exit(fn ->
+      send(rogue_id, :stop)
+      send(rogue_old, :stop)
+
+      if Process.alive?(current_pid) do
+        DynamicSupervisor.terminate_child(Synapsis.MCP.DynamicSupervisor, current_pid)
+      end
+
+      if current = MCPConfigs.get(stale.id), do: MCPConfigs.delete(current)
+    end)
+
+    assert_receive {:rogue_registered, {:config_id, config_id}, ^rogue_id}
+    assert config_id == stale.id
+    assert_receive {:rogue_registered, ^old_name, ^rogue_old}
+
+    assert {:error,
+            {:restart_cleanup_failed,
+             {:multiple_runtime_cleanup_failures,
+              [
+                {:runtime_stop_timeout, {:config_id, ^config_id}},
+                {:runtime_stop_timeout, ^old_name}
+              ]}}} = Synapsis.MCP.restart(stale)
+
+    refute Process.alive?(current_pid)
+    assert Process.alive?(rogue_id)
+    assert Process.alive?(rogue_old)
+    refute_receive {:mcp_request, _method}, 200
+  end
+
   test "unavailable managed configs cannot start or remain registered after restart", %{
     bypass: bypass
   } do
@@ -235,6 +318,52 @@ defmodule Synapsis.MCPTest do
     assert {:error, :mcp_unavailable} = Synapsis.MCP.restart(unavailable)
     assert wait_until(fn -> match?({:error, :not_found}, Registry.lookup(tool)) end)
     refute name in Synapsis.MCP.list()
+  end
+
+  test "reconciliation readiness does not permit tool execution through a durable block", %{
+    bypass: bypass
+  } do
+    name = "blocked_reconciliation_#{System.unique_integer([:positive])}"
+
+    {:ok, config} =
+      MCPConfigs.create(%{
+        name: name,
+        transport: "streamable_http",
+        url: "http://localhost:#{bypass.port}",
+        enabled: true,
+        config: %{
+          "managed_by" => "backplane",
+          "backplane_source_id" => "source-1",
+          "backplane_available" => true,
+          "backplane_tools" => [
+            %{"external_id" => "echo", "backplane_available" => true}
+          ]
+        }
+      })
+
+    assert {:ok, _connection} =
+             Store.put(:backplane, %{
+               "id" => "source-1",
+               "enabled" => true,
+               "metadata_json" => Jason.encode!(%{"runtime_blocked_surfaces" => ["tools"]})
+             })
+
+    tool_name = "mcp:#{name}:echo"
+
+    on_exit(fn ->
+      Synapsis.MCP.stop(name)
+      Registry.unregister(tool_name)
+      if current = MCPConfigs.get(config.id), do: MCPConfigs.delete(current)
+    end)
+
+    refute MCPConfigs.runtime_available?(config)
+    assert :ok = Synapsis.MCP.restart_for_reconciliation(config)
+    assert {:ok, {:process, pid, _opts}} = Registry.lookup(tool_name)
+
+    assert {:error, :mcp_unavailable} =
+             GenServer.call(pid, {:execute, tool_name, %{}, %{}})
+
+    refute_receive {:mcp_request, "tools/call"}, 200
   end
 
   test "restart rejects a stale enabled struct after its persisted record is disabled", %{

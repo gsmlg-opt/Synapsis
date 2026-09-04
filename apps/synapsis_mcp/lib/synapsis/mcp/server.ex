@@ -49,7 +49,13 @@ defmodule Synapsis.MCP.Server do
 
   @spec start_link(MCPConfig.t()) :: GenServer.on_start()
   def start_link(%MCPConfig{} = config) do
-    GenServer.start_link(__MODULE__, config, name: via(config.name))
+    start(config, :runtime)
+  end
+
+  @doc false
+  @spec start_reconciliation_link(MCPConfig.t()) :: GenServer.on_start()
+  def start_reconciliation_link(%MCPConfig{} = config) do
+    start(config, :reconciliation)
   end
 
   @doc "Wait until initial discovery and tool registration have completed."
@@ -68,7 +74,7 @@ defmodule Synapsis.MCP.Server do
   # --------------------------------------------------------------------------
 
   @impl true
-  def init(%MCPConfig{} = config) do
+  def init({%MCPConfig{} = config, initial_availability}) do
     Process.flag(:trap_exit, true)
 
     case register_config_id(config) do
@@ -90,6 +96,7 @@ defmodule Synapsis.MCP.Server do
               config: config,
               client: client_name,
               supervisor: supervisor,
+              initial_availability: initial_availability,
               tool_registry_ref: monitor_tool_registry(),
               tools: [],
               tool_names: []
@@ -107,14 +114,17 @@ defmodule Synapsis.MCP.Server do
   end
 
   @impl true
-  def handle_continue(:discover, %{client: client, config: config} = state) do
+  def handle_continue(
+        :discover,
+        %{client: client, config: config, initial_availability: initial_availability} = state
+      ) do
     with :ok <- MCPClient.await_ready(client, timeout: @await_timeout),
          {:ok, response} <- MCPClient.list_tools(client, timeout: @discovery_timeout) do
       tools =
         response
         |> ProtocolResponse.unwrap()
         |> Response.tools(config.name)
-        |> runtime_available_tools(config)
+        |> runtime_available_tools(config, initial_availability)
 
       case register_tools(tools) do
         {:ok, names} ->
@@ -190,6 +200,10 @@ defmodule Synapsis.MCP.Server do
   # Helpers
   # --------------------------------------------------------------------------
 
+  defp start(config, initial_availability) do
+    GenServer.start_link(__MODULE__, {config, initial_availability}, name: via(config.name))
+  end
+
   defp register_tools(tools) do
     {:ok, Enum.map(tools, &register_tool/1)}
   rescue
@@ -247,8 +261,14 @@ defmodule Synapsis.MCP.Server do
     end
   end
 
-  defp runtime_available_tools(tools, config) do
-    if MCPConfigs.runtime_available?(config) do
+  defp runtime_available_tools(tools, config, initial_availability) do
+    available? =
+      case initial_availability do
+        :runtime -> MCPConfigs.runtime_available?(config)
+        :reconciliation -> MCPConfigs.reconciliation_available?(config)
+      end
+
+    if available? do
       Enum.filter(tools, &tool_runtime_available?(config, &1.name))
     else
       []

@@ -7,6 +7,7 @@ defmodule Synapsis.Backplane.Sync do
   @max_error_length 500
   @fail_closed_persist_attempts 2
   @lock_context_key {__MODULE__, :held_connection_locks}
+  @managed_runtime_surfaces ~w(models skills tools)
   @runtime_blocked_surfaces_key "runtime_blocked_surfaces"
 
   def status(connection_id) do
@@ -42,16 +43,18 @@ defmodule Synapsis.Backplane.Sync do
   end
 
   defp do_run(connection_id, opts) do
-    with {:ok, connection} <- Connection.get(connection_id),
+    connection_store = Keyword.get(opts, :connection_store, Connection)
+
+    with {:ok, connection} <- connection_store.get(connection_id),
          now <- now(opts),
-         {:ok, attempted} <- Connection.update(connection, %{last_attempt_at: now}) do
+         {:ok, attempted} <- connection_store.update(connection, %{last_attempt_at: now}) do
       Events.started(attempted)
       previous_state = managed_capability_state(attempted)
 
       case fetch_snapshot(attempted, opts) do
         {:ok, snapshot} ->
           {:ok, reconciliation} = reconcile_snapshot(attempted, snapshot, opts)
-          result = finalize_sync(attempted, reconciliation, now)
+          result = finalize_sync(attempted, reconciliation, now, opts)
 
           publish_sync_result(
             result,
@@ -60,7 +63,7 @@ defmodule Synapsis.Backplane.Sync do
           )
 
         {:error, reason} ->
-          attempted |> persist_failure(reason) |> publish_sync_result(false)
+          attempted |> persist_failure(reason, connection_store) |> publish_sync_result(false)
       end
     end
   end
@@ -416,7 +419,7 @@ defmodule Synapsis.Backplane.Sync do
     end
   end
 
-  defp finalize_sync(connection, reconciliation, now) do
+  defp finalize_sync(connection, reconciliation, now, opts) do
     errors = reconciliation.errors
     success? = map_size(errors) == 0
     surface_errors = sanitize_surface_errors(errors, connection.credential)
@@ -449,11 +452,21 @@ defmodule Synapsis.Backplane.Sync do
         do: Map.merge(attrs, %{last_success_at: now, last_synced_at: now}),
         else: attrs
 
-    Connection.update(connection, attrs)
+    connection_store = Keyword.get(opts, :connection_store, Connection)
+    mcp_store = Keyword.get(opts, :mcp_store, MCPConfigs)
+
+    persist_sync_result(
+      connection_store,
+      mcp_store,
+      connection,
+      attrs,
+      reconciliation,
+      @fail_closed_persist_attempts
+    )
   end
 
-  defp persist_failure(connection, reason) do
-    Connection.update(connection, %{
+  defp persist_failure(connection, reason, connection_store) do
+    connection_store.update(connection, %{
       unavailable: ~w(models skills tools),
       status: "degraded",
       stale: true,
@@ -465,6 +478,98 @@ defmodule Synapsis.Backplane.Sync do
           %{"snapshot" => format_error(reason, connection.credential)}
         )
     })
+  end
+
+  defp persist_sync_result(
+         connection_store,
+         mcp_store,
+         connection,
+         attrs,
+         reconciliation,
+         attempts_left
+       ) do
+    case connection_store.update(connection, attrs) do
+      {:ok, _connection} = success ->
+        success
+
+      {:error, _reason} when attempts_left > 1 ->
+        persist_sync_result(
+          connection_store,
+          mcp_store,
+          connection,
+          attrs,
+          reconciliation,
+          attempts_left - 1
+        )
+
+      {:error, reason} ->
+        fail_closed =
+          if "tools" in reconciliation.runtime_blocked_surfaces,
+            do: ensure_durable_mcp_fail_closed(mcp_store, connection.id),
+            else: :not_required
+
+        {:error,
+         {:sync_persist_failed,
+          %{
+            connection: reason,
+            fail_closed: fail_closed,
+            surfaces: sanitize_surface_errors(reconciliation.errors, connection.credential)
+          }}}
+    end
+  end
+
+  defp ensure_durable_mcp_fail_closed(mcp_store, connection_id) do
+    results =
+      mcp_store.list()
+      |> Enum.filter(&owned?(&1.config, connection_id, "mcp_server"))
+      |> Enum.sort_by(& &1.id)
+      |> Enum.map(&durably_fail_close_mcp(mcp_store, &1))
+
+    cond do
+      results == [] ->
+        {:mcp_configs_deleted, []}
+
+      Enum.all?(results, &match?({:marker, _id}, &1)) ->
+        {:mcp_markers_persisted, Enum.map(results, &elem(&1, 1))}
+
+      Enum.all?(results, &match?({:deleted, _id}, &1)) ->
+        {:mcp_configs_deleted, Enum.map(results, &elem(&1, 1))}
+
+      Enum.any?(results, &match?({:failed, _id, _marker_reason, _delete_reason}, &1)) ->
+        {:mcp_fail_closed_failed, results}
+
+      true ->
+        {:mcp_configs_secured, results}
+    end
+  end
+
+  defp durably_fail_close_mcp(mcp_store, mcp) do
+    case persist_fail_closed_mcp(mcp_store, mcp) do
+      :ok ->
+        {:marker, mcp.id}
+
+      {:error, marker_reason} ->
+        case delete_mcp_config(mcp_store, mcp, @fail_closed_persist_attempts) do
+          :ok -> {:deleted, mcp.id}
+          {:error, delete_reason} -> {:failed, mcp.id, marker_reason, delete_reason}
+        end
+    end
+  end
+
+  defp delete_mcp_config(mcp_store, mcp, attempts_left) do
+    case mcp_store.delete(mcp) do
+      :ok ->
+        :ok
+
+      {:ok, _deleted} ->
+        :ok
+
+      {:error, _reason} when attempts_left > 1 ->
+        delete_mcp_config(mcp_store, mcp, attempts_left - 1)
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   defp reconstruct_artifacts(connection_id) do
@@ -497,18 +602,22 @@ defmodule Synapsis.Backplane.Sync do
   defp public_surface(:mcp_tools), do: :tools
   defp public_surface(surface), do: surface
 
-  defp runtime_blocked_surfaces(metadata) do
-    case Map.get(metadata || %{}, @runtime_blocked_surfaces_key, []) do
-      blocked when is_list(blocked) ->
-        blocked
-        |> Enum.filter(&is_binary/1)
-        |> Enum.uniq()
-        |> Enum.sort()
-
-      _invalid ->
+  defp runtime_blocked_surfaces(metadata) when is_map(metadata) do
+    case Map.fetch(metadata, @runtime_blocked_surfaces_key) do
+      :error ->
         []
+
+      {:ok, blocked} when is_list(blocked) ->
+        if Enum.all?(blocked, &(&1 in @managed_runtime_surfaces)),
+          do: blocked |> Enum.uniq() |> Enum.sort(),
+          else: @managed_runtime_surfaces
+
+      _malformed ->
+        @managed_runtime_surfaces
     end
   end
+
+  defp runtime_blocked_surfaces(_malformed), do: @managed_runtime_surfaces
 
   defp format_errors(errors, credential) do
     errors
@@ -829,7 +938,7 @@ defmodule Synapsis.Backplane.Sync do
       end
 
     with {:ok, persisted} <- result do
-      case reconcile_runtime_availability(runtime, persisted) do
+      case reconcile_runtime_availability(runtime, persisted, :reconciliation) do
         :ok ->
           {:ok, persisted}
 
@@ -904,7 +1013,7 @@ defmodule Synapsis.Backplane.Sync do
     do: stop_mcp_runtime(runtime, attempted.name)
 
   defp restore_mcp_runtime(runtime, restored, _attempted),
-    do: reconcile_runtime_availability(runtime, restored)
+    do: reconcile_runtime_availability(runtime, restored, :reconciliation)
 
   defp fail_closed_runtime(mcp_store, runtime, restored, name, rollback_runtime_reason) do
     persistence = persist_fail_closed_mcp(mcp_store, restored)
@@ -1031,7 +1140,7 @@ defmodule Synapsis.Backplane.Sync do
 
         result =
           with {:ok, updated} <- MCPConfigs.update(mcp, %{config: config}),
-               :ok <- reconcile_runtime_availability(runtime, updated) do
+               :ok <- reconcile_runtime_availability(runtime, updated, :runtime) do
             :ok
           end
 
@@ -1088,16 +1197,27 @@ defmodule Synapsis.Backplane.Sync do
       get_in(markers, ["source_metadata", "content_available"]) != false
   end
 
+  defp reconcile_runtime_availability(runtime, mcp, availability)
+
   defp reconcile_runtime_availability(
          runtime,
-         %{enabled: true, config: %{"backplane_available" => true}} = mcp
+         %{enabled: true, config: %{"backplane_available" => true}} = mcp,
+         availability
        ) do
-    protect(fn -> runtime.restart(mcp) end) |> normalize_runtime_result()
+    protect(fn -> restart_runtime(runtime, mcp, availability) end) |> normalize_runtime_result()
   end
 
-  defp reconcile_runtime_availability(runtime, %{name: name}) do
+  defp reconcile_runtime_availability(runtime, %{name: name}, _availability) do
     stop_mcp_runtime(runtime, name)
   end
+
+  defp restart_runtime(runtime, mcp, :reconciliation) do
+    if function_exported?(runtime, :restart_for_reconciliation, 1),
+      do: runtime.restart_for_reconciliation(mcp),
+      else: runtime.restart(mcp)
+  end
+
+  defp restart_runtime(runtime, mcp, :runtime), do: runtime.restart(mcp)
 
   defp stop_mcp_runtime(runtime, name) do
     case protect(fn -> runtime.stop(name) end) do

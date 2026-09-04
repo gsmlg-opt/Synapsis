@@ -11,10 +11,13 @@ defmodule Synapsis.MCP do
     end
   end
 
-  defp start_available(config) do
+  defp start_available(config, availability \\ :runtime) do
+    start_function =
+      if availability == :reconciliation, do: :start_reconciliation_link, else: :start_link
+
     spec = %{
       id: {:mcp, config.name},
-      start: {Server, :start_link, [config]},
+      start: {Server, start_function, [config]},
       restart: :transient
     }
 
@@ -29,11 +32,20 @@ defmodule Synapsis.MCP do
   end
 
   def restart(%MCPConfig{} = config) do
+    restart(config, :runtime)
+  end
+
+  @doc false
+  def restart_for_reconciliation(%MCPConfig{} = config) do
+    restart(config, :reconciliation)
+  end
+
+  defp restart(%MCPConfig{} = config, availability) do
     case current_config(config) do
       {:ok, current} ->
-        case cleanup_runtime(config.id, [config.name, current.name]) do
+        case cleanup_runtime(config.id, [current.name, config.name]) do
           :ok ->
-            case start(current) do
+            case start_after_cleanup(current, availability) do
               {:ok, pid} -> await_restart(pid, current)
               {:error, _} = error -> error
             end
@@ -106,17 +118,32 @@ defmodule Synapsis.MCP do
   end
 
   defp cleanup_runtime(config_id, names) do
-    with :ok <- stop_by_config_id(config_id) do
-      names
+    selectors =
+      case config_id do
+        nil -> names
+        id -> [{:config_id, id} | names]
+      end
+
+    errors =
+      selectors
       |> Enum.uniq()
-      |> Enum.reduce_while(:ok, fn name, :ok ->
-        case stop_and_wait(name) do
-          :ok -> {:cont, :ok}
-          {:error, _reason} = error -> {:halt, error}
+      |> Enum.reduce([], fn selector, errors ->
+        case stop_selector(selector) do
+          :ok -> errors
+          {:error, reason} -> [reason | errors]
         end
       end)
+      |> Enum.reverse()
+
+    case errors do
+      [] -> :ok
+      [reason] -> {:error, reason}
+      reasons -> {:error, {:multiple_runtime_cleanup_failures, reasons}}
     end
   end
+
+  defp stop_selector({:config_id, id}), do: stop_by_config_id(id)
+  defp stop_selector(name), do: stop_and_wait(name)
 
   defp stop_by_config_id(nil), do: :ok
 
@@ -155,6 +182,18 @@ defmodule Synapsis.MCP do
       start_available(config)
     else
       {:error, :mcp_unavailable}
+    end
+  end
+
+  defp start_after_cleanup(config, :runtime), do: start(config)
+
+  defp start_after_cleanup(config, :reconciliation) do
+    with {:ok, current} <- current_config(config) do
+      if MCPConfigs.reconciliation_available?(current) do
+        start_available(current, :reconciliation)
+      else
+        {:error, :mcp_unavailable}
+      end
     end
   end
 end

@@ -169,6 +169,25 @@ defmodule Synapsis.Backplane.SyncTest do
     end
   end
 
+  defmodule FailingConnectionStore do
+    def configure(failures) do
+      Process.put({__MODULE__, :state}, %{call: 0, failures: Map.new(failures)})
+    end
+
+    def get(id), do: Synapsis.Backplane.Connection.get(id)
+
+    def update(connection, attrs) do
+      state = Process.get({__MODULE__, :state}, %{call: 0, failures: %{}})
+      call = state.call + 1
+      Process.put({__MODULE__, :state}, %{state | call: call})
+
+      case Map.fetch(state.failures, call) do
+        {:ok, reason} -> {:error, reason}
+        :error -> Synapsis.Backplane.Connection.update(connection, attrs)
+      end
+    end
+  end
+
   setup do
     for type <- [:backplane, :provider, :skill, :mcp] do
       path =
@@ -1129,6 +1148,46 @@ defmodule Synapsis.Backplane.SyncTest do
     assert recovered.metadata["runtime_blocked_surfaces"] == []
   end
 
+  test "malformed durable blocks remain fail closed for surfaces that do not reconcile" do
+    {:ok, connection} =
+      Connection.create(%{
+        name: "malformed-runtime-block",
+        endpoint: "https://backplane.example.test"
+      })
+
+    initial =
+      snapshot!(connection,
+        models: [%{"id" => "coding", "revision" => "model-v1"}],
+        skills: [generated_skill("skill-a", "Alpha", "Alpha v1")],
+        mcp_tools: [%{"name" => "memory::search", "revision" => "tool-v1"}]
+      )
+
+    assert {:ok, ready} = run_sync(connection, initial)
+
+    assert {:ok, blocked} =
+             Connection.update(ready, %{
+               metadata: Map.put(ready.metadata, "runtime_blocked_surfaces", ["unknown-surface"])
+             })
+
+    {:ok, partial} =
+      Snapshot.normalize(
+        blocked,
+        %{
+          models: {:ok, [%{"id" => "coding", "revision" => "model-v2"}]},
+          skills: {:ok, [generated_skill("skill-a", "Alpha", "Alpha v2")]},
+          mcp_tools: {:error, :tools_unavailable}
+        },
+        fetched_at: "2026-09-04T13:00:00Z"
+      )
+
+    assert {:ok, degraded} = run_sync(blocked, partial)
+    assert degraded.unavailable == ["tools"]
+    assert degraded.metadata["runtime_blocked_surfaces"] == ["tools"]
+
+    mcp = MCPConfigs.get(degraded.artifacts["mcp_id"])
+    refute MCPConfigs.runtime_available?(mcp)
+  end
+
   test "an MCP runtime reconciliation error retains the complete tool surface LKG" do
     {:ok, connection} =
       Connection.create(%{name: "tool-lkg", endpoint: "https://backplane.example.test"})
@@ -1504,6 +1563,211 @@ defmodule Synapsis.Backplane.SyncTest do
     assert {:ok, recovered} = run_sync(connection, v2, mcp_runtime: StatefulMCPRuntime)
     assert recovered.status == "ready"
     assert recovered.metadata["runtime_blocked_surfaces"] == []
+  end
+
+  test "failed marker and connection block writes remove the unsafe MCP record" do
+    {:ok, runtime_state} = Agent.start_link(fn -> %{} end)
+
+    StatefulMCPRuntime.configure(runtime_state, [
+      :ok,
+      {:error, :v2_restart_failed},
+      {:error, :v1_rollback_failed}
+    ])
+
+    {:ok, connection} =
+      Connection.create(%{
+        name: "runtime-block-persist-failure",
+        endpoint: "https://backplane.example.test"
+      })
+
+    v1 =
+      snapshot!(connection,
+        models: [%{"id" => "coding"}],
+        skills: [],
+        mcp_tools: [%{"name" => "memory::search", "revision" => "tool-v1"}]
+      )
+
+    assert {:ok, ready} = run_sync(connection, v1, mcp_runtime: StatefulMCPRuntime)
+    mcp_v1 = MCPConfigs.get(ready.artifacts["mcp_id"])
+
+    FailingMCPStore.configure([
+      {3, :marker_write_failed},
+      {4, :marker_write_failed},
+      {5, :marker_write_failed},
+      {6, :marker_write_failed}
+    ])
+
+    FailingConnectionStore.configure([
+      {2, :connection_block_write_failed},
+      {3, :connection_block_write_failed}
+    ])
+
+    v2 =
+      snapshot!(connection,
+        models: [%{"id" => "coding"}],
+        skills: [],
+        mcp_tools: [%{"name" => "memory::search", "revision" => "tool-v2"}]
+      )
+
+    assert {:error,
+            {:sync_persist_failed,
+             %{
+               connection: :connection_block_write_failed,
+               fail_closed: {:mcp_configs_deleted, [mcp_id]},
+               surfaces: %{"tools" => tools_error}
+             }}} =
+             run_sync(connection, v2,
+               connection_store: FailingConnectionStore,
+               mcp_runtime: StatefulMCPRuntime,
+               mcp_store: FailingMCPStore
+             )
+
+    assert mcp_id == mcp_v1.id
+    assert tools_error =~ "marker_write_failed"
+    assert MCPConfigs.get(mcp_v1.id) == nil
+    assert :ok = Synapsis.MCP.start_enabled()
+    refute mcp_v1.name in Synapsis.MCP.list()
+
+    state = Agent.get(runtime_state, & &1)
+    assert state.active == nil
+  end
+
+  test "a transient connection block write failure is retried without deleting LKG" do
+    {:ok, runtime_state} = Agent.start_link(fn -> %{} end)
+
+    StatefulMCPRuntime.configure(runtime_state, [
+      :ok,
+      {:error, :v2_restart_failed},
+      {:error, :v1_rollback_failed}
+    ])
+
+    {:ok, connection} =
+      Connection.create(%{
+        name: "runtime-block-persist-retry",
+        endpoint: "https://backplane.example.test"
+      })
+
+    v1 =
+      snapshot!(connection,
+        models: [%{"id" => "coding"}],
+        skills: [],
+        mcp_tools: [%{"name" => "memory::search", "revision" => "tool-v1"}]
+      )
+
+    assert {:ok, ready} = run_sync(connection, v1, mcp_runtime: StatefulMCPRuntime)
+    mcp_v1 = MCPConfigs.get(ready.artifacts["mcp_id"])
+
+    FailingMCPStore.configure([
+      {3, :marker_write_failed},
+      {4, :marker_write_failed}
+    ])
+
+    FailingConnectionStore.configure([{2, :connection_block_write_failed}])
+
+    v2 =
+      snapshot!(connection,
+        models: [%{"id" => "coding"}],
+        skills: [],
+        mcp_tools: [%{"name" => "memory::search", "revision" => "tool-v2"}]
+      )
+
+    assert {:ok, degraded} =
+             run_sync(connection, v2,
+               connection_store: FailingConnectionStore,
+               mcp_runtime: StatefulMCPRuntime,
+               mcp_store: FailingMCPStore
+             )
+
+    assert degraded.metadata["runtime_blocked_surfaces"] == ["tools"]
+    assert retained = MCPConfigs.get(mcp_v1.id)
+    assert retained.config["backplane_available"] == true
+    refute MCPConfigs.runtime_available?(retained)
+  end
+
+  test "a real MCP runtime recovers from a durable tools block only after readiness" do
+    bypass = Bypass.open()
+
+    Bypass.stub(bypass, "POST", "/mcp", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      request = Jason.decode!(body)
+
+      case request do
+        %{"id" => id, "method" => "initialize"} ->
+          json(conn, %{
+            "jsonrpc" => "2.0",
+            "id" => id,
+            "result" => %{
+              "protocolVersion" => "2025-06-18",
+              "capabilities" => %{"tools" => %{}},
+              "serverInfo" => %{"name" => "recovery", "version" => "1"}
+            }
+          })
+
+        %{"id" => id, "method" => "tools/list"} ->
+          json(conn, %{
+            "jsonrpc" => "2.0",
+            "id" => id,
+            "result" => %{
+              "tools" => [
+                %{
+                  "name" => "echo",
+                  "description" => "echo",
+                  "inputSchema" => %{"type" => "object"}
+                }
+              ]
+            }
+          })
+
+        _notification ->
+          Plug.Conn.send_resp(conn, 202, "")
+      end
+    end)
+
+    Bypass.stub(bypass, "GET", "/mcp", fn conn -> Plug.Conn.send_resp(conn, 200, "") end)
+
+    {:ok, connection} =
+      Connection.create(%{
+        name: "real-runtime-recovery",
+        endpoint: "http://localhost:#{bypass.port}"
+      })
+
+    v1 =
+      snapshot!(connection,
+        models: [%{"id" => "coding"}],
+        skills: [],
+        mcp_tools: [%{"name" => "echo", "revision" => "tool-v1"}]
+      )
+
+    assert {:ok, ready} = run_sync(connection, v1)
+    mcp = MCPConfigs.get(ready.artifacts["mcp_id"])
+    tool_name = "mcp:#{mcp.name}:echo"
+
+    on_exit(fn ->
+      Synapsis.MCP.stop(mcp.name)
+      Synapsis.Tool.Registry.unregister(tool_name)
+    end)
+
+    assert {:ok, blocked} =
+             Connection.update(ready, %{
+               metadata: Map.put(ready.metadata, "runtime_blocked_surfaces", ["tools"])
+             })
+
+    refute MCPConfigs.runtime_available?(mcp)
+
+    v2 =
+      snapshot!(blocked,
+        models: [%{"id" => "coding"}],
+        skills: [],
+        mcp_tools: [%{"name" => "echo", "revision" => "tool-v2"}]
+      )
+
+    assert {:ok, recovered} =
+             run_sync(blocked, v2, mcp_runtime: Synapsis.MCP)
+
+    assert recovered.status == "ready"
+    assert recovered.metadata["runtime_blocked_surfaces"] == []
+    assert {:ok, {:process, pid, _opts}} = Synapsis.Tool.Registry.lookup(tool_name)
+    assert Process.alive?(pid)
   end
 
   test "MCP stop failure persists degraded availability and a successful retry clears it" do
