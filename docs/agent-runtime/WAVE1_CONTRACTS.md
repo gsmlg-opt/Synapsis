@@ -36,4 +36,12 @@ contracts; they are **not** implemented in the Track B PR.
 - Daemon liveness pulse remains separate from `last_heartbeat_success_at` / `heartbeat_failure_streak`.
 - False `heartbeat_completed` on timeout/error is removed.
 
-## Track G — Durable Routine Engine (next)
+## Track G — Durable Routine Engine (implemented in PR-06)
+
+- Normalized `Routine.Definition` with heartbeat TOML adapter (defaults: `Etc/UTC`, `misfire_policy: :skip`, `no_overlap: true`, `tool_profile: "heartbeat"`).
+- Concord state/occurrence stores under `coord/routines/<id>/state` and `coord/routine_occurrences/<id>/<key>`; persist is fail-closed.
+- Deterministic occurrence key `<routine_id>:<scheduled_for-UTC-iso>`; claim before `Daemon.trigger`.
+- Controllable `Routine.Clock`; `Routine.Scheduler` persists `next_run_at` and reconciles on boot. `LocalScheduler` delegates (same process name for health).
+- Policies: no-overlap skip, misfire `skip` / `run_once`, retry backoff + failure streak on routine state.
+- Timezone fold policy: ambiguous → earlier UTC; gap → after-gap instant.
+- Dream/schedule `Daemon.trigger` kinds remain `:not_implemented` until Track H / later.
