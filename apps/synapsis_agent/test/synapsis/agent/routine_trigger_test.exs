@@ -31,6 +31,29 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
     end
 
     def touch_accessed(_ids), do: :ok
+
+    def store(attrs) do
+      record = Map.put(attrs, :id, "dream-saved-#{System.unique_integer([:positive])}")
+
+      Agent.update(
+        Application.fetch_env!(:synapsis_agent, :dream_test_memory_store),
+        &[record | &1]
+      )
+
+      send(
+        Application.fetch_env!(:synapsis_agent, :daemon_test_owner),
+        {:dream_memory_stored, record}
+      )
+
+      {:ok, record}
+    end
+
+    def list(_filters) do
+      Agent.get(
+        Application.fetch_env!(:synapsis_agent, :dream_test_memory_store),
+        &Enum.reverse/1
+      )
+    end
   end
 
   @tag :tmp_dir
@@ -93,6 +116,114 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
              "proposed_tasks" => ["Add a bounded trigger task"],
              "ignored_noise" => ["Unrelated UI work"]
            }
+  end
+
+  @tag :tmp_dir
+  test "dream persists a memory through memory_save without a permission request", %{
+    tmp_dir: tmp_dir
+  } do
+    previous_adapter = Application.get_env(:synapsis_core, :memory_adapter)
+    memory_store = start_supervised!({Agent, fn -> [] end})
+    Application.put_env(:synapsis_core, :memory_adapter, DreamMemoryAdapter)
+    Application.put_env(:synapsis_agent, :dream_test_memory_store, memory_store)
+
+    on_exit(fn ->
+      Application.delete_env(:synapsis_agent, :dream_test_memory_store)
+
+      if previous_adapter,
+        do: Application.put_env(:synapsis_core, :memory_adapter, previous_adapter),
+        else: Application.delete_env(:synapsis_core, :memory_adapter)
+    end)
+
+    memory_input = %{
+      "memories" => [
+        %{
+          "scope" => "agent",
+          "kind" => "lesson",
+          "title" => "Verify imported tools",
+          "summary" => "Exercise imported tools through the daemon before release.",
+          "tags" => ["release"]
+        }
+      ]
+    }
+
+    dream_json =
+      Jason.encode!(%{
+        "recent_summary" => "Saved the release lesson",
+        "memory_candidates" => ["Verify imported tools"],
+        "open_questions" => [],
+        "risks" => [],
+        "proposed_tasks" => [],
+        "ignored_noise" => []
+      })
+
+    owner = self()
+    bypass = Bypass.open()
+    {:ok, counter} = Agent.start_link(fn -> 0 end)
+
+    Bypass.expect(bypass, "POST", "/v1/chat/completions", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      request = Jason.decode!(body)
+      request_number = Agent.get_and_update(counter, &{&1 + 1, &1 + 1})
+      send(owner, {:dream_memory_provider_request, request_number, request, self()})
+
+      case request_number do
+        1 ->
+          receive do
+            :respond ->
+              send_sse(conn, [
+                dream_tool_call_chunk("memory_save", "dream-memory-call", memory_input),
+                finish_chunk("tool_calls")
+              ])
+          after
+            5_000 -> Plug.Conn.send_resp(conn, 500, "test did not release memory tool response")
+          end
+
+        2 ->
+          send_sse(conn, [text_chunk(dream_json), finish_chunk("stop")])
+      end
+    end)
+
+    {provider_name, agent_name} = register_provider_agent(tmp_dir, bypass)
+    {daemon, _task_supervisor} = start_test_daemon()
+
+    assert {:ok, dream} =
+             Daemon.trigger(daemon, :dream, %{
+               routine_id: Ecto.UUID.generate(),
+               prompt: "reflect and retain the release lesson",
+               assistant_name: agent_name,
+               provider: provider_name,
+               model: "daemon-test-model"
+             })
+
+    assert_receive {:dream_memory_provider_request, 1, first_request, request_pid}, 2_000
+
+    assert "memory_save" in Enum.map(first_request["tools"], &get_in(&1, ["function", "name"]))
+    refute "bash" in Enum.map(first_request["tools"], &get_in(&1, ["function", "name"]))
+
+    assert {:ok, running} = wait_for_run(dream.id, "running")
+    assert :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{running.session_id}")
+    send(request_pid, :respond)
+
+    assert_receive {:dream_memory_stored,
+                    %{
+                      scope: "agent",
+                      scope_id: ^agent_name,
+                      kind: "lesson",
+                      title: "Verify imported tools",
+                      contributed_by: ^agent_name
+                    } = saved},
+                   2_000
+
+    assert_receive {:dream_memory_provider_request, 2, second_request, _request_pid}, 2_000
+    assert Jason.encode!(second_request) =~ "Verify imported tools"
+    assert Jason.encode!(second_request) =~ "saved"
+    refute_receive {"permission_requests", _payload}, 100
+
+    assert [persisted] = Synapsis.Memory.list_semantic(scope: "agent", scope_id: agent_name)
+    assert persisted.id == saved.id
+    assert {:ok, completed} = wait_for_run(dream.id, "completed")
+    assert completed.metadata["output"]["recent_summary"] == "Saved the release lesson"
   end
 
   @tag :tmp_dir
@@ -525,5 +656,27 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
   defp git!(dir, args) do
     {out, 0} = System.cmd("git", args, cd: dir, stderr_to_stdout: true)
     out
+  end
+
+  defp dream_tool_call_chunk(tool_name, tool_call_id, input) do
+    %{
+      "id" => "dream-tool-response",
+      "choices" => [
+        %{
+          "index" => 0,
+          "delta" => %{
+            "tool_calls" => [
+              %{
+                "index" => 0,
+                "id" => tool_call_id,
+                "type" => "function",
+                "function" => %{"name" => tool_name, "arguments" => Jason.encode!(input)}
+              }
+            ]
+          },
+          "finish_reason" => nil
+        }
+      ]
+    }
   end
 end

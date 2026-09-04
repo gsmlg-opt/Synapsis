@@ -101,6 +101,101 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
   end
 
   @tag :tmp_dir
+  test "default daemon run exposes and executes only annotated read-only MCP tools", %{
+    tmp_dir: tmp_dir
+  } do
+    suffix = System.unique_integer([:positive])
+    source_id = Ecto.UUID.generate()
+    server_name = "daemon-mcp-#{suffix}"
+    safe_tool = "mcp:#{server_name}:read_note"
+    destructive_tool = "mcp:#{server_name}:delete_note"
+    unannotated_tool = "mcp:#{server_name}:mystery"
+    wire_safe_tool = Synapsis.Provider.ToolName.encode(safe_tool)
+    mcp_bypass = Bypass.open()
+
+    stub_annotated_mcp(mcp_bypass, server_name, self())
+
+    assert {:ok, _connection} =
+             Synapsis.Config.Store.put(:backplane, %{"id" => source_id, "enabled" => true})
+
+    assert {:ok, mcp_config} =
+             Synapsis.MCPConfigs.create(%{
+               name: server_name,
+               transport: "streamable_http",
+               url: "http://localhost:#{mcp_bypass.port}",
+               config: %{
+                 "managed_by" => "backplane",
+                 "backplane_source_id" => source_id,
+                 "backplane_available" => true,
+                 "backplane_tools" => [
+                   %{"external_id" => "read_note", "backplane_available" => true},
+                   %{"external_id" => "delete_note", "backplane_available" => true},
+                   %{"external_id" => "mystery", "backplane_available" => true}
+                 ]
+               }
+             })
+
+    assert {:ok, mcp_pid} = Synapsis.MCP.start(mcp_config)
+    assert :ok = Synapsis.MCP.Server.await_ready(mcp_pid)
+
+    on_exit(fn ->
+      Synapsis.MCP.stop(server_name)
+
+      if current = Synapsis.MCPConfigs.get(mcp_config.id) do
+        Synapsis.MCPConfigs.delete(current)
+      end
+
+      Synapsis.Config.Store.delete(:backplane, source_id)
+    end)
+
+    {daemon, _task_supervisor} = start_test_daemon()
+
+    {_provider_bypass, provider_name, agent_name} =
+      controlled_tool_provider(tmp_dir, safe_tool, %{"text" => "deployment note"})
+
+    assert :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, Daemon.topic())
+
+    assert {:ok, queued} =
+             Daemon.submit(
+               daemon,
+               "Read the imported note",
+               daemon_opts(agent_name, provider_name)
+             )
+
+    assert_receive {:tool_provider_request, 1, first_request, request_pid}, 2_000
+
+    assert wire_safe_tool in tool_names(first_request)
+    refute Synapsis.Provider.ToolName.encode(destructive_tool) in tool_names(first_request)
+    refute Synapsis.Provider.ToolName.encode(unannotated_tool) in tool_names(first_request)
+
+    assert %{"function" => %{"parameters" => parameters}} =
+             Enum.find(first_request["tools"], fn tool ->
+               get_in(tool, ["function", "name"]) == wire_safe_tool
+             end)
+
+    assert parameters == %{
+             "type" => "object",
+             "properties" => %{"text" => %{"type" => "string"}},
+             "required" => ["text"]
+           }
+
+    assert {:ok, running} = wait_for_run(queued.id, "running")
+    assert :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{running.session_id}")
+    send(request_pid, :respond)
+
+    assert_receive {:mcp_tool_called, %{"name" => "read_note", "arguments" => arguments}}, 2_000
+    assert arguments == %{"text" => "deployment note"}
+    refute_receive {:mcp_tool_called, %{"name" => "delete_note"}}, 100
+    refute_receive {:mcp_tool_called, %{"name" => "mystery"}}, 100
+    refute_receive {"permission_requests", _payload}, 100
+
+    assert_receive {:tool_provider_request, 2, second_request, _request_pid}, 2_000
+    assert Jason.encode!(second_request) =~ "deployment note"
+    assert {:ok, completed} = wait_for_run(queued.id, "completed")
+    assert completed.summary == "daemon tool run complete"
+  end
+
+  @tag :tmp_dir
   test "a provider-invented tool outside the basic toolset is denied without approval", %{
     tmp_dir: tmp_dir
   } do
@@ -292,7 +387,11 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
           receive do
             :respond ->
               send_sse(conn, [
-                tool_call_chunk(tool_name, "daemon-tool-call", input),
+                tool_call_chunk(
+                  Synapsis.Provider.ToolName.encode(tool_name),
+                  "daemon-tool-call",
+                  input
+                ),
                 finish_chunk("tool_calls")
               ])
           after
@@ -309,6 +408,76 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
 
     {provider_name, agent_name} = register_provider_agent(tmp_dir, bypass)
     {bypass, provider_name, agent_name}
+  end
+
+  defp stub_annotated_mcp(bypass, server_name, owner) do
+    tools = [
+      %{
+        "name" => "read_note",
+        "description" => "Read one deployment note",
+        "inputSchema" => %{
+          "type" => "object",
+          "properties" => %{"text" => %{"type" => "string"}},
+          "required" => ["text"]
+        },
+        "annotations" => %{"readOnlyHint" => true, "destructiveHint" => false}
+      },
+      %{
+        "name" => "delete_note",
+        "description" => "Delete one deployment note",
+        "inputSchema" => %{"type" => "object"},
+        "annotations" => %{"readOnlyHint" => true, "destructiveHint" => true}
+      },
+      %{
+        "name" => "mystery",
+        "description" => "Unannotated operation",
+        "inputSchema" => %{"type" => "object"}
+      }
+    ]
+
+    Bypass.stub(bypass, "POST", "/mcp", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      request = Jason.decode!(body)
+
+      case request do
+        %{"id" => id, "method" => method} ->
+          result =
+            case method do
+              "initialize" ->
+                %{
+                  "protocolVersion" => request["params"]["protocolVersion"] || "2024-11-05",
+                  "capabilities" => %{"tools" => %{}},
+                  "serverInfo" => %{"name" => server_name, "version" => "1"}
+                }
+
+              "tools/list" ->
+                %{"tools" => tools}
+
+              "tools/call" ->
+                send(owner, {:mcp_tool_called, request["params"]})
+
+                %{
+                  "content" => [
+                    %{"type" => "text", "text" => request["params"]["arguments"]["text"]}
+                  ]
+                }
+            end
+
+          conn
+          |> Plug.Conn.put_resp_content_type("application/json")
+          |> Plug.Conn.send_resp(
+            200,
+            Jason.encode!(%{"jsonrpc" => "2.0", "id" => id, "result" => result})
+          )
+
+        _notification ->
+          Plug.Conn.send_resp(conn, 202, "")
+      end
+    end)
+
+    for method <- ["GET", "DELETE"] do
+      Bypass.stub(bypass, method, "/mcp", &Plug.Conn.send_resp(&1, 200, ""))
+    end
   end
 
   defp tool_names(request) do

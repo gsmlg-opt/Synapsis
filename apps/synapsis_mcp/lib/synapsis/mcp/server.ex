@@ -217,12 +217,21 @@ defmodule Synapsis.MCP.Server do
   defp ready_failure({reason, {GenServer, :call, _details}}), do: reason
   defp ready_failure(reason), do: reason
 
-  defp register_tool(%{name: name, description: description, parameters: parameters}) do
+  defp register_tool(%{
+         name: name,
+         description: description,
+         parameters: parameters,
+         annotations: annotations,
+         permission_level: permission_level
+       }) do
     Registry.register_process(name, self(),
       description: description,
       parameters: parameters,
       timeout: @tool_timeout,
-      plugin: :mcp
+      plugin: :mcp,
+      category: :mcp,
+      permission_level: permission_level,
+      annotations: annotations
     )
 
     name

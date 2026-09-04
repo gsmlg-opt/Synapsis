@@ -16,6 +16,33 @@ defmodule Synapsis.MCP.ResponseTest do
     assert tool.parameters == %{"type" => "object"}
   end
 
+  test "tools/2 preserves annotations and classifies only explicit non-destructive reads as read-only" do
+    tools = [
+      %{
+        "name" => "read_notes",
+        "annotations" => %{
+          "readOnlyHint" => true,
+          "destructiveHint" => false,
+          "openWorldHint" => true
+        }
+      },
+      %{
+        "name" => "delete_note",
+        "annotations" => %{"readOnlyHint" => true, "destructiveHint" => true}
+      },
+      %{"name" => "unannotated"}
+    ]
+
+    assert [read, destructive, unannotated] = Response.tools(%{"tools" => tools}, "notes")
+
+    assert read.annotations == hd(tools)["annotations"]
+    assert read.permission_level == :read
+    assert destructive.annotations == Enum.at(tools, 1)["annotations"]
+    assert destructive.permission_level == :write
+    assert unannotated.annotations == nil
+    assert unannotated.permission_level == :write
+  end
+
   test "tools/2 preserves JSON Schema type arrays" do
     schema = %{
       "type" => "object",

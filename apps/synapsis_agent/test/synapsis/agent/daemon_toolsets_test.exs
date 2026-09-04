@@ -1,5 +1,5 @@
 defmodule Synapsis.Agent.DaemonToolsetsTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Synapsis.Agent.Daemon.Toolsets
   alias Synapsis.Agent.Daemon.Execution
@@ -20,6 +20,49 @@ defmodule Synapsis.Agent.DaemonToolsetsTest do
     assert {:ok, @coding} = Toolsets.resolve("assistant_coding")
     assert {:ok, @dream} = Toolsets.resolve("assistant_dream")
     assert {:ok, @dream ++ ["todo_write"]} = Toolsets.resolve("assistant_dream_todo")
+  end
+
+  test "appends only enabled non-deferred read-only MCP tools to basic-derived profiles" do
+    suffix = System.unique_integer([:positive])
+    safe_read = "mcp:notes-#{suffix}:read"
+    safe_none = "mcp:notes-#{suffix}:status"
+    unsafe_write = "mcp:notes-#{suffix}:write"
+    disabled_read = "mcp:notes-#{suffix}:disabled"
+    deferred_read = "mcp:notes-#{suffix}:deferred"
+    names = [safe_read, safe_none, unsafe_write, disabled_read, deferred_read]
+
+    on_exit(fn -> Enum.each(names, &Synapsis.Tool.Registry.unregister/1) end)
+
+    :ok =
+      Synapsis.Tool.Registry.register_process(safe_read, self(), permission_level: :read)
+
+    :ok =
+      Synapsis.Tool.Registry.register_process(safe_none, self(), permission_level: :none)
+
+    :ok =
+      Synapsis.Tool.Registry.register_process(unsafe_write, self(), permission_level: :write)
+
+    :ok =
+      Synapsis.Tool.Registry.register_process(disabled_read, self(),
+        permission_level: :read,
+        enabled: false
+      )
+
+    :ok =
+      Synapsis.Tool.Registry.register_process(deferred_read, self(),
+        permission_level: :read,
+        deferred: true
+      )
+
+    for profile <-
+          ~w(assistant_basic assistant_workspace assistant_coding assistant_dream assistant_dream_todo) do
+      assert {:ok, tools} = Toolsets.resolve(profile)
+      assert safe_read in tools
+      assert safe_none in tools
+      refute unsafe_write in tools
+      refute disabled_read in tools
+      refute deferred_read in tools
+    end
   end
 
   test "maps legacy profiles onto safe daemon toolsets" do

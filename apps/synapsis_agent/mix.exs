@@ -33,6 +33,7 @@ defmodule SynapsisAgent.MixProject do
       {:synapsis_data, in_umbrella: true},
       {:synapsis_core, in_umbrella: true},
       {:synapsis_provider, in_umbrella: true},
+      {:synapsis_mcp, in_umbrella: true, only: :test},
       {:synapsis_workspace, in_umbrella: true},
       {:crontab, "~> 1.1"},
       {:bypass, "~> 2.1", only: :test},

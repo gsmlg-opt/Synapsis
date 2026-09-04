@@ -93,6 +93,53 @@ defmodule Synapsis.MCP.ServerTest do
     assert wait_until(fn -> match?({:error, :not_found}, Registry.lookup(tool)) end)
   end
 
+  test "registers MCP annotation-derived permission metadata conservatively", %{bypass: bypass} do
+    name = "metadata_#{System.unique_integer([:positive])}"
+
+    tools = [
+      %{
+        "name" => "read_notes",
+        "annotations" => %{"readOnlyHint" => true, "openWorldHint" => false}
+      },
+      %{
+        "name" => "delete_note",
+        "annotations" => %{"readOnlyHint" => true, "destructiveHint" => true}
+      },
+      %{"name" => "unannotated"}
+    ]
+
+    stub_mcp(bypass, name, nil, tools)
+
+    pid =
+      start_supervised!(
+        {Server,
+         %MCPConfig{
+           name: name,
+           transport: "streamable_http",
+           url: "http://localhost:#{bypass.port}"
+         }}
+      )
+
+    assert wait_until(fn ->
+             match?({:ok, {:process, ^pid, _opts}}, Registry.lookup("mcp:#{name}:read_notes"))
+           end)
+
+    assert {:ok, {:process, ^pid, read_opts}} = Registry.lookup("mcp:#{name}:read_notes")
+    assert read_opts[:category] == :mcp
+    assert read_opts[:permission_level] == :read
+    assert read_opts[:annotations] == %{"readOnlyHint" => true, "openWorldHint" => false}
+
+    assert {:ok, {:process, ^pid, destructive_opts}} =
+             Registry.lookup("mcp:#{name}:delete_note")
+
+    assert destructive_opts[:permission_level] == :write
+
+    assert {:ok, {:process, ^pid, unannotated_opts}} =
+             Registry.lookup("mcp:#{name}:unannotated")
+
+    assert unannotated_opts[:permission_level] == :write
+  end
+
   test "re-registers discovered tools after tool registry restart", %{bypass: bypass} do
     name = "srv_#{System.unique_integer([:positive])}"
     stub_mcp(bypass, name)

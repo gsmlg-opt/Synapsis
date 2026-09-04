@@ -28,8 +28,28 @@ defmodule Synapsis.Agent.Daemon.Toolsets do
 
   def resolve(profile) do
     case Map.fetch(@profiles, profile) do
-      {:ok, tools} -> {:ok, tools}
+      {:ok, tools} -> {:ok, tools ++ safe_mcp_tools()}
       :error -> {:error, :unknown_tool_profile}
+    end
+  end
+
+  defp safe_mcp_tools do
+    Synapsis.Tool.Registry.list_for_query_loop()
+    |> Enum.filter(fn tool ->
+      String.starts_with?(tool.name, "mcp:") and
+        tool.permission_level in [:none, :read] and
+        non_deferred?(tool.name)
+    end)
+    |> Enum.map(& &1.name)
+    |> Enum.sort()
+  rescue
+    ArgumentError -> []
+  end
+
+  defp non_deferred?(name) do
+    case Synapsis.Tool.Registry.lookup(name) do
+      {:ok, {_kind, _owner, opts}} -> opts[:deferred] != true
+      {:error, :not_found} -> false
     end
   end
 end

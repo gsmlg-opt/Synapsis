@@ -5,10 +5,14 @@ defmodule Synapsis.MCP.Response do
   def tools(result, server_name) when is_map(result) do
     (result["tools"] || [])
     |> Enum.map(fn t ->
+      annotations = t["annotations"]
+
       %{
         name: "mcp:#{server_name}:#{t["name"]}",
         description: t["description"] || "",
-        parameters: t["inputSchema"] || %{}
+        parameters: t["inputSchema"] || %{},
+        annotations: annotations,
+        permission_level: permission_level(annotations)
       }
     end)
   end
@@ -34,4 +38,10 @@ defmodule Synapsis.MCP.Response do
       _ -> full_name
     end
   end
+
+  defp permission_level(%{"readOnlyHint" => true} = annotations) do
+    if annotations["destructiveHint"] == true, do: :write, else: :read
+  end
+
+  defp permission_level(_annotations), do: :write
 end
