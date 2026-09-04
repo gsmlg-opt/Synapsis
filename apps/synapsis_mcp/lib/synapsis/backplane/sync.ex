@@ -266,6 +266,7 @@ defmodule Synapsis.Backplane.Sync do
   defp reconcile_snapshot(connection, %Snapshot{} = snapshot, opts) do
     runtime = Keyword.get(opts, :mcp_runtime, Synapsis.MCP)
     skill_store = Keyword.get(opts, :skill_store, Skills)
+    mcp_store = Keyword.get(opts, :mcp_store, MCPConfigs)
 
     initial = %{
       artifacts: reconstruct_artifacts(connection.id),
@@ -287,7 +288,7 @@ defmodule Synapsis.Backplane.Sync do
 
     result =
       reconcile_surface(result, :mcp_tools, fn ->
-        reconcile_tools_surface(result, connection, snapshot, runtime)
+        reconcile_tools_surface(result, connection, snapshot, runtime, mcp_store)
       end)
 
     {:ok, result}
@@ -340,11 +341,11 @@ defmodule Synapsis.Backplane.Sync do
     end
   end
 
-  defp reconcile_tools_surface(result, connection, snapshot, runtime) do
+  defp reconcile_tools_surface(result, connection, snapshot, runtime, mcp_store) do
     if Map.has_key?(snapshot.errors, :mcp_tools) do
       {:ok, result}
     else
-      with {:ok, mcp} <- reconcile_mcp_config(connection, snapshot, runtime) do
+      with {:ok, mcp} <- reconcile_mcp_config(connection, snapshot, runtime, mcp_store) do
         {:ok,
          result
          |> put_in([:artifacts, "mcp_id"], mcp.id)
@@ -702,9 +703,10 @@ defmodule Synapsis.Backplane.Sync do
   defp reconcile_mcp_config(
          connection,
          %Snapshot{mcp_servers: [capability], mcp_tools: tools},
-         runtime
+         runtime,
+         mcp_store
        ) do
-    mcp = find_mcp(connection.id, capability.external_id)
+    mcp = find_mcp(connection.id, capability.external_id, mcp_store)
     source_name = available_mcp_name(connection, mcp)
     available = Enum.any?(tools, & &1.enabled_by_source)
 
@@ -732,7 +734,7 @@ defmodule Synapsis.Backplane.Sync do
     result =
       case mcp do
         nil ->
-          MCPConfigs.create(attrs)
+          mcp_store.create(attrs)
 
         mcp ->
           attrs = %{
@@ -742,7 +744,7 @@ defmodule Synapsis.Backplane.Sync do
               config: Map.merge(mcp.config || %{}, config)
           }
 
-          MCPConfigs.update(mcp, Map.delete(attrs, :enabled))
+          mcp_store.update(mcp, Map.delete(attrs, :enabled))
       end
 
     with {:ok, persisted} <- result do
@@ -751,7 +753,7 @@ defmodule Synapsis.Backplane.Sync do
           {:ok, persisted}
 
         {:error, runtime_reason} ->
-          case restore_mcp_config(mcp, persisted) do
+          case restore_mcp_config(mcp_store, mcp, persisted) do
             {:ok, restored} ->
               case restore_mcp_runtime(runtime, restored, persisted) do
                 :ok ->
@@ -759,7 +761,13 @@ defmodule Synapsis.Backplane.Sync do
 
                 {:error, rollback_runtime_reason} ->
                   rollback_runtime_reason =
-                    fail_closed_runtime(runtime, persisted.name, rollback_runtime_reason)
+                    fail_closed_runtime(
+                      mcp_store,
+                      runtime,
+                      restored,
+                      persisted.name,
+                      rollback_runtime_reason
+                    )
 
                   {:error,
                    {:mcp_runtime_rollback_failed, runtime_reason, rollback_runtime_reason}}
@@ -772,17 +780,17 @@ defmodule Synapsis.Backplane.Sync do
     end
   end
 
-  defp reconcile_mcp_config(_connection, _snapshot, _runtime),
+  defp reconcile_mcp_config(_connection, _snapshot, _runtime, _mcp_store),
     do: {:error, :missing_mcp_server_capability}
 
-  defp restore_mcp_config(nil, created) do
-    case MCPConfigs.delete(created) do
+  defp restore_mcp_config(mcp_store, nil, created) do
+    case mcp_store.delete(created) do
       {:ok, _deleted} -> {:ok, nil}
       {:error, reason} -> {:error, reason}
     end
   end
 
-  defp restore_mcp_config(original, persisted) do
+  defp restore_mcp_config(mcp_store, original, persisted) do
     attrs =
       Map.take(original, [
         :name,
@@ -796,7 +804,7 @@ defmodule Synapsis.Backplane.Sync do
         :config
       ])
 
-    case MCPConfigs.update(persisted, attrs) do
+    case mcp_store.update(persisted, attrs) do
       {:ok, restored} -> {:ok, restored}
       {:error, reason} -> {:error, reason}
     end
@@ -808,13 +816,38 @@ defmodule Synapsis.Backplane.Sync do
   defp restore_mcp_runtime(runtime, restored, _attempted),
     do: reconcile_runtime_availability(runtime, restored)
 
-  defp fail_closed_runtime(runtime, name, rollback_runtime_reason) do
-    case stop_mcp_runtime(runtime, name) do
-      :ok ->
+  defp fail_closed_runtime(mcp_store, runtime, restored, name, rollback_runtime_reason) do
+    persistence = persist_fail_closed_mcp(mcp_store, restored)
+    stopped = stop_mcp_runtime(runtime, name)
+
+    case {persistence, stopped} do
+      {:ok, :ok} ->
         rollback_runtime_reason
 
-      {:error, stop_reason} ->
-        {:rollback_failed, rollback_runtime_reason, {:fail_closed_failed, stop_reason}}
+      {{:error, persist_reason}, :ok} ->
+        {:rollback_failed, rollback_runtime_reason, {:fail_closed_persist_failed, persist_reason}}
+
+      {:ok, {:error, stop_reason}} ->
+        {:rollback_failed, rollback_runtime_reason, {:fail_closed_stop_failed, stop_reason}}
+
+      {{:error, persist_reason}, {:error, stop_reason}} ->
+        {:rollback_failed, rollback_runtime_reason,
+         {:fail_closed_failed,
+          [persist: {:fail_closed_persist_failed, persist_reason}, stop: stop_reason]}}
+    end
+  end
+
+  defp persist_fail_closed_mcp(_mcp_store, nil), do: :ok
+
+  defp persist_fail_closed_mcp(mcp_store, restored) do
+    config =
+      restored.config
+      |> put_effective_availability(false)
+      |> update_nested_availability("backplane_tools", false)
+
+    case mcp_store.update(restored, %{config: config}) do
+      {:ok, _unavailable} -> :ok
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -832,8 +865,11 @@ defmodule Synapsis.Backplane.Sync do
     Enum.filter(skill_store.list(), &owned?(&1.config_overrides, connection_id, "skill"))
   end
 
-  defp find_mcp(connection_id, external_id) do
-    Enum.find(MCPConfigs.list(), &owned?(&1.config, connection_id, "mcp_server", external_id))
+  defp find_mcp(connection_id, external_id, mcp_store \\ MCPConfigs) do
+    Enum.find(
+      mcp_store.list(),
+      &owned?(&1.config, connection_id, "mcp_server", external_id)
+    )
   end
 
   defp set_providers_available(connection_id, available, provider_store) do

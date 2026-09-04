@@ -148,6 +148,27 @@ defmodule Synapsis.Backplane.SyncTest do
     end
   end
 
+  defmodule FailingMCPStore do
+    def configure(failures) do
+      Process.put({__MODULE__, :state}, %{call: 0, failures: Map.new(failures)})
+    end
+
+    def list, do: Synapsis.MCPConfigs.list()
+    def create(attrs), do: Synapsis.MCPConfigs.create(attrs)
+    def delete(config), do: Synapsis.MCPConfigs.delete(config)
+
+    def update(config, attrs) do
+      state = Process.get({__MODULE__, :state}, %{call: 0, failures: %{}})
+      call = state.call + 1
+      Process.put({__MODULE__, :state}, %{state | call: call})
+
+      case Map.fetch(state.failures, call) do
+        {:ok, reason} -> {:error, reason}
+        :error -> Synapsis.MCPConfigs.update(config, attrs)
+      end
+    end
+  end
+
   setup do
     for type <- [:backplane, :provider, :skill, :mcp] do
       path =
@@ -1086,7 +1107,11 @@ defmodule Synapsis.Backplane.SyncTest do
     assert degraded.unavailable == ["tools"]
     assert degraded.counts["tools"] == 1
     assert degraded.metadata["surface_revisions"]["mcp_tools"] == tools_revision_v1
-    assert MCPConfigs.get(mcp_v1.id) == mcp_v1
+    fail_closed = MCPConfigs.get(mcp_v1.id)
+    refute MCPConfigs.runtime_available?(fail_closed)
+    assert fail_closed.config["external_revision"] == mcp_v1.config["external_revision"]
+    assert fail_closed.config["backplane_available"] == false
+    assert tool_revision(fail_closed) == "tool-v1"
   end
 
   test "a failed v2 restart restores both persisted and active v1 tool state" do
@@ -1141,7 +1166,7 @@ defmodule Synapsis.Backplane.SyncTest do
     refute_receive {:agent_daemon_event, %{event: "backplane.capabilities.updated"}}
   end
 
-  test "a failed rollback restart reports both errors and leaves restored config stopped" do
+  test "a failed rollback restart durably disables restored v1 until a successful refresh" do
     {:ok, runtime_state} = Agent.start_link(fn -> %{} end)
 
     StatefulMCPRuntime.configure(runtime_state, [
@@ -1167,6 +1192,13 @@ defmodule Synapsis.Backplane.SyncTest do
              run_sync(connection, v1, mcp_runtime: StatefulMCPRuntime)
 
     mcp_v1 = MCPConfigs.get(ready.artifacts["mcp_id"])
+
+    assert {:ok, mcp_v1} =
+             MCPConfigs.update(mcp_v1, %{
+               headers: %{"x-local" => "keep"},
+               config: Map.put(mcp_v1.config, "local_option", "keep")
+             })
+
     Phoenix.PubSub.subscribe(Synapsis.PubSub, "agent:daemon")
 
     v2 =
@@ -1183,18 +1215,100 @@ defmodule Synapsis.Backplane.SyncTest do
     assert degraded.unavailable == ["tools"]
     assert degraded.last_error =~ "v2_restart_failed"
     assert degraded.last_error =~ "v1_rollback_failed"
-    assert MCPConfigs.get(mcp_v1.id) == mcp_v1
+
+    fail_closed = MCPConfigs.get(mcp_v1.id)
+    refute MCPConfigs.runtime_available?(fail_closed)
+    assert fail_closed.name == mcp_v1.name
+    assert fail_closed.headers == %{"x-local" => "keep"}
+    assert fail_closed.config["local_option"] == "keep"
+    assert fail_closed.config["external_revision"] == mcp_v1.config["external_revision"]
+    assert fail_closed.config["backplane_available"] == false
+    assert tool_revision(fail_closed) == "tool-v1"
+    assert [fail_closed_tool] = fail_closed.config["backplane_tools"]
+    assert fail_closed_tool["source_available"] == true
+    assert fail_closed_tool["backplane_available"] == false
+
+    assert {:error, :mcp_unavailable} = Synapsis.MCP.start(fail_closed)
+    assert :ok = Synapsis.MCP.start_enabled()
+    refute fail_closed.name in Synapsis.MCP.list()
 
     state = Agent.get(runtime_state, & &1)
     assert state.active == nil
     assert state.stop_calls == [mcp_v1.name]
-    assert [^mcp_v1, attempted_v2, ^mcp_v1] = state.restart_calls
+    assert [initial_v1, attempted_v2, ^mcp_v1] = state.restart_calls
+    assert initial_v1.id == mcp_v1.id
     assert tool_revision(attempted_v2) == "tool-v2"
 
     assert_receive {:agent_daemon_event, %{event: "backplane.sync.started"}}
     assert_receive {:agent_daemon_event, %{event: "backplane.sync.failed"}}
     assert_receive {:agent_daemon_event, %{event: "backplane.capabilities.updated"}}
     refute_receive {:agent_daemon_event, %{event: "backplane.sync.completed"}}
+
+    StatefulMCPRuntime.configure(runtime_state, [:ok])
+
+    assert {:ok, recovered} =
+             run_sync(connection, v2, mcp_runtime: StatefulMCPRuntime)
+
+    assert recovered.status == "ready"
+    available_v2 = MCPConfigs.get(mcp_v1.id)
+    assert MCPConfigs.runtime_available?(available_v2)
+    assert available_v2.config["local_option"] == "keep"
+    assert available_v2.headers == %{"x-local" => "keep"}
+    assert available_v2.config["backplane_available"] == true
+    assert tool_revision(available_v2) == "tool-v2"
+  end
+
+  test "a fail-closed persistence error is compounded and the runtime remains stopped" do
+    {:ok, runtime_state} = Agent.start_link(fn -> %{} end)
+
+    StatefulMCPRuntime.configure(runtime_state, [
+      :ok,
+      {:error, :v2_restart_failed},
+      {:error, :v1_rollback_failed}
+    ])
+
+    {:ok, connection} =
+      Connection.create(%{
+        name: "runtime-fail-closed-persist",
+        endpoint: "https://backplane.example.test"
+      })
+
+    v1 =
+      snapshot!(connection,
+        models: [%{"id" => "coding"}],
+        skills: [],
+        mcp_tools: [%{"name" => "memory::search", "revision" => "tool-v1"}]
+      )
+
+    assert {:ok, ready} =
+             run_sync(connection, v1, mcp_runtime: StatefulMCPRuntime)
+
+    mcp_v1 = MCPConfigs.get(ready.artifacts["mcp_id"])
+    FailingMCPStore.configure([{3, :fail_closed_persist_failed}])
+
+    v2 =
+      snapshot!(connection,
+        models: [%{"id" => "coding"}],
+        skills: [],
+        mcp_tools: [%{"name" => "memory::search", "revision" => "tool-v2"}]
+      )
+
+    assert {:ok, degraded} =
+             run_sync(connection, v2,
+               mcp_runtime: StatefulMCPRuntime,
+               mcp_store: FailingMCPStore
+             )
+
+    assert degraded.status == "degraded"
+    assert degraded.unavailable == ["tools"]
+    assert degraded.last_error =~ "v2_restart_failed"
+    assert degraded.last_error =~ "v1_rollback_failed"
+    assert degraded.last_error =~ "fail_closed_persist_failed"
+    assert MCPConfigs.get(mcp_v1.id) == mcp_v1
+
+    state = Agent.get(runtime_state, & &1)
+    assert state.active == nil
+    assert state.stop_calls == [mcp_v1.name]
   end
 
   test "MCP stop failure persists degraded availability and a successful retry clears it" do
