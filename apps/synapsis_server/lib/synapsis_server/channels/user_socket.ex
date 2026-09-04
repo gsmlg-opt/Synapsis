@@ -1,6 +1,7 @@
 defmodule SynapsisServer.UserSocket do
   use Phoenix.Socket
 
+  channel "agent:daemon", SynapsisServer.AgentDaemonChannel
   channel "session:*", SynapsisServer.SessionChannel
 
   @impl true
