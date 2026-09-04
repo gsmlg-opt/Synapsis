@@ -215,6 +215,38 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
     assert {:error, :not_found} = ConfigStore.get(:routine, id)
   end
 
+  test "routine-updated reports the durable kind after a delayed merge" do
+    {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
+    owner = self()
+    id = Ecto.UUID.generate()
+    config = routine(id, "kind-ordering", "schedule")
+    assert {:ok, _routine} = ConfigStore.put(:routine, config)
+    on_exit(fn -> ConfigStore.delete(:routine, id) end)
+    :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, "agent:daemon")
+
+    _scheduler =
+      start_scheduler([config], daemon, task_supervisor,
+        config_writer: fn type, attrs ->
+          send(owner, {:delayed_routine_write, self()})
+
+          receive do
+            :release_routine_write -> merge_owned_config(type, attrs)
+          end
+        end
+      )
+
+    assert_receive {:delayed_routine_write, writer}, 1_000
+
+    assert {:ok, %{"kind" => "dream"}} =
+             ConfigStore.merge_existing(:routine, id, %{"kind" => "dream"})
+
+    send(writer, :release_routine_write)
+
+    assert_receive {:agent_daemon_event,
+                    %{event: "agent.routine.updated", routine_id: ^id, kind: "dream"}},
+                   1_000
+  end
+
   test "a scheduled submission publishes routine-triggered exactly once" do
     {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
     id = Ecto.UUID.generate()

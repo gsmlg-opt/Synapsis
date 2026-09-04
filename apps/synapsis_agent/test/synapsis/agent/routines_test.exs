@@ -101,6 +101,83 @@ defmodule Synapsis.Agent.RoutinesTest do
                     }}
   end
 
+  test "reload failure removes an existing routine from the live scheduler" do
+    owner = self()
+    id = Ecto.UUID.generate()
+    attrs = Map.put(routine_attrs("stale-runtime"), "id", id)
+    assert {:ok, routine} = Store.put(:routine, attrs)
+    on_exit(fn -> Store.delete(:routine, id) end)
+    {:ok, loader} = Agent.start_link(fn -> {:ok, [routine]} end)
+    task_supervisor = start_supervised!({Task.Supervisor, []})
+
+    scheduler =
+      start_supervised!(
+        {LocalScheduler,
+         name: String.to_atom("routines_fail_closed_#{System.unique_integer([:positive])}"),
+         daemon: :test_daemon,
+         task_supervisor: task_supervisor,
+         config_loader: fn ->
+           case Agent.get(loader, & &1) do
+             {:ok, configs} -> configs
+             :fail -> raise "injected reload failure"
+           end
+         end,
+         config_writer: fn _type, written -> {:ok, written} end,
+         trigger_fun: fn config, _daemon ->
+           send(owner, {:unexpected_trigger, config})
+           {:error, :unexpected_trigger}
+         end,
+         reload_interval_ms: :timer.hours(1)}
+      )
+
+    assert [%{id: ^id}] = LocalScheduler.status(scheduler)
+    Agent.update(loader, fn _current -> :fail end)
+
+    assert {:error, {:scheduler_reload_failed, :reload_failed}} =
+             Routines.update(id, %{"name" => "must-not-run"}, scheduler: scheduler)
+
+    assert {:ok, %{"enabled" => false, "name" => "must-not-run"}} = Store.get(:routine, id)
+    assert [] = LocalScheduler.status(scheduler)
+    assert {:error, :not_found} = LocalScheduler.trigger(scheduler, id)
+    refute_receive {:unexpected_trigger, _config}, 50
+  end
+
+  test "reload failure retries a transient fail-closed write against the real store" do
+    id = Ecto.UUID.generate()
+
+    assert {:ok, _routine} =
+             Store.put(:routine, Map.put(routine_attrs("retry-disable"), "id", id))
+
+    on_exit(fn -> Store.delete(:routine, id) end)
+    {:ok, attempts} = Agent.start_link(fn -> 0 end)
+    task_supervisor = start_supervised!({Task.Supervisor, []})
+
+    scheduler =
+      start_supervised!(
+        {LocalScheduler,
+         name: String.to_atom("routines_retry_disable_#{System.unique_integer([:positive])}"),
+         task_supervisor: task_supervisor,
+         config_loader: fn -> raise "injected reload failure" end,
+         reload_interval_ms: :timer.hours(1)}
+      )
+
+    fail_closed_writer = fn type, routine_id, patch ->
+      case Agent.get_and_update(attempts, &{&1 + 1, &1 + 1}) do
+        1 -> {:error, :transient_store_failure}
+        2 -> Store.merge_existing(type, routine_id, patch)
+      end
+    end
+
+    assert {:error, {:scheduler_reload_failed, :reload_failed}} =
+             Routines.update(id, %{"enabled" => true},
+               scheduler: scheduler,
+               fail_closed_writer: fail_closed_writer
+             )
+
+    assert Agent.get(attempts, & &1) == 2
+    assert {:ok, %{"enabled" => false}} = Store.get(:routine, id)
+  end
+
   test "update merge-patches a routine without changing its stable ID" do
     scheduler = isolated_scheduler()
     assert {:ok, %{"id" => id}} = Routines.create(routine_attrs("before"), scheduler: scheduler)
@@ -125,6 +202,68 @@ defmodule Synapsis.Agent.RoutinesTest do
 
     assert {:error, :not_found} =
              Routines.update(Ecto.UUID.generate(), %{"name" => "none"}, scheduler: scheduler)
+  end
+
+  test "update atomically preserves terminal fields written after its read" do
+    scheduler = isolated_scheduler()
+
+    assert {:ok, %{"id" => id}} =
+             Routines.create(routine_attrs("before-race"), scheduler: scheduler)
+
+    on_exit(fn -> Store.delete(:routine, id) end)
+    owner = self()
+
+    update =
+      Task.async(fn ->
+        Routines.update(id, %{"name" => "after-race", "enabled" => false},
+          scheduler: scheduler,
+          before_update_persist: fn ->
+            send(owner, {:update_ready, self()})
+            receive do: (:continue_update -> :ok)
+          end
+        )
+      end)
+
+    assert_receive {:update_ready, updater}, 1_000
+
+    assert {:ok, _terminal} =
+             Store.merge_existing(:routine, id, %{
+               "last_run_at" => DateTime.utc_now() |> DateTime.to_iso8601(),
+               "last_status" => "completed"
+             })
+
+    send(updater, :continue_update)
+    assert {:ok, %{"name" => "after-race", "enabled" => false}} = Task.await(update)
+
+    assert {:ok, %{"name" => "after-race", "enabled" => false, "last_status" => "completed"}} =
+             Store.get(:routine, id)
+  end
+
+  test "update cannot recreate a routine deleted after its read" do
+    scheduler = isolated_scheduler()
+
+    assert {:ok, %{"id" => id}} =
+             Routines.create(routine_attrs("delete-race"), scheduler: scheduler)
+
+    owner = self()
+
+    update =
+      Task.async(fn ->
+        Routines.update(id, %{"name" => "must-stay-deleted"},
+          scheduler: scheduler,
+          before_update_persist: fn ->
+            send(owner, {:update_ready, self()})
+            receive do: (:continue_update -> :ok)
+          end
+        )
+      end)
+
+    assert_receive {:update_ready, updater}, 1_000
+    assert :ok = Store.delete(:routine, id)
+    send(updater, :continue_update)
+
+    assert {:error, :not_found} = Task.await(update)
+    assert {:error, :not_found} = Store.get(:routine, id)
   end
 
   test "stored trigger reloads by ID, emits after submission, and rejects disabled routines" do

@@ -29,6 +29,12 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
   @doc "Synchronously reload persisted routines and reconcile their timers."
   def reload(server \\ __MODULE__), do: GenServer.call(server, :reload)
 
+  @doc "Remove a routine from runnable in-memory state after reconciliation fails."
+  def fail_close(id) when is_binary(id), do: fail_close(__MODULE__, id)
+
+  def fail_close(server, id) when is_binary(id),
+    do: GenServer.call(server, {:fail_close, id})
+
   @doc "Submit a loaded routine by stable ID, or by a unique legacy name."
   def trigger(server \\ __MODULE__, identifier) when is_binary(identifier) do
     case GenServer.call(server, {:lookup, identifier}) do
@@ -114,6 +120,21 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
     error ->
       Logger.warning("heartbeat_reload_failed", reason: Exception.message(error))
       {:reply, {:error, :reload_failed}, state}
+  end
+
+  def handle_call({:fail_close, id}, _from, state) do
+    case Map.get(state.timers, id) do
+      nil -> :ok
+      timer -> cancel_timer(timer)
+    end
+
+    state = %{
+      state
+      | timers: Map.delete(state.timers, id),
+        configs: Enum.reject(state.configs, &(routine_key(&1) == id))
+    }
+
+    {:reply, :ok, state}
   end
 
   def handle_call({:lookup, identifier}, _from, state) do
@@ -654,7 +675,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
 
     cond do
       persistence_success?(result) ->
-        RunEvents.publish_routine_updated(task.key, task.kind)
+        RunEvents.publish_routine_updated(task.key, persisted_kind(result, task.kind))
         start_pending_persistence(state, task.key)
 
       Map.has_key?(state.pending_persistence, task.key) ->
@@ -712,6 +733,11 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
   defp persistence_success?(:ok), do: true
   defp persistence_success?({:ok, _value}), do: true
   defp persistence_success?(_result), do: false
+
+  defp persisted_kind({:ok, persisted}, fallback) when is_map(persisted),
+    do: value(persisted, :kind, fallback)
+
+  defp persisted_kind(_result, fallback), do: fallback
 
   defp apply_persistence_result(state, task, :ok), do: restore_terminal_result(state, task)
 

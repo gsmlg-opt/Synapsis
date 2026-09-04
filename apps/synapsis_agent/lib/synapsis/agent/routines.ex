@@ -12,6 +12,8 @@ defmodule Synapsis.Agent.Routines do
   alias Synapsis.Config.Store
   alias Synapsis.HeartbeatConfig
 
+  @fail_closed_attempts 2
+
   @spec list() :: [map()]
   def list, do: list(nil)
 
@@ -54,11 +56,13 @@ defmodule Synapsis.Agent.Routines do
 
   @spec update(String.t(), map(), keyword()) :: {:ok, map()} | {:error, term()}
   def update(id, attrs, opts) when is_binary(id) and is_map(attrs) and is_list(opts) do
+    patch = attrs |> stringify_keys() |> Map.delete("id")
+
     case locate(id) do
       {:ok, type, current} ->
-        updated = current |> Map.merge(stringify_keys(attrs)) |> Map.put("id", id)
-
-        with {:ok, routine} <- persist(type, updated) do
+        with :ok <- validate_update(type, current, patch),
+             :ok <- before_update_persist(opts),
+             {:ok, routine} <- Store.merge_existing(type, id, persisted_patch(type, patch)) do
           finalize_change(type, routine, opts)
         end
 
@@ -129,15 +133,25 @@ defmodule Synapsis.Agent.Routines do
   defp normalize(:heartbeat, routine), do: Map.put(routine, "kind", "heartbeat")
   defp normalize(:routine, routine), do: routine
 
-  defp persist(:routine, routine), do: Store.put(:routine, routine)
+  defp validate_update(:routine, _current, _patch), do: :ok
 
-  defp persist(:heartbeat, routine) do
-    attrs = Map.delete(routine, "kind")
+  defp validate_update(:heartbeat, current, patch) do
+    attrs = current |> Map.merge(patch) |> Map.delete("kind")
     changeset = HeartbeatConfig.changeset(%HeartbeatConfig{}, attrs)
 
     if changeset.valid?,
-      do: Store.put(:heartbeat, attrs),
+      do: :ok,
       else: {:error, changeset}
+  end
+
+  defp persisted_patch(:routine, patch), do: patch
+  defp persisted_patch(:heartbeat, patch), do: Map.delete(patch, "kind")
+
+  defp before_update_persist(opts) do
+    case Keyword.get(opts, :before_update_persist) do
+      nil -> :ok
+      callback when is_function(callback, 0) -> callback.()
+    end
   end
 
   defp ensure_enabled(%{"enabled" => false}), do: {:error, :disabled}
@@ -154,14 +168,15 @@ defmodule Synapsis.Agent.Routines do
         {:ok, routine}
 
       {:error, reason} ->
-        fail_closed(type, routine, reason)
+        fail_closed(type, routine, reason, opts)
     end
   end
 
-  defp fail_closed(type, routine, reload_reason) do
+  defp fail_closed(type, routine, reload_reason, opts) do
     id = routine["id"] || routine[:id]
+    fail_close_runtime(id, opts)
 
-    case Store.merge_existing(type, id, %{"enabled" => false}) do
+    case persist_fail_closed(type, id, opts) do
       {:ok, disabled} ->
         RunEvents.publish_routine_updated(normalize(type, disabled))
         {:error, {:scheduler_reload_failed, reload_reason}}
@@ -170,6 +185,42 @@ defmodule Synapsis.Agent.Routines do
         {:error,
          {:scheduler_reload_failed, reload_reason, {:fail_closed_persist_failed, persist_reason}}}
     end
+  end
+
+  defp fail_close_runtime(id, opts) do
+    LocalScheduler.fail_close(scheduler(opts), id)
+  rescue
+    _error -> :ok
+  catch
+    :exit, _reason -> :ok
+  end
+
+  defp persist_fail_closed(type, id, opts, attempts_left \\ @fail_closed_attempts) do
+    writer = Keyword.get(opts, :fail_closed_writer, &Store.merge_existing/3)
+    result = protect_write(fn -> writer.(type, id, %{"enabled" => false}) end)
+
+    case {result, attempts_left} do
+      {{:ok, disabled}, _attempts_left} ->
+        {:ok, disabled}
+
+      {{:error, _reason}, attempts_left} when attempts_left > 1 ->
+        persist_fail_closed(type, id, opts, attempts_left - 1)
+
+      {{:error, reason}, _attempts_left} ->
+        {:error, reason}
+    end
+  end
+
+  defp protect_write(fun) do
+    case fun.() do
+      {:ok, disabled} -> {:ok, disabled}
+      {:error, reason} -> {:error, reason}
+      other -> {:error, {:unexpected_fail_closed_result, other}}
+    end
+  rescue
+    error -> {:error, {error.__struct__, Exception.message(error)}}
+  catch
+    kind, reason -> {:error, {kind, reason}}
   end
 
   defp reload_scheduler(opts) do
