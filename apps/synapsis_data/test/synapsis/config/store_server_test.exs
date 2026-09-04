@@ -46,4 +46,79 @@ defmodule Synapsis.Config.Store.ServerTest do
     assert :ok = Store.reload(:provider)
     assert {:error, :not_found} = Store.get(:provider, "provider-1")
   end
+
+  test "malformed reload preserves the last known good entries" do
+    provider = %{"id" => "provider-1", "name" => "Original"}
+    assert {:ok, ^provider} = Store.put(:provider, provider)
+
+    Store.file_path(:provider)
+    |> File.write!("[[providers]]\nid =")
+
+    assert {:error, {:parse_failed, _reason}} = Store.reload(:provider)
+    assert {:ok, ^provider} = Store.get(:provider, "provider-1")
+  end
+
+  test "unreadable reload preserves the last known good entries" do
+    provider = %{"id" => "provider-1", "name" => "Original"}
+    assert {:ok, ^provider} = Store.put(:provider, provider)
+
+    Store.file_path(:provider)
+    |> File.chmod!(0o000)
+
+    assert {:error, {:read_failed, :eacces}} = Store.reload(:provider)
+    assert {:ok, ^provider} = Store.get(:provider, "provider-1")
+  end
+
+  test "invalid reload preserves the last known good entries" do
+    clear_config_store(:routine)
+    on_exit(fn -> clear_config_store(:routine) end)
+
+    routine = %{
+      "id" => Ecto.UUID.generate(),
+      "name" => "valid-routine",
+      "kind" => "schedule",
+      "enabled" => true,
+      "schedule" => "* * * * *",
+      "prompt" => "Run safely"
+    }
+
+    assert {:ok, ^routine} = Store.put(:routine, routine)
+
+    File.write!(
+      Store.file_path(:routine),
+      """
+      [[routines]]
+      id = "#{routine["id"]}"
+      name = "invalid-routine"
+      kind = "schedule"
+      enabled = true
+      schedule = "x x x x x"
+      prompt = "Do not load"
+      """
+    )
+
+    assert {:error, {:invalid_entry, {:invalid_routine, :schedule}}} =
+             Store.reload(:routine)
+
+    assert {:ok, ^routine} = Store.get(:routine, routine["id"])
+  end
+
+  test "successful reload replaces the live entries" do
+    original = %{"id" => "provider-1", "name" => "Original"}
+    replacement = %{"id" => "provider-2", "name" => "Replacement"}
+    assert {:ok, ^original} = Store.put(:provider, original)
+
+    File.write!(
+      Store.file_path(:provider),
+      """
+      [[providers]]
+      id = "provider-2"
+      name = "Replacement"
+      """
+    )
+
+    assert :ok = Store.reload(:provider)
+    assert {:error, :not_found} = Store.get(:provider, "provider-1")
+    assert {:ok, ^replacement} = Store.get(:provider, "provider-2")
+  end
 end

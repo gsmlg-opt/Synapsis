@@ -47,8 +47,9 @@ defmodule Synapsis.Toolsets do
   def delete(%Toolset{is_builtin: true}), do: {:error, :protected}
 
   def delete(%Toolset{} = toolset) do
-    Store.delete(@store_type, toolset.id)
-    {:ok, toolset}
+    with :ok <- Store.delete(@store_type, toolset.id) do
+      {:ok, toolset}
+    end
   end
 
   # ── internals ──────────────────────────────────────────────────────────────

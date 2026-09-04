@@ -124,7 +124,7 @@ defmodule Synapsis.HeartbeatConfig do
     end
   end
 
-  @spec delete_config(t()) :: :ok
+  @spec delete_config(t()) :: :ok | {:error, term()}
   def delete_config(%__MODULE__{id: id}), do: Store.delete(@store_type, id)
 
   # ── internals ──────────────────────────────────────────────────────────────

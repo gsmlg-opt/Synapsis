@@ -38,8 +38,9 @@ defmodule Synapsis.MCPConfigs do
 
   @doc "Delete an MCP config."
   def delete(%MCPConfig{} = config) do
-    Store.delete(@store_type, config.id)
-    {:ok, config}
+    with :ok <- Store.delete(@store_type, config.id) do
+      {:ok, config}
+    end
   end
 
   # ── internals ──────────────────────────────────────────────────────────────

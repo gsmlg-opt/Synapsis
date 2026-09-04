@@ -56,8 +56,9 @@ defmodule Synapsis.AgentConfigs do
     if protected?(agent_config) do
       {:error, :protected}
     else
-      Store.delete(@store_type, agent_config.id)
-      {:ok, agent_config}
+      with :ok <- Store.delete(@store_type, agent_config.id) do
+        {:ok, agent_config}
+      end
     end
   end
 

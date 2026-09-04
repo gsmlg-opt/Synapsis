@@ -34,8 +34,9 @@ defmodule Synapsis.Skills do
   def delete(%Skill{is_builtin: true}), do: {:error, :protected}
 
   def delete(%Skill{} = skill) do
-    Store.delete(@store_type, skill.id)
-    {:ok, skill}
+    with :ok <- Store.delete(@store_type, skill.id) do
+      {:ok, skill}
+    end
   end
 
   # ── agent ↔ skill assignments (denormalized on the agent config) ────────────

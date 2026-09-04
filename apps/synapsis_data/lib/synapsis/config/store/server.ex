@@ -49,7 +49,7 @@ defmodule Synapsis.Config.Store.Server do
     GenServer.call(via(type), {:delete, id})
   end
 
-  @spec reload(atom()) :: :ok
+  @spec reload(atom()) :: :ok | {:error, term()}
   def reload(type) do
     GenServer.call(via(type), :reload)
   end
@@ -68,7 +68,13 @@ defmodule Synapsis.Config.Store.Server do
   @impl true
   def init(type) do
     tab = :ets.new(table(type), [:named_table, :set, :public, read_concurrency: true])
-    load_from_disk(type, tab)
+
+    case load_entries(type) do
+      {:ok, entries} -> replace_entries(tab, entries)
+      {:error, {:read_failed, :enoent}} -> :ok
+      {:error, reason} -> log_load_error(type, reason)
+    end
+
     {:ok, %{type: type, table: tab}}
   end
 
@@ -119,46 +125,76 @@ defmodule Synapsis.Config.Store.Server do
 
   @impl true
   def handle_call(:reload, _from, state) do
-    :ets.delete_all_objects(state.table)
-    load_from_disk(state.type, state.table)
-    {:reply, :ok, state}
+    case load_entries(state.type) do
+      {:ok, entries} ->
+        replace_entries(state.table, entries)
+        {:reply, :ok, state}
+
+      {:error, reason} ->
+        log_load_error(state.type, reason)
+        {:reply, {:error, reason}, state}
+    end
   end
 
   # --- Private ---
 
-  defp load_from_disk(type, tab) do
+  defp load_entries(type) do
     path = Store.file_path(type)
 
     case File.read(path) do
       {:ok, content} ->
         case Toml.decode(content) do
           {:ok, map} ->
-            entries = Map.get(map, Atom.to_string(type) <> "s", [])
-
-            Enum.each(entries, fn raw ->
-              with {:ok, raw} <- validate_entry(type, raw),
-                   entry = atomize_keys(raw),
-                   id when not is_nil(id) <- Map.get(entry, :id) do
-                :ets.insert(tab, {id, entry})
-              else
-                _invalid -> :ok
-              end
-            end)
+            map
+            |> Map.get(Atom.to_string(type) <> "s", [])
+            |> validate_entries(type)
 
           {:error, reason} ->
-            Logger.warning("config_store_toml_parse_error",
-              type: type,
-              path: path,
-              reason: inspect(reason)
-            )
+            {:error, {:parse_failed, reason}}
         end
 
-      {:error, :enoent} ->
-        :ok
-
       {:error, reason} ->
-        Logger.warning("config_store_read_error", type: type, path: path, reason: inspect(reason))
+        {:error, {:read_failed, reason}}
     end
+  end
+
+  defp validate_entries(entries, type) when is_list(entries) do
+    Enum.reduce_while(entries, {:ok, []}, fn raw, {:ok, acc} ->
+      with true <- is_map(raw),
+           {:ok, validated} <- validate_entry(type, raw),
+           id when not is_nil(id) <- id_of(validated) do
+        entry = validated |> atomize_keys() |> Map.put(:id, id)
+        {:cont, {:ok, [{id, entry} | acc]}}
+      else
+        false -> {:halt, {:error, {:invalid_entry, :not_a_map}}}
+        nil -> {:halt, {:error, {:invalid_entry, :missing_id}}}
+        {:error, reason} -> {:halt, {:error, {:invalid_entry, reason}}}
+      end
+    end)
+  end
+
+  defp validate_entries(_entries, _type), do: {:error, {:invalid_entry, :not_a_list}}
+
+  defp replace_entries(table, entries) do
+    :ets.delete_all_objects(table)
+    if entries != [], do: :ets.insert(table, entries)
+    :ok
+  end
+
+  defp log_load_error(type, {kind, reason}) when kind in [:read_failed, :parse_failed] do
+    Logger.warning("config_store_#{kind}",
+      type: type,
+      path: Store.file_path(type),
+      reason: inspect(reason)
+    )
+  end
+
+  defp log_load_error(type, reason) do
+    Logger.warning("config_store_validation_failed",
+      type: type,
+      path: Store.file_path(type),
+      reason: inspect(reason)
+    )
   end
 
   defp persist(type, entries) do

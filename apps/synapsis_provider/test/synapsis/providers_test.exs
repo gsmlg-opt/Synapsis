@@ -183,6 +183,20 @@ defmodule Synapsis.ProvidersTest do
     test "returns error for missing provider" do
       assert {:error, :not_found} = Providers.delete(Ecto.UUID.generate())
     end
+
+    test "keeps the persisted provider registered when deletion cannot be persisted" do
+      {:ok, provider} = Providers.create(@valid_attrs)
+      on_exit(fn -> ProviderRegistry.unregister(provider.name) end)
+
+      :provider
+      |> Synapsis.Config.Store.file_path()
+      |> File.chmod!(0o400)
+
+      assert {:error, {:persist_failed, _reason}} = Providers.delete(provider.id)
+      assert {:ok, %{id: id}} = Providers.get(provider.id)
+      assert id == provider.id
+      assert {:ok, _runtime_config} = ProviderRegistry.get(provider.name)
+    end
   end
 
   describe "authenticate/2" do

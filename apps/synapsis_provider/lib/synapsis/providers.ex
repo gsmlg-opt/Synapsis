@@ -58,9 +58,9 @@ defmodule Synapsis.Providers do
   end
 
   def delete(id) do
-    with {:ok, provider} <- get(id) do
+    with {:ok, provider} <- get(id),
+         :ok <- Store.delete(@store_type, id) do
       ProviderRegistry.unregister(provider.name)
-      Store.delete(@store_type, id)
       {:ok, provider}
     end
   end

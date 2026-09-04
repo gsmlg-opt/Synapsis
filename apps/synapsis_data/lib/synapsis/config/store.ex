@@ -49,7 +49,7 @@ defmodule Synapsis.Config.Store do
   def delete(type, id) when type in @types, do: Server.delete(type, id)
 
   @doc "Reload a type's entries from disk (also called automatically on file change)."
-  @spec reload(atom()) :: :ok
+  @spec reload(atom()) :: :ok | {:error, term()}
   def reload(type) when type in @types, do: Server.reload(type)
 
   @doc "Config directory path."
