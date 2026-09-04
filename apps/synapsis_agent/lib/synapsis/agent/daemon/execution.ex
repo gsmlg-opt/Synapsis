@@ -38,6 +38,54 @@ defmodule Synapsis.Agent.Daemon.Execution do
     with :ok <- validate_prompt(prompt), do: {:error, :invalid_options}
   end
 
+  def heartbeat_attrs(opts) when is_map(opts) do
+    prompt = option(opts, :prompt)
+    heartbeat_id = option(opts, :heartbeat_id)
+    no_overlap = option(opts, :no_overlap, true)
+    max_runtime_ms = option(opts, :max_runtime_ms, :timer.minutes(2))
+    metadata = option(opts, :metadata, %{})
+
+    with :ok <- validate_prompt(prompt),
+         true <- is_binary(heartbeat_id) and match?({:ok, _}, Ecto.UUID.cast(heartbeat_id)),
+         true <- is_boolean(no_overlap),
+         true <- is_integer(max_runtime_ms) and max_runtime_ms > 0,
+         true <- is_map(metadata),
+         :ok <- validate_options(opts) do
+      metadata =
+        metadata
+        |> Map.put("no_overlap", no_overlap)
+        |> Map.put("max_runtime_ms", max_runtime_ms)
+
+      {:ok,
+       %{
+         kind: "heartbeat",
+         status: "queued",
+         source: option(opts, :source, "system"),
+         assistant_name: option(opts, :assistant_name, "main"),
+         heartbeat_id: heartbeat_id,
+         routine_id: option(opts, :routine_id, heartbeat_id),
+         prompt: prompt,
+         tool_profile: option(opts, :tool_profile, "assistant_basic"),
+         provider: option(opts, :provider),
+         model: option(opts, :model),
+         metadata: metadata
+       }}
+    else
+      _invalid -> {:error, :invalid_options}
+    end
+  end
+
+  def heartbeat_attrs(_opts), do: {:error, :invalid_options}
+
+  def run_timeout(%{metadata: metadata}, default) when is_map(metadata) do
+    case Map.get(metadata, "max_runtime_ms", Map.get(metadata, :max_runtime_ms)) do
+      timeout when is_integer(timeout) and timeout > 0 -> timeout
+      _other -> default
+    end
+  end
+
+  def run_timeout(_run, default), do: default
+
   def status(state) do
     queued_ids = state.queue |> :queue.to_list() |> Enum.map(& &1.id)
     active = state.active_run && active_summary(state.active_run)

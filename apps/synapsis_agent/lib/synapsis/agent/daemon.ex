@@ -39,6 +39,16 @@ defmodule Synapsis.Agent.Daemon do
     end
   end
 
+  def trigger(kind, opts), do: trigger(__MODULE__, kind, opts)
+
+  def trigger(server, :heartbeat, opts) do
+    with {:ok, attrs} <- Execution.heartbeat_attrs(opts) do
+      GenServer.call(server, {:submit, attrs}, :infinity)
+    end
+  end
+
+  def trigger(_server, _kind, _opts), do: {:error, :unsupported_trigger}
+
   def cancel(run_id), do: cancel(__MODULE__, run_id)
 
   def cancel(server, run_id) when is_binary(run_id),
@@ -106,6 +116,9 @@ defmodule Synapsis.Agent.Daemon do
 
       queue_load(state) >= state.queue_capacity ->
         {:reply, {:error, :queue_full}, state}
+
+      overlapping?(state, attrs) ->
+        {:reply, {:error, :overlap}, state}
 
       true ->
         run_id = Ecto.UUID.generate()
@@ -751,7 +764,7 @@ defmodule Synapsis.Agent.Daemon do
         state.deps,
         state.task_supervisor,
         run,
-        state.run_timeout,
+        Execution.run_timeout(run, state.run_timeout),
         Map.get(state, :cleanup_timeout, @cleanup_timeout),
         Map.get(state, :event_timeout, @event_timeout)
       )
@@ -816,6 +829,22 @@ defmodule Synapsis.Agent.Daemon do
       run = Enum.find(:queue.to_list(state.queue), &(&1.id == run_id)) -> {:queued, run}
       true -> :unknown
     end
+  end
+
+  defp overlapping?(state, attrs) do
+    routine_id = Map.get(attrs, :routine_id)
+    metadata = Map.get(attrs, :metadata, %{})
+    no_overlap = Map.get(metadata, "no_overlap", Map.get(metadata, :no_overlap, false))
+
+    no_overlap and is_binary(routine_id) and
+      Enum.any?(owned_runs(state), &(&1.routine_id == routine_id))
+  end
+
+  defp owned_runs(state) do
+    active = if state.active_run, do: [state.active_run.run], else: []
+    queued = :queue.to_list(state.queue)
+    submitting = state.submit_queue |> :queue.to_list() |> Enum.map(& &1.attrs)
+    active ++ queued ++ submitting
   end
 
   defp pop_operation(state, pid) do

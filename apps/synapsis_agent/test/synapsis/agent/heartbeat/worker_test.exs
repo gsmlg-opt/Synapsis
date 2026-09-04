@@ -1,8 +1,5 @@
 defmodule Synapsis.Agent.Heartbeat.WorkerTest do
-  # Oban-based Worker.perform/1 removed in ADR-006 C3.
-  # Execution logic lives in Worker.execute/1, called by LocalScheduler.
-  # Integration tests covering LocalScheduler + execute/1 belong here.
-  use ExUnit.Case, async: true
+  use Synapsis.Agent.DaemonCase, async: false
 
   alias Synapsis.Agent.Heartbeat.Worker
 
@@ -16,5 +13,28 @@ defmodule Synapsis.Agent.Heartbeat.WorkerTest do
     }
 
     assert :ok = Worker.execute(config)
+  end
+
+  test "execute/2 adapts an enabled legacy config to the daemon trigger" do
+    Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :waiting)
+    {daemon, _task_supervisor} = start_test_daemon(sessions: FakeSessions)
+    heartbeat_id = Ecto.UUID.generate()
+
+    config = %{
+      id: heartbeat_id,
+      name: "legacy-adapter",
+      schedule: "0 9 * * *",
+      enabled: true,
+      prompt: "route through daemon",
+      agent_name: "main",
+      no_overlap: true,
+      max_runtime_ms: 1_000
+    }
+
+    assert {:ok, run} = Worker.execute(config, daemon)
+    assert run.kind == "heartbeat"
+    assert run.heartbeat_id == heartbeat_id
+    assert_receive {:waiting_session, _session_id}, 1_000
+    assert {:ok, _cancelled} = Daemon.cancel(daemon, run.id)
   end
 end

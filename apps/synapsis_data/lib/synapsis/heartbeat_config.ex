@@ -26,6 +26,9 @@ defmodule Synapsis.HeartbeatConfig do
     field(:notify_user, :boolean, default: true)
     field(:session_isolation, Ecto.Enum, values: [:isolated, :main], default: :isolated)
     field(:keep_history, :boolean, default: false)
+    field(:tool_profile, :string, default: "assistant_basic")
+    field(:no_overlap, :boolean, default: true)
+    field(:max_runtime_ms, :integer, default: 120_000)
 
     field(:inserted_at, :utc_datetime_usec)
     field(:updated_at, :utc_datetime_usec)
@@ -43,12 +46,17 @@ defmodule Synapsis.HeartbeatConfig do
       :enabled,
       :notify_user,
       :session_isolation,
-      :keep_history
+      :keep_history,
+      :tool_profile,
+      :no_overlap,
+      :max_runtime_ms
     ])
     |> validate_required([:name, :schedule, :prompt])
     |> validate_length(:name, max: 255)
     |> validate_length(:schedule, max: 255)
     |> validate_length(:prompt, max: 50_000)
+    |> validate_inclusion(:tool_profile, ~w(assistant_basic assistant_workspace assistant_coding))
+    |> validate_number(:max_runtime_ms, greater_than: 0)
     |> validate_cron_expression(:schedule)
   end
 
@@ -137,7 +145,10 @@ defmodule Synapsis.HeartbeatConfig do
       "enabled" => record.enabled,
       "notify_user" => record.notify_user,
       "session_isolation" => to_string_or_nil(record.session_isolation),
-      "keep_history" => record.keep_history
+      "keep_history" => record.keep_history,
+      "tool_profile" => record.tool_profile,
+      "no_overlap" => record.no_overlap,
+      "max_runtime_ms" => record.max_runtime_ms
     }
     |> Enum.reject(fn {_k, v} -> is_nil(v) end)
     |> Map.new()
