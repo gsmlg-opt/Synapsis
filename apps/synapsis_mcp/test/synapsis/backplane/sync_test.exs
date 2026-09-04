@@ -36,6 +36,31 @@ defmodule Synapsis.Backplane.SyncTest do
     end
   end
 
+  defmodule FlakyMCPRuntime do
+    def configure(stop_results), do: Process.put({__MODULE__, :stop_results}, stop_results)
+
+    def restart(config) do
+      send(self(), {:mcp_restarted, config})
+      :ok
+    end
+
+    def stop(name) do
+      [result | remaining] = Process.get({__MODULE__, :stop_results}, [:ok])
+      Process.put({__MODULE__, :stop_results}, remaining)
+      send(self(), {:mcp_stop_attempt, name, result})
+      result
+    end
+  end
+
+  defmodule FailingRestartMCPRuntime do
+    def restart(config) do
+      send(self(), {:mcp_restart_failed, config.id})
+      {:error, :restart_failed}
+    end
+
+    def stop(_name), do: :ok
+  end
+
   setup do
     for type <- [:backplane, :provider, :skill, :mcp] do
       path =
@@ -574,6 +599,215 @@ defmodule Synapsis.Backplane.SyncTest do
              Sync.set_available(connection.id, true, mcp_runtime: MockMCPRuntime)
 
     assert Skills.get(skill.id).config_overrides["backplane_available"] == false
+  end
+
+  test "source-disabled-only models and tools keep their owners out of runtime APIs" do
+    {:ok, connection} =
+      Connection.create(%{name: "disabled-only", endpoint: "https://backplane.example.test"})
+
+    snapshot =
+      snapshot!(connection,
+        models: [%{"id" => "disabled-model", "enabled" => false}],
+        skills: [],
+        mcp_tools: [%{"name" => "disabled-tool", "enabled" => false}]
+      )
+
+    assert {:ok, synced} = run_sync(connection, snapshot)
+    assert {:ok, provider} = Providers.get(synced.artifacts["provider_id"])
+    refute Providers.runtime_available?(provider)
+    assert provider.config["available_models"] == []
+    assert {:error, :provider_unavailable} = Providers.models_for(provider.name)
+
+    assert [model] = provider.config["backplane_models"]
+    assert model["external_id"] == "disabled-model"
+    assert model["source_available"] == false
+    assert model["backplane_available"] == false
+
+    assert mcp = MCPConfigs.get(synced.artifacts["mcp_id"])
+    refute MCPConfigs.runtime_available?(mcp)
+    assert MCPConfigs.enabled() == []
+    assert_receive {:mcp_stopped, mcp_name}
+    assert mcp_name == mcp.name
+
+    assert [tool] = mcp.config["backplane_tools"]
+    assert tool["external_id"] == "disabled-tool"
+    assert tool["source_available"] == false
+    assert tool["backplane_available"] == false
+  end
+
+  test "mixed model and tool surfaces expose only source-enabled entries" do
+    {:ok, connection} =
+      Connection.create(%{name: "mixed-enabled", endpoint: "https://backplane.example.test"})
+
+    snapshot =
+      snapshot!(connection,
+        models: [
+          %{"id" => "disabled-model", "enabled" => false},
+          %{"id" => "enabled-model", "enabled" => true}
+        ],
+        skills: [],
+        mcp_tools: [
+          %{"name" => "disabled-tool", "enabled" => false},
+          %{"name" => "enabled-tool", "enabled" => true}
+        ]
+      )
+
+    assert {:ok, synced} = run_sync(connection, snapshot)
+    assert {:ok, provider} = Providers.get(synced.artifacts["provider_id"])
+    assert Providers.runtime_available?(provider)
+    assert provider.config["available_models"] == [%{"enabled" => true, "id" => "enabled-model"}]
+    assert {:ok, [%{id: "enabled-model"}]} = Providers.models_for(provider.name)
+
+    models = Map.new(provider.config["backplane_models"], &{&1["external_id"], &1})
+    assert models["enabled-model"]["backplane_available"] == true
+    assert models["disabled-model"]["backplane_available"] == false
+
+    assert mcp = MCPConfigs.get(synced.artifacts["mcp_id"])
+    assert MCPConfigs.runtime_available?(mcp)
+    assert [enabled_mcp] = MCPConfigs.enabled()
+    assert enabled_mcp.id == mcp.id
+    assert_receive {:mcp_restarted, %{id: mcp_id}}
+    assert mcp_id == mcp.id
+
+    tools = Map.new(mcp.config["backplane_tools"], &{&1["external_id"], &1})
+    assert tools["enabled-tool"]["backplane_available"] == true
+    assert tools["disabled-tool"]["backplane_available"] == false
+  end
+
+  test "a malformed skill surface retains all skill LKG while models and tools reconcile" do
+    {:ok, connection} =
+      Connection.create(%{name: "contained", endpoint: "https://backplane.example.test"})
+
+    initial =
+      snapshot!(connection,
+        models: [%{"id" => "coding", "revision" => "model-v1"}],
+        skills: [generated_skill("a-skill", "Review", "Prompt v1")],
+        mcp_tools: [%{"name" => "memory::search", "revision" => "tool-v1"}]
+      )
+
+    assert {:ok, ready} = run_sync(connection, initial)
+    skill_id = ready.artifacts["skill_ids"]["a-skill"]
+    revisions_v1 = ready.metadata["surface_revisions"]
+    Phoenix.PubSub.subscribe(Synapsis.PubSub, "agent:daemon")
+
+    malformed =
+      generated_skill("z-invalid", String.duplicate("x", 256), "invalid")
+
+    update =
+      snapshot!(connection,
+        models: [%{"id" => "coding", "revision" => "model-v2"}],
+        skills: [generated_skill("a-skill", "Review", "Prompt v2"), malformed],
+        mcp_tools: [%{"name" => "memory::search", "revision" => "tool-v2"}]
+      )
+
+    assert {:ok, degraded} = run_sync(connection, update)
+    assert degraded.status == "degraded"
+    assert degraded.stale == true
+    assert degraded.unavailable == ["skills"]
+    assert degraded.counts == %{"models" => 1, "skills" => 1, "tools" => 1}
+    assert degraded.metadata["surface_revisions"]["skills"] == revisions_v1["skills"]
+    refute degraded.metadata["surface_revisions"]["models"] == revisions_v1["models"]
+    refute degraded.metadata["surface_revisions"]["mcp_tools"] == revisions_v1["mcp_tools"]
+    assert degraded.artifacts["skill_ids"] == ready.artifacts["skill_ids"]
+
+    assert Skills.get(skill_id).system_prompt_fragment == "Prompt v1"
+    assert length(Skills.list()) == 1
+
+    assert {:ok, provider} = Providers.get(degraded.artifacts["provider_id"])
+    assert provider.config["available_models"] == [%{"id" => "coding", "revision" => "model-v2"}]
+
+    assert mcp = MCPConfigs.get(degraded.artifacts["mcp_id"])
+    assert [tool] = mcp.config["backplane_tools"]
+    assert tool["source_metadata"]["revision"] == "tool-v2"
+
+    assert_receive {:agent_daemon_event, %{event: "backplane.sync.started"}}
+    assert_receive {:agent_daemon_event, %{event: "backplane.sync.failed"}}
+    assert_receive {:agent_daemon_event, %{event: "backplane.capabilities.updated"}}
+    refute_receive {:agent_daemon_event, %{event: "backplane.sync.completed"}}
+  end
+
+  test "an MCP runtime reconciliation error retains the complete tool surface LKG" do
+    {:ok, connection} =
+      Connection.create(%{name: "tool-lkg", endpoint: "https://backplane.example.test"})
+
+    initial =
+      snapshot!(connection,
+        models: [%{"id" => "coding"}],
+        skills: [],
+        mcp_tools: [%{"name" => "memory::search", "revision" => "tool-v1"}]
+      )
+
+    assert {:ok, ready} = run_sync(connection, initial)
+    assert mcp_v1 = MCPConfigs.get(ready.artifacts["mcp_id"])
+    tools_revision_v1 = ready.metadata["surface_revisions"]["mcp_tools"]
+
+    update =
+      snapshot!(connection,
+        models: [%{"id" => "coding"}],
+        skills: [],
+        mcp_tools: [%{"name" => "memory::search", "revision" => "tool-v2"}]
+      )
+
+    assert {:ok, degraded} =
+             run_sync(connection, update, mcp_runtime: FailingRestartMCPRuntime)
+
+    assert_receive {:mcp_restart_failed, mcp_id}
+    assert mcp_id == mcp_v1.id
+    assert degraded.status == "degraded"
+    assert degraded.unavailable == ["tools"]
+    assert degraded.counts["tools"] == 1
+    assert degraded.metadata["surface_revisions"]["mcp_tools"] == tools_revision_v1
+    assert MCPConfigs.get(mcp_v1.id) == mcp_v1
+  end
+
+  test "MCP stop failure persists degraded availability and a successful retry clears it" do
+    {:ok, connection} =
+      Connection.create(%{name: "stop-retry", endpoint: "https://backplane.example.test"})
+
+    snapshot =
+      snapshot!(connection,
+        models: [%{"id" => "coding"}],
+        skills: [generated_skill("skill-42", "Review", "prompt")],
+        mcp_tools: [%{"name" => "memory::search"}]
+      )
+
+    assert {:ok, ready} = run_sync(connection, snapshot)
+    assert_receive {:mcp_restarted, _config}
+    Phoenix.PubSub.subscribe(Synapsis.PubSub, "agent:daemon")
+    FlakyMCPRuntime.configure([{:error, :stop_failed}, :ok])
+
+    assert {:error, {:mcp_availability_failed, {:runtime_reconcile_failed, :stop_failed}}} =
+             Sync.set_available(connection.id, false, mcp_runtime: FlakyMCPRuntime)
+
+    assert_receive {:mcp_stop_attempt, _name, {:error, :stop_failed}}
+    assert {:ok, failed} = Connection.get(connection.id)
+    assert failed.status == "degraded"
+    assert failed.stale == true
+    assert failed.unavailable == ["models", "skills", "tools"]
+    assert failed.last_success_at == ready.last_success_at
+    assert failed.last_error =~ "stop_failed"
+    assert failed.metadata["surface_errors"]["tools"] =~ "stop_failed"
+
+    assert_receive {:agent_daemon_event,
+                    %{event: "backplane.capabilities.updated"} = failed_event}
+
+    assert failed_event.status == "degraded"
+    assert failed_event.error =~ "stop_failed"
+    refute_receive {:agent_daemon_event, %{event: "backplane.sync.started"}}
+    refute_receive {:agent_daemon_event, %{event: "backplane.sync.completed"}}
+    refute_receive {:agent_daemon_event, %{event: "backplane.sync.failed"}}
+
+    assert {:ok, retried} =
+             Sync.set_available(connection.id, false, mcp_runtime: FlakyMCPRuntime)
+
+    assert_receive {:mcp_stop_attempt, _name, :ok}
+    assert retried.status == "degraded"
+    assert retried.stale == true
+    assert retried.unavailable == ["models", "skills", "tools"]
+    assert retried.last_error == nil
+    assert retried.metadata["surface_errors"] == %{}
+    assert_receive {:agent_daemon_event, %{event: "backplane.capabilities.updated"} = retry_event}
+    assert retry_event.error == nil
   end
 
   test "sync errors and status never expose the connection credential" do

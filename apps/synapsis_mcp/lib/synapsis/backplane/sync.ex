@@ -2,7 +2,7 @@ defmodule Synapsis.Backplane.Sync do
   @moduledoc "Synchronizes normalized Backplane snapshots into capability stores."
 
   alias Synapsis.Backplane.{Client, Connection, Events, Snapshot}
-  alias Synapsis.{MCPConfigs, Providers, Skills}
+  alias Synapsis.{MCPConfigs, Providers, Skill, Skills}
 
   @max_error_length 500
 
@@ -42,18 +42,13 @@ defmodule Synapsis.Backplane.Sync do
 
       case fetch_snapshot(attempted, opts) do
         {:ok, snapshot} ->
-          case reconcile_snapshot(attempted, snapshot, opts) do
-            {:ok, reconciliation} ->
-              result = finalize_sync(attempted, reconciliation, now)
+          {:ok, reconciliation} = reconcile_snapshot(attempted, snapshot, opts)
+          result = finalize_sync(attempted, reconciliation, now)
 
-              publish_sync_result(
-                result,
-                surface_reconciled?(snapshot) and capabilities_changed?(previous_state, result)
-              )
-
-            {:error, reason} ->
-              attempted |> persist_failure(reason) |> publish_sync_result(false)
-          end
+          publish_sync_result(
+            result,
+            surface_reconciled?(snapshot) and capabilities_changed?(previous_state, result)
+          )
 
         {:error, reason} ->
           attempted |> persist_failure(reason) |> publish_sync_result(false)
@@ -94,7 +89,7 @@ defmodule Synapsis.Backplane.Sync do
     runtime = Keyword.get(opts, :mcp_runtime, Synapsis.MCP)
 
     with {:ok, connection} <- Connection.get(connection_id) do
-      previous_state = managed_capability_state(connection)
+      previous_state = availability_state(connection)
 
       result =
         with :ok <- set_providers_available(connection_id, available),
@@ -103,17 +98,61 @@ defmodule Synapsis.Backplane.Sync do
           Connection.update(connection, %{
             stale: not available,
             status: if(available, do: "ready", else: "degraded"),
-            unavailable: if(available, do: [], else: ~w(models skills tools))
+            unavailable: if(available, do: [], else: ~w(models skills tools)),
+            last_error: nil,
+            metadata: Map.put(connection.metadata || %{}, "surface_errors", %{})
           })
         end
 
-      if capabilities_changed?(previous_state, result) do
-        {:ok, persisted} = result
-        Events.capabilities_updated(persisted)
-      end
+      case result do
+        {:ok, persisted} = success ->
+          publish_availability_update(previous_state, persisted)
+          success
 
-      result
+        {:error, {:mcp_availability_failed, _reason} = reason} ->
+          case persist_availability_failure(connection, available, reason) do
+            {:ok, persisted} ->
+              publish_availability_update(previous_state, persisted)
+              {:error, reason}
+
+            {:error, _reason} = error ->
+              error
+          end
+
+        {:error, _reason} = error ->
+          error
+      end
     end
+  end
+
+  defp availability_state(connection) do
+    Map.merge(managed_capability_state(connection), %{
+      status: connection.status,
+      stale: connection.stale,
+      unavailable: connection.unavailable,
+      last_error: connection.last_error
+    })
+  end
+
+  defp publish_availability_update(previous_state, persisted) do
+    if previous_state != availability_state(persisted), do: Events.capabilities_updated(persisted)
+  end
+
+  defp persist_availability_failure(connection, available, reason) do
+    error = format_error(reason, connection.credential)
+
+    Connection.update(connection, %{
+      status: "degraded",
+      stale: true,
+      unavailable: if(available, do: ["tools"], else: ~w(models skills tools)),
+      last_error: error,
+      metadata:
+        Map.put(
+          connection.metadata || %{},
+          "surface_errors",
+          %{"tools" => error}
+        )
+    })
   end
 
   defp managed_capability_state(connection) do
@@ -185,10 +224,28 @@ defmodule Synapsis.Backplane.Sync do
       errors: snapshot.errors
     }
 
-    with {:ok, result} <- reconcile_models_surface(initial, connection, snapshot),
-         {:ok, result} <- reconcile_skills_surface(result, connection, snapshot),
-         {:ok, result} <- reconcile_tools_surface(result, connection, snapshot, runtime) do
-      {:ok, result}
+    result =
+      reconcile_surface(initial, :models, fn ->
+        reconcile_models_surface(initial, connection, snapshot)
+      end)
+
+    result =
+      reconcile_surface(result, :skills, fn ->
+        reconcile_skills_surface(result, connection, snapshot)
+      end)
+
+    result =
+      reconcile_surface(result, :mcp_tools, fn ->
+        reconcile_tools_surface(result, connection, snapshot, runtime)
+      end)
+
+    {:ok, result}
+  end
+
+  defp reconcile_surface(result, surface, fun) do
+    case fun.() do
+      {:ok, updated} -> updated
+      {:error, reason} -> put_in(result, [:errors, surface], reason)
     end
   end
 
@@ -360,13 +417,14 @@ defmodule Synapsis.Backplane.Sync do
   defp reconcile_provider(connection, %Snapshot{providers: [capability], models: models}) do
     provider = find_provider(connection.id, capability.external_id)
     source_name = available_provider_name(connection, provider)
-    available = models != []
+    enabled_models = Enum.filter(models, & &1.enabled_by_source)
+    available = enabled_models != []
 
     config =
       marker_map(capability, available)
       |> Map.put("source_name", source_name)
       |> Map.put("source_contents_available", available)
-      |> Map.put("available_models", Enum.map(models, & &1.metadata))
+      |> Map.put("available_models", Enum.map(enabled_models, & &1.metadata))
       |> Map.put(
         "backplane_models",
         merge_capability_cache(
@@ -405,52 +463,69 @@ defmodule Synapsis.Backplane.Sync do
     existing =
       Map.new(owned_skills(connection.id), &{marker(&1.config_overrides, "external_id"), &1})
 
-    imported =
-      capabilities
-      |> Enum.reduce_while({:ok, []}, fn capability, {:ok, imported} ->
-        available = skill_importable?(capability)
-        metadata = capability.metadata
-
-        attrs = %{
-          name: capability.name,
-          description: metadata["description"],
-          system_prompt_fragment: metadata["content"],
-          enabled: available,
-          config_overrides:
-            capability
-            |> marker_map(available)
-            |> Map.put("source_contents_available", skill_content_available?(capability))
-        }
-
-        result =
-          case existing[capability.external_id] do
-            nil ->
-              Skills.create(attrs)
-
-            skill ->
-              attrs = %{
-                attrs
-                | name: reconciled_name(skill.name, skill.config_overrides, attrs.name),
-                  config_overrides:
-                    Map.merge(skill.config_overrides || %{}, attrs.config_overrides)
-              }
-
-              Skills.update(skill, Map.delete(attrs, :enabled))
-          end
-
-        case result do
-          {:ok, skill} ->
-            {:cont, {:ok, [skill | imported]}}
-
-          {:error, reason} ->
-            {:halt, {:error, {:skill_import_failed, capability.external_id, reason}}}
-        end
-      end)
-
-    with {:ok, current} <- imported,
+    with {:ok, prepared} <- prepare_skills(existing, capabilities),
+         {:ok, current} <- persist_skills(prepared),
          {:ok, stale} <- mark_disappeared_skills(existing, capabilities) do
       {:ok, Enum.reverse(current) ++ stale}
     end
+  end
+
+  defp prepare_skills(existing, capabilities) do
+    Enum.reduce_while(capabilities, {:ok, []}, fn capability, {:ok, prepared} ->
+      current = existing[capability.external_id]
+      attrs = skill_attrs(capability, current)
+      changeset = Skill.changeset(current || %Skill{}, attrs)
+
+      if changeset.valid? do
+        {:cont, {:ok, [{capability.external_id, current, attrs} | prepared]}}
+      else
+        {:halt, {:error, {:skill_import_failed, capability.external_id, changeset}}}
+      end
+    end)
+    |> case do
+      {:ok, prepared} -> {:ok, Enum.reverse(prepared)}
+      error -> error
+    end
+  end
+
+  defp skill_attrs(capability, current) do
+    available = skill_importable?(capability)
+    metadata = capability.metadata
+
+    attrs = %{
+      name: capability.name,
+      description: metadata["description"],
+      system_prompt_fragment: metadata["content"],
+      enabled: available,
+      config_overrides:
+        capability
+        |> marker_map(available)
+        |> Map.put("source_contents_available", skill_content_available?(capability))
+    }
+
+    case current do
+      nil ->
+        attrs
+
+      skill ->
+        %{
+          attrs
+          | name: reconciled_name(skill.name, skill.config_overrides, attrs.name),
+            config_overrides: Map.merge(skill.config_overrides || %{}, attrs.config_overrides)
+        }
+        |> Map.delete(:enabled)
+    end
+  end
+
+  defp persist_skills(prepared) do
+    Enum.reduce_while(prepared, {:ok, []}, fn {external_id, current, attrs}, {:ok, imported} ->
+      result = if current, do: Skills.update(current, attrs), else: Skills.create(attrs)
+
+      case result do
+        {:ok, skill} -> {:cont, {:ok, [skill | imported]}}
+        {:error, reason} -> {:halt, {:error, {:skill_import_failed, external_id, reason}}}
+      end
+    end)
   end
 
   defp mark_disappeared_skills(existing, capabilities) do
@@ -475,7 +550,7 @@ defmodule Synapsis.Backplane.Sync do
        ) do
     mcp = find_mcp(connection.id, capability.external_id)
     source_name = available_mcp_name(connection, mcp)
-    available = tools != []
+    available = Enum.any?(tools, & &1.enabled_by_source)
 
     config =
       marker_map(capability, available)
@@ -514,14 +589,52 @@ defmodule Synapsis.Backplane.Sync do
           MCPConfigs.update(mcp, Map.delete(attrs, :enabled))
       end
 
-    with {:ok, mcp} <- result,
-         :ok <- reconcile_runtime_availability(runtime, mcp) do
-      {:ok, mcp}
+    with {:ok, persisted} <- result do
+      case reconcile_runtime_availability(runtime, persisted) do
+        :ok ->
+          {:ok, persisted}
+
+        {:error, runtime_reason} ->
+          case restore_mcp_config(mcp, persisted) do
+            :ok ->
+              {:error, runtime_reason}
+
+            {:error, rollback_reason} ->
+              {:error, {:mcp_rollback_failed, runtime_reason, rollback_reason}}
+          end
+      end
     end
   end
 
   defp reconcile_mcp_config(_connection, _snapshot, _runtime),
     do: {:error, :missing_mcp_server_capability}
+
+  defp restore_mcp_config(nil, created) do
+    case MCPConfigs.delete(created) do
+      {:ok, _deleted} -> :ok
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp restore_mcp_config(original, persisted) do
+    attrs =
+      Map.take(original, [
+        :name,
+        :transport,
+        :enabled,
+        :command,
+        :args,
+        :env,
+        :url,
+        :headers,
+        :config
+      ])
+
+    case MCPConfigs.update(persisted, attrs) do
+      {:ok, _restored} -> :ok
+      {:error, reason} -> {:error, reason}
+    end
+  end
 
   defp find_provider(connection_id, external_id) do
     case Providers.list() do
