@@ -64,8 +64,6 @@ defmodule Synapsis.Session.StoreTest do
                  })
       end
 
-      assert Store.put_meta(id, %{turn_count: 30}) == :ok
-
       assert {:ok, recent} = Store.list_recent_turns(id, 10)
       assert Enum.map(recent, & &1.n) == Enum.to_list(20..29)
     end
@@ -74,17 +72,38 @@ defmodule Synapsis.Session.StoreTest do
       assert Store.replace_turns(id, [%{n: 0}, %{n: 1}]) == :ok
       assert Store.commit_turn(id, 2, %{n: 2}, %{latest_turn: 2}) == :ok
 
-      assert Store.get_value(id, "turn_count") == 3
       assert {:ok, [%{n: 2}]} = Store.list_recent_turns(id, 1)
     end
 
-    test "out-of-order commit_turn never decreases the scoped turn count", %{id: id} do
+    test "out-of-order commit_turn keeps recent reads at the highest turn", %{id: id} do
       assert Store.replace_turns(id, Enum.map(0..3, &%{n: &1})) == :ok
       assert Store.commit_turn(id, 4, %{n: 4}, %{latest_turn: 4}) == :ok
       assert Store.commit_turn(id, 1, %{n: 1, overwritten: true}, %{latest_turn: 1}) == :ok
 
-      assert Store.get_value(id, "turn_count") == 5
       assert {:ok, [%{n: 4}]} = Store.list_recent_turns(id, 1)
+    end
+
+    test "concurrent commits return the newest turn regardless of completion order", %{id: id} do
+      assert Store.replace_turns(id, [%{n: 0}]) == :ok
+      parent = self()
+
+      tasks =
+        for n <- 100..1//-1 do
+          Task.async(fn ->
+            send(parent, {:commit_ready, self()})
+
+            receive do
+              :commit -> Store.commit_turn(id, n, %{n: n}, %{latest_turn: n})
+            end
+          end)
+        end
+
+      for _task <- tasks, do: assert_receive({:commit_ready, _pid}, 5_000)
+      Enum.each(tasks, &send(&1.pid, :commit))
+      assert Enum.all?(Task.await_many(tasks, 30_000), &(&1 == :ok))
+
+      assert {:ok, %{n: 100}} = Store.get_turn(id, 100)
+      assert {:ok, [%{n: 100}]} = Store.list_recent_turns(id, 1)
     end
   end
 

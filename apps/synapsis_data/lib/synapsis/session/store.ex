@@ -29,6 +29,7 @@ defmodule Synapsis.Session.Store do
 
   @turn_pad 12
   @default_batch_size 500
+  @list_page_size 10_000
 
   # ── key helpers ──────────────────────────────────────────────────────────
 
@@ -144,8 +145,8 @@ defmodule Synapsis.Session.Store do
   @spec list_recent_turns(String.t(), pos_integer()) :: {:ok, [map()]} | {:error, term()}
   def list_recent_turns(id, limit)
       when is_binary(id) and is_integer(limit) and limit > 0 do
-    with {:ok, turn_count} <- stored_turn_count(id) do
-      read_recent_turn_range(id, turn_count, limit)
+    with {:ok, keys} <- list_recent_turn_keys(id, limit) do
+      read_turn_keys(keys)
     end
   end
 
@@ -160,8 +161,7 @@ defmodule Synapsis.Session.Store do
   @doc """
   Atomically commit a whole turn: writes the turn entry and the updated session
   meta snapshot together via `Concord.Turso.put_many/2`; the turn and meta
-  either both land or neither does (all-or-nothing). The session-scoped turn
-  count advances in that same batch and never decreases for an overwrite.
+  either both land or neither does (all-or-nothing).
 
   Turn writes are keyed by turn number, so re-committing the same turn is
   naturally idempotent at the data level (the same key is overwritten in place);
@@ -169,28 +169,17 @@ defmodule Synapsis.Session.Store do
   """
   def commit_turn(id, n, turn, meta)
       when is_binary(id) and is_integer(n) and n >= 0 and is_map(turn) and is_map(meta) do
-    with {:ok, stored_count} <- stored_turn_count(id) do
-      turn_count = max(max(stored_count, n + 1), meta_turn_count(meta))
-
-      operations = [
-        {turn_key(id, n), turn},
-        {meta_key(id), meta},
-        {value_key(id, "turn_count"), turn_count}
-      ]
-
-      case KV.put_many(operations) do
-        {:ok, _results} -> :ok
-        :ok -> :ok
-        other -> normalize_error(other)
-      end
+    case KV.put_many([{turn_key(id, n), turn}, {meta_key(id), meta}]) do
+      {:ok, _results} -> :ok
+      :ok -> :ok
+      other -> normalize_error(other)
     end
   end
 
   @doc """
   Replace the full ordered turn list for a session in one atomic batch: drops the
-  existing `turns/*` and writes `turns/0..n-1` from `turn_maps`. A session-scoped
-  turn count is kept current for bounded range reads; session meta is untouched.
-  Used by the message write path (a message == a turn).
+  existing `turns/*` and writes `turns/0..n-1` from `turn_maps`; session meta is
+  untouched. Used by the message write path (a message == a turn).
   """
   def replace_turns(id, turn_maps) when is_binary(id) and is_list(turn_maps) do
     old_keys =
@@ -208,10 +197,7 @@ defmodule Synapsis.Session.Store do
     stale = old_keys -- Enum.map(new_puts, fn {k, _v} -> k end)
     if stale != [], do: KV.delete_many(stale)
 
-    with :ok <- persist_replacement_turns(new_puts),
-         :ok <- update_stored_turn_count(id, length(turn_maps)) do
-      :ok
-    end
+    persist_replacement_turns(new_puts)
   end
 
   @doc "Delete a whole session: meta, turns, and every session-scoped value."
@@ -248,78 +234,62 @@ defmodule Synapsis.Session.Store do
     with {:ok, _} <- KV.put_many(puts), do: :ok
   end
 
-  defp update_stored_turn_count(id, count) do
-    case KV.put(value_key(id, "turn_count"), count) do
-      :ok -> :ok
-      {:ok, _value} -> :ok
-      other -> normalize_error(other)
-    end
-  end
-
-  defp stored_turn_count(id) do
-    case KV.get(value_key(id, "turn_count")) do
-      {:ok, count} when is_integer(count) and count >= 0 -> {:ok, count}
-      {:error, :not_found} -> stored_meta_turn_count(id)
-      {:ok, _invalid} -> stored_meta_turn_count(id)
-      other -> normalize_error(other)
-    end
-  end
-
-  defp stored_meta_turn_count(id) do
-    case get_meta(id) do
-      {:ok, meta} ->
-        case Map.get(meta, :turn_count, Map.get(meta, "turn_count")) do
-          count when is_integer(count) and count >= 0 -> {:ok, count}
-          _missing -> count_turn_keys(id)
-        end
-
-      {:error, :not_found} ->
-        count_turn_keys(id)
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp meta_turn_count(meta) do
-    case Map.get(meta, :turn_count, Map.get(meta, "turn_count")) do
-      count when is_integer(count) and count >= 0 -> count
-      _missing -> 0
-    end
-  end
-
-  defp count_turn_keys(id) do
+  defp list_recent_turn_keys(id, limit) do
     prefix = turns_prefix(id)
-    count_turn_keys(prefix, prefix <> "\u{10FFFF}", 0)
+    collect_recent_turn_keys(prefix, prefix <> "\u{10FFFF}", limit, [])
   end
 
-  defp count_turn_keys(start_key, end_key, count) do
-    case KV.list(range: {start_key, end_key}, limit: 10_000, keys_only: true) do
+  defp collect_recent_turn_keys(start_key, end_key, limit, tail) do
+    case KV.list(range: {start_key, end_key}, limit: @list_page_size, keys_only: true) do
       {:ok, records, %{has_more: true, last_key: last_key}} when is_binary(last_key) ->
-        count_turn_keys(last_key <> <<0>>, end_key, count + length(records))
+        next_tail = retain_key_tail(tail, records, limit)
+        collect_recent_turn_keys(last_key <> <<0>>, end_key, limit, next_tail)
 
       {:ok, records, _cursor} ->
-        {:ok, count + length(records)}
+        {:ok, retain_key_tail(tail, records, limit)}
 
       {:error, reason} ->
         {:error, reason}
     end
   end
 
-  defp read_recent_turn_range(_id, 0, _limit), do: {:ok, []}
+  defp retain_key_tail(tail, records, limit) do
+    keys = Enum.map(records, & &1.key)
+    Enum.take(tail ++ keys, -limit)
+  end
 
-  defp read_recent_turn_range(id, turn_count, limit) do
-    first = max(turn_count - limit, 0)
+  defp read_turn_keys([]), do: {:ok, []}
 
-    case KV.list(
-           range: {turn_key(id, first), turn_key(id, turn_count)},
-           limit: limit
-         ) do
-      {:ok, records, _cursor} ->
-        {:ok, Enum.map(records, &Concord.Compression.decompress(&1.value))}
+  defp read_turn_keys(keys) do
+    keys
+    |> Enum.chunk_every(concord_batch_size())
+    |> Enum.reduce_while({:ok, %{}}, fn chunk, {:ok, values} ->
+      case KV.get_many(chunk) do
+        {:ok, chunk_values} -> {:cont, {:ok, Map.merge(values, chunk_values)}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> decode_turn_keys(keys)
+  end
 
-      {:error, reason} ->
-        {:error, reason}
+  defp decode_turn_keys({:error, reason}, _keys), do: {:error, reason}
+
+  defp decode_turn_keys({:ok, values}, keys) do
+    Enum.reduce_while(keys, {:ok, []}, fn key, {:ok, turns} ->
+      case Map.fetch(values, key) do
+        {:ok, {:ok, value}} ->
+          {:cont, {:ok, [Concord.Compression.decompress(value) | turns]}}
+
+        {:ok, {:error, reason}} ->
+          {:halt, {:error, reason}}
+
+        :error ->
+          {:halt, {:error, :not_found}}
+      end
+    end)
+    |> case do
+      {:ok, turns} -> {:ok, Enum.reverse(turns)}
+      {:error, reason} -> {:error, reason}
     end
   end
 
