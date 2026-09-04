@@ -67,8 +67,13 @@ defmodule SynapsisServer.Router do
     get "/agent/runs/:id", AgentController, :show_run
     post "/agent/runs", AgentController, :run
     post "/agent/runs/:id/cancel", AgentController, :cancel
+    get "/agent/routines", AgentController, :routines
+    post "/agent/routines", AgentController, :create_routine
+    patch "/agent/routines/:id", AgentController, :update_routine
+    post "/agent/routines/:id/trigger", AgentController, :trigger_routine
+    post "/agent/heartbeat/trigger", AgentController, :trigger_heartbeat
+    post "/agent/dream/trigger", AgentController, :trigger_dream
     get "/agent/routines/:kind", AgentController, :routines
-    post "/agent/routines/:kind/trigger", AgentController, :trigger
 
     resources "/backplane/connections", BackplaneConnectionController,
       only: [:index, :create, :update, :delete]

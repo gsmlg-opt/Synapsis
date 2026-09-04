@@ -32,8 +32,8 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
     scheduler = start_scheduler(configs, daemon, task_supervisor)
     assert [%{name: "enabled", next_run_at: %DateTime{}}] = LocalScheduler.status(scheduler)
 
-    %{timers: %{"enabled" => %{token: token}}} = :sys.get_state(scheduler)
-    send(scheduler, {:fire, "enabled", token})
+    %{timers: %{^heartbeat_id => %{token: token}}} = :sys.get_state(scheduler)
+    send(scheduler, {:fire, heartbeat_id, token})
 
     assert_receive {:waiting_session, _session_id}, 1_000
 
@@ -54,6 +54,63 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
     assert {:error, :overlap} = LocalScheduler.trigger(scheduler, "manual")
     assert {:error, :not_found} = LocalScheduler.trigger(scheduler, "missing")
     assert {:ok, _cancelled} = Daemon.cancel(daemon, first.id)
+  end
+
+  test "stable IDs survive rename and synchronous reload uses the current config" do
+    {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
+    owner = self()
+    routine_id = Ecto.UUID.generate()
+    before = routine(routine_id, "before-rename", "schedule")
+    {:ok, configs} = Agent.start_link(fn -> [before] end)
+
+    scheduler =
+      start_scheduler(fn -> Agent.get(configs, & &1) end, daemon, task_supervisor,
+        trigger_fun: fn config, _daemon ->
+          send(owner, {:triggered_config, config})
+          {:error, :observed}
+        end,
+        config_writer: fn _type, attrs -> {:ok, attrs} end
+      )
+
+    assert [%{id: ^routine_id, name: "before-rename"}] = LocalScheduler.status(scheduler)
+    %{timers: %{^routine_id => %{ref: timer_ref}}} = :sys.get_state(scheduler)
+
+    Agent.update(configs, fn [config] -> [%{config | name: "after-rename"}] end)
+    assert :ok = LocalScheduler.reload(scheduler)
+
+    assert [%{id: ^routine_id, name: "after-rename"}] = LocalScheduler.status(scheduler)
+    assert %{timers: %{^routine_id => %{ref: ^timer_ref}}} = :sys.get_state(scheduler)
+
+    assert {:error, :observed} = LocalScheduler.trigger(scheduler, routine_id)
+    assert_receive {:triggered_config, %{id: ^routine_id, name: "after-rename"}}
+    assert {:error, :not_found} = LocalScheduler.trigger(scheduler, "before-rename")
+  end
+
+  test "legacy names resolve exactly one enabled config and reject ambiguity or disabled IDs" do
+    {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
+    first_id = Ecto.UUID.generate()
+    second_id = Ecto.UUID.generate()
+    disabled_id = Ecto.UUID.generate()
+
+    scheduler =
+      start_scheduler(
+        [
+          routine(first_id, "duplicate", "schedule"),
+          routine(second_id, "duplicate", "dream"),
+          %{routine(disabled_id, "disabled", "schedule") | enabled: false}
+        ],
+        daemon,
+        task_supervisor
+      )
+
+    assert {:error, :ambiguous} = LocalScheduler.trigger(scheduler, "duplicate")
+    assert {:error, :disabled} = LocalScheduler.trigger(scheduler, disabled_id)
+    assert {:error, :not_found} = LocalScheduler.trigger(scheduler, Ecto.UUID.generate())
+
+    assert [first, second] =
+             LocalScheduler.status(scheduler) |> Enum.filter(&(&1.name == "duplicate"))
+
+    assert MapSet.new([first.id, second.id]) == MapSet.new([first_id, second_id])
   end
 
   test "restart reloads config and schedules only a future run instead of replaying a miss" do
@@ -167,7 +224,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
 
     GenServer.cast(
       scheduler,
-      {:track_trigger, config.name, config, {:ok, run}, run.started_at, next_run_at}
+      {:track_trigger, config.id, config, {:ok, run}, run.started_at, next_run_at}
     )
 
     assert_receive {:routine_config_written, :routine,
@@ -440,9 +497,11 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
     {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
     owner = self()
 
+    reflection_id = Ecto.UUID.generate()
+
     configs = [
       routine(Ecto.UUID.generate(), "scheduled", "schedule"),
-      routine(Ecto.UUID.generate(), "reflection", "dream")
+      routine(reflection_id, "reflection", "dream")
     ]
 
     scheduler =
@@ -457,8 +516,8 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
     assert schedule.kind == "schedule"
     assert_receive {:waiting_session, _session_id}, 1_000
 
-    %{timers: %{"reflection" => %{token: dream_token}}} = :sys.get_state(scheduler)
-    send(scheduler, {:fire, "reflection", dream_token})
+    %{timers: %{^reflection_id => %{token: dream_token}}} = :sys.get_state(scheduler)
+    send(scheduler, {:fire, reflection_id, dream_token})
 
     assert {:ok, _queued_dream} =
              wait_for(fn ->
@@ -486,8 +545,9 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
         config_writer: fn _type, attrs -> {:ok, attrs} end
       )
 
-    %{timers: %{"hung" => %{token: token}}} = :sys.get_state(scheduler)
-    send(scheduler, {:fire, "hung", token})
+    config_id = config.id
+    %{timers: %{^config_id => %{token: token}}} = :sys.get_state(scheduler)
+    send(scheduler, {:fire, config_id, token})
 
     assert_receive {:routine_trigger_started, trigger_pid}, 1_000
 
@@ -513,13 +573,17 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
         else: fn -> configs_or_loader end
 
     scheduler_opts =
-      [
-        name: name,
-        daemon: daemon,
-        task_supervisor: task_supervisor,
-        config_loader: loader,
-        reload_interval_ms: :timer.hours(1)
-      ] ++ opts
+      Keyword.merge(
+        [
+          name: name,
+          daemon: daemon,
+          task_supervisor: task_supervisor,
+          config_loader: loader,
+          config_writer: fn _type, attrs -> {:ok, attrs} end,
+          reload_interval_ms: :timer.hours(1)
+        ],
+        opts
+      )
 
     start_supervised!({LocalScheduler, scheduler_opts})
   end

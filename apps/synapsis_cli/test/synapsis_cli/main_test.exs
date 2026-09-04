@@ -25,6 +25,13 @@ defmodule SynapsisCli.MainTest do
       assert {:ok, output} = capture_main(["--help"])
       assert output =~ "Usage:"
       assert output =~ ~s(synapsis -p "prompt")
+      assert output =~ "synapsis agent status"
+      assert output =~ "synapsis heartbeat run [name]"
+      assert output =~ "synapsis dream run"
+      assert output =~ "synapsis schedule run <name>"
+      assert output =~ "synapsis backplane add <name> <endpoint>"
+      assert output =~ "--credential-env VAR"
+      assert output =~ "default: http://localhost:4657"
     end
 
     test "help output contains options section" do

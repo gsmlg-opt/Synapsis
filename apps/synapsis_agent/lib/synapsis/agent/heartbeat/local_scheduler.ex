@@ -26,22 +26,25 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
   @doc "Return the enabled heartbeat schedule."
   def status(server \\ __MODULE__), do: GenServer.call(server, :status)
 
-  @doc "Manually submit a loaded heartbeat through the daemon."
-  def trigger(server \\ __MODULE__, name) when is_binary(name) do
-    case GenServer.call(server, {:lookup, name}) do
-      {:ok, config, context} ->
+  @doc "Synchronously reload persisted routines and reconcile their timers."
+  def reload(server \\ __MODULE__), do: GenServer.call(server, :reload)
+
+  @doc "Submit a loaded routine by stable ID, or by a unique legacy name."
+  def trigger(server \\ __MODULE__, identifier) when is_binary(identifier) do
+    case GenServer.call(server, {:lookup, identifier}) do
+      {:ok, key, config, context} ->
         last_run_at = DateTime.utc_now()
         result = protect(fn -> context.trigger_fun.(config, context.daemon) end)
 
         GenServer.cast(
           server,
-          {:track_trigger, name, config, result, last_run_at, context.next_run_at}
+          {:track_trigger, key, config, result, last_run_at, context.next_run_at}
         )
 
         result
 
-      :error ->
-        {:error, :not_found}
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -86,29 +89,53 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
   def handle_call(:status, _from, state) do
     entries =
       state.timers
-      |> Enum.map(fn {name, timer} ->
-        base = %{name: name, schedule: timer.schedule, next_run_at: timer.next_run_at}
-        Map.merge(base, Map.get(state.trigger_results, name, %{}))
+      |> Enum.map(fn {key, timer} ->
+        config = config_by_id(state.configs, key)
+
+        base = %{
+          id: key,
+          name: value(config, :name),
+          kind: value(config, :kind, "heartbeat"),
+          schedule: timer.schedule,
+          next_run_at: timer.next_run_at
+        }
+
+        Map.merge(base, Map.get(state.trigger_results, key, %{}))
       end)
-      |> Enum.sort_by(& &1.name)
+      |> Enum.sort_by(&{&1.name, &1.id})
 
     {:reply, entries, state}
   end
 
-  def handle_call({:lookup, name}, _from, state) do
-    case Enum.find(state.configs, &(value(&1, :name) == name)) do
-      nil ->
-        {:reply, :error, state}
+  def handle_call(:reload, _from, state) do
+    state = reload_configs(state)
+    {:reply, :ok, state}
+  rescue
+    error ->
+      Logger.warning("heartbeat_reload_failed", reason: Exception.message(error))
+      {:reply, {:error, :reload_failed}, state}
+  end
 
-      config ->
-        context = trigger_context(state, get_in(state.timers, [name, :next_run_at]))
-        {:reply, {:ok, config, context}, state}
+  def handle_call({:lookup, identifier}, _from, state) do
+    case resolve_config(state.configs, identifier) do
+      {:ok, config} ->
+        key = routine_key(config)
+
+        if value(config, :enabled, true) == false do
+          {:reply, {:error, :disabled}, state}
+        else
+          context = trigger_context(state, get_in(state.timers, [key, :next_run_at]))
+          {:reply, {:ok, key, config, context}, state}
+        end
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
     end
   end
 
   @impl true
-  def handle_cast({:track_trigger, name, config, result, last_run_at, next_run_at}, state) do
-    {:noreply, track_trigger(state, name, config, result, last_run_at, next_run_at)}
+  def handle_cast({:track_trigger, key, config, result, last_run_at, next_run_at}, state) do
+    {:noreply, track_trigger(state, key, config, result, last_run_at, next_run_at)}
   end
 
   @impl true
@@ -131,18 +158,18 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
       {:noreply, state}
   end
 
-  def handle_info({:fire, name, token}, state) do
-    case {state.timers[name], Enum.find(state.configs, &(value(&1, :name) == name))} do
+  def handle_info({:fire, key, token}, state) do
+    case {state.timers[key], config_by_id(state.configs, key)} do
       {%{token: ^token}, config} when not is_nil(config) ->
-        Logger.info("heartbeat_firing", name: name)
-        timers = state.timers |> Map.delete(name) |> schedule_config(config)
+        Logger.info("heartbeat_firing", routine_id: key, name: value(config, :name))
+        timers = state.timers |> Map.delete(key) |> schedule_config(config)
 
         state =
           state
           |> Map.put(:timers, timers)
-          |> persist_next_run(config, get_in(timers, [name, :next_run_at]))
+          |> persist_next_run(config, get_in(timers, [key, :next_run_at]))
 
-        {:noreply, start_trigger_task(state, name, config, get_in(timers, [name, :next_run_at]))}
+        {:noreply, start_trigger_task(state, key, config, get_in(timers, [key, :next_run_at]))}
 
       _stale ->
         {:noreply, state}
@@ -151,15 +178,15 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
 
   def handle_info({ref, result}, state) when is_reference(ref) do
     cond do
-      trigger = Enum.find(state.trigger_tasks, fn {_name, task} -> task.monitor == ref end) ->
-        {name, task} = trigger
+      trigger = Enum.find(state.trigger_tasks, fn {_key, task} -> task.monitor == ref end) ->
+        {key, task} = trigger
         cancel_trigger_task_tracking(task)
         {config, trigger_result, last_run_at, next_run_at} = result
 
         state =
           state
-          |> delete_trigger_task(name)
-          |> track_trigger(name, config, trigger_result, last_run_at, next_run_at)
+          |> delete_trigger_task(key)
+          |> track_trigger(key, config, trigger_result, last_run_at, next_run_at)
 
         {:noreply, state}
 
@@ -172,16 +199,16 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
     end
   end
 
-  def handle_info({:trigger_timeout, name, pid}, state) do
-    case state.trigger_tasks[name] do
+  def handle_info({:trigger_timeout, key, pid}, state) do
+    case state.trigger_tasks[key] do
       %{pid: ^pid} = task ->
         Process.exit(pid, :kill)
         cancel_trigger_task_tracking(task)
 
         {:noreply,
          state
-         |> delete_trigger_task(name)
-         |> put_trigger_error(name, :trigger_timeout)}
+         |> delete_trigger_task(key)
+         |> put_trigger_error(key, :trigger_timeout)}
 
       _stale ->
         {:noreply, state}
@@ -201,15 +228,15 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
     end
   end
 
-  def handle_info({:retry_persistence, name, token}, state) do
-    case state.persistence_retry_timers[name] do
+  def handle_info({:retry_persistence, key, token}, state) do
+    case state.persistence_retry_timers[key] do
       %{token: ^token, type: type, attrs: attrs, attempt: attempt} ->
         state = %{
           state
-          | persistence_retry_timers: Map.delete(state.persistence_retry_timers, name)
+          | persistence_retry_timers: Map.delete(state.persistence_retry_timers, key)
         }
 
-        {:noreply, start_persistence_task(state, name, type, attrs, attempt)}
+        {:noreply, start_persistence_task(state, key, type, attrs, attempt)}
 
       _stale ->
         {:noreply, state}
@@ -231,14 +258,14 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
 
   def handle_info({:DOWN, monitor, :process, _pid, reason}, state) do
     cond do
-      trigger = Enum.find(state.trigger_tasks, fn {_name, task} -> task.monitor == monitor end) ->
-        {name, task} = trigger
+      trigger = Enum.find(state.trigger_tasks, fn {_key, task} -> task.monitor == monitor end) ->
+        {key, task} = trigger
         cancel_timeout(task.timeout_ref)
 
         {:noreply,
          state
-         |> delete_trigger_task(name)
-         |> put_trigger_error(name, {:trigger_task_down, reason})}
+         |> delete_trigger_task(key)
+         |> put_trigger_error(key, {:trigger_task_down, reason})}
 
       task = Map.get(state.persistence_tasks, monitor) ->
         cancel_timeout(task.timeout_ref)
@@ -261,13 +288,14 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
   def handle_info(_message, state), do: {:noreply, state}
 
   defp reload_configs(state) do
-    configs = state.config_loader.() |> Enum.filter(&(value(&1, :enabled, true) != false))
-    timers = reconcile_timers(state.timers, configs)
+    configs = state.config_loader.()
+    enabled_configs = Enum.filter(configs, &(value(&1, :enabled, true) != false))
+    timers = reconcile_timers(state.timers, enabled_configs)
 
     state = %{state | timers: timers, configs: configs}
 
-    Enum.reduce(configs, state, fn config, acc ->
-      next_run_at = get_in(timers, [value(config, :name), :next_run_at])
+    Enum.reduce(enabled_configs, state, fn config, acc ->
+      next_run_at = get_in(timers, [routine_key(config), :next_run_at])
 
       if same_datetime?(value(config, :next_run_at), next_run_at),
         do: acc,
@@ -276,14 +304,12 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
   end
 
   defp reconcile_timers(timers, configs) do
-    names = MapSet.new(configs, &value(&1, :name))
-
     timers =
-      Enum.reduce(timers, %{}, fn {name, timer}, kept ->
-        config = Enum.find(configs, &(value(&1, :name) == name))
+      Enum.reduce(timers, %{}, fn {key, timer}, kept ->
+        config = config_by_id(configs, key)
 
         if config && value(config, :schedule) == timer.schedule do
-          Map.put(kept, name, timer)
+          Map.put(kept, key, timer)
         else
           cancel_timer(timer)
           kept
@@ -291,24 +317,25 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
       end)
 
     Enum.reduce(configs, timers, fn config, acc ->
-      name = value(config, :name)
+      key = routine_key(config)
 
-      if MapSet.member?(names, name) and Map.has_key?(acc, name),
+      if Map.has_key?(acc, key),
         do: acc,
         else: schedule_config(acc, config)
     end)
   end
 
   defp schedule_config(timers, config) do
+    key = routine_key(config)
     name = value(config, :name)
     schedule = value(config, :schedule)
 
     case next_run(schedule) do
       {:ok, delay_ms, next_run_at} ->
         token = make_ref()
-        ref = Process.send_after(self(), {:fire, name, token}, delay_ms)
+        ref = Process.send_after(self(), {:fire, key, token}, delay_ms)
 
-        Map.put(timers, name, %{
+        Map.put(timers, key, %{
           ref: ref,
           token: token,
           schedule: schedule,
@@ -352,9 +379,9 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
     end
   end
 
-  defp start_trigger_task(state, name, config, next_run_at) do
-    if Map.has_key?(state.trigger_tasks, name) do
-      put_trigger_error(state, name, :trigger_already_running)
+  defp start_trigger_task(state, key, config, next_run_at) do
+    if Map.has_key?(state.trigger_tasks, key) do
+      put_trigger_error(state, key, :trigger_already_running)
     else
       try do
         context = trigger_context(state, next_run_at)
@@ -367,14 +394,14 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
           end)
 
         timeout_ref =
-          Process.send_after(self(), {:trigger_timeout, name, task.pid}, state.trigger_timeout_ms)
+          Process.send_after(self(), {:trigger_timeout, key, task.pid}, state.trigger_timeout_ms)
 
         task = %{pid: task.pid, monitor: task.ref, timeout_ref: timeout_ref}
-        %{state | trigger_tasks: Map.put(state.trigger_tasks, name, task)}
+        %{state | trigger_tasks: Map.put(state.trigger_tasks, key, task)}
       rescue
-        error -> put_trigger_error(state, name, {:trigger_task_start_failed, error})
+        error -> put_trigger_error(state, key, {:trigger_task_start_failed, error})
       catch
-        :exit, reason -> put_trigger_error(state, name, {:trigger_task_start_failed, reason})
+        :exit, reason -> put_trigger_error(state, key, {:trigger_task_start_failed, reason})
       end
     end
   end
@@ -388,10 +415,10 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
     |> Map.put("next_run_at", encode_datetime(next_run_at))
   end
 
-  defp track_trigger(state, name, config, {:ok, %{id: run_id}}, last_run_at, next_run_at)
+  defp track_trigger(state, key, config, {:ok, %{id: run_id}}, last_run_at, next_run_at)
        when is_binary(run_id) do
     tracked = %{
-      name: name,
+      key: key,
       config: config,
       last_run_at: last_run_at,
       next_run_at: next_run_at
@@ -413,20 +440,20 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
     end
   end
 
-  defp track_trigger(state, name, _config, {:error, reason}, last_run_at, _next_run_at) do
+  defp track_trigger(state, key, _config, {:error, reason}, last_run_at, _next_run_at) do
     status = %{
       last_run_at: encode_datetime(last_run_at),
       last_status: "error",
       last_error: bounded_error(reason)
     }
 
-    %{state | trigger_results: Map.put(state.trigger_results, name, status)}
+    %{state | trigger_results: Map.put(state.trigger_results, key, status)}
   end
 
-  defp track_trigger(state, name, _config, _result, last_run_at, _next_run_at) do
+  defp track_trigger(state, key, _config, _result, last_run_at, _next_run_at) do
     put_trigger_error(
       state,
-      name,
+      key,
       {:unexpected_trigger_result, encode_datetime(last_run_at)}
     )
   end
@@ -469,14 +496,14 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
 
     with config when not is_nil(config) <- matching_config(state.configs, routine_id, kind),
          %DateTime{} = last_run_at <- terminal_started_at(payload) do
-      name = value(config, :name)
+      key = routine_key(config)
 
       {:ok,
        %{
-         name: name,
+         key: key,
          config: config,
          last_run_at: last_run_at,
-         next_run_at: get_in(state.timers, [name, :next_run_at])
+         next_run_at: get_in(state.timers, [key, :next_run_at])
        }}
     else
       _unmatched -> :error
@@ -527,11 +554,11 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
 
     state = %{
       state
-      | trigger_results: Map.put(state.trigger_results, tracked.name, observable),
-        terminal_results: Map.put(state.terminal_results, tracked.name, observable)
+      | trigger_results: Map.put(state.trigger_results, tracked.key, observable),
+        terminal_results: Map.put(state.terminal_results, tracked.key, observable)
     }
 
-    enqueue_persistence(state, tracked.name, config_type(tracked.config), attrs)
+    enqueue_persistence(state, tracked.key, config_type(tracked.config), attrs)
   end
 
   defp persist_next_run(state, _config, nil), do: state
@@ -543,29 +570,29 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
       |> Map.drop(["__config_type"])
       |> Map.put("next_run_at", encode_datetime(next_run_at))
 
-    enqueue_persistence(state, value(config, :name), config_type(config), attrs)
+    enqueue_persistence(state, routine_key(config), config_type(config), attrs)
   end
 
-  defp enqueue_persistence(state, name, type, attrs) do
-    attrs = Map.merge(Map.get(state.persistence_snapshots, name, %{}), attrs)
+  defp enqueue_persistence(state, key, type, attrs) do
+    attrs = Map.merge(Map.get(state.persistence_snapshots, key, %{}), attrs)
 
     state =
       state
-      |> cancel_persistence_retry(name)
-      |> put_in([:persistence_snapshots, name], attrs)
+      |> cancel_persistence_retry(key)
+      |> put_in([:persistence_snapshots, key], attrs)
 
-    if persistence_active?(state, name) do
-      put_in(state.pending_persistence[name], %{type: type, attrs: attrs})
+    if persistence_active?(state, key) do
+      put_in(state.pending_persistence[key], %{type: type, attrs: attrs})
     else
-      start_persistence_task(state, name, type, attrs)
+      start_persistence_task(state, key, type, attrs)
     end
   end
 
-  defp persistence_active?(state, name) do
-    Enum.any?(state.persistence_tasks, fn {_ref, task} -> task.name == name end)
+  defp persistence_active?(state, key) do
+    Enum.any?(state.persistence_tasks, fn {_ref, task} -> task.key == key end)
   end
 
-  defp start_persistence_task(state, name, type, attrs, attempt \\ 0) do
+  defp start_persistence_task(state, key, type, attrs, attempt \\ 0) do
     writer = state.config_writer
 
     try do
@@ -584,7 +611,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
       tracked = %{
         pid: task.pid,
         monitor: task.ref,
-        name: name,
+        key: key,
         type: type,
         attrs: attrs,
         attempt: attempt,
@@ -593,10 +620,10 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
 
       %{state | persistence_tasks: Map.put(state.persistence_tasks, task.ref, tracked)}
     rescue
-      error -> put_trigger_error(state, name, {:config_persist_task_start_failed, error})
+      error -> put_trigger_error(state, key, {:config_persist_task_start_failed, error})
     catch
       :exit, reason ->
-        put_trigger_error(state, name, {:config_persist_task_start_failed, reason})
+        put_trigger_error(state, key, {:config_persist_task_start_failed, reason})
     end
   end
 
@@ -608,25 +635,25 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
 
     cond do
       persistence_success?(result) ->
-        start_pending_persistence(state, task.name)
+        start_pending_persistence(state, task.key)
 
-      Map.has_key?(state.pending_persistence, task.name) ->
-        start_pending_persistence(state, task.name)
+      Map.has_key?(state.pending_persistence, task.key) ->
+        start_pending_persistence(state, task.key)
 
       true ->
         schedule_persistence_retry(state, task)
     end
   end
 
-  defp start_pending_persistence(state, name) do
-    case Map.pop(state.pending_persistence, name) do
+  defp start_pending_persistence(state, key) do
+    case Map.pop(state.pending_persistence, key) do
       {nil, pending_persistence} ->
         %{state | pending_persistence: pending_persistence}
 
       {%{type: type, attrs: attrs}, pending_persistence} ->
         state
         |> Map.put(:pending_persistence, pending_persistence)
-        |> start_persistence_task(name, type, attrs)
+        |> start_persistence_task(key, type, attrs)
     end
   end
 
@@ -635,23 +662,23 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
     attempt = task.attempt + 1
     delay = state.persistence_retry_backoff_ms * :erlang.bsl(1, attempt - 1)
     token = make_ref()
-    timer_ref = Process.send_after(self(), {:retry_persistence, task.name, token}, delay)
+    timer_ref = Process.send_after(self(), {:retry_persistence, task.key, token}, delay)
 
     retry = %{
       token: token,
       timer_ref: timer_ref,
       type: task.type,
-      attrs: Map.get(state.persistence_snapshots, task.name, task.attrs),
+      attrs: Map.get(state.persistence_snapshots, task.key, task.attrs),
       attempt: attempt
     }
 
-    put_in(state.persistence_retry_timers[task.name], retry)
+    put_in(state.persistence_retry_timers[task.key], retry)
   end
 
   defp schedule_persistence_retry(state, _task), do: state
 
-  defp cancel_persistence_retry(state, name) do
-    case Map.pop(state.persistence_retry_timers, name) do
+  defp cancel_persistence_retry(state, key) do
+    case Map.pop(state.persistence_retry_timers, key) do
       {nil, persistence_retry_timers} ->
         %{state | persistence_retry_timers: persistence_retry_timers}
 
@@ -671,15 +698,15 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
     do: restore_terminal_result(state, task)
 
   defp apply_persistence_result(state, task, {:error, reason}),
-    do: put_trigger_error(state, task.name, {:config_persist_failed, reason})
+    do: put_trigger_error(state, task.key, {:config_persist_failed, reason})
 
   defp apply_persistence_result(state, task, other),
-    do: put_trigger_error(state, task.name, {:unexpected_config_persist_result, other})
+    do: put_trigger_error(state, task.key, {:unexpected_config_persist_result, other})
 
-  defp restore_terminal_result(state, %{name: name, attrs: %{"last_status" => _status}}) do
-    case Map.fetch(state.terminal_results, name) do
+  defp restore_terminal_result(state, %{key: key, attrs: %{"last_status" => _status}}) do
+    case Map.fetch(state.terminal_results, key) do
       {:ok, observable} ->
-        %{state | trigger_results: Map.put(state.trigger_results, name, observable)}
+        %{state | trigger_results: Map.put(state.trigger_results, key, observable)}
 
       :error ->
         state
@@ -688,15 +715,15 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
 
   defp restore_terminal_result(state, _task), do: state
 
-  defp put_trigger_error(state, name, reason) do
+  defp put_trigger_error(state, key, reason) do
     status = %{
       last_run_at: DateTime.utc_now() |> DateTime.to_iso8601(),
       last_status: "error",
       last_error: bounded_error(reason)
     }
 
-    Logger.warning("heartbeat_trigger_failed", name: name, reason: status.last_error)
-    %{state | trigger_results: Map.put(state.trigger_results, name, status)}
+    Logger.warning("heartbeat_trigger_failed", routine_id: key, reason: status.last_error)
+    %{state | trigger_results: Map.put(state.trigger_results, key, status)}
   end
 
   defp trigger_context(state, next_run_at) do
@@ -707,8 +734,8 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
     }
   end
 
-  defp delete_trigger_task(state, name),
-    do: %{state | trigger_tasks: Map.delete(state.trigger_tasks, name)}
+  defp delete_trigger_task(state, key),
+    do: %{state | trigger_tasks: Map.delete(state.trigger_tasks, key)}
 
   defp cancel_trigger_task_tracking(task) do
     Process.unlink(task.pid)
@@ -800,6 +827,23 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
 
   defp routine_tool_profile(config, _kind, _allow_todo_write),
     do: value(config, :tool_profile, "assistant_basic") || "assistant_basic"
+
+  defp resolve_config(configs, identifier) do
+    case config_by_id(configs, identifier) do
+      nil ->
+        case Enum.filter(configs, &(value(&1, :name) == identifier)) do
+          [config] -> {:ok, config}
+          [] -> {:error, :not_found}
+          [_first, _second | _rest] -> {:error, :ambiguous}
+        end
+
+      config ->
+        {:ok, config}
+    end
+  end
+
+  defp config_by_id(configs, id), do: Enum.find(configs, &(routine_key(&1) == id))
+  defp routine_key(config), do: value(config, :id)
 
   defp cancel_timer(%{ref: ref}) when is_reference(ref), do: Process.cancel_timer(ref)
   defp cancel_timer(_timer), do: :ok

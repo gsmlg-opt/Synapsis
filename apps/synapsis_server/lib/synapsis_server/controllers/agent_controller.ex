@@ -1,8 +1,7 @@
 defmodule SynapsisServer.AgentController do
   use SynapsisServer, :controller
 
-  alias Synapsis.Agent.{Daemon, Runs}
-  alias Synapsis.Config.Store
+  alias Synapsis.Agent.{Daemon, Routines, Runs}
 
   def status(conn, _params), do: json(conn, %{data: Daemon.status()})
 
@@ -52,11 +51,22 @@ defmodule SynapsisServer.AgentController do
     end
   end
 
-  def trigger(conn, %{"kind" => kind} = params) when kind in ["heartbeat", "dream", "schedule"] do
-    atom = String.to_existing_atom(kind)
-    opts = trigger_opts(atom, params)
+  def create_routine(conn, params) do
+    case Routines.create(params) do
+      {:ok, routine} -> conn |> put_status(:created) |> json(%{data: routine})
+      {:error, reason} -> error_response(conn, reason)
+    end
+  end
 
-    case Daemon.trigger(atom, opts) do
+  def update_routine(conn, %{"id" => id} = params) do
+    case Routines.update(id, Map.delete(params, "id")) do
+      {:ok, routine} -> json(conn, %{data: routine})
+      {:error, reason} -> error_response(conn, reason)
+    end
+  end
+
+  def trigger_routine(conn, %{"id" => id}) do
+    case Routines.trigger(id) do
       {:ok, run} ->
         conn |> put_status(:created) |> json(%{data: serialize_run(run)})
 
@@ -65,36 +75,17 @@ defmodule SynapsisServer.AgentController do
     end
   end
 
-  def trigger(conn, _params),
-    do: conn |> put_status(:bad_request) |> json(%{error: "unsupported trigger"})
+  def trigger_heartbeat(conn, params), do: trigger_kind(conn, "heartbeat", params["name"])
+  def trigger_dream(conn, _params), do: trigger_kind(conn, "dream", nil)
 
   def routines(conn, %{"kind" => kind}) when kind in ["heartbeat", "dream", "schedule"] do
-    json(conn, %{data: Enum.filter(routines(), &(&1["kind"] == kind))})
+    json(conn, %{data: Routines.list(kind)})
   end
 
   def routines(conn, %{"kind" => _kind}),
     do: conn |> put_status(:not_found) |> json(%{error: "unsupported routine kind"})
 
-  def routines(conn, _params), do: json(conn, %{data: routines()})
-
-  defp routines do
-    Store.list(:routine) ++
-      Enum.map(Store.list(:heartbeat), &Map.put_new(&1, "kind", "heartbeat"))
-  end
-
-  defp trigger_opts(:heartbeat, params),
-    do:
-      atom_opts(
-        params,
-        ~w(heartbeat_id routine_id prompt assistant_name tool_profile provider model no_overlap max_runtime_ms)
-      )
-
-  defp trigger_opts(_kind, params),
-    do:
-      atom_opts(
-        params,
-        ~w(routine_id prompt assistant_name tool_profile provider model no_overlap max_runtime_ms allow_todo_write)
-      )
+  def routines(conn, _params), do: json(conn, %{data: Routines.list()})
 
   defp atom_opts(params, keys) do
     Enum.reduce(keys, %{}, fn key, opts ->
@@ -113,9 +104,20 @@ defmodule SynapsisServer.AgentController do
   defp limit_value(_), do: 50
 
   defp error_response(conn, reason)
-       when reason in [:not_ready, :queue_full, :overlap, :not_owned, :terminal] do
+       when reason in [
+              :not_ready,
+              :queue_full,
+              :overlap,
+              :not_owned,
+              :terminal,
+              :disabled,
+              :ambiguous
+            ] do
     conn |> put_status(:conflict) |> json(%{error: Atom.to_string(reason)})
   end
+
+  defp error_response(conn, :not_found),
+    do: conn |> put_status(:not_found) |> json(%{error: "routine not found"})
 
   defp error_response(conn, reason) do
     conn |> put_status(:unprocessable_entity) |> json(%{error: inspect(reason)})
@@ -132,4 +134,11 @@ defmodule SynapsisServer.AgentController do
 
   defp iso(%DateTime{} = value), do: DateTime.to_iso8601(value)
   defp iso(value), do: value
+
+  defp trigger_kind(conn, kind, name) do
+    case Routines.trigger_kind(kind, name) do
+      {:ok, run} -> conn |> put_status(:created) |> json(%{data: serialize_run(run)})
+      {:error, reason} -> error_response(conn, reason)
+    end
+  end
 end

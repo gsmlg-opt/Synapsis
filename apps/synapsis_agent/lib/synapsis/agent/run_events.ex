@@ -35,6 +35,23 @@ defmodule Synapsis.Agent.RunEvents do
     publish(lifecycle_topic(event), run, lifecycle_payload(event, run, payload))
   end
 
+  def publish_routine_triggered(routine, %AgentRun{} = run) when is_map(routine) do
+    Phoenix.PubSub.broadcast(
+      Synapsis.PubSub,
+      @topic,
+      {:agent_daemon_event,
+       %{
+         event: "agent.routine.triggered",
+         routine_id: value(routine, :id),
+         routine_name: value(routine, :name),
+         kind: value(routine, :kind),
+         run_id: run.id,
+         status: run.status,
+         at: DateTime.utc_now()
+       }}
+    )
+  end
+
   def publish_status(adapter, status, sequence) do
     if Code.ensure_loaded?(adapter) and function_exported?(adapter, :publish_daemon_status, 2) do
       adapter.publish_daemon_status(status, sequence)
@@ -176,6 +193,8 @@ defmodule Synapsis.Agent.RunEvents do
   end
 
   defp memory_scope(_run), do: {"agent", "daemon"}
+
+  defp value(map, key), do: Map.get(map, key, Map.get(map, Atom.to_string(key)))
 
   defp log_failure(target, reason) do
     Logger.warning("agent_run_event_append_failed", target: target, reason: inspect(reason))
