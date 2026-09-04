@@ -32,6 +32,47 @@ defmodule Synapsis.Providers do
     end
   end
 
+  @doc "Whether a persisted provider may participate in runtime operations."
+  def runtime_available?(provider) when is_map(provider) do
+    enabled = Map.get(provider, :enabled, Map.get(provider, "enabled", false))
+    config = Map.get(provider, :config, Map.get(provider, "config", %{})) || %{}
+
+    enabled and
+      (not backplane_managed?(config) or
+         Map.get(config, "backplane_available", Map.get(config, :backplane_available)) != false)
+  end
+
+  def runtime_available?(_provider), do: false
+
+  @doc "Fetch a persisted provider only when it is available to runtime callers."
+  def get_runtime_by_name(name) do
+    case get_by_name(name) do
+      {:ok, provider} ->
+        if runtime_available?(provider),
+          do: {:ok, provider},
+          else: {:error, :provider_unavailable}
+
+      {:error, :not_found} = error ->
+        error
+    end
+  end
+
+  @doc "Resolve the effective runtime config without reviving unavailable persisted records."
+  def runtime_config(name) do
+    case get_by_name(name) do
+      {:ok, provider} ->
+        if runtime_available?(provider) do
+          {:ok, build_runtime_config(provider)}
+        else
+          ProviderRegistry.unregister(name)
+          {:error, :provider_unavailable}
+        end
+
+      {:error, :not_found} ->
+        ProviderRegistry.get(name)
+    end
+  end
+
   def list(opts \\ []) do
     providers =
       all()
@@ -67,6 +108,7 @@ defmodule Synapsis.Providers do
 
   def models(id) do
     with {:ok, provider} <- get(id),
+         :ok <- ensure_runtime_available(provider),
          {:ok, mod} <- ProviderRegistry.module_for(provider.type) do
       config = build_runtime_config(provider)
       mod.models(config)
@@ -75,45 +117,40 @@ defmodule Synapsis.Providers do
 
   @doc "Fetch available models for a provider by name."
   def models_for(provider_name) do
-    case get_by_name(provider_name) do
-      {:ok, provider} ->
-        case cached_models(provider) do
-          [] ->
-            config = build_runtime_config(provider)
-            Synapsis.Provider.Adapter.models(config)
+    with {:ok, provider} <- get_by_name(provider_name),
+         :ok <- ensure_runtime_available(provider) do
+      case cached_models(provider) do
+        [] ->
+          config = build_runtime_config(provider)
+          Synapsis.Provider.Adapter.models(config)
 
-          models ->
-            {:ok, models}
-        end
-
-      {:error, _} ->
-        {:error, :not_found}
+        models ->
+          {:ok, models}
+      end
     end
   end
 
   @doc "Fetch all available models for a provider by id."
   def models_by_id(id) do
-    case get(id) do
-      {:ok, provider} ->
-        provider
-        |> cached_models()
-        |> case do
-          [] ->
-            config = build_runtime_config(provider)
-            Synapsis.Provider.Adapter.models(config)
+    with {:ok, provider} <- get(id),
+         :ok <- ensure_runtime_available(provider) do
+      provider
+      |> cached_models()
+      |> case do
+        [] ->
+          config = build_runtime_config(provider)
+          Synapsis.Provider.Adapter.models(config)
 
-          models ->
-            {:ok, models}
-        end
-
-      {:error, _} ->
-        {:error, :not_found}
+        models ->
+          {:ok, models}
+      end
     end
   end
 
   @doc "Refresh provider models from the provider's /models endpoint and cache them in config."
   def refresh_models(id) do
     with {:ok, provider} <- get(id),
+         :ok <- ensure_runtime_available(provider),
          {:ok, models} <- fetch_models(provider) do
       config =
         (provider.config || %{})
@@ -128,10 +165,12 @@ defmodule Synapsis.Providers do
 
   @doc "Fetch provider models from the remote endpoint, bypassing any cached config."
   def fetch_models(provider) when is_map(provider) do
-    provider
-    |> build_runtime_config()
-    |> Map.put(:discover_models, true)
-    |> Synapsis.Provider.Adapter.models()
+    with :ok <- ensure_runtime_available(provider) do
+      provider
+      |> build_runtime_config()
+      |> Map.put(:discover_models, true)
+      |> Synapsis.Provider.Adapter.models()
+    end
   end
 
   @doc "Return cached discovered models for a provider."
@@ -299,7 +338,7 @@ defmodule Synapsis.Providers do
   end
 
   def load_all_into_registry do
-    {:ok, providers} = list(enabled: true)
+    {:ok, providers} = list()
 
     Enum.each(providers, fn provider ->
       sync_to_registry(provider)
@@ -309,11 +348,20 @@ defmodule Synapsis.Providers do
   end
 
   defp sync_to_registry(%ProviderConfig{} = provider) do
-    if provider.enabled do
+    if runtime_available?(provider) do
       ProviderRegistry.register(provider.name, build_runtime_config(provider))
     else
       ProviderRegistry.unregister(provider.name)
     end
+  end
+
+  defp backplane_managed?(config) do
+    Map.get(config, "managed_by", Map.get(config, :managed_by)) == "backplane" or
+      not is_nil(Map.get(config, "backplane_source_id", Map.get(config, :backplane_source_id)))
+  end
+
+  defp ensure_runtime_available(provider) do
+    if runtime_available?(provider), do: :ok, else: {:error, :provider_unavailable}
   end
 
   defp build_runtime_config(%ProviderConfig{} = provider) do

@@ -291,11 +291,38 @@ defmodule Synapsis.Agent.ResolverTest do
           system_prompt_fragment: "Always review tradeoffs."
         })
 
-      {:ok, _skills} = AgentSkills.assign_skills(agent_config, [skill.id])
+      {:ok, unavailable} =
+        Skills.create(%{
+          name: "unavailable-review-style",
+          scope: "global",
+          system_prompt_fragment: "This must not enter context.",
+          config_overrides: %{
+            "managed_by" => "backplane",
+            "backplane_source_id" => "source-1",
+            "backplane_available" => false
+          }
+        })
+
+      {:ok, disabled} =
+        Skills.create(%{
+          name: "disabled-review-style",
+          scope: "global",
+          system_prompt_fragment: "This must not enter context either.",
+          enabled: false
+        })
+
+      {:ok, _skills} =
+        AgentSkills.assign_skills(agent_config, [skill.id, unavailable.id, disabled.id])
 
       agent = Resolver.resolve("skilled-agent")
       assert Enum.map(agent.skills, & &1.name) == ["review-style"]
       assert hd(agent.skills).system_prompt_fragment == "Always review tradeoffs."
+
+      assert AgentSkills.list_skill_ids(agent_config.id) == [
+               skill.id,
+               unavailable.id,
+               disabled.id
+             ]
     end
 
     test "returns configured agent workspace path" do

@@ -17,31 +17,38 @@ defmodule Synapsis.Session.Worker.IOHandler do
 
   def handle_start_stream(request, state, provider_override \\ nil) do
     provider = provider_override || state.agent[:provider] || state.session.provider
-    provider_config = provider_config(provider, state)
 
-    config =
-      provider_config
-      |> Map.put(:session_id, state.session_id)
-      |> Map.put_new(:provider_name, provider)
+    case provider_config(provider, state) do
+      {:ok, provider_config} ->
+        config =
+          provider_config
+          |> Map.put(:session_id, state.session_id)
+          |> Map.put_new(:provider_name, provider)
 
-    debug_handler = maybe_attach_debug(state)
+        debug_handler = maybe_attach_debug(state)
 
-    state =
-      state
-      |> clear_stream_result_ctx()
-      |> align_stream_provider(provider, provider_config, request)
-
-    case start_stream(request, config, provider, state) do
-      {:ok, ref} ->
-        %{
+        state =
           state
-          | stream_ref: ref,
-            stream_acc: StreamAccumulator.new(),
-            debug_handler_id: debug_handler
-        }
+          |> clear_stream_result_ctx()
+          |> align_stream_provider(provider, provider_config, request)
+
+        case start_stream(request, config, provider, state) do
+          {:ok, ref} ->
+            %{
+              state
+              | stream_ref: ref,
+                stream_acc: StreamAccumulator.new(),
+                debug_handler_id: debug_handler
+            }
+
+          {:error, reason} ->
+            detach_debug(debug_handler)
+            new_ctx = Map.put(state.engine_ctx, :stream_error, reason)
+            Worker.step_engine(%{state | engine_ctx: new_ctx})
+        end
 
       {:error, reason} ->
-        detach_debug(debug_handler)
+        state = clear_stream_result_ctx(state)
         new_ctx = Map.put(state.engine_ctx, :stream_error, reason)
         Worker.step_engine(%{state | engine_ctx: new_ctx})
     end
@@ -51,7 +58,10 @@ defmodule Synapsis.Session.Worker.IOHandler do
     current_provider = state.agent[:provider] || state.session.provider
 
     if provider == current_provider do
-      state.provider_config
+      case Synapsis.Providers.get_runtime_by_name(provider) do
+        {:error, :provider_unavailable} = error -> error
+        _ -> {:ok, state.provider_config}
+      end
     else
       Config.resolve_provider_config(provider)
     end

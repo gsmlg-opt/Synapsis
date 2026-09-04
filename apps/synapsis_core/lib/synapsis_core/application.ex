@@ -94,31 +94,37 @@ defmodule SynapsisCore.Application do
 
   defp register_env_providers do
     Enum.each(@env_provider_names, fn name ->
-      api_key = Synapsis.Providers.env_api_key(name)
-
-      base_url =
-        Synapsis.Providers.env_base_url(name) || Synapsis.Providers.default_base_url(name)
-
-      case {Synapsis.Provider.Registry.get(name), api_key} do
-        {{:ok, _}, _} ->
-          :ok
-
-        {_, nil} ->
-          :ok
-
-        {_, api_key} ->
-          config =
-            %{
-              api_key: api_key,
-              base_url: base_url,
-              type: Synapsis.Providers.provider_type(name)
-            }
-            |> maybe_put(:default_model, Synapsis.Providers.env_default_model(name))
-
-          Synapsis.Provider.Registry.register(name, config)
-          Logger.info("env_provider_registered", provider: name)
+      if Synapsis.Providers.get_runtime_by_name(name) != {:error, :provider_unavailable} do
+        register_env_provider(name)
       end
     end)
+  end
+
+  defp register_env_provider(name) do
+    api_key = Synapsis.Providers.env_api_key(name)
+
+    base_url =
+      Synapsis.Providers.env_base_url(name) || Synapsis.Providers.default_base_url(name)
+
+    case {Synapsis.Provider.Registry.get(name), api_key} do
+      {{:ok, _}, _} ->
+        :ok
+
+      {_, nil} ->
+        :ok
+
+      {_, api_key} ->
+        config =
+          %{
+            api_key: api_key,
+            base_url: base_url,
+            type: Synapsis.Providers.provider_type(name)
+          }
+          |> maybe_put(:default_model, Synapsis.Providers.env_default_model(name))
+
+        Synapsis.Provider.Registry.register(name, config)
+        Logger.info("env_provider_registered", provider: name)
+    end
   end
 
   defp maybe_put(map, _key, value) when value in [nil, ""], do: map

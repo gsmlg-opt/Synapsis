@@ -64,7 +64,7 @@ defmodule Synapsis.MCP.Transport do
 
   defp source_headers(%{"backplane_source_id" => source_id}) do
     case Synapsis.Backplane.Connection.get(source_id) do
-      {:ok, %{credential: credential}} when is_binary(credential) ->
+      {:ok, %{enabled: true, credential: credential}} when is_binary(credential) ->
         %{"authorization" => "Bearer " <> credential}
 
       _missing_or_keyless ->

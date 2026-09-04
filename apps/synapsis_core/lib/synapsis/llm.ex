@@ -48,8 +48,13 @@ defmodule Synapsis.LLM do
   @spec complete([message()], opts()) :: {:ok, String.t()} | {:error, term()}
   def complete(messages, opts \\ []) do
     provider_name = Keyword.get(opts, :provider, "anthropic")
-    provider_config = resolve_provider_config(provider_name)
 
+    with {:ok, provider_config} <- resolve_provider_config(provider_name) do
+      complete_with_config(messages, opts, provider_name, provider_config)
+    end
+  end
+
+  defp complete_with_config(messages, opts, provider_name, provider_config) do
     model =
       Keyword.get(opts, :model) ||
         provider_config[:default_model] ||
@@ -117,35 +122,31 @@ defmodule Synapsis.LLM do
 
   # Resolve provider config using the same fallback chain as Session.Worker.
   defp resolve_provider_config(provider_name) do
-    case Synapsis.Provider.Registry.get(provider_name) do
+    case Synapsis.Providers.runtime_config(provider_name) do
       {:ok, config} ->
-        config
+        {:ok, config}
 
-      {:error, _} ->
-        case Synapsis.Providers.get_by_name(provider_name) do
-          {:ok, provider} ->
-            %{
-              api_key: provider.api_key_encrypted,
-              base_url: provider.base_url || Synapsis.Providers.default_base_url(provider_name),
-              type: provider.type
-            }
+      {:error, :provider_unavailable} = error ->
+        error
 
-          {:error, _} ->
-            auth = Synapsis.Config.load_auth()
+      {:error, :not_found} ->
+        auth = Synapsis.Config.load_auth()
 
-            api_key =
-              get_in(auth, [provider_name, "apiKey"]) ||
-                Synapsis.Providers.env_api_key(provider_name)
+        api_key =
+          get_in(auth, [provider_name, "apiKey"]) ||
+            Synapsis.Providers.env_api_key(provider_name)
 
-            base_url = provider_base_url(auth, provider_name)
+        base_url = provider_base_url(auth, provider_name)
 
-            %{
-              api_key: api_key,
-              base_url: base_url,
-              type: Synapsis.Providers.provider_type(provider_name)
-            }
-            |> maybe_put(:default_model, Synapsis.Providers.env_default_model(provider_name))
-        end
+        config =
+          %{
+            api_key: api_key,
+            base_url: base_url,
+            type: Synapsis.Providers.provider_type(provider_name)
+          }
+          |> maybe_put(:default_model, Synapsis.Providers.env_default_model(provider_name))
+
+        {:ok, config}
     end
   end
 

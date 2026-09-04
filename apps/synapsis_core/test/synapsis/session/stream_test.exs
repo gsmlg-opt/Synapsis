@@ -104,6 +104,30 @@ defmodule Synapsis.Session.StreamTest do
     end
   end
 
+  describe "start_stream/3 with unavailable persisted providers" do
+    test "rejects before a stale runtime registration can stream" do
+      provider_name = unique_provider_name()
+
+      assert {:ok, provider} =
+               Synapsis.Providers.create(%{
+                 name: provider_name,
+                 type: "anthropic",
+                 enabled: true,
+                 config: %{
+                   "managed_by" => "backplane",
+                   "backplane_source_id" => "source-1",
+                   "backplane_available" => false
+                 }
+               })
+
+      on_exit(fn -> Synapsis.Providers.delete(provider.id) end)
+      :ok = ProviderRegistry.register(provider_name, %{type: "anthropic", api_key: "stale-key"})
+
+      assert {:error, :provider_unavailable} =
+               Stream.start_stream(%{model: "test", messages: []}, %{}, provider_name)
+    end
+  end
+
   # ---------------------------------------------------------------------------
   # start_stream/3 — successful delegation via Bypass (Anthropic)
   # ---------------------------------------------------------------------------

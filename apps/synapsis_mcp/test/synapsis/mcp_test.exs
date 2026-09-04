@@ -67,6 +67,42 @@ defmodule Synapsis.MCPTest do
     refute name in Synapsis.MCP.list()
   end
 
+  test "unavailable managed configs cannot start or remain registered after restart", %{
+    bypass: bypass
+  } do
+    name = "unavailable_facade_#{System.unique_integer([:positive])}"
+    on_exit(fn -> Synapsis.MCP.stop(name) end)
+
+    source_config = %{
+      "managed_by" => "backplane",
+      "backplane_source_id" => "source-1",
+      "backplane_available" => true
+    }
+
+    available = %MCPConfig{
+      name: name,
+      transport: "streamable_http",
+      url: "http://localhost:#{bypass.port}",
+      config: source_config
+    }
+
+    unavailable = %{
+      available
+      | config: Map.put(source_config, "backplane_available", false)
+    }
+
+    assert {:error, :mcp_unavailable} = Synapsis.MCP.start(unavailable)
+    refute name in Synapsis.MCP.list()
+
+    assert {:ok, _pid} = Synapsis.MCP.start(available)
+    tool = "mcp:#{name}:echo"
+    assert wait_until(fn -> match?({:ok, _}, Registry.lookup(tool)) end)
+
+    assert {:error, :mcp_unavailable} = Synapsis.MCP.restart(unavailable)
+    assert wait_until(fn -> match?({:error, :not_found}, Registry.lookup(tool)) end)
+    refute name in Synapsis.MCP.list()
+  end
+
   defp wait_until(fun, tries \\ 100) do
     cond do
       tries <= 0 ->

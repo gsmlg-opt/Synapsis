@@ -11,31 +11,33 @@ defmodule Synapsis.Session.Stream do
   @stream_start_timeout_ms 5_000
 
   def start_stream(request, provider_config, provider_name) do
-    case Synapsis.Provider.Registry.module_for(provider_name) do
-      {:ok, provider_module} ->
-        try do
-          provider_module.stream(request, provider_config)
-        rescue
-          e ->
-            Logger.warning("provider_stream_crash",
-              provider: provider_name,
-              error: Exception.message(e)
-            )
+    with :ok <- ensure_provider_available(provider_name) do
+      case Synapsis.Provider.Registry.module_for(provider_name) do
+        {:ok, provider_module} ->
+          try do
+            provider_module.stream(request, provider_config)
+          rescue
+            e ->
+              Logger.warning("provider_stream_crash",
+                provider: provider_name,
+                error: Exception.message(e)
+              )
 
-            {:error, "Provider stream failed"}
-        catch
-          kind, reason ->
-            Logger.warning("provider_stream_throw",
-              provider: provider_name,
-              kind: kind,
-              error: inspect(reason)
-            )
+              {:error, "Provider stream failed"}
+          catch
+            kind, reason ->
+              Logger.warning("provider_stream_throw",
+                provider: provider_name,
+                kind: kind,
+                error: inspect(reason)
+              )
 
-            {:error, "Provider stream failed"}
-        end
+              {:error, "Provider stream failed"}
+          end
 
-      {:error, reason} ->
-        {:error, reason}
+        {:error, reason} ->
+          {:error, reason}
+      end
     end
   end
 
@@ -136,6 +138,13 @@ defmodule Synapsis.Session.Stream do
 
       {:error, _} ->
         :ok
+    end
+  end
+
+  defp ensure_provider_available(provider_name) do
+    case Synapsis.Providers.get_runtime_by_name(provider_name) do
+      {:error, :provider_unavailable} = error -> error
+      _ -> :ok
     end
   end
 end

@@ -84,9 +84,10 @@ defmodule Synapsis.Session.Worker.Config do
     model = agent[:model] || session.model
     agent = agent |> Map.put(:provider, provider) |> Map.put(:model, model)
 
-    with {:ok, updated_session} <-
+    with {:ok, provider_config} <- resolve_provider_config(provider),
+         {:ok, updated_session} <-
            persist_session_if_changed(session, %{provider: provider, model: model}) do
-      {:ok, updated_session, agent, provider, resolve_provider_config(provider)}
+      {:ok, updated_session, agent, provider, provider_config}
     end
   end
 
@@ -121,31 +122,27 @@ defmodule Synapsis.Session.Worker.Config do
   end
 
   def resolve_provider_config(provider_name) do
-    case Synapsis.Provider.Registry.get(provider_name) do
+    case Synapsis.Providers.runtime_config(provider_name) do
       {:ok, config} ->
-        config
+        {:ok, config}
 
-      {:error, _} ->
-        case Synapsis.Providers.get_by_name(provider_name) do
-          {:ok, provider} ->
-            %{
-              api_key: provider.api_key_encrypted,
-              base_url: provider.base_url,
-              type: provider.type
-            }
+      {:error, :provider_unavailable} = error ->
+        error
 
-          {:error, _} ->
-            auth = Synapsis.Config.load_auth()
-            api_key = get_in(auth, [provider_name, "apiKey"]) || env_key(provider_name)
-            base_url = provider_base_url(provider_name, auth)
+      {:error, :not_found} ->
+        auth = Synapsis.Config.load_auth()
+        api_key = get_in(auth, [provider_name, "apiKey"]) || env_key(provider_name)
+        base_url = provider_base_url(provider_name, auth)
 
-            %{
-              api_key: api_key,
-              base_url: base_url,
-              type: Synapsis.Providers.provider_type(provider_name)
-            }
-            |> maybe_put(:default_model, Synapsis.Providers.env_default_model(provider_name))
-        end
+        config =
+          %{
+            api_key: api_key,
+            base_url: base_url,
+            type: Synapsis.Providers.provider_type(provider_name)
+          }
+          |> maybe_put(:default_model, Synapsis.Providers.env_default_model(provider_name))
+
+        {:ok, config}
     end
   end
 
@@ -210,14 +207,14 @@ defmodule Synapsis.Session.Worker.Config do
   defp refresh_engine_state(engine_state, _agent), do: engine_state
 
   def do_switch_model(provider_name, model, state) do
-    case persist_session(state.session, %{provider: provider_name, model: model}) do
-      {:ok, updated_session} ->
-        provider_config = resolve_provider_config(provider_name)
-        agent = Map.put(state.agent, :model, model)
-        {:ok, updated_session, provider_config, agent}
-
-      {:error, _changeset} ->
-        {:error, :db_update_failed}
+    with {:ok, provider_config} <- resolve_provider_config(provider_name),
+         {:ok, updated_session} <-
+           persist_session(state.session, %{provider: provider_name, model: model}) do
+      agent = Map.put(state.agent, :model, model)
+      {:ok, updated_session, provider_config, agent}
+    else
+      {:error, :provider_unavailable} = error -> error
+      {:error, _changeset} -> {:error, :db_update_failed}
     end
   end
 

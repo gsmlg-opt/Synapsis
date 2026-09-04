@@ -32,6 +32,56 @@ defmodule Synapsis.AgentSkillsTest do
   end
 
   describe "skills context" do
+    test "omits locally disabled and unavailable managed skills without changing assignments" do
+      suffix = System.unique_integer([:positive])
+      {:ok, agent} = AgentConfigs.create(%{name: "availability-agent-#{suffix}"})
+
+      {:ok, local} =
+        Skills.create(%{
+          name: "local-skill-#{suffix}",
+          scope: "global",
+          config_overrides: %{"backplane_available" => false}
+        })
+
+      {:ok, local_disabled} =
+        Skills.create(%{
+          name: "disabled-skill-#{suffix}",
+          scope: "global",
+          enabled: false
+        })
+
+      {:ok, managed} =
+        Skills.create(%{
+          name: "managed-skill-#{suffix}",
+          scope: "global",
+          config_overrides: %{
+            "managed_by" => "backplane",
+            "backplane_source_id" => "source-1",
+            "backplane_available" => true
+          }
+        })
+
+      {:ok, unavailable} =
+        Skills.create(%{
+          name: "unavailable-skill-#{suffix}",
+          scope: "global",
+          config_overrides: %{
+            "managed_by" => "backplane",
+            "backplane_source_id" => "source-1",
+            "backplane_available" => false
+          }
+        })
+
+      assigned = [local.id, local_disabled.id, managed.id, unavailable.id]
+      assert {:ok, assigned_agent} = AgentSkills.assign_skills(agent, assigned)
+
+      assert Enum.map(AgentSkills.list_skills_for_agent(assigned_agent), & &1.id) ==
+               [local.id, managed.id]
+
+      assert AgentSkills.list_skill_ids(assigned_agent.id) == assigned
+      assert Enum.all?(assigned, &Skills.get(&1))
+    end
+
     test "protects built-in skills from deletion" do
       {:ok, skill} =
         Skills.create(%{

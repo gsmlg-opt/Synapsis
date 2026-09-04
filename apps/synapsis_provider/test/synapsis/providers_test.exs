@@ -136,6 +136,51 @@ defmodule Synapsis.ProvidersTest do
       assert {:error, :not_found} = ProviderRegistry.get("test-provider")
     end
 
+    test "Backplane availability controls runtime registration independently of local enabled" do
+      {:ok, provider} =
+        Providers.create(
+          Map.merge(@valid_attrs, %{
+            name: "managed-provider",
+            config: %{
+              "managed_by" => "backplane",
+              "backplane_source_id" => "source-1",
+              "backplane_available" => true
+            }
+          })
+        )
+
+      assert Providers.runtime_available?(provider)
+      assert {:ok, _config} = ProviderRegistry.get(provider.name)
+
+      assert {:ok, unavailable} =
+               Providers.update(provider.id, %{
+                 config: Map.put(provider.config, "backplane_available", false)
+               })
+
+      refute Providers.runtime_available?(unavailable)
+      assert unavailable.enabled
+      assert {:error, :not_found} = ProviderRegistry.get(provider.name)
+
+      assert {:ok, restored} =
+               Providers.update(provider.id, %{
+                 config: Map.put(unavailable.config, "backplane_available", true)
+               })
+
+      assert Providers.runtime_available?(restored)
+      assert {:ok, _config} = ProviderRegistry.get(provider.name)
+
+      assert {:ok, local} =
+               Providers.create(
+                 Map.merge(@valid_attrs, %{
+                   name: "local-provider",
+                   config: %{"backplane_available" => false}
+                 })
+               )
+
+      assert Providers.runtime_available?(local)
+      assert {:ok, _config} = ProviderRegistry.get(local.name)
+    end
+
     test "returns error for missing provider" do
       assert {:error, :not_found} = Providers.update(Ecto.UUID.generate(), %{enabled: false})
     end
@@ -251,22 +296,57 @@ defmodule Synapsis.ProvidersTest do
   end
 
   describe "load_all_into_registry/0" do
-    test "loads enabled providers into registry" do
+    test "loads available providers and removes stale unavailable registrations" do
       {:ok, _} = Providers.create(@valid_attrs)
-      {:ok, _} = Providers.create(%{@valid_attrs | name: "disabled-one", enabled: false})
+      {:ok, disabled} = Providers.create(%{@valid_attrs | name: "disabled-one", enabled: false})
 
-      # Clear registry
+      {:ok, unavailable} =
+        Providers.create(
+          Map.merge(@valid_attrs, %{
+            name: "unavailable-one",
+            config: %{
+              "managed_by" => "backplane",
+              "backplane_source_id" => "source-1",
+              "backplane_available" => false
+            }
+          })
+        )
+
       ProviderRegistry.unregister("test-provider")
-      ProviderRegistry.unregister("disabled-one")
+      ProviderRegistry.register(disabled.name, %{type: "anthropic"})
+      ProviderRegistry.register(unavailable.name, %{type: "anthropic"})
 
       Providers.load_all_into_registry()
 
       assert {:ok, _} = ProviderRegistry.get("test-provider")
       assert {:error, :not_found} = ProviderRegistry.get("disabled-one")
+      assert {:error, :not_found} = ProviderRegistry.get("unavailable-one")
     end
   end
 
   describe "models/1" do
+    test "rejects every model operation for an unavailable managed provider" do
+      {:ok, provider} =
+        Providers.create(%{
+          name: "unavailable-model-provider",
+          type: "anthropic",
+          enabled: true,
+          config: %{
+            "managed_by" => "backplane",
+            "backplane_source_id" => "source-1",
+            "backplane_available" => false,
+            "available_models" => [%{"id" => "cached-model"}]
+          }
+        })
+
+      assert {:error, :provider_unavailable} = Providers.models(provider.id)
+      assert {:error, :provider_unavailable} = Providers.models_for(provider.name)
+      assert {:error, :provider_unavailable} = Providers.models_by_id(provider.id)
+      assert {:error, :provider_unavailable} = Providers.fetch_models(provider)
+      assert {:error, :provider_unavailable} = Providers.refresh_models(provider.id)
+      assert {:error, :provider_unavailable} = Providers.test_connection(provider.id)
+    end
+
     test "returns static models for anthropic provider" do
       {:ok, provider} = Providers.create(%{@valid_attrs | name: "models-test-provider"})
       assert {:ok, models} = Providers.models(provider.id)

@@ -15,7 +15,17 @@ defmodule Synapsis.MCPConfigs do
   end
 
   @doc "List enabled MCP configs."
-  def enabled, do: Enum.filter(list(), & &1.enabled)
+  def enabled, do: Enum.filter(list(), &runtime_available?/1)
+
+  @doc "Whether an MCP config may participate in runtime operations."
+  def runtime_available?(%MCPConfig{enabled: true, config: config}) do
+    config = config || %{}
+
+    not backplane_managed?(config) or
+      Map.get(config, "backplane_available", Map.get(config, :backplane_available)) != false
+  end
+
+  def runtime_available?(_config), do: false
 
   @doc "Get an MCP config by id."
   def get(id) do
@@ -44,6 +54,11 @@ defmodule Synapsis.MCPConfigs do
   end
 
   # ── internals ──────────────────────────────────────────────────────────────
+
+  defp backplane_managed?(config) do
+    Map.get(config, "managed_by", Map.get(config, :managed_by)) == "backplane" or
+      not is_nil(Map.get(config, "backplane_source_id", Map.get(config, :backplane_source_id)))
+  end
 
   defp persist(%Ecto.Changeset{valid?: true} = changeset) do
     record = changeset |> Ecto.Changeset.apply_changes() |> ensure_id()

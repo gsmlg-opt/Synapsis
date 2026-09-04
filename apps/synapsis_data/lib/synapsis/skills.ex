@@ -43,8 +43,21 @@ defmodule Synapsis.Skills do
 
   @doc "List skills assigned to an agent."
   def list_skills_for_agent(%AgentConfig{} = agent) do
-    agent |> skill_ids_of() |> Enum.map(&get/1) |> Enum.reject(&is_nil/1)
+    agent
+    |> skill_ids_of()
+    |> Enum.map(&get/1)
+    |> Enum.filter(&runtime_available?/1)
   end
+
+  @doc "Whether a skill may be included in runtime agent context."
+  def runtime_available?(%Skill{enabled: true, config_overrides: config}) do
+    config = config || %{}
+
+    not backplane_managed?(config) or
+      Map.get(config, "backplane_available", Map.get(config, :backplane_available)) != false
+  end
+
+  def runtime_available?(_skill), do: false
 
   @doc "List skills assigned to an agent by name."
   def list_skills_for_agent_name(name) when is_binary(name) do
@@ -102,6 +115,11 @@ defmodule Synapsis.Skills do
   defp put_skill_ids(%AgentConfig{} = agent, ids) do
     config = Map.put(agent.config || %{}, "skill_ids", ids)
     AgentConfigs.update(agent, %{config: config})
+  end
+
+  defp backplane_managed?(config) do
+    Map.get(config, "managed_by", Map.get(config, :managed_by)) == "backplane" or
+      not is_nil(Map.get(config, "backplane_source_id", Map.get(config, :backplane_source_id)))
   end
 
   defp persist(%Ecto.Changeset{valid?: true} = changeset) do

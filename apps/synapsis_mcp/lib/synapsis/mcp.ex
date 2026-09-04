@@ -6,6 +6,14 @@ defmodule Synapsis.MCP do
   alias Synapsis.MCPConfigs
 
   def start(%Synapsis.MCPConfig{} = config) do
+    if MCPConfigs.runtime_available?(config) do
+      start_available(config)
+    else
+      {:error, :mcp_unavailable}
+    end
+  end
+
+  defp start_available(config) do
     spec = %{
       id: {:mcp, config.name},
       start: {Server, :start_link, [config]},

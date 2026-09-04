@@ -1,9 +1,55 @@
 defmodule Synapsis.LLMTest do
   use Synapsis.DataCase
 
-  alias Synapsis.LLM
+  alias Synapsis.{LLM, Providers}
+  alias Synapsis.Provider.Registry, as: ProviderRegistry
+
+  setup do
+    Synapsis.DataCase.clear_config_store(:provider)
+    ProviderRegistry.unregister("anthropic")
+
+    on_exit(fn ->
+      Synapsis.DataCase.clear_config_store(:provider)
+      ProviderRegistry.unregister("anthropic")
+    end)
+
+    :ok
+  end
 
   describe "complete/2" do
+    test "rejects a known unavailable provider before registry or environment fallback" do
+      previous_api_key = System.get_env("ANTHROPIC_API_KEY")
+
+      on_exit(fn ->
+        if previous_api_key,
+          do: System.put_env("ANTHROPIC_API_KEY", previous_api_key),
+          else: System.delete_env("ANTHROPIC_API_KEY")
+      end)
+
+      System.put_env("ANTHROPIC_API_KEY", "env-key-that-must-not-be-used")
+
+      assert {:ok, _provider} =
+               Providers.create(%{
+                 name: "anthropic",
+                 type: "anthropic",
+                 enabled: true,
+                 config: %{
+                   "managed_by" => "backplane",
+                   "backplane_source_id" => "source-1",
+                   "backplane_available" => false
+                 }
+               })
+
+      :ok =
+        ProviderRegistry.register("anthropic", %{
+          type: "unknown",
+          api_key: "stale-runtime-key"
+        })
+
+      assert {:error, :provider_unavailable} =
+               LLM.complete([%{role: "user", content: "Hello"}], provider: "anthropic")
+    end
+
     test "returns error when provider has no valid api key" do
       messages = [%{role: "user", content: "Hello"}]
 

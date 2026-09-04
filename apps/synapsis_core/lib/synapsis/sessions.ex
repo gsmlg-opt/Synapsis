@@ -381,25 +381,27 @@ defmodule Synapsis.Sessions do
     providers = config["providers"] || %{}
 
     cond do
-      present?(agent_config["provider"]) ->
+      present?(agent_config["provider"]) and
+          provider_runtime_candidate?(agent_config["provider"]) ->
         agent_config["provider"]
 
-      Map.has_key?(providers, "anthropic") ->
+      Map.has_key?(providers, "anthropic") and provider_runtime_candidate?("anthropic") ->
         "anthropic"
 
-      Map.has_key?(providers, "openai") ->
+      Map.has_key?(providers, "openai") and provider_runtime_candidate?("openai") ->
         "openai"
 
-      Map.has_key?(providers, "google") ->
+      Map.has_key?(providers, "google") and provider_runtime_candidate?("google") ->
         "google"
 
-      Synapsis.Providers.env_configured?("anthropic") ->
+      provider_runtime_candidate?("anthropic") and
+          Synapsis.Providers.env_configured?("anthropic") ->
         "anthropic"
 
-      Synapsis.Providers.env_configured?("openai") ->
+      provider_runtime_candidate?("openai") and Synapsis.Providers.env_configured?("openai") ->
         "openai"
 
-      Synapsis.Providers.env_configured?("google") ->
+      provider_runtime_candidate?("google") and Synapsis.Providers.env_configured?("google") ->
         "google"
 
       provider = first_enabled_provider_name() ->
@@ -413,6 +415,10 @@ defmodule Synapsis.Sessions do
   defp default_model(config, provider, agent) do
     agent_config = agent_config(config, agent)
 
+    env_model =
+      if provider_runtime_candidate?(provider),
+        do: Synapsis.Providers.env_default_model(provider)
+
     cond do
       present?(agent_config["model"]) ->
         agent_config["model"]
@@ -420,7 +426,7 @@ defmodule Synapsis.Sessions do
       model = first_enabled_provider_model(provider) ->
         model
 
-      model = Synapsis.Providers.env_default_model(provider) ->
+      model = env_model ->
         model
 
       true ->
@@ -448,8 +454,13 @@ defmodule Synapsis.Sessions do
 
   defp first_enabled_provider_name do
     case Synapsis.Providers.list(enabled: true) do
-      {:ok, providers} -> Enum.find_value(providers, &provider_name/1)
-      _ -> nil
+      {:ok, providers} ->
+        providers
+        |> Enum.filter(&Synapsis.Providers.runtime_available?/1)
+        |> Enum.find_value(&provider_name/1)
+
+      _ ->
+        nil
     end
   end
 
@@ -462,7 +473,7 @@ defmodule Synapsis.Sessions do
   defp first_enabled_provider_model(provider) when provider in [nil, ""], do: nil
 
   defp first_enabled_provider_model(provider) do
-    case Synapsis.Providers.get_by_name(provider) do
+    case Synapsis.Providers.get_runtime_by_name(provider) do
       {:ok, provider_config} ->
         provider_config
         |> Synapsis.Providers.enabled_models()
@@ -526,29 +537,35 @@ defmodule Synapsis.Sessions do
   defp provider_configured?(provider) when provider in [nil, ""], do: false
 
   defp provider_configured?(provider) do
-    case Synapsis.Providers.get_by_name(provider) do
-      {:ok, %{enabled: true}} -> true
-      _ -> Synapsis.Providers.env_configured?(provider)
+    case Synapsis.Providers.get_runtime_by_name(provider) do
+      {:ok, _provider} -> true
+      {:error, :provider_unavailable} -> false
+      {:error, :not_found} -> Synapsis.Providers.env_configured?(provider)
     end
   end
 
   defp model_supported?(_provider, model) when model in [nil, ""], do: false
 
   defp model_supported?(provider, model) do
-    case Synapsis.Providers.get_by_name(provider) do
-      {:ok, %{enabled: true} = provider_config} ->
+    case Synapsis.Providers.get_runtime_by_name(provider) do
+      {:ok, provider_config} ->
         case Synapsis.Providers.enabled_models(provider_config) do
           [] -> true
           models -> model in models
         end
 
-      _ ->
+      {:error, :provider_unavailable} ->
+        false
+
+      {:error, :not_found} ->
         Synapsis.Providers.env_configured?(provider)
     end
   end
 
   defp env_recovery_model(provider, model) do
-    env_model = Synapsis.Providers.env_default_model(provider)
+    env_model =
+      if provider_runtime_candidate?(provider),
+        do: Synapsis.Providers.env_default_model(provider)
 
     cond do
       blank?(env_model) ->
@@ -580,6 +597,10 @@ defmodule Synapsis.Sessions do
 
   defp blank?(value), do: value in [nil, ""]
   defp present?(value), do: is_binary(value) and String.trim(value) != ""
+
+  defp provider_runtime_candidate?(provider) do
+    Synapsis.Providers.get_runtime_by_name(provider) != {:error, :provider_unavailable}
+  end
 
   defp exit_reason({:timeout, _}), do: :worker_timeout
   defp exit_reason({:noproc, _}), do: :worker_not_running
