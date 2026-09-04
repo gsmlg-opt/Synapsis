@@ -6,6 +6,7 @@ defmodule SynapsisServer.Router do
   @compile {:no_warn_undefined,
             [
               SynapsisWeb.DashboardLive,
+              SynapsisWeb.AgentLive.Daemon,
               SynapsisWeb.AgentLive.Agents,
               SynapsisWeb.AgentLive.Sessions,
               SynapsisWeb.AgentLive.Toolsets,
@@ -63,6 +64,7 @@ defmodule SynapsisServer.Router do
     get "/config", ConfigController, :show
 
     get "/agent/daemon/status", AgentController, :status
+    get "/agent/events", SSEController, :agent_events
     get "/agent/runs", AgentController, :runs
     get "/agent/runs/:id", AgentController, :show_run
     post "/agent/runs", AgentController, :run
@@ -94,6 +96,7 @@ defmodule SynapsisServer.Router do
 
     live "/", DashboardLive, :index
 
+    live "/agent/daemon", AgentLive.Daemon, :index
     live "/agent/agents", AgentLive.Agents, :index
     live "/agent/agents/new", AgentLive.Agents, :new
     live "/agent/agents/:id/config", AgentLive.Agents, :config

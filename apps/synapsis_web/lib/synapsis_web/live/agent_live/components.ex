@@ -12,6 +12,11 @@ defmodule SynapsisWeb.AgentLive.Components do
         <.dm_left_menu active={active_path(@active)} size="lg" class="app-left-menu">
           <:title>Agent</:title>
           <:menu>
+            <.dm_link navigate="/agent/daemon" class={nav_item_class(@active, :daemon)}>
+              <.dm_mdi name="server-network" class="w-5 h-5 shrink-0" /> Daemon
+            </.dm_link>
+          </:menu>
+          <:menu>
             <.dm_link navigate={~p"/agent/agents"} class={nav_item_class(@active, :agents)}>
               <.dm_mdi name="robot-outline" class="w-5 h-5 shrink-0" /> Agents
             </.dm_link>
@@ -36,6 +41,7 @@ defmodule SynapsisWeb.AgentLive.Components do
     """
   end
 
+  defp active_path(:daemon), do: "/agent/daemon"
   defp active_path(:agents), do: ~p"/agent/agents"
   defp active_path(:tools), do: ~p"/agent/tools"
   defp active_path(:skills), do: ~p"/agent/skills"

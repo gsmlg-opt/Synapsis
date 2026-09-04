@@ -121,6 +121,20 @@ defmodule SynapsisServer.RouterTest do
   end
 
   describe "agent session LiveView routes exist" do
+    test "GET /agent/daemon routes to the daemon operations console" do
+      assert %{
+               plug: Phoenix.LiveView.Plug,
+               plug_opts: :index,
+               log_module: SynapsisWeb.AgentLive.Daemon
+             } =
+               Phoenix.Router.route_info(
+                 SynapsisServer.Router,
+                 "GET",
+                 "/agent/daemon",
+                 ""
+               )
+    end
+
     test "GET /agent/agents/:agent_id/sessions routes to agent sessions" do
       assert %{
                plug: Phoenix.LiveView.Plug,
@@ -263,6 +277,18 @@ defmodule SynapsisServer.RouterTest do
     test "GET /api/config" do
       assert %{plug: SynapsisServer.ConfigController, plug_opts: :show} =
                Phoenix.Router.route_info(SynapsisServer.Router, "GET", "/api/config", "")
+    end
+  end
+
+  describe "agent daemon event route exists" do
+    test "GET /api/agent/events routes to the daemon SSE action" do
+      assert %{plug: SynapsisServer.SSEController, plug_opts: :agent_events} =
+               Phoenix.Router.route_info(
+                 SynapsisServer.Router,
+                 "GET",
+                 "/api/agent/events",
+                 ""
+               )
     end
   end
 
