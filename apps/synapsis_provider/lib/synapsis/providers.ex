@@ -39,7 +39,9 @@ defmodule Synapsis.Providers do
 
     enabled and
       (not backplane_managed?(config) or
-         Map.get(config, "backplane_available", Map.get(config, :backplane_available)) != false)
+         (Map.get(config, "backplane_available", Map.get(config, :backplane_available)) !=
+            false and
+            backplane_connection_available?(config)))
   end
 
   def runtime_available?(_provider), do: false
@@ -103,11 +105,14 @@ defmodule Synapsis.Providers do
     do: Enum.filter(providers, &(&1.enabled == enabled))
 
   def update(id, attrs) do
-    with {:ok, provider} <- get(id) do
-      provider
-      |> ProviderConfig.changeset(attrs)
-      |> check_unique_name(id)
-      |> persist()
+    with {:ok, provider} <- get(id),
+         {:ok, updated} <-
+           provider
+           |> ProviderConfig.changeset(attrs)
+           |> check_unique_name(id)
+           |> persist() do
+      if provider.name != updated.name, do: ProviderRegistry.unregister(provider.name)
+      {:ok, updated}
     end
   end
 
@@ -124,7 +129,10 @@ defmodule Synapsis.Providers do
          :ok <- ensure_runtime_available(provider),
          {:ok, mod} <- ProviderRegistry.module_for(provider.type) do
       config = build_runtime_config(provider)
-      mod.models(config)
+
+      with {:ok, models} <- mod.models(config) do
+        {:ok, filter_runtime_models(provider, models)}
+      end
     end
   end
 
@@ -135,10 +143,13 @@ defmodule Synapsis.Providers do
       case cached_models(provider) do
         [] ->
           config = build_runtime_config(provider)
-          Synapsis.Provider.Adapter.models(config)
+
+          with {:ok, models} <- Synapsis.Provider.Adapter.models(config) do
+            {:ok, filter_runtime_models(provider, models)}
+          end
 
         models ->
-          {:ok, models}
+          {:ok, filter_runtime_models(provider, models)}
       end
     end
   end
@@ -152,10 +163,13 @@ defmodule Synapsis.Providers do
       |> case do
         [] ->
           config = build_runtime_config(provider)
-          Synapsis.Provider.Adapter.models(config)
+
+          with {:ok, models} <- Synapsis.Provider.Adapter.models(config) do
+            {:ok, filter_runtime_models(provider, models)}
+          end
 
         models ->
-          {:ok, models}
+          {:ok, filter_runtime_models(provider, models)}
       end
     end
   end
@@ -178,11 +192,13 @@ defmodule Synapsis.Providers do
 
   @doc "Fetch provider models from the remote endpoint, bypassing any cached config."
   def fetch_models(provider) when is_map(provider) do
-    with :ok <- ensure_runtime_available(provider) do
-      provider
-      |> build_runtime_config()
-      |> Map.put(:discover_models, true)
-      |> Synapsis.Provider.Adapter.models()
+    with :ok <- ensure_runtime_available(provider),
+         {:ok, models} <-
+           provider
+           |> build_runtime_config()
+           |> Map.put(:discover_models, true)
+           |> Synapsis.Provider.Adapter.models() do
+      {:ok, filter_runtime_models(provider, models)}
     end
   end
 
@@ -201,6 +217,22 @@ defmodule Synapsis.Providers do
     do: models
 
   def enabled_models(_), do: []
+
+  @doc "Return the first configured or cached model that is available at runtime."
+  def first_runtime_model(provider) when is_map(provider) do
+    configured = enabled_models(provider)
+
+    candidates =
+      if configured == [] do
+        provider
+        |> cached_models()
+        |> Enum.map(& &1.id)
+      else
+        configured
+      end
+
+    Enum.find(candidates, &model_runtime_available?(provider, &1))
+  end
 
   defp stringify_model(model) do
     model
@@ -373,17 +405,59 @@ defmodule Synapsis.Providers do
       not is_nil(Map.get(config, "backplane_source_id", Map.get(config, :backplane_source_id)))
   end
 
+  defp backplane_connection_available?(config) do
+    source_id =
+      Map.get(config, "backplane_source_id", Map.get(config, :backplane_source_id))
+
+    with true <- is_binary(source_id) and source_id != "",
+         {:ok, connection} <- Store.get(:backplane, source_id) do
+      Map.get(connection, "enabled", Map.get(connection, :enabled)) == true
+    else
+      _error -> false
+    end
+  end
+
   defp source_model_available?(config, model) do
     if backplane_managed?(config) do
-      config
-      |> Map.get("backplane_models", Map.get(config, :backplane_models, []))
-      |> Enum.any?(fn markers ->
-        Map.get(markers, "external_id", Map.get(markers, :external_id)) == model and
-          Map.get(markers, "source_available", Map.get(markers, :source_available)) == true and
-          Map.get(markers, "backplane_available", Map.get(markers, :backplane_available)) == true
-      end)
+      case Map.get(config, "backplane_models", Map.get(config, :backplane_models, [])) do
+        models when is_list(models) ->
+          Enum.any?(models, fn
+            markers when is_map(markers) ->
+              Map.get(markers, "external_id", Map.get(markers, :external_id)) == model and
+                Map.get(markers, "source_available", Map.get(markers, :source_available)) ==
+                  true and
+                Map.get(
+                  markers,
+                  "backplane_available",
+                  Map.get(markers, :backplane_available)
+                ) == true
+
+            _malformed ->
+              false
+          end)
+
+        _malformed ->
+          false
+      end
     else
       true
+    end
+  end
+
+  defp filter_runtime_models(provider, models) when is_map(provider) and is_list(models) do
+    config = Map.get(provider, :config, Map.get(provider, "config", %{}))
+
+    if backplane_managed?(config || %{}) do
+      Enum.filter(models, fn
+        model when is_map(model) ->
+          model_id = Map.get(model, :id, Map.get(model, "id"))
+          model_runtime_available?(provider, model_id)
+
+        _malformed ->
+          false
+      end)
+    else
+      models
     end
   end
 

@@ -3,6 +3,10 @@ defmodule Synapsis.Provider.AdapterTest do
 
   alias Synapsis.Provider.Adapter
 
+  defmodule Request do
+    defstruct [:model, messages: []]
+  end
+
   setup do
     bypass = Bypass.open()
     %{bypass: bypass, port: bypass.port}
@@ -93,6 +97,29 @@ defmodule Synapsis.Provider.AdapterTest do
   # ---------------------------------------------------------------------------
 
   describe "stream/2 OpenAI" do
+    test "rejects a source-disabled persisted model before starting an HTTP stream", %{
+      bypass: bypass,
+      port: port
+    } do
+      Synapsis.DataCase.clear_config_store(:provider)
+      on_exit(fn -> Synapsis.DataCase.clear_config_store(:provider) end)
+      caller = self()
+
+      Bypass.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+        send(caller, :http_called)
+
+        conn
+        |> Plug.Conn.put_resp_content_type("text/event-stream")
+        |> Plug.Conn.send_resp(200, "data: [DONE]\n\n")
+      end)
+
+      config = managed_provider_config(port, "managed-stream-provider")
+      request = %Request{model: "disabled-model"}
+
+      assert {:error, :model_unavailable} = Adapter.stream(request, config)
+      refute_receive :http_called, 100
+    end
+
     test "string-key config uses custom base URL and bearer credentials", %{
       bypass: bypass,
       port: port
@@ -414,6 +441,34 @@ defmodule Synapsis.Provider.AdapterTest do
   # ---------------------------------------------------------------------------
 
   describe "complete/2" do
+    test "rejects a source-disabled persisted model before an HTTP request", %{
+      bypass: bypass,
+      port: port
+    } do
+      Synapsis.DataCase.clear_config_store(:provider)
+      on_exit(fn -> Synapsis.DataCase.clear_config_store(:provider) end)
+      caller = self()
+
+      Bypass.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+        send(caller, :http_called)
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(
+          200,
+          Jason.encode!(%{
+            "choices" => [%{"message" => %{"role" => "assistant", "content" => "wrong"}}]
+          })
+        )
+      end)
+
+      config = managed_provider_config(port, "managed-complete-provider")
+      request = %{model: "disabled-model", messages: []}
+
+      assert {:error, :model_unavailable} = Adapter.complete(request, config)
+      refute_receive :http_called, 100
+    end
+
     test "Anthropic synchronous completion returns text", %{bypass: bypass, port: port} do
       Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
         conn
@@ -959,6 +1014,41 @@ defmodule Synapsis.Provider.AdapterTest do
   # ---------------------------------------------------------------------------
   # Helpers
   # ---------------------------------------------------------------------------
+
+  defp managed_provider_config(port, name) do
+    Synapsis.DataCase.clear_config_store(:backplane)
+
+    assert {:ok, _connection} =
+             Synapsis.Config.Store.put(:backplane, %{"id" => "source-1", "enabled" => true})
+
+    assert {:ok, provider} =
+             Synapsis.Providers.create(%{
+               name: name,
+               type: "openai",
+               base_url: "http://localhost:#{port}",
+               enabled: true,
+               config: %{
+                 "managed_by" => "backplane",
+                 "backplane_source_id" => "source-1",
+                 "backplane_available" => true,
+                 "backplane_models" => [
+                   %{
+                     "external_id" => "disabled-model",
+                     "source_available" => false,
+                     "backplane_available" => false
+                   },
+                   %{
+                     "external_id" => "enabled-model",
+                     "source_available" => true,
+                     "backplane_available" => true
+                   }
+                 ]
+               }
+             })
+
+    assert {:ok, config} = Synapsis.Providers.runtime_config(provider.name)
+    config
+  end
 
   defp collect_chunks(ref) do
     collect_chunks(ref, [])

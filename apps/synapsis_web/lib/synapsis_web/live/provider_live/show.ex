@@ -165,15 +165,37 @@ defmodule SynapsisWeb.ProviderLive.Show do
       {:ok, config} ->
         request = build_chat_request(config, model, messages)
 
-        {:ok, ref} = Synapsis.Provider.Adapter.stream(request, config)
+        case Synapsis.Provider.Adapter.stream(request, config) do
+          {:ok, ref} ->
+            {:noreply,
+             assign(socket,
+               chat_messages: messages,
+               chat_streaming: true,
+               chat_stream_text: "",
+               chat_stream_ref: ref
+             )}
 
-        {:noreply,
-         assign(socket,
-           chat_messages: messages,
-           chat_streaming: true,
-           chat_stream_text: "",
-           chat_stream_ref: ref
-         )}
+          {:error, :model_unavailable} ->
+            {:noreply,
+             assign(socket,
+               chat_messages:
+                 messages ++ [%{role: "error", content: "Model is currently unavailable."}]
+             )}
+
+          {:error, :provider_unavailable} ->
+            {:noreply,
+             assign(socket,
+               chat_messages:
+                 messages ++ [%{role: "error", content: "Provider is currently unavailable."}]
+             )}
+
+          {:error, _reason} ->
+            {:noreply,
+             assign(socket,
+               chat_messages:
+                 messages ++ [%{role: "error", content: "Failed to start provider stream."}]
+             )}
+        end
 
       {:error, :provider_unavailable} ->
         {:noreply,
@@ -416,15 +438,9 @@ defmodule SynapsisWeb.ProviderLive.Show do
   end
 
   defp fetch_models(provider) do
-    case Synapsis.Providers.cached_models(provider) do
-      [] ->
-        case Synapsis.Providers.models_by_id(provider.id) do
-          {:ok, models} -> models
-          {:error, _} -> []
-        end
-
-      models ->
-        models
+    case Synapsis.Providers.models_by_id(provider.id) do
+      {:ok, models} -> models
+      {:error, _} -> []
     end
   end
 

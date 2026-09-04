@@ -47,15 +47,17 @@ defmodule Synapsis.Provider.Adapter do
   def stream({:error, error}, _config), do: {:error, error}
 
   def stream(request, config) do
-    caller = self()
-    transport_type = resolve_transport_type(config[:type] || config["type"])
+    with :ok <- ensure_model_runtime_available(request, config) do
+      caller = self()
+      transport_type = resolve_transport_type(config[:type] || config["type"])
 
-    task =
-      Task.Supervisor.async_nolink(Synapsis.Provider.TaskSupervisor, fn ->
-        do_stream(transport_type, request, config, caller)
-      end)
+      task =
+        Task.Supervisor.async_nolink(Synapsis.Provider.TaskSupervisor, fn ->
+          do_stream(transport_type, request, config, caller)
+        end)
 
-    {:ok, %{pid: task.pid, ref: task.ref}}
+      {:ok, %{pid: task.pid, ref: task.ref}}
+    end
   end
 
   @doc "Cancels an in-progress stream using its returned handle or task PID."
@@ -131,19 +133,42 @@ defmodule Synapsis.Provider.Adapter do
   def complete({:error, error}, _config), do: {:error, error}
 
   def complete(request, config) do
-    transport_type = resolve_transport_type(config[:type] || config["type"])
+    with :ok <- ensure_model_runtime_available(request, config) do
+      transport_type = resolve_transport_type(config[:type] || config["type"])
 
-    task =
-      Task.Supervisor.async_nolink(
-        Synapsis.Provider.TaskSupervisor,
-        fn -> do_complete(transport_type, request, config) end,
-        timeout: 60_000
-      )
+      task =
+        Task.Supervisor.async_nolink(
+          Synapsis.Provider.TaskSupervisor,
+          fn -> do_complete(transport_type, request, config) end,
+          timeout: 60_000
+        )
 
-    case Task.yield(task, 60_000) || Task.shutdown(task) do
-      {:ok, result} -> result
-      {:exit, _reason} -> {:error, "completion failed"}
-      nil -> {:error, "auditor timeout"}
+      case Task.yield(task, 60_000) || Task.shutdown(task) do
+        {:ok, result} -> result
+        {:exit, _reason} -> {:error, "completion failed"}
+        nil -> {:error, "auditor timeout"}
+      end
+    end
+  end
+
+  defp ensure_model_runtime_available(request, config) do
+    provider_id = Map.get(config, :provider_id, Map.get(config, "provider_id"))
+    model = Map.get(request, :model, Map.get(request, "model"))
+
+    case provider_id do
+      nil ->
+        :ok
+
+      id ->
+        case Synapsis.Providers.get(id) do
+          {:ok, provider} ->
+            if Synapsis.Providers.model_runtime_available?(provider, model),
+              do: :ok,
+              else: {:error, :model_unavailable}
+
+          {:error, :not_found} ->
+            {:error, :provider_unavailable}
+        end
     end
   end
 

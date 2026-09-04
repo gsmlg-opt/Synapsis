@@ -62,23 +62,25 @@ defmodule Synapsis.Sessions do
     after_seconds = Keyword.get(opts, :after_seconds, @stale_transient_status_after_seconds)
 
     if stale_transient_status?(session, after_seconds) do
-      updated = persist_update(session, stale_transient_recovery_attrs(session))
-      restart_session_worker(updated.id)
-      {:ok, with_messages(updated)}
+      with {:ok, attrs} <- stale_transient_recovery_attrs(session) do
+        updated = persist_update(session, attrs)
+        restart_session_worker(updated.id)
+        {:ok, with_messages(updated)}
+      end
     else
       {:ok, session}
     end
   end
 
   def recover_unsupported_provider_model(%Session{} = session) do
-    {provider, model} = recovered_provider_model(session)
-
-    if provider == session.provider and model == session.model do
-      {:ok, session}
-    else
-      updated = persist_update(session, %{provider: provider, model: model})
-      restart_session_worker(updated.id)
-      {:ok, with_messages(updated)}
+    with {:ok, {provider, model}} <- recoverable_provider_model(session) do
+      if provider == session.provider and model == session.model do
+        {:ok, session}
+      else
+        updated = persist_update(session, %{provider: provider, model: model})
+        restart_session_worker(updated.id)
+        {:ok, with_messages(updated)}
+      end
     end
   end
 
@@ -424,11 +426,11 @@ defmodule Synapsis.Sessions do
       present?(configured_model) and model_runtime_candidate?(provider, configured_model) ->
         configured_model
 
-      model = first_runtime_provider_model(provider) ->
-        model
-
       present?(env_model) and model_runtime_candidate?(provider, env_model) ->
         env_model
+
+      model = first_runtime_provider_model(provider) ->
+        model
 
       true ->
         Synapsis.Providers.default_model(provider)
@@ -476,21 +478,7 @@ defmodule Synapsis.Sessions do
   defp first_runtime_provider_model(provider) do
     case Synapsis.Providers.get_runtime_by_name(provider) do
       {:ok, provider_config} ->
-        configured = Synapsis.Providers.enabled_models(provider_config)
-
-        candidates =
-          if configured == [] do
-            provider_config
-            |> Synapsis.Providers.cached_models()
-            |> Enum.map(& &1.id)
-          else
-            configured
-          end
-
-        Enum.find(candidates, fn model ->
-          present?(model) and
-            Synapsis.Providers.model_runtime_available?(provider_config, model)
-        end)
+        Synapsis.Providers.first_runtime_model(provider_config)
 
       {:error, _} ->
         nil
@@ -498,13 +486,22 @@ defmodule Synapsis.Sessions do
   end
 
   defp stale_transient_recovery_attrs(session) do
+    with {:ok, {provider, model}} <- recoverable_provider_model(session) do
+      {:ok,
+       %{
+         status: "idle",
+         provider: provider,
+         model: model
+       }}
+    end
+  end
+
+  defp recoverable_provider_model(session) do
     {provider, model} = recovered_provider_model(session)
 
-    %{
-      status: "idle",
-      provider: provider,
-      model: model
-    }
+    if model_supported?(provider, model),
+      do: {:ok, {provider, model}},
+      else: {:error, :model_unavailable}
   end
 
   defp recovered_provider_model(session) do

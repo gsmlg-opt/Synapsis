@@ -7,6 +7,11 @@ defmodule Synapsis.ProvidersTest do
   # ADR-006 C4: providers persist in the global Config.Store; isolate per test.
   setup do
     Synapsis.DataCase.clear_config_store(:provider)
+    Synapsis.DataCase.clear_config_store(:backplane)
+
+    assert {:ok, _connection} =
+             Synapsis.Config.Store.put(:backplane, %{"id" => "source-1", "enabled" => true})
+
     :ok
   end
 
@@ -128,6 +133,46 @@ defmodule Synapsis.ProvidersTest do
       assert config.base_url == "https://custom.api.com"
     end
 
+    test "successful provider and managed-source renames remove stale registry keys" do
+      assert {:ok, local} = Providers.create(@valid_attrs)
+      assert {:ok, renamed_local} = Providers.update(local.id, %{name: "renamed-local"})
+
+      assert renamed_local.name == "renamed-local"
+      assert {:error, :not_found} = Providers.runtime_config(local.name)
+      assert {:ok, %{provider_id: provider_id}} = Providers.runtime_config(renamed_local.name)
+      assert provider_id == local.id
+
+      assert {:ok, _connection} =
+               Synapsis.Config.Store.put(:backplane, %{"id" => "source-2", "enabled" => true})
+
+      assert {:ok, managed} =
+               Providers.create(%{
+                 name: "managed-old-name",
+                 type: "openai",
+                 config: %{
+                   "managed_by" => "backplane",
+                   "backplane_source_id" => "source-1",
+                   "backplane_available" => true
+                 }
+               })
+
+      renamed_config = Map.put(managed.config, "backplane_source_id", "source-2")
+
+      assert {:ok, renamed_managed} =
+               Providers.update(managed.id, %{
+                 name: "managed-new-name",
+                 config: renamed_config
+               })
+
+      assert {:error, :not_found} = Providers.runtime_config(managed.name)
+
+      assert {:ok, %{provider_id: managed_id}} =
+               Providers.runtime_config(renamed_managed.name)
+
+      assert managed_id == managed.id
+      assert renamed_managed.config["backplane_source_id"] == "source-2"
+    end
+
     test "disabling provider unregisters from registry" do
       {:ok, provider} = Providers.create(@valid_attrs)
       assert {:ok, _} = ProviderRegistry.get("test-provider")
@@ -181,6 +226,37 @@ defmodule Synapsis.ProvidersTest do
       assert {:ok, _config} = ProviderRegistry.get(local.name)
     end
 
+    test "managed providers require an enabled persisted Backplane connection" do
+      source_id = "source-runtime-connection"
+
+      assert {:ok, _connection} =
+               Synapsis.Config.Store.put(:backplane, %{"id" => source_id, "enabled" => true})
+
+      assert {:ok, provider} =
+               Providers.create(
+                 Map.merge(@valid_attrs, %{
+                   name: "connection-guarded-provider",
+                   config: %{
+                     "managed_by" => "backplane",
+                     "backplane_source_id" => source_id,
+                     "backplane_available" => true
+                   }
+                 })
+               )
+
+      assert Providers.runtime_available?(provider)
+
+      assert {:ok, _connection} =
+               Synapsis.Config.Store.put(:backplane, %{"id" => source_id, "enabled" => false})
+
+      refute Providers.runtime_available?(provider)
+      assert {:error, :provider_unavailable} = Providers.runtime_config(provider.name)
+      assert {:error, :not_found} = ProviderRegistry.get(provider.name)
+
+      assert :ok = Synapsis.Config.Store.delete(:backplane, source_id)
+      refute Providers.runtime_available?(provider)
+    end
+
     test "returns error for missing provider" do
       assert {:error, :not_found} = Providers.update(Ecto.UUID.generate(), %{enabled: false})
     end
@@ -188,6 +264,21 @@ defmodule Synapsis.ProvidersTest do
     test "returns changeset error for invalid update" do
       {:ok, provider} = Providers.create(@valid_attrs)
       assert {:error, %Ecto.Changeset{}} = Providers.update(provider.id, %{type: "invalid"})
+    end
+
+    test "failed persisted rename preserves the old runtime registration" do
+      assert {:ok, provider} = Providers.create(@valid_attrs)
+
+      :provider
+      |> Synapsis.Config.Store.file_path()
+      |> File.chmod!(0o400)
+
+      assert {:error, {:persist_failed, _reason}} =
+               Providers.update(provider.id, %{name: "failed-rename"})
+
+      assert {:ok, %{name: "test-provider"}} = Providers.get(provider.id)
+      assert {:ok, _runtime_config} = Providers.runtime_config(provider.name)
+      assert {:error, :not_found} = Providers.runtime_config("failed-rename")
     end
   end
 
@@ -197,6 +288,7 @@ defmodule Synapsis.ProvidersTest do
         enabled: true,
         config: %{
           "managed_by" => "backplane",
+          "backplane_source_id" => "source-1",
           "backplane_available" => true,
           "enabled_models" => [],
           "backplane_models" => [
@@ -229,6 +321,32 @@ defmodule Synapsis.ProvidersTest do
       refute Providers.model_runtime_available?(restricted, "other-model")
 
       refute Providers.model_runtime_available?(%{provider | enabled: false}, "any-local-model")
+    end
+
+    test "treats malformed Backplane model markers as unavailable without raising" do
+      provider = %ProviderConfig{
+        enabled: true,
+        config: %{
+          "managed_by" => "backplane",
+          "backplane_source_id" => "source-1",
+          "backplane_available" => true,
+          "backplane_models" => %{"external_id" => "model-a"}
+        }
+      }
+
+      refute Providers.model_runtime_available?(provider, "model-a")
+
+      malformed_entries = %{
+        provider
+        | config: %{
+            "managed_by" => "backplane",
+            "backplane_source_id" => "source-1",
+            "backplane_available" => true,
+            "backplane_models" => [nil, "model-a", %{}, %{"external_id" => "model-a"}]
+          }
+      }
+
+      refute Providers.model_runtime_available?(malformed_entries, "model-a")
     end
   end
 
@@ -366,6 +484,56 @@ defmodule Synapsis.ProvidersTest do
   end
 
   describe "models/1" do
+    test "filters discovered Backplane models through source and local availability" do
+      bypass = Bypass.open()
+
+      Bypass.stub(bypass, "GET", "/v1/models", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(
+          200,
+          Jason.encode!(%{
+            "data" => [%{"id" => "disabled-model"}, %{"id" => "enabled-model"}]
+          })
+        )
+      end)
+
+      assert {:ok, provider} =
+               Providers.create(%{
+                 name: "mixed-discovery-provider",
+                 type: "openai",
+                 base_url: "http://localhost:#{bypass.port}",
+                 enabled: true,
+                 config: %{
+                   "managed_by" => "backplane",
+                   "backplane_source_id" => "source-1",
+                   "backplane_available" => true,
+                   "enabled_models" => ["disabled-model", "enabled-model"],
+                   "available_models" => [
+                     %{"id" => "disabled-model"},
+                     %{"id" => "enabled-model"}
+                   ],
+                   "backplane_models" => [
+                     %{
+                       "external_id" => "disabled-model",
+                       "source_available" => false,
+                       "backplane_available" => false
+                     },
+                     %{
+                       "external_id" => "enabled-model",
+                       "source_available" => true,
+                       "backplane_available" => true
+                     }
+                   ]
+                 }
+               })
+
+      assert {:ok, [%{id: "enabled-model"}]} = Providers.models(provider.id)
+      assert {:ok, [%{id: "enabled-model"}]} = Providers.fetch_models(provider)
+      assert {:ok, [%{id: "enabled-model"}]} = Providers.models_for(provider.name)
+      assert {:ok, [%{id: "enabled-model"}]} = Providers.models_by_id(provider.id)
+    end
+
     test "rejects every model operation for an unavailable managed provider" do
       {:ok, provider} =
         Providers.create(%{

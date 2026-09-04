@@ -81,12 +81,13 @@ defmodule Synapsis.Session.Worker.Config do
   def resolve_session_defaults(%Session{} = session) do
     agent = resolve_agent(session)
     provider = agent[:provider] || session.provider
-    model = agent[:model] || session.model
-    agent = agent |> Map.put(:provider, provider) |> Map.put(:model, model)
+    selected_model = agent[:model] || session.model
 
     with {:ok, provider_config} <- resolve_provider_config(provider),
+         {:ok, model} <- resolve_runtime_model(provider, selected_model),
          {:ok, updated_session} <-
            persist_session_if_changed(session, %{provider: provider, model: model}) do
+      agent = agent |> Map.put(:provider, provider) |> Map.put(:model, model)
       {:ok, updated_session, agent, provider, provider_config}
     end
   end
@@ -229,6 +230,25 @@ defmodule Synapsis.Session.Worker.Config do
 
       {:error, :not_found} ->
         :ok
+    end
+  end
+
+  defp resolve_runtime_model(provider_name, selected_model) do
+    case Synapsis.Providers.get_by_name(provider_name) do
+      {:ok, provider} ->
+        cond do
+          Synapsis.Providers.model_runtime_available?(provider, selected_model) ->
+            {:ok, selected_model}
+
+          model = Synapsis.Providers.first_runtime_model(provider) ->
+            {:ok, model}
+
+          true ->
+            {:error, :model_unavailable}
+        end
+
+      {:error, :not_found} ->
+        {:ok, selected_model}
     end
   end
 

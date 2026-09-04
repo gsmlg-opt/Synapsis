@@ -212,7 +212,11 @@ defmodule Synapsis.Agent.QueryLoop do
     stream_fn = ctx.agent_config[:stream_fn] || (&default_stream/2)
 
     with {:ok, request} <- build_request(state, ctx),
-         :ok <- ensure_provider_available(ctx.agent_config[:provider]) do
+         :ok <-
+           ensure_model_runtime_available(
+             ctx.agent_config[:provider],
+             request[:model] || request["model"]
+           ) do
       case stream_fn.(request, ctx.provider_config) do
         :ok -> collect_with_streaming(ctx)
         {:ok, _ref} -> collect_with_streaming(ctx)
@@ -221,12 +225,20 @@ defmodule Synapsis.Agent.QueryLoop do
     end
   end
 
-  defp ensure_provider_available(nil), do: :ok
+  defp ensure_model_runtime_available(nil, _model), do: :ok
 
-  defp ensure_provider_available(provider) do
+  defp ensure_model_runtime_available(provider, model) do
     case Synapsis.Providers.get_runtime_by_name(provider) do
-      {:error, :provider_unavailable} = error -> error
-      _ -> :ok
+      {:ok, provider_config} ->
+        if Synapsis.Providers.model_runtime_available?(provider_config, model),
+          do: :ok,
+          else: {:error, :model_unavailable}
+
+      {:error, :provider_unavailable} = error ->
+        error
+
+      {:error, :not_found} ->
+        :ok
     end
   end
 

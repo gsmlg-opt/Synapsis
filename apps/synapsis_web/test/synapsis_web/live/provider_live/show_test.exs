@@ -503,6 +503,65 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       assert html =~ "Provider is currently unavailable"
     end
 
+    test "chat_send rejects a source-disabled model before an HTTP request", %{conn: conn} do
+      bypass = Bypass.open()
+      test_pid = self()
+
+      assert {:ok, _connection} =
+               Synapsis.Config.Store.put(:backplane, %{"id" => "source-1", "enabled" => true})
+
+      Bypass.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+        send(test_pid, :provider_http_called)
+
+        conn
+        |> Plug.Conn.put_resp_content_type("text/event-stream")
+        |> Plug.Conn.send_resp(200, "data: [DONE]\n\n")
+      end)
+
+      provider =
+        create_provider!(%{
+          name: "mixed-model-chat",
+          type: "openai",
+          base_url: "http://localhost:#{bypass.port}",
+          config: %{
+            "managed_by" => "backplane",
+            "backplane_source_id" => "source-1",
+            "backplane_available" => true,
+            "available_models" => [
+              %{id: "disabled-model", name: "Disabled Model"},
+              %{id: "enabled-model", name: "Enabled Model"}
+            ],
+            "backplane_models" => [
+              %{
+                "external_id" => "disabled-model",
+                "source_available" => false,
+                "backplane_available" => false
+              },
+              %{
+                "external_id" => "enabled-model",
+                "source_available" => true,
+                "backplane_available" => true
+              }
+            ]
+          }
+        })
+
+      {:ok, view, html} = live(conn, ~p"/settings/providers/#{provider.id}")
+
+      refute html =~ "Disabled Model"
+      assert html =~ "Enabled Model"
+
+      view
+      |> element(~s(div[phx-click="toggle_chat"]))
+      |> render_click()
+
+      render_hook(view, "chat_select_model", %{"model" => "disabled-model"})
+      html = render_hook(view, "chat_send", %{"message" => "must not leave the process"})
+
+      refute_receive :provider_http_called, 200
+      assert html =~ "Model is currently unavailable"
+    end
+
     test "chat_send preserves available non-Backplane providers", %{conn: conn} do
       bypass = Bypass.open()
       test_pid = self()

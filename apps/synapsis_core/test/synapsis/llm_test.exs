@@ -6,10 +6,12 @@ defmodule Synapsis.LLMTest do
 
   setup do
     Synapsis.DataCase.clear_config_store(:provider)
+    Synapsis.DataCase.clear_config_store(:backplane)
     ProviderRegistry.unregister("anthropic")
 
     on_exit(fn ->
       Synapsis.DataCase.clear_config_store(:provider)
+      Synapsis.DataCase.clear_config_store(:backplane)
       ProviderRegistry.unregister("anthropic")
     end)
 
@@ -17,6 +19,52 @@ defmodule Synapsis.LLMTest do
   end
 
   describe "complete/2" do
+    test "rejects a source-disabled model before an HTTP request" do
+      bypass = Bypass.open()
+      caller = self()
+      provider_name = "llm-managed-#{System.unique_integer([:positive])}"
+
+      Bypass.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+        send(caller, :provider_http_called)
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(200, Jason.encode!(%{"choices" => []}))
+      end)
+
+      assert {:ok, _connection} =
+               Synapsis.Config.Store.put(:backplane, %{"id" => "source-1", "enabled" => true})
+
+      assert {:ok, _provider} =
+               Providers.create(%{
+                 name: provider_name,
+                 type: "openai",
+                 base_url: "http://localhost:#{bypass.port}",
+                 config: %{
+                   "managed_by" => "backplane",
+                   "backplane_source_id" => "source-1",
+                   "backplane_available" => true,
+                   "backplane_models" => [
+                     %{
+                       "external_id" => "disabled-model",
+                       "source_available" => false,
+                       "backplane_available" => false
+                     }
+                   ]
+                 }
+               })
+
+      on_exit(fn -> ProviderRegistry.unregister(provider_name) end)
+
+      assert {:error, :model_unavailable} =
+               LLM.complete([%{role: "user", content: "Hello"}],
+                 provider: provider_name,
+                 model: "disabled-model"
+               )
+
+      refute_receive :provider_http_called, 200
+    end
+
     test "rejects a known unavailable provider before registry or environment fallback" do
       previous_api_key = System.get_env("ANTHROPIC_API_KEY")
 
