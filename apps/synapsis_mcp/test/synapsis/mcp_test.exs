@@ -164,6 +164,42 @@ defmodule Synapsis.MCPTest do
     refute name in Synapsis.MCP.list()
   end
 
+  test "restart reports cleanup timeout when a registered runtime cannot be stopped", %{
+    bypass: bypass
+  } do
+    name = "restart_cleanup_#{System.unique_integer([:positive])}"
+    parent = self()
+
+    rogue =
+      spawn(fn ->
+        {:ok, _value} = Elixir.Registry.register(Synapsis.MCP.Registry, name, nil)
+        send(parent, {:rogue_registered, self()})
+
+        receive do
+          :stop -> :ok
+        end
+      end)
+
+    on_exit(fn ->
+      send(rogue, :stop)
+      wait_until(fn -> not Process.alive?(rogue) end)
+    end)
+
+    assert_receive {:rogue_registered, ^rogue}
+
+    config = %MCPConfig{
+      name: name,
+      transport: "streamable_http",
+      url: "http://localhost:#{bypass.port}"
+    }
+
+    assert {:error, {:restart_cleanup_failed, {:runtime_stop_timeout, ^name}}} =
+             Synapsis.MCP.restart(config)
+
+    refute_receive {:mcp_request, _method}, 200
+    assert Process.alive?(rogue)
+  end
+
   test "unavailable managed configs cannot start or remain registered after restart", %{
     bypass: bypass
   } do

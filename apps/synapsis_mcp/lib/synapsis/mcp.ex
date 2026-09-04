@@ -31,18 +31,25 @@ defmodule Synapsis.MCP do
   def restart(%MCPConfig{} = config) do
     case current_config(config) do
       {:ok, current} ->
-        stop_by_config_id(config.id)
-        Enum.each(Enum.uniq([config.name, current.name]), &stop_and_wait/1)
+        case cleanup_runtime(config.id, [config.name, current.name]) do
+          :ok ->
+            case start(current) do
+              {:ok, pid} -> await_restart(pid, current)
+              {:error, _} = error -> error
+            end
 
-        case start(current) do
-          {:ok, pid} -> await_restart(pid, current)
-          {:error, _} = error -> error
+          {:error, reason} ->
+            {:error, {:restart_cleanup_failed, reason}}
         end
 
-      {:error, _} = error ->
-        stop_by_config_id(config.id)
-        stop_and_wait(config.name)
-        error
+      {:error, current_reason} ->
+        case cleanup_runtime(config.id, [config.name]) do
+          :ok ->
+            {:error, current_reason}
+
+          {:error, cleanup_reason} ->
+            {:error, {:restart_cleanup_failed, current_reason, cleanup_reason}}
+        end
     end
   end
 
@@ -72,11 +79,11 @@ defmodule Synapsis.MCP do
 
   defp wait_gone(name, tries \\ 50) do
     cond do
-      tries <= 0 ->
-        :ok
-
       Registry.lookup(Synapsis.MCP.Registry, name) == [] ->
         :ok
+
+      tries <= 0 ->
+        {:error, {:runtime_stop_timeout, name}}
 
       true ->
         Process.sleep(20)
@@ -98,6 +105,19 @@ defmodule Synapsis.MCP do
     wait_gone(name)
   end
 
+  defp cleanup_runtime(config_id, names) do
+    with :ok <- stop_by_config_id(config_id) do
+      names
+      |> Enum.uniq()
+      |> Enum.reduce_while(:ok, fn name, :ok ->
+        case stop_and_wait(name) do
+          :ok -> {:cont, :ok}
+          {:error, _reason} = error -> {:halt, error}
+        end
+      end)
+    end
+  end
+
   defp stop_by_config_id(nil), do: :ok
 
   defp stop_by_config_id(id) do
@@ -117,11 +137,16 @@ defmodule Synapsis.MCP do
       :ok ->
         :ok
 
-      {:error, _reason} = error ->
+      {:error, reason} = error ->
         _ = DynamicSupervisor.terminate_child(Synapsis.MCP.DynamicSupervisor, pid)
-        stop_by_config_id(config.id)
-        stop_and_wait(config.name)
-        error
+
+        case cleanup_runtime(config.id, [config.name]) do
+          :ok ->
+            error
+
+          {:error, cleanup_reason} ->
+            {:error, {:restart_cleanup_failed, reason, cleanup_reason}}
+        end
     end
   end
 
