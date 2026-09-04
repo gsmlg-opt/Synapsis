@@ -38,6 +38,8 @@ defmodule Synapsis.MCP.Server do
   @client_info %{"name" => "synapsis", "version" => "0.1.0"}
   @capabilities %{"roots" => %{}}
   @await_timeout 15_000
+  @discovery_timeout 30_000
+  @ready_timeout @await_timeout + @discovery_timeout + 2_000
   @tool_timeout 30_000
   @registry_retry_ms 100
 
@@ -48,6 +50,15 @@ defmodule Synapsis.MCP.Server do
   @spec start_link(MCPConfig.t()) :: GenServer.on_start()
   def start_link(%MCPConfig{} = config) do
     GenServer.start_link(__MODULE__, config, name: via(config.name))
+  end
+
+  @doc "Wait until initial discovery and tool registration have completed."
+  @spec await_ready(GenServer.server(), timeout()) :: :ok | {:error, term()}
+  def await_ready(server, timeout \\ @ready_timeout)
+      when is_integer(timeout) and timeout > 0 do
+    GenServer.call(server, :await_ready, timeout)
+  catch
+    :exit, reason -> {:error, ready_failure(reason)}
   end
 
   defp via(name), do: {:via, Elixir.Registry, {Synapsis.MCP.Registry, name}}
@@ -98,7 +109,7 @@ defmodule Synapsis.MCP.Server do
   @impl true
   def handle_continue(:discover, %{client: client, config: config} = state) do
     with :ok <- MCPClient.await_ready(client, timeout: @await_timeout),
-         {:ok, response} <- MCPClient.list_tools(client) do
+         {:ok, response} <- MCPClient.list_tools(client, timeout: @discovery_timeout) do
       tools =
         response
         |> ProtocolResponse.unwrap()
@@ -119,6 +130,8 @@ defmodule Synapsis.MCP.Server do
   end
 
   @impl true
+  def handle_call(:await_ready, _from, state), do: {:reply, :ok, state}
+
   def handle_call({:execute, full_tool_name, input, _ctx}, _from, state) do
     if discovered_tool?(state.tools, full_tool_name) and
          current_runtime_available?(state.config, full_tool_name) do
@@ -184,6 +197,11 @@ defmodule Synapsis.MCP.Server do
   catch
     :exit, reason -> {:error, reason}
   end
+
+  defp ready_failure({:timeout, {GenServer, :call, _details}}), do: :mcp_ready_timeout
+  defp ready_failure({:noproc, {GenServer, :call, _details}}), do: :mcp_not_running
+  defp ready_failure({reason, {GenServer, :call, _details}}), do: reason
+  defp ready_failure(reason), do: reason
 
   defp register_tool(%{name: name, description: description, parameters: parameters}) do
     Registry.register_process(name, self(),

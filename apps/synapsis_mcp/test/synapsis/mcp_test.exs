@@ -1,11 +1,19 @@
 defmodule Synapsis.MCPTest do
   use ExUnit.Case, async: false
 
+  alias Synapsis.Config.Store
   alias Synapsis.MCPConfig
   alias Synapsis.MCPConfigs
   alias Synapsis.Tool.Registry
 
   setup do
+    Synapsis.DataCase.clear_config_store(:backplane)
+
+    assert {:ok, _connection} =
+             Store.put(:backplane, %{"id" => "source-1", "enabled" => true})
+
+    on_exit(fn -> Synapsis.DataCase.clear_config_store(:backplane) end)
+
     bypass = Bypass.open()
     test_pid = self()
 
@@ -62,11 +70,96 @@ defmodule Synapsis.MCPTest do
     assert wait_until(fn -> match?({:ok, _}, Registry.lookup(tool)) end)
 
     :ok = Synapsis.MCP.restart(cfg)
-    assert wait_until(fn -> match?({:ok, _}, Registry.lookup(tool)) end)
+    assert {:ok, _registered} = Registry.lookup(tool)
 
     assert name in Synapsis.MCP.list()
 
     :ok = Synapsis.MCP.stop(name)
+    assert wait_until(fn -> match?({:error, :not_found}, Registry.lookup(tool)) end)
+    refute name in Synapsis.MCP.list()
+  end
+
+  test "restart reports discovery failure before returning" do
+    bypass = Bypass.open()
+    {:ok, mode} = Agent.start_link(fn -> :available end)
+
+    Bypass.stub(bypass, "POST", "/mcp", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      request = Jason.decode!(body)
+
+      response =
+        case request do
+          %{"id" => id, "method" => "initialize"} = req ->
+            %{
+              "jsonrpc" => "2.0",
+              "id" => id,
+              "result" => %{
+                "protocolVersion" => req["params"]["protocolVersion"] || "2025-06-18",
+                "capabilities" => %{"tools" => %{}},
+                "serverInfo" => %{"name" => "x", "version" => "0"}
+              }
+            }
+
+          %{"id" => id, "method" => "tools/list"} ->
+            case Agent.get_and_update(mode, fn
+                   :fail_once -> {:unavailable, :available}
+                   current -> {current, current}
+                 end) do
+              :available ->
+                %{
+                  "jsonrpc" => "2.0",
+                  "id" => id,
+                  "result" => %{
+                    "tools" => [
+                      %{
+                        "name" => "echo",
+                        "description" => "e",
+                        "inputSchema" => %{"type" => "object"}
+                      }
+                    ]
+                  }
+                }
+
+              :unavailable ->
+                %{
+                  "jsonrpc" => "2.0",
+                  "id" => id,
+                  "error" => %{"code" => -32_603, "message" => "replacement unavailable"}
+                }
+            end
+
+          _notification ->
+            nil
+        end
+
+      if response do
+        conn
+        |> Plug.Conn.put_resp_header("content-type", "application/json")
+        |> Plug.Conn.resp(200, Jason.encode!(response))
+      else
+        Plug.Conn.resp(conn, 202, "")
+      end
+    end)
+
+    Bypass.stub(bypass, "GET", "/mcp", fn conn -> Plug.Conn.resp(conn, 200, "") end)
+
+    name = "restart_readiness_#{System.unique_integer([:positive])}"
+
+    config = %MCPConfig{
+      name: name,
+      transport: "streamable_http",
+      url: "http://localhost:#{bypass.port}"
+    }
+
+    on_exit(fn -> Synapsis.MCP.stop(name) end)
+
+    assert {:ok, _pid} = Synapsis.MCP.start(config)
+    tool = "mcp:#{name}:echo"
+    assert wait_until(fn -> match?({:ok, _}, Registry.lookup(tool)) end)
+
+    Agent.update(mode, fn _ -> :fail_once end)
+
+    assert {:error, {:discover_failed, _reason}} = Synapsis.MCP.restart(config)
     assert wait_until(fn -> match?({:error, :not_found}, Registry.lookup(tool)) end)
     refute name in Synapsis.MCP.list()
   end

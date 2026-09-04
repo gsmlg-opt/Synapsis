@@ -35,7 +35,7 @@ defmodule Synapsis.MCP do
         Enum.each(Enum.uniq([config.name, current.name]), &stop_and_wait/1)
 
         case start(current) do
-          {:ok, _} -> :ok
+          {:ok, pid} -> await_restart(pid, current)
           {:error, _} = error -> error
         end
 
@@ -110,6 +110,19 @@ defmodule Synapsis.MCP do
     end)
 
     wait_gone(key)
+  end
+
+  defp await_restart(pid, config) do
+    case Server.await_ready(pid) do
+      :ok ->
+        :ok
+
+      {:error, _reason} = error ->
+        _ = DynamicSupervisor.terminate_child(Synapsis.MCP.DynamicSupervisor, pid)
+        stop_by_config_id(config.id)
+        stop_and_wait(config.name)
+        error
+    end
   end
 
   defp start_resolved(config) do
