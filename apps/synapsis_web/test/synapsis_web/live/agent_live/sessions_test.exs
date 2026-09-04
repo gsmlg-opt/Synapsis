@@ -7,6 +7,12 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
   alias Synapsis.Session.Worker.Persistence, as: SessionPersistence
   alias Synapsis.{AgentConfigs, Sessions}
 
+  setup do
+    Synapsis.DataCase.clear_config_store(:provider)
+    on_exit(fn -> Synapsis.DataCase.clear_config_store(:provider) end)
+    :ok
+  end
+
   describe "agent sessions page" do
     test "disables LiveView parameter logging for Base64 image payloads" do
       assert %{log: false} = SynapsisWeb.AgentLive.Sessions.__live__()
