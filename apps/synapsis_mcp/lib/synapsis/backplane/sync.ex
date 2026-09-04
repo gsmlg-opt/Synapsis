@@ -5,7 +5,9 @@ defmodule Synapsis.Backplane.Sync do
   alias Synapsis.{MCPConfigs, Providers, Skill, Skills}
 
   @max_error_length 500
+  @fail_closed_persist_attempts 2
   @lock_context_key {__MODULE__, :held_connection_locks}
+  @runtime_blocked_surfaces_key "runtime_blocked_surfaces"
 
   def status(connection_id) do
     with {:ok, connection} <- Connection.get(connection_id) do
@@ -240,6 +242,7 @@ defmodule Synapsis.Backplane.Sync do
     %{
       artifacts: connection.artifacts || %{},
       revisions: Map.get(connection.metadata || %{}, "surface_revisions", %{}),
+      runtime_blocked_surfaces: runtime_blocked_surfaces(connection.metadata),
       providers: providers,
       skills: skills,
       mcps: mcps
@@ -273,7 +276,8 @@ defmodule Synapsis.Backplane.Sync do
       counts: connection.counts || %{},
       revisions: Map.get(connection.metadata || %{}, "surface_revisions", %{}),
       errors: snapshot.errors,
-      runtime_changed: false
+      runtime_changed: false,
+      runtime_blocked_surfaces: runtime_blocked_surfaces(connection.metadata)
     }
 
     result =
@@ -297,14 +301,64 @@ defmodule Synapsis.Backplane.Sync do
   defp reconcile_surface(result, surface, fun) do
     case fun.() do
       {:ok, updated} ->
-        updated
+        if Map.has_key?(updated.errors, surface),
+          do: updated,
+          else: clear_runtime_block(updated, surface)
 
       {:error, reason} ->
         result
         |> put_in([:errors, surface], reason)
+        |> maybe_block_runtime(surface, reason)
         |> maybe_mark_runtime_changed(reason)
     end
   end
+
+  defp clear_runtime_block(result, surface) do
+    public_surface = surface |> public_surface() |> Atom.to_string()
+
+    update_in(
+      result,
+      [:runtime_blocked_surfaces],
+      &List.delete(&1, public_surface)
+    )
+  end
+
+  defp maybe_block_runtime(result, surface, reason) do
+    if runtime_block_required?(surface, reason) do
+      public_surface = surface |> public_surface() |> Atom.to_string()
+
+      update_in(result, [:runtime_blocked_surfaces], fn blocked ->
+        [public_surface | blocked] |> Enum.uniq() |> Enum.sort()
+      end)
+    else
+      result
+    end
+  end
+
+  defp runtime_block_required?(
+         :skills,
+         {:skill_rollback_failed, _surface_reason, _rollback_reason,
+          {:fail_closed_failed, _fail_closed_reason}}
+       ),
+       do: true
+
+  defp runtime_block_required?(:mcp_tools, reason),
+    do: contains_fail_closed_persist_failure?(reason)
+
+  defp runtime_block_required?(_surface, _reason), do: false
+
+  defp contains_fail_closed_persist_failure?({:fail_closed_persist_failed, _reason}), do: true
+
+  defp contains_fail_closed_persist_failure?(reason) when is_tuple(reason) do
+    reason
+    |> Tuple.to_list()
+    |> Enum.any?(&contains_fail_closed_persist_failure?/1)
+  end
+
+  defp contains_fail_closed_persist_failure?(reason) when is_list(reason),
+    do: Enum.any?(reason, &contains_fail_closed_persist_failure?/1)
+
+  defp contains_fail_closed_persist_failure?(_reason), do: false
 
   defp maybe_mark_runtime_changed(result, {:mcp_runtime_rollback_failed, _new, _rollback}),
     do: %{result | runtime_changed: true}
@@ -369,6 +423,7 @@ defmodule Synapsis.Backplane.Sync do
 
     metadata =
       Map.merge(connection.metadata || %{}, %{
+        @runtime_blocked_surfaces_key => reconciliation.runtime_blocked_surfaces,
         "surface_errors" => surface_errors,
         "surface_revisions" => reconciliation.revisions
       })
@@ -441,6 +496,19 @@ defmodule Synapsis.Backplane.Sync do
 
   defp public_surface(:mcp_tools), do: :tools
   defp public_surface(surface), do: surface
+
+  defp runtime_blocked_surfaces(metadata) do
+    case Map.get(metadata || %{}, @runtime_blocked_surfaces_key, []) do
+      blocked when is_list(blocked) ->
+        blocked
+        |> Enum.filter(&is_binary/1)
+        |> Enum.uniq()
+        |> Enum.sort()
+
+      _invalid ->
+        []
+    end
+  end
 
   defp format_errors(errors, credential) do
     errors
@@ -686,10 +754,8 @@ defmodule Synapsis.Backplane.Sync do
       |> owned_skills(skill_store)
       |> Enum.sort_by(& &1.id)
       |> Enum.reduce([], fn skill, errors ->
-        config = Map.put(skill.config_overrides || %{}, "backplane_available", false)
-
-        case skill_store.update(skill, %{config_overrides: config}) do
-          {:ok, _updated} -> errors
+        case persist_fail_closed_skill(skill_store, skill, @fail_closed_persist_attempts) do
+          :ok -> errors
           {:error, reason} -> [{skill.id, reason} | errors]
         end
       end)
@@ -697,6 +763,21 @@ defmodule Synapsis.Backplane.Sync do
     case Enum.reverse(errors) do
       [] -> :ok
       errors -> {:error, errors}
+    end
+  end
+
+  defp persist_fail_closed_skill(skill_store, skill, attempts_left) do
+    config = Map.put(skill.config_overrides || %{}, "backplane_available", false)
+
+    case skill_store.update(skill, %{config_overrides: config}) do
+      {:ok, _updated} ->
+        :ok
+
+      {:error, _reason} when attempts_left > 1 ->
+        persist_fail_closed_skill(skill_store, skill, attempts_left - 1)
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -774,6 +855,15 @@ defmodule Synapsis.Backplane.Sync do
               end
 
             {:error, rollback_reason} ->
+              rollback_reason =
+                fail_closed_runtime(
+                  mcp_store,
+                  runtime,
+                  persisted,
+                  persisted.name,
+                  {:config_restore_failed, rollback_reason}
+                )
+
               {:error, {:mcp_rollback_failed, runtime_reason, rollback_reason}}
           end
       end
@@ -840,14 +930,24 @@ defmodule Synapsis.Backplane.Sync do
   defp persist_fail_closed_mcp(_mcp_store, nil), do: :ok
 
   defp persist_fail_closed_mcp(mcp_store, restored) do
+    persist_fail_closed_mcp(mcp_store, restored, @fail_closed_persist_attempts)
+  end
+
+  defp persist_fail_closed_mcp(mcp_store, restored, attempts_left) do
     config =
       restored.config
       |> put_effective_availability(false)
       |> update_nested_availability("backplane_tools", false)
 
     case mcp_store.update(restored, %{config: config}) do
-      {:ok, _unavailable} -> :ok
-      {:error, reason} -> {:error, reason}
+      {:ok, _unavailable} ->
+        :ok
+
+      {:error, _reason} when attempts_left > 1 ->
+        persist_fail_closed_mcp(mcp_store, restored, attempts_left - 1)
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
