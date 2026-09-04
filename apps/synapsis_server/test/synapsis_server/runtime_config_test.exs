@@ -2,6 +2,7 @@ defmodule SynapsisServer.RuntimeConfigTest do
   use ExUnit.Case, async: false
 
   @runtime_config Path.expand("../../../../config/runtime.exs", __DIR__)
+  @prod_config Path.expand("../../../../config/prod.exs", __DIR__)
   @env_keys ~w(PHX_IP SECRET_KEY_BASE SYNAPSIS_ENCRYPTION_KEY)
 
   setup do
@@ -42,6 +43,18 @@ defmodule SynapsisServer.RuntimeConfigTest do
 
   test "rejects an invalid bind address" do
     assert_raise RuntimeError, ~r/invalid PHX_IP/, fn -> endpoint_ip("not-an-ip") end
+  end
+
+  test "trusts Caddy's forwarded protocol while permitting loopback health checks" do
+    force_ssl =
+      @prod_config
+      |> Config.Reader.read!(env: :prod)
+      |> Keyword.fetch!(:synapsis_server)
+      |> Keyword.fetch!(SynapsisServer.Endpoint)
+      |> Keyword.fetch!(:force_ssl)
+
+    assert force_ssl[:rewrite_on] == [:x_forwarded_proto]
+    assert force_ssl[:exclude] == [hosts: ["localhost", "127.0.0.1"]]
   end
 
   defp endpoint_ip(nil) do

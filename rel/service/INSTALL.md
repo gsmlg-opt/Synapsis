@@ -36,12 +36,14 @@ library path before starting the release.
 Create the user service environment:
 
 ```sh
+umask 077
 {
   printf 'SECRET_KEY_BASE=%s\n' "$(openssl rand -base64 64)"
   printf 'SYNAPSIS_ENCRYPTION_KEY=%s\n' "$(openssl rand -base64 32)"
   printf 'PHX_HOST=localhost\n'
   printf 'PORT=4657\n'
 } > "$HOME/.config/synapsis/synapsis.env"
+chmod 600 "$HOME/.config/synapsis/synapsis.env"
 ```
 
 The release listens on `127.0.0.1` by default. `PHX_HOST` controls generated

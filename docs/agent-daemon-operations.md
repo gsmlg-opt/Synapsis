@@ -87,9 +87,17 @@ the site's certificate policy:
 ```sh
 umask 077
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out synapsis-client-ca.key
-openssl req -x509 -new -sha256 -days 3650 \
+openssl req -new -sha256 \
   -key synapsis-client-ca.key \
   -subj '/CN=Synapsis Client CA' \
+  -out synapsis-client-ca.csr
+printf '%s\n' 'basicConstraints=critical,CA:TRUE' \
+  'keyUsage=critical,keyCertSign,cRLSign' \
+  'subjectKeyIdentifier=hash' > synapsis-client-ca.ext
+openssl x509 -req -sha256 -days 3650 \
+  -in synapsis-client-ca.csr \
+  -signkey synapsis-client-ca.key \
+  -extfile synapsis-client-ca.ext \
   -out synapsis-client-ca.pem
 
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out synapsis-admin.key
@@ -97,7 +105,8 @@ openssl req -new -sha256 \
   -key synapsis-admin.key \
   -subj '/CN=synapsis-admin' \
   -out synapsis-admin.csr
-printf '%s\n' 'basicConstraints=CA:FALSE' 'keyUsage=digitalSignature' \
+printf '%s\n' 'basicConstraints=critical,CA:FALSE' \
+  'keyUsage=critical,digitalSignature' \
   'extendedKeyUsage=clientAuth' > synapsis-admin.ext
 openssl x509 -req -sha256 -days 365 \
   -in synapsis-admin.csr \
@@ -107,6 +116,10 @@ openssl x509 -req -sha256 -days 365 \
   -extfile synapsis-admin.ext \
   -out synapsis-admin.pem
 chmod 600 synapsis-admin.key synapsis-client-ca.key
+openssl verify \
+  -CAfile synapsis-client-ca.pem \
+  -purpose sslclient \
+  synapsis-admin.pem
 ```
 
 Install only `synapsis-client-ca.pem` where the Caddy service can read it, then
