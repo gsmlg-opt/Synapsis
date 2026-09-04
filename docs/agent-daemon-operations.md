@@ -25,8 +25,17 @@ All endpoints are under `/api`:
 - `GET /agent/daemon/status`, `GET /agent/runs`, `GET /agent/runs/:id`
 - `POST /agent/runs` with `{"prompt":"..."}`
 - `POST /agent/runs/:id/cancel`
-- `GET /agent/routines/:kind` and `POST /agent/routines/:kind/trigger`
+- `GET /agent/routines` with optional `kind`, `POST /agent/routines`
+- `PATCH /agent/routines/:id`, `POST /agent/routines/:id/trigger`
+- `POST /agent/heartbeat/trigger` with an optional stored routine `name`
+- `POST /agent/dream/trigger` when exactly one enabled dream routine exists
+- `GET /agent/events` for daemon and Backplane lifecycle SSE
 - Backplane CRUD under `/backplane/connections`, plus `/status`, `/test`, and `/refresh`.
+
+Routine creation assigns an immutable UUID. PATCH and run-now operations use
+that ID and execute only the persisted routine definition; request payloads
+cannot replace its prompt or tool profile. The `agent:daemon` Phoenix Channel
+and daemon SSE endpoint expose the same public lifecycle event names.
 
 Credentials are encrypted at rest and are never returned by the API. Backplane
 refresh is best-effort and keeps last-known-good capability artifacts when a
@@ -34,9 +43,17 @@ surface is unavailable.
 
 ## CLI
 
-The escript provides `agent status|run|runs|cancel`, `heartbeat run`, `dream run`,
-`schedule list|run`, and `backplane list|test|sync`. Use `--host` to select the
+The escript provides `agent status|run|runs|cancel`, `heartbeat run [name]`,
+`dream run`, `schedule list|run <name>`, and
+`backplane list|add|test|sync`. Schedule and Backplane names resolve to exactly
+one stable ID or fail as ambiguous. Backplane connections are keyless unless
+`backplane add` is given `--credential-env VAR`; the credential is read from
+that environment variable and is never printed. Use `--host` to select the
 local HTTP endpoint.
+
+The operational LiveView is available at `/agent/daemon`. It subscribes to the
+daemon topic and provides runtime status, durable run history and controls,
+routine management, and Backplane connection status and actions.
 
 ## Deployment boundary
 
