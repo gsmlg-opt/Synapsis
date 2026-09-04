@@ -29,6 +29,11 @@ defmodule SynapsisCli.Main do
         IO.puts("Starting Synapsis server...")
         IO.puts("Run `mix phx.server` from the project root instead.")
 
+      match?(["agent", _ | _], rest) or match?(["heartbeat", _ | _], rest) or
+        match?(["dream", _ | _], rest) or match?(["schedule", _ | _], rest) or
+          match?(["backplane", _ | _], rest) ->
+        run_daemon_command(rest, opts[:host] || @default_host)
+
       match?(["code" | _], rest) ->
         prompt = rest |> Enum.drop(1) |> Enum.join(" ")
 
@@ -47,6 +52,59 @@ defmodule SynapsisCli.Main do
 
       true ->
         run_interactive(opts)
+    end
+  end
+
+  defp run_daemon_command(["agent", "status"], host), do: api_get(host, "/api/agent/status")
+  defp run_daemon_command(["agent", "runs"], host), do: api_get(host, "/api/agent/runs")
+
+  defp run_daemon_command(["agent", "run" | prompt], host),
+    do: api_post(host, "/api/agent/runs", %{prompt: Enum.join(prompt, " ")})
+
+  defp run_daemon_command(["agent", "cancel", id], host),
+    do: api_post(host, "/api/agent/runs/#{id}/cancel", %{})
+
+  defp run_daemon_command(["heartbeat", "run" | rest], host),
+    do: api_post(host, "/api/agent/triggers", %{kind: "heartbeat", routine_id: List.first(rest)})
+
+  defp run_daemon_command(["dream", "run"], host),
+    do: api_post(host, "/api/agent/triggers", %{kind: "dream"})
+
+  defp run_daemon_command(["schedule", "list"], host),
+    do: api_get(host, "/api/agent/routines?kind=schedule")
+
+  defp run_daemon_command(["schedule", "run", id], host),
+    do: api_post(host, "/api/agent/routines/#{id}/run", %{})
+
+  defp run_daemon_command(["backplane", "list"], host),
+    do: api_get(host, "/api/backplane/connections")
+
+  defp run_daemon_command(["backplane", "test", id], host),
+    do: api_post(host, "/api/backplane/connections/#{id}/test", %{})
+
+  defp run_daemon_command(["backplane", "sync", id], host),
+    do: api_post(host, "/api/backplane/connections/#{id}/refresh", %{})
+
+  defp run_daemon_command(_, _host),
+    do: IO.puts(:stderr, "Usage: synapsis agent status|run <prompt>|runs|cancel <id>")
+
+  defp api_get(host, path) do
+    case Req.get("#{host}#{path}", receive_timeout: 30_000) do
+      {:ok, %{status: status, body: body}} ->
+        IO.puts(Jason.encode!(%{status: status, data: body}))
+
+      {:error, _} ->
+        IO.puts(:stderr, "Error: connection failed")
+    end
+  end
+
+  defp api_post(host, path, body) do
+    case Req.post("#{host}#{path}", json: body, receive_timeout: 30_000) do
+      {:ok, %{status: status, body: response}} ->
+        IO.puts(Jason.encode!(%{status: status, data: response}))
+
+      {:error, _} ->
+        IO.puts(:stderr, "Error: connection failed")
     end
   end
 

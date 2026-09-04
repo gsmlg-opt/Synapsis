@@ -4,7 +4,7 @@ defmodule SynapsisMcp.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [Synapsis.MCP.Supervisor]
+    children = [Synapsis.MCP.Supervisor, Synapsis.Backplane.StartupRefresh]
     opts = [strategy: :one_for_one, name: SynapsisMcp.RootSupervisor]
 
     case Supervisor.start_link(children, opts) do
