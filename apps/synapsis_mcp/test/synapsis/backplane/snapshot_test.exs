@@ -190,6 +190,49 @@ defmodule Synapsis.Backplane.SnapshotTest do
     refute first.surface_revisions.mcp_tools == third.surface_revisions.mcp_tools
   end
 
+  test "rejects duplicate external identities independent of input ordering" do
+    duplicate_models = [
+      %{"id" => "duplicate", "name" => "First model"},
+      %{"id" => "duplicate", "name" => "Second model"}
+    ]
+
+    duplicate_skills = [
+      %{"id" => "duplicate", "name" => "First skill"},
+      %{"id" => "duplicate", "name" => "Second skill"}
+    ]
+
+    surfaces = %{
+      models: {:ok, duplicate_models},
+      skills: {:ok, duplicate_skills},
+      mcp_tools: {:ok, [%{"name" => "unique-tool"}]}
+    }
+
+    assert {:ok, first} = Snapshot.normalize(connection!(), surfaces, fetched_at: @fetched_at)
+
+    reordered = %{
+      surfaces
+      | models: {:ok, Enum.reverse(duplicate_models)},
+        skills: {:ok, Enum.reverse(duplicate_skills)}
+    }
+
+    assert {:ok, second} = Snapshot.normalize(connection!(), reordered, fetched_at: @fetched_at)
+
+    for snapshot <- [first, second] do
+      assert snapshot.errors.models == {:duplicate_capability, "model", "duplicate"}
+      assert snapshot.errors.skills == {:duplicate_capability, "skill", "duplicate"}
+      assert snapshot.models == []
+      assert snapshot.providers == []
+      assert snapshot.skills == []
+      assert [%{external_id: "unique-tool"}] = snapshot.mcp_tools
+      refute Map.has_key?(snapshot.surface_revisions, :models)
+      refute Map.has_key?(snapshot.surface_revisions, :skills)
+    end
+
+    assert first.errors == second.errors
+    assert first.surface_revisions == second.surface_revisions
+    assert first.source_revision == second.source_revision
+  end
+
   defp connection! do
     {:ok, connection} =
       Connection.new(%{

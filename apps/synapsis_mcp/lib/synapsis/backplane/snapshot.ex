@@ -173,29 +173,33 @@ defmodule Synapsis.Backplane.Snapshot do
 
   defp capabilities(connection, kind, entries, id_fun) do
     entries
-    |> Enum.reduce_while({:ok, []}, fn entry, {:ok, acc} ->
+    |> Enum.reduce_while({:ok, [], MapSet.new()}, fn entry, {:ok, acc, seen_ids} ->
       with true <- is_map(entry),
            id when is_binary(id) and id != "" <- id_fun.(entry) do
-        name = capability_name(entry, id)
+        if MapSet.member?(seen_ids, id) do
+          {:halt, {:error, {:duplicate_capability, kind, id}}}
+        else
+          name = capability_name(entry, id)
 
-        normalized =
-          capability(
-            connection,
-            id,
-            external_revision(entry),
-            name,
-            kind,
-            map_value(entry, "enabled") != false,
-            stringify_keys(entry)
-          )
+          normalized =
+            capability(
+              connection,
+              id,
+              external_revision(entry),
+              name,
+              kind,
+              map_value(entry, "enabled") != false,
+              stringify_keys(entry)
+            )
 
-        {:cont, {:ok, [normalized | acc]}}
+          {:cont, {:ok, [normalized | acc], MapSet.put(seen_ids, id)}}
+        end
       else
         _invalid -> {:halt, {:error, {:invalid_capability, kind}}}
       end
     end)
     |> case do
-      {:ok, normalized} -> {:ok, Enum.sort_by(normalized, & &1.external_id)}
+      {:ok, normalized, _seen_ids} -> {:ok, Enum.sort_by(normalized, & &1.external_id)}
       error -> error
     end
   end
