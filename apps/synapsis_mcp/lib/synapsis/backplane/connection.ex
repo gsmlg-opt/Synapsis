@@ -89,6 +89,8 @@ defmodule Synapsis.Backplane.Connection do
     end
   end
 
+  def delete(%__MODULE__{} = connection), do: Store.delete(@store_type, connection.id)
+
   def redacted(%__MODULE__{} = connection), do: %{connection | credential: nil}
 
   defp unique_name(name, id) do

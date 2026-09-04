@@ -61,6 +61,21 @@ defmodule SynapsisServer.Router do
     post "/providers/:id/oauth/refresh", ProviderController, :oauth_refresh
 
     get "/config", ConfigController, :show
+
+    get "/agent/daemon/status", AgentController, :status
+    get "/agent/runs", AgentController, :runs
+    get "/agent/runs/:id", AgentController, :show_run
+    post "/agent/runs", AgentController, :run
+    post "/agent/runs/:id/cancel", AgentController, :cancel
+    get "/agent/routines/:kind", AgentController, :routines
+    post "/agent/routines/:kind/trigger", AgentController, :trigger
+
+    resources "/backplane/connections", BackplaneConnectionController,
+      only: [:index, :create, :update, :delete]
+
+    get "/backplane/connections/:id/status", BackplaneConnectionController, :status
+    post "/backplane/connections/:id/test", BackplaneConnectionController, :test_connection
+    post "/backplane/connections/:id/refresh", BackplaneConnectionController, :refresh
   end
 
   scope "/", SynapsisServer do
