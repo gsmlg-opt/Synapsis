@@ -29,7 +29,7 @@ defmodule Synapsis.Tool.RegistryTest do
       assert {:ok, {:module, FakeTool, opts}} = Registry.lookup("test_tool")
       # Enriched opts include metadata resolved from module callbacks
       assert opts[:category] == :uncategorized
-      assert opts[:permission_level] == :read
+      assert opts[:permission_level] == :write
       assert opts[:enabled] == true
       assert opts[:deferred] == false
     end
@@ -48,6 +48,24 @@ defmodule Synapsis.Tool.RegistryTest do
 
       assert {:ok, {:process, ^pid, [description: "proc tool"]}} =
                Registry.lookup("test_process_tool")
+    end
+
+    test "defaults missing process permission metadata to write" do
+      assert :ok = Registry.register_process("test_process_tool", self())
+
+      assert [tool] = Registry.list_for_query_loop(names: ["test_process_tool"])
+      assert %{name: "test_process_tool", permission_level: :write} = tool
+      assert {:process, pid, _opts} = tool.registration
+      assert pid == self()
+    end
+
+    test "excludes a process tool when its runtime availability check fails" do
+      assert :ok =
+               Registry.register_process("test_process_tool", self(),
+                 availability_check: fn -> false end
+               )
+
+      assert [] = Registry.list_for_query_loop(names: ["test_process_tool"])
     end
   end
 

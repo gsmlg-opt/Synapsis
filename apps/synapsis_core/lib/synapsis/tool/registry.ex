@@ -18,6 +18,8 @@ defmodule Synapsis.Tool.Registry do
   - `:permission_level` (atom) — overrides the module's `permission_level/0` callback.
   - `:version` (string) — overrides the module's `version/0` callback.
   - `:enabled` (boolean) — overrides the module's `enabled?/0` callback.
+  - `:availability_check` (zero-arity function) — optional runtime predicate;
+    only an exact `true` result is available.
   """
   use GenServer
   require Logger
@@ -90,6 +92,25 @@ defmodule Synapsis.Tool.Registry do
     end
   end
 
+  @doc "Return whether a registered entry is currently runtime-available."
+  def runtime_available?(tool_name) when is_binary(tool_name) do
+    case lookup(tool_name) do
+      {:ok, entry} -> runtime_available?(entry)
+      {:error, :not_found} -> false
+    end
+  end
+
+  def runtime_available?({:module, module, opts}) when is_atom(module) and is_list(opts) do
+    module_enabled?(module, opts) and availability_check_passes?(opts)
+  end
+
+  def runtime_available?({:process, pid, opts}) when is_pid(pid) and is_list(opts) do
+    Process.alive?(pid) and Keyword.get(opts, :enabled, true) == true and
+      availability_check_passes?(opts)
+  end
+
+  def runtime_available?(_entry), do: false
+
   @doc "Backward-compatible get returning a map format."
   def get(tool_name) do
     case :ets.lookup(@table, tool_name) do
@@ -160,6 +181,8 @@ defmodule Synapsis.Tool.Registry do
 
   @doc """
   List tools enriched with `permission_level`, suitable for QueryLoop and fork.
+  Each map also carries an internal `registration` token so execution can reject
+  a same-name registry replacement after admission.
 
   ## Options
 
@@ -321,7 +344,7 @@ defmodule Synapsis.Tool.Registry do
   defp resolve_permission_level(module, opts) do
     opts[:permission_level] ||
       (function_exported?(module, :permission_level, 0) && module.permission_level()) ||
-      :read
+      :write
   end
 
   defp resolve_version(module, opts) do
@@ -370,7 +393,10 @@ defmodule Synapsis.Tool.Registry do
 
   defp entry_to_query_loop_map({name, entry}) do
     base = entry_to_llm_map({name, entry})
-    Map.put(base, :permission_level, resolve_permission_level_from_entry(entry))
+
+    base
+    |> Map.put(:permission_level, resolve_permission_level_from_entry(entry))
+    |> Map.put(:registration, entry)
   end
 
   defp entry_to_full_map({name, entry}) do
@@ -399,7 +425,7 @@ defmodule Synapsis.Tool.Registry do
 
   defp filter_enabled(entries) do
     Enum.filter(entries, fn {_name, entry} ->
-      resolve_enabled_from_entry(entry)
+      runtime_available?(entry)
     end)
   end
 
@@ -449,26 +475,46 @@ defmodule Synapsis.Tool.Registry do
   defp entry_opts({:module, _module, opts}), do: opts
   defp entry_opts({:process, _pid, opts}), do: opts
 
-  defp resolve_enabled_from_entry({:module, module, opts}) do
+  defp module_enabled?(module, opts) do
     cond do
-      Keyword.has_key?(opts, :enabled) -> opts[:enabled]
-      function_exported?(module, :enabled?, 0) -> module.enabled?()
+      Keyword.has_key?(opts, :enabled) -> opts[:enabled] == true
+      function_exported?(module, :enabled?, 0) -> safe_boolean_callback(module, :enabled?)
       true -> true
     end
   end
 
-  defp resolve_enabled_from_entry({:process, _pid, opts}) do
-    Keyword.get(opts, :enabled, true)
+  defp availability_check_passes?(opts) do
+    case Keyword.fetch(opts, :availability_check) do
+      :error -> true
+      {:ok, check} when is_function(check, 0) -> safe_boolean_callback(check)
+      {:ok, _invalid} -> false
+    end
+  end
+
+  defp safe_boolean_callback(module, function) do
+    apply(module, function, []) == true
+  rescue
+    _exception -> false
+  catch
+    _kind, _reason -> false
+  end
+
+  defp safe_boolean_callback(function) do
+    function.() == true
+  rescue
+    _exception -> false
+  catch
+    _kind, _reason -> false
   end
 
   defp resolve_permission_level_from_entry({:module, module, opts}) do
     opts[:permission_level] ||
       (function_exported?(module, :permission_level, 0) && module.permission_level()) ||
-      :read
+      :write
   end
 
   defp resolve_permission_level_from_entry({:process, _pid, opts}) do
-    Keyword.get(opts, :permission_level, :read)
+    Keyword.get(opts, :permission_level, :write)
   end
 
   defp resolve_category_from_entry({:module, module, opts}) do

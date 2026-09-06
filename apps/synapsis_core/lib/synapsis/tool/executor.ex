@@ -63,6 +63,17 @@ defmodule Synapsis.Tool.Executor do
     end
   end
 
+  @doc false
+  @spec dispatch_granted(String.t(), map(), map(), tuple()) :: execute_result()
+  def dispatch_granted(tool_name, input, context, expected_entry)
+      when is_binary(tool_name) and is_map(input) and is_map(context) do
+    with {:ok, entry} <- registry_lookup(tool_name),
+         :ok <- same_registration(entry, expected_entry),
+         :ok <- check_enabled(entry) do
+      dispatch_with_retries(tool_name, entry, input, context)
+    end
+  end
+
   @doc """
   Execute multiple tool calls concurrently, serializing calls that target the same file.
 
@@ -135,15 +146,16 @@ defmodule Synapsis.Tool.Executor do
     end
   end
 
-  defp check_enabled({:module, module, _opts}) do
-    if function_exported?(module, :enabled?, 0) and not module.enabled?() do
-      {:error, :tool_disabled}
-    else
-      :ok
+  defp same_registration(entry, entry), do: :ok
+  defp same_registration(_current, _expected), do: {:error, :tool_registration_changed}
+
+  defp check_enabled({_kind, _owner, opts} = entry) do
+    cond do
+      opts[:deferred] == true and opts[:loaded] != true -> {:error, :tool_deferred}
+      Synapsis.Tool.Registry.runtime_available?(entry) -> :ok
+      true -> {:error, :tool_disabled}
     end
   end
-
-  defp check_enabled({:process, _pid, _opts}), do: :ok
 
   defp dispatch(tool_name, {:module, module, opts}, input, context) do
     execute_module(tool_name, module, opts, input, context)
@@ -336,8 +348,10 @@ defmodule Synapsis.Tool.Executor do
 
   defp retry_safe_entry?(entry, context) do
     context_value(context, :tool_retry_unsafe) == true or
-      permission_level(entry) in @retryable_permission_levels
+      (not mcp_entry?(entry) and permission_level(entry) in @retryable_permission_levels)
   end
+
+  defp mcp_entry?({_kind, _owner, opts}), do: opts[:category] == :mcp
 
   defp retryable_reason?(:timeout), do: true
   defp retryable_reason?({:timeout, _reason}), do: true
@@ -363,7 +377,7 @@ defmodule Synapsis.Tool.Executor do
   end
 
   defp permission_level({:process, _pid, opts}) do
-    Keyword.get(opts, :permission_level, :read)
+    Keyword.get(opts, :permission_level, :write)
   end
 
   defp entry_opts({:module, _module, opts}), do: opts

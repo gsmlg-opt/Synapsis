@@ -70,7 +70,7 @@ defmodule Synapsis.Agent.QueryLoop do
   end
 
   defp do_turn(state, ctx) do
-    ctx = prepare_context(state, ctx)
+    ctx = state |> prepare_context(ctx) |> bind_tool_map()
     notify(ctx, {:stream_start})
 
     case stream_model(state, ctx) do
@@ -200,12 +200,33 @@ defmodule Synapsis.Agent.QueryLoop do
   defp build_tool_map(tools) do
     Enum.reduce(tools, %{}, fn tool, acc ->
       name = tool[:name] || Map.get(tool, "name")
+      registration = tool[:registration] || Map.get(tool, "registration")
 
-      case name && Synapsis.Tool.Registry.lookup(name) do
-        {:ok, entry} -> Map.put(acc, name, entry)
-        _ -> acc
+      case {name, registration} do
+        {name, {kind, _owner, opts} = entry}
+        when is_binary(name) and kind in [:module, :process] and is_list(opts) ->
+          Map.put(acc, name, entry)
+
+        {name, _missing} when is_binary(name) ->
+          case Synapsis.Tool.Registry.lookup(name) do
+            {:ok, entry} -> Map.put(acc, name, entry)
+            _missing -> acc
+          end
+
+        _invalid ->
+          acc
       end
     end)
+  end
+
+  defp bind_tool_map(%Context{agent_config: config, tools: tools} = ctx) do
+    case config[:tool_modules] do
+      tool_modules when is_map(tool_modules) ->
+        ctx
+
+      _missing ->
+        %{ctx | agent_config: Map.put(config, :tool_modules, build_tool_map(tools))}
+    end
   end
 
   defp stream_model(state, ctx) do

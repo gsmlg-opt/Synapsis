@@ -1,5 +1,5 @@
 defmodule Synapsis.Agent.QueryLoop.ExecutorTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Synapsis.Agent.QueryLoop.Executor
 
@@ -79,6 +79,18 @@ defmodule Synapsis.Agent.QueryLoop.ExecutorTest do
     end
   end
 
+  defmodule ProcessTool do
+    use GenServer
+
+    def start_link(owner), do: GenServer.start_link(__MODULE__, owner)
+    def init(owner), do: {:ok, owner}
+
+    def handle_call({:execute, name, _input, _context}, _from, owner) do
+      send(owner, {:query_loop_process_executed, name})
+      {:reply, {:ok, "ran"}, owner}
+    end
+  end
+
   @read_block %{id: "r1", name: "read_tool", input: %{}}
   @write_block %{id: "w1", name: "write_tool", input: %{}}
 
@@ -145,6 +157,27 @@ defmodule Synapsis.Agent.QueryLoop.ExecutorTest do
   end
 
   describe "run/3" do
+    test "rejects a registry owner replacement after the query tool map is captured" do
+      name = "query_loop_replaced_#{System.unique_integer([:positive])}"
+      admitted = start_supervised!({ProcessTool, self()}, id: {:admitted, name})
+      replacement = start_supervised!({ProcessTool, self()}, id: {:replacement, name})
+
+      :ok =
+        Synapsis.Tool.Registry.register_process(name, admitted, permission_level: :read)
+
+      assert {:ok, expected_entry} = Synapsis.Tool.Registry.lookup(name)
+
+      :ok =
+        Synapsis.Tool.Registry.register_process(name, replacement, permission_level: :write)
+
+      on_exit(fn -> Synapsis.Tool.Registry.unregister(name) end)
+
+      assert {:error, :tool_registration_changed} =
+               Executor.run_one(%{name: name, input: %{}}, %{name => expected_entry}, %{})
+
+      refute_receive {:query_loop_process_executed, ^name}
+    end
+
     test "executes concurrent batch in parallel and returns results in order" do
       blocks = [
         %{id: "r1", name: "read_tool", input: %{}},

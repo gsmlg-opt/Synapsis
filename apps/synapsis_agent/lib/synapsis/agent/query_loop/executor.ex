@@ -112,11 +112,11 @@ defmodule Synapsis.Agent.QueryLoop.Executor do
       nil ->
         {:error, "Unknown tool: #{name}"}
 
-      {:module, _module, _opts} ->
-        Synapsis.Tool.Gateway.execute(name, input, gateway_context(context))
+      {:module, _module, _opts} = entry ->
+        Synapsis.Tool.Gateway.execute(name, input, gateway_context(context), entry)
 
-      {:process, _pid, _opts} ->
-        Synapsis.Tool.Gateway.execute(name, input, gateway_context(context))
+      {:process, _pid, _opts} = entry ->
+        Synapsis.Tool.Gateway.execute(name, input, gateway_context(context), entry)
 
       mod when is_atom(mod) ->
         execute_module_with_retries(name, mod, input, context)

@@ -7,8 +7,13 @@ defmodule Synapsis.Agent.ResolverTest do
   setup do
     Synapsis.Session.Store.ensure_started()
     # ADR-006 C4: clean up any existing agent configs (Config.Store) for isolation.
-    Enum.each(Store.list(:agent), &Store.delete(:agent, &1["id"]))
+    clear_agent_configs()
+    on_exit(&clear_agent_configs/0)
     :ok
+  end
+
+  defp clear_agent_configs do
+    Enum.each(Store.list(:agent), &Store.delete(:agent, &1["id"]))
   end
 
   describe "resolve/1 with no DB records (hardcoded fallback)" do

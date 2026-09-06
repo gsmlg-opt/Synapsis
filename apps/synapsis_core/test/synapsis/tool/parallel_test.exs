@@ -56,6 +56,18 @@ defmodule Synapsis.Tool.ParallelTest do
     end
   end
 
+  defmodule ReplyProcessTool do
+    use GenServer
+
+    def start_link({owner, result}), do: GenServer.start_link(__MODULE__, {owner, result})
+    def init(state), do: {:ok, state}
+
+    def handle_call({:execute, tool_name, _input, _context}, _from, {owner, result} = state) do
+      send(owner, {:process_tool_executed, tool_name})
+      {:reply, result, state}
+    end
+  end
+
   setup do
     Registry.register_module("parallel_test_slow", SlowMockTool, timeout: 5_000)
 
@@ -170,6 +182,98 @@ defmodule Synapsis.Tool.ParallelTest do
   end
 
   describe "timeout and retry handling" do
+    test "rejects a disabled process tool at dispatch" do
+      name = "parallel_test_disabled_process_#{System.unique_integer([:positive])}"
+      pid = start_supervised!({ReplyProcessTool, {self(), {:ok, "ran"}}})
+
+      Registry.register_process(name, pid, enabled: false, permission_level: :read)
+      on_exit(fn -> Registry.unregister(name) end)
+
+      assert {:error, :tool_disabled} = Executor.execute_approved(name, %{}, %{})
+      refute_receive {:process_tool_executed, ^name}
+    end
+
+    test "fails closed when a process runtime availability check changes" do
+      name = "parallel_test_unavailable_process_#{System.unique_integer([:positive])}"
+      pid = start_supervised!({ReplyProcessTool, {self(), {:ok, "ran"}}})
+      {:ok, available} = Agent.start_link(fn -> true end)
+
+      Registry.register_process(name, pid,
+        permission_level: :read,
+        availability_check: fn -> Agent.get(available, & &1) end
+      )
+
+      on_exit(fn -> Registry.unregister(name) end)
+      Agent.update(available, fn _ -> false end)
+
+      assert {:error, :tool_disabled} = Executor.execute_approved(name, %{}, %{})
+      refute_receive {:process_tool_executed, ^name}
+    end
+
+    test "rejects a disabled module tool at dispatch" do
+      name = "parallel_test_disabled_module_#{System.unique_integer([:positive])}"
+      Registry.register_module(name, SlowMockTool, enabled: false)
+      on_exit(fn -> Registry.unregister(name) end)
+
+      assert {:error, :tool_disabled} = Executor.execute_approved(name, %{}, %{})
+    end
+
+    test "rejects an unloaded deferred module tool at dispatch" do
+      name = "parallel_test_deferred_module_#{System.unique_integer([:positive])}"
+      Registry.register_module(name, SlowMockTool, deferred: true)
+      on_exit(fn -> Registry.unregister(name) end)
+
+      assert {:error, :tool_deferred} = Executor.execute_approved(name, %{}, %{})
+    end
+
+    test "rejects an unloaded deferred process tool at dispatch" do
+      name = "parallel_test_deferred_process_#{System.unique_integer([:positive])}"
+      pid = start_supervised!({ReplyProcessTool, {self(), {:ok, "ran"}}})
+
+      Registry.register_process(name, pid, deferred: true, permission_level: :read)
+      on_exit(fn -> Registry.unregister(name) end)
+
+      assert {:error, :tool_deferred} = Executor.execute_approved(name, %{}, %{})
+      refute_receive {:process_tool_executed, ^name}
+    end
+
+    test "rejects a same-name process replacement after admission" do
+      name = "parallel_test_replaced_process_#{System.unique_integer([:positive])}"
+
+      admitted =
+        start_supervised!({ReplyProcessTool, {self(), {:ok, "old"}}}, id: {:admitted, name})
+
+      replacement =
+        start_supervised!({ReplyProcessTool, {self(), {:ok, "new"}}}, id: {:replacement, name})
+
+      Registry.register_process(name, admitted, permission_level: :read)
+      assert {:ok, expected_entry} = Registry.lookup(name)
+      Registry.register_process(name, replacement, permission_level: :write)
+      on_exit(fn -> Registry.unregister(name) end)
+
+      assert {:error, :tool_registration_changed} =
+               Executor.dispatch_granted(name, %{}, %{}, expected_entry)
+
+      refute_receive {:process_tool_executed, ^name}
+    end
+
+    test "does not retry MCP process tools by default" do
+      name = "parallel_test_mcp_no_retry_#{System.unique_integer([:positive])}"
+      {:ok, counter} = Agent.start_link(fn -> 0 end)
+      {:ok, pid} = NeverReplyProcessTool.start_link(counter)
+
+      Registry.register_process(name, pid,
+        timeout: 20,
+        permission_level: :read,
+        category: :mcp
+      )
+
+      on_exit(fn -> Registry.unregister(name) end)
+
+      assert {:error, :timeout} = Executor.execute_approved(name, %{}, %{})
+      assert Agent.get(counter, & &1) == 1
+    end
+
     test "retries retry-safe module tools after timeout" do
       {:ok, counter} = Agent.start_link(fn -> 0 end)
 

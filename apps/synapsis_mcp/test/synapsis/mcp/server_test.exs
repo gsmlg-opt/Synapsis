@@ -284,6 +284,8 @@ defmodule Synapsis.MCP.ServerTest do
              })
 
     refute MCPConfigs.runtime_available?(unavailable)
+    refute Registry.runtime_available?(tool)
+    assert [] = Registry.list_for_query_loop(names: [tool])
 
     assert {:error, :mcp_unavailable} =
              GenServer.call(pid, {:execute, tool, %{"text" => "blocked"}, %{}}, 10_000)

@@ -35,6 +35,16 @@ defmodule Synapsis.Tool.Gateway do
     end
   end
 
+  @doc "Authorize and execute only if the admitted registry entry is still current."
+  @spec execute(String.t(), map(), map(), tuple()) :: execute_result()
+  def execute(tool_name, input, context, expected_entry)
+      when is_binary(tool_name) and is_map(input) and is_map(context) do
+    with {:ok, snapshot} <- resolve_snapshot(context),
+         {:ok, grant} <- authorize(tool_name, input, snapshot, context) do
+      execute_authorized(tool_name, input, context, grant, expected_entry)
+    end
+  end
+
   @doc "Execute a tool with a previously minted, validated grant."
   @spec execute_authorized(String.t(), map(), map(), Grant.t()) :: execute_result()
   def execute_authorized(tool_name, input, context, %Grant{} = grant)
@@ -43,6 +53,17 @@ defmodule Synapsis.Tool.Gateway do
 
     with :ok <- Grant.validate(grant, tool_name, context) do
       Executor.dispatch_granted(tool_name, input, context)
+    end
+  end
+
+  @doc "Execute with a validated grant if the admitted registry entry is unchanged."
+  @spec execute_authorized(String.t(), map(), map(), Grant.t(), tuple()) :: execute_result()
+  def execute_authorized(tool_name, input, context, %Grant{} = grant, expected_entry)
+      when is_binary(tool_name) and is_map(input) and is_map(context) do
+    context = Map.put(context, :input, input)
+
+    with :ok <- Grant.validate(grant, tool_name, context) do
+      Executor.dispatch_granted(tool_name, input, context, expected_entry)
     end
   end
 

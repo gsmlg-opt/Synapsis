@@ -127,6 +127,7 @@ defmodule Synapsis.MCP.Server do
           trust_annotations: MCPConfigs.trust_tool_annotations?(config)
         )
         |> runtime_available_tools(config, initial_availability)
+        |> attach_availability_checks(config)
 
       case register_tools(tools) do
         {:ok, names} ->
@@ -225,6 +226,7 @@ defmodule Synapsis.MCP.Server do
          parameters: parameters,
          annotations: annotations,
          trust_annotations: trust_annotations,
+         availability_check: availability_check,
          permission_level: permission_level
        }) do
     Registry.register_process(name, self(),
@@ -235,6 +237,7 @@ defmodule Synapsis.MCP.Server do
       category: :mcp,
       permission_level: permission_level,
       trust_annotations: trust_annotations,
+      availability_check: availability_check,
       annotations: annotations
     )
 
@@ -286,6 +289,12 @@ defmodule Synapsis.MCP.Server do
     else
       []
     end
+  end
+
+  defp attach_availability_checks(tools, config) do
+    Enum.map(tools, fn tool ->
+      Map.put(tool, :availability_check, fn -> current_runtime_available?(config, tool.name) end)
+    end)
   end
 
   defp tool_runtime_available?(%MCPConfig{config: config}, full_tool_name) do
