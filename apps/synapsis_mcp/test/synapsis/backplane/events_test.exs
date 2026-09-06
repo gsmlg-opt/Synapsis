@@ -130,6 +130,77 @@ defmodule Synapsis.Backplane.EventsTest do
     refute_receive {:agent_daemon_event, %{event: "backplane.capabilities.updated"}}
   end
 
+  test "does not publish capabilities updated for an incomplete optional-only snapshot" do
+    {:ok, connection} =
+      Connection.create(%{name: "optional-no-op", endpoint: "https://backplane.example.test"})
+
+    {:ok, complete} =
+      Snapshot.normalize(
+        connection,
+        %{
+          models: {:ok, []},
+          skills: {:ok, []},
+          mcp_tools: {:ok, []},
+          other_capabilities:
+            {:ok,
+             [
+               %{"id" => "prompt:review", "name" => "Review", "kind" => "mcp_prompt"},
+               %{
+                 "id" => "resource:memory://recent",
+                 "name" => "Recent",
+                 "kind" => "mcp_resource"
+               }
+             ]}
+        },
+        fetched_at: "2026-09-04T12:00:00Z"
+      )
+
+    assert {:ok, ready} =
+             Sync.run(connection.id,
+               client: fn _connection, _opts -> {:ok, complete} end,
+               mcp_runtime: MockMCPRuntime
+             )
+
+    assert_receive {:agent_daemon_event, %{event: "backplane.sync.started"}}
+    assert_receive {:agent_daemon_event, %{event: "backplane.sync.completed"}}
+    assert_receive {:agent_daemon_event, %{event: "backplane.capabilities.updated"}}
+
+    original_revision = ready.metadata["surface_revisions"]["other_capabilities"]
+
+    {:ok, incomplete} =
+      Snapshot.normalize(
+        connection,
+        %{
+          models: {:ok, []},
+          skills: {:ok, []},
+          mcp_tools: {:ok, []},
+          other_capabilities:
+            {:incomplete,
+             [
+               %{
+                 "id" => "resource:memory://recent",
+                 "name" => "Recent",
+                 "kind" => "mcp_resource"
+               }
+             ], %{prompts: :registry_unavailable}}
+        },
+        fetched_at: "2026-09-04T13:00:00Z"
+      )
+
+    assert {:ok, degraded} =
+             Sync.run(connection.id,
+               client: fn _connection, _opts -> {:ok, incomplete} end,
+               mcp_runtime: MockMCPRuntime
+             )
+
+    assert degraded.status == "degraded"
+    assert degraded.counts["other_capabilities"] == 2
+    assert degraded.metadata["surface_revisions"]["other_capabilities"] == original_revision
+    assert_receive {:agent_daemon_event, %{event: "backplane.sync.started"}}
+    assert_receive {:agent_daemon_event, %{event: "backplane.sync.failed"}}
+    refute_receive {:agent_daemon_event, %{event: "backplane.capabilities.updated"}}
+  end
+
   test "truncates long multibyte errors at a valid UTF-8 byte boundary" do
     {:ok, connection} =
       Connection.create(%{name: "unicode", endpoint: "https://backplane.example.test"})

@@ -108,6 +108,39 @@ defmodule Synapsis.Backplane.SnapshotTest do
     assert snapshot.surface_revisions == %{skills: Snapshot.revision([])}
   end
 
+  test "normalizes stable MCP prompt, resource, and resource-template identities" do
+    other = [
+      %{"id" => "resource:memory://recent", "name" => "Recent", "kind" => "mcp_resource"},
+      %{"id" => "prompt:review", "name" => "Review", "kind" => "mcp_prompt"},
+      %{
+        "id" => "resource_template:memory://sessions/{id}",
+        "name" => "Session",
+        "kind" => "mcp_resource_template"
+      }
+    ]
+
+    surfaces = %{
+      models: {:ok, []},
+      skills: {:ok, []},
+      mcp_tools: {:ok, []},
+      other_capabilities: {:ok, other}
+    }
+
+    assert {:ok, first} = Snapshot.normalize(connection!(), surfaces, fetched_at: @fetched_at)
+
+    assert Enum.map(first.other_capabilities, &{&1.kind, &1.external_id}) == [
+             {"mcp_prompt", "prompt:review"},
+             {"mcp_resource", "resource:memory://recent"},
+             {"mcp_resource_template", "resource_template:memory://sessions/{id}"}
+           ]
+
+    reordered = %{surfaces | other_capabilities: {:ok, Enum.reverse(other)}}
+    assert {:ok, second} = Snapshot.normalize(connection!(), reordered, fetched_at: @fetched_at)
+
+    assert second.surface_revisions.other_capabilities ==
+             first.surface_revisions.other_capabilities
+  end
+
   test "uses the slug when an upstream skill id is absent" do
     surfaces = %{
       models: {:ok, []},

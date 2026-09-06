@@ -129,6 +129,14 @@ defmodule Synapsis.Backplane.Connection do
 
   def redacted(%__MODULE__{} = connection), do: %{connection | credential: nil}
 
+  @doc false
+  def seal_credential(credential), do: encrypt_credential(credential)
+
+  @doc false
+  def unseal_credential(nil), do: {:ok, nil}
+
+  def unseal_credential(encrypted), do: decrypt_credential(encrypted)
+
   defp unique_name(name, id) do
     if Enum.any?(list(), &(&1.name == name and &1.id != id)),
       do: {:error, :name_taken},

@@ -821,6 +821,127 @@ defmodule Synapsis.Backplane.SyncTest do
     assert mcp_name == empty_mcp.name
   end
 
+  test "an incomplete skill scan upserts returned skills without marking omitted skills unavailable" do
+    {:ok, connection} =
+      Connection.create(%{name: "partial-prune", endpoint: "https://backplane.example.test"})
+
+    initial =
+      snapshot!(connection,
+        models: [],
+        skills: [
+          generated_skill("returned-skill", "Returned", "returned v1"),
+          generated_skill("omitted-skill", "Omitted", "omitted v1")
+        ],
+        mcp_tools: []
+      )
+
+    assert {:ok, ready} = run_sync(connection, initial)
+    omitted_id = ready.artifacts["skill_ids"]["omitted-skill"]
+
+    assert {:ok, incomplete} =
+             Snapshot.normalize(
+               connection,
+               %{
+                 models: {:ok, []},
+                 skills:
+                   {:incomplete,
+                    [
+                      generated_skill("returned-skill", "Returned", "returned v2"),
+                      generated_skill("new-skill", "New", "new v1")
+                    ], :skills_limit_reached},
+                 mcp_tools: {:ok, []}
+               },
+               fetched_at: "2026-09-04T13:00:00Z"
+             )
+
+    assert {:ok, synced} =
+             run_sync(connection, incomplete, now: fn -> ~U[2026-09-04 13:00:00Z] end)
+
+    assert synced.status == "degraded"
+    assert synced.stale == true
+    assert synced.unavailable == ["skills"]
+    assert synced.last_error =~ "skills_limit_reached"
+    assert synced.counts["skills"] == 3
+
+    returned = Skills.get(synced.artifacts["skill_ids"]["returned-skill"])
+    assert returned.system_prompt_fragment == "returned v2"
+
+    new_skill = Skills.get(synced.artifacts["skill_ids"]["new-skill"])
+    assert new_skill.system_prompt_fragment == "new v1"
+
+    assert synced.artifacts["skill_ids"]["omitted-skill"] == omitted_id
+    omitted = Skills.get(omitted_id)
+    assert omitted.system_prompt_fragment == "omitted v1"
+    assert omitted.config_overrides["backplane_available"] == true
+    assert omitted.config_overrides["source_available"] == true
+  end
+
+  test "persists optional capability status while continuing to reconcile tools" do
+    {:ok, connection} =
+      Connection.create(%{name: "optional-mcp", endpoint: "https://backplane.example.test"})
+
+    assert {:ok, complete} =
+             Snapshot.normalize(
+               connection,
+               %{
+                 models: {:ok, []},
+                 skills: {:ok, []},
+                 mcp_tools: {:ok, [%{"name" => "memory::search", "revision" => "tool-v1"}]},
+                 other_capabilities:
+                   {:ok,
+                    [
+                      %{"id" => "prompt:review", "name" => "Review", "kind" => "mcp_prompt"},
+                      %{
+                        "id" => "resource:memory://recent",
+                        "name" => "Recent",
+                        "kind" => "mcp_resource"
+                      }
+                    ]}
+               },
+               fetched_at: "2026-09-04T12:00:00Z"
+             )
+
+    assert {:ok, ready} = run_sync(connection, complete)
+    assert ready.status == "ready"
+    assert ready.counts["other_capabilities"] == 2
+    first_other_revision = ready.metadata["surface_revisions"]["other_capabilities"]
+    first_tool_revision = ready.metadata["surface_revisions"]["mcp_tools"]
+
+    assert {:ok, partial} =
+             Snapshot.normalize(
+               connection,
+               %{
+                 models: {:ok, []},
+                 skills: {:ok, []},
+                 mcp_tools: {:ok, [%{"name" => "memory::search", "revision" => "tool-v2"}]},
+                 other_capabilities:
+                   {:incomplete,
+                    [
+                      %{
+                        "id" => "resource:memory://recent",
+                        "name" => "Recent",
+                        "kind" => "mcp_resource"
+                      }
+                    ], %{prompts: :registry_unavailable}}
+               },
+               fetched_at: "2026-09-04T13:00:00Z"
+             )
+
+    assert {:ok, degraded} =
+             run_sync(connection, partial, now: fn -> ~U[2026-09-04 13:00:00Z] end)
+
+    assert degraded.status == "degraded"
+    assert degraded.stale == true
+    assert degraded.unavailable == ["other_capabilities"]
+    assert degraded.last_error =~ "registry_unavailable"
+    assert degraded.counts["other_capabilities"] == 2
+    assert degraded.metadata["surface_revisions"]["other_capabilities"] == first_other_revision
+    refute degraded.metadata["surface_revisions"]["mcp_tools"] == first_tool_revision
+
+    mcp = MCPConfigs.get(degraded.artifacts["mcp_id"])
+    assert hd(mcp.config["backplane_tools"])["source_metadata"]["revision"] == "tool-v2"
+  end
+
   test "metadata-only skills remain disabled and explicitly unavailable" do
     {:ok, connection} =
       Connection.create(%{name: "metadata", endpoint: "https://backplane.example.test"})

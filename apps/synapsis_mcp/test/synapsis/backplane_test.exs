@@ -88,6 +88,32 @@ defmodule Synapsis.BackplaneTest do
     refute_receive {:sync_run, _, _}
   end
 
+  test "failed refresh cannot roll back an explicit MCP annotation trust revocation" do
+    assert {:ok, connection} =
+             Backplane.create(%{
+               name: "trust-revocation",
+               endpoint: "https://backplane.example.test",
+               enabled: false,
+               connection_options: %{"trust_mcp_annotations" => true}
+             })
+
+    assert {:ok, _enabled} = Connection.update(connection, %{enabled: true})
+
+    assert {:ok, updated} =
+             Backplane.update(
+               connection.id,
+               %{connection_options: %{"trust_mcp_annotations" => false}},
+               sync: SyncStub,
+               sync_opts: [test_pid: self(), run_result: {:error, :offline}]
+             )
+
+    assert_receive {:sync_run, connection_id, _opts}
+    assert connection_id == connection.id
+    assert updated.connection_options == %{"trust_mcp_annotations" => false}
+    assert {:ok, persisted} = Connection.get(connection.id)
+    assert persisted.connection_options == %{"trust_mcp_annotations" => false}
+  end
+
   test "update refreshes enabled source changes, disables before returning, and refreshes re-enable" do
     opts = [sync: SyncStub, sync_opts: [test_pid: self()]]
 

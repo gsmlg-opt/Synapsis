@@ -141,7 +141,7 @@ defmodule Synapsis.MCP.ServerTest do
     assert unannotated_opts[:permission_level] == :write
   end
 
-  test "uses MCP read-only annotations only for an explicitly trusted Backplane source", %{
+  test "revokes trusted MCP read-only admission live when source trust is removed", %{
     bypass: bypass
   } do
     source_id = Ecto.UUID.generate()
@@ -161,7 +161,7 @@ defmodule Synapsis.MCP.ServerTest do
       }
     ]
 
-    stub_mcp(bypass, name, nil, tools)
+    stub_mcp(bypass, name, self(), tools)
 
     {:ok, config} =
       MCPConfigs.create(%{
@@ -190,6 +190,28 @@ defmodule Synapsis.MCP.ServerTest do
     assert {:ok, {:process, ^pid, opts}} = Registry.lookup(tool)
     assert opts[:permission_level] == :read
     assert opts[:trust_annotations] == true
+    assert Registry.runtime_available?(tool)
+    assert [%{name: ^tool}] = Registry.list_for_query_loop(names: [tool])
+
+    assert {:ok, revoked_source} =
+             Store.merge_existing(:backplane, source_id, %{
+               "connection_options_json" => Jason.encode!(%{"trust_mcp_annotations" => false})
+             })
+
+    assert revoked_source["enabled"] == true
+    assert Process.alive?(pid)
+    assert {:ok, {:process, ^pid, _opts}} = Registry.lookup(tool)
+    refute MCPConfigs.trust_tool_annotations?(MCPConfigs.get(config.id))
+    refute Registry.runtime_available?(tool)
+
+    # Daemon Toolsets select MCP candidates through this runtime-filtered registry view.
+    assert [] = Registry.list_for_query_loop(names: [tool])
+    assert {:error, :tool_disabled} = Synapsis.Tool.Executor.execute_approved(tool, %{}, %{})
+
+    assert {:error, :mcp_unavailable} =
+             GenServer.call(pid, {:execute, tool, %{"text" => "blocked"}, %{}}, 10_000)
+
+    refute_receive {:mcp_tool_called, _params}, 100
   end
 
   test "re-registers discovered tools after tool registry restart", %{bypass: bypass} do

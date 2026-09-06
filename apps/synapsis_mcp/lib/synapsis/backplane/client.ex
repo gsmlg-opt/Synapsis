@@ -14,6 +14,11 @@ defmodule Synapsis.Backplane.Client do
   @default_max_skill_content_bytes 1 * 1_024 * 1_024
   @max_archive_files 500
   @max_archive_entries 1_000
+  @mcp_protocol_version "2025-03-26"
+  @mcp_accept "application/json, text/event-stream"
+  @default_max_mcp_pages 100
+  @max_mcp_pages 100
+  @max_mcp_cursor_bytes 4_096
 
   @callback fetch_models(Connection.t(), keyword()) :: {:ok, [map()]} | {:error, term()}
   @callback list_skills(Connection.t(), keyword()) :: {:ok, [map()]} | {:error, term()}
@@ -23,11 +28,17 @@ defmodule Synapsis.Backplane.Client do
   @optional_callbacks fetch_snapshot: 2
 
   def fetch_snapshot(%Connection{} = connection, opts \\ []) do
+    mcp_discovery =
+      protect(fn -> discover_mcp(connection, opts, true) end)
+      |> redact_result(connection)
+
     surfaces = %{
       models: protect(fn -> fetch_models(connection, opts) end) |> redact_result(connection),
       skills: protect(fn -> fetch_skills(connection, opts) end) |> redact_result(connection),
-      mcp_tools: protect(fn -> list_tools(connection, opts) end) |> redact_result(connection)
+      mcp_tools: mcp_tools_surface(mcp_discovery)
     }
+
+    surfaces = maybe_put_other_capabilities(surfaces, mcp_discovery)
 
     snapshot_opts =
       case Keyword.fetch(opts, :fetched_at) do
@@ -107,6 +118,12 @@ defmodule Synapsis.Backplane.Client do
   end
 
   def list_tools(%Connection{} = connection, opts \\ []) do
+    with {:ok, tools, _other_capabilities} <- discover_mcp(connection, opts, false) do
+      {:ok, tools}
+    end
+  end
+
+  defp discover_mcp(%Connection{} = connection, opts, discover_optional?) do
     url = connection.endpoint <> "/mcp"
     auth_headers = auth_headers(connection)
 
@@ -115,7 +132,7 @@ defmodule Synapsis.Backplane.Client do
       "id" => 1,
       "method" => "initialize",
       "params" => %{
-        "protocolVersion" => "2025-03-26",
+        "protocolVersion" => @mcp_protocol_version,
         "capabilities" => %{},
         "clientInfo" => %{"name" => "synapsis", "version" => "0.1.0"}
       }
@@ -135,24 +152,200 @@ defmodule Synapsis.Backplane.Client do
         :mcp_response_too_large
       )
 
-    with {:ok, response} <- post_json(url, initialize, auth_headers, response_bound, opts),
-         :ok <- mcp_result(response.body),
+    with {:ok, response} <-
+           post_json(url, initialize, mcp_accept_headers(auth_headers), response_bound, opts),
+         {:ok, capabilities, protocol_version} <- mcp_capabilities(response.body),
          session_headers when session_headers != [] <- session_header(response),
+         request_headers <-
+           mcp_session_headers(auth_headers, session_headers, protocol_version),
          {:ok, _initialized_response} <-
-           post_json(url, initialized, auth_headers ++ session_headers, response_bound, opts),
-         {:ok, listed} <-
-           post_json(
+           post_json(url, initialized, request_headers, response_bound, opts),
+         {:ok, tools} <-
+           list_mcp_catalog(
              url,
-             %{"jsonrpc" => "2.0", "id" => 2, "method" => "tools/list", "params" => %{}},
-             auth_headers ++ session_headers,
+             request_headers,
              response_bound,
-             opts
-           ),
-         {:ok, tools} <- tools_result(listed.body) do
-      {:ok, tools}
+             opts,
+             "tools/list",
+             2,
+             &tools_result/1
+           ) do
+      other_capabilities =
+        if discover_optional? do
+          discover_optional_capabilities(
+            url,
+            request_headers,
+            response_bound,
+            opts,
+            capabilities
+          )
+        else
+          {:ok, []}
+        end
+
+      {:ok, tools, other_capabilities}
     else
       [] -> {:error, :missing_mcp_session_id}
       error -> error
+    end
+  end
+
+  defp mcp_tools_surface({:ok, tools, _other_capabilities}), do: {:ok, tools}
+  defp mcp_tools_surface({:error, _reason} = error), do: error
+
+  defp maybe_put_other_capabilities(surfaces, {:ok, _tools, other_capabilities}),
+    do: Map.put(surfaces, :other_capabilities, other_capabilities)
+
+  defp maybe_put_other_capabilities(surfaces, {:error, _reason}), do: surfaces
+
+  defp discover_optional_capabilities(url, headers, response_bound, opts, capabilities) do
+    results =
+      []
+      |> maybe_discover_prompts(url, headers, response_bound, opts, capabilities)
+      |> maybe_discover_resources(url, headers, response_bound, opts, capabilities)
+
+    {entries, errors} =
+      Enum.reduce(results, {[], %{}}, fn
+        {_surface, {:ok, discovered}}, {entries, errors} ->
+          {entries ++ discovered, errors}
+
+        {surface, {:error, reason}}, {entries, errors} ->
+          {entries, Map.put(errors, surface, reason)}
+      end)
+
+    if map_size(errors) == 0,
+      do: {:ok, entries},
+      else: {:incomplete, entries, errors}
+  end
+
+  defp maybe_discover_prompts(results, url, headers, response_bound, opts, capabilities) do
+    if advertised?(capabilities, "prompts") do
+      result =
+        list_mcp_catalog(
+          url,
+          headers,
+          response_bound,
+          opts,
+          "prompts/list",
+          3,
+          &prompts_result/1
+        )
+
+      results ++ [{:prompts, result}]
+    else
+      results
+    end
+  end
+
+  defp maybe_discover_resources(results, url, headers, response_bound, opts, capabilities) do
+    if advertised?(capabilities, "resources") do
+      resources =
+        list_mcp_catalog(
+          url,
+          headers,
+          response_bound,
+          opts,
+          "resources/list",
+          4,
+          &resources_result/1
+        )
+
+      templates =
+        list_mcp_catalog(
+          url,
+          headers,
+          response_bound,
+          opts,
+          "resources/templates/list",
+          5,
+          &resource_templates_result/1
+        )
+
+      results ++ [{:resources, resources}, {:resource_templates, templates}]
+    else
+      results
+    end
+  end
+
+  defp advertised?(capabilities, name),
+    do: is_map(capabilities) and Map.has_key?(capabilities, name)
+
+  defp list_mcp_catalog(url, headers, response_bound, opts, method, request_id, parser) do
+    do_list_mcp_catalog(
+      url,
+      headers,
+      response_bound,
+      opts,
+      method,
+      request_id,
+      parser,
+      nil,
+      MapSet.new(),
+      [],
+      1,
+      mcp_page_limit(opts)
+    )
+  end
+
+  defp do_list_mcp_catalog(
+         _url,
+         _headers,
+         _response_bound,
+         _opts,
+         _method,
+         _request_id,
+         _parser,
+         _cursor,
+         _seen_cursors,
+         _pages,
+         page,
+         page_limit
+       )
+       when page > page_limit,
+       do: {:error, :mcp_page_limit_exceeded}
+
+  defp do_list_mcp_catalog(
+         url,
+         headers,
+         response_bound,
+         opts,
+         method,
+         request_id,
+         parser,
+         cursor,
+         seen_cursors,
+         pages,
+         page,
+         page_limit
+       ) do
+    params = if is_binary(cursor), do: %{"cursor" => cursor}, else: %{}
+    request = %{"jsonrpc" => "2.0", "id" => request_id, "method" => method, "params" => params}
+
+    with {:ok, response} <- post_json(url, request, headers, response_bound, opts),
+         {:ok, entries, next_cursor} <- parser.(response.body),
+         {:ok, seen_cursors} <- remember_cursor(next_cursor, seen_cursors) do
+      pages = [entries | pages]
+
+      case next_cursor do
+        nil ->
+          {:ok, pages |> Enum.reverse() |> Enum.flat_map(& &1)}
+
+        next_cursor ->
+          do_list_mcp_catalog(
+            url,
+            headers,
+            response_bound,
+            opts,
+            method,
+            request_id,
+            parser,
+            next_cursor,
+            seen_cursors,
+            pages,
+            page + 1,
+            page_limit
+          )
+      end
     end
   end
 
@@ -171,8 +364,14 @@ defmodule Synapsis.Backplane.Client do
         end
       end)
       |> case do
-        {:ok, details} -> {:ok, Enum.reverse(details)}
-        error -> error
+        {:ok, details} when length(skills) == @skill_limit ->
+          {:incomplete, Enum.reverse(details), :skills_limit_reached}
+
+        {:ok, details} ->
+          {:ok, Enum.reverse(details)}
+
+        error ->
+          error
       end
     end
   end
@@ -579,19 +778,146 @@ defmodule Synapsis.Backplane.Client do
     _error -> {:error, :invalid_archive}
   end
 
-  defp mcp_result(%{"result" => _result}), do: :ok
-  defp mcp_result(%{"error" => error}), do: {:error, {:mcp_error, error}}
-  defp mcp_result(_body), do: {:error, :invalid_initialize_response}
+  defp mcp_capabilities(%{"result" => %{"protocolVersion" => @mcp_protocol_version} = result}) do
+    case Map.get(result, "capabilities", %{}) do
+      capabilities when is_map(capabilities) ->
+        {:ok, capabilities, @mcp_protocol_version}
 
-  defp tools_result(%{"result" => %{"tools" => tools}}) when is_list(tools), do: {:ok, tools}
+      _invalid ->
+        {:error, :invalid_initialize_response}
+    end
+  end
+
+  defp mcp_capabilities(%{"result" => %{"protocolVersion" => version}})
+       when is_binary(version),
+       do: {:error, {:unsupported_mcp_protocol_version, version}}
+
+  defp mcp_capabilities(%{"error" => error}), do: {:error, {:mcp_error, error}}
+  defp mcp_capabilities(_body), do: {:error, :invalid_initialize_response}
+
+  defp tools_result(%{"result" => %{"tools" => tools} = result}) when is_list(tools) do
+    with {:ok, cursor} <- next_cursor(result), do: {:ok, tools, cursor}
+  end
+
   defp tools_result(%{"error" => error}), do: {:error, {:mcp_error, error}}
   defp tools_result(_body), do: {:error, :invalid_tools_response}
+
+  defp prompts_result(%{"result" => %{"prompts" => prompts} = result}) when is_list(prompts) do
+    normalize_mcp_page(
+      prompts,
+      result,
+      "name",
+      "prompt:",
+      "mcp_prompt",
+      :invalid_prompts_response
+    )
+  end
+
+  defp prompts_result(%{"error" => error}), do: {:error, {:mcp_error, error}}
+  defp prompts_result(_body), do: {:error, :invalid_prompts_response}
+
+  defp resources_result(%{"result" => %{"resources" => resources} = result})
+       when is_list(resources) do
+    normalize_mcp_page(
+      resources,
+      result,
+      "uri",
+      "resource:",
+      "mcp_resource",
+      :invalid_resources_response
+    )
+  end
+
+  defp resources_result(%{"error" => error}), do: {:error, {:mcp_error, error}}
+  defp resources_result(_body), do: {:error, :invalid_resources_response}
+
+  defp resource_templates_result(%{"result" => %{"resourceTemplates" => templates} = result})
+       when is_list(templates) do
+    normalize_mcp_page(
+      templates,
+      result,
+      "uriTemplate",
+      "resource_template:",
+      "mcp_resource_template",
+      :invalid_resource_templates_response
+    )
+  end
+
+  defp resource_templates_result(%{"error" => error}), do: {:error, {:mcp_error, error}}
+  defp resource_templates_result(_body), do: {:error, :invalid_resource_templates_response}
+
+  defp normalize_mcp_page(
+         entries,
+         result,
+         identity_key,
+         prefix,
+         kind,
+         invalid_response
+       ) do
+    with {:ok, normalized} <-
+           normalize_mcp_entries(entries, identity_key, prefix, kind, invalid_response),
+         {:ok, cursor} <- next_cursor(result) do
+      {:ok, normalized, cursor}
+    end
+  end
+
+  defp normalize_mcp_entries(entries, identity_key, prefix, kind, invalid_response) do
+    Enum.reduce_while(entries, {:ok, []}, fn entry, {:ok, normalized} ->
+      case entry do
+        %{^identity_key => identity} when is_binary(identity) and identity != "" ->
+          capability =
+            entry
+            |> Map.put("id", prefix <> identity)
+            |> Map.put("kind", kind)
+            |> Map.put_new("name", identity)
+
+          {:cont, {:ok, [capability | normalized]}}
+
+        _invalid ->
+          {:halt, {:error, invalid_response}}
+      end
+    end)
+    |> case do
+      {:ok, normalized} -> {:ok, Enum.reverse(normalized)}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp next_cursor(result) do
+    case Map.get(result, "nextCursor") do
+      nil ->
+        {:ok, nil}
+
+      cursor
+      when is_binary(cursor) and cursor != "" and byte_size(cursor) <= @max_mcp_cursor_bytes ->
+        {:ok, cursor}
+
+      _invalid ->
+        {:error, :invalid_mcp_cursor}
+    end
+  end
+
+  defp remember_cursor(nil, seen_cursors), do: {:ok, seen_cursors}
+
+  defp remember_cursor(cursor, seen_cursors) do
+    if MapSet.member?(seen_cursors, cursor),
+      do: {:error, :mcp_cursor_cycle},
+      else: {:ok, MapSet.put(seen_cursors, cursor)}
+  end
 
   defp session_header(response) do
     case Req.Response.get_header(response, "mcp-session-id") do
       [session_id | _] when session_id != "" -> [{"mcp-session-id", session_id}]
       _missing -> []
     end
+  end
+
+  defp mcp_accept_headers(headers), do: headers ++ [{"accept", @mcp_accept}]
+
+  defp mcp_session_headers(auth_headers, session_headers, protocol_version) do
+    auth_headers ++
+      session_headers ++
+      [{"mcp-protocol-version", protocol_version}, {"accept", @mcp_accept}]
   end
 
   defp auth_headers(%Connection{credential: credential}) when is_binary(credential) do
@@ -607,6 +933,12 @@ defmodule Synapsis.Backplane.Client do
     end
   end
 
+  defp mcp_page_limit(opts) do
+    opts
+    |> option(:max_mcp_pages, @default_max_mcp_pages)
+    |> min(@max_mcp_pages)
+  end
+
   defp protect(fun) do
     fun.()
   rescue
@@ -618,6 +950,15 @@ defmodule Synapsis.Backplane.Client do
   defp redact_result({:error, reason}, %Connection{credential: credential})
        when is_binary(credential) and credential != "" do
     {:error, redact_term(reason, credential)}
+  end
+
+  defp redact_result({:ok, tools, other_capabilities}, %Connection{} = connection) do
+    {:ok, tools, redact_result(other_capabilities, connection)}
+  end
+
+  defp redact_result({:incomplete, entries, reason}, %Connection{credential: credential})
+       when is_binary(credential) and credential != "" do
+    {:incomplete, redact_term(entries, credential), redact_term(reason, credential)}
   end
 
   defp redact_result(result, _connection), do: result

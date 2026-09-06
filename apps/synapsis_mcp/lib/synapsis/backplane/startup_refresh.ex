@@ -6,7 +6,7 @@ defmodule Synapsis.Backplane.StartupRefresh do
   require Logger
 
   alias Synapsis.Backplane
-  alias Synapsis.Backplane.Connection
+  alias Synapsis.Backplane.{Connection, Sync}
 
   @timeout_ms 30_000
 
@@ -21,7 +21,8 @@ defmodule Synapsis.Backplane.StartupRefresh do
   def init(opts) do
     state = %{
       connections: Keyword.get(opts, :connections, &Connection.list/0),
-      refresh: Keyword.get(opts, :refresh, &Backplane.refresh/1),
+      refresh: Keyword.get(opts, :refresh, &default_refresh/2),
+      fail_attempt: Keyword.get(opts, :fail_attempt, &Sync.fail_attempt/3),
       task_supervisor: Keyword.get(opts, :task_supervisor, Synapsis.Tool.TaskSupervisor),
       timeout: Keyword.get(opts, :timeout, @timeout_ms),
       tasks: %{}
@@ -46,6 +47,8 @@ defmodule Synapsis.Backplane.StartupRefresh do
         Task.Supervisor.terminate_child(state.task_supervisor, task.pid)
         Process.demonitor(ref, [:flush])
 
+        persist_failure(state, task, :startup_refresh_timeout)
+
         Logger.warning("backplane_startup_refresh_timeout", connection_id: task.connection_id)
 
         {:noreply, %{state | tasks: tasks}}
@@ -60,7 +63,31 @@ defmodule Synapsis.Backplane.StartupRefresh do
 
       {task, tasks} ->
         Process.cancel_timer(task.timer)
+
+        if not benign_exit?(reason),
+          do: persist_failure(state, task, {:startup_refresh_exit, reason})
+
         log_failure(task.connection_id, reason)
+        {:noreply, %{state | tasks: tasks}}
+    end
+  end
+
+  @impl true
+  def handle_info({:startup_refresh_result, attempt_id, result}, state) do
+    case Enum.find(state.tasks, fn {_ref, task} -> task.attempt_id == attempt_id end) do
+      nil ->
+        {:noreply, state}
+
+      {ref, task} ->
+        Process.cancel_timer(task.timer)
+        Process.demonitor(ref, [:flush])
+        tasks = Map.delete(state.tasks, ref)
+
+        case result do
+          :ok -> :ok
+          {:error, reason} -> persist_failure(state, task, reason)
+        end
+
         {:noreply, %{state | tasks: tasks}}
     end
   end
@@ -99,13 +126,19 @@ defmodule Synapsis.Backplane.StartupRefresh do
   end
 
   defp start_refresh_task(state, connection_id) do
+    owner = self()
+    attempt_id = Ecto.UUID.generate()
+
     case Task.Supervisor.start_child(state.task_supervisor, fn ->
-           run_refresh(state.refresh, connection_id)
+           result = run_refresh(state.refresh, connection_id, attempt_id)
+           send(owner, {:startup_refresh_result, attempt_id, result})
          end) do
       {:ok, pid} ->
         ref = Process.monitor(pid)
         timer = Process.send_after(self(), {:task_timeout, ref}, state.timeout)
-        {:ok, ref, %{pid: pid, timer: timer, connection_id: connection_id}}
+
+        {:ok, ref,
+         %{pid: pid, timer: timer, connection_id: connection_id, attempt_id: attempt_id}}
 
       {:error, reason} ->
         {:error, reason}
@@ -114,30 +147,49 @@ defmodule Synapsis.Backplane.StartupRefresh do
     kind, reason -> {:error, {kind, reason}}
   end
 
-  defp run_refresh(refresh, connection_id) do
-    case refresh.(connection_id) do
-      {:error, _reason} ->
-        Logger.warning("backplane_startup_refresh_failed", connection_id: connection_id)
+  defp run_refresh(refresh, connection_id, attempt_id) do
+    result =
+      if is_function(refresh, 2),
+        do: refresh.(connection_id, attempt_id),
+        else: refresh.(connection_id)
 
-      _result ->
-        :ok
+    case result do
+      {:error, reason} -> {:error, reason}
+      _result -> :ok
     end
   rescue
+    error -> {:error, {:startup_refresh_exception, error.__struct__}}
+  catch
+    kind, reason -> {:error, {:startup_refresh_catch, kind, reason}}
+  end
+
+  defp default_refresh(connection_id, attempt_id) do
+    Backplane.refresh(connection_id, sync_opts: [attempt_token: attempt_id])
+  end
+
+  defp persist_failure(state, task, reason) do
+    state.fail_attempt.(task.connection_id, task.attempt_id, reason)
+  rescue
     error ->
-      Logger.warning("backplane_startup_refresh_failed",
-        connection_id: connection_id,
+      Logger.warning("backplane_startup_refresh_failure_persist_failed",
+        connection_id: task.connection_id,
         error: inspect(error.__struct__)
       )
   catch
     kind, _reason ->
-      Logger.warning("backplane_startup_refresh_failed",
-        connection_id: connection_id,
+      Logger.warning("backplane_startup_refresh_failure_persist_failed",
+        connection_id: task.connection_id,
         failure_kind: inspect(kind)
       )
   end
 
   defp log_failure(_connection_id, reason) when reason in [:normal, :shutdown, :noproc], do: :ok
+  defp log_failure(_connection_id, {:shutdown, _reason}), do: :ok
 
   defp log_failure(connection_id, _reason),
     do: Logger.warning("backplane_startup_refresh_failed", connection_id: connection_id)
+
+  defp benign_exit?(reason) when reason in [:normal, :shutdown, :noproc], do: true
+  defp benign_exit?({:shutdown, _reason}), do: true
+  defp benign_exit?(_reason), do: false
 end

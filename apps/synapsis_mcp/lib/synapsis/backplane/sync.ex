@@ -8,6 +8,10 @@ defmodule Synapsis.Backplane.Sync do
   @fail_closed_persist_attempts 2
   @lock_context_key {__MODULE__, :held_connection_locks}
   @managed_runtime_surfaces ~w(models skills tools)
+  @credential_encrypted_key "backplane_credential_encrypted"
+  @credential_mode_key "backplane_credential_mode"
+  @last_attempt_token_key "last_attempt_token"
+  @last_success_token_key "last_success_token"
   @runtime_blocked_surfaces_key "runtime_blocked_surfaces"
 
   def status(connection_id) do
@@ -22,6 +26,30 @@ defmodule Synapsis.Backplane.Sync do
     else
       with_lock(connection_id, opts, fn -> do_run(connection_id, opts) end)
     end
+  end
+
+  @doc false
+  def fail_attempt(connection_id, expected_attempt_token, reason, opts \\ [])
+      when is_binary(connection_id) do
+    with_lock(connection_id, opts, fn ->
+      connection_store = Keyword.get(opts, :connection_store, Connection)
+
+      with {:ok, connection} <- connection_store.get(connection_id) do
+        cond do
+          attempt_token(connection) != expected_attempt_token ->
+            {:ok, connection}
+
+          not is_nil(expected_attempt_token) and
+              success_token(connection) == expected_attempt_token ->
+            {:ok, connection}
+
+          true ->
+            connection
+            |> persist_failure(reason, connection_store)
+            |> publish_sync_result(false)
+        end
+      end
+    end)
   end
 
   @doc "Runs a callback under the bounded per-connection reconciliation lock."
@@ -46,8 +74,13 @@ defmodule Synapsis.Backplane.Sync do
     connection_store = Keyword.get(opts, :connection_store, Connection)
 
     with {:ok, connection} <- connection_store.get(connection_id),
+         {:ok, attempt_token} <- attempt_token(opts),
          now <- now(opts),
-         {:ok, attempted} <- connection_store.update(connection, %{last_attempt_at: now}) do
+         {:ok, attempted} <-
+           connection_store.update(connection, %{
+             last_attempt_at: now,
+             metadata: Map.put(connection.metadata || %{}, @last_attempt_token_key, attempt_token)
+           }) do
       Events.started(attempted)
       previous_state = managed_capability_state(attempted)
 
@@ -85,7 +118,10 @@ defmodule Synapsis.Backplane.Sync do
   defp capabilities_changed?(_previous_state, _error), do: false
 
   defp surface_reconciled?(snapshot) do
-    Enum.any?([:models, :skills, :mcp_tools], &(!Map.has_key?(snapshot.errors, &1)))
+    Enum.any?(
+      [:models, :skills, :mcp_tools, :other_capabilities],
+      &Map.has_key?(snapshot.surface_revisions, &1)
+    )
   end
 
   def set_available(connection_id, available, opts \\ [])
@@ -278,7 +314,7 @@ defmodule Synapsis.Backplane.Sync do
       artifacts: reconstruct_artifacts(connection.id),
       counts: connection.counts || %{},
       revisions: Map.get(connection.metadata || %{}, "surface_revisions", %{}),
-      errors: snapshot.errors,
+      errors: Map.merge(snapshot.errors, snapshot.incomplete_surfaces),
       runtime_changed: false,
       runtime_blocked_surfaces: runtime_blocked_surfaces(connection.metadata)
     }
@@ -296,6 +332,11 @@ defmodule Synapsis.Backplane.Sync do
     result =
       reconcile_surface(result, :mcp_tools, fn ->
         reconcile_tools_surface(result, connection, snapshot, runtime, mcp_store)
+      end)
+
+    result =
+      reconcile_surface(result, :other_capabilities, fn ->
+        reconcile_other_capabilities_surface(result, snapshot)
       end)
 
     {:ok, result}
@@ -386,13 +427,15 @@ defmodule Synapsis.Backplane.Sync do
     if Map.has_key?(snapshot.errors, :skills) do
       {:ok, result}
     else
-      with {:ok, skills} <- reconcile_skills(connection, snapshot.skills, skill_store) do
+      complete? = not Map.has_key?(snapshot.incomplete_surfaces, :skills)
+
+      with {:ok, skills} <- reconcile_skills(connection, snapshot.skills, skill_store, complete?) do
         ids = Map.new(skills, &{marker(&1.config_overrides, "external_id"), &1.id})
 
         {:ok,
          result
          |> put_in([:artifacts, "skill_ids"], ids)
-         |> put_in([:counts, "skills"], length(snapshot.skills))
+         |> put_in([:counts, "skills"], skill_count(skills, snapshot.skills, complete?))
          |> put_surface_revision(:skills, snapshot)}
       end
     end
@@ -409,6 +452,25 @@ defmodule Synapsis.Backplane.Sync do
          |> put_in([:counts, "tools"], length(snapshot.mcp_tools))
          |> put_surface_revision(:mcp_tools, snapshot)}
       end
+    end
+  end
+
+  defp reconcile_other_capabilities_surface(result, snapshot) do
+    cond do
+      Map.has_key?(snapshot.errors, :other_capabilities) ->
+        {:ok, result}
+
+      Map.has_key?(snapshot.incomplete_surfaces, :other_capabilities) ->
+        {:ok, result}
+
+      not Map.has_key?(snapshot.surface_revisions, :other_capabilities) ->
+        {:ok, result}
+
+      true ->
+        {:ok,
+         result
+         |> put_in([:counts, "other_capabilities"], length(snapshot.other_capabilities))
+         |> put_surface_revision(:other_capabilities, snapshot)}
     end
   end
 
@@ -430,6 +492,7 @@ defmodule Synapsis.Backplane.Sync do
         "surface_errors" => surface_errors,
         "surface_revisions" => reconciliation.revisions
       })
+      |> maybe_mark_attempt_success(success?)
 
     source_revision =
       if map_size(reconciliation.revisions) == 0,
@@ -588,7 +651,12 @@ defmodule Synapsis.Backplane.Sync do
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
   defp unavailable_surfaces(errors) do
-    for {surface, public} <- [models: "models", skills: "skills", mcp_tools: "tools"],
+    for {surface, public} <- [
+          models: "models",
+          skills: "skills",
+          mcp_tools: "tools",
+          other_capabilities: "other_capabilities"
+        ],
         Map.has_key?(errors, surface),
         do: public
   end
@@ -623,11 +691,16 @@ defmodule Synapsis.Backplane.Sync do
     errors
     |> unavailable_surfaces()
     |> Enum.map_join(", ", fn surface ->
-      internal = if surface == "tools", do: :mcp_tools, else: String.to_existing_atom(surface)
+      internal = internal_surface(surface)
       "#{surface}: #{format_error(Map.fetch!(errors, internal), credential)}"
     end)
     |> truncate_error()
   end
+
+  defp internal_surface("models"), do: :models
+  defp internal_surface("skills"), do: :skills
+  defp internal_surface("tools"), do: :mcp_tools
+  defp internal_surface("other_capabilities"), do: :other_capabilities
 
   defp format_error(reason, credential) do
     message = inspect(reason)
@@ -698,12 +771,12 @@ defmodule Synapsis.Backplane.Sync do
 
   defp reconcile_provider(_connection, _snapshot), do: {:error, :missing_provider_capability}
 
-  defp reconcile_skills(connection, capabilities, skill_store) do
+  defp reconcile_skills(connection, capabilities, skill_store, complete?) do
     original = owned_skills(connection.id, skill_store)
     existing = Map.new(original, &{marker(&1.config_overrides, "external_id"), &1})
 
     with {:ok, prepared} <- prepare_skills(existing, capabilities) do
-      case persist_skill_surface(skill_store, prepared, existing, capabilities) do
+      case persist_skill_surface(skill_store, prepared, existing, capabilities, complete?) do
         {:ok, skills} ->
           {:ok, skills}
 
@@ -727,11 +800,38 @@ defmodule Synapsis.Backplane.Sync do
     end
   end
 
-  defp persist_skill_surface(skill_store, prepared, existing, capabilities) do
+  defp persist_skill_surface(skill_store, prepared, existing, capabilities, true) do
     with {:ok, current} <- persist_skills(skill_store, prepared),
          {:ok, stale} <- mark_disappeared_skills(skill_store, existing, capabilities) do
       {:ok, Enum.reverse(current) ++ stale}
     end
+  end
+
+  defp persist_skill_surface(skill_store, prepared, existing, capabilities, false) do
+    with {:ok, current} <- persist_skills(skill_store, prepared) do
+      current_ids = MapSet.new(capabilities, & &1.external_id)
+
+      untouched =
+        existing
+        |> Enum.reject(fn {external_id, _skill} -> MapSet.member?(current_ids, external_id) end)
+        |> Enum.sort_by(&elem(&1, 0))
+        |> Enum.map(&elem(&1, 1))
+
+      {:ok, Enum.reverse(current) ++ untouched}
+    end
+  end
+
+  defp skill_count(_skills, capabilities, true), do: length(capabilities)
+
+  defp skill_count(skills, capabilities, false) do
+    returned_ids = MapSet.new(capabilities, & &1.external_id)
+
+    Enum.count(skills, fn skill ->
+      external_id = marker(skill.config_overrides, "external_id")
+
+      MapSet.member?(returned_ids, external_id) or
+        marker(skill.config_overrides, "source_available") != false
+    end)
   end
 
   defp prepare_skills(existing, capabilities) do
@@ -911,6 +1011,7 @@ defmodule Synapsis.Backplane.Sync do
           Enum.map(tools, &capability_cache(&1, &1.enabled_by_source))
         )
       )
+      |> put_applied_credential(mcp, connection.credential)
 
     attrs = %{
       name: source_name,
@@ -931,7 +1032,10 @@ defmodule Synapsis.Backplane.Sync do
             attrs
             | name: reconciled_name(mcp.name, mcp.config, attrs.name),
               headers: mcp.headers || %{},
-              config: Map.merge(mcp.config || %{}, config)
+              config:
+                (mcp.config || %{})
+                |> Map.merge(config)
+                |> put_applied_credential(mcp, connection.credential)
           }
 
           mcp_store.update(mcp, Map.delete(attrs, :enabled))
@@ -981,6 +1085,29 @@ defmodule Synapsis.Backplane.Sync do
 
   defp reconcile_mcp_config(_connection, _snapshot, _runtime, _mcp_store),
     do: {:error, :missing_mcp_server_capability}
+
+  defp put_applied_credential(config, _mcp, nil) do
+    config
+    |> Map.put(@credential_mode_key, "keyless")
+    |> Map.delete(@credential_encrypted_key)
+  end
+
+  defp put_applied_credential(config, mcp, credential) when is_binary(credential) do
+    config
+    |> Map.put(@credential_mode_key, "encrypted")
+    |> Map.put(@credential_encrypted_key, applied_credential_marker(mcp, credential))
+  end
+
+  defp applied_credential_marker(nil, credential), do: Connection.seal_credential(credential)
+
+  defp applied_credential_marker(mcp, credential) do
+    existing = marker(mcp.config, @credential_encrypted_key)
+
+    case Connection.unseal_credential(existing) do
+      {:ok, ^credential} -> existing
+      _missing_or_changed -> Connection.seal_credential(credential)
+    end
+  end
 
   defp restore_mcp_config(mcp_store, nil, created) do
     case mcp_store.delete(created) do
@@ -1332,6 +1459,30 @@ defmodule Synapsis.Backplane.Sync do
       value when is_binary(value) -> value
     end
   end
+
+  defp attempt_token(opts) when is_list(opts) do
+    case Keyword.get_lazy(opts, :attempt_token, &Ecto.UUID.generate/0) do
+      token when is_binary(token) and token != "" -> {:ok, token}
+      _invalid -> {:error, :invalid_attempt_token}
+    end
+  end
+
+  defp attempt_token(connection) do
+    Map.get(connection.metadata || %{}, @last_attempt_token_key)
+  end
+
+  defp success_token(connection) do
+    Map.get(connection.metadata || %{}, @last_success_token_key)
+  end
+
+  defp maybe_mark_attempt_success(metadata, true) do
+    case Map.get(metadata, @last_attempt_token_key) do
+      token when is_binary(token) -> Map.put(metadata, @last_success_token_key, token)
+      _missing -> metadata
+    end
+  end
+
+  defp maybe_mark_attempt_success(metadata, false), do: metadata
 
   defp lock_retries(opts) do
     case Keyword.get(opts, :lock_retries, 10) do

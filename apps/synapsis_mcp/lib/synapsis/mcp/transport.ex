@@ -19,6 +19,8 @@ defmodule Synapsis.MCP.Transport do
   """
   alias Synapsis.MCPConfig
 
+  @credential_encrypted_key "backplane_credential_encrypted"
+  @credential_mode_key "backplane_credential_mode"
   @current_protocol_version "2025-06-18"
   @legacy_sse_protocol_version "2024-11-05"
 
@@ -62,15 +64,40 @@ defmodule Synapsis.MCP.Transport do
     Map.merge(config.headers || %{}, source_headers(config.config || %{}))
   end
 
-  defp source_headers(%{"backplane_source_id" => source_id}) do
-    case Synapsis.Backplane.Connection.get(source_id) do
-      {:ok, %{enabled: true, credential: credential}} when is_binary(credential) ->
-        %{"authorization" => "Bearer " <> credential}
-
-      _missing_or_keyless ->
-        %{}
+  defp source_headers(%{"backplane_source_id" => source_id} = config) do
+    with {:ok, %{enabled: true} = connection} <-
+           Synapsis.Backplane.Connection.get(source_id),
+         {:ok, credential} <- applied_credential(config, connection),
+         true <- is_binary(credential) do
+      %{"authorization" => "Bearer " <> credential}
+    else
+      _missing_or_keyless -> %{}
     end
   end
 
   defp source_headers(_config), do: %{}
+
+  defp applied_credential(config, connection) do
+    case Map.get(config, @credential_mode_key) do
+      "keyless" ->
+        {:ok, nil}
+
+      "encrypted" ->
+        unseal_applied_credential(config)
+
+      nil ->
+        if Map.has_key?(config, @credential_encrypted_key),
+          do: unseal_applied_credential(config),
+          else: {:ok, connection.credential}
+
+      _invalid ->
+        {:error, :invalid_backplane_credential_mode}
+    end
+  end
+
+  defp unseal_applied_credential(config) do
+    config
+    |> Map.get(@credential_encrypted_key)
+    |> Synapsis.Backplane.Connection.unseal_credential()
+  end
 end

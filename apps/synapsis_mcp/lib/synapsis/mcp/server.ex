@@ -146,11 +146,16 @@ defmodule Synapsis.MCP.Server do
   def handle_call(:await_ready, _from, state), do: {:reply, :ok, state}
 
   def handle_call({:execute, full_tool_name, input, _ctx}, _from, state) do
-    if discovered_tool?(state.tools, full_tool_name) and
-         current_runtime_available?(state.config, full_tool_name) do
-      execute_tool(state.client, full_tool_name, input, state)
-    else
-      {:reply, {:error, :mcp_unavailable}, state}
+    case discovered_tool(state.tools, full_tool_name) do
+      %{trust_annotations: trust_annotations} ->
+        if current_runtime_available?(state.config, full_tool_name, trust_annotations) do
+          execute_tool(state.client, full_tool_name, input, state)
+        else
+          {:reply, {:error, :mcp_unavailable}, state}
+        end
+
+      nil ->
+        {:reply, {:error, :mcp_unavailable}, state}
     end
   end
 
@@ -262,18 +267,25 @@ defmodule Synapsis.MCP.Server do
     end
   end
 
-  defp current_runtime_available?(%MCPConfig{id: nil} = config, full_tool_name) do
-    MCPConfigs.runtime_available?(config) and tool_runtime_available?(config, full_tool_name)
+  defp current_runtime_available?(
+         %MCPConfig{id: nil} = config,
+         full_tool_name,
+         trust_annotations
+       ) do
+    MCPConfigs.runtime_available?(config) and
+      tool_runtime_available?(config, full_tool_name) and
+      annotation_trust_available?(config, trust_annotations)
   end
 
-  defp current_runtime_available?(%MCPConfig{id: id}, full_tool_name) do
+  defp current_runtime_available?(%MCPConfig{id: id}, full_tool_name, trust_annotations) do
     case MCPConfigs.get(id) do
       nil ->
         false
 
       config ->
         MCPConfigs.runtime_available?(config) and
-          tool_runtime_available?(config, full_tool_name)
+          tool_runtime_available?(config, full_tool_name) and
+          annotation_trust_available?(config, trust_annotations)
     end
   end
 
@@ -293,9 +305,16 @@ defmodule Synapsis.MCP.Server do
 
   defp attach_availability_checks(tools, config) do
     Enum.map(tools, fn tool ->
-      Map.put(tool, :availability_check, fn -> current_runtime_available?(config, tool.name) end)
+      Map.put(tool, :availability_check, fn ->
+        current_runtime_available?(config, tool.name, tool.trust_annotations)
+      end)
     end)
   end
+
+  defp annotation_trust_available?(config, true),
+    do: MCPConfigs.trust_tool_annotations?(config)
+
+  defp annotation_trust_available?(_config, false), do: true
 
   defp tool_runtime_available?(%MCPConfig{config: config}, full_tool_name) do
     not backplane_managed?(config) or
@@ -323,8 +342,8 @@ defmodule Synapsis.MCP.Server do
     end
   end
 
-  defp discovered_tool?(tools, full_tool_name),
-    do: Enum.any?(tools, &(&1.name == full_tool_name))
+  defp discovered_tool(tools, full_tool_name),
+    do: Enum.find(tools, &(&1.name == full_tool_name))
 
   defp register_config_id(%MCPConfig{id: nil}), do: :ok
 

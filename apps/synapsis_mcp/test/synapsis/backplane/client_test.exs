@@ -81,6 +81,10 @@ defmodule Synapsis.Backplane.ClientTest do
         "initialize" ->
           send(parent, :initialize)
 
+          assert Plug.Conn.get_req_header(conn, "accept") == [
+                   "application/json, text/event-stream"
+                 ]
+
           conn
           |> Plug.Conn.put_resp_header("mcp-session-id", "session-1")
           |> json(%{
@@ -92,11 +96,22 @@ defmodule Synapsis.Backplane.ClientTest do
         "notifications/initialized" ->
           send(parent, :initialized)
           assert Plug.Conn.get_req_header(conn, "mcp-session-id") == ["session-1"]
+          assert Plug.Conn.get_req_header(conn, "mcp-protocol-version") == ["2025-03-26"]
+
+          assert Plug.Conn.get_req_header(conn, "accept") == [
+                   "application/json, text/event-stream"
+                 ]
+
           Plug.Conn.send_resp(conn, 202, "")
 
         "tools/list" ->
           send(parent, :tools)
           assert Plug.Conn.get_req_header(conn, "mcp-session-id") == ["session-1"]
+          assert Plug.Conn.get_req_header(conn, "mcp-protocol-version") == ["2025-03-26"]
+
+          assert Plug.Conn.get_req_header(conn, "accept") == [
+                   "application/json, text/event-stream"
+                 ]
 
           json(conn, %{
             "jsonrpc" => "2.0",
@@ -129,6 +144,448 @@ defmodule Synapsis.Backplane.ClientTest do
     assert_receive :tools
   end
 
+  test "discovers advertised MCP prompts and resources through the tools session" do
+    bypass = Bypass.open()
+    connection = connection!(bypass)
+    parent = self()
+
+    Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+      json(conn, %{"data" => []})
+    end)
+
+    Bypass.expect_once(bypass, "GET", "/skills", fn conn ->
+      json(conn, %{"data" => []})
+    end)
+
+    Bypass.expect(bypass, "POST", "/mcp", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      method = Jason.decode!(body)["method"]
+      send(parent, {:mcp_method, method, Plug.Conn.get_req_header(conn, "mcp-session-id")})
+
+      case method do
+        "initialize" ->
+          conn
+          |> Plug.Conn.put_resp_header("mcp-session-id", "capability-session")
+          |> json(%{
+            "jsonrpc" => "2.0",
+            "id" => 1,
+            "result" => %{
+              "protocolVersion" => "2025-03-26",
+              "capabilities" => %{"tools" => %{}, "prompts" => %{}, "resources" => %{}}
+            }
+          })
+
+        "notifications/initialized" ->
+          Plug.Conn.send_resp(conn, 202, "")
+
+        "tools/list" ->
+          json(conn, %{
+            "jsonrpc" => "2.0",
+            "id" => 2,
+            "result" => %{"tools" => [%{"name" => "memory::search"}]}
+          })
+
+        "prompts/list" ->
+          json(conn, %{
+            "jsonrpc" => "2.0",
+            "id" => 3,
+            "result" => %{"prompts" => [%{"name" => "review", "description" => "Review"}]}
+          })
+
+        "resources/list" ->
+          json(conn, %{
+            "jsonrpc" => "2.0",
+            "id" => 4,
+            "result" => %{
+              "resources" => [%{"uri" => "memory://recent", "name" => "Recent memory"}]
+            }
+          })
+
+        "resources/templates/list" ->
+          json(conn, %{
+            "jsonrpc" => "2.0",
+            "id" => 5,
+            "result" => %{
+              "resourceTemplates" => [
+                %{"uriTemplate" => "memory://sessions/{id}", "name" => "Session memory"}
+              ]
+            }
+          })
+      end
+    end)
+
+    assert {:ok, snapshot} = Client.fetch_snapshot(connection, timeout: 500)
+    assert Enum.map(snapshot.mcp_tools, & &1.external_id) == ["memory::search"]
+
+    assert Enum.map(snapshot.other_capabilities, &{&1.kind, &1.external_id}) == [
+             {"mcp_prompt", "prompt:review"},
+             {"mcp_resource", "resource:memory://recent"},
+             {"mcp_resource_template", "resource_template:memory://sessions/{id}"}
+           ]
+
+    assert snapshot.incomplete_surfaces == %{}
+
+    assert_receive {:mcp_method, "initialize", []}
+
+    for method <- [
+          "notifications/initialized",
+          "tools/list",
+          "prompts/list",
+          "resources/list",
+          "resources/templates/list"
+        ] do
+      assert_receive {:mcp_method, ^method, ["capability-session"]}
+    end
+  end
+
+  test "follows MCP pagination cursors for every discovered catalog in one session" do
+    bypass = Bypass.open()
+    connection = connection!(bypass)
+    parent = self()
+
+    Bypass.expect_once(bypass, "GET", "/v1/models", fn conn -> json(conn, %{"data" => []}) end)
+    Bypass.expect_once(bypass, "GET", "/skills", fn conn -> json(conn, %{"data" => []}) end)
+
+    Bypass.expect(bypass, "POST", "/mcp", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      message = Jason.decode!(body)
+      cursor = get_in(message, ["params", "cursor"])
+      send(parent, {:mcp_page, message["method"], cursor})
+
+      case {message["method"], cursor} do
+        {"initialize", nil} ->
+          conn
+          |> Plug.Conn.put_resp_header("mcp-session-id", "paginated-session")
+          |> json(%{
+            "jsonrpc" => "2.0",
+            "id" => 1,
+            "result" => %{
+              "protocolVersion" => "2025-03-26",
+              "capabilities" => %{"tools" => %{}, "prompts" => %{}, "resources" => %{}}
+            }
+          })
+
+        {"notifications/initialized", nil} ->
+          Plug.Conn.send_resp(conn, 202, "")
+
+        {"tools/list", nil} ->
+          json(conn, %{
+            "jsonrpc" => "2.0",
+            "id" => 2,
+            "result" => %{
+              "tools" => [%{"name" => "memory::search"}],
+              "nextCursor" => "tools-2"
+            }
+          })
+
+        {"tools/list", "tools-2"} ->
+          json(conn, %{
+            "jsonrpc" => "2.0",
+            "id" => 2,
+            "result" => %{"tools" => [%{"name" => "memory::write"}]}
+          })
+
+        {"prompts/list", nil} ->
+          json(conn, %{
+            "jsonrpc" => "2.0",
+            "id" => 3,
+            "result" => %{
+              "prompts" => [%{"name" => "review"}],
+              "nextCursor" => "prompts-2"
+            }
+          })
+
+        {"prompts/list", "prompts-2"} ->
+          json(conn, %{
+            "jsonrpc" => "2.0",
+            "id" => 3,
+            "result" => %{"prompts" => [%{"name" => "draft"}]}
+          })
+
+        {"resources/list", nil} ->
+          json(conn, %{
+            "jsonrpc" => "2.0",
+            "id" => 4,
+            "result" => %{
+              "resources" => [%{"uri" => "memory://recent"}],
+              "nextCursor" => "resources-2"
+            }
+          })
+
+        {"resources/list", "resources-2"} ->
+          json(conn, %{
+            "jsonrpc" => "2.0",
+            "id" => 4,
+            "result" => %{"resources" => [%{"uri" => "memory://archive"}]}
+          })
+
+        {"resources/templates/list", nil} ->
+          json(conn, %{
+            "jsonrpc" => "2.0",
+            "id" => 5,
+            "result" => %{
+              "resourceTemplates" => [%{"uriTemplate" => "memory://sessions/{id}"}],
+              "nextCursor" => "templates-2"
+            }
+          })
+
+        {"resources/templates/list", "templates-2"} ->
+          json(conn, %{
+            "jsonrpc" => "2.0",
+            "id" => 5,
+            "result" => %{
+              "resourceTemplates" => [%{"uriTemplate" => "memory://projects/{id}"}]
+            }
+          })
+      end
+    end)
+
+    assert {:ok, snapshot} = Client.fetch_snapshot(connection, timeout: 500)
+
+    assert MapSet.new(snapshot.mcp_tools, & &1.external_id) ==
+             MapSet.new(["memory::search", "memory::write"])
+
+    assert MapSet.new(snapshot.other_capabilities, & &1.external_id) ==
+             MapSet.new([
+               "prompt:review",
+               "prompt:draft",
+               "resource:memory://recent",
+               "resource:memory://archive",
+               "resource_template:memory://sessions/{id}",
+               "resource_template:memory://projects/{id}"
+             ])
+
+    for {method, cursor} <- [
+          {"tools/list", "tools-2"},
+          {"prompts/list", "prompts-2"},
+          {"resources/list", "resources-2"},
+          {"resources/templates/list", "templates-2"}
+        ] do
+      assert_receive {:mcp_page, ^method, ^cursor}
+    end
+
+    assert_received {:mcp_page, "initialize", nil}
+    refute_received {:mcp_page, "initialize", _cursor}
+  end
+
+  test "fails the tools surface when a later MCP page fails" do
+    bypass = Bypass.open()
+    connection = connection!(bypass)
+
+    Bypass.expect(bypass, "POST", "/mcp", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      message = Jason.decode!(body)
+
+      case {message["method"], get_in(message, ["params", "cursor"])} do
+        {"initialize", nil} ->
+          conn
+          |> Plug.Conn.put_resp_header("mcp-session-id", "failed-page-session")
+          |> json(%{
+            "jsonrpc" => "2.0",
+            "id" => 1,
+            "result" => %{"protocolVersion" => "2025-03-26"}
+          })
+
+        {"notifications/initialized", nil} ->
+          Plug.Conn.send_resp(conn, 202, "")
+
+        {"tools/list", nil} ->
+          json(conn, %{
+            "jsonrpc" => "2.0",
+            "id" => 2,
+            "result" => %{
+              "tools" => [%{"name" => "first-page-tool"}],
+              "nextCursor" => "tools-2"
+            }
+          })
+
+        {"tools/list", "tools-2"} ->
+          json(conn, %{
+            "jsonrpc" => "2.0",
+            "id" => 2,
+            "error" => %{"code" => -32_603, "message" => "catalog unavailable"}
+          })
+      end
+    end)
+
+    assert {:error, {:mcp_error, %{"message" => "catalog unavailable"}}} =
+             Client.list_tools(connection, timeout: 500)
+  end
+
+  test "fails MCP pagination when a server repeats a cursor" do
+    bypass = Bypass.open()
+    connection = connection!(bypass)
+
+    Bypass.expect(bypass, "POST", "/mcp", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      message = Jason.decode!(body)
+
+      case {message["method"], get_in(message, ["params", "cursor"])} do
+        {"initialize", nil} ->
+          conn
+          |> Plug.Conn.put_resp_header("mcp-session-id", "cursor-cycle-session")
+          |> json(%{
+            "jsonrpc" => "2.0",
+            "id" => 1,
+            "result" => %{"protocolVersion" => "2025-03-26"}
+          })
+
+        {"notifications/initialized", nil} ->
+          Plug.Conn.send_resp(conn, 202, "")
+
+        {"tools/list", nil} ->
+          json(conn, %{
+            "jsonrpc" => "2.0",
+            "id" => 2,
+            "result" => %{"tools" => [], "nextCursor" => "repeated-cursor"}
+          })
+
+        {"tools/list", "repeated-cursor"} ->
+          json(conn, %{
+            "jsonrpc" => "2.0",
+            "id" => 2,
+            "result" => %{"tools" => [], "nextCursor" => "repeated-cursor"}
+          })
+      end
+    end)
+
+    assert {:error, :mcp_cursor_cycle} = Client.list_tools(connection, timeout: 500)
+  end
+
+  test "stops MCP pagination at the configured page limit" do
+    bypass = Bypass.open()
+    connection = connection!(bypass)
+    parent = self()
+
+    Bypass.expect(bypass, "POST", "/mcp", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      message = Jason.decode!(body)
+      cursor = get_in(message, ["params", "cursor"])
+
+      case {message["method"], cursor} do
+        {"initialize", nil} ->
+          conn
+          |> Plug.Conn.put_resp_header("mcp-session-id", "page-limit-session")
+          |> json(%{
+            "jsonrpc" => "2.0",
+            "id" => 1,
+            "result" => %{"protocolVersion" => "2025-03-26"}
+          })
+
+        {"notifications/initialized", nil} ->
+          Plug.Conn.send_resp(conn, 202, "")
+
+        {"tools/list", nil} ->
+          send(parent, {:tools_cursor, nil})
+
+          json(conn, %{
+            "jsonrpc" => "2.0",
+            "id" => 2,
+            "result" => %{"tools" => [], "nextCursor" => "tools-2"}
+          })
+
+        {"tools/list", next_cursor} ->
+          send(parent, {:tools_cursor, next_cursor})
+          json(conn, %{"jsonrpc" => "2.0", "id" => 2, "result" => %{"tools" => []}})
+      end
+    end)
+
+    assert {:error, :mcp_page_limit_exceeded} =
+             Client.list_tools(connection, timeout: 500, max_mcp_pages: 1)
+
+    assert_received {:tools_cursor, nil}
+    refute_received {:tools_cursor, "tools-2"}
+  end
+
+  test "keeps tools and successful optional capabilities when an advertised MCP surface fails" do
+    bypass = Bypass.open()
+    connection = connection!(bypass)
+
+    Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+      json(conn, %{"data" => []})
+    end)
+
+    Bypass.expect_once(bypass, "GET", "/skills", fn conn ->
+      json(conn, %{"data" => []})
+    end)
+
+    Bypass.expect(bypass, "POST", "/mcp", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      message = Jason.decode!(body)
+
+      case message["method"] do
+        "initialize" ->
+          conn
+          |> Plug.Conn.put_resp_header("mcp-session-id", "partial-session")
+          |> json(%{
+            "jsonrpc" => "2.0",
+            "id" => 1,
+            "result" => %{
+              "protocolVersion" => "2025-03-26",
+              "capabilities" => %{"prompts" => %{}, "resources" => %{}}
+            }
+          })
+
+        "notifications/initialized" ->
+          Plug.Conn.send_resp(conn, 202, "")
+
+        "tools/list" ->
+          json(conn, %{
+            "jsonrpc" => "2.0",
+            "id" => 2,
+            "result" => %{"tools" => [%{"name" => "memory::search"}]}
+          })
+
+        "prompts/list" ->
+          case get_in(message, ["params", "cursor"]) do
+            nil ->
+              json(conn, %{
+                "jsonrpc" => "2.0",
+                "id" => 3,
+                "result" => %{
+                  "prompts" => [%{"name" => "cached-review"}],
+                  "nextCursor" => "prompts-2"
+                }
+              })
+
+            "prompts-2" ->
+              json(conn, %{
+                "jsonrpc" => "2.0",
+                "id" => 3,
+                "error" => %{"code" => -32_603, "message" => "prompt registry unavailable"}
+              })
+          end
+
+        "resources/list" ->
+          json(conn, %{
+            "jsonrpc" => "2.0",
+            "id" => 4,
+            "result" => %{"resources" => [%{"uri" => "memory://recent", "name" => "Recent"}]}
+          })
+
+        "resources/templates/list" ->
+          json(conn, %{
+            "jsonrpc" => "2.0",
+            "id" => 5,
+            "result" => %{"resourceTemplates" => []}
+          })
+      end
+    end)
+
+    assert {:ok, snapshot} = Client.fetch_snapshot(connection, timeout: 500)
+    assert Enum.map(snapshot.mcp_tools, & &1.external_id) == ["memory::search"]
+
+    assert Enum.map(snapshot.other_capabilities, & &1.external_id) == [
+             "resource:memory://recent"
+           ]
+
+    assert %{other_capabilities: %{prompts: {:mcp_error, error}}} =
+             snapshot.incomplete_surfaces
+
+    assert error["message"] == "prompt registry unavailable"
+    assert snapshot.errors == %{}
+  end
+
   test "keeps successful surfaces when another discovery surface fails" do
     bypass = Bypass.open()
     connection = connection!(bypass)
@@ -148,6 +605,61 @@ defmodule Synapsis.Backplane.ClientTest do
     assert {:ok, snapshot} = Client.fetch_snapshot(connection, timeout: 500)
     assert snapshot.skills == []
     assert snapshot.errors == %{models: {:http_status, 503}, mcp_tools: {:http_status, 503}}
+  end
+
+  test "marks an exact-limit skill catalog incomplete" do
+    bypass = Bypass.open()
+    connection = connection!(bypass)
+
+    skills =
+      for index <- 1..100 do
+        slug = "skill-#{index}"
+        %{"id" => slug, "slug" => slug, "name" => slug, "source_kind" => "generated"}
+      end
+
+    Bypass.expect(bypass, fn conn ->
+      case {conn.method, conn.request_path} do
+        {"GET", "/v1/models"} ->
+          json(conn, %{"data" => []})
+
+        {"GET", "/skills"} ->
+          assert conn.query_string == "limit=100"
+          json(conn, %{"data" => skills})
+
+        {"GET", "/skills/" <> slug} ->
+          json(conn, %{
+            "id" => slug,
+            "slug" => slug,
+            "name" => slug,
+            "source_kind" => "generated",
+            "content" => "Content for #{slug}"
+          })
+
+        {"POST", "/mcp"} ->
+          {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+          case Jason.decode!(body)["method"] do
+            "initialize" ->
+              conn
+              |> Plug.Conn.put_resp_header("mcp-session-id", "exact-limit-session")
+              |> json(%{
+                "jsonrpc" => "2.0",
+                "id" => 1,
+                "result" => %{"protocolVersion" => "2025-03-26"}
+              })
+
+            "notifications/initialized" ->
+              Plug.Conn.send_resp(conn, 202, "")
+
+            "tools/list" ->
+              json(conn, %{"jsonrpc" => "2.0", "id" => 2, "result" => %{"tools" => []}})
+          end
+      end
+    end)
+
+    assert {:ok, snapshot} = Client.fetch_snapshot(connection, timeout: 500)
+    assert length(snapshot.skills) == 100
+    assert Map.get(snapshot, :incomplete_surfaces) == %{skills: :skills_limit_reached}
   end
 
   test "bounds model, skill list, and generated skill detail JSON before decoding" do
@@ -207,7 +719,11 @@ defmodule Synapsis.Backplane.ClientTest do
           {_phase, "initialize"} ->
             conn
             |> Plug.Conn.put_resp_header("mcp-session-id", "bounded-session")
-            |> json(%{"jsonrpc" => "2.0", "id" => 1, "result" => %{}})
+            |> json(%{
+              "jsonrpc" => "2.0",
+              "id" => 1,
+              "result" => %{"protocolVersion" => "2025-03-26"}
+            })
 
           {:initialized, "notifications/initialized"} ->
             oversized_mcp_response(conn, nil)
@@ -813,7 +1329,11 @@ defmodule Synapsis.Backplane.ClientTest do
         "initialize" ->
           conn
           |> Plug.Conn.put_resp_header("mcp-session-id", "empty-session")
-          |> json(%{"jsonrpc" => "2.0", "id" => 1, "result" => %{}})
+          |> json(%{
+            "jsonrpc" => "2.0",
+            "id" => 1,
+            "result" => %{"protocolVersion" => "2025-03-26"}
+          })
 
         "notifications/initialized" ->
           Plug.Conn.send_resp(conn, 202, "")

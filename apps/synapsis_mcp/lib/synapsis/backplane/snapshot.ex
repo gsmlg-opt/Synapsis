@@ -20,6 +20,7 @@ defmodule Synapsis.Backplane.Snapshot do
     mcp_tools: [],
     other_capabilities: [],
     surface_revisions: %{},
+    incomplete_surfaces: %{},
     errors: %{}
   ]
 
@@ -46,15 +47,15 @@ defmodule Synapsis.Backplane.Snapshot do
     {skills, skill_revision, skill_error} =
       normalize_capability_list(connection, "skill", surface(surfaces, :skills), &skill_id/1)
 
+    incomplete_surfaces = incomplete_surfaces(surfaces)
+
     {mcp_tools, mcp_servers, mcp_revision, mcp_error} =
       normalize_mcp(connection, surface(surfaces, :mcp_tools))
 
     {other, other_revision, other_error} =
-      normalize_capability_list(
+      normalize_other_capabilities(
         connection,
-        "other",
-        surface(surfaces, :other_capabilities, {:ok, []}),
-        &generic_id/1
+        surface(surfaces, :other_capabilities, {:ok, []})
       )
 
     surface_results = [
@@ -95,6 +96,7 @@ defmodule Synapsis.Backplane.Snapshot do
        fetched_at: fetched_at,
        source_revision: revision(surface_revisions),
        surface_revisions: surface_revisions,
+       incomplete_surfaces: incomplete_surfaces,
        errors: errors
      }}
   end
@@ -110,6 +112,8 @@ defmodule Synapsis.Backplane.Snapshot do
   end
 
   defp normalize_models(connection, {:ok, models}) when is_list(models) do
+    # WORKAROUND(upstream): gsmlg-opt/backplane#31
+    # Preserve the source payload; support flags cannot be populated until Backplane exposes them.
     with {:ok, capabilities} <- capabilities(connection, "model", models, &model_id/1) do
       revision = collection_revision(models)
 
@@ -165,11 +169,53 @@ defmodule Synapsis.Backplane.Snapshot do
     end
   end
 
+  defp normalize_capability_list(connection, kind, {:incomplete, entries, _reason}, id_fun)
+       when is_list(entries),
+       do: normalize_capability_list(connection, kind, {:ok, entries}, id_fun)
+
   defp normalize_capability_list(_connection, _kind, {:error, reason}, _id_fun),
     do: {[], nil, reason}
 
   defp normalize_capability_list(_connection, kind, other, _id_fun),
     do: {[], nil, {:invalid_surface, kind, other}}
+
+  defp normalize_other_capabilities(connection, surface) do
+    case normalize_capability_list(connection, "other", surface, &generic_id/1) do
+      {capabilities, revision, nil} ->
+        case type_other_capabilities(capabilities) do
+          {:ok, typed} -> {typed, revision, nil}
+          {:error, reason} -> {[], nil, reason}
+        end
+
+      {_capabilities, _revision, error} ->
+        {[], nil, error}
+    end
+  end
+
+  defp type_other_capabilities(capabilities) do
+    Enum.reduce_while(capabilities, {:ok, []}, fn capability, {:ok, typed} ->
+      case capability.metadata["kind"] do
+        kind when kind in ["mcp_prompt", "mcp_resource", "mcp_resource_template"] ->
+          {:cont, {:ok, [%{capability | kind: kind} | typed]}}
+
+        _invalid ->
+          {:halt, {:error, {:invalid_capability, "other"}}}
+      end
+    end)
+    |> case do
+      {:ok, typed} -> {:ok, Enum.reverse(typed)}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp incomplete_surfaces(surfaces) do
+    Enum.reduce([:skills, :other_capabilities], %{}, fn name, incomplete ->
+      case surface(surfaces, name) do
+        {:incomplete, _entries, reason} -> Map.put(incomplete, name, reason)
+        _complete_or_failed -> incomplete
+      end
+    end)
+  end
 
   defp capabilities(connection, kind, entries, id_fun) do
     entries

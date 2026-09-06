@@ -95,6 +95,69 @@ defmodule Synapsis.MCP.TransportTest do
     assert missing_opts[:headers] == %{"x-local" => "present"}
   end
 
+  test "uses the credential captured with an imported MCP generation" do
+    assert {:ok, connection} =
+             Connection.create(%{
+               name: "pinned-transport-source-#{System.unique_integer([:positive])}",
+               endpoint: "https://old.example.test",
+               credential: "old-secret",
+               enabled: true
+             })
+
+    on_exit(fn -> Connection.delete(connection) end)
+
+    config = %MCPConfig{
+      transport: "streamable_http",
+      url: "https://old.example.test/mcp",
+      config: %{
+        "backplane_source_id" => connection.id,
+        "backplane_credential_encrypted" => Connection.seal_credential("old-secret")
+      }
+    }
+
+    assert {:ok, _updated} =
+             Connection.update(connection, %{
+               endpoint: "https://new.example.test",
+               credential: "new-secret"
+             })
+
+    assert {:streamable_http, opts} = Transport.build(config)
+    assert opts[:base_url] == "https://old.example.test"
+    assert opts[:headers]["authorization"] == "Bearer old-secret"
+  end
+
+  test "distinguishes a pinned keyless generation from legacy current-credential fallback" do
+    assert {:ok, connection} =
+             Connection.create(%{
+               name: "keyless-pinned-source-#{System.unique_integer([:positive])}",
+               endpoint: "https://new.example.test",
+               credential: "current-secret",
+               enabled: true
+             })
+
+    on_exit(fn -> Connection.delete(connection) end)
+
+    keyless_config = %MCPConfig{
+      transport: "streamable_http",
+      url: "https://old.example.test/mcp",
+      config: %{
+        "backplane_source_id" => connection.id,
+        "backplane_credential_mode" => "keyless"
+      }
+    }
+
+    legacy_config = %{
+      keyless_config
+      | config: %{"backplane_source_id" => connection.id}
+    }
+
+    assert {:streamable_http, keyless_opts} = Transport.build(keyless_config)
+    refute Map.has_key?(keyless_opts[:headers], "authorization")
+
+    assert {:streamable_http, legacy_opts} = Transport.build(legacy_config)
+    assert legacy_opts[:headers]["authorization"] == "Bearer current-secret"
+  end
+
   test "builds an sse tuple with nested server base_url and top-level headers" do
     cfg = %MCPConfig{transport: "sse", url: "https://h", headers: %{"A" => "b"}}
 
