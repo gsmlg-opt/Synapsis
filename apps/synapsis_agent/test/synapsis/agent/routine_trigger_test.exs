@@ -618,18 +618,18 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
              wait_for_status(daemon, &is_nil(&1.active_run_id))
   end
 
-  test "generic routine no-overlap and max runtime use the daemon protocol" do
+  test "dream no-overlap and max runtime use the daemon protocol" do
     Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :waiting)
 
     {daemon, _task_supervisor} =
       start_test_daemon(sessions: FakeSessions, run_timeout: 2_000, cleanup_timeout: 50)
 
     routine_id = Ecto.UUID.generate()
-    opts = %{routine_id: routine_id, prompt: "bounded schedule", max_runtime_ms: 50}
+    opts = %{routine_id: routine_id, prompt: "bounded dream", max_runtime_ms: 50}
 
-    assert {:ok, run} = Daemon.trigger(daemon, :schedule, opts)
+    assert {:ok, run} = Daemon.trigger(daemon, :dream, opts)
     assert_receive {:waiting_session, _session_id}, 1_000
-    assert {:error, :overlap} = Daemon.trigger(daemon, :schedule, opts)
+    assert {:error, :overlap} = Daemon.trigger(daemon, :dream, opts)
     assert {:ok, failed} = wait_for_run(run.id, "failed")
     assert failed.error =~ "session_timeout"
   end
