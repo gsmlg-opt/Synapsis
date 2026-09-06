@@ -160,7 +160,8 @@ defmodule Synapsis.Backplane do
       counts: %{
         "models" => length(snapshot.models),
         "skills" => length(snapshot.skills),
-        "tools" => length(snapshot.mcp_tools)
+        "tools" => length(snapshot.mcp_tools),
+        "other_capabilities" => length(snapshot.other_capabilities)
       },
       errors: errors
     }

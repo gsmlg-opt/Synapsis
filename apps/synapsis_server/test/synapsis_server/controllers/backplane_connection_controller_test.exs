@@ -89,7 +89,12 @@ defmodule SynapsisServer.BackplaneConnectionControllerTest do
              |> post("/api/backplane/connections/#{connection["id"]}/test")
              |> json_response(200)
 
-    assert counts == %{"models" => 1, "skills" => 0, "tools" => 0}
+    assert counts == %{
+             "models" => 1,
+             "skills" => 0,
+             "tools" => 0,
+             "other_capabilities" => 0
+           }
 
     assert %{"data" => refreshed} =
              conn
