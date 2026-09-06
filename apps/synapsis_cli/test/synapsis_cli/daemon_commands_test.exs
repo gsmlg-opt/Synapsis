@@ -406,6 +406,48 @@ defmodule SynapsisCli.DaemonCommandsTest do
              ])
   end
 
+  test "does not follow redirects for a credential-bearing Backplane request" do
+    source = Bypass.open()
+    redirect_target = Bypass.open()
+    host = "http://localhost:#{source.port}"
+    owner = self()
+    env_name = "SYNAPSIS_TEST_REDIRECT_CREDENTIAL_#{System.unique_integer([:positive])}"
+
+    System.put_env(env_name, "must-not-be-redirected")
+    on_exit(fn -> System.delete_env(env_name) end)
+
+    Bypass.expect_once(source, "POST", "/api/backplane/connections", fn conn ->
+      conn
+      |> Plug.Conn.put_resp_header(
+        "location",
+        "http://127.0.0.1:#{redirect_target.port}/capture"
+      )
+      |> Plug.Conn.resp(307, "")
+    end)
+
+    Bypass.stub(redirect_target, "POST", "/capture", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      send(owner, {:redirected_credential, body})
+      json(conn, 201, %{"data" => %{"id" => "redirected"}})
+    end)
+
+    assert capture_io(fn ->
+             assert {:error, {:http_error, 307}} =
+                      Main.run([
+                        "backplane",
+                        "add",
+                        "secure",
+                        "https://backplane.internal",
+                        "--credential-env",
+                        env_name,
+                        "--host",
+                        host
+                      ])
+           end) == ""
+
+    refute_receive {:redirected_credential, _body}, 100
+  end
+
   test "bare daemon command namespaces return usage without starting a session" do
     bypass = Bypass.open()
     host = "http://localhost:#{bypass.port}"

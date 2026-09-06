@@ -2,6 +2,7 @@ defmodule SynapsisCli.Main do
   @moduledoc "CLI entry point and argument parsing."
 
   @default_host "http://localhost:4657"
+  @max_sse_frame_bytes 16 * 1024 * 1024
 
   def main(args) do
     case run(args) do
@@ -249,7 +250,7 @@ defmodule SynapsisCli.Main do
 
   @doc false
   def request_options(opts, timeout) do
-    base = [receive_timeout: timeout, request_timeout: timeout, retry: false]
+    base = [receive_timeout: timeout, request_timeout: timeout, retry: false, redirect: false]
 
     transport_options =
       []
@@ -355,8 +356,14 @@ defmodule SynapsisCli.Main do
 
     {pid, monitor_ref} =
       spawn_monitor(fn ->
-        result = stream_sse_request(url, opts, owner, request_ref)
-        send(owner, {request_ref, :complete, result})
+        owner_watcher = start_owner_watcher(owner)
+
+        try do
+          result = stream_sse_request(url, opts, owner, request_ref)
+          send(owner, {request_ref, :complete, result})
+        after
+          send(owner_watcher, {:stop, self()})
+        end
       end)
 
     receive do
@@ -403,9 +410,31 @@ defmodule SynapsisCli.Main do
     end
   end
 
+  @doc false
+  def start_owner_watcher(owner) when is_pid(owner) do
+    request_worker = self()
+
+    spawn(fn ->
+      owner_ref = Process.monitor(owner)
+      worker_ref = Process.monitor(request_worker)
+
+      receive do
+        {:DOWN, ^owner_ref, :process, ^owner, _reason} ->
+          Process.exit(request_worker, :shutdown)
+
+        {:DOWN, ^worker_ref, :process, ^request_worker, _reason} ->
+          Process.demonitor(owner_ref, [:flush])
+
+        {:stop, ^request_worker} ->
+          Process.demonitor(owner_ref, [:flush])
+          Process.demonitor(worker_ref, [:flush])
+      end
+    end)
+  end
+
   defp process_sse_chunk(data, state, owner, request_ref) do
     buffer = state.buffer <> data
-    ready? = state.ready? or next_sse_frame(buffer) != :more
+    ready? = state.ready? or match?({:ok, _frame, _rest}, next_sse_frame(buffer))
 
     if ready? and not state.ready?, do: send(owner, {request_ref, :ready})
 
@@ -470,6 +499,9 @@ defmodule SynapsisCli.Main do
       :more ->
         {:continue, buffer}
 
+      {:error, reason} ->
+        {:halt, {:error, reason}}
+
       {:ok, frame, rest} ->
         case process_sse_event(parse_sse_event(frame)) do
           :continue -> consume_sse_chunk(rest)
@@ -482,8 +514,14 @@ defmodule SynapsisCli.Main do
     delimiters = ["\r\n\r\n", "\n\n"]
 
     case :binary.match(buffer, delimiters) do
+      :nomatch when byte_size(buffer) > @max_sse_frame_bytes ->
+        {:error, :sse_frame_too_large}
+
       :nomatch ->
         :more
+
+      {index, _length} when index > @max_sse_frame_bytes ->
+        {:error, :sse_frame_too_large}
 
       {index, length} ->
         <<frame::binary-size(index), _delimiter::binary-size(length), rest::binary>> = buffer
@@ -596,6 +634,7 @@ defmodule SynapsisCli.Main do
   defp error_message(:usage), do: "invalid command; run synapsis --help"
   defp error_message(:connection_failed), do: "connection failed"
   defp error_message(:invalid_sse_response), do: "invalid event stream response"
+  defp error_message(:sse_frame_too_large), do: "event stream frame exceeds the size limit"
   defp error_message(:sse_closed_before_terminal), do: "event stream closed before completion"
 
   defp error_message(:mtls_pair_required),

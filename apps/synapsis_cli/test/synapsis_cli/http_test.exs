@@ -536,6 +536,54 @@ defmodule SynapsisCli.HTTPTest do
                         SynapsisCli.Main.run(["--prompt", "test", "--host", host])
              end) == "partial"
     end
+
+    test "returns an explicit error when an SSE frame exceeds the buffer limit" do
+      bypass = Bypass.open()
+      host = "http://localhost:#{bypass.port}"
+      session_id = "oversized-stream-#{System.unique_integer([:positive])}"
+
+      Bypass.expect_once(bypass, "POST", "/api/sessions", fn conn ->
+        json(conn, 201, %{"data" => %{"id" => session_id}})
+      end)
+
+      Bypass.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
+        body =
+          "event: session_state\ndata: {\"status\":\"waiting\"}\n\n" <>
+            String.duplicate("x", 16 * 1024 * 1024 + 1)
+
+        conn
+        |> Plug.Conn.put_resp_content_type("text/event-stream")
+        |> Plug.Conn.resp(200, body)
+      end)
+
+      Bypass.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
+        json(conn, 200, %{"ok" => true})
+      end)
+
+      assert capture_io(fn ->
+               assert {:error, :sse_frame_too_large} =
+                        SynapsisCli.Main.run(["--prompt", "test", "--host", host])
+             end) == ""
+    end
+
+    test "terminates the SSE request worker when its embedding caller exits" do
+      test_pid = self()
+      owner = spawn(fn -> Process.sleep(:infinity) end)
+
+      worker =
+        spawn(fn ->
+          SynapsisCli.Main.start_owner_watcher(owner)
+          send(test_pid, {:worker_ready, self()})
+          Process.sleep(:infinity)
+        end)
+
+      worker_ref = Process.monitor(worker)
+      assert_receive {:worker_ready, ^worker}, 1_000
+      assert Process.info(owner, :trap_exit) == {:trap_exit, false}
+
+      Process.exit(owner, :kill)
+      assert_receive {:DOWN, ^worker_ref, :process, ^worker, :shutdown}, 1_000
+    end
   end
 
   describe "message send failure" do
