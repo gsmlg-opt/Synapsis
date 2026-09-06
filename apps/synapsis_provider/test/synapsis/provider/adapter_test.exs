@@ -97,6 +97,37 @@ defmodule Synapsis.Provider.AdapterTest do
   # ---------------------------------------------------------------------------
 
   describe "stream/2 OpenAI" do
+    test "strips request-local alias metadata and restores long tool names", %{
+      bypass: bypass,
+      port: port
+    } do
+      name = "mcp:agent-note:" <> String.duplicate("nested-namespace:", 8) <> "list_notes"
+      tool = %{name: name, description: "List notes", parameters: %{"type" => "object"}}
+      request = Adapter.format_request([], [tool], %{model: "gpt-4o", provider_type: "openai"})
+      alias_name = get_in(request, [:tools, Access.at(0), :function, :name])
+
+      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        decoded = Jason.decode!(body)
+        refute Map.has_key?(decoded, "__synapsis_tool_name_aliases__")
+        assert get_in(decoded, ["tools", Access.at(0), "function", "name"]) == alias_name
+
+        conn
+        |> Plug.Conn.put_resp_content_type("text/event-stream")
+        |> Plug.Conn.send_resp(200, """
+        data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"#{alias_name}","arguments":"{}"}}]}}]}
+
+        data: [DONE]
+
+        """)
+      end)
+
+      config = %{api_key: "test-key", base_url: "http://localhost:#{port}", type: "openai"}
+      assert {:ok, ref} = Adapter.stream(request, config)
+
+      assert {:tool_call_delta, 0, "call_1", name, "{}"} in collect_chunks(ref)
+    end
+
     test "rejects a source-disabled persisted model before starting an HTTP stream", %{
       bypass: bypass,
       port: port

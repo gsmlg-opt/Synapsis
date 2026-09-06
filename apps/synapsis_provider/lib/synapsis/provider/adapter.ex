@@ -18,7 +18,7 @@ defmodule Synapsis.Provider.Adapter do
   OpenAI Responses is not a supported client protocol here.
   """
 
-  alias Synapsis.Provider.{EventMapper, MessageMapper, ModelRegistry, StreamGuard}
+  alias Synapsis.Provider.{EventMapper, MessageMapper, ModelRegistry, StreamGuard, ToolName}
   alias Synapsis.Provider.Transport
   alias SynapsisProvider.Sanitizer
 
@@ -50,10 +50,11 @@ defmodule Synapsis.Provider.Adapter do
     with :ok <- ensure_model_runtime_available(request, config) do
       caller = self()
       transport_type = resolve_transport_type(config[:type] || config["type"])
+      {request, tool_aliases} = ToolName.pop_aliases(request)
 
       task =
         Task.Supervisor.async_nolink(Synapsis.Provider.TaskSupervisor, fn ->
-          do_stream(transport_type, request, config, caller)
+          do_stream(transport_type, request, config, caller, tool_aliases)
         end)
 
       {:ok, %{pid: task.pid, ref: task.ref}}
@@ -135,6 +136,7 @@ defmodule Synapsis.Provider.Adapter do
   def complete(request, config) do
     with :ok <- ensure_model_runtime_available(request, config) do
       transport_type = resolve_transport_type(config[:type] || config["type"])
+      {request, _tool_aliases} = ToolName.pop_aliases(request)
 
       task =
         Task.Supervisor.async_nolink(
@@ -160,12 +162,18 @@ defmodule Synapsis.Provider.Adapter do
   # Streaming
   # ---------------------------------------------------------------------------
 
-  defp do_stream(:openai = protocol, request, config, caller) do
-    case perform_stream(protocol, request, config, caller) do
+  defp do_stream(:openai = protocol, request, config, caller, tool_aliases) do
+    case perform_stream(protocol, request, config, caller, tool_aliases) do
       {:retry_auth, _response} ->
         case maybe_refresh_oauth(config) do
           {:ok, new_config} ->
-            perform_stream(protocol, request, Map.merge(config, new_config), caller)
+            perform_stream(
+              protocol,
+              request,
+              Map.merge(config, new_config),
+              caller,
+              tool_aliases
+            )
 
           _ ->
             send(caller, {:provider_error, "HTTP 401: Authentication failed"})
@@ -176,10 +184,10 @@ defmodule Synapsis.Provider.Adapter do
     end
   end
 
-  defp do_stream(protocol, request, config, caller),
-    do: perform_stream(protocol, request, config, caller)
+  defp do_stream(protocol, request, config, caller, tool_aliases),
+    do: perform_stream(protocol, request, config, caller, tool_aliases)
 
-  defp perform_stream(protocol, request, config, caller) do
+  defp perform_stream(protocol, request, config, caller, tool_aliases) do
     {url, headers, body} = request_parts(protocol, request, config, true)
     request_id = Ecto.UUID.generate()
     session_id = config[:session_id] || config["session_id"]
@@ -217,7 +225,7 @@ defmodule Synapsis.Provider.Adapter do
 
               case Backplane.AiProtocol.Codec.stream_feed(protocol, state, data) do
                 {:ok, state, events} ->
-                  case emit_mapped_events(events, caller, guard) do
+                  case emit_mapped_events(events, caller, guard, tool_aliases) do
                     {:ok, guard} ->
                       {:cont, {req, put_stream_response_state(response, state, guard)}}
 
@@ -245,7 +253,7 @@ defmodule Synapsis.Provider.Adapter do
         )
 
       emit_response_telemetry(session_id, request_id, response, start_time)
-      finish_stream_response(protocol, request, config, response, caller)
+      finish_stream_response(protocol, request, config, response, caller, tool_aliases)
     rescue
       error in [Req.TransportError, RuntimeError, Jason.DecodeError] ->
         emit_error_telemetry(session_id, request_id, error, start_time)
@@ -253,19 +261,26 @@ defmodule Synapsis.Provider.Adapter do
     end
   end
 
-  defp finish_stream_response(:openai, request, config, %{status: 401} = response, caller) do
+  defp finish_stream_response(
+         :openai,
+         request,
+         config,
+         %{status: 401} = response,
+         caller,
+         tool_aliases
+       ) do
     if config[:oauth] == true or config["oauth"] == true do
       {:retry_auth, response}
     else
-      finish_stream_response_body(:openai, request, config, response, caller)
+      finish_stream_response_body(:openai, request, config, response, caller, tool_aliases)
     end
   end
 
-  defp finish_stream_response(protocol, request, config, response, caller) do
-    finish_stream_response_body(protocol, request, config, response, caller)
+  defp finish_stream_response(protocol, request, config, response, caller, tool_aliases) do
+    finish_stream_response_body(protocol, request, config, response, caller, tool_aliases)
   end
 
-  defp finish_stream_response_body(protocol, request, config, response, caller) do
+  defp finish_stream_response_body(protocol, request, config, response, caller, tool_aliases) do
     cond do
       stream_guard_violation?(response) ->
         :ok
@@ -299,7 +314,7 @@ defmodule Synapsis.Provider.Adapter do
           {:ok, _state, events} ->
             guard = response_stream_guard(response, stream_guard_state(config))
 
-            case emit_mapped_events(events, caller, guard) do
+            case emit_mapped_events(events, caller, guard, tool_aliases) do
               {:ok, guard} ->
                 case flush_stream_guard(caller, guard) do
                   {:ok, _guard} -> send(caller, :provider_done)
@@ -316,9 +331,9 @@ defmodule Synapsis.Provider.Adapter do
     end
   end
 
-  defp emit_mapped_events(events, caller, stream_guard) do
+  defp emit_mapped_events(events, caller, stream_guard, tool_aliases) do
     Enum.reduce_while(events, {:ok, stream_guard}, fn event, {:ok, stream_guard} ->
-      event = EventMapper.map_event(event)
+      event = EventMapper.map_event(event, tool_aliases)
 
       case emit_provider_event(caller, event, stream_guard) do
         {:ok, stream_guard} -> {:cont, {:ok, stream_guard}}

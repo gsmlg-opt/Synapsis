@@ -42,6 +42,23 @@ defmodule Synapsis.Provider.EventMapperTest do
              })
   end
 
+  test "restores request-local aliases for bounded tool names" do
+    name = "mcp:agent-note:" <> String.duplicate("nested-namespace:", 8) <> "list_notes"
+    alias_name = ToolName.encode(name)
+    {_request, aliases} = %{} |> ToolName.put_aliases([name]) |> ToolName.pop_aliases()
+
+    event = %StreamEvent{
+      type: :tool_call_done,
+      index: 1,
+      call_id: "call-1",
+      name: alias_name,
+      content: %{}
+    }
+
+    assert {:tool_call_done, 1, "call-1", ^name, %{}} =
+             EventMapper.map_event(event, aliases)
+  end
+
   test "projects provider state into a JSON-safe ordered host event" do
     state = %ProviderState{
       source_profile: "primary",

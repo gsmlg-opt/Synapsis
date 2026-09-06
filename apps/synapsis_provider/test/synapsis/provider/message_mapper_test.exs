@@ -331,4 +331,30 @@ defmodule Synapsis.Provider.MessageMapperTest do
     |> Enum.flat_map(& &1["parts"])
     |> Enum.count(&Map.has_key?(&1, "functionResponse"))
   end
+
+  describe "provider-safe tool names" do
+    test "aliases long tool declarations consistently for every provider" do
+      name = "mcp:agent-note:" <> String.duplicate("nested-namespace:", 8) <> "list_notes"
+      tool = %{name: name, description: "List notes", parameters: %{"type" => "object"}}
+
+      anthropic = MessageMapper.build_request(:anthropic, [], [tool], %{})
+      openai = MessageMapper.build_request(:openai, [], [tool], %{})
+      google = MessageMapper.build_request(:google, [], [tool], %{})
+
+      anthropic_alias = get_in(anthropic, [:tools, Access.at(0), :name])
+      openai_alias = get_in(openai, [:tools, Access.at(0), :function, :name])
+
+      google_alias =
+        get_in(google, [:tools, Access.at(0), :functionDeclarations, Access.at(0), :name])
+
+      assert anthropic_alias == openai_alias
+      assert openai_alias == google_alias
+      assert byte_size(openai_alias) <= 64
+
+      for request <- [anthropic, openai, google] do
+        {_wire_request, aliases} = ToolName.pop_aliases(request)
+        assert ToolName.decode(openai_alias, aliases) == name
+      end
+    end
+  end
 end

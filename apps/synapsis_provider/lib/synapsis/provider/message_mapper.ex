@@ -31,8 +31,10 @@ defmodule Synapsis.Provider.MessageMapper do
                extensions: extensions(protocol, opts)
              },
              limits: @limits
-           ) do
-      Codec.encode_request(protocol, request, codec_opts(protocol, model, opts))
+           ),
+         {:ok, wire_request} <-
+           Codec.encode_request(protocol, request, codec_opts(protocol, model, opts)) do
+      {:ok, ToolName.put_aliases(wire_request, Enum.map(tools, & &1.name))}
     end
   end
 

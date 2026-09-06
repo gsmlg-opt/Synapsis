@@ -4,6 +4,13 @@ defmodule Synapsis.Provider.EventMapper do
   alias Backplane.AiProtocol.{ContentBlock, ProviderState, StreamEvent}
   alias Synapsis.Provider.ToolName
 
+  @doc "Maps a canonical event and restores request-local tool-name aliases."
+  def map_event(event, aliases) when is_map(aliases) do
+    event
+    |> map_event()
+    |> restore_tool_aliases(aliases)
+  end
+
   def map_event(%StreamEvent{type: :text_delta, text: text}), do: {:text_delta, text}
   def map_event(%StreamEvent{type: :reasoning_delta, text: text}), do: {:reasoning_delta, text}
 
@@ -68,4 +75,16 @@ defmodule Synapsis.Provider.EventMapper do
     }
     |> Map.reject(fn {_key, value} -> is_nil(value) end)
   end
+
+  defp restore_tool_aliases({:tool_call_delta, index, id, name, args}, aliases) do
+    name = if is_nil(name), do: nil, else: ToolName.decode(name, aliases)
+    {:tool_call_delta, index, id, name, args}
+  end
+
+  defp restore_tool_aliases({:tool_call_done, index, id, name, content}, aliases) do
+    name = if is_nil(name), do: nil, else: ToolName.decode(name, aliases)
+    {:tool_call_done, index, id, name, content}
+  end
+
+  defp restore_tool_aliases(event, _aliases), do: event
 end
