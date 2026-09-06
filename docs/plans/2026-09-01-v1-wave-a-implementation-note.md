@@ -33,7 +33,7 @@ not green until this fix reaches `main` and its CI run succeeds.
 | 7 | `skills.toml` -> `Synapsis.Skills`; agent `skill_ids` resolve through `Agent.Resolver`, then `ContextBuilder` injects prompt fragments. Backplane imports enter this path. |
 | 8 | `mcp.toml` -> `MCPConfigs` -> `MCP.Server` -> `tools/list` -> `Tool.Registry` names `mcp:<server>:<tool>`. Imported MCP artifacts reuse this runtime and explicit reconcile/restart. |
 | 9 | `providers.toml` -> `Synapsis.Providers` -> `Provider.Registry`. Dynamic models live in provider `available_models` / `enabled_models`, so imported providers/models reuse this path. |
-| 10 | Backplane exposes `/v1/models`, all archives at `/skills/export`, metadata/search at `/skills`, detail at `/skills/:slug`, and `/mcp` JSON-RPC tools/prompts/resources. There is no unified catalog endpoint and none will be invented. |
+| 10 | Backplane exposes `/v1/models`, a bounded catalog at `/skills?limit=100`, detail at `/skills/:slug`, per-skill archives at `/skills/:slug/archive`, an archive-only bulk `/skills/export`, and `/mcp` JSON-RPC tools/prompts/resources. There is no unified catalog endpoint and none will be invented. |
 | 11 | URLs and OAuth `client_id` are public; access tokens and `client_secret` are secret. Current provider persistence bypasses `Synapsis.Encrypted.Binary.dump/1`; Wave D must correct/reuse that secret seam before storing a Backplane token. |
 | 12 | `fix/restore-green-main@fd816fb`, based on current `origin/main`, is locally green. `main` and its last CI run remain at failed `0d6cc71` until explicitly integrated and verified. |
 
@@ -50,7 +50,7 @@ not green until this fix reaches `main` and its CI run succeeds.
   own sync/last-known-good lifecycle. Per connection, sync creates source-managed
   provider/model, skill, and MCP artifacts in the existing subsystems; the
   connection itself is not a Provider or MCP config.
-- Aggregate Backplane from `/v1/models`, `/skills/export`, and MCP `tools/list`.
+- Aggregate Backplane from `/v1/models`, `/skills?limit=100` plus detail/archive routes, and the advertised MCP tools/prompts/resources methods.
   Preserve surfaces independently on failure and hash normalized content for the
   composite source revision.
 

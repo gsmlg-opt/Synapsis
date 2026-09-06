@@ -119,6 +119,76 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
   end
 
   @tag :tmp_dir
+  test "schedule executes a safe tool through the daemon without a permission request", %{
+    tmp_dir: tmp_dir
+  } do
+    file_content = "scheduled safe tool result"
+    File.write!(Path.join(tmp_dir, "scheduled.txt"), file_content)
+
+    owner = self()
+    bypass = Bypass.open()
+    {:ok, counter} = Agent.start_link(fn -> 0 end)
+
+    Bypass.expect(bypass, "POST", "/v1/chat/completions", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      request = Jason.decode!(body)
+      request_number = Agent.get_and_update(counter, &{&1 + 1, &1 + 1})
+      send(owner, {:schedule_provider_request, request_number, request, self()})
+
+      case request_number do
+        1 ->
+          receive do
+            :respond ->
+              send_sse(conn, [
+                tool_call_chunk("file_read", "schedule-file-read", %{"path" => "scheduled.txt"}),
+                finish_chunk("tool_calls")
+              ])
+          after
+            5_000 -> Plug.Conn.send_resp(conn, 500, "test did not release schedule tool response")
+          end
+
+        2 ->
+          send_sse(conn, [text_chunk("scheduled work completed"), finish_chunk("stop")])
+      end
+    end)
+
+    {provider_name, agent_name} = register_provider_agent(tmp_dir, bypass)
+    {daemon, _task_supervisor} = start_test_daemon()
+
+    assert {:ok, schedule} =
+             Daemon.trigger(daemon, :schedule, %{
+               routine_id: Ecto.UUID.generate(),
+               prompt: "read the scheduled input",
+               assistant_name: agent_name,
+               provider: provider_name,
+               model: "daemon-test-model"
+             })
+
+    assert_receive {:schedule_provider_request, 1, first_request, request_pid}, 2_000
+
+    tool_names = Enum.map(first_request["tools"], &get_in(&1, ["function", "name"]))
+    assert "file_read" in tool_names
+    refute "file_write" in tool_names
+    refute "bash" in tool_names
+
+    assert {:ok, running} = wait_for_run(schedule.id, "running")
+    assert :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{running.session_id}")
+    send(request_pid, :respond)
+
+    assert_receive {:schedule_provider_request, 2, second_request, _request_pid}, 2_000
+
+    assert %{
+             "role" => "tool",
+             "tool_call_id" => "schedule-file-read",
+             "content" => ^file_content
+           } = Enum.find(second_request["messages"], &(&1["role"] == "tool"))
+
+    refute_receive {"permission_requests", _payload}, 100
+    assert {:ok, completed} = wait_for_run(schedule.id, "completed")
+    assert completed.summary == "scheduled work completed"
+  end
+
+  @tag :tmp_dir
   test "dream persists a memory through memory_save without a permission request", %{
     tmp_dir: tmp_dir
   } do
@@ -172,7 +242,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
           receive do
             :respond ->
               send_sse(conn, [
-                dream_tool_call_chunk("memory_save", "dream-memory-call", memory_input),
+                tool_call_chunk("memory_save", "dream-memory-call", memory_input),
                 finish_chunk("tool_calls")
               ])
           after
@@ -658,7 +728,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
     out
   end
 
-  defp dream_tool_call_chunk(tool_name, tool_call_id, input) do
+  defp tool_call_chunk(tool_name, tool_call_id, input) do
     %{
       "id" => "dream-tool-response",
       "choices" => [

@@ -447,6 +447,40 @@ defmodule SynapsisWeb.AgentLive.DaemonTest do
     assert has_element?(view, "#routine-routine-pubsub", "completed")
   end
 
+  test "refreshes Backplane status and counts for capability sync events", %{conn: conn} do
+    {:ok, view, _html} = live_isolated(conn, Daemon)
+    state = Application.fetch_env!(:synapsis_web, :daemon_live_test_state)
+
+    [connection | rest] = state.connections
+
+    Application.put_env(:synapsis_web, :daemon_live_test_state, %{
+      state
+      | connections: [
+          %{
+            connection
+            | status: "ready",
+              stale: false,
+              last_error: nil,
+              counts: %{"models" => 5, "skills" => 4, "tools" => 9}
+          }
+          | rest
+        ]
+    })
+
+    Phoenix.PubSub.broadcast(
+      Synapsis.PubSub,
+      "agent:daemon",
+      {:agent_daemon_event,
+       %{event: "backplane.capabilities.updated", connection_id: connection.id}}
+    )
+
+    assert has_element?(view, "#connection-connection-live", "ready")
+    refute has_element?(view, "#connection-connection-live", "Stale")
+    assert has_element?(view, "#connection-connection-live", "5 models")
+    assert has_element?(view, "#connection-connection-live", "4 skills")
+    assert has_element?(view, "#connection-connection-live", "9 tools")
+  end
+
   test "renders Backplane state and imported counts without credentials", %{conn: conn} do
     {:ok, view, html} = live_isolated(conn, Daemon)
 
