@@ -446,7 +446,12 @@ defmodule Synapsis.BackplaneTest do
 
     assert result == %{
              status: "ok",
-             counts: %{"models" => 1, "skills" => 1, "tools" => 1},
+             counts: %{
+               "models" => 1,
+               "skills" => 1,
+               "tools" => 1,
+               "other_capabilities" => 0
+             },
              errors: %{}
            }
 
