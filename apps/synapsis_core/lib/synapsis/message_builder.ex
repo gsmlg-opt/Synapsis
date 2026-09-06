@@ -6,7 +6,7 @@ defmodule Synapsis.MessageBuilder do
   def build_request(messages, agent, provider_name, prompt_context \\ nil) do
     provider_module = provider_module!(provider_name)
 
-    tools = resolve_tools(agent[:tools])
+    tools = agent[:resolved_tools] || resolve_tools(agent[:tools])
 
     system_prompt = build_system_prompt(agent[:system_prompt], prompt_context)
 

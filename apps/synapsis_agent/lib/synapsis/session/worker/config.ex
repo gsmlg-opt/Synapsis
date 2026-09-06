@@ -3,6 +3,7 @@ defmodule Synapsis.Session.Worker.Config do
 
   alias Synapsis.Session
   alias Synapsis.Session.Store
+  alias Synapsis.Agent.Daemon.Toolsets
 
   @valid_modes ~w(bypass_permissions ask_before_edits edit_automatically plan_mode assistant_mode)
   @mode_configs %{
@@ -70,6 +71,34 @@ defmodule Synapsis.Session.Worker.Config do
       |> apply_daemon_run_tools(session.config)
 
     ensure_agent_model(agent, session)
+  end
+
+  defp apply_daemon_run_tools(
+         agent,
+         %{
+           "daemon_run_tool_names" => tool_names,
+           "daemon_run_tool_profile" => tool_profile
+         }
+       )
+       when is_list(tool_names) and is_binary(tool_profile) do
+    case Toolsets.resolve_for_query_loop(tool_profile) do
+      {:ok, tools} ->
+        names = Enum.map(tools, & &1.name)
+        registrations = Map.new(tools, &{&1.name, &1.registration})
+
+        agent
+        |> Map.put(:tools, names)
+        |> Map.put(:resolved_tools, tools)
+        |> Map.put(:tool_modules, registrations)
+        |> Map.put(:daemon_tool_profile, tool_profile)
+
+      {:error, _reason} ->
+        agent
+        |> Map.put(:tools, [])
+        |> Map.put(:resolved_tools, [])
+        |> Map.put(:tool_modules, %{})
+        |> Map.put(:daemon_tool_profile, tool_profile)
+    end
   end
 
   defp apply_daemon_run_tools(agent, %{"daemon_run_tool_names" => tool_names})

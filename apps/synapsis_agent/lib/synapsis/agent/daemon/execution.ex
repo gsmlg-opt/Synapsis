@@ -1077,7 +1077,10 @@ defmodule Synapsis.Agent.Daemon.Execution do
         provider: run.provider,
         model: run.model,
         title: "Agent run #{run.id}",
-        config: %{"daemon_run_tool_names" => tool_names}
+        config: %{
+          "daemon_run_tool_names" => tool_names,
+          "daemon_run_tool_profile" => run.tool_profile
+        }
       }
       |> Enum.reject(fn {_key, value} -> is_nil(value) end)
       |> Map.new()

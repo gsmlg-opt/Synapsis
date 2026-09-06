@@ -40,6 +40,24 @@ defmodule Synapsis.Agent.QueryLoopForkTest do
       refute "bash" in tool_names
     end
 
+    test "scopes a bound execution map to the child's filtered tools", %{parent: parent} do
+      parent = %{
+        parent
+        | agent_config: %{
+            tool_modules: %{
+              "file_read" => Synapsis.Tool.FileRead,
+              "file_write" => Synapsis.Tool.FileWrite,
+              "bash" => Synapsis.Tool.Bash,
+              "grep" => Synapsis.Tool.Grep
+            }
+          }
+      }
+
+      child = QueryLoop.fork(parent, system_prompt: "task", subscriber: self())
+
+      assert Map.keys(child.agent_config.tool_modules) |> Enum.sort() == ["file_read", "grep"]
+    end
+
     test "uses explicit tool allowlist", %{parent: parent} do
       child =
         QueryLoop.fork(parent,
@@ -128,6 +146,10 @@ defmodule Synapsis.Agent.QueryLoopForkTest do
       def execute(%{"prompt" => prompt}, context) do
         query_ctx = context[:query_context]
 
+        if query_ctx do
+          send(query_ctx.subscriber, :streaming_task_received_query_context)
+        end
+
         unless QueryLoop.can_fork?(query_ctx) do
           {:error, "Max depth reached"}
         else
@@ -163,6 +185,72 @@ defmodule Synapsis.Agent.QueryLoopForkTest do
           end
         end
       end
+    end
+
+    defmodule ExcludedWriteTool do
+      use Synapsis.Tool
+
+      def name, do: "file_write"
+      def description, do: "must stay outside a read-only child"
+      def parameters, do: %{}
+      def permission_level, do: :write
+
+      def execute(_input, context) do
+        send(context.query_context.subscriber, :excluded_write_executed)
+        {:ok, "unsafe"}
+      end
+    end
+
+    test "a child cannot execute a provider-invented tool excluded by its fork scope", %{
+      parent: parent
+    } do
+      turn = :counters.new(1, [:atomics])
+      owner = self()
+
+      stream = fn request, _config ->
+        send(owner, {:child_request_tools, Enum.map(request.tools, & &1.name)})
+        caller = self()
+        count = :counters.get(turn, 1)
+        :counters.add(turn, 1, 1)
+
+        if count == 0 do
+          send(caller, {:provider_chunk, {:tool_use_start, "file_write", "unsafe-call"}})
+          send(caller, {:provider_chunk, {:tool_use_complete, "file_write", %{}}})
+          send(caller, {:provider_chunk, :content_block_stop})
+          send(caller, {:provider_chunk, :done})
+        else
+          send(caller, {:provider_chunk, {:text_delta, "contained"}})
+          send(caller, {:provider_chunk, :content_block_stop})
+          send(caller, {:provider_chunk, :done})
+        end
+
+        :ok
+      end
+
+      parent = %{
+        parent
+        | agent_config: %{
+            stream_fn: stream,
+            tool_modules: %{
+              "file_read" => Synapsis.Tool.FileRead,
+              "file_write" => ExcludedWriteTool,
+              "bash" => Synapsis.Tool.Bash,
+              "grep" => Synapsis.Tool.Grep
+            }
+          }
+      }
+
+      child = QueryLoop.fork(parent, system_prompt: "child", subscriber: self())
+      state = Synapsis.Agent.QueryLoop.State.new(messages: [%{role: "user", content: "work"}])
+
+      assert {:ok, :completed, final} = QueryLoop.run(state, child)
+      assert_receive {:child_request_tools, names}
+      refute "file_write" in names
+      refute_received :excluded_write_executed
+
+      assert final.messages
+             |> Enum.flat_map(&List.wrap(&1.content))
+             |> Enum.any?(&(inspect(&1) =~ "Unknown tool: file_write"))
     end
 
     test "task tool spawns subagent via QueryLoop.fork and returns result" do
@@ -222,6 +310,7 @@ defmodule Synapsis.Agent.QueryLoopForkTest do
 
       assert {:ok, :completed, final} = QueryLoop.run(state, ctx)
       assert final.turn_count >= 2
+      assert_received :streaming_task_received_query_context
     end
 
     test "refuses when depth >= 3" do

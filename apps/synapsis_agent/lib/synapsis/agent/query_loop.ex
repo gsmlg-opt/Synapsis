@@ -36,8 +36,23 @@ defmodule Synapsis.Agent.QueryLoop do
       working_dir: parent.working_dir,
       depth: parent.depth + 1,
       streaming_tools_enabled: parent.streaming_tools_enabled,
-      agent_config: parent.agent_config
+      agent_config: scope_fork_tool_map(parent.agent_config, tools)
     }
+  end
+
+  defp scope_fork_tool_map(agent_config, tools) when is_map(agent_config) do
+    names =
+      tools
+      |> Enum.map(&(&1[:name] || Map.get(&1, "name")))
+      |> Enum.filter(&is_binary/1)
+
+    case agent_config[:tool_modules] do
+      tool_map when is_map(tool_map) ->
+        Map.put(agent_config, :tool_modules, Map.take(tool_map, names))
+
+      _missing_or_invalid ->
+        Map.delete(agent_config, :tool_modules)
+    end
   end
 
   @doc "Returns true if depth allows spawning subagents."
@@ -289,7 +304,8 @@ defmodule Synapsis.Agent.QueryLoop do
         StreamingExecutor.new(tool_modules, %{
           session_id: ctx.session_id,
           project_path: ctx.project_path,
-          working_dir: ctx.working_dir
+          working_dir: ctx.working_dir,
+          query_context: ctx
         })
 
       collect_loop_streaming(

@@ -84,8 +84,7 @@ defmodule Synapsis.Agent.StreamingExecutor do
   @doc "Wait for ALL in-flight and queued tools. Returns {all_results_in_order, updated_exec}."
   @spec get_remaining_results(t()) :: {[map()], t()}
   def get_remaining_results(%__MODULE__{} = exec) do
-    exec = start_all_queued(exec)
-    exec = wait_all(exec)
+    exec = drain_remaining(exec)
 
     results =
       exec.tools
@@ -113,31 +112,40 @@ defmodule Synapsis.Agent.StreamingExecutor do
         t.status == :executing and not t.concurrent_safe?
       end)
 
-    any_executing? = Enum.any?(exec.tools, &(&1.status == :executing))
+    if any_serial_executing? do
+      exec
+    else
+      executing? = Enum.any?(exec.tools, &(&1.status == :executing))
+      queued = Enum.filter(exec.tools, &(&1.status == :queued))
 
-    tools =
-      Enum.map(exec.tools, fn
-        %TrackedTool{status: :queued, concurrent_safe?: true} = t ->
-          if any_serial_executing?, do: t, else: start_tool(t, exec)
+      start_orders =
+        case queued do
+          [] ->
+            MapSet.new()
 
-        %TrackedTool{status: :queued, concurrent_safe?: false} = t ->
-          if any_executing?, do: t, else: start_tool(t, exec)
+          [%TrackedTool{concurrent_safe?: true} | _rest] ->
+            queued
+            |> Enum.take_while(& &1.concurrent_safe?)
+            |> MapSet.new(& &1.order)
 
-        t ->
-          t
-      end)
+          [%TrackedTool{concurrent_safe?: false, order: order} | _rest] when not executing? ->
+            MapSet.new([order])
 
-    %{exec | tools: tools}
-  end
+          _blocked_serial ->
+            MapSet.new()
+        end
 
-  defp start_all_queued(%__MODULE__{} = exec) do
-    tools =
-      Enum.map(exec.tools, fn
-        %TrackedTool{status: :queued} = t -> start_tool(t, exec)
-        t -> t
-      end)
+      tools =
+        Enum.map(exec.tools, fn
+          %TrackedTool{status: :queued, order: order} = tool ->
+            if MapSet.member?(start_orders, order), do: start_tool(tool, exec), else: tool
 
-    %{exec | tools: tools}
+          tool ->
+            tool
+        end)
+
+      %{exec | tools: tools}
+    end
   end
 
   defp start_tool(%TrackedTool{} = t, exec) do
@@ -194,7 +202,19 @@ defmodule Synapsis.Agent.StreamingExecutor do
     %{exec | tools: tools}
   end
 
-  defp wait_all(%__MODULE__{} = exec) do
+  defp drain_remaining(%__MODULE__{} = exec) do
+    exec = exec |> check_completions() |> maybe_start_tools()
+
+    if Enum.all?(exec.tools, &(&1.status == :completed)) do
+      exec
+    else
+      exec
+      |> wait_executing()
+      |> drain_remaining()
+    end
+  end
+
+  defp wait_executing(%__MODULE__{} = exec) do
     tools =
       Enum.map(exec.tools, fn
         %TrackedTool{status: :executing} = t ->
@@ -204,15 +224,11 @@ defmodule Synapsis.Agent.StreamingExecutor do
           t
 
         %TrackedTool{status: :queued} = t ->
-          # Shouldn't happen after start_all_queued, but handle gracefully
-          started = start_tool(t, exec)
-          wait_for_tool(started, exec)
+          t
       end)
 
     %{exec | tools: tools}
   end
-
-  defp wait_for_tool(%TrackedTool{status: :completed} = t, _exec), do: t
 
   defp wait_for_tool(%TrackedTool{task_ref: ref, id: id} = t, exec) when not is_nil(ref) do
     receive do
@@ -275,7 +291,7 @@ defmodule Synapsis.Agent.StreamingExecutor do
   end
 
   defp permission_level({:process, _pid, opts}) do
-    Keyword.get(opts, :permission_level, :read)
+    Keyword.get(opts, :permission_level, :write)
   end
 
   defp permission_level(mod) when is_atom(mod) do

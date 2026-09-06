@@ -6,37 +6,15 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
     agent_status agent_discover agent_inbox
   )
 
-  defmodule CountingFileRead do
-    use Synapsis.Tool
+  defmodule ProcessTool do
+    use GenServer
 
-    def name, do: "file_read"
-    def description, do: Synapsis.Tool.FileRead.description()
-    def parameters, do: Synapsis.Tool.FileRead.parameters()
-    def permission_level, do: :read
+    def start_link(owner), do: GenServer.start_link(__MODULE__, owner)
+    def init(owner), do: {:ok, owner}
 
-    def execute(input, context) do
-      send(Application.fetch_env!(:synapsis_agent, :daemon_tool_test_owner), :file_read_executed)
-      Synapsis.Tool.FileRead.execute(input, context)
-    end
-  end
-
-  defmodule HangingFileRead do
-    use Synapsis.Tool
-
-    def name, do: "file_read"
-    def description, do: "Hangs to exercise the existing tool timeout."
-    def parameters, do: Synapsis.Tool.FileRead.parameters()
-    def permission_level, do: :read
-
-    def execute(_input, _context) do
-      send(
-        Application.fetch_env!(:synapsis_agent, :daemon_tool_test_owner),
-        :hanging_tool_started
-      )
-
-      receive do
-        :never -> {:ok, "unexpected"}
-      end
+    def handle_call({:execute, name, _input, _context}, _from, owner) do
+      send(owner, {:process_tool_executed, name})
+      {:noreply, owner}
     end
   end
 
@@ -56,7 +34,6 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
     tmp_dir: tmp_dir
   } do
     File.write!(Path.join(tmp_dir, "safe.txt"), "daemon-safe-content")
-    register_counting_file_read()
 
     {daemon, _task_supervisor} = start_test_daemon()
 
@@ -89,8 +66,6 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
                session_id: running.session_id
              })
 
-    assert_receive :file_read_executed, 2_000
-    refute_receive :file_read_executed, 100
     refute_receive {"permission_requests", _payload}, 100
 
     assert_receive {:tool_provider_request, 2, second_request, _request_pid}, 2_000
@@ -98,6 +73,96 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
     assert {:ok, completed} = wait_for_run(queued.id, "completed")
     assert completed.summary == "daemon tool run complete"
     assert Process.alive?(Process.whereis(daemon))
+  end
+
+  @tag :tmp_dir
+  test "a same-name process replacement cannot inherit built-in daemon approval", %{
+    tmp_dir: tmp_dir
+  } do
+    replacement = start_supervised!({ProcessTool, self()}, id: :same_name_replacement)
+
+    :ok =
+      Synapsis.Tool.Registry.register_process("file_read", replacement,
+        permission_level: :read,
+        description: "replacement",
+        parameters: %{}
+      )
+
+    on_exit(fn -> Synapsis.Tool.Builtin.register_all() end)
+
+    {daemon, _task_supervisor} = start_test_daemon()
+
+    {_bypass, provider_name, agent_name} =
+      controlled_tool_provider(tmp_dir, "file_read", %{"path" => "anything"})
+
+    assert {:ok, {:process, ^replacement, _opts}} =
+             Synapsis.Tool.Registry.lookup("file_read")
+
+    assert {:ok, queued} =
+             Daemon.submit(
+               daemon,
+               "Do not run the replacement",
+               daemon_opts(agent_name, provider_name)
+             )
+
+    assert_receive {:tool_provider_request, 1, first_request, request_pid}, 2_000
+    send(request_pid, :respond)
+
+    assert {:ok, {:process, ^replacement, _opts}} =
+             Synapsis.Tool.Registry.lookup("file_read")
+
+    assert {:ok, tools} =
+             Synapsis.Agent.Daemon.Toolsets.resolve_for_query_loop("assistant_basic")
+
+    refute Enum.any?(tools, &(&1.name == "file_read"))
+
+    refute "file_read" in tool_names(first_request)
+
+    assert_receive {:tool_provider_request, 2, second_request, _request_pid}, 2_000
+    assert Jason.encode!(second_request) =~ "Tool denied"
+    refute_receive {:process_tool_executed, "file_read"}, 100
+    refute_receive {"permission_requests", _payload}, 100
+    assert {:ok, _completed} = wait_for_run(queued.id, "completed")
+  end
+
+  @tag :tmp_dir
+  test "a built-in replacement after admission cannot execute under the approved name", %{
+    tmp_dir: tmp_dir
+  } do
+    {daemon, _task_supervisor} = start_test_daemon()
+
+    {_bypass, provider_name, agent_name} =
+      controlled_tool_provider(tmp_dir, "file_read", %{"path" => "anything"})
+
+    assert {:ok, queued} =
+             Daemon.submit(
+               daemon,
+               "Do not rebind the approved tool",
+               daemon_opts(agent_name, provider_name)
+             )
+
+    assert_receive {:tool_provider_request, 1, first_request, request_pid}, 2_000
+    assert "file_read" in tool_names(first_request)
+
+    replacement = start_supervised!({ProcessTool, self()}, id: :late_same_name_replacement)
+
+    :ok =
+      Synapsis.Tool.Registry.register_process("file_read", replacement,
+        permission_level: :read,
+        timeout: 25,
+        max_retries: 0,
+        description: "late replacement",
+        parameters: %{}
+      )
+
+    on_exit(fn -> Synapsis.Tool.Builtin.register_all() end)
+    send(request_pid, :respond)
+
+    assert_receive {:tool_provider_request, 2, second_request, _request_pid}, 2_000
+    assert Jason.encode!(second_request) =~ "Tool registration changed"
+    refute_receive {:process_tool_executed, "file_read"}, 100
+    refute_receive {"permission_requests", _payload}, 100
+    assert {:ok, _completed} = wait_for_run(queued.id, "completed")
   end
 
   @tag :tmp_dir
@@ -324,11 +389,24 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
   test "tool timeout is returned to the provider and the daemon remains alive", %{
     tmp_dir: tmp_dir
   } do
-    register_hanging_file_read()
+    tool_name = "mcp:timeout-#{System.unique_integer([:positive])}:read"
+    hanging = start_supervised!({ProcessTool, self()}, id: {:hanging, tool_name})
+
+    :ok =
+      Synapsis.Tool.Registry.register_process(tool_name, hanging,
+        permission_level: :read,
+        trust_annotations: true,
+        timeout: 25,
+        max_retries: 0,
+        description: "Hangs to exercise the existing tool timeout.",
+        parameters: %{}
+      )
+
+    on_exit(fn -> Synapsis.Tool.Registry.unregister(tool_name) end)
     {daemon, _task_supervisor} = start_test_daemon()
 
     {_bypass, provider_name, agent_name} =
-      controlled_tool_provider(tmp_dir, "file_read", %{"path" => "never.txt"})
+      controlled_tool_provider(tmp_dir, tool_name, %{})
 
     assert {:ok, queued} =
              Daemon.submit(
@@ -339,40 +417,13 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
 
     assert_receive {:tool_provider_request, 1, _first_request, request_pid}, 2_000
     send(request_pid, :respond)
-    assert_receive :hanging_tool_started, 2_000
+    assert_receive {:process_tool_executed, ^tool_name}, 2_000
 
     assert_receive {:tool_provider_request, 2, second_request, _request_pid}, 2_000
     assert Jason.encode!(second_request) =~ "Tool execution timed out"
     refute_receive {"permission_requests", _payload}, 100
     assert {:ok, _completed} = wait_for_run(queued.id, "completed")
     assert Process.alive?(Process.whereis(daemon))
-  end
-
-  defp register_counting_file_read do
-    previous_owner = Application.get_env(:synapsis_agent, :daemon_tool_test_owner, :missing)
-    Application.put_env(:synapsis_agent, :daemon_tool_test_owner, self())
-    :ok = Synapsis.Tool.Registry.register_module("file_read", CountingFileRead, timeout: 5_000)
-
-    on_exit(fn ->
-      restore_application_env(:daemon_tool_test_owner, previous_owner)
-      Synapsis.Tool.Builtin.register_all()
-    end)
-  end
-
-  defp register_hanging_file_read do
-    previous_owner = Application.get_env(:synapsis_agent, :daemon_tool_test_owner, :missing)
-    Application.put_env(:synapsis_agent, :daemon_tool_test_owner, self())
-
-    :ok =
-      Synapsis.Tool.Registry.register_module("file_read", HangingFileRead,
-        timeout: 25,
-        max_retries: 0
-      )
-
-    on_exit(fn ->
-      restore_application_env(:daemon_tool_test_owner, previous_owner)
-      Synapsis.Tool.Builtin.register_all()
-    end)
   end
 
   defp controlled_tool_provider(tmp_dir, tool_name, input) do

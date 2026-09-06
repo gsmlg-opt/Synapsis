@@ -95,6 +95,23 @@ defmodule Synapsis.Agent.QueryLoop.ExecutorTest do
   @write_block %{id: "w1", name: "write_tool", input: %{}}
 
   describe "partition/2" do
+    test "process registrations without a permission are serialized" do
+      blocks = [
+        %{id: "1", name: "first", input: %{}},
+        %{id: "2", name: "second", input: %{}}
+      ]
+
+      tool_map = %{
+        "first" => {:process, self(), []},
+        "second" => {:process, self(), []}
+      }
+
+      assert Executor.partition(blocks, tool_map) == [
+               {:serial, [%{id: "1", name: "first", input: %{}}]},
+               {:serial, [%{id: "2", name: "second", input: %{}}]}
+             ]
+    end
+
     test "groups consecutive read-only tools into concurrent batch" do
       blocks = [
         %{@read_block | id: "r1"},

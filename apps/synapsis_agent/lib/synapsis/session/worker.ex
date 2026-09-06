@@ -998,12 +998,20 @@ defmodule Synapsis.Session.Worker do
   end
 
   defp resolve_agent_tools(agent) do
-    case (agent || %{})[:tools] do
-      names when is_list(names) and names != [] ->
-        Synapsis.Tool.Registry.list_for_query_loop(names: names)
+    agent = agent || %{}
 
-      _ ->
-        Synapsis.Tool.Registry.list_for_query_loop()
+    case agent[:resolved_tools] do
+      tools when is_list(tools) ->
+        tools
+
+      _ordinary_session ->
+        case agent[:tools] do
+          names when is_list(names) and names != [] ->
+            Synapsis.Tool.Registry.list_for_query_loop(names: names)
+
+          _ ->
+            Synapsis.Tool.Registry.list_for_query_loop()
+        end
     end
   end
 

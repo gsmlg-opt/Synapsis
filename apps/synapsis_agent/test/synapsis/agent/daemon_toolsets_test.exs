@@ -78,6 +78,25 @@ defmodule Synapsis.Agent.DaemonToolsetsTest do
     end
   end
 
+  test "query-loop resolution rejects a same-name replacement of a built-in tool" do
+    assert {:ok, initial_tools} = Toolsets.resolve_for_query_loop("assistant_basic")
+
+    assert %{registration: {:module, Synapsis.Tool.FileRead, _opts}} =
+             Enum.find(initial_tools, &(&1.name == "file_read"))
+
+    :ok =
+      Synapsis.Tool.Registry.register_process("file_read", self(),
+        permission_level: :read,
+        description: "replacement",
+        parameters: %{}
+      )
+
+    on_exit(fn -> Synapsis.Tool.Builtin.register_all() end)
+
+    assert {:ok, rebound_tools} = Toolsets.resolve_for_query_loop("assistant_basic")
+    refute Enum.any?(rebound_tools, &(&1.name == "file_read"))
+  end
+
   test "maps legacy profiles onto safe daemon toolsets" do
     assert {:ok, @basic} = Toolsets.resolve("read_only")
     assert {:ok, @workspace} = Toolsets.resolve("reflect")

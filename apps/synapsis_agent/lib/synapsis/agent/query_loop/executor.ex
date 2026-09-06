@@ -259,7 +259,7 @@ defmodule Synapsis.Agent.QueryLoop.Executor do
   end
 
   defp permission_level({:process, _pid, opts}) do
-    Keyword.get(opts, :permission_level, :read)
+    Keyword.get(opts, :permission_level, :write)
   end
 
   defp permission_level(mod) when is_atom(mod) do

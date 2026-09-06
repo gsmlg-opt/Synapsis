@@ -346,8 +346,7 @@ defmodule Synapsis.Session.Worker.IOHandler do
               attended?: true
             }
 
-            result =
-              Synapsis.Tool.Gateway.execute(tool_use.tool, tool_use.input || %{}, context)
+            result = execute_bound_tool(tool_use, context, state.agent)
 
             {output, is_error} =
               case result do
@@ -433,9 +432,26 @@ defmodule Synapsis.Session.Worker.IOHandler do
   defp tool_error_message(:grant_required), do: "Tool execution requires a capability grant"
   defp tool_error_message(:missing_session_context), do: "Tool denied: missing session context"
   defp tool_error_message(:missing_policy_snapshot), do: "Tool denied: missing policy snapshot"
+  defp tool_error_message(:tool_registration_changed), do: "Tool registration changed"
   defp tool_error_message(reason) when is_binary(reason), do: reason
   defp tool_error_message(reason) when is_atom(reason), do: "Tool denied: #{reason}"
   defp tool_error_message(_), do: "Tool execution failed"
+
+  defp execute_bound_tool(tool_use, context, agent) do
+    registrations = (agent || %{})[:tool_modules]
+
+    with registrations when is_map(registrations) <- registrations,
+         {:ok, registration} <- Map.fetch(registrations, tool_use.tool) do
+      Synapsis.Tool.Gateway.execute(
+        tool_use.tool,
+        tool_use.input || %{},
+        context,
+        registration
+      )
+    else
+      _unbound -> Synapsis.Tool.Gateway.execute(tool_use.tool, tool_use.input || %{}, context)
+    end
+  end
 
   defp maybe_attach_debug(state) do
     if session_debug_enabled?(state.session_id) do

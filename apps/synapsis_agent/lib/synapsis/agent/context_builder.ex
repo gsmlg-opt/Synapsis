@@ -127,8 +127,10 @@ defmodule Synapsis.Agent.ContextBuilder do
     tool_names = assigned_tool_names(agent_config)
 
     tools =
-      Synapsis.Tool.Registry.list_for_llm()
-      |> maybe_filter_tools(tool_names)
+      case Map.get(agent_config, :resolved_tools) do
+        tools when is_list(tools) -> tools
+        _other -> Synapsis.Tool.Registry.list_for_llm() |> maybe_filter_tools(tool_names)
+      end
 
     case tools do
       [] ->

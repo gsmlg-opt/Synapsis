@@ -38,10 +38,46 @@ defmodule Synapsis.Agent.StreamingExecutorTest do
     def execute(_input, _ctx), do: Process.sleep(:infinity)
   end
 
+  defmodule BlockingReadTool do
+    use Synapsis.Tool
+    def name, do: "blocking_read"
+    def description, do: "controlled read"
+    def parameters, do: %{}
+    def permission_level, do: :read
+
+    def execute(input, ctx) do
+      label = input["label"]
+      send(ctx.owner, {:streaming_tool_started, label, self()})
+
+      receive do
+        {:release_streaming_tool, ^label} -> {:ok, label}
+      end
+    end
+  end
+
+  defmodule BlockingWriteTool do
+    use Synapsis.Tool
+    def name, do: "blocking_write"
+    def description, do: "controlled write"
+    def parameters, do: %{}
+    def permission_level, do: :write
+
+    def execute(input, ctx) do
+      label = input["label"]
+      send(ctx.owner, {:streaming_tool_started, label, self()})
+
+      receive do
+        {:release_streaming_tool, ^label} -> {:ok, label}
+      end
+    end
+  end
+
   @tool_map %{
     "fast_read" => FastReadTool,
     "slow_write" => SlowWriteTool,
-    "hanging_read" => HangingReadTool
+    "hanging_read" => HangingReadTool,
+    "blocking_read" => BlockingReadTool,
+    "blocking_write" => BlockingWriteTool
   }
 
   @ctx %{session_id: "test"}
@@ -78,6 +114,24 @@ defmodule Synapsis.Agent.StreamingExecutorTest do
       # Unknown tools are serial (not concurrent-safe) but should still be queued/started
       assert length(exec.tools) == 1
     end
+
+    test "treats process registrations without a permission as serial" do
+      tool_map = %{
+        "first" => {:process, self(), []},
+        "second" => {:process, self(), []}
+      }
+
+      exec = StreamingExecutor.new(tool_map, @ctx)
+      exec = StreamingExecutor.add_tool(exec, %{id: "p1", name: "first", input: %{}})
+      exec = StreamingExecutor.add_tool(exec, %{id: "p2", name: "second", input: %{}})
+
+      assert Enum.find(exec.tools, &(&1.id == "p1")).status == :executing
+      assert Enum.find(exec.tools, &(&1.id == "p2")).status == :queued
+
+      Enum.each(exec.tools, fn tool ->
+        if is_pid(tool.task_pid), do: Process.exit(tool.task_pid, :kill)
+      end)
+    end
   end
 
   describe "get_completed_results/1" do
@@ -98,6 +152,48 @@ defmodule Synapsis.Agent.StreamingExecutorTest do
       exec = StreamingExecutor.new(@tool_map, @ctx)
       {results, _exec} = StreamingExecutor.get_completed_results(exec)
       assert results == []
+    end
+
+    test "starts queued writes one at a time after earlier reads complete" do
+      ctx = Map.put(@ctx, :owner, self())
+
+      exec =
+        @tool_map
+        |> StreamingExecutor.new(ctx)
+        |> StreamingExecutor.add_tool(%{
+          id: "r1",
+          name: "blocking_read",
+          input: %{"label" => "read"}
+        })
+        |> StreamingExecutor.add_tool(%{
+          id: "w1",
+          name: "blocking_write",
+          input: %{"label" => "write-one"}
+        })
+        |> StreamingExecutor.add_tool(%{
+          id: "w2",
+          name: "blocking_write",
+          input: %{"label" => "write-two"}
+        })
+
+      assert_receive {:streaming_tool_started, "read", read_pid}
+      send(read_pid, {:release_streaming_tool, "read"})
+      Process.sleep(10)
+
+      {read_results, exec} = StreamingExecutor.get_completed_results(exec)
+      assert Enum.map(read_results, & &1.tool_use_id) == ["r1"]
+      assert_receive {:streaming_tool_started, "write-one", write_one_pid}
+      refute_receive {:streaming_tool_started, "write-two", _pid}, 100
+
+      send(write_one_pid, {:release_streaming_tool, "write-one"})
+      Process.sleep(10)
+      {write_one_results, exec} = StreamingExecutor.get_completed_results(exec)
+      assert Enum.map(write_one_results, & &1.tool_use_id) == ["w1"]
+      assert_receive {:streaming_tool_started, "write-two", write_two_pid}
+      send(write_two_pid, {:release_streaming_tool, "write-two"})
+
+      {write_two_results, _exec} = StreamingExecutor.get_remaining_results(exec)
+      assert Enum.map(write_two_results, & &1.tool_use_id) == ["w2"]
     end
   end
 
@@ -150,6 +246,46 @@ defmodule Synapsis.Agent.StreamingExecutorTest do
                  is_error: true
                }
              ] = results
+    end
+
+    test "drains queued writes serially" do
+      owner = self()
+
+      task =
+        Task.async(fn ->
+          exec =
+            @tool_map
+            |> StreamingExecutor.new(Map.put(@ctx, :owner, owner))
+            |> StreamingExecutor.add_tool(%{
+              id: "r1",
+              name: "blocking_read",
+              input: %{"label" => "drain-read"}
+            })
+            |> StreamingExecutor.add_tool(%{
+              id: "w1",
+              name: "blocking_write",
+              input: %{"label" => "drain-write-one"}
+            })
+            |> StreamingExecutor.add_tool(%{
+              id: "w2",
+              name: "blocking_write",
+              input: %{"label" => "drain-write-two"}
+            })
+
+          StreamingExecutor.get_remaining_results(exec)
+        end)
+
+      assert_receive {:streaming_tool_started, "drain-read", read_pid}
+      send(read_pid, {:release_streaming_tool, "drain-read"})
+      assert_receive {:streaming_tool_started, "drain-write-one", write_one_pid}
+      refute_receive {:streaming_tool_started, "drain-write-two", _pid}, 100
+
+      send(write_one_pid, {:release_streaming_tool, "drain-write-one"})
+      assert_receive {:streaming_tool_started, "drain-write-two", write_two_pid}
+      send(write_two_pid, {:release_streaming_tool, "drain-write-two"})
+
+      assert {results, _exec} = Task.await(task, 2_000)
+      assert Enum.map(results, & &1.tool_use_id) == ["r1", "w1", "w2"]
     end
   end
 end
