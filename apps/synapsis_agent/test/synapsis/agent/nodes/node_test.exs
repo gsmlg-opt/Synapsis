@@ -136,7 +136,7 @@ defmodule Synapsis.Agent.Nodes.NodeTest do
           agent_config: %{
             provider: "anthropic",
             model: "primary-model",
-            fallback_models: "openai/gpt-4o"
+            fallback_models: "fallback-model"
           }
         })
         |> Map.put(:awaiting_stream, true)
@@ -145,11 +145,68 @@ defmodule Synapsis.Agent.Nodes.NodeTest do
       assert {:wait, new_state} = Nodes.LLMStream.run(state, %{stream_error: "HTTP 500"})
 
       assert new_state.awaiting_stream == true
-      assert new_state.request.model == "gpt-4o"
-      assert new_state.agent_config.provider == "openai"
-      assert new_state.agent_config.model == "gpt-4o"
+      assert new_state.request.model == "fallback-model"
+      assert new_state.agent_config.provider == "anthropic"
+      assert new_state.agent_config.model == "fallback-model"
       refute Map.has_key?(new_state, :stream_error)
       refute Map.has_key?(new_state, :pending_text)
+    end
+
+    test "rebuilds the request when fallback changes provider type" do
+      suffix = System.unique_integer([:positive])
+      primary_provider = "node_test_openai_#{suffix}"
+      fallback_provider = "node_test_anthropic_#{suffix}"
+
+      Synapsis.Provider.Registry.register(primary_provider, %{type: "openai"})
+      Synapsis.Provider.Registry.register(fallback_provider, %{type: "anthropic"})
+
+      on_exit(fn ->
+        Synapsis.Provider.Registry.unregister(primary_provider)
+        Synapsis.Provider.Registry.unregister(fallback_provider)
+      end)
+
+      messages = [
+        %Synapsis.Message{
+          role: "user",
+          parts: [%Synapsis.Part.Text{content: "hello"}]
+        }
+      ]
+
+      agent_config = %{
+        provider: primary_provider,
+        model: "fast",
+        fallback_models: "#{fallback_provider}/MiniMax-M3",
+        tools: ["file_read"],
+        system_prompt: "Base prompt",
+        max_tokens: 1024
+      }
+
+      request_agent_config = %{agent_config | system_prompt: "Assembled prompt"}
+
+      primary_request =
+        Synapsis.MessageBuilder.build_request(messages, request_agent_config, primary_provider)
+
+      assert [%{function: %{name: "file_read"}, type: "function"}] = primary_request.tools
+
+      state =
+        CodingLoop.initial_state(%{session_id: "s1", agent_config: agent_config})
+        |> Map.merge(%{
+          awaiting_stream: true,
+          request: primary_request,
+          request_agent_config: request_agent_config,
+          messages: messages
+        })
+
+      assert {:wait, new_state} = Nodes.LLMStream.run(state, %{stream_error: "HTTP 400"})
+
+      assert new_state.request.model == "MiniMax-M3"
+      assert new_state.request.system == "Assembled prompt"
+      assert [%{name: "file_read", input_schema: _parameters}] = new_state.request.tools
+      assert new_state.agent_config.system_prompt == "Base prompt"
+      assert new_state.request_agent_config.system_prompt == "Assembled prompt"
+
+      assert [%{role: "user", content: [%{type: "text", text: "hello"}]}] =
+               new_state.request.messages
     end
 
     test "handles resumed legacy state without reasoning signature" do

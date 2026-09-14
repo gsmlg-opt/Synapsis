@@ -18,7 +18,7 @@ defmodule Synapsis.Agent.Nodes.BuildPrompt do
   def run(state, ctx) do
     session_id = state.session_id
     agent_config = state.agent_config
-    provider = ctx[:provider] || agent_config[:provider] || "anthropic"
+    provider = agent_config[:provider] || ctx[:provider] || "anthropic"
 
     ResponseFlusher.ensure_tool_results(
       session_id,
@@ -67,7 +67,11 @@ defmodule Synapsis.Agent.Nodes.BuildPrompt do
     mark_steers_consumed(session_id, consumed_steers)
 
     new_state = %{state | messages: messages, user_input: nil}
-    new_state = Map.put(new_state, :request, request)
+
+    new_state =
+      new_state
+      |> Map.put(:request_agent_config, enriched_config)
+      |> Map.put(:request, request)
 
     {:next, :default, new_state}
   end

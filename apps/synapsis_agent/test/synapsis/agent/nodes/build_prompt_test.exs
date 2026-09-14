@@ -19,10 +19,13 @@ defmodule Synapsis.Agent.Nodes.BuildPromptTest do
     {:ok, _message} = append_user_message(session.id, "fix it")
     {:ok, steer} = PendingInputStore.append_steer(session.id, "focus on the current failing test")
 
-    assert {:next, :default, new_state} = BuildPrompt.run(build_state(session), %{})
+    assert {:next, :default, new_state} =
+             BuildPrompt.run(build_state(session, %{system_prompt: "Base prompt"}), %{})
 
     assert new_state.request.system =~ "Mid-turn user guidance"
     assert new_state.request.system =~ "focus on the current failing test"
+    assert new_state.request_agent_config.system_prompt == new_state.request.system
+    assert new_state.agent_config.system_prompt == "Base prompt"
     assert [%{id: id, status: "consumed"}] = steer_inputs(session.id)
     assert id == steer.id
 
@@ -76,6 +79,56 @@ defmodule Synapsis.Agent.Nodes.BuildPromptTest do
 
     assert [%{id: id, status: "queued"}] = steer_inputs(session.id)
     assert id == steer.id
+  end
+
+  test "uses the current fallback provider after a tool loop", %{session: session} do
+    suffix = System.unique_integer([:positive])
+    primary_provider = "build_prompt_openai_#{suffix}"
+    fallback_provider = "build_prompt_anthropic_#{suffix}"
+
+    Synapsis.Provider.Registry.register(primary_provider, %{type: "openai"})
+    Synapsis.Provider.Registry.register(fallback_provider, %{type: "anthropic"})
+
+    on_exit(fn ->
+      Synapsis.Provider.Registry.unregister(primary_provider)
+      Synapsis.Provider.Registry.unregister(fallback_provider)
+    end)
+
+    {:ok, _message} = append_user_message(session.id, "continue after tools")
+
+    state =
+      build_state(session, %{
+        provider: fallback_provider,
+        model: "MiniMax-M3",
+        tools: ["file_read"]
+      })
+
+    assert {:next, :default, new_state} =
+             BuildPrompt.run(state, %{provider: primary_provider})
+
+    assert new_state.request.model == "MiniMax-M3"
+    assert is_binary(new_state.request.system)
+    assert [%{name: "file_read", input_schema: _parameters}] = new_state.request.tools
+
+    assert [%{role: "user", content: [%{type: "text", text: "continue after tools"}]}] =
+             new_state.request.messages
+  end
+
+  test "uses the context provider when agent config has none", %{session: session} do
+    provider = "build_prompt_ctx_openai_#{System.unique_integer([:positive])}"
+    Synapsis.Provider.Registry.register(provider, %{type: "openai"})
+    on_exit(fn -> Synapsis.Provider.Registry.unregister(provider) end)
+
+    {:ok, _message} = append_user_message(session.id, "hello")
+
+    state =
+      session
+      |> build_state(%{tools: ["file_read"]})
+      |> update_in([:agent_config], &Map.delete(&1, :provider))
+
+    assert {:next, :default, new_state} = BuildPrompt.run(state, %{provider: provider})
+
+    assert [%{function: %{name: "file_read"}, type: "function"}] = new_state.request.tools
   end
 
   defp persist_session do

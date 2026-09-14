@@ -55,16 +55,22 @@ defmodule Synapsis.Agent.Nodes.LLMStream do
           reason: inspect(reason)
         )
 
+        fallback_config =
+          fallback_agent_config(Map.get(state, :agent_config), provider, model)
+
+        request_config =
+          state
+          |> Map.get(:request_agent_config, state[:agent_config])
+          |> fallback_agent_config(provider, model)
+
         state
         |> Map.delete(:awaiting_stream)
         |> Map.delete(:stream_error)
         |> Map.delete(:pending_text)
         |> Map.put(:fallback_models_tried, tried)
-        |> Map.put(
-          :agent_config,
-          fallback_agent_config(Map.get(state, :agent_config), provider, model)
-        )
-        |> Map.put(:request, fallback_request(state.request, model))
+        |> Map.put(:agent_config, fallback_config)
+        |> Map.put(:request_agent_config, request_config)
+        |> Map.put(:request, fallback_request(state, request_config, provider, model))
         |> start_stream()
 
       :error ->
@@ -162,8 +168,10 @@ defmodule Synapsis.Agent.Nodes.LLMStream do
     |> Map.put(:model, model)
   end
 
-  defp fallback_request(request, model) when is_map(request), do: Map.put(request, :model, model)
-  defp fallback_request(request, _model), do: request
+  defp fallback_request(%{messages: messages}, agent_config, provider, _model)
+       when is_list(messages) do
+    Synapsis.MessageBuilder.build_request(messages, agent_config, provider)
+  end
 
   defp current_provider(state) do
     get_in(state, [:agent_config, :provider]) ||
