@@ -28,6 +28,7 @@ defmodule Synapsis.Agent.Nodes.LLMStream do
               pending_tool_input: acc.pending_tool_input,
               pending_reasoning: acc.pending_reasoning,
               pending_reasoning_signature: acc.pending_reasoning_signature,
+              pending_provider_states: acc.pending_provider_states,
               tool_uses: acc.tool_uses
             })
             |> Map.delete(:awaiting_stream)
@@ -63,15 +64,21 @@ defmodule Synapsis.Agent.Nodes.LLMStream do
           |> Map.get(:request_agent_config, state[:agent_config])
           |> fallback_agent_config(provider, model)
 
-        state
-        |> Map.delete(:awaiting_stream)
-        |> Map.delete(:stream_error)
-        |> Map.delete(:pending_text)
-        |> Map.put(:fallback_models_tried, tried)
-        |> Map.put(:agent_config, fallback_config)
-        |> Map.put(:request_agent_config, request_config)
-        |> Map.put(:request, fallback_request(state, request_config, provider, model))
-        |> start_stream()
+        case fallback_request(state, request_config, provider, model) do
+          {:ok, request} ->
+            state
+            |> Map.delete(:awaiting_stream)
+            |> Map.delete(:stream_error)
+            |> Map.delete(:pending_text)
+            |> Map.put(:fallback_models_tried, tried)
+            |> Map.put(:agent_config, fallback_config)
+            |> Map.put(:request_agent_config, request_config)
+            |> Map.put(:request, request)
+            |> start_stream()
+
+          {:error, error} ->
+            request_error(state, error)
+        end
 
       :error ->
         Logger.warning("llm_stream_error", reason: inspect(reason))
@@ -171,6 +178,16 @@ defmodule Synapsis.Agent.Nodes.LLMStream do
   defp fallback_request(%{messages: messages}, agent_config, provider, _model)
        when is_list(messages) do
     Synapsis.MessageBuilder.build_request(messages, agent_config, provider)
+  end
+
+  defp request_error(state, error) do
+    new_state =
+      state
+      |> Map.delete(:awaiting_stream)
+      |> Map.put(:stream_error, error)
+      |> Map.put(:pending_text, provider_error_text(error))
+
+    {:next, :error, new_state}
   end
 
   defp current_provider(state) do

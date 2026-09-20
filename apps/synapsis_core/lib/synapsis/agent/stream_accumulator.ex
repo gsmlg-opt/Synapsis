@@ -13,6 +13,8 @@ defmodule Synapsis.Agent.StreamAccumulator do
           pending_tool_calls: map(),
           pending_reasoning: String.t(),
           pending_reasoning_signature: String.t(),
+          pending_provider_states: [map()],
+          stream_error: term() | nil,
           tool_uses: [Synapsis.Part.ToolUse.t()]
         }
 
@@ -53,6 +55,24 @@ defmodule Synapsis.Agent.StreamAccumulator do
     {broadcasts, new_acc}
   end
 
+  def accumulate({:tool_call_done, index, id, name, input}, acc) when is_map(input) do
+    pending = Map.get(acc.pending_tool_calls, index, new_pending_tool_call())
+
+    tool_use = %Synapsis.Part.ToolUse{
+      tool: name || pending.tool,
+      tool_use_id: id || pending.tool_use_id,
+      input: input,
+      status: :pending
+    }
+
+    {[],
+     %{
+       acc
+       | pending_tool_calls: Map.delete(acc.pending_tool_calls, index),
+         tool_uses: acc.tool_uses ++ [tool_use]
+     }}
+  end
+
   def accumulate({:tool_input_delta, json}, acc) do
     {[], %{acc | pending_tool_input: acc.pending_tool_input <> json}}
   end
@@ -76,25 +96,29 @@ defmodule Synapsis.Agent.StreamAccumulator do
       %{tool: name, tool_use_id: id} ->
         input =
           case Jason.decode(acc.pending_tool_input) do
-            {:ok, parsed} -> parsed
-            _ -> %{}
+            {:ok, parsed} when is_map(parsed) -> parsed
+            _ -> nil
           end
 
-        tool_use = %Synapsis.Part.ToolUse{
-          tool: name,
-          tool_use_id: id,
-          input: input,
-          status: :pending
-        }
+        if is_nil(input) do
+          {[], %{acc | stream_error: :invalid_tool_arguments}}
+        else
+          tool_use = %Synapsis.Part.ToolUse{
+            tool: name,
+            tool_use_id: id,
+            input: input,
+            status: :pending
+          }
 
-        new_acc = %{
-          acc
-          | pending_tool_use: nil,
-            pending_tool_input: "",
-            tool_uses: acc.tool_uses ++ [tool_use]
-        }
+          new_acc = %{
+            acc
+            | pending_tool_use: nil,
+              pending_tool_input: "",
+              tool_uses: acc.tool_uses ++ [tool_use]
+          }
 
-        {[], new_acc}
+          {[], new_acc}
+        end
     end
   end
 
@@ -107,6 +131,12 @@ defmodule Synapsis.Agent.StreamAccumulator do
   def accumulate({:reasoning_signature_delta, signature}, acc) do
     {[], %{acc | pending_reasoning_signature: acc.pending_reasoning_signature <> signature}}
   end
+
+  def accumulate({:provider_state, provider_state}, acc) when is_map(provider_state) do
+    {[], %{acc | pending_provider_states: acc.pending_provider_states ++ [provider_state]}}
+  end
+
+  def accumulate({:usage, _usage}, acc), do: {[], acc}
 
   def accumulate(:message_start, acc), do: {[], acc}
   def accumulate({:message_delta, _delta}, acc), do: {[], acc}
@@ -131,23 +161,27 @@ defmodule Synapsis.Agent.StreamAccumulator do
   defp finalize_pending_tool(%{pending_tool_use: %{tool: name, tool_use_id: id}} = acc) do
     input =
       case Jason.decode(acc.pending_tool_input) do
-        {:ok, parsed} -> parsed
-        _ -> %{}
+        {:ok, parsed} when is_map(parsed) -> parsed
+        _ -> nil
       end
 
-    tool_use = %Synapsis.Part.ToolUse{
-      tool: name,
-      tool_use_id: id,
-      input: input,
-      status: :pending
-    }
+    if is_nil(input) do
+      %{acc | stream_error: :invalid_tool_arguments}
+    else
+      tool_use = %Synapsis.Part.ToolUse{
+        tool: name,
+        tool_use_id: id,
+        input: input,
+        status: :pending
+      }
 
-    %{
-      acc
-      | pending_tool_use: nil,
-        pending_tool_input: "",
-        tool_uses: acc.tool_uses ++ [tool_use]
-    }
+      %{
+        acc
+        | pending_tool_use: nil,
+          pending_tool_input: "",
+          tool_uses: acc.tool_uses ++ [tool_use]
+      }
+    end
   end
 
   defp finalize_pending_openai_tool_calls(%{pending_tool_calls: pending_tool_calls} = acc)
@@ -161,15 +195,22 @@ defmodule Synapsis.Agent.StreamAccumulator do
       |> Enum.sort_by(fn {index, _tool_call} -> index end)
       |> Enum.flat_map(fn {_index, tool_call} ->
         case tool_call do
-          %{tool: name, tool_use_id: id, input: input} when is_binary(name) and is_binary(id) ->
-            [
-              %Synapsis.Part.ToolUse{
-                tool: name,
-                tool_use_id: id,
-                input: decode_tool_input(input),
-                status: :pending
-              }
-            ]
+          %{tool: name, tool_use_id: id, input: input}
+          when is_binary(name) and is_binary(id) and is_binary(input) ->
+            decoded = decode_tool_input(input)
+
+            if is_map(decoded) do
+              [
+                %Synapsis.Part.ToolUse{
+                  tool: name,
+                  tool_use_id: id,
+                  input: decoded,
+                  status: :pending
+                }
+              ]
+            else
+              []
+            end
 
           _ ->
             []
@@ -181,8 +222,8 @@ defmodule Synapsis.Agent.StreamAccumulator do
 
   defp decode_tool_input(input) do
     case Jason.decode(input || "") do
-      {:ok, parsed} -> parsed
-      _ -> %{}
+      {:ok, parsed} when is_map(parsed) -> parsed
+      _ -> nil
     end
   end
 
@@ -198,6 +239,8 @@ defmodule Synapsis.Agent.StreamAccumulator do
       pending_tool_calls: %{},
       pending_reasoning: "",
       pending_reasoning_signature: "",
+      pending_provider_states: [],
+      stream_error: nil,
       tool_uses: []
     }
   end

@@ -25,6 +25,7 @@ defmodule Synapsis.Agent.Nodes.ProcessResponse do
       pending_tool_input: Map.get(state, :pending_tool_input, ""),
       pending_reasoning: Map.get(state, :pending_reasoning, ""),
       pending_reasoning_signature: Map.get(state, :pending_reasoning_signature, ""),
+      pending_provider_states: Map.get(state, :pending_provider_states, []),
       tool_uses: Map.get(state, :tool_uses, [])
     }
 
@@ -37,6 +38,7 @@ defmodule Synapsis.Agent.Nodes.ProcessResponse do
         pending_tool_input: flushed.pending_tool_input,
         pending_reasoning: flushed.pending_reasoning,
         pending_reasoning_signature: flushed.pending_reasoning_signature,
+        pending_provider_states: flushed.pending_provider_states,
         iteration_activity: %{
           text_emitted: acc.pending_text != "",
           tool_calls_emitted: length(acc.tool_uses),

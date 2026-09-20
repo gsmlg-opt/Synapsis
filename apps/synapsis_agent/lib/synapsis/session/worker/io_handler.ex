@@ -18,7 +18,12 @@ defmodule Synapsis.Session.Worker.IOHandler do
   def handle_start_stream(request, state, provider_override \\ nil) do
     provider = provider_override || state.agent[:provider] || state.session.provider
     provider_config = provider_config(provider, state)
-    config = Map.put(provider_config, :session_id, state.session_id)
+
+    config =
+      provider_config
+      |> Map.put(:session_id, state.session_id)
+      |> Map.put_new(:provider_name, provider)
+
     debug_handler = maybe_attach_debug(state)
 
     state =
@@ -136,7 +141,13 @@ defmodule Synapsis.Session.Worker.IOHandler do
   def handle_provider_done(state) do
     detach_debug(state.debug_handler_id)
     {_broadcasts, stream_acc} = StreamAccumulator.accumulate(:done, state.stream_acc)
-    new_ctx = Map.put(state.engine_ctx, :stream_acc, stream_acc)
+
+    new_ctx =
+      if stream_acc.stream_error do
+        Map.put(state.engine_ctx, :stream_error, stream_acc.stream_error)
+      else
+        Map.put(state.engine_ctx, :stream_acc, stream_acc)
+      end
 
     Worker.step_engine(%{state | stream_ref: nil, debug_handler_id: nil, engine_ctx: new_ctx})
   end

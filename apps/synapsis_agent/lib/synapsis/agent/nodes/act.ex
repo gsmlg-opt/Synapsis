@@ -26,6 +26,7 @@ defmodule Synapsis.Agent.Nodes.Act do
       pending_tool_input: Map.get(state, :pending_tool_input, ""),
       pending_reasoning: Map.get(state, :pending_reasoning, ""),
       pending_reasoning_signature: Map.get(state, :pending_reasoning_signature, ""),
+      pending_provider_states: Map.get(state, :pending_provider_states, []),
       tool_uses: Map.get(state, :tool_uses, [])
     }
 
@@ -37,7 +38,8 @@ defmodule Synapsis.Agent.Nodes.Act do
         pending_tool_use: flushed.pending_tool_use,
         pending_tool_input: flushed.pending_tool_input,
         pending_reasoning: flushed.pending_reasoning,
-        pending_reasoning_signature: flushed.pending_reasoning_signature
+        pending_reasoning_signature: flushed.pending_reasoning_signature,
+        pending_provider_states: flushed.pending_provider_states
       })
 
     route = determine_route(Map.get(new_state, :tool_uses, []))

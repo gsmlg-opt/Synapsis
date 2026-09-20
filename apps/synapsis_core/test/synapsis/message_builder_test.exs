@@ -1,8 +1,40 @@
 defmodule Synapsis.MessageBuilderTest do
   use ExUnit.Case
 
-  alias Synapsis.MessageBuilder
+  alias Synapsis.MessageBuilderTest.CanonicalBuilder, as: MessageBuilder
   alias Synapsis.Part.{Text, ToolUse, ToolResult, Reasoning, Image}
+
+  defmodule CanonicalBuilder do
+    import ExUnit.Assertions
+
+    def build_request(messages, agent, provider_name, prompt_context \\ nil) do
+      assert {:ok, request} =
+               Synapsis.MessageBuilder.build_request(
+                 messages,
+                 agent,
+                 provider_name,
+                 prompt_context
+               )
+
+      assert Enum.all?(Map.keys(request), &is_binary/1)
+      atomize_keys(request)
+    end
+
+    defp atomize_keys(map) when is_map(map) do
+      Map.new(map, fn {key, value} -> {atomize_key(key), atomize_keys(value)} end)
+    end
+
+    defp atomize_keys(list) when is_list(list), do: Enum.map(list, &atomize_keys/1)
+    defp atomize_keys(value), do: value
+
+    defp atomize_key(key) when is_binary(key) do
+      String.to_existing_atom(key)
+    rescue
+      ArgumentError -> key
+    end
+
+    defp atomize_key(key), do: key
+  end
 
   # ---------------------------------------------------------------------------
   # Helpers
@@ -41,8 +73,51 @@ defmodule Synapsis.MessageBuilderTest do
   # ---------------------------------------------------------------------------
 
   describe "build_request/4" do
+    test "replays default-endpoint provider state with account and workspace affinity" do
+      provider_name = "builder_affinity_#{System.unique_integer([:positive])}"
+
+      Synapsis.Provider.Registry.register(provider_name, %{
+        type: "anthropic",
+        account: "acct",
+        workspace: "space"
+      })
+
+      on_exit(fn -> Synapsis.Provider.Registry.unregister(provider_name) end)
+
+      provider_state = %{
+        "source_profile" => provider_name,
+        "source_protocol" => "anthropic",
+        "kind" => "anthropic_signed_thinking",
+        "affinity" => %{
+          "profile" => provider_name,
+          "protocol" => "anthropic",
+          "endpoint" => "https://api.anthropic.com",
+          "account" => "acct",
+          "workspace" => "space",
+          "model" => "claude-test"
+        },
+        "payload" => %{"thinking" => "private", "signature" => "signed"}
+      }
+
+      messages = [
+        %{
+          role: "assistant",
+          parts: [
+            %Reasoning{content: "private", provider_states: [provider_state]}
+          ]
+        }
+      ]
+
+      assert {:ok, _request} =
+               Synapsis.MessageBuilder.build_request(
+                 messages,
+                 base_agent(%{model: "claude-test"}),
+                 provider_name
+               )
+    end
+
     test "builds request with system prompt" do
-      messages = [%{role: "user", parts: [%{type: "text", content: "hello"}]}]
+      messages = [%{role: "user", parts: [%Text{content: "hello"}]}]
 
       agent = %{
         system_prompt: "You are helpful.",
@@ -56,7 +131,7 @@ defmodule Synapsis.MessageBuilderTest do
     end
 
     test "builds request with prompt context appended" do
-      messages = [%{role: "user", parts: [%{type: "text", content: "hello"}]}]
+      messages = [%{role: "user", parts: [%Text{content: "hello"}]}]
 
       agent = %{
         system_prompt: "Base prompt.",
@@ -70,7 +145,7 @@ defmodule Synapsis.MessageBuilderTest do
     end
 
     test "resolves tools as empty list when nil" do
-      messages = [%{role: "user", parts: [%{type: "text", content: "hello"}]}]
+      messages = [%{role: "user", parts: [%Text{content: "hello"}]}]
 
       agent = %{
         system_prompt: "Test",
@@ -85,7 +160,7 @@ defmodule Synapsis.MessageBuilderTest do
     end
 
     test "resolves :all tools from registry" do
-      messages = [%{role: "user", parts: [%{type: "text", content: "hello"}]}]
+      messages = [%{role: "user", parts: [%Text{content: "hello"}]}]
 
       agent = %{
         system_prompt: "Test",
@@ -100,7 +175,7 @@ defmodule Synapsis.MessageBuilderTest do
     end
 
     test "resolves specific tool names from registry" do
-      messages = [%{role: "user", parts: [%{type: "text", content: "hello"}]}]
+      messages = [%{role: "user", parts: [%Text{content: "hello"}]}]
 
       agent = %{
         system_prompt: "Test",
@@ -114,7 +189,7 @@ defmodule Synapsis.MessageBuilderTest do
     end
 
     test "falls back to Adapter for unknown provider" do
-      messages = [%{role: "user", parts: [%{type: "text", content: "hello"}]}]
+      messages = [%{role: "user", parts: [%Text{content: "hello"}]}]
 
       agent = %{
         system_prompt: "Test",
@@ -140,9 +215,10 @@ defmodule Synapsis.MessageBuilderTest do
       }
 
       result = MessageBuilder.build_request(messages, agent, "anthropic")
-      assert result.system =~ "Base prompt"
+      assert [%{type: "text", text: system}] = result.system
+      assert system =~ "Base prompt"
       # nil context should not add extra text
-      assert result.system == "Base prompt"
+      assert system == "Base prompt"
     end
 
     test "builds request with empty string context (no extra appended)" do
@@ -158,7 +234,7 @@ defmodule Synapsis.MessageBuilderTest do
       }
 
       result = MessageBuilder.build_request(messages, agent, "anthropic")
-      assert result.system == "Base prompt"
+      assert result.system == [%{type: "text", text: "Base prompt"}]
     end
 
     test "empty string as 4th positional arg does not append to system prompt" do
@@ -166,7 +242,7 @@ defmodule Synapsis.MessageBuilderTest do
       agent = %{system_prompt: "Base prompt", tools: nil, model: "test-model", max_tokens: 4096}
 
       result = MessageBuilder.build_request(messages, agent, "anthropic", "")
-      assert result.system == "Base prompt"
+      assert result.system == [%{type: "text", text: "Base prompt"}]
     end
   end
 
@@ -182,7 +258,7 @@ defmodule Synapsis.MessageBuilderTest do
       assert result.max_tokens == 4096
       assert result.stream == true
       assert result.messages == []
-      assert result.system == "You are helpful."
+      assert result.system == [%{type: "text", text: "You are helpful."}]
     end
 
     test "openai: returns valid request with empty messages list" do
@@ -191,7 +267,8 @@ defmodule Synapsis.MessageBuilderTest do
       assert result.model == "test-model"
       assert result.stream == true
       # OpenAI puts system prompt in messages array
-      assert [%{role: "system", content: "You are helpful."}] = result.messages
+      assert [%{role: "system", content: [%{type: "text", text: "You are helpful."}]}] =
+               result.messages
     end
 
     test "google: returns valid request with empty messages list" do
@@ -211,7 +288,7 @@ defmodule Synapsis.MessageBuilderTest do
   describe "system prompt construction" do
     test "anthropic: system prompt appears as top-level :system key" do
       result = MessageBuilder.build_request([], base_agent(), "anthropic")
-      assert result.system == "You are helpful."
+      assert result.system == [%{type: "text", text: "You are helpful."}]
     end
 
     test "anthropic: no :system key when system_prompt is nil" do
@@ -223,7 +300,7 @@ defmodule Synapsis.MessageBuilderTest do
     test "openai: system prompt inserted as first message with role system" do
       result = MessageBuilder.build_request([], base_agent(), "openai")
       assert hd(result.messages).role == "system"
-      assert hd(result.messages).content == "You are helpful."
+      assert hd(result.messages).content == [%{type: "text", text: "You are helpful."}]
     end
 
     test "openai: no system message when system_prompt is nil" do
@@ -245,7 +322,7 @@ defmodule Synapsis.MessageBuilderTest do
 
     test "prompt_context is appended to system prompt with double newline" do
       result = MessageBuilder.build_request([], base_agent(), "anthropic", "Extra info")
-      assert result.system == "You are helpful.\n\nExtra info"
+      assert result.system == [%{type: "text", text: "You are helpful.\n\nExtra info"}]
     end
   end
 
@@ -285,7 +362,7 @@ defmodule Synapsis.MessageBuilderTest do
       assert block.type == "tool_use"
       assert block.id == "tu_123"
       assert block.name == "file_read"
-      assert block.input == %{"path" => "/tmp/test.txt"}
+      assert block.input == %{path: "/tmp/test.txt"}
     end
 
     test "tool_result part becomes anthropic tool_result content block" do
@@ -299,7 +376,7 @@ defmodule Synapsis.MessageBuilderTest do
 
       assert block.type == "tool_result"
       assert block.tool_use_id == "tu_123"
-      assert block.content == "file contents here"
+      assert block.content == [%{type: "text", text: "file contents here"}]
       assert block.is_error == false
     end
 
@@ -313,7 +390,7 @@ defmodule Synapsis.MessageBuilderTest do
       [block] = msg.content
 
       assert block.is_error == true
-      assert block.content == "permission denied"
+      assert block.content == [%{type: "text", text: "permission denied"}]
     end
 
     test "reasoning part becomes native thinking block in anthropic format" do
@@ -352,7 +429,7 @@ defmodule Synapsis.MessageBuilderTest do
 
       # First message is system prompt, second is user
       user_msg_result = Enum.find(result.messages, &(&1.role == "user"))
-      assert user_msg_result.content == "hello"
+      assert user_msg_result.content == [%{type: "text", text: "hello"}]
     end
 
     test "tool_use part becomes openai tool_calls" do
@@ -424,7 +501,7 @@ defmodule Synapsis.MessageBuilderTest do
       [part] = msg.parts
 
       assert part.functionCall.name == "grep"
-      assert part.functionCall.args == %{"pattern" => "TODO"}
+      assert part.functionCall.args == %{pattern: "TODO"}
     end
 
     test "image part becomes google inlineData" do
@@ -545,7 +622,7 @@ defmodule Synapsis.MessageBuilderTest do
 
       result = MessageBuilder.build_request(messages, base_agent(), "openai")
       user = Enum.find(result.messages, &(&1.role == "user"))
-      assert user.content == "string keys"
+      assert user.content == [%{type: "text", text: "string keys"}]
     end
 
     test "google: handles string-keyed role and parts" do

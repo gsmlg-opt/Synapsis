@@ -204,13 +204,13 @@ defmodule Synapsis.Agent.StreamAccumulatorTest do
       assert Enum.at(acc.tool_uses, 1).input == %{"pattern" => "x"}
     end
 
-    test ":done handles invalid JSON in pending_tool_input", %{acc: acc} do
+    test ":done rejects invalid JSON in pending_tool_input", %{acc: acc} do
       {_, acc} = StreamAccumulator.accumulate({:tool_use_start, "file_read", "tu_1"}, acc)
       {_, acc} = StreamAccumulator.accumulate({:tool_input_delta, "not valid json"}, acc)
       {_, acc} = StreamAccumulator.accumulate(:done, acc)
 
-      assert [tool_use] = acc.tool_uses
-      assert tool_use.input == %{}
+      assert acc.tool_uses == []
+      assert acc.stream_error == :invalid_tool_arguments
     end
 
     test "content_block_stop without pending tool_use is no-op", %{acc: acc} do
@@ -236,6 +236,8 @@ defmodule Synapsis.Agent.StreamAccumulatorTest do
       assert acc.pending_tool_calls == %{}
       assert acc.pending_reasoning == ""
       assert acc.pending_reasoning_signature == ""
+      assert acc.pending_provider_states == []
+      assert acc.stream_error == nil
       assert acc.tool_uses == []
     end
   end

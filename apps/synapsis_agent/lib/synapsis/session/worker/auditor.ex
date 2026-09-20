@@ -24,24 +24,42 @@ defmodule Synapsis.Session.Worker.Auditor do
 
       provider_type = provider_config[:type] || provider_config["type"] || "anthropic"
 
-      request = %{
-        model:
-          auditor_request.config.model || provider_config[:default_model] ||
-            Synapsis.Providers.model_for_tier(auditor_provider, :fast),
-        max_tokens: auditor_request.config.max_tokens || 1024,
-        system: auditor_request.system_prompt,
-        messages: [%{role: "user", content: auditor_request.user_message}]
-      }
+      model =
+        auditor_request.config.model || provider_config[:default_model] ||
+          Synapsis.Providers.model_for_tier(auditor_provider, :fast)
 
       config = Map.put(provider_config, :type, provider_type)
 
-      case Synapsis.Provider.Adapter.complete(request, config) do
+      result =
+        with {:ok, request} <-
+               Synapsis.Provider.Adapter.format_request(
+                 [
+                   %{
+                     role: "user",
+                     parts: [%Synapsis.Part.Text{content: auditor_request.user_message}]
+                   }
+                 ],
+                 [],
+                 %{
+                   model: model,
+                   max_tokens: auditor_request.config.max_tokens,
+                   system_prompt: auditor_request.system_prompt,
+                   provider_type: provider_type,
+                   provider_name: auditor_provider,
+                   endpoint: provider_config[:base_url] || provider_config["base_url"],
+                   stream: false
+                 }
+               ) do
+          Synapsis.Provider.Adapter.complete(request, config)
+        end
+
+      case result do
         {:ok, response_text} ->
           Synapsis.Session.AuditorTask.record_analysis(
             params.session_id,
             response_text,
             trigger: to_string(params.decision),
-            auditor_model: request.model
+            auditor_model: model
           )
 
         {:error, err} ->

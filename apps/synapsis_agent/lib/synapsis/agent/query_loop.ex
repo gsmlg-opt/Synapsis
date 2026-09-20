@@ -209,13 +209,14 @@ defmodule Synapsis.Agent.QueryLoop do
   end
 
   defp stream_model(state, ctx) do
-    request = build_request(state, ctx)
     stream_fn = ctx.agent_config[:stream_fn] || (&default_stream/2)
 
-    case stream_fn.(request, ctx.provider_config) do
-      :ok -> collect_with_streaming(ctx)
-      {:ok, _ref} -> collect_with_streaming(ctx)
-      {:error, reason} -> {:error, reason}
+    with {:ok, request} <- build_request(state, ctx) do
+      case stream_fn.(request, ctx.provider_config) do
+        :ok -> collect_with_streaming(ctx)
+        {:ok, _ref} -> collect_with_streaming(ctx)
+        {:error, reason} -> {:error, reason}
+      end
     end
   end
 
@@ -241,6 +242,8 @@ defmodule Synapsis.Agent.QueryLoop do
         ctx,
         %{
           text: "",
+          reasoning: "",
+          provider_states: [],
           tools: [],
           building_tool: nil,
           pending_tool_calls: %{}
@@ -250,6 +253,8 @@ defmodule Synapsis.Agent.QueryLoop do
     else
       collect_loop(ctx, %{
         text: "",
+        reasoning: "",
+        provider_states: [],
         tools: [],
         building_tool: nil,
         pending_tool_calls: %{}
@@ -262,22 +267,40 @@ defmodule Synapsis.Agent.QueryLoop do
       {:provider_chunk, :done} ->
         flush_provider_done()
         {acc, _tools} = finalize_tools(acc)
-        assistant_msg = build_assistant_message(acc.text, acc.tools)
+
+        assistant_msg =
+          build_assistant_message(acc.text, acc.tools, acc.reasoning, acc.provider_states)
+
         {:ok, assistant_msg, acc.tools}
 
       :provider_done ->
         {acc, _tools} = finalize_tools(acc)
-        assistant_msg = build_assistant_message(acc.text, acc.tools)
+
+        assistant_msg =
+          build_assistant_message(acc.text, acc.tools, acc.reasoning, acc.provider_states)
+
         {:ok, assistant_msg, acc.tools}
+
+      {:provider_error, reason} ->
+        {:error, reason}
 
       {:provider_chunk, {:text_delta, text}} ->
         maybe_notify_text(ctx, text)
         collect_loop(ctx, %{acc | text: acc.text <> text})
 
+      {:provider_chunk, {:reasoning_delta, text}} ->
+        collect_loop(ctx, %{acc | reasoning: acc.reasoning <> text})
+
+      {:provider_chunk, {:provider_state, provider_state}} ->
+        collect_loop(ctx, %{acc | provider_states: acc.provider_states ++ [provider_state]})
+
       {:provider_chunk, {:tool_call_delta, index, id, name, arguments}} ->
         {start_event, acc} = accumulate_tool_call_delta(acc, index, id, name, arguments)
         maybe_notify_tool_start(ctx, start_event)
         collect_loop(ctx, acc)
+
+      {:provider_chunk, {:tool_call_done, index, id, name, input}} ->
+        collect_loop(ctx, complete_tool_call(acc, index, id, name, input))
 
       {:provider_chunk, {:tool_use_start, name, id}} ->
         notify(ctx, {:stream_chunk, {:tool_use_start, name, id}})
@@ -338,23 +361,48 @@ defmodule Synapsis.Agent.QueryLoop do
         executor = Enum.reduce(tools, executor, &maybe_add_streaming_tool(ctx, &2, &1))
         # Wait for all in-flight tools to complete
         {results, _exec} = StreamingExecutor.get_remaining_results(executor)
-        assistant_msg = build_assistant_message(acc.text, acc.tools)
+
+        assistant_msg =
+          build_assistant_message(acc.text, acc.tools, acc.reasoning, acc.provider_states)
+
         {:ok, assistant_msg, acc.tools, results}
 
       :provider_done ->
         {acc, tools} = finalize_tools(acc)
         executor = Enum.reduce(tools, executor, &maybe_add_streaming_tool(ctx, &2, &1))
         {results, _exec} = StreamingExecutor.get_remaining_results(executor)
-        assistant_msg = build_assistant_message(acc.text, acc.tools)
+
+        assistant_msg =
+          build_assistant_message(acc.text, acc.tools, acc.reasoning, acc.provider_states)
+
         {:ok, assistant_msg, acc.tools, results}
+
+      {:provider_error, reason} ->
+        {:error, reason}
 
       {:provider_chunk, {:text_delta, text}} ->
         maybe_notify_text(ctx, text)
         collect_loop_streaming(ctx, %{acc | text: acc.text <> text}, executor)
 
+      {:provider_chunk, {:reasoning_delta, text}} ->
+        collect_loop_streaming(ctx, %{acc | reasoning: acc.reasoning <> text}, executor)
+
+      {:provider_chunk, {:provider_state, provider_state}} ->
+        collect_loop_streaming(
+          ctx,
+          %{acc | provider_states: acc.provider_states ++ [provider_state]},
+          executor
+        )
+
       {:provider_chunk, {:tool_call_delta, index, id, name, arguments}} ->
         {start_event, acc} = accumulate_tool_call_delta(acc, index, id, name, arguments)
         maybe_notify_tool_start(ctx, start_event)
+        collect_loop_streaming(ctx, acc, executor)
+
+      {:provider_chunk, {:tool_call_done, index, id, name, input}} ->
+        acc = complete_tool_call(acc, index, id, name, input)
+        tool = List.last(acc.tools)
+        executor = maybe_add_streaming_tool(ctx, executor, tool)
         collect_loop_streaming(ctx, acc, executor)
 
       {:provider_chunk, {:tool_use_start, name, id}} ->
@@ -476,6 +524,22 @@ defmodule Synapsis.Agent.QueryLoop do
 
   defp maybe_mark_tool_started(tool_call), do: {nil, tool_call}
 
+  defp complete_tool_call(acc, index, id, name, input) when is_map(input) do
+    pending = Map.get(acc.pending_tool_calls, index, %{})
+
+    tool = %{
+      id: id || pending[:id],
+      name: name || pending[:name],
+      input: input
+    }
+
+    %{
+      acc
+      | tools: acc.tools ++ [tool],
+        pending_tool_calls: Map.delete(acc.pending_tool_calls, index)
+    }
+  end
+
   defp finalize_tools(acc) do
     {acc, legacy_tool} = finalize_building_tool(acc)
     {acc, indexed_tools} = finalize_pending_tool_calls(acc)
@@ -535,13 +599,27 @@ defmodule Synapsis.Agent.QueryLoop do
     StreamingExecutor.add_tool(executor, tool)
   end
 
-  defp build_assistant_message(text, tools) do
+  defp build_assistant_message(text, tools, reasoning, provider_states) do
     content =
       case {text, tools} do
         {"", []} -> []
         {t, []} when t != "" -> [%{type: "text", text: t}]
         {"", ts} -> Enum.map(ts, &tool_content_block/1)
         {t, ts} -> [%{type: "text", text: t} | Enum.map(ts, &tool_content_block/1)]
+      end
+
+    content =
+      if reasoning != "" or provider_states != [] do
+        [
+          %{
+            type: "reasoning",
+            content: reasoning,
+            provider_states: provider_states
+          }
+          | content
+        ]
+      else
+        content
       end
 
     %{role: "assistant", content: content}
@@ -565,6 +643,8 @@ defmodule Synapsis.Agent.QueryLoop do
       provider_name:
         value(ctx.provider_config, :provider_name, "provider_name") ||
           value(ctx.provider_config, :name, "name"),
+      account: value(ctx.provider_config, :account, "account"),
+      workspace: value(ctx.provider_config, :workspace, "workspace"),
       system: ctx.system_prompt,
       system_prompt: ctx.system_prompt,
       max_tokens: 8192,
@@ -641,7 +721,8 @@ defmodule Synapsis.Agent.QueryLoop do
           content:
             value(part, :thinking, "thinking") || value(part, :content, "content") ||
               value(part, :text, "text") || "",
-          signature: value(part, :signature, "signature")
+          signature: value(part, :signature, "signature"),
+          provider_states: value(part, :provider_states, "provider_states") || []
         }
 
       _ ->

@@ -45,7 +45,11 @@ defmodule Synapsis.Part do
   end
 
   defp load_part(%{"type" => "reasoning"} = data) do
-    %Synapsis.Part.Reasoning{content: data["content"] || "", signature: data["signature"]}
+    %Synapsis.Part.Reasoning{
+      content: data["content"] || "",
+      signature: data["signature"],
+      provider_states: data["provider_states"] || []
+    }
   end
 
   defp load_part(%{"type" => "image"} = data) do
@@ -96,8 +100,13 @@ defmodule Synapsis.Part do
     }
   end
 
-  defp dump_part(%Synapsis.Part.Reasoning{content: content, signature: signature}) do
-    %{"type" => "reasoning", "content" => content, "signature" => signature}
+  defp dump_part(%Synapsis.Part.Reasoning{} = reasoning) do
+    %{
+      "type" => "reasoning",
+      "content" => reasoning.content,
+      "signature" => reasoning.signature,
+      "provider_states" => reasoning.provider_states || []
+    }
   end
 
   defp dump_part(%Synapsis.Part.Image{} = p) do

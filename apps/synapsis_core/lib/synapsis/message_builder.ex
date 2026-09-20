@@ -10,12 +10,17 @@ defmodule Synapsis.MessageBuilder do
 
     system_prompt = build_system_prompt(agent[:system_prompt], prompt_context)
 
+    provider_config = provider_config(provider_name)
+
     opts = %{
       model: agent[:model],
       system_prompt: system_prompt,
       max_tokens: agent[:max_tokens] || @default_max_tokens,
       provider_type: resolve_provider_type(provider_name),
-      provider_name: provider_name
+      provider_name: provider_name,
+      endpoint: provider_config[:base_url] || provider_config["base_url"],
+      account: provider_config[:account] || provider_config["account"],
+      workspace: provider_config[:workspace] || provider_config["workspace"]
     }
 
     provider_module.format_request(messages, tools, opts)
@@ -29,9 +34,16 @@ defmodule Synapsis.MessageBuilder do
   end
 
   defp resolve_provider_type(provider_name) do
-    case Synapsis.Provider.Registry.get(provider_name) do
-      {:ok, config} -> config[:type] || config["type"] || provider_name
+    case provider_config(provider_name) do
+      config when is_map(config) -> config[:type] || config["type"] || provider_name
       _ -> provider_name
+    end
+  end
+
+  defp provider_config(provider_name) do
+    case Synapsis.Provider.Registry.get(provider_name) do
+      {:ok, config} -> config
+      _ -> %{}
     end
   end
 

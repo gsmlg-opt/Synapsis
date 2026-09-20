@@ -26,7 +26,7 @@ defmodule Synapsis.Agent.Graphs.CodingLoop do
       edges: %{
         receive: :compact_context,
         compact_context: :build_prompt,
-        build_prompt: :llm_stream,
+        build_prompt: %{default: :llm_stream, error: :process_response},
         llm_stream: %{default: :process_response, error: :process_response},
         process_response: %{
           has_tools: :tool_dispatch,
@@ -60,6 +60,7 @@ defmodule Synapsis.Agent.Graphs.CodingLoop do
       pending_tool_input: "",
       pending_reasoning: "",
       pending_reasoning_signature: "",
+      pending_provider_states: [],
       tool_uses: [],
       iteration_activity: %{text_emitted: false, tool_calls_emitted: 0, tool_results_received: 0},
       monitor: Synapsis.Session.Monitor.new(),

@@ -40,7 +40,7 @@ defmodule Synapsis.Agent.Graphs.ConversationalLoop do
       edges: %{
         receive: :compact_context,
         compact_context: :build_prompt,
-        build_prompt: :reason,
+        build_prompt: %{default: :reason, error: :respond},
         reason: %{default: :act, error: :respond},
         act: %{respond: :respond, spawn: :spawn_agent},
         spawn_agent: :respond,
@@ -61,6 +61,7 @@ defmodule Synapsis.Agent.Graphs.ConversationalLoop do
       pending_tool_input: "",
       pending_reasoning: "",
       pending_reasoning_signature: "",
+      pending_provider_states: [],
       tool_uses: [],
       monitor: Synapsis.Session.Monitor.new(),
       iteration_count: 0,

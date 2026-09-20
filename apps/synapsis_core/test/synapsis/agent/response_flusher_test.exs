@@ -1,7 +1,7 @@
 defmodule Synapsis.Agent.ResponseFlusherTest do
   use ExUnit.Case, async: false
 
-  alias Synapsis.Agent.ResponseFlusher
+  alias Synapsis.Agent.{ResponseFlusher, StreamAccumulator}
   alias Synapsis.Message
   alias Synapsis.Part.{Text, ToolResult, ToolUse}
 
@@ -164,5 +164,48 @@ defmodule Synapsis.Agent.ResponseFlusherTest do
 
       assert [%ToolResult{content: "first"}] = results_by_id(session_id)["call_A"]
     end
+  end
+
+  test "signed provider state survives stream accumulation, persistence, and replay" do
+    session_id = new_session_id()
+    provider_name = "reasoning_roundtrip_#{System.unique_integer([:positive])}"
+    endpoint = "https://api.example"
+
+    Synapsis.Provider.Registry.register(provider_name, %{type: "anthropic", base_url: endpoint})
+    on_exit(fn -> Synapsis.Provider.Registry.unregister(provider_name) end)
+
+    provider_state = %{
+      "source_profile" => provider_name,
+      "source_protocol" => "anthropic",
+      "kind" => "anthropic_signed_thinking",
+      "affinity" => %{
+        "profile" => provider_name,
+        "protocol" => "anthropic",
+        "endpoint" => endpoint,
+        "model" => "claude-test"
+      },
+      "payload" => %{"thinking" => "private", "signature" => "signed"}
+    }
+
+    {_, acc} =
+      StreamAccumulator.accumulate({:reasoning_delta, "private"}, StreamAccumulator.new())
+
+    {_, acc} = StreamAccumulator.accumulate({:provider_state, provider_state}, acc)
+    parts = ResponseFlusher.build_parts(acc)
+
+    persist(session_id, [{"assistant", parts}])
+    [message] = Message.list_by_session(session_id)
+
+    assert [%Synapsis.Part.Reasoning{provider_states: [^provider_state]}] = message.parts
+
+    assert {:ok, wire} =
+             Synapsis.MessageBuilder.build_request(
+               [message],
+               %{model: "claude-test", tools: []},
+               provider_name
+             )
+
+    assert [%{"type" => "thinking", "signature" => "signed"}] =
+             hd(wire["messages"])["content"]
   end
 end

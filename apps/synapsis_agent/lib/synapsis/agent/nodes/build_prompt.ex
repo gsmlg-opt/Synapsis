@@ -57,23 +57,37 @@ defmodule Synapsis.Agent.Nodes.BuildPrompt do
     enriched_config = Map.put(agent_config, :system_prompt, full_prompt)
 
     # Build the request
-    request =
+    request_result =
       Synapsis.MessageBuilder.build_request(
         messages,
         enriched_config,
         provider
       )
 
-    mark_steers_consumed(session_id, consumed_steers)
+    case request_result do
+      {:ok, request} ->
+        mark_steers_consumed(session_id, consumed_steers)
 
-    new_state = %{state | messages: messages, user_input: nil}
+        new_state =
+          %{state | messages: messages, user_input: nil}
+          |> Map.put(:request_agent_config, enriched_config)
+          |> Map.put(:request, request)
 
-    new_state =
-      new_state
-      |> Map.put(:request_agent_config, enriched_config)
-      |> Map.put(:request, request)
+        {:next, :default, new_state}
 
-    {:next, :default, new_state}
+      {:error, error} ->
+        Logger.warning("provider_request_preparation_failed",
+          session_id: session_id,
+          reason: inspect(error)
+        )
+
+        new_state =
+          %{state | messages: messages}
+          |> Map.put(:stream_error, error)
+          |> Map.put(:pending_text, "Provider request could not be prepared.")
+
+        {:next, :error, new_state}
+    end
   end
 
   defp append_steer_context(prompt, session_id) do

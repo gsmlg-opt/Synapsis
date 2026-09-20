@@ -86,7 +86,10 @@ defmodule Synapsis.Session.Stream do
     end
   end
 
-  defp forward_provider_events(owner, stream_ref) do
+  defp forward_provider_events(
+         owner,
+         %Ref{provider_ref: %{pid: provider_pid, ref: monitor_ref}} = stream_ref
+       ) do
     receive do
       {:provider_chunk, event} ->
         send(owner, {:provider_chunk, stream_ref, event})
@@ -97,6 +100,9 @@ defmodule Synapsis.Session.Stream do
 
       {:provider_error, reason} ->
         send(owner, {:provider_error, stream_ref, reason})
+
+      {:DOWN, ^monitor_ref, :process, ^provider_pid, reason} ->
+        send(owner, {:provider_error, stream_ref, {:provider_exit, reason}})
 
       _other ->
         forward_provider_events(owner, stream_ref)

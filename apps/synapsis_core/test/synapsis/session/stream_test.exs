@@ -66,6 +66,18 @@ defmodule Synapsis.Session.StreamTest do
     end
   end
 
+  defp eventually(fun, attempts \\ 50)
+  defp eventually(fun, 0), do: fun.()
+
+  defp eventually(fun, attempts) do
+    if fun.() do
+      true
+    else
+      Process.sleep(10)
+      eventually(fun, attempts - 1)
+    end
+  end
+
   # ---------------------------------------------------------------------------
   # start_stream/3 — error paths (unknown / nil / empty provider)
   # ---------------------------------------------------------------------------
@@ -136,7 +148,9 @@ defmodule Synapsis.Session.StreamTest do
       }
 
       assert {:ok, ref} = Stream.start_stream(request, config, provider_name)
-      assert is_reference(ref)
+      assert %{pid: pid, ref: monitor_ref} = ref
+      assert is_pid(pid)
+      assert is_reference(monitor_ref)
 
       events = collect_stream_events()
       chunk_events = for {:chunk, c} <- events, do: c
@@ -271,7 +285,9 @@ defmodule Synapsis.Session.StreamTest do
       }
 
       assert {:ok, ref} = Stream.start_stream(request, config, provider_name)
-      assert is_reference(ref)
+      assert %{pid: pid, ref: monitor_ref} = ref
+      assert is_pid(pid)
+      assert is_reference(monitor_ref)
 
       events = collect_stream_events()
       chunk_events = for {:chunk, c} <- events, do: c
@@ -322,7 +338,9 @@ defmodule Synapsis.Session.StreamTest do
       }
 
       assert {:ok, ref} = Stream.start_stream(request, config, provider_name)
-      assert is_reference(ref)
+      assert %{pid: pid, ref: monitor_ref} = ref
+      assert is_pid(pid)
+      assert is_reference(monitor_ref)
 
       events = collect_stream_events()
       chunk_events = for {:chunk, c} <- events, do: c
@@ -361,6 +379,96 @@ defmodule Synapsis.Session.StreamTest do
   # ---------------------------------------------------------------------------
 
   describe "cancel_stream/2 terminates an active stream" do
+    test "unexpected provider task exit reports a fenced terminal error and stops the proxy" do
+      {:ok, listener} =
+        :gen_tcp.listen(0, [:binary, active: false, reuseaddr: true, ip: {127, 0, 0, 1}])
+
+      {:ok, {_, port}} = :inet.sockname(listener)
+      provider_name = unique_provider_name()
+      test_pid = self()
+
+      acceptor =
+        spawn(fn ->
+          {:ok, socket} = :gen_tcp.accept(listener)
+          send(test_pid, {:request_arrived, self()})
+
+          receive do
+            :close -> :gen_tcp.close(socket)
+          end
+        end)
+
+      on_exit(fn ->
+        send(acceptor, :close)
+        :gen_tcp.close(listener)
+      end)
+
+      config =
+        register_provider(provider_name, "anthropic", port, %{
+          base_url: "http://127.0.0.1:#{port}"
+        })
+
+      request = %{model: "claude-test", max_tokens: 10, messages: [], stream: true}
+
+      assert {:ok,
+              %Stream.Ref{provider_ref: %{pid: provider_pid}, proxy_pid: proxy_pid} = stream_ref} =
+               Stream.start_stream(request, config, provider_name, forward_to: self())
+
+      assert_receive {:request_arrived, ^acceptor}, 1_000
+      Process.exit(provider_pid, :kill)
+
+      assert_receive {:provider_error, ^stream_ref, {:provider_exit, :killed}}, 1_000
+      assert eventually(fn -> not Process.alive?(proxy_pid) end)
+      send(acceptor, :close)
+    end
+
+    test "fenced cancellation terminates provider and proxy processes" do
+      {:ok, listener} =
+        :gen_tcp.listen(0, [:binary, active: false, reuseaddr: true, ip: {127, 0, 0, 1}])
+
+      {:ok, {_, port}} = :inet.sockname(listener)
+      provider_name = unique_provider_name()
+      test_pid = self()
+
+      acceptor =
+        spawn(fn ->
+          {:ok, socket} = :gen_tcp.accept(listener)
+          send(test_pid, {:request_arrived, self()})
+
+          receive do
+            :close -> :gen_tcp.close(socket)
+          end
+        end)
+
+      on_exit(fn ->
+        send(acceptor, :close)
+        :gen_tcp.close(listener)
+      end)
+
+      config =
+        register_provider(provider_name, "anthropic", port, %{
+          base_url: "http://127.0.0.1:#{port}"
+        })
+
+      request = %{model: "claude-test", max_tokens: 10, messages: [], stream: true}
+
+      assert {:ok,
+              %Stream.Ref{
+                provider_ref: %{pid: provider_pid, ref: monitor_ref},
+                proxy_pid: proxy_pid
+              } = stream_ref} =
+               Stream.start_stream(request, config, provider_name, forward_to: self())
+
+      assert is_reference(monitor_ref)
+      assert eventually(fn -> Process.alive?(provider_pid) end)
+      assert eventually(fn -> Process.alive?(proxy_pid) end)
+      assert_receive {:request_arrived, ^acceptor}, 1_000
+
+      assert :ok = Stream.cancel_stream(stream_ref, provider_name)
+      assert eventually(fn -> not Process.alive?(provider_pid) end)
+      assert eventually(fn -> not Process.alive?(proxy_pid) end)
+      send(acceptor, :close)
+    end
+
     test "cancels a task by PID through the provider adapter" do
       provider_name = unique_provider_name()
       ProviderRegistry.register(provider_name, %{type: "anthropic"})

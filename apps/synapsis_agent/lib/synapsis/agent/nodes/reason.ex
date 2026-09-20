@@ -41,6 +41,7 @@ defmodule Synapsis.Agent.Nodes.Reason do
               pending_tool_input: acc.pending_tool_input,
               pending_reasoning: acc.pending_reasoning,
               pending_reasoning_signature: acc.pending_reasoning_signature,
+              pending_provider_states: acc.pending_provider_states,
               tool_uses: acc.tool_uses
             })
             |> Map.delete(:awaiting_stream)

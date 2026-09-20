@@ -57,16 +57,31 @@ defmodule Synapsis.LLM do
 
     provider_type = provider_config[:type] || provider_config["type"] || provider_name
 
-    request =
-      %{
-        model: model,
-        max_tokens: Keyword.get(opts, :max_tokens, @default_max_tokens),
-        messages: messages
-      }
-      |> maybe_put(:system, Keyword.get(opts, :system))
-      |> maybe_put(:temperature, Keyword.get(opts, :temperature))
+    request_result =
+      Synapsis.Provider.Adapter.format_request(
+        Enum.map(messages, fn message ->
+          %{
+            role: message[:role] || message["role"],
+            parts: [%Synapsis.Part.Text{content: message[:content] || message["content"] || ""}]
+          }
+        end),
+        [],
+        %{
+          model: model,
+          max_tokens: Keyword.get(opts, :max_tokens, @default_max_tokens),
+          temperature: Keyword.get(opts, :temperature),
+          system_prompt: Keyword.get(opts, :system),
+          provider_type: provider_type,
+          provider_name: provider_name,
+          endpoint: provider_config[:base_url] || provider_config["base_url"],
+          stream: false
+        }
+      )
 
-    config = Map.put(provider_config, :type, provider_type)
+    config =
+      provider_config
+      |> Map.put(:type, provider_type)
+      |> Map.put_new(:provider_name, provider_name)
 
     Logger.info("llm_complete_started",
       provider: provider_name,
@@ -74,7 +89,12 @@ defmodule Synapsis.LLM do
       message_count: length(messages)
     )
 
-    case Synapsis.Provider.Adapter.complete(request, config) do
+    result =
+      with {:ok, request} <- request_result do
+        Synapsis.Provider.Adapter.complete(request, config)
+      end
+
+    case result do
       {:ok, text} = result ->
         Logger.info("llm_complete_succeeded",
           provider: provider_name,

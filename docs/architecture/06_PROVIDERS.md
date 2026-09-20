@@ -1,214 +1,170 @@
-# 06 — Provider Integration
+# 06 - Provider Integration
 
-## Architecture Overview
+## Ownership
 
-The provider layer uses an **Anthropic Messages API-shaped internal contract** as
-the canonical event format. All providers — Anthropic, OpenAI (and compatibles),
-and Google Gemini — are handled by a single unified `Adapter` module that delegates
-to per-provider transport plugins and pure-function mappers.
+Synapsis supports three provider wire protocols:
 
-### Module Topology
+- Anthropic Messages (`:anthropic`)
+- OpenAI Chat Completions and compatible endpoints (`:openai`)
+- Google Gemini GenerateContent (`:google`)
 
-```
-apps/synapsis_provider/lib/synapsis/provider/
-  adapter.ex            # unified entry: stream/2, cancel/1, models/1, format_request/3
-  event_mapper.ex       # raw provider JSON → Anthropic-shaped event tuples
-  message_mapper.ex     # Part.* structs → provider-specific wire format
-  model_registry.ex     # static model metadata: capabilities, context windows
-  registry.ex           # ETS-backed runtime config store
-  retry.ex              # exponential backoff for 429/5xx
+OpenAI Responses is not a supported Synapsis client protocol. The Backplane
+Responses observer is an independent host-side observation surface, not a
+request/stream codec used here.
 
-  transport/
-    anthropic.ex        # Anthropic Messages API specifics
-    openai.ex           # OpenAI chat completions + all compat (Ollama, OpenRouter, Groq, etc.)
-    google.ex           # Gemini API specifics
-    sse.ex              # shared SSE line parser
-```
+Provider responsibilities are split as follows:
 
-## Streaming Architecture
+| Layer | Responsibility |
+|---|---|
+| `Synapsis.Provider.MessageMapper` | Convert Synapsis messages, tools, and reasoning state into canonical `Backplane.AiProtocol` values. |
+| `Backplane.AiProtocol.Codec` | Encode canonical requests and decode provider responses, errors, and stream bytes. |
+| `Synapsis.Provider.EventMapper` | Convert canonical stream events into Synapsis runtime events. |
+| `Synapsis.Provider.Adapter` | Own HTTP execution, authentication headers, URL selection, timeouts, OAuth retry, stream codec state, event delivery, and cancellation. |
+| `Synapsis.Provider.Transport.*` | Provide model discovery where supported and default endpoint metadata. |
 
-All providers stream through the unified `Synapsis.Provider.Adapter`. The adapter
-resolves the transport type from the provider config, builds the HTTP request, parses
-SSE chunks, maps them to canonical events, and sends them to the caller process.
+There is no `Transport.stream/3` callback and no Synapsis-owned shared SSE
+parser. `Adapter` feeds response bytes directly to the protocol codec. The
+transport modules do not own request, response, error, or stream wire handling.
+
+## Dependency Boundary
+
+`synapsis_provider` consumes the published Hex package:
 
 ```elixir
-defmodule Synapsis.Provider.Adapter do
-  def stream(request, config) do
-    caller = self()
-    transport_type = resolve_transport_type(config[:type])
-
-    task = Task.Supervisor.async_nolink(Synapsis.Provider.TaskSupervisor, fn ->
-      # HTTP streaming with SSE parsing and event mapping inline
-      do_stream(transport_type, request, config, caller)
-    end)
-
-    {:ok, task.ref}
-  end
-
-  def cancel(ref) do
-    Task.Supervisor.terminate_child(Synapsis.Provider.TaskSupervisor, ref)
-    :ok
-  end
-
-  def format_request(messages, tools, opts) do
-    provider_type = resolve_transport_type(opts[:provider_type])
-    MessageMapper.build_request(provider_type, messages, tools, opts)
-  end
-end
+{:backplane_ai_protocol, "~> 1.5.0"}
 ```
 
-### Transport Resolution
+The resolved release and package checksum are locked in `mix.lock`. Builds no
+longer require a sibling Backplane checkout, so CI and fresh clones resolve the
+same protocol implementation from Hex.
 
-The adapter maps provider type strings to transport atoms:
+## Request Construction
 
-| Config Type                                          | Transport |
-|------------------------------------------------------|-----------|
-| `"anthropic"`                                         | `:anthropic` |
-| `"openai"`, `"openai_compat"`, `"local"`, `"openrouter"`, `"groq"`, `"deepseek"` | `:openai` |
-| `"google"`                                            | `:google` |
+`Adapter.format_request/3` delegates to `MessageMapper.build_request/4` and has
+a tagged result contract:
 
-### Backplane Preset
+```elixir
+{:ok, wire_request} | {:error, %Backplane.AiProtocol.Error{}}
+```
 
-Backplane is a named provider preset that uses the existing `openai` transport.
-The hosted endpoint defaults to `https://backplane.gsmlg.net/v1` and requires an
-access token. Local development commonly uses `http://localhost:4220/v1` and may
-run without authentication. Synapsis sends `Authorization: Bearer <token>` only
+`wire_request` is the provider-ready map returned by
+`Backplane.AiProtocol.Codec.encode_request/3`. Provider wire maps use string
+keys, including core fields such as `"model"` and `"stream"`. Callers pass the
+tagged result through to `Adapter.stream/2` or `Adapter.complete/2`; both reject
+an error tuple without making an HTTP request.
+
+The mapper preserves explicit `false` options, encodes every tool definition
+and historical tool call with `Synapsis.Provider.ToolName`, and supplies the
+codec with provider affinity (`profile`, `protocol`, `endpoint`, optional
+`account` and `workspace`, and `model`). The codecs reject unsupported or
+lossy conversions instead of silently dropping content.
+
+## Streaming And Cancellation
+
+`Adapter.stream/2` starts an async provider task and returns both the task PID
+and monitor reference:
+
+```elixir
+{:ok, %{pid: pid, ref: monitor_ref}}
+```
+
+The PID is the cancellation target; the monitor reference lets
+`Synapsis.Session.Stream` detect an unexpected provider-task exit. `cancel/1`
+accepts the returned handle or a PID and terminates the supervised task.
+
+The adapter sends these messages to its calling process:
+
+```elixir
+{:provider_chunk, event}
+:provider_done
+{:provider_error, reason}
+```
+
+For a successful HTTP response, the adapter initializes codec state, feeds
+each byte chunk with `Codec.stream_feed/3`, and closes the stream with
+`Codec.stream_finish/3`. The codec's canonical `:terminal` event is not exposed
+as a Synapsis chunk. `:provider_done` is emitted only after successful codec
+finish and stream-guard flush. HTTP failures, codec failures, unsupported
+mapped output, and guard violations emit `{:provider_error, reason}` and do not
+also emit `:provider_done`. An empty successful body is therefore a protocol
+error rather than a successful empty completion.
+
+The fenced session proxy forwards chunks only for the active stream. A
+matching task `:DOWN` becomes
+`{:provider_error, stream_ref, {:provider_exit, reason}}`, so collectors do not
+wait for the normal stream timeout after a provider task crashes.
+
+## Canonical Events
+
+The Backplane codecs produce `%Backplane.AiProtocol.StreamEvent{}` values.
+`EventMapper` maps the supported subset to Synapsis events:
+
+```elixir
+{:text_delta, text}
+{:reasoning_delta, text}
+{:tool_call_delta, index, call_id, name, arguments_delta}
+{:tool_call_done, index, call_id, name, content}
+{:provider_state, state_map}
+{:usage, usage}
+```
+
+Canonical text content can be emitted as a text delta. Other canonical content
+blocks are rejected explicitly as incompatible provider output. They are not
+ignored or treated as successful completion. Tool names are decoded back to
+their Synapsis names at this boundary.
+
+## Signed Provider State
+
+Anthropic signed thinking and Google thought signatures are opaque,
+provider-bound state. Stream events carry that state with its source profile,
+source protocol, and public affinity. Synapsis persists it on
+`Synapsis.Part.Reasoning.provider_states` with the reasoning content so session
+snapshots can replay it.
+
+Replay is deliberately strict. Signed reasoning without provider-origin
+metadata is rejected. The codec also requires the original protocol, profile,
+endpoint, and model, and checks optional account/workspace affinity when
+present. State cannot be replayed through a different provider origin. Google
+signed content that is not marked as thought is rejected because its semantics
+cannot be preserved.
+
+## Model Discovery And Endpoints
+
+- `Transport.Anthropic` discovers models for configured compatible endpoints
+  when requested and exposes the default Anthropic base URL.
+- `Transport.OpenAI` discovers models through the configured models endpoint
+  and exposes the default OpenAI base URL.
+- `Transport.Google` exposes the default Gemini base URL; model metadata comes
+  from `ModelRegistry`.
+
+`Synapsis.Provider.ModelRegistry` owns static capability metadata such as model
+IDs, context windows, output limits, tool support, reasoning support, image
+support, and streaming support. Anthropic and Google normally use this static
+metadata. OpenAI-compatible providers use dynamic discovery.
+
+`Synapsis.Provider.Registry` is the ETS-backed runtime provider configuration
+store. For supported provider types, `module_for/1` returns
+`Synapsis.Provider.Adapter`; the configured type selects the codec and endpoint
+behavior inside the adapter.
+
+Req automatic retries are disabled for streaming submissions. The adapter owns
+the bounded OpenAI OAuth refresh retry on a 401 response; callers receive other
+HTTP and codec failures through the normal tagged error or `provider_error`
+contract.
+
+## Backplane Preset
+
+Backplane remains an opt-in OpenAI-compatible provider preset. The hosted
+endpoint defaults to `https://backplane.gsmlg.net/v1` and requires an access
+token. Local development commonly uses `http://localhost:4220/v1` and may run
+without authentication. Synapsis sends `Authorization: Bearer <token>` only
 when a non-empty token is configured.
 
-The Backplane preset is opt-in rather than startup-seeded. Its base URL is
-editable during creation. Creation attempts model discovery through the
-OpenAI-compatible models endpoint (`<base_url>/models` when the URL already ends
-in `/v1`, otherwise `<base_url>/v1/models`) and caches models when discovery
-succeeds; a discovery failure leaves the provider configured for later retry.
+The preset is not startup-seeded, and its base URL remains editable during
+creation. Creation attempts model discovery through the OpenAI-compatible
+models endpoint (`<base_url>/models` when the URL already ends in `/v1`,
+otherwise `<base_url>/v1/models`) and caches models when discovery succeeds. A
+discovery failure leaves the provider configured for a later retry.
 
-## Internal Event Protocol
-
-`Session.Worker` receives these canonical Anthropic-shaped events via
-`handle_info({:provider_chunk, event}, state)`. The adapter emits the exact same
-event shapes regardless of which provider is being used.
-
-```elixir
-# Text streaming
-:text_start
-{:text_delta, text}
-
-# Tool use
-{:tool_use_start, tool_name, tool_use_id}
-{:tool_input_delta, partial_json}
-{:tool_use_complete, name, args}       # Google sends complete tool calls
-
-# Extended thinking / reasoning
-:reasoning_start
-{:reasoning_delta, text}
-
-# Block lifecycle
-:content_block_stop
-
-# Message lifecycle
-:message_start
-{:message_delta, delta_map}
-:done
-
-# Errors
-{:error, error_map}
-:ignore
-```
-
-The adapter also sends lifecycle signals to the caller:
-- `{:provider_chunk, event}` — for each SSE event
-- `:provider_done` — stream completed
-- `{:provider_error, reason}` — stream failed
-
-## Event Mapper
-
-`Synapsis.Provider.EventMapper` contains pure functions that normalize raw decoded
-JSON from each provider into the canonical event tuples:
-
-- **Anthropic**: Mostly passthrough — already the canonical format
-- **OpenAI**: `choices[0].delta.content` → `{:text_delta, text}`, `tool_calls` → `{:tool_use_start, ...}` / `{:tool_input_delta, ...}`, `reasoning_content` → `{:reasoning_delta, text}`
-- **Google**: `candidates[0].content.parts[0].text` → `{:text_delta, text}`, `functionCall` → `{:tool_use_complete, name, args}` (atomic, not streamed)
-
-## Message Mapper
-
-`Synapsis.Provider.MessageMapper` converts `Part.*` domain structs into
-provider-specific wire format:
-
-- **Anthropic**: `{role, content: [blocks]}` with `text`, `tool_use`, `tool_result` blocks; top-level `system` field; tools as `{name, description, input_schema}`
-- **OpenAI**: `{role, content: "text"}` (merged text); system prompt as first message; tools as `{type: "function", function: {name, description, parameters}}`
-- **Google**: `{role, parts: []}` with role mapping (`assistant` → `model`); `systemInstruction` field; tools as `{functionDeclarations: [...]}`
-
-## Model Registry
-
-`Synapsis.Provider.ModelRegistry` provides static metadata for known models:
-
-```elixir
-%{
-  id: "claude-sonnet-4-20250514",
-  name: "Claude Sonnet 4",
-  provider: "anthropic",
-  context_window: 200_000,
-  max_output_tokens: 64_000,
-  supports_tools: true,
-  supports_thinking: true,
-  supports_images: true,
-  supports_streaming: true
-}
-```
-
-For Anthropic and Google, models are returned from the static registry. For OpenAI
-(and compatibles), models are fetched dynamically from the `/v1/models` endpoint.
-
-## Provider Registry
-
-ETS-backed GenServer for runtime provider lookup and config caching:
-
-```elixir
-defmodule Synapsis.Provider.Registry do
-  use GenServer
-
-  def register(provider_name, config), do: :ets.insert(@table, {provider_name, config})
-  def get(provider_name), do: # lookup from ETS
-  def module_for(provider_name), do: {:ok, Synapsis.Provider.Adapter}  # always returns Adapter
-end
-```
-
-`module_for/1` always returns `Synapsis.Provider.Adapter` for known provider types.
-The adapter internally resolves the transport based on the config's `:type` field.
-
-## Error Handling & Retry
-
-```elixir
-defmodule Synapsis.Provider.Retry do
-  @max_retries 3
-  @backoff_base 1_000  # ms
-
-  def with_retry(fun, retries \\ @max_retries) do
-    case fun.() do
-      {:ok, result} -> {:ok, result}
-      {:error, %{status: status}} when status in [429, 500, 502, 503] and retries > 0 ->
-        backoff = @backoff_base * (@max_retries - retries + 1)
-        Process.sleep(backoff)
-        with_retry(fun, retries - 1)
-      {:error, reason} -> {:error, reason}
-    end
-  end
-end
-```
-
-## SSE Parser
-
-`Synapsis.Provider.Transport.SSE` provides shared pure functions for parsing
-Server-Sent Events data, used by all transports:
-
-```elixir
-SSE.parse_lines("data: {\"type\":\"text_delta\"}\ndata: [DONE]\n")
-# => [%{"type" => "text_delta"}, "[DONE]"]
-```
-
-## Transport Plugins
-
-Each transport module handles provider-specific HTTP concerns:
-
-- **`Transport.Anthropic`**: URL `{base_url}/v1/messages`, `x-api-key` header, `anthropic-version: 2023-06-01`
-- **`Transport.OpenAI`**: URL `{base_url}/v1/chat/completions`, `Authorization: Bearer` header (optional for local models), Azure URL pattern support
-- **`Transport.Google`**: URL `{base_url}/v1beta/models/{model}:streamGenerateContent?alt=sse&key={api_key}`
+These preset details do not create a fourth wire protocol and do not enable the
+OpenAI Responses client API.

@@ -13,6 +13,21 @@ defmodule Synapsis.Provider.AdapterTest do
   # ---------------------------------------------------------------------------
 
   describe "stream/2 Anthropic" do
+    test "empty successful response reports an incomplete stream", %{bypass: bypass, port: port} do
+      Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
+        Plug.Conn.send_resp(conn, 200, "")
+      end)
+
+      config = %{api_key: "test-key", base_url: "http://localhost:#{port}", type: "anthropic"}
+
+      request =
+        Adapter.format_request([], [], %{model: "claude-test", provider_type: "anthropic"})
+
+      assert {:ok, _ref} = Adapter.stream(request, config)
+      assert_receive {:provider_error, %Backplane.AiProtocol.Error{}}, 1_000
+      refute_receive :provider_done, 100
+    end
+
     test "receives streaming chunks", %{bypass: bypass, port: port} do
       Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
         conn
@@ -46,7 +61,6 @@ defmodule Synapsis.Provider.AdapterTest do
       text_deltas = for {:text_delta, text} <- chunks, do: text
       assert "Hello" in text_deltas
       assert " world" in text_deltas
-      assert :done in chunks
     end
 
     test "handles error response", %{bypass: bypass, port: port} do
@@ -70,7 +84,7 @@ defmodule Synapsis.Provider.AdapterTest do
       assert {:ok, _ref} = Adapter.stream(request, config)
 
       # Should receive provider_error for non-200 responses
-      assert_receive({:provider_error, "HTTP 401:" <> _}, 5000)
+      assert_receive({:provider_error, %Backplane.AiProtocol.Error{http_status: 401}}, 5000)
     end
   end
 
@@ -101,7 +115,7 @@ defmodule Synapsis.Provider.AdapterTest do
       request = Adapter.format_request([], [], %{model: "gpt-4o", provider_type: "openai"})
 
       assert {:ok, ref} = Adapter.stream(request, config)
-      assert :done in collect_chunks(ref)
+      assert collect_chunks(ref) == []
     end
 
     test "empty api_key omits Authorization header while streaming", %{
@@ -126,7 +140,7 @@ defmodule Synapsis.Provider.AdapterTest do
       request = Adapter.format_request([], [], %{model: "gpt-4o", provider_type: "openai"})
 
       assert {:ok, ref} = Adapter.stream(request, config)
-      assert :done in collect_chunks(ref)
+      assert collect_chunks(ref) == [{:text_delta, "Hi"}]
     end
 
     test "receives streaming chunks", %{bypass: bypass, port: port} do
@@ -164,7 +178,6 @@ defmodule Synapsis.Provider.AdapterTest do
       text_deltas = for {:text_delta, text} <- chunks, do: text
       assert "Hello" in text_deltas
       assert " there" in text_deltas
-      assert :done in chunks
     end
 
     test "Azure OpenAI uses deployment URL and api-key header", %{bypass: bypass, port: port} do
@@ -259,7 +272,6 @@ defmodule Synapsis.Provider.AdapterTest do
       chunks = collect_chunks(ref)
       text_deltas = for {:text_delta, text} <- chunks, do: text
       assert "OK" in text_deltas
-      assert :done in chunks
     end
 
     test "stream guard aborts a forbidden pattern split across text deltas", %{
@@ -305,6 +317,34 @@ defmodule Synapsis.Provider.AdapterTest do
   # ---------------------------------------------------------------------------
 
   describe "stream/2 Google" do
+    test "unsupported image output fails once and does not emit later text or done", %{
+      bypass: bypass,
+      port: port
+    } do
+      Bypass.expect_once(
+        bypass,
+        "POST",
+        "/v1beta/models/gemini-test:streamGenerateContent",
+        fn conn ->
+          conn
+          |> Plug.Conn.put_resp_content_type("text/event-stream")
+          |> Plug.Conn.send_resp(200, """
+          data: {"candidates":[{"content":{"parts":[{"inlineData":{"mimeType":"image/png","data":"AA=="}},{"text":"must-not-arrive"}],"role":"model"},"finishReason":"STOP"}]}
+
+          """)
+        end
+      )
+
+      config = %{api_key: "test-key", base_url: "http://localhost:#{port}", type: "google"}
+      request = Adapter.format_request([], [], %{model: "gemini-test", provider_type: "google"})
+
+      assert {:ok, _ref} = Adapter.stream(request, config)
+      assert_receive {:provider_error, %Backplane.AiProtocol.Error{kind: :incompatible}}, 1_000
+      refute_receive {:provider_chunk, {:text_delta, "must-not-arrive"}}, 100
+      refute_receive :provider_done, 100
+      refute_receive {:provider_error, _}, 100
+    end
+
     test "receives streaming chunks", %{bypass: bypass, port: port} do
       Bypass.expect_once(
         bypass,
@@ -338,7 +378,6 @@ defmodule Synapsis.Provider.AdapterTest do
       text_deltas = for {:text_delta, text} <- chunks, do: text
       assert "Hello" in text_deltas
       assert " world" in text_deltas
-      assert :done in chunks
     end
 
     test "sends API key in header, not URL query string", %{bypass: bypass, port: port} do
@@ -382,7 +421,8 @@ defmodule Synapsis.Provider.AdapterTest do
         |> Plug.Conn.send_resp(
           200,
           Jason.encode!(%{
-            "content" => [%{"type" => "text", "text" => "The answer is 4"}]
+            "content" => [%{"type" => "text", "text" => "The answer is 4"}],
+            "stop_reason" => "end_turn"
           })
         )
       end)
@@ -397,7 +437,8 @@ defmodule Synapsis.Provider.AdapterTest do
         })
 
       # complete/2 sets stream: false on the request
-      request = Map.put(request, :stream, false)
+      {:ok, request} = request
+      request = Map.put(request, "stream", false)
 
       assert {:ok, text} = Adapter.complete(request, config)
       assert text == "The answer is 4"
@@ -414,7 +455,10 @@ defmodule Synapsis.Provider.AdapterTest do
           200,
           Jason.encode!(%{
             "choices" => [
-              %{"message" => %{"role" => "assistant", "content" => "Hello"}}
+              %{
+                "message" => %{"role" => "assistant", "content" => "Hello"},
+                "finish_reason" => "stop"
+              }
             ]
           })
         )
@@ -442,7 +486,12 @@ defmodule Synapsis.Provider.AdapterTest do
         |> Plug.Conn.send_resp(
           200,
           Jason.encode!(%{
-            "choices" => [%{"message" => %{"role" => "assistant", "content" => "Hi"}}]
+            "choices" => [
+              %{
+                "message" => %{"role" => "assistant", "content" => "Hi"},
+                "finish_reason" => "stop"
+              }
+            ]
           })
         )
       end)
@@ -471,7 +520,12 @@ defmodule Synapsis.Provider.AdapterTest do
         |> Plug.Conn.send_resp(
           200,
           Jason.encode!(%{
-            "choices" => [%{"message" => %{"role" => "assistant", "content" => "Hi"}}]
+            "choices" => [
+              %{
+                "message" => %{"role" => "assistant", "content" => "Hi"},
+                "finish_reason" => "stop"
+              }
+            ]
           })
         )
       end)
@@ -495,7 +549,12 @@ defmodule Synapsis.Provider.AdapterTest do
         |> Plug.Conn.send_resp(
           200,
           Jason.encode!(%{
-            "choices" => [%{"message" => %{"role" => "assistant", "content" => "Hi"}}]
+            "choices" => [
+              %{
+                "message" => %{"role" => "assistant", "content" => "Hi"},
+                "finish_reason" => "stop"
+              }
+            ]
           })
         )
       end)
@@ -517,7 +576,10 @@ defmodule Synapsis.Provider.AdapterTest do
           200,
           Jason.encode!(%{
             "choices" => [
-              %{"message" => %{"role" => "assistant", "content" => "OK"}}
+              %{
+                "message" => %{"role" => "assistant", "content" => "OK"},
+                "finish_reason" => "stop"
+              }
             ]
           })
         )
@@ -567,7 +629,10 @@ defmodule Synapsis.Provider.AdapterTest do
             200,
             Jason.encode!(%{
               "candidates" => [
-                %{"content" => %{"parts" => [%{"text" => "Gemini response"}]}}
+                %{
+                  "content" => %{"parts" => [%{"text" => "Gemini response"}]},
+                  "finishReason" => "STOP"
+                }
               ]
             })
           )
@@ -579,7 +644,8 @@ defmodule Synapsis.Provider.AdapterTest do
       request =
         Adapter.format_request([], [], %{model: "gemini-2.0-flash", provider_type: "google"})
 
-      request = Map.put(request, :stream, false)
+      {:ok, request} = request
+      request = Map.put(request, "stream", false)
       assert {:ok, "Gemini response"} = Adapter.complete(request, config)
     end
 
@@ -602,7 +668,7 @@ defmodule Synapsis.Provider.AdapterTest do
         })
 
       assert {:error, reason} = Adapter.complete(request, config)
-      assert reason =~ "unexpected response"
+      assert reason =~ "Anthropic content must be a list"
     end
 
     test "OpenAI complete returns error for unexpected response format", %{
@@ -621,7 +687,7 @@ defmodule Synapsis.Provider.AdapterTest do
         Adapter.format_request([], [], %{model: "gpt-4o", provider_type: "openai"})
 
       assert {:error, reason} = Adapter.complete(request, config)
-      assert reason =~ "unexpected response"
+      assert reason =~ "OpenAI choices must be a list"
     end
 
     test "Google complete returns error for unexpected response format", %{
@@ -644,9 +710,10 @@ defmodule Synapsis.Provider.AdapterTest do
       request =
         Adapter.format_request([], [], %{model: "gemini-2.0-flash", provider_type: "google"})
 
-      request = Map.put(request, :stream, false)
+      {:ok, request} = request
+      request = Map.put(request, "stream", false)
       assert {:error, reason} = Adapter.complete(request, config)
-      assert reason =~ "unexpected response"
+      assert reason =~ "Google candidates must be a list"
     end
 
     test "OpenAI complete without api_key omits Authorization header", %{
@@ -662,7 +729,12 @@ defmodule Synapsis.Provider.AdapterTest do
         |> Plug.Conn.send_resp(
           200,
           Jason.encode!(%{
-            "choices" => [%{"message" => %{"role" => "assistant", "content" => "Hi"}}]
+            "choices" => [
+              %{
+                "message" => %{"role" => "assistant", "content" => "Hi"},
+                "finish_reason" => "stop"
+              }
+            ]
           })
         )
       end)
@@ -691,7 +763,7 @@ defmodule Synapsis.Provider.AdapterTest do
 
       request = Adapter.format_request([], [], %{model: "gpt-4o", provider_type: "openai"})
 
-      assert {:error, "rate_limit_exceeded"} = Adapter.complete(request, config)
+      assert {:error, "OpenAI provider request failed"} = Adapter.complete(request, config)
     end
   end
 
@@ -703,45 +775,48 @@ defmodule Synapsis.Provider.AdapterTest do
     test "formats for anthropic" do
       messages = [%{role: :user, parts: [%Synapsis.Part.Text{content: "Hello"}]}]
 
-      request =
+      {:ok, request} =
         Adapter.format_request(messages, [], %{
           model: "claude-sonnet-4-20250514",
           system_prompt: "You are helpful",
           provider_type: "anthropic"
         })
 
-      assert request.model == "claude-sonnet-4-20250514"
-      assert request.system == "You are helpful"
-      assert request.stream == true
+      assert request["model"] == "claude-sonnet-4-20250514"
+      assert request["system"] == [%{"type" => "text", "text" => "You are helpful"}]
+      assert request["stream"] == true
     end
 
     test "formats for openai" do
       messages = [%{role: :user, parts: [%Synapsis.Part.Text{content: "Hello"}]}]
 
-      request =
+      {:ok, request} =
         Adapter.format_request(messages, [], %{
           model: "gpt-4o",
           system_prompt: "You are helpful",
           provider_type: "openai"
         })
 
-      assert request.model == "gpt-4o"
-      assert length(request.messages) == 2
-      assert hd(request.messages).role == "system"
+      assert request["model"] == "gpt-4o"
+      assert length(request["messages"]) == 2
+      assert hd(request["messages"])["role"] == "system"
     end
 
     test "formats for google" do
       messages = [%{role: :user, parts: [%Synapsis.Part.Text{content: "Hello"}]}]
 
-      request =
+      {:ok, request} =
         Adapter.format_request(messages, [], %{
           model: "gemini-2.0-flash",
           system_prompt: "You are helpful",
           provider_type: "google"
         })
 
-      assert request.model == "gemini-2.0-flash"
-      assert request.systemInstruction == %{parts: [%{text: "You are helpful"}]}
+      assert request["model"] == "gemini-2.0-flash"
+
+      assert request["systemInstruction"] == %{
+               "parts" => [%{"text" => "You are helpful"}]
+             }
     end
   end
 

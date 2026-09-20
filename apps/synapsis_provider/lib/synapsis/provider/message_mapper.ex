@@ -1,328 +1,270 @@
 defmodule Synapsis.Provider.MessageMapper do
   @moduledoc """
-  Pure functions for converting `Part.*` domain structs into provider-specific
-  wire format request bodies.
-
-  Two directions:
-  - Outbound: `Part.*` messages → provider HTTP request body
-  - Tool formatting per provider
+  Converts Synapsis domain messages into canonical Backplane requests and
+  delegates provider wire encoding to `Backplane.AiProtocol.Codec`.
   """
 
+  alias Backplane.AiProtocol.{Codec, Error, Request}
   alias Synapsis.Provider.ToolName
+  alias Synapsis.Provider.Transport
 
-  # ---------------------------------------------------------------------------
-  # Public API
-  # ---------------------------------------------------------------------------
+  @limits %{
+    max_bytes: 32 * 1024 * 1024,
+    max_string_bytes: 32 * 1024 * 1024,
+    max_depth: 64
+  }
 
-  @doc """
-  Build a provider-specific request body from domain messages, tools, and opts.
+  @spec build_request(atom(), list(), list(), map()) :: {:ok, map()} | {:error, Error.t()}
+  def build_request(protocol, messages, tools, opts) do
+    model =
+      option(opts, :model) ||
+        Synapsis.Providers.default_model(option(opts, :provider_name) || Atom.to_string(protocol))
 
-  `provider_type` is an atom: `:anthropic`, `:openai`, or `:google`.
-  """
-  def build_request(:anthropic, messages, tools, opts) do
-    request = %{
-      model:
-        opts[:model] || Synapsis.Providers.default_model(opts[:provider_name] || "anthropic"),
-      max_tokens: opts[:max_tokens] || 8192,
-      stream: true,
-      messages: Enum.map(messages, &format_anthropic_message/1)
-    }
+    with {:ok, input} <- canonical_messages(messages),
+         {:ok, request} <-
+           Request.new(
+             %{
+               model: model,
+               input: system_message(opts) ++ input,
+               tools: Enum.map(tools, &canonical_tool(&1, protocol)),
+               settings: settings(protocol, opts),
+               extensions: extensions(protocol, opts)
+             },
+             limits: @limits
+           ) do
+      Codec.encode_request(protocol, request, codec_opts(protocol, model, opts))
+    end
+  end
 
-    request =
-      case opts[:system_prompt] do
-        nil -> request
-        prompt -> Map.put(request, :system, prompt)
+  defp canonical_messages(messages) do
+    Enum.reduce_while(messages, {:ok, []}, fn message, {:ok, acc} ->
+      case canonical_message(message) do
+        {:ok, items} -> {:cont, {:ok, acc ++ items}}
+        {:error, _error} = error -> {:halt, error}
       end
+    end)
+  end
 
-    case tools do
-      [] -> request
-      _ -> Map.put(request, :tools, Enum.map(tools, &format_anthropic_tool/1))
+  defp canonical_message(message) do
+    role = message |> field(:role) |> normalize_role()
+    parts = field(message, :parts) || []
+    {results, content_parts} = Enum.split_with(parts, &match?(%Synapsis.Part.ToolResult{}, &1))
+
+    with {:ok, content} <- canonical_parts(content_parts) do
+      messages = if content == [], do: [], else: [%{role: role, content: content}]
+
+      tool_results =
+        Enum.map(results, fn result ->
+          %{
+            role: :tool,
+            tool_call_id: result.tool_use_id,
+            status: if(result.is_error, do: :error, else: :success),
+            content: [%{type: :text, text: result.content}]
+          }
+        end)
+
+      {:ok, messages ++ tool_results}
     end
   end
 
-  def build_request(:openai, messages, tools, opts) do
-    request =
-      %{
-        model: opts[:model] || Synapsis.Providers.default_model(opts[:provider_name] || "openai"),
-        stream: true,
-        messages: format_openai_messages(messages, opts)
-      }
-      |> maybe_put_openai_reasoning_split(opts)
-
-    case tools do
-      [] -> request
-      _ -> Map.put(request, :tools, Enum.map(tools, &format_openai_tool/1))
-    end
-  end
-
-  def build_request(:google, messages, tools, opts) do
-    request = %{
-      model: opts[:model] || Synapsis.Providers.default_model(opts[:provider_name] || "google"),
-      stream: true,
-      contents: Enum.map(messages, &format_google_message/1)
-    }
-
-    request =
-      case opts[:system_prompt] do
-        nil -> request
-        prompt -> Map.put(request, :systemInstruction, %{parts: [%{text: prompt}]})
+  defp canonical_parts(parts) do
+    Enum.reduce_while(parts, {:ok, []}, fn part, {:ok, acc} ->
+      case canonical_part(part) do
+        {:ok, blocks} -> {:cont, {:ok, acc ++ List.wrap(blocks)}}
+        {:error, _error} = error -> {:halt, error}
       end
+    end)
+  end
 
-    case tools do
-      [] ->
-        request
+  defp canonical_part(%Synapsis.Part.Text{content: content}),
+    do: {:ok, %{type: :text, text: content}}
 
-      _ ->
-        Map.put(request, :tools, [%{functionDeclarations: Enum.map(tools, &format_google_tool/1)}])
+  defp canonical_part(%Synapsis.Part.Image{media_type: media_type, data: data}) do
+    {:ok,
+     %{
+       type: :image,
+       data: %{"source" => "base64", "media_type" => media_type, "data" => data}
+     }}
+  end
+
+  defp canonical_part(%Synapsis.Part.ToolUse{} = part) do
+    with {:ok, json} <- Jason.encode(part.input) do
+      {:ok,
+       %{
+         type: :tool_call,
+         tool_call: %{
+           id: part.tool_use_id,
+           native_id: part.tool_use_id,
+           name: ToolName.encode(part.tool),
+           raw_arguments: {:json, json}
+         }
+       }}
+    else
+      {:error, error} ->
+        Error.invalid("Tool call arguments are not JSON encodable: #{Exception.message(error)}")
     end
   end
 
-  # ---------------------------------------------------------------------------
-  # Anthropic message formatting — native format, minimal transform
-  # ---------------------------------------------------------------------------
+  defp canonical_part(%Synapsis.Part.Reasoning{} = part) do
+    states = Map.get(part, :provider_states, []) || []
 
-  defp format_anthropic_message(%{role: role, parts: parts}) do
-    %{role: to_string(role), content: Enum.map(parts, &format_anthropic_content/1)}
+    cond do
+      part.signature not in [nil, ""] and states == [] ->
+        Error.incompatible("Signed reasoning cannot be replayed without provider origin metadata")
+
+      true ->
+        reasoning =
+          if part.content in [nil, ""] or signed_state_only?(states),
+            do: [],
+            else: [%{type: :reasoning, data: part.content}]
+
+        with {:ok, provider_states} <- canonical_provider_states(states) do
+          {:ok, reasoning ++ Enum.map(provider_states, &%{type: :provider_state, state: &1})}
+        end
+    end
   end
 
-  defp format_anthropic_message(%{"role" => role, "parts" => parts}) do
-    %{role: role, content: Enum.map(parts, &format_anthropic_content/1)}
+  defp canonical_part(%Synapsis.Part.ToolResult{}) do
+    Error.invalid("Tool results must be encoded as tool messages")
   end
 
-  defp format_anthropic_content(%Synapsis.Part.Text{content: content}) do
-    %{type: "text", text: content}
+  defp canonical_part(part) do
+    name = if is_map(part) and Map.has_key?(part, :__struct__), do: part.__struct__, else: part
+    Error.incompatible("Unsupported message part: #{inspect(name)}")
   end
 
-  defp format_anthropic_content(%Synapsis.Part.ToolUse{tool: tool, tool_use_id: id, input: input}) do
-    %{type: "tool_use", id: id, name: tool, input: input}
-  end
-
-  defp format_anthropic_content(%Synapsis.Part.ToolResult{
-         tool_use_id: id,
-         content: content,
-         is_error: is_error
-       }) do
-    %{type: "tool_result", tool_use_id: id, content: content, is_error: is_error}
-  end
-
-  defp format_anthropic_content(%Synapsis.Part.Image{media_type: mt, data: data}) do
-    %{
-      type: "image",
-      source: %{
-        type: "base64",
-        media_type: mt,
-        data: data
+  defp canonical_provider_states(states) do
+    Enum.reduce_while(states, {:ok, []}, fn state, {:ok, acc} ->
+      attrs = %{
+        source_profile: field(state, :source_profile),
+        source_protocol: field(state, :source_protocol),
+        kind: field(state, :kind),
+        affinity: affinity_attrs(field(state, :affinity)),
+        payload: field(state, :payload),
+        payload_reference: field(state, :payload_reference),
+        constraints: field(state, :constraints) || %{},
+        extensions: field(state, :extensions) || %{}
       }
-    }
+
+      case Backplane.AiProtocol.ProviderState.new(attrs, limits: @limits) do
+        {:ok, provider_state} -> {:cont, {:ok, acc ++ [provider_state]}}
+        {:error, _error} = error -> {:halt, error}
+      end
+    end)
   end
 
-  defp format_anthropic_content(%Synapsis.Part.Reasoning{content: content, signature: signature}) do
-    %{type: "thinking", thinking: content}
-    |> maybe_put(:signature, signature)
+  defp signed_state_only?([]), do: false
+
+  defp signed_state_only?(states) do
+    Enum.all?(states, fn state ->
+      field(state, :kind) in ["anthropic_signed_thinking", "google_thought_signature"]
+    end)
   end
 
-  defp format_anthropic_content(%{content: content}) do
-    %{type: "text", text: to_string(content)}
+  defp affinity_attrs(nil), do: %{}
+
+  defp affinity_attrs(affinity) do
+    [:profile, :protocol, :endpoint, :account, :workspace, :model]
+    |> Enum.reduce(%{}, fn key, acc ->
+      case field(affinity, key) do
+        nil -> acc
+        value -> Map.put(acc, key, value)
+      end
+    end)
   end
 
-  defp format_anthropic_tool(tool) do
+  defp canonical_tool(tool, _protocol) do
     %{
-      name: tool.name,
+      name: ToolName.encode(tool.name),
       description: tool.description,
       input_schema: tool.parameters
     }
   end
 
-  defp maybe_put(map, _key, value) when value in [nil, ""], do: map
-  defp maybe_put(map, key, value), do: Map.put(map, key, value)
-
-  # ---------------------------------------------------------------------------
-  # OpenAI message formatting — chat completions format
-  # ---------------------------------------------------------------------------
-
-  defp format_openai_messages(messages, opts) do
-    system_messages =
-      case opts[:system_prompt] do
-        nil -> []
-        prompt -> [%{role: "system", content: prompt}]
-      end
-
-    # One source message can expand into several OpenAI messages: a user turn
-    # carrying N parallel tool results becomes N separate `role: "tool"` messages.
-    system_messages ++
-      Enum.flat_map(messages, fn msg -> List.wrap(format_openai_message(msg)) end)
-  end
-
-  defp format_openai_message(msg) do
-    {role, parts} = extract_role_parts(msg)
-    {tool_uses, other_parts} = Enum.split_with(parts, &match?(%Synapsis.Part.ToolUse{}, &1))
-
-    {tool_results, content_parts} =
-      Enum.split_with(other_parts, &match?(%Synapsis.Part.ToolResult{}, &1))
-
-    cond do
-      tool_results != [] ->
-        # Each tool_result becomes its own `role: "tool"` message. OpenAI-style
-        # APIs (incl. minimax) require exactly one tool reply per tool_call id;
-        # collapsing parallel results into one message drops answers and trips
-        # "tool call and result not match".
-        Enum.map(tool_results, fn result ->
-          %{
-            role: "tool",
-            tool_call_id: result.tool_use_id,
-            content: result.content
-          }
-        end)
-
-      tool_uses != [] ->
-        # Assistant messages with tool_use become tool_calls
-        base =
-          case content_parts do
-            [] ->
-              %{role: "assistant"}
-
-            _ ->
-              content_items = Enum.map(content_parts, &format_openai_content/1)
-              %{role: "assistant", content: merge_openai_content(content_items)}
-          end
-
-        tool_calls =
-          Enum.map(tool_uses, fn %Synapsis.Part.ToolUse{tool: tool, tool_use_id: id, input: input} ->
-            %{
-              id: id,
-              type: "function",
-              function: %{
-                name: ToolName.encode(tool),
-                arguments:
-                  case Jason.encode(input) do
-                    {:ok, json} -> json
-                    {:error, _} -> "{}"
-                  end
-              }
-            }
-          end)
-
-        Map.put(base, :tool_calls, tool_calls)
-
-      true ->
-        content_items = Enum.map(content_parts, &format_openai_content/1)
-        content = merge_openai_content(content_items)
-        %{role: to_string(role), content: content}
+  defp system_message(opts) do
+    case option(opts, :system_prompt) do
+      prompt when prompt in [nil, ""] -> []
+      prompt -> [%{role: :system, content: [%{type: :text, text: prompt}]}]
     end
   end
 
-  defp extract_role_parts(%{role: role, parts: parts}), do: {role, parts}
-  defp extract_role_parts(%{"role" => role, "parts" => parts}), do: {role, parts}
+  defp settings(:anthropic, opts),
+    do:
+      compact(%{
+        "max_tokens" => option(opts, :max_tokens) || 8192,
+        "temperature" => option(opts, :temperature)
+      })
 
-  defp format_openai_content(%Synapsis.Part.Text{content: content}), do: content
+  defp settings(:openai, opts),
+    do:
+      compact(%{
+        "max_tokens" => option(opts, :max_tokens),
+        "temperature" => option(opts, :temperature)
+      })
 
-  defp format_openai_content(%Synapsis.Part.Image{media_type: mt, data: data}) do
-    %{
-      type: "image_url",
-      image_url: %{
-        url: "data:#{mt};base64,#{data}"
+  defp settings(:google, opts),
+    do:
+      compact(%{
+        "maxOutputTokens" => option(opts, :max_tokens),
+        "temperature" => option(opts, :temperature)
+      })
+
+  defp extensions(:openai, opts) do
+    reasoning_split = option(opts, :reasoning_split)
+
+    if is_boolean(reasoning_split) or minimax?(opts) do
+      %{
+        "minimax::reasoning_split" =>
+          if(is_boolean(reasoning_split), do: reasoning_split, else: true)
       }
-    }
-  end
-
-  defp format_openai_content(%Synapsis.Part.ToolResult{content: content}), do: content
-  defp format_openai_content(%{content: content}), do: to_string(content)
-
-  defp merge_openai_content(items) do
-    has_multimodal = Enum.any?(items, &is_map/1)
-
-    if has_multimodal do
-      # When images are present, use content array format
-      Enum.map(items, fn
-        text when is_binary(text) -> %{type: "text", text: text}
-        map when is_map(map) -> map
-      end)
     else
-      merge_text_content(items)
+      %{}
     end
   end
 
-  defp merge_text_content([single]) when is_binary(single), do: single
-  defp merge_text_content(parts), do: Enum.join(parts, "\n")
+  defp extensions(_protocol, _opts), do: %{}
 
-  defp maybe_put_openai_reasoning_split(request, opts) do
-    cond do
-      is_boolean(opts[:reasoning_split]) ->
-        Map.put(request, :reasoning_split, opts[:reasoning_split])
-
-      minimax_openai?(opts) ->
-        Map.put(request, :reasoning_split, true)
-
-      true ->
-        request
-    end
-  end
-
-  defp minimax_openai?(opts) do
+  defp codec_opts(protocol, model, opts) do
     [
-      opts[:provider_name],
-      opts["provider_name"],
-      opts[:base_url],
-      opts["base_url"],
-      opts[:model],
-      opts["model"]
+      stream: option(opts, :stream) != false,
+      profile: option(opts, :provider_name) || Atom.to_string(protocol),
+      endpoint: option(opts, :endpoint) || option(opts, :base_url) || default_base_url(protocol),
+      account: option(opts, :account),
+      workspace: option(opts, :workspace),
+      model: model,
+      limits: @limits
     ]
-    |> Enum.any?(&contains_minimax?/1)
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
   end
 
-  defp contains_minimax?(value) when is_binary(value) do
-    value |> String.downcase() |> String.contains?("minimax")
+  defp minimax?(opts) do
+    [:provider_name, :base_url, :endpoint, :model]
+    |> Enum.map(&option(opts, &1))
+    |> Enum.any?(fn
+      value when is_binary(value) -> String.contains?(String.downcase(value), "minimax")
+      _ -> false
+    end)
   end
 
-  defp contains_minimax?(_value), do: false
+  defp compact(map), do: Map.reject(map, fn {_key, value} -> is_nil(value) end)
 
-  defp format_openai_tool(tool) do
-    %{
-      type: "function",
-      function: %{
-        name: ToolName.encode(tool.name),
-        description: tool.description,
-        parameters: tool.parameters
-      }
-    }
+  defp default_base_url(:anthropic), do: Transport.Anthropic.default_base_url()
+  defp default_base_url(:openai), do: Transport.OpenAI.default_base_url()
+  defp default_base_url(:google), do: Transport.Google.default_base_url()
+
+  defp normalize_role(role) when role in [:system, :developer, :user, :assistant, :tool], do: role
+  defp normalize_role("system"), do: :system
+  defp normalize_role("developer"), do: :developer
+  defp normalize_role("assistant"), do: :assistant
+  defp normalize_role("tool"), do: :tool
+  defp normalize_role(_), do: :user
+
+  defp option(opts, key) do
+    case Map.fetch(opts, key) do
+      {:ok, value} -> value
+      :error -> Map.get(opts, Atom.to_string(key))
+    end
   end
 
-  # ---------------------------------------------------------------------------
-  # Google message formatting — Gemini API format
-  # ---------------------------------------------------------------------------
-
-  defp format_google_message(%{role: role, parts: parts}) do
-    google_role = if to_string(role) == "assistant", do: "model", else: "user"
-    %{role: google_role, parts: Enum.map(parts, &format_google_content/1)}
-  end
-
-  defp format_google_message(%{"role" => role, "parts" => parts}) do
-    google_role = if role == "assistant", do: "model", else: "user"
-    %{role: google_role, parts: Enum.map(parts, &format_google_content/1)}
-  end
-
-  defp format_google_content(%Synapsis.Part.Text{content: content}), do: %{text: content}
-
-  defp format_google_content(%Synapsis.Part.Image{media_type: mt, data: data}) do
-    %{
-      inlineData: %{
-        mimeType: mt,
-        data: data
-      }
-    }
-  end
-
-  defp format_google_content(%Synapsis.Part.ToolUse{tool: tool, input: input}) do
-    %{functionCall: %{name: tool, args: input}}
-  end
-
-  defp format_google_content(%{content: content}), do: %{text: to_string(content)}
-
-  defp format_google_tool(tool) do
-    %{
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.parameters
-    }
-  end
+  defp field(map, key), do: Map.get(map, key) || Map.get(map, Atom.to_string(key))
 end

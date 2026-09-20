@@ -1,14 +1,21 @@
 defmodule Synapsis.Provider.Adapter do
   @moduledoc """
-  Unified entry point for all provider interactions. Replaces the per-provider
-  module pattern (`Anthropic`, `OpenAICompat`, `Google`) with a single adapter
-  that delegates to transport plugins and uses event/message mappers.
+  Host-owned HTTP adapter for Anthropic Messages, OpenAI Chat Completions, and
+  Google Gemini GenerateContent.
+
+  Request and response wire semantics are delegated to
+  `Backplane.AiProtocol.Codec`. This module owns endpoint selection,
+  authentication headers, HTTP execution, timeouts, stream codec state, event
+  delivery, OAuth retry, and task cancellation. Transport modules provide only
+  model discovery and default endpoint metadata.
 
   Implements the same public interface consumed by `Session.Stream`:
-  - `stream/2` — starts async streaming, sends events to caller
-  - `cancel/1` — cancels an in-progress stream
-  - `models/1` — returns available models
-  - `format_request/3` — builds provider-specific request body
+  - `stream/2` - starts async streaming and returns its PID/monitor handle
+  - `cancel/1` - cancels an in-progress stream by handle or PID
+  - `models/1` - returns available models
+  - `format_request/3` - returns a tagged provider wire-map result
+
+  OpenAI Responses is not a supported client protocol here.
   """
 
   alias Synapsis.Provider.{EventMapper, MessageMapper, ModelRegistry, StreamGuard}
@@ -20,19 +27,25 @@ defmodule Synapsis.Provider.Adapter do
   @request_timeout_ms 60_000
   @stream_guard_key :synapsis_stream_guard
   @stream_guard_violation_key :synapsis_stream_guard_violation
-
-  require Logger
+  @codec_state_key :synapsis_codec_state
+  @codec_error_key :synapsis_codec_error
 
   # ---------------------------------------------------------------------------
   # Public API
   # ---------------------------------------------------------------------------
 
   @doc """
-  Start a streaming request. Sends `{:provider_chunk, event}` and
-  `:provider_done` to the calling process.
+  Starts a streaming request and returns `{:ok, %{pid: pid, ref: monitor_ref}}`.
+
+  Sends `{:provider_chunk, event}` followed by `:provider_done` on successful
+  codec completion, or `{:provider_error, reason}` as the terminal signal on
+  failure. A provider error is never followed by `:provider_done`.
 
   `config` must include `:type` (e.g. "anthropic", "openai", "google").
   """
+  def stream({:ok, request}, config), do: stream(request, config)
+  def stream({:error, error}, _config), do: {:error, error}
+
   def stream(request, config) do
     caller = self()
     transport_type = resolve_transport_type(config[:type] || config["type"])
@@ -42,12 +55,17 @@ defmodule Synapsis.Provider.Adapter do
         do_stream(transport_type, request, config, caller)
       end)
 
-    {:ok, task.ref}
+    {:ok, %{pid: task.pid, ref: task.ref}}
   end
 
-  @doc "Cancel an in-progress stream."
-  def cancel(ref) do
-    Task.Supervisor.terminate_child(Synapsis.Provider.TaskSupervisor, ref)
+  @doc "Cancels an in-progress stream using its returned handle or task PID."
+  def cancel(%{pid: pid}) when is_pid(pid) do
+    Task.Supervisor.terminate_child(Synapsis.Provider.TaskSupervisor, pid)
+    :ok
+  end
+
+  def cancel(pid) when is_pid(pid) do
+    Task.Supervisor.terminate_child(Synapsis.Provider.TaskSupervisor, pid)
     :ok
   end
 
@@ -88,8 +106,11 @@ defmodule Synapsis.Provider.Adapter do
   end
 
   @doc """
-  Format messages and tools into provider-specific request format.
-  Delegates to `MessageMapper.build_request/4`.
+  Formats messages and tools as a provider wire request.
+
+  Returns `{:ok, wire_map}` or `{:error, %Backplane.AiProtocol.Error{}}`.
+  Successful provider wire maps use string keys. Delegates to
+  `MessageMapper.build_request/4`.
   """
   def format_request(messages, tools, opts) do
     provider_type = resolve_transport_type(opts[:provider_type] || opts[:type] || "anthropic")
@@ -101,9 +122,14 @@ defmodule Synapsis.Provider.Adapter do
   `{:error, reason}`. Intended for short auditor/analysis calls where
   the full response is needed before continuing.
 
-  `request` is a provider-format map (from `format_request/3`).
+  `request` may be the tagged result from `format_request/3` or an already
+  unwrapped provider wire map. An `{:error, reason}` input is returned without
+  making an HTTP request.
   `config` must include `:type` and `:api_key`.
   """
+  def complete({:ok, request}, config), do: complete(request, config)
+  def complete({:error, error}, _config), do: {:error, error}
+
   def complete(request, config) do
     transport_type = resolve_transport_type(config[:type] || config["type"])
 
@@ -122,183 +148,37 @@ defmodule Synapsis.Provider.Adapter do
   end
 
   # ---------------------------------------------------------------------------
-  # Streaming — inline SSE parse + event mapping per transport
+  # Streaming
   # ---------------------------------------------------------------------------
 
-  defp do_stream(:anthropic, request, config, caller) do
-    base_url = config[:base_url] || Transport.Anthropic.default_base_url()
-    url = "#{base_url}/v1/messages"
-
-    # Send both auth headers: official Anthropic uses x-api-key,
-    # compatible proxies (MiniMax, Moonshot, ZhipuAI) require Bearer.
-    headers =
-      [
-        {"anthropic-version", @anthropic_api_version},
-        {"content-type", "application/json"}
-      ] ++ anthropic_auth_headers(config[:api_key])
-
-    request_id = Ecto.UUID.generate()
-    session_id = config[:session_id]
-    start_time = System.monotonic_time()
-    stream_guard = stream_guard_state(config)
-
-    emit_request_telemetry(
-      session_id,
-      request_id,
-      :post,
-      url,
-      headers,
-      request,
-      :anthropic,
-      request[:model]
-    )
-
-    try do
-      resp =
-        Req.post!(url,
-          headers: headers,
-          json: request,
-          receive_timeout: @stream_timeout_ms,
-          compressed: false,
-          retry: false,
-          redirect: false,
-          into: fn {:data, data}, {req, resp} ->
-            {events, buffer} = Transport.SSE.accumulate_and_parse(data, resp.body || "")
-            stream_guard = response_stream_guard(resp, stream_guard)
-
-            case emit_mapped_events(:anthropic, events, caller, stream_guard) do
-              {:ok, stream_guard} ->
-                {:cont, {req, put_stream_response_state(resp, buffer, stream_guard)}}
-
-              {:violation, stream_guard} ->
-                resp =
-                  resp
-                  |> put_stream_response_state(buffer, stream_guard)
-                  |> mark_stream_guard_violation()
-
-                {:halt, {req, resp}}
-            end
-          end
-        )
-
-      resp = finish_stream_guard(resp, caller)
-
-      emit_response_telemetry(session_id, request_id, resp, start_time)
-
-      unless stream_guard_violation?(resp) do
-        handle_stream_response(resp, caller)
-      end
-    rescue
-      e in [Req.TransportError, RuntimeError, Jason.DecodeError] ->
-        emit_error_telemetry(session_id, request_id, e, start_time)
-        send(caller, {:provider_error, Exception.message(e)})
-    end
-  end
-
-  defp do_stream(:openai, request, config, caller) do
-    case do_openai_stream(request, config, caller) do
-      {:retry_auth, _resp} ->
+  defp do_stream(:openai = protocol, request, config, caller) do
+    case perform_stream(protocol, request, config, caller) do
+      {:retry_auth, _response} ->
         case maybe_refresh_oauth(config) do
           {:ok, new_config} ->
-            do_openai_stream(request, new_config, caller)
+            perform_stream(protocol, request, Map.merge(config, new_config), caller)
 
           _ ->
             send(caller, {:provider_error, "HTTP 401: Authentication failed"})
         end
 
-      _ ->
-        :ok
+      result ->
+        result
     end
   end
 
-  defp do_stream(:google, request, config, caller) do
-    base_url = config[:base_url] || Transport.Google.default_base_url()
-    model = request[:model] || "gemini-2.5-flash"
+  defp do_stream(protocol, request, config, caller),
+    do: perform_stream(protocol, request, config, caller)
 
-    url = "#{base_url}/v1beta/models/#{model}:streamGenerateContent?alt=sse"
-
-    headers = [{"content-type", "application/json"}, {"x-goog-api-key", config[:api_key]}]
-    body = Map.drop(request, [:model, :stream])
-
+  defp perform_stream(protocol, request, config, caller) do
+    {url, headers, body} = request_parts(protocol, request, config, true)
     request_id = Ecto.UUID.generate()
-    session_id = config[:session_id]
+    session_id = config[:session_id] || config["session_id"]
     start_time = System.monotonic_time()
-    stream_guard = stream_guard_state(config)
 
-    emit_request_telemetry(session_id, request_id, :post, url, headers, body, :google, model)
+    codec_state =
+      Backplane.AiProtocol.Codec.stream_new(protocol, codec_opts(protocol, request, config))
 
-    try do
-      resp =
-        Req.post!(url,
-          headers: headers,
-          json: body,
-          receive_timeout: @stream_timeout_ms,
-          compressed: false,
-          retry: false,
-          redirect: false,
-          into: fn {:data, data}, {req, resp} ->
-            {events, buffer} = Transport.SSE.accumulate_and_parse(data, resp.body || "")
-            stream_guard = response_stream_guard(resp, stream_guard)
-
-            case emit_mapped_events(:google, events, caller, stream_guard) do
-              {:ok, stream_guard} ->
-                {:cont, {req, put_stream_response_state(resp, buffer, stream_guard)}}
-
-              {:violation, stream_guard} ->
-                resp =
-                  resp
-                  |> put_stream_response_state(buffer, stream_guard)
-                  |> mark_stream_guard_violation()
-
-                {:halt, {req, resp}}
-            end
-          end
-        )
-
-      resp = finish_stream_guard(resp, caller)
-
-      emit_response_telemetry(session_id, request_id, resp, start_time)
-
-      unless stream_guard_violation?(resp) do
-        handle_stream_response(resp, caller)
-      end
-    rescue
-      e in [Req.TransportError, RuntimeError, Jason.DecodeError] ->
-        emit_error_telemetry(session_id, request_id, e, start_time)
-        send(caller, {:provider_error, Exception.message(e)})
-    end
-  end
-
-  # ---------------------------------------------------------------------------
-  # OpenAI stream/complete with 401 retry support
-  # ---------------------------------------------------------------------------
-
-  defp do_openai_stream(request, config, caller) do
-    base_url = config[:base_url] || config["base_url"] || Transport.OpenAI.default_base_url()
-
-    {url, headers, body} =
-      if config[:azure] || config["azure"] do
-        model = request[:model] || "gpt-4.1"
-        api_version = config[:api_version] || config["api_version"] || "2024-02-15-preview"
-
-        url =
-          "#{base_url}/openai/deployments/#{model}/chat/completions?api-version=#{api_version}"
-
-        headers = [
-          {"api-key", config[:api_key] || config["api_key"]},
-          {"content-type", "application/json"}
-        ]
-
-        {url, headers, Map.drop(request, [:model])}
-      else
-        headers = [{"content-type", "application/json"}] ++ openai_auth_headers(config)
-
-        {openai_chat_completions_url(base_url), headers, request}
-      end
-
-    request_id = Ecto.UUID.generate()
-    session_id = config[:session_id]
-    start_time = System.monotonic_time()
     stream_guard = stream_guard_state(config)
 
     emit_request_telemetry(
@@ -308,12 +188,12 @@ defmodule Synapsis.Provider.Adapter do
       url,
       headers,
       body,
-      :openai,
-      request[:model]
+      protocol,
+      request["model"] || request[:model]
     )
 
     try do
-      resp =
+      response =
         Req.post!(url,
           headers: headers,
           json: body,
@@ -321,53 +201,115 @@ defmodule Synapsis.Provider.Adapter do
           compressed: false,
           retry: false,
           redirect: false,
-          into: fn {:data, data}, {req, resp} ->
-            {events, buffer} = Transport.SSE.accumulate_and_parse(data, resp.body || "")
-            stream_guard = response_stream_guard(resp, stream_guard)
+          into: fn {:data, data}, {req, response} ->
+            if response.status in 200..299 do
+              state = response_codec_state(response, codec_state)
+              guard = response_stream_guard(response, stream_guard)
 
-            case emit_mapped_events(:openai, events, caller, stream_guard) do
-              {:ok, stream_guard} ->
-                {:cont, {req, put_stream_response_state(resp, buffer, stream_guard)}}
+              case Backplane.AiProtocol.Codec.stream_feed(protocol, state, data) do
+                {:ok, state, events} ->
+                  case emit_mapped_events(events, caller, guard) do
+                    {:ok, guard} ->
+                      {:cont, {req, put_stream_response_state(response, state, guard)}}
 
-              {:violation, stream_guard} ->
-                resp =
-                  resp
-                  |> put_stream_response_state(buffer, stream_guard)
-                  |> mark_stream_guard_violation()
+                    {:violation, guard} ->
+                      response =
+                        response
+                        |> put_stream_response_state(state, guard)
+                        |> mark_stream_guard_violation()
 
-                {:halt, {req, resp}}
+                      {:halt, {req, response}}
+                  end
+
+                {:error, error, state} ->
+                  response =
+                    response
+                    |> put_stream_response_state(state, guard)
+                    |> put_codec_error(error)
+
+                  {:halt, {req, response}}
+              end
+            else
+              {:cont, {req, %{response | body: (response.body || "") <> data}}}
             end
           end
         )
 
-      resp = finish_stream_guard(resp, caller)
-
-      emit_response_telemetry(session_id, request_id, resp, start_time)
-
-      cond do
-        stream_guard_violation?(resp) ->
-          :ok
-
-        resp.status == 401 and config[:oauth] ->
-          {:retry_auth, resp}
-
-        true ->
-          handle_stream_response(resp, caller)
-      end
+      emit_response_telemetry(session_id, request_id, response, start_time)
+      finish_stream_response(protocol, request, config, response, caller)
     rescue
-      e in [Req.TransportError, RuntimeError, Jason.DecodeError] ->
-        emit_error_telemetry(session_id, request_id, e, start_time)
-        send(caller, {:provider_error, Exception.message(e)})
+      error in [Req.TransportError, RuntimeError, Jason.DecodeError] ->
+        emit_error_telemetry(session_id, request_id, error, start_time)
+        send(caller, {:provider_error, Exception.message(error)})
     end
   end
 
-  # ---------------------------------------------------------------------------
-  # Stream response handling — uses accumulated raw data for error extraction
-  # ---------------------------------------------------------------------------
+  defp finish_stream_response(:openai, request, config, %{status: 401} = response, caller) do
+    if config[:oauth] == true or config["oauth"] == true do
+      {:retry_auth, response}
+    else
+      finish_stream_response_body(:openai, request, config, response, caller)
+    end
+  end
 
-  defp emit_mapped_events(provider, events, caller, stream_guard) do
-    Enum.reduce_while(events, {:ok, stream_guard}, fn chunk, {:ok, stream_guard} ->
-      event = EventMapper.map_event(provider, chunk)
+  defp finish_stream_response(protocol, request, config, response, caller) do
+    finish_stream_response_body(protocol, request, config, response, caller)
+  end
+
+  defp finish_stream_response_body(protocol, request, config, response, caller) do
+    cond do
+      stream_guard_violation?(response) ->
+        :ok
+
+      error = Map.get(response.private || %{}, @codec_error_key) ->
+        send(caller, {:provider_error, error})
+
+      response.status not in 200..299 ->
+        {:error, error} =
+          Backplane.AiProtocol.Codec.decode_error(
+            protocol,
+            response.status,
+            resp_headers(response),
+            response.body,
+            codec_opts(protocol, request, config)
+          )
+
+        send(caller, {:provider_error, error})
+
+      true ->
+        state =
+          response_codec_state(
+            response,
+            Backplane.AiProtocol.Codec.stream_new(
+              protocol,
+              codec_opts(protocol, request, config)
+            )
+          )
+
+        case Backplane.AiProtocol.Codec.stream_finish(protocol, state, :eof) do
+          {:ok, _state, events} ->
+            guard = response_stream_guard(response, stream_guard_state(config))
+
+            case emit_mapped_events(events, caller, guard) do
+              {:ok, guard} ->
+                case flush_stream_guard(caller, guard) do
+                  {:ok, _guard} -> send(caller, :provider_done)
+                  {:violation, _guard} -> :ok
+                end
+
+              {:violation, _guard} ->
+                :ok
+            end
+
+          {:error, error, _state} ->
+            send(caller, {:provider_error, error})
+        end
+    end
+  end
+
+  defp emit_mapped_events(events, caller, stream_guard) do
+    Enum.reduce_while(events, {:ok, stream_guard}, fn event, {:ok, stream_guard} ->
+      event = EventMapper.map_event(event)
 
       case emit_provider_event(caller, event, stream_guard) do
         {:ok, stream_guard} -> {:cont, {:ok, stream_guard}}
@@ -376,8 +318,13 @@ defmodule Synapsis.Provider.Adapter do
     end)
   end
 
+  defp emit_provider_event(caller, {:error, error}, stream_guard) do
+    send(caller, {:provider_error, error})
+    {:violation, stream_guard}
+  end
+
   defp emit_provider_event(caller, event, nil) do
-    send_provider_event(caller, event)
+    if event != :ignore, do: send_provider_event(caller, event)
     {:ok, nil}
   end
 
@@ -399,7 +346,7 @@ defmodule Synapsis.Provider.Adapter do
 
       :skip ->
         with {:ok, stream_guard} <- maybe_flush_guard_before_event(caller, stream_guard, event) do
-          send_provider_event(caller, event)
+          if event != :ignore, do: send_provider_event(caller, event)
           {:ok, stream_guard}
         end
     end
@@ -450,6 +397,7 @@ defmodule Synapsis.Provider.Adapter do
   end
 
   defp flush_stream_guard(_caller, %{rebuild: nil} = stream_guard), do: {:ok, stream_guard}
+  defp flush_stream_guard(_caller, nil), do: {:ok, nil}
 
   defp flush_stream_guard(caller, stream_guard) do
     case StreamGuard.finish(stream_guard.scanner) do
@@ -496,31 +444,23 @@ defmodule Synapsis.Provider.Adapter do
     Map.get(resp.private || %{}, @stream_guard_key, initial_stream_guard)
   end
 
-  defp put_stream_response_state(resp, buffer, stream_guard) do
-    private = Map.put(resp.private || %{}, @stream_guard_key, stream_guard)
-    %{resp | body: buffer, private: private}
+  defp response_codec_state(response, initial_state) do
+    Map.get(response.private || %{}, @codec_state_key, initial_state)
   end
 
-  defp finish_stream_guard(resp, caller) do
-    cond do
-      stream_guard_violation?(resp) ->
-        resp
+  defp put_stream_response_state(response, codec_state, stream_guard) do
+    private =
+      response.private
+      |> Kernel.||(%{})
+      |> Map.put(@codec_state_key, codec_state)
+      |> Map.put(@stream_guard_key, stream_guard)
 
-      stream_guard = Map.get(resp.private || %{}, @stream_guard_key) ->
-        case flush_stream_guard(caller, stream_guard) do
-          {:ok, stream_guard} ->
-            private = Map.put(resp.private || %{}, @stream_guard_key, stream_guard)
-            %{resp | private: private}
+    %{response | private: private}
+  end
 
-          {:violation, stream_guard} ->
-            resp
-            |> put_stream_response_state(resp.body, stream_guard)
-            |> mark_stream_guard_violation()
-        end
-
-      true ->
-        resp
-    end
+  defp put_codec_error(response, error) do
+    private = Map.put(response.private || %{}, @codec_error_key, error)
+    %{response | private: private}
   end
 
   defp mark_stream_guard_violation(resp) do
@@ -538,54 +478,15 @@ defmodule Synapsis.Provider.Adapter do
 
   defp send_provider_event(caller, event), do: send(caller, {:provider_chunk, event})
 
-  defp handle_stream_response(resp, caller) do
-    if resp.status >= 400 do
-      error_msg = extract_error(resp)
-      send(caller, {:provider_error, "HTTP #{resp.status}: #{error_msg}"})
-    else
-      send(caller, :provider_done)
-    end
-  end
-
   # ---------------------------------------------------------------------------
-  # Synchronous complete (auditor path)
+  # Synchronous complete
   # ---------------------------------------------------------------------------
 
-  defp do_complete(:anthropic, request, config) do
-    base_url = config[:base_url] || Transport.Anthropic.default_base_url()
-    url = "#{base_url}/v1/messages"
-
-    body = Map.merge(request, %{stream: false})
-
-    headers =
-      [
-        {"anthropic-version", @anthropic_api_version},
-        {"content-type", "application/json"}
-      ] ++ anthropic_auth_headers(config[:api_key])
-
-    case Req.post(url, headers: headers, json: body, receive_timeout: @request_timeout_ms) do
-      {:ok, response} ->
-        case response.body do
-          %{"content" => [%{"text" => text} | _]} ->
-            {:ok, text}
-
-          %{"error" => %{"message" => msg}} ->
-            {:error, msg}
-
-          _other ->
-            {:error, "unexpected response format"}
-        end
-
-      {:error, exception} ->
-        {:error, Exception.message(exception)}
-    end
-  end
-
-  defp do_complete(:openai, request, config) do
-    case do_openai_complete(request, config) do
-      {:retry_auth, _} ->
+  defp do_complete(:openai = protocol, request, config) do
+    case perform_complete(protocol, request, config) do
+      {:retry_auth, _response} ->
         case maybe_refresh_oauth(config) do
-          {:ok, new_config} -> do_openai_complete(request, new_config)
+          {:ok, new_config} -> perform_complete(protocol, request, Map.merge(config, new_config))
           _ -> {:error, "HTTP 401: Authentication failed"}
         end
 
@@ -594,65 +495,120 @@ defmodule Synapsis.Provider.Adapter do
     end
   end
 
-  defp do_complete(:google, request, config) do
-    base_url = config[:base_url] || Transport.Google.default_base_url()
-    model = request[:model] || "gemini-2.5-flash"
-    url = "#{base_url}/v1beta/models/#{model}:generateContent"
+  defp do_complete(protocol, request, config), do: perform_complete(protocol, request, config)
 
-    body = Map.drop(request, [:model, :stream])
-
-    case Req.post(url,
-           headers: [{"content-type", "application/json"}, {"x-goog-api-key", config[:api_key]}],
-           json: body,
-           receive_timeout: @request_timeout_ms
-         ) do
-      {:ok, response} ->
-        case response.body do
-          %{"candidates" => [%{"content" => %{"parts" => [%{"text" => text} | _]}} | _]} ->
-            {:ok, text}
-
-          _other ->
-            {:error, "unexpected response format"}
-        end
-
-      {:error, exception} ->
-        {:error, Exception.message(exception)}
-    end
-  end
-
-  # ---------------------------------------------------------------------------
-  # OpenAI complete with 401 retry support
-  # ---------------------------------------------------------------------------
-
-  defp do_openai_complete(request, config) do
-    base_url = config[:base_url] || config["base_url"] || Transport.OpenAI.default_base_url()
-    url = openai_chat_completions_url(base_url)
-
-    body = Map.merge(request, %{stream: false})
-
-    headers = [{"content-type", "application/json"}] ++ openai_auth_headers(config)
+  defp perform_complete(protocol, request, config) do
+    {url, headers, body} = request_parts(protocol, request, config, false)
 
     case Req.post(url, headers: headers, json: body, receive_timeout: @request_timeout_ms) do
-      {:ok, response} ->
-        if response.status == 401 and config[:oauth] do
+      {:ok, %{status: 401} = response} ->
+        if protocol == :openai and (config[:oauth] == true or config["oauth"] == true) do
           {:retry_auth, response}
         else
-          case response.body do
-            %{"choices" => [%{"message" => %{"content" => text}} | _]} ->
-              {:ok, text}
-
-            %{"error" => %{"message" => msg}} ->
-              {:error, msg}
-
-            _other ->
-              {:error, "unexpected response format"}
-          end
+          decode_complete_response(protocol, request, config, response)
         end
+
+      {:ok, response} ->
+        decode_complete_response(protocol, request, config, response)
 
       {:error, exception} ->
         {:error, Exception.message(exception)}
     end
   end
+
+  defp decode_complete_response(protocol, request, config, response) do
+    case Backplane.AiProtocol.Codec.decode_response(
+           protocol,
+           response.status,
+           resp_headers(response),
+           response.body,
+           codec_opts(protocol, request, config)
+         ) do
+      {:ok, canonical_response} -> response_text(canonical_response.output)
+      {:error, error} -> {:error, error_message(error)}
+    end
+  end
+
+  defp response_text(output) do
+    text =
+      output
+      |> Enum.filter(&(&1.type == :text))
+      |> Enum.map_join("", & &1.text)
+
+    if text == "", do: {:error, "unexpected response format"}, else: {:ok, text}
+  end
+
+  defp request_parts(:anthropic, request, config, stream?) do
+    base_url = config[:base_url] || config["base_url"] || Transport.Anthropic.default_base_url()
+
+    headers =
+      [{"anthropic-version", @anthropic_api_version}, {"content-type", "application/json"}] ++
+        anthropic_auth_headers(config[:api_key] || config["api_key"])
+
+    {"#{base_url}/v1/messages", headers, Map.put(request, "stream", stream?)}
+  end
+
+  defp request_parts(:openai, request, config, stream?) do
+    base_url = config[:base_url] || config["base_url"] || Transport.OpenAI.default_base_url()
+    body = Map.put(request, "stream", stream?)
+
+    if config[:azure] || config["azure"] do
+      model = request["model"] || request[:model] || "gpt-4.1"
+      api_version = config[:api_version] || config["api_version"] || "2024-02-15-preview"
+      url = "#{base_url}/openai/deployments/#{model}/chat/completions?api-version=#{api_version}"
+
+      headers = [
+        {"api-key", config[:api_key] || config["api_key"]},
+        {"content-type", "application/json"}
+      ]
+
+      {url, headers, Map.drop(body, ["model", :model])}
+    else
+      headers = [{"content-type", "application/json"}] ++ openai_auth_headers(config)
+      {openai_chat_completions_url(base_url), headers, body}
+    end
+  end
+
+  defp request_parts(:google, request, config, stream?) do
+    base_url = config[:base_url] || config["base_url"] || Transport.Google.default_base_url()
+    model = request["model"] || request[:model] || "gemini-2.5-flash"
+    method = if stream?, do: "streamGenerateContent?alt=sse", else: "generateContent"
+
+    headers = [
+      {"content-type", "application/json"},
+      {"x-goog-api-key", config[:api_key] || config["api_key"]}
+    ]
+
+    body = Map.drop(request, ["model", "stream", :model, :stream])
+    {"#{base_url}/v1beta/models/#{model}:#{method}", headers, body}
+  end
+
+  defp codec_opts(protocol, request, config) do
+    base_url =
+      config[:base_url] || config["base_url"] ||
+        case protocol do
+          :anthropic -> Transport.Anthropic.default_base_url()
+          :openai -> Transport.OpenAI.default_base_url()
+          :google -> Transport.Google.default_base_url()
+        end
+
+    [
+      profile:
+        config[:provider_name] || config["provider_name"] || config[:name] || config["name"] ||
+          Atom.to_string(protocol),
+      endpoint: base_url,
+      account: config[:account] || config["account"],
+      workspace: config[:workspace] || config["workspace"],
+      model: request["model"] || request[:model]
+    ]
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+  end
+
+  defp error_message(%{message: message, provider_code: code}) do
+    message || code || "API request failed"
+  end
+
+  defp error_message(error), do: inspect(error)
 
   defp openai_auth_headers(config) do
     case config[:api_key] || config["api_key"] do
@@ -673,26 +629,6 @@ defmodule Synapsis.Provider.Adapter do
       "#{base_url}/v1/chat/completions"
     end
   end
-
-  # ---------------------------------------------------------------------------
-  # Error extraction
-  # ---------------------------------------------------------------------------
-
-  defp extract_error(%{body: body}) when is_binary(body) do
-    case Jason.decode(body) do
-      {:ok, %{"error" => %{"message" => msg}}} -> String.slice(msg, 0, 200)
-      {:ok, %{"error" => msg}} when is_binary(msg) -> String.slice(msg, 0, 200)
-      _ -> "API request failed"
-    end
-  end
-
-  defp extract_error(%{body: %{"error" => %{"message" => msg}}}), do: String.slice(msg, 0, 200)
-
-  defp extract_error(%{body: %{"error" => msg}}) when is_binary(msg),
-    do: String.slice(msg, 0, 200)
-
-  defp extract_error(%{body: _body}), do: "API request failed"
-  defp extract_error(_), do: "unknown error"
 
   # Sends both x-api-key (official Anthropic) and Authorization: Bearer
   # (required by MiniMax, Moonshot, ZhipuAI and other Anthropic-compat proxies).

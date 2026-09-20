@@ -22,9 +22,10 @@ defmodule Synapsis.Agent.Nodes.BuildPromptTest do
     assert {:next, :default, new_state} =
              BuildPrompt.run(build_state(session, %{system_prompt: "Base prompt"}), %{})
 
-    assert new_state.request.system =~ "Mid-turn user guidance"
-    assert new_state.request.system =~ "focus on the current failing test"
-    assert new_state.request_agent_config.system_prompt == new_state.request.system
+    request_system = system_text(new_state.request)
+    assert request_system =~ "Mid-turn user guidance"
+    assert request_system =~ "focus on the current failing test"
+    assert new_state.request_agent_config.system_prompt == request_system
     assert new_state.agent_config.system_prompt == "Base prompt"
     assert [%{id: id, status: "consumed"}] = steer_inputs(session.id)
     assert id == steer.id
@@ -40,7 +41,8 @@ defmodule Synapsis.Agent.Nodes.BuildPromptTest do
 
     assert {:next, :default, new_state} = BuildPrompt.run(build_state(session), %{})
 
-    assert new_state.request.system =~ "Mid-turn user guidance:\nfirst steer\n\nsecond steer"
+    assert system_text(new_state.request) =~
+             "Mid-turn user guidance:\nfirst steer\n\nsecond steer"
 
     assert [%{id: first_id, status: "consumed"}, %{id: second_id, status: "consumed"}] =
              steer_inputs(session.id)
@@ -54,7 +56,7 @@ defmodule Synapsis.Agent.Nodes.BuildPromptTest do
 
     assert {:next, :default, new_state} = BuildPrompt.run(build_state(session), %{})
 
-    refute new_state.request.system =~ "Mid-turn user guidance"
+    refute system_text(new_state.request) =~ "Mid-turn user guidance"
     assert [] = steer_inputs(session.id)
   end
 
@@ -64,7 +66,7 @@ defmodule Synapsis.Agent.Nodes.BuildPromptTest do
 
     assert {:next, :default, new_state} = BuildPrompt.run(build_state(session), %{})
 
-    refute new_state.request.system =~ "Mid-turn user guidance"
+    refute system_text(new_state.request) =~ "Mid-turn user guidance"
     assert [%{id: id, status: "consumed"}] = steer_inputs(session.id)
     assert id == steer.id
   end
@@ -77,6 +79,23 @@ defmodule Synapsis.Agent.Nodes.BuildPromptTest do
       BuildPrompt.run(build_state(session, %{tools: :invalid}), %{})
     end
 
+    assert [%{id: id, status: "queued"}] = steer_inputs(session.id)
+    assert id == steer.id
+  end
+
+  test "keeps queued steers queued when canonical request preparation fails", %{session: session} do
+    {:ok, _message} = append_user_message(session.id, "fix it")
+
+    {:ok, _message} =
+      Message.append(session.id, %Message{
+        role: "assistant",
+        parts: [%Part.Reasoning{content: "private", signature: "legacy-signature"}]
+      })
+
+    {:ok, steer} = PendingInputStore.append_steer(session.id, "do not lose this")
+
+    assert {:next, :error, new_state} = BuildPrompt.run(build_state(session), %{})
+    assert %Backplane.AiProtocol.Error{kind: :incompatible} = new_state.stream_error
     assert [%{id: id, status: "queued"}] = steer_inputs(session.id)
     assert id == steer.id
   end
@@ -106,12 +125,19 @@ defmodule Synapsis.Agent.Nodes.BuildPromptTest do
     assert {:next, :default, new_state} =
              BuildPrompt.run(state, %{provider: primary_provider})
 
-    assert new_state.request.model == "MiniMax-M3"
-    assert is_binary(new_state.request.system)
-    assert [%{name: "file_read", input_schema: _parameters}] = new_state.request.tools
+    assert new_state.request["model"] == "MiniMax-M3"
+    assert is_binary(system_text(new_state.request))
 
-    assert [%{role: "user", content: [%{type: "text", text: "continue after tools"}]}] =
-             new_state.request.messages
+    assert [%{"name" => "file_read", "input_schema" => _parameters}] =
+             new_state.request["tools"]
+
+    assert [
+             %{
+               "role" => "user",
+               "content" => [%{"type" => "text", "text" => "continue after tools"}]
+             }
+           ] =
+             new_state.request["messages"]
   end
 
   test "uses the context provider when agent config has none", %{session: session} do
@@ -128,7 +154,8 @@ defmodule Synapsis.Agent.Nodes.BuildPromptTest do
 
     assert {:next, :default, new_state} = BuildPrompt.run(state, %{provider: provider})
 
-    assert [%{function: %{name: "file_read"}, type: "function"}] = new_state.request.tools
+    assert [%{"function" => %{"name" => "file_read"}, "type" => "function"}] =
+             new_state.request["tools"]
   end
 
   defp persist_session do
@@ -159,6 +186,13 @@ defmodule Synapsis.Agent.Nodes.BuildPromptTest do
       agent_config: %{provider: session.provider, name: session.agent, model: session.model}
     }
     |> update_in([:agent_config], &Map.merge(&1, overrides))
+  end
+
+  defp system_text(request) do
+    request
+    |> Map.fetch!("system")
+    |> hd()
+    |> Map.fetch!("text")
   end
 
   defp steer_inputs(session_id) do

@@ -119,6 +119,40 @@ defmodule Synapsis.Agent.QueryLoopTest do
   end
 
   describe "run/2 -- completion (no tools)" do
+    test "batch collector terminates on provider lifecycle errors" do
+      mock_stream = fn _request, _config ->
+        send(self(), {:provider_error, :codec_failure})
+        :ok
+      end
+
+      ctx = make_ctx(streaming_tools_enabled: false, agent_config: %{stream_fn: mock_stream})
+
+      task =
+        Task.async(fn ->
+          QueryLoop.run(State.new(messages: [%{role: "user", content: "hi"}]), ctx)
+        end)
+
+      assert {:ok, {:ok, :model_error, _state}} =
+               Task.yield(task, 200) || Task.shutdown(task, :brutal_kill)
+    end
+
+    test "streaming collector terminates on provider lifecycle errors" do
+      mock_stream = fn _request, _config ->
+        send(self(), {:provider_error, :codec_failure})
+        :ok
+      end
+
+      ctx = make_ctx(streaming_tools_enabled: true, agent_config: %{stream_fn: mock_stream})
+
+      task =
+        Task.async(fn ->
+          QueryLoop.run(State.new(messages: [%{role: "user", content: "hi"}]), ctx)
+        end)
+
+      assert {:ok, {:ok, :model_error, _state}} =
+               Task.yield(task, 200) || Task.shutdown(task, :brutal_kill)
+    end
+
     test "formats OpenAI provider requests with function tools" do
       test_pid = self()
       tool_name = "mcp:backplane:web::search"
@@ -149,9 +183,9 @@ defmodule Synapsis.Agent.QueryLoopTest do
       assert {:ok, :completed, _final_state} = QueryLoop.run(state, ctx)
       assert_received {:request_seen, request, %{type: "openai"}}
 
-      [tool] = request.tools
-      assert tool.type == "function"
-      assert tool.function.name == "syn_bWNwOmJhY2twbGFuZTp3ZWI6OnNlYXJjaA"
+      [tool] = request["tools"]
+      assert tool["type"] == "function"
+      assert tool["function"]["name"] == "syn_bWNwOmJhY2twbGFuZTp3ZWI6OnNlYXJjaA"
       refute Map.has_key?(tool, :input_schema)
     end
 
@@ -179,7 +213,57 @@ defmodule Synapsis.Agent.QueryLoopTest do
 
       assert {:ok, :completed, _final_state} = QueryLoop.run(state, ctx)
       assert_received {:request_seen, request, _config}
-      assert request.reasoning_split == true
+      assert request["reasoning_split"] == true
+    end
+
+    test "replays signed state using default endpoint and configured affinity" do
+      test_pid = self()
+      provider_name = "query-affinity"
+
+      state = %{
+        "source_profile" => provider_name,
+        "source_protocol" => "anthropic",
+        "kind" => "anthropic_signed_thinking",
+        "affinity" => %{
+          "profile" => provider_name,
+          "protocol" => "anthropic",
+          "endpoint" => "https://api.anthropic.com",
+          "account" => "acct",
+          "workspace" => "space",
+          "model" => "claude-test"
+        },
+        "payload" => %{"thinking" => "private", "signature" => "signed"}
+      }
+
+      mock_stream = fn request, _config ->
+        send(test_pid, {:request_seen, request})
+        send(test_pid, :provider_done)
+        :ok
+      end
+
+      ctx =
+        make_ctx(
+          model: "claude-test",
+          provider_config: %{
+            type: "anthropic",
+            provider_name: provider_name,
+            account: "acct",
+            workspace: "space"
+          },
+          agent_config: %{stream_fn: mock_stream}
+        )
+
+      messages = [
+        %{
+          role: "assistant",
+          content: [
+            %{type: "reasoning", content: "private", provider_states: [state]}
+          ]
+        }
+      ]
+
+      assert {:ok, :completed, _state} = QueryLoop.run(State.new(messages: messages), ctx)
+      assert_received {:request_seen, _request}
     end
 
     test "completes when LLM returns no tool_use blocks" do
@@ -315,9 +399,12 @@ defmodule Synapsis.Agent.QueryLoopTest do
       {:ok, :completed, _} = QueryLoop.run(state, ctx)
 
       [{:request, req}] = :ets.lookup(captured, :request)
-      assert req.model == "test-model"
-      assert req.stream == true
-      assert [%{name: "file_read", input_schema: %{type: "object"}}] = req.tools
+      assert req["model"] == "test-model"
+      assert req["stream"] == true
+
+      assert [%{"name" => "file_read", "input_schema" => %{type: "object"}}] =
+               req["tools"]
+
       :ets.delete(captured)
     end
 
@@ -343,7 +430,7 @@ defmodule Synapsis.Agent.QueryLoopTest do
       test_pid = self()
 
       mock_stream = fn request, _config ->
-        send(test_pid, {:captured_system, request.system})
+        send(test_pid, {:captured_system, request["system"] |> hd() |> Map.fetch!("text")})
         send(test_pid, {:provider_chunk, {:text_delta, "ok"}})
         send(test_pid, {:provider_chunk, :content_block_stop})
         send(test_pid, {:provider_chunk, :done})
@@ -371,7 +458,7 @@ defmodule Synapsis.Agent.QueryLoopTest do
       test_pid = self()
 
       mock_stream = fn request, _config ->
-        send(test_pid, {:captured_system, request.system})
+        send(test_pid, {:captured_system, request["system"] |> hd() |> Map.fetch!("text")})
         send(test_pid, {:provider_chunk, {:text_delta, "ok"}})
         send(test_pid, {:provider_chunk, :content_block_stop})
         send(test_pid, {:provider_chunk, :done})

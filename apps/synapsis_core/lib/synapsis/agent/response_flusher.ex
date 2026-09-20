@@ -12,6 +12,7 @@ defmodule Synapsis.Agent.ResponseFlusher do
           pending_text: String.t(),
           pending_reasoning: String.t(),
           pending_reasoning_signature: String.t(),
+          pending_provider_states: [map()],
           pending_tool_use: map() | nil,
           pending_tool_input: String.t(),
           tool_uses: [Synapsis.Part.ToolUse.t()]
@@ -34,7 +35,21 @@ defmodule Synapsis.Agent.ResponseFlusher do
           [
             %Synapsis.Part.Reasoning{
               content: acc.pending_reasoning,
-              signature: blank_to_nil(acc.pending_reasoning_signature)
+              signature: blank_to_nil(acc.pending_reasoning_signature),
+              provider_states: Map.get(acc, :pending_provider_states, [])
+            }
+          ]
+      else
+        parts
+      end
+
+    parts =
+      if acc.pending_reasoning == "" and Map.get(acc, :pending_provider_states, []) != [] do
+        parts ++
+          [
+            %Synapsis.Part.Reasoning{
+              content: "",
+              provider_states: Map.get(acc, :pending_provider_states, [])
             }
           ]
       else
@@ -81,6 +96,7 @@ defmodule Synapsis.Agent.ResponseFlusher do
       | pending_text: "",
         pending_reasoning: "",
         pending_reasoning_signature: "",
+        pending_provider_states: [],
         pending_tool_use: nil,
         pending_tool_input: ""
     }

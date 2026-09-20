@@ -1,487 +1,334 @@
 defmodule Synapsis.Provider.MessageMapperTest do
   use ExUnit.Case, async: true
 
-  alias Synapsis.Provider.MessageMapper
+  alias Synapsis.Provider.{MessageMapper, ToolName}
 
-  @text_msg %{
-    role: :user,
-    parts: [%Synapsis.Part.Text{content: "Hello"}]
+  @text_message %{role: "user", parts: [%Synapsis.Part.Text{content: "Hello"}]}
+  @tool %{
+    name: "mcp:backplane:web::search",
+    description: "Search",
+    parameters: %{"type" => "object"}
   }
 
-  @tool_use_msg %{
-    role: :assistant,
-    parts: [
-      %Synapsis.Part.Text{content: "Let me read that."},
-      %Synapsis.Part.ToolUse{
-        tool: "file_read",
-        tool_use_id: "toolu_123",
-        input: %{"path" => "/tmp/test.txt"},
-        status: :pending
+  test "encodes Anthropic text, system, image, tools, and limits with string keys" do
+    messages = [
+      @text_message,
+      %{
+        role: "user",
+        parts: [%Synapsis.Part.Image{media_type: "image/png", data: Base.encode64(<<0, 1, 2>>)}]
       }
     ]
-  }
 
-  @tool_result_msg %{
-    role: :user,
-    parts: [
-      %Synapsis.Part.ToolResult{
-        tool_use_id: "toolu_123",
-        content: "file contents here",
-        is_error: false
+    assert {:ok, wire} =
+             MessageMapper.build_request(:anthropic, messages, [@tool], %{
+               model: "claude-test",
+               system_prompt: "Be precise",
+               max_tokens: 2048
+             })
+
+    assert wire["model"] == "claude-test"
+    assert wire["max_tokens"] == 2048
+    assert wire["system"] == [%{"type" => "text", "text" => "Be precise"}]
+    assert [%{"name" => tool_name}] = wire["tools"]
+    assert ToolName.decode(tool_name) == "mcp:backplane:web::search"
+    assert get_in(wire, ["messages", Access.at(1), "content", Access.at(0), "type"]) == "image"
+    assert Enum.all?(Map.keys(wire), &is_binary/1)
+  end
+
+  test "accepts a 20 MiB CLI image without applying upload count limits to history" do
+    history =
+      for index <- 1..5 do
+        %{
+          role: "user",
+          parts: [%Synapsis.Part.Image{media_type: "image/png", data: Base.encode64(<<index>>)}]
+        }
+      end
+
+    image = %Synapsis.Part.Image{
+      media_type: "image/png",
+      data: Base.encode64(:binary.copy(<<0>>, 20 * 1024 * 1024))
+    }
+
+    assert {:ok, wire} =
+             MessageMapper.build_request(
+               :anthropic,
+               history ++ [%{role: "user", parts: [image]}],
+               [],
+               %{model: "claude-test"}
+             )
+
+    assert length(wire["messages"]) == 6
+
+    assert byte_size(
+             get_in(wire, ["messages", Access.at(5), "content", Access.at(0), "source", "data"])
+           ) ==
+             27_962_028
+  end
+
+  test "encodes OpenAI tool names and parallel tool results" do
+    messages = [
+      %{
+        role: "assistant",
+        parts: [
+          %Synapsis.Part.ToolUse{
+            tool: @tool.name,
+            tool_use_id: "call-1",
+            input: %{"query" => "elixir"}
+          }
+        ]
+      },
+      %{
+        role: "user",
+        parts: [
+          %Synapsis.Part.ToolResult{tool_use_id: "call-1", content: "one"},
+          %Synapsis.Part.ToolResult{tool_use_id: "call-2", content: "two", is_error: true}
+        ]
       }
     ]
-  }
 
-  @reasoning_msg %{
-    role: :assistant,
-    parts: [%Synapsis.Part.Reasoning{content: "Let me think...", signature: "sig-123"}]
-  }
+    assert {:ok, wire} =
+             MessageMapper.build_request(:openai, messages, [@tool], %{model: "gpt-test"})
 
-  @sample_tools [
-    %{name: "file_read", description: "Read a file", parameters: %{"type" => "object"}}
-  ]
+    encoded = ToolName.encode(@tool.name)
+    assert get_in(wire, ["tools", Access.at(0), "function", "name"]) == encoded
 
-  # ---------------------------------------------------------------------------
-  # Anthropic
-  # ---------------------------------------------------------------------------
+    assert get_in(wire, ["messages", Access.at(0), "tool_calls", Access.at(0), "function", "name"]) ==
+             encoded
 
-  describe "build_request/4 :anthropic" do
-    test "formats basic text message" do
-      request =
-        MessageMapper.build_request(:anthropic, [@text_msg], [], %{
-          model: "claude-sonnet-4-20250514"
-        })
+    assert [
+             _,
+             %{"role" => "tool", "tool_call_id" => "call-1"},
+             %{"role" => "tool", "tool_call_id" => "call-2"}
+           ] =
+             wire["messages"]
+  end
 
-      assert request.model == "claude-sonnet-4-20250514"
-      assert request.stream == true
-      assert length(request.messages) == 1
+  test "enables MiniMax reasoning details through a canonical extension" do
+    assert {:ok, %{"reasoning_split" => true}} =
+             MessageMapper.build_request(:openai, [@text_message], [], %{
+               model: "MiniMax-M3",
+               base_url: "https://api.minimaxi.com/v1"
+             })
+  end
 
-      [msg] = request.messages
-      assert msg.role == "user"
-      assert [%{type: "text", text: "Hello"}] = msg.content
-    end
-
-    test "includes system prompt" do
-      request =
-        MessageMapper.build_request(:anthropic, [@text_msg], [], %{
-          model: "claude-sonnet-4-20250514",
-          system_prompt: "You are helpful"
-        })
-
-      assert request.system == "You are helpful"
-    end
-
-    test "omits system when nil" do
-      request = MessageMapper.build_request(:anthropic, [@text_msg], [], %{})
-      refute Map.has_key?(request, :system)
-    end
-
-    test "formats tool_use parts" do
-      request = MessageMapper.build_request(:anthropic, [@tool_use_msg], [], %{})
-
-      [msg] = request.messages
-      assert msg.role == "assistant"
-      assert length(msg.content) == 2
-
-      tool_block = Enum.at(msg.content, 1)
-      assert tool_block.type == "tool_use"
-      assert tool_block.name == "file_read"
-      assert tool_block.id == "toolu_123"
-    end
-
-    test "formats tool_result parts" do
-      request = MessageMapper.build_request(:anthropic, [@tool_result_msg], [], %{})
-
-      [msg] = request.messages
-      [block] = msg.content
-      assert block.type == "tool_result"
-      assert block.tool_use_id == "toolu_123"
-      assert block.is_error == false
-    end
-
-    test "formats reasoning parts" do
-      request = MessageMapper.build_request(:anthropic, [@reasoning_msg], [], %{})
-      [msg] = request.messages
-      [block] = msg.content
-      assert block.type == "thinking"
-      assert block.thinking == "Let me think..."
-      assert block.signature == "sig-123"
-    end
-
-    test "formats tools" do
-      request = MessageMapper.build_request(:anthropic, [], @sample_tools, %{})
-      assert length(request.tools) == 1
-      [tool] = request.tools
-      assert tool.name == "file_read"
-      assert tool.input_schema == %{"type" => "object"}
-    end
-
-    test "omits tools when empty" do
-      request = MessageMapper.build_request(:anthropic, [], [], %{})
-      refute Map.has_key?(request, :tools)
-    end
-
-    test "uses default model" do
-      request = MessageMapper.build_request(:anthropic, [], [], %{})
-      assert request.model == Synapsis.Providers.default_model("anthropic")
-    end
-
-    test "handles string-keyed messages" do
-      msg = %{"role" => "user", "parts" => [%Synapsis.Part.Text{content: "Hi"}]}
-      request = MessageMapper.build_request(:anthropic, [msg], [], %{})
-      [m] = request.messages
-      assert m.role == "user"
-    end
-
-    test "formats Image parts as base64 source block" do
-      msg = %{
-        role: :user,
-        parts: [%Synapsis.Part.Image{media_type: "image/png", data: "base64data"}]
-      }
-
-      request = MessageMapper.build_request(:anthropic, [msg], [], %{})
-      [m] = request.messages
-      [block] = m.content
-      assert block.type == "image"
-      assert block.source.type == "base64"
-      assert block.source.media_type == "image/png"
-      assert block.source.data == "base64data"
-    end
-
-    test "formats unknown parts via generic content fallback" do
-      # Part.File has :content key, falls through to catch-all
-      msg = %{role: :user, parts: [%Synapsis.Part.File{path: "/tmp/f.txt", content: "file body"}]}
-      request = MessageMapper.build_request(:anthropic, [msg], [], %{})
-      [m] = request.messages
-      [block] = m.content
-      assert block.type == "text"
-      assert block.text == "file body"
-    end
-
-    test "includes max_tokens when specified" do
-      request = MessageMapper.build_request(:anthropic, [@text_msg], [], %{max_tokens: 2048})
-      assert request.max_tokens == 2048
-    end
-
-    test "includes reasoning_effort when specified via opts" do
-      request =
-        MessageMapper.build_request(:anthropic, [@text_msg], [], %{reasoning_effort: "high"})
-
-      # reasoning_effort is not currently forwarded to the request body
-      refute Map.has_key?(request, :reasoning_effort)
+  test "preserves explicit false stream and MiniMax reasoning options for atom and string keys" do
+    for opts <- [
+          %{model: "m", provider_name: "minimax", stream: false, reasoning_split: false},
+          %{
+            "model" => "m",
+            "provider_name" => "minimax",
+            "stream" => false,
+            "reasoning_split" => false
+          }
+        ] do
+      assert {:ok, %{"stream" => false, "reasoning_split" => false}} =
+               MessageMapper.build_request(:openai, [@text_message], [], opts)
     end
   end
 
-  # ---------------------------------------------------------------------------
-  # OpenAI
-  # ---------------------------------------------------------------------------
-
-  describe "build_request/4 :openai" do
-    test "formats basic text message" do
-      request = MessageMapper.build_request(:openai, [@text_msg], [], %{model: "gpt-4o"})
-
-      assert request.model == "gpt-4o"
-      assert request.stream == true
-      assert length(request.messages) == 1
-
-      [msg] = request.messages
-      assert msg.role == "user"
-      assert msg.content == "Hello"
-    end
-
-    test "includes system as message" do
-      request =
-        MessageMapper.build_request(:openai, [@text_msg], [], %{
-          model: "gpt-4o",
-          system_prompt: "You are helpful"
-        })
-
-      assert length(request.messages) == 2
-      [sys, _user] = request.messages
-      assert sys.role == "system"
-      assert sys.content == "You are helpful"
-    end
-
-    test "merges multi-part text content" do
-      msg = %{
-        role: :user,
-        parts: [
-          %Synapsis.Part.Text{content: "First"},
-          %Synapsis.Part.Text{content: "Second"}
-        ]
-      }
-
-      request = MessageMapper.build_request(:openai, [msg], [], %{})
-      [m] = request.messages
-      assert m.content == "First\nSecond"
-    end
-
-    test "formats tools as function type" do
-      request = MessageMapper.build_request(:openai, [], @sample_tools, %{})
-      [tool] = request.tools
-      assert tool.type == "function"
-      assert tool.function.name == "file_read"
-      assert tool.function.parameters == %{"type" => "object"}
-    end
-
-    test "aliases MCP tool names to OpenAI-safe function names" do
-      request =
-        MessageMapper.build_request(
-          :openai,
-          [],
-          [
-            %{
-              name: "mcp:backplane:web::search",
-              description: "Search the web",
-              parameters: %{"type" => "object"}
-            }
-          ],
-          %{}
-        )
-
-      [tool] = request.tools
-      assert tool.function.name == "syn_bWNwOmJhY2twbGFuZTp3ZWI6OnNlYXJjaA"
-      refute String.contains?(tool.function.name, ":")
-    end
-
-    test "enables MiniMax reasoning split for OpenAI-compatible requests" do
-      request =
-        MessageMapper.build_request(:openai, [@text_msg], [], %{
-          model: "MiniMax-M3",
-          base_url: "https://api.minimaxi.com/v1"
-        })
-
-      assert request.reasoning_split == true
-    end
-
-    test "uses default model" do
-      request = MessageMapper.build_request(:openai, [], [], %{})
-      assert request.model == Synapsis.Providers.default_model("openai")
-    end
-
-    test "formats Image parts as multimodal image_url content" do
-      msg = %{
-        role: :user,
-        parts: [%Synapsis.Part.Image{media_type: "image/jpeg", data: "b64data"}]
-      }
-
-      request = MessageMapper.build_request(:openai, [msg], [], %{})
-      [m] = request.messages
-      assert is_list(m.content)
-      [block] = m.content
-      assert block.type == "image_url"
-      assert block.image_url.url =~ "data:image/jpeg;base64,b64data"
-    end
-
-    test "handles string-keyed messages" do
-      msg = %{"role" => "user", "parts" => [%Synapsis.Part.Text{content: "Hi there"}]}
-      request = MessageMapper.build_request(:openai, [msg], [], %{})
-      [m] = request.messages
-      assert m.role == "user"
-      assert m.content == "Hi there"
-    end
-
-    test "formats tool_use parts as tool_calls" do
-      msg = %{
-        role: :assistant,
+  test "encodes Google tools and tool call/result pairs" do
+    messages = [
+      %{
+        role: "assistant",
         parts: [
           %Synapsis.Part.ToolUse{
-            tool: "bash",
-            tool_use_id: "id1",
-            input: %{"cmd" => "ls"},
-            status: :pending
+            tool: "search",
+            tool_use_id: "call-1",
+            input: %{"q" => "x"}
           }
         ]
+      },
+      %{
+        role: "user",
+        parts: [%Synapsis.Part.ToolResult{tool_use_id: "call-1", content: "ok"}]
       }
+    ]
 
-      request = MessageMapper.build_request(:openai, [msg], [], %{})
-      [m] = request.messages
-      assert m.role == "assistant"
-      assert is_list(m.tool_calls)
-      [tc] = m.tool_calls
-      assert tc.id == "id1"
-      assert tc.type == "function"
-      assert tc.function.name == "bash"
-    end
+    tool = %{@tool | name: "search"}
 
-    test "aliases MCP tool_use names to OpenAI-safe tool_calls" do
-      msg = %{
-        role: :assistant,
-        parts: [
-          %Synapsis.Part.ToolUse{
-            tool: "mcp:backplane:web::search",
-            tool_use_id: "id1",
-            input: %{"query" => "dogs"},
-            status: :pending
-          }
-        ]
-      }
+    assert {:ok, wire} =
+             MessageMapper.build_request(:google, messages, [tool], %{model: "gemini-test"})
 
-      request = MessageMapper.build_request(:openai, [msg], [], %{})
-      [m] = request.messages
-      [tc] = m.tool_calls
-      assert tc.function.name == "syn_bWNwOmJhY2twbGFuZTp3ZWI6OnNlYXJjaA"
-    end
+    assert wire["model"] == "gemini-test"
 
-    test "formats tool_result parts" do
-      msg = %{
-        role: :user,
-        parts: [
-          %Synapsis.Part.ToolResult{
-            tool_use_id: "id1",
-            content: "output",
-            is_error: false
-          }
-        ]
-      }
+    assert get_in(wire, ["contents", Access.at(0), "parts", Access.at(0), "functionCall", "name"]) ==
+             "search"
 
-      request = MessageMapper.build_request(:openai, [msg], [], %{})
-      [m] = request.messages
-      assert m.role == "tool"
-      assert m.tool_call_id == "id1"
-      assert m.content == "output"
-    end
+    assert get_in(wire, [
+             "contents",
+             Access.at(1),
+             "parts",
+             Access.at(0),
+             "functionResponse",
+             "name"
+           ]) == "search"
+  end
 
-    test "expands parallel tool_results into one tool message per tool_call id" do
-      # An assistant turn with two parallel tool_calls, answered by a single
-      # user message carrying both results (Anthropic storage convention).
-      # OpenAI/minimax require one `role: "tool"` reply per id — collapsing them
-      # drops answers and trips "tool call and result not match".
-      assistant = %{
-        role: :assistant,
-        parts: [
-          %Synapsis.Part.ToolUse{tool: "bash", tool_use_id: "id1", input: %{}, status: :pending},
-          %Synapsis.Part.ToolUse{tool: "bash", tool_use_id: "id2", input: %{}, status: :pending}
-        ]
-      }
+  test "preserves plain reasoning but rejects a legacy signature without origin" do
+    assert {:ok, wire} =
+             MessageMapper.build_request(
+               :openai,
+               [%{role: "assistant", parts: [%Synapsis.Part.Reasoning{content: "why"}]}],
+               [],
+               %{model: "gpt-test"}
+             )
 
-      results = %{
-        role: :user,
-        parts: [
-          %Synapsis.Part.ToolResult{tool_use_id: "id1", content: "out1", is_error: false},
-          %Synapsis.Part.ToolResult{tool_use_id: "id2", content: "out2", is_error: false}
-        ]
-      }
+    assert get_in(wire, ["messages", Access.at(0), "reasoning_content"]) == "why"
 
-      request = MessageMapper.build_request(:openai, [assistant, results], [], %{})
+    assert {:error, %Backplane.AiProtocol.Error{kind: :incompatible}} =
+             MessageMapper.build_request(
+               :anthropic,
+               [
+                 %{
+                   role: "assistant",
+                   parts: [%Synapsis.Part.Reasoning{content: "why", signature: "legacy"}]
+                 }
+               ],
+               [],
+               %{model: "claude-test"}
+             )
+  end
 
-      assert [
-               %{role: "assistant", tool_calls: [%{id: "id1"}, %{id: "id2"}]},
-               %{role: "tool", tool_call_id: "id1", content: "out1"},
-               %{role: "tool", tool_call_id: "id2", content: "out2"}
-             ] = request.messages
+  test "replays multiple provider states in order only at matching affinity" do
+    states = [provider_state("first"), provider_state("second")]
+
+    message = %{
+      role: "assistant",
+      parts: [%Synapsis.Part.Reasoning{content: "", provider_states: states}]
+    }
+
+    opts = %{
+      model: "claude-test",
+      provider_name: "primary",
+      endpoint: "https://api.example"
+    }
+
+    assert {:ok, wire} = MessageMapper.build_request(:anthropic, [message], [], opts)
+    assert Enum.map(hd(wire["messages"])["content"], & &1["thinking"]) == ["first", "second"]
+
+    assert {:error, %Backplane.AiProtocol.Error{kind: :incompatible}} =
+             MessageMapper.build_request(:anthropic, [message], [], %{opts | model: "changed"})
+  end
+
+  test "replays signed state without duplicating visible reasoning" do
+    message = %{
+      role: "assistant",
+      parts: [
+        %Synapsis.Part.Reasoning{
+          content: "private",
+          provider_states: [provider_state("private")]
+        }
+      ]
+    }
+
+    assert {:ok, wire} =
+             MessageMapper.build_request(:anthropic, [message], [], %{
+               model: "claude-test",
+               provider_name: "primary",
+               endpoint: "https://api.example"
+             })
+
+    assert [%{"type" => "thinking", "thinking" => "private"}] =
+             hd(wire["messages"])["content"]
+  end
+
+  test "uses the protocol default endpoint for matching signed replay" do
+    state =
+      provider_state("private")
+      |> put_in(["affinity", "endpoint"], "https://api.anthropic.com")
+
+    message = %{
+      role: "assistant",
+      parts: [%Synapsis.Part.Reasoning{content: "private", provider_states: [state]}]
+    }
+
+    assert {:ok, _wire} =
+             MessageMapper.build_request(:anthropic, [message], [], %{
+               model: "claude-test",
+               provider_name: "primary"
+             })
+  end
+
+  test "uses the same reversible tool names for definitions and history" do
+    originals = ["mcp.tool", "mcp:server:web::search"]
+
+    tools =
+      Enum.map(originals, &%{name: &1, description: &1, parameters: %{"type" => "object"}})
+
+    calls =
+      originals
+      |> Enum.with_index(1)
+      |> Enum.map(fn {name, index} ->
+        %Synapsis.Part.ToolUse{tool: name, tool_use_id: "call-#{index}", input: %{"i" => index}}
+      end)
+
+    results =
+      originals
+      |> Enum.with_index(1)
+      |> Enum.map(fn {_name, index} ->
+        %Synapsis.Part.ToolResult{tool_use_id: "call-#{index}", content: "result-#{index}"}
+      end)
+
+    messages = [%{role: "assistant", parts: calls}, %{role: "user", parts: results}]
+
+    for protocol <- [:anthropic, :google] do
+      assert {:ok, wire} =
+               MessageMapper.build_request(protocol, messages, tools, %{model: "test"})
+
+      {declarations, call_names} = tool_names(protocol, wire)
+      assert declarations == call_names
+      assert Enum.map(declarations, &ToolName.decode/1) == originals
+      assert tool_result_count(protocol, wire) == 2
     end
   end
 
-  # ---------------------------------------------------------------------------
-  # Google
-  # ---------------------------------------------------------------------------
+  test "rejects unsupported file parts rather than flattening semantics" do
+    message = %{role: "user", parts: [%Synapsis.Part.File{path: "a.txt", content: "data"}]}
 
-  describe "build_request/4 :google" do
-    test "formats basic text message" do
-      request =
-        MessageMapper.build_request(:google, [@text_msg], [], %{model: "gemini-2.0-flash"})
+    assert {:error, %Backplane.AiProtocol.Error{kind: :incompatible}} =
+             MessageMapper.build_request(:openai, [message], [], %{model: "gpt-test"})
+  end
 
-      assert request.model == "gemini-2.0-flash"
-      assert request.stream == true
-      assert length(request.contents) == 1
+  defp provider_state(thinking) do
+    %{
+      "source_profile" => "primary",
+      "source_protocol" => "anthropic",
+      "kind" => "anthropic_signed_thinking",
+      "affinity" => %{
+        "profile" => "primary",
+        "protocol" => "anthropic",
+        "endpoint" => "https://api.example",
+        "model" => "claude-test"
+      },
+      "payload" => %{"thinking" => thinking, "signature" => "signature-#{thinking}"}
+    }
+  end
 
-      [msg] = request.contents
-      assert msg.role == "user"
-      assert [%{text: "Hello"}] = msg.parts
-    end
+  defp tool_names(:anthropic, wire) do
+    declarations = Enum.map(wire["tools"], & &1["name"])
+    calls = wire["messages"] |> hd() |> Map.fetch!("content") |> Enum.map(& &1["name"])
+    {declarations, calls}
+  end
 
-    test "maps assistant role to model" do
-      msg = %{role: :assistant, parts: [%Synapsis.Part.Text{content: "Hi"}]}
-      request = MessageMapper.build_request(:google, [msg], [], %{})
-      [m] = request.contents
-      assert m.role == "model"
-    end
+  defp tool_names(:google, wire) do
+    declarations =
+      wire["tools"] |> hd() |> Map.fetch!("functionDeclarations") |> Enum.map(& &1["name"])
 
-    test "includes systemInstruction" do
-      request =
-        MessageMapper.build_request(:google, [@text_msg], [], %{
-          system_prompt: "You are helpful"
-        })
+    calls =
+      wire["contents"] |> hd() |> Map.fetch!("parts") |> Enum.map(& &1["functionCall"]["name"])
 
-      assert request.systemInstruction == %{parts: [%{text: "You are helpful"}]}
-    end
+    {declarations, calls}
+  end
 
-    test "formats tools as functionDeclarations" do
-      request = MessageMapper.build_request(:google, [], @sample_tools, %{})
-      [tool_group] = request.tools
-      [decl] = tool_group.functionDeclarations
-      assert decl.name == "file_read"
-    end
+  defp tool_result_count(:anthropic, wire) do
+    wire["messages"]
+    |> Enum.flat_map(& &1["content"])
+    |> Enum.count(&(&1["type"] == "tool_result"))
+  end
 
-    test "uses default model" do
-      request = MessageMapper.build_request(:google, [], [], %{})
-      assert request.model == Synapsis.Providers.default_model("google")
-    end
-
-    test "formats tool_result parts via generic content handler" do
-      msg = %{
-        role: :user,
-        parts: [
-          %Synapsis.Part.ToolResult{
-            tool_use_id: "toolu_x",
-            content: "file contents here",
-            is_error: false
-          }
-        ]
-      }
-
-      request = MessageMapper.build_request(:google, [msg], [], %{})
-      [m] = request.contents
-      [block] = m.parts
-      assert block.text == "file contents here"
-    end
-
-    test "formats image parts as inlineData" do
-      msg = %{
-        role: :user,
-        parts: [%Synapsis.Part.Image{media_type: "image/png", data: "base64data"}]
-      }
-
-      request = MessageMapper.build_request(:google, [msg], [], %{})
-      [m] = request.contents
-      [block] = m.parts
-      assert block.inlineData.mimeType == "image/png"
-      assert block.inlineData.data == "base64data"
-    end
-
-    test "handles string-keyed messages" do
-      msg = %{"role" => "user", "parts" => [%Synapsis.Part.Text{content: "Hi"}]}
-      request = MessageMapper.build_request(:google, [msg], [], %{})
-      [m] = request.contents
-      assert m.role == "user"
-      assert [%{text: "Hi"}] = m.parts
-    end
-
-    test "formats tool_use parts as functionCall" do
-      msg = %{
-        role: :assistant,
-        parts: [
-          %Synapsis.Part.ToolUse{
-            tool: "bash",
-            tool_use_id: "id1",
-            input: %{"cmd" => "ls"},
-            status: :pending
-          }
-        ]
-      }
-
-      request = MessageMapper.build_request(:google, [msg], [], %{})
-      [m] = request.contents
-      assert m.role == "model"
-      [block] = m.parts
-      assert block.functionCall.name == "bash"
-      assert block.functionCall.args == %{"cmd" => "ls"}
-    end
-
-    test "omits systemInstruction when nil" do
-      request = MessageMapper.build_request(:google, [@text_msg], [], %{})
-      refute Map.has_key?(request, :systemInstruction)
-    end
+  defp tool_result_count(:google, wire) do
+    wire["contents"]
+    |> Enum.flat_map(& &1["parts"])
+    |> Enum.count(&Map.has_key?(&1, "functionResponse"))
   end
 end

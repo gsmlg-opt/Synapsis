@@ -38,11 +38,20 @@ defmodule Synapsis.PartTest do
       assert %Part.ToolResult{tool_use_id: "toolu_123", content: "file contents here"} = loaded
     end
 
-    test "ReasoningPart" do
-      part = %Part.Reasoning{content: "thinking..."}
+    test "ReasoningPart preserves provider states" do
+      provider_state = %{
+        "source_profile" => "primary",
+        "source_protocol" => "anthropic",
+        "kind" => "anthropic_signed_thinking",
+        "affinity" => %{"profile" => "primary", "protocol" => "anthropic"},
+        "payload" => %{"thinking" => "thinking...", "signature" => "signed"}
+      }
+
+      part = %Part.Reasoning{content: "thinking...", provider_states: [provider_state]}
       assert {:ok, dumped} = Part.dump(part)
+      assert dumped["provider_states"] == [provider_state]
       assert {:ok, loaded} = Part.load(dumped)
-      assert %Part.Reasoning{content: "thinking..."} = loaded
+      assert %Part.Reasoning{content: "thinking...", provider_states: [^provider_state]} = loaded
     end
 
     test "FilePart" do
@@ -71,7 +80,9 @@ defmodule Synapsis.PartTest do
       assert {:ok, dumped} = Part.dump(part)
       assert %{"type" => "image", "media_type" => "image/png", "data" => "base64abc"} = dumped
       assert {:ok, loaded} = Part.load(dumped)
-      assert %Part.Image{media_type: "image/png", data: "base64abc", path: "/tmp/img.png"} = loaded
+
+      assert %Part.Image{media_type: "image/png", data: "base64abc", path: "/tmp/img.png"} =
+               loaded
     end
 
     test "unknown type in load falls back to TextPart with inspect" do

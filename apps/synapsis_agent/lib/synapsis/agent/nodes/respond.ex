@@ -29,6 +29,7 @@ defmodule Synapsis.Agent.Nodes.Respond do
         pending_tool_input: "",
         pending_reasoning: "",
         pending_reasoning_signature: "",
+        pending_provider_states: [],
         tool_uses: [],
         user_input: nil,
         iteration_count: state.iteration_count + 1

@@ -130,8 +130,13 @@ defmodule Synapsis.Message do
   defp encode_part(%Synapsis.Part.ToolResult{tool_use_id: id, content: content, is_error: err}),
     do: %{type: "tool_result", tool_use_id: id, content: content || "", is_error: err || false}
 
-  defp encode_part(%Synapsis.Part.Reasoning{content: content, signature: sig}),
-    do: %{type: "reasoning", content: content || "", signature: sig}
+  defp encode_part(%Synapsis.Part.Reasoning{} = reasoning),
+    do: %{
+      type: "reasoning",
+      content: reasoning.content || "",
+      signature: reasoning.signature,
+      provider_states: reasoning.provider_states || []
+    }
 
   defp encode_part(%Synapsis.Part.Agent{agent: agent, message: message}),
     do: %{type: "agent", agent: agent, message: message}
@@ -175,7 +180,8 @@ defmodule Synapsis.Message do
   defp decode_part(%{type: "reasoning"} = p),
     do: %Synapsis.Part.Reasoning{
       content: fetch(p, :content) || fetch(p, :text) || "",
-      signature: fetch(p, :signature)
+      signature: fetch(p, :signature),
+      provider_states: fetch(p, :provider_states) || []
     }
 
   defp decode_part(%{type: "agent"} = p),
