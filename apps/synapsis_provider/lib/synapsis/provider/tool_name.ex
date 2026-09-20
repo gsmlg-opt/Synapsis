@@ -50,7 +50,7 @@ defmodule Synapsis.Provider.ToolName do
         name = to_string(name)
         alias_name = encode(name)
 
-        if alias_name == name do
+        if alias_name == name or decode(alias_name) == name do
           aliases
         else
           put_alias(aliases, alias_name, name)

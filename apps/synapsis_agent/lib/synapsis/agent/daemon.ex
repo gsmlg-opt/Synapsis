@@ -35,12 +35,43 @@ defmodule Synapsis.Agent.Daemon do
   def submit(prompt, opts \\ %{}), do: submit(__MODULE__, prompt, opts)
 
   def submit(server, prompt, opts) do
+    if opts == [] do
+      {:error, :invalid_options}
+    else
+      do_submit(server, prompt, opts)
+    end
+  end
+
+  defp do_submit(server, prompt, opts) do
+    opts = normalize_submit_opts(opts)
+
     with {:ok, attrs} <- Execution.manual_attrs(prompt, opts) do
       GenServer.call(server, {:submit, attrs}, :infinity)
     end
   end
 
+  def trigger(:heartbeat, routine_id) when is_binary(routine_id), do: {:error, :missing_prompt}
+
+  def trigger(kind, routine_id) when kind in [:dream, :schedule] and is_binary(routine_id),
+    do: {:error, :not_implemented}
+
+  def trigger(kind, nil) when is_atom(kind), do: {:error, :invalid_kind}
+
   def trigger(kind, opts), do: trigger(__MODULE__, kind, opts)
+
+  @doc "Compatibility form used by older heartbeat callers."
+  def trigger(kind, routine_id, opts)
+      when kind in [:heartbeat, :schedule, :dream] and
+             (is_binary(routine_id) or is_nil(routine_id)) do
+    opts =
+      opts
+      |> normalize_trigger_opts()
+      |> Map.put_new(:routine_id, routine_id)
+      |> maybe_put_heartbeat_id(kind, routine_id)
+      |> normalize_legacy_agent()
+
+    trigger(kind, opts)
+  end
 
   def trigger(server, :heartbeat, opts) do
     with {:ok, attrs} <- Execution.heartbeat_attrs(opts) do
@@ -56,12 +87,25 @@ defmodule Synapsis.Agent.Daemon do
 
   def trigger(_server, _kind, _opts), do: {:error, :unsupported_trigger}
 
-  def cancel(run_id), do: cancel(__MODULE__, run_id)
+  def cancel(run_id) do
+    case cancel(__MODULE__, run_id) do
+      {:ok, _run} -> :ok
+      other -> other
+    end
+  end
 
   def cancel(server, run_id) when is_binary(run_id),
     do: GenServer.call(server, {:cancel, run_id}, :infinity)
 
   def cancel(_server, _run_id), do: {:error, :invalid_run_id}
+
+  def reconcile(server \\ __MODULE__), do: GenServer.call(server, :reconcile, :infinity)
+
+  def record_heartbeat_outcome(_routine_id, outcome, _opts \\ [])
+      when outcome in [:completed, :failed] do
+    if Process.whereis(__MODULE__), do: GenServer.cast(__MODULE__, {:heartbeat_outcome, outcome})
+    :ok
+  end
 
   @impl true
   def init(opts) do
@@ -99,6 +143,8 @@ defmodule Synapsis.Agent.Daemon do
         liveness_target:
           Keyword.get(opts, :liveness_target, Synapsis.Agent.Heartbeat.LocalScheduler),
         last_seen_at: DateTime.utc_now(),
+        last_heartbeat_success_at: nil,
+        heartbeat_failure_streak: 0,
         deps: %{
           runs: Keyword.get(opts, :runs, Runs),
           run_events: Keyword.get(opts, :run_events, RunEvents),
@@ -119,6 +165,10 @@ defmodule Synapsis.Agent.Daemon do
 
   @impl true
   def handle_call(:status, _from, state), do: {:reply, Execution.status(state), state}
+
+  def handle_call(:reconcile, _from, state) do
+    {:reply, {:ok, Execution.status(state)}, state}
+  end
 
   def handle_call({:submit, attrs}, from, state) do
     cond do
@@ -179,6 +229,18 @@ defmodule Synapsis.Agent.Daemon do
         end
     end
   end
+
+  @impl true
+  def handle_cast({:heartbeat_outcome, :failed}, state) do
+    {:noreply, %{state | heartbeat_failure_streak: state.heartbeat_failure_streak + 1}}
+  end
+
+  def handle_cast({:heartbeat_outcome, :completed}, state) do
+    {:noreply,
+     %{state | heartbeat_failure_streak: 0, last_heartbeat_success_at: DateTime.utc_now()}}
+  end
+
+  def handle_cast(_message, state), do: {:noreply, state}
 
   @impl true
   def handle_info(:recover, state) do
@@ -783,6 +845,8 @@ defmodule Synapsis.Agent.Daemon do
     daemon = self()
 
     Execution.start_monitored_task(state.task_supervisor, fn ->
+      _ = Registry.register(Synapsis.Agent.RunRegistry, run.id, nil)
+
       Execution.run(
         daemon,
         state.deps,
@@ -861,7 +925,15 @@ defmodule Synapsis.Agent.Daemon do
     no_overlap = Map.get(metadata, "no_overlap", Map.get(metadata, :no_overlap, false))
 
     no_overlap and is_binary(routine_id) and
+      not idempotency_exists?(state.deps.runs, attrs) and
       Enum.any?(owned_runs(state), &(&1.routine_id == routine_id))
+  end
+
+  defp idempotency_exists?(runs, attrs) do
+    key = Map.get(attrs, :idempotency_key)
+
+    is_binary(key) and key != "" and function_exported?(runs, :get_by_idempotency_key, 1) and
+      not is_nil(runs.get_by_idempotency_key(key))
   end
 
   defp owned_runs(state) do
@@ -1007,4 +1079,40 @@ defmodule Synapsis.Agent.Daemon do
   defp request_due_routine_check(_target), do: :ok
 
   defp cancel_timer(ref), do: Operations.cancel_timer(ref)
+
+  defp normalize_trigger_opts(opts) when is_map(opts), do: opts
+  defp normalize_trigger_opts(opts) when is_list(opts), do: Map.new(opts)
+  defp normalize_trigger_opts(_opts), do: %{}
+
+  defp normalize_submit_opts(opts) do
+    opts = normalize_trigger_opts(opts)
+
+    case Map.fetch(opts, :agent) do
+      {:ok, agent} ->
+        opts
+        |> Map.put(:assistant_name, agent)
+        |> Map.put(:tool_profile, "read_only")
+
+      :error ->
+        opts
+    end
+  end
+
+  defp normalize_legacy_agent(opts) do
+    case Map.fetch(opts, :agent) do
+      {:ok, agent} ->
+        opts
+        |> Map.put_new(:assistant_name, agent)
+        |> Map.put_new(:tool_profile, "heartbeat")
+        |> Map.put_new(:source, "scheduler")
+
+      :error ->
+        opts
+    end
+  end
+
+  defp maybe_put_heartbeat_id(opts, :heartbeat, routine_id) when is_binary(routine_id),
+    do: Map.put_new(opts, :heartbeat_id, routine_id)
+
+  defp maybe_put_heartbeat_id(opts, _kind, _routine_id), do: opts
 end

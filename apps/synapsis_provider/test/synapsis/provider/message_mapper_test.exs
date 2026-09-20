@@ -337,15 +337,15 @@ defmodule Synapsis.Provider.MessageMapperTest do
       name = "mcp:agent-note:" <> String.duplicate("nested-namespace:", 8) <> "list_notes"
       tool = %{name: name, description: "List notes", parameters: %{"type" => "object"}}
 
-      anthropic = MessageMapper.build_request(:anthropic, [], [tool], %{})
-      openai = MessageMapper.build_request(:openai, [], [tool], %{})
-      google = MessageMapper.build_request(:google, [], [tool], %{})
+      assert {:ok, anthropic} = MessageMapper.build_request(:anthropic, [], [tool], %{})
+      assert {:ok, openai} = MessageMapper.build_request(:openai, [], [tool], %{})
+      assert {:ok, google} = MessageMapper.build_request(:google, [], [tool], %{})
 
-      anthropic_alias = get_in(anthropic, [:tools, Access.at(0), :name])
-      openai_alias = get_in(openai, [:tools, Access.at(0), :function, :name])
+      anthropic_alias = get_in(anthropic, ["tools", Access.at(0), "name"])
+      openai_alias = get_in(openai, ["tools", Access.at(0), "function", "name"])
 
       google_alias =
-        get_in(google, [:tools, Access.at(0), :functionDeclarations, Access.at(0), :name])
+        get_in(google, ["tools", Access.at(0), "functionDeclarations", Access.at(0), "name"])
 
       assert anthropic_alias == openai_alias
       assert openai_alias == google_alias

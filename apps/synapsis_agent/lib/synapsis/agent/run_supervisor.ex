@@ -47,8 +47,16 @@ defmodule Synapsis.Agent.RunSupervisor do
   @spec whereis(String.t()) :: pid() | nil
   def whereis(run_id) when is_binary(run_id) do
     case Registry.lookup(@registry, run_id) do
-      [{pid, _}] -> pid
-      [] -> nil
+      [{pid, _}] ->
+        pid
+
+      [] ->
+        # The durable daemon may have accepted a run before its FIFO runner
+        # starts. Keep the legacy lookup contract useful during that window.
+        case Synapsis.Agent.Runs.get(run_id) do
+          %{status: "queued"} -> Process.whereis(Synapsis.Agent.Daemon)
+          _other -> nil
+        end
     end
   end
 

@@ -16,6 +16,8 @@ defmodule Synapsis.Agent.Supervisor do
     # parent→child links and statuses ride the session + agent-coordination data.
     children = [
       {Registry, keys: :unique, name: Synapsis.Agent.Runtime.RunRegistry},
+      {Registry, keys: :unique, name: Synapsis.Agent.RunRegistry},
+      Synapsis.Agent.RunSupervisor,
       Synapsis.Agent.Daemon.Supervisor
     ]
 

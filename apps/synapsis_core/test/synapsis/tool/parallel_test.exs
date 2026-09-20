@@ -86,11 +86,14 @@ defmodule Synapsis.Tool.ParallelTest do
         end
 
       start = System.monotonic_time(:millisecond)
-      results = Executor.execute_batch(calls, %{
-            session_id: "parallel-batch-session",
-            permission_mode: "yolo",
-            attended?: true
-          })
+
+      results =
+        Executor.execute_batch(calls, %{
+          session_id: "parallel-batch-session",
+          permission_mode: "yolo",
+          attended?: true
+        })
+
       elapsed = System.monotonic_time(:millisecond) - start
 
       # All 5 should succeed
@@ -111,11 +114,13 @@ defmodule Synapsis.Tool.ParallelTest do
           %{id: "ord_#{i}", name: "parallel_test_slow", input: %{}}
         end
 
-      results = Executor.execute_batch(calls, %{
-            session_id: "parallel-batch-session",
-            permission_mode: "yolo",
-            attended?: true
-          })
+      results =
+        Executor.execute_batch(calls, %{
+          session_id: "parallel-batch-session",
+          permission_mode: "yolo",
+          attended?: true
+        })
+
       ids = Enum.map(results, fn {id, _} -> id end)
 
       assert ids == ["ord_1", "ord_2", "ord_3", "ord_4", "ord_5"]
@@ -155,7 +160,7 @@ defmodule Synapsis.Tool.ParallelTest do
         def execute(_input, _ctx), do: {:error, "intentional failure"}
       end
 
-      Registry.register_module("parallel_test_fail", FailMockTool)
+      Registry.register_module("parallel_test_fail", FailMockTool, permission_level: :read)
       on_exit(fn -> Registry.unregister("parallel_test_fail") end)
 
       calls = [
@@ -166,11 +171,12 @@ defmodule Synapsis.Tool.ParallelTest do
         %{id: "ok_3", name: "parallel_test_slow", input: %{}}
       ]
 
-      results = Executor.execute_batch(calls, %{
-            session_id: "parallel-batch-session",
-            permission_mode: "yolo",
-            attended?: true
-          })
+      results =
+        Executor.execute_batch(calls, %{
+          session_id: "parallel-batch-session",
+          permission_mode: "yolo",
+          attended?: true
+        })
 
       result_map = Map.new(results)
       assert {:ok, "done"} = result_map["ok_1"]
@@ -189,7 +195,7 @@ defmodule Synapsis.Tool.ParallelTest do
       Registry.register_process(name, pid, enabled: false, permission_level: :read)
       on_exit(fn -> Registry.unregister(name) end)
 
-      assert {:error, :tool_disabled} = Executor.execute_approved(name, %{}, %{})
+      assert {:error, :tool_disabled} = Executor.dispatch_granted(name, %{}, %{})
       refute_receive {:process_tool_executed, ^name}
     end
 
@@ -206,7 +212,7 @@ defmodule Synapsis.Tool.ParallelTest do
       on_exit(fn -> Registry.unregister(name) end)
       Agent.update(available, fn _ -> false end)
 
-      assert {:error, :tool_disabled} = Executor.execute_approved(name, %{}, %{})
+      assert {:error, :tool_disabled} = Executor.dispatch_granted(name, %{}, %{})
       refute_receive {:process_tool_executed, ^name}
     end
 
@@ -215,7 +221,7 @@ defmodule Synapsis.Tool.ParallelTest do
       Registry.register_module(name, SlowMockTool, enabled: false)
       on_exit(fn -> Registry.unregister(name) end)
 
-      assert {:error, :tool_disabled} = Executor.execute_approved(name, %{}, %{})
+      assert {:error, :tool_disabled} = Executor.dispatch_granted(name, %{}, %{})
     end
 
     test "rejects an unloaded deferred module tool at dispatch" do
@@ -223,7 +229,7 @@ defmodule Synapsis.Tool.ParallelTest do
       Registry.register_module(name, SlowMockTool, deferred: true)
       on_exit(fn -> Registry.unregister(name) end)
 
-      assert {:error, :tool_deferred} = Executor.execute_approved(name, %{}, %{})
+      assert {:error, :tool_deferred} = Executor.dispatch_granted(name, %{}, %{})
     end
 
     test "rejects an unloaded deferred process tool at dispatch" do
@@ -233,7 +239,7 @@ defmodule Synapsis.Tool.ParallelTest do
       Registry.register_process(name, pid, deferred: true, permission_level: :read)
       on_exit(fn -> Registry.unregister(name) end)
 
-      assert {:error, :tool_deferred} = Executor.execute_approved(name, %{}, %{})
+      assert {:error, :tool_deferred} = Executor.dispatch_granted(name, %{}, %{})
       refute_receive {:process_tool_executed, ^name}
     end
 
@@ -270,7 +276,7 @@ defmodule Synapsis.Tool.ParallelTest do
 
       on_exit(fn -> Registry.unregister(name) end)
 
-      assert {:error, :timeout} = Executor.execute_approved(name, %{}, %{})
+      assert {:error, :timeout} = Executor.dispatch_granted(name, %{}, %{})
       assert Agent.get(counter, & &1) == 1
     end
 

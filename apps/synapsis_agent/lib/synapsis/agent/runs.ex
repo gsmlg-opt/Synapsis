@@ -51,41 +51,37 @@ defmodule Synapsis.Agent.Runs do
     end
   end
 
-  @doc "Fetches a run without collapsing absence and storage failures."
+  @spec get_by_idempotency_key(String.t()) :: AgentRun.t() | nil
+  def get_by_idempotency_key(key) when is_binary(key), do: get_by_idempotency(key)
+
+  @doc "Return a tagged lookup result for controller and coordinator callers."
   @spec fetch(String.t()) :: {:ok, AgentRun.t()} | :not_found | {:error, term()}
   def fetch(id) when is_binary(id) do
-    case fetch_run(id) do
-      {:ok, run, _durable_value} -> {:ok, run}
-      {:error, :not_found} -> :not_found
+    case KV.get(@prefix <> id) do
+      {:ok, map} -> {:ok, AgentRun.from_store(map)}
       {:error, reason} -> {:error, reason}
+      _ -> :not_found
     end
+  end
+
+  def list_by_status_result(status, opts \\ []) when is_binary(status) do
+    {:ok, list_by_status(status, opts)}
   end
 
   @spec list_recent(keyword()) :: [AgentRun.t()]
   def list_recent(opts \\ []) do
-    scan() |> recent() |> Enum.take(Keyword.get(opts, :limit, 50))
+    list = scan() |> recent()
+    take_limit(list, Keyword.get(opts, :limit, 50))
   end
 
   @spec list_by_status(String.t(), keyword()) :: [AgentRun.t()]
   def list_by_status(status, opts \\ []) when is_binary(status) do
-    case list_by_status_result(status, opts) do
-      {:ok, runs} -> runs
-      {:error, _reason} -> []
-    end
-  end
+    list =
+      scan()
+      |> Enum.filter(&(&1.status == status))
+      |> recent()
 
-  @doc "Lists runs by status while preserving storage errors for recovery callers."
-  @spec list_by_status_result(String.t(), keyword()) ::
-          {:ok, [AgentRun.t()]} | {:error, term()}
-  def list_by_status_result(status, opts \\ []) when is_binary(status) do
-    with {:ok, runs} <- scan_result() do
-      filtered = runs |> Enum.filter(&(&1.status == status)) |> recent()
-
-      case Keyword.get(opts, :limit, 50) do
-        :all -> {:ok, filtered}
-        limit when is_integer(limit) and limit >= 0 -> {:ok, Enum.take(filtered, limit)}
-      end
-    end
+    take_limit(list, Keyword.get(opts, :limit, 50))
   end
 
   @spec persist(AgentRun.t()) :: {:ok, AgentRun.t()} | {:error, term()}
@@ -209,7 +205,8 @@ defmodule Synapsis.Agent.Runs do
   # ── internals ──────────────────────────────────────────────────────────────
 
   defp do_create(normalized) do
-    changeset = AgentRun.changeset(%AgentRun{}, normalized)
+    initial_status = Map.get(normalized, :status, "queued")
+    changeset = AgentRun.changeset(%AgentRun{}, Map.put(normalized, :status, "queued"))
 
     if changeset.valid? do
       now = utc_now()
@@ -235,8 +232,19 @@ defmodule Synapsis.Agent.Runs do
 
       with {:ok, run} <- persist(run),
            :ok <- maybe_index_idempotency(run),
-           {:ok, run} <- transition(run, "run.created", %{}) do
-        {:ok, run}
+           {:ok, created} <- transition(run, "run.created", %{}) do
+        if initial_status == "queued" do
+          {:ok, created}
+        else
+          projection =
+            created
+            |> Map.put(:status, initial_status)
+            |> Map.put(:error, Map.get(normalized, :error))
+            |> Map.put(:summary, Map.get(normalized, :summary))
+            |> Map.put(:finished_at, Map.get(normalized, :finished_at))
+
+          persist(%{projection | updated_at: utc_now()})
+        end
       end
     else
       {:error, changeset}
@@ -326,7 +334,7 @@ defmodule Synapsis.Agent.Runs do
 
   defp maybe_index_idempotency(_run), do: :ok
 
-  defp get_by_idempotency_key(key) do
+  defp get_by_idempotency(key) do
     case KV.get(@idempotency_prefix <> key) do
       {:ok, %{"run_id" => id}} -> get(id)
       {:ok, %{run_id: id}} -> get(id)
@@ -355,6 +363,10 @@ defmodule Synapsis.Agent.Runs do
   end
 
   defp recent(runs), do: Enum.sort_by(runs, & &1.inserted_at, {:desc, DateTime})
+
+  defp take_limit(list, :all), do: list
+  defp take_limit(list, limit) when is_integer(limit) and limit >= 0, do: Enum.take(list, limit)
+  defp take_limit(list, _limit), do: Enum.take(list, 50)
 
   defp normalize_attrs(attrs) when is_map(attrs) do
     Enum.reduce(attrs, %{}, fn

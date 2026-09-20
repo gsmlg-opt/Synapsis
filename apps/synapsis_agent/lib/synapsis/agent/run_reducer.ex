@@ -14,13 +14,13 @@ defmodule Synapsis.Agent.RunReducer do
 
   @transitions %{
     "queued" => MapSet.new(~w(starting cancelled failed)),
-    "starting" => MapSet.new(~w(running cancelled failed timed_out)),
+    "starting" => MapSet.new(~w(running cancelled failed interrupted timed_out)),
     "running" =>
       MapSet.new(
-        ~w(waiting_approval sleeping completed failed cancelled timed_out unknown_outcome)
+        ~w(waiting_approval sleeping completed failed cancelled interrupted timed_out unknown_outcome)
       ),
-    "waiting_approval" => MapSet.new(~w(running failed cancelled timed_out)),
-    "sleeping" => MapSet.new(~w(running failed cancelled timed_out))
+    "waiting_approval" => MapSet.new(~w(running failed cancelled interrupted timed_out)),
+    "sleeping" => MapSet.new(~w(running failed cancelled interrupted timed_out))
   }
 
   @event_status %{
@@ -33,6 +33,7 @@ defmodule Synapsis.Agent.RunReducer do
     "run.completed" => "completed",
     "run.failed" => "failed",
     "run.cancelled" => "cancelled",
+    "run.interrupted" => "interrupted",
     "run.timed_out" => "timed_out",
     "run.unknown_outcome" => "unknown_outcome",
     "run.reconciled" => nil,
@@ -174,7 +175,7 @@ defmodule Synapsis.Agent.RunReducer do
   defp maybe_put_summary(run, _payload, _status), do: run
 
   defp maybe_put_error(run, payload, status)
-       when status in ~w(failed timed_out unknown_outcome) do
+       when status in ~w(failed interrupted timed_out unknown_outcome) do
     error = Map.get(payload, "error") || Map.get(payload, "reason") || run.error
     failure_class = Map.get(payload, "failure_class") || run.failure_class
     %{run | error: error, failure_class: failure_class}

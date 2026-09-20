@@ -23,8 +23,13 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
     GenServer.start_link(__MODULE__, opts, name: Keyword.get(opts, :name, __MODULE__))
   end
 
-  @doc "Return the enabled heartbeat schedule."
-  def status(server \\ __MODULE__), do: GenServer.call(server, :status)
+  @doc "Return the enabled heartbeat schedule for an explicit scheduler process."
+  def status(server) when is_pid(server) or is_atom(server), do: GenServer.call(server, :status)
+
+  @doc "Return the compatibility snapshot used by daemon health callers."
+  def status() do
+    %{degraded?: false, entries: status(__MODULE__)}
+  end
 
   @doc "Synchronously reload persisted routines and reconcile their timers."
   def reload(server \\ __MODULE__), do: GenServer.call(server, :reload)

@@ -28,6 +28,7 @@ defmodule Synapsis.Agent.Events.RunEvent do
     run.completed
     run.failed
     run.cancelled
+    run.interrupted
     run.timed_out
     run.unknown_outcome
     run.reconciled
@@ -44,6 +45,7 @@ defmodule Synapsis.Agent.Events.RunEvent do
     run.completed
     run.failed
     run.cancelled
+    run.interrupted
     run.timed_out
     run.unknown_outcome
     run.reconciled

@@ -190,7 +190,15 @@ defmodule Synapsis.Agent.QueryLoop.ExecutorTest do
       on_exit(fn -> Synapsis.Tool.Registry.unregister(name) end)
 
       assert {:error, :tool_registration_changed} =
-               Executor.run_one(%{name: name, input: %{}}, %{name => expected_entry}, %{})
+               Executor.run_one(
+                 %{name: name, input: %{}},
+                 %{name => expected_entry},
+                 %{
+                   session_id: "replacement-test",
+                   permission_mode: "yolo",
+                   operator_approval: true
+                 }
+               )
 
       refute_receive {:query_loop_process_executed, ^name}
     end

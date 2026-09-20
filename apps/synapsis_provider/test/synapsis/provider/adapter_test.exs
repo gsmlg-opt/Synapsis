@@ -103,8 +103,11 @@ defmodule Synapsis.Provider.AdapterTest do
     } do
       name = "mcp:agent-note:" <> String.duplicate("nested-namespace:", 8) <> "list_notes"
       tool = %{name: name, description: "List notes", parameters: %{"type" => "object"}}
-      request = Adapter.format_request([], [tool], %{model: "gpt-4o", provider_type: "openai"})
-      alias_name = get_in(request, [:tools, Access.at(0), :function, :name])
+
+      assert {:ok, request} =
+               Adapter.format_request([], [tool], %{model: "gpt-4o", provider_type: "openai"})
+
+      alias_name = get_in(request, ["tools", Access.at(0), "function", "name"])
 
       Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)

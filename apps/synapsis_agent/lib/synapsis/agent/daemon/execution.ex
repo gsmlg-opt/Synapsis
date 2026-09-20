@@ -37,6 +37,8 @@ defmodule Synapsis.Agent.Daemon.Execution do
          assistant_name: option(opts, :assistant_name, "main"),
          prompt: prompt,
          tool_profile: option(opts, :tool_profile, "assistant_basic"),
+         idempotency_key: option(opts, :idempotency_key),
+         deadline_at: option(opts, :deadline_at),
          provider: option(opts, :provider),
          model: option(opts, :model),
          metadata: option(opts, :metadata, %{})
@@ -56,7 +58,7 @@ defmodule Synapsis.Agent.Daemon.Execution do
     metadata = option(opts, :metadata, %{})
 
     with :ok <- validate_prompt(prompt),
-         true <- is_binary(heartbeat_id) and match?({:ok, _}, Ecto.UUID.cast(heartbeat_id)),
+         true <- is_binary(heartbeat_id) and heartbeat_id != "",
          true <- is_boolean(no_overlap),
          true <- is_integer(max_runtime_ms) and max_runtime_ms > 0,
          true <- is_map(metadata),
@@ -74,6 +76,8 @@ defmodule Synapsis.Agent.Daemon.Execution do
          assistant_name: option(opts, :assistant_name, "main"),
          heartbeat_id: heartbeat_id,
          routine_id: option(opts, :routine_id, heartbeat_id),
+         idempotency_key: option(opts, :idempotency_key),
+         deadline_at: option(opts, :deadline_at),
          prompt: prompt,
          tool_profile: option(opts, :tool_profile, "assistant_basic"),
          provider: option(opts, :provider),
@@ -146,6 +150,16 @@ defmodule Synapsis.Agent.Daemon.Execution do
     end
   end
 
+  def run_timeout(%{deadline_at: %DateTime{} = deadline, metadata: metadata}, default)
+      when is_map(metadata) do
+    deadline_timeout = max(DateTime.diff(deadline, DateTime.utc_now(), :millisecond), 0)
+
+    case Map.get(metadata, "max_runtime_ms", Map.get(metadata, :max_runtime_ms)) do
+      timeout when is_integer(timeout) and timeout > 0 -> min(timeout, deadline_timeout)
+      _other -> min(default, deadline_timeout)
+    end
+  end
+
   def run_timeout(%{metadata: metadata}, default) when is_map(metadata) do
     case Map.get(metadata, "max_runtime_ms", Map.get(metadata, :max_runtime_ms)) do
       timeout when is_integer(timeout) and timeout > 0 -> timeout
@@ -163,9 +177,14 @@ defmodule Synapsis.Agent.Daemon.Execution do
       ready: state.ready,
       active_run: active,
       active_run_id: active && active.id,
+      active_count: if(active, do: 1, else: 0),
+      active_run_ids: if(active, do: [active.id], else: []),
       queued_count: length(queued_ids),
       queued_ids: queued_ids,
       last_seen_at: state.last_seen_at,
+      liveness_at: state.last_seen_at,
+      heartbeat_failure_streak: Map.get(state, :heartbeat_failure_streak, 0),
+      last_heartbeat_success_at: Map.get(state, :last_heartbeat_success_at),
       recovery_backlog_count: Map.get(state, :recovery_backlog_count, 0),
       last_error: bound_optional(state.last_error),
       recovery_error: bound_optional(state.recovery_error)
@@ -192,7 +211,8 @@ defmodule Synapsis.Agent.Daemon.Execution do
   end
 
   def run(daemon, deps, task_supervisor, run, timeout, cleanup_timeout, event_timeout) do
-    deadline = System.monotonic_time(:millisecond) + timeout
+    startup_grace = if run.kind == "dream", do: 250, else: 0
+    deadline = System.monotonic_time(:millisecond) + timeout + startup_grace
 
     {current_run, outcome, session_id, warnings} =
       case start_inner(daemon, deps, task_supervisor, run, event_timeout) do
@@ -306,9 +326,19 @@ defmodule Synapsis.Agent.Daemon.Execution do
   def finalize(deps, run, {:error, reason}, session_id, task_supervisor, event_timeout) do
     error = bounded_error(reason)
 
-    finalize_transition(deps, run, :failed, task_supervisor, event_timeout, fn ->
-      deps.runs.mark_failed(run, error, terminal_attrs(run, "failed", error, session_id))
-    end)
+    if run.deadline_at && reason == :session_timeout do
+      finalize_transition(deps, run, :timed_out, task_supervisor, event_timeout, fn ->
+        deps.runs.mark_timed_out(run, %{
+          session_id: session_id,
+          error: error,
+          failure_class: "timeout"
+        })
+      end)
+    else
+      finalize_transition(deps, run, :failed, task_supervisor, event_timeout, fn ->
+        deps.runs.mark_failed(run, error, terminal_attrs(run, "failed", error, session_id))
+      end)
+    end
   end
 
   def finalize_intent(deps, task_supervisor, event_timeout, intent) do

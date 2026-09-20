@@ -133,7 +133,7 @@ defmodule Synapsis.AgentRun do
       scheduled_for: Map.get(atomized, :scheduled_for),
       deadline_at: Map.get(atomized, :deadline_at),
       prompt: Map.get(atomized, :prompt),
-      tool_profile: Map.get(atomized, :tool_profile) || "read_only",
+      tool_profile: Map.get(atomized, :tool_profile) || "assistant_basic",
       policy_snapshot: Map.get(atomized, :policy_snapshot) || %{},
       capability_snapshot: Map.get(atomized, :capability_snapshot) || %{},
       model: Map.get(atomized, :model),
