@@ -28,10 +28,6 @@ defmodule SynapsisWeb.ProviderLive.Index do
   end
 
   @impl true
-  def handle_event("select_preset", %{"name" => "backplane"}, socket) do
-    {:noreply, push_navigate(socket, to: "/agent/daemon#backplane-create")}
-  end
-
   def handle_event("select_preset", %{"name" => name}, socket) do
     preset =
       Synapsis.Providers.preset_providers()
