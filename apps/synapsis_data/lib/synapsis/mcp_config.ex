@@ -46,7 +46,19 @@ defmodule Synapsis.MCPConfig do
     |> validate_length(:name, max: 255)
     |> validate_length(:command, max: 4_096)
     |> validate_length(:url, max: 2_048)
+    |> validate_change(:headers, &validate_headers/2)
     |> validate_transport_fields()
+  end
+
+  defp validate_headers(:headers, headers) do
+    if Enum.all?(headers, fn {name, value} ->
+         is_binary(name) and Regex.match?(~r/\A[!#$%&'*+\-.^_`|~0-9A-Za-z]+\z/, name) and
+           is_binary(value) and not Regex.match?(~r/[\x00-\x08\x0A-\x1F\x7F]/, value)
+       end) do
+      []
+    else
+      [headers: "must contain valid HTTP header names and single-line string values"]
+    end
   end
 
   defp validate_transport_fields(changeset) do

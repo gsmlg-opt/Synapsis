@@ -252,6 +252,30 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
            }
   end
 
+  test "invalid header input shows guidance and preserves saved config", %{
+    conn: conn,
+    config: config
+  } do
+    {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
+
+    view
+    |> form("#mcp-config-form", %{"transport" => "streamable_http"})
+    |> render_change()
+
+    html =
+      view
+      |> form("#mcp-config-form", %{
+        "transport" => "streamable_http",
+        "url" => "http://localhost/mcp",
+        "headers" => ~s({"Authorization":"Bearer test-token"})
+      })
+      |> render_submit()
+
+    assert html =~ "Invalid headers. Use Name: Value, one per line, without JSON braces."
+    assert MCPConfigs.get(config.id).transport == "stdio"
+    assert MCPConfigs.get(config.id).headers == %{}
+  end
+
   test "enabled checkbox — submitting with false value", %{conn: conn, config: config} do
     {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
 

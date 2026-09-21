@@ -37,6 +37,43 @@ defmodule Synapsis.MCPConfigsTest do
     assert "is invalid" in errors_on(changeset).transport
   end
 
+  test "rejects invalid HTTP headers before persisting a config" do
+    for headers <- [
+          %{"{\"Authorization\"" => "\"Bearer test-token\"}"},
+          %{"Bad Header" => "value"},
+          %{"X-Test" => "value\r\nInjected: value"},
+          %{"X-Test" => 123}
+        ] do
+      assert {:error, changeset} =
+               MCPConfigs.create(%{
+                 name: "invalid-headers",
+                 transport: "streamable_http",
+                 url: "http://localhost/mcp",
+                 headers: headers
+               })
+
+      assert errors_on(changeset).headers != []
+      assert MCPConfigs.get_by_name("invalid-headers") == nil
+    end
+  end
+
+  test "invalid header updates preserve the existing HTTP config" do
+    headers = %{"Authorization" => "Bearer test-token", "X-Client" => "synapsis:local"}
+
+    assert {:ok, config} =
+             MCPConfigs.create(%{
+               name: "valid-headers",
+               transport: "streamable_http",
+               url: "http://localhost/mcp",
+               headers: headers
+             })
+
+    assert {:error, _changeset} =
+             MCPConfigs.update(config, %{headers: %{"{\"Authorization\"" => "bad"}})
+
+    assert MCPConfigs.get(config.id).headers == headers
+  end
+
   test "enabled/0 returns only effectively available configs" do
     suffix = System.unique_integer([:positive])
 

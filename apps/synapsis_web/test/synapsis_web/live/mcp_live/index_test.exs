@@ -137,6 +137,27 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
              }
     end
 
+    test "rejects JSON pasted into the line-based headers field", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings/mcp/new")
+
+      view
+      |> form("#mcp-create-form", %{"transport" => "streamable_http"})
+      |> render_change()
+
+      html =
+        view
+        |> form("#mcp-create-form", %{
+          "name" => "invalid-json-headers",
+          "transport" => "streamable_http",
+          "url" => "http://localhost/mcp",
+          "headers" => ~s({"Authorization":"Bearer test-token"})
+        })
+        |> render_submit()
+
+      assert html =~ "Invalid headers. Use Name: Value, one per line, without JSON braces."
+      assert MCPConfigs.get_by_name("invalid-json-headers") == nil
+    end
+
     test "deletes MCP config", %{conn: conn} do
       config = create_mcp_config(%{name: "deletable", command: "test-cmd"})
 

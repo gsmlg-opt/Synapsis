@@ -45,6 +45,16 @@ defmodule SynapsisWeb.MCPLive.Show do
       {:ok, config} ->
         {:noreply, finish_update(socket, config)}
 
+      {:error, %Ecto.Changeset{errors: errors}} ->
+        message =
+          if Keyword.has_key?(errors, :headers) do
+            "Invalid headers. Use Name: Value, one per line, without JSON braces."
+          else
+            "Failed to update"
+          end
+
+        {:noreply, put_flash(socket, :error, message)}
+
       {:error, _} ->
         {:noreply, put_flash(socket, :error, "Failed to update")}
     end

@@ -77,6 +77,11 @@ GET  /settings/mcp[/new|/:id]                 MCPLive.Index/Show
 GET  /settings/lsp[/new|/:id]                 LSPLive.Index/Show
 ```
 
+The MCP server create/edit forms accept HTTP headers as `Name: Value`, one per
+line (for example, `Authorization: Bearer <token>`), not JSON. Config writes reject
+invalid HTTP header names, non-string values, and disallowed control characters
+before persistence; the forms display a header-format error on rejection.
+
 `AgentLive.Sessions` is the core chat view: pure LiveView with small DOM hooks (`ScrollBottom`, `StreamingText`) for streaming UX.
 
 **Workspace packages** (Bun workspaces in `packages/`):

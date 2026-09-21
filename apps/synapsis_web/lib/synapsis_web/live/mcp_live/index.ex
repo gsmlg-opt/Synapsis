@@ -101,9 +101,15 @@ defmodule SynapsisWeb.MCPLive.Index do
 
       {:error, %Ecto.Changeset{errors: errors}} ->
         msg =
-          case Keyword.get(errors, :name) do
-            {"has already been taken", _} -> "Name already taken"
-            _ -> "Failed to add MCP server"
+          cond do
+            Keyword.has_key?(errors, :headers) ->
+              "Invalid headers. Use Name: Value, one per line, without JSON braces."
+
+            match?({"has already been taken", _}, Keyword.get(errors, :name)) ->
+              "Name already taken"
+
+            true ->
+              "Failed to add MCP server"
           end
 
         {:noreply, put_flash(socket, :error, msg)}
