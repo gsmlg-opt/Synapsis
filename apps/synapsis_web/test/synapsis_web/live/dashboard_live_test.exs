@@ -30,9 +30,8 @@ defmodule SynapsisWeb.DashboardLiveTest do
              )
 
       assert has_element?(view, "header.appbar .appbar-trailing a[href='/settings']", "Settings")
-      assert has_element?(view, "header.appbar .appbar-trailing [phx-hook='ThemeSwitcher']")
-      assert has_element?(view, "header.appbar .appbar-trailing input.theme-controller-item")
-      assert theme_switcher_hook_source() =~ ".theme-controller-item"
+      refute has_element?(view, "header.appbar [phx-hook='ThemeSwitcher']")
+      refute has_element?(view, "header.appbar input[type='radio']")
 
       refute has_element?(view, "header.appbar a[href='/projects']")
       refute has_element?(view, "header.appbar a[href='/chat']")
@@ -73,11 +72,6 @@ defmodule SynapsisWeb.DashboardLiveTest do
       {:ok, view, _html} = live(conn, ~p"/")
       assert page_title(view) =~ "Synapsis"
     end
-  end
-
-  defp theme_switcher_hook_source do
-    Path.expand("../../../assets/js/app.ts", __DIR__)
-    |> File.read!()
   end
 
   # ADR-006 C4: write a session meta directly (no worker) for dashboard counts.

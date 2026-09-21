@@ -43,37 +43,66 @@ const WebComponentHook = {
   }
 }
 
-// Client-only theme switcher — upstream hook pushes "theme_changed" to the
-// server which has no handler, causing a disconnect flash. We handle
-// everything on the client: localStorage + data-theme on <html>.
-const themeControllerSelector = '.theme-controller, .theme-controller-item'
+// Keep theme preference client-side; Auto must follow the system on every page.
+const systemTheme = window.matchMedia('(prefers-color-scheme: dark)')
+const themeSelector = 'input[name="theme-mode"]'
+type ThemeMode = 'auto' | 'sunshine' | 'moonlight'
+
+function savedTheme(): ThemeMode {
+  try {
+    const saved = localStorage.getItem('theme')
+    if (saved === 'sunshine' || saved === 'moonlight') return saved
+  } catch {
+    // Use Auto when browser storage is unavailable.
+  }
+  return 'auto'
+}
+
+let themeMode = savedTheme()
+
+function applyTheme() {
+  const theme = themeMode === 'auto'
+    ? (systemTheme.matches ? 'moonlight' : 'sunshine')
+    : themeMode
+  document.documentElement.setAttribute('data-theme', theme)
+  document.documentElement.style.colorScheme = theme === 'moonlight' ? 'dark' : 'light'
+  document.querySelectorAll<HTMLInputElement>(themeSelector).forEach((input) => {
+    input.checked = input.value === themeMode
+  })
+}
+
+function changeTheme(event: Event) {
+  const input = event.target
+  if (!(input instanceof HTMLInputElement) || !input.matches(themeSelector) || !input.checked) return
+  if (input.value !== 'auto' && input.value !== 'sunshine' && input.value !== 'moonlight') return
+  themeMode = input.value
+  try {
+    localStorage.setItem('theme', themeMode)
+  } catch {
+    // Still apply the selection for this page when storage is unavailable.
+  }
+  applyTheme()
+}
+
+systemTheme.addEventListener('change', applyTheme)
+window.addEventListener('storage', (event) => {
+  if (event.key === 'theme' || event.key === null) {
+    themeMode = savedTheme()
+    applyTheme()
+  }
+})
+applyTheme()
 
 const ThemeSwitcher = {
   mounted(this: { el: HTMLElement }) {
-    const saved = localStorage.getItem('theme')
-    if (saved) {
-      document.documentElement.setAttribute('data-theme', saved)
-    }
-
-    const controllers = this.el.querySelectorAll<HTMLInputElement>(themeControllerSelector)
-    const current = saved || this.el.dataset.theme || 'default'
-
-    controllers.forEach((c) => {
-      c.checked = c.value === current
-      c.addEventListener('change', () => {
-        localStorage.setItem('theme', c.value)
-        document.documentElement.setAttribute('data-theme', c.value)
-      })
-    })
+    applyTheme()
+    this.el.addEventListener('change', changeTheme)
   },
-
-  updated(this: { el: HTMLElement }) {
-    const saved = localStorage.getItem('theme')
-    if (saved) {
-      this.el.querySelectorAll<HTMLInputElement>(themeControllerSelector).forEach((c) => {
-        c.checked = c.value === saved
-      })
-    }
+  updated() {
+    applyTheme()
+  },
+  destroyed(this: { el: HTMLElement }) {
+    this.el.removeEventListener('change', changeTheme)
   }
 }
 

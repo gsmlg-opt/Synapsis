@@ -1,74 +1,60 @@
 defmodule SynapsisWeb.SettingsLive do
-  @moduledoc "Application settings page for user preferences and configuration."
+  @moduledoc "Appearance settings for the application."
   use SynapsisWeb, :live_view
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, page_title: "Settings")}
+    {:ok, assign(socket, page_title: "Appearance")}
   end
 
   @impl true
   def render(assigns) do
     ~H"""
-    <.settings_layout current_path="/settings">
-      <h1 class="text-2xl font-bold mb-6">Settings</h1>
+    <.settings_layout current_path="/settings" content_class="max-w-4xl">
+      <h1 class="text-3xl font-bold mb-3">Appearance</h1>
+      <p id="theme-description" class="text-lg text-on-surface-variant mb-8">
+        Choose system theme preference: automatic, light, or dark.
+      </p>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <.dm_card variant="bordered">
-          <:title>
-            <.dm_mdi name="theme-light-dark" class="w-5 h-5 inline mr-2" />Theme
-          </:title>
-          <div class="flex items-center justify-between gap-4" data-testid="settings-theme-switcher">
-            <p class="text-sm text-on-surface-variant">
-              Choose the interface theme.
-            </p>
-            <.dm_theme_switcher />
-          </div>
-        </.dm_card>
-
-        <.dm_link navigate={~p"/settings/providers"}>
-          <.dm_card variant="bordered">
-            <:title>
-              <.dm_mdi name="cloud" class="w-5 h-5 inline mr-2" />Providers
-            </:title>
-            <p class="text-sm text-on-surface-variant">
-              Manage LLM provider configurations and API keys.
-            </p>
-          </.dm_card>
-        </.dm_link>
-
-        <.dm_link navigate={~p"/settings/models"}>
-          <.dm_card variant="bordered">
-            <:title>
-              <.dm_mdi name="tune" class="w-5 h-5 inline mr-2" />Default Model
-            </:title>
-            <p class="text-sm text-on-surface-variant">
-              View default, fast, and expert model tiers per provider.
-            </p>
-          </.dm_card>
-        </.dm_link>
-
-        <.dm_link navigate={~p"/settings/memory"}>
-          <.dm_card variant="bordered">
-            <:title>
-              <.dm_mdi name="brain" class="w-5 h-5 inline mr-2" />Memory
-            </:title>
-            <p class="text-sm text-on-surface-variant">
-              Manage persistent memory entries across scopes.
-            </p>
-          </.dm_card>
-        </.dm_link>
-
-        <.dm_link navigate={~p"/settings/mcp"}>
-          <.dm_card variant="bordered">
-            <:title>
-              <.dm_mdi name="server-network" class="w-5 h-5 inline mr-2" />MCP Servers
-            </:title>
-            <p class="text-sm text-on-surface-variant">
-              Manage Model Context Protocol server connections.
-            </p>
-          </.dm_card>
-        </.dm_link>
+      <div
+        id="appearance-theme"
+        phx-hook="ThemeSwitcher"
+        class="theme-controller theme-controller-lg w-full"
+        role="radiogroup"
+        aria-label="Theme"
+        aria-describedby="theme-description"
+      >
+        <input
+          id="theme-auto"
+          type="radio"
+          name="theme-mode"
+          value="auto"
+          class="theme-controller-item"
+          checked
+        />
+        <label for="theme-auto" class="theme-controller-label">
+          <.dm_mdi name="monitor" class="w-6 h-6" aria-hidden="true" /> Auto
+        </label>
+        <input
+          id="theme-light"
+          type="radio"
+          name="theme-mode"
+          value="sunshine"
+          class="theme-controller-item"
+        />
+        <label for="theme-light" class="theme-controller-label">
+          <.dm_mdi name="white-balance-sunny" class="w-6 h-6" aria-hidden="true" /> Light
+        </label>
+        <input
+          id="theme-dark"
+          type="radio"
+          name="theme-mode"
+          value="moonlight"
+          class="theme-controller-item"
+        />
+        <label for="theme-dark" class="theme-controller-label">
+          <.dm_mdi name="weather-night" class="w-6 h-6" aria-hidden="true" /> Dark
+        </label>
       </div>
     </.settings_layout>
     """

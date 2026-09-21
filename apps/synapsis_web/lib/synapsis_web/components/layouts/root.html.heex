@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="moonlight">
+<html lang="en" data-theme="sunshine">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="csrf-token" content={get_csrf_token()} />
-    <title>Synapsis</title>
+    <.live_title suffix=" · Synapsis">{assigns[:page_title] || "Synapsis"}</.live_title>
     <link rel="icon" type="image/png" href={~p"/favicon.png"} />
     <link rel="apple-touch-icon" href={~p"/apple-touch-icon.png"} />
     <link
@@ -17,17 +17,15 @@
       }
     />
     <script>
-      // Restore saved theme before first paint to avoid flash.
-      // Validate against known themes to avoid applying a stale/invalid value
-      // that would leave all CSS theme variables unresolved.
+      // Apply the saved mode before first paint; missing/legacy values follow the system.
       (function() {
-        var valid = ["sunshine", "moonlight"];
-        var t = localStorage.getItem("theme");
-        if (t && valid.indexOf(t) >= 0) {
-          document.documentElement.setAttribute("data-theme", t);
-        } else if (t) {
-          localStorage.removeItem("theme");
+        var theme;
+        try { theme = localStorage.getItem("theme"); } catch (_) {}
+        if (theme !== "sunshine" && theme !== "moonlight") {
+          theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "moonlight" : "sunshine";
         }
+        document.documentElement.setAttribute("data-theme", theme);
+        document.documentElement.style.colorScheme = theme === "moonlight" ? "dark" : "light";
       })();
     </script>
     <script

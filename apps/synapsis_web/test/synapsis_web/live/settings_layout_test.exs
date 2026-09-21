@@ -44,13 +44,13 @@ defmodule SynapsisWeb.SettingsLayoutTest do
     end
   end
 
-  test "settings overview is active on the root settings page", %{conn: conn} do
+  test "settings appearance is active on the root settings page", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/settings")
 
     assert has_element?(
              view,
              "[data-testid='settings-sidebar'] a[href='/settings'][aria-current='page']",
-             "Overview"
+             "Appearance"
            )
   end
 
@@ -66,17 +66,17 @@ defmodule SynapsisWeb.SettingsLayoutTest do
     refute has_element?(
              view,
              "[data-testid='settings-sidebar'] a[href='/settings'][aria-current='page']",
-             "Overview"
+             "Appearance"
            )
   end
 
-  test "unlisted settings sections do not activate overview", %{conn: conn} do
+  test "unlisted settings sections do not activate appearance", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/settings/skills")
 
     refute has_element?(
              view,
              "[data-testid='settings-sidebar'] a[href='/settings'][aria-current='page']",
-             "Overview"
+             "Appearance"
            )
   end
 

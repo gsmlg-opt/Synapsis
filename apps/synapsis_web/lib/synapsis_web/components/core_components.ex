@@ -348,7 +348,7 @@ defmodule SynapsisWeb.CoreComponents do
 
   def settings_layout(assigns) do
     ~H"""
-    <div class={["flex min-h-full", @class]} data-testid="settings-layout">
+    <div class={["flex flex-col md:flex-row min-h-full", @class]} data-testid="settings-layout">
       <.settings_sidebar current_path={@current_path} />
       <main class="flex-1 min-w-0 p-6">
         <div class={["mx-auto", @content_class]}>
@@ -367,7 +367,7 @@ defmodule SynapsisWeb.CoreComponents do
 
   def settings_sidebar(assigns) do
     items = [
-      %{to: ~p"/settings", icon: "view-dashboard-outline", label: "Overview"},
+      %{to: ~p"/settings", icon: "theme-light-dark", label: "Appearance"},
       %{to: ~p"/settings/providers", icon: "cloud", label: "Providers"},
       %{to: ~p"/settings/models", icon: "tune", label: "Default Model"},
       %{to: ~p"/settings/memory", icon: "brain", label: "Memory"},
@@ -380,6 +380,23 @@ defmodule SynapsisWeb.CoreComponents do
       |> assign(:active_path, active_menu_id(assigns.current_path, items))
 
     ~H"""
+    <nav
+      class="flex gap-2 overflow-x-auto border-b border-outline-variant px-6 py-3 md:hidden"
+      aria-label="Settings navigation"
+      data-testid="settings-mobile-nav"
+    >
+      <.dm_link
+        :for={item <- @items}
+        navigate={item.to}
+        aria-current={if(@active_path == item.to, do: "page")}
+        class={[
+          "shrink-0 rounded px-3 py-2 text-sm font-medium",
+          @active_path == item.to && "bg-primary-container text-on-primary-container"
+        ]}
+      >
+        {item.label}
+      </.dm_link>
+    </nav>
     <aside
       class={[
         "hidden w-64 shrink-0 border-r border-outline-variant bg-secondary px-5 py-6 text-secondary-content md:block",

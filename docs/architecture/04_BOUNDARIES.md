@@ -68,7 +68,7 @@ GET  /agent/tools[/new|/:id/edit]             AgentLive.Toolsets   — toolset C
 GET  /agent/skills[/new|/:id/edit]            AgentLive.Skills     — skill CRUD
 GET  /agent/agents/:agent_id/sessions[/:id]   AgentLive.Sessions   — chat view
 GET  /workspace                               WorkspaceLive.Explorer
-GET  /settings                                SettingsLive         — settings hub
+GET  /settings                                SettingsLive         — appearance
 GET  /settings/providers[/new|/:id]           ProviderLive.Index/Show
 GET  /settings/models                         ModelTierLive.Index
 GET  /settings/memory[/new|/:id]              MemoryLive.Index/Show
@@ -81,6 +81,11 @@ The MCP server create/edit forms accept HTTP headers as `Name: Value`, one per
 line (for example, `Authorization: Bearer <token>`), not JSON. Config writes reject
 invalid HTTP header names, non-string values, and disallowed control characters
 before persistence; the forms display a header-format error on rejection.
+
+Appearance at `/settings` owns the Auto, Light, and Dark theme controls; the
+appbar only links to Settings. The browser stores the preference in `theme`
+localStorage (`auto`, `sunshine`, or `moonlight`). Auto follows system color-scheme
+changes on every page; existing Sunshine/Moonlight preferences remain valid.
 
 `AgentLive.Sessions` is the core chat view: pure LiveView with small DOM hooks (`ScrollBottom`, `StreamingText`) for streaming UX.
 
