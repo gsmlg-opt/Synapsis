@@ -4,6 +4,8 @@ Status: proposal and validation record; production integration blocked by open g
 
 Latest dependency validation (2026-09-23): **runtime and MCP packages upgraded to published 1.7.9**, containing fixes for #42/#43. Six new consumer contracts pass; the combined regression run reports **564 agent tests passed and 144/145 MCP tests passed**, exit 2 due to a source-confirmed pre-existing MCP grant-fixture mismatch. See [upgrade evidence](#published-179-adoption-2026-09-23). ADR/profile acceptance and host integration remain open.
 
+Release follow-up (2026-09-23): the previously reported MCP fixture now obtains a valid grant before source trust is revoked, then checks that execution with that grant still returns `:tool_disabled`. Its focused test passes (1 passed, 6 excluded), preserving the revocation requirement without bypassing permission checks. The prior 144/145 result below remains the historical dependency-upgrade run; full release validation is a separate gate.
+
 Related: [adoption plan](2026-09-22-backplane-agent-runtime-adoption.md), [proposed ADR-009](../../decisions/ADR-009-backplane-daemon-pilot-ownership.md).
 
 ## Completed handoff

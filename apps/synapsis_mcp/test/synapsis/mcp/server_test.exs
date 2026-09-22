@@ -193,6 +193,11 @@ defmodule Synapsis.MCP.ServerTest do
     assert Registry.runtime_available?(tool)
     assert [%{name: ^tool}] = Registry.list_for_query_loop(names: [tool])
 
+    context = %{run_id: Ecto.UUID.generate(), permission_mode: "auto"}
+    assert {:ok, snapshot} = Synapsis.Tool.Gateway.resolve_snapshot(context)
+    assert {:ok, grant} = Synapsis.Tool.Gateway.authorize(tool, %{}, snapshot, context)
+    authorized_context = Map.put(context, :capability_grant, grant)
+
     assert {:ok, revoked_source} =
              Store.merge_existing(:backplane, source_id, %{
                "connection_options_json" => Jason.encode!(%{"trust_mcp_annotations" => false})
@@ -206,7 +211,8 @@ defmodule Synapsis.MCP.ServerTest do
 
     # Daemon Toolsets select MCP candidates through this runtime-filtered registry view.
     assert [] = Registry.list_for_query_loop(names: [tool])
-    assert {:error, :tool_disabled} = Synapsis.Tool.Executor.execute_approved(tool, %{}, %{})
+    assert {:error, :tool_disabled} =
+             Synapsis.Tool.Executor.execute_approved(tool, %{}, authorized_context)
 
     assert {:error, :mcp_unavailable} =
              GenServer.call(pid, {:execute, tool, %{"text" => "blocked"}, %{}}, 10_000)
