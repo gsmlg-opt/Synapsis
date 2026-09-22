@@ -31,16 +31,16 @@ defmodule Synapsis.Agent.QueryLoopContextTest do
       {:ok, :completed, _} = QueryLoop.run(state, ctx)
 
       assert_received {:captured_request, request}
-      assert is_binary(request.system)
+      assert [%{"type" => "text", "text" => prompt}] = request["system"]
       # The assembled prompt should be non-trivial (ContextBuilder adds layers)
-      assert String.length(request.system) > 50
+      assert String.length(prompt) > 50
     end
 
     test "static system_prompt passes through unchanged" do
       test_pid = self()
 
       mock_stream = fn request, _config ->
-        send(test_pid, {:captured_system, request.system})
+        send(test_pid, {:captured_system, request["system"]})
         send(test_pid, {:provider_chunk, {:text_delta, "ok"}})
         send(test_pid, {:provider_chunk, :content_block_stop})
         send(test_pid, {:provider_chunk, :done})
@@ -61,7 +61,8 @@ defmodule Synapsis.Agent.QueryLoopContextTest do
       state = State.new(messages: [%{role: "user", content: "hi"}])
       {:ok, :completed, _} = QueryLoop.run(state, ctx)
 
-      assert_received {:captured_system, "You are a static test prompt."}
+      assert_received {:captured_system,
+                       [%{"type" => "text", "text" => "You are a static test prompt."}]}
     end
   end
 end

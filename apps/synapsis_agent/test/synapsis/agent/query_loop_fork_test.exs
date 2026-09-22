@@ -208,7 +208,7 @@ defmodule Synapsis.Agent.QueryLoopForkTest do
       owner = self()
 
       stream = fn request, _config ->
-        send(owner, {:child_request_tools, Enum.map(request.tools, & &1.name)})
+        send(owner, {:child_request_tools, Enum.map(request["tools"], & &1["name"])})
         caller = self()
         count = :counters.get(turn, 1)
         :counters.add(turn, 1, 1)

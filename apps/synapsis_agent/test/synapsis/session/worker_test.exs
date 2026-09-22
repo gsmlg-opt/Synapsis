@@ -138,7 +138,7 @@ defmodule Synapsis.Session.WorkerTest do
     assert new_state.session.model == "new-default-model"
     assert new_state.engine_ctx.model == "new-default-model"
     assert new_state.engine_state.agent_config.model == "new-default-model"
-    assert new_state.engine_state.request.model == "new-default-model"
+    assert new_state.engine_state.request["model"] == "new-default-model"
 
     assert {:ok, meta} = Session.Store.get_meta(session.id)
     assert Session.from_meta(meta).model == "new-default-model"
