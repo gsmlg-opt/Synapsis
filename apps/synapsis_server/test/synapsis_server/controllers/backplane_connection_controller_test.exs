@@ -142,10 +142,13 @@ defmodule SynapsisServer.BackplaneConnectionControllerTest do
       |> Plug.Conn.resp(200, Jason.encode!(%{"data" => [%{"id" => "coding"}]}))
     end)
 
-    Bypass.stub(bypass, "GET", "/skills", fn conn ->
+    Bypass.stub(bypass, "GET", "/skill-protocol/v1/catalog", fn conn ->
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(%{"data" => []}))
+      |> Plug.Conn.resp(
+        200,
+        Jason.encode!(%{"protocol_version" => "1", "data" => [], "next_cursor" => nil})
+      )
     end)
 
     Bypass.stub(bypass, "POST", "/mcp", fn conn ->
