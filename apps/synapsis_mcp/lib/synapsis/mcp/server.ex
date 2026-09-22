@@ -162,6 +162,7 @@ defmodule Synapsis.MCP.Server do
   defp execute_tool(client, full_tool_name, input, state) do
     raw = Response.raw_tool_name(full_tool_name)
 
+    # TODO: Delegate pilot calls to monitored owners using the published #43 tool-call handles.
     case MCPClient.call_tool(client, raw, input, timeout: @tool_timeout) do
       {:ok, response} ->
         {:reply, {:ok, Response.content(ProtocolResponse.unwrap(response))}, state}

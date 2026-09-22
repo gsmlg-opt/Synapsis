@@ -77,6 +77,7 @@ defmodule Synapsis.Agent.Runtime.ToolRegistry do
     end)
   end
 
+  # TODO: Wire host discovery policy to the published #42 catalog API before admission.
   defp admissible("tool_search", _),
     do:
       error(
@@ -84,6 +85,7 @@ defmodule Synapsis.Agent.Runtime.ToolRegistry do
         "Dynamic tool discovery requires a runtime catalog update contract"
       )
 
+  # TODO: Wire host per-invocation ownership to the published #43 MCP handles before admission.
   defp admissible(_name, {:process, _, _}),
     do: error(:unsupported_capability, "Process-backed tools require a cancellation contract")
 
