@@ -22,6 +22,17 @@ defmodule Synapsis.Tool.E2ETest do
     :ok
   end
 
+  defp tool_context do
+    run_id = Ecto.UUID.generate()
+
+    %{
+      project_path: @test_dir,
+      run_id: run_id,
+      policy_snapshot:
+        Synapsis.Tool.Capability.PolicySnapshot.for_profile(:maintenance, run_id: run_id)
+    }
+  end
+
   describe "builtin tools are registered" do
     test "core tools are available in registry" do
       for name <- ["file_read", "file_edit", "grep", "glob", "bash", "file_write"] do
@@ -34,9 +45,11 @@ defmodule Synapsis.Tool.E2ETest do
   describe "grep tool via Executor" do
     test "finds a pattern in a temp file" do
       {:ok, output} =
-        Executor.execute("grep", %{"pattern" => "find_me_marker", "path" => @test_dir}, %{
-          project_path: @test_dir
-        })
+        Executor.execute(
+          "grep",
+          %{"pattern" => "find_me_marker", "path" => @test_dir},
+          tool_context()
+        )
 
       assert output =~ "find_me_marker"
       assert output =~ "sample.txt"
@@ -44,9 +57,11 @@ defmodule Synapsis.Tool.E2ETest do
 
     test "returns no matches for absent pattern" do
       {:ok, output} =
-        Executor.execute("grep", %{"pattern" => "ZZZZZ_NOT_HERE", "path" => @test_dir}, %{
-          project_path: @test_dir
-        })
+        Executor.execute(
+          "grep",
+          %{"pattern" => "ZZZZZ_NOT_HERE", "path" => @test_dir},
+          tool_context()
+        )
 
       assert output =~ "No matches"
     end
@@ -55,9 +70,7 @@ defmodule Synapsis.Tool.E2ETest do
   describe "file_read tool via Executor" do
     test "reads temp file contents" do
       {:ok, content} =
-        Executor.execute("file_read", %{"path" => "sample.txt"}, %{
-          project_path: @test_dir
-        })
+        Executor.execute("file_read", %{"path" => "sample.txt"}, tool_context())
 
       assert content =~ "line one"
       assert content =~ "find_me_marker"
@@ -68,7 +81,7 @@ defmodule Synapsis.Tool.E2ETest do
         Executor.execute(
           "file_read",
           %{"path" => "sample.txt", "offset" => 1, "limit" => 1},
-          %{project_path: @test_dir}
+          tool_context()
         )
 
       assert content == "line two"
@@ -81,7 +94,7 @@ defmodule Synapsis.Tool.E2ETest do
         Executor.execute(
           "file_edit",
           %{"path" => "editable.txt", "old_string" => "beta", "new_string" => "BETA"},
-          %{project_path: @test_dir}
+          tool_context()
         )
 
       assert result =~ "ok"
@@ -97,17 +110,13 @@ defmodule Synapsis.Tool.E2ETest do
     test "grep then file_read then file_edit pipeline" do
       # Step 1: grep to find the file containing the marker
       {:ok, grep_output} =
-        Executor.execute("grep", %{"pattern" => "find_me_marker"}, %{
-          project_path: @test_dir
-        })
+        Executor.execute("grep", %{"pattern" => "find_me_marker"}, tool_context())
 
       assert grep_output =~ "sample.txt"
 
       # Step 2: file_read to get the file content
       {:ok, content} =
-        Executor.execute("file_read", %{"path" => "sample.txt"}, %{
-          project_path: @test_dir
-        })
+        Executor.execute("file_read", %{"path" => "sample.txt"}, tool_context())
 
       assert content =~ "find_me_marker"
 
@@ -120,7 +129,7 @@ defmodule Synapsis.Tool.E2ETest do
             "old_string" => "find_me_marker",
             "new_string" => "found_and_replaced"
           },
-          %{project_path: @test_dir}
+          tool_context()
         )
 
       # Verify end-to-end result
@@ -134,15 +143,11 @@ defmodule Synapsis.Tool.E2ETest do
     test "one tool failure does not affect another" do
       # Failing call: read nonexistent file
       {:error, _} =
-        Executor.execute("file_read", %{"path" => "nonexistent.txt"}, %{
-          project_path: @test_dir
-        })
+        Executor.execute("file_read", %{"path" => "nonexistent.txt"}, tool_context())
 
       # Succeeding call: read existing file
       {:ok, content} =
-        Executor.execute("file_read", %{"path" => "sample.txt"}, %{
-          project_path: @test_dir
-        })
+        Executor.execute("file_read", %{"path" => "sample.txt"}, tool_context())
 
       assert content =~ "line one"
     end
@@ -151,9 +156,7 @@ defmodule Synapsis.Tool.E2ETest do
   describe "glob tool via Executor" do
     test "finds files matching pattern" do
       {:ok, output} =
-        Executor.execute("glob", %{"pattern" => "**/*.txt"}, %{
-          project_path: @test_dir
-        })
+        Executor.execute("glob", %{"pattern" => "**/*.txt"}, tool_context())
 
       assert output =~ "sample.txt"
       assert output =~ "editable.txt"

@@ -55,7 +55,36 @@ defmodule Synapsis.Agent.ToolDispatcherTest do
 
   @test_session_id "00000000-0000-0000-0000-000000000000"
 
+  defp authorized_context(tool_use, session_id \\ @test_session_id) do
+    context = %{project_path: "/tmp", session_id: session_id}
+
+    snapshot =
+      Synapsis.Tool.Capability.PolicySnapshot.from_permission_mode("yolo", session_id: session_id)
+
+    {:ok, grant} =
+      Synapsis.Tool.Gateway.authorize(tool_use.tool, tool_use.input, snapshot, context)
+
+    Map.put(context, :capability_grant, grant)
+  end
+
   describe "execute_async/3 error handling" do
+    test "rejects missing and mismatched grants before executing a tool" do
+      tool_name = unique_tool_name("test_grant_scope")
+      Synapsis.Tool.Registry.register_module(tool_name, @success_tool)
+      on_exit(fn -> Synapsis.Tool.Registry.unregister(tool_name) end)
+      tool_use = make_tool_use(tool_name)
+      authorized = authorized_context(tool_use)
+
+      for context <- [
+            Map.delete(authorized, :capability_grant),
+            Map.put(authorized, :session_id, Ecto.UUID.generate())
+          ] do
+        ToolDispatcher.execute_async(tool_use, self(), context)
+        assert_receive {:tool_result, id, "Tool execution failed", true}, 5_000
+        assert id == tool_use.tool_use_id
+      end
+    end
+
     test "sends error tool_result when executor returns unexpected value" do
       tool_name = unique_tool_name("test_unexpected")
       Synapsis.Tool.Registry.register_module(tool_name, @unexpected_tool)
@@ -64,17 +93,12 @@ defmodule Synapsis.Agent.ToolDispatcherTest do
       caller = self()
 
       _task =
-        ToolDispatcher.execute_async(tool_use, caller, %{
-          project_path: "/tmp",
-          session_id: @test_session_id
-        })
+        ToolDispatcher.execute_async(tool_use, caller, authorized_context(tool_use))
 
-      # The unexpected return (:unexpected_return atom) gets wrapped as {:ok, :unexpected_return}
-      # by the executor, then our case matches {:ok, output} but string operations on the
-      # atom crash — the try/rescue catches this and sends an error result
+      # The executor rejects the malformed return; the dispatcher reports the crash.
       assert_receive {:tool_result, id, content, true}, 5_000
       assert id == tool_use.tool_use_id
-      assert is_binary(content)
+      assert content =~ "unexpected_return"
     end
 
     test "sends error tool_result when executor crashes with exception" do
@@ -85,16 +109,13 @@ defmodule Synapsis.Agent.ToolDispatcherTest do
       caller = self()
 
       _task =
-        ToolDispatcher.execute_async(tool_use, caller, %{
-          project_path: "/tmp",
-          session_id: @test_session_id
-        })
+        ToolDispatcher.execute_async(tool_use, caller, authorized_context(tool_use))
 
       # Should still receive a tool_result with is_error=true
       assert_receive {:tool_result, id, content, true}, 5_000
       assert id == tool_use.tool_use_id
       assert is_binary(content)
-      assert content =~ "crash" or content =~ "error" or content =~ "failed"
+      assert content =~ "deliberate test crash"
     end
 
     test "sends success tool_result on normal execution" do
@@ -105,10 +126,7 @@ defmodule Synapsis.Agent.ToolDispatcherTest do
       caller = self()
 
       _task =
-        ToolDispatcher.execute_async(tool_use, caller, %{
-          project_path: "/tmp",
-          session_id: @test_session_id
-        })
+        ToolDispatcher.execute_async(tool_use, caller, authorized_context(tool_use))
 
       assert_receive {:tool_result, id, content, false}, 5_000
       assert id == tool_use.tool_use_id
@@ -123,10 +141,7 @@ defmodule Synapsis.Agent.ToolDispatcherTest do
       caller = self()
 
       _task =
-        ToolDispatcher.execute_async(tool_use, caller, %{
-          project_path: "/tmp",
-          session_id: @test_session_id
-        })
+        ToolDispatcher.execute_async(tool_use, caller, authorized_context(tool_use))
 
       assert_receive {:tool_result, id, content, true}, 5_000
       assert id == tool_use.tool_use_id
@@ -138,10 +153,7 @@ defmodule Synapsis.Agent.ToolDispatcherTest do
       caller = self()
 
       _task =
-        ToolDispatcher.execute_async(tool_use, caller, %{
-          project_path: "/tmp",
-          session_id: @test_session_id
-        })
+        ToolDispatcher.execute_async(tool_use, caller, authorized_context(tool_use))
 
       assert_receive {:tool_result, id, content, true}, 5_000
       assert id == tool_use.tool_use_id
@@ -192,7 +204,7 @@ defmodule Synapsis.Agent.ToolDispatcherTest do
           [{:approved, tool_use}],
           self(),
           "test_session",
-          %{project_path: "/tmp"}
+          authorized_context(tool_use, "test_session") |> Map.delete(:session_id)
         )
 
       assert MapSet.size(task_refs) == 1

@@ -82,7 +82,9 @@ defmodule Synapsis.Agent.ToolDispatcher do
             session_id: session_id,
             working_dir: effective_path,
             agent_id: agent_id,
-            agent_scope: :agent
+            agent_scope: :agent,
+            run_id: opts[:run_id],
+            capability_grant: opts[:capability_grant]
           })
 
         case result do
@@ -171,7 +173,11 @@ defmodule Synapsis.Agent.ToolDispatcher do
           case classification do
             :approved ->
               task =
-                execute_async(tool_use, caller_pid, Map.put(opts, :tool_call_hashes, hashes))
+                execute_async(
+                  tool_use,
+                  caller_pid,
+                  opts |> Map.put(:session_id, session_id) |> Map.put(:tool_call_hashes, hashes)
+                )
 
               MapSet.put(acc, task.ref)
 
