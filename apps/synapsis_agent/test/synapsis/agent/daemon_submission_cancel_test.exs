@@ -97,7 +97,7 @@ defmodule Synapsis.Agent.DaemonSubmissionCancelTest do
     assert {:ok, %{status: "idle"}} = Synapsis.Sessions.get(running.session_id)
     assert %{active_run_id: nil, queued_count: 0} = Daemon.status(daemon)
 
-    send(first_request_pid, :release_first_run)
+    assert_receive {:provider_disconnected, ^first_request_pid}, 1_000
   end
 
   test "cancel returns clear errors for unknown and terminal run ids" do
@@ -138,7 +138,7 @@ defmodule Synapsis.Agent.DaemonSubmissionCancelTest do
 
     assert {:ok, _cancelled} = Daemon.cancel(daemon, second.id)
     assert {:ok, _cancelled} = Daemon.cancel(daemon, first.id)
-    send(first_request_pid, :release_first_run)
+    assert_receive {:provider_disconnected, ^first_request_pid}, 1_000
   end
 
   test "submission responds within the event bound when created-event append hangs forever" do

@@ -74,7 +74,9 @@ defmodule Synapsis.Agent.DaemonExecutionTest do
              })
 
     assert {:ok, failed} = wait_for_run(queued.id, "failed")
-    assert failed.error =~ "offline"
+    assert failed.error =~ "Provider error: %Backplane.AiProtocol.Error{"
+    assert failed.error =~ "kind: :upstream_error"
+    assert failed.error =~ "http_status: 503"
 
     assert {:ok, %{ready: true, active_run_id: nil, queued_count: 0}} =
              wait_for_status(daemon, &is_nil(&1.active_run_id))
@@ -100,7 +102,7 @@ defmodule Synapsis.Agent.DaemonExecutionTest do
     assert %{ready: true, active_run_id: nil, queued_count: 0} = Daemon.status(daemon)
     assert Process.alive?(Process.whereis(daemon))
 
-    send(request_pid, :release_first_run)
+    assert_receive {:provider_disconnected, ^request_pid}, 1_000
   end
 
   test "durable completion drains when completed-event append hangs forever" do
@@ -222,9 +224,13 @@ defmodule Synapsis.Agent.DaemonExecutionTest do
   end
 
   test "completion at the absolute deadline has one terminal CAS and never crashes the daemon" do
-    previous_adapter = Application.get_env(:synapsis_agent, :agent_runs_kv_adapter, :missing)
-    Application.put_env(:synapsis_agent, :agent_runs_kv_adapter, TerminalCountingKV)
-    on_exit(fn -> restore_application_env(:agent_runs_kv_adapter, previous_adapter) end)
+    previous_adapter = Application.get_env(:synapsis_data, :agent_run_store_adapter, :missing)
+    Application.put_env(:synapsis_data, :agent_run_store_adapter, TerminalCountingKV)
+
+    on_exit(fn ->
+      restore_application_env(:agent_run_store_adapter, previous_adapter, :synapsis_data)
+    end)
+
     Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :immediate_done)
 
     {daemon, _task_supervisor} = start_test_daemon(sessions: FakeSessions, run_timeout: 0)
@@ -253,9 +259,12 @@ defmodule Synapsis.Agent.DaemonExecutionTest do
 
   test "terminal persistence failure retains degraded active ownership and does not drain" do
     Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :controlled_done)
-    previous_adapter = Application.get_env(:synapsis_agent, :agent_runs_kv_adapter, :missing)
-    Application.put_env(:synapsis_agent, :agent_runs_kv_adapter, SelectivePutIfKV)
-    on_exit(fn -> restore_application_env(:agent_runs_kv_adapter, previous_adapter) end)
+    previous_adapter = Application.get_env(:synapsis_data, :agent_run_store_adapter, :missing)
+    Application.put_env(:synapsis_data, :agent_run_store_adapter, SelectiveTransactionKV)
+
+    on_exit(fn ->
+      restore_application_env(:agent_run_store_adapter, previous_adapter, :synapsis_data)
+    end)
 
     {daemon, _task_supervisor} = start_test_daemon(sessions: FakeSessions)
     assert {:ok, first} = Daemon.submit(daemon, "cannot finalize", %{})
@@ -264,7 +273,7 @@ defmodule Synapsis.Agent.DaemonExecutionTest do
 
     Application.put_env(
       :synapsis_agent,
-      :daemon_selective_put_if,
+      :daemon_selective_transaction,
       [{first.id, "completed"}]
     )
 
@@ -370,13 +379,16 @@ defmodule Synapsis.Agent.DaemonExecutionTest do
     send(second_runner, :complete_session)
   end
 
-  test "terminal put_if timeout retries the same completion intent" do
-    previous_adapter = Application.get_env(:synapsis_agent, :agent_runs_kv_adapter, :missing)
-    Application.put_env(:synapsis_agent, :agent_runs_kv_adapter, DeadlinePutIfKV)
-    on_exit(fn -> restore_application_env(:agent_runs_kv_adapter, previous_adapter) end)
+  test "terminal transaction timeout retries the same completion intent" do
+    previous_adapter = Application.get_env(:synapsis_data, :agent_run_store_adapter, :missing)
+    Application.put_env(:synapsis_data, :agent_run_store_adapter, DeadlineTransactionKV)
+
+    on_exit(fn ->
+      restore_application_env(:agent_run_store_adapter, previous_adapter, :synapsis_data)
+    end)
 
     {:ok, deadline_agent} =
-      Agent.start_link(fn -> %{hang_put_if: MapSet.new(["completed"])} end)
+      Agent.start_link(fn -> %{hang_transaction: MapSet.new(["completed"])} end)
 
     Application.put_env(:synapsis_agent, :daemon_deadline_agent, deadline_agent)
     Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :controlled_done)
@@ -387,15 +399,18 @@ defmodule Synapsis.Agent.DaemonExecutionTest do
         operation_timeout: 50
       )
 
-    assert {:ok, run} = Daemon.submit(daemon, "retry terminal put_if", %{})
+    assert {:ok, run} = Daemon.submit(daemon, "retry terminal transaction", %{})
     assert_receive {:controlled_session, inner, _session_id}, 1_000
     send(inner, :complete_session)
-    assert_receive {:durable_operation_hung, {:put_if, "completed"}, terminal_task, _key}, 1_000
+
+    assert_receive {:durable_operation_hung, {:transaction, "completed"}, terminal_task, _key},
+                   1_000
+
     assert %{active_run_id: run_id} = Daemon.status(daemon)
     assert run_id == run.id
     assert {:ok, :gone} = wait_for_task_exit(terminal_task)
 
-    Agent.update(deadline_agent, &Map.put(&1, :hang_put_if, MapSet.new()))
+    Agent.update(deadline_agent, &Map.put(&1, :hang_transaction, MapSet.new()))
     assert {:ok, completed} = wait_for_run(run.id, "completed")
     assert completed.summary == "(no assistant response)"
     assert {:ok, %{active_run_id: nil}} = wait_for_status(daemon, &is_nil(&1.active_run_id))

@@ -8,7 +8,7 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
   - `:streamed_success` — multiple text deltas then finish
   - `:provider_failure` — HTTP 500
   - `:timeout` — HTTP 408 (wall-clock hang avoided in CI)
-  - `:hang` — sleep then succeed (for cancel/deadline races; keep sleep short)
+  - `:hang` — wait for cancellation or a bounded delayed success
   - `:malformed_tool_request` — tool call with invalid JSON arguments
   - `:multi_turn_tool_result` — first turn tool call, second turn text
 
@@ -16,6 +16,8 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
   """
 
   @chat_path "/v1/chat/completions"
+
+  alias Synapsis.Agent.TestSupport.AbortableHTTP
 
   @type scenario ::
           :success
@@ -70,7 +72,8 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
       tool_call_id: tool_call_id,
       tool_args: tool_args,
       counter: counter,
-      hang_ms: hang_ms
+      hang_ms: hang_ms,
+      owner: self()
     })
 
     base_url = "http://localhost:#{bypass.port}"
@@ -104,19 +107,14 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
   @spec install!(map(), scenario(), map()) :: :ok
   def install!(bypass, scenario, ctx \\ %{}) do
     fun = fn conn ->
+      conn = if scenario == :hang, do: AbortableHTTP.arm(conn), else: conn
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
       maybe_record(ctx[:counter], request)
       handle_request(conn, scenario, request, ctx)
     end
 
-    # `:hang` uses stub so cancel/deadline/crash tests that abort mid-request
-    # do not fail Bypass expectation verification on exit.
-    if scenario == :hang do
-      Bypass.stub(bypass, "POST", @chat_path, fun)
-    else
-      Bypass.expect(bypass, "POST", @chat_path, fun)
-    end
+    Bypass.expect(bypass, "POST", @chat_path, fun)
 
     :ok
   end
@@ -204,8 +202,10 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
   end
 
   defp handle_request(conn, :hang, _request, ctx) do
-    Process.sleep(Map.get(ctx, :hang_ms, 5_000))
-    send_sse(conn, [text_chunk(ctx[:text] || ctx.text || "hang complete"), finish_chunk("stop")])
+    case AbortableHTTP.await(conn, :release_hang, Map.get(ctx, :hang_ms, 5_000), ctx.owner) do
+      :disconnected -> Plug.Conn.resp(conn, 204, "")
+      _ -> send_sse(conn, [text_chunk(ctx.text), finish_chunk("stop")])
+    end
   end
 
   defp handle_request(conn, :malformed_tool_request, _request, ctx) do

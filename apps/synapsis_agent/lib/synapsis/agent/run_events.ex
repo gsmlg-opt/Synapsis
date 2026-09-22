@@ -8,12 +8,9 @@ defmodule Synapsis.Agent.RunEvents do
 
   require Logger
 
-  alias Concord.Turso, as: KV
   alias Synapsis.Agent.Events.RunEvent
   alias Synapsis.AgentRun
-
-  @prefix "coord/agent_run_events/"
-  @by_id_prefix "coord/agent_run_event_ids/"
+  alias Synapsis.AgentRun.Store
   @max_reason_bytes 512
   @topic "agent:daemon"
   @max_payload_length 500
@@ -23,7 +20,7 @@ defmodule Synapsis.Agent.RunEvents do
     unless RunEvent.critical_run?(event) do
       {:error, :not_critical}
     else
-      do_append_critical(run, event)
+      with {:ok, _updated} <- Synapsis.Agent.Runs.apply_event(run, event), do: {:ok, event}
     end
   end
 
@@ -36,6 +33,11 @@ defmodule Synapsis.Agent.RunEvents do
     error ->
       Logger.warning("agent_run_observational_append_failed", reason: inspect(error))
       :ok
+  end
+
+  @doc false
+  def observe_critical(%AgentRun{} = run, %RunEvent{} = event) do
+    append_observational(run, event.type, Map.merge(base_payload(run), RunEvent.to_map(event)))
   end
 
   def append_run_created(%AgentRun{} = run),
@@ -141,7 +143,7 @@ defmodule Synapsis.Agent.RunEvents do
 
   @spec get_by_event_id(String.t()) :: map() | nil
   def get_by_event_id(event_id) when is_binary(event_id) do
-    case KV.get(@by_id_prefix <> event_id) do
+    case Store.event_index(event_id) do
       {:ok, map} when is_map(map) -> map
       _ -> nil
     end
@@ -149,68 +151,11 @@ defmodule Synapsis.Agent.RunEvents do
 
   @spec list_for_run(String.t()) :: [map()]
   def list_for_run(run_id) when is_binary(run_id) do
-    case KV.prefix_scan(@prefix <> run_id <> "/") do
-      {:ok, pairs} ->
-        pairs
-        |> Enum.map(fn {_k, v} -> Concord.Compression.decompress(v) end)
-        |> Enum.sort_by(& &1["sequence"])
-
-      _ ->
-        []
+    case Store.list_events(run_id) do
+      {:ok, events} -> events
+      _ -> []
     end
   end
-
-  defp do_append_critical(%AgentRun{} = run, %RunEvent{} = event) do
-    case get_by_event_id(event.event_id) do
-      %{"run_id" => existing_run_id} when existing_run_id == run.id ->
-        {:ok, event}
-
-      %{"run_id" => _} ->
-        {:error, :event_id_conflict}
-
-      nil ->
-        put_critical(run, event)
-    end
-  end
-
-  defp put_critical(%AgentRun{} = run, %RunEvent{} = event) do
-    body = RunEvent.to_map(event)
-    event_key = @prefix <> run.id <> "/" <> pad_seq(event.sequence) <> "-" <> event.event_id
-    id_key = @by_id_prefix <> event.event_id
-    id_body = %{"run_id" => run.id, "sequence" => event.sequence, "type" => event.type}
-
-    with :ok <- put_kv(event_key, body),
-         :ok <- put_kv(id_key, id_body) do
-      _ = append_agent_event(run, event.type, Map.merge(base_payload(run), body))
-      {:ok, event}
-    end
-  end
-
-  defp put_kv(key, value) do
-    case maybe_inject_event_failure() do
-      {:error, reason} ->
-        {:error, reason}
-
-      :ok ->
-        case KV.put(key, value) do
-          :ok -> :ok
-          {:ok, _} -> :ok
-          other -> {:error, other}
-        end
-    end
-  end
-
-  defp maybe_inject_event_failure do
-    case Process.get(:synapsis_run_events_put_result) do
-      {:error, reason} -> {:error, reason}
-      _ -> :ok
-    end
-  end
-
-  defp pad_seq(seq) when is_integer(seq),
-    do: seq |> Integer.to_string() |> String.pad_leading(12, "0")
-
-  defp pad_seq(_), do: "000000000000"
 
   defp legacy_append(%AgentRun{} = run, agent_event_type, memory_event_type) do
     payload = base_payload(run)

@@ -17,7 +17,7 @@ defmodule Synapsis.Agent.DaemonCase do
       alias Synapsis.Agent.Daemon.StatusPublisher
       alias Synapsis.Agent.Runs
       alias Synapsis.Agent.DaemonCase.ScanFailingKV
-      alias Synapsis.Agent.DaemonCase.SelectivePutIfKV
+      alias Synapsis.Agent.DaemonCase.SelectiveTransactionKV
       alias Synapsis.Agent.DaemonCase.BlockingRuns
       alias Synapsis.Agent.DaemonCase.SlowFirstRuns
       alias Synapsis.Agent.DaemonCase.KillAfterCreateRuns
@@ -25,7 +25,7 @@ defmodule Synapsis.Agent.DaemonCase do
       alias Synapsis.Agent.DaemonCase.RecoveryFaultRuns
       alias Synapsis.Agent.DaemonCase.BlockingRefillRuns
       alias Synapsis.Agent.DaemonCase.DeadlineRuns
-      alias Synapsis.Agent.DaemonCase.DeadlinePutIfKV
+      alias Synapsis.Agent.DaemonCase.DeadlineTransactionKV
       alias Synapsis.Agent.DaemonCase.MarkRunningFailRuns
       alias Synapsis.Agent.DaemonCase.BlockingRunEvents
       alias Synapsis.Agent.DaemonCase.HangingRunEvents
@@ -42,26 +42,25 @@ defmodule Synapsis.Agent.DaemonCase do
   end
 
   defmodule ScanFailingKV do
-    def put(key, value), do: Concord.Turso.put(key, value)
-    def put_if(key, value, opts), do: Concord.Turso.put_if(key, value, opts)
-    def get(key), do: Concord.Turso.get(key)
-    def prefix_scan(_prefix), do: {:error, :store_unavailable}
+    defdelegate txn(spec, opts), to: Concord.Turso
+    defdelegate get(key, opts), to: Concord.Turso
+    def prefix_scan(_prefix, _opts), do: {:error, :store_unavailable}
   end
 
-  defmodule SelectivePutIfKV do
-    def put(key, value), do: Concord.Turso.put(key, value)
-    def get(key), do: Concord.Turso.get(key)
-    def prefix_scan(prefix), do: Concord.Turso.prefix_scan(prefix)
+  defmodule SelectiveTransactionKV do
+    defdelegate get(key, opts), to: Concord.Turso
+    defdelegate prefix_scan(prefix, opts), to: Concord.Turso
 
-    def put_if(key, value, opts) do
-      failures = Application.get_env(:synapsis_agent, :daemon_selective_put_if, [])
+    def txn(spec, opts) do
+      {:put, key, value, _} = hd(spec.success)
+      failures = Application.get_env(:synapsis_agent, :daemon_selective_transaction, [])
       run_id = key |> String.split("/") |> List.last()
       status = Map.get(value, :status) || Map.get(value, "status")
 
       if {run_id, status} in failures do
         {:error, String.duplicate("store failure ", 100)}
       else
-        Concord.Turso.put_if(key, value, opts)
+        Concord.Turso.txn(spec, opts)
       end
     end
   end
@@ -367,26 +366,26 @@ defmodule Synapsis.Agent.DaemonCase do
     end
   end
 
-  defmodule DeadlinePutIfKV do
-    def put(key, value), do: Concord.Turso.put(key, value)
-    def get(key), do: Concord.Turso.get(key)
-    def prefix_scan(prefix), do: Concord.Turso.prefix_scan(prefix)
+  defmodule DeadlineTransactionKV do
+    defdelegate get(key, opts), to: Concord.Turso
+    defdelegate prefix_scan(prefix, opts), to: Concord.Turso
 
-    def put_if(key, value, opts) do
+    def txn(spec, opts) do
+      {:put, key, value, _} = hd(spec.success)
       status = Map.get(value, :status) || Map.get(value, "status")
       agent = Application.fetch_env!(:synapsis_agent, :daemon_deadline_agent)
 
-      if Agent.get(agent, &MapSet.member?(Map.get(&1, :hang_put_if, MapSet.new()), status)) do
+      if Agent.get(agent, &MapSet.member?(Map.get(&1, :hang_transaction, MapSet.new()), status)) do
         send(
           Application.fetch_env!(:synapsis_agent, :daemon_test_owner),
-          {:durable_operation_hung, {:put_if, status}, self(), key}
+          {:durable_operation_hung, {:transaction, status}, self(), key}
         )
 
         receive do
           :never -> :ok
         end
       else
-        Concord.Turso.put_if(key, value, opts)
+        Concord.Turso.txn(spec, opts)
       end
     end
   end
@@ -749,21 +748,23 @@ defmodule Synapsis.Agent.DaemonCase do
   end
 
   defmodule TerminalCountingKV do
-    def put(key, value), do: Concord.Turso.put(key, value)
-    def get(key), do: Concord.Turso.get(key)
-    def prefix_scan(prefix), do: Concord.Turso.prefix_scan(prefix)
+    defdelegate get(key, opts), to: Concord.Turso
+    defdelegate prefix_scan(prefix, opts), to: Concord.Turso
 
-    def put_if(key, value, opts) do
+    def txn(spec, opts) do
+      {:put, key, value, _} = hd(spec.success)
       status = Map.get(value, :status) || Map.get(value, "status")
+      result = Concord.Turso.txn(spec, opts)
 
-      if status in ~w(completed failed cancelled interrupted) do
+      if status in Synapsis.AgentRun.terminal_statuses() and
+           match?({:ok, %{succeeded: true}}, result) do
         send(
           Application.fetch_env!(:synapsis_agent, :daemon_test_owner),
           {:terminal_cas, key, status}
         )
       end
 
-      Concord.Turso.put_if(key, value, opts)
+      result
     end
   end
 
@@ -778,7 +779,7 @@ defmodule Synapsis.Agent.DaemonCase do
       Application.delete_env(:synapsis_agent, :daemon_block_event)
       Application.delete_env(:synapsis_agent, :daemon_hanging_event)
       Application.delete_env(:synapsis_agent, :daemon_fake_session_mode)
-      Application.delete_env(:synapsis_agent, :daemon_selective_put_if)
+      Application.delete_env(:synapsis_agent, :daemon_selective_transaction)
       Application.delete_env(:synapsis_agent, :daemon_reconcile_fault_agent)
       Application.delete_env(:synapsis_agent, :daemon_recovery_fault_agent)
       Application.delete_env(:synapsis_agent, :daemon_refill_scan_agent)
@@ -873,19 +874,28 @@ defmodule Synapsis.Agent.DaemonCase do
     {:ok, counter} = Agent.start_link(fn -> 0 end)
 
     Bypass.expect(bypass, "POST", "/v1/chat/completions", fn conn ->
+      conn = Synapsis.Agent.TestSupport.AbortableHTTP.arm(conn)
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request_number = Agent.get_and_update(counter, &{&1 + 1, &1 + 1})
       send(owner, {:provider_request, request_number, body, self()})
 
-      if request_number == 1 do
-        receive do
-          :release_first_run -> :ok
-        after
-          5_000 -> raise "first controlled run was not released"
+      outcome =
+        if request_number == 1 do
+          Synapsis.Agent.TestSupport.AbortableHTTP.await(conn, :release_first_run, 5_000, owner)
+        else
+          :released
         end
-      end
 
-      send_sse(conn, [text_chunk("result #{request_number}"), finish_chunk("stop")])
+      case outcome do
+        :released ->
+          send_sse(conn, [text_chunk("result #{request_number}"), finish_chunk("stop")])
+
+        :disconnected ->
+          Plug.Conn.resp(conn, 204, "")
+
+        :timeout ->
+          raise "first controlled run was not released"
+      end
     end)
 
     register_provider_agent(tmp_dir, bypass)
@@ -963,8 +973,9 @@ defmodule Synapsis.Agent.DaemonCase do
 
   def status_publisher_name(daemon), do: String.to_atom("#{daemon}_status_publisher")
 
-  def restore_application_env(key, :missing), do: Application.delete_env(:synapsis_agent, key)
-  def restore_application_env(key, value), do: Application.put_env(:synapsis_agent, key, value)
+  def restore_application_env(key, value, app \\ :synapsis_agent)
+  def restore_application_env(key, :missing, app), do: Application.delete_env(app, key)
+  def restore_application_env(key, value, app), do: Application.put_env(app, key, value)
 
   def text_chunk(text) do
     %{

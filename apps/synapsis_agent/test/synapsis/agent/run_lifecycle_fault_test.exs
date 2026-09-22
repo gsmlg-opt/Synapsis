@@ -33,17 +33,17 @@ defmodule Synapsis.Agent.RunLifecycleFaultTest do
     assert {:reconcile, "failed", _} = RunReconciler.classify(stored, %{alive?: false})
   end
 
-  test "start fact persisted then projection write fails does not claim running" do
+  test "projection storage failure leaves neither a start fact nor a changed projection" do
     assert {:ok, run} = Runs.create(@attrs)
+    events = Synapsis.Agent.RunEvents.list_for_run(run.id)
 
-    # Event write succeeds; projection write fails after reduce+append ordering:
-    # apply_event appends then persist — inject persist failure.
     Process.put(:synapsis_agent_runs_put_result, {:error, :proj_fail})
     assert {:error, :proj_fail} = Runs.mark_starting(run)
     Process.delete(:synapsis_agent_runs_put_result)
 
     stored = Runs.get(run.id)
     assert stored.status == "queued"
+    assert Synapsis.Agent.RunEvents.list_for_run(run.id) == events
   end
 
   test "after start, before tool — reconcile without side effect is failed" do

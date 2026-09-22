@@ -5,19 +5,16 @@ defmodule Synapsis.Agent.Runs do
   ADR-006 C4: node-local coordination data in Concord under `coord/agent_runs/`,
   keyed by id (ADR-006 §10 — cluster form is future work).
 
-  Transitions go through `RunReducer`; critical facts persist via `RunEvents`
-  before the run projection is updated. Persist failures never report success.
+  Transitions go through `RunReducer`; the data store atomically commits the
+  critical fact and projection against the expected snapshot.
   """
-  alias Concord.Turso, as: KV
   alias Synapsis.Agent.Events.RunEvent
   alias Synapsis.Agent.RunEvents
   alias Synapsis.Agent.RunReconciler
   alias Synapsis.Agent.RunReducer
   alias Synapsis.Agent.RunState
   alias Synapsis.AgentRun
-
-  @prefix "coord/agent_runs/"
-  @idempotency_prefix "coord/agent_run_idempotency/"
+  alias Synapsis.AgentRun.Store
 
   @updatable_fields ~w(
     kind status source assistant_name project_ref workspace_ref session_id
@@ -29,13 +26,20 @@ defmodule Synapsis.Agent.Runs do
 
   @spec create(map()) :: {:ok, AgentRun.t()} | {:error, term()}
   def create(attrs) when is_map(attrs) do
-    normalized = normalize_attrs(attrs)
+    # Identity is accepted only at creation. Normalize both key forms before
+    # passing attrs to Ecto, which rejects mixed atom/string keys.
+    normalized =
+      attrs
+      |> Map.drop([:id, "id"])
+      |> normalize_attrs()
+      |> Map.put(:id, Map.get(attrs, :id, Map.get(attrs, "id")))
 
     case Map.get(normalized, :idempotency_key) do
       key when is_binary(key) and key != "" ->
-        case get_by_idempotency_key(key) do
-          %AgentRun{} = existing -> {:ok, existing}
-          nil -> do_create(normalized)
+        case Store.fetch_by_idempotency(key) do
+          {:ok, existing} -> {:ok, existing}
+          :not_found -> do_create(normalized)
+          {:error, _} = error -> error
         end
 
       _ ->
@@ -45,27 +49,29 @@ defmodule Synapsis.Agent.Runs do
 
   @spec get(String.t()) :: AgentRun.t() | nil
   def get(id) do
-    case KV.get(@prefix <> id) do
-      {:ok, map} -> AgentRun.from_store(map)
+    case fetch(id) do
+      {:ok, run} -> run
       _ -> nil
     end
   end
 
   @spec get_by_idempotency_key(String.t()) :: AgentRun.t() | nil
-  def get_by_idempotency_key(key) when is_binary(key), do: get_by_idempotency(key)
-
-  @doc "Return a tagged lookup result for controller and coordinator callers."
-  @spec fetch(String.t()) :: {:ok, AgentRun.t()} | :not_found | {:error, term()}
-  def fetch(id) when is_binary(id) do
-    case KV.get(@prefix <> id) do
-      {:ok, map} -> {:ok, AgentRun.from_store(map)}
-      {:error, reason} -> {:error, reason}
-      _ -> :not_found
+  def get_by_idempotency_key(key) when is_binary(key) do
+    case Store.fetch_by_idempotency(key) do
+      {:ok, run} -> run
+      _ -> nil
     end
   end
 
+  @doc "Return a tagged lookup result for controller and coordinator callers."
+  @spec fetch(String.t()) :: {:ok, AgentRun.t()} | :not_found | {:error, term()}
+  def fetch(id) when is_binary(id), do: Store.fetch(id)
+
   def list_by_status_result(status, opts \\ []) when is_binary(status) do
-    {:ok, list_by_status(status, opts)}
+    with {:ok, runs} <- Store.list() do
+      list = runs |> Enum.filter(&(&1.status == status)) |> recent()
+      {:ok, take_limit(list, Keyword.get(opts, :limit, 50))}
+    end
   end
 
   @spec list_recent(keyword()) :: [AgentRun.t()]
@@ -86,27 +92,54 @@ defmodule Synapsis.Agent.Runs do
 
   @spec persist(AgentRun.t()) :: {:ok, AgentRun.t()} | {:error, term()}
   def persist(%AgentRun{} = run) do
-    case maybe_inject_put_failure() do
-      {:error, reason} ->
-        {:error, reason}
-
-      :ok ->
-        case KV.put(@prefix <> run.id, AgentRun.to_store_map(run)) do
-          :ok -> {:ok, run}
-          {:ok, _} -> {:ok, run}
-          other -> {:error, other}
-        end
-    end
+    with :ok <- maybe_inject_put_failure(), do: Store.persist(run)
   end
 
   @spec apply_event(AgentRun.t(), RunEvent.t()) :: {:ok, AgentRun.t()} | {:error, term()}
   def apply_event(%AgentRun{} = run, %RunEvent{} = event) do
-    state = RunState.from_run(run)
+    apply_event(run, event, %{})
+  end
 
-    with {:ok, new_state} <- RunReducer.reduce(state, event),
-         {:ok, ^event} <- RunEvents.append_critical(run, event) do
-      new_run = %{RunState.to_run(new_state) | updated_at: utc_now()}
-      persist(new_run)
+  defp apply_event(run, event, attrs) do
+    cond do
+      event.run_id != run.id ->
+        {:error, :run_id_mismatch}
+
+      not RunEvent.critical_run?(event) ->
+        {:error, :not_critical}
+
+      event.type == "run.created" ->
+        {:error, :creation_event_required}
+
+      true ->
+        body = RunEvent.to_map(event)
+
+        case Store.fetch_event(event.event_id) do
+          {:ok, ^body, durable} ->
+            {:ok, durable}
+
+          {:ok, _other, _run} ->
+            {:error, :event_id_conflict}
+
+          {:error, _} = error ->
+            error
+
+          :not_found ->
+            with {:ok, new_state} <- reduce_new_event(run, event),
+                 :ok <- check_write_failures() do
+              proposed = new_state |> RunState.to_run() |> maybe_merge_attrs(attrs)
+              proposed = %{proposed | updated_at: utc_now()}
+              Store.commit(run, proposed, body) |> committed_result(event)
+            end
+        end
+    end
+  end
+
+  defp reduce_new_event(run, event) do
+    with {:ok, state} <- RunReducer.reduce(RunState.from_run(run), event) do
+      if state.run.revision == run.revision + 1,
+        do: {:ok, state},
+        else: {:error, :incomplete_event}
     end
   end
 
@@ -117,16 +150,12 @@ defmodule Synapsis.Agent.Runs do
 
   @spec mark_running(AgentRun.t(), map()) :: {:ok, AgentRun.t()} | {:error, term()}
   def mark_running(%AgentRun{} = run, attrs \\ %{}) do
-    with {:ok, run} <- ensure_starting(run, attrs) do
-      transition(run, "run.started", attrs)
-    end
+    transition(run, "run.started", attrs)
   end
 
   @spec mark_waiting_approval(AgentRun.t(), map()) :: {:ok, AgentRun.t()} | {:error, term()}
   def mark_waiting_approval(%AgentRun{} = run, attrs \\ %{}) do
-    with {:ok, run} <- ensure_running(run, attrs) do
-      transition(run, "run.waiting_approval", attrs)
-    end
+    transition(run, "run.waiting_approval", attrs)
   end
 
   @spec mark_completed(AgentRun.t(), String.t(), map()) :: {:ok, AgentRun.t()} | {:error, term()}
@@ -206,7 +235,16 @@ defmodule Synapsis.Agent.Runs do
 
   defp do_create(normalized) do
     initial_status = Map.get(normalized, :status, "queued")
-    changeset = AgentRun.changeset(%AgentRun{}, Map.put(normalized, :status, "queued"))
+
+    changeset =
+      %AgentRun{}
+      |> AgentRun.changeset(normalized)
+      |> Ecto.Changeset.validate_change(:id, fn :id, id ->
+        case Ecto.UUID.cast(id) do
+          {:ok, _} -> []
+          :error -> [id: "is invalid"]
+        end
+      end)
 
     if changeset.valid? do
       now = utc_now()
@@ -230,21 +268,18 @@ defmodule Synapsis.Agent.Runs do
           }
         )
 
-      with {:ok, run} <- persist(run),
-           :ok <- maybe_index_idempotency(run),
-           {:ok, created} <- transition(run, "run.created", %{}) do
-        if initial_status == "queued" do
-          {:ok, created}
-        else
-          projection =
-            created
-            |> Map.put(:status, initial_status)
-            |> Map.put(:error, Map.get(normalized, :error))
-            |> Map.put(:summary, Map.get(normalized, :summary))
-            |> Map.put(:finished_at, Map.get(normalized, :finished_at))
+      event =
+        RunEvent.new("run.created",
+          run_id: run.id,
+          session_id: run.session_id,
+          sequence: run.last_event_sequence + 1,
+          occurred_at: now,
+          payload: %{"initial_status" => initial_status}
+        )
 
-          persist(%{projection | updated_at: utc_now()})
-        end
+      with {:ok, state} <- RunReducer.reduce(RunState.from_run(%{run | status: "queued"}), event),
+           :ok <- check_write_failures() do
+        Store.create(RunState.to_run(state), RunEvent.to_map(event)) |> committed_result(event)
       end
     else
       {:error, changeset}
@@ -263,19 +298,53 @@ defmodule Synapsis.Agent.Runs do
 
   defp transition(%AgentRun{} = run, type, attrs) when is_binary(type) do
     attrs = normalize_attrs(attrs)
-    occurred_at = attr(attrs, :finished_at) || attr(attrs, :started_at) || utc_now()
-    sequence = run.last_event_sequence + 1
 
     payload =
       attrs
-      |> Map.take([
-        :summary,
-        :error,
-        :failure_class,
-        :status
-      ])
-      |> Enum.reduce(%{}, fn {k, v}, acc -> Map.put(acc, Atom.to_string(k), v) end)
-      |> Map.merge(string_payload(attrs))
+      |> Map.drop([:event_id, "event_id", :id, "id"])
+      |> Map.new(fn {key, value} -> {to_string(key), value} end)
+
+    # Convenience transitions reuse the original envelope for an explicit retry
+    # ID; caller-supplied typed events remain exact, including sequence and time.
+    case attr(attrs, :event_id) do
+      nil ->
+        new_transition(run, type, attrs, payload)
+
+      id ->
+        case Store.fetch_event(id) do
+          {:ok, %{"run_id" => run_id, "type" => ^type, "payload" => ^payload}, durable}
+          when run_id == run.id ->
+            {:ok, durable}
+
+          {:ok, _body, _run} ->
+            {:error, :event_id_conflict}
+
+          :not_found ->
+            new_transition(run, type, attrs, payload)
+
+          {:error, _} = error ->
+            error
+        end
+    end
+  end
+
+  defp new_transition(run, type, attrs, payload) do
+    # The retry ID belongs to the requested transition, not its prerequisite
+    # starting/running events.
+    preliminary_attrs = Map.drop(attrs, [:event_id, "event_id"])
+
+    with {:ok, run} <- prepare_transition(run, type, preliminary_attrs) do
+      commit_transition(run, type, attrs, payload)
+    end
+  end
+
+  defp prepare_transition(run, "run.started", attrs), do: ensure_starting(run, attrs)
+  defp prepare_transition(run, "run.waiting_approval", attrs), do: ensure_running(run, attrs)
+  defp prepare_transition(run, _type, _attrs), do: {:ok, run}
+
+  defp commit_transition(run, type, attrs, payload) do
+    occurred_at = attr(attrs, :finished_at) || attr(attrs, :started_at) || utc_now()
+    sequence = run.last_event_sequence + 1
 
     event =
       RunEvent.new(type,
@@ -287,14 +356,7 @@ defmodule Synapsis.Agent.Runs do
         payload: payload
       )
 
-    case apply_event(run, event) do
-      {:ok, updated} ->
-        merged = maybe_merge_attrs(updated, attrs)
-        if merged == updated, do: {:ok, updated}, else: persist(%{merged | updated_at: utc_now()})
-
-      {:error, reason} ->
-        {:error, reason}
-    end
+    apply_event(run, event, attrs)
   end
 
   defp maybe_merge_attrs(run, attrs) do
@@ -316,29 +378,20 @@ defmodule Synapsis.Agent.Runs do
     Map.merge(run, keep)
   end
 
-  defp string_payload(attrs) do
-    Enum.reduce(attrs, %{}, fn
-      {key, value}, acc when is_binary(key) -> Map.put(acc, key, value)
-      _, acc -> acc
-    end)
+  defp committed_result({:ok, run, :committed}, event) do
+    RunEvents.observe_critical(run, event)
+    {:ok, run}
   end
 
-  defp maybe_index_idempotency(%AgentRun{idempotency_key: key, id: id})
-       when is_binary(key) and key != "" do
-    case KV.put(@idempotency_prefix <> key, %{"run_id" => id}) do
-      :ok -> :ok
-      {:ok, _} -> :ok
-      other -> {:error, other}
-    end
-  end
+  defp committed_result({:ok, run, :duplicate}, _event), do: {:ok, run}
+  defp committed_result({:error, _} = error, _event), do: error
 
-  defp maybe_index_idempotency(_run), do: :ok
-
-  defp get_by_idempotency(key) do
-    case KV.get(@idempotency_prefix <> key) do
-      {:ok, %{"run_id" => id}} -> get(id)
-      {:ok, %{run_id: id}} -> get(id)
-      _ -> nil
+  defp check_write_failures do
+    with :ok <- maybe_inject_put_failure() do
+      case Process.get(:synapsis_run_events_put_result) do
+        {:error, _} = error -> error
+        _ -> :ok
+      end
     end
   end
 
@@ -350,15 +403,9 @@ defmodule Synapsis.Agent.Runs do
   end
 
   defp scan do
-    case KV.prefix_scan(@prefix) do
-      # WORKAROUND(upstream): gsmlg-dev/concord#23 — prefix_scan skips decompression.
-      {:ok, pairs} ->
-        Enum.map(pairs, fn {_k, v} ->
-          AgentRun.from_store(Concord.Compression.decompress(v))
-        end)
-
-      _ ->
-        []
+    case Store.list() do
+      {:ok, runs} -> runs
+      _ -> []
     end
   end
 
@@ -387,7 +434,7 @@ defmodule Synapsis.Agent.Runs do
     end)
   end
 
-  defp attr(attrs, key), do: Map.get(attrs, key) || Map.get(normalize_attrs(attrs), key)
+  defp attr(attrs, key), do: Map.get(attrs, key) || Map.get(attrs, Atom.to_string(key))
 
   defp utc_now, do: DateTime.utc_now()
 end

@@ -153,17 +153,8 @@ defmodule Synapsis.Agent.Routine.SchedulerTest do
                idempotency_key: occ.occurrence_key <> ":run"
              })
 
-    # Force terminal projection for occurrence reconcile (reducer path covered elsewhere)
-    now = DateTime.utc_now()
-
-    assert {:ok, run} =
-             Runs.persist(%{
-               run
-               | status: "completed",
-                 summary: "ok",
-                 finished_at: now,
-                 updated_at: now
-             })
+    assert {:ok, run} = Runs.mark_running(run)
+    assert {:ok, run} = Runs.mark_completed(run, "ok")
 
     assert {:ok, started} = Occurrence.mark_started(claimed, run.id)
 

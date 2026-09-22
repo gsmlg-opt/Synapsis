@@ -20,6 +20,15 @@ contracts; they are **not** implemented in the Track B PR.
 - Pure `RunReducer.reduce(run_state, run_event) -> {:ok, new_state} | {:error, reason}` with no store/PubSub/clock side effects.
 - Restart reconciliation via `RunReconciler.classify/2` maps incomplete runs to `failed` / `timed_out` / `unknown_outcome` (never blind side-effect replay).
 
+Persistence amendment (2026-09-22):
+
+- `Synapsis.AgentRun.Store` in `synapsis_data` atomically commits a critical event, its event-ID index and the run projection, conditioned on the expected stored snapshot. Creation also includes the idempotency index. Lifecycle reduction and observational publication stay in `synapsis_agent`.
+- `Runs.persist/1` retains its tagged result shape but only acknowledges an identical stored snapshot; attempted raw creation or mutation returns `{:error, :lifecycle_event_required}`. Use lifecycle APIs for writes. `RunEvents.append_critical/2` delegates to `Runs.apply_event/2`, so it cannot append a fact without its projection.
+- Typed-event retries require an identical envelope. Convenience transitions with an explicit `event_id` reuse the committed envelope when run, type and normalized attributes match. Duplicate retries return the current durable projection without another write or observational append. Conflicting reuse returns `:event_id_conflict`; stale snapshots return `:stale_run`.
+- Non-queued creation remains supported and records `initial_status` in the creation fact. A legacy critical event ahead of its projection, an orphan event, or a retry through an index lacking an atomic commit revision returns `:incomplete_event`; no automatic history rewrite or tool replay is attempted.
+- `Runs.fetch/1` distinguishes `:not_found` from storage errors. `list_by_status_result/2` propagates scan failures. Untagged compatibility read/list helpers retain their existing nil/empty fallbacks; coordination must use tagged APIs.
+- Store fault fixtures use `:synapsis_data, :agent_run_store_adapter` with the actual `get/2`, `prefix_scan/2` and `txn/2` boundary. Operations have a five-second timeout. This stores existing host coordination records; it does not implement the Backplane runtime Store behaviour.
+
 ## Track E — Daemon / RunSupervisor (implemented in PR-04)
 
 - `RunSupervisor` + `RunRegistry`: one temporary `RunCoordinator` per `run_id`.

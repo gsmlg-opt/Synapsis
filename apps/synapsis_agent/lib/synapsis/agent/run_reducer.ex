@@ -74,6 +74,10 @@ defmodule Synapsis.Agent.RunReducer do
   defp validate_sequence(_run, %RunEvent{sequence: nil}), do: {:error, :missing_sequence}
   defp validate_sequence(_run, _event), do: {:error, :stale_sequence}
 
+  defp target_status(_run, %RunEvent{type: "run.created", payload: %{"initial_status" => status}}) do
+    if status in AgentRun.statuses(), do: {:ok, status}, else: {:error, :invalid_initial_status}
+  end
+
   defp target_status(%AgentRun{} = run, %RunEvent{type: "run.reconciled"} = event) do
     case Map.get(event.payload, "status") || Map.get(event.payload, :status) do
       status when is_binary(status) ->
@@ -109,7 +113,7 @@ defmodule Synapsis.Agent.RunReducer do
       from in @terminals ->
         {:error, :already_terminal}
 
-      type == "run.created" and from == "queued" and to == "queued" ->
+      type == "run.created" and from == "queued" ->
         :ok
 
       MapSet.member?(Map.get(@transitions, from, MapSet.new()), to) ->

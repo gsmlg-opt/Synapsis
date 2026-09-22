@@ -146,6 +146,7 @@ defmodule Synapsis.Agent.DaemonTest do
 
     final = Runs.get(run.id)
     assert final.status == "cancelled"
+    assert_receive {:provider_disconnected, _handler}, 1_000
   end
 
   test "deadline produces timed_out", %{tmp_dir: tmp_dir} do
@@ -171,6 +172,7 @@ defmodule Synapsis.Agent.DaemonTest do
              )
 
     assert_run_terminal(run.id, "timed_out", 10_000)
+    assert_receive {:provider_disconnected, _handler}, 1_000
   end
 
   test "coordinator crash is reconciled without completing", %{tmp_dir: tmp_dir} do
@@ -215,6 +217,7 @@ defmodule Synapsis.Agent.DaemonTest do
     stored = Runs.get(run.id)
     assert stored.status in ~w(failed unknown_outcome timed_out)
     refute stored.status == "completed"
+    assert_receive {:provider_disconnected, _handler}, 1_000
   end
 
   defp assert_run_terminal(run_id, status, timeout_ms) do

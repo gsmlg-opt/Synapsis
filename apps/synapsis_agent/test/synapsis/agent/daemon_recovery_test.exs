@@ -58,10 +58,10 @@ defmodule Synapsis.Agent.DaemonRecoveryTest do
   end
 
   test "recovery store errors remain visible without crash-looping" do
-    previous = Application.get_env(:synapsis_agent, :agent_runs_kv_adapter, :missing)
-    Application.put_env(:synapsis_agent, :agent_runs_kv_adapter, ScanFailingKV)
+    previous = Application.get_env(:synapsis_data, :agent_run_store_adapter, :missing)
+    Application.put_env(:synapsis_data, :agent_run_store_adapter, ScanFailingKV)
 
-    on_exit(fn -> restore_application_env(:agent_runs_kv_adapter, previous) end)
+    on_exit(fn -> restore_application_env(:agent_run_store_adapter, previous, :synapsis_data) end)
 
     {daemon, _task_supervisor} = start_test_daemon(recover?: true)
 
@@ -79,7 +79,7 @@ defmodule Synapsis.Agent.DaemonRecoveryTest do
     assert status.recovery_error =~ "store_unavailable"
     assert Process.alive?(Process.whereis(daemon))
 
-    restore_application_env(:agent_runs_kv_adapter, previous)
+    restore_application_env(:agent_run_store_adapter, previous, :synapsis_data)
     assert {:ok, recovered} = wait_for_status(daemon, & &1.ready)
     assert recovered.recovery_error == nil
   end
@@ -212,10 +212,13 @@ defmodule Synapsis.Agent.DaemonRecoveryTest do
   end
 
   test "partial recovery still interrupts waiting runs and owns every queued run" do
-    previous_adapter = Application.get_env(:synapsis_agent, :agent_runs_kv_adapter, :missing)
-    Application.put_env(:synapsis_agent, :agent_runs_kv_adapter, SelectivePutIfKV)
+    previous_adapter = Application.get_env(:synapsis_data, :agent_run_store_adapter, :missing)
+    Application.put_env(:synapsis_data, :agent_run_store_adapter, SelectiveTransactionKV)
     Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :waiting)
-    on_exit(fn -> restore_application_env(:agent_runs_kv_adapter, previous_adapter) end)
+
+    on_exit(fn ->
+      restore_application_env(:agent_run_store_adapter, previous_adapter, :synapsis_data)
+    end)
 
     attrs = %{
       kind: "manual",
@@ -233,7 +236,7 @@ defmodule Synapsis.Agent.DaemonRecoveryTest do
 
     Application.put_env(
       :synapsis_agent,
-      :daemon_selective_put_if,
+      :daemon_selective_transaction,
       [{running.id, "interrupted"}]
     )
 
@@ -249,7 +252,7 @@ defmodule Synapsis.Agent.DaemonRecoveryTest do
     assert %{status: "running"} = Runs.get(running.id)
     assert %{status: "interrupted"} = Runs.get(waiting.id)
 
-    Application.put_env(:synapsis_agent, :daemon_selective_put_if, [])
+    Application.put_env(:synapsis_agent, :daemon_selective_transaction, [])
     assert_receive {:waiting_session, _session_id}, 2_000
 
     assert {:ok, status} =

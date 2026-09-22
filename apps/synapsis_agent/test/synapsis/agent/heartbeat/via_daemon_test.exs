@@ -5,7 +5,6 @@ defmodule Synapsis.Agent.Heartbeat.ViaDaemonTest do
   alias Synapsis.Agent.Heartbeat.{Delivery, Worker}
   alias Synapsis.Agent.Runs
   alias Synapsis.Agent.TestSupport.SessionHarness
-  alias Synapsis.AgentRun
 
   @moduletag :tmp_dir
 
@@ -100,6 +99,7 @@ defmodule Synapsis.Agent.Heartbeat.ViaDaemonTest do
              )
 
     assert_run_terminal(run.id, "timed_out", 10_000)
+    assert_receive {:provider_disconnected, _handler}, 1_000
   end
 
   test "Worker.execute disabled is ok without run" do
@@ -148,29 +148,37 @@ defmodule Synapsis.Agent.Heartbeat.ViaDaemonTest do
     assert %{status: "completed"} = Runs.get(run.id)
   end
 
-  test "idempotent heartbeat trigger returns same run" do
+  test "idempotent heartbeat trigger returns same run", %{tmp_dir: tmp_dir} do
+    harness = SessionHarness.setup_session!(tmp_dir: tmp_dir, scenario: :success, text: "idem")
+    on_exit(fn -> SessionHarness.cleanup!(harness) end)
     key = "hb-idem-#{System.unique_integer([:positive])}"
 
     assert {:ok, first} =
              Daemon.trigger(:heartbeat, "hb-idem",
                prompt: "idem",
-               agent: "main",
+               agent: harness.agent_name,
+               provider: harness.provider.name,
+               model: "characterization-model",
                idempotency_key: key
              )
 
-    # Mark terminal so coordinator exit does not race second create path
-    if not AgentRun.terminal?(first) do
-      _ = Runs.mark_failed(Runs.get(first.id), "stop for idempotency test")
-    end
+    assert_run_terminal(first.id, "completed", 5_000)
 
     assert {:ok, second} =
              Daemon.trigger(:heartbeat, "hb-idem",
                prompt: "idem",
-               agent: "main",
+               agent: harness.agent_name,
+               provider: harness.provider.name,
+               model: "characterization-model",
                idempotency_key: key
              )
 
     assert first.id == second.id
+
+    wait_until(
+      fn -> Daemon.status().active_count == 0 and Daemon.status().queued_count == 0 end,
+      5_000
+    )
   end
 
   test "failure streak resets after success" do
@@ -187,6 +195,9 @@ defmodule Synapsis.Agent.Heartbeat.ViaDaemonTest do
   defp assert_run_terminal(run_id, status, timeout_ms) do
     wait_until(fn -> match?(%{status: ^status}, Runs.get(run_id)) end, timeout_ms)
     assert %{status: ^status} = Runs.get(run_id)
+    # The next test clears the shared store. Do not erase durable state while
+    # the daemon still owns a finalizer for this run.
+    wait_until(fn -> Daemon.status().active_run_id != run_id end, timeout_ms)
   end
 
   defp wait_until(fun, timeout_ms) do
