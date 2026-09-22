@@ -1,6 +1,10 @@
 # Backplane Agent Runtime adoption research and plan
 
-Status: published 1.7.4 adopted; provider and module-tool adapters implemented and fixture-tested, including skill loading, scoped approval and cancellation. Production routing remains proposed.
+Status: runtime and MCP published 1.7.9 adopted on 2026-09-23; #42/#43 consumer contracts pass. Provider and module-tool adapters remain fixture-tested, including skill loading, scoped approval and cancellation. Production routing remains proposed. See the [current upgrade evidence](2026-09-22-backplane-daemon-pilot.md#published-179-adoption-2026-09-23); the original 1.7.4 baseline below is historical.
+
+Follow-up at commit `72cec7c`: [ADR-009 ownership proposal](../../decisions/ADR-009-backplane-daemon-pilot-ownership.md) and [pilot checklist and failure triage](2026-09-22-backplane-daemon-pilot.md). The initial full agent suite failed (505/530 passed, 25 failed). All 25 failure identities also reproduced on parent `e2ae52b` (432/457 passed); subsequent repairs are recorded below.
+
+Subsequent repairs preserve creation-time run IDs and atomically commit run projections, critical events and indexes through `Synapsis.AgentRun.Store`. The scoped consistency/recovery check passed 75 tests, leaving 16 baseline provider/cancellation fixture failures. Those fixtures are now repaired: the full agent suite passes **561 tests, exit 0**, seed `430362`. See the pilot checklist for the implemented contract and legacy-record limitations. Ownership, profile/catalog and MCP gates still precede production routing.
 
 ## Recommendation
 
@@ -38,6 +42,9 @@ The initial 1.7.3 research found unsupported `anyOf` and four warnings on Elixir
 | Provider/runtime/Gateway/skill regression run | Passed: 344 tests | 274 provider, 55 runtime, 15 Gateway/skill; before final additional lifecycle/reasoning cases |
 | Provider increment focused revalidation | Passed: 120 tests | 49 HTTP adapter tests (including both link policies), 56 runtime, 15 Gateway/skill |
 | Tool adapter increment focused revalidation | Passed: 102 tests, exit 0 | 85 runtime (including production HTTP/skill, catalog and backend), 17 Gateway/skill/Executor lifetime tests; cancellation crash logs are deliberately induced |
+| Full agent suite at `72cec7c` | Failed: 505/530 passed, 25 failed, exit 2 | Seed 430362; exact same 25 failure identities as parent `e2ae52b` (432/457 passed, exit 2); see pilot checklist for causal evidence |
+| Identity and atomic persistence follow-up | Passed: 75 scoped tests; full agent suite 542/558 passed, 16 failed, exit 2 | Seed 430362; all 16 remaining failure identities are baseline provider/cancellation fixtures; no new identities. Does not implement the Backplane runtime Store behaviour |
+| Provider/cancellation fixture follow-up | Passed: 561 agent tests, exit 0 | Seed 430362; all previous 16 failures resolved. Three added checks verify that only the owning HTTP connection's shutdown is treated as cancellation; all HTTP traffic uses Bypass |
 | Scoped formatting, diff whitespace, document links | Passed | Changed files only; unrelated compiler warnings remain |
 | Durable store conformance and crash tests | Not run | No host runtime store adapter exists yet |
 
@@ -151,7 +158,7 @@ Each phase is a separate reviewable change. The first increment established the 
 - The Bypass HTTP → actual assigned skill → HTTP test now uses the production catalog/backend. The earlier proof-only Gateway backend remains confined to the initial package contract tests.
 - Process-backed tools, deferred registrations and `tool_search` are explicitly rejected. Their shared-process cancellation and catalog-update contracts remain open; existing daemon profiles must not be silently trimmed to fit this subset.
 
-Next: settle the daemon pilot's live-owner/restart ADR and profile/catalog requirements, implement authenticated host interaction resolution, and finish MCP/dynamic catalog contracts before production routing. Full agent-suite validation remains a later gate. This increment changes neither daemon/session routing nor persistence.
+Published fixes for Backplane [#42](https://github.com/gsmlg-opt/backplane/issues/42) and [#43](https://github.com/gsmlg-opt/backplane/issues/43) are now adopted in 1.7.9, with six new consumer contracts passing. Next: accept ADR-009 and explicitly settle discovered-tool eligibility before host integration; legacy daemon discovery does not establish same-run catalog activation. Use request-scoped provider definitions for dynamic catalogs and caller-owned MCP workers as described in the [upgrade evidence](2026-09-22-backplane-daemon-pilot.md#published-179-adoption-2026-09-23). Creation identity, atomic lifecycle persistence and the agent-suite validation gate are complete. Production routing remains gated by host integration and acceptance; the MCP regression suite has one pre-existing grant-fixture mismatch. Daemon/session routing is unchanged.
 
 ### Phase 0 — compatibility and ownership decisions
 
@@ -159,7 +166,7 @@ Allowed scope: this plan, an ADR proposal, schema inventory/report, and upstream
 
 1. Audit complete resolved daemon tool schemas, including configured MCP tools and deferred discovery requirements. Record each unsupported construct and affected profile.
 2. Required `skill` schema support is verified in 1.7.4. Request upstream support for any additional unsupported constructs found in MCP admission; do not locally fork or weaken schemas.
-3. The 1.7.4 package passes strict compilation on Elixir 1.18/OTP 28 and 1.20.1/OTP 29 and is pinned. Recheck these gates on future upgrades.
+3. Historical 1.7.4 strict compilation passed on Elixir 1.18/OTP 28 and 1.20.1/OTP 29. Current 1.7.9 was force-compiled and consumer-tested on Elixir 1.20.1/OTP 29; the older toolchain and CI have not been rerun for this upgrade.
 4. Decide the bounded pilot profile and accept its ownership ADR before routing production work to it. Explicitly document restart and live-read behavior.
 
 Exit: exact package/version and schema gates documented; architecture choice accepted before product cutover. Test-only adapter work may proceed independently of unresolved production gates.
@@ -216,4 +223,4 @@ mix format --check-formatted
 git diff --check
 ```
 
-The runtime directory also contains existing graph/runner/checkpoint tests. The provider adapter increment validated the runtime directory, provider suite, and relevant Gateway/skill tests. The tool adapter increment revalidated the runtime directory and Gateway/skill/Executor lifetime tests; the entire agent suite is a later Phase 1 gate. Add focused session/server tests when those interfaces change; run storage conformance only in Phase 3. Report baseline/environment failures separately and do not repair unrelated suites as part of this migration.
+The runtime directory also contains existing graph/runner/checkpoint tests. The provider adapter increment validated the runtime directory, provider suite, and relevant Gateway/skill tests. The tool adapter increment revalidated the runtime directory and Gateway/skill/Executor lifetime tests. After the recorded identity, persistence and fixture repairs, the full agent suite passes. Add focused session/server tests when those interfaces change; run Backplane runtime Store conformance only in Phase 3. Report baseline/environment failures separately and do not repair unrelated suites as part of this migration.
