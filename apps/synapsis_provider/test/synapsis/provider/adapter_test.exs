@@ -12,6 +12,62 @@ defmodule Synapsis.Provider.AdapterTest do
     %{bypass: bypass, port: bypass.port}
   end
 
+  for linked? <- [false, true] do
+    test "stream link=#{linked?} preserves the requested owner lifetime policy", %{
+      bypass: bypass,
+      port: port
+    } do
+      owner = self()
+
+      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+        Process.flag(:trap_exit, true)
+        conn = Plug.Conn.send_chunked(conn, 200)
+        send(owner, {:http_started, self()})
+
+        receive do
+          :release -> conn
+        after
+          3_000 -> conn
+        end
+      end)
+
+      config = %{type: "openai", base_url: "http://localhost:#{port}", api_key: "fixture"}
+      request = Adapter.format_request([], [], %{model: "gpt-test", provider_type: "openai"})
+
+      {:ok, caller} =
+        Task.Supervisor.start_child(Synapsis.Provider.TaskSupervisor, fn ->
+          result =
+            if unquote(linked?),
+              do: Adapter.stream(request, config, link: true),
+              else: Adapter.stream(request, config)
+
+          send(owner, {:stream_started, result})
+
+          receive do
+            :stop -> :ok
+          after
+            3_000 -> :ok
+          end
+        end)
+
+      assert_receive {:stream_started, {:ok, handle}}, 1_000
+      assert_receive {:http_started, handler}, 1_000
+      monitor = Process.monitor(handle.pid)
+      Process.exit(caller, :kill)
+
+      if unquote(linked?) do
+        assert_receive {:DOWN, ^monitor, :process, _, _}, 1_000
+      else
+        refute_receive {:DOWN, ^monitor, :process, _, _}, 50
+        assert Process.alive?(handle.pid)
+        Adapter.cancel(handle)
+        assert_receive {:DOWN, ^monitor, :process, _, _}, 1_000
+      end
+
+      send(handler, :release)
+    end
+  end
+
   # ---------------------------------------------------------------------------
   # stream/2 — Anthropic
   # ---------------------------------------------------------------------------

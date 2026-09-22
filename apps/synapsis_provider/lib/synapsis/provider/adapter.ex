@@ -43,19 +43,30 @@ defmodule Synapsis.Provider.Adapter do
 
   `config` must include `:type` (e.g. "anthropic", "openai", "google").
   """
-  def stream({:ok, request}, config), do: stream(request, config)
-  def stream({:error, error}, _config), do: {:error, error}
+  def stream(request, config), do: stream(request, config, [])
 
-  def stream(request, config) do
+  @doc """
+  Starts a stream with optional `link: true` for a dedicated lifecycle owner.
+
+  The link is established by Task.Supervisor before streaming starts, so an
+  abnormal owner exit also stops its provider task. Linked task failures can
+  terminate the owner. Existing `stream/2` callers remain unlinked.
+  """
+  def stream({:ok, request}, config, opts), do: stream(request, config, opts)
+  def stream({:error, error}, _config, _opts), do: {:error, error}
+
+  def stream(request, config, opts) do
     with :ok <- ensure_model_runtime_available(request, config) do
       caller = self()
       transport_type = resolve_transport_type(config[:type] || config["type"])
       {request, tool_aliases} = ToolName.pop_aliases(request)
 
+      work = fn -> do_stream(transport_type, request, config, caller, tool_aliases) end
+
       task =
-        Task.Supervisor.async_nolink(Synapsis.Provider.TaskSupervisor, fn ->
-          do_stream(transport_type, request, config, caller, tool_aliases)
-        end)
+        if Keyword.get(opts, :link, false),
+          do: Task.Supervisor.async(Synapsis.Provider.TaskSupervisor, work),
+          else: Task.Supervisor.async_nolink(Synapsis.Provider.TaskSupervisor, work)
 
       {:ok, %{pid: task.pid, ref: task.ref}}
     end

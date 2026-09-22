@@ -197,10 +197,14 @@ defmodule Synapsis.Tool.Executor do
     start_time = System.monotonic_time(:millisecond)
 
     try do
+      work = fn -> safe_module_execute(module, input, context) end
+
+      # Dedicated runtime effect owners opt in so their abnormal exit cancels
+      # the module task too. Existing session callers keep ADR-006 lifetimes.
       task =
-        Task.Supervisor.async_nolink(Synapsis.Tool.TaskSupervisor, fn ->
-          safe_module_execute(module, input, context)
-        end)
+        if context[:tool_task_link] == true,
+          do: Task.Supervisor.async(Synapsis.Tool.TaskSupervisor, work),
+          else: Task.Supervisor.async_nolink(Synapsis.Tool.TaskSupervisor, work)
 
       case Task.yield(task, timeout) || Task.shutdown(task, :brutal_kill) do
         {:ok, {:ok, result}} ->
