@@ -87,7 +87,7 @@ defmodule Synapsis.Tool.ToolSearchTest do
 
   describe "execute/2 — keyword search" do
     test "matches tools by name" do
-      assert {:ok, json} = ToolSearch.execute(%{"query" => "file"}, %{})
+      assert {:ok, json} = ToolSearch.execute(%{"query" => "mock_file"}, %{})
       results = Jason.decode!(json)
       names = Enum.map(results, & &1["name"])
       assert "mock_file_reader" in names
