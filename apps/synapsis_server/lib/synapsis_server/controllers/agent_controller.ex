@@ -39,7 +39,7 @@ defmodule SynapsisServer.AgentController do
     do: conn |> put_status(:unprocessable_entity) |> json(%{error: "prompt is required"})
 
   def cancel(conn, %{"id" => id}) do
-    case Daemon.cancel(id) do
+    case Daemon.cancel(Daemon, id) do
       {:ok, run} ->
         json(conn, %{data: serialize_run(run)})
 
