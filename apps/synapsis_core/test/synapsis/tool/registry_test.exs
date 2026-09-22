@@ -24,6 +24,38 @@ defmodule Synapsis.Tool.RegistryTest do
   end
 
   describe "register_module/3" do
+    test "loads a cold module before caching its permission level" do
+      module = Module.concat(__MODULE__, ColdReadTool)
+      directory = Path.join(System.tmp_dir!(), "synapsis-cold-tool-#{Ecto.UUID.generate()}")
+      File.mkdir_p!(directory)
+
+      [{^module, bytecode}] =
+        Code.compile_string("""
+        defmodule #{inspect(module)} do
+          def permission_level, do: :read
+        end
+        """)
+
+      File.write!(Path.join(directory, "#{module}.beam"), bytecode)
+      :code.purge(module)
+      :code.delete(module)
+      Code.prepend_path(directory)
+
+      on_exit(fn ->
+        Registry.unregister("test_tool")
+        Code.delete_path(directory)
+        :code.purge(module)
+        :code.delete(module)
+        File.rm_rf!(directory)
+      end)
+
+      refute :code.is_loaded(module)
+      assert :ok = Registry.register_module("test_tool", module)
+      assert {:ok, {:module, ^module, opts}} = Registry.lookup("test_tool")
+      assert opts[:permission_level] == :read
+      assert Synapsis.Tool.Permission.tool_permission_level("test_tool") == :read
+    end
+
     test "registers a module-based tool" do
       assert :ok = Registry.register_module("test_tool", FakeTool)
       assert {:ok, {:module, FakeTool, opts}} = Registry.lookup("test_tool")

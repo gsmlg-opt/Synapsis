@@ -343,7 +343,8 @@ defmodule Synapsis.Tool.Registry do
 
   defp resolve_permission_level(module, opts) do
     opts[:permission_level] ||
-      (function_exported?(module, :permission_level, 0) && module.permission_level()) ||
+      (Code.ensure_loaded?(module) && function_exported?(module, :permission_level, 0) &&
+         module.permission_level()) ||
       :write
   end
 
