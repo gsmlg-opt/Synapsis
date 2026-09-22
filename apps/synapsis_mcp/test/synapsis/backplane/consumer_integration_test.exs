@@ -122,9 +122,10 @@ defmodule Synapsis.Backplane.ConsumerIntegrationTest do
 
     prompt = ContextBuilder.build_system_prompt(:coding, agent_config: resolved_agent)
 
-    assert prompt =~ "<assigned_skills>"
-    assert prompt =~ "## Matrix Review"
+    assert prompt =~ "<system-reminder>\n<skills_instructions>"
+    assert prompt =~ "- Matrix Review:"
     assert prompt =~ "Review imported capabilities"
-    assert prompt =~ "Use the imported matrix review procedure."
+    assert prompt =~ "backplane://#{connection.id}/matrix-skill"
+    refute prompt =~ "Use the imported matrix review procedure."
   end
 end

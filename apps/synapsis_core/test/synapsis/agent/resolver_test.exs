@@ -322,6 +322,9 @@ defmodule Synapsis.Agent.ResolverTest do
       agent = Resolver.resolve("skilled-agent")
       assert Enum.map(agent.skills, & &1.name) == ["review-style"]
       assert hd(agent.skills).system_prompt_fragment == "Always review tradeoffs."
+      assert [%Synapsis.SkillCatalog.Entry{} = entry] = agent.skill_catalog
+      assert entry.locator == "synapsis://skills/#{skill.id}"
+      assert entry.name == "review-style"
 
       assert AgentSkills.list_skill_ids(agent_config.id) == [
                skill.id,

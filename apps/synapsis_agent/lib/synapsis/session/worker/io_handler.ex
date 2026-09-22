@@ -342,6 +342,8 @@ defmodule Synapsis.Session.Worker.IOHandler do
               working_dir: effective_path,
               agent_id: agent_id,
               agent_scope: :agent,
+              skill_catalog: opts[:skill_catalog] || [],
+              skill_loader: opts[:skill_loader],
               operator_approval: true,
               attended?: true
             }

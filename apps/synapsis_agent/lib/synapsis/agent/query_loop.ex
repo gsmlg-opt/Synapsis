@@ -158,6 +158,8 @@ defmodule Synapsis.Agent.QueryLoop do
         session_id: ctx.session_id,
         project_path: ctx.project_path,
         working_dir: ctx.working_dir,
+        skill_catalog: ctx.agent_config[:skill_catalog] || [],
+        skill_loader: ctx.agent_config[:skill_loader],
         query_context: ctx
       })
 
@@ -305,6 +307,8 @@ defmodule Synapsis.Agent.QueryLoop do
           session_id: ctx.session_id,
           project_path: ctx.project_path,
           working_dir: ctx.working_dir,
+          skill_catalog: ctx.agent_config[:skill_catalog] || [],
+          skill_loader: ctx.agent_config[:skill_loader],
           query_context: ctx
         })
 

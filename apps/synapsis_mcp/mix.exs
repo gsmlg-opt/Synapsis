@@ -34,6 +34,7 @@ defmodule SynapsisMcp.MixProject do
       {:synapsis_data, in_umbrella: true},
       {:synapsis_provider, in_umbrella: true},
       {:backplane_mcp_protocol, "~> 0.4"},
+      {:backplane_skill_protocol, "~> 1.7.0"},
       {:req, "~> 0.5"},
       {:jason, "~> 1.4"},
       {:bypass, "~> 2.1", only: :test}

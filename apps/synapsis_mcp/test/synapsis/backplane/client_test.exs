@@ -1142,15 +1142,72 @@ defmodule Synapsis.Backplane.ClientTest do
     assert {:ok, []} = Client.fetch_models(connection, timeout: 500)
   end
 
+  test "paginates the Skill Protocol v1 catalog and preserves exact references" do
+    bypass = Bypass.open()
+
+    {:ok, connection} =
+      Connection.new(%{
+        name: "skill-protocol",
+        endpoint: "http://localhost:#{bypass.port}",
+        credential: "protocol-secret"
+      })
+
+    digest_a = "sha256:" <> String.duplicate("a", 64)
+    digest_b = "sha256:" <> String.duplicate("b", 64)
+
+    Bypass.expect(bypass, "GET", "/skill-protocol/v1/catalog", fn conn ->
+      params = URI.decode_query(conn.query_string)
+      assert Plug.Conn.get_req_header(conn, "authorization") == ["Bearer protocol-secret"]
+
+      case params["cursor"] do
+        nil ->
+          json(conn, %{
+            "protocol_version" => "1",
+            "data" => [protocol_descriptor("review", "rev-1", digest_a)],
+            "next_cursor" => "page-2"
+          })
+
+        "page-2" ->
+          json(conn, %{
+            "protocol_version" => "1",
+            "data" => [protocol_descriptor("deploy", "rev-2", digest_b)],
+            "next_cursor" => nil
+          })
+      end
+    end)
+
+    assert {:ok, skills, false} =
+             Client.list_protocol_skills(connection, max_skills: 3, timeout: 500)
+
+    assert Enum.map(skills, &{&1["id"], &1["revision"], &1["artifact_digest"]}) == [
+             {"review", "rev-1", digest_a},
+             {"deploy", "rev-2", digest_b}
+           ]
+
+    refute Enum.any?(skills, &Map.has_key?(&1, "content"))
+  end
+
   defp connection!(bypass, opts \\ []) do
     {:ok, connection} =
       Connection.new(%{
         name: "http",
         endpoint: "http://localhost:#{bypass.port}",
-        credential: Keyword.get(opts, :credential)
+        credential: Keyword.get(opts, :credential),
+        connection_options: %{"skill_protocol" => "legacy"}
       })
 
     connection
+  end
+
+  defp protocol_descriptor(skill_id, revision, digest) do
+    %{
+      "skill_id" => skill_id,
+      "name" => skill_id,
+      "description" => "#{skill_id} description",
+      "revision" => revision,
+      "artifact_digest" => digest,
+      "publication_status" => "ready"
+    }
   end
 
   defp archive!(test, slug, content) do

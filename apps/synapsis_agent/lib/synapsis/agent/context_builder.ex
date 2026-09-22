@@ -16,8 +16,9 @@ defmodule Synapsis.Agent.ContextBuilder do
 
   require Logger
 
-  alias Synapsis.Workspace.Identity
+  alias Synapsis.{SkillCatalog, Workspace.Identity}
   alias Synapsis.Memory.ContextBuilder, as: MemoryContextBuilder
+  alias Synapsis.Provider.ModelRegistry
 
   @memory_budget_ratio 0.05
   @memory_hard_cap 10
@@ -30,7 +31,7 @@ defmodule Synapsis.Agent.ContextBuilder do
     * `:agent_id` — for agent-scoped workspace context
     * `:session_id` — for memory relevance scoring
     * `:user_message` — latest user message for memory search
-    * `:model_context_window` — model's context window size (default: 128_000)
+    * `:model_context_window` — explicit model context window size
     * `:agent_config` — agent configuration map
 
   """
@@ -38,16 +39,17 @@ defmodule Synapsis.Agent.ContextBuilder do
   def build_system_prompt(agent_type, opts \\ []) do
     agent_id = Keyword.get(opts, :agent_id)
     user_message = Keyword.get(opts, :user_message, "")
-    model_context_window = Keyword.get(opts, :model_context_window, 128_000)
     agent_config = Keyword.get(opts, :agent_config, %{})
+    skill_context_window = skill_context_window(opts, agent_config)
+    memory_context_window = memory_context_window(opts)
 
     layers = [
       {:base, load_base_prompt(agent_type, agent_config)},
       {:soul, load_soul(agent_id)},
       {:identity, load_identity()},
-      {:assigned_skills, build_assigned_skills(agent_config)},
+      {:skill_catalog, build_skill_catalog(agent_config, skill_context_window)},
       {:skills, build_skills_manifest(agent_id, agent_config)},
-      {:memory, load_memory_context(user_message, agent_id, model_context_window)},
+      {:memory, load_memory_context(user_message, agent_id, memory_context_window)},
       {:bootstrap, load_bootstrap()},
       {:agent, load_agent_context(agent_id)}
     ]
@@ -233,17 +235,33 @@ defmodule Synapsis.Agent.ContextBuilder do
     }
   end
 
+  @doc "Resolve the context window used for Skill catalog budgeting."
+  @spec skill_context_window(keyword(), map()) :: pos_integer() | nil
+  def skill_context_window(opts, agent_config) do
+    if Keyword.has_key?(opts, :model_context_window) do
+      positive_integer_or_nil(Keyword.get(opts, :model_context_window))
+    else
+      model = Map.get(agent_config, :model) || Map.get(agent_config, "model")
+
+      case ModelRegistry.get(model) do
+        {:ok, metadata} -> metadata.context_window
+        {:error, :unknown} -> nil
+      end
+    end
+  end
+
   # -- Private --
 
   defp wrap_layer(:base, content), do: content
   defp wrap_layer(:soul, content), do: "<soul>\n#{content}\n</soul>"
   defp wrap_layer(:identity, content), do: "<user_identity>\n#{content}\n</user_identity>"
 
+  defp wrap_layer(:skill_catalog, content),
+    do:
+      "<system-reminder>\n<skills_instructions>\n#{content}\n</skills_instructions>\n</system-reminder>"
+
   defp wrap_layer(:skills, content),
     do: "<available_skills>\n#{content}\n</available_skills>"
-
-  defp wrap_layer(:assigned_skills, content),
-    do: "<assigned_skills>\n#{content}\n</assigned_skills>"
 
   defp wrap_layer(:memory, content), do: "<memory>\n#{content}\n</memory>"
   defp wrap_layer(:bootstrap, content), do: "<environment>\n#{content}\n</environment>"
@@ -280,39 +298,31 @@ defmodule Synapsis.Agent.ContextBuilder do
   defp explicit_tool_names(nil), do: :none
   defp explicit_tool_names(tool_names), do: tool_names
 
-  defp build_assigned_skills(agent_config) do
-    skills = Map.get(agent_config, :skills) || Map.get(agent_config, "skills") || []
-
-    skills
-    |> Enum.map(&format_assigned_skill/1)
-    |> Enum.reject(&(&1 == ""))
-    |> case do
-      [] -> nil
-      lines -> Enum.join(lines, "\n\n")
-    end
+  defp memory_context_window(opts) do
+    positive_integer_or_nil(Keyword.get(opts, :model_context_window)) || 128_000
   end
 
-  defp format_assigned_skill(skill) do
-    fragment = skill_value(skill, :system_prompt_fragment)
+  defp positive_integer_or_nil(value) when is_integer(value) and value > 0, do: value
+  defp positive_integer_or_nil(_value), do: nil
 
-    if is_binary(fragment) and String.trim(fragment) != "" do
-      name = skill_value(skill, :name) || "unnamed-skill"
-      description = skill_value(skill, :description)
+  defp build_skill_catalog(agent_config, model_context_window) do
+    catalog =
+      Map.get(agent_config, :skill_catalog) || Map.get(agent_config, "skill_catalog") || []
 
-      ["## #{name}", description, fragment]
-      |> Enum.reject(&is_nil/1)
-      |> Enum.reject(&(is_binary(&1) and String.trim(&1) == ""))
-      |> Enum.join("\n")
+    if catalog == [] do
+      nil
     else
-      ""
+      settings =
+        Map.get(agent_config, :skill_settings) || Map.get(agent_config, "skill_settings") || %{}
+
+      max_tokens = Map.get(settings, "max_context_tokens", Map.get(settings, :max_context_tokens))
+
+      SkillCatalog.render(catalog,
+        max_context_tokens: max_tokens,
+        model_context_window: model_context_window
+      ).text
     end
   end
-
-  defp skill_value(skill, key) when is_map(skill) do
-    Map.get(skill, key) || Map.get(skill, to_string(key))
-  end
-
-  defp skill_value(_skill, _key), do: nil
 
   defp default_base_prompt do
     """

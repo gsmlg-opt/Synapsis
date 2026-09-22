@@ -2,6 +2,8 @@ defmodule Synapsis.Backplane.Client do
   @moduledoc "Bounded client for Backplane capability discovery surfaces."
 
   alias Synapsis.Backplane.{Connection, Snapshot}
+  alias Elixir.Backplane.SkillProtocol.{Descriptor, Source.Backplane}
+  alias Elixir.Backplane.SkillProtocol.Client, as: SkillProtocolClient
 
   @default_timeout 5_000
   @skill_limit 100
@@ -19,6 +21,7 @@ defmodule Synapsis.Backplane.Client do
   @default_max_mcp_pages 100
   @max_mcp_pages 100
   @max_mcp_cursor_bytes 4_096
+  @default_max_skill_protocol_pages 100
 
   @callback fetch_models(Connection.t(), keyword()) :: {:ok, [map()]} | {:error, term()}
   @callback list_skills(Connection.t(), keyword()) :: {:ok, [map()]} | {:error, term()}
@@ -91,6 +94,24 @@ defmodule Synapsis.Backplane.Client do
       false -> {:error, :skills_limit_exceeded}
       {:ok, _body} -> {:error, :invalid_skills_response}
       error -> error
+    end
+  end
+
+  @doc "List exact Skill Protocol v1 descriptors with bounded cursor pagination."
+  def list_protocol_skills(%Connection{} = connection, opts \\ []) do
+    max_skills = option(opts, :max_skills, @skill_limit)
+    max_pages = option(opts, :max_skill_pages, @default_max_skill_protocol_pages)
+
+    with true <- is_integer(max_skills) and max_skills > 0 and max_skills <= @skill_limit,
+         true <-
+           is_integer(max_pages) and max_pages > 0 and
+             max_pages <= @default_max_skill_protocol_pages,
+         {:ok, client} <- skill_protocol_client(connection, opts) do
+      source = Backplane.new!(client)
+      paginate_protocol_skills(source, nil, max_skills, max_pages, MapSet.new(), [])
+    else
+      false -> {:error, :invalid_skill_protocol_limit}
+      {:error, reason} -> {:error, skill_protocol_error(reason)}
     end
   end
 
@@ -350,6 +371,18 @@ defmodule Synapsis.Backplane.Client do
   end
 
   defp fetch_skills(connection, opts) do
+    if legacy_skill_discovery?(connection) do
+      fetch_legacy_skills(connection, opts)
+    else
+      case list_protocol_skills(connection, opts) do
+        {:ok, skills, false} -> {:ok, skills}
+        {:ok, skills, true} -> {:incomplete, skills, :skills_limit_reached}
+        {:error, reason} -> {:error, reason}
+      end
+    end
+  end
+
+  defp fetch_legacy_skills(connection, opts) do
     with {:ok, skills} <- list_skills(connection, opts) do
       Enum.reduce_while(skills, {:ok, []}, fn summary, {:ok, details} ->
         case Map.get(summary, "slug") do
@@ -373,6 +406,106 @@ defmodule Synapsis.Backplane.Client do
         error ->
           error
       end
+    end
+  end
+
+  defp legacy_skill_discovery?(connection) do
+    Map.get(connection.connection_options || %{}, "skill_protocol") == "legacy"
+  end
+
+  defp skill_protocol_client(connection, opts) do
+    timeout = option(opts, :timeout, @default_timeout)
+
+    SkillProtocolClient.new(
+      endpoint: connection.endpoint,
+      source_id: connection.id,
+      access_context_id: "synapsis-sync:#{connection.id}",
+      credential_supplier: fn -> connection.credential end,
+      overall_timeout_ms: timeout,
+      max_json_bytes:
+        option(opts, :max_skills_response_bytes, @default_max_skills_response_bytes),
+      max_artifact_bytes: option(opts, :max_archive_bytes, @default_max_archive_bytes),
+      max_attempts: 2,
+      cancelled?: cancellation(opts)
+    )
+  end
+
+  defp paginate_protocol_skills(_source, _cursor, remaining, _pages, _seen, acc)
+       when remaining == 0,
+       do: {:ok, Enum.reverse(acc), true}
+
+  defp paginate_protocol_skills(_source, _cursor, _remaining, 0, _seen, _acc),
+    do: {:error, :skill_protocol_page_limit_exceeded}
+
+  defp paginate_protocol_skills(source, cursor, remaining, pages, seen, acc) do
+    opts = [limit: min(remaining, @skill_limit), cursor: cursor]
+
+    case Backplane.catalog(source, opts) do
+      {:ok, %{data: descriptors, next_cursor: next_cursor}} when is_list(descriptors) ->
+        with true <- length(descriptors) <= remaining,
+             :ok <- validate_protocol_cursor(next_cursor, seen) do
+          mapped = Enum.map(descriptors, &protocol_skill_map/1)
+          next_acc = Enum.reverse(mapped, acc)
+
+          if is_nil(next_cursor) do
+            {:ok, Enum.reverse(next_acc), false}
+          else
+            paginate_protocol_skills(
+              source,
+              next_cursor,
+              remaining - length(descriptors),
+              pages - 1,
+              MapSet.put(seen, next_cursor),
+              next_acc
+            )
+          end
+        else
+          false -> {:error, :skills_limit_exceeded}
+          {:error, reason} -> {:error, reason}
+        end
+
+      {:error, reason} ->
+        {:error, skill_protocol_error(reason)}
+
+      _invalid ->
+        {:error, :invalid_skills_response}
+    end
+  end
+
+  defp validate_protocol_cursor(nil, _seen), do: :ok
+
+  defp validate_protocol_cursor(cursor, seen) when is_binary(cursor) do
+    cond do
+      byte_size(cursor) > @max_mcp_cursor_bytes -> {:error, :skill_protocol_cursor_too_large}
+      MapSet.member?(seen, cursor) -> {:error, :skill_protocol_cursor_cycle}
+      true -> :ok
+    end
+  end
+
+  defp validate_protocol_cursor(_cursor, _seen), do: {:error, :invalid_skills_response}
+
+  defp protocol_skill_map(%Descriptor{} = descriptor) do
+    %{
+      "id" => descriptor.ref.skill_id,
+      "slug" => descriptor.ref.skill_id,
+      "name" => descriptor.name,
+      "description" => descriptor.description,
+      "revision" => descriptor.revision,
+      "artifact_digest" => descriptor.artifact_digest,
+      "publication_status" => to_string(descriptor.publication_status),
+      "enabled" => descriptor.publication_status == :ready,
+      "content_available" =>
+        is_binary(descriptor.revision) and is_binary(descriptor.artifact_digest)
+    }
+  end
+
+  defp skill_protocol_error(%{code: code}) when is_atom(code), do: {:skill_protocol, code}
+  defp skill_protocol_error(reason), do: reason
+
+  defp cancellation(opts) do
+    case Keyword.get(opts, :cancelled?) do
+      fun when is_function(fun, 0) -> fun
+      _ -> fn -> false end
     end
   end
 

@@ -4,7 +4,7 @@ defmodule Synapsis.Agent.Resolver do
   falling back to hardcoded defaults if not found.
   """
 
-  alias Synapsis.{AgentConfigs, AgentSkills, Toolset, Toolsets}
+  alias Synapsis.{AgentConfigs, AgentSkills, SkillCatalog, Toolset, Toolsets}
 
   @retired_tool_names ~w(
     workspace_read workspace_write workspace_delete workspace_list workspace_search
@@ -27,7 +27,9 @@ defmodule Synapsis.Agent.Resolver do
           |> from_default()
       end
 
-    apply_project_agent_config(agent, project_config)
+    agent
+    |> apply_project_agent_config(project_config)
+    |> snapshot_skills()
   end
 
   @doc "List all available agent names from the database."
@@ -100,9 +102,16 @@ defmodule Synapsis.Agent.Resolver do
     agent
     |> fill_blank(:provider, config["provider"])
     |> fill_blank(:model, config["model"])
+    |> Map.put(:skill_settings, Map.get(project_config, "skills", %{}))
   end
 
   defp apply_project_agent_config(agent, _project_config), do: agent
+
+  defp snapshot_skills(agent) do
+    agent
+    |> Map.put(:skill_catalog, SkillCatalog.snapshot(agent[:skills] || []))
+    |> Map.put(:skill_loader, Application.get_env(:synapsis_core, :skill_loader))
+  end
 
   defp project_agent_config(config, agent_name) do
     agents = config["agents"] || %{}

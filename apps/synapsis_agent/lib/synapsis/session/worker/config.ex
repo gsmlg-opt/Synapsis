@@ -124,6 +124,8 @@ defmodule Synapsis.Session.Worker.Config do
   def refresh_agent_defaults(%{session: %Session{} = session} = state) do
     with {:ok, updated_session, agent, provider, provider_config} <-
            resolve_session_defaults(session) do
+      agent = preserve_skill_catalog(agent, state.agent)
+
       {:ok,
        %{
          state
@@ -135,6 +137,15 @@ defmodule Synapsis.Session.Worker.Config do
        }}
     end
   end
+
+  defp preserve_skill_catalog(agent, previous) when is_map(previous) do
+    case Map.fetch(previous, :skill_catalog) do
+      {:ok, catalog} -> Map.put(agent, :skill_catalog, catalog)
+      :error -> agent
+    end
+  end
+
+  defp preserve_skill_catalog(agent, _previous), do: agent
 
   def ensure_agent_model(agent, session) do
     cond do

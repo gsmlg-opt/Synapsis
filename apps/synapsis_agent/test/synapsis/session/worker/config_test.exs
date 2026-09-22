@@ -95,6 +95,32 @@ defmodule Synapsis.Session.Worker.ConfigTest do
     refute Map.has_key?(google, :provider_id)
   end
 
+  test "refresh preserves the Skill catalog frozen at session boot" do
+    session = %Session{
+      id: Ecto.UUID.generate(),
+      agent: "main",
+      provider: "anthropic",
+      model: "claude-sonnet-4-6",
+      config: %{}
+    }
+
+    frozen = [%{locator: "synapsis://skills/boot-snapshot"}]
+
+    state = %{
+      session: session,
+      agent: %{skill_catalog: frozen},
+      provider_config: %{},
+      engine_ctx: %{},
+      engine_state: %{agent_config: %{}}
+    }
+
+    assert {:ok, refreshed} = Config.refresh_agent_defaults(state)
+    assert refreshed.agent.skill_catalog == frozen
+    assert refreshed.engine_state.agent_config.skill_catalog == frozen
+
+    on_exit(fn -> Synapsis.Session.Store.delete_session(session.id) end)
+  end
+
   test "renamed imported providers do not fall through to local config or custom streams" do
     old_name = "backplane-old-#{System.unique_integer([:positive])}"
     new_name = "backplane-new-#{System.unique_integer([:positive])}"

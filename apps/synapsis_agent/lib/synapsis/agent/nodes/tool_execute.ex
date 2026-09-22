@@ -59,6 +59,8 @@ defmodule Synapsis.Agent.Nodes.ToolExecute do
             effective_path: ctx[:project_path],
             session_id: session_id,
             agent_id: state.agent_config[:name] || "default",
+            skill_catalog: state.agent_config[:skill_catalog] || [],
+            skill_loader: state.agent_config[:skill_loader],
             tool_call_hashes: state.tool_call_hashes
           }
 
