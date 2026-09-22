@@ -61,9 +61,7 @@ function savedTheme(): ThemeMode {
 let themeMode = savedTheme()
 
 function applyTheme() {
-  const theme = themeMode === 'auto'
-    ? (systemTheme.matches ? 'moonlight' : 'sunshine')
-    : themeMode
+  const theme = themeMode === 'auto' ? (systemTheme.matches ? 'moonlight' : 'sunshine') : themeMode
   document.documentElement.setAttribute('data-theme', theme)
   document.documentElement.style.colorScheme = theme === 'moonlight' ? 'dark' : 'light'
   document.querySelectorAll<HTMLInputElement>(themeSelector).forEach((input) => {
@@ -73,7 +71,8 @@ function applyTheme() {
 
 function changeTheme(event: Event) {
   const input = event.target
-  if (!(input instanceof HTMLInputElement) || !input.matches(themeSelector) || !input.checked) return
+  if (!(input instanceof HTMLInputElement) || !input.matches(themeSelector) || !input.checked)
+    return
   if (input.value !== 'auto' && input.value !== 'sunshine' && input.value !== 'moonlight') return
   themeMode = input.value
   try {
