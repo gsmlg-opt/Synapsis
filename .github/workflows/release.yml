@@ -31,7 +31,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.git_ref }}
 
@@ -46,12 +46,12 @@ jobs:
           otp-version: '28'
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
 
       - name: Restore dependencies cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             deps
@@ -114,7 +114,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.verify.outputs.source_sha }}
 
@@ -125,12 +125,12 @@ jobs:
           otp-version: '28'
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
 
       - name: Restore dependencies cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             deps
@@ -178,7 +178,7 @@ jobs:
             "_build/prod/synapsis-${{ inputs.version }}-${{ matrix.target }}.tar.gz"
 
       - name: Upload release archive artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: synapsis-${{ inputs.version }}-${{ matrix.target }}
           path: _build/prod/synapsis-${{ inputs.version }}-${{ matrix.target }}.tar.gz
@@ -191,7 +191,7 @@ jobs:
 
     steps:
       - name: Download Linux archive
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: synapsis-${{ inputs.version }}-linux-amd64
           path: dist
@@ -265,12 +265,12 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.verify.outputs.source_sha }}
 
       - name: Download release archives
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: synapsis-${{ inputs.version }}-*
           path: dist
@@ -284,7 +284,7 @@ jobs:
           git push origin "v${{ inputs.version }}"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ inputs.version }}
           name: Synapsis v${{ inputs.version }}
