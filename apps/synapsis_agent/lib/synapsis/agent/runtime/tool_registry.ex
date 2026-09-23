@@ -114,15 +114,8 @@ defmodule Synapsis.Agent.Runtime.ToolRegistry do
        else: error(:resource_conflict, "Tool definition differs from its host registration")
   end
 
-  # The pinned validator checks the whole schema before input validation. A
-  # root argument error means the schema was accepted; schema errors have no
-  # argument path. No keyword is removed or rewritten here.
   defp schema_supported(schema) do
-    case InputSchema.validate(schema, %{}) do
-      {:ok, _} -> :ok
-      {:error, %Error{class: :validation, details: %{path: "$arguments"}}} -> :ok
-      {:error, _} = error -> error
-    end
+    InputSchema.validate_schema(schema)
   end
 
   defp safety(tool) do

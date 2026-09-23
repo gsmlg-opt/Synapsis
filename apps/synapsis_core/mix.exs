@@ -33,7 +33,7 @@ defmodule SynapsisCore.MixProject do
     [
       {:synapsis_data, in_umbrella: true},
       {:synapsis_provider, in_umbrella: true},
-      {:backplane_skill_protocol, "~> 1.7.0"},
+      {:backplane_skill_protocol, "~> 1.10.0"},
       {:phoenix_pubsub, "~> 2.1"},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},

@@ -17,23 +17,7 @@ defmodule Synapsis.Agent.Runtime.BackplaneSchemaCompatibilityTest do
       for name <- builtins do
         assert {:ok, {:module, module, opts}} = Registry.lookup(name)
         schema = opts[:parameters] || module.parameters()
-        input = if name == "skill", do: %{"locator" => "proof:assigned-skill"}, else: %{}
-        result = InputSchema.validate(schema, input)
-
-        # The published validator checks the entire schema before arguments.
-        # This exact missing-root-argument result establishes schema acceptance,
-        # not successful execution or validity of arbitrary tool inputs.
-        assert match?({:ok, _}, result) or
-                 match?(
-                   {:error,
-                    %Error{
-                      class: :validation,
-                      message: "required tool argument is missing",
-                      details: %{path: "$arguments"}
-                    }},
-                   result
-                 ),
-               "#{unquote(profile)}/#{name}: #{inspect(result)}"
+        assert :ok = InputSchema.validate_schema(schema), "#{unquote(profile)}/#{name}"
       end
     end
   end

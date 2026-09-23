@@ -65,7 +65,11 @@ defmodule Synapsis.Agent.Runtime.ToolRegistryTest do
   end
 
   test "rejects unsupported schemas without removing keywords", ctx do
-    schema = %{"type" => "object", "patternProperties" => %{".*" => %{"type" => "string"}}}
+    schema = %{
+      "$vocabulary" => %{"https://example.test/unsupported-vocabulary" => true},
+      "type" => "object"
+    }
+
     :ok = Registry.register_module(ctx.tool.name, EchoTool, parameters: schema)
     {:ok, registration} = Registry.lookup(ctx.tool.name)
     tool = %{ctx.tool | registration: registration, parameters: schema}
