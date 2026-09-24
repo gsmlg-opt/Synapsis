@@ -42,7 +42,7 @@ defmodule SynapsisServer.MixProject do
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
       {:jason, "~> 1.4"},
-      {:dns_cluster, "~> 0.2.0"},
+      {:dns_cluster, "~> 0.3"},
       {:bandit, "~> 1.6"},
       {:cors_plug, "~> 3.0"},
       {:duskmoon_bundler, "~> 9.7", runtime: Mix.env() in [:dev, :test]}
