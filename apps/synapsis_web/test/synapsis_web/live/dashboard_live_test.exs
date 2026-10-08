@@ -17,7 +17,7 @@ defmodule SynapsisWeb.DashboardLiveTest do
     test "shows enabled agents summary", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
       assert has_element?(view, "p", "Enabled agents")
-      assert has_element?(view, "el-dm-card", "Agent sessions")
+      assert has_element?(view, ".card", "Agent sessions")
     end
 
     test "renders appbar navigation links", %{conn: conn} do
@@ -64,7 +64,7 @@ defmodule SynapsisWeb.DashboardLiveTest do
       {:ok, view, html} = live(conn, ~p"/")
       assert html =~ "Coder"
       assert html =~ "Coding agent"
-      assert has_element?(view, "el-dm-badge", "2")
+      assert has_element?(view, ".badge", "2")
       refute html =~ "Paused"
     end
 

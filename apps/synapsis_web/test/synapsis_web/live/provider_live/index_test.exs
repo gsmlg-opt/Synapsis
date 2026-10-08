@@ -320,8 +320,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       })
 
       {:ok, view, _html} = live(conn, ~p"/settings/providers")
-      # dm_badge uses <slot /> which renders empty; check for badge-success class
-      assert has_element?(view, "el-dm-badge[color=\"success\"]")
+      assert has_element?(view, ".badge.badge-success", "Enabled")
     end
 
     test "shows disabled badge for disabled provider", %{conn: conn} do
@@ -333,8 +332,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       })
 
       {:ok, view, _html} = live(conn, ~p"/settings/providers")
-      # dm_badge uses <slot /> which renders empty; check for badge-error class
-      assert has_element?(view, "el-dm-badge[color=\"error\"]")
+      assert has_element?(view, ".badge.badge-error", "Disabled")
     end
 
     test "shows base_url when set", %{conn: conn} do

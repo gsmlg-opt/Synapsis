@@ -26,8 +26,8 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       assert html =~ "Reviewer"
       assert has_element?(view, "aside", "Tools")
       assert has_element?(view, "a[href='/agent/agents/new']", "New Agent")
-      assert has_element?(view, "el-dm-card[data-agent-card='planner']", "Planner")
-      assert has_element?(view, "el-dm-card[data-agent-card='reviewer']", "Reviewer")
+      assert has_element?(view, ".card[data-agent-card='planner']", "Planner")
+      assert has_element?(view, ".card[data-agent-card='reviewer']", "Reviewer")
       assert has_element?(view, "a[href='/agent/agents/planner/sessions']", "Sessions")
       assert has_element?(view, "a[href='/agent/agents/reviewer/sessions']", "Sessions")
       assert has_element?(view, "a[href='/agent/agents/#{agent.id}/config']", "Config")

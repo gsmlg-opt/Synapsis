@@ -72,8 +72,7 @@ defmodule SynapsisWeb.SkillLive.ShowTest do
 
     test "heading displays the skill name", %{conn: conn, skill: skill} do
       {:ok, view, _html} = live(conn, ~p"/settings/skills/#{skill.id}")
-      # dm_card header renders in [slot="header"] inside el-dm-card
-      assert has_element?(view, "el-dm-card [slot=\"header\"]", skill.name)
+      assert has_element?(view, ".card .card-title", skill.name)
     end
 
     test "form shows name input with current value", %{conn: conn, skill: skill} do
