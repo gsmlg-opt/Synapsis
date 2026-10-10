@@ -30,14 +30,14 @@ defmodule SynapsisProvider.MixProject do
   defp deps do
     [
       {:synapsis_data, in_umbrella: true},
-      {:backplane_ai_protocol, "~> 1.10.0"},
-      {:req, "~> 0.5"},
-      {:finch, "~> 0.18"},
+      {:backplane_ai_protocol, "~> 1.10.17"},
+      {:req, "~> 0.7"},
+      {:finch, "~> 0.24"},
       {:jason, "~> 1.4"},
       {:bypass, "~> 2.1", only: :test},
       # Security floors for Bypass's test-only Plug/Cowboy transport.
-      {:cowboy, "~> 2.18", only: :test},
-      {:cowlib, "~> 2.19", only: :test}
+      {:cowboy, "~> 2.20", only: :test},
+      {:cowlib, "~> 2.21", only: :test}
     ]
   end
 end

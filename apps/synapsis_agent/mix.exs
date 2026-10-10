@@ -37,10 +37,10 @@ defmodule SynapsisAgent.MixProject do
       {:synapsis_workspace, in_umbrella: true},
       # TODO(upstream): gsmlg-opt/backplane#60 — unblock the runtime upgrade.
       {:backplane_agent_runtime, "1.10.4"},
-      {:crontab, "~> 1.1"},
+      {:crontab, "~> 1.2.1"},
       {:bypass, "~> 2.1", only: :test},
-      {:cowboy, "~> 2.18", only: :test},
-      {:cowlib, "~> 2.19", only: :test}
+      {:cowboy, "~> 2.20.0", only: :test},
+      {:cowlib, "~> 2.21.0", only: :test}
     ]
   end
 end

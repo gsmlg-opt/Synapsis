@@ -38,7 +38,7 @@ defmodule SynapsisData.MixProject do
       {:ecto, "~> 3.12"},
       {:jason, "~> 1.4"},
       {:concord, "~> 3.0"},
-      {:crontab, "~> 1.1"},
+      {:crontab, "~> 1.2.1"},
       {:toml, "~> 0.7"},
       {:file_system, "~> 1.0"}
     ]

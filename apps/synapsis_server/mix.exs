@@ -36,16 +36,16 @@ defmodule SynapsisServer.MixProject do
       {:synapsis_provider, in_umbrella: true},
       {:synapsis_mcp, in_umbrella: true},
       {:synapsis_sandbox, in_umbrella: true},
-      {:phoenix, "~> 1.8"},
+      {:phoenix, "~> 1.8.15"},
       {:phoenix_html, "~> 4.2"},
-      {:phoenix_live_view, "~> 1.0"},
+      {:phoenix_live_view, "~> 1.2.12"},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
       {:jason, "~> 1.4"},
-      {:dns_cluster, "~> 0.3"},
+      {:dns_cluster, "~> 0.3.1"},
       {:bandit, "~> 1.6"},
       {:cors_plug, "~> 3.0"},
-      {:duskmoon_bundler, "~> 9.7", runtime: Mix.env() in [:dev, :test]}
+      {:duskmoon_bundler, "~> 9.16.10", runtime: Mix.env() in [:dev, :test]}
     ]
   end
 end

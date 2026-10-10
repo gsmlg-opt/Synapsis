@@ -35,15 +35,15 @@ defmodule SynapsisWeb.MixProject do
       {:synapsis_agent, in_umbrella: true},
       {:synapsis_mcp, in_umbrella: true},
       {:synapsis_workspace, in_umbrella: true},
-      {:phoenix, "~> 1.8"},
+      {:phoenix, "~> 1.8.15"},
       {:phoenix_html, "~> 4.2"},
-      {:phoenix_live_view, "~> 1.0"},
-      {:phoenix_duskmoon, "~> 9.1"},
+      {:phoenix_live_view, "~> 1.2.12"},
+      {:phoenix_duskmoon, "~> 9.16.10"},
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.4"},
-      {:duskmoon_bundler_runtime, "~> 9.7"},
-      {:duskmoon_bundler, "~> 9.7", runtime: Mix.env() in [:dev, :test]},
-      {:lazy_html, ">= 0.1.0"}
+      {:duskmoon_bundler_runtime, "~> 9.16.10"},
+      {:duskmoon_bundler, "~> 9.16.10", runtime: Mix.env() in [:dev, :test]},
+      {:lazy_html, "~> 0.1.13"}
     ]
   end
 
