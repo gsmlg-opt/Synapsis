@@ -43,6 +43,11 @@ COPY config config
 COPY apps apps
 COPY packages packages
 
+ARG SYNAPSIS_GIT_REF
+ARG SYNAPSIS_RELEASE_TIME
+ENV SYNAPSIS_GIT_REF=${SYNAPSIS_GIT_REF}
+ENV SYNAPSIS_RELEASE_TIME=${SYNAPSIS_RELEASE_TIME}
+
 # Build production assets with DuskmoonBundler
 WORKDIR /app/apps/synapsis_web
 RUN mix assets.deploy

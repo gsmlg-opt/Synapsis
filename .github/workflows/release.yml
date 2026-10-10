@@ -26,6 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       source_sha: ${{ steps.source.outputs.sha }}
+      release_time: ${{ steps.source.outputs.release_time }}
     env:
       MIX_ENV: test
 
@@ -37,7 +38,10 @@ jobs:
 
       - name: Resolve release commit
         id: source
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          # Shared release-build timestamp, before GitHub publication.
+          echo "release_time=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
 
       - name: Set up Elixir
         uses: erlef/setup-beam@v1
@@ -99,6 +103,8 @@ jobs:
     runs-on: ${{ matrix.runner }}
     env:
       MIX_ENV: prod
+      SYNAPSIS_GIT_REF: ${{ needs.verify.outputs.source_sha }}
+      SYNAPSIS_RELEASE_TIME: ${{ needs.verify.outputs.release_time }}
     strategy:
       fail-fast: false
       matrix:

@@ -2,16 +2,25 @@
   <.dm_appbar
     title="Synapsis"
     title_to={~p"/"}
-    class="shrink-0 appbar-primary"
+    class="shrink-0 appbar-primary [&_.appbar-title]:hidden sm:[&_.appbar-title]:inline"
   >
     <:logo>
       <.dm_mdi name="brain" class="w-6 h-6" />
     </:logo>
+    <:after_title>
+      <.version_badge />
+    </:after_title>
+    <%!-- WORKAROUND(upstream): duskmoon-dev/duskmoonui#73
+    Keep accessible and visual labels separate until sr-only respects CSS layers. --%>
     <:menu to={~p"/agent/agents"}>
-      <.dm_mdi name="robot" class="w-4 h-4 inline mr-1" /> Agents
+      <.dm_mdi name="robot" class="w-4 h-4 sm:inline sm:mr-1" />
+      <span class="sr-only">Agents</span>
+      <span aria-hidden="true" class="hidden sm:inline">Agents</span>
     </:menu>
     <:menu to={~p"/settings"}>
-      <.dm_mdi name="cog" class="w-4 h-4 inline mr-1" /> Settings
+      <.dm_mdi name="cog" class="w-4 h-4 sm:inline sm:mr-1" />
+      <span class="sr-only">Settings</span>
+      <span aria-hidden="true" class="hidden sm:inline">Settings</span>
     </:menu>
   </.dm_appbar>
   <div class="fixed top-4 right-4 z-[1000]">
