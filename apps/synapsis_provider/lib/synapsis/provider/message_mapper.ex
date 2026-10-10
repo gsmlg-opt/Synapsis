@@ -207,7 +207,7 @@ defmodule Synapsis.Provider.MessageMapper do
   defp settings(:google, opts),
     do:
       compact(%{
-        "maxOutputTokens" => option(opts, :max_tokens),
+        "max_output_tokens" => option(opts, :max_tokens),
         "temperature" => option(opts, :temperature)
       })
 

@@ -126,6 +126,17 @@ defmodule Synapsis.Provider.MessageMapperTest do
     end
   end
 
+  test "encodes Google generation settings for atom and string keys" do
+    for opts <- [
+          %{model: "gemini-test", max_tokens: 2048, temperature: 0.25},
+          %{"model" => "gemini-test", "max_tokens" => 2048, "temperature" => 0.25}
+        ] do
+      assert {:ok, wire} = MessageMapper.build_request(:google, [@text_message], [], opts)
+
+      assert wire["generationConfig"] == %{"maxOutputTokens" => 2048, "temperature" => 0.25}
+    end
+  end
+
   test "encodes Google tools and tool call/result pairs" do
     messages = [
       %{
