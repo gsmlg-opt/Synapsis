@@ -8,8 +8,10 @@ defmodule Synapsis.Agent.Runtime.ToolBackend do
   permission. The grant must be operator-minted for the exact run, session,
   tool and arguments. The runtime correlates the separate interaction ID.
 
-  Approval waits are bounded by Conversation's effect/run deadline; an earlier
-  approval expiry is also checked before dispatch. The host UI is not wired yet.
+  Approval waits pause Conversation's effect/run deadlines, which resume with
+  their remaining budgets on resolution. Approval expiry is checked before
+  dispatch. Cancellation closes pending approval ownership. The host UI is not
+  wired yet.
   Module tasks are linked to this effect owner, retries are disabled, and a
   timeout/crash is an unknown outcome rather than proof of no side effects.
   """

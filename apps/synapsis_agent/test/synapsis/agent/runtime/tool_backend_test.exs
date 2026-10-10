@@ -206,11 +206,32 @@ defmodule Synapsis.Agent.Runtime.ToolBackendTest do
     refute_receive {:executed, _, _}, 100
   end
 
-  test "runtime effect timeout also stops a dispatched module task", ctx do
-    pid = start_run(ctx, arguments: %{"text" => "block"}, effect_timeout: 100)
+  test "approval pauses deadlines and resumes effect timeout after resolution", ctx do
+    write(ctx)
+
+    pid =
+      start_run(ctx,
+        arguments: %{"text" => "block"},
+        effect_timeout: 200,
+        run_timeout: 2_000
+      )
+
+    {interaction, request} = approval(ctx)
+    refute_receive {:agent_runtime, _, %{type: :run_cancelled}}, 2_100
+    refute_receive {:executed, _, _}, 20
+    assert Conversation.status(pid).conversation.pending_interaction != nil
+    assert :ok = Conversation.resolve(pid, interaction, answer(ctx, request))
     assert_receive {:executed, task, _}, 2_000
     ref = Process.monitor(task)
-    assert_receive {:agent_runtime, _, %{type: :run_cancelled, state: :unknown_outcome}}, 2_000
+
+    assert_receive {:agent_runtime, _,
+                    %{
+                      type: :run_cancelled,
+                      state: :unknown_outcome,
+                      outcome: %{"stop_reason" => "deadline_exceeded"}
+                    }},
+                   1_000
+
     assert_receive {:DOWN, ^ref, :process, ^task, _}, 2_000
     assert Conversation.status(pid).phase == :terminal
     refute_receive {:executed, _, _}, 20
@@ -234,32 +255,19 @@ defmodule Synapsis.Agent.Runtime.ToolBackendTest do
     assert %{is_error: true, error: %Error{class: :forbidden}} = result(pid)
   end
 
-  for termination <- [:cancel, :timeout] do
-    test "#{termination} clears pending approval and rejects late resolution", ctx do
-      write(ctx)
-      pid = start_run(ctx, effect_timeout: 200)
-      {interaction, request} = approval(ctx)
+  test "cancellation clears pending approval and rejects late resolution", ctx do
+    write(ctx)
+    pid = start_run(ctx, effect_timeout: 200)
+    {interaction, request} = approval(ctx)
+    assert :ok = Conversation.cancel(pid)
+    assert_receive {:agent_runtime, _, %{type: :run_cancelled}}, 2_000
 
-      if unquote(termination) == :cancel do
-        assert :ok = Conversation.cancel(pid)
-        assert_receive {:agent_runtime, _, %{type: :run_cancelled}}, 2_000
-      else
-        assert_receive {:agent_runtime, _,
-                        %{
-                          type: :run_cancelled,
-                          state: :unknown_outcome,
-                          outcome: %{"stop_reason" => "deadline_exceeded"}
-                        }},
-                       2_000
-      end
+    assert Conversation.status(pid).conversation.pending_interaction == nil
 
-      assert Conversation.status(pid).conversation.pending_interaction == nil
+    assert {:error, %Error{class: :not_found}} =
+             Conversation.resolve(pid, interaction, answer(ctx, request))
 
-      assert {:error, %Error{class: :not_found}} =
-               Conversation.resolve(pid, interaction, answer(ctx, request))
-
-      refute_receive {:executed, _, _}, 20
-    end
+    refute_receive {:executed, _, _}, 20
   end
 
   defp write(ctx), do: Registry.register_module(ctx.name, Tool, permission_level: :write)
@@ -297,7 +305,7 @@ defmodule Synapsis.Agent.Runtime.ToolBackendTest do
         registry: admitted.registry,
         authority: admitted.authority
       )
-      |> Keyword.merge(Keyword.take(opts, [:effect_timeout]))
+      |> Keyword.merge(Keyword.take(opts, [:effect_timeout, :run_timeout]))
 
     pid = start_supervised!({Conversation, options})
     assert {:ok, _} = Proof.prompt(ctx.caller, pid, "Start")
