@@ -1,6 +1,7 @@
 defmodule SynapsisWeb.AgentLive.Agents do
   @moduledoc "Agent module page for managing agent configurations."
   use SynapsisWeb, :live_view
+  use SynapsisWeb.ReactFormEvents
 
   import SynapsisWeb.AgentLive.Components
 
@@ -22,7 +23,8 @@ defmodule SynapsisWeb.AgentLive.Agents do
        toolsets: [],
        providers: [],
        active_config_tab: "overview",
-       wizard_mode: false
+       wizard_mode: false,
+       form_revision: 0
      )}
   end
 
@@ -68,9 +70,15 @@ defmodule SynapsisWeb.AgentLive.Agents do
 
         case AgentConfigs.update(agent, %{enabled: enabled?}) do
           {:ok, %AgentConfig{} = updated_agent} ->
+            values =
+              (react_form_draft(socket.assigns, "agent-config-form") ||
+                 agent_form_values(updated_agent, socket.assigns.selected_skill_ids))
+              |> Map.update!("agent", &Map.put(&1, "enabled", enabled?))
+
             {:noreply,
              socket
              |> assign(agent: updated_agent, agents: AgentConfigs.list())
+             |> reset_react_form("agent-config-form", values)
              |> put_flash(:info, if(enabled?, do: "Agent enabled", else: "Agent disabled"))}
 
           {:error, _changeset} ->
@@ -157,6 +165,9 @@ defmodule SynapsisWeb.AgentLive.Agents do
           action={@live_action}
           active_tab={@active_config_tab}
           wizard_mode={@wizard_mode}
+          form_revision={@form_revision}
+          draft={react_form_draft(assigns, "agent-config-form")}
+          delete_draft={react_form_draft(assigns, "agent-delete-form")}
         />
 
         <div :if={@live_action == :index} class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -212,6 +223,9 @@ defmodule SynapsisWeb.AgentLive.Agents do
   attr :selected_skill_ids, :list, required: true
   attr :active_tab, :string, required: true
   attr :wizard_mode, :boolean, required: true
+  attr :form_revision, :integer, required: true
+  attr :draft, :map, default: nil
+  attr :delete_draft, :map, default: nil
 
   defp agent_form(assigns) do
     selected_toolsets = selected_toolsets(assigns.agent, assigns.toolsets)
@@ -221,8 +235,17 @@ defmodule SynapsisWeb.AgentLive.Agents do
     workspace_path = workspace_path(assigns.agent)
     permission_mode = permission_mode(assigns.agent)
 
+    form_structure = [
+      assigns.active_tab,
+      assigns.wizard_mode,
+      Enum.map(assigns.toolsets, & &1.id),
+      Enum.map(assigns.skills, & &1.id),
+      assigns.form_revision
+    ]
+
     assigns =
       assigns
+      |> assign(:form_structure, form_structure)
       |> assign(:selected_toolsets, selected_toolsets)
       |> assign(:selected_toolset_ids, selected_toolset_ids)
       |> assign(:tool_names, tool_names)
@@ -266,7 +289,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
             <button
               :if={@active_tab != "management"}
               type="submit"
-              form="agent-config-form"
+              form={form_mount_id("agent-config-form", @form_structure) <> "-native"}
               class="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-content transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30"
             >
               <.dm_mdi name="content-save-outline" class="w-3.5 h-3.5" /> Save Agent
@@ -349,14 +372,18 @@ defmodule SynapsisWeb.AgentLive.Agents do
         </nav>
 
         <div class="min-w-0">
-          <.dm_form
+          <.react_form
             for={%{}}
             as={:agent}
             id="agent-config-form"
+            values={agent_form_values(@agent, @selected_skill_ids)}
+            draft={@draft}
+            structure={@form_structure}
             phx-submit="save_agent"
             phx-change="change_agent_form"
             class={if @active_tab == "management", do: "hidden", else: "space-y-5"}
           >
+            <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#191 - retain native fields with required, placeholder, min, rows and resize attributes. --%>
             <section class={tab_panel_class(@active_tab, "overview")}>
               <div class="mb-5">
                 <h3 class="text-lg font-semibold">Overview</h3>
@@ -383,8 +410,8 @@ defmodule SynapsisWeb.AgentLive.Agents do
                   placeholder="researcher"
                 />
                 <.readonly_field :if={@action == :config} label="Name" value={@agent.name} />
-                <.dm_input type="text" name="agent[label]" value={@agent.label} label="Label" />
-                <.dm_input type="text" name="agent[icon]" value={@agent.icon} label="Icon" />
+                <.dm_react_field type="text" name="agent[label]" label="Label" />
+                <.dm_react_field type="text" name="agent[icon]" label="Icon" />
                 <div class="form-group">
                   <label for="agent-provider-model-picker-provider" class="form-label">
                     <span>Provider / model</span>
@@ -715,7 +742,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
               </.dm_link>
               <.dm_btn type="submit" variant="primary">Save</.dm_btn>
             </div>
-          </.dm_form>
+          </.react_form>
 
           <section class={tab_panel_class(@active_tab, "management")}>
             <div class="mb-5">
@@ -775,9 +802,11 @@ defmodule SynapsisWeb.AgentLive.Agents do
                 </div>
               </div>
 
-              <.dm_form
+              <.react_form
                 :if={deletable_agent?(@agent)}
                 for={%{}}
+                id="agent-delete-form"
+                draft={@delete_draft}
                 phx-submit="delete_agent"
                 class="space-y-4"
               >
@@ -803,7 +832,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
                     Delete Agent
                   </.dm_btn>
                 </div>
-              </.dm_form>
+              </.react_form>
 
               <div
                 :if={!deletable_agent?(@agent)}
@@ -882,6 +911,38 @@ defmodule SynapsisWeb.AgentLive.Agents do
     end
   end
 
+  defp agent_form_values(agent, skill_ids) do
+    values =
+      agent
+      |> Map.from_struct()
+      |> Map.take([
+        :name,
+        :label,
+        :icon,
+        :description,
+        :provider,
+        :model,
+        :fallback_models,
+        :reasoning_effort,
+        :model_tier,
+        :max_tokens,
+        :enabled,
+        :read_only,
+        :system_prompt
+      ])
+      |> Map.new(fn {key, value} -> {Atom.to_string(key), value} end)
+      |> Map.put("reasoning_effort", agent.reasoning_effort || "medium")
+      |> Map.put("model_tier", agent.model_tier || "default")
+      |> Map.put("max_tokens", agent.max_tokens || 8192)
+      |> Map.put("workspace_path", workspace_path(agent))
+      |> Map.put("permission_mode", permission_mode(agent))
+      |> Map.put("toolset_ids", selected_toolset_ids(agent))
+      |> Map.put("provider_model_state", provider_model_state_value(agent))
+      |> Map.put("fallback_model_state", fallback_model_state_value(agent))
+
+    %{"agent" => values, "skill_ids" => skill_ids}
+  end
+
   defp after_agent_save(%{assigns: %{live_action: :new}} = socket, _agent) do
     socket
     |> put_flash(:info, "Agent saved")
@@ -892,7 +953,12 @@ defmodule SynapsisWeb.AgentLive.Agents do
     assign(socket,
       agent: agent,
       agents: AgentConfigs.list(),
-      selected_skill_ids: AgentSkills.list_skill_ids(agent.id)
+      selected_skill_ids: AgentSkills.list_skill_ids(agent.id),
+      form_revision: socket.assigns.form_revision + 1
+    )
+    |> reset_react_form(
+      "agent-config-form",
+      agent_form_values(agent, AgentSkills.list_skill_ids(agent.id))
     )
     |> put_flash(:info, "Agent saved")
   end

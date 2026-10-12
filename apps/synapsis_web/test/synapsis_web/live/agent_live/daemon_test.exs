@@ -1,6 +1,8 @@
 defmodule SynapsisWeb.AgentLive.DaemonTest do
   use SynapsisWeb.ConnCase, async: false
 
+  import SynapsisWeb.ReactFormHelpers
+
   alias SynapsisWeb.AgentLive.Daemon
 
   defmodule DaemonStub do
@@ -322,13 +324,17 @@ defmodule SynapsisWeb.AgentLive.DaemonTest do
     {:ok, view, _html} = live_isolated(conn, Daemon)
 
     view
-    |> form("#manual-run-form", %{"manual" => %{"prompt" => "Inspect the deployment"}})
-    |> render_submit()
+    |> react_form_submit("manual-run-form", %{"manual" => %{"prompt" => "Inspect the deployment"}})
 
     assert_receive {:manual_submitted, "Inspect the deployment", %{source: "web"}}
     html = render_async(view, 1_000)
     assert html =~ "Run queued"
-    assert has_element?(view, "#manual-run-form textarea[name='manual[prompt]']", "")
+
+    assert has_element?(
+             view,
+             "[data-form-id='manual-run-form'] textarea[name='manual[prompt]']",
+             ""
+           )
   end
 
   test "runs manual submission asynchronously with visible loading state", %{conn: conn} do
@@ -344,8 +350,9 @@ defmodule SynapsisWeb.AgentLive.DaemonTest do
     submit_task =
       Task.async(fn ->
         view
-        |> form("#manual-run-form", %{"manual" => %{"prompt" => "Inspect asynchronously"}})
-        |> render_submit()
+        |> react_form_submit("manual-run-form", %{
+          "manual" => %{"prompt" => "Inspect asynchronously"}
+        })
       end)
 
     assert_receive {:manual_submitted, "Inspect asynchronously", %{source: "web"}}
@@ -521,7 +528,7 @@ defmodule SynapsisWeb.AgentLive.DaemonTest do
     create_task =
       Task.async(fn ->
         view
-        |> form("#backplane-create-form", %{
+        |> react_form_submit("backplane-create-form", %{
           "connection" => %{
             "name" => "new-source",
             "endpoint" => "https://new-backplane.example",
@@ -531,7 +538,6 @@ defmodule SynapsisWeb.AgentLive.DaemonTest do
             "trust_mcp_annotations" => "true"
           }
         })
-        |> render_submit()
       end)
 
     assert_receive {:connection_created,
@@ -568,10 +574,9 @@ defmodule SynapsisWeb.AgentLive.DaemonTest do
 
     html =
       view
-      |> form("#backplane-create-form", %{
+      |> react_form_submit("backplane-create-form", %{
         "connection" => %{"name" => "", "endpoint" => ""}
       })
-      |> render_submit()
 
     assert html =~ "Name and endpoint are required"
     refute_receive {:connection_created, _attrs}
@@ -584,7 +589,7 @@ defmodule SynapsisWeb.AgentLive.DaemonTest do
     })
 
     view
-    |> form("#backplane-create-form", %{
+    |> react_form_submit("backplane-create-form", %{
       "connection" => %{
         "name" => "failing-source",
         "endpoint" => "https://failing.example",
@@ -593,7 +598,6 @@ defmodule SynapsisWeb.AgentLive.DaemonTest do
         "sync_on_start" => "true"
       }
     })
-    |> render_submit()
 
     assert_receive {:connection_created, %{credential: "failing-secret"}}
     html = render_async(view, 1_000)
@@ -653,7 +657,7 @@ defmodule SynapsisWeb.AgentLive.DaemonTest do
     {:ok, view, _html} = live_isolated(conn, Daemon)
 
     view
-    |> form("#routine-create-form", %{
+    |> react_form_submit("routine-create-form", %{
       "routine" => %{
         "name" => "Deploy watch",
         "kind" => "schedule",
@@ -663,7 +667,6 @@ defmodule SynapsisWeb.AgentLive.DaemonTest do
         "enabled" => "true"
       }
     })
-    |> render_submit()
 
     assert_receive {:routine_created,
                     %{

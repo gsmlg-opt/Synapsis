@@ -1,6 +1,7 @@
 defmodule SynapsisWeb.AgentLive.Skills do
   @moduledoc "Agent module page for managing skills and agent assignments."
   use SynapsisWeb, :live_view
+  use SynapsisWeb.ReactFormEvents
 
   import SynapsisWeb.AgentLive.Components
 
@@ -88,6 +89,7 @@ defmodule SynapsisWeb.AgentLive.Skills do
           skill={@skill}
           agents={@agents}
           selected_agent_ids={@selected_agent_ids}
+          draft={react_form_draft(assigns, "agent-skill-form")}
         />
 
         <div :if={@live_action == :index} class="space-y-2">
@@ -141,20 +143,36 @@ defmodule SynapsisWeb.AgentLive.Skills do
   attr :skill, :map, required: true
   attr :agents, :list, required: true
   attr :selected_agent_ids, :list, required: true
+  attr :draft, :map, default: nil
 
   defp skill_form(assigns) do
     ~H"""
     <.dm_card variant="bordered" class="mb-6">
       <:title>{if @skill.id, do: "Edit Skill", else: "New Skill"}</:title>
 
-      <.dm_form for={%{}} as={:skill} phx-submit="save_skill" class="space-y-4">
+      <.react_form
+        for={%{}}
+        as={:skill}
+        id="agent-skill-form"
+        values={
+          %{
+            "skill" =>
+              Map.take(Map.from_struct(@skill), [:name, :scope, :description, :system_prompt_fragment]),
+            "agent_ids" => @selected_agent_ids
+          }
+        }
+        draft={@draft}
+        phx-submit="save_skill"
+        class="space-y-4"
+      >
+        <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#191 - preserve required and textarea layout attributes. --%>
         <.dm_input type="text" name="skill[name]" value={@skill.name} required label="Name" />
 
-        <.dm_select
+        <.dm_react_field
           name="skill[scope]"
+          type="select"
           label="Scope"
-          options={[{"global", "Global"}]}
-          value={@skill.scope || "global"}
+          options={[%{value: "global", label: "Global"}]}
         />
 
         <.dm_textarea
@@ -200,7 +218,7 @@ defmodule SynapsisWeb.AgentLive.Skills do
           </.dm_link>
           <.dm_btn type="submit" variant="primary">Save Skill</.dm_btn>
         </:actions>
-      </.dm_form>
+      </.react_form>
     </.dm_card>
     """
   end

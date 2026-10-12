@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.MemoryLive.ShowTest do
   use SynapsisWeb.ConnCase
+  import SynapsisWeb.ReactFormHelpers
 
   alias Synapsis.Memory
 
@@ -106,6 +107,34 @@ defmodule SynapsisWeb.MemoryLive.ShowTest do
       refute has_element?(view, "#edit-memory-form")
     end
 
+    test "external Save targets the React native form and reopening restores stored values", %{
+      conn: conn
+    } do
+      mem = create_semantic_memory(%{title: "Saved title", summary: "Saved summary"})
+      {:ok, view, _html} = live(conn, ~p"/settings/memory/#{mem.id}")
+      render_hook(view, "edit", %{})
+
+      assert has_element?(
+               view,
+               "el-dm-button[type='submit'][form='edit-memory-form-native']",
+               "Save"
+             )
+
+      assert has_element?(view, "#edit-memory-form[phx-hook='DuskmoonReactForm']")
+
+      render_hook(view, "cancel_edit", %{})
+      render_hook(view, "edit", %{})
+
+      [json] =
+        view
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("#edit-memory-form")
+        |> LazyHTML.attribute("data-initial-values")
+
+      assert %{"title" => "Saved title", "summary" => "Saved summary"} = Jason.decode!(json)
+    end
+
     test "saving edit updates memory", %{conn: conn} do
       mem = create_semantic_memory(%{title: "Original Title", summary: "Original summary"})
       {:ok, view, _html} = live(conn, ~p"/settings/memory/#{mem.id}")
@@ -113,20 +142,23 @@ defmodule SynapsisWeb.MemoryLive.ShowTest do
       view |> element("[phx-click=\"edit\"]") |> render_click()
 
       view
-      |> form("#edit-memory-form", %{
+      |> react_form_submit("edit-memory-form", %{
         "title" => "Updated Title",
         "summary" => "Updated summary",
         "kind" => "decision",
         "tags" => "tag1, tag2",
-        "importance" => "0.7",
-        "confidence" => "0.8"
+        "importance" => 0.7,
+        "confidence" => 0.8
       })
-      |> render_submit()
 
       html = render(view)
       assert html =~ "Memory updated"
       assert html =~ "Updated Title"
       assert html =~ "Updated summary"
+      assert {:ok, updated} = Synapsis.Memory.get_semantic(mem.id)
+      assert updated.importance == 0.7
+      assert updated.confidence == 0.8
+      assert updated.tags == ["tag1", "tag2"]
     end
 
     test "archiving memory redirects to index", %{conn: conn} do

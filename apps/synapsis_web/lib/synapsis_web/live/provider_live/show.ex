@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.ProviderLive.Show do
   use SynapsisWeb, :live_view
+  use SynapsisWeb.ReactFormEvents
   require Logger
 
   @impl true
@@ -47,6 +48,8 @@ defmodule SynapsisWeb.ProviderLive.Show do
   end
 
   @impl true
+  def handle_event("change_provider_form", _params, socket), do: {:noreply, socket}
+
   def handle_event("update_provider", params, socket) do
     attrs =
       %{
@@ -64,6 +67,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
         {:noreply,
          socket
          |> assign(provider: provider)
+         |> reset_react_form("edit-provider-form", provider_form_values(provider))
          |> put_flash(:info, "Provider updated")}
 
       {:error, _} ->
@@ -74,9 +78,19 @@ defmodule SynapsisWeb.ProviderLive.Show do
   def handle_event("clear_api_key", _params, socket) do
     case Synapsis.Providers.clear_api_key(socket.assigns.provider.id) do
       {:ok, provider} ->
+        values =
+          provider_form_values(provider)
+          |> Map.merge(
+            Map.take(react_form_draft(socket.assigns, "edit-provider-form") || %{}, [
+              "base_url",
+              "enabled"
+            ])
+          )
+
         {:noreply,
          socket
          |> assign(provider: provider)
+         |> reset_react_form("edit-provider-form", values)
          |> put_flash(:info, "Access token cleared")}
 
       {:error, :oauth_provider} ->
@@ -95,7 +109,12 @@ defmodule SynapsisWeb.ProviderLive.Show do
   end
 
   def handle_event("toggle_edit_models", _params, socket) do
-    {:noreply, assign(socket, editing_models: !socket.assigns.editing_models)}
+    {:noreply,
+     socket
+     |> reset_react_form("provider-models-form", %{
+       "models" => selected_model_ids(socket.assigns.all_models, socket.assigns.enabled_models)
+     })
+     |> assign(editing_models: !socket.assigns.editing_models)}
   end
 
   def handle_event("save_models", params, socket) do
@@ -112,6 +131,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
            enabled_models: Synapsis.Providers.enabled_models(updated),
            editing_models: false
          )
+         |> reset_react_form("provider-models-form")
          |> put_flash(:info, "Models updated")}
 
       {:error, _} ->
@@ -132,6 +152,12 @@ defmodule SynapsisWeb.ProviderLive.Show do
            enabled_models: Synapsis.Providers.enabled_models(provider),
            chat_model: default_chat_model(all_models, socket.assigns.chat_model)
          )
+         |> reset_react_form("provider-models-form", %{
+           "models" => selected_model_ids(all_models, Synapsis.Providers.enabled_models(provider))
+         })
+         |> reset_react_form("provider-chat-model-form", %{
+           "model" => default_chat_model(all_models, socket.assigns.chat_model)
+         })
          |> put_flash(:info, "Models refreshed")}
 
       {:error, reason} ->
@@ -503,6 +529,16 @@ defmodule SynapsisWeb.ProviderLive.Show do
     %{role: "user", parts: [%{text: content}]}
   end
 
+  defp provider_form_values(provider) do
+    %{"base_url" => provider.base_url, "api_key" => "", "enabled" => provider.enabled}
+  end
+
+  defp selected_model_ids(models, enabled_models) do
+    models
+    |> Enum.filter(&model_enabled?(&1.id, enabled_models))
+    |> Enum.map(& &1.id)
+  end
+
   @impl true
   def render(assigns) do
     model_options =
@@ -523,7 +559,21 @@ defmodule SynapsisWeb.ProviderLive.Show do
       <%!-- Provider Settings --%>
       <.dm_card variant="bordered" class="mb-6">
         <:title>Settings</:title>
-        <.dm_form for={to_form(%{})} phx-submit="update_provider" class="space-y-4">
+        <.react_form
+          for={to_form(%{})}
+          id="edit-provider-form"
+          values={provider_form_values(@provider)}
+          draft={react_form_draft(assigns, "edit-provider-form")}
+          structure={[
+            @provider.type,
+            @provider.api_key_encrypted not in [nil, ""],
+            Synapsis.Providers.oauth_provider?(@provider)
+          ]}
+          phx-submit="update_provider"
+          phx-change="change_provider_form"
+          class="space-y-4"
+        >
+          <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#191 --%>
           <.readonly_field label="Type" value={@provider.type} />
 
           <.dm_input
@@ -565,23 +615,14 @@ defmodule SynapsisWeb.ProviderLive.Show do
             </div>
           </div>
 
-          <div>
-            <input type="hidden" name="enabled" value="false" />
-            <.dm_switch
-              name="enabled"
-              value="true"
-              checked={@provider.enabled}
-              label="Enabled"
-              color="success"
-            />
-          </div>
+          <.dm_react_field name="enabled" type="checkbox" label="Enabled" />
 
           <:actions>
             <.dm_btn type="submit" variant="primary">
               Save Changes
             </.dm_btn>
           </:actions>
-        </.dm_form>
+        </.react_form>
       </.dm_card>
 
       <%!-- OAuth Login Section (openai-sub only) --%>
@@ -678,7 +719,15 @@ defmodule SynapsisWeb.ProviderLive.Show do
         </div>
 
         <%= if @all_models != [] && @editing_models do %>
-          <.dm_form for={to_form(%{})} phx-submit="save_models">
+          <.react_form
+            for={to_form(%{})}
+            id="provider-models-form"
+            values={%{"models" => selected_model_ids(@all_models, @enabled_models)}}
+            draft={react_form_draft(assigns, "provider-models-form")}
+            structure={Enum.map(@all_models, & &1.id)}
+            phx-submit="save_models"
+          >
+            <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#192 --%>
             <input type="hidden" name="models[]" value="" />
             <div class="space-y-2">
               <div :for={model <- @all_models} class="flex items-center gap-3">
@@ -706,7 +755,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
                 </.dm_btn>
               </div>
             </:actions>
-          </.dm_form>
+          </.react_form>
         <% end %>
 
         <%= if @all_models != [] && !@editing_models do %>
@@ -743,19 +792,24 @@ defmodule SynapsisWeb.ProviderLive.Show do
         <div :if={@chat_open} class="space-y-4">
           <%!-- Model selector --%>
           <div :if={@all_models != []} class="flex items-center gap-3">
-            <.dm_form
+            <.react_form
               for={to_form(%{})}
               id="provider-chat-model-form"
+              values={%{"model" => @chat_model}}
+              draft={react_form_draft(assigns, "provider-chat-model-form")}
+              structure={@model_options}
               phx-change="chat_select_model"
               class="flex-1"
             >
-              <.dm_select
+              <.dm_react_field
                 name="model"
+                type="select"
                 label="Model"
-                options={@model_options}
-                value={@chat_model}
+                options={
+                  Enum.map(@model_options, fn {value, label} -> %{value: value, label: label} end)
+                }
               />
-            </.dm_form>
+            </.react_form>
             <.dm_btn
               :if={@chat_messages != []}
               variant="ghost"

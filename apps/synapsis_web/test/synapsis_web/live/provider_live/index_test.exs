@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.ProviderLive.IndexTest do
   use SynapsisWeb.ConnCase
+  import SynapsisWeb.ReactFormHelpers
 
   setup do
     clear_providers()
@@ -88,6 +89,40 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       assert {:ok, []} = Synapsis.Providers.list()
     end
 
+    test "switching presets replaces the React mount and clears a rejected draft", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/new")
+      render_hook(view, "select_preset", %{"name" => "anthropic"})
+
+      mount_id =
+        view
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("[data-form-id='create-provider-form']")
+        |> LazyHTML.attribute("id")
+        |> hd()
+
+      react_form_submit(view, "create-provider-form", %{
+        "name" => "",
+        "api_key" => "discard-this-key"
+      })
+
+      assert render(view) =~ "Failed to create provider"
+
+      render_hook(view, "back_to_presets", %{})
+      render_hook(view, "select_preset", %{"name" => "backplane"})
+
+      form =
+        view
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("[data-form-id='create-provider-form']")
+
+      refute LazyHTML.attribute(form, "id") == [mount_id]
+      [json] = LazyHTML.attribute(form, "data-initial-values")
+      assert %{"name" => "backplane", "api_key" => ""} = Jason.decode!(json)
+      refute has_element?(view, "input[name='api_key'][required]")
+    end
+
     test "creates a keyless Backplane provider and discovers models without authorization",
          %{conn: conn} do
       bypass = Bypass.open()
@@ -107,12 +142,11 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       |> render_click()
 
       view
-      |> form("form[phx-submit]", %{
+      |> react_form_submit("create-provider-form", %{
         "name" => "backplane-dev",
         "base_url" => "http://localhost:#{bypass.port}/v1",
         "api_key" => ""
       })
-      |> render_submit()
 
       flash = assert_redirected(view, ~p"/settings/providers")
       assert flash["info"] == "Provider created and models loaded"
@@ -159,8 +193,10 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       |> render_click()
 
       view
-      |> form("form[phx-submit]", %{"name" => "my-anthropic", "api_key" => "sk-test-123"})
-      |> render_submit()
+      |> react_form_submit("create-provider-form", %{
+        "name" => "my-anthropic",
+        "api_key" => "sk-test-123"
+      })
 
       flash = assert_redirected(view, ~p"/settings/providers")
       assert flash["info"] == "Provider created"
@@ -175,8 +211,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       |> render_click()
 
       view
-      |> form("form[phx-submit]", %{"name" => name, "api_key" => "sk-test-123"})
-      |> render_submit()
+      |> react_form_submit("create-provider-form", %{"name" => name, "api_key" => "sk-test-123"})
 
       assert_redirected(view, ~p"/settings/providers")
       :ok = Synapsis.Config.Store.reload(:provider)
@@ -194,8 +229,10 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       |> render_click()
 
       view
-      |> form("form[phx-submit]", %{"name" => "anthropic-work", "api_key" => "sk-work"})
-      |> render_submit()
+      |> react_form_submit("create-provider-form", %{
+        "name" => "anthropic-work",
+        "api_key" => "sk-work"
+      })
 
       # Create second
       {:ok, view2, _html} = live(conn, ~p"/settings/providers/new")
@@ -205,8 +242,10 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       |> render_click()
 
       view2
-      |> form("form[phx-submit]", %{"name" => "anthropic-personal", "api_key" => "sk-personal"})
-      |> render_submit()
+      |> react_form_submit("create-provider-form", %{
+        "name" => "anthropic-personal",
+        "api_key" => "sk-personal"
+      })
 
       flash = assert_redirected(view2, ~p"/settings/providers")
       assert flash["info"] == "Provider created"
@@ -228,8 +267,10 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
 
       html =
         view
-        |> form("form[phx-submit]", %{"name" => "taken-name", "api_key" => "sk-other"})
-        |> render_submit()
+        |> react_form_submit("create-provider-form", %{
+          "name" => "taken-name",
+          "api_key" => "sk-other"
+        })
 
       assert html =~ "Name already taken"
     end
@@ -245,12 +286,11 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       |> render_click()
 
       view
-      |> form("form[phx-submit]", %{
+      |> react_form_submit("create-provider-form", %{
         "name" => "my-local-llm",
         "base_url" => "http://localhost:#{bypass.port}",
         "api_key" => "none"
       })
-      |> render_submit()
 
       flash = assert_redirected(view, ~p"/settings/providers")
       assert flash["info"] == "Provider created; model loading failed"
@@ -278,12 +318,11 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       |> render_click()
 
       view
-      |> form("form[phx-submit]", %{
+      |> react_form_submit("create-provider-form", %{
         "name" => "my-compatible-llm",
         "base_url" => "http://localhost:#{bypass.port}/v1",
         "api_key" => "sk-test"
       })
-      |> render_submit()
 
       flash = assert_redirected(view, ~p"/settings/providers")
       assert flash["info"] == "Provider created and models loaded"

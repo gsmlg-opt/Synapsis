@@ -1,6 +1,7 @@
 defmodule SynapsisWeb.AgentLive.Toolsets do
   @moduledoc "Agent module page for managing named toolsets."
   use SynapsisWeb, :live_view
+  use SynapsisWeb.ReactFormEvents
 
   import SynapsisWeb.AgentLive.Components
 
@@ -45,7 +46,8 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
        selected_tool_names: [],
        available_tools: [],
        mcp_sources: [],
-       selected_source: "built-in"
+       selected_source: "built-in",
+       selection_revision: 0
      )}
   end
 
@@ -126,7 +128,16 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
 
     selected_tool_names = merge_tool_names(socket.assigns.selected_tool_names, tool_names)
 
-    {:noreply, assign(socket, selected_tool_names: selected_tool_names)}
+    {:noreply,
+     socket
+     |> assign(
+       selected_tool_names: selected_tool_names,
+       selection_revision: socket.assigns.selection_revision + 1
+     )
+     |> reset_react_form(
+       "toolset-form",
+       toolset_form_values(socket.assigns.toolset, selected_tool_names)
+     )}
   end
 
   def handle_event("select_tool_group", %{"category" => category}, socket) do
@@ -138,7 +149,16 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
 
     selected_tool_names = merge_tool_names(socket.assigns.selected_tool_names, tool_names)
 
-    {:noreply, assign(socket, selected_tool_names: selected_tool_names)}
+    {:noreply,
+     socket
+     |> assign(
+       selected_tool_names: selected_tool_names,
+       selection_revision: socket.assigns.selection_revision + 1
+     )
+     |> reset_react_form(
+       "toolset-form",
+       toolset_form_values(socket.assigns.toolset, selected_tool_names)
+     )}
   end
 
   def handle_event("delete_toolset", %{"id" => id}, socket) do
@@ -180,6 +200,8 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
           selected_tool_names={@selected_tool_names}
           mcp_sources={@mcp_sources}
           selected_source={@selected_source}
+          selection_revision={@selection_revision}
+          draft={react_form_draft(assigns, "toolset-form")}
         />
 
         <div :if={@live_action == :index} class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -234,6 +256,8 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
   attr :selected_tool_names, :list, required: true
   attr :mcp_sources, :list, required: true
   attr :selected_source, :string, required: true
+  attr :selection_revision, :integer, required: true
+  attr :draft, :map, default: nil
 
   defp toolset_form(assigns) do
     available_names = Enum.map(assigns.available_tools, & &1.name)
@@ -248,6 +272,10 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
       |> assign(:unavailable_names, unavailable_names)
       |> assign(:source_options, source_options)
       |> assign(:source_tools, source_tools)
+      |> assign(
+        :off_source_names,
+        assigns.selected_tool_names -- (Enum.map(source_tools, & &1.name) ++ unavailable_names)
+      )
       |> assign(:tool_groups, tool_groups)
       |> assign(:selected_source_label, selected_source_label)
 
@@ -255,14 +283,18 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
     <.dm_card variant="bordered" class="mb-6">
       <:title>{if @toolset.id, do: "Edit Toolset", else: "New Toolset"}</:title>
 
-      <.dm_form
+      <.react_form
         for={%{}}
         as={:toolset}
         id="toolset-form"
+        values={toolset_form_values(@toolset, @selected_tool_names)}
+        draft={@draft}
+        structure={[@selected_source, Enum.map(@available_tools, & &1.name), @selection_revision]}
         phx-submit="save_toolset"
         phx-change="change_toolset_form"
         class="space-y-4"
       >
+        <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#191 - preserve required and textarea layout attributes. --%>
         <.dm_input type="text" name="toolset[name]" value={@toolset.name} required label="Name" />
         <.dm_textarea
           name="toolset[description]"
@@ -272,6 +304,7 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
           resize="none"
         />
 
+        <input :for={name <- @off_source_names} type="hidden" name="tool_names[]" value={name} />
         <div>
           <div class="mb-3">
             <div class="mb-2 text-sm font-medium">Tool source</div>
@@ -379,7 +412,7 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
           </.dm_link>
           <.dm_btn type="submit" variant="primary">Save Toolset</.dm_btn>
         </:actions>
-      </.dm_form>
+      </.react_form>
     </.dm_card>
     """
   end
@@ -431,6 +464,13 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
         |> put_flash(:error, "Toolset not found")
         |> push_navigate(to: ~p"/agent/tools")
     end
+  end
+
+  defp toolset_form_values(toolset, tool_names) do
+    %{
+      "toolset" => %{"name" => toolset.name || "", "description" => toolset.description || ""},
+      "tool_names" => tool_names
+    }
   end
 
   defp selected_tool_names(params) do

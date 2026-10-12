@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.WorkspaceLive.Explorer do
   use SynapsisWeb, :live_view
+  use SynapsisWeb.ReactFormEvents
   require Logger
 
   @impl true
@@ -49,7 +50,10 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
   def handle_event("select", %{"id" => id}, socket) do
     case Synapsis.Workspace.read(id) do
       {:ok, resource} ->
-        {:noreply, assign(socket, selected: resource, editing: false)}
+        {:noreply,
+         socket
+         |> reset_react_form("workspace-edit-form")
+         |> assign(selected: resource, editing: false)}
 
       {:error, _} ->
         {:noreply, put_flash(socket, :error, "Document not found")}
@@ -74,16 +78,23 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
   end
 
   def handle_event("clear_search", _params, socket) do
-    {:noreply, assign(socket, search_query: "", search_results: nil)}
+    {:noreply,
+     socket
+     |> reset_react_form("workspace-search-form", %{"query" => ""})
+     |> assign(search_query: "", search_results: nil)}
   end
 
   def handle_event("edit", _params, socket) do
     content = (socket.assigns.selected && socket.assigns.selected.content) || ""
-    {:noreply, assign(socket, editing: true, edit_content: content)}
+
+    {:noreply,
+     socket
+     |> reset_react_form("workspace-edit-form", %{"content" => content})
+     |> assign(editing: true, edit_content: content)}
   end
 
   def handle_event("cancel_edit", _params, socket) do
-    {:noreply, assign(socket, editing: false)}
+    {:noreply, socket |> reset_react_form("workspace-edit-form") |> assign(editing: false)}
   end
 
   @max_content_bytes 1_000_000
@@ -107,6 +118,7 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
             {:noreply,
              socket
              |> assign(selected: updated, editing: false, resources: resources)
+             |> reset_react_form("workspace-edit-form")
              |> put_flash(:info, "Document saved")}
 
           {:error, _} ->
@@ -205,19 +217,29 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
 
       <%!-- Search bar --%>
       <.dm_card variant="bordered" class="mb-6">
-        <.dm_form for={%{}} phx-submit="search" class="flex gap-2 items-end">
-          <div class="flex-1">
-            <.dm_input
-              type="text"
-              name="query"
-              value={@search_query}
-              placeholder="Search workspace documents..."
-              label="Search"
-            />
-          </div>
-          <.dm_btn type="submit" variant="primary">
-            Search
-          </.dm_btn>
+        <div class="flex gap-2 items-end">
+          <.react_form
+            for={%{}}
+            id="workspace-search-form"
+            values={%{"query" => @search_query}}
+            draft={react_form_draft(assigns, "workspace-search-form")}
+            phx-submit="search"
+            class="flex flex-1 gap-2 items-end"
+          >
+            <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#191 --%>
+            <div class="flex-1">
+              <.dm_input
+                type="text"
+                name="query"
+                value={@search_query}
+                placeholder="Search workspace documents..."
+                label="Search"
+              />
+            </div>
+            <.dm_btn type="submit" variant="primary">
+              Search
+            </.dm_btn>
+          </.react_form>
           <.dm_btn
             :if={@search_results}
             type="button"
@@ -226,7 +248,7 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
           >
             Clear
           </.dm_btn>
-        </.dm_form>
+        </div>
       </.dm_card>
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -341,7 +363,14 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
 
             <%!-- Edit mode --%>
             <div :if={@editing}>
-              <.dm_form for={%{}} phx-submit="save_edit">
+              <.react_form
+                for={%{}}
+                id="workspace-edit-form"
+                values={%{"content" => @edit_content}}
+                draft={react_form_draft(assigns, "workspace-edit-form")}
+                phx-submit="save_edit"
+              >
+                <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#191 --%>
                 <textarea
                   name="content"
                   rows="20"
@@ -355,7 +384,7 @@ defmodule SynapsisWeb.WorkspaceLive.Explorer do
                     Cancel
                   </.dm_btn>
                 </div>
-              </.dm_form>
+              </.react_form>
             </div>
 
             <%!-- Read-only mode --%>

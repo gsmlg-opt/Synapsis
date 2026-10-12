@@ -1,6 +1,8 @@
 defmodule SynapsisWeb.AgentLive.ToolsetsTest do
   use SynapsisWeb.ConnCase
 
+  import SynapsisWeb.ReactFormHelpers
+
   alias Synapsis.{MCPConfigs, Toolsets}
 
   setup do
@@ -28,14 +30,13 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
       {:ok, view, _html} = live(conn, ~p"/agent/tools/new")
 
       view
-      |> form("form[phx-submit='save_toolset']", %{
+      |> react_form_submit("toolset-form", %{
         "toolset" => %{
           "name" => "research-tools",
           "description" => "Search and read"
         },
         "tool_names" => ["file_read", "grep"]
       })
-      |> render_submit()
 
       toolset = toolset_by_name("research-tools")
       assert toolset.tool_names == ["file_read", "grep"]
@@ -45,7 +46,7 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
     test "groups available tools by category on the toolset form", %{conn: conn} do
       {:ok, view, html} = live(conn, ~p"/agent/tools/new")
 
-      assert has_element?(view, "form#toolset-form")
+      assert has_element?(view, "[data-form-id='toolset-form']")
       assert has_element?(view, "[data-tool-category='filesystem']", "Files")
       assert has_element?(view, "[data-tool-category='filesystem'] input[value='file_read']")
       assert has_element?(view, "[data-tool-category='search']", "Search")
@@ -128,17 +129,46 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
              )
 
       view
-      |> form("form[phx-submit='save_toolset']", %{
+      |> react_form_submit("toolset-form", %{
         "toolset" => %{
           "name" => "demo-mcp",
           "description" => "Demo MCP tools"
         },
         "tool_names" => ["mcp:demo:search_docs"]
       })
-      |> render_submit()
 
       toolset = toolset_by_name("demo-mcp")
       assert toolset.tool_names == ["mcp:demo:search_docs"]
+    end
+
+    test "keeps form drafts and selections across tool sources", %{conn: conn} do
+      Synapsis.Tool.Registry.register_process("mcp:drafts:search_docs", self(),
+        description: "Search docs",
+        category: :search
+      )
+
+      on_exit(fn -> Synapsis.Tool.Registry.unregister("mcp:drafts:search_docs") end)
+      {:ok, view, _html} = live(conn, ~p"/agent/tools/new")
+
+      react_form_change(view, "toolset-form", %{
+        "toolset" => %{"name" => "draft-tools", "description" => "Keep this draft"},
+        "tool_names" => ["file_read"]
+      })
+
+      view
+      |> element("[data-testid='tool-source-selector'] el-dm-button", "MCP: drafts")
+      |> render_click()
+
+      assert has_element?(view, "input[type='hidden'][name='tool_names[]'][value='file_read']")
+
+      view
+      |> element("el-dm-button[phx-click='select_all_tools']")
+      |> render_click()
+
+      react_form_submit(view, "toolset-form", %{})
+      saved = toolset_by_name("draft-tools")
+      assert saved.description == "Keep this draft"
+      assert Enum.sort(saved.tool_names) == ["file_read", "mcp:drafts:search_docs"]
     end
 
     test "refreshes MCP tool list when registry changes after page load", %{conn: conn} do

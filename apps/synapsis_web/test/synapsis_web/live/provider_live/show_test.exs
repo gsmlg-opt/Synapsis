@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.ProviderLive.ShowTest do
   use SynapsisWeb.ConnCase
+  import SynapsisWeb.ReactFormHelpers
 
   setup do
     provider =
@@ -45,11 +46,10 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
 
       html =
         view
-        |> form("form", %{
+        |> react_form_submit("edit-provider-form", %{
           "base_url" => "https://custom.api.example.com/v1",
-          "enabled" => "true"
+          "enabled" => true
         })
-        |> render_submit()
 
       assert html =~ "Provider updated"
     end
@@ -68,8 +68,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
 
       view
-      |> form("form", %{"base_url" => "", "enabled" => "false"})
-      |> render_submit()
+      |> react_form_submit("edit-provider-form", %{"base_url" => "", "enabled" => false})
 
       {:ok, updated} = Synapsis.Providers.get(provider.id)
       assert updated.enabled == false
@@ -82,8 +81,11 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
 
       view
-      |> form("form", %{"base_url" => "", "enabled" => "true", "api_key" => ""})
-      |> render_submit()
+      |> react_form_submit("edit-provider-form", %{
+        "base_url" => "",
+        "enabled" => true,
+        "api_key" => ""
+      })
 
       {:ok, updated} = Synapsis.Providers.get(provider.id)
       assert updated.api_key_encrypted != nil
@@ -93,8 +95,11 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
 
       view
-      |> form("form", %{"base_url" => "", "enabled" => "true", "api_key" => "new-secret-key"})
-      |> render_submit()
+      |> react_form_submit("edit-provider-form", %{
+        "base_url" => "",
+        "enabled" => true,
+        "api_key" => "new-secret-key"
+      })
 
       html = render(view)
       assert html =~ "Provider updated"
@@ -156,6 +161,38 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
 
       assert html =~ "Models refreshed"
       assert html =~ "backplane-model"
+    end
+
+    test "clearing a token preserves noncredential edits and discards the typed key", %{
+      conn: conn,
+      provider: provider
+    } do
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+      draft_url = "https://edited.api.example.com/v1"
+
+      react_form_change(view, "edit-provider-form", %{
+        "base_url" => draft_url,
+        "enabled" => false,
+        "api_key" => "discard-this-typed-key"
+      })
+
+      render_hook(view, "clear_api_key", %{})
+
+      assert_push_event(view, "dm:form:reset", %{
+        form_id: "edit-provider-form",
+        values: %{"base_url" => ^draft_url, "enabled" => false, "api_key" => ""}
+      })
+
+      assert {:ok, before_save} = Synapsis.Providers.get(provider.id)
+      assert before_save.base_url == provider.base_url
+      assert before_save.enabled == provider.enabled
+      assert is_nil(before_save.api_key_encrypted)
+
+      react_form_submit(view, "edit-provider-form", %{})
+      assert {:ok, saved} = Synapsis.Providers.get(provider.id)
+      assert saved.base_url == draft_url
+      refute saved.enabled
+      assert is_nil(saved.api_key_encrypted)
     end
 
     test "clearing an absent token remains keyless", %{conn: conn} do
@@ -266,20 +303,19 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
     end
 
     test "form has enabled checkbox", %{conn: conn, provider: provider} do
-      {:ok, _view, html} = live(conn, ~p"/settings/providers/#{provider.id}")
+      {:ok, view, html} = live(conn, ~p"/settings/providers/#{provider.id}")
       assert html =~ "Enabled"
-      assert html =~ ~s(name="enabled")
+      assert has_element?(view, ~s|[data-dm-react-field*='"enabled"']|)
     end
 
     test "update_provider with new base_url persists it", %{conn: conn, provider: provider} do
       {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
 
       view
-      |> form("form", %{
+      |> react_form_submit("edit-provider-form", %{
         "base_url" => "https://new-base.example.com/v2",
-        "enabled" => "true"
+        "enabled" => true
       })
-      |> render_submit()
 
       {:ok, updated} = Synapsis.Providers.get(provider.id)
       assert updated.base_url == "https://new-base.example.com/v2"
@@ -352,10 +388,9 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       # Submit with specific models selected
       html =
         view
-        |> form("form[phx-submit='save_models']", %{
+        |> react_form_submit("provider-models-form", %{
           "models" => ["claude-sonnet-4-6", "claude-haiku-3-5-20241022"]
         })
-        |> render_submit()
 
       assert html =~ "Models updated"
 
@@ -415,10 +450,9 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       assert has_element?(view, ~s|input[value="unchecked-model"]:not([checked])|)
 
       view
-      |> form("form[phx-submit='save_models']", %{
+      |> react_form_submit("provider-models-form", %{
         "models" => ["enabled-model", "unchecked-model"]
       })
-      |> render_submit()
 
       assert {:ok, updated} = Synapsis.Providers.get(provider.id)
       assert updated.config["enabled_models"] == ["enabled-model", "unchecked-model"]
@@ -472,7 +506,12 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
 
       assert html =~ "Claude"
       assert html =~ ~s(phx-change="chat_select_model")
-      assert has_element?(view, "form#provider-chat-model-form")
+
+      assert has_element?(
+               view,
+               "[data-form-id='provider-chat-model-form'][phx-hook='DuskmoonReactForm']"
+             )
+
       assert_unique_form_ids(html)
     end
 
@@ -483,7 +522,11 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       |> element(~s(div[phx-click="toggle_chat"]))
       |> render_click()
 
-      html = render_hook(view, "chat_select_model", %{"model" => "claude-haiku-3-5-20241022"})
+      html =
+        react_form_change(view, "provider-chat-model-form", %{
+          "model" => "claude-haiku-3-5-20241022"
+        })
+
       assert html =~ "claude-haiku-3-5-20241022"
     end
 
@@ -611,7 +654,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       |> element(~s(div[phx-click="toggle_chat"]))
       |> render_click()
 
-      render_hook(view, "chat_select_model", %{"model" => "disabled-model"})
+      react_form_change(view, "provider-chat-model-form", %{"model" => "disabled-model"})
       html = render_hook(view, "chat_send", %{"message" => "must not leave the process"})
 
       refute_receive :provider_http_called, 200

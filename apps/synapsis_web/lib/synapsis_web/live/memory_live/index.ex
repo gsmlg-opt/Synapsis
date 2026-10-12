@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.MemoryLive.Index do
   use SynapsisWeb, :live_view
+  use SynapsisWeb.ReactFormEvents
 
   @impl true
   def mount(_params, _session, socket) do
@@ -40,7 +41,7 @@ defmodule SynapsisWeb.MemoryLive.Index do
   def handle_params(_params, _uri, socket) do
     case socket.assigns.live_action do
       :new ->
-        {:noreply, assign(socket, show_create: true)}
+        {:noreply, socket |> reset_react_form("create-memory-form") |> assign(show_create: true)}
 
       _ ->
         {:noreply, socket}
@@ -73,7 +74,7 @@ defmodule SynapsisWeb.MemoryLive.Index do
   end
 
   def handle_event("cancel_create", _params, socket) do
-    {:noreply, assign(socket, show_create: false)}
+    {:noreply, socket |> reset_react_form("create-memory-form") |> assign(show_create: false)}
   end
 
   def handle_event("create_memory", params, socket) do
@@ -102,6 +103,7 @@ defmodule SynapsisWeb.MemoryLive.Index do
         {:noreply,
          socket
          |> assign(show_create: false)
+         |> reset_react_form("create-memory-form")
          |> put_flash(:info, "Memory saved")
          |> load_knowledge()}
 
@@ -277,28 +279,35 @@ defmodule SynapsisWeb.MemoryLive.Index do
         <%= if @show_create do %>
           <.dm_card variant="bordered" class="mb-4">
             <:title>New Memory</:title>
-            <.dm_form for={@create_form} id="create-memory-form" phx-submit="create_memory">
+            <.react_form
+              for={@create_form}
+              id="create-memory-form"
+              values={Map.put(@create_form.params, "scope", "agent")}
+              draft={react_form_draft(assigns, "create-memory-form")}
+              phx-submit="create_memory"
+            >
+              <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#191 --%>
               <div class="grid grid-cols-2 gap-4 mb-4">
                 <div>
-                  <.dm_select
+                  <.dm_react_field
                     name="scope"
+                    type="select"
                     label="Scope"
-                    value="agent"
-                    options={[{"shared", "Shared"}, {"agent", "Agent"}]}
+                    options={[%{value: "shared", label: "Shared"}, %{value: "agent", label: "Agent"}]}
                   />
                 </div>
                 <div>
-                  <.dm_select
+                  <.dm_react_field
                     name="kind"
+                    type="select"
                     label="Kind"
-                    value="fact"
                     options={[
-                      {"fact", "Fact"},
-                      {"decision", "Decision"},
-                      {"lesson", "Lesson"},
-                      {"preference", "Preference"},
-                      {"pattern", "Pattern"},
-                      {"warning", "Warning"}
+                      %{value: "fact", label: "Fact"},
+                      %{value: "decision", label: "Decision"},
+                      %{value: "lesson", label: "Lesson"},
+                      %{value: "preference", label: "Preference"},
+                      %{value: "pattern", label: "Pattern"},
+                      %{value: "warning", label: "Warning"}
                     ]}
                   />
                 </div>
@@ -322,10 +331,10 @@ defmodule SynapsisWeb.MemoryLive.Index do
                 <.dm_input name="tags" value="" placeholder="tag1, tag2, tag3" />
               </div>
               <div class="flex gap-2 justify-end">
-                <.dm_btn variant="ghost" phx-click="cancel_create">Cancel</.dm_btn>
+                <.dm_btn type="button" variant="ghost" phx-click="cancel_create">Cancel</.dm_btn>
                 <.dm_btn variant="secondary" type="submit">Save</.dm_btn>
               </div>
-            </.dm_form>
+            </.react_form>
           </.dm_card>
         <% end %>
 

@@ -1,6 +1,8 @@
 defmodule SynapsisWeb.MCPLive.ShowTest do
   use SynapsisWeb.ConnCase
 
+  import SynapsisWeb.ReactFormHelpers
+
   alias Synapsis.MCPConfigs
 
   defmodule FakeMCPServer do
@@ -43,7 +45,7 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     {:ok, view, html} = live(conn, ~p"/settings/mcp/#{config.id}")
     assert html =~ "test-server"
     assert html =~ "npx test-server"
-    assert has_element?(view, "form#mcp-config-form")
+    assert has_element?(view, "[data-form-id='mcp-config-form']")
     assert_unique_form_ids(html)
   end
 
@@ -56,8 +58,7 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
 
     view
-    |> form("form", %{"command" => "npx updated-server"})
-    |> render_submit()
+    |> react_form_submit("mcp-config-form", %{"command" => "npx updated-server"})
 
     html = render(view)
     assert html =~ "npx updated-server"
@@ -92,8 +93,7 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
 
     view
-    |> form("form", %{"command" => "updated-cmd"})
-    |> render_submit()
+    |> react_form_submit("mcp-config-form", %{"command" => "updated-cmd"})
 
     assert render(view) =~ "MCP server updated"
   end
@@ -116,7 +116,7 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     {:ok, _view, html} = live(conn, ~p"/settings/mcp/#{http_config.id}")
 
     assert html =~ "URL"
-    assert html =~ ~s(name="url")
+    assert html =~ "&quot;name&quot;:&quot;url&quot;"
     assert html =~ "Headers (Name: Value, one per line)"
     refute html =~ "Command"
     refute html =~ "Arguments (one per line)"
@@ -140,14 +140,35 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
 
     html =
       view
-      |> form("form", %{"transport" => "streamable_http"})
-      |> render_change()
+      |> react_form_change("mcp-config-form", %{"transport" => "streamable_http"})
 
     assert html =~ "URL"
     assert html =~ "Headers (Name: Value, one per line)"
     refute html =~ "Command"
     refute html =~ "Arguments (one per line)"
     refute html =~ "Environment Variables"
+  end
+
+  test "preserves transport drafts when switching back to stdio", %{conn: conn, config: config} do
+    {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
+
+    react_form_change(view, "mcp-config-form", %{
+      "command" => "draft-command",
+      "args" => "--draft",
+      "transport" => "streamable_http"
+    })
+
+    react_form_change(view, "mcp-config-form", %{
+      "url" => "http://localhost:7331/mcp",
+      "transport" => "stdio"
+    })
+
+    react_form_submit(view, "mcp-config-form", %{})
+    updated = MCPConfigs.get(config.id)
+    assert updated.command == "draft-command"
+    assert updated.args == ["--draft"]
+    assert updated.transport == "stdio"
+    assert updated.url in [nil, ""]
   end
 
   test "config with env vars displays them formatted", %{conn: conn} do
@@ -182,8 +203,7 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
 
     view
-    |> form("form", %{"command" => "some-cmd", "args" => "", "env" => ""})
-    |> render_submit()
+    |> react_form_submit("mcp-config-form", %{"command" => "some-cmd", "args" => "", "env" => ""})
 
     html = render(view)
     assert html =~ "MCP server updated"
@@ -193,8 +213,10 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
 
     view
-    |> form("form", %{"command" => "cmd", "args" => "--verbose\n--debug\n"})
-    |> render_submit()
+    |> react_form_submit("mcp-config-form", %{
+      "command" => "cmd",
+      "args" => "--verbose\n--debug\n"
+    })
 
     html = render(view)
     assert html =~ "MCP server updated"
@@ -206,11 +228,10 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
 
     view
-    |> form("form", %{
+    |> react_form_submit("mcp-config-form", %{
       "command" => "cmd",
       "env" => "MYVAR=hello\nOTHER=world\nINVALID_LINE_NO_EQUALS\n"
     })
-    |> render_submit()
 
     html = render(view)
     assert html =~ "MCP server updated"
@@ -225,16 +246,14 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
 
     view
-    |> form("form", %{"transport" => "streamable_http"})
-    |> render_change()
+    |> react_form_change("mcp-config-form", %{"transport" => "streamable_http"})
 
     view
-    |> form("form", %{
+    |> react_form_submit("mcp-config-form", %{
       "transport" => "streamable_http",
       "url" => "http://example.com/mcp",
       "headers" => "Authorization: Bearer test-token\nX-Client: synapsis\ninvalid"
     })
-    |> render_submit()
 
     html = render(view)
     assert html =~ "MCP server updated"
@@ -259,17 +278,15 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
 
     view
-    |> form("#mcp-config-form", %{"transport" => "streamable_http"})
-    |> render_change()
+    |> react_form_change("mcp-config-form", %{"transport" => "streamable_http"})
 
     html =
       view
-      |> form("#mcp-config-form", %{
+      |> react_form_submit("mcp-config-form", %{
         "transport" => "streamable_http",
         "url" => "http://localhost/mcp",
         "headers" => ~s({"Authorization":"Bearer test-token"})
       })
-      |> render_submit()
 
     assert html =~ "Invalid headers. Use Name: Value, one per line, without JSON braces."
     assert MCPConfigs.get(config.id).transport == "stdio"
@@ -280,8 +297,7 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
 
     view
-    |> form("form", %{"command" => "test", "enabled" => "false"})
-    |> render_submit()
+    |> react_form_submit("mcp-config-form", %{"command" => "test", "enabled" => "false"})
 
     assert render(view) =~ "MCP server updated"
   end
@@ -313,8 +329,7 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
 
     view
-    |> form("form", %{"command" => config.command, "enabled" => "false"})
-    |> render_submit()
+    |> react_form_submit("mcp-config-form", %{"command" => config.command, "enabled" => "false"})
 
     refute MCPConfigs.get(config.id).enabled
     assert wait_until(fn -> not Process.alive?(pid) end)

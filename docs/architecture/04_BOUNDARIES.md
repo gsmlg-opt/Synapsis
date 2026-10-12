@@ -57,7 +57,7 @@ LiveView:  /live socket (for LiveView connections)
 
 ### synapsis_web → LiveView Pages
 
-`synapsis_web` owns all LiveView modules, HEEx templates, and function components. It depends on `synapsis_server` and defines no OTP application. The UI is pure LiveView — no React (see [ADR-007](../decisions/ADR-007-pure-liveview-ui.md)).
+`synapsis_web` owns all LiveView modules, HEEx templates, and function components. It depends on `synapsis_server` and defines no OTP application. LiveView owns pages and server state. Forms use published DuskMoon React islands under [ADR-010](../decisions/ADR-010-react-form-islands.md); chat remains LiveView during the first migration phase. [ADR-007](../decisions/ADR-007-pure-liveview-ui.md) documents the earlier pure-LiveView decision.
 
 **LiveView pages** (all under `SynapsisWeb.*` namespace, routed from `SynapsisServer.Router`):
 

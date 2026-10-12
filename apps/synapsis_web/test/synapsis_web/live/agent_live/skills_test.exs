@@ -1,6 +1,8 @@
 defmodule SynapsisWeb.AgentLive.SkillsTest do
   use SynapsisWeb.ConnCase
 
+  import SynapsisWeb.ReactFormHelpers
+
   alias Synapsis.{AgentConfigs, AgentSkills, Skills}
 
   setup do
@@ -28,7 +30,7 @@ defmodule SynapsisWeb.AgentLive.SkillsTest do
       {:ok, view, _html} = live(conn, ~p"/agent/skills/new")
 
       view
-      |> form("form[phx-submit='save_skill']", %{
+      |> react_form_submit("agent-skill-form", %{
         "skill" => %{
           "name" => "writing-style",
           "scope" => "global",
@@ -37,7 +39,6 @@ defmodule SynapsisWeb.AgentLive.SkillsTest do
         },
         "agent_ids" => [agent.id]
       })
-      |> render_submit()
 
       skill = skill_by_name("writing-style")
       assert AgentSkills.list_agent_ids(skill.id) == [agent.id]
@@ -51,7 +52,7 @@ defmodule SynapsisWeb.AgentLive.SkillsTest do
       {:ok, view, _html} = live(conn, ~p"/agent/skills/#{skill.id}/edit")
 
       view
-      |> form("form[phx-submit='save_skill']", %{
+      |> react_form_submit("agent-skill-form", %{
         "skill" => %{
           "name" => "review-style",
           "scope" => "global",
@@ -60,7 +61,6 @@ defmodule SynapsisWeb.AgentLive.SkillsTest do
         },
         "agent_ids" => [agent.id]
       })
-      |> render_submit()
 
       updated = Skills.get(skill.id)
       assert updated.system_prompt_fragment == "Review risks first."

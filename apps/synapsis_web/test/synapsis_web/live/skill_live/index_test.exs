@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.SkillLive.IndexTest do
   use SynapsisWeb.ConnCase
+  import SynapsisWeb.ReactFormHelpers
 
   setup do
     Synapsis.DataCase.clear_config_store(:skill)
@@ -48,7 +49,7 @@ defmodule SynapsisWeb.SkillLive.IndexTest do
 
     test "create_skill with empty name shows error flash", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings/skills")
-      view |> form("form", %{"name" => "", "scope" => "global"}) |> render_submit()
+      view |> react_form_submit("create-skill-form", %{"name" => "", "scope" => "global"})
       assert render(view) =~ "Failed to create skill"
     end
 
@@ -57,8 +58,10 @@ defmodule SynapsisWeb.SkillLive.IndexTest do
 
       assert {:error, {:live_redirect, %{to: "/settings/skills/" <> _}}} =
                view
-               |> form("form", %{"name" => "redirect-skill", "scope" => "global"})
-               |> render_submit()
+               |> react_form_submit("create-skill-form", %{
+                 "name" => "redirect-skill",
+                 "scope" => "global"
+               })
     end
 
     test "built-in skill does not show delete button", %{conn: conn} do

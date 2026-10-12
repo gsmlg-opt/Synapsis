@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.WorkspaceLive.ExplorerTest do
   use SynapsisWeb.ConnCase
+  import SynapsisWeb.ReactFormHelpers
 
   # ADR-006 C4: workspace docs are file-backed under SYNAPSIS_WORKSPACE_ROOT
   # (defaults to File.cwd!); isolate each test in a fresh tmp root.
@@ -73,8 +74,7 @@ defmodule SynapsisWeb.WorkspaceLive.ExplorerTest do
 
       html =
         view
-        |> element("form")
-        |> render_submit(%{query: "phoenix framework"})
+        |> react_form_submit("workspace-search-form", %{"query" => "phoenix framework"})
 
       assert html =~ "searchable-phoenix.md"
     end
@@ -117,10 +117,20 @@ defmodule SynapsisWeb.WorkspaceLive.ExplorerTest do
 
       html =
         view
-        |> element("form[phx-submit=save_edit]")
-        |> render_submit(%{content: "Updated content"})
+        |> react_form_submit("workspace-edit-form", %{"content" => "Updated content"})
 
       assert html =~ "Updated content"
+    end
+
+    test "clearing search resets the React input", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/workspace")
+      react_form_submit(view, "workspace-search-form", %{"query" => "missing document"})
+      render_hook(view, "clear_search", %{})
+
+      assert_push_event(view, "dm:form:reset", %{
+        id: "workspace-search-form",
+        values: %{"query" => ""}
+      })
     end
 
     test "delete removes document from list", %{conn: conn} do
@@ -149,8 +159,7 @@ defmodule SynapsisWeb.WorkspaceLive.ExplorerTest do
       {:ok, view, _html} = live(conn, ~p"/workspace?path=/shared/notes")
 
       view
-      |> element("form")
-      |> render_submit(%{query: "content"})
+      |> react_form_submit("workspace-search-form", %{"query" => "content"})
 
       html =
         view

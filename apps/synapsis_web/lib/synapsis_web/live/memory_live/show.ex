@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.MemoryLive.Show do
   use SynapsisWeb, :live_view
+  use SynapsisWeb.ReactFormEvents
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
@@ -36,11 +37,14 @@ defmodule SynapsisWeb.MemoryLive.Show do
 
   @impl true
   def handle_event("edit", _params, socket) do
-    {:noreply, assign(socket, editing: true)}
+    {:noreply,
+     socket
+     |> reset_react_form("edit-memory-form", build_edit_form(socket.assigns.memory).params)
+     |> assign(editing: true)}
   end
 
   def handle_event("cancel_edit", _params, socket) do
-    {:noreply, assign(socket, editing: false)}
+    {:noreply, socket |> reset_react_form("edit-memory-form") |> assign(editing: false)}
   end
 
   def handle_event("save", params, socket) do
@@ -88,6 +92,7 @@ defmodule SynapsisWeb.MemoryLive.Show do
         {:noreply,
          socket
          |> assign(memory: updated, editing: false, edit_form: build_edit_form(updated))
+         |> reset_react_form("edit-memory-form", build_edit_form(updated).params)
          |> put_flash(:info, "Memory updated")}
 
       {:error, _changeset} ->
@@ -173,7 +178,9 @@ defmodule SynapsisWeb.MemoryLive.Show do
         <:action>
           <%= if @editing do %>
             <.dm_btn variant="ghost" size="sm" phx-click="cancel_edit">Cancel</.dm_btn>
-            <.dm_btn type="submit" form="edit-memory-form" variant="primary" size="sm">Save</.dm_btn>
+            <.dm_btn type="submit" form="edit-memory-form-native" variant="primary" size="sm">
+              Save
+            </.dm_btn>
           <% else %>
             <.dm_btn variant="ghost" size="sm" phx-click="edit">
               <.dm_mdi name="pencil" /> Edit
@@ -185,17 +192,24 @@ defmodule SynapsisWeb.MemoryLive.Show do
         </:action>
 
         <%= if @editing do %>
-          <.dm_form for={@edit_form} id="edit-memory-form" phx-submit="save">
+          <.react_form
+            for={@edit_form}
+            id="edit-memory-form"
+            values={@edit_form.params}
+            draft={react_form_draft(assigns, "edit-memory-form")}
+            phx-submit="save"
+          >
+            <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#191 --%>
             <div class="grid grid-cols-2 gap-4 mb-4">
               <div>
-                <.dm_select
+                <.dm_react_field
                   name="kind"
+                  type="select"
                   label="Kind"
-                  value={@memory.kind}
                   options={
                     Enum.map(
                       ~w(fact decision lesson preference pattern warning),
-                      &{&1, String.capitalize(&1)}
+                      &%{value: &1, label: String.capitalize(&1)}
                     )
                   }
                 />
@@ -226,18 +240,16 @@ defmodule SynapsisWeb.MemoryLive.Show do
               </div>
             </div>
             <div class="mb-4">
-              <label class="label text-on-surface-variant text-sm">Title</label>
-              <.dm_input name="title" value={@memory.title} />
+              <.dm_react_field name="title" type="text" label="Title" />
             </div>
             <div class="mb-4">
               <label class="label text-on-surface-variant text-sm">Summary</label>
               <.dm_textarea name="summary" value={@memory.summary} rows={4} />
             </div>
             <div class="mb-4">
-              <label class="label text-on-surface-variant text-sm">Tags (comma separated)</label>
-              <.dm_input name="tags" value={Enum.join(@memory.tags || [], ", ")} />
+              <.dm_react_field name="tags" type="text" label="Tags (comma separated)" />
             </div>
-          </.dm_form>
+          </.react_form>
         <% else %>
           <div class="space-y-4">
             <div>

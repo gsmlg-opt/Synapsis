@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.SkillLive.Index do
   use SynapsisWeb, :live_view
+  use SynapsisWeb.ReactFormEvents
 
   @impl true
   def mount(_params, _session, socket) do
@@ -56,7 +57,15 @@ defmodule SynapsisWeb.SkillLive.Index do
 
       <.dm_card variant="bordered" class="mb-6">
         <:title>Create Skill</:title>
-        <.dm_form for={%{}} phx-submit="create_skill" class="flex gap-2 items-end">
+        <.react_form
+          for={%{}}
+          id="create-skill-form"
+          values={%{"name" => "", "scope" => "global"}}
+          draft={react_form_draft(assigns, "create-skill-form")}
+          phx-submit="create_skill"
+          class="flex gap-2 items-end"
+        >
+          <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#191 --%>
           <div class="flex-1">
             <.dm_input
               type="text"
@@ -68,16 +77,16 @@ defmodule SynapsisWeb.SkillLive.Index do
             />
           </div>
           <div>
-            <.dm_select
+            <.dm_react_field
               name="scope"
-              options={[{"global", "Global"}]}
-              value="global"
+              type="select"
+              options={[%{value: "global", label: "Global"}]}
             />
           </div>
           <.dm_btn type="submit" variant="primary">
             Create
           </.dm_btn>
-        </.dm_form>
+        </.react_form>
       </.dm_card>
 
       <div class="space-y-2">

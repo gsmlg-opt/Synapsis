@@ -1,6 +1,7 @@
 defmodule SynapsisWeb.AgentLive.Daemon do
   @moduledoc "Dense operational console for the agent daemon and its durable work."
   use SynapsisWeb, :live_view
+  use SynapsisWeb.ReactFormEvents
 
   import SynapsisWeb.AgentLive.Components
 
@@ -194,7 +195,15 @@ defmodule SynapsisWeb.AgentLive.Daemon do
 
         <.dm_card id="manual-run" variant="bordered" class="bg-surface-container-high" shadow="sm">
           <:title><span class="text-sm font-semibold">Manual run</span></:title>
-          <.dm_form for={@manual_form} id="manual-run-form" phx-submit="submit_manual">
+          <.react_form
+            for={@manual_form}
+            id="manual-run-form"
+            draft={react_form_draft(assigns, "manual-run-form")}
+            structure={operation_busy?(@operation)}
+            phx-submit="submit_manual"
+            phx-change="change_daemon_form"
+          >
+            <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#191 - preserve native validation, autocomplete and textarea layout attributes. --%>
             <.dm_textarea
               field={@manual_form[:prompt]}
               label="Prompt"
@@ -215,7 +224,7 @@ defmodule SynapsisWeb.AgentLive.Daemon do
                 Queue run
               </.dm_btn>
             </:actions>
-          </.dm_form>
+          </.react_form>
         </.dm_card>
 
         <.dm_card id="daemon-runs" variant="bordered" class="bg-surface-container" padding="none">
@@ -346,7 +355,14 @@ defmodule SynapsisWeb.AgentLive.Daemon do
 
             <div class="bg-surface-container-high p-4">
               <h3 class="mb-3 text-sm font-semibold text-on-surface">Create routine</h3>
-              <.dm_form for={@routine_form} id="routine-create-form" phx-submit="create_routine">
+              <.react_form
+                for={@routine_form}
+                id="routine-create-form"
+                draft={react_form_draft(assigns, "routine-create-form")}
+                structure={operation_busy?(@operation)}
+                phx-submit="create_routine"
+                phx-change="change_daemon_form"
+              >
                 <.dm_input
                   field={@routine_form[:name]}
                   type="text"
@@ -355,13 +371,14 @@ defmodule SynapsisWeb.AgentLive.Daemon do
                   required
                 />
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                  <.dm_select
-                    field={@routine_form[:kind]}
+                  <.dm_react_field
+                    type="select"
+                    name="routine[kind]"
                     label="Kind"
                     options={[
-                      {"schedule", "Schedule"},
-                      {"heartbeat", "Heartbeat"},
-                      {"dream", "Dream"}
+                      %{value: "schedule", label: "Schedule"},
+                      %{value: "heartbeat", label: "Heartbeat"},
+                      %{value: "dream", label: "Dream"}
                     ]}
                   />
                   <.dm_input
@@ -372,14 +389,15 @@ defmodule SynapsisWeb.AgentLive.Daemon do
                     required
                   />
                 </div>
-                <.dm_select
-                  field={@routine_form[:tool_profile]}
+                <.dm_react_field
+                  type="select"
+                  name="routine[tool_profile]"
                   label="Toolset"
                   options={[
-                    {"assistant_basic", "Basic"},
-                    {"assistant_workspace", "Workspace"},
-                    {"assistant_coding", "Coding"},
-                    {"assistant_dream", "Dream"}
+                    %{value: "assistant_basic", label: "Basic"},
+                    %{value: "assistant_workspace", label: "Workspace"},
+                    %{value: "assistant_coding", label: "Coding"},
+                    %{value: "assistant_dream", label: "Dream"}
                   ]}
                 />
                 <.dm_textarea
@@ -402,7 +420,7 @@ defmodule SynapsisWeb.AgentLive.Daemon do
                     Create routine
                   </.dm_btn>
                 </:actions>
-              </.dm_form>
+              </.react_form>
             </div>
           </div>
         </.dm_card>
@@ -525,10 +543,13 @@ defmodule SynapsisWeb.AgentLive.Daemon do
             class="border-t border-outline-variant bg-surface-container-high p-4"
           >
             <h3 class="mb-3 text-sm font-semibold text-on-surface">Add capability source</h3>
-            <.dm_form
+            <.react_form
               for={@connection_form}
               id="backplane-create-form"
+              draft={connection_form_draft(assigns)}
+              structure={operation_busy?(@operation)}
               phx-submit="create_connection"
+              phx-change="change_daemon_form"
             >
               <div class="grid grid-cols-1 gap-3 lg:grid-cols-3">
                 <.dm_input
@@ -585,7 +606,7 @@ defmodule SynapsisWeb.AgentLive.Daemon do
                   Add connection
                 </.dm_btn>
               </:actions>
-            </.dm_form>
+            </.react_form>
           </section>
         </.dm_card>
       </div>
@@ -594,6 +615,9 @@ defmodule SynapsisWeb.AgentLive.Daemon do
   end
 
   @impl true
+  def handle_event("change_daemon_form", _params, socket),
+    do: {:noreply, sanitize_connection_draft(socket)}
+
   def handle_event("submit_manual", %{"manual" => %{"prompt" => prompt}}, socket) do
     prompt = String.trim(prompt)
 
@@ -635,6 +659,7 @@ defmodule SynapsisWeb.AgentLive.Daemon do
   def handle_event("create_connection", %{"connection" => params}, socket)
       when is_map(params) do
     attrs = connection_attrs(params)
+    socket = sanitize_connection_draft(socket)
 
     if attrs.name == "" or attrs.endpoint == "" do
       {:noreply, put_flash(socket, :error, "Name and endpoint are required")}
@@ -888,14 +913,44 @@ defmodule SynapsisWeb.AgentLive.Daemon do
 
   defp fail_operation(socket), do: assign(socket, operation: nil)
 
+  defp sanitize_connection_draft(socket) do
+    case connection_form_draft(socket.assigns) do
+      nil ->
+        socket
+
+      draft ->
+        assign(
+          socket,
+          :react_form_drafts,
+          Map.put(socket.assigns.react_form_drafts, "backplane-create-form", draft)
+        )
+    end
+  end
+
+  defp connection_form_draft(assigns) do
+    case react_form_draft(assigns, "backplane-create-form") do
+      nil -> nil
+      draft -> Map.update(draft, "connection", %{}, &Map.put(&1, "credential", ""))
+    end
+  end
+
   defp reset_operation_form(socket, :manual_form),
-    do: assign(socket, manual_form: to_form(%{"prompt" => ""}, as: :manual))
+    do:
+      socket
+      |> assign(manual_form: to_form(%{"prompt" => ""}, as: :manual))
+      |> reset_react_form("manual-run-form", %{"manual" => %{"prompt" => ""}})
 
   defp reset_operation_form(socket, :routine_form),
-    do: assign(socket, routine_form: new_routine_form())
+    do:
+      socket
+      |> assign(routine_form: new_routine_form())
+      |> reset_react_form("routine-create-form", %{"routine" => new_routine_form().params})
 
   defp reset_operation_form(socket, :connection_form),
-    do: assign(socket, connection_form: new_connection_form())
+    do:
+      socket
+      |> assign(connection_form: new_connection_form())
+      |> reset_react_form("backplane-create-form", %{"connection" => new_connection_form().params})
 
   defp reset_operation_form(socket, _reset), do: socket
 

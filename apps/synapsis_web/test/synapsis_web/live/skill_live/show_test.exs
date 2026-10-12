@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.SkillLive.ShowTest do
   use SynapsisWeb.ConnCase
+  import SynapsisWeb.ReactFormHelpers
 
   setup do
     {:ok, skill} =
@@ -53,21 +54,57 @@ defmodule SynapsisWeb.SkillLive.ShowTest do
 
       html =
         view
-        |> form("form", %{
+        |> react_form_submit("edit-skill-form", %{
           "name" => skill.name,
           "description" => "Updated description",
           "system_prompt_fragment" => "Updated prompt",
           "scope" => "global"
         })
-        |> render_submit()
 
       assert html =~ "Skill updated"
     end
 
     test "update_skill with empty name shows error flash", %{conn: conn, skill: skill} do
       {:ok, view, _html} = live(conn, ~p"/settings/skills/#{skill.id}")
-      view |> form("form", %{"name" => "", "description" => ""}) |> render_submit()
+      view |> react_form_submit("edit-skill-form", %{"name" => "", "description" => ""})
       assert render(view) =~ "Failed to update skill"
+    end
+
+    test "rejected React submission retains the draft and successful save resets it", %{
+      conn: conn,
+      skill: skill
+    } do
+      {:ok, view, _html} = live(conn, ~p"/settings/skills/#{skill.id}")
+      assert has_element?(view, "[data-form-id='edit-skill-form'][phx-hook='DuskmoonReactForm']")
+
+      react_form_submit(view, "edit-skill-form", %{
+        "name" => "",
+        "description" => "Keep this draft"
+      })
+
+      assert render(view) =~ "Failed to update skill"
+
+      [json] =
+        view
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("[data-form-id='edit-skill-form']")
+        |> LazyHTML.attribute("data-initial-values")
+
+      assert %{"name" => "", "description" => "Keep this draft"} = Jason.decode!(json)
+      assert Synapsis.Skills.get(skill.id).description == skill.description
+
+      react_form_submit(view, "edit-skill-form", %{
+        "name" => skill.name,
+        "description" => "Saved draft"
+      })
+
+      assert_push_event(view, "dm:form:reset", %{
+        id: "edit-skill-form",
+        values: %{"description" => "Saved draft"}
+      })
+
+      assert Synapsis.Skills.get(skill.id).description == "Saved draft"
     end
 
     test "heading displays the skill name", %{conn: conn, skill: skill} do
@@ -84,13 +121,12 @@ defmodule SynapsisWeb.SkillLive.ShowTest do
       {:ok, view, _html} = live(conn, ~p"/settings/skills/#{skill.id}")
 
       view
-      |> form("form", %{
+      |> react_form_submit("edit-skill-form", %{
         "name" => skill.name,
         "description" => skill.description,
         "system_prompt_fragment" => skill.system_prompt_fragment,
         "scope" => "global"
       })
-      |> render_submit()
 
       updated = Synapsis.Skills.get(skill.id)
       assert updated.scope == "global"
@@ -100,13 +136,12 @@ defmodule SynapsisWeb.SkillLive.ShowTest do
       {:ok, view, _html} = live(conn, ~p"/settings/skills/#{skill.id}")
 
       view
-      |> form("form", %{
+      |> react_form_submit("edit-skill-form", %{
         "name" => skill.name,
         "description" => skill.description,
         "system_prompt_fragment" => "New specialized prompt for testing.",
         "scope" => "global"
       })
-      |> render_submit()
 
       updated = Synapsis.Skills.get(skill.id)
       assert updated.system_prompt_fragment == "New specialized prompt for testing."

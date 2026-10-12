@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.ProviderLive.Index do
   use SynapsisWeb, :live_view
+  use SynapsisWeb.ReactFormEvents
 
   @custom_presets [
     %{name: "", type: "openai", base_url: "", label: "OpenAI Compatible", custom: true},
@@ -33,16 +34,21 @@ defmodule SynapsisWeb.ProviderLive.Index do
       Synapsis.Providers.preset_providers()
       |> Enum.find(&(&1.name == name))
 
-    {:noreply, assign(socket, selected_preset: Map.put(preset, :custom, false))}
+    {:noreply,
+     socket
+     |> reset_react_form("create-provider-form")
+     |> assign(selected_preset: Map.put(preset, :custom, false))}
   end
 
   def handle_event("select_custom", %{"type" => type}, socket) do
     preset = Enum.find(@custom_presets, &(&1.type == type))
-    {:noreply, assign(socket, selected_preset: preset)}
+
+    {:noreply,
+     socket |> reset_react_form("create-provider-form") |> assign(selected_preset: preset)}
   end
 
   def handle_event("back_to_presets", _params, socket) do
-    {:noreply, assign(socket, selected_preset: nil)}
+    {:noreply, socket |> reset_react_form("create-provider-form") |> assign(selected_preset: nil)}
   end
 
   def handle_event("create_provider", params, socket) do
@@ -166,7 +172,22 @@ defmodule SynapsisWeb.ProviderLive.Index do
                 </span>
               </div>
             </:title>
-            <.dm_form for={to_form(%{})} phx-submit="create_provider" class="space-y-3">
+            <.react_form
+              for={to_form(%{})}
+              id="create-provider-form"
+              values={
+                %{
+                  "name" => @selected_preset.name,
+                  "base_url" => @selected_preset.base_url,
+                  "api_key" => ""
+                }
+              }
+              draft={react_form_draft(assigns, "create-provider-form")}
+              structure={@selected_preset}
+              phx-submit="create_provider"
+              class="space-y-3"
+            >
+              <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#191 --%>
               <.dm_input
                 id="provider-name"
                 type="text"
@@ -227,7 +248,7 @@ defmodule SynapsisWeb.ProviderLive.Index do
                   <% end %>
                 </.dm_btn>
               </:actions>
-            </.dm_form>
+            </.react_form>
           </.dm_card>
         <% else %>
           <div class="mb-6">

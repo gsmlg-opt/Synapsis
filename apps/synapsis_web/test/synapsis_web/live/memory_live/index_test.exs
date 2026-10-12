@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.MemoryLive.IndexTest do
   use SynapsisWeb.ConnCase
+  import SynapsisWeb.ReactFormHelpers
 
   alias Synapsis.Memory
 
@@ -84,14 +85,13 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
       view |> element("el-dm-button", "New Memory") |> render_click()
 
       view
-      |> form("#create-memory-form", %{
+      |> react_form_submit("create-memory-form", %{
         "scope" => "shared",
         "kind" => "fact",
         "title" => "New fact",
         "summary" => "This is a new fact",
         "tags" => "tag1, tag2"
       })
-      |> render_submit()
 
       html = render(view)
       assert html =~ "Memory saved"

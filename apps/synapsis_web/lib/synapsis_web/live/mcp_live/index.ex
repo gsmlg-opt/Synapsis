@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.MCPLive.Index do
   use SynapsisWeb, :live_view
+  use SynapsisWeb.ReactFormEvents
   require Logger
 
   alias Synapsis.MCPConfigs
@@ -15,7 +16,10 @@ defmodule SynapsisWeb.MCPLive.Index do
        configs: [],
        page_title: "MCP Servers",
        plugin_states: %{},
-       custom_form: %{}
+       custom_form: %{},
+       show_form: false,
+       show_import: false,
+       modal_error: nil
      )}
   end
 
@@ -30,26 +34,58 @@ defmodule SynapsisWeb.MCPLive.Index do
   end
 
   defp apply_action(socket, :new, _params) do
-    assign(socket, show_form: true, show_import: false, custom_form: %{"transport" => "stdio"})
+    socket
+    |> reset_react_form("mcp-create-form")
+    |> clear_flash(:error)
+    |> assign(
+      show_form: true,
+      show_import: false,
+      modal_error: nil,
+      custom_form: %{"transport" => "stdio"}
+    )
   end
 
   defp apply_action(socket, :index, _params) do
-    assign(socket, show_form: false, show_import: false)
+    assign(socket, show_form: false)
   end
 
   @impl true
   def handle_event("show_import", _params, socket) do
-    {:noreply, assign(socket, show_import: true, import_json: "")}
+    socket =
+      socket
+      |> assign(show_import: true, show_form: false, modal_error: nil)
+      |> clear_flash(:error)
+      |> reset_react_form("mcp-import-form", %{"json" => ""})
+
+    socket =
+      if socket.assigns.live_action == :new,
+        do: push_patch(socket, to: ~p"/settings/mcp"),
+        else: socket
+
+    {:noreply, socket}
   end
 
   def handle_event("hide_import", _params, socket) do
-    {:noreply, assign(socket, show_import: false)}
+    {:noreply,
+     socket
+     |> reset_react_form("mcp-import-form")
+     |> assign(show_import: false, modal_error: nil)
+     |> clear_flash(:error)}
+  end
+
+  def handle_event("hide_create", _params, socket) do
+    {:noreply,
+     socket
+     |> reset_react_form("mcp-create-form")
+     |> assign(show_form: false, show_import: false, modal_error: nil)
+     |> clear_flash(:error)
+     |> push_patch(to: ~p"/settings/mcp")}
   end
 
   def handle_event("import_json", %{"json" => json}, socket) do
     case parse_mcp_json(json) do
       {:ok, servers} when map_size(servers) == 0 ->
-        {:noreply, put_flash(socket, :error, "No MCP servers found in JSON")}
+        {:noreply, modal_error(socket, "No MCP servers found in JSON")}
 
       {:ok, servers} ->
         configured = Enum.map(socket.assigns.configs, & &1.name) |> MapSet.new()
@@ -64,12 +100,13 @@ defmodule SynapsisWeb.MCPLive.Index do
 
         {:noreply,
          socket
-         |> assign(show_import: false, configs: list_configs())
+         |> assign(show_import: false, modal_error: nil, configs: list_configs())
+         |> reset_react_form("mcp-import-form")
          |> put_flash(:info, msg)}
 
       {:error, reason} ->
         Logger.warning("mcp_import_invalid_json", reason: inspect(reason))
-        {:noreply, put_flash(socket, :error, "Invalid JSON format")}
+        {:noreply, modal_error(socket, "Invalid JSON format")}
     end
   end
 
@@ -95,9 +132,10 @@ defmodule SynapsisWeb.MCPLive.Index do
       {:ok, _config} ->
         {:noreply,
          socket
-         |> assign(configs: list_configs(), show_form: false)
+         |> assign(configs: list_configs(), show_form: false, modal_error: nil)
+         |> reset_react_form("mcp-create-form")
          |> put_flash(:info, "MCP server added")
-         |> push_navigate(to: ~p"/settings/mcp")}
+         |> push_patch(to: ~p"/settings/mcp")}
 
       {:error, %Ecto.Changeset{errors: errors}} ->
         msg =
@@ -112,10 +150,10 @@ defmodule SynapsisWeb.MCPLive.Index do
               "Failed to add MCP server"
           end
 
-        {:noreply, put_flash(socket, :error, msg)}
+        {:noreply, modal_error(socket, msg)}
 
       {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Failed to add MCP server")}
+        {:noreply, modal_error(socket, "Failed to add MCP server")}
     end
   end
 
@@ -404,96 +442,134 @@ defmodule SynapsisWeb.MCPLive.Index do
 
       <div class="flex justify-between items-center mb-6">
         <h1 class="text-2xl font-bold">MCP Servers</h1>
-        <div :if={!@show_form} class="flex gap-2">
+        <div class="flex gap-2">
           <.dm_btn variant="ghost" size="sm" phx-click="show_import">
             <.dm_mdi name="code-json" class="w-4 h-4 mr-1" /> Import JSON
           </.dm_btn>
-          <.dm_link navigate={~p"/settings/mcp/new"}>
+          <.dm_link patch={~p"/settings/mcp/new"}>
             <.dm_btn variant="primary" size="sm">+ Add MCP Server</.dm_btn>
           </.dm_link>
         </div>
       </div>
 
       <%!-- Import JSON form --%>
-      <.dm_card :if={@show_import} variant="bordered" class="mb-6">
-        <div class="flex items-center gap-3 mb-4">
-          <.dm_btn variant="ghost" size="sm" phx-click="hide_import">
-            &larr; Back
-          </.dm_btn>
-          <h2 class="text-lg font-semibold">Import MCP Servers from JSON</h2>
-        </div>
-        <p class="text-sm text-on-surface-variant mb-3">
-          Paste JSON in Claude Code
-          <code class="text-xs bg-surface-container px-1 rounded">mcp.json</code>
-          format.
-          Supports both <code class="text-xs bg-surface-container px-1 rounded">mcpServers</code>
-          wrapper and bare server objects.
-        </p>
-        <details class="mb-3">
-          <summary class="text-xs text-on-surface-variant cursor-pointer hover:text-on-surface-variant">
-            Example format
-          </summary>
-          <pre class="text-xs bg-surface-container p-3 rounded mt-1 overflow-x-auto"><code>{mcp_import_example()}</code></pre>
-        </details>
-        <.dm_form for={%{}} phx-submit="import_json">
-          <.dm_textarea
-            name="json"
-            value=""
-            rows={10}
-            placeholder={mcp_import_placeholder()}
-            label="JSON"
-          />
-          <div class="flex gap-2 mt-3">
-            <.dm_btn type="submit" variant="primary">Import</.dm_btn>
-            <.dm_btn type="button" variant="ghost" phx-click="hide_import">Cancel</.dm_btn>
+      <.dm_modal
+        :if={@show_import}
+        id="mcp-import-modal"
+        size="lg"
+        class="synapsis-mcp-modal"
+        phx-hook="MCPFormModal"
+        data-close-event="hide_import"
+      >
+        <:title>Import MCP Servers from JSON</:title>
+        <:body>
+          <div
+            :if={@modal_error}
+            role="alert"
+            aria-live="polite"
+            class="mb-4 rounded-lg border border-error bg-error-container p-3 text-sm text-on-error-container"
+          >
+            {@modal_error}
           </div>
-        </.dm_form>
-      </.dm_card>
+          <p class="text-sm text-on-surface-variant mb-3">
+            Paste JSON in Claude Code
+            <code class="text-xs bg-surface-container px-1 rounded">mcp.json</code>
+            format.
+            Supports both <code class="text-xs bg-surface-container px-1 rounded">mcpServers</code>
+            wrapper and bare server objects.
+          </p>
+          <details class="mb-3">
+            <summary class="text-xs text-on-surface-variant cursor-pointer hover:text-on-surface-variant">
+              Example format
+            </summary>
+            <pre class="text-xs bg-surface-container p-3 rounded mt-1 overflow-x-auto"><code>{mcp_import_example()}</code></pre>
+          </details>
+          <.react_form
+            for={%{}}
+            id="mcp-import-form"
+            class="space-y-4"
+            draft={react_form_draft(assigns, "mcp-import-form")}
+            phx-submit="import_json"
+          >
+            <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#191 - preserve placeholder and textarea layout attributes. --%>
+            <.dm_textarea
+              id="mcp-import-json"
+              autofocus
+              name="json"
+              value=""
+              rows={10}
+              placeholder={mcp_import_placeholder()}
+              label="JSON"
+            />
+            <div class="flex gap-2 mt-3">
+              <.dm_btn type="submit" variant="primary">Import</.dm_btn>
+              <.dm_btn type="button" variant="ghost" phx-click="hide_import">Cancel</.dm_btn>
+            </div>
+          </.react_form>
+        </:body>
+      </.dm_modal>
 
-      <%= if @show_form do %>
-        <.dm_card variant="bordered" class="mb-6">
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-semibold">New MCP Server</h2>
-            <.dm_link
-              navigate={~p"/settings/mcp"}
-              class="text-on-surface-variant hover:text-on-surface text-sm"
-            >
-              Cancel
-            </.dm_link>
+      <.dm_modal
+        :if={@show_form}
+        id="mcp-create-modal"
+        size="lg"
+        class="synapsis-mcp-modal"
+        phx-hook="MCPFormModal"
+        data-close-event="hide_create"
+      >
+        <:title>New MCP Server</:title>
+        <:body>
+          <div
+            :if={@modal_error}
+            role="alert"
+            aria-live="polite"
+            class="mb-4 rounded-lg border border-error bg-error-container p-3 text-sm text-on-error-container"
+          >
+            {@modal_error}
           </div>
-          <.dm_form
+          <.react_form
             for={%{}}
             id="mcp-create-form"
+            class="space-y-4"
+            values={@custom_form}
+            draft={react_form_draft(assigns, "mcp-create-form")}
+            structure={@custom_transport}
             phx-submit="create_config"
             phx-change="change_custom_config"
           >
+            <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#191 - preserve required, placeholders and textarea layout attributes. --%>
             <.dm_input
               type="text"
+              id="mcp-create-name"
+              autofocus
               name="name"
               value={form_value(@custom_form, "name")}
               placeholder="Server name"
               required
               label="Name"
             />
-            <.dm_select
+            <.dm_react_field
+              type="select"
               name="transport"
               label="Transport"
               options={[
-                {"stdio", "stdio"},
-                {"streamable_http", "Streamable HTTP"},
-                {"sse", "SSE"}
+                %{value: "stdio", label: "stdio"},
+                %{value: "streamable_http", label: "Streamable HTTP"},
+                %{value: "sse", label: "SSE"}
               ]}
-              value={@custom_transport}
             />
-            <div :if={@custom_transport in ["streamable_http", "sse"]}>
+            <div :if={@custom_transport in ["streamable_http", "sse"]} class="space-y-4">
               <.dm_input
                 type="text"
+                id="mcp-create-url"
                 name="url"
+                required
                 value={form_value(@custom_form, "url")}
                 placeholder="http://localhost:7331/mcp"
                 label="URL"
               />
               <.dm_textarea
+                id="mcp-create-headers"
                 name="headers"
                 value={form_value(@custom_form, "headers")}
                 rows={4}
@@ -501,15 +577,18 @@ defmodule SynapsisWeb.MCPLive.Index do
                 label="Headers (Name: Value, one per line)"
               />
             </div>
-            <div :if={@custom_transport == "stdio"}>
+            <div :if={@custom_transport == "stdio"} class="space-y-4">
               <.dm_input
                 type="text"
+                id="mcp-create-command"
                 name="command"
+                required
                 value={form_value(@custom_form, "command")}
                 placeholder="e.g. npx"
                 label="Command"
               />
               <.dm_textarea
+                id="mcp-create-args"
                 name="args"
                 value={form_value(@custom_form, "args")}
                 rows={3}
@@ -517,6 +596,7 @@ defmodule SynapsisWeb.MCPLive.Index do
                 label="Arguments (one per line)"
               />
               <.dm_textarea
+                id="mcp-create-env"
                 name="env"
                 rows={3}
                 placeholder="KEY=VALUE"
@@ -527,17 +607,21 @@ defmodule SynapsisWeb.MCPLive.Index do
             <div>
               <input type="hidden" name="enabled" value="false" />
               <.dm_checkbox
+                id="mcp-create-enabled"
                 name="enabled"
                 value="true"
                 label="Enabled"
               />
             </div>
-            <.dm_btn type="submit" variant="primary">
-              Add MCP Server
-            </.dm_btn>
-          </.dm_form>
-        </.dm_card>
-      <% end %>
+            <:actions>
+              <.dm_btn type="button" variant="ghost" phx-click="hide_create">Cancel</.dm_btn>
+              <.dm_btn type="submit" variant="primary">
+                Add MCP Server
+              </.dm_btn>
+            </:actions>
+          </.react_form>
+        </:body>
+      </.dm_modal>
 
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <.dm_card
@@ -663,7 +747,7 @@ defmodule SynapsisWeb.MCPLive.Index do
         </.dm_card>
       </div>
 
-      <div :if={@configs == [] && !@show_form} class="text-center text-on-surface-variant py-12">
+      <div :if={@configs == []} class="text-center text-on-surface-variant py-12">
         No MCP servers configured. Click "+ Add MCP Server" to get started.
       </div>
     </.settings_layout>
@@ -691,6 +775,10 @@ defmodule SynapsisWeb.MCPLive.Index do
     |> String.split("\n", trim: true)
     |> List.first("")
     |> String.slice(0, 200)
+  end
+
+  defp modal_error(socket, message) do
+    socket |> assign(modal_error: message) |> put_flash(:error, message)
   end
 
   defp form_value(form, key, default \\ "") when is_map(form) do

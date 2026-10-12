@@ -45,6 +45,7 @@ defmodule SynapsisWeb do
       use PhoenixDuskmoon.Component
       use PhoenixDuskmoon.ArtComponent
 
+      import SynapsisWeb.ReactForms
       import SynapsisWeb.CoreComponents
 
       alias Phoenix.LiveView.JS

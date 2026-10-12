@@ -1,6 +1,8 @@
 # ADR-007: Pure LiveView UI (Removes the React ChatApp)
 
-## Status: Accepted
+## Status: Accepted, partially superseded
+
+[ADR-010](ADR-010-react-form-islands.md) permits published DuskMoon React Form islands while preserving LiveView page ownership. The pure-LiveView chat decision remains in effect until the separate chat migration phase.
 
 Partially supersedes [ADR-005 (LiveView + React Hybrid)](ADR-005-liveview-react-hybrid.md):
 the LiveView-owns-pages decision stands; the "mount React via `phx-hook` for the

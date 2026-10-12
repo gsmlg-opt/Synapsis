@@ -1,6 +1,8 @@
 defmodule SynapsisWeb.AgentLive.AgentsTest do
   use SynapsisWeb.ConnCase
 
+  import SynapsisWeb.ReactFormHelpers
+
   alias Synapsis.{AgentConfigs, AgentSkills, Providers, Skills, Toolsets}
 
   setup do
@@ -42,7 +44,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
 
       {:ok, view, _html} = live(conn, ~p"/agent/agents/new")
 
-      render_submit(view, "save_agent", %{
+      react_form_submit(view, "agent-config-form", %{
         "agent" => %{
           "name" => "researcher",
           "label" => "Researcher",
@@ -78,7 +80,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       {:ok, view, _html} = live(conn, ~p"/agent/agents/#{agent.id}/config")
 
       view
-      |> form("form[phx-submit='save_agent']", %{
+      |> react_form_submit("agent-config-form", %{
         "agent" => %{
           "label" => "Updated Editor",
           "description" => "Updated",
@@ -92,7 +94,6 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
         },
         "skill_ids" => []
       })
-      |> render_submit()
 
       updated = AgentConfigs.get(agent.id)
       assert updated.label == "Updated Editor"
@@ -100,8 +101,107 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       assert updated.toolset_ids == []
       assert updated.permission_mode == "yolo"
       :ok = refute_redirected(view)
-      assert has_element?(view, "form#agent-config-form")
+      assert has_element?(view, "[data-form-id='agent-config-form']")
       assert render(view) =~ "Updated Editor"
+    end
+
+    test "preserves typed fields and grouped selections across config tabs", %{conn: conn} do
+      {:ok, agent} = AgentConfigs.create(%{name: "draft-agent", label: "Draft Agent"})
+      {:ok, toolset} = Toolsets.create(%{name: "draft-readers", tool_names: ["file_read"]})
+      {:ok, skill} = Skills.create(%{name: "draft-style", scope: "global"})
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+
+      react_form_change(view, "agent-config-form", %{
+        "agent" => %{
+          "label" => "Edited draft",
+          "toolset_ids" => [toolset.id],
+          "max_tokens" => 1024
+        },
+        "skill_ids" => [skill.id]
+      })
+
+      view
+      |> element("button[phx-click='switch_config_tab'][phx-value-tab='runtime']")
+      |> render_click()
+
+      react_form_submit(view, "agent-config-form", %{})
+      updated = AgentConfigs.get(agent.id)
+      assert updated.label == "Edited draft"
+      assert updated.max_tokens == 1024
+      assert updated.toolset_ids == [toolset.id]
+      assert AgentSkills.list_skill_ids(agent.id) == [skill.id]
+    end
+
+    test "availability changes preserve pending skill and configuration drafts", %{conn: conn} do
+      {:ok, agent} = AgentConfigs.create(%{name: "availability-draft", label: "Original"})
+      {:ok, toolset} = Toolsets.create(%{name: "availability-readers", tool_names: ["file_read"]})
+      {:ok, skill} = Skills.create(%{name: "availability-style", scope: "global"})
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+
+      react_form_change(view, "agent-config-form", %{
+        "agent" => %{
+          "label" => "Pending label",
+          "toolset_ids" => [toolset.id],
+          "max_tokens" => 2048
+        },
+        "skill_ids" => [skill.id]
+      })
+
+      view
+      |> element("button[phx-click='switch_config_tab'][phx-value-tab='management']")
+      |> render_click()
+
+      view
+      |> element("el-dm-button[phx-click='set_agent_enabled'][phx-value-enabled='false']")
+      |> render_click()
+
+      view
+      |> element("button[phx-click='switch_config_tab'][phx-value-tab='overview']")
+      |> render_click()
+
+      react_form_submit(view, "agent-config-form", %{})
+      updated = AgentConfigs.get(agent.id)
+      refute updated.enabled
+      assert updated.label == "Pending label"
+      assert updated.max_tokens == 2048
+      assert updated.toolset_ids == [toolset.id]
+      assert AgentSkills.list_skill_ids(agent.id) == [skill.id]
+    end
+
+    test "external Save Agent targets the current native form after remounts", %{conn: conn} do
+      {:ok, agent} = AgentConfigs.create(%{name: "external-save", label: "External Save"})
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+
+      assert_save_target = fn ->
+        [mount_id] =
+          view
+          |> element("[data-form-id='agent-config-form']")
+          |> render()
+          |> LazyHTML.from_fragment()
+          |> LazyHTML.query("[data-form-id]")
+          |> LazyHTML.attribute("id")
+
+        assert has_element?(
+                 view,
+                 "button[type='submit'][form='#{mount_id}-native']",
+                 "Save Agent"
+               )
+
+        mount_id
+      end
+
+      initial_mount = assert_save_target.()
+
+      view
+      |> element("button[phx-click='switch_config_tab'][phx-value-tab='runtime']")
+      |> render_click()
+
+      runtime_mount = assert_save_target.()
+      refute runtime_mount == initial_mount
+
+      react_form_submit(view, "agent-config-form", %{"agent" => %{"label" => "Saved externally"}})
+      refute assert_save_target.() == runtime_mount
+      assert AgentConfigs.get(agent.id).label == "Saved externally"
     end
 
     test "opens config page by agent name from sessions links", %{conn: conn} do
@@ -111,7 +211,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
 
       assert html =~ "Main Agent"
       assert html =~ agent.id
-      assert has_element?(view, "form#agent-config-form")
+      assert has_element?(view, "[data-form-id='agent-config-form']")
       assert has_element?(view, "button[phx-click='switch_config_tab'][phx-value-tab='overview']")
       assert_unique_form_ids(html)
     end
@@ -126,12 +226,16 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
 
       {:ok, view, _html} = live(conn, ~p"/agent/agents/#{agent.id}/config")
 
-      render_submit(view, "save_agent", %{
-        "agent" => %{
-          "label" => "Reviewer",
-          "enabled" => "true"
+      render_hook(view, "save_agent", %{
+        "id" => "agent-config-form",
+        "values" => %{
+          "agent" => %{
+            "label" => "Reviewer",
+            "enabled" => "true"
+          },
+          "skill_ids" => []
         },
-        "skill_ids" => []
+        "revision" => 1
       })
 
       assert AgentConfigs.get(agent.id).permission_mode == "restrict"
@@ -151,7 +255,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
 
       {:ok, view, _html} = live(conn, ~p"/agent/agents/#{agent.id}/config")
 
-      render_submit(view, "save_agent", %{
+      react_form_submit(view, "agent-config-form", %{
         "agent" => %{
           "label" => "Picker",
           "provider" => "",
@@ -181,7 +285,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
 
       {:ok, view, _html} = live(conn, ~p"/agent/agents/#{agent.id}/config")
 
-      render_submit(view, "save_agent", %{
+      react_form_submit(view, "agent-config-form", %{
         "agent" => %{
           "label" => "Fallback Picker",
           "fallback_models" => "",
@@ -315,7 +419,11 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
                "input[name='agent[toolset_ids][]'][value='#{toolset.id}'][checked]"
              )
 
-      assert has_element?(view, "form#agent-config-form el-dm-button[type='submit']", "Save")
+      assert has_element?(
+               view,
+               "[data-form-id='agent-config-form'] el-dm-button[type='submit']",
+               "Save"
+             )
     end
 
     test "config tools tab can add and remove multiple toolsets", %{conn: conn} do
@@ -358,7 +466,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
              )
 
       view
-      |> form("form[phx-submit='save_agent']", %{
+      |> react_form_submit("agent-config-form", %{
         "agent" => %{
           "label" => "Tool User",
           "toolset_ids" => [reader_toolset.id, mcp_toolset.id],
@@ -367,7 +475,6 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
         },
         "skill_ids" => []
       })
-      |> render_submit()
 
       updated = AgentConfigs.get(agent.id)
       assert updated.toolset_ids == [reader_toolset.id, mcp_toolset.id]
@@ -375,7 +482,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       assert render(view) =~ "mcp:docs:search"
 
       view
-      |> form("form[phx-submit='save_agent']", %{
+      |> react_form_submit("agent-config-form", %{
         "agent" => %{
           "label" => "Tool User",
           "toolset_ids" => [mcp_toolset.id],
@@ -384,7 +491,6 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
         },
         "skill_ids" => []
       })
-      |> render_submit()
 
       updated = AgentConfigs.get(agent.id)
       assert updated.toolset_ids == [mcp_toolset.id]
@@ -582,19 +688,17 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       |> render_click()
 
       view
-      |> form("form[phx-submit='delete_agent']", %{
+      |> react_form_submit("agent-delete-form", %{
         "confirmation" => "delete temporary"
       })
-      |> render_submit()
 
       assert AgentConfigs.get(agent.id)
       assert render(view) =~ "Type delete agent temporary to confirm"
 
       view
-      |> form("form[phx-submit='delete_agent']", %{
+      |> react_form_submit("agent-delete-form", %{
         "confirmation" => "delete agent temporary"
       })
-      |> render_submit()
 
       refute AgentConfigs.get(agent.id)
       assert_redirect(view, ~p"/agent/agents")
@@ -611,7 +715,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
 
       html = render(view)
       refute html =~ "Delete Agent"
-      refute has_element?(view, "form[phx-submit='delete_agent']")
+      refute has_element?(view, "[data-form-id='agent-delete-form']")
       assert html =~ "Default agent cannot be deleted"
     end
   end

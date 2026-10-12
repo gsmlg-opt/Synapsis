@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.MCPLive.Show do
   use SynapsisWeb, :live_view
+  use SynapsisWeb.ReactFormEvents
   require Logger
 
   alias Synapsis.{MCPConfig, MCPConfigs}
@@ -61,7 +62,10 @@ defmodule SynapsisWeb.MCPLive.Show do
   end
 
   defp finish_update(socket, config) do
-    socket = assign(socket, config: config, form_values: form_values_from_config(config))
+    socket =
+      socket
+      |> assign(config: config, form_values: form_values_from_config(config))
+      |> reset_react_form("mcp-config-form", form_values_from_config(config))
 
     if config.enabled do
       put_flash(socket, :info, "MCP server updated")
@@ -173,7 +177,8 @@ defmodule SynapsisWeb.MCPLive.Show do
       "args" => format_args(config.args),
       "url" => config.url || "",
       "env" => format_env(config.env),
-      "headers" => format_headers(config.headers)
+      "headers" => format_headers(config.headers),
+      "enabled" => config.enabled
     }
   end
 
@@ -194,32 +199,33 @@ defmodule SynapsisWeb.MCPLive.Show do
       <h1 class="text-2xl font-bold mb-6">{@config.name}</h1>
 
       <.dm_card variant="bordered">
-        <.dm_form
+        <.react_form
           for={%{}}
           id="mcp-config-form"
+          class="space-y-4"
+          values={@form_values}
+          draft={react_form_draft(assigns, "mcp-config-form")}
+          structure={form_value(@form_values, "transport", "stdio")}
           phx-submit="update_config"
           phx-change="change_config_form"
         >
-          <.dm_select
+          <.dm_react_field
+            type="select"
             name="transport"
             label="Transport"
             options={[
-              {"stdio", "stdio"},
-              {"streamable_http", "Streamable HTTP"},
-              {"sse", "SSE"}
+              %{value: "stdio", label: "stdio"},
+              %{value: "streamable_http", label: "Streamable HTTP"},
+              %{value: "sse", label: "SSE"}
             ]}
-            value={form_value(@form_values, "transport", "stdio")}
           />
 
-          <div :if={form_value(@form_values, "transport", "stdio") == "stdio"}>
-            <.dm_input
-              type="text"
-              name="command"
-              value={form_value(@form_values, "command")}
-              label="Command"
-            />
+          <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#191 - preserve textarea rows and placeholders. --%>
+          <div :if={form_value(@form_values, "transport", "stdio") == "stdio"} class="space-y-4">
+            <.dm_react_field type="text" name="command" label="Command" />
 
             <.dm_textarea
+              id="mcp-config-args"
               name="args"
               rows={3}
               label="Arguments (one per line)"
@@ -227,6 +233,7 @@ defmodule SynapsisWeb.MCPLive.Show do
             />
 
             <.dm_textarea
+              id="mcp-config-env"
               name="env"
               rows={4}
               placeholder="GITHUB_TOKEN=ghp_xxx\nAPI_KEY=sk-xxx"
@@ -235,15 +242,14 @@ defmodule SynapsisWeb.MCPLive.Show do
             />
           </div>
 
-          <div :if={form_value(@form_values, "transport", "stdio") in ["streamable_http", "sse"]}>
-            <.dm_input
-              type="text"
-              name="url"
-              value={form_value(@form_values, "url")}
-              label="URL"
-            />
+          <div
+            :if={form_value(@form_values, "transport", "stdio") in ["streamable_http", "sse"]}
+            class="space-y-4"
+          >
+            <.dm_react_field type="text" name="url" label="URL" />
 
             <.dm_textarea
+              id="mcp-config-headers"
               name="headers"
               rows={4}
               placeholder="Authorization: Bearer token"
@@ -255,6 +261,7 @@ defmodule SynapsisWeb.MCPLive.Show do
           <div>
             <input type="hidden" name="enabled" value="false" />
             <.dm_checkbox
+              id="mcp-config-enabled"
               name="enabled"
               value="true"
               checked={@config.enabled}
@@ -265,7 +272,7 @@ defmodule SynapsisWeb.MCPLive.Show do
           <.dm_btn type="submit" variant="primary">
             Save Changes
           </.dm_btn>
-        </.dm_form>
+        </.react_form>
       </.dm_card>
     </.settings_layout>
     """

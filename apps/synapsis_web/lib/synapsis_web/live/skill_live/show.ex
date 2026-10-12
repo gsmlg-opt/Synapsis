@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.SkillLive.Show do
   use SynapsisWeb, :live_view
+  use SynapsisWeb.ReactFormEvents
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
@@ -29,11 +30,21 @@ defmodule SynapsisWeb.SkillLive.Show do
         {:noreply,
          socket
          |> assign(skill: skill)
+         |> reset_react_form("edit-skill-form", skill_form_values(skill))
          |> put_flash(:info, "Skill updated")}
 
       {:error, _} ->
         {:noreply, put_flash(socket, :error, "Failed to update skill")}
     end
+  end
+
+  defp skill_form_values(skill) do
+    %{
+      "name" => skill.name,
+      "scope" => skill.scope,
+      "description" => skill.description || "",
+      "system_prompt_fragment" => skill.system_prompt_fragment || ""
+    }
   end
 
   @impl true
@@ -49,7 +60,16 @@ defmodule SynapsisWeb.SkillLive.Show do
       <.dm_card variant="bordered">
         <:title>{@skill.name}</:title>
 
-        <.dm_form for={to_form(%{})} as={:skill} phx-submit="update_skill" class="space-y-4">
+        <.react_form
+          for={to_form(%{})}
+          as={:skill}
+          id="edit-skill-form"
+          values={skill_form_values(@skill)}
+          draft={react_form_draft(assigns, "edit-skill-form")}
+          phx-submit="update_skill"
+          class="space-y-4"
+        >
+          <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#191 --%>
           <.dm_input
             type="text"
             name="name"
@@ -58,11 +78,7 @@ defmodule SynapsisWeb.SkillLive.Show do
             label="Name"
           />
 
-          <.dm_select
-            name="scope"
-            options={[{"global", "Global"}]}
-            value={@skill.scope}
-          />
+          <.dm_react_field name="scope" type="select" options={[%{value: "global", label: "Global"}]} />
 
           <.dm_textarea
             name="description"
@@ -85,7 +101,7 @@ defmodule SynapsisWeb.SkillLive.Show do
               Save Changes
             </.dm_btn>
           </:actions>
-        </.dm_form>
+        </.react_form>
       </.dm_card>
     </.settings_layout>
     """
