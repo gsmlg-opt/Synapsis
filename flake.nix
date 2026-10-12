@@ -21,7 +21,6 @@
           buildInputs = [
             elixir
             erlang
-            pkgs.postgresql_16
             pkgs.nodejs_22
             pkgs.git
             pkgs.ripgrep
@@ -36,7 +35,6 @@
             export ERL_AFLAGS="-kernel shell_history enabled"
             echo "Synapsis dev environment loaded"
             echo "  Elixir: $(elixir --version | tail -1)"
-            echo "  PostgreSQL: $(postgres --version)"
             echo "  Node: $(node --version)"
           '';
         };
