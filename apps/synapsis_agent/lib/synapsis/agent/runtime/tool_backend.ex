@@ -12,10 +12,11 @@ defmodule Synapsis.Agent.Runtime.ToolBackend do
   their remaining budgets on resolution. Approval expiry is checked before
   dispatch. Cancellation closes pending approval ownership. The host UI is not
   wired yet.
+  Rejections before dispatch carry invocation-bound non-dispatch evidence.
   Module tasks are linked to this effect owner, retries are disabled, and a
   timeout/crash is an unknown outcome rather than proof of no side effects.
   """
-  alias Backplane.AgentRuntime.{Error, InputSchema}
+  alias Backplane.AgentRuntime.{Error, InputSchema, ToolEffects}
   alias Synapsis.Tool.{Gateway, Registry}
   alias Synapsis.Tool.Capability.Grant
 
@@ -42,9 +43,14 @@ defmodule Synapsis.Agent.Runtime.ToolBackend do
       Gateway.execute_authorized(name, input, host, grant, bound.registration)
       |> result()
     else
-      false -> error(:forbidden, "Tool operation does not match admitted authority")
-      {:error, %Error{}} = error -> error
-      {:error, reason} -> denied(reason)
+      false ->
+        reject(operation, error(:forbidden, "Tool operation does not match admitted authority"))
+
+      {:error, %Error{}} = error ->
+        reject(operation, error)
+
+      {:error, reason} ->
+        reject(operation, denied(reason))
     end
   end
 
@@ -129,5 +135,6 @@ defmodule Synapsis.Agent.Runtime.ToolBackend do
        Error.new(:forbidden, "Host tool authorization rejected", details: %{reason: reason})}
 
   defp denied(_), do: error(:forbidden, "Host tool authorization rejected")
+  defp reject(operation, {:error, %Error{} = error}), do: ToolEffects.reject(operation, error)
   defp error(class, message), do: {:error, Error.new(class, message)}
 end

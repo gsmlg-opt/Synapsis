@@ -1,7 +1,7 @@
 defmodule Synapsis.Agent.Runtime.ToolBackendTest do
   use ExUnit.Case, async: false
 
-  alias Backplane.AgentRuntime.{Conversation, Error}
+  alias Backplane.AgentRuntime.{Conversation, Error, ToolEffects}
   alias Synapsis.Agent.Runtime.ToolRegistry
   alias Synapsis.Agent.TestSupport.BackplaneRuntimeProof, as: Proof
   alias Synapsis.Tool.Capability.{Grant, PolicySnapshot}
@@ -79,21 +79,37 @@ defmodule Synapsis.Agent.Runtime.ToolBackendTest do
     operation = %{
       tool_name: ctx.name,
       run_id: ctx.run_id,
+      incarnation: 1,
+      step_id: "step",
+      attempt_id: "attempt",
+      invocation_id: "invocation",
       tool_revision: 1,
       arguments: %{"text" => "hello"},
       backend_context: admitted.registry.tools[ctx.name].backend_context
     }
 
     for {key, value} <- [run_id: "another", tool_name: "another", tool_revision: 2] do
-      assert {:error, %Error{class: :forbidden}} =
-               Synapsis.Agent.Runtime.ToolBackend.execute(Map.put(operation, key, value))
+      mismatched = Map.put(operation, key, value)
+      assert {:rejected, rejection} = Synapsis.Agent.Runtime.ToolBackend.execute(mismatched)
+
+      assert {:ok, %{is_error: true, error: %Error{class: :forbidden}}} =
+               ToolEffects.validate_rejection(rejection, mismatched)
+
+      assert {:error, %Error{class: :unknown_outcome}} =
+               ToolEffects.validate_rejection(rejection, operation)
     end
 
-    assert {:error, %Error{class: :validation}} =
-             Synapsis.Agent.Runtime.ToolBackend.execute(%{
-               operation
-               | arguments: %{"text" => 123}
-             })
+    invalid = %{operation | arguments: %{"text" => 123}}
+    assert {:rejected, rejection} = Synapsis.Agent.Runtime.ToolBackend.execute(invalid)
+
+    assert {:ok, %{is_error: true, error: %Error{class: :validation}}} =
+             ToolEffects.validate_rejection(rejection, invalid)
+
+    assert {:error, %Error{class: :unknown_outcome}} =
+             operation
+             |> Map.put(:run_id, "another")
+             |> Map.delete(:invocation_id)
+             |> Synapsis.Agent.Runtime.ToolBackend.execute()
 
     refute_receive {:executed, _, _}, 20
   end
@@ -200,9 +216,16 @@ defmodule Synapsis.Agent.Runtime.ToolBackendTest do
     pid = start_run(ctx, arguments: %{"text" => "block"}, tool_timeout_ms: 50)
     assert_receive {:executed, task, _}, 2_000
     ref = Process.monitor(task)
-    completed(ctx)
+    run_id = ctx.run_id
+
+    assert_receive {:agent_runtime, ^run_id, %{type: :run_cancelled, state: :unknown_outcome}},
+                   2_000
+
     assert_receive {:DOWN, ^ref, :process, ^task, _}, 2_000
-    assert %{is_error: true, error: %Error{class: :unknown_outcome}} = result(pid)
+    assert %{phase: :terminal, error: %Error{class: :unknown_outcome}} = Conversation.status(pid)
+    refute Enum.any?(Conversation.status(pid).messages, &(&1.role == :tool))
+    refute_receive {:agent_runtime, ^run_id, %{type: :run_completed}}, 20
+    refute_receive {:agent_runtime, ^run_id, %{type: :provider_started}}, 20
     refute_receive {:executed, _, _}, 100
   end
 
