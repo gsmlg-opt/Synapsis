@@ -111,6 +111,57 @@ defmodule Synapsis.Provider.MessageMapperTest do
              })
   end
 
+  test "replays MiniMax reasoning detail batches as a flat ordered array" do
+    first = %{"type" => "reasoning.text", "text" => "first", "signature" => "opaque"}
+    second = %{"type" => "reasoning.text", "text" => "second"}
+    third = %{"type" => "reasoning.text", "text" => "third"}
+
+    for payloads <- [[first, second, third], [[first, second], [third]]] do
+      states =
+        Enum.map(payloads, fn payload ->
+          %{
+            source_profile: "backplane",
+            source_protocol: "openai",
+            kind: "minimax_reasoning_details",
+            affinity: %{
+              profile: "backplane",
+              protocol: "openai",
+              endpoint: "http://localhost:4220/v1",
+              model: "minimax/MiniMax-M3"
+            },
+            payload: payload
+          }
+        end)
+
+      messages = [
+        @text_message,
+        %{
+          role: "assistant",
+          parts: [
+            %Synapsis.Part.Text{content: "Hello"},
+            %Synapsis.Part.Reasoning{content: "why", provider_states: states}
+          ]
+        },
+        @text_message
+      ]
+
+      opts = %{
+        model: "minimax/MiniMax-M3",
+        provider_name: "backplane",
+        base_url: "http://localhost:4220/v1"
+      }
+
+      assert {:ok, wire} = MessageMapper.build_request(:openai, messages, [], opts)
+      assistant = Enum.at(wire["messages"], 1)
+      assert assistant["reasoning_details"] == [first, second, third]
+      assert assistant["reasoning_content"] == "why"
+      assert assistant["content"] == [%{"type" => "text", "text" => "Hello"}]
+
+      assert {:error, %Backplane.AiProtocol.Error{kind: :incompatible}} =
+               MessageMapper.build_request(:openai, messages, [], %{opts | model: "changed"})
+    end
+  end
+
   test "preserves explicit false stream and MiniMax reasoning options for atom and string keys" do
     for opts <- [
           %{model: "m", provider_name: "minimax", stream: false, reasoning_split: false},

@@ -5,6 +5,7 @@ defmodule Synapsis.Agent.Nodes.Complete do
   require Logger
 
   alias Synapsis.Agent.Events.Emitter
+  alias Synapsis.Agent.Nodes.ProviderError
 
   @impl true
   @spec run(map(), map()) :: {:next, atom(), map()}
@@ -30,9 +31,6 @@ defmodule Synapsis.Agent.Nodes.Complete do
     {:next, :default, state}
   end
 
-  defp stream_error_message(%{stream_error: reason}) when is_binary(reason),
-    do: "Provider error: #{reason}"
-
-  defp stream_error_message(%{stream_error: reason}), do: "Provider error: #{inspect(reason)}"
+  defp stream_error_message(%{stream_error: reason}), do: ProviderError.message(reason)
   defp stream_error_message(_state), do: nil
 end

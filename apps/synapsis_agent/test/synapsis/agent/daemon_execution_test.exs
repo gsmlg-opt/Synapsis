@@ -74,9 +74,7 @@ defmodule Synapsis.Agent.DaemonExecutionTest do
              })
 
     assert {:ok, failed} = wait_for_run(queued.id, "failed")
-    assert failed.error =~ "Provider error: %Backplane.AiProtocol.Error{"
-    assert failed.error =~ "kind: :upstream_error"
-    assert failed.error =~ "http_status: 503"
+    assert failed.error == "Provider error (HTTP 503): OpenAI provider request failed"
 
     assert {:ok, %{ready: true, active_run_id: nil, queued_count: 0}} =
              wait_for_status(daemon, &is_nil(&1.active_run_id))

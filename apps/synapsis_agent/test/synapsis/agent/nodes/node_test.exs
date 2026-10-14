@@ -131,6 +131,57 @@ defmodule Synapsis.Agent.Nodes.NodeTest do
       assert new_state[:pending_text] == "Provider error: connection_failed"
     end
 
+    test "formats structured provider failures without exposing internal details" do
+      state =
+        CodingLoop.initial_state(%{session_id: "s1"})
+        |> Map.put(:awaiting_stream, true)
+
+      for status <- [400, 500] do
+        error = %Backplane.AiProtocol.Error{
+          kind: :upstream_error,
+          stage: :response,
+          http_status: status,
+          message: "OpenAI provider request failed",
+          request_id: "private-request-id",
+          details: %{api_key: "private-api-key", raw_body: "private-provider-body"}
+        }
+
+        assert {:next, :error, new_state} = Nodes.LLMStream.run(state, %{stream_error: error})
+        assert new_state.stream_error == error
+
+        assert new_state.pending_text ==
+                 "Provider error (HTTP #{status}): OpenAI provider request failed"
+      end
+    end
+
+    test "uses a concise fallback for unknown stream failures" do
+      state =
+        CodingLoop.initial_state(%{session_id: "s1"})
+        |> Map.put(:awaiting_stream, true)
+
+      reason = {:unexpected, %{raw_body: "private-provider-body"}}
+      assert {:next, :error, new_state} = Nodes.LLMStream.run(state, %{stream_error: reason})
+      assert new_state.stream_error == reason
+      assert new_state.pending_text == "Provider error: Provider request failed"
+    end
+
+    test "preserves HTTP status when the structured failure has no presentation message" do
+      state =
+        CodingLoop.initial_state(%{session_id: "s1"})
+        |> Map.put(:awaiting_stream, true)
+
+      error = %Backplane.AiProtocol.Error{
+        kind: :upstream_error,
+        stage: :response,
+        http_status: 503,
+        details: %{raw_body: "private-provider-body"}
+      }
+
+      assert {:next, :error, new_state} = Nodes.LLMStream.run(state, %{stream_error: error})
+      assert new_state.pending_text == "Provider error (HTTP 503): Provider request failed"
+      assert new_state.stream_error == error
+    end
+
     test "retries a failed stream with the configured fallback model" do
       state =
         CodingLoop.initial_state(%{
@@ -348,6 +399,54 @@ defmodule Synapsis.Agent.Nodes.NodeTest do
   end
 
   describe "Complete" do
+    test "publishes the safe provider message and HTTP status while preserving the error state" do
+      session_id = Ecto.UUID.generate()
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session_id}")
+
+      error = %Backplane.AiProtocol.Error{
+        kind: :upstream_error,
+        stage: :response,
+        http_status: 400,
+        message: "OpenAI provider request failed",
+        details: %{api_key: "private-api-key", raw_body: "private-provider-body"}
+      }
+
+      state =
+        CodingLoop.initial_state(%{session_id: session_id})
+        |> Map.put(:stream_error, error)
+
+      assert {:next, :default, ^state} = Nodes.Complete.run(state, %{})
+
+      assert_receive {"error",
+                      %{message: "Provider error (HTTP 400): OpenAI provider request failed"}}
+
+      assert_receive {"session_status", %{status: "error"}}
+    end
+
+    test "keeps legacy string errors unchanged in session notifications" do
+      session_id = Ecto.UUID.generate()
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session_id}")
+
+      state =
+        CodingLoop.initial_state(%{session_id: session_id})
+        |> Map.put(:stream_error, "connection_failed")
+
+      assert {:next, :default, ^state} = Nodes.Complete.run(state, %{})
+      assert_receive {"error", %{message: "Provider error: connection_failed"}}
+    end
+
+    test "does not inspect unknown errors in session notifications" do
+      session_id = Ecto.UUID.generate()
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session_id}")
+
+      state =
+        CodingLoop.initial_state(%{session_id: session_id})
+        |> Map.put(:stream_error, %{raw_body: "private-provider-body"})
+
+      assert {:next, :default, ^state} = Nodes.Complete.run(state, %{})
+      assert_receive {"error", %{message: "Provider error: Provider request failed"}}
+    end
+
     test "routes back to receive" do
       state = CodingLoop.initial_state(%{session_id: Ecto.UUID.generate()})
       assert {:next, :default, ^state} = Nodes.Complete.run(state, %{})

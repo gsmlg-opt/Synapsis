@@ -30,7 +30,7 @@ defmodule SynapsisProvider.MixProject do
   defp deps do
     [
       {:synapsis_data, in_umbrella: true},
-      {:backplane_ai_protocol, "~> 1.10.17"},
+      {:backplane_ai_protocol, "~> 1.10.20"},
       {:req, "~> 0.7"},
       {:finch, "~> 0.24"},
       {:jason, "~> 1.4"},

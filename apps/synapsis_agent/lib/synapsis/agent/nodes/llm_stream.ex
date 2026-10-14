@@ -7,6 +7,8 @@ defmodule Synapsis.Agent.Nodes.LLMStream do
 
   import Synapsis.Agent.Nodes.Helpers, only: [worker_pid: 1]
 
+  alias Synapsis.Agent.Nodes.ProviderError
+
   require Logger
 
   @impl true
@@ -87,7 +89,7 @@ defmodule Synapsis.Agent.Nodes.LLMStream do
           state
           |> Map.delete(:awaiting_stream)
           |> Map.put(:stream_error, reason)
-          |> Map.put(:pending_text, provider_error_text(reason))
+          |> Map.put(:pending_text, ProviderError.message(reason))
           |> Map.put_new(:pending_reasoning_signature, "")
 
         {:next, :error, new_state}
@@ -185,7 +187,7 @@ defmodule Synapsis.Agent.Nodes.LLMStream do
       state
       |> Map.delete(:awaiting_stream)
       |> Map.put(:stream_error, error)
-      |> Map.put(:pending_text, provider_error_text(error))
+      |> Map.put(:pending_text, ProviderError.message(error))
 
     {:next, :error, new_state}
   end
@@ -204,7 +206,4 @@ defmodule Synapsis.Agent.Nodes.LLMStream do
   end
 
   defp model_key(provider, model), do: {to_string(provider || ""), to_string(model || "")}
-
-  defp provider_error_text(reason) when is_binary(reason), do: "Provider error: #{reason}"
-  defp provider_error_text(reason), do: "Provider error: #{inspect(reason)}"
 end
