@@ -1,5 +1,5 @@
 defmodule Synapsis.Agent.DaemonTest do
-  use Synapsis.Agent.DataCase, async: false
+  use Synapsis.Agent.DaemonCase, async: false
 
   alias Synapsis.Agent.Daemon
   alias Synapsis.Agent.RunSupervisor
@@ -9,15 +9,12 @@ defmodule Synapsis.Agent.DaemonTest do
   @moduletag :tmp_dir
 
   setup do
-    Synapsis.DataCase.clear_coord("coord/agent_runs/")
-    Synapsis.DataCase.clear_coord("coord/agent_run_events/")
-    Synapsis.DataCase.clear_coord("coord/agent_run_event_ids/")
-    Synapsis.DataCase.clear_coord("coord/agent_run_idempotency/")
-    :ok
+    {daemon, _task_supervisor} = start_test_daemon()
+    %{daemon: daemon}
   end
 
-  test "status remains responsive" do
-    status = Daemon.status()
+  test "status remains responsive", %{daemon: daemon} do
+    status = Daemon.status(daemon)
     assert %DateTime{} = status.liveness_at
     assert is_list(status.active_run_ids)
     assert is_integer(status.active_count)
@@ -33,7 +30,7 @@ defmodule Synapsis.Agent.DaemonTest do
     assert {:error, :missing_prompt} = Daemon.trigger(:heartbeat, "hb-missing")
   end
 
-  test "submit forces read_only and is idempotent", %{tmp_dir: tmp_dir} do
+  test "submit forces read_only and is idempotent", %{tmp_dir: tmp_dir, daemon: daemon} do
     harness =
       SessionHarness.setup_session!(
         tmp_dir: tmp_dir,
@@ -51,17 +48,20 @@ defmodule Synapsis.Agent.DaemonTest do
       tool_profile: "dangerous"
     ]
 
-    assert {:ok, run1} = Daemon.submit("hello daemon", opts)
+    assert {:ok, run1} = Daemon.submit(daemon, "hello daemon", opts)
     assert run1.tool_profile == "read_only"
     assert run1.kind == "manual"
 
-    assert {:ok, run2} = Daemon.submit("hello daemon", opts)
+    assert {:ok, run2} = Daemon.submit(daemon, "hello daemon", opts)
     assert run2.id == run1.id
 
-    assert_run_terminal(run1.id, "completed", 20_000)
+    assert_run_terminal(daemon, run1.id, "completed", 20_000)
   end
 
-  test "two independent runs do not share coordinator state", %{tmp_dir: tmp_dir} do
+  test "independent FIFO runs retain separate sessions and summaries", %{
+    tmp_dir: tmp_dir,
+    daemon: daemon
+  } do
     h1 =
       SessionHarness.setup_session!(
         tmp_dir: tmp_dir,
@@ -84,7 +84,7 @@ defmodule Synapsis.Agent.DaemonTest do
     end)
 
     assert {:ok, r1} =
-             Daemon.submit("a",
+             Daemon.submit(daemon, "a",
                agent: h1.agent_name,
                provider: h1.provider.name,
                model: "characterization-model",
@@ -92,7 +92,7 @@ defmodule Synapsis.Agent.DaemonTest do
              )
 
     assert {:ok, r2} =
-             Daemon.submit("b",
+             Daemon.submit(daemon, "b",
                agent: h2.agent_name,
                provider: h2.provider.name,
                model: "characterization-model",
@@ -100,17 +100,17 @@ defmodule Synapsis.Agent.DaemonTest do
              )
 
     assert r1.id != r2.id
-    pid1 = RunSupervisor.whereis(r1.id)
-    pid2 = RunSupervisor.whereis(r2.id)
-    assert is_pid(pid1)
-    assert is_pid(pid2)
-    assert pid1 != pid2
+    assert_run_terminal(daemon, r1.id, "completed", 20_000)
+    assert_run_terminal(daemon, r2.id, "completed", 20_000)
 
-    assert_run_terminal(r1.id, "completed", 20_000)
-    assert_run_terminal(r2.id, "completed", 20_000)
+    first = Runs.get(r1.id)
+    second = Runs.get(r2.id)
+    assert first.session_id != second.session_id
+    assert first.summary == "run-a"
+    assert second.summary == "run-b"
   end
 
-  test "cancel produces cancelled and cannot complete later", %{tmp_dir: tmp_dir} do
+  test "cancel produces cancelled and cannot complete later", %{tmp_dir: tmp_dir, daemon: daemon} do
     harness =
       SessionHarness.setup_session!(
         tmp_dir: tmp_dir,
@@ -122,14 +122,14 @@ defmodule Synapsis.Agent.DaemonTest do
     on_exit(fn -> SessionHarness.cleanup!(harness) end)
 
     assert {:ok, run} =
-             Daemon.submit("hang",
+             Daemon.submit(daemon, "hang",
                agent: harness.agent_name,
                provider: harness.provider.name,
                model: "characterization-model",
                idempotency_key: "cancel-1"
              )
 
-    wait_until(fn -> is_pid(RunSupervisor.whereis(run.id)) end, 5_000)
+    wait_until(fn -> Daemon.status(daemon).active_run_id == run.id end, 5_000)
 
     wait_until(
       fn ->
@@ -141,15 +141,15 @@ defmodule Synapsis.Agent.DaemonTest do
       8_000
     )
 
-    assert :ok = Daemon.cancel(run.id)
-    assert_run_terminal(run.id, "cancelled", 10_000)
+    assert {:ok, %{status: "cancelled"}} = Daemon.cancel(daemon, run.id)
+    assert_run_terminal(daemon, run.id, "cancelled", 10_000)
 
     final = Runs.get(run.id)
     assert final.status == "cancelled"
     assert_receive {:provider_disconnected, _handler}, 1_000
   end
 
-  test "deadline produces timed_out", %{tmp_dir: tmp_dir} do
+  test "deadline produces timed_out", %{tmp_dir: tmp_dir, daemon: daemon} do
     harness =
       SessionHarness.setup_session!(
         tmp_dir: tmp_dir,
@@ -163,7 +163,7 @@ defmodule Synapsis.Agent.DaemonTest do
     deadline = DateTime.add(DateTime.utc_now(), 400, :millisecond)
 
     assert {:ok, run} =
-             Daemon.submit("deadline",
+             Daemon.submit(daemon, "deadline",
                agent: harness.agent_name,
                provider: harness.provider.name,
                model: "characterization-model",
@@ -171,11 +171,11 @@ defmodule Synapsis.Agent.DaemonTest do
                deadline_at: deadline
              )
 
-    assert_run_terminal(run.id, "timed_out", 10_000)
+    assert_run_terminal(daemon, run.id, "timed_out", 10_000)
     assert_receive {:provider_disconnected, _handler}, 1_000
   end
 
-  test "coordinator crash is reconciled without completing", %{tmp_dir: tmp_dir} do
+  test "run task crash is reconciled without completing", %{tmp_dir: tmp_dir, daemon: daemon} do
     harness =
       SessionHarness.setup_session!(
         tmp_dir: tmp_dir,
@@ -187,14 +187,14 @@ defmodule Synapsis.Agent.DaemonTest do
     on_exit(fn -> SessionHarness.cleanup!(harness) end)
 
     assert {:ok, run} =
-             Daemon.submit("crash-me",
+             Daemon.submit(daemon, "crash-me",
                agent: harness.agent_name,
                provider: harness.provider.name,
                model: "characterization-model",
                idempotency_key: "crash-1"
              )
 
-    wait_until(fn -> is_pid(RunSupervisor.whereis(run.id)) end, 5_000)
+    wait_until(fn -> Daemon.status(daemon).active_run_id == run.id end, 5_000)
 
     wait_until(
       fn ->
@@ -211,8 +211,9 @@ defmodule Synapsis.Agent.DaemonTest do
 
     wait_until(fn -> RunSupervisor.whereis(run.id) == nil end, 5_000)
 
-    assert %{} = Daemon.status()
-    assert {:ok, _status} = Daemon.reconcile()
+    assert %{} = Daemon.status(daemon)
+    assert {:ok, _status} = Daemon.reconcile(daemon)
+    assert_run_terminal(daemon, run.id, "failed", 10_000)
 
     stored = Runs.get(run.id)
     assert stored.status in ~w(failed unknown_outcome timed_out)
@@ -220,7 +221,7 @@ defmodule Synapsis.Agent.DaemonTest do
     assert_receive {:provider_disconnected, _handler}, 1_000
   end
 
-  defp assert_run_terminal(run_id, status, timeout_ms) do
+  defp assert_run_terminal(daemon, run_id, status, timeout_ms) do
     wait_until(
       fn ->
         match?(%{status: ^status}, Runs.get(run_id))
@@ -229,6 +230,7 @@ defmodule Synapsis.Agent.DaemonTest do
     )
 
     assert %{status: ^status} = Runs.get(run_id)
+    wait_until(fn -> Daemon.status(daemon).active_run_id != run_id end, timeout_ms)
   end
 
   defp wait_until(fun, timeout_ms) do

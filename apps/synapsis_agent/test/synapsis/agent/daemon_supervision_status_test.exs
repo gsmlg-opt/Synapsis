@@ -60,7 +60,8 @@ defmodule Synapsis.Agent.DaemonSupervisionStatusTest do
   end
 
   test "reports a ready empty state without exposing prompt data" do
-    assert {:ok, status} = wait_for_ready()
+    {daemon, _task_supervisor} = start_test_daemon()
+    assert {:ok, status} = wait_for_status(daemon, & &1.ready)
 
     assert %{
              ready: true,
