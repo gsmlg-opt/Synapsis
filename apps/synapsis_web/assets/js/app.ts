@@ -9,7 +9,14 @@ import '@duskmoon-dev/el-markdown/register'
 import '@duskmoon-dev/elements/register'
 import * as DuskmoonHooks from 'phoenix_duskmoon/hooks'
 import { DuskmoonReactForm } from 'phoenix_duskmoon/react-form'
-import { ChatImageInputHook, Hooks, observeChatInputFieldSemantics, createSynapsisReactFormHook } from '@synapsis/hooks'
+import { createDuskmoonReactChat } from 'phoenix_duskmoon/react-chat'
+import {
+  ChatImageInputHook,
+  Hooks,
+  observeChatInputFieldSemantics,
+  createSynapsisReactFormHook,
+  createSynapsisReactChat
+} from '@synapsis/hooks'
 
 // WORKAROUND(upstream): duskmoon-dev/duskmoon-elements#73
 // Preserve the upstream bridge while propagating field identity into the
@@ -118,7 +125,14 @@ try {
 const liveSocket = new LiveSocket('/live', Socket, {
   transport: window.WebSocket,
   params: { _csrf_token: csrfToken },
-  hooks: { ...DuskmoonHooks, WebComponentHook, ThemeSwitcher, ...Hooks, DuskmoonReactForm: createSynapsisReactFormHook(DuskmoonReactForm) }
+  hooks: {
+    ...DuskmoonHooks,
+    WebComponentHook,
+    ThemeSwitcher,
+    ...Hooks,
+    DuskmoonReactForm: createSynapsisReactFormHook(DuskmoonReactForm),
+    SynapsisReactChat: createSynapsisReactChat(createDuskmoonReactChat)
+  }
 })
 
 liveSocket.connect()

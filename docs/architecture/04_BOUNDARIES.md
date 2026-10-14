@@ -57,7 +57,7 @@ LiveView:  /live socket (for LiveView connections)
 
 ### synapsis_web → LiveView Pages
 
-`synapsis_web` owns all LiveView modules, HEEx templates, and function components. It depends on `synapsis_server` and defines no OTP application. LiveView owns pages and server state. Forms use published DuskMoon React islands under [ADR-010](../decisions/ADR-010-react-form-islands.md); chat remains LiveView during the first migration phase. [ADR-007](../decisions/ADR-007-pure-liveview-ui.md) documents the earlier pure-LiveView decision.
+`synapsis_web` owns all LiveView modules, HEEx templates, and function components. It depends on `synapsis_server` and defines no OTP application. LiveView owns pages and server state. Forms and chat use published DuskMoon React islands under [ADR-010](../decisions/ADR-010-react-form-islands.md) and [ADR-011](../decisions/ADR-011-react-chat-islands.md). [ADR-007](../decisions/ADR-007-pure-liveview-ui.md) documents the earlier pure-LiveView decision.
 
 **LiveView pages** (all under `SynapsisWeb.*` namespace, routed from `SynapsisServer.Router`):
 
@@ -87,10 +87,10 @@ appbar only links to Settings. The browser stores the preference in `theme`
 localStorage (`auto`, `sunshine`, or `moonlight`). Auto follows system color-scheme
 changes on every page; existing Sunshine/Moonlight preferences remain valid.
 
-`AgentLive.Sessions` is the core chat view: pure LiveView with small DOM hooks (`ScrollBottom`, `StreamingText`) for streaming UX.
+`AgentLive.Sessions` and Provider Test Chat mount `dm_react_chat`. LiveView projects canonical messages, publishes ordered streaming events, validates scoped requests, and acknowledges admission. React owns Markdown, the editable composer, attachments, and transcript scrolling; the agent runtime remains independent of the browser mount lifecycle.
 
-**Workspace packages** (Bun workspaces in `packages/`):
-- `@synapsis/hooks` — LiveView DOM hooks: `ScrollBottom`, `StreamingText`, `AgentModelPicker` (Preact)
+**Workspace packages** (npm workspaces built by DuskmoonBundler):
+- `@synapsis/hooks` — LiveView hooks, React Form compatibility glue, `SynapsisReactChat` presentation/composer, and `AgentModelPicker` (Preact)
 
 ### synapsis_server → Channel Protocol
 

@@ -93,6 +93,99 @@ code, pre, kbd, samp {
     overflow-y: auto;
   }
 
+  .synapsis-react-chat > section {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .synapsis-react-chat [data-chat-messages] {
+    padding: 1rem;
+  }
+
+  .synapsis-react-chat > section > button {
+    align-self: center;
+    min-height: 1.75rem;
+    padding-block: 0.25rem;
+    font-size: 0.75rem;
+  }
+
+  .synapsis-react-chat .chat-composer {
+    flex-shrink: 0;
+    margin: 0 0.75rem 0.75rem;
+    background: var(--color-surface-container-low);
+  }
+
+  .synapsis-react-chat .synapsis-chat-status {
+    margin: 0 0.75rem 0.5rem;
+  }
+
+  .synapsis-chat-question {
+    flex-shrink: 0;
+    margin: 0 0.75rem 0.75rem;
+    padding: 0.75rem;
+    border: 1px solid var(--color-outline-variant);
+    border-radius: var(--radius-box, 0.75rem);
+    background: var(--color-surface-container-low);
+    max-height: 40dvh;
+    overflow-y: auto;
+    overflow-wrap: anywhere;
+  }
+
+  .synapsis-chat-question-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-block: 0.5rem;
+  }
+
+  .synapsis-react-chat .chat-header {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .synapsis-react-chat .chat-bubble {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  /* WORKAROUND(upstream): duskmoon-dev/duskmoonui#76
+     Markdown must inherit the filled bubble's paired content color. */
+  .synapsis-react-chat .chat-bubble-filled > .markdown-body {
+    color: inherit;
+  }
+
+  .synapsis-react-chat .chat-bubble-filled > .markdown-body :is(a, blockquote, h6, figcaption) {
+    color: inherit;
+  }
+
+  .synapsis-react-chat .chat-bubble-filled > .markdown-body a {
+    text-decoration: underline;
+  }
+
+  /* Markdown's nested surface backgrounds retain their own text pairing. */
+  .synapsis-react-chat .chat-bubble-filled > .markdown-body :is(pre, code, kbd, th, tr:nth-child(2n)) {
+    color: var(--color-on-surface);
+  }
+
+  .synapsis-react-chat .chat-bubble pre {
+    max-height: 16rem;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: 0.75rem;
+  }
+
+  .synapsis-chat-permission {
+    margin-block: 0.75rem;
+    padding: 0.75rem;
+    border: 1px solid var(--color-warning);
+    border-radius: var(--radius-box, 0.75rem);
+    background: var(--color-warning-container);
+    color: var(--color-on-warning-container);
+  }
+
   .app-left-menu {
     --color-on-surface: var(--color-secondary-content);
     --color-on-surface-variant: color-mix(

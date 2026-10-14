@@ -3,7 +3,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
   import Phoenix.Component
 
-  alias Synapsis.Session.PendingInputStore
+  alias Synapsis.Session.{PendingInputStore, Worker}
   alias Synapsis.Session.Worker.Persistence, as: SessionPersistence
   alias Synapsis.{AgentConfigs, Sessions}
 
@@ -262,9 +262,9 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
          %{name: "morning-briefing", executed_at: DateTime.utc_now(), result: "Test result"}}
       )
 
-      html = render(view)
-      assert html =~ "morning-briefing"
-      assert html =~ "Test result"
+      render(view)
+      assert chat_json(view) =~ "morning-briefing"
+      assert chat_json(view) =~ "Test result"
     end
 
     test "ignores stale active status after a completed turn", %{conn: conn} do
@@ -280,29 +280,26 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       html = render(view)
 
       refute html =~ "Generating..."
-      refute has_element?(view, "el-dm-chat-input#message-input[disabled]")
+      assert chat_snapshot(view).admission.canSubmit
       assert {:ok, %{status: "idle"}} = Synapsis.Sessions.get(session.id)
     end
 
-    test "chat input uses DuskMoon send event and hides idle steer quick action", %{conn: conn} do
+    test "chat island owns the composer and idle steer is unavailable", %{conn: conn} do
       {:ok, session} =
         Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
 
       {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
 
-      assert has_element?(view, "el-dm-chat-input#message-input[phx-hook='WebComponentHook']")
-      refute has_element?(view, "el-dm-chat-input#message-input[clear-on-send]")
-
-      refute has_element?(
+      assert has_element?(
                view,
-               "el-dm-chat-input#message-input[duskmoon-send-quick-action='steer_message']"
+               "#agent-chat-#{session.id}[phx-hook='SynapsisReactChat'][phx-update='ignore']"
              )
 
+      refute has_element?(view, "el-dm-chat-input#message-input")
+      refute chat_snapshot(view).admission.canSteer
+
       render_hook(view, "send_message", %{"value" => "   "})
-
-      html = render_hook(view, "steer_message", %{"value" => "idle steer should not persist"})
-
-      refute html =~ "idle steer should not persist"
+      render_hook(view, "steer_message", %{"value" => "idle steer should not persist"})
       assert Sessions.get_messages(session.id) == []
     end
 
@@ -399,7 +396,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       assert Sessions.get_messages(session.id) == []
     end
 
-    test "chat input remains enabled while session is running", %{conn: conn} do
+    test "chat admits queue and steer while streaming or executing tools", %{conn: conn} do
       {:ok, session} =
         Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
 
@@ -407,18 +404,13 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
       for status <- ~w(streaming tool_executing) do
         assert {:ok, _session} = SessionPersistence.update_session_status(session.id, status)
-
         send(view.pid, {"session_status", %{status: status}})
+        render(view)
 
-        html = render(view)
-        refute has_element?(view, "el-dm-chat-input#message-input[disabled]")
+        assert %{canSubmit: true, canSteer: true, sendLabel: "Queue"} =
+                 chat_snapshot(view).admission
 
-        assert has_element?(
-                 view,
-                 "el-dm-chat-input#message-input[duskmoon-send-quick-action='steer_message']"
-               )
-
-        assert html =~ ~s(send-label="Queue")
+        assert chat_snapshot(view).runtime.phase == status
       end
     end
 
@@ -438,15 +430,15 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
         {"input_queued", %{id: "queued-prompt-1", kind: "prompt", content: "queued follow-up"}}
       )
 
-      html = render(view)
+      html = chat_json(view)
 
       assert html =~ "queued follow-up"
-      assert html =~ "Queued"
+      assert html =~ ~s("queued":true)
       assert Sessions.get_messages(session.id) == []
 
       send(view.pid, {"input_started", %{id: "queued-prompt-1", kind: "prompt"}})
 
-      html = render(view)
+      html = chat_json(view)
 
       refute html =~ "queued follow-up"
       assert Sessions.get_messages(session.id) == []
@@ -471,25 +463,25 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
         {"input_queued", %{id: "queued-prompt-2", kind: "prompt", content: "second pending"}}
       )
 
-      html = render(view)
+      html = chat_json(view)
       assert html =~ "first pending"
       assert html =~ "second pending"
 
       send(view.pid, {"done", %{}})
 
-      html = render(view)
+      html = chat_json(view)
       assert html =~ "first pending"
       assert html =~ "second pending"
 
       send(view.pid, {"input_started", %{id: "queued-prompt-1", kind: "prompt"}})
 
-      html = render(view)
+      html = chat_json(view)
       refute html =~ "first pending"
       assert html =~ "second pending"
 
       send(view.pid, {"input_started", %{id: "queued-prompt-2", kind: "prompt"}})
 
-      html = render(view)
+      html = chat_json(view)
       refute html =~ "first pending"
       refute html =~ "second pending"
     end
@@ -510,12 +502,12 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
       send(view.pid, {"session_status", %{status: "idle"}})
 
-      html = render(view)
+      html = chat_json(view)
       assert html =~ "survives idle"
 
       send(view.pid, {"input_started", %{id: "queued-prompt-1", kind: "prompt"}})
 
-      html = render(view)
+      html = chat_json(view)
       refute html =~ "survives idle"
     end
 
@@ -538,11 +530,11 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
         {"input_queued", %{id: "queued-prompt-2", kind: "prompt", content: "same prompt"}}
       )
 
-      html = render(view)
+      html = chat_json(view)
 
-      assert html =~ ~s(id="queued-input-queued-prompt-1")
-      assert html =~ ~s(id="queued-input-queued-prompt-2")
-      assert occurrence_count(html, "same prompt") == 2
+      assert html =~ ~s("id":"queued-input-queued-prompt-1")
+      assert html =~ ~s("id":"queued-input-queued-prompt-2")
+      assert Enum.count(chat_snapshot(view).messages, &(&1.content == "same prompt")) == 2
       assert Sessions.get_messages(session.id) == []
     end
 
@@ -561,7 +553,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
                       %{id: _id, kind: "prompt", content: "queued through hook"} = payload}
 
       send(view.pid, {"input_queued", payload})
-      html = render(view)
+      html = chat_json(view)
 
       assert html =~ "queued through hook"
       assert Sessions.get_messages(session.id) == []
@@ -583,9 +575,9 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       html = render_hook(view, "send_message", %{"value" => "overflow prompt"})
 
       assert html =~ "Failed to queue message"
-      assert html =~ ~s(send-label="Queue")
-      refute html =~ "Retry"
-      refute has_element?(view, "el-dm-chat-input#message-input[disabled]")
+      assert chat_snapshot(view).admission.sendLabel == "Queue"
+      refute has_element?(view, "el-dm-button[phx-click='retry']")
+      assert chat_snapshot(view).admission.canSubmit
       assert Sessions.get_messages(session.id) == []
     end
 
@@ -625,7 +617,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
          %{id: "queued-steer-1", kind: "steer", content: "prefer a smaller patch"}}
       )
 
-      html = render(view)
+      html = chat_json(view)
 
       refute html =~ "prefer a smaller patch"
       assert Sessions.get_messages(session.id) == []
@@ -639,16 +631,16 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
       send(view.pid, {"tool_use", %{tool: "file_read", tool_use_id: "tu_failed"}})
 
-      assert render(view) =~ "file_read"
+      assert chat_json(view) =~ "file_read"
 
       send(
         view.pid,
         {"tool_result", %{tool_use_id: "tu_failed", content: "Permission denied", is_error: true}}
       )
 
-      html = render(view)
+      html = chat_json(view)
 
-      assert html =~ ~s(status="error")
+      assert html =~ ~s("status":"error")
       assert html =~ "Permission denied"
     end
 
@@ -690,15 +682,607 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
       {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
 
-      html = render_hook(view, "send_message", %{"value" => "show this immediately"})
+      render_hook(view, "send_message", %{"value" => "show this immediately"})
 
-      assert html =~ "show this immediately"
+      assert chat_json(view) =~ "show this immediately"
       # The user message must be written before the agent responds.
       # Don't assert exactly 1 message — on fast CI the assistant reply can
       # already be written by the time we check.
       messages = Sessions.get_messages(session.id)
       assert Enum.any?(messages, &(&1.role == "user")), "expected a user message to be persisted"
       assert_eventually(fn -> length(Sessions.get_messages(session.id)) >= 2 end)
+    end
+  end
+
+  describe "React chat protocol" do
+    test "streaming deltas are ordered and sync recovers canonical text without changing mount data",
+         %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, view, html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      [initial] =
+        html
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("#agent-chat-#{session.id}")
+        |> LazyHTML.attribute("data-chat")
+
+      scope = chat_scope(view)
+      message_id = SynapsisWeb.AgentLive.SessionChat.live_id(session.id)
+
+      send(view.pid, {"text_delta", %{text: "hello "}})
+      render(view)
+
+      assert_push_event(view, "chat:event", %{
+        type: "chat.message",
+        message_id: ^message_id,
+        sequence: 1
+      })
+
+      assert_push_event(view, "chat:event", %{
+        type: "chat.delta",
+        message_id: ^message_id,
+        sequence: 2,
+        text: "hello "
+      })
+
+      send(view.pid, {"text_delta", %{text: "world"}})
+      render(view)
+
+      assert_push_event(view, "chat:event", %{
+        type: "chat.delta",
+        message_id: ^message_id,
+        sequence: 3,
+        text: "world"
+      })
+
+      send(view.pid, {"reasoning", %{text: "a short explanation"}})
+      render(view)
+
+      assert_push_event(view, "chat:event", %{
+        type: "chat.message",
+        message_id: ^message_id,
+        sequence: 4,
+        message: %{content: "hello world", metadata: %{reasoning: "a short explanation"}}
+      })
+
+      updated = render_hook(view, "chat.sync", scope)
+
+      assert_push_event(view, "chat:event", %{
+        type: "chat.snapshot",
+        sequences: %{^message_id => 4},
+        messages: [%{content: "hello world"}]
+      })
+
+      assert [initial] ==
+               updated
+               |> LazyHTML.from_fragment()
+               |> LazyHTML.query("#agent-chat-#{session.id}")
+               |> LazyHTML.attribute("data-chat")
+    end
+
+    test "completion replaces the transient assistant with durable ordered parts", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      send(view.pid, {"text_delta", %{text: "draft"}})
+      render(view)
+
+      {:ok, message} =
+        Synapsis.Message.append(session.id, %{
+          role: "assistant",
+          parts: [
+            %Synapsis.Part.Reasoning{content: "reason"},
+            %Synapsis.Part.ToolUse{
+              tool: "file_read",
+              tool_use_id: "tool-1",
+              input: %{path: "a.txt"},
+              status: :complete
+            },
+            %Synapsis.Part.ToolResult{tool_use_id: "tool-1", content: "file contents"},
+            %Synapsis.Part.Text{content: "final"}
+          ]
+        })
+
+      send(view.pid, {"done", %{}})
+      render(view)
+      id = message.id
+
+      assert_push_event(view, "chat:event", %{
+        type: "chat.snapshot",
+        runtime: %{active: false, phase: "idle"},
+        messages: [
+          %{
+            id: ^id,
+            content: "final",
+            actions: [%{id: "regenerate"}],
+            metadata: %{
+              parts: [
+                %{type: "reasoning"},
+                %{type: "tool_use"},
+                %{type: "tool_result"},
+                %{type: "text"}
+              ]
+            }
+          }
+        ]
+      })
+    end
+
+    test "accepted queued image sends acknowledge once and survive remount", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      set_worker_running(session)
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      params =
+        Map.merge(chat_scope(view), %{
+          "request_id" => "send-once",
+          "text" => "look",
+          "images" => [png_image_payload()]
+        })
+
+      socket = chat_socket(view)
+
+      assert {:reply, %{status: "ok"}, accepted} =
+               SynapsisWeb.AgentLive.Sessions.handle_event("chat.send", params, socket)
+
+      assert {:reply, %{status: "ok"}, _same} =
+               SynapsisWeb.AgentLive.Sessions.handle_event("chat.send", params, accepted)
+
+      assert [%{content: "look", image_parts: [%Synapsis.Part.Image{}]}] =
+               PendingInputStore.queued_prompts(session.id)
+
+      {:ok, remounted, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      assert [%{metadata: %{queued: true, parts: [%{type: "text"}, %{type: "image"}]}}] =
+               Enum.filter(chat_snapshot(remounted).messages, & &1.metadata[:queued])
+    end
+
+    test "invalid attachments and stale scope return errors without persistence", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      socket = chat_socket(view)
+
+      params =
+        Map.merge(chat_scope(view), %{
+          "request_id" => "invalid-image",
+          "text" => "must not send",
+          "images" => [%{png_image_payload() | "data" => "not-base64!"}]
+        })
+
+      assert {:reply, %{status: "error", message: "Invalid image attachment"}, _socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event("chat.send", params, socket)
+
+      assert {:reply, %{status: "error", message: "Conversation changed"}, _socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.send",
+                 %{params | "conversation_id" => "old-session"},
+                 socket
+               )
+
+      assert {:reply, %{status: "error", message: "Invalid request ID"}, rejected} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.send",
+                 %{params | "request_id" => String.duplicate("x", 129), "images" => []},
+                 socket
+               )
+
+      assert rejected.assigns.react_chat.requests == socket.assigns.react_chat.requests
+      assert Sessions.get_messages(session.id) == []
+    end
+
+    test "switching sessions resets streaming state and accepted request IDs", %{conn: conn} do
+      {:ok, first} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, second} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      set_worker_running(first)
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{first.id}")
+      old_scope = chat_scope(view)
+
+      render_hook(
+        view,
+        "chat.send",
+        Map.merge(old_scope, %{"request_id" => "old-request", "text" => "queued"})
+      )
+
+      send(view.pid, {"text_delta", %{text: "old draft"}})
+      render(view)
+
+      render_patch(view, ~p"/agent/agents/main/sessions/#{second.id}")
+      chat = chat_snapshot(view)
+      assert chat.conversation_id == second.id
+      assert chat.messages == []
+      assert chat.sequences == %{}
+      assert chat.requests == %{}
+
+      assert {:reply, %{status: "error"}, _socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.stop",
+                 old_scope,
+                 chat_socket(view)
+               )
+    end
+
+    test "active tool execution blocks regenerate and validates pending permission actions", %{
+      conn: conn
+    } do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, message} =
+        Synapsis.Message.append(session.id, %{
+          role: "assistant",
+          parts: [%Synapsis.Part.Text{content: "keep reply"}]
+        })
+
+      set_worker_running(session)
+
+      assert {:ok, _session} =
+               SessionPersistence.update_session_status(session.id, "tool_executing")
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      send(view.pid, {"session_status", %{status: "tool_executing"}})
+
+      send(
+        view.pid,
+        {"permission_request",
+         %{
+           tool: "file_write",
+           tool_use_id: "pending-tool",
+           input: %{path: "a.txt"},
+           level: "write"
+         }}
+      )
+
+      render(view)
+      scope = chat_scope(view)
+      socket = chat_socket(view)
+      assert Enum.find(chat_snapshot(view).messages, &(&1.id == message.id)).actions == []
+
+      assert {:reply, %{status: "error"}, _socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.action",
+                 Map.merge(scope, %{"action" => "regenerate", "message_id" => message.id}),
+                 socket
+               )
+
+      assert Enum.any?(Sessions.get_messages(session.id), &(&1.id == message.id))
+
+      live_id = SynapsisWeb.AgentLive.SessionChat.live_id(session.id)
+
+      params =
+        Map.merge(scope, %{
+          "action" => "approve_tool",
+          "message_id" => live_id,
+          "tool_use_id" => "unknown"
+        })
+
+      assert {:reply, %{status: "error"}, _socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event("chat.action", params, socket)
+
+      assert {:reply, %{status: "ok"}, approved} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.action",
+                 %{params | "tool_use_id" => "pending-tool"},
+                 socket
+               )
+
+      assert approved.assigns.permission_requests == []
+
+      assert {:reply, %{status: "error"}, _socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.action",
+                 %{params | "tool_use_id" => "pending-tool"},
+                 approved
+               )
+    end
+
+    test "heartbeat and code-agent panels remain scoped transcript messages", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      send(
+        view.pid,
+        {:heartbeat_completed, "config",
+         %{name: "briefing", executed_at: DateTime.utc_now(), result: "ready"}}
+      )
+
+      send(view.pid, {"code_agent_spawned", %{sub_session_id: "sub-1", prompt: "fix file"}})
+
+      send(
+        view.pid,
+        {"code_agent_event",
+         %{sub_session_id: "sub-1", event: "tool_use", payload: %{tool: "file_read"}}}
+      )
+
+      send(
+        view.pid,
+        {"code_agent_event", %{sub_session_id: "sub-1", event: "done", payload: %{text: "fixed"}}}
+      )
+
+      render(view)
+      chat = chat_snapshot(view)
+
+      assert %{
+               metadata: %{
+                 codeAgent: %{
+                   prompt: "fix file",
+                   status: "complete",
+                   completion: "fixed",
+                   tool_calls: [%{name: "file_read"}]
+                 }
+               }
+             } = Enum.find(chat.messages, &(&1.id == "code-agent-sub-1"))
+
+      heartbeat = Enum.find(chat.messages, & &1.metadata[:heartbeat])
+      assert heartbeat.content == "ready"
+
+      assert {:reply, %{status: "ok"}, socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.action",
+                 Map.merge(chat_scope(view), %{
+                   "action" => "dismiss_heartbeat",
+                   "message_id" => heartbeat.id
+                 }),
+                 chat_socket(view)
+               )
+
+      assert socket.assigns.heartbeat_notifications == []
+    end
+  end
+
+  describe "ask_user questions" do
+    test "projects registered questions and option descriptions while retaining Queue and Stop",
+         %{conn: conn} do
+      session = create_running_question_session()
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      options = [%{"label" => "Small change", "description" => "Keep the patch focused"}]
+      {ref, task} = start_user_question(session, options)
+
+      assert_eventually(fn -> chat_snapshot(view).metadata.userQuestions != [] end)
+      chat = chat_snapshot(view)
+
+      assert chat.metadata.userQuestions == [
+               %{ref: ref, question: "Which approach?", options: options}
+             ]
+
+      assert %{phase: "waiting_for_user", active: true} = chat.runtime
+
+      assert %{canSubmit: true, canSteer: false, allowWhileStreaming: true, sendLabel: "Queue"} =
+               chat.admission
+
+      assert chat.metadata.canStop
+
+      assert Enum.find(
+               chat.messages,
+               &(&1.id == SynapsisWeb.AgentLive.SessionChat.live_id(session.id))
+             ).status == "pending"
+
+      refute Jason.encode!(chat.metadata) =~ "deadline_ms"
+      refute Jason.encode!(chat.metadata) =~ "owner"
+
+      render_hook(
+        view,
+        "chat.send",
+        Map.merge(chat_scope(view), %{
+          "request_id" => "queue-during-question",
+          "text" => "follow-up prompt"
+        })
+      )
+
+      assert [%{content: "follow-up prompt"}] = PendingInputStore.queued_prompts(session.id)
+      params = answer_params(view, ref, "Small change", "answer-question")
+
+      assert {:reply, %{status: "ok"}, _socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.action",
+                 params,
+                 chat_socket(view)
+               )
+
+      assert {:ok, "Small change"} = Task.await(task, 1_000)
+    end
+
+    test "answer acceptance is deduplicated and closes the question in every mounted view", %{
+      conn: conn
+    } do
+      session = create_running_question_session()
+      {:ok, first, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      {:ok, second, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      {ref, task} = start_user_question(session)
+      assert_eventually(fn -> length(chat_snapshot(first).metadata.userQuestions) == 1 end)
+      assert_eventually(fn -> length(chat_snapshot(second).metadata.userQuestions) == 1 end)
+      second_socket = chat_socket(second)
+      second_params = answer_params(second, ref, "a second answer", "second-answer")
+      params = answer_params(first, ref, "chosen response", "answer-once")
+
+      assert {:reply, %{status: "ok"}, accepted} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.action",
+                 params,
+                 chat_socket(first)
+               )
+
+      assert {:reply, %{status: "ok"}, _same} =
+               SynapsisWeb.AgentLive.Sessions.handle_event("chat.action", params, accepted)
+
+      assert {:ok, "chosen response"} = Task.await(task, 1_000)
+
+      assert {:reply, %{status: "error", message: "Question is no longer pending"}, rejected} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.action",
+                 second_params,
+                 second_socket
+               )
+
+      assert rejected.assigns.user_questions == []
+      assert_eventually(fn -> chat_snapshot(first).metadata.userQuestions == [] end)
+      assert_eventually(fn -> chat_snapshot(second).metadata.userQuestions == [] end)
+      assert chat_snapshot(first).runtime.phase == "streaming"
+      assert chat_snapshot(first).admission.canSteer
+      assert PendingInputStore.queued_prompts(session.id) == []
+      assert PendingInputStore.queued_steers(session.id) == []
+      assert Sessions.get_messages(session.id) == []
+    end
+
+    test "mount, reselect and sync recover questions from the live Worker", %{conn: conn} do
+      session = create_running_question_session()
+      {ref, task} = start_user_question(session)
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      assert [%{ref: ^ref}] = chat_snapshot(view).metadata.userQuestions
+      old_scope = chat_scope(view)
+
+      {:ok, other} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      render_patch(view, ~p"/agent/agents/main/sessions/#{other.id}")
+      assert chat_snapshot(view).metadata.userQuestions == []
+      send(view.pid, {:ask_user, ref, %{session_id: session.id, question: "old question"}})
+      render(view)
+      assert chat_snapshot(view).metadata.userQuestions == []
+
+      assert {:reply, %{status: "error", message: "Conversation changed"}, _socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.action",
+                 Map.merge(old_scope, %{
+                   "action" => "answer_question",
+                   "ref" => ref,
+                   "response" => "stale",
+                   "request_id" => "stale-answer"
+                 }),
+                 chat_socket(view)
+               )
+
+      assert [%{ref: ^ref}] = Worker.snapshot(session.id).user_questions
+
+      render_patch(view, ~p"/agent/agents/main/sessions/#{session.id}")
+      assert [%{ref: ^ref}] = chat_snapshot(view).metadata.userQuestions
+      stale_socket = Phoenix.Component.assign(chat_socket(view), :user_questions, [])
+
+      assert {:reply, %{status: "ok"}, recovered} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.sync",
+                 chat_scope(view),
+                 stale_socket
+               )
+
+      assert [%{ref: ^ref}] = recovered.assigns.react_chat.metadata.userQuestions
+      assert recovered.assigns.react_chat.runtime.phase == "waiting_for_user"
+
+      assert :ok = Worker.answer_question(session.id, ref, "recovered answer")
+      assert {:ok, "recovered answer"} = Task.await(task, 1_000)
+    end
+
+    test "rejects invalid, oversized and foreign answers without consuming the active question",
+         %{conn: conn} do
+      session = create_running_question_session()
+      {ref, task} = start_user_question(session)
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      socket = chat_socket(view)
+
+      for response <- ["   ", String.duplicate("x", 256_001), %{"value" => "not a string"}] do
+        params = answer_params(view, ref, response, Ecto.UUID.generate())
+
+        assert {:reply, %{status: "error", message: "Invalid question response"}, _socket} =
+                 SynapsisWeb.AgentLive.Sessions.handle_event("chat.action", params, socket)
+      end
+
+      params = answer_params(view, ref, "valid text", "valid-answer")
+
+      assert {:reply, %{status: "error", message: "Invalid question response"}, _socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.action",
+                 Map.delete(params, "request_id"),
+                 socket
+               )
+
+      assert {:reply, %{status: "error", message: "Invalid question response"}, _socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.action",
+                 %{params | "ref" => String.duplicate("r", 129)},
+                 socket
+               )
+
+      assert {:reply, %{status: "error", message: "Question is no longer pending"}, _socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.action",
+                 %{params | "ref" => Ecto.UUID.generate()},
+                 socket
+               )
+
+      assert [%{ref: ^ref}] = Worker.snapshot(session.id).user_questions
+
+      {:ok, other} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, other_view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{other.id}")
+
+      assert {:reply, %{status: "error", message: "Question is no longer pending"}, _socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.action",
+                 answer_params(other_view, ref, "wrong session", "foreign-answer"),
+                 chat_socket(other_view)
+               )
+
+      assert [%{ref: ^ref}] = Worker.snapshot(session.id).user_questions
+      assert PendingInputStore.queued_prompts(session.id) == []
+      assert PendingInputStore.queued_steers(session.id) == []
+
+      assert {:reply, %{status: "ok"}, _socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event("chat.action", params, socket)
+
+      assert {:ok, "valid text"} = Task.await(task, 1_000)
+    end
+
+    test "owner exit removes pending questions through the closed event", %{conn: conn} do
+      session = create_running_question_session()
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      {_ref, task} = start_user_question(session)
+      assert_eventually(fn -> length(chat_snapshot(view).metadata.userQuestions) == 1 end)
+      Task.shutdown(task, :brutal_kill)
+      assert_eventually(fn -> chat_snapshot(view).metadata.userQuestions == [] end)
+      assert chat_snapshot(view).runtime.phase == "streaming"
+    end
+
+    test "stop, completion and failure clear the question projection", %{conn: conn} do
+      session = create_running_question_session()
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      {ref, task} = start_user_question(session)
+      assert_eventually(fn -> length(chat_snapshot(view).metadata.userQuestions) == 1 end)
+      socket = chat_socket(view)
+
+      for event <- [{"done", %{}}, {"error", %{message: "failed"}}] do
+        assert {:noreply, terminal} = SynapsisWeb.AgentLive.Sessions.handle_info(event, socket)
+        assert terminal.assigns.react_chat.metadata.userQuestions == []
+        refute terminal.assigns.react_chat.runtime.active
+      end
+
+      assert {:reply, %{status: "ok"}, stopped} =
+               SynapsisWeb.AgentLive.Sessions.handle_event("chat.stop", chat_scope(view), socket)
+
+      assert stopped.assigns.react_chat.metadata.userQuestions == []
+      assert_eventually(fn -> Worker.snapshot(session.id).user_questions == [] end)
+      assert_eventually(fn -> chat_snapshot(view).metadata.userQuestions == [] end)
+
+      assert {:reply, %{status: "error", message: "Question is no longer pending"}, _socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.action",
+                 answer_params(view, ref, "after cancellation", "cancelled-answer"),
+                 chat_socket(view)
+               )
+
+      Task.shutdown(task, :brutal_kill)
     end
   end
 
@@ -969,11 +1553,54 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
     end)
   end
 
-  defp occurrence_count(text, pattern) do
-    text
-    |> String.split(pattern)
-    |> length()
-    |> Kernel.-(1)
+  defp create_running_question_session do
+    {:ok, session} =
+      Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+    set_worker_running(session)
+    session
+  end
+
+  defp start_user_question(session, options \\ nil) do
+    Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}")
+
+    task =
+      Task.async(fn ->
+        Synapsis.Tool.AskUser.execute(%{"question" => "Which approach?", "options" => options}, %{
+          session_id: session.id
+        })
+      end)
+
+    on_exit(fn -> if Process.alive?(task.pid), do: Process.exit(task.pid, :kill) end)
+    assert_receive {:ask_user, ref, _payload}, 1_000
+
+    assert_eventually(fn ->
+      Enum.any?(Worker.snapshot(session.id).user_questions, &(&1.ref == ref))
+    end)
+
+    {ref, task}
+  end
+
+  defp answer_params(view, ref, response, request_id) do
+    Map.merge(chat_scope(view), %{
+      "action" => "answer_question",
+      "ref" => ref,
+      "response" => response,
+      "request_id" => request_id
+    })
+  end
+
+  defp chat_socket(view) do
+    render(view)
+    :sys.get_state(view.pid).socket
+  end
+
+  defp chat_snapshot(view), do: chat_socket(view).assigns.react_chat
+  defp chat_json(view), do: Jason.encode!(chat_snapshot(view))
+
+  defp chat_scope(view) do
+    chat = chat_snapshot(view)
+    %{"id" => chat.id, "conversation_id" => chat.conversation_id}
   end
 
   defp png_image_payload do

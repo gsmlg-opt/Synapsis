@@ -24,3 +24,4 @@ export { AgentBackupModelPickerHook, AgentModelPickerHook } from "./agent-model-
 export { ChatImageInputHook, encodeChatImages } from "./chat-image-input"
 
 export { createSynapsisReactFormHook } from "./react-form"
+export { createSynapsisReactChat } from "./react-chat"

@@ -3,6 +3,8 @@ defmodule SynapsisWeb.ProviderLive.Show do
   use SynapsisWeb.ReactFormEvents
   require Logger
 
+  alias SynapsisWeb.ChatBridge
+
   @impl true
   def mount(%{"id" => id}, _session, socket) do
     case Synapsis.Providers.get(id) do
@@ -25,6 +27,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
            chat_streaming: false,
            chat_stream_text: "",
            chat_stream_ref: nil,
+           chat_stream_message_id: nil,
            # OAuth device flow state
            oauth_state: :idle,
            oauth_user_code: nil,
@@ -32,7 +35,8 @@ defmodule SynapsisWeb.ProviderLive.Show do
            oauth_device_auth_id: nil,
            oauth_error: nil,
            oauth_poll_timer: nil
-         )}
+         )
+         |> start_chat_bridge()}
 
       {:error, :not_found} ->
         {:ok,
@@ -173,7 +177,18 @@ defmodule SynapsisWeb.ProviderLive.Show do
   # -- Test Chat Events --
 
   def handle_event("toggle_chat", _params, socket) do
-    {:noreply, assign(socket, chat_open: !socket.assigns.chat_open)}
+    socket = assign(socket, chat_open: !socket.assigns.chat_open)
+
+    socket =
+      if socket.assigns.chat_open do
+        socket
+        |> assign(:react_chat_initial, socket.assigns.react_chat)
+        |> ChatBridge.snapshot()
+      else
+        socket
+      end
+
+    {:noreply, socket}
   end
 
   def handle_event("chat_select_model", %{"model" => model}, socket) do
@@ -181,72 +196,63 @@ defmodule SynapsisWeb.ProviderLive.Show do
   end
 
   def handle_event("chat_send", %{"message" => message}, socket) when message != "" do
-    provider = socket.assigns.provider
-    model = socket.assigns.chat_model
-
-    messages =
-      socket.assigns.chat_messages ++ [%{role: "user", content: message}]
-
-    case Synapsis.Providers.runtime_config(provider.name) do
-      {:ok, config} ->
-        request = build_chat_request(config, model, messages)
-
-        case Synapsis.Provider.Adapter.stream(request, config) do
-          {:ok, ref} ->
-            {:noreply,
-             assign(socket,
-               chat_messages: messages,
-               chat_streaming: true,
-               chat_stream_text: "",
-               chat_stream_ref: ref
-             )}
-
-          {:error, :model_unavailable} ->
-            {:noreply,
-             assign(socket,
-               chat_messages:
-                 messages ++ [%{role: "error", content: "Model is currently unavailable."}]
-             )}
-
-          {:error, :provider_unavailable} ->
-            {:noreply,
-             assign(socket,
-               chat_messages:
-                 messages ++ [%{role: "error", content: "Provider is currently unavailable."}]
-             )}
-
-          {:error, _reason} ->
-            {:noreply,
-             assign(socket,
-               chat_messages:
-                 messages ++ [%{role: "error", content: "Failed to start provider stream."}]
-             )}
-        end
-
-      {:error, :provider_unavailable} ->
-        {:noreply,
-         assign(socket,
-           chat_messages:
-             messages ++
-               [%{role: "error", content: "Provider is currently unavailable."}]
-         )}
-
-      {:error, _} ->
-        {:noreply,
-         assign(socket,
-           chat_messages:
-             messages ++
-               [%{role: "error", content: "Provider not registered. Save and enable it first."}]
-         )}
-    end
-  end
-
-  def handle_event("chat_send", _params, socket) do
+    {socket, _reply} = admit_chat_message(socket, message)
     {:noreply, socket}
   end
 
+  def handle_event("chat_send", _params, socket), do: {:noreply, socket}
+
+  def handle_event("chat.send", params, socket) do
+    request_id = params["request_id"]
+
+    cond do
+      not ChatBridge.valid_scope?(socket, params) ->
+        {:reply, %{status: "error", message: "Conversation is no longer available"}, socket}
+
+      not is_binary(request_id) or request_id == "" or byte_size(request_id) > 128 ->
+        {:reply, %{status: "error", message: "Invalid request ID"}, socket}
+
+      reply = ChatBridge.request_reply(socket, request_id) ->
+        {:reply, reply, socket}
+
+      params["images"] not in [nil, []] or params["attachments"] not in [nil, []] ->
+        reply = %{status: "error", message: "Provider test chat does not support attachments"}
+        {:reply, reply, ChatBridge.remember_request(socket, request_id, reply)}
+
+      true ->
+        {socket, reply} = admit_chat_message(socket, params["text"])
+        {:reply, reply, ChatBridge.remember_request(socket, request_id, reply)}
+    end
+  end
+
+  def handle_event("chat.sync", params, socket) do
+    if ChatBridge.valid_scope?(socket, params) do
+      {:reply, %{status: "ok"}, ChatBridge.snapshot(socket)}
+    else
+      {:reply, %{status: "error", message: "Conversation is no longer available"}, socket}
+    end
+  end
+
+  def handle_event("chat.stop", params, socket) do
+    if ChatBridge.valid_scope?(socket, params) do
+      socket = cancel_chat_stream(socket, false)
+      {:reply, %{status: "ok"}, sync_chat(socket)}
+    else
+      {:reply, %{status: "error", message: "Conversation is no longer available"}, socket}
+    end
+  end
+
+  def handle_event("chat.retry", _params, socket) do
+    {:reply, %{status: "error", message: "Send a new message to retry the provider"}, socket}
+  end
+
+  def handle_event("chat.action", _params, socket) do
+    {:reply, %{status: "error", message: "Unsupported provider chat action"}, socket}
+  end
+
   def handle_event("chat_clear", _params, socket) do
-    {:noreply, assign(socket, chat_messages: [], chat_stream_text: "", chat_streaming: false)}
+    socket = socket |> cancel_chat_stream(true) |> assign(chat_messages: []) |> sync_chat()
+    {:noreply, socket}
   end
 
   # -- OAuth Device Flow Events --
@@ -321,8 +327,16 @@ defmodule SynapsisWeb.ProviderLive.Show do
   # -- Streaming handle_info --
 
   @impl true
-  def handle_info({:provider_chunk, {:text_delta, text}}, socket) do
-    {:noreply, assign(socket, chat_stream_text: socket.assigns.chat_stream_text <> text)}
+  def handle_info(
+        {:provider_chunk, {:text_delta, text}},
+        %{assigns: %{chat_streaming: true}} = socket
+      ) do
+    socket =
+      socket
+      |> assign(chat_stream_text: socket.assigns.chat_stream_text <> text)
+      |> ChatBridge.delta(socket.assigns.chat_stream_message_id, text)
+
+    {:noreply, socket}
   end
 
   def handle_info({:provider_chunk, _other_event}, socket) do
@@ -330,32 +344,46 @@ defmodule SynapsisWeb.ProviderLive.Show do
     {:noreply, socket}
   end
 
-  def handle_info(:provider_done, socket) do
+  def handle_info(:provider_done, %{assigns: %{chat_streaming: true}} = socket) do
     messages =
       socket.assigns.chat_messages ++
-        [%{role: "assistant", content: socket.assigns.chat_stream_text}]
+        [
+          chat_message(
+            "assistant",
+            socket.assigns.chat_stream_text,
+            socket.assigns.chat_stream_message_id
+          )
+        ]
 
     {:noreply,
      assign(socket,
        chat_messages: messages,
        chat_streaming: false,
        chat_stream_text: "",
-       chat_stream_ref: nil
-     )}
+       chat_stream_ref: nil,
+       chat_stream_message_id: nil
+     )
+     |> sync_chat()}
   end
 
-  def handle_info({:provider_error, reason}, socket) do
+  def handle_info({:provider_error, reason}, %{assigns: %{chat_streaming: true}} = socket) do
     messages =
-      socket.assigns.chat_messages ++ [%{role: "error", content: "Error: #{reason}"}]
+      socket.assigns.chat_messages ++
+        [chat_message("error", "Error: #{chat_error_message(reason)}")]
 
     {:noreply,
      assign(socket,
        chat_messages: messages,
        chat_streaming: false,
        chat_stream_text: "",
-       chat_stream_ref: nil
-     )}
+       chat_stream_ref: nil,
+       chat_stream_message_id: nil
+     )
+     |> sync_chat()}
   end
+
+  def handle_info(:provider_done, socket), do: {:noreply, socket}
+  def handle_info({:provider_error, _reason}, socket), do: {:noreply, socket}
 
   # Task completion messages
   def handle_info({ref, _result}, socket) when is_reference(ref) do
@@ -363,8 +391,11 @@ defmodule SynapsisWeb.ProviderLive.Show do
     {:noreply, socket}
   end
 
-  def handle_info({:DOWN, _ref, :process, _pid, _reason}, socket) do
-    {:noreply, socket}
+  def handle_info({:DOWN, ref, :process, _pid, _reason}, socket) do
+    case socket.assigns.chat_stream_ref do
+      %{ref: ^ref} -> handle_info({:provider_error, "Provider stream stopped"}, socket)
+      _ -> {:noreply, socket}
+    end
   end
 
   # -- OAuth polling handle_info --
@@ -413,6 +444,8 @@ defmodule SynapsisWeb.ProviderLive.Show do
 
   @impl true
   def terminate(_reason, socket) do
+    if stream = socket.assigns[:chat_stream_ref], do: Synapsis.Provider.Adapter.cancel(stream)
+
     if timer = socket.assigns[:oauth_poll_timer] do
       Process.cancel_timer(timer)
     end
@@ -421,6 +454,166 @@ defmodule SynapsisWeb.ProviderLive.Show do
   end
 
   # -- Private helpers --
+
+  defp admit_chat_message(socket, message)
+       when not is_binary(message) or message == "" do
+    {socket, %{status: "error", message: "Enter a message"}}
+  end
+
+  defp admit_chat_message(socket, message) do
+    cond do
+      String.trim(message) == "" ->
+        {socket, %{status: "error", message: "Enter a message"}}
+
+      byte_size(message) > 256_000 ->
+        {socket, %{status: "error", message: "Message too large"}}
+
+      socket.assigns.chat_streaming ->
+        {socket, %{status: "error", message: "Wait for the provider response"}}
+
+      true ->
+        start_chat_stream(socket, message)
+    end
+  end
+
+  defp start_chat_stream(socket, message) do
+    provider = socket.assigns.provider
+    model = socket.assigns.chat_model
+
+    messages =
+      socket.assigns.chat_messages ++ [chat_message("user", message)]
+
+    case Synapsis.Providers.runtime_config(provider.name) do
+      {:ok, config} ->
+        request = build_chat_request(config, model, messages)
+
+        case Synapsis.Provider.Adapter.stream(request, config) do
+          {:ok, ref} ->
+            socket =
+              assign(socket,
+                chat_messages: messages,
+                chat_streaming: true,
+                chat_stream_text: "",
+                chat_stream_ref: ref,
+                chat_stream_message_id: Ecto.UUID.generate()
+              )
+              |> sync_chat()
+
+            {socket, %{status: "ok"}}
+
+          {:error, :model_unavailable} ->
+            reject_chat(socket, messages, "Model is currently unavailable.")
+
+          {:error, :provider_unavailable} ->
+            reject_chat(socket, messages, "Provider is currently unavailable.")
+
+          {:error, _reason} ->
+            reject_chat(socket, messages, "Failed to start provider stream.")
+        end
+
+      {:error, :provider_unavailable} ->
+        reject_chat(socket, messages, "Provider is currently unavailable.")
+
+      {:error, _} ->
+        reject_chat(socket, messages, "Provider not registered. Save and enable it first.")
+    end
+  end
+
+  defp chat_message(role, content, id \\ Ecto.UUID.generate()) do
+    message = %{id: id, role: role, content: content, status: "complete"}
+    if role == "error", do: Map.merge(message, %{status: "error", error: content}), else: message
+  end
+
+  defp chat_error_message(%{message: message}) when is_binary(message), do: message
+  defp chat_error_message(message) when is_binary(message), do: message
+  defp chat_error_message({:stream_violation, message}) when is_binary(message), do: message
+  defp chat_error_message(_reason), do: "Provider request failed"
+
+  defp reject_chat(socket, messages, message) do
+    socket =
+      assign(socket, chat_messages: messages ++ [chat_message("error", message)]) |> sync_chat()
+
+    {socket, %{status: "error", message: message}}
+  end
+
+  defp start_chat_bridge(socket) do
+    ChatBridge.start(
+      socket,
+      "provider-chat-#{socket.assigns.provider.id}",
+      socket.assigns.provider.id,
+      chat_snapshot(socket.assigns)
+    )
+  end
+
+  defp sync_chat(socket), do: ChatBridge.sync(socket, chat_snapshot(socket.assigns))
+
+  defp chat_snapshot(assigns) do
+    messages =
+      if assigns.chat_streaming do
+        assigns.chat_messages ++
+          [
+            %{
+              id: assigns.chat_stream_message_id,
+              role: "assistant",
+              content: assigns.chat_stream_text,
+              status: "streaming"
+            }
+          ]
+      else
+        assigns.chat_messages
+      end
+
+    %{
+      messages: messages,
+      metadata: %{kind: "provider", attachmentsAllowed: false, canStop: true},
+      runtime: %{
+        active: assigns.chat_streaming,
+        phase: if(assigns.chat_streaming, do: "streaming", else: "idle")
+      },
+      admission: %{canSubmit: not assigns.chat_streaming, allowWhileStreaming: false}
+    }
+  end
+
+  defp cancel_chat_stream(socket, clear?) do
+    if stream = socket.assigns.chat_stream_ref do
+      Synapsis.Provider.Adapter.cancel(stream)
+      Process.demonitor(stream.ref, [:flush])
+      drain_chat_stream_messages()
+    end
+
+    messages =
+      if socket.assigns.chat_streaming and not clear? do
+        socket.assigns.chat_messages ++
+          [
+            chat_message(
+              "assistant",
+              socket.assigns.chat_stream_text,
+              socket.assigns.chat_stream_message_id
+            )
+            |> Map.put(:status, "cancelled")
+          ]
+      else
+        socket.assigns.chat_messages
+      end
+
+    assign(socket,
+      chat_messages: messages,
+      chat_streaming: false,
+      chat_stream_text: "",
+      chat_stream_ref: nil,
+      chat_stream_message_id: nil
+    )
+  end
+
+  defp drain_chat_stream_messages do
+    receive do
+      {:provider_chunk, _event} -> drain_chat_stream_messages()
+      {:provider_error, _reason} -> drain_chat_stream_messages()
+      :provider_done -> drain_chat_stream_messages()
+    after
+      0 -> :ok
+    end
+  end
 
   defp handle_oauth_authorized(socket, auth_result) do
     case Synapsis.Provider.OAuth.OpenAI.exchange_code(
@@ -820,59 +1013,17 @@ defmodule SynapsisWeb.ProviderLive.Show do
             </.dm_btn>
           </div>
 
-          <%!-- Messages --%>
-          <div
-            class="bg-surface rounded-lg border border-outline-variant p-3 min-h-[120px] max-h-[400px] overflow-y-auto space-y-3"
-            id="chat-messages"
-            phx-hook="ScrollBottom"
-          >
-            <div
-              :if={@chat_messages == [] && !@chat_streaming}
-              class="text-on-surface-variant text-sm"
-            >
-              Send a message to test this provider...
-            </div>
-
-            <div :for={msg <- @chat_messages}>
-              <%= case msg.role do %>
-                <% "user" -> %>
-                  <.chat_bubble role="user">{msg.content}</.chat_bubble>
-                <% "assistant" -> %>
-                  <.chat_bubble role="assistant">{msg.content}</.chat_bubble>
-                <% "error" -> %>
-                  <div class="flex justify-start">
-                    <div class="bg-error/20 border border-error/30 rounded-lg px-3 py-2 max-w-[80%] text-sm text-error">
-                      {msg.content}
-                    </div>
-                  </div>
-                <% _ -> %>
-              <% end %>
-            </div>
-
-            <%!-- Streaming indicator --%>
-            <div :if={@chat_streaming}>
-              <.chat_bubble role="assistant">
-                <span :if={@chat_stream_text != ""}>{@chat_stream_text}</span>
-                <.dm_loading_spinner size="xs" class="inline-block ml-1" />
-              </.chat_bubble>
-            </div>
-          </div>
-
-          <%!-- Input --%>
-          <.dm_form for={to_form(%{})} phx-submit="chat_send" class="flex gap-2">
-            <.dm_input
-              type="text"
-              name="message"
-              value=""
-              placeholder="Type a test message..."
-              autocomplete="off"
-              disabled={@chat_streaming}
-              class="flex-1"
-            />
-            <.dm_btn type="submit" variant="secondary" size="sm" disabled={@chat_streaming}>
-              Send
-            </.dm_btn>
-          </.dm_form>
+          <.dm_react_chat
+            id={"provider-chat-#{@provider.id}"}
+            conversation_id={@provider.id}
+            hook="SynapsisReactChat"
+            label="Provider test chat"
+            messages={@react_chat_initial.messages}
+            metadata={@react_chat_initial.metadata}
+            runtime={@react_chat_initial.runtime}
+            admission={@react_chat_initial.admission}
+            class="synapsis-react-chat h-[420px] min-h-0"
+          />
         </div>
       </.dm_card>
     </.settings_layout>

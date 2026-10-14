@@ -4,6 +4,8 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   require Logger
 
   alias Synapsis.{ContextWindow, Image, Sessions}
+  alias Synapsis.Session.{PendingInputStore, Worker}
+  alias SynapsisWeb.{ChatBridge, AgentLive.SessionChat}
 
   @running_statuses ~w(streaming tool_executing)
 
@@ -30,12 +32,15 @@ defmodule SynapsisWeb.AgentLive.Sessions do
        streaming_reasoning: "",
        tool_calls: %{},
        permission_requests: [],
+       user_questions: [],
        heartbeat_notifications: [],
        code_agent_sessions: %{},
        session_status: "idle",
        delete_session: nil,
        show_sidebar: true,
-       current_mode: agent_id
+       current_mode: agent_id,
+       react_chat: nil,
+       react_chat_initial: nil
      )}
   end
 
@@ -56,7 +61,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
         # ADR-006 B2: the live process is the read authority for current state,
         # so a fresh mount mid-turn shows the in-flight status/text; fall back to
         # the durable/DB status when the process is down.
-        {status, in_flight} = live_session_state(session)
+        {status, in_flight, user_questions} = live_session_state(session)
 
         {:noreply,
          assign(socket,
@@ -64,15 +69,17 @@ defmodule SynapsisWeb.AgentLive.Sessions do
            sessions: sessions,
            current_session: session,
            messages: messages,
-           queued_inputs: [],
+           queued_inputs: PendingInputStore.queued_prompts(session.id),
            streaming_text: in_flight,
            streaming_reasoning: "",
            tool_calls: %{},
            permission_requests: [],
+           user_questions: user_questions,
            code_agent_sessions: %{},
            session_status: status,
            current_mode: session.agent || agent_id
-         )}
+         )
+         |> start_chat()}
 
       {:error, :not_found} ->
         {:noreply,
@@ -92,7 +99,8 @@ defmodule SynapsisWeb.AgentLive.Sessions do
            sessions: sessions,
            current_session: nil,
            messages: [],
-           queued_inputs: []
+           queued_inputs: [],
+           user_questions: []
          )
          |> put_flash(:error, "Could not load session — storage is temporarily unavailable")
          |> push_navigate(to: ~p"/agent/agents/#{agent_id}/sessions")}
@@ -117,23 +125,26 @@ defmodule SynapsisWeb.AgentLive.Sessions do
        streaming_reasoning: "",
        tool_calls: %{},
        permission_requests: [],
-       session_status: "idle"
+       user_questions: [],
+       session_status: "idle",
+       react_chat: nil,
+       react_chat_initial: nil
      )}
   end
 
-  # ADR-006 B2: resolve {status, in_flight_text} from the live read authority
+  # ADR-006 B2: resolve status, in-flight text and pending questions from the live read authority
   # (the running session process), falling back to Concord's durable snapshot
   # and finally the DB status. Returns UI status vocabulary ("idle"/"streaming").
   defp live_session_state(session) do
     case Synapsis.Session.Read.live_snapshot(session.id) do
-      {:live, %{status: status, in_flight_text: text}} ->
-        {live_status_string(status), text || ""}
+      {:live, %{status: status, in_flight_text: text} = snapshot} ->
+        {live_status_string(status), text || "", public_user_questions(snapshot)}
 
       {:durable, %{meta: %{status: status}}} when is_binary(status) ->
-        {status, ""}
+        {status, "", []}
 
       _ ->
-        {session.status || "idle", ""}
+        {session.status || "idle", "", []}
     end
   end
 
@@ -143,42 +154,226 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
   # --- Events ---
 
-  @impl true
   @max_content_bytes 256_000
 
-  def handle_event("send_message", %{"value" => content, "images" => images}, socket) do
+  @impl true
+  def handle_event(event, params, socket)
+      when event in ~w(chat.send chat.stop chat.retry chat.action chat.sync) do
+    request_id = params["request_id"]
+
+    cond do
+      not ChatBridge.valid_scope?(socket, params) or is_nil(socket.assigns.current_session) ->
+        {:reply, %{status: "error", message: "Conversation changed"}, socket}
+
+      not is_nil(request_id) and
+          (not is_binary(request_id) or byte_size(request_id) > 128) ->
+        {:reply, %{status: "error", message: "Invalid request ID"}, socket}
+
+      true ->
+        case ChatBridge.request_reply(socket, request_id) do
+          nil ->
+            {reply, socket} = chat_event(event, params, socket)
+            socket = ChatBridge.remember_request(socket, request_id, reply)
+            {:reply, reply, sync_chat(socket)}
+
+          reply ->
+            {:reply, reply, socket}
+        end
+    end
+  end
+
+  def handle_event(event, params, socket) do
+    {:noreply, socket} = handle_session_event(event, params, socket)
+    {:noreply, sync_chat(socket)}
+  end
+
+  defp chat_event("chat.sync", _params, socket),
+    do:
+      {%{status: "ok"},
+       socket |> refresh_user_questions() |> sync_chat() |> ChatBridge.snapshot()}
+
+  defp chat_event("chat.send", params, socket) do
+    with true <- socket.assigns.react_chat.admission.canSubmit,
+         true <- is_binary(params["request_id"]) and params["request_id"] != "",
+         {:ok, images} <- Image.decode_payloads(params["images"] || []) do
+      submit_message(params["text"], images, socket)
+    else
+      {:error, {_reason, message}} -> {%{status: "error", message: message}, socket}
+      _ -> {%{status: "error", message: "Message cannot be sent"}, socket}
+    end
+  end
+
+  defp chat_event("chat.stop", _params, socket) do
+    if running_session_status?(socket.assigns.session_status) do
+      case operation_reply(Sessions.cancel(socket.assigns.current_session.id), socket) do
+        {%{status: "ok"} = reply, socket} -> {reply, assign(socket, :user_questions, [])}
+        result -> result
+      end
+    else
+      {%{status: "error", message: "Session is not running"}, socket}
+    end
+  end
+
+  defp chat_event("chat.retry", _params, socket) do
+    if socket.assigns.session_status == "error" do
+      operation_reply(Sessions.retry(socket.assigns.current_session.id), socket)
+    else
+      {%{status: "error", message: "Session cannot be retried"}, socket}
+    end
+  end
+
+  defp chat_event("chat.action", %{"action" => "steer", "text" => text}, socket)
+       when is_binary(text) do
+    text = String.trim(text)
+
+    if running_session_status?(socket.assigns.session_status) and
+         socket.assigns.user_questions == [] and text != "" and
+         byte_size(text) <= @max_content_bytes do
+      operation_reply(Sessions.steer_message(socket.assigns.current_session.id, text), socket)
+    else
+      {%{status: "error", message: "Session cannot be steered"}, socket}
+    end
+  end
+
+  defp chat_event(
+         "chat.action",
+         %{"action" => "answer_question", "ref" => ref, "response" => response} = params,
+         socket
+       ) do
+    valid? =
+      is_binary(params["request_id"]) and params["request_id"] != "" and
+        is_binary(ref) and ref != "" and byte_size(ref) <= 128 and
+        is_binary(response) and String.trim(response) != "" and
+        byte_size(response) <= @max_content_bytes
+
+    if valid? do
+      case answer_question(socket.assigns.current_session.id, ref, response) do
+        :ok ->
+          {%{status: "ok"}, refresh_user_questions(socket)}
+
+        {:error, :question_not_pending} ->
+          {%{status: "error", message: "Question is no longer pending"},
+           refresh_user_questions(socket)}
+
+        _ ->
+          {%{status: "error", message: "Question could not be answered"}, socket}
+      end
+    else
+      {%{status: "error", message: "Invalid question response"}, socket}
+    end
+  end
+
+  defp chat_event("chat.action", %{"action" => "regenerate", "message_id" => id}, socket) do
+    valid? = Enum.any?(socket.assigns.messages, &(&1.id == id and &1.role == "assistant"))
+
+    if valid? and socket.assigns.session_status == "idle" do
+      case Sessions.regenerate(socket.assigns.current_session.id, id) do
+        :ok ->
+          {%{status: "ok"},
+           assign(socket,
+             session_status: "streaming",
+             messages: Sessions.get_messages(socket.assigns.current_session.id),
+             streaming_text: "",
+             streaming_reasoning: "",
+             tool_calls: %{}
+           )}
+
+        result ->
+          operation_reply(result, socket)
+      end
+    else
+      {%{status: "error", message: "Response cannot be regenerated"}, socket}
+    end
+  end
+
+  defp chat_event(
+         "chat.action",
+         %{"action" => action, "tool_use_id" => id, "message_id" => message_id},
+         socket
+       )
+       when action in ~w(approve_tool deny_tool) do
+    valid? =
+      message_id == SessionChat.live_id(socket.assigns.current_session.id) and
+        Enum.any?(socket.assigns.permission_requests, &(&1.tool_use_id == id))
+
+    if valid? do
+      result =
+        if action == "approve_tool",
+          do: Sessions.approve_tool(socket.assigns.current_session.id, id),
+          else: Sessions.deny_tool(socket.assigns.current_session.id, id)
+
+      case operation_reply(result, socket) do
+        {%{status: "ok"} = reply, socket} ->
+          {reply,
+           update(
+             socket,
+             :permission_requests,
+             &Enum.reject(&1, fn request -> request.tool_use_id == id end)
+           )}
+
+        result ->
+          result
+      end
+    else
+      {%{status: "error", message: "Permission request is no longer pending"}, socket}
+    end
+  end
+
+  defp chat_event("chat.action", %{"action" => "dismiss_heartbeat", "message_id" => id}, socket) do
+    if Enum.any?(socket.assigns.heartbeat_notifications, &("heartbeat-#{&1.id}" == id)) do
+      {%{status: "ok"},
+       update(
+         socket,
+         :heartbeat_notifications,
+         &Enum.reject(&1, fn notification -> "heartbeat-#{notification.id}" == id end)
+       )}
+    else
+      {%{status: "error", message: "Notification is no longer available"}, socket}
+    end
+  end
+
+  defp chat_event(_event, _params, socket),
+    do: {%{status: "error", message: "Unsupported chat action"}, socket}
+
+  defp operation_reply(:ok, socket), do: {%{status: "ok"}, socket}
+  defp operation_reply({:ok, _result}, socket), do: {%{status: "ok"}, socket}
+
+  defp operation_reply(_result, socket),
+    do: {%{status: "error", message: "Session action failed"}, socket}
+
+  defp handle_session_event("send_message", %{"value" => content, "images" => images}, socket) do
     send_message_with_images(content, images, socket)
   end
 
-  def handle_event("send_message", %{"content" => content, "images" => images}, socket) do
+  defp handle_session_event("send_message", %{"content" => content, "images" => images}, socket) do
     send_message_with_images(content, images, socket)
   end
 
-  def handle_event("send_message", %{"value" => content}, socket) do
+  defp handle_session_event("send_message", %{"value" => content}, socket) do
     send_message(content, [], socket)
   end
 
-  def handle_event("send_message", %{"content" => content}, socket) do
+  defp handle_session_event("send_message", %{"content" => content}, socket) do
     send_message(content, [], socket)
   end
 
-  def handle_event("image_attachment_error", _params, socket) do
+  defp handle_session_event("image_attachment_error", _params, socket) do
     {:noreply, put_flash(socket, :error, "Could not read image attachment")}
   end
 
-  def handle_event("steer_message", %{"value" => content}, socket) do
+  defp handle_session_event("steer_message", %{"value" => content}, socket) do
     steer_message(content, socket)
   end
 
-  def handle_event("steer_message", %{"content" => content}, socket) do
+  defp handle_session_event("steer_message", %{"content" => content}, socket) do
     steer_message(content, socket)
   end
 
-  def handle_event("toggle_sidebar", _params, socket) do
+  defp handle_session_event("toggle_sidebar", _params, socket) do
     {:noreply, assign(socket, :show_sidebar, !socket.assigns.show_sidebar)}
   end
 
-  def handle_event("create_session", _params, socket) do
+  defp handle_session_event("create_session", _params, socket) do
     agent_id = socket.assigns.agent_id
     # Re-resolve to pick up any config changes saved from the setting page
     agent_config = Synapsis.Agent.Resolver.resolve(agent_id)
@@ -200,21 +395,21 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     end
   end
 
-  def handle_event("switch_session", %{"id" => session_id}, socket) do
+  defp handle_session_event("switch_session", %{"id" => session_id}, socket) do
     agent_id = socket.assigns.agent_id
     {:noreply, push_patch(socket, to: ~p"/agent/agents/#{agent_id}/sessions/#{session_id}")}
   end
 
-  def handle_event("confirm_delete_session", %{"id" => session_id}, socket) do
+  defp handle_session_event("confirm_delete_session", %{"id" => session_id}, socket) do
     delete_session = Enum.find(socket.assigns.sessions, &(&1.id == session_id))
     {:noreply, assign(socket, :delete_session, delete_session)}
   end
 
-  def handle_event("cancel_delete_session", _params, socket) do
+  defp handle_session_event("cancel_delete_session", _params, socket) do
     {:noreply, assign(socket, :delete_session, nil)}
   end
 
-  def handle_event("delete_session", %{"id" => session_id}, socket) do
+  defp handle_session_event("delete_session", %{"id" => session_id}, socket) do
     agent_id = socket.assigns.agent_id
 
     case Sessions.delete(session_id) do
@@ -248,15 +443,15 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     end
   end
 
-  def handle_event("cancel_stream", _params, socket) do
+  defp handle_session_event("cancel_stream", _params, socket) do
     if session = socket.assigns.current_session do
       Sessions.cancel(session.id)
     end
 
-    {:noreply, socket}
+    {:noreply, assign(socket, :user_questions, [])}
   end
 
-  def handle_event("retry", _params, socket) do
+  defp handle_session_event("retry", _params, socket) do
     if session = socket.assigns.current_session do
       Sessions.retry(session.id)
     end
@@ -264,7 +459,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     {:noreply, socket}
   end
 
-  def handle_event("regenerate", %{"id" => message_id}, socket) do
+  defp handle_session_event("regenerate", %{"id" => message_id}, socket) do
     case socket.assigns.current_session do
       nil ->
         {:noreply, socket}
@@ -294,7 +489,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     end
   end
 
-  def handle_event("approve_tool", %{"tool-use-id" => tool_use_id}, socket) do
+  defp handle_session_event("approve_tool", %{"tool-use-id" => tool_use_id}, socket) do
     if session = socket.assigns.current_session do
       Sessions.approve_tool(session.id, tool_use_id)
     end
@@ -303,7 +498,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     {:noreply, assign(socket, :permission_requests, requests)}
   end
 
-  def handle_event("deny_tool", %{"tool-use-id" => tool_use_id}, socket) do
+  defp handle_session_event("deny_tool", %{"tool-use-id" => tool_use_id}, socket) do
     if session = socket.assigns.current_session do
       Sessions.deny_tool(session.id, tool_use_id)
     end
@@ -312,7 +507,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     {:noreply, assign(socket, :permission_requests, requests)}
   end
 
-  def handle_event("dismiss_heartbeat", %{"id" => id_str}, socket) do
+  defp handle_session_event("dismiss_heartbeat", %{"id" => id_str}, socket) do
     case Integer.parse(id_str) do
       {id, ""} ->
         {:noreply,
@@ -325,7 +520,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     end
   end
 
-  def handle_event("switch_mode", %{"mode" => mode}, socket) do
+  defp handle_session_event("switch_mode", %{"mode" => mode}, socket) do
     if session = socket.assigns.current_session do
       Sessions.switch_mode(session.id, mode)
     end
@@ -340,16 +535,22 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     end
   end
 
-  defp send_message(content, image_parts, socket)
+  defp send_message(content, image_parts, socket) do
+    {_reply, socket} = submit_message(content, image_parts, socket)
+    {:noreply, socket}
+  end
+
+  defp submit_message(content, image_parts, socket)
        when is_binary(content) and is_list(image_parts) do
     content = String.trim(content)
 
     cond do
       (content == "" and image_parts == []) or is_nil(socket.assigns.current_session) ->
-        {:noreply, socket}
+        {%{status: "error", message: "Enter a message or attach an image"}, socket}
 
       byte_size(content) > @max_content_bytes ->
-        {:noreply, put_flash(socket, :error, "Message too large")}
+        {%{status: "error", message: "Message too large"},
+         put_flash(socket, :error, "Message too large")}
 
       true ->
         session_id = socket.assigns.current_session.id
@@ -384,15 +585,16 @@ defmodule SynapsisWeb.AgentLive.Sessions do
                 assign(socket, :messages, Sessions.get_messages(session_id))
               end
 
-            {:noreply, push_event(socket, "clear_chat_input", %{})}
+            {%{status: "ok"}, push_event(socket, "clear_chat_input", %{})}
 
           {:error, reason} ->
             Logger.warning("session_send_failed", session_id: session_id, reason: inspect(reason))
 
             if running? do
-              {:noreply, put_flash(socket, :error, "Failed to queue message")}
+              {%{status: "error", message: "Failed to queue message"},
+               put_flash(socket, :error, "Failed to queue message")}
             else
-              {:noreply,
+              {%{status: "error", message: "Failed to send message"},
                socket
                |> assign(:messages, Sessions.get_messages(session_id))
                |> assign(:session_status, "error")
@@ -402,7 +604,8 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     end
   end
 
-  defp send_message(_content, _image_parts, socket), do: {:noreply, socket}
+  defp submit_message(_content, _image_parts, socket),
+    do: {%{status: "error", message: "Invalid message"}, socket}
 
   defp optimistic_user_parts("", [_image | _] = image_parts), do: image_parts
 
@@ -416,7 +619,8 @@ defmodule SynapsisWeb.AgentLive.Sessions do
       content == "" or is_nil(socket.assigns.current_session) ->
         {:noreply, socket}
 
-      not running_session_status?(socket.assigns.session_status) ->
+      not running_session_status?(socket.assigns.session_status) or
+          socket.assigns.user_questions != [] ->
         {:noreply, socket}
 
       byte_size(content) > @max_content_bytes ->
@@ -445,32 +649,62 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   # --- PubSub handle_info ---
 
   @impl true
-  def handle_info({"text_delta", %{text: text}}, socket) do
-    socket =
-      socket
-      |> update(:streaming_text, &(&1 <> text))
-      |> push_event("append_text", %{text: text})
+  def handle_info({"text_delta", %{text: text}}, socket) when is_binary(text) do
+    if socket.assigns.current_session do
+      socket = sync_chat(socket)
+      id = SessionChat.live_id(socket.assigns.current_session.id)
 
-    {:noreply, socket}
+      socket =
+        if Enum.any?(socket.assigns.react_chat.messages, &(&1.id == id)) do
+          socket
+        else
+          socket |> assign(:session_status, "streaming") |> sync_chat()
+        end
+
+      {:noreply,
+       socket
+       |> update(:streaming_text, &(&1 <> text))
+       |> ChatBridge.delta(id, text)}
+    else
+      {:noreply, socket}
+    end
   end
 
-  def handle_info({"reasoning", %{text: text}}, socket) do
+  def handle_info(message, socket) do
+    {:noreply, socket} = handle_session_info(message, socket)
+    {:noreply, sync_chat(socket)}
+  end
+
+  defp handle_session_info({:ask_user, _ref, payload}, socket) do
+    case socket.assigns.current_session do
+      %{id: id} when not is_map_key(payload, :session_id) or payload.session_id == id ->
+        {:noreply, refresh_user_questions(socket)}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  defp handle_session_info({:ask_user_closed, _ref}, socket),
+    do: {:noreply, refresh_user_questions(socket)}
+
+  defp handle_session_info({"reasoning", %{text: text}}, socket) do
     {:noreply, update(socket, :streaming_reasoning, &(&1 <> text))}
   end
 
-  def handle_info({"tool_use", %{tool: name, tool_use_id: id}}, socket) do
+  defp handle_session_info({"tool_use", %{tool: name, tool_use_id: id} = payload}, socket) do
     tool_calls =
       Map.put(socket.assigns.tool_calls, id, %{
         name: name,
         status: "running",
-        input: %{},
+        input: payload[:input] || %{},
         result: nil
       })
 
     {:noreply, assign(socket, :tool_calls, tool_calls)}
   end
 
-  def handle_info({"tool_result", %{tool_use_id: id} = payload}, socket) do
+  defp handle_session_info({"tool_result", %{tool_use_id: id} = payload}, socket) do
     status = if payload[:is_error], do: "error", else: "complete"
 
     tool_calls =
@@ -484,28 +718,34 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     {:noreply, assign(socket, :tool_calls, tool_calls)}
   end
 
-  def handle_info({"permission_request", payload}, socket) do
+  defp handle_session_info({"permission_request", payload}, socket) do
     {:noreply, update(socket, :permission_requests, &[payload | &1])}
   end
 
-  def handle_info({"permission_requests", %{tools: tools}}, socket) when is_list(tools) do
+  defp handle_session_info({"permission_requests", %{tools: tools}}, socket)
+       when is_list(tools) do
     {:noreply, update(socket, :permission_requests, &(tools ++ &1))}
   end
 
-  def handle_info({"input_queued", %{id: id, kind: "prompt", content: content}}, socket) do
-    queued = %{id: id, kind: "prompt", content: content}
+  defp handle_session_info({"input_queued", %{id: id, kind: "prompt", content: content}}, socket) do
+    queued =
+      if session = socket.assigns.current_session do
+        Enum.find(PendingInputStore.queued_prompts(session.id), &(&1.id == id))
+      end
+
+    queued = queued || %{id: id, kind: "prompt", content: content}
     {:noreply, update(socket, :queued_inputs, &append_unique_input(&1, queued))}
   end
 
-  def handle_info({"input_queued", %{kind: "steer"}}, socket) do
+  defp handle_session_info({"input_queued", %{kind: "steer"}}, socket) do
     {:noreply, socket}
   end
 
-  def handle_info({"input_started", %{id: id}}, socket) do
+  defp handle_session_info({"input_started", %{id: id}}, socket) do
     {:noreply, update(socket, :queued_inputs, &Enum.reject(&1, fn input -> input.id == id end))}
   end
 
-  def handle_info({"done", _}, socket) do
+  defp handle_session_info({"done", _}, socket) do
     name = socket.assigns.agent_id
 
     messages =
@@ -531,26 +771,27 @@ defmodule SynapsisWeb.AgentLive.Sessions do
        streaming_reasoning: "",
        tool_calls: error_tool_calls,
        permission_requests: [],
+       user_questions: [],
        session_status: "idle"
      )}
   end
 
-  def handle_info({"session_status", %{status: status}}, socket) do
+  defp handle_session_info({"session_status", %{status: status}}, socket) do
     {:noreply, assign_session_status(socket, status)}
   end
 
-  def handle_info({"error", %{message: msg}}, socket) do
+  defp handle_session_info({"error", %{message: msg}}, socket) do
     {:noreply,
      socket
      |> put_flash(:error, msg)
      |> assign_session_status("error")}
   end
 
-  def handle_info({"agent_switched", %{agent: agent}}, socket) do
+  defp handle_session_info({"agent_switched", %{agent: agent}}, socket) do
     {:noreply, assign(socket, :current_mode, agent)}
   end
 
-  def handle_info({"model_switched", _payload}, socket) do
+  defp handle_session_info({"model_switched", _payload}, socket) do
     if session = socket.assigns.current_session do
       case Sessions.get(session.id) do
         {:ok, updated} -> {:noreply, assign(socket, :current_session, updated)}
@@ -561,31 +802,30 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     end
   end
 
-  def handle_info({"mode_switched", %{agent: agent}}, socket) do
+  defp handle_session_info({"mode_switched", %{agent: agent}}, socket) do
     {:noreply, assign(socket, :current_mode, agent)}
   end
 
-  def handle_info({"auditing", _payload}, socket), do: {:noreply, socket}
+  defp handle_session_info({"auditing", _payload}, socket), do: {:noreply, socket}
 
-  def handle_info({:session_compacted, _session_id, _metadata}, socket) do
+  defp handle_session_info({:session_compacted, session_id, _metadata}, socket) do
     messages =
-      if session = socket.assigns.current_session do
-        Sessions.get_messages(session.id, limit: 200)
-      else
-        []
+      case socket.assigns.current_session do
+        %{id: ^session_id} -> Sessions.get_messages(session_id, limit: 200)
+        _ -> socket.assigns.messages
       end
 
     {:noreply, assign(socket, :messages, messages)}
   end
 
-  def handle_info({:system_message, %{type: :compaction} = payload}, socket) do
+  defp handle_session_info({:system_message, %{type: :compaction} = payload}, socket) do
     {:noreply, put_flash(socket, :info, payload.text)}
   end
 
-  def handle_info(
-        {:heartbeat_completed, _config_id, %{name: name, executed_at: ts, result: result}},
-        socket
-      ) do
+  defp handle_session_info(
+         {:heartbeat_completed, _config_id, %{name: name, executed_at: ts, result: result}},
+         socket
+       ) do
     notification = %{
       name: name,
       timestamp: ts,
@@ -599,22 +839,22 @@ defmodule SynapsisWeb.AgentLive.Sessions do
      end)}
   end
 
-  def handle_info(
-        {"code_agent_spawned", %{sub_session_id: sub_id, prompt: prompt}},
-        socket
-      ) do
+  defp handle_session_info(
+         {"code_agent_spawned", %{sub_session_id: sub_id, prompt: prompt}},
+         socket
+       ) do
     entry = %{prompt: prompt, status: "running", tool_calls: [], completion: nil}
     {:noreply, update(socket, :code_agent_sessions, &Map.put(&1, sub_id, entry))}
   end
 
-  def handle_info(
-        {"code_agent_event", %{sub_session_id: sub_id, event: event, payload: payload}},
-        socket
-      ) do
+  defp handle_session_info(
+         {"code_agent_event", %{sub_session_id: sub_id, event: event, payload: payload}},
+         socket
+       ) do
     {:noreply, update_code_agent(socket, sub_id, event, payload)}
   end
 
-  def handle_info(_msg, socket), do: {:noreply, socket}
+  defp handle_session_info(_msg, socket), do: {:noreply, socket}
 
   # --- Render ---
 
@@ -756,114 +996,17 @@ defmodule SynapsisWeb.AgentLive.Sessions do
             </div>
           </div>
 
-          <%!-- Message list --%>
-          <div id="messages" phx-hook="ScrollBottom" class="flex-1 overflow-y-auto p-5 space-y-4">
-            <.message_parts
-              :for={msg <- @messages}
-              message={msg}
-              assistant_label={agent_display_name(@agent_config, @agent_id)}
-              assistant_avatar={agent_avatar(@agent_config)}
-              can_regenerate={@session_status != "streaming"}
-            />
-
-            <.queued_prompt
-              :for={input <- @queued_inputs}
-              id={"queued-input-#{input.id}"}
-              content={input.content}
-            />
-
-            <.reasoning_block
-              :if={@streaming_reasoning != ""}
-              content={@streaming_reasoning}
-              collapsed={false}
-            />
-
-            <div :for={{_id, tc} <- @tool_calls}>
-              <.tool_call_display name={tc[:name] || "tool"} status={tc[:status] || "pending"}>
-                <:params>
-                  <pre class="max-h-32 overflow-y-auto">{Jason.encode!(tc[:input] || %{}, pretty: true)}</pre>
-                </:params>
-                <:result :if={tc[:result] not in [nil, ""]}>
-                  <pre class={[
-                    "max-h-48 overflow-y-auto whitespace-pre-wrap",
-                    if(tc[:status] == "error", do: "text-error", else: nil)
-                  ]}>{tc[:result]}</pre>
-                </:result>
-              </.tool_call_display>
-            </div>
-
-            <.permission_card :for={req <- @permission_requests} {req} />
-
-            <%!-- Heartbeat notification cards --%>
-            <div :for={notif <- @heartbeat_notifications} class="relative">
-              <.heartbeat_card name={notif.name} timestamp={notif.timestamp}>
-                <p class="whitespace-pre-wrap leading-relaxed text-sm">
-                  {String.slice(notif.result || "", 0, 500)}
-                </p>
-              </.heartbeat_card>
-              <.dm_btn
-                variant="ghost"
-                size="xs"
-                phx-click="dismiss_heartbeat"
-                phx-value-id={notif.id}
-                class="absolute top-1 right-1 text-on-surface-variant/50 hover:text-on-surface-variant"
-              >
-                <.dm_mdi name="close" class="w-3.5 h-3.5" />
-              </.dm_btn>
-            </div>
-
-            <%!-- Embedded Code Agent panels --%>
-            <.code_agent_panel
-              :for={{_sub_id, agent} <- @code_agent_sessions}
-              prompt={agent.prompt}
-              status={agent.status}
-              tool_calls={agent.tool_calls}
-              completion={agent.completion}
-            />
-
-            <.chat_bubble
-              :if={@streaming_text != "" || @session_status == "streaming"}
-              role="assistant"
-              label={agent_display_name(@agent_config, @agent_id)}
-              avatar={agent_avatar(@agent_config)}
-              status="streaming"
-            >
-              <.dm_markdown
-                id="streaming-output"
-                phx-hook="StreamingText"
-                content={@streaming_text}
-                theme="auto"
-              />
-            </.chat_bubble>
-
-            <.streaming_indicator :if={@session_status == "streaming" && @streaming_text == ""} />
-          </div>
-
-          <%!-- Agent working indicator --%>
-          <.agent_working_indicator
-            :if={@session_status in ~w(streaming tool_executing)}
-            status={@session_status}
+          <.dm_react_chat
+            id={@react_chat_initial.id}
+            conversation_id={@react_chat_initial.conversation_id}
+            messages={@react_chat_initial.messages}
+            metadata={@react_chat_initial.metadata}
+            runtime={@react_chat_initial.runtime}
+            admission={@react_chat_initial.admission}
+            label={@react_chat_initial.metadata.assistantLabel}
+            hook="SynapsisReactChat"
+            class="synapsis-react-chat flex min-h-0 flex-1 flex-col"
           />
-
-          <%!-- Input area --%>
-          <div class="border-t border-outline-variant bg-surface-container-low p-3">
-            <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#41 --%>
-            <%!-- # WORKAROUND(upstream): duskmoon-dev/duskmoon-elements#73 --%>
-            <.dm_chat_input
-              id="message-input"
-              name="content"
-              value=""
-              placeholder="Send a message... (Ctrl/Cmd+Enter)"
-              disabled={chat_input_disabled?(@session_status)}
-              send_label={if running_session_status?(@session_status), do: "Queue", else: "Send"}
-              duskmoon-send-send="send_message"
-              {steer_quick_action_attrs(@session_status)}
-              class={[
-                "synapsis-chat-input w-full",
-                if(chat_input_disabled?(@session_status), do: "opacity-50 cursor-not-allowed")
-              ]}
-            />
-          </div>
 
           <%!-- Status bar --%>
           <.session_status_bar
@@ -949,6 +1092,48 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
   # --- Helpers ---
 
+  defp start_chat(socket) do
+    session_id = socket.assigns.current_session.id
+
+    ChatBridge.start(
+      socket,
+      "agent-chat-#{session_id}",
+      session_id,
+      SessionChat.snapshot(socket.assigns)
+    )
+  end
+
+  defp sync_chat(%{assigns: %{current_session: nil}} = socket), do: socket
+
+  defp sync_chat(socket) do
+    ChatBridge.sync(socket, SessionChat.snapshot(socket.assigns))
+  end
+
+  defp refresh_user_questions(%{assigns: %{current_session: nil}} = socket),
+    do: assign(socket, :user_questions, [])
+
+  defp refresh_user_questions(socket) do
+    questions =
+      case Synapsis.Session.Read.live_snapshot(socket.assigns.current_session.id) do
+        {:live, snapshot} -> public_user_questions(snapshot)
+        _ -> []
+      end
+
+    assign(socket, :user_questions, questions)
+  end
+
+  defp public_user_questions(snapshot) do
+    snapshot
+    |> Map.get(:user_questions, [])
+    |> Enum.map(&Map.take(&1, [:ref, :question, :options]))
+  end
+
+  defp answer_question(session_id, ref, response) do
+    Worker.answer_question(session_id, ref, response)
+  catch
+    :exit, _ -> {:error, :question_not_pending}
+  end
+
   defp load_sessions(agent_name) do
     {:ok, sessions} = Sessions.list(agent_name, limit: 50)
     sessions
@@ -971,12 +1156,6 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
     if String.ends_with?(base, "Agent"), do: base, else: "#{base} Agent"
   end
-
-  defp agent_avatar(%{icon: icon}) when is_binary(icon) do
-    if String.contains?(icon, "-") or length(String.graphemes(icon)) > 3, do: nil, else: icon
-  end
-
-  defp agent_avatar(_agent_config), do: nil
 
   defp assign_session_status(socket, status) when status in ~w(streaming tool_executing) do
     case fetch_current_session(socket) do
@@ -1022,9 +1201,6 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   defp fetch_current_session(_socket), do: {:error, :not_found}
 
   defp running_session_status?(status), do: status in @running_statuses
-
-  defp chat_input_disabled?(status),
-    do: status not in ~w(idle error streaming tool_executing)
 
   defp session_context_size_label(messages) when is_list(messages) do
     tokens = ContextWindow.total_tokens(messages)
@@ -1073,38 +1249,13 @@ defmodule SynapsisWeb.AgentLive.Sessions do
       streaming_text: "",
       streaming_reasoning: "",
       tool_calls: error_tool_calls,
-      permission_requests: []
+      permission_requests: [],
+      user_questions: []
     )
   end
 
   defp append_unique_input(inputs, queued) do
     if Enum.any?(inputs, &(&1.id == queued.id)), do: inputs, else: inputs ++ [queued]
-  end
-
-  defp steer_quick_action_attrs(status) do
-    if running_session_status?(status) do
-      %{"duskmoon-send-quick-action" => "steer_message"}
-    else
-      %{}
-    end
-  end
-
-  defp queued_prompt(assigns) do
-    ~H"""
-    <div
-      id={@id}
-      data-queued-input={@id}
-      class="ml-auto flex max-w-[min(42rem,85%)] flex-col items-end gap-1 rounded-md border border-primary/30 bg-primary-container/30 px-3 py-2 text-on-surface"
-    >
-      <div class="flex items-center gap-1 text-[0.7rem] font-medium uppercase text-primary">
-        <.dm_mdi name="clock-outline" class="h-3.5 w-3.5" />
-        <span>Queued</span>
-      </div>
-      <p class="max-w-full whitespace-pre-wrap break-words text-sm leading-relaxed">
-        {@content}
-      </p>
-    </div>
-    """
   end
 
   defp update_code_agent(socket, sub_id, "tool_use", %{tool: name}) do
@@ -1133,10 +1284,14 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     end)
   end
 
-  defp update_code_agent(socket, sub_id, "done", _payload) do
+  defp update_code_agent(socket, sub_id, "done", payload) do
     update(socket, :code_agent_sessions, fn sessions ->
       Map.update(sessions, sub_id, %{}, fn entry ->
-        %{entry | status: "complete"}
+        %{
+          entry
+          | status: "complete",
+            completion: payload[:content] || payload[:text] || entry.completion
+        }
       end)
     end)
   end

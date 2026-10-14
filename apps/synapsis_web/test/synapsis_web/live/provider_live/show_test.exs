@@ -479,21 +479,21 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
 
     test "toggle_chat opens and closes the chat panel", %{conn: conn, provider: provider} do
       {:ok, view, html} = live(conn, ~p"/settings/providers/#{provider.id}")
-      refute html =~ "Send a message to test"
+      refute html =~ ~s(phx-hook="SynapsisReactChat")
 
       html =
         view
         |> element(~s(div[phx-click="toggle_chat"]))
         |> render_click()
 
-      assert html =~ "Send a message to test"
+      assert html =~ ~s(phx-hook="SynapsisReactChat")
 
       html =
         view
         |> element(~s(div[phx-click="toggle_chat"]))
         |> render_click()
 
-      refute html =~ "Send a message to test"
+      refute html =~ ~s(phx-hook="SynapsisReactChat")
     end
 
     test "chat panel shows model selector", %{conn: conn, provider: provider} do
@@ -537,8 +537,9 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       |> element(~s(div[phx-click="toggle_chat"]))
       |> render_click()
 
-      html = render_hook(view, "chat_send", %{"message" => ""})
+      html = render_hook(view, "chat.send", chat_params(provider, %{"text" => ""}))
       refute html =~ "Provider not registered"
+      assert_reply view, %{status: "error", message: "Enter a message"}
     end
 
     test "chat_send without registered provider shows error", %{conn: conn, provider: provider} do
@@ -552,8 +553,17 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       # persisted providers are intentionally rebuilt by the runtime resolver.
       assert {:ok, _deleted} = Synapsis.Providers.delete(provider.id)
 
-      html = render_hook(view, "chat_send", %{"message" => "hello"})
-      assert html =~ "Provider not registered"
+      render_hook(view, "chat.send", chat_params(provider, %{"text" => "hello"}))
+
+      assert_reply view, %{
+        status: "error",
+        message: "Provider not registered. Save and enable it first."
+      }
+
+      assert_push_event view, "chat:event", %{
+        type: "chat.message",
+        message: %{status: "error", error: "Provider not registered. Save and enable it first."}
+      }
     end
 
     test "chat_send rejects an unavailable provider despite a stale registry entry", %{conn: conn} do
@@ -595,11 +605,15 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       |> element(~s(div[phx-click="toggle_chat"]))
       |> render_click()
 
-      html = render_hook(view, "chat_send", %{"message" => "must not leave the process"})
+      render_hook(
+        view,
+        "chat.send",
+        chat_params(provider, %{"text" => "must not leave the process"})
+      )
 
       refute_receive :provider_http_called, 200
       assert {:error, :not_found} = Synapsis.Provider.Registry.get(provider.name)
-      assert html =~ "Provider is currently unavailable"
+      assert_reply view, %{status: "error", message: "Provider is currently unavailable."}
     end
 
     test "chat_send rejects a source-disabled model before an HTTP request", %{conn: conn} do
@@ -655,10 +669,15 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       |> render_click()
 
       react_form_change(view, "provider-chat-model-form", %{"model" => "disabled-model"})
-      html = render_hook(view, "chat_send", %{"message" => "must not leave the process"})
+
+      render_hook(
+        view,
+        "chat.send",
+        chat_params(provider, %{"text" => "must not leave the process"})
+      )
 
       refute_receive :provider_http_called, 200
-      assert html =~ "Model is currently unavailable"
+      assert_reply view, %{status: "error", message: "Model is currently unavailable."}
     end
 
     test "chat_send preserves available non-Backplane providers", %{conn: conn} do
@@ -689,10 +708,10 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       |> element(~s(div[phx-click="toggle_chat"]))
       |> render_click()
 
-      html = render_hook(view, "chat_send", %{"message" => "hello"})
+      render_hook(view, "chat.send", chat_params(provider, %{"text" => "hello"}))
 
+      assert_reply view, %{status: "ok"}
       assert_receive :local_provider_http_called, 1_000
-      refute html =~ "Provider is currently unavailable"
     end
 
     test "chat_clear resets messages", %{conn: conn, provider: provider} do
@@ -704,44 +723,218 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
 
       render_hook(view, "chat_clear", %{})
       html = render(view)
-      assert html =~ "Send a message to test"
+      assert html =~ ~s(phx-hook="SynapsisReactChat")
     end
 
-    test "handle_info for provider_done appends assistant message", %{
+    test "React chat scopes requests and restores canonical state", %{
       conn: conn,
       provider: provider
     } do
       {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+      render_hook(view, "toggle_chat", %{})
 
-      view
-      |> element(~s(div[phx-click="toggle_chat"]))
-      |> render_click()
+      render_hook(
+        view,
+        "chat.send",
+        chat_params(provider, %{"conversation_id" => "other", "text" => "hello"})
+      )
 
-      # Simulate streaming lifecycle via handle_info
-      send(view.pid, {:provider_chunk, {:text_delta, "Hello "}})
-      send(view.pid, {:provider_chunk, {:text_delta, "world!"}})
+      assert_reply view, %{status: "error", message: "Conversation is no longer available"}
+
+      render_hook(
+        view,
+        "chat.send",
+        chat_params(provider, %{"request_id" => nil, "text" => "hello"})
+      )
+
+      assert_reply view, %{status: "error", message: "Invalid request ID"}
+
+      render_hook(
+        view,
+        "chat.send",
+        chat_params(provider, %{"text" => "hello", "images" => [%{}]})
+      )
+
+      assert_reply view, %{
+        status: "error",
+        message: "Provider test chat does not support attachments"
+      }
+
+      render_hook(view, "chat.sync", chat_params(provider))
+      assert_reply view, %{status: "ok"}
+
+      assert_push_event view, "chat:event", %{
+        type: "chat.snapshot",
+        messages: [],
+        metadata: %{kind: "provider", attachmentsAllowed: false, canStop: true},
+        runtime: %{active: false},
+        admission: %{canSubmit: true}
+      }
+    end
+
+    test "provider stream sends ordered deltas and preserves its assistant ID", %{conn: conn} do
+      {provider, _bypass} = controlled_chat_provider(self())
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+      render_hook(view, "toggle_chat", %{})
+      render_hook(view, "chat.send", chat_params(provider, %{"text" => "hello"}))
+      assert_reply view, %{status: "ok"}
+      assert_receive {:provider_request, request_pid}, 1_000
+
+      assert_push_event view, "chat:event", %{
+        type: "chat.message",
+        message_id: assistant_id,
+        message: %{role: "assistant", status: "streaming"},
+        runtime: %{active: true},
+        admission: %{canSubmit: false}
+      }
+
+      send(request_pid, {:respond, 200, chat_stream_response("Hello world!")})
+
+      assert_push_event view, "chat:event", %{
+        type: "chat.delta",
+        message_id: ^assistant_id,
+        sequence: 2,
+        text: "Hello world!"
+      }
+
+      assert_push_event view, "chat:event", %{
+        type: "chat.message",
+        message_id: ^assistant_id,
+        sequence: 3,
+        message: %{content: "Hello world!", status: "complete"},
+        runtime: %{active: false},
+        admission: %{canSubmit: true}
+      }
+
+      render_hook(view, "chat.sync", chat_params(provider))
+
+      assert_push_event view, "chat:event", %{
+        type: "chat.snapshot",
+        sequences: %{^assistant_id => 3},
+        messages: [%{role: "user"}, %{id: ^assistant_id, content: "Hello world!"}]
+      }
+    end
+
+    test "provider admission deduplicates requests and rejects a second active send", %{
+      conn: conn
+    } do
+      {provider, _bypass} = controlled_chat_provider(self())
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+      render_hook(view, "toggle_chat", %{})
+      params = chat_params(provider, %{"text" => "hello"})
+      render_hook(view, "chat.send", params)
+      assert_reply view, %{status: "ok"}
+      assert_receive {:provider_request, request_pid}, 1_000
+
+      render_hook(view, "chat.send", params)
+      assert_reply view, %{status: "ok"}
+      render_hook(view, "chat.send", chat_params(provider, %{"text" => "second"}))
+      assert_reply view, %{status: "error", message: "Wait for the provider response"}
+      refute_receive {:provider_request, _}, 100
+
+      render_hook(view, "chat.stop", chat_params(provider))
+      assert_reply view, %{status: "ok"}
+      send(request_pid, :release)
+      send(view.pid, {:provider_chunk, {:text_delta, "stale"}})
       send(view.pid, :provider_done)
+      render_hook(view, "chat.sync", chat_params(provider))
 
-      # Give the view a moment to process
-      html = render(view)
-      assert html =~ "Hello world!"
+      assert_push_event view, "chat:event", %{
+        type: "chat.snapshot",
+        runtime: %{active: false},
+        messages: [%{role: "user"}, %{role: "assistant", status: "cancelled", content: ""}]
+      }
     end
 
-    test "handle_info for provider_error shows error message", %{
-      conn: conn,
-      provider: provider
-    } do
+    test "provider errors have stable IDs and Clear cancels an admitted stream", %{conn: conn} do
+      {provider, _bypass} = controlled_chat_provider(self())
       {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+      render_hook(view, "toggle_chat", %{})
+      render_hook(view, "chat.send", chat_params(provider, %{"text" => "hello"}))
+      assert_reply view, %{status: "ok"}
+      assert_receive {:provider_request, request_pid}, 1_000
+      send(request_pid, {:respond, 401, Jason.encode!(%{error: %{message: "Invalid API key"}})})
 
-      view
-      |> element(~s(div[phx-click="toggle_chat"]))
-      |> render_click()
+      assert_push_event view, "chat:event", %{
+        type: "chat.snapshot",
+        messages: [
+          %{role: "user"},
+          %{id: error_id, role: "error", status: "error", content: error}
+        ]
+      }
 
-      send(view.pid, {:provider_error, "HTTP 401: Invalid API key"})
+      assert is_binary(error_id)
+      assert error =~ "Error:"
 
-      html = render(view)
-      assert html =~ "Error: HTTP 401"
+      render_hook(view, "chat_clear", %{})
+      assert_push_event view, "chat:event", %{type: "chat.snapshot", messages: []}
+      render_hook(view, "chat.send", chat_params(provider, %{"text" => "second"}))
+      assert_reply view, %{status: "ok"}
+      assert_receive {:provider_request, next_request_pid}, 1_000
+      render_hook(view, "chat_clear", %{})
+      send(next_request_pid, :release)
+      send(view.pid, {:provider_chunk, {:text_delta, "stale"}})
+      send(view.pid, :provider_done)
+      render_hook(view, "chat.sync", chat_params(provider))
+
+      assert_push_event view, "chat:event", %{
+        type: "chat.snapshot",
+        messages: [],
+        runtime: %{active: false}
+      }
     end
+  end
+
+  defp chat_params(provider, attrs \\ %{}) do
+    Map.merge(
+      %{
+        "id" => "provider-chat-#{provider.id}",
+        "conversation_id" => provider.id,
+        "request_id" => Ecto.UUID.generate()
+      },
+      attrs
+    )
+  end
+
+  defp controlled_chat_provider(test_pid) do
+    bypass = Bypass.open()
+
+    Bypass.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Process.flag(:trap_exit, true)
+      send(test_pid, {:provider_request, self()})
+
+      receive do
+        :release ->
+          conn
+
+        {:respond, status, body} ->
+          conn
+          |> Plug.Conn.put_resp_content_type(
+            if(status == 200, do: "text/event-stream", else: "application/json")
+          )
+          |> Plug.Conn.send_resp(status, body)
+      after
+        5_000 -> Plug.Conn.send_resp(conn, 500, "test stream response missing")
+      end
+    end)
+
+    provider =
+      create_provider!(%{
+        name: "react-chat",
+        type: "openai",
+        base_url: "http://localhost:#{bypass.port}",
+        config: %{"available_models" => [%{"id" => "test-model", "name" => "Test Model"}]}
+      })
+
+    {provider, bypass}
+  end
+
+  defp chat_stream_response(text) do
+    "data: " <>
+      Jason.encode!(%{choices: [%{index: 0, delta: %{content: text}}]}) <>
+      "\n\ndata: " <>
+      Jason.encode!(%{choices: [%{index: 0, delta: %{}, finish_reason: "stop"}]}) <>
+      "\n\ndata: [DONE]\n\n"
   end
 
   defp create_provider!(attrs) do
