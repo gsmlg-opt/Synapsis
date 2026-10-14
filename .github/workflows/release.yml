@@ -71,7 +71,7 @@ jobs:
           mix local.rebar --force
           mix deps.get
 
-      # TODO(upstream): duskmoon-dev/phoenix-duskmoon-ui#201
+      # TODO(upstream): duskmoon-dev/duskmoon-bundler#1
       # TODO(upstream): gsmlg-dev/http_fetch#111
       - name: Install JavaScript dependencies
         run: mix npm.ci
@@ -159,7 +159,7 @@ jobs:
           mix local.rebar --force
           mix deps.get --only prod
 
-      # TODO(upstream): duskmoon-dev/phoenix-duskmoon-ui#201
+      # TODO(upstream): duskmoon-dev/duskmoon-bundler#1
       # TODO(upstream): gsmlg-dev/http_fetch#111
       - name: Install JavaScript dependencies
         run: mix npm.ci
