@@ -100,6 +100,64 @@ defmodule Synapsis.Tool.AskUserTest do
   end
 
   describe "blocking and response" do
+    test "broadcasts private waiter lifetime and closes the question after answering" do
+      session_id = Ecto.UUID.generate()
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session_id}")
+
+      task =
+        Task.async(fn ->
+          AskUser.execute(%{"question" => "City?"}, %{
+            session_id: session_id,
+            session_epoch: 42
+          })
+        end)
+
+      assert_receive {:ask_user, ref, %{owner: owner, deadline_ms: deadline, session_epoch: 42}},
+                     1_000
+
+      assert owner == task.pid
+      assert deadline > System.monotonic_time(:millisecond)
+
+      Phoenix.PubSub.broadcast(
+        Synapsis.PubSub,
+        "ask_user_response:#{session_id}",
+        {:user_response, ref, "Beijing"}
+      )
+
+      assert {:ok, "Beijing"} = Task.await(task)
+      assert_receive {:ask_user_closed, ^ref}
+    end
+
+    test "closes timed out questions without requiring a five minute test" do
+      session_id = Ecto.UUID.generate()
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session_id}")
+
+      task =
+        Task.async(fn ->
+          AskUser.execute(%{"question" => "City?"}, %{
+            session_id: session_id,
+            ask_user_timeout_ms: 10
+          })
+        end)
+
+      assert_receive {:ask_user, ref, _}, 1_000
+      assert {:error, _} = Task.await(task)
+      assert_receive {:ask_user_closed, ^ref}
+    end
+
+    test "cancellation releases the waiter and closes its question" do
+      session_id = Ecto.UUID.generate()
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session_id}")
+
+      task =
+        Task.async(fn -> AskUser.execute(%{"question" => "City?"}, %{session_id: session_id}) end)
+
+      assert_receive {:ask_user, ref, _}, 1_000
+      send(task.pid, {:ask_user_cancelled, ref})
+      assert {:error, "Question cancelled"} = Task.await(task)
+      assert_receive {:ask_user_closed, ^ref}
+    end
+
     test "blocks until user responds" do
       session_id = "test-session-#{System.unique_integer([:positive])}"
       Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session_id}")

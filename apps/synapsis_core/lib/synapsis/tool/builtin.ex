@@ -49,11 +49,14 @@ defmodule Synapsis.Tool.Builtin do
 
   def register_all do
     for mod <- @tools do
-      Synapsis.Tool.Registry.register_module(mod.name(), mod,
+      opts = [
         timeout: default_timeout(mod.name()),
         description: mod.description(),
         parameters: mod.parameters()
-      )
+      ]
+
+      opts = if mod == Synapsis.Tool.AskUser, do: Keyword.put(opts, :max_retries, 0), else: opts
+      Synapsis.Tool.Registry.register_module(mod.name(), mod, opts)
     end
 
     :ok
@@ -70,7 +73,7 @@ defmodule Synapsis.Tool.Builtin do
   defp default_timeout("list_dir"), do: 5_000
   defp default_timeout("file_delete"), do: 5_000
   defp default_timeout("file_move"), do: 5_000
-  defp default_timeout("ask_user"), do: 300_000
+  defp default_timeout("ask_user"), do: 301_000
   defp default_timeout("sleep"), do: 600_000
   defp default_timeout("agent_ask"), do: 300_000
   defp default_timeout("agent_handoff"), do: 30_000

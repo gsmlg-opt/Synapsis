@@ -48,13 +48,18 @@ defmodule Synapsis.Tool.BuiltinTest do
     "file_delete" => 5_000,
     "file_move" => 5_000,
     "multi_edit" => 15_000,
-    "ask_user" => 300_000,
+    "ask_user" => 301_000,
     "task" => 600_000,
     "sleep" => 600_000
   }
 
   # Tools are registered at application startup by Builtin.register_all/0.
   # We do NOT unregister them — we verify the app-startup state.
+
+  test "ask_user never automatically retries a human question" do
+    assert {:ok, {:module, Synapsis.Tool.AskUser, opts}} = Registry.lookup("ask_user")
+    assert opts[:max_retries] == 0
+  end
 
   describe "register_all/0 total tool count" do
     test "Registry.list/0 returns exactly 27 tools from builtin set" do

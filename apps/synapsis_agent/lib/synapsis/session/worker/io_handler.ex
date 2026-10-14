@@ -339,6 +339,7 @@ defmodule Synapsis.Session.Worker.IOHandler do
             context = %{
               project_path: effective_path,
               session_id: session_id,
+              session_epoch: epoch,
               working_dir: effective_path,
               agent_id: agent_id,
               agent_scope: :agent,

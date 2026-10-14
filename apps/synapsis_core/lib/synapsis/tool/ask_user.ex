@@ -2,6 +2,8 @@ defmodule Synapsis.Tool.AskUser do
   @moduledoc "Present structured questions to the user and wait for response."
   use Synapsis.Tool
 
+  @response_timeout 300_000
+
   @impl true
   def name, do: "ask_user"
 
@@ -51,28 +53,42 @@ defmodule Synapsis.Tool.AskUser do
         question = input["question"]
         options = input["options"]
         ref = Ecto.UUID.generate()
+        timeout = context[:ask_user_timeout_ms] || @response_timeout
 
         # Subscribe to response topic before broadcasting to avoid race condition
         Phoenix.PubSub.subscribe(Synapsis.PubSub, "ask_user_response:#{session_id}")
 
         # Broadcast question to session — include ref so clients can echo it back
-        Phoenix.PubSub.broadcast(
-          Synapsis.PubSub,
-          "session:#{session_id}",
-          {:ask_user, ref, %{ref: ref, question: question, options: options}}
-        )
+        try do
+          Phoenix.PubSub.broadcast(
+            Synapsis.PubSub,
+            "session:#{session_id}",
+            {:ask_user, ref,
+             %{
+               ref: ref,
+               question: question,
+               options: options,
+               session_id: session_id,
+               session_epoch: context[:session_epoch],
+               owner: self(),
+               deadline_ms: System.monotonic_time(:millisecond) + timeout
+             }}
+          )
 
-        # Wait for user response (with timeout)
-        timeout = 300_000
-
-        receive do
-          {:user_response, ^ref, response} ->
-            Phoenix.PubSub.unsubscribe(Synapsis.PubSub, "ask_user_response:#{session_id}")
-            {:ok, response}
+          receive do
+            {:user_response, ^ref, response} -> {:ok, response}
+            {:ask_user_cancelled, ^ref} -> {:error, "Question cancelled"}
+          after
+            timeout -> {:error, "User did not respond within 5 minutes"}
+          end
         after
-          timeout ->
-            Phoenix.PubSub.unsubscribe(Synapsis.PubSub, "ask_user_response:#{session_id}")
-            {:error, "User did not respond within 5 minutes"}
+          Phoenix.PubSub.unsubscribe(Synapsis.PubSub, "ask_user_response:#{session_id}")
+
+          Phoenix.PubSub.broadcast(
+            Synapsis.PubSub,
+            "session:#{session_id}",
+            {:ask_user_closed, ref}
+          )
         end
       end
     end

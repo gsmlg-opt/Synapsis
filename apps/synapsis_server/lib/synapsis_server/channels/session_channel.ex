@@ -263,7 +263,7 @@ defmodule SynapsisServer.SessionChannel do
 
   @impl true
   def handle_info({:ask_user, _ref, payload}, socket) do
-    push(socket, "ask_user", payload)
+    push(socket, "ask_user", Map.take(payload, [:ref, :question, :options]))
     {:noreply, socket}
   end
 

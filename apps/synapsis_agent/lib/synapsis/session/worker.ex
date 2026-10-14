@@ -67,6 +67,7 @@ defmodule Synapsis.Session.Worker do
     pending_tool_count: 0,
     pending_approvals: MapSet.new(),
     approval_decisions: %{},
+    user_questions: %{},
     execution_mode: :graph,
     query_loop_task: nil,
     checkpoints: [],
@@ -123,6 +124,9 @@ defmodule Synapsis.Session.Worker do
 
   def get_status(session_id), do: :gen_statem.call(via(session_id), :get_status, 10_000)
 
+  def answer_question(session_id, ref, response),
+    do: :gen_statem.call(via(session_id), {:answer_question, ref, response}, 10_000)
+
   @doc """
   Live read snapshot of the session (ADR-006 B2): the process is the read
   authority during a turn. Returns the current status, session record, and the
@@ -149,6 +153,7 @@ defmodule Synapsis.Session.Worker do
           # Successful boot clears the poison-protection failure counter.
           Synapsis.Session.Quarantine.clear(session.id)
           recover_pending_inputs(session.id)
+          Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}")
           Logger.info("session_worker_started", session_id: session.id)
 
           data = %__MODULE__{
@@ -320,14 +325,45 @@ defmodule Synapsis.Session.Worker do
   end
 
   def handle_event({:call, from}, :snapshot, state, data) do
+    data = prune_user_questions(data)
+
     snapshot = %{
       source: :live,
       status: external_status(state),
       session: data.session,
-      in_flight_text: Map.get(data.stream_acc, :pending_text, "")
+      in_flight_text: Map.get(data.stream_acc, :pending_text, ""),
+      user_questions:
+        data
+        |> Map.get(:user_questions, %{})
+        |> Enum.sort_by(fn {ref, _question} -> ref end)
+        |> Enum.map(fn {_ref, question} -> Map.take(question, [:ref, :question, :options]) end)
     }
 
-    keep(data, [{:reply, from, snapshot}])
+    {:keep_state, data, [{:reply, from, snapshot}, timeout_action()]}
+  end
+
+  def handle_event({:call, from}, {:answer_question, ref, response}, _state, data) do
+    data = prune_user_questions(data)
+
+    {result, data} =
+      cond do
+        not is_binary(response) or String.trim(response) == "" ->
+          {{:error, :invalid_response}, data}
+
+        not Map.has_key?(Map.get(data, :user_questions, %{}), ref) ->
+          {{:error, :question_not_pending}, data}
+
+        true ->
+          Phoenix.PubSub.broadcast(
+            Synapsis.PubSub,
+            "ask_user_response:#{data.session_id}",
+            {:user_response, ref, response}
+          )
+
+          {:ok, close_user_question(data, ref)}
+      end
+
+    {:keep_state, data, [{:reply, from, result}, timeout_action()]}
   end
 
   def handle_event({:call, from}, {:switch_agent, name}, _state, data) do
@@ -367,6 +403,7 @@ defmodule Synapsis.Session.Worker do
   end
 
   def handle_event(:cast, :cancel, _state, data) do
+    data = cancel_user_questions(data)
     cancel_pending_steers(data.session_id)
 
     case data.execution_mode do
@@ -517,6 +554,90 @@ defmodule Synapsis.Session.Worker do
   end
 
   # QueryLoop events
+  def handle_event(
+        :info,
+        {:ask_user, ref, %{owner: owner, session_epoch: epoch} = payload},
+        _state,
+        %{epoch: current_epoch} = data
+      )
+      when is_binary(ref) and is_pid(owner) and not is_nil(epoch) and epoch != current_epoch do
+    if Map.get(payload, :session_id, data.session_id) == data.session_id do
+      send(owner, {:ask_user_cancelled, ref})
+
+      Phoenix.PubSub.broadcast(
+        Synapsis.PubSub,
+        "session:#{data.session_id}",
+        {:ask_user_closed, ref}
+      )
+    end
+
+    {:keep_state, data, [timeout_action()]}
+  end
+
+  def handle_event(
+        :info,
+        {:ask_user, ref, %{owner: owner, deadline_ms: deadline} = payload},
+        _state,
+        data
+      )
+      when is_binary(ref) and is_pid(owner) and is_integer(deadline) do
+    data = prune_user_questions(data)
+
+    data =
+      if Process.alive?(owner) and deadline > System.monotonic_time(:millisecond) and
+           Map.get(payload, :session_id, data.session_id) == data.session_id do
+        questions = Map.get(data, :user_questions, %{})
+
+        if Map.has_key?(questions, ref) do
+          data
+        else
+          question =
+            payload
+            |> Map.take([:question, :options])
+            |> Map.merge(%{
+              ref: ref,
+              owner: owner,
+              deadline_ms: deadline,
+              monitor: Process.monitor(owner),
+              timer:
+                Process.send_after(
+                  self(),
+                  {:ask_user_expired, ref},
+                  max(deadline - System.monotonic_time(:millisecond), 0)
+                )
+            })
+
+          # Repeat only the public notification after registration so subscribers
+          # can safely refresh the authoritative snapshot regardless of delivery order.
+          Phoenix.PubSub.broadcast(
+            Synapsis.PubSub,
+            "session:#{data.session_id}",
+            {:ask_user, ref,
+             Map.put(
+               Map.take(question, [:ref, :question, :options]),
+               :session_id,
+               data.session_id
+             )}
+          )
+
+          Map.put(data, :user_questions, Map.put(questions, ref, question))
+        end
+      else
+        data
+      end
+
+    {:keep_state, data, [timeout_action()]}
+  end
+
+  def handle_event(:info, {:ask_user, _ref, _payload}, _state, data),
+    do: {:keep_state, data, [timeout_action()]}
+
+  def handle_event(:info, {:ask_user_closed, ref}, _state, data),
+    do: {:keep_state, close_user_question(data, ref), [timeout_action()]}
+
+  def handle_event(:info, {:ask_user_expired, ref}, _state, data),
+    do: {:keep_state, close_user_question(data, ref), [timeout_action()]}
+
   def handle_event(:info, {:query_event, event}, _state, %{execution_mode: :query_loop} = data),
     do: advance(IOHandler.handle_query_loop_event(event, data))
 
@@ -549,12 +670,18 @@ defmodule Synapsis.Session.Worker do
   # Tool task monitor — abnormal exit without having sent a tool_result.
   def handle_event(:info, {:DOWN, ref, :process, _pid, reason}, _state, data)
       when is_reference(ref) do
+    data =
+      case Enum.find(Map.get(data, :user_questions, %{}), fn {_id, q} -> q.monitor == ref end) do
+        {question_ref, _question} -> close_user_question(data, question_ref)
+        nil -> data
+      end
+
     case Map.fetch(data.tool_tasks, ref) do
       {:ok, tool_use_id} ->
         advance(IOHandler.handle_tool_task_down(ref, tool_use_id, reason, data))
 
       :error ->
-        keep(data)
+        {:keep_state, data, [timeout_action()]}
     end
   end
 
@@ -568,6 +695,8 @@ defmodule Synapsis.Session.Worker do
 
   @impl :gen_statem
   def terminate(reason, _state, data) do
+    cancel_user_questions(data)
+
     Logger.info("session_worker_terminated",
       session_id: data.session_id,
       reason: inspect(reason)
@@ -668,6 +797,40 @@ defmodule Synapsis.Session.Worker do
   end
 
   # --- Private helpers ---
+
+  defp prune_user_questions(data) do
+    now = System.monotonic_time(:millisecond)
+
+    Enum.reduce(Map.get(data, :user_questions, %{}), data, fn {ref, question}, data ->
+      if question.deadline_ms <= now or not Process.alive?(question.owner),
+        do: close_user_question(data, ref),
+        else: data
+    end)
+  end
+
+  defp close_user_question(data, ref) do
+    {question, questions} = Map.pop(Map.get(data, :user_questions, %{}), ref)
+
+    if question do
+      Process.demonitor(question.monitor, [:flush])
+      Process.cancel_timer(question.timer)
+
+      Phoenix.PubSub.broadcast(
+        Synapsis.PubSub,
+        "session:#{data.session_id}",
+        {:ask_user_closed, ref}
+      )
+    end
+
+    Map.put(data, :user_questions, questions)
+  end
+
+  defp cancel_user_questions(data) do
+    Enum.reduce(Map.get(data, :user_questions, %{}), data, fn {ref, question}, data ->
+      send(question.owner, {:ask_user_cancelled, ref})
+      close_user_question(data, ref)
+    end)
+  end
 
   defp new_epoch, do: System.monotonic_time()
 
