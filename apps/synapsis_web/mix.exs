@@ -41,8 +41,8 @@ defmodule SynapsisWeb.MixProject do
       {:phoenix_duskmoon, "~> 9.16.10"},
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.4"},
-      {:duskmoon_bundler_runtime, "~> 9.16.10"},
-      {:duskmoon_bundler, "~> 9.16.10", runtime: Mix.env() in [:dev, :test]},
+      {:duskmoon_bundler_runtime, "~> 10.0.1"},
+      {:duskmoon_bundler, "~> 10.0.1", runtime: Mix.env() in [:dev, :test]},
       {:lazy_html, "~> 0.1.13"}
     ]
   end
