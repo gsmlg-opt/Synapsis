@@ -174,7 +174,7 @@ jobs:
         run: rm -f _build/prod/synapsis-*.tar.gz
 
       - name: Build OTP release
-        run: mix release synapsis
+        run: mix release synapsis --overwrite
         env:
           SECRET_KEY_BASE: ${{ secrets.SECRET_KEY_BASE || 'build-only-placeholder-key-that-is-at-least-64-bytes-long-for-phoenix' }}
 
