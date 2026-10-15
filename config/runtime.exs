@@ -24,6 +24,9 @@ encryption_key =
 config :synapsis_data, encryption_key: encryption_key
 
 if config_env() == :prod do
+  config :duskmoon_bundler_runtime, :synapsis_web,
+    outdir: Application.app_dir(:synapsis_web, "priv/static/assets")
+
   secret_key_base =
     System.get_env("SECRET_KEY_BASE") ||
       raise """

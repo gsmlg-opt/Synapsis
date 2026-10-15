@@ -252,6 +252,49 @@ jobs:
           curl --fail --silent --show-error http://127.0.0.1:4664/api/health >"$smoke_root/health.json"
           jq -e --arg version "$RELEASE_VERSION" '.ok == true and .version == $version' "$smoke_root/health.json"
 
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from urllib.parse import urljoin, urlsplit
+          from urllib.request import urlopen
+
+          base_url = "http://127.0.0.1:4664/"
+
+          class Assets(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.scripts = set()
+                  self.stylesheets = set()
+
+              def handle_starttag(self, tag, attributes):
+                  attrs = dict(attributes)
+                  if tag == "script" and attrs.get("src"):
+                      self.scripts.add(attrs["src"])
+                  if tag == "link" and "stylesheet" in attrs.get("rel", "").split() and attrs.get("href"):
+                      self.stylesheets.add(attrs["href"])
+
+          with urlopen(base_url, timeout=10) as response:
+              assert response.status == 200, f"Dashboard returned {response.status}"
+              assert response.headers.get_content_type() == "text/html", "Dashboard did not return HTML"
+              assets = Assets()
+              assets.feed(response.read().decode("utf-8"))
+
+          assert assets.scripts, "Dashboard did not emit JavaScript assets"
+          assert assets.stylesheets, "Dashboard did not emit CSS assets"
+          for references, content_types in [
+              (assets.scripts, {"text/javascript", "application/javascript"}),
+              (assets.stylesheets, {"text/css"}),
+          ]:
+              for reference in sorted(references):
+                  url = urljoin(base_url, reference)
+                  assert urlsplit(url).netloc == urlsplit(base_url).netloc, f"Unexpected asset host: {url}"
+                  with urlopen(url, timeout=10) as response:
+                      assert response.status == 200, f"Asset returned {response.status}: {url}"
+                      content_type = response.headers.get_content_type()
+                      assert content_type in content_types, f"Wrong asset content type {content_type}: {url}"
+                      assert response.read(), f"Empty asset: {url}"
+                  print(f"Verified {content_type}: {url}")
+          PY
+
           listen_address="$(ss -H -ltn 'sport = :4664' | awk 'NR == 1 { print $4 }')"
           test "$listen_address" = "127.0.0.1:4664"
 

@@ -33,6 +33,71 @@ defmodule SynapsisServer.RuntimeConfigTest do
     assert read_endpoint_config() |> Keyword.fetch!(:server)
   end
 
+  @tag :tmp_dir
+  test "resolves production asset manifests from the installed application", %{tmp_dir: tmp_dir} do
+    original_code_path =
+      :synapsis_web |> :code.lib_dir() |> Path.join("ebin") |> String.to_charlist()
+
+    original_bundler = Application.fetch_env(:duskmoon_bundler, :synapsis_web)
+    original_runtime = Application.fetch_env(:duskmoon_bundler_runtime, :synapsis_web)
+    app_dir = Path.join(tmp_dir, "synapsis_web-0.0.0")
+    ebin = Path.join(app_dir, "ebin")
+    outdir = Path.join(app_dir, "priv/static/assets")
+    File.mkdir_p!(ebin)
+    File.mkdir_p!(outdir)
+
+    on_exit(fn ->
+      :code.replace_path(:synapsis_web, original_code_path)
+
+      for {app, original} <- [
+            duskmoon_bundler: original_bundler,
+            duskmoon_bundler_runtime: original_runtime
+          ] do
+        case original do
+          {:ok, value} -> Application.put_env(app, :synapsis_web, value)
+          :error -> Application.delete_env(app, :synapsis_web)
+        end
+      end
+    end)
+
+    assert :code.replace_path(:synapsis_web, String.to_charlist(ebin))
+
+    File.write!(
+      Path.join(outdir, "manifest.json"),
+      Jason.encode!(%{
+        "manifest_version" => 1,
+        "entries" => %{
+          "css/app.css" => %{"file" => "app-installed.css"},
+          "js/app.js" => %{"file" => "app-installed.js"}
+        }
+      })
+    )
+
+    runtime_profile =
+      @runtime_config
+      |> Config.Reader.read!(env: :prod)
+      |> Keyword.fetch!(:duskmoon_bundler_runtime)
+      |> Keyword.fetch!(:synapsis_web)
+
+    assert runtime_profile[:outdir] == outdir
+
+    Application.put_env(:duskmoon_bundler, :synapsis_web,
+      outdir: Path.join(tmp_dir, "missing-build-checkout/assets")
+    )
+
+    Application.put_env(:duskmoon_bundler_runtime, :synapsis_web, runtime_profile)
+
+    for {source, installed} <- [
+          {"/assets/css/app.css", "/assets/app-installed.css"},
+          {"/assets/js/app.js", "/assets/app-installed.js"}
+        ] do
+      assert {:ok, ^installed} =
+               DuskmoonBundler.StaticPath.resolve(SynapsisServer.Endpoint, source,
+                 profile: :synapsis_web
+               )
+    end
+  end
+
   test "accepts an explicit IPv4 bind address" do
     assert endpoint_ip("0.0.0.0") == {0, 0, 0, 0}
   end
