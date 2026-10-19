@@ -57,6 +57,8 @@ defmodule SynapsisWeb.ProviderLive.Index do
     attrs = %{
       name: params["name"],
       type: preset.type,
+      preset: if(preset.custom, do: nil, else: preset.name),
+      config: %{"model_catalog_migrated" => true},
       base_url:
         if(preset.custom or Map.get(preset, :base_url_editable, false),
           do: params["base_url"],

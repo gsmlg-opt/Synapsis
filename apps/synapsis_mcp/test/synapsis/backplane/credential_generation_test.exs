@@ -24,7 +24,7 @@ defmodule Synapsis.Backplane.CredentialGenerationTest do
     :ok
   end
 
-  test "failed endpoint and credential update keeps one coherent MCP generation" do
+  test "linked endpoint and credential edits retain a coherent current provider generation" do
     assert {:ok, connection} =
              Connection.create(%{
                name: "credential-generation",
@@ -51,8 +51,9 @@ defmodule Synapsis.Backplane.CredentialGenerationTest do
 
     [repeated_mcp] = MCPConfigs.list()
 
-    assert repeated_mcp.config["backplane_credential_encrypted"] ==
-             old_mcp.config["backplane_credential_encrypted"]
+    assert is_binary(repeated_mcp.provider_id)
+    refute Map.has_key?(repeated_mcp.config, "backplane_credential_encrypted")
+    assert repeated_mcp.config["provider_url_override"] == false
 
     assert {:ok, changed} =
              Backplane.update(
@@ -68,7 +69,13 @@ defmodule Synapsis.Backplane.CredentialGenerationTest do
     [retained_mcp] = MCPConfigs.list()
     assert retained_mcp.id == old_mcp.id
     assert retained_mcp.url == "https://old.example.test/mcp"
-    assert authorization(retained_mcp) == "Bearer old-secret"
+    assert authorization(retained_mcp) == "Bearer new-secret"
+    assert {:streamable_http, current_transport} = Transport.build(retained_mcp)
+    assert current_transport[:base_url] == "https://new.example.test"
+    assert current_transport[:mcp_path] == "/mcp"
+    assert retained_mcp.provider_id == changed.provider_id
+    assert "tools" in changed.unavailable
+    assert changed.metadata["surface_errors"]["tools"] =~ "mcp_offline"
 
     assert {:ok, _refreshed} =
              Backplane.refresh(connection.id,
@@ -122,6 +129,7 @@ defmodule Synapsis.Backplane.CredentialGenerationTest do
     assert retained_mcp.config["backplane_credential_mode"] == "keyless"
     refute Map.has_key?(retained_mcp.config, "backplane_credential_encrypted")
     assert authorization(retained_mcp) == nil
+    refute MCPConfigs.runtime_available?(retained_mcp)
 
     assert {:ok, _refreshed} =
              Backplane.refresh(connection.id,
@@ -131,8 +139,9 @@ defmodule Synapsis.Backplane.CredentialGenerationTest do
     [promoted_mcp] = MCPConfigs.list()
     assert promoted_mcp.id == keyless_mcp.id
     assert promoted_mcp.url == "https://credentialed.example.test/mcp"
-    assert promoted_mcp.config["backplane_credential_mode"] == "encrypted"
-    assert is_binary(promoted_mcp.config["backplane_credential_encrypted"])
+    assert promoted_mcp.provider_id == changed.provider_id
+    refute Map.has_key?(promoted_mcp.config, "backplane_credential_mode")
+    refute Map.has_key?(promoted_mcp.config, "backplane_credential_encrypted")
     assert authorization(promoted_mcp) == "Bearer new-secret"
   end
 

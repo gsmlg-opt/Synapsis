@@ -5,7 +5,33 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
 
   alias Synapsis.MCPConfigs
 
+  defmodule NoopRefresh do
+    def refresh, do: %{}
+  end
+
+  defmodule ObservedRefresh do
+    def refresh do
+      send(
+        Application.fetch_env!(:synapsis_web, :mcp_settings_refresh_owner),
+        :settings_refresh_requested
+      )
+
+      %{}
+    end
+  end
+
   setup do
+    original = Application.get_env(:synapsis_core, :mcp_refresh)
+    Application.put_env(:synapsis_core, :mcp_refresh, {NoopRefresh, :refresh, []})
+
+    on_exit(fn ->
+      if original,
+        do: Application.put_env(:synapsis_core, :mcp_refresh, original),
+        else: Application.delete_env(:synapsis_core, :mcp_refresh)
+
+      Application.delete_env(:synapsis_web, :mcp_settings_refresh_owner)
+    end)
+
     Synapsis.DataCase.clear_config_store(:mcp)
     :ok
   end
@@ -40,6 +66,44 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
   defp create_mcp_config(attrs) do
     {:ok, config} = MCPConfigs.create(Map.merge(%{transport: "stdio"}, attrs))
     config
+  end
+
+  test "requests live MCP discovery on connected open", %{conn: conn} do
+    Application.put_env(:synapsis_core, :mcp_refresh, {ObservedRefresh, :refresh, []})
+    Application.put_env(:synapsis_web, :mcp_settings_refresh_owner, self())
+    {:ok, view, _} = live(conn, ~p"/settings/mcp")
+    render_async(view)
+    assert_receive :settings_refresh_requested
+    refute_receive :settings_refresh_requested, 20
+  end
+
+  test "offers provider-linked MCP creation and live refresh", %{conn: conn} do
+    {:ok, provider} =
+      Synapsis.Providers.create(%{
+        name: "mcp-provider-#{System.unique_integer([:positive])}",
+        type: "openai",
+        config: %{"preset" => "backplane"},
+        base_url: "https://backplane.example.test/v1"
+      })
+
+    on_exit(fn -> Synapsis.Providers.delete(provider.id) end)
+    {:ok, view, html} = live(conn, ~p"/settings/mcp")
+    assert html =~ "Provider connection"
+    assert has_element?(view, "[data-form-id='mcp-provider-form']")
+    assert has_element?(view, "[phx-click='refresh_catalog']")
+
+    react_form_submit(view, "mcp-provider-form", %{
+      "provider_id" => provider.id,
+      "url" => "https://override.example.test/custom/mcp"
+    })
+
+    assert config = Enum.find(MCPConfigs.list(), &(&1.provider_id == provider.id))
+    assert config.url == "https://override.example.test/custom/mcp"
+    Synapsis.MCPConfigs.delete(config)
+
+    for source <- Synapsis.Backplane.Connection.list(),
+        source.provider_id == provider.id,
+        do: Synapsis.Backplane.Connection.delete(source)
   end
 
   describe "MCP servers page" do

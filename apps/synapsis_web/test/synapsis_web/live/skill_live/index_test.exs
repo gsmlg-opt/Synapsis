@@ -7,6 +7,29 @@ defmodule SynapsisWeb.SkillLive.IndexTest do
     :ok
   end
 
+  test "offers explicit provider sources without creating one on provider creation", %{conn: conn} do
+    {:ok, provider} =
+      Synapsis.Providers.create(%{
+        name: "skill-provider-#{System.unique_integer([:positive])}",
+        type: "openai",
+        config: %{"preset" => "backplane"},
+        base_url: "https://backplane.example.test/v1"
+      })
+
+    on_exit(fn -> Synapsis.Providers.delete(provider.id) end)
+    refute Enum.any?(Synapsis.Backplane.Connection.list(), &(&1.provider_id == provider.id))
+    {:ok, view, html} = live(conn, ~p"/settings/skills")
+    assert html =~ "Remote skill sources"
+    assert has_element?(view, "[data-form-id='skill-source-form']")
+    react_form_submit(view, "skill-source-form", %{"provider_id" => provider.id})
+
+    assert source =
+             Enum.find(Synapsis.Backplane.Connection.list(), &(&1.provider_id == provider.id))
+
+    assert source.connection_options["enabled_surfaces"] == ["skills"]
+    Synapsis.Backplane.Connection.delete(source)
+  end
+
   describe "skills page" do
     test "mounts and renders heading", %{conn: conn} do
       {:ok, view, html} = live(conn, ~p"/settings/skills")

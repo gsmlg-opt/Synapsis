@@ -12,6 +12,7 @@ defmodule Synapsis.Backplane do
   @max_error_length 500
   @editable_fields [
     :name,
+    :provider_id,
     :endpoint,
     :base_url,
     :credential,
@@ -20,6 +21,7 @@ defmodule Synapsis.Backplane do
     :enabled,
     :metadata,
     "name",
+    "provider_id",
     "endpoint",
     "base_url",
     "credential",
@@ -28,6 +30,74 @@ defmodule Synapsis.Backplane do
     "enabled",
     "metadata"
   ]
+
+  @doc "Explicitly enable a provider-backed capability source without performing remote I/O."
+  def select_provider(provider_id, surface) when surface in ["skills", "tools"] do
+    with {:ok, resolved} <- Synapsis.Backplane.ProviderSource.get(provider_id),
+         true <- Synapsis.Backplane.ProviderSource.backplane?(resolved.provider) do
+      case Enum.find(Connection.list(), &(&1.provider_id == provider_id)) do
+        nil ->
+          Connection.create(%{
+            name: "provider-" <> provider_id,
+            provider_id: provider_id,
+            connection_options: %{"enabled_surfaces" => [surface]}
+          })
+
+        source ->
+          surfaces =
+            source.connection_options["enabled_surfaces"] || ["models", "tools", "skills"]
+
+          Connection.update(source, %{
+            connection_options:
+              Map.put(
+                source.connection_options,
+                "enabled_surfaces",
+                Enum.uniq(surfaces ++ [surface])
+              )
+          })
+      end
+    else
+      _ -> {:error, :provider_unavailable}
+    end
+  end
+
+  def select_mcp_provider(provider_id, override \\ nil) do
+    with {:ok, source} <- select_provider(provider_id, "tools") do
+      overridden? = is_binary(override) and String.trim(override) != ""
+      url = if overridden?, do: String.trim(override), else: source.endpoint <> "/mcp"
+
+      options =
+        if overridden?,
+          do: Map.put(source.connection_options, "mcp_url", url),
+          else: Map.delete(source.connection_options, "mcp_url")
+
+      with {:ok, source} <- Connection.update(source, %{connection_options: options}) do
+        attrs = %{
+          provider_id: provider_id,
+          name: "backplane-" <> source.id,
+          transport: "streamable_http",
+          url: url,
+          config: %{
+            "managed_by" => "backplane",
+            "source" => "backplane",
+            "backplane_source_id" => source.id,
+            "kind" => "mcp_server",
+            "external_id" => "mcp",
+            "backplane_available" => true,
+            "provider_url_override" => overridden?
+          }
+        }
+
+        case Enum.find(
+               Synapsis.MCPConfigs.list(),
+               &(&1.config["backplane_source_id"] == source.id)
+             ) do
+          nil -> Synapsis.MCPConfigs.create(attrs)
+          config -> Synapsis.MCPConfigs.update(config, Map.delete(attrs, :name))
+        end
+      end
+    end
+  end
 
   @spec list() :: [Connection.t()]
   def list, do: Connection.list()

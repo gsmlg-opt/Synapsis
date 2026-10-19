@@ -19,6 +19,7 @@ defmodule Synapsis.Sessions do
     config = opts[:config] || %{}
     provider = opts[:provider] || agent_config.provider || default_provider(config, agent)
     model = opts[:model] || agent_config.model || default_model(config, provider, agent)
+    config = model_selection_config(config, provider, model)
 
     attrs = %{
       provider: provider,
@@ -32,7 +33,7 @@ defmodule Synapsis.Sessions do
     now = DateTime.utc_now()
     changeset = Session.changeset(%Session{}, attrs)
 
-    if changeset.valid? do
+    if changeset.valid? and creation_model_available?(provider, model) do
       session =
         changeset
         |> Ecto.Changeset.apply_changes()
@@ -41,7 +42,24 @@ defmodule Synapsis.Sessions do
       session_runtime = opts[:session_runtime] || Synapsis.Session.DynamicSupervisor
       persist_and_start_session(session, agent, session_runtime)
     else
-      {:error, changeset}
+      if changeset.valid?, do: {:error, :model_unavailable}, else: {:error, changeset}
+    end
+  end
+
+  defp creation_model_available?(provider, model) do
+    case Synapsis.Providers.get_runtime_by_name(provider) do
+      {:ok, record} -> Synapsis.Providers.model_runtime_available?(record, model)
+      {:error, :provider_unavailable} -> false
+      {:error, :not_found} -> true
+    end
+  end
+
+  defp model_selection_config(config, provider, model) do
+    with {:ok, connection} <- Synapsis.Providers.get_by_name(provider),
+         {:ok, record} <- Synapsis.Models.get_by_identity(connection.id, model) do
+      config |> Map.put("provider_id", connection.id) |> Map.put("model_id", record.id)
+    else
+      _ -> config |> Map.delete("provider_id") |> Map.delete("model_id")
     end
   end
 
@@ -388,7 +406,8 @@ defmodule Synapsis.Sessions do
           if failure_context, do: Synapsis.ContextWindow.estimate_tokens(failure_context), else: 0
 
         Synapsis.Session.Compactor.maybe_compact(session_id, session.model,
-          extra_tokens: failure_log_tokens
+          extra_tokens: failure_log_tokens,
+          provider: session.provider
         )
 
       error ->
@@ -548,65 +567,12 @@ defmodule Synapsis.Sessions do
   end
 
   defp recoverable_provider_model(session) do
-    {provider, model} = recovered_provider_model(session)
+    {provider, model} = {session.provider, session.model}
     config = session.config || %{}
 
     if model_supported?(provider, model, config),
       do: {:ok, {provider, model}},
       else: {:error, :model_unavailable}
-  end
-
-  defp recovered_provider_model(session) do
-    config = session.config || %{}
-    env_model = env_recovery_model(session.provider, session.model, config)
-
-    cond do
-      present?(env_model) and model_supported?(session.provider, env_model, config) ->
-        {session.provider, env_model}
-
-      provider_model_supported?(session.provider, session.model, config) ->
-        {session.provider, session.model}
-
-      provider_configured?(session.provider, config) ->
-        {session.provider,
-         supported_model(config, session.provider, session.agent, session.model)}
-
-      true ->
-        provider = default_provider(config, session.agent)
-        {provider, supported_model(config, provider, session.agent, session.model)}
-    end
-  end
-
-  defp supported_model(config, provider, agent, fallback_model) do
-    model = default_model(config || %{}, provider, agent)
-
-    cond do
-      model_supported?(provider, model, config) ->
-        model
-
-      model_supported?(provider, fallback_model, config) ->
-        fallback_model
-
-      fallback = first_runtime_provider_model(provider) ->
-        fallback
-
-      true ->
-        model || fallback_model
-    end
-  end
-
-  defp provider_model_supported?(provider, model, config) do
-    provider_configured?(provider, config) and model_supported?(provider, model, config)
-  end
-
-  defp provider_configured?(provider, _config) when provider in [nil, ""], do: false
-
-  defp provider_configured?(provider, config) do
-    case Synapsis.Providers.get_runtime_by_name(provider) do
-      {:ok, _provider} -> true
-      {:error, :provider_unavailable} -> false
-      {:error, :not_found} -> fallback_configured?(provider, config)
-    end
   end
 
   defp model_supported?(_provider, model, _config) when model in [nil, ""], do: false
@@ -634,26 +600,6 @@ defmodule Synapsis.Sessions do
 
       {:error, :not_found} ->
         fallback_configured?(provider, config)
-    end
-  end
-
-  defp env_recovery_model(provider, model, config) do
-    env_model =
-      if provider_runtime_candidate?(provider, config),
-        do: Synapsis.Providers.env_default_model(provider)
-
-    cond do
-      blank?(env_model) ->
-        nil
-
-      blank?(model) ->
-        env_model
-
-      model == Synapsis.Providers.default_model(provider) ->
-        env_model
-
-      true ->
-        nil
     end
   end
 

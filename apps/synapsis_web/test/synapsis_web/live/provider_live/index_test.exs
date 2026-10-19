@@ -153,6 +153,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
 
       assert {:ok, provider} = Synapsis.Providers.get_by_name("backplane-dev")
       assert provider.type == "openai"
+      assert provider.preset == "backplane"
       assert provider.base_url == "http://localhost:#{bypass.port}/v1"
       assert is_nil(provider.api_key_encrypted)
       assert [%{"id" => "backplane-model"}] = provider.config["available_models"]

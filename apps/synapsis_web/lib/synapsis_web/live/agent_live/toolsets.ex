@@ -47,6 +47,8 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
        available_tools: [],
        mcp_sources: [],
        selected_source: "built-in",
+       mcp_refreshing: false,
+       mcp_refresh_errors: %{},
        selection_revision: 0
      )}
   end
@@ -63,10 +65,18 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
       |> assign_common()
       |> apply_action(socket.assigns.live_action, params)
 
+    socket =
+      if connected?(socket) and socket.assigns.live_action in [:new, :edit],
+        do: refresh_mcp_catalog(socket),
+        else: socket
+
     {:noreply, socket}
   end
 
   @impl true
+  def handle_event("refresh_mcp_tools", _params, socket),
+    do: {:noreply, refresh_mcp_catalog(socket)}
+
   def handle_event("save_toolset", %{"toolset" => attrs} = params, socket) do
     tool_names =
       params
@@ -191,6 +201,19 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
               <.dm_mdi name="plus" class="w-4 h-4" /> New Toolset
             </.dm_btn>
           </.dm_link>
+        </div>
+
+        <div :if={@live_action in [:new, :edit]} class="mb-4">
+          <.dm_btn type="button" phx-click="refresh_mcp_tools" disabled={@mcp_refreshing} size="sm">
+            {if @mcp_refreshing, do: "Refreshing MCP tools…", else: "Refresh live MCP tools"}
+          </.dm_btn>
+          <p
+            :for={{source_id, _reason} <- @mcp_refresh_errors}
+            role="alert"
+            class="text-sm text-error mt-2"
+          >
+            MCP discovery failed: {source_id}. Tools remain unavailable until refresh succeeds.
+          </p>
         </div>
 
         <.toolset_form
@@ -417,6 +440,29 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
     """
   end
 
+  defp refresh_mcp_catalog(%{assigns: %{mcp_refreshing: true}} = socket), do: socket
+
+  defp refresh_mcp_catalog(socket) do
+    socket
+    |> assign(mcp_refreshing: true, mcp_refresh_errors: %{})
+    |> start_async(:mcp_tools, fn -> Synapsis.MCPSelection.refresh() end)
+  end
+
+  @impl true
+  def handle_async(:mcp_tools, {:ok, outcomes}, socket) when is_map(outcomes) do
+    errors = Map.reject(outcomes, fn {_id, outcome} -> outcome == :ok end)
+
+    {:noreply,
+     socket |> assign(mcp_refreshing: false, mcp_refresh_errors: errors) |> assign_tool_catalog()}
+  end
+
+  def handle_async(:mcp_tools, _failure, socket) do
+    {:noreply,
+     socket
+     |> assign(mcp_refreshing: false, mcp_refresh_errors: %{"catalog" => :failed})
+     |> assign_tool_catalog()}
+  end
+
   defp assign_common(socket) do
     assign(socket,
       toolsets: Toolsets.list()
@@ -499,6 +545,10 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
 
     Synapsis.Tool.Registry.list()
     |> Enum.reject(&retired_tool_name?(&1.name))
+    |> Enum.filter(fn tool ->
+      not String.starts_with?(tool.name, "mcp:") or
+        Synapsis.Tool.Registry.runtime_available?(tool.name)
+    end)
     |> Enum.map(fn tool ->
       category = Map.get(category_lookup, tool.name, :uncategorized)
 

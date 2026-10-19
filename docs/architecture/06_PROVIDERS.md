@@ -128,6 +128,38 @@ present. State cannot be replayed through a different provider origin. Google
 signed content that is not marked as thought is rejected because its semantics
 cannot be preserved.
 
+An explicit idle session model change enables `history_projection: :portable`.
+`Synapsis.Provider.RequestHistory` constructs the target request view: valid
+incompatible opaque state and its nonportable reasoning are removed; compatible
+state, visible content and paired tool calls/results are retained. Invalid or
+missing origin metadata still reaches strict codec validation and fails closed.
+The original durable messages are unchanged. Codec acceptance does not prove a
+remote model will accept converted signed history, particularly Google content.
+
+## Configured Models And Session Selection
+
+Provider connections own endpoint, credentials, protocol, preset and enabled
+state in `providers.toml`. `Synapsis.Models` owns `models.toml`: stable model UUID,
+provider UUID, raw model ID, optional display name, positive token context window,
+and enabled state. Raw IDs are unique within a provider. Discovery provides import
+candidates; repeat imports preserve configured context and enabled choices.
+
+`Providers.configured_models/0` is the shared selectable catalog for agent defaults
+and sessions. Both provider and model must be runtime-available. One-time import
+preserves legacy provider choices, agent defaults and durable session pairs;
+the migration marker prevents deleted catalog entries from being recreated.
+Legacy environment and `.opencode.json` runtime resolution remains available.
+
+An agent model initializes a new session. Saved sessions own their provider/model
+pair and catalog identity independently of later agent-default refreshes. Idle
+switching validates projected history before persistence and updates the worker,
+provider configuration and engine together. Deleted/disabled choices require an
+explicit replacement; a recreated raw name cannot replace a deleted UUID.
+
+`Providers.model_context_window/2` supplies the configured token window to turn
+preparation, compaction, skill metadata and memory budgeting. Static ModelRegistry
+metadata remains the fallback for legacy pairs and capability information.
+
 ## Model Discovery And Endpoints
 
 - `Transport.Anthropic` discovers models for configured compatible endpoints
@@ -168,3 +200,9 @@ discovery failure leaves the provider configured for a later retry.
 
 These preset details do not create a fourth wire protocol and do not enable the
 OpenAI Responses client API.
+
+MCP and remote skill setup may explicitly select a Backplane provider. Linked
+sources resolve current provider credentials when used, preserve existing source
+UUIDs and skill locators, and keep source trust/sync state separate. MCP may save
+an explicit URL override; its default follows the provider endpoint. Creating a
+provider alone does not create either source or assign skills to agents.

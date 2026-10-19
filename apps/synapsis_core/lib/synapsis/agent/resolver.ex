@@ -29,6 +29,7 @@ defmodule Synapsis.Agent.Resolver do
 
     agent
     |> apply_project_agent_config(project_config)
+    |> Synapsis.MCPSelection.apply()
     |> snapshot_skills()
   end
 
@@ -67,6 +68,14 @@ defmodule Synapsis.Agent.Resolver do
       is_default: ac.is_default || false,
       enabled: ac.enabled
     }
+    |> maybe_mcp_selection(ac.config)
+  end
+
+  defp maybe_mcp_selection(agent, config) do
+    case Map.fetch(config || %{}, "mcp_selection") do
+      {:ok, policy} -> Map.put(agent, :mcp_selection, policy)
+      :error -> agent
+    end
   end
 
   defp from_default(attrs) when is_map(attrs) do

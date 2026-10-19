@@ -12,11 +12,15 @@ defmodule SynapsisWeb.SkillLive.Show do
          |> push_navigate(to: ~p"/settings/skills")}
 
       skill ->
-        {:ok, assign(socket, skill: skill, page_title: skill.name)}
+        remote = (skill.config_overrides || %{})["backplane_source_id"] != nil
+        {:ok, assign(socket, skill: skill, page_title: skill.name, remote: remote)}
     end
   end
 
   @impl true
+  def handle_event("update_skill", _params, %{assigns: %{remote: true}} = socket),
+    do: {:noreply, put_flash(socket, :error, "Remote skills are managed by their source")}
+
   def handle_event("update_skill", params, socket) do
     attrs = %{
       name: params["name"],
@@ -57,7 +61,27 @@ defmodule SynapsisWeb.SkillLive.Show do
         <:crumb>{@skill.name}</:crumb>
       </.breadcrumb>
 
-      <.dm_card variant="bordered">
+      <.dm_card :if={@remote} variant="bordered">
+        <:title>{@skill.name}</:title>
+        <p>{@skill.description}</p>
+        <dl class="text-sm space-y-2 mt-3">
+          <dt>Source</dt><dd>{@skill.config_overrides["backplane_source_id"]}</dd>
+          <dt>Skill ID</dt><dd>{@skill.config_overrides["external_id"]}</dd>
+          <dt>Revision</dt><dd>
+            {get_in(@skill.config_overrides, ["source_metadata", "revision"]) ||
+              @skill.config_overrides["external_revision"]}
+          </dd>
+          <dt>Artifact digest</dt><dd class="break-all">
+            {get_in(@skill.config_overrides, ["source_metadata", "artifact_digest"])}
+          </dd>
+          <dt>Availability</dt><dd>
+            {if Synapsis.Skills.runtime_available?(@skill), do: "Available", else: "Unavailable"}
+          </dd>
+        </dl>
+        <p class="text-sm mt-4">The pinned body is fetched when the agent reads this skill.</p>
+        <.dm_link navigate={~p"/agent/skills/#{@skill.id}/edit"}>Assign to agents</.dm_link>
+      </.dm_card>
+      <.dm_card :if={!@remote} variant="bordered">
         <:title>{@skill.name}</:title>
 
         <.react_form

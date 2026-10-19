@@ -70,6 +70,13 @@ defmodule Synapsis.MCP.Server do
     :exit, reason -> {:error, ready_failure(reason)}
   end
 
+  @doc "Fetch a complete live tool catalog, coalescing concurrent callers."
+  def refresh(server, timeout \\ @ready_timeout) do
+    GenServer.call(server, :refresh, timeout)
+  catch
+    :exit, reason -> {:error, ready_failure(reason)}
+  end
+
   @doc "Executes a native runtime tool call owned by the calling effect process."
   @spec execute_runtime(GenServer.server(), String.t(), map(), map(), pos_integer()) ::
           {:ok, String.t()} | {:error, term()}
@@ -138,7 +145,13 @@ defmodule Synapsis.MCP.Server do
               initial_availability: initial_availability,
               tool_registry_ref: monitor_tool_registry(),
               tools: [],
-              tool_names: []
+              tool_names: [],
+              catalog_valid: :atomics.new(1, []),
+              refresh_task: nil,
+              refresh_waiters: [],
+              ready_waiters: [],
+              discovery_result: nil,
+              transport: connection_transport(config)
             }
 
             {:ok, state, {:continue, :discover}}
@@ -153,41 +166,26 @@ defmodule Synapsis.MCP.Server do
   end
 
   @impl true
-  def handle_continue(
-        :discover,
-        %{client: client, config: config, initial_availability: initial_availability} = state
-      ) do
-    with :ok <- MCPClient.await_ready(client, timeout: @await_timeout),
-         {:ok, response} <- MCPClient.list_tools(client, timeout: @discovery_timeout) do
-      tools =
-        response
-        |> ProtocolResponse.unwrap()
-        |> Response.tools(config.name,
-          trust_annotations: MCPConfigs.trust_tool_annotations?(config)
-        )
-        |> runtime_available_tools(config, initial_availability)
-        |> attach_availability_checks(config)
-
-      case register_tools(tools) do
-        {:ok, names} ->
-          {:noreply, %{state | tools: tools, tool_names: names}}
-
-        {:error, reason} ->
-          {:stop, {:tool_registration_failed, reason}, state}
-      end
-    else
-      {:error, reason} ->
-        {:stop, {:discover_failed, reason}, state}
-    end
-  end
+  def handle_continue(:discover, state), do: {:noreply, begin_refresh(state)}
 
   @impl true
-  def handle_call(:await_ready, _from, state), do: {:reply, :ok, state}
+  def handle_call(:await_ready, from, %{discovery_result: nil} = state),
+    do: {:noreply, %{state | ready_waiters: [from | state.ready_waiters]}}
+
+  def handle_call(:await_ready, _from, state),
+    do: {:reply, ready_result(state.discovery_result), state}
+
+  def handle_call(:refresh, from, state) do
+    state = %{state | refresh_waiters: [from | state.refresh_waiters]}
+    {:noreply, if(state.refresh_task, do: state, else: begin_refresh(state))}
+  end
 
   def handle_call({:runtime_tool, full_tool_name}, _from, state) do
     case discovered_tool(state.tools, full_tool_name) do
       %{trust_annotations: trust_annotations} ->
-        if current_runtime_available?(state.config, full_tool_name, trust_annotations) do
+        if :atomics.get(state.catalog_valid, 1) == 1 and
+             current_transport(state.config) == state.transport and
+             current_runtime_available?(state.config, full_tool_name, trust_annotations) do
           {:reply, {:ok, state.client, Response.raw_tool_name(full_tool_name)}, state}
         else
           {:reply, {:error, :mcp_unavailable}, state}
@@ -201,7 +199,9 @@ defmodule Synapsis.MCP.Server do
   def handle_call({:execute, full_tool_name, input, _ctx}, _from, state) do
     case discovered_tool(state.tools, full_tool_name) do
       %{trust_annotations: trust_annotations} ->
-        if current_runtime_available?(state.config, full_tool_name, trust_annotations) do
+        if :atomics.get(state.catalog_valid, 1) == 1 and
+             current_transport(state.config) == state.transport and
+             current_runtime_available?(state.config, full_tool_name, trust_annotations) do
           execute_tool(state.client, full_tool_name, input, state)
         else
           {:reply, {:error, :mcp_unavailable}, state}
@@ -237,8 +237,23 @@ defmodule Synapsis.MCP.Server do
   defp runtime_result({:error, reason}), do: {:error, reason}
 
   @impl true
+  def handle_info({ref, result}, %{refresh_task: %{ref: ref}} = state) do
+    Process.demonitor(ref, [:flush])
+    {:noreply, finish_refresh(state, result)}
+  end
+
+  def handle_info({:refresh_timeout, ref}, %{refresh_task: %{ref: ref} = task} = state) do
+    Task.shutdown(task, :brutal_kill)
+    {:noreply, finish_refresh(state, {:error, :mcp_refresh_timeout})}
+  end
+
+  def handle_info({:DOWN, ref, :process, _pid, reason}, %{refresh_task: %{ref: ref}} = state) do
+    {:noreply, finish_refresh(state, {:error, {:mcp_refresh_failed, reason}})}
+  end
+
   def handle_info({:EXIT, supervisor, reason}, %{supervisor: supervisor} = state) do
-    {:stop, {:client_exited, reason}, state}
+    # The client tree already exhausted its own retries; require an explicit reconnect.
+    {:stop, {:shutdown, {:client_exited, reason}}, state}
   end
 
   def handle_info({:DOWN, ref, :process, _pid, _reason}, %{tool_registry_ref: ref} = state) do
@@ -262,7 +277,8 @@ defmodule Synapsis.MCP.Server do
   def handle_info(_msg, state), do: {:noreply, state}
 
   @impl true
-  def terminate(_reason, %{tool_names: names}) do
+  def terminate(_reason, %{tool_names: names} = state) do
+    if task = Map.get(state, :refresh_task), do: Task.shutdown(task, :brutal_kill)
     Enum.each(names, &Registry.unregister(&1, self()))
     :ok
   end
@@ -285,6 +301,9 @@ defmodule Synapsis.MCP.Server do
     :exit, reason -> {:error, reason}
   end
 
+  defp ready_result(:ok), do: :ok
+  defp ready_result({:error, reason}), do: {:error, {:discover_failed, reason}}
+
   defp ready_failure({:timeout, {GenServer, :call, _details}}), do: :mcp_ready_timeout
   defp ready_failure({:noproc, {GenServer, :call, _details}}), do: :mcp_not_running
   defp ready_failure({reason, {GenServer, :call, _details}}), do: reason
@@ -297,7 +316,9 @@ defmodule Synapsis.MCP.Server do
          annotations: annotations,
          trust_annotations: trust_annotations,
          availability_check: availability_check,
-         permission_level: permission_level
+         permission_level: permission_level,
+         mcp_config_id: config_id,
+         mcp_tool_name: raw_name
        }) do
     Registry.register_process(name, self(),
       description: description,
@@ -305,6 +326,8 @@ defmodule Synapsis.MCP.Server do
       timeout: @tool_timeout,
       runtime_dispatch: __MODULE__,
       plugin: :mcp,
+      mcp_config_id: config_id,
+      mcp_tool_name: raw_name,
       category: :mcp,
       permission_level: permission_level,
       trust_annotations: trust_annotations,
@@ -335,22 +358,20 @@ defmodule Synapsis.MCP.Server do
 
   defp current_runtime_available?(
          %MCPConfig{id: nil} = config,
-         full_tool_name,
+         _full_tool_name,
          trust_annotations
        ) do
     MCPConfigs.runtime_available?(config) and
-      tool_runtime_available?(config, full_tool_name) and
       annotation_trust_available?(config, trust_annotations)
   end
 
-  defp current_runtime_available?(%MCPConfig{id: id}, full_tool_name, trust_annotations) do
+  defp current_runtime_available?(%MCPConfig{id: id}, _full_tool_name, trust_annotations) do
     case MCPConfigs.get(id) do
       nil ->
         false
 
       config ->
         MCPConfigs.runtime_available?(config) and
-          tool_runtime_available?(config, full_tool_name) and
           annotation_trust_available?(config, trust_annotations)
     end
   end
@@ -363,50 +384,142 @@ defmodule Synapsis.MCP.Server do
       end
 
     if available? do
-      Enum.filter(tools, &tool_runtime_available?(config, &1.name))
+      tools
     else
       []
     end
   end
 
-  defp attach_availability_checks(tools, config) do
+  defp attach_availability_checks(tools, config, valid, transport) do
     Enum.map(tools, fn tool ->
-      Map.put(tool, :availability_check, fn ->
-        current_runtime_available?(config, tool.name, tool.trust_annotations)
+      tool
+      |> Map.put(:mcp_config_id, config.id)
+      |> Map.put(:mcp_tool_name, Response.raw_tool_name(tool.name))
+      |> Map.put(:availability_check, fn ->
+        :atomics.get(valid, 1) == 1 and
+          current_runtime_available?(config, tool.name, tool.trust_annotations) and
+          current_transport(config) == transport
       end)
     end)
+  end
+
+  defp current_transport(%MCPConfig{id: nil} = config), do: connection_transport(config)
+
+  defp current_transport(%MCPConfig{id: id}) do
+    case MCPConfigs.get(id) do
+      nil -> nil
+      current -> connection_transport(current)
+    end
+  end
+
+  defp connection_transport(config) do
+    generation =
+      case config.provider_id do
+        nil ->
+          nil
+
+        id ->
+          case Synapsis.Config.Store.get(:provider, id) do
+            {:ok, provider} -> {provider["enabled"], provider["updated_at"]}
+            _ -> :provider_unavailable
+          end
+      end
+
+    {Transport.build(config), generation}
+  end
+
+  defp begin_refresh(state) do
+    client = state.client
+    config = state.config
+    transport = state.transport
+
+    task =
+      Task.Supervisor.async_nolink(Synapsis.MCP.TaskSupervisor, fn ->
+        if current_transport(config) == transport do
+          with :ok <- MCPClient.await_ready(client, timeout: @await_timeout),
+               {:ok, tools} <- discover_pages(client, nil, MapSet.new(), [], 0) do
+            {:ok, tools}
+          end
+        else
+          {:error, :connection_changed}
+        end
+      end)
+
+    Process.send_after(self(), {:refresh_timeout, task.ref}, @await_timeout + @discovery_timeout)
+    %{state | refresh_task: task}
+  end
+
+  defp discover_pages(_client, _cursor, _seen, _tools, 100), do: {:error, :mcp_page_limit}
+
+  defp discover_pages(client, cursor, seen, tools, count) do
+    opts =
+      if cursor,
+        do: [cursor: cursor, timeout: @discovery_timeout],
+        else: [timeout: @discovery_timeout]
+
+    with {:ok, response} <- MCPClient.list_tools(client, opts),
+         %{"tools" => page} = result when is_list(page) <- ProtocolResponse.unwrap(response) do
+      case result["nextCursor"] do
+        nil ->
+          {:ok, Enum.reverse([page | tools]) |> List.flatten()}
+
+        next when is_binary(next) and next != "" and byte_size(next) <= 4_096 ->
+          if MapSet.member?(seen, next),
+            do: {:error, :mcp_cursor_cycle},
+            else: discover_pages(client, next, MapSet.put(seen, next), [page | tools], count + 1)
+
+        _ ->
+          {:error, :invalid_mcp_cursor}
+      end
+    else
+      {:error, _} = error -> error
+      _ -> {:error, :invalid_tools_response}
+    end
+  end
+
+  defp finish_refresh(state, result) do
+    result =
+      case result do
+        {:ok, raw_tools} ->
+          tools =
+            %{"tools" => raw_tools}
+            |> Response.tools(state.config.name,
+              trust_annotations: MCPConfigs.trust_tool_annotations?(state.config)
+            )
+            |> runtime_available_tools(state.config, state.initial_availability)
+            |> attach_availability_checks(state.config, state.catalog_valid, state.transport)
+
+          Enum.each(state.tool_names, &Registry.unregister(&1, self()))
+
+          case register_tools(tools) do
+            {:ok, names} -> {:ok, tools, names}
+            {:error, reason} -> {:error, reason}
+          end
+
+        other ->
+          other
+      end
+
+    {reply, state} =
+      case result do
+        {:ok, tools, names} ->
+          :atomics.put(state.catalog_valid, 1, 1)
+          {:ok, %{state | tools: tools, tool_names: names}}
+
+        {:error, reason} ->
+          :atomics.put(state.catalog_valid, 1, 0)
+          {{:error, reason}, state}
+      end
+
+    Enum.each(state.refresh_waiters, &GenServer.reply(&1, reply))
+    Enum.each(state.ready_waiters, &GenServer.reply(&1, ready_result(reply)))
+    %{state | refresh_task: nil, refresh_waiters: [], ready_waiters: [], discovery_result: reply}
   end
 
   defp annotation_trust_available?(config, true),
     do: MCPConfigs.trust_tool_annotations?(config)
 
   defp annotation_trust_available?(_config, false), do: true
-
-  defp tool_runtime_available?(%MCPConfig{config: config}, full_tool_name) do
-    not backplane_managed?(config) or
-      backplane_tool_available?(config, Response.raw_tool_name(full_tool_name))
-  end
-
-  defp backplane_managed?(config) when is_map(config) do
-    Map.get(config, "managed_by", Map.get(config, :managed_by)) == "backplane" or
-      not is_nil(Map.get(config, "backplane_source_id", Map.get(config, :backplane_source_id)))
-  end
-
-  defp backplane_managed?(_config), do: false
-
-  defp backplane_tool_available?(config, raw_name) do
-    case Map.get(config, "backplane_tools", Map.get(config, :backplane_tools)) do
-      tools when is_list(tools) ->
-        Enum.any?(tools, fn tool ->
-          is_map(tool) and
-            Map.get(tool, "external_id", Map.get(tool, :external_id)) == raw_name and
-            Map.get(tool, "backplane_available", Map.get(tool, :backplane_available)) == true
-        end)
-
-      _other ->
-        false
-    end
-  end
 
   defp discovered_tool(tools, full_tool_name),
     do: Enum.find(tools, &(&1.name == full_tool_name))

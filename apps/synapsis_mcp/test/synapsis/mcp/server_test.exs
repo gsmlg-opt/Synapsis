@@ -404,17 +404,11 @@ defmodule Synapsis.MCP.ServerTest do
     refute_receive {:mcp_tool_called, _params}, 100
   end
 
-  test "registers and executes only available tools for a source-managed config", %{
+  test "live catalog includes newly discovered tools absent from persisted Backplane metadata", %{
     bypass: bypass
   } do
-    name = "mixed_#{System.unique_integer([:positive])}"
-
-    tools = [
-      %{"name" => "enabled::tool", "description" => "enabled", "inputSchema" => %{}},
-      %{"name" => "disabled::tool", "description" => "disabled", "inputSchema" => %{}}
-    ]
-
-    stub_mcp(bypass, name, self(), tools)
+    name = "new_tools_#{System.unique_integer([:positive])}"
+    stub_mcp(bypass, name, nil, [%{"name" => "fresh"}])
 
     {:ok, config} =
       MCPConfigs.create(%{
@@ -425,55 +419,197 @@ defmodule Synapsis.MCP.ServerTest do
           "managed_by" => "backplane",
           "backplane_source_id" => "source-1",
           "backplane_available" => true,
-          "backplane_tools" => [
-            %{"external_id" => "enabled::tool", "backplane_available" => true},
-            %{"external_id" => "disabled::tool", "backplane_available" => false}
-          ]
+          "backplane_tools" => []
         }
       })
 
-    on_exit(fn ->
-      if current = MCPConfigs.get(config.id), do: MCPConfigs.delete(current)
+    on_exit(fn -> if current = MCPConfigs.get(config.id), do: MCPConfigs.delete(current) end)
+    server = start_supervised!({Server, config})
+    assert :ok = Server.await_ready(server)
+    assert {:ok, {:process, ^server, opts}} = Registry.lookup("mcp:#{name}:fresh")
+    assert opts[:mcp_config_id] == config.id
+    assert opts[:mcp_tool_name] == "fresh"
+  end
+
+  test "live refresh replaces the complete paginated catalog and rejects failed refresh catalogs",
+       %{bypass: bypass} do
+    name = "live_#{System.unique_integer([:positive])}"
+    {:ok, mode} = Agent.start_link(fn -> :initial end)
+    on_exit(fn -> if Process.alive?(mode), do: Agent.stop(mode) end)
+
+    Bypass.stub(bypass, "POST", "/mcp", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      request = Jason.decode!(body)
+
+      result =
+        case request["method"] do
+          "initialize" ->
+            %{
+              "protocolVersion" => request["params"]["protocolVersion"],
+              "capabilities" => %{"tools" => %{}},
+              "serverInfo" => %{"name" => name, "version" => "1"}
+            }
+
+          "tools/list" ->
+            case {Agent.get(mode, & &1), get_in(request, ["params", "cursor"])} do
+              {:initial, _} -> %{"tools" => [%{"name" => "old"}]}
+              {:updated, nil} -> %{"tools" => [%{"name" => "new"}], "nextCursor" => "page2"}
+              {:updated, "page2"} -> %{"tools" => [%{"name" => "last"}]}
+              {:cycle, _} -> %{"tools" => [%{"name" => "partial"}], "nextCursor" => "repeat"}
+            end
+
+          _ ->
+            %{}
+        end
+
+      if request["id"],
+        do:
+          conn
+          |> Plug.Conn.put_resp_header("content-type", "application/json")
+          |> Plug.Conn.resp(
+            200,
+            Jason.encode!(%{"jsonrpc" => "2.0", "id" => request["id"], "result" => result})
+          ),
+        else: Plug.Conn.resp(conn, 202, "")
     end)
 
-    pid = start_supervised!({Server, config})
-    enabled_tool = "mcp:#{name}:enabled::tool"
-    disabled_tool = "mcp:#{name}:disabled::tool"
+    Bypass.stub(bypass, "GET", "/mcp", &Plug.Conn.resp(&1, 200, ""))
+    Bypass.stub(bypass, "DELETE", "/mcp", &Plug.Conn.resp(&1, 200, ""))
 
-    assert wait_until(fn ->
-             match?({:ok, {:process, ^pid, _opts}}, Registry.lookup(enabled_tool))
-           end)
+    server =
+      start_supervised!(
+        {Server,
+         %MCPConfig{
+           name: name,
+           transport: "streamable_http",
+           url: "http://localhost:#{bypass.port}"
+         }}
+      )
 
-    assert {:error, :not_found} = Registry.lookup(disabled_tool)
-
-    assert {:ok, "allowed"} =
-             GenServer.call(pid, {:execute, enabled_tool, %{"text" => "allowed"}, %{}}, 10_000)
-
-    assert_receive {:mcp_tool_called, %{"name" => "enabled::tool"}}
-
-    assert {:error, :mcp_unavailable} =
-             GenServer.call(pid, {:execute, disabled_tool, %{"text" => "blocked"}, %{}}, 10_000)
-
-    refute_receive {:mcp_tool_called, %{"name" => "disabled::tool"}}, 100
-
-    markers =
-      Enum.map(config.config["backplane_tools"], fn
-        %{"external_id" => "enabled::tool"} = marker ->
-          Map.put(marker, "backplane_available", false)
-
-        marker ->
-          marker
-      end)
-
-    assert {:ok, _current} =
-             MCPConfigs.update(config, %{
-               config: Map.put(config.config, "backplane_tools", markers)
-             })
+    assert :ok = Server.await_ready(server)
+    assert {:ok, _} = Registry.lookup("mcp:#{name}:old")
+    Agent.update(mode, fn _ -> :updated end)
+    assert :ok = Server.refresh(server)
+    assert {:error, :not_found} = Registry.lookup("mcp:#{name}:old")
+    assert {:ok, {:process, ^server, opts}} = Registry.lookup("mcp:#{name}:last")
+    assert opts[:mcp_tool_name] == "last"
+    Agent.update(mode, fn _ -> :cycle end)
+    assert {:error, :mcp_cursor_cycle} = Server.refresh(server)
+    refute Registry.runtime_available?("mcp:#{name}:last")
+    assert {:error, :not_found} = Registry.lookup("mcp:#{name}:partial")
 
     assert {:error, :mcp_unavailable} =
-             GenServer.call(pid, {:execute, enabled_tool, %{"text" => "stale"}, %{}}, 10_000)
+             Server.execute_runtime(server, "mcp:#{name}:last", %{}, %{}, 1_000)
 
-    refute_receive {:mcp_tool_called, %{"name" => "enabled::tool"}}, 100
+    assert Process.alive?(server)
+  end
+
+  test "linked MCP reconnects with current credentials and rejects old credentials immediately",
+       %{bypass: bypass} do
+    name = "linked-mcp-#{System.unique_integer([:positive])}"
+
+    {:ok, provider} =
+      Synapsis.Providers.create(%{
+        name: name,
+        type: "openai",
+        base_url: "http://localhost:#{bypass.port}/v1",
+        api_key_encrypted: "first",
+        config: %{"preset" => "backplane"}
+      })
+
+    {:ok, config} =
+      Synapsis.Backplane.select_mcp_provider(provider.id, "http://localhost:#{bypass.port}/mcp")
+
+    {:ok, expected} = Agent.start_link(fn -> "first" end)
+    stub_mcp(bypass, config.name)
+
+    Bypass.stub(bypass, "POST", "/mcp", fn conn ->
+      assert Plug.Conn.get_req_header(conn, "authorization") == [
+               "Bearer " <> Agent.get(expected, & &1)
+             ]
+
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      handle_rpc(conn, Jason.decode!(body), config.name, nil, [%{"name" => "echo"}])
+    end)
+
+    on_exit(fn ->
+      Synapsis.MCP.stop(config.name)
+      if Process.alive?(expected), do: Agent.stop(expected)
+      MCPConfigs.delete(config)
+
+      for source <- Synapsis.Backplane.Connection.list(),
+          source.provider_id == provider.id,
+          do: Synapsis.Backplane.Connection.delete(source)
+
+      Synapsis.Providers.delete(provider.id)
+    end)
+
+    assert {:ok, server} = Synapsis.MCP.start(config)
+    assert :ok = Server.await_ready(server)
+    tool = "mcp:#{config.name}:echo"
+    {:ok, _} = Synapsis.Providers.update(provider.id, %{api_key_encrypted: "rotated"})
+    Agent.update(expected, fn _ -> "rotated" end)
+    refute Registry.runtime_available?(tool)
+    assert {:error, :mcp_unavailable} = Server.execute_runtime(server, tool, %{}, %{}, 1_000)
+    assert :ok = Synapsis.MCP.refresh(config.id)
+    assert Registry.runtime_available?(tool)
+    {:ok, _} = Synapsis.Providers.update(provider.id, %{enabled: false})
+    refute Registry.runtime_available?(tool)
+    {:ok, _} = Synapsis.Providers.update(provider.id, %{enabled: true})
+    refute Registry.runtime_available?(tool)
+    assert :ok = Synapsis.MCP.refresh(config.id)
+    assert Registry.runtime_available?(tool)
+    {:ok, _} = Synapsis.Providers.update(provider.id, %{enabled: false})
+    assert {:error, :mcp_unavailable} = Synapsis.MCP.refresh(config.id)
+  end
+
+  test "concurrent live refreshes coalesce and caller timeout leaves another caller intact", %{
+    bypass: bypass
+  } do
+    name = "coalesced-#{System.unique_integer([:positive])}"
+    observer = self()
+    {:ok, blocked} = Agent.start_link(fn -> false end)
+    on_exit(fn -> if Process.alive?(blocked), do: Agent.stop(blocked) end)
+    stub_mcp(bypass, name)
+
+    Bypass.stub(bypass, "POST", "/mcp", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      request = Jason.decode!(body)
+
+      if request["method"] == "tools/list" and Agent.get(blocked, & &1) do
+        send(observer, {:live_page_started, self()})
+
+        receive do
+          :release -> :ok
+        after
+          2_000 -> :ok
+        end
+      end
+
+      handle_rpc(conn, request, name, nil, [%{"name" => "echo"}])
+    end)
+
+    server =
+      start_supervised!(
+        {Server,
+         %MCPConfig{
+           name: name,
+           transport: "streamable_http",
+           url: "http://localhost:#{bypass.port}"
+         }}
+      )
+
+    assert :ok = Server.await_ready(server)
+    Agent.update(blocked, fn _ -> true end)
+    caller = Task.async(fn -> Server.refresh(server, 2_000) end)
+    assert_receive {:live_page_started, page}
+    assert Registry.runtime_available?("mcp:#{name}:echo")
+    assert {:error, :mcp_ready_timeout} = Server.refresh(server, 30)
+    assert :ok = Server.await_ready(server, 100)
+    refute_receive {:live_page_started, _}, 50
+    send(page, :release)
+    assert :ok = Task.await(caller, 2_000)
+    assert Registry.runtime_available?("mcp:#{name}:echo")
   end
 
   defp wait_until(fun, tries \\ 100) do

@@ -40,6 +40,7 @@ defmodule Synapsis.SessionsTest do
 
   setup do
     Synapsis.DataCase.clear_config_store(:provider)
+    Synapsis.DataCase.clear_config_store(:model)
     Synapsis.DataCase.clear_config_store(:backplane)
 
     assert {:ok, _connection} =
@@ -47,13 +48,14 @@ defmodule Synapsis.SessionsTest do
 
     on_exit(fn ->
       Synapsis.DataCase.clear_config_store(:provider)
+      Synapsis.DataCase.clear_config_store(:model)
       Synapsis.DataCase.clear_config_store(:backplane)
     end)
 
     :ok
   end
 
-  test "recovers a source-disabled Backplane model to its available sibling" do
+  test "retains an unavailable saved model until an explicit choice is made" do
     provider_name = "mixed-provider-#{System.unique_integer([:positive])}"
 
     assert {:ok, %ProviderConfig{}} =
@@ -65,11 +67,11 @@ defmodule Synapsis.SessionsTest do
     session = persisted_session(provider_name, "disabled-model")
     on_exit(fn -> Sessions.delete(session.id) end)
 
-    assert {:ok, %{provider: ^provider_name, model: "enabled-model"}} =
-             Sessions.recover_unsupported_provider_model(session)
+    assert {:error, :model_unavailable} = Sessions.recover_unsupported_provider_model(session)
+    assert {:ok, %{model: "disabled-model"}} = Sessions.get(session.id)
   end
 
-  test "create returns the effective model persisted during worker boot" do
+  test "create rejects an explicitly selected unavailable model" do
     provider_name = "create-mixed-provider-#{System.unique_integer([:positive])}"
 
     assert {:ok, %ProviderConfig{}} =
@@ -78,13 +80,8 @@ defmodule Synapsis.SessionsTest do
                "enabled-model"
              ])
 
-    assert {:ok, session} =
+    assert {:error, :model_unavailable} =
              Sessions.create("main", %{provider: provider_name, model: "disabled-model"})
-
-    on_exit(fn -> Sessions.delete(session.id) end)
-
-    assert session.model == "enabled-model"
-    assert {:ok, %{model: "enabled-model"}} = Sessions.get(session.id)
   end
 
   test "does not persist a model when local and Backplane availability have no intersection" do

@@ -31,13 +31,28 @@ defmodule Synapsis.Backplane.Client do
   @optional_callbacks fetch_snapshot: 2
 
   def fetch_snapshot(%Connection{} = connection, opts \\ []) do
+    with {:ok, current} <- Connection.runtime(connection), do: do_fetch_snapshot(current, opts)
+  end
+
+  defp do_fetch_snapshot(connection, opts) do
     mcp_discovery =
-      protect(fn -> discover_mcp(connection, opts, true) end)
-      |> redact_result(connection)
+      if Connection.surface_enabled?(connection, "tools") do
+        protect(fn -> discover_mcp(connection, opts, true) end) |> redact_result(connection)
+      else
+        {:ok, [], {:ok, []}}
+      end
 
     surfaces = %{
-      models: protect(fn -> fetch_models(connection, opts) end) |> redact_result(connection),
-      skills: protect(fn -> fetch_skills(connection, opts) end) |> redact_result(connection),
+      models:
+        if(Connection.surface_enabled?(connection, "models"),
+          do: protect(fn -> fetch_models(connection, opts) end) |> redact_result(connection),
+          else: {:ok, []}
+        ),
+      skills:
+        if(Connection.surface_enabled?(connection, "skills"),
+          do: protect(fn -> fetch_skills(connection, opts) end) |> redact_result(connection),
+          else: {:ok, []}
+        ),
       mcp_tools: mcp_tools_surface(mcp_discovery)
     }
 
@@ -53,6 +68,10 @@ defmodule Synapsis.Backplane.Client do
   end
 
   def fetch_models(%Connection{} = connection, opts \\ []) do
+    with {:ok, current} <- Connection.runtime(connection), do: do_fetch_models(current, opts)
+  end
+
+  defp do_fetch_models(connection, opts) do
     with {:ok, %{"data" => models}} when is_list(models) <-
            get_json(
              connection.endpoint <> "/v1/models",
@@ -73,6 +92,10 @@ defmodule Synapsis.Backplane.Client do
   end
 
   def list_skills(%Connection{} = connection, opts \\ []) do
+    with {:ok, current} <- Connection.runtime(connection), do: do_list_skills(current, opts)
+  end
+
+  defp do_list_skills(connection, opts) do
     # WORKAROUND(upstream): gsmlg-opt/backplane#29
     url = connection.endpoint <> "/skills?limit=#{@skill_limit}"
 
@@ -99,6 +122,11 @@ defmodule Synapsis.Backplane.Client do
 
   @doc "List exact Skill Protocol v1 descriptors with bounded cursor pagination."
   def list_protocol_skills(%Connection{} = connection, opts \\ []) do
+    with {:ok, current} <- Connection.runtime(connection),
+         do: do_list_protocol_skills(current, opts)
+  end
+
+  defp do_list_protocol_skills(connection, opts) do
     max_skills = option(opts, :max_skills, @skill_limit)
     max_pages = option(opts, :max_skill_pages, @default_max_skill_protocol_pages)
 
@@ -116,6 +144,10 @@ defmodule Synapsis.Backplane.Client do
   end
 
   def fetch_skill(%Connection{} = connection, slug, opts \\ []) when is_binary(slug) do
+    with {:ok, current} <- Connection.runtime(connection), do: do_fetch_skill(current, slug, opts)
+  end
+
+  defp do_fetch_skill(connection, slug, opts) do
     encoded_slug = URI.encode(slug, &URI.char_unreserved?/1)
 
     with {:ok, detail} when is_map(detail) <-
@@ -139,13 +171,17 @@ defmodule Synapsis.Backplane.Client do
   end
 
   def list_tools(%Connection{} = connection, opts \\ []) do
+    with {:ok, current} <- Connection.runtime(connection), do: do_list_tools(current, opts)
+  end
+
+  defp do_list_tools(connection, opts) do
     with {:ok, tools, _other_capabilities} <- discover_mcp(connection, opts, false) do
       {:ok, tools}
     end
   end
 
   defp discover_mcp(%Connection{} = connection, opts, discover_optional?) do
-    url = connection.endpoint <> "/mcp"
+    url = Connection.mcp_url(connection)
     auth_headers = auth_headers(connection)
 
     initialize = %{
@@ -420,7 +456,7 @@ defmodule Synapsis.Backplane.Client do
       endpoint: connection.endpoint,
       source_id: connection.id,
       access_context_id: "synapsis-sync:#{connection.id}",
-      credential_supplier: fn -> connection.credential end,
+      credential_supplier: fn -> Connection.credential(connection) end,
       overall_timeout_ms: timeout,
       max_json_bytes:
         option(opts, :max_skills_response_bytes, @default_max_skills_response_bytes),

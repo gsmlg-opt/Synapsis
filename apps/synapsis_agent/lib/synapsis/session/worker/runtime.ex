@@ -69,6 +69,25 @@ defmodule Synapsis.Session.Worker.Runtime do
   end
 
   defp prepare_turn(data, content, image_parts) do
+    agent = Config.refresh_turn_tools(data.agent)
+
+    system_prompt =
+      Synapsis.Agent.ContextBuilder.build_system_prompt(:coding,
+        agent_id: data.session.agent,
+        session_id: data.session_id,
+        user_message: content,
+        agent_config: agent
+      )
+
+    {:ok, _} =
+      Synapsis.Session.Compactor.maybe_compact(data.session_id, agent[:model],
+        provider: agent[:provider],
+        context_window: agent[:model_context_window],
+        extra_tokens:
+          Synapsis.ContextWindow.estimate_tokens(system_prompt <> content) +
+            length(image_parts) * 1_000
+      )
+
     messages = Message.list_by_session(data.session_id)
 
     user = %Message{
@@ -93,17 +112,11 @@ defmodule Synapsis.Session.Worker.Runtime do
            ) do
       context = %{
         session: data.session,
-        agent: data.agent,
+        agent: agent,
         provider_config: data.provider_config,
         project_path: data.project_path,
         messages: messages,
-        system_prompt:
-          Synapsis.Agent.ContextBuilder.build_system_prompt(:coding,
-            agent_id: data.session.agent,
-            session_id: data.session_id,
-            user_message: content,
-            agent_config: data.agent
-          )
+        system_prompt: system_prompt
       }
 
       {:ok, context, input.content, length(history) + 1, offset + 1}
@@ -148,7 +161,8 @@ defmodule Synapsis.Session.Worker.Runtime do
       ) do
     data = %{
       data
-      | runtime_task: nil,
+      | agent: context.agent,
+        runtime_task: nil,
         runtime_phase: :running,
         runtime_history_offset: history_offset,
         runtime_turn_offset: turn_offset
@@ -216,8 +230,20 @@ defmodule Synapsis.Session.Worker.Runtime do
   def task_result(data, {:error, reason}),
     do: {:error, fail(%{data | runtime_task: nil}, reason)}
 
-  def cancel(%{runtime_phase: :preparing} = data),
-    do: %{data | runtime_cancelled: true}
+  def cancel(%{runtime_phase: :preparing} = data) do
+    if data.runtime_task, do: Task.shutdown(data.runtime_task, :brutal_kill)
+    Persistence.set_status(data.session_id, "idle")
+    Persistence.broadcast(data.session_id, "done", %{})
+
+    %{
+      data
+      | runtime_task: nil,
+        runtime_active: false,
+        runtime_phase: nil,
+        runtime_cancelled: true,
+        stream_acc: Synapsis.Agent.StreamAccumulator.new()
+    }
+  end
 
   def cancel(data) do
     :ok = SessionAdapter.cancel(data.runtime_pid)

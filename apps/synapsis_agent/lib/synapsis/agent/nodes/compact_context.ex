@@ -17,7 +17,10 @@ defmodule Synapsis.Agent.Nodes.CompactContext do
     model = agent_config[:model]
 
     # Delegate to existing compactor — it handles threshold checking
-    case Synapsis.Session.Compactor.maybe_compact(session_id, model) do
+    case Synapsis.Session.Compactor.maybe_compact(session_id, model,
+           provider: agent_config[:provider],
+           context_window: agent_config[:model_context_window]
+         ) do
       {:ok, :no_compaction_needed} ->
         {:next, :default, state}
 

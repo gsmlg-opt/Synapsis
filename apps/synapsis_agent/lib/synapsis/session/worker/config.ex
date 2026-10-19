@@ -83,14 +83,9 @@ defmodule Synapsis.Session.Worker.Config do
        when is_list(tool_names) and is_binary(tool_profile) do
     case Toolsets.resolve_for_query_loop(tool_profile) do
       {:ok, tools} ->
-        names = Enum.map(tools, & &1.name)
-        registrations = Map.new(tools, &{&1.name, &1.registration})
-
         agent
-        |> Map.put(:tools, names)
-        |> Map.put(:resolved_tools, tools)
-        |> Map.put(:tool_modules, registrations)
         |> Map.put(:daemon_tool_profile, tool_profile)
+        |> bind_daemon_tools(tools)
 
       {:error, _reason} ->
         agent
@@ -107,16 +102,63 @@ defmodule Synapsis.Session.Worker.Config do
 
   defp apply_daemon_run_tools(agent, _config), do: agent
 
+  defp bind_daemon_tools(agent, tools) do
+    policy_names =
+      if Map.has_key?(agent, :mcp_selection),
+        do: Synapsis.MCPSelection.names(agent.mcp_selection, Synapsis.MCPSelection.catalog()),
+        else: Enum.map(tools, & &1.name)
+
+    tools =
+      Enum.filter(
+        tools,
+        &(not Synapsis.MCPSelection.mcp_name?(&1.name) or &1.name in policy_names)
+      )
+
+    agent
+    |> Map.put(:tools, Enum.map(tools, & &1.name))
+    |> Map.put(:resolved_tools, tools)
+    |> Map.put(:tool_modules, Map.new(tools, &{&1.name, &1.registration}))
+  end
+
+  @doc "Refresh remote tools only from a supervised turn-preparation task."
+  def refresh_turn_tools(agent) do
+    refreshed = Synapsis.MCPSelection.refresh_agent(agent)
+
+    case agent[:daemon_tool_profile] do
+      nil ->
+        refreshed
+
+      profile ->
+        case Toolsets.resolve_for_query_loop(profile) do
+          {:ok, tools} ->
+            allowed = refreshed.tools
+
+            tools =
+              Enum.filter(
+                tools,
+                &(not Synapsis.MCPSelection.mcp_name?(&1.name) or &1.name in allowed)
+              )
+
+            bind_daemon_tools(refreshed, tools)
+
+          {:error, _reason} ->
+            bind_daemon_tools(refreshed, [])
+        end
+    end
+  end
+
   def resolve_session_defaults(%Session{} = session) do
     agent = resolve_agent(session)
-    provider = agent[:provider] || session.provider
-    selected_model = agent[:model] || session.model
+    provider = session.provider || agent[:provider]
+    selected_model = session.model || agent[:model]
 
-    with {:ok, provider_config} <- resolve_provider_config(provider),
-         {:ok, model} <- resolve_runtime_model(provider, selected_model),
+    with {:ok, provider, selected_model} <-
+           resolve_catalog_identity(session, provider, selected_model),
+         {:ok, provider_config} <- resolve_provider_config(provider),
+         :ok <- ensure_model_runtime_available(provider, selected_model),
          {:ok, updated_session} <-
-           persist_session_if_changed(session, %{provider: provider, model: model}) do
-      agent = agent |> Map.put(:provider, provider) |> Map.put(:model, model)
+           persist_session_if_changed(session, selection_attrs(session, provider, selected_model)) do
+      agent = selected_agent(agent, updated_session)
       {:ok, updated_session, agent, provider, provider_config}
     end
   end
@@ -133,7 +175,7 @@ defmodule Synapsis.Session.Worker.Config do
            agent: agent,
            provider_config: provider_config,
            engine_ctx: refresh_engine_ctx(state.engine_ctx, provider, agent[:model]),
-           engine_state: refresh_engine_state(state.engine_state, agent)
+           engine_state: refresh_engine_state(state.engine_state, agent, provider_config)
        }}
     end
   end
@@ -149,17 +191,62 @@ defmodule Synapsis.Session.Worker.Config do
 
   def ensure_agent_model(agent, session) do
     cond do
-      not is_nil(agent[:model]) ->
-        agent
+      session.provider not in [nil, ""] and session.model not in [nil, ""] ->
+        selected_agent(agent, session)
 
-      not is_nil(session.model) ->
-        Map.put(agent, :model, session.model)
+      agent[:model] not in [nil, ""] ->
+        agent
 
       true ->
         tier = agent[:model_tier] || :default
         provider = agent[:provider] || session.provider
         Map.put(agent, :model, Synapsis.Providers.model_for_tier(provider, tier))
     end
+  end
+
+  defp selected_agent(agent, session) do
+    agent
+    |> Map.put(:provider, session.provider)
+    |> Map.put(:model, session.model)
+    |> Map.put(
+      :model_context_window,
+      Synapsis.Providers.model_context_window(session.provider, session.model)
+    )
+    |> Map.put(
+      :history_projection,
+      if((session.config || %{})["history_projection"] == "portable", do: :portable)
+    )
+  end
+
+  defp resolve_catalog_identity(session, provider, model) do
+    case (session.config || %{})["model_id"] do
+      nil ->
+        {:ok, provider, model}
+
+      id ->
+        with {:ok, record} <- Synapsis.Models.get(id),
+             true <- record.enabled,
+             {:ok, connection} <- Synapsis.Providers.get(record.provider_id) do
+          {:ok, connection.name, record.model}
+        else
+          _ -> {:error, :model_unavailable}
+        end
+    end
+  end
+
+  defp selection_attrs(session, provider, model) do
+    config = session.config || %{}
+
+    config =
+      with {:ok, connection} <- Synapsis.Providers.get_by_name(provider),
+           {:ok, record} <- Synapsis.Models.get_by_identity(connection.id, model) do
+        config |> Map.put("provider_id", connection.id) |> Map.put("model_id", record.id)
+      else
+        _ -> config |> Map.delete("provider_id") |> Map.delete("model_id")
+      end
+
+    config = if config == %{} and is_nil(session.config), do: nil, else: config
+    %{provider: provider, model: model, config: config}
   end
 
   def resolve_provider_config(provider_name) do
@@ -181,7 +268,8 @@ defmodule Synapsis.Session.Worker.Config do
             %{
               api_key: api_key,
               base_url: base_url,
-              type: Synapsis.Providers.provider_type(provider_name)
+              type: Synapsis.Providers.provider_type(provider_name),
+              provider_name: provider_name
             }
             |> maybe_put(:default_model, Synapsis.Providers.env_default_model(provider_name))
 
@@ -222,8 +310,10 @@ defmodule Synapsis.Session.Worker.Config do
       updated =
         changeset |> Ecto.Changeset.apply_changes() |> Map.put(:updated_at, DateTime.utc_now())
 
-      Store.put_meta(updated.id, Session.to_meta(updated))
-      {:ok, updated}
+      case Store.put_meta(updated.id, Session.to_meta(updated)) do
+        :ok -> {:ok, updated}
+        {:error, _reason} -> {:error, :db_update_failed}
+      end
     else
       {:error, :db_update_failed}
     end
@@ -233,7 +323,8 @@ defmodule Synapsis.Session.Worker.Config do
     provider = attrs[:provider]
     model = attrs[:model]
 
-    if session.provider == provider and session.model == model do
+    if session.provider == provider and session.model == model and
+         session.config == attrs[:config] do
       {:ok, session}
     else
       persist_session(session, attrs)
@@ -246,24 +337,50 @@ defmodule Synapsis.Session.Worker.Config do
     |> Map.put(:model, model)
   end
 
-  defp refresh_engine_state(engine_state, agent) when is_map(engine_state) do
-    Map.put(engine_state, :agent_config, agent)
+  defp refresh_engine_state(engine_state, agent, provider_config) when is_map(engine_state) do
+    engine_state |> Map.put(:agent_config, agent) |> Map.put(:provider_config, provider_config)
   end
 
-  defp refresh_engine_state(engine_state, _agent), do: engine_state
+  defp refresh_engine_state(engine_state, _agent, _provider_config), do: engine_state
 
   def do_switch_model(provider_name, model, state) do
     with {:ok, provider_config} <- resolve_provider_config(provider_name),
          :ok <- ensure_model_runtime_available(provider_name, model),
-         {:ok, updated_session} <-
-           persist_session(state.session, %{provider: provider_name, model: model}) do
-      agent = Map.put(state.agent, :model, model)
-      {:ok, updated_session, provider_config, agent}
-    else
-      {:error, :provider_unavailable} = error -> error
-      {:error, :model_unavailable} = error -> error
-      {:error, _changeset} -> {:error, :db_update_failed}
+         :ok <- preflight_history(state.session.id, provider_name, model, provider_config),
+         attrs = selection_attrs(state.session, provider_name, model),
+         attrs =
+           Map.update!(attrs, :config, &Map.put(&1 || %{}, "history_projection", "portable")),
+         {:ok, updated_session} <- persist_session(state.session, attrs) do
+      {:ok, updated_session, provider_config, selected_agent(state.agent, updated_session)}
     end
+  end
+
+  defp preflight_history(session_id, provider, model, config) do
+    messages = Synapsis.Message.list_by_session(session_id)
+
+    opts =
+      Map.merge(config, %{
+        provider_name: provider,
+        provider_type: config[:type],
+        model: model,
+        history_projection: :portable
+      })
+
+    case Synapsis.Provider.Adapter.format_request(messages, [], opts) do
+      {:ok, _request} -> :ok
+      {:error, reason} -> {:error, {:history_incompatible, reason}}
+    end
+  end
+
+  def update_model_state(state, session, provider_config, agent) do
+    %{
+      state
+      | session: session,
+        provider_config: provider_config,
+        agent: agent,
+        engine_ctx: refresh_engine_ctx(state.engine_ctx, session.provider, session.model),
+        engine_state: refresh_engine_state(state.engine_state, agent, provider_config)
+    }
   end
 
   defp ensure_model_runtime_available(provider_name, model) do
@@ -275,25 +392,6 @@ defmodule Synapsis.Session.Worker.Config do
 
       {:error, :not_found} ->
         :ok
-    end
-  end
-
-  defp resolve_runtime_model(provider_name, selected_model) do
-    case Synapsis.Providers.get_by_name(provider_name) do
-      {:ok, provider} ->
-        cond do
-          Synapsis.Providers.model_runtime_available?(provider, selected_model) ->
-            {:ok, selected_model}
-
-          model = Synapsis.Providers.first_runtime_model(provider) ->
-            {:ok, model}
-
-          true ->
-            {:error, :model_unavailable}
-        end
-
-      {:error, :not_found} ->
-        {:ok, selected_model}
     end
   end
 

@@ -74,6 +74,7 @@ defmodule Synapsis.Backplane.Sync do
     connection_store = Keyword.get(opts, :connection_store, Connection)
 
     with {:ok, connection} <- connection_store.get(connection_id),
+         {:ok, connection} <- Connection.runtime(connection),
          {:ok, attempt_token} <- attempt_token(opts),
          now <- now(opts),
          {:ok, attempted} <-
@@ -275,7 +276,18 @@ defmodule Synapsis.Backplane.Sync do
     mcps =
       MCPConfigs.list()
       |> Enum.filter(&owned?(&1.config, connection.id, "mcp_server"))
-      |> Enum.map(&Map.take(&1, [:id, :name, :transport, :command, :args, :env, :url, :config]))
+      |> Enum.map(fn mcp ->
+        # Provider linkage changes credential storage, not the effective capability.
+        config =
+          (mcp.config || %{})
+          |> Map.drop([@credential_mode_key, @credential_encrypted_key])
+          |> Map.put_new("provider_url_override", false)
+
+        mcp
+        |> Map.take([:id, :name, :transport, :command, :args, :env, :url])
+        |> Map.put(:config, config)
+        |> Map.put(:resolved_transport, Synapsis.MCP.Transport.build(mcp))
+      end)
       |> Enum.sort_by(& &1.id)
 
     %{
@@ -321,17 +333,23 @@ defmodule Synapsis.Backplane.Sync do
 
     result =
       reconcile_surface(initial, :models, fn ->
-        reconcile_models_surface(initial, connection, snapshot)
+        if Connection.surface_enabled?(connection, "models"),
+          do: reconcile_models_surface(initial, connection, snapshot),
+          else: {:ok, initial}
       end)
 
     result =
       reconcile_surface(result, :skills, fn ->
-        reconcile_skills_surface(result, connection, snapshot, skill_store)
+        if Connection.surface_enabled?(connection, "skills"),
+          do: reconcile_skills_surface(result, connection, snapshot, skill_store),
+          else: {:ok, result}
       end)
 
     result =
       reconcile_surface(result, :mcp_tools, fn ->
-        reconcile_tools_surface(result, connection, snapshot, runtime, mcp_store)
+        if Connection.surface_enabled?(connection, "tools"),
+          do: reconcile_tools_surface(result, connection, snapshot, runtime, mcp_store),
+          else: {:ok, result}
       end)
 
     result =
@@ -726,24 +744,35 @@ defmodule Synapsis.Backplane.Sync do
     end
   end
 
+  defp reconcile_provider(%Connection{provider_id: id} = connection, %Snapshot{
+         providers: [capability],
+         models: models
+       })
+       when is_binary(id) do
+    with {:ok, provider} <- Providers.get(id) do
+      if owned?(provider.config, connection.id, "provider") do
+        config =
+          provider_availability_config(
+            provider,
+            capability,
+            models,
+            marker(provider.config, "source_name") || capability.name
+          )
+
+        Providers.update(id, %{config: Map.merge(provider.config || %{}, config)})
+      else
+        {:ok, provider}
+      end
+    end
+  end
+
+  defp reconcile_provider(%Connection{provider_id: id}, _snapshot) when is_binary(id),
+    do: Providers.get(id)
+
   defp reconcile_provider(connection, %Snapshot{providers: [capability], models: models}) do
     provider = find_provider(connection.id, capability.external_id)
     source_name = available_provider_name(connection, provider)
-    enabled_models = Enum.filter(models, & &1.enabled_by_source)
-    available = enabled_models != []
-
-    config =
-      marker_map(capability, available)
-      |> Map.put("source_name", source_name)
-      |> Map.put("source_contents_available", available)
-      |> Map.put("available_models", Enum.map(enabled_models, & &1.metadata))
-      |> Map.put(
-        "backplane_models",
-        merge_capability_cache(
-          marker(provider && provider.config, "backplane_models"),
-          Enum.map(models, &capability_cache(&1, &1.enabled_by_source))
-        )
-      )
+    config = provider_availability_config(provider, capability, models, source_name)
 
     attrs = %{
       name: source_name,
@@ -770,6 +799,23 @@ defmodule Synapsis.Backplane.Sync do
   end
 
   defp reconcile_provider(_connection, _snapshot), do: {:error, :missing_provider_capability}
+
+  defp provider_availability_config(provider, capability, models, source_name) do
+    enabled_models = Enum.filter(models, & &1.enabled_by_source)
+    available = enabled_models != []
+
+    marker_map(capability, available)
+    |> Map.put("source_name", source_name)
+    |> Map.put("source_contents_available", available)
+    |> Map.put("available_models", Enum.map(enabled_models, & &1.metadata))
+    |> Map.put(
+      "backplane_models",
+      merge_capability_cache(
+        marker(provider && provider.config, "backplane_models"),
+        Enum.map(models, &capability_cache(&1, &1.enabled_by_source))
+      )
+    )
+  end
 
   defp reconcile_skills(connection, capabilities, skill_store, complete?) do
     original = owned_skills(connection.id, skill_store)
@@ -998,12 +1044,13 @@ defmodule Synapsis.Backplane.Sync do
        ) do
     mcp = find_mcp(connection.id, capability.external_id, mcp_store)
     source_name = available_mcp_name(connection, mcp)
-    available = Enum.any?(tools, & &1.enabled_by_source)
+    available = capability.enabled_by_source
 
     config =
       marker_map(capability, available)
       |> Map.put("source_name", source_name)
       |> Map.put("source_contents_available", available)
+      # Retain the last snapshot for diagnostics; live MCP discovery owns tool admission.
       |> Map.put(
         "backplane_tools",
         merge_capability_cache(
@@ -1011,13 +1058,14 @@ defmodule Synapsis.Backplane.Sync do
           Enum.map(tools, &capability_cache(&1, &1.enabled_by_source))
         )
       )
-      |> put_applied_credential(mcp, connection.credential)
+      |> put_connection_credential(mcp, connection)
 
     attrs = %{
       name: source_name,
+      provider_id: connection.provider_id,
       transport: "streamable_http",
       enabled: true,
-      url: connection.endpoint <> "/mcp",
+      url: reconciled_mcp_url(connection, mcp),
       headers: %{},
       config: config
     }
@@ -1035,7 +1083,7 @@ defmodule Synapsis.Backplane.Sync do
               config:
                 (mcp.config || %{})
                 |> Map.merge(config)
-                |> put_applied_credential(mcp, connection.credential)
+                |> put_connection_credential(mcp, connection)
           }
 
           mcp_store.update(mcp, Map.delete(attrs, :enabled))
@@ -1086,6 +1134,40 @@ defmodule Synapsis.Backplane.Sync do
   defp reconcile_mcp_config(_connection, _snapshot, _runtime, _mcp_store),
     do: {:error, :missing_mcp_server_capability}
 
+  defp reconciled_mcp_url(connection, nil), do: Connection.mcp_url(connection)
+
+  defp reconciled_mcp_url(connection, mcp) do
+    previous_default = get_in(mcp.config || %{}, ["source_metadata", "endpoint"])
+
+    case (mcp.config || %{})["provider_url_override"] do
+      true ->
+        mcp.url
+
+      false ->
+        Connection.mcp_url(connection)
+
+      nil ->
+        if mcp.url && previous_default && mcp.url != previous_default,
+          do: mcp.url,
+          else: Connection.mcp_url(connection)
+    end
+  end
+
+  defp put_connection_credential(config, mcp, %Connection{provider_id: nil} = connection),
+    do: put_applied_credential(config, mcp, connection.credential)
+
+  defp put_connection_credential(config, mcp, connection) do
+    overridden? =
+      Map.has_key?(connection.connection_options, "mcp_url") or
+        marker(mcp && mcp.config, "provider_url_override") == true or
+        reconciled_mcp_url(connection, mcp) != connection.endpoint <> "/mcp"
+
+    config
+    |> Map.put("provider_url_override", overridden?)
+    |> Map.delete(@credential_mode_key)
+    |> Map.delete(@credential_encrypted_key)
+  end
+
   defp put_applied_credential(config, _mcp, nil) do
     config
     |> Map.put(@credential_mode_key, "keyless")
@@ -1120,6 +1202,7 @@ defmodule Synapsis.Backplane.Sync do
     attrs =
       Map.take(original, [
         :name,
+        :provider_id,
         :transport,
         :enabled,
         :command,

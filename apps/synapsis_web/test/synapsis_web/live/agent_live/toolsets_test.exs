@@ -5,13 +5,76 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
 
   alias Synapsis.{MCPConfigs, Toolsets}
 
+  defmodule NoopRefresh do
+    def refresh, do: %{}
+  end
+
+  defmodule BlockingRefresh do
+    def refresh do
+      send(
+        Application.fetch_env!(:synapsis_web, :toolset_refresh_owner),
+        {:toolset_refresh_started, self()}
+      )
+
+      receive do
+        {:release, result} -> result
+      after
+        5_000 -> %{"source" => {:error, :timeout}}
+      end
+    end
+  end
+
   setup do
+    original = Application.get_env(:synapsis_core, :mcp_refresh)
+    Application.put_env(:synapsis_core, :mcp_refresh, {NoopRefresh, :refresh, []})
+
+    on_exit(fn ->
+      if original,
+        do: Application.put_env(:synapsis_core, :mcp_refresh, original),
+        else: Application.delete_env(:synapsis_core, :mcp_refresh)
+
+      Application.delete_env(:synapsis_web, :toolset_refresh_owner)
+    end)
+
     Synapsis.DataCase.clear_config_store(:mcp)
     Synapsis.DataCase.clear_config_store(:toolset)
     :ok
   end
 
   defp toolset_by_name(name), do: Enum.find(Toolsets.list(), &(&1.name == name))
+
+  test "async MCP refresh preserves metadata and selected names while reporting source errors", %{
+    conn: conn
+  } do
+    Application.put_env(:synapsis_core, :mcp_refresh, {BlockingRefresh, :refresh, []})
+    Application.put_env(:synapsis_web, :toolset_refresh_owner, self())
+    {:ok, view, html} = live(conn, ~p"/agent/tools/new")
+    assert html =~ "Refreshing MCP tools"
+    assert_receive {:toolset_refresh_started, task}
+
+    react_form_change(view, "toolset-form", %{
+      "toolset" => %{"name" => "async-draft", "description" => "Keep metadata"},
+      "tool_names" => ["file_read", "mcp:gone:keep"]
+    })
+
+    :ok =
+      Synapsis.Tool.Registry.register_process("mcp:arrived:read", self(),
+        description: "Newly discovered tool",
+        category: :mcp
+      )
+
+    on_exit(fn -> Synapsis.Tool.Registry.unregister("mcp:arrived:read") end)
+    send(task, {:release, %{"offline-source" => {:error, :offline}}})
+    html = render_async(view)
+    assert html =~ "MCP discovery failed"
+    assert html =~ "offline-source"
+    assert has_element?(view, "input[name='tool_names[]'][value='file_read'][checked]")
+    assert has_element?(view, "input[name='tool_names[]'][value='mcp:gone:keep'][checked]")
+    react_form_submit(view, "toolset-form", %{})
+    saved = toolset_by_name("async-draft")
+    assert saved.description == "Keep metadata"
+    assert saved.tool_names == ["file_read", "mcp:gone:keep"]
+  end
 
   describe "toolsets routes" do
     test "lists toolsets and available tools", %{conn: conn} do

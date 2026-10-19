@@ -18,6 +18,7 @@ defmodule Synapsis.MCP.Transport do
       `headers` (`Backplane.McpProtocol.Transport.SSE` options schema).
   """
   alias Synapsis.MCPConfig
+  alias Synapsis.Backplane.ProviderSource
 
   @credential_encrypted_key "backplane_credential_encrypted"
   @credential_mode_key "backplane_credential_mode"
@@ -30,13 +31,13 @@ defmodule Synapsis.MCP.Transport do
   end
 
   def build(%MCPConfig{transport: "streamable_http"} = c) do
-    {base_url, mcp_path} = split_url(c.url)
+    {base_url, mcp_path} = split_url(resolved_url(c))
 
     {:streamable_http, base_url: base_url, mcp_path: mcp_path, headers: resolved_headers(c)}
   end
 
   def build(%MCPConfig{transport: "sse"} = c) do
-    {:sse, server: [base_url: c.url], headers: c.headers || %{}}
+    {:sse, server: [base_url: resolved_url(c)], headers: resolved_headers(c)}
   end
 
   @spec protocol_version(MCPConfig.t()) :: String.t()
@@ -60,6 +61,32 @@ defmodule Synapsis.MCP.Transport do
     {base, path}
   end
 
+  defp resolved_url(%MCPConfig{provider_id: id, config: config} = record) when is_binary(id) do
+    if config["provider_url_override"] == false do
+      case ProviderSource.get(id) do
+        {:ok, source} -> source.endpoint <> "/mcp"
+        _ -> record.url
+      end
+    else
+      record.url
+    end
+  end
+
+  defp resolved_url(record), do: record.url
+
+  defp resolved_headers(%MCPConfig{provider_id: id} = config) when is_binary(id) do
+    headers =
+      Map.reject(config.headers || %{}, fn {key, _} -> String.downcase(key) == "authorization" end)
+
+    case ProviderSource.get(id) do
+      {:ok, %{credential: credential}} when is_binary(credential) ->
+        Map.put(headers, "authorization", "Bearer " <> credential)
+
+      _ ->
+        headers
+    end
+  end
+
   defp resolved_headers(%MCPConfig{} = config) do
     Map.merge(config.headers || %{}, source_headers(config.config || %{}))
   end
@@ -67,7 +94,8 @@ defmodule Synapsis.MCP.Transport do
   defp source_headers(%{"backplane_source_id" => source_id} = config) do
     with {:ok, %{enabled: true} = connection} <-
            Synapsis.Backplane.Connection.get(source_id),
-         {:ok, credential} <- applied_credential(config, connection),
+         {:ok, credential} <-
+           applied_credential(config, connection),
          true <- is_binary(credential) do
       %{"authorization" => "Bearer " <> credential}
     else

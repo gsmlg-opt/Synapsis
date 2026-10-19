@@ -346,22 +346,32 @@ Sub-agents inherit the session context but have their own conversation history. 
 
 ## MCP Tool Delegation
 
-MCP tools are discovered at startup from config and registered dynamically with `deferred: true`:
+`Synapsis.MCP.Server` owns each connection using `backplane_mcp_protocol`.
+`MCP.refresh/1` and `refresh_all/0` perform live `tools/list` discovery in supervised
+tasks, including bounded cursor pagination. Concurrent refresh callers share an
+in-progress request. Only a complete successful result publishes added, changed
+and removed registrations. Persisted `backplane_tools` is not a discovery allowlist.
 
-```elixir
-defmodule Synapsis.MCP.Client do
-  use GenServer
+MCP, agent and toolset pages refresh asynchronously on connected open and explicit
+refresh. Turn preparation also refreshes before resolving MCP definitions. Failed
+sources contribute no definitions or dispatch authority to that turn; saved
+selection rules survive failure. A pending refresh retains the prior catalog;
+failure invalidates it, and source/credential/trust revocation remains effective.
 
-  # Each MCP server connection is a GenServer managing a Port (stdio) or HTTP (SSE)
-  # Tools are registered in Synapsis.Tool.Registry with prefix "mcp:<server>:<tool>"
+Registrations use `mcp:<server>:<tool>` display names and carry stable
+`mcp_config_id` plus raw `mcp_tool_name`. Agent config stores `mcp_selection` with
+default `all` or `selected` and source rules `all`, `selected` or `none`. The `all`
+rules include future discovered tools; `selected` retains unavailable raw names.
+New agent forms default to all; legacy agents retain their effective choices.
+Explicit none never falls back to all. Daemon profiles additionally require trusted
+read-only, nondeferred registrations and respect source exclusions.
 
-  def call_tool(server_name, tool_name, input) do
-    GenServer.call(via(server_name), {:call_tool, tool_name, input})
-  end
-end
-```
-
-MCP tools follow the same execution pipeline (permission check → dispatch → side effects) but dispatch via `GenServer.call/3` to the MCP client process.
+Definitions and allowed registrations are bound from the same catalog resolution.
+Invocation still validates current registration and availability: removal, schema
+replacement or revocation fails closed rather than dispatching a changed tool.
+Native runtime calls use `MCP.Server.execute_runtime/5` with caller-owned request
+handles, finite timeouts and cancellation, while the shared permission/Gateway
+pipeline continues to authorize effects.
 
 ## Agent Loop Integration
 

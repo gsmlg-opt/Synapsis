@@ -10,7 +10,6 @@ defmodule SynapsisWeb.ProviderLive.Show do
     case Synapsis.Providers.get(id) do
       {:ok, provider} ->
         all_models = fetch_models(provider)
-        enabled = Synapsis.Providers.enabled_models(provider)
         default_model = if all_models != [], do: hd(all_models).id, else: nil
 
         {:ok,
@@ -18,8 +17,6 @@ defmodule SynapsisWeb.ProviderLive.Show do
            provider: provider,
            page_title: provider.name,
            all_models: all_models,
-           enabled_models: enabled,
-           editing_models: false,
            # Test chat state
            chat_open: false,
            chat_model: default_model,
@@ -112,37 +109,6 @@ defmodule SynapsisWeb.ProviderLive.Show do
     end
   end
 
-  def handle_event("toggle_edit_models", _params, socket) do
-    {:noreply,
-     socket
-     |> reset_react_form("provider-models-form", %{
-       "models" => selected_model_ids(socket.assigns.all_models, socket.assigns.enabled_models)
-     })
-     |> assign(editing_models: !socket.assigns.editing_models)}
-  end
-
-  def handle_event("save_models", params, socket) do
-    selected = (params["models"] || []) |> Enum.reject(&(&1 == ""))
-    provider = socket.assigns.provider
-    config = Map.merge(provider.config || %{}, %{"enabled_models" => selected})
-
-    case Synapsis.Providers.update(provider.id, %{config: config}) do
-      {:ok, updated} ->
-        {:noreply,
-         socket
-         |> assign(
-           provider: updated,
-           enabled_models: Synapsis.Providers.enabled_models(updated),
-           editing_models: false
-         )
-         |> reset_react_form("provider-models-form")
-         |> put_flash(:info, "Models updated")}
-
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Failed to update models")}
-    end
-  end
-
   def handle_event("refresh_models", _params, socket) do
     case Synapsis.Providers.refresh_models(socket.assigns.provider.id) do
       {:ok, provider} ->
@@ -153,12 +119,8 @@ defmodule SynapsisWeb.ProviderLive.Show do
          |> assign(
            provider: provider,
            all_models: all_models,
-           enabled_models: Synapsis.Providers.enabled_models(provider),
            chat_model: default_chat_model(all_models, socket.assigns.chat_model)
          )
-         |> reset_react_form("provider-models-form", %{
-           "models" => selected_model_ids(all_models, Synapsis.Providers.enabled_models(provider))
-         })
          |> reset_react_form("provider-chat-model-form", %{
            "model" => default_chat_model(all_models, socket.assigns.chat_model)
          })
@@ -669,10 +631,6 @@ defmodule SynapsisWeb.ProviderLive.Show do
   defp default_chat_model(models, current),
     do: if(Enum.any?(models, &(&1.id == current)), do: current, else: hd(models).id)
 
-  defp model_enabled?(model_id, enabled_models) do
-    enabled_models == [] or model_id in enabled_models
-  end
-
   defp build_chat_request(config, model, messages) do
     transport = Synapsis.Provider.Adapter.resolve_transport_type(config[:type])
     formatted_messages = Enum.map(messages, &format_chat_message(transport, &1))
@@ -726,12 +684,6 @@ defmodule SynapsisWeb.ProviderLive.Show do
     %{"base_url" => provider.base_url, "api_key" => "", "enabled" => provider.enabled}
   end
 
-  defp selected_model_ids(models, enabled_models) do
-    models
-    |> Enum.filter(&model_enabled?(&1.id, enabled_models))
-    |> Enum.map(& &1.id)
-  end
-
   @impl true
   def render(assigns) do
     model_options =
@@ -768,6 +720,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
         >
           <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#191 --%>
           <.readonly_field label="Type" value={@provider.type} />
+          <.readonly_field :if={@provider.preset} label="Preset" value={@provider.preset} />
 
           <.dm_input
             type="text"
@@ -900,9 +853,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
               <.dm_btn variant="ghost" size="xs" phx-click="refresh_models">
                 Refresh Models
               </.dm_btn>
-              <.dm_btn variant="ghost" size="xs" phx-click="toggle_edit_models">
-                {if @editing_models, do: "Cancel", else: "Edit"}
-              </.dm_btn>
+              <.link navigate={~p"/settings/models"} class="link text-sm">Manage Models</.link>
             </div>
           </div>
         </:title>
@@ -911,64 +862,13 @@ defmodule SynapsisWeb.ProviderLive.Show do
           No models loaded. Use Refresh Models to load the provider's model list.
         </div>
 
-        <%= if @all_models != [] && @editing_models do %>
-          <.react_form
-            for={to_form(%{})}
-            id="provider-models-form"
-            values={%{"models" => selected_model_ids(@all_models, @enabled_models)}}
-            draft={react_form_draft(assigns, "provider-models-form")}
-            structure={Enum.map(@all_models, & &1.id)}
-            phx-submit="save_models"
-          >
-            <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#192 --%>
-            <input type="hidden" name="models[]" value="" />
-            <div class="space-y-2">
-              <div :for={model <- @all_models} class="flex items-center gap-3">
-                <label class="flex items-center gap-2 text-sm" for={"model-#{model.id}"}>
-                  <input
-                    type="checkbox"
-                    name="models[]"
-                    value={model.id}
-                    checked={model_enabled?(model.id, @enabled_models)}
-                    id={"model-#{model.id}"}
-                    class="h-4 w-4 rounded border-outline text-primary focus:ring-primary"
-                  />
-                  <span>{model.name}</span>
-                </label>
-                <span class="text-xs text-on-surface-variant">{model.id}</span>
-              </div>
-            </div>
-            <:actions>
-              <div class="flex gap-2">
-                <.dm_btn type="submit" variant="secondary" size="sm">
-                  Save Models
-                </.dm_btn>
-                <.dm_btn type="button" variant="ghost" size="sm" phx-click="toggle_edit_models">
-                  Cancel
-                </.dm_btn>
-              </div>
-            </:actions>
-          </.react_form>
-        <% end %>
-
-        <%= if @all_models != [] && !@editing_models do %>
-          <div class="space-y-1">
-            <div :for={model <- @all_models} class="flex items-center gap-2 py-1">
-              <%= if model_enabled?(model.id, @enabled_models) do %>
-                <span class="w-2 h-2 rounded-full bg-success"></span>
-                <span class="text-sm">{model.name}</span>
-                <span class="text-xs text-on-surface-variant">{model.id}</span>
-              <% else %>
-                <span class="w-2 h-2 rounded-full bg-on-surface/20"></span>
-                <span class="text-sm text-on-surface-variant">{model.name}</span>
-                <span class="text-xs text-on-surface-variant/50">{model.id}</span>
-              <% end %>
-            </div>
-          </div>
-          <div :if={@enabled_models == []} class="text-xs text-on-surface-variant mt-3">
-            All models enabled (no filter set)
-          </div>
-        <% end %>
+        <div :for={model <- @all_models} class="flex items-center gap-2 py-1">
+          <span class="text-sm">{model.name}</span>
+          <code class="text-xs text-on-surface-variant">{model.id}</code>
+        </div>
+        <p class="text-xs text-on-surface-variant mt-3">
+          Discovery suggestions are imported and enabled in the model catalog.
+        </p>
       </.dm_card>
 
       <%!-- Test Chat Section --%>

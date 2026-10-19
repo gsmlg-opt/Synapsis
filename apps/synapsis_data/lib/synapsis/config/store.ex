@@ -20,6 +20,7 @@ defmodule Synapsis.Config.Store do
   @types [
     :agent,
     :provider,
+    :model,
     :plugin,
     :heartbeat,
     :routine,
@@ -70,6 +71,7 @@ defmodule Synapsis.Config.Store do
       case type do
         :agent -> "agents.toml"
         :provider -> "providers.toml"
+        :model -> "models.toml"
         :plugin -> "plugins.toml"
         :heartbeat -> "heartbeats.toml"
         :routine -> "routines.toml"

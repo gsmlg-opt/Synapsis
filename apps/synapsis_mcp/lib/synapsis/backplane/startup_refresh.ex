@@ -164,7 +164,10 @@ defmodule Synapsis.Backplane.StartupRefresh do
   end
 
   defp default_refresh(connection_id, attempt_id) do
-    Backplane.refresh(connection_id, sync_opts: [attempt_token: attempt_id])
+    with {:ok, connection} <- Connection.get(connection_id),
+         {:ok, _linked} <- Connection.migrate_provider(connection) do
+      Backplane.refresh(connection_id, sync_opts: [attempt_token: attempt_id])
+    end
   end
 
   defp persist_failure(state, task, reason) do

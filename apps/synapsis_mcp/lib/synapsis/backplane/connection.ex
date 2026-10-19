@@ -17,6 +17,7 @@ defmodule Synapsis.Backplane.Connection do
     :endpoint,
     :base_url,
     :credential,
+    :provider_id,
     :last_synced_at,
     :last_success_at,
     :last_attempt_at,
@@ -38,11 +39,15 @@ defmodule Synapsis.Backplane.Connection do
 
   def new(attrs) when is_map(attrs) do
     name = value(attrs, :name)
-    endpoint = value(attrs, :endpoint) || value(attrs, :base_url)
+    provider_id = value(attrs, :provider_id)
+
+    endpoint =
+      provider_endpoint(provider_id) || value(attrs, :endpoint) || value(attrs, :base_url)
 
     with :ok <- validate_name(name),
          {:ok, endpoint} <- validate_url(endpoint),
          {:ok, id} <- validate_id(value(attrs, :id, Ecto.UUID.generate())),
+         :ok <- validate_provider_id(provider_id),
          {:ok, credential} <- load_credential(attrs),
          {:ok, connection_options} <- load_json_map(attrs, :connection_options),
          {:ok, metadata} <- load_json_map(attrs, :metadata),
@@ -55,6 +60,7 @@ defmodule Synapsis.Backplane.Connection do
       {:ok,
        %__MODULE__{
          id: id,
+         provider_id: provider_id,
          name: name,
          endpoint: endpoint,
          base_url: endpoint,
@@ -116,12 +122,229 @@ defmodule Synapsis.Backplane.Connection do
   end
 
   def update(%__MODULE__{} = connection, attrs) when is_map(attrs) do
-    merged = Map.merge(to_map(connection), canonicalize_endpoint_update(attrs))
+    attrs = canonicalize_endpoint_update(attrs)
 
-    with {:ok, updated} <- new(merged),
+    with {:ok, attrs} <- normalize_update_value(attrs, "endpoint", &validate_url/1),
+         {:ok, attrs} <- normalize_update_value(attrs, "credential", &normalize_credential/1),
+         {:ok, attrs} <- link_explicit_provider_update(connection, attrs),
+         {:ok, updated} <- new(Map.merge(to_map(connection), attrs)),
          :ok <- unique_name(updated.name, updated.id),
-         {:ok, _stored} <- Store.put(@store_type, to_map(updated)) do
-      {:ok, updated}
+         {:ok, rollback} <- update_provider(updated.provider_id, attrs) do
+      updated =
+        if updated.provider_id do
+          endpoint = Map.get(attrs, "endpoint", updated.endpoint)
+          credential = Map.get(attrs, "credential", updated.credential)
+
+          %{
+            updated
+            | endpoint: endpoint,
+              base_url: endpoint,
+              credential: credential,
+              credential_configured: is_binary(credential)
+          }
+        else
+          updated
+        end
+
+      case Store.put(@store_type, to_map(updated)) do
+        {:ok, _stored} -> {:ok, updated}
+        {:error, reason} -> rollback_provider(rollback, reason)
+      end
+    end
+  end
+
+  defp link_explicit_provider_update(%__MODULE__{provider_id: nil} = connection, attrs) do
+    if not Map.has_key?(attrs, "provider_id") and
+         (Map.has_key?(attrs, "credential") or Map.has_key?(attrs, "endpoint")) do
+      case owned_providers(connection.id) do
+        [] ->
+          {:ok, attrs}
+
+        [provider] ->
+          if Map.has_key?(attrs, "credential") or
+               connection.credential == provider.api_key_encrypted,
+             do: {:ok, Map.put(attrs, "provider_id", provider.id)},
+             else: {:error, :provider_credential_conflict}
+
+        _ ->
+          {:error, :provider_ownership_conflict}
+      end
+    else
+      {:ok, attrs}
+    end
+  end
+
+  defp link_explicit_provider_update(_connection, attrs), do: {:ok, attrs}
+
+  defp normalize_update_value(attrs, key, normalize) do
+    case Map.fetch(attrs, key) do
+      {:ok, value} ->
+        with {:ok, normalized} <- normalize.(value), do: {:ok, Map.put(attrs, key, normalized)}
+
+      :error ->
+        {:ok, attrs}
+    end
+  end
+
+  @doc "Resolve the current provider connection immediately before remote operations."
+  def runtime(%__MODULE__{provider_id: nil, enabled: true} = connection) do
+    current =
+      case get(connection.id) do
+        {:ok, current} -> current
+        _ -> connection
+      end
+
+    cond do
+      current.provider_id || not current.enabled ->
+        runtime(current)
+
+      current.metadata["provider_migration_error"] in ~w(provider_credential_conflict provider_ownership_conflict) ->
+        with {:ok, migrated} <- migrate_provider(current) do
+          if migrated.provider_id, do: runtime(migrated), else: {:ok, migrated}
+        end
+
+      true ->
+        case owned_providers(current.id) do
+          [] ->
+            {:ok, current}
+
+          [provider] ->
+            if current.credential == provider.api_key_encrypted,
+              do: migrate_runtime(current),
+              else: migration_error(current, :provider_credential_conflict)
+
+          _ ->
+            migration_error(current, :provider_ownership_conflict)
+        end
+    end
+  end
+
+  def runtime(%__MODULE__{enabled: false}), do: {:error, :connection_disabled}
+
+  def runtime(%__MODULE__{provider_id: id} = connection) do
+    with {:ok, source} <- Synapsis.Backplane.ProviderSource.get(id) do
+      {:ok,
+       %{
+         connection
+         | endpoint: source.endpoint,
+           base_url: source.endpoint,
+           credential: source.credential,
+           credential_configured: is_binary(source.credential)
+       }}
+    end
+  end
+
+  defp migrate_runtime(connection) do
+    with {:ok, migrated} <- migrate_provider(connection), do: runtime(migrated)
+  end
+
+  def surface_enabled?(connection, surface) do
+    case connection.connection_options["enabled_surfaces"] do
+      nil -> true
+      surfaces when is_list(surfaces) -> surface in surfaces
+      _ -> false
+    end
+  end
+
+  def credential(%__MODULE__{} = connection) do
+    with {:ok, current} <- runtime(connection), do: {:ok, current.credential}
+  end
+
+  def mcp_url(%__MODULE__{} = connection) do
+    connection.connection_options["mcp_url"] || connection.endpoint <> "/mcp"
+  end
+
+  @doc "Link legacy sources using managed ownership markers, rejecting credential conflicts."
+  def migrate_provider(%__MODULE__{provider_id: id} = connection) when is_binary(id),
+    do: {:ok, connection}
+
+  def migrate_provider(%__MODULE__{} = connection) do
+    case owned_providers(connection.id) do
+      [] ->
+        {:ok, connection}
+
+      [provider] ->
+        if connection.credential == provider.api_key_encrypted,
+          do:
+            update(connection, %{
+              provider_id: provider.id,
+              metadata: Map.delete(connection.metadata, "provider_migration_error")
+            }),
+          else: migration_error(connection, :provider_credential_conflict)
+
+      _ ->
+        migration_error(connection, :provider_ownership_conflict)
+    end
+  end
+
+  defp owned_providers(connection_id) do
+    {:ok, providers} = Synapsis.Providers.list()
+
+    Enum.filter(providers, fn provider ->
+      provider.config["managed_by"] == "backplane" and
+        provider.config["backplane_source_id"] == connection_id and
+        provider.config["source"] == "backplane" and provider.config["kind"] == "provider"
+    end)
+  end
+
+  defp migration_error(connection, reason) do
+    case update(connection, %{
+           status: "degraded",
+           stale: true,
+           last_error: to_string(reason),
+           metadata:
+             connection.metadata
+             |> Map.put("provider_migration_error", to_string(reason))
+             |> Map.put("runtime_blocked_surfaces", ["models", "skills", "tools"])
+         }) do
+      {:ok, _} ->
+        {:error, reason}
+
+      {:error, persistence_reason} ->
+        {:error, {:migration_error_persist_failed, reason, persistence_reason}}
+    end
+  end
+
+  defp update_provider(nil, _attrs), do: {:ok, nil}
+
+  defp update_provider(id, attrs) do
+    updates = %{}
+
+    updates =
+      if Map.has_key?(attrs, "credential"),
+        do: Map.put(updates, :api_key_encrypted, attrs["credential"]),
+        else: updates
+
+    updates =
+      if Map.has_key?(attrs, "endpoint"),
+        do: Map.put(updates, :base_url, String.trim_trailing(attrs["endpoint"], "/") <> "/v1"),
+        else: updates
+
+    if map_size(updates) == 0 do
+      {:ok, nil}
+    else
+      with {:ok, provider} <- Synapsis.Providers.get(id),
+           {:ok, _updated} <- Synapsis.Providers.update(id, updates) do
+        {:ok, {id, Map.take(Map.from_struct(provider), Map.keys(updates))}}
+      end
+    end
+  end
+
+  defp rollback_provider(nil, reason), do: {:error, reason}
+
+  defp rollback_provider({id, attrs}, reason) do
+    case Synapsis.Providers.update(id, attrs) do
+      {:ok, _restored} -> {:error, reason}
+      {:error, rollback_reason} -> {:error, {:provider_rollback_failed, reason, rollback_reason}}
+    end
+  end
+
+  defp provider_endpoint(nil), do: nil
+
+  defp provider_endpoint(id) do
+    case Synapsis.Backplane.ProviderSource.get(id, allow_disabled: true) do
+      {:ok, source} -> source.endpoint
+      _ -> nil
     end
   end
 
@@ -192,6 +415,15 @@ defmodule Synapsis.Backplane.Connection do
     end
   end
 
+  defp validate_provider_id(nil), do: :ok
+
+  defp validate_provider_id(id) do
+    case Ecto.UUID.cast(id) do
+      {:ok, _} -> :ok
+      :error -> {:error, :invalid_provider_id}
+    end
+  end
+
   defp validate_id(id) do
     case Ecto.UUID.cast(id) do
       {:ok, id} -> {:ok, id}
@@ -200,7 +432,8 @@ defmodule Synapsis.Backplane.Connection do
   end
 
   defp to_map(%__MODULE__{} = connection) do
-    encrypted = encrypt_credential(connection.credential)
+    encrypted =
+      if connection.provider_id, do: nil, else: encrypt_credential(connection.credential)
 
     connection
     |> redacted()
@@ -223,6 +456,19 @@ defmodule Synapsis.Backplane.Connection do
   defp stringify_keys(map), do: Map.new(map, fn {key, value} -> {to_string(key), value} end)
 
   defp load_credential(attrs) do
+    case value(attrs, :provider_id) do
+      nil ->
+        load_local_credential(attrs)
+
+      id ->
+        case Synapsis.Backplane.ProviderSource.get(id, allow_disabled: true) do
+          {:ok, source} -> {:ok, source.credential}
+          _ -> {:ok, nil}
+        end
+    end
+  end
+
+  defp load_local_credential(attrs) do
     cond do
       Map.has_key?(attrs, :credential) -> normalize_credential(Map.get(attrs, :credential))
       Map.has_key?(attrs, "credential") -> normalize_credential(Map.get(attrs, "credential"))

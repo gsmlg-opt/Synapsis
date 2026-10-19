@@ -7,13 +7,192 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
   alias Synapsis.Session.Worker.Persistence, as: SessionPersistence
   alias Synapsis.{AgentConfigs, Sessions}
 
+  def refresh_mcp, do: %{}
+
   setup do
+    previous = Application.get_env(:synapsis_core, :mcp_refresh)
+    Application.put_env(:synapsis_core, :mcp_refresh, {__MODULE__, :refresh_mcp, []})
+
+    on_exit(fn ->
+      if previous,
+        do: Application.put_env(:synapsis_core, :mcp_refresh, previous),
+        else: Application.delete_env(:synapsis_core, :mcp_refresh)
+    end)
+
     Synapsis.DataCase.clear_config_store(:provider)
+    Synapsis.DataCase.clear_config_store(:model)
     on_exit(fn -> Synapsis.DataCase.clear_config_store(:provider) end)
     :ok
   end
 
   describe "agent sessions page" do
+    test "session model selector groups configured choices by provider and switches independently from the agent default",
+         %{conn: conn} do
+      {:ok, provider} =
+        Synapsis.Providers.create(%{
+          name: "session-models",
+          type: "openai",
+          config: %{"model_catalog_migrated" => true}
+        })
+
+      {:ok, first} =
+        Synapsis.Models.create(%{provider_id: provider.id, model: "first", context_window: 8192})
+
+      {:ok, second} =
+        Synapsis.Models.create(%{provider_id: provider.id, model: "second", context_window: 4096})
+
+      {:ok, agent} =
+        AgentConfigs.create(%{
+          name: "catalog-session-agent",
+          provider: provider.name,
+          model: first.model
+        })
+
+      {:ok, session} =
+        Sessions.create("__global__", %{
+          provider: provider.name,
+          model: first.model,
+          agent: agent.name
+        })
+
+      {:ok, view, _} = live(conn, ~p"/agent/agents/#{agent.name}/sessions/#{session.id}")
+
+      assert has_element?(
+               view,
+               "#session-model-selector optgroup[label='session-models'] option[value='#{second.id}']",
+               "second"
+             )
+
+      view |> form("#session-model-form", %{"model_id" => second.id}) |> render_change()
+      assert {:ok, updated} = Sessions.get(session.id)
+      assert updated.model == second.model
+      assert updated.provider == provider.name
+      assert AgentConfigs.get_by_name(agent.name).model == first.model
+      assert has_element?(view, "#session-model-selector option[value='#{second.id}'][selected]")
+    end
+
+    test "unavailable current model remains visible and stale choices are rejected", %{conn: conn} do
+      {:ok, provider} =
+        Synapsis.Providers.create(%{
+          name: "unavailable-models",
+          type: "openai",
+          config: %{"model_catalog_migrated" => true}
+        })
+
+      {:ok, model} =
+        Synapsis.Models.create(%{
+          provider_id: provider.id,
+          model: "disabled",
+          context_window: 4096
+        })
+
+      {:ok, session} =
+        Sessions.create("__global__", %{
+          provider: provider.name,
+          model: model.model,
+          agent: "main"
+        })
+
+      {:ok, _} = Synapsis.Models.update(model, %{enabled: false})
+      {:ok, view, html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      assert html =~ "Current model unavailable"
+      assert has_element?(view, "#session-model-selector option[selected]", "disabled")
+      render_hook(view, "switch_model", %{"model_id" => model.id})
+      assert render(view) =~ "Selected model is unavailable"
+      assert {:ok, unchanged} = Sessions.get(session.id)
+      assert unchanged.model == model.model
+    end
+
+    test "a recreated raw model requires an explicit choice of its new catalog identity", %{
+      conn: conn
+    } do
+      {:ok, provider} =
+        Synapsis.Providers.create(%{
+          name: "recreated-model",
+          type: "openai",
+          config: %{"model_catalog_migrated" => true}
+        })
+
+      {:ok, original} =
+        Synapsis.Models.create(%{
+          provider_id: provider.id,
+          model: "same-name",
+          context_window: 4096
+        })
+
+      {:ok, session} =
+        Sessions.create("__global__", %{
+          provider: provider.name,
+          model: original.model,
+          agent: "main"
+        })
+
+      {:ok, _} = Synapsis.Models.delete(original.id)
+
+      {:ok, replacement} =
+        Synapsis.Models.create(%{
+          provider_id: provider.id,
+          model: original.model,
+          context_window: 8192
+        })
+
+      {:ok, view, html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      assert html =~ "Current model unavailable"
+
+      assert has_element?(
+               view,
+               "#session-model-selector option[value=''][selected][disabled]",
+               "same-name"
+             )
+
+      refute has_element?(
+               view,
+               "#session-model-selector option[value='#{replacement.id}'][selected]"
+             )
+
+      view |> form("#session-model-form", %{"model_id" => replacement.id}) |> render_change()
+      assert {:ok, updated} = Sessions.get(session.id)
+      assert updated.config["model_id"] == replacement.id
+
+      assert has_element?(
+               view,
+               "#session-model-selector option[value='#{replacement.id}'][selected]"
+             )
+    end
+
+    test "model selector is disabled while running and rejects forged switch events", %{
+      conn: conn
+    } do
+      {:ok, provider} =
+        Synapsis.Providers.create(%{
+          name: "busy-models",
+          type: "openai",
+          config: %{"model_catalog_migrated" => true}
+        })
+
+      {:ok, model} =
+        Synapsis.Models.create(%{provider_id: provider.id, model: "target", context_window: 4096})
+
+      {:ok, _} =
+        Synapsis.Models.create(%{
+          provider_id: provider.id,
+          model: "current",
+          context_window: 8192
+        })
+
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: provider.name, model: "current", agent: "main"})
+
+      {:ok, view, _} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      set_worker_running(session)
+      send(view.pid, {"session_status", %{status: "streaming"}})
+      assert has_element?(view, "#session-model-selector[disabled]")
+      render_hook(view, "switch_model", %{"model_id" => model.id})
+      assert render(view) =~ "Wait for the session to become idle"
+      assert {:ok, unchanged} = Sessions.get(session.id)
+      assert unchanged.model == "current"
+    end
+
     test "disables LiveView parameter logging for Base64 image payloads" do
       assert %{log: false} = SynapsisWeb.AgentLive.Sessions.__live__()
     end
@@ -178,11 +357,11 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       {:ok, session} =
         Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
 
-      {:ok, _view, html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      {:ok, view, html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
       # Personality name appears in the styled span (text-primary/70 class)
       assert html =~ "text-primary/70"
       assert html =~ "Main"
-      refute html =~ "anthropic/test"
+      refute has_element?(view, "[data-session-agent-meta]", "anthropic/test")
     end
 
     test "handles session_compacted PubSub event and reloads messages", %{conn: conn} do

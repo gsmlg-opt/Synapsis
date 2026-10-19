@@ -322,6 +322,21 @@ defmodule Synapsis.Backplane.SyncTest do
         mcp_tools: [%{"name" => "memory::search", "revision" => "tool-v2"}]
       )
 
+    assert {:error, :provider_unavailable} =
+             run_sync(renamed, changed,
+               client: fn _, _ -> flunk("disabled providers must not fetch a snapshot") end
+             )
+
+    assert {:ok, blocked_source} = Connection.get(renamed.id)
+    assert blocked_source.source_revision == repeated.source_revision
+    assert {:ok, blocked_provider} = Providers.get(provider.id)
+    assert blocked_provider.enabled == false
+    assert blocked_provider.config == provider_config
+    assert Skills.get(skill.id).system_prompt_fragment == "Prompt v1"
+    assert MCPConfigs.get(mcp.id).config == mcp_config
+    refute MCPConfigs.runtime_available?(MCPConfigs.get(mcp.id))
+
+    assert {:ok, _provider} = Providers.update(provider.id, %{enabled: true})
     assert {:ok, resynced} = run_sync(renamed, changed)
     assert resynced.source_revision == changed.source_revision
     assert resynced.artifacts == first.artifacts
@@ -329,7 +344,7 @@ defmodule Synapsis.Backplane.SyncTest do
     assert {:ok, [same_provider]} = Providers.list()
     assert same_provider.id == provider.id
     assert same_provider.name == "local-provider"
-    assert same_provider.enabled == false
+    assert same_provider.enabled == true
     assert same_provider.config["aliases"] == %{"fast" => "coding"}
 
     assert same_provider.config["available_models"] == [
@@ -815,10 +830,10 @@ defmodule Synapsis.Backplane.SyncTest do
 
     assert empty_mcp = MCPConfigs.get(synced.artifacts["mcp_id"])
     assert empty_mcp.enabled == true
-    assert empty_mcp.config["backplane_available"] == false
+    assert empty_mcp.config["backplane_available"] == true
     assert Enum.all?(empty_mcp.config["backplane_tools"], &(&1["backplane_available"] == false))
-    assert_receive {:mcp_stopped, mcp_name}
-    assert mcp_name == empty_mcp.name
+    assert_receive {:mcp_restarted, %{id: empty_mcp_id}}
+    assert empty_mcp_id == empty_mcp.id
   end
 
   test "an incomplete skill scan upserts returned skills without marking omitted skills unavailable" do
@@ -985,7 +1000,7 @@ defmodule Synapsis.Backplane.SyncTest do
     assert Skills.get(skill.id).config_overrides["backplane_available"] == false
   end
 
-  test "source-disabled-only models and tools keep their owners out of runtime APIs" do
+  test "disabled model metadata blocks models while live MCP source remains discoverable" do
     {:ok, connection} =
       Connection.create(%{name: "disabled-only", endpoint: "https://backplane.example.test"})
 
@@ -1008,10 +1023,10 @@ defmodule Synapsis.Backplane.SyncTest do
     assert model["backplane_available"] == false
 
     assert mcp = MCPConfigs.get(synced.artifacts["mcp_id"])
-    refute MCPConfigs.runtime_available?(mcp)
-    assert MCPConfigs.enabled() == []
-    assert_receive {:mcp_stopped, mcp_name}
-    assert mcp_name == mcp.name
+    assert MCPConfigs.runtime_available?(mcp)
+    assert Enum.any?(MCPConfigs.enabled(), &(&1.id == mcp.id))
+    assert_receive {:mcp_restarted, restarted}
+    assert restarted.id == mcp.id
 
     assert [tool] = mcp.config["backplane_tools"]
     assert tool["external_id"] == "disabled-tool"

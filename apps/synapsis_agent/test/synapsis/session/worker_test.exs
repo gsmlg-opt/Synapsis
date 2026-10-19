@@ -83,7 +83,7 @@ defmodule Synapsis.Session.WorkerTest do
   end
 
   @tag :tmp_dir
-  test "send_message refreshes changed agent defaults before building the provider request", %{
+  test "send_message refreshes agent settings while retaining the session model", %{
     tmp_dir: tmp_dir
   } do
     isolate_agent_config_store(tmp_dir)
@@ -96,6 +96,7 @@ defmodule Synapsis.Session.WorkerTest do
         provider: "anthropic",
         model: "new-default-model",
         tools: [],
+        system_prompt: "Updated instructions",
         config: %{"workspace_path" => tmp_dir}
       })
 
@@ -142,14 +143,32 @@ defmodule Synapsis.Session.WorkerTest do
     assert {:next_state, _next, new_state, _actions} =
              Worker.handle_event({:call, from}, {:send_message, "hello", []}, :idle, state)
 
-    assert new_state.agent.model == "new-default-model"
-    assert new_state.session.model == "new-default-model"
-    assert new_state.engine_ctx.model == "new-default-model"
-    assert new_state.engine_state.agent_config.model == "new-default-model"
-    assert new_state.engine_state.request["model"] == "new-default-model"
+    assert new_state.agent.model == "old-stale-model"
+    assert new_state.agent.system_prompt == "Updated instructions"
+    assert new_state.session.model == "old-stale-model"
+    assert new_state.engine_ctx.model == "old-stale-model"
+    assert new_state.engine_state.agent_config.model == "old-stale-model"
+    assert new_state.engine_state.request["model"] == "old-stale-model"
 
     assert {:ok, meta} = Session.Store.get_meta(session.id)
-    assert Session.from_meta(meta).model == "new-default-model"
+    assert Session.from_meta(meta).model == "old-stale-model"
+  end
+
+  test "model switches are rejected in every active legacy state" do
+    state = %Worker{session_id: "busy", session: build_session(%{})}
+    from = {self(), make_ref()}
+
+    for status <- [:generating, :executing_tools, :awaiting_approval, :busy, :query_loop] do
+      assert {:keep_state_and_data, actions} =
+               Worker.handle_event(
+                 {:call, from},
+                 {:switch_model, "google", "gemini"},
+                 status,
+                 state
+               )
+
+      assert {:reply, from, {:error, :session_busy}} in actions
+    end
   end
 
   # --- A2: tool execution robustness ---

@@ -14,6 +14,7 @@ defmodule Synapsis.MCPConfig do
   @primary_key {:id, :binary_id, autogenerate: false}
   embedded_schema do
     field(:name, :string)
+    field(:provider_id, :binary_id)
     field(:transport, :string, default: "stdio")
     field(:enabled, :boolean, default: true)
     field(:command, :string)
@@ -32,6 +33,7 @@ defmodule Synapsis.MCPConfig do
     |> cast(attrs, [
       :id,
       :name,
+      :provider_id,
       :transport,
       :enabled,
       :command,

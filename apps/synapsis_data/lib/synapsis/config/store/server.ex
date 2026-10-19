@@ -209,6 +209,16 @@ defmodule Synapsis.Config.Store.Server do
         {:error, reason} -> {:halt, {:error, {:invalid_entry, reason}}}
       end
     end)
+    |> case do
+      {:ok, validated} ->
+        case validate_model_identities(type, Enum.map(validated, &elem(&1, 1))) do
+          :ok -> {:ok, validated}
+          {:error, reason} -> {:error, {:invalid_entry, reason}}
+        end
+
+      error ->
+        error
+    end
   end
 
   defp validate_entries(_entries, _type), do: {:error, {:invalid_entry, :not_a_list}}
@@ -236,6 +246,20 @@ defmodule Synapsis.Config.Store.Server do
   end
 
   defp persist(type, entries) do
+    with :ok <- validate_model_identities(type, entries), do: persist_entries(type, entries)
+  end
+
+  defp validate_model_identities(:model, entries) do
+    identities = Enum.map(entries, &{value(&1, :provider_id), value(&1, :model)})
+
+    if length(Enum.uniq(identities)) == length(identities),
+      do: :ok,
+      else: {:error, :duplicate_model}
+  end
+
+  defp validate_model_identities(_type, _entries), do: :ok
+
+  defp persist_entries(type, entries) do
     path = Store.file_path(type)
 
     table_key = Atom.to_string(type) <> "s"
@@ -262,14 +286,25 @@ defmodule Synapsis.Config.Store.Server do
     Enum.map_join(entries, "\n", fn entry ->
       header = "[[#{key}]]\n"
 
-      fields =
-        Enum.flat_map(entry, fn
-          {_k, nil} -> []
-          {_k, v} when is_map(v) and map_size(v) == 0 -> []
-          {k, v} -> ["#{k} = #{encode_toml_value(v)}\n"]
-        end)
+      # Toml 0.7 flattens inline map values inside an array of tables. Dotted
+      # keys preserve nested config maps across reloads, including model choices.
+      fields = encode_toml_fields(entry, [])
 
       header <> Enum.join(fields)
+    end)
+  end
+
+  defp encode_toml_fields(map, prefix) do
+    Enum.flat_map(map, fn
+      {_key, nil} ->
+        []
+
+      {key, value} when is_map(value) ->
+        encode_toml_fields(value, prefix ++ [to_string(key)])
+
+      {key, value} ->
+        path = Enum.map_join(prefix ++ [to_string(key)], ".", &inspect/1)
+        ["#{path} = #{encode_toml_value(value)}\n"]
     end)
   end
 
@@ -293,6 +328,15 @@ defmodule Synapsis.Config.Store.Server do
   defp id_of(attrs) do
     Map.get(attrs, :id) || Map.get(attrs, "id")
   end
+
+  defp validate_entry(:model, attrs) when is_map(attrs) do
+    case Synapsis.ModelConfig.changeset(%Synapsis.ModelConfig{}, attrs) do
+      %{valid?: true} -> {:ok, attrs}
+      changeset -> {:error, {:invalid_model, changeset.errors}}
+    end
+  end
+
+  defp validate_entry(:model, _attrs), do: {:error, {:invalid_model, :not_a_map}}
 
   defp validate_entry(:routine, attrs) when is_map(attrs) do
     with :ok <- required_string(attrs, :id),

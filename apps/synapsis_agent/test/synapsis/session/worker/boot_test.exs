@@ -45,7 +45,7 @@ defmodule Synapsis.Session.Worker.BootTest do
              Boot.ensure_workspace_path(workspace_path)
   end
 
-  test "load_and_boot refreshes stale session metadata to agent default model", %{
+  test "load_and_boot retains the session model after the agent default changes", %{
     tmp_dir: tmp_dir
   } do
     agent_name = "agent-#{System.unique_integer([:positive])}"
@@ -69,13 +69,13 @@ defmodule Synapsis.Session.Worker.BootTest do
     assert {booted_session, agent, _provider_config, _graph, engine_state, engine_ctx,
             ^workspace_path} = Boot.load_and_boot(session.id)
 
-    assert booted_session.model == "new-default-model"
-    assert agent.model == "new-default-model"
-    assert engine_state.agent_config.model == "new-default-model"
-    assert engine_ctx.model == "new-default-model"
+    assert booted_session.model == "old-stale-model"
+    assert agent.model == "old-stale-model"
+    assert engine_state.agent_config.model == "old-stale-model"
+    assert engine_ctx.model == "old-stale-model"
 
     assert {:ok, meta} = Synapsis.Session.Store.get_meta(session.id)
-    assert Session.from_meta(meta).model == "new-default-model"
+    assert Session.from_meta(meta).model == "old-stale-model"
   end
 
   defp persist_session(attrs) do

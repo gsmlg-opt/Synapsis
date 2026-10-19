@@ -5,7 +5,7 @@ defmodule Synapsis.Providers do
   # (TOML), keyed by id. Records round-trip as `%ProviderConfig{}` structs
   # (the Config.Store struct-mapping pattern); the in-memory Provider.Registry
   # remains the runtime authority.
-  alias Synapsis.{Config.Store, ProviderConfig}
+  alias Synapsis.{Config.Store, Models, ProviderConfig}
   alias Synapsis.Encrypted.Binary, as: EncryptedBinary
   alias Synapsis.Provider.Registry, as: ProviderRegistry
 
@@ -49,15 +49,190 @@ defmodule Synapsis.Providers do
   @doc "Whether a model may participate in runtime operations for a persisted provider."
   def model_runtime_available?(provider, model)
       when is_map(provider) and is_binary(model) and model != "" do
-    config = Map.get(provider, :config, Map.get(provider, "config", %{})) || %{}
-    enabled_models = Map.get(config, "enabled_models", Map.get(config, :enabled_models, []))
+    # Callers may hold a provider struct from before a catalog edit or disable.
+    # Resolve its stable identity again so stale state never revives a choice.
+    current =
+      case Map.get(provider, :id, Map.get(provider, "id")) do
+        nil -> {:ok, provider}
+        id -> get(id)
+      end
 
-    runtime_available?(provider) and
-      (not is_list(enabled_models) or enabled_models == [] or model in enabled_models) and
-      source_model_available?(config, model)
+    with {:ok, provider} <- current do
+      config = Map.get(provider, :config, Map.get(provider, "config", %{})) || %{}
+
+      runtime_available?(provider) and catalog_model_enabled?(provider, model) and
+        source_model_available?(config, model)
+    else
+      {:error, :not_found} -> false
+    end
   end
 
   def model_runtime_available?(_provider, _model), do: false
+
+  defp catalog_model_enabled?(provider, model) do
+    id = Map.get(provider, :id, Map.get(provider, "id"))
+    config = Map.get(provider, :config, Map.get(provider, "config", %{})) || %{}
+    {:ok, catalog} = Models.list(provider_id: id)
+
+    if Map.get(config, "model_catalog_migrated", false) or catalog != [] do
+      Enum.any?(catalog, &(&1.model == model and &1.enabled))
+    else
+      enabled = Map.get(config, "enabled_models", Map.get(config, :enabled_models, []))
+      not is_list(enabled) or enabled == [] or model in enabled
+    end
+  end
+
+  @doc "Available configured models, shared by settings, agent/session pickers and runtime."
+  def configured_models do
+    migrate_model_catalog()
+    providers = Map.new(all(), &{&1.id, &1})
+    {:ok, models} = Models.list(enabled: true)
+
+    models
+    |> Enum.flat_map(fn model ->
+      case Map.get(providers, model.provider_id) do
+        nil ->
+          []
+
+        provider ->
+          if model_runtime_available?(provider, model.model) do
+            [
+              %{
+                id: model.id,
+                provider_id: provider.id,
+                provider: provider.name,
+                model: model.model,
+                name: model.name || model.model,
+                context_window: model.context_window
+              }
+            ]
+          else
+            []
+          end
+      end
+    end)
+    |> Enum.sort_by(&{&1.provider, &1.name, &1.model})
+  end
+
+  @doc "Configured token context, with static metadata retained for legacy model pairs."
+  def model_context_window(provider_name, model) do
+    with {:ok, provider} <- get_by_name(provider_name),
+         {:ok, configured} <- Models.get_by_identity(provider.id, model) do
+      configured.context_window
+    else
+      _ -> static_context_window(model)
+    end
+  end
+
+  @doc "Idempotently import legacy model choices without changing agent defaults."
+  def migrate_model_catalog do
+    providers = Enum.reject(all(), & &1.config["model_catalog_migrated"])
+
+    with {:ok, sessions} <- legacy_sessions(providers) do
+      Enum.reduce_while(providers, :ok, fn provider, :ok ->
+        with {:ok, _} <- Models.import(provider.id, legacy_model_candidates(provider, sessions)),
+             {:ok, _} <-
+               update(provider.id, %{
+                 config: Map.put(provider.config, "model_catalog_migrated", true)
+               }) do
+          {:cont, :ok}
+        else
+          error -> {:halt, error}
+        end
+      end)
+    end
+  end
+
+  defp legacy_sessions([]), do: {:ok, []}
+  defp legacy_sessions(_providers), do: Synapsis.Session.Store.list_metas()
+
+  defp legacy_model_candidates(provider, sessions) do
+    enabled = enabled_models(provider)
+    cached = cached_models(provider)
+
+    agent_models =
+      Store.list(:agent)
+      |> Enum.filter(&(&1["provider"] == provider.name))
+      |> Enum.map(& &1["model"])
+      |> Enum.filter(&(is_binary(&1) and &1 != ""))
+
+    source_models =
+      (provider.config["backplane_models"] || [])
+      |> Enum.flat_map(fn
+        %{"external_id" => id} -> [%{id: id}]
+        _ -> []
+      end)
+
+    explicit_models =
+      case provider.config["models"] do
+        models when is_list(models) ->
+          Enum.flat_map(models, fn
+            id when is_binary(id) and id != "" -> [%{id: id}]
+            %{id: id} = model when is_binary(id) -> [model]
+            %{"id" => id} = model when is_binary(id) -> [normalize_model(model)]
+            _ -> []
+          end)
+
+        _ ->
+          []
+      end
+
+    environment_models =
+      [:default, :fast, :expert]
+      |> Enum.map(&env_model_for_tier(provider.name, &1))
+      |> Enum.filter(&(is_binary(&1) and &1 != ""))
+
+    session_models =
+      sessions
+      |> Enum.filter(&(legacy_value(&1, :provider) == provider.name))
+      |> Enum.flat_map(fn session ->
+        case legacy_value(session, :model) do
+          model when is_binary(model) and model != "" ->
+            config = legacy_value(session, :config) || %{}
+
+            context =
+              legacy_value(config, :model_context_window) || legacy_value(config, :context_window)
+
+            [%{id: model, context_window: positive_context(context, model)}]
+
+          _ ->
+            []
+        end
+      end)
+
+    candidates =
+      cached ++
+        explicit_models ++
+        source_models ++
+        session_models ++ Enum.map(enabled ++ agent_models ++ environment_models, &%{id: &1})
+
+    candidates =
+      if candidates == [] and not backplane_managed?(provider.config) do
+        model_suggestions(provider)
+      else
+        candidates
+      end
+
+    candidates
+    |> Enum.uniq_by(& &1.id)
+    |> Enum.map(fn candidate ->
+      candidate
+      |> Map.put(:context_window, positive_context(candidate[:context_window], candidate.id))
+      |> Map.put(:enabled, enabled == [] or candidate.id in enabled)
+    end)
+  end
+
+  defp legacy_value(map, key), do: Map.get(map, key, Map.get(map, to_string(key)))
+
+  defp positive_context(value, _model) when is_integer(value) and value > 0, do: value
+  defp positive_context(_value, model), do: static_context_window(model)
+
+  defp static_context_window(model) do
+    case Synapsis.Provider.ModelRegistry.get(model) do
+      {:ok, metadata} -> metadata.context_window
+      {:error, :unknown} -> 128_000
+    end
+  end
 
   @doc "Fetch a persisted provider only when it is available to runtime callers."
   def get_runtime_by_name(name) do
@@ -221,6 +396,38 @@ defmodule Synapsis.Providers do
     end
   end
 
+  @doc "Discovered or static provider metadata offered for explicit catalog import."
+  def model_suggestions(provider) do
+    case cached_models(provider) do
+      [] ->
+        hint =
+          String.downcase(
+            Enum.join([provider.preset || "", provider.name || "", provider.base_url || ""], " ")
+          )
+
+        family =
+          cond do
+            String.contains?(hint, "moonshot") ->
+              "moonshot"
+
+            String.contains?(hint, "zhipu") or String.contains?(hint, "bigmodel") or
+                String.contains?(hint, "z.ai") ->
+              "zhipu"
+
+            String.contains?(hint, "minimax") ->
+              "minimax"
+
+            true ->
+              provider.type
+          end
+
+        Synapsis.Provider.ModelRegistry.list(family)
+
+      models ->
+        models
+    end
+  end
+
   @doc "Return cached discovered models for a provider."
   def cached_models(%ProviderConfig{config: config}), do: cached_models_from(config)
   def cached_models(%{"config" => config}), do: cached_models_from(config)
@@ -239,15 +446,16 @@ defmodule Synapsis.Providers do
 
   @doc "Return the first configured or cached model that is available at runtime."
   def first_runtime_model(provider) when is_map(provider) do
-    configured = enabled_models(provider)
+    {:ok, models} = Models.list(provider_id: provider.id, enabled: true)
 
     candidates =
-      if configured == [] do
-        provider
-        |> cached_models()
-        |> Enum.map(& &1.id)
+      if models == [] and not provider.config["model_catalog_migrated"] do
+        case enabled_models(provider) do
+          [] -> Enum.map(cached_models(provider), & &1.id)
+          enabled -> enabled
+        end
       else
-        configured
+        Enum.map(models, & &1.model)
       end
 
     Enum.find(candidates, &model_runtime_available?(provider, &1))
@@ -571,6 +779,7 @@ defmodule Synapsis.Providers do
     base
     |> Map.merge(atomize_keys(config))
     |> Map.put(:provider_id, provider.id)
+    |> Map.put(:provider_name, provider.name)
   end
 
   # ADR-006 C4 store <-> struct mapping (the Config.Store struct-mapping pattern).
@@ -638,6 +847,7 @@ defmodule Synapsis.Providers do
       "id" => r.id,
       "name" => r.name,
       "type" => r.type,
+      "preset" => r.preset,
       "base_url" => r.base_url,
       "api_key_encrypted" => encrypt_api_key(r.api_key_encrypted),
       "config" => r.config || %{},

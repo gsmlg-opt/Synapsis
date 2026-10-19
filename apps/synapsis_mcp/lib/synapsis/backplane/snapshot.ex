@@ -149,7 +149,7 @@ defmodule Synapsis.Backplane.Snapshot do
           "Backplane #{connection.name}",
           "mcp_server",
           true,
-          %{"endpoint" => connection.endpoint <> "/mcp", "transport" => "streamable_http"}
+          %{"endpoint" => Connection.mcp_url(connection), "transport" => "streamable_http"}
         )
 
       {capabilities, [server], revision, nil}

@@ -670,7 +670,8 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
               model: context.agent[:model] || context.session.model,
               system_prompt: context.system_prompt,
               max_tokens: context.agent[:max_tokens] || 8192,
-              reasoning_effort: context.agent[:reasoning_effort]
+              reasoning_effort: context.agent[:reasoning_effort],
+              history_projection: context.agent[:history_projection]
             }
           },
           state.fixture_context

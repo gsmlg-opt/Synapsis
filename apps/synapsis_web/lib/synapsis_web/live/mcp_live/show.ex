@@ -9,10 +9,14 @@ defmodule SynapsisWeb.MCPLive.Show do
   def mount(%{"id" => id}, _session, socket) do
     case MCPConfigs.get(id) do
       %MCPConfig{} = config ->
+        if connected?(socket), do: send(self(), :refresh_open_catalog)
+
         {:ok,
          assign(socket,
            config: config,
            page_title: config.name,
+           catalog_loading: false,
+           catalog_error: nil,
            form_values: form_values_from_config(config)
          )}
 
@@ -25,26 +29,51 @@ defmodule SynapsisWeb.MCPLive.Show do
   end
 
   @impl true
+  def handle_event("refresh_catalog", _params, %{assigns: %{catalog_loading: true}} = socket),
+    do: {:noreply, socket}
+
+  def handle_event("refresh_catalog", _params, socket) do
+    id = socket.assigns.config.id
+
+    {:noreply,
+     socket
+     |> assign(catalog_loading: true, catalog_error: nil)
+     |> start_async(:mcp_catalog, fn -> Synapsis.MCP.refresh(id) end)}
+  end
+
   def handle_event("change_config_form", params, socket) do
     {:noreply, assign(socket, form_values: Map.drop(params, ["_target"]))}
   end
 
   def handle_event("update_config", params, socket) do
-    transport = params["transport"] || socket.assigns.config.transport
+    current = socket.assigns.config
+    transport = params["transport"] || current.transport
+    url = url_for_transport(transport, params)
 
     attrs = %{
       command: command_for_transport(transport, params),
       args: args_for_transport(transport, params),
-      url: url_for_transport(transport, params),
+      url: url,
       transport: transport,
       env: env_for_transport(transport, params),
       headers: headers_for_transport(transport, params),
-      enabled: params["enabled"] == "true"
+      enabled: params["enabled"] == "true",
+      config:
+        if(current.provider_id && url != current.url,
+          do: Map.put(current.config, "provider_url_override", true),
+          else: current.config
+        )
     }
 
     case MCPConfigs.update(socket.assigns.config, attrs) do
       {:ok, config} ->
-        {:noreply, finish_update(socket, config)}
+        case persist_source_url(config) do
+          :ok ->
+            {:noreply, finish_update(socket, config)}
+
+          {:error, _} ->
+            {:noreply, put_flash(socket, :error, "MCP saved but source URL could not be updated")}
+        end
 
       {:error, %Ecto.Changeset{errors: errors}} ->
         message =
@@ -58,6 +87,69 @@ defmodule SynapsisWeb.MCPLive.Show do
 
       {:error, _} ->
         {:noreply, put_flash(socket, :error, "Failed to update")}
+    end
+  end
+
+  @impl true
+  def handle_info(:refresh_open_catalog, socket) do
+    {:noreply,
+     socket
+     |> assign(catalog_loading: true, catalog_error: nil)
+     |> start_async(:mcp_catalog, fn -> Synapsis.MCPSelection.refresh() end)}
+  end
+
+  @impl true
+  def handle_async(:mcp_catalog, {:ok, outcomes}, socket) when is_map(outcomes) do
+    case Map.get(outcomes, socket.assigns.config.id, :ok) do
+      :ok ->
+        {:noreply, assign(socket, catalog_loading: false, catalog_error: nil)}
+
+      _ ->
+        {:noreply,
+         assign(socket,
+           catalog_loading: false,
+           catalog_error:
+             "Live tool discovery failed. Tools remain unavailable until refresh succeeds."
+         )}
+    end
+  end
+
+  def handle_async(:mcp_catalog, {:ok, :ok}, socket),
+    do: {:noreply, assign(socket, catalog_loading: false, catalog_error: nil)}
+
+  def handle_async(:mcp_catalog, _failure, socket),
+    do:
+      {:noreply,
+       assign(socket,
+         catalog_loading: false,
+         catalog_error:
+           "Live tool discovery failed. Tools remain unavailable until refresh succeeds."
+       )}
+
+  defp persist_source_url(%MCPConfig{provider_id: id, config: metadata} = config)
+       when is_binary(id) do
+    if metadata["provider_url_override"] == true,
+      do: do_persist_source_url(metadata["backplane_source_id"], config),
+      else: :ok
+  end
+
+  defp persist_source_url(config) do
+    do_persist_source_url(config.config["backplane_source_id"], config)
+  end
+
+  defp do_persist_source_url(source_id, config) do
+    case source_id do
+      nil ->
+        :ok
+
+      source_id ->
+        with {:ok, source} <- Synapsis.Backplane.Connection.get(source_id),
+             {:ok, _} <-
+               Synapsis.Backplane.Connection.update(source, %{
+                 connection_options: Map.put(source.connection_options, "mcp_url", config.url)
+               }) do
+          :ok
+        end
     end
   end
 
@@ -197,6 +289,17 @@ defmodule SynapsisWeb.MCPLive.Show do
       </.breadcrumb>
 
       <h1 class="text-2xl font-bold mb-6">{@config.name}</h1>
+
+      <.dm_card variant="bordered" class="mb-4">
+        <:title>Live tool discovery</:title>
+        <p :if={@config.provider_id} class="text-sm mb-2">
+          Provider connection: {@config.provider_id}
+        </p>
+        <.dm_btn phx-click="refresh_catalog" disabled={@catalog_loading} size="sm">
+          {if @catalog_loading, do: "Refreshing tools…", else: "Refresh live tools"}
+        </.dm_btn>
+        <p :if={@catalog_error} role="alert" class="text-error mt-2">{@catalog_error}</p>
+      </.dm_card>
 
       <.dm_card variant="bordered">
         <.react_form

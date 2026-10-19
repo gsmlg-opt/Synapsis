@@ -22,6 +22,7 @@ defmodule Synapsis.Backplane.SkillLoader do
       when is_binary(source_id) and is_binary(skill_id) and is_binary(revision) and revision != "" do
     with {:ok, connection} <- Connection.get(source_id),
          true <- connection.enabled,
+         {:ok, connection} <- Connection.runtime(connection),
          {:ok, client} <- client(connection, context),
          {:ok, parent} <- TemporaryStorage.directory(System.tmp_dir!(), "synapsis-skill"),
          {:ok, content} <- prepare_and_read(client, entry, parent, context) do
@@ -42,7 +43,7 @@ defmodule Synapsis.Backplane.SkillLoader do
       endpoint: connection.endpoint,
       source_id: connection.id,
       access_context_id: to_string(context[:session_id] || context[:agent_id] || "synapsis"),
-      credential_supplier: fn -> connection.credential end,
+      credential_supplier: fn -> Connection.credential(connection) end,
       cancelled?: cancellation(context),
       overall_timeout_ms: @timeout_ms,
       max_json_bytes: @max_json_bytes,

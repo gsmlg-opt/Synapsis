@@ -327,21 +327,14 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       assert html =~ "Claude"
     end
 
-    test "shows all models enabled by default", %{conn: conn, provider: provider} do
-      {:ok, _view, html} = live(conn, ~p"/settings/providers/#{provider.id}")
-      assert html =~ "All models enabled"
-    end
-
-    test "edit button toggles model editing mode", %{conn: conn, provider: provider} do
+    test "connection settings link to the independent model catalog", %{
+      conn: conn,
+      provider: provider
+    } do
       {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
-
-      html =
-        view
-        |> element(~s(el-dm-button[phx-click="toggle_edit_models"]))
-        |> render_click()
-
-      assert html =~ "Save Models"
-      assert html =~ ~s(name="models[]")
+      assert has_element?(view, "a[href='/settings/models']", "Manage Models")
+      refute has_element?(view, "[phx-click='toggle_edit_models']")
+      refute has_element?(view, "[data-form-id='provider-models-form']")
     end
 
     test "refresh_models reloads models from provider settings", %{conn: conn} do
@@ -375,101 +368,6 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
 
       {:ok, updated} = Synapsis.Providers.get(provider.id)
       assert [%{"id" => "fresh-model"}] = updated.config["available_models"]
-    end
-
-    test "save_models persists enabled models", %{conn: conn, provider: provider} do
-      {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
-
-      # Enter edit mode
-      view
-      |> element(~s(el-dm-button[phx-click="toggle_edit_models"]))
-      |> render_click()
-
-      # Submit with specific models selected
-      html =
-        view
-        |> react_form_submit("provider-models-form", %{
-          "models" => ["claude-sonnet-4-6", "claude-haiku-3-5-20241022"]
-        })
-
-      assert html =~ "Models updated"
-
-      # Verify persisted
-      {:ok, updated} = Synapsis.Providers.get(provider.id)
-
-      assert updated.config["enabled_models"] == [
-               "claude-sonnet-4-6",
-               "claude-haiku-3-5-20241022"
-             ]
-    end
-
-    test "source-available unchecked Backplane models can be enabled again", %{conn: conn} do
-      source_id = "source-#{Ecto.UUID.generate()}"
-
-      assert {:ok, _connection} =
-               Synapsis.Config.Store.put(:backplane, %{"id" => source_id, "enabled" => true})
-
-      provider =
-        create_provider!(%{
-          name: "backplane-model-editor",
-          type: "openai",
-          config: %{
-            "managed_by" => "backplane",
-            "backplane_source_id" => source_id,
-            "backplane_available" => true,
-            "enabled_models" => ["enabled-model"],
-            "available_models" => [
-              %{"id" => "enabled-model", "name" => "Enabled Model"},
-              %{"id" => "unchecked-model", "name" => "Unchecked Model"}
-            ],
-            "backplane_models" => [
-              %{
-                "external_id" => "enabled-model",
-                "source_available" => true,
-                "backplane_available" => true
-              },
-              %{
-                "external_id" => "unchecked-model",
-                "source_available" => true,
-                "backplane_available" => true
-              }
-            ]
-          }
-        })
-
-      on_exit(fn -> Synapsis.Config.Store.delete(:backplane, source_id) end)
-
-      {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
-
-      html =
-        view
-        |> element(~s(el-dm-button[phx-click="toggle_edit_models"]))
-        |> render_click()
-
-      assert html =~ "Unchecked Model"
-      assert has_element?(view, ~s|input[value="unchecked-model"]:not([checked])|)
-
-      view
-      |> react_form_submit("provider-models-form", %{
-        "models" => ["enabled-model", "unchecked-model"]
-      })
-
-      assert {:ok, updated} = Synapsis.Providers.get(provider.id)
-      assert updated.config["enabled_models"] == ["enabled-model", "unchecked-model"]
-    end
-
-    test "disabled models shown differently from enabled", %{conn: conn} do
-      provider =
-        create_provider!(%{
-          name: "filtered-prov",
-          type: "anthropic",
-          api_key_encrypted: "sk-key",
-          config: %{"enabled_models" => ["claude-sonnet-4-6"]}
-        })
-
-      {:ok, _view, html} = live(conn, ~p"/settings/providers/#{provider.id}")
-      # Should not show "All models enabled" since a filter is set
-      refute html =~ "All models enabled"
     end
 
     test "test chat section is present", %{conn: conn, provider: provider} do

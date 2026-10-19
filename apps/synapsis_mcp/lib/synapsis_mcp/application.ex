@@ -6,6 +6,8 @@ defmodule SynapsisMcp.Application do
   def start(_type, _args) do
     Application.put_env(:synapsis_core, :skill_loader, &Synapsis.Backplane.SkillLoader.load/2)
 
+    Application.put_env(:synapsis_core, :mcp_refresh, {Synapsis.MCP, :refresh_all, []})
+
     children = [Synapsis.MCP.Supervisor, Synapsis.Backplane.StartupRefresh]
     opts = [strategy: :one_for_one, name: SynapsisMcp.RootSupervisor]
 

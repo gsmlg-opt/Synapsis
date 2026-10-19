@@ -9,6 +9,7 @@ defmodule Synapsis.Session.Worker.ConfigTest do
 
   setup do
     Synapsis.DataCase.clear_config_store(:provider)
+    Synapsis.DataCase.clear_config_store(:model)
     Synapsis.DataCase.clear_config_store(:backplane)
 
     assert {:ok, _connection} =
@@ -18,6 +19,7 @@ defmodule Synapsis.Session.Worker.ConfigTest do
 
     on_exit(fn ->
       Synapsis.DataCase.clear_config_store(:provider)
+      Synapsis.DataCase.clear_config_store(:model)
       Synapsis.DataCase.clear_config_store(:backplane)
       ProviderRegistry.unregister("anthropic")
     end)
@@ -296,7 +298,7 @@ defmodule Synapsis.Session.Worker.ConfigTest do
     refute_received :provider_called
   end
 
-  test "session default resolution replaces a source-disabled model with an enabled sibling" do
+  test "session default resolution requires an explicit choice for a source-disabled model" do
     name = "mixed-default-provider-#{System.unique_integer([:positive])}"
 
     assert {:ok, _provider} =
@@ -336,10 +338,103 @@ defmodule Synapsis.Session.Worker.ConfigTest do
     :ok = Synapsis.Session.Store.put_meta(session.id, Session.to_meta(session))
     on_exit(fn -> Synapsis.Session.Store.delete_session(session.id) end)
 
-    assert {:ok, %{model: "enabled-model"}, %{model: "enabled-model"}, ^name, _provider_config} =
-             Config.resolve_session_defaults(session)
+    assert {:error, :model_unavailable} = Config.resolve_session_defaults(session)
 
     assert {:ok, persisted} = Synapsis.Session.Store.get_meta(session.id)
-    assert Session.from_meta(persisted).model == "enabled-model"
+    assert Session.from_meta(persisted).model == "disabled-model"
+  end
+
+  test "switching records a coherent provider/model pair, context, and catalog identity" do
+    {:ok, provider} = Providers.create(%{name: "target", type: "openai"})
+
+    {:ok, model} =
+      Synapsis.Models.create(%{
+        provider_id: provider.id,
+        model: "target-model",
+        context_window: 4096
+      })
+
+    session = %Session{
+      id: Ecto.UUID.generate(),
+      agent: "main",
+      provider: "anthropic",
+      model: "old",
+      config: %{}
+    }
+
+    :ok = Synapsis.Session.Store.put_meta(session.id, Session.to_meta(session))
+    on_exit(fn -> Synapsis.Session.Store.delete_session(session.id) end)
+
+    state = %{session: session, agent: %{provider: "anthropic", model: "old"}}
+
+    assert {:ok, switched, config, agent} =
+             Config.do_switch_model("target", "target-model", state)
+
+    assert agent.provider == "target"
+    assert agent.model == "target-model"
+    assert agent.model_context_window == 4096
+    assert agent.history_projection == :portable
+    assert config.provider_id == provider.id
+    assert switched.config["model_id"] == model.id
+    assert switched.config["provider_id"] == provider.id
+    assert {:ok, persisted} = Synapsis.Session.Store.get_meta(session.id)
+    assert Session.from_meta(persisted).config == switched.config
+
+    assert {:ok, rebooted, resolved, "target", _} = Config.resolve_session_defaults(switched)
+    assert rebooted.model == "target-model"
+    assert resolved.provider == "target"
+    assert resolved.model_context_window == 4096
+    assert resolved.history_projection == :portable
+  end
+
+  test "deleted catalog identities require selection even if the raw name is reused" do
+    {:ok, provider} = Providers.create(%{name: "catalog-provider", type: "openai"})
+
+    {:ok, model} =
+      Synapsis.Models.create(%{provider_id: provider.id, model: "model", context_window: 4096})
+
+    {:ok, _} = Synapsis.Models.delete(model.id)
+
+    {:ok, _replacement} =
+      Synapsis.Models.create(%{provider_id: provider.id, model: "model", context_window: 8192})
+
+    session = %Session{
+      id: Ecto.UUID.generate(),
+      agent: "main",
+      provider: provider.name,
+      model: "model",
+      config: %{"model_id" => model.id, "provider_id" => provider.id}
+    }
+
+    assert {:error, :model_unavailable} = Config.resolve_session_defaults(session)
+  end
+
+  test "incompatible history is rejected before persisting a model switch" do
+    session = %Session{
+      id: Ecto.UUID.generate(),
+      agent: "main",
+      provider: "anthropic",
+      model: "old",
+      config: %{}
+    }
+
+    :ok = Synapsis.Session.Store.put_meta(session.id, Session.to_meta(session))
+
+    :ok =
+      Synapsis.Message.persist_list(session.id, [
+        %Synapsis.Message{
+          session_id: session.id,
+          role: "assistant",
+          parts: [%Synapsis.Part.Reasoning{content: "private", signature: "unbound"}]
+        }
+      ])
+
+    on_exit(fn -> Synapsis.Session.Store.delete_session(session.id) end)
+
+    assert {:error, {:history_incompatible, _reason}} =
+             Config.do_switch_model("google", "gemini-2.5-pro", %{session: session, agent: %{}})
+
+    assert {:ok, persisted} = Synapsis.Session.Store.get_meta(session.id)
+    assert Session.from_meta(persisted).model == "old"
   end
 end

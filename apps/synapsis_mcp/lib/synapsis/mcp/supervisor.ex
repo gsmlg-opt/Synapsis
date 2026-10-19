@@ -10,6 +10,7 @@ defmodule Synapsis.MCP.Supervisor do
   def init(_init_arg) do
     children = [
       {Registry, keys: :unique, name: Synapsis.MCP.Registry},
+      {Task.Supervisor, name: Synapsis.MCP.TaskSupervisor},
       {DynamicSupervisor, name: Synapsis.MCP.DynamicSupervisor, strategy: :one_for_one}
     ]
 

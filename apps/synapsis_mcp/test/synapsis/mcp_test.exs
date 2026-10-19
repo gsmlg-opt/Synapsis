@@ -92,6 +92,95 @@ defmodule Synapsis.MCPTest do
     refute name in Synapsis.MCP.list()
   end
 
+  test "a failed client stops its runtime without restarting unrelated MCP infrastructure", %{
+    bypass: bypass
+  } do
+    name = "failed-client-#{System.unique_integer([:positive])}"
+
+    {:ok, config} =
+      MCPConfigs.create(%{
+        name: name,
+        transport: "streamable_http",
+        url: "http://localhost:#{bypass.port}"
+      })
+
+    on_exit(fn ->
+      Synapsis.MCP.stop(name)
+      MCPConfigs.delete(config)
+    end)
+
+    {:ok, server} = Synapsis.MCP.start(config)
+    assert :ok = Synapsis.MCP.Server.await_ready(server)
+    task_supervisor = Process.whereis(Synapsis.MCP.TaskSupervisor)
+    dynamic_supervisor = Process.whereis(Synapsis.MCP.DynamicSupervisor)
+    monitor = Process.monitor(server)
+    client_supervisor = :sys.get_state(server).supervisor
+    Process.exit(client_supervisor, :kill)
+
+    assert_receive {:DOWN, ^monitor, :process, ^server, {:shutdown, {:client_exited, :killed}}},
+                   2_000
+
+    assert wait_until(fn -> Elixir.Registry.lookup(Synapsis.MCP.Registry, name) == [] end)
+    assert Process.whereis(Synapsis.MCP.TaskSupervisor) == task_supervisor
+    assert Process.whereis(Synapsis.MCP.DynamicSupervisor) == dynamic_supervisor
+    assert :ok = Synapsis.MCP.refresh(config.id)
+  end
+
+  test "live refresh isolates an invalid stdio source while refreshing healthy sources", %{
+    bypass: bypass
+  } do
+    suffix = System.unique_integer([:positive])
+
+    {:ok, invalid} =
+      MCPConfigs.create(%{
+        name: "invalid-#{suffix}",
+        transport: "stdio",
+        command: "/synapsis-missing-mcp-binary"
+      })
+
+    {:ok, healthy} =
+      MCPConfigs.create(%{
+        name: "healthy-#{suffix}",
+        transport: "streamable_http",
+        url: "http://localhost:#{bypass.port}"
+      })
+
+    on_exit(fn ->
+      for config <- [invalid, healthy] do
+        Synapsis.MCP.stop(config.name)
+        MCPConfigs.delete(config)
+      end
+    end)
+
+    task_supervisor = Process.whereis(Synapsis.MCP.TaskSupervisor)
+    dynamic_supervisor = Process.whereis(Synapsis.MCP.DynamicSupervisor)
+    results = Synapsis.MCP.refresh_all()
+    assert {:error, _} = results[invalid.id]
+    assert results[healthy.id] == :ok
+    assert Process.whereis(Synapsis.MCP.TaskSupervisor) == task_supervisor
+    assert Process.whereis(Synapsis.MCP.DynamicSupervisor) == dynamic_supervisor
+    assert Registry.runtime_available?("mcp:#{healthy.name}:echo")
+  end
+
+  test "refresh reports per-source errors when the discovery task supervisor is unavailable" do
+    {:ok, config} =
+      MCPConfigs.create(%{
+        name: "no-tasks-#{System.unique_integer([:positive])}",
+        transport: "stdio",
+        command: "false"
+      })
+
+    on_exit(fn -> MCPConfigs.delete(config) end)
+    task_supervisor = Process.whereis(Synapsis.MCP.TaskSupervisor)
+    Process.unregister(Synapsis.MCP.TaskSupervisor)
+
+    try do
+      assert Synapsis.MCP.refresh_all()[config.id] == {:error, :mcp_refresh_unavailable}
+    after
+      Process.register(task_supervisor, Synapsis.MCP.TaskSupervisor)
+    end
+  end
+
   test "restart reports discovery failure before returning" do
     bypass = Bypass.open()
     {:ok, mode} = Agent.start_link(fn -> :available end)

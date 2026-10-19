@@ -35,9 +35,16 @@ defmodule SynapsisWeb.AgentLive.Skills do
 
     result =
       case socket.assigns.live_action do
-        :new -> Skills.create(attrs)
-        :edit -> Skills.update(socket.assigns.skill, attrs)
-        _ -> {:error, :unsupported_action}
+        :new ->
+          Skills.create(attrs)
+
+        :edit ->
+          if remote_skill?(socket.assigns.skill),
+            do: {:ok, socket.assigns.skill},
+            else: Skills.update(socket.assigns.skill, attrs)
+
+        _ ->
+          {:error, :unsupported_action}
       end
 
     case result do
@@ -75,6 +82,7 @@ defmodule SynapsisWeb.AgentLive.Skills do
         <div class="flex items-center justify-between mb-6">
           <div>
             <h1 class="text-2xl font-bold">Skills</h1>
+            <.dm_link navigate={~p"/settings/skills"}>Manage remote sources</.dm_link>
             <p class="text-sm text-on-surface-variant">Create skills and assign them to agents.</p>
           </div>
           <.dm_link :if={@live_action == :index} navigate={~p"/agent/skills/new"}>
@@ -92,41 +100,48 @@ defmodule SynapsisWeb.AgentLive.Skills do
           draft={react_form_draft(assigns, "agent-skill-form")}
         />
 
-        <div :if={@live_action == :index} class="space-y-2">
-          <.dm_card :for={skill <- @skills} variant="bordered">
-            <div class="flex items-center justify-between gap-3">
-              <div class="min-w-0">
-                <div class="flex items-center gap-2">
-                  <h2 class="font-semibold">{skill.name}</h2>
-                  <.dm_badge
-                    variant={if skill.scope == "global", do: "primary", else: "secondary"}
-                    size="sm"
-                  >
-                    {skill.scope}
-                  </.dm_badge>
-                  <.dm_badge :if={skill.is_builtin} variant="warning" size="sm">built-in</.dm_badge>
+        <div :if={@live_action == :index} class="space-y-4">
+          <div
+            :for={group <- skill_source_groups(@skills)}
+            data-skill-source={group.id}
+            class="space-y-2"
+          >
+            <h2 class="font-semibold">{group.label}</h2>
+            <.dm_card :for={skill <- group.skills} variant="bordered">
+              <div class="flex items-center justify-between gap-3">
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2">
+                    <h2 class="font-semibold">{skill.name}</h2>
+                    <.dm_badge
+                      variant={if skill.scope == "global", do: "primary", else: "secondary"}
+                      size="sm"
+                    >
+                      {skill.scope}
+                    </.dm_badge>
+                    <.dm_badge :if={skill.is_builtin} variant="warning" size="sm">built-in</.dm_badge>
+                  </div>
+                  <p class="text-xs text-on-surface-variant mt-1">{skill.description}</p>
                 </div>
-                <p class="text-xs text-on-surface-variant mt-1">{skill.description}</p>
-              </div>
-              <div class="flex items-center gap-1 shrink-0">
-                <.dm_link navigate={~p"/agent/skills/#{skill.id}/edit"}>
-                  <.dm_btn variant="ghost" size="xs">
-                    <.dm_mdi name="pencil" class="w-3.5 h-3.5" /> Edit
+                <div class="flex items-center gap-1 shrink-0">
+                  <.dm_link navigate={~p"/agent/skills/#{skill.id}/edit"}>
+                    <.dm_btn variant="ghost" size="xs">
+                      <.dm_mdi name="pencil" class="w-3.5 h-3.5" /> Edit
+                    </.dm_btn>
+                  </.dm_link>
+                  <.dm_btn
+                    variant="ghost"
+                    size="xs"
+                    class="text-error"
+                    phx-click="delete_skill"
+                    phx-value-id={skill.id}
+                    confirm="Remove this skill?"
+                  >
+                    Remove
                   </.dm_btn>
-                </.dm_link>
-                <.dm_btn
-                  variant="ghost"
-                  size="xs"
-                  class="text-error"
-                  phx-click="delete_skill"
-                  phx-value-id={skill.id}
-                  confirm="Remove this skill?"
-                >
-                  Remove
-                </.dm_btn>
+                </div>
               </div>
-            </div>
-          </.dm_card>
+            </.dm_card>
+          </div>
         </div>
 
         <.empty_state
@@ -165,32 +180,36 @@ defmodule SynapsisWeb.AgentLive.Skills do
         phx-submit="save_skill"
         class="space-y-4"
       >
-        <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#191 - preserve required and textarea layout attributes. --%>
-        <.dm_input type="text" name="skill[name]" value={@skill.name} required label="Name" />
+        <p :if={remote_skill?(@skill)} class="text-sm">
+          Remote skill: {@skill.name}. Revision {@skill.config_overrides["external_revision"]}. The body is fetched when the agent reads it.
+        </p>
+        <div :if={!remote_skill?(@skill)}>
+          <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#191 - preserve required and textarea layout attributes. --%>
+          <.dm_input type="text" name="skill[name]" value={@skill.name} required label="Name" />
 
-        <.dm_react_field
-          name="skill[scope]"
-          type="select"
-          label="Scope"
-          options={[%{value: "global", label: "Global"}]}
-        />
+          <.dm_react_field
+            name="skill[scope]"
+            type="select"
+            label="Scope"
+            options={[%{value: "global", label: "Global"}]}
+          />
 
-        <.dm_textarea
-          name="skill[description]"
-          value={@skill.description}
-          rows={2}
-          label="Description"
-          resize="none"
-        />
+          <.dm_textarea
+            name="skill[description]"
+            value={@skill.description}
+            rows={2}
+            label="Description"
+            resize="none"
+          />
 
-        <.dm_textarea
-          name="skill[system_prompt_fragment]"
-          value={@skill.system_prompt_fragment}
-          rows={10}
-          label="System Prompt Fragment"
-          resize="vertical"
-        />
-
+          <.dm_textarea
+            name="skill[system_prompt_fragment]"
+            value={@skill.system_prompt_fragment}
+            rows={10}
+            label="System Prompt Fragment"
+            resize="vertical"
+          />
+        </div>
         <div>
           <div class="text-sm font-medium mb-2">Assigned Agents</div>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -221,6 +240,32 @@ defmodule SynapsisWeb.AgentLive.Skills do
       </.react_form>
     </.dm_card>
     """
+  end
+
+  defp remote_skill?(skill),
+    do: not is_nil((skill.config_overrides || %{})["backplane_source_id"])
+
+  defp skill_source_groups(skills) do
+    sources = Map.new(Synapsis.Backplane.Connection.list(), &{&1.id, &1})
+
+    skills
+    |> Enum.group_by(&((&1.config_overrides || %{})["backplane_source_id"] || "local"))
+    |> Enum.map(fn {id, grouped} ->
+      label =
+        case sources[id] do
+          nil ->
+            if id == "local", do: "Local skills", else: "Remote source " <> id
+
+          source ->
+            case Synapsis.Backplane.ProviderSource.get(source.provider_id, allow_disabled: true) do
+              {:ok, resolved} -> resolved.provider.name
+              _ -> source.name
+            end
+        end
+
+      %{id: id, label: label, skills: grouped}
+    end)
+    |> Enum.sort_by(& &1.label)
   end
 
   defp assign_common(socket) do

@@ -5,10 +5,218 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
 
   alias Synapsis.{AgentConfigs, AgentSkills, Providers, Skills, Toolsets}
 
+  def refresh_mcp, do: %{}
+
   setup do
+    previous = Application.get_env(:synapsis_core, :mcp_refresh)
+    Application.put_env(:synapsis_core, :mcp_refresh, {__MODULE__, :refresh_mcp, []})
+
+    on_exit(fn ->
+      if previous,
+        do: Application.put_env(:synapsis_core, :mcp_refresh, previous),
+        else: Application.delete_env(:synapsis_core, :mcp_refresh)
+    end)
+
     Synapsis.DataCase.clear_config_store(:provider)
+    Synapsis.DataCase.clear_config_store(:model)
     Synapsis.DataCase.clear_config_store(:agent)
     :ok
+  end
+
+  test "skill assignment groups preserve source UUID and skill identity", %{conn: conn} do
+    {:ok, skill} =
+      Skills.create(%{
+        name: "remote-grouped",
+        scope: "global",
+        config_overrides: %{
+          "managed_by" => "backplane",
+          "backplane_source_id" => "source-group",
+          "external_id" => "review",
+          "external_revision" => "rev1"
+        }
+      })
+
+    {:ok, view, html} = live(conn, ~p"/agent/agents/new")
+    assert html =~ "source-group"
+
+    assert has_element?(
+             view,
+             "[data-skill-source='source-group'] input[name='skill_ids[]'][value='#{skill.id}']"
+           )
+  end
+
+  test "new agents save a dynamic default-all MCP policy", %{conn: conn} do
+    {:ok, view, _} = live(conn, ~p"/agent/agents/new")
+
+    assert has_element?(
+             view,
+             "select[name='mcp_selection[default]'] option[value='all'][selected]"
+           )
+
+    react_form_submit(view, "agent-config-form", %{"agent" => %{"name" => "default-all"}})
+
+    assert AgentConfigs.get_by_name("default-all").config["mcp_selection"] == %{
+             "default" => "all",
+             "sources" => %{}
+           }
+  end
+
+  test "inherited MCP groups initialize the native form and stay inherited after ordinary edits",
+       %{conn: conn} do
+    {:ok, source} =
+      Synapsis.MCPConfigs.create(%{
+        name: "inherited-mcp",
+        transport: "stdio",
+        command: "false",
+        enabled: false
+      })
+
+    {:ok, agent} =
+      AgentConfigs.create(%{
+        name: "inherited-policy",
+        config: %{"mcp_selection" => %{"default" => "all", "sources" => %{}}}
+      })
+
+    on_exit(fn -> Synapsis.MCPConfigs.delete(source) end)
+    {:ok, view, _html} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+
+    values =
+      view
+      |> element("[data-form-id='agent-config-form']")
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("[data-initial-values]")
+      |> LazyHTML.attribute("data-initial-values")
+      |> hd()
+      |> Jason.decode!()
+
+    assert values["mcp_selection"]["sources"][source.id]["mode"] == "inherit"
+
+    react_form_submit(view, "agent-config-form", %{
+      "agent" => %{"label" => "Ordinary edit"},
+      "mcp_selection" => %{
+        "default" => "all",
+        "sources" => %{source.id => %{"mode" => "", "tools" => []}}
+      }
+    })
+
+    assert AgentConfigs.get(agent.id).config["mcp_selection"] == %{
+             "default" => "all",
+             "sources" => %{}
+           }
+  end
+
+  test "new MCP groups inherit the default when discovery remounts a pending draft", %{conn: conn} do
+    {:ok, agent} =
+      AgentConfigs.create(%{
+        name: "new-group-draft",
+        config: %{"mcp_selection" => %{"default" => "all", "sources" => %{}}}
+      })
+
+    {:ok, view, _} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+    render_async(view)
+    react_form_change(view, "agent-config-form", %{"agent" => %{"label" => "Keep this draft"}})
+
+    {:ok, source} =
+      Synapsis.MCPConfigs.create(%{
+        name: "new-draft-mcp",
+        transport: "stdio",
+        command: "false",
+        enabled: false
+      })
+
+    on_exit(fn -> Synapsis.MCPConfigs.delete(source) end)
+    view |> element("el-dm-button[phx-click='refresh_mcp_tools']") |> render_click()
+    render_async(view)
+
+    values =
+      view
+      |> element("[data-form-id='agent-config-form']")
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("[data-initial-values]")
+      |> LazyHTML.attribute("data-initial-values")
+      |> hd()
+      |> Jason.decode!()
+
+    assert values["mcp_selection"]["sources"][source.id]["mode"] == "inherit"
+    assert values["agent"]["label"] == "Keep this draft"
+    react_form_submit(view, "agent-config-form", %{})
+    saved = AgentConfigs.get(agent.id)
+    assert saved.label == "Keep this draft"
+    assert saved.config["mcp_selection"] == %{"default" => "all", "sources" => %{}}
+  end
+
+  test "legacy MCP choices become selected rules and keep unavailable names", %{conn: conn} do
+    {:ok, source} =
+      Synapsis.MCPConfigs.create(%{
+        name: "legacy-source",
+        transport: "stdio",
+        command: "false",
+        enabled: false
+      })
+
+    {:ok, agent} =
+      AgentConfigs.create(%{name: "legacy-mcp", tools: ["file_read", "mcp:legacy-source:gone"]})
+
+    {:ok, view, _} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+    assert has_element?(view, "[data-mcp-source='#{source.id}']", "unavailable")
+    react_form_submit(view, "agent-config-form", %{"agent" => %{"label" => "Changed label"}})
+    saved = AgentConfigs.get(agent.id)
+    assert saved.tools == agent.tools
+
+    assert saved.config["mcp_selection"] == %{
+             "default" => "selected",
+             "sources" => %{source.id => %{"mode" => "selected", "tools" => ["gone"]}}
+           }
+
+    {:ok, _} = Synapsis.MCPConfigs.delete(source)
+  end
+
+  test "group modes and selected tools survive live refresh with other form drafts", %{conn: conn} do
+    {:ok, first} =
+      Synapsis.MCPConfigs.create(%{
+        name: "first-mcp",
+        transport: "stdio",
+        command: "false",
+        enabled: false
+      })
+
+    {:ok, second} =
+      Synapsis.MCPConfigs.create(%{
+        name: "second-mcp",
+        transport: "stdio",
+        command: "false",
+        enabled: false
+      })
+
+    {:ok, agent} = AgentConfigs.create(%{name: "mcp-draft", tools: ["file_read"]})
+    {:ok, view, _} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+    render_async(view)
+
+    policy = %{
+      "default" => "all",
+      "sources" => %{
+        first.id => %{"mode" => "none"},
+        second.id => %{"mode" => "selected", "tools" => ["saved-but-gone"]}
+      }
+    }
+
+    react_form_change(view, "agent-config-form", %{
+      "agent" => %{"label" => "Pending draft"},
+      "mcp_selection" => policy
+    })
+
+    view |> element("el-dm-button[phx-click='refresh_mcp_tools']") |> render_click()
+    render_async(view)
+    react_form_submit(view, "agent-config-form", %{})
+    saved = AgentConfigs.get(agent.id)
+    assert saved.label == "Pending draft"
+    assert saved.config["mcp_selection"]["sources"][first.id]["mode"] == "none"
+    assert saved.config["mcp_selection"]["sources"][second.id]["tools"] == ["saved-but-gone"]
+    assert Synapsis.Agent.Resolver.resolve(saved.name).tools == ["file_read"]
+    {:ok, _} = Synapsis.MCPConfigs.delete(first)
+    {:ok, _} = Synapsis.MCPConfigs.delete(second)
   end
 
   describe "agent routes" do
@@ -299,6 +507,73 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       :ok = refute_redirected(view)
     end
 
+    test "editing another agent field preserves an unavailable saved default", %{conn: conn} do
+      provider =
+        insert_provider("unavailable-default", "openai", %{
+          config: %{"model_catalog_migrated" => true}
+        })
+
+      {:ok, model} =
+        Synapsis.Models.create(%{
+          provider_id: provider.id,
+          model: "saved",
+          context_window: 4096,
+          enabled: false
+        })
+
+      {:ok, agent} =
+        AgentConfigs.create(%{
+          name: "preserved-default",
+          provider: provider.name,
+          model: model.model
+        })
+
+      {:ok, view, _} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+      react_form_change(view, "agent-config-form", %{"agent" => %{"label" => "Changed label"}})
+      render_hook(view, "switch_config_tab", %{"tab" => "runtime"})
+      render_hook(view, "switch_config_tab", %{"tab" => "overview"})
+      assert has_element?(view, "#agent-model-hidden[value='saved']")
+
+      react_form_submit(view, "agent-config-form", %{
+        "agent" => %{"label" => "Changed label", "enabled" => true}
+      })
+
+      updated = AgentConfigs.get(agent.id)
+      assert updated.provider == provider.name
+      assert updated.model == "saved"
+    end
+
+    test "default model picker uses the configured catalog including manual IDs and excludes disabled choices",
+         %{conn: conn} do
+      provider =
+        insert_provider("catalog-agent-provider", "openai", %{
+          config: %{
+            "model_catalog_migrated" => true,
+            "available_models" => [%{"id" => "discovered-only"}]
+          }
+        })
+
+      {:ok, _} =
+        Synapsis.Models.create(%{
+          provider_id: provider.id,
+          model: "manual",
+          name: "My manual model",
+          context_window: 4096
+        })
+
+      {:ok, _} =
+        Synapsis.Models.create(%{
+          provider_id: provider.id,
+          model: "disabled",
+          context_window: 4096,
+          enabled: false
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/agent/agents/new")
+      assert html =~ "Default model"
+      assert cascader_options(html) |> cascader_model_values(provider.name) == ["manual"]
+    end
+
     test "config page lists provider available_models in model picker", %{conn: conn} do
       insert_provider("backplane", "openai", %{
         config: %{
@@ -321,8 +596,8 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       options = cascader_options(html)
 
       assert cascader_model_values(options, "backplane") == [
-               "openai-codex/gpt-5.5",
-               "fast"
+               "fast",
+               "openai-codex/gpt-5.5"
              ]
 
       refute "gpt-4.1" in cascader_model_values(options, "backplane")
@@ -374,7 +649,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       assert html =~ "Skills 1"
       assert html =~ "Management"
       assert html =~ "Configuration Wizard"
-      assert html =~ "Primary Model"
+      assert html =~ "Default model"
       assert html =~ "openai/gpt-4.1 (+1 backup)"
       assert html =~ "Workspace tools"
       assert html =~ "~/.synapsis/agents/builder"
@@ -550,22 +825,39 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
     end
 
     test "provider model cascader only lists models supported by each provider", %{conn: conn} do
-      Providers.create(%{
-        name: "anthropic",
-        type: "anthropic",
-        base_url: "https://api.anthropic.com",
-        api_key_encrypted: "sk-ant-test",
-        enabled: true
-      })
+      {:ok, anthropic} =
+        Providers.create(%{
+          name: "anthropic",
+          type: "anthropic",
+          base_url: "https://api.anthropic.com",
+          api_key_encrypted: "sk-ant-test",
+          config: %{"model_catalog_migrated" => true},
+          enabled: true
+        })
 
-      Providers.create(%{
-        name: "openai",
-        type: "openai",
-        base_url: "https://api.openai.com",
-        api_key_encrypted: "sk-openai-test",
-        config: %{"enabled_models" => ["gpt-4.1-mini"]},
-        enabled: true
-      })
+      {:ok, openai} =
+        Providers.create(%{
+          name: "openai",
+          type: "openai",
+          base_url: "https://api.openai.com",
+          api_key_encrypted: "sk-openai-test",
+          config: %{"model_catalog_migrated" => true},
+          enabled: true
+        })
+
+      for {provider, model, enabled} <- [
+            {anthropic, "claude-sonnet-4-6", true},
+            {openai, "gpt-4.1-mini", true},
+            {openai, "gpt-4.1", false}
+          ] do
+        assert {:ok, _} =
+                 Synapsis.Models.create(%{
+                   provider_id: provider.id,
+                   model: model,
+                   context_window: 128_000,
+                   enabled: enabled
+                 })
+      end
 
       {:ok, view, html} = live(conn, ~p"/agent/agents/new")
       options = cascader_options(html)

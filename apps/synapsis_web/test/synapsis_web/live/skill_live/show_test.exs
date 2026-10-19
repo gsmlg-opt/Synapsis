@@ -14,6 +14,28 @@ defmodule SynapsisWeb.SkillLive.ShowTest do
     {:ok, skill: skill}
   end
 
+  test "remote details show pinned metadata without an editable body", %{conn: conn} do
+    {:ok, skill} =
+      Synapsis.Skills.create(%{
+        name: "remote-review",
+        scope: "global",
+        description: "Remote metadata",
+        config_overrides: %{
+          "managed_by" => "backplane",
+          "backplane_source_id" => "source-exact",
+          "external_id" => "review",
+          "external_revision" => "revision-exact",
+          "source_metadata" => %{"artifact_digest" => "digest-exact"}
+        }
+      })
+
+    {:ok, view, html} = live(conn, ~p"/settings/skills/#{skill.id}")
+    assert html =~ "source-exact"
+    assert html =~ "revision-exact"
+    assert html =~ "digest-exact"
+    refute has_element?(view, "[data-form-id='edit-skill-form']")
+  end
+
   describe "skill show page" do
     test "mounts and shows skill name", %{conn: conn, skill: skill} do
       {:ok, _view, html} = live(conn, ~p"/settings/skills/#{skill.id}")

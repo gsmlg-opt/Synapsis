@@ -12,6 +12,92 @@ defmodule Synapsis.Backplane.ConnectionTest do
     :ok
   end
 
+  test "provider-linked sources share current credentials without persisting a copy" do
+    {:ok, provider} =
+      Synapsis.Providers.create(%{
+        name: "linked-#{System.unique_integer([:positive])}",
+        type: "openai",
+        base_url: "https://backplane.example.test/prefix/v1",
+        api_key_encrypted: "first"
+      })
+
+    on_exit(fn -> Synapsis.Providers.delete(provider.id) end)
+    assert {:ok, source} = Connection.create(%{name: "linked", provider_id: provider.id})
+    assert source.provider_id == provider.id
+    assert {:ok, runtime} = Connection.runtime(source)
+    assert runtime.endpoint == "https://backplane.example.test/prefix"
+    assert runtime.credential == "first"
+    {:ok, _} = Synapsis.Providers.update(provider.id, %{api_key_encrypted: "rotated"})
+    assert {:ok, rotated} = Connection.runtime(source)
+    assert rotated.credential == "rotated"
+    assert rotated.id == source.id
+    assert {:ok, stored} = Store.get(:backplane, source.id)
+    refute Map.has_key?(stored, "credential_encrypted")
+    {:ok, _} = Synapsis.Providers.update(provider.id, %{api_key_encrypted: nil})
+    assert {:ok, cleared} = Connection.runtime(source)
+    assert cleared.credential == nil
+    {:ok, _} = Synapsis.Providers.update(provider.id, %{enabled: false})
+    assert {:error, :provider_unavailable} = Connection.runtime(source)
+  end
+
+  test "rejected linked source edits leave the shared provider unchanged" do
+    {:ok, provider} =
+      Synapsis.Providers.create(%{
+        name: "atomic-#{System.unique_integer([:positive])}",
+        type: "openai",
+        base_url: "https://original.example.test/v1",
+        api_key_encrypted: "original"
+      })
+
+    on_exit(fn -> Synapsis.Providers.delete(provider.id) end)
+    {:ok, source} = Connection.create(%{name: "atomic", provider_id: provider.id})
+    {:ok, _} = Connection.create(%{name: "taken", endpoint: source.endpoint})
+    {:ok, original_provider} = Synapsis.Providers.get(provider.id)
+
+    for {invalid, reason} <- [
+          {%{name: "invalid name"}, :invalid_name},
+          {%{id: "invalid"}, :invalid_id},
+          {%{connection_options: []}, :invalid_connection_options},
+          {%{name: "taken"}, :name_taken},
+          {%{endpoint: "file:///tmp"}, :invalid_endpoint},
+          {%{credential: 123}, :invalid_credential}
+        ] do
+      attrs =
+        Map.merge(%{endpoint: "https://changed.example.test", credential: "changed"}, invalid)
+
+      assert {:error, ^reason} = Connection.update(source, attrs)
+      assert {:ok, ^original_provider} = Synapsis.Providers.get(provider.id)
+      assert {:ok, ^source} = Connection.get(source.id)
+    end
+  end
+
+  test "failed linked source persistence restores the provider endpoint and credential" do
+    {:ok, provider} =
+      Synapsis.Providers.create(%{
+        name: "rollback-#{System.unique_integer([:positive])}",
+        type: "openai",
+        base_url: "https://original.example.test/v1",
+        api_key_encrypted: "original"
+      })
+
+    on_exit(fn -> Synapsis.Providers.delete(provider.id) end)
+    {:ok, source} = Connection.create(%{name: "rollback", provider_id: provider.id})
+    path = Store.file_path(:backplane)
+    File.chmod!(path, 0o400)
+    on_exit(fn -> File.chmod(path, 0o600) end)
+
+    assert {:error, {:persist_failed, _}} =
+             Connection.update(source, %{
+               endpoint: "https://changed.example.test",
+               credential: "changed"
+             })
+
+    assert {:ok, restored} = Synapsis.Providers.get(provider.id)
+    assert restored.base_url == provider.base_url
+    assert restored.api_key_encrypted == provider.api_key_encrypted
+    assert {:ok, ^source} = Connection.get(source.id)
+  end
+
   test "persists the complete connection model and redacts the credential" do
     connection_options = %{
       "headers.with.dots" => %{

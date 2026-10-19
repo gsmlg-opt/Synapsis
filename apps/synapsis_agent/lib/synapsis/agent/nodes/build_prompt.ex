@@ -16,6 +16,23 @@ defmodule Synapsis.Agent.Nodes.BuildPrompt do
   @impl true
   @spec run(map(), map()) :: {:next, atom(), map()}
   def run(state, ctx) do
+    if Synapsis.MCPSelection.refresh_required?(state.agent_config) and
+         state[:mcp_tools_refreshed] != true do
+      case Synapsis.Agent.Nodes.Helpers.worker_pid(state.session_id) do
+        pid when is_pid(pid) ->
+          ref = state[:tool_refresh_request] || make_ref()
+          send(pid, {:node_request, :refresh_mcp_tools, ref})
+          {:wait, Map.put(state, :tool_refresh_request, ref)}
+
+        nil ->
+          build(state, ctx)
+      end
+    else
+      build(state, ctx)
+    end
+  end
+
+  defp build(state, ctx) do
     session_id = state.session_id
     agent_config = state.agent_config
     provider = agent_config[:provider] || ctx[:provider] || "anthropic"

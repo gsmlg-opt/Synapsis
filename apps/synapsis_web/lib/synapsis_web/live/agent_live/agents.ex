@@ -6,13 +6,14 @@ defmodule SynapsisWeb.AgentLive.Agents do
   import SynapsisWeb.AgentLive.Components
 
   alias Synapsis.{AgentConfig, AgentConfigs, AgentSkills, Providers, Skills, Toolsets}
-  alias Synapsis.Provider.ModelRegistry
 
   @config_tabs ~w(overview workspace runtime tools skills prompt management)
   @wizard_steps ~w(overview workspace runtime tools skills prompt)
 
   @impl true
   def mount(_params, _session, socket) do
+    if connected?(socket), do: Phoenix.PubSub.subscribe(Synapsis.PubSub, "tool_registry")
+
     {:ok,
      assign(socket,
        page_title: "Agents",
@@ -24,7 +25,11 @@ defmodule SynapsisWeb.AgentLive.Agents do
        providers: [],
        active_config_tab: "overview",
        wizard_mode: false,
-       form_revision: 0
+       form_revision: 0,
+       mcp_sources: [],
+       mcp_catalog: [],
+       mcp_loading: false,
+       mcp_failures: %{}
      )}
   end
 
@@ -34,6 +39,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
       socket
       |> assign_common()
       |> apply_action(socket.assigns.live_action, params)
+      |> maybe_refresh_mcp()
 
     {:noreply, socket}
   end
@@ -90,14 +96,25 @@ defmodule SynapsisWeb.AgentLive.Agents do
     end
   end
 
-  def handle_event("change_agent_form", %{"agent" => attrs}, socket) do
-    {:noreply,
-     assign(socket, agent: preview_agent(socket.assigns.agent, attrs, socket.assigns.providers))}
+  def handle_event("change_agent_form", %{"agent" => attrs} = params, socket) do
+    agent = preview_agent(socket.assigns.agent, attrs, socket.assigns.providers)
+    agent = mcp_preview(agent, params)
+    {:noreply, assign(socket, agent: agent)}
   end
+
+  def handle_event("refresh_mcp_tools", _params, socket),
+    do: {:noreply, maybe_refresh_mcp(socket)}
 
   def handle_event("save_agent", %{"agent" => attrs} = params, socket) do
     skill_ids = params |> Map.get("skill_ids", []) |> List.wrap()
     attrs = normalize_agent_attrs(attrs, socket.assigns.agent)
+
+    policy =
+      mcp_normalize_policy(
+        Map.get(params, "mcp_selection", (socket.assigns.agent.config || %{})["mcp_selection"])
+      )
+
+    attrs = Map.update!(attrs, "config", &Map.put(&1, "mcp_selection", policy))
 
     result =
       case socket.assigns.live_action do
@@ -136,6 +153,28 @@ defmodule SynapsisWeb.AgentLive.Agents do
   end
 
   @impl true
+  def handle_async(:agent_mcp_catalog, {:ok, result}, socket) do
+    failures =
+      if is_map(result),
+        do: Map.reject(result, fn {_id, status} -> status == :ok end),
+        else: %{"all" => result}
+
+    {:noreply,
+     socket |> assign(mcp_loading: false, mcp_failures: failures) |> assign_mcp_catalog()}
+  end
+
+  def handle_async(:agent_mcp_catalog, {:exit, reason}, socket) do
+    {:noreply,
+     socket
+     |> assign(mcp_loading: false, mcp_failures: %{"all" => reason})
+     |> assign_mcp_catalog()}
+  end
+
+  @impl true
+  def handle_info({:tool_registry_changed, _payload}, socket),
+    do: {:noreply, assign_mcp_catalog(socket)}
+
+  @impl true
   def render(assigns) do
     ~H"""
     <.agent_shell active={:agents}>
@@ -161,6 +200,10 @@ defmodule SynapsisWeb.AgentLive.Agents do
           toolsets={@toolsets}
           skills={@skills}
           providers={@providers}
+          mcp_sources={@mcp_sources}
+          mcp_catalog={@mcp_catalog}
+          mcp_loading={@mcp_loading}
+          mcp_failures={@mcp_failures}
           selected_skill_ids={@selected_skill_ids}
           action={@live_action}
           active_tab={@active_config_tab}
@@ -220,6 +263,10 @@ defmodule SynapsisWeb.AgentLive.Agents do
   attr :toolsets, :list, required: true
   attr :skills, :list, required: true
   attr :providers, :list, required: true
+  attr :mcp_sources, :list, required: true
+  attr :mcp_catalog, :list, required: true
+  attr :mcp_loading, :boolean, required: true
+  attr :mcp_failures, :map, required: true
   attr :selected_skill_ids, :list, required: true
   attr :active_tab, :string, required: true
   attr :wizard_mode, :boolean, required: true
@@ -235,7 +282,21 @@ defmodule SynapsisWeb.AgentLive.Agents do
     workspace_path = workspace_path(assigns.agent)
     permission_mode = permission_mode(assigns.agent)
 
+    mcp_policy =
+      mcp_normalize_policy(
+        (assigns.draft || %{})["mcp_selection"] || (assigns.agent.config || %{})["mcp_selection"]
+      )
+
+    mcp_groups = mcp_groups(assigns.mcp_sources, assigns.mcp_catalog, mcp_policy)
+
+    draft =
+      if assigns.draft do
+        Map.put(assigns.draft, "mcp_selection", mcp_form_policy(mcp_policy))
+      end
+
     form_structure = [
+      mcp_policy,
+      Enum.map(mcp_groups, &{&1.id, &1.tools}),
       assigns.active_tab,
       assigns.wizard_mode,
       Enum.map(assigns.toolsets, & &1.id),
@@ -245,6 +306,9 @@ defmodule SynapsisWeb.AgentLive.Agents do
 
     assigns =
       assigns
+      |> assign(:draft, draft)
+      |> assign(:mcp_policy, mcp_policy)
+      |> assign(:mcp_groups, mcp_groups)
       |> assign(:form_structure, form_structure)
       |> assign(:selected_toolsets, selected_toolsets)
       |> assign(:selected_toolset_ids, selected_toolset_ids)
@@ -394,7 +458,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
 
               <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
                 <.overview_metric label="Agent ID" value={@agent.id || "pending"} mono />
-                <.overview_metric label="Primary Model" value={model_summary(@agent)} mono />
+                <.overview_metric label="Default model" value={model_summary(@agent)} mono />
                 <.overview_metric label="Runtime" value={runtime_summary(@agent)} />
                 <.overview_metric label="Skills Filter" value={skills_summary(@skill_count)} />
               </div>
@@ -414,7 +478,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
                 <.dm_react_field type="text" name="agent[icon]" label="Icon" />
                 <div class="form-group">
                   <label for="agent-provider-model-picker-provider" class="form-label">
-                    <span>Provider / model</span>
+                    <span>Default model</span>
                   </label>
                   <div
                     id="agent-provider-model-picker"
@@ -660,6 +724,89 @@ defmodule SynapsisWeb.AgentLive.Agents do
                 </div>
               </div>
 
+              <div class="mt-6 space-y-4" data-testid="agent-mcp-selection">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <h4 class="font-medium">MCP tools</h4>
+                    <p class="text-xs text-on-surface-variant">
+                      All includes tools discovered in future turns. Group rules override the default.
+                    </p>
+                  </div>
+                  <.dm_btn
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    phx-click="refresh_mcp_tools"
+                    disabled={@mcp_loading}
+                  >
+                    Refresh tools
+                  </.dm_btn>
+                </div>
+                <p :if={@mcp_loading} role="status" class="text-sm text-on-surface-variant">
+                  Refreshing live MCP tools…
+                </p>
+                <p :if={map_size(@mcp_failures) > 0} role="alert" class="text-sm text-error">
+                  Live discovery failed for one or more sources. Their tools are unavailable until refresh succeeds; saved selections are retained.
+                </p>
+                <.dm_select
+                  name="mcp_selection[default]"
+                  label="Default MCP selection"
+                  value={@mcp_policy["default"]}
+                  options={[{"all", "All MCP tools"}, {"selected", "Only selected groups and tools"}]}
+                />
+                <div
+                  :for={group <- @mcp_groups}
+                  data-mcp-source={group.id}
+                  class="rounded-lg border border-outline-variant p-3 space-y-3"
+                >
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="font-medium">{group.name}</span>
+                    <span class="text-xs text-on-surface-variant">{length(group.tools)} tools{if !group.enabled,
+                      do: " · disabled",
+                      else: ""}</span>
+                  </div>
+                  <.dm_select
+                    name={"mcp_selection[sources][#{group.id}][mode]"}
+                    label={"Selection for #{group.name}"}
+                    value={group.mode}
+                    options={[
+                      {"inherit", "Use default"},
+                      {"all", "All in this group"},
+                      {"selected", "Select tools"},
+                      {"none", "None in this group"}
+                    ]}
+                  />
+                  <div :if={group.mode == "selected"} class="space-y-2">
+                    <input
+                      type="hidden"
+                      name={"mcp_selection[sources][#{group.id}][tools][]"}
+                      value=""
+                    />
+                    <label :for={tool <- group.tools} class="flex items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        name={"mcp_selection[sources][#{group.id}][tools][]"}
+                        value={tool.name}
+                        checked={tool.name in group.selected}
+                      />
+                      <span class="font-mono">{tool.name}<span
+                        :if={!tool.available}
+                        class="ml-2 text-xs text-on-surface-variant"
+                      >unavailable</span></span>
+                    </label>
+                    <p :if={group.tools == []} class="text-xs text-on-surface-variant">
+                      No tools discovered.
+                    </p>
+                  </div>
+                  <input
+                    :for={name <- if(group.mode != "selected", do: group.selected, else: [])}
+                    type="hidden"
+                    name={"mcp_selection[sources][#{group.id}][tools][]"}
+                    value={name}
+                  />
+                </div>
+              </div>
+
               <div class="mt-5">
                 <div class="text-xs text-on-surface-variant mb-2">Enabled Tools</div>
                 <div class="flex flex-wrap gap-2">
@@ -690,29 +837,36 @@ defmodule SynapsisWeb.AgentLive.Agents do
               </div>
 
               <input type="hidden" name="skill_ids[]" value="" />
-              <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                <label
-                  :for={skill <- @skills}
-                  class="flex items-start gap-3 rounded-lg border border-outline-variant bg-surface-container-high p-3 text-sm"
-                >
-                  <input
-                    type="checkbox"
-                    name="skill_ids[]"
-                    value={skill.id}
-                    checked={skill.id in @selected_skill_ids}
-                    class="mt-1"
-                  />
-                  <span class="min-w-0">
-                    <span class="font-medium">{skill.name}</span>
-                    <span class="block text-xs text-on-surface-variant mt-1">
-                      {skill.description || skill.system_prompt_fragment || "No description"}
+              <div
+                :for={group <- skill_source_groups(@skills)}
+                data-skill-source={group.id}
+                class="mb-4"
+              >
+                <h4 class="font-medium mb-2">{group.label}</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  <label
+                    :for={skill <- group.skills}
+                    class="flex items-start gap-3 rounded-lg border border-outline-variant bg-surface-container-high p-3 text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      name="skill_ids[]"
+                      value={skill.id}
+                      checked={skill.id in @selected_skill_ids}
+                      class="mt-1"
+                    />
+                    <span class="min-w-0">
+                      <span class="font-medium">{skill.name}</span>
+                      <span class="block text-xs text-on-surface-variant mt-1">
+                        {skill.description || skill.system_prompt_fragment || "No description"}
+                      </span>
                     </span>
-                  </span>
-                </label>
-                <div :if={@skills == []} class="text-sm text-on-surface-variant">
-                  No skills have been configured yet.
+                  </label>
                 </div>
               </div>
+              <p :if={@skills == []} class="text-sm text-on-surface-variant">
+                No skills have been configured yet.
+              </p>
             </section>
 
             <section class={tab_panel_class(@active_tab, "prompt")}>
@@ -868,7 +1022,8 @@ defmodule SynapsisWeb.AgentLive.Agents do
       agents: AgentConfigs.list(),
       toolsets: Toolsets.list(),
       skills: Skills.list(),
-      providers: load_providers()
+      providers: load_providers(),
+      mcp_sources: Synapsis.MCPConfigs.list()
     )
   end
 
@@ -879,7 +1034,11 @@ defmodule SynapsisWeb.AgentLive.Agents do
   defp apply_action(socket, :new, _params) do
     assign(socket,
       page_title: "New Agent",
-      agent: %AgentConfig{enabled: true, icon: "robot-outline"},
+      agent: %AgentConfig{
+        enabled: true,
+        icon: "robot-outline",
+        config: %{"mcp_selection" => %{"default" => "all", "sources" => %{}}}
+      },
       selected_skill_ids: [],
       active_config_tab: "overview",
       wizard_mode: false
@@ -889,6 +1048,8 @@ defmodule SynapsisWeb.AgentLive.Agents do
   defp apply_action(socket, :config, %{"id" => id}) do
     case get_agent_config(id) do
       %AgentConfig{} = agent ->
+        agent = mcp_initialize_policy(agent, socket.assigns.mcp_sources)
+
         assign(socket,
           page_title: "Agent Config",
           agent: agent,
@@ -940,7 +1101,11 @@ defmodule SynapsisWeb.AgentLive.Agents do
       |> Map.put("provider_model_state", provider_model_state_value(agent))
       |> Map.put("fallback_model_state", fallback_model_state_value(agent))
 
-    %{"agent" => values, "skill_ids" => skill_ids}
+    %{
+      "agent" => values,
+      "skill_ids" => skill_ids,
+      "mcp_selection" => mcp_form_policy((agent.config || %{})["mcp_selection"])
+    }
   end
 
   defp after_agent_save(%{assigns: %{live_action: :new}} = socket, _agent) do
@@ -1259,13 +1424,12 @@ defmodule SynapsisWeb.AgentLive.Agents do
   defp delete_confirmation(_agent), do: "delete agent"
 
   defp load_providers do
-    case Providers.list(enabled: true) do
-      {:ok, list} -> list
-      list when is_list(list) -> list
-      _ -> []
-    end
-    |> Enum.uniq_by(&provider_name/1)
-    |> Enum.sort_by(&provider_name/1)
+    Providers.configured_models()
+    |> Enum.group_by(& &1.provider)
+    |> Enum.map(fn {name, models} ->
+      %{name: name, models: Enum.map(models, &%{id: &1.model, name: &1.name})}
+    end)
+    |> Enum.sort_by(& &1.name)
   end
 
   defp provider_model_cascader_options(providers) do
@@ -1320,95 +1484,10 @@ defmodule SynapsisWeb.AgentLive.Agents do
   defp models_for_provider(_providers, ""), do: []
 
   defp models_for_provider(providers, provider_name) do
-    provider = Enum.find(providers, &(provider_name(&1) == provider_name))
-
-    provider_configured_models(provider)
-    |> case do
-      [] -> registry_models_for_provider(provider_name, provider)
-      models -> models
+    case Enum.find(providers, &(&1.name == provider_name)) do
+      nil -> []
+      provider -> provider.models
     end
-    |> filter_enabled_models(provider)
-  end
-
-  defp registry_models_for_provider(provider_name, provider) do
-    provider_name
-    |> provider_model_keys(provider)
-    |> Enum.find_value([], fn key ->
-      case ModelRegistry.list(key) do
-        [] -> nil
-        models -> models
-      end
-    end)
-  end
-
-  defp filter_enabled_models(models, nil), do: models
-
-  defp filter_enabled_models(models, provider) do
-    case Providers.enabled_models(provider) do
-      [] -> models
-      enabled_models -> models_for_enabled_ids(models, enabled_models)
-    end
-  end
-
-  defp models_for_enabled_ids(models, enabled_models) do
-    models_by_id = Map.new(models, &{model_id(&1), &1})
-
-    enabled_models
-    |> normalize_model_ids()
-    |> Enum.map(fn id -> Map.get(models_by_id, id, %{id: id, name: id}) end)
-  end
-
-  defp provider_configured_models(nil), do: []
-
-  defp provider_configured_models(provider) do
-    config = provider_config_map(provider)
-
-    case Map.get(config, "models") do
-      models when is_list(models) and models != [] -> models
-      _ -> Map.get(config, "available_models", [])
-    end
-    |> normalize_configured_models()
-  end
-
-  defp provider_config_map(%{config: config}) when is_map(config) do
-    Map.new(config, fn {key, value} -> {to_string(key), value} end)
-  end
-
-  defp provider_config_map(%{"config" => config}) when is_map(config) do
-    Map.new(config, fn {key, value} -> {to_string(key), value} end)
-  end
-
-  defp provider_config_map(_provider), do: %{}
-
-  defp normalize_configured_models(models) when is_list(models) do
-    models
-    |> Enum.map(&normalize_configured_model/1)
-    |> Enum.reject(&is_nil/1)
-    |> Enum.uniq_by(&model_id/1)
-  end
-
-  defp normalize_configured_models(_models), do: []
-
-  defp normalize_configured_model(model) when is_binary(model) do
-    case String.trim(model) do
-      "" -> nil
-      id -> %{id: id, name: id}
-    end
-  end
-
-  defp normalize_configured_model(%{id: id} = model),
-    do: normalize_configured_model(id, model[:name])
-
-  defp normalize_configured_model(%{"id" => id} = model),
-    do: normalize_configured_model(id, model["name"])
-
-  defp normalize_configured_model(_model), do: nil
-
-  defp normalize_configured_model(id, name) do
-    id = model_id(id)
-    name = if name in [nil, ""], do: id, else: model_id(name)
-
-    if id == "", do: nil, else: %{id: id, name: name}
   end
 
   defp normalize_model_ids(model_ids) do
@@ -1422,54 +1501,10 @@ defmodule SynapsisWeb.AgentLive.Agents do
   defp model_supported?("", _models), do: true
   defp model_supported?(model, models), do: Enum.any?(models, &(model_id(&1) == model))
 
-  defp provider_model_keys(provider_name, nil), do: [provider_name]
-
-  defp provider_model_keys(provider_name, provider) do
-    [provider_name, provider_family(provider_name, provider), provider_type(provider)]
-    |> Enum.reject(&(&1 in [nil, ""]))
-    |> Enum.uniq()
-  end
-
-  defp provider_family(provider_name, provider) do
-    provider_hint =
-      [provider_name, provider_base_url(provider)]
-      |> Enum.reject(&(&1 in [nil, ""]))
-      |> Enum.join(" ")
-      |> String.downcase()
-
-    cond do
-      String.contains?(provider_hint, "moonshot") ->
-        "moonshot"
-
-      String.contains?(provider_hint, "zhipu") or String.contains?(provider_hint, "bigmodel") or
-          String.contains?(provider_hint, "z.ai") ->
-        "zhipu"
-
-      String.contains?(provider_hint, "minimax") ->
-        "minimax"
-
-      true ->
-        nil
-    end
-  end
-
   defp provider_name(%{name: name}), do: name
   defp provider_name(%{"name" => name}), do: name
 
-  defp provider_type(%{type: type}), do: type
-  defp provider_type(%{"type" => type}), do: type
-  defp provider_type(_provider), do: nil
-
-  defp provider_base_url(%{base_url: base_url}), do: base_url
-  defp provider_base_url(%{"base_url" => base_url}), do: base_url
-  defp provider_base_url(_provider), do: nil
-
-  defp provider_label(provider) do
-    case provider_type(provider) do
-      nil -> provider_name(provider)
-      type -> "#{provider_name(provider)} (#{type})"
-    end
-  end
+  defp provider_label(provider), do: provider_name(provider)
 
   defp model_id(model) when is_binary(model), do: model
   defp model_id(%{id: id}), do: id
@@ -1553,6 +1588,139 @@ defmodule SynapsisWeb.AgentLive.Agents do
     mode = if agent.read_only, do: "read-only", else: "write-enabled"
     effort = agent.reasoning_effort || "medium"
     "#{mode}, #{effort} reasoning"
+  end
+
+  defp maybe_refresh_mcp(%{assigns: %{mcp_loading: true}} = socket), do: socket
+
+  defp maybe_refresh_mcp(socket) do
+    if connected?(socket) and socket.assigns.live_action in [:new, :config] do
+      socket
+      |> assign(mcp_loading: true)
+      |> start_async(:agent_mcp_catalog, fn -> Synapsis.MCPSelection.refresh() end)
+    else
+      socket
+    end
+  end
+
+  defp assign_mcp_catalog(socket) do
+    failures = socket.assigns.mcp_failures
+
+    catalog =
+      if Map.has_key?(failures, "all"),
+        do: [],
+        else:
+          Synapsis.MCPSelection.catalog()
+          |> Enum.reject(&Map.has_key?(failures, &1.mcp_config_id))
+
+    assign(socket, mcp_catalog: catalog, mcp_sources: Synapsis.MCPConfigs.list())
+  end
+
+  defp mcp_initialize_policy(agent, sources) do
+    config = agent.config || %{}
+
+    if Map.has_key?(config, "mcp_selection") do
+      agent
+    else
+      names = Synapsis.Agent.Resolver.resolve(agent.name).tools
+      policy = Synapsis.MCPSelection.from_legacy(names, sources)
+      %{agent | config: Map.put(config, "mcp_selection", policy)}
+    end
+  end
+
+  defp mcp_preview(agent, params) do
+    case Map.fetch(params, "mcp_selection") do
+      {:ok, policy} ->
+        %{
+          agent
+          | config: Map.put(agent.config || %{}, "mcp_selection", mcp_normalize_policy(policy))
+        }
+
+      :error ->
+        agent
+    end
+  end
+
+  defp mcp_normalize_policy(%{"default" => default} = policy)
+       when default in ["all", "selected"] do
+    sources =
+      case policy["sources"] do
+        sources when is_map(sources) ->
+          Map.new(sources, fn {id, rule} ->
+            mode = if is_map(rule), do: rule["mode"], else: "none"
+            names = if is_map(rule), do: List.wrap(rule["tools"]), else: []
+
+            {id,
+             %{
+               "mode" => mode,
+               "tools" => names |> Enum.filter(&(is_binary(&1) and &1 != "")) |> Enum.uniq()
+             }}
+          end)
+          |> Map.reject(fn {_id, rule} -> rule["mode"] in [nil, "", "inherit"] end)
+
+        _ ->
+          %{}
+      end
+
+    %{"default" => default, "sources" => sources}
+  end
+
+  defp mcp_normalize_policy(_), do: %{"default" => "selected", "sources" => %{}}
+
+  defp mcp_form_policy(policy) do
+    policy = mcp_normalize_policy(policy)
+
+    sources =
+      Enum.reduce(Synapsis.MCPConfigs.list(), policy["sources"], fn source, sources ->
+        Map.put_new(sources, source.id, %{"mode" => "inherit", "tools" => []})
+      end)
+
+    Map.put(policy, "sources", sources)
+  end
+
+  defp mcp_groups(sources, catalog, policy) do
+    Enum.map(sources, fn source ->
+      rule = policy["sources"][source.id] || %{}
+      selected = rule["tools"] || []
+
+      available =
+        catalog |> Enum.filter(&(&1.mcp_config_id == source.id)) |> Enum.map(& &1.mcp_tool_name)
+
+      tools =
+        Enum.sort(Enum.uniq(available ++ selected))
+        |> Enum.map(&%{name: &1, available: &1 in available})
+
+      %{
+        id: source.id,
+        name: source.name,
+        enabled: source.enabled,
+        mode: rule["mode"] || "inherit",
+        selected: selected,
+        tools: tools
+      }
+    end)
+  end
+
+  defp skill_source_groups(skills) do
+    sources = Map.new(Synapsis.Backplane.Connection.list(), &{&1.id, &1})
+
+    skills
+    |> Enum.group_by(&((&1.config_overrides || %{})["backplane_source_id"] || "local"))
+    |> Enum.map(fn {id, grouped} ->
+      label =
+        case sources[id] do
+          nil ->
+            if id == "local", do: "Local skills", else: "Remote source " <> id
+
+          source ->
+            case Synapsis.Backplane.ProviderSource.get(source.provider_id, allow_disabled: true) do
+              {:ok, resolved} -> resolved.provider.name
+              _ -> source.name
+            end
+        end
+
+      %{id: id, label: label, skills: grouped}
+    end)
+    |> Enum.sort_by(& &1.label)
   end
 
   defp skills_summary(0), do: "all skills"

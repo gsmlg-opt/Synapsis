@@ -75,6 +75,80 @@ defmodule Synapsis.MCP do
     end)
   end
 
+  @doc "Refresh all enabled sources and report each source's outcome by stable config ID."
+  def refresh_all do
+    configs = Enum.filter(MCPConfigs.list(), & &1.enabled)
+
+    jobs =
+      Enum.map(configs, fn config ->
+        task =
+          try do
+            Task.Supervisor.async_nolink(Synapsis.MCP.TaskSupervisor, fn -> refresh(config.id) end)
+          catch
+            :exit, _reason -> {:error, :mcp_refresh_unavailable}
+          end
+
+        {config.id, task}
+      end)
+
+    results =
+      jobs
+      |> Enum.flat_map(fn
+        {_id, %Task{} = task} -> [task]
+        _ -> []
+      end)
+      |> Task.yield_many(55_000)
+      |> Map.new(fn {task, result} ->
+        outcome =
+          case result do
+            {:ok, outcome} ->
+              outcome
+
+            {:exit, reason} ->
+              {:error, reason}
+
+            nil ->
+              Task.shutdown(task, :brutal_kill)
+              {:error, :mcp_refresh_timeout}
+          end
+
+        {task.ref, outcome}
+      end)
+
+    Map.new(jobs, fn
+      {id, %Task{ref: ref}} -> {id, Map.fetch!(results, ref)}
+      {id, error} -> {id, error}
+    end)
+  end
+
+  @doc "Refresh one configured source, starting or reconnecting it when necessary."
+  def refresh(id) do
+    case MCPConfigs.get(id) do
+      nil ->
+        {:error, :mcp_unavailable}
+
+      config ->
+        if MCPConfigs.runtime_available?(config) do
+          case Registry.lookup(Synapsis.MCP.Registry, {:config_id, id}) do
+            [{pid, _}] ->
+              case Server.refresh(pid) do
+                {:error, :connection_changed} -> restart(config)
+                result -> result
+              end
+
+            [] ->
+              case start(config) do
+                {:ok, pid} -> Server.await_ready(pid)
+                {:error, reason} -> {:error, reason}
+              end
+          end
+        else
+          _ = cleanup_runtime(id, [config.name])
+          {:error, :mcp_unavailable}
+        end
+    end
+  end
+
   def start_enabled do
     for cfg <- MCPConfigs.enabled() do
       case start(cfg) do

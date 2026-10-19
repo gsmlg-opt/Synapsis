@@ -18,21 +18,22 @@ defmodule Synapsis.MCPConfigs do
   def enabled, do: Enum.filter(list(), &runtime_available?/1)
 
   @doc "Whether an MCP config may participate in runtime operations."
-  def runtime_available?(%MCPConfig{enabled: true, config: config}) do
+  def runtime_available?(%MCPConfig{enabled: true, config: config} = record) do
     config = config || %{}
 
-    not backplane_managed?(config) or
-      (Map.get(config, "backplane_available", Map.get(config, :backplane_available)) != false and
-         source_connection_enabled?(config))
+    provider_available?(record.provider_id) and provider_link_current?(record, config) and
+      (not backplane_managed?(config) or
+         (Map.get(config, "backplane_available", Map.get(config, :backplane_available)) != false and
+            source_connection_enabled?(config)))
   end
 
   def runtime_available?(_config), do: false
 
   @doc false
-  def reconciliation_available?(%MCPConfig{enabled: true, config: config}) do
+  def reconciliation_available?(%MCPConfig{enabled: true, config: config} = record) do
     config = config || %{}
 
-    backplane_managed?(config) and
+    provider_available?(record.provider_id) and backplane_managed?(config) and
       Map.get(config, "backplane_available", Map.get(config, :backplane_available)) != false and
       source_connection_reconcilable?(config)
   end
@@ -109,7 +110,10 @@ defmodule Synapsis.MCPConfigs do
       source_id when is_binary(source_id) and source_id != "" ->
         case Store.get(:backplane, source_id) do
           {:ok, connection} when is_map(connection) ->
-            Map.get(connection, "enabled", Map.get(connection, :enabled)) == true and
+            provider_available?(
+              Map.get(connection, "provider_id", Map.get(connection, :provider_id))
+            ) and
+              Map.get(connection, "enabled", Map.get(connection, :enabled)) == true and
               match?({:ok, %{}}, connection_metadata(connection))
 
           _missing_or_malformed ->
@@ -121,8 +125,31 @@ defmodule Synapsis.MCPConfigs do
     end
   end
 
+  defp provider_link_current?(record, config) do
+    case Map.get(config, "backplane_source_id") do
+      source_id when is_binary(source_id) ->
+        case Store.get(:backplane, source_id) do
+          {:ok, %{"provider_id" => id}} when is_binary(id) -> record.provider_id == id
+          _ -> true
+        end
+
+      _ ->
+        true
+    end
+  end
+
+  defp provider_available?(nil), do: true
+
+  defp provider_available?(id) do
+    match?({:ok, %{"enabled" => true}}, Store.get(:provider, id))
+  end
+
   defp source_connection_available?(connection, surface) do
-    with true <- Map.get(connection, "enabled", Map.get(connection, :enabled)) == true,
+    with true <-
+           provider_available?(
+             Map.get(connection, "provider_id", Map.get(connection, :provider_id))
+           ),
+         true <- Map.get(connection, "enabled", Map.get(connection, :enabled)) == true,
          {:ok, metadata} <- connection_metadata(connection),
          blocked when is_list(blocked) <- Map.get(metadata, "runtime_blocked_surfaces", []),
          true <- Enum.all?(blocked, &is_binary/1) do
@@ -208,6 +235,7 @@ defmodule Synapsis.MCPConfigs do
     %{
       "id" => r.id,
       "name" => r.name,
+      "provider_id" => r.provider_id,
       "transport" => r.transport,
       "enabled" => r.enabled,
       "command" => r.command,

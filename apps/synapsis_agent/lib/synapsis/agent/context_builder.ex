@@ -41,7 +41,7 @@ defmodule Synapsis.Agent.ContextBuilder do
     user_message = Keyword.get(opts, :user_message, "")
     agent_config = Keyword.get(opts, :agent_config, %{})
     skill_context_window = skill_context_window(opts, agent_config)
-    memory_context_window = memory_context_window(opts)
+    memory_context_window = skill_context_window || 128_000
 
     layers = [
       {:base, load_base_prompt(agent_type, agent_config)},
@@ -238,15 +238,24 @@ defmodule Synapsis.Agent.ContextBuilder do
   @doc "Resolve the context window used for Skill catalog budgeting."
   @spec skill_context_window(keyword(), map()) :: pos_integer() | nil
   def skill_context_window(opts, agent_config) do
-    if Keyword.has_key?(opts, :model_context_window) do
-      positive_integer_or_nil(Keyword.get(opts, :model_context_window))
-    else
-      model = Map.get(agent_config, :model) || Map.get(agent_config, "model")
+    cond do
+      Keyword.has_key?(opts, :model_context_window) ->
+        positive_integer_or_nil(Keyword.get(opts, :model_context_window))
 
-      case ModelRegistry.get(model) do
-        {:ok, metadata} -> metadata.context_window
-        {:error, :unknown} -> nil
-      end
+      window = positive_integer_or_nil(agent_config[:model_context_window]) ->
+        window
+
+      provider = Map.get(agent_config, :provider) || Map.get(agent_config, "provider") ->
+        model = Map.get(agent_config, :model) || Map.get(agent_config, "model")
+        Synapsis.Providers.model_context_window(provider, model)
+
+      true ->
+        model = Map.get(agent_config, :model) || Map.get(agent_config, "model")
+
+        case ModelRegistry.get(model) do
+          {:ok, metadata} -> metadata.context_window
+          {:error, :unknown} -> nil
+        end
     end
   end
 
@@ -297,10 +306,6 @@ defmodule Synapsis.Agent.ContextBuilder do
   defp explicit_tool_names([]), do: :none
   defp explicit_tool_names(nil), do: :none
   defp explicit_tool_names(tool_names), do: tool_names
-
-  defp memory_context_window(opts) do
-    positive_integer_or_nil(Keyword.get(opts, :model_context_window)) || 128_000
-  end
 
   defp positive_integer_or_nil(value) when is_integer(value) and value > 0, do: value
   defp positive_integer_or_nil(_value), do: nil

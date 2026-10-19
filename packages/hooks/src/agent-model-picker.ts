@@ -91,15 +91,10 @@ function parseModelList(raw: string | undefined): string[] {
     .filter((value) => value.length > 0)
 }
 
-function initialSelection(options: ProviderOption[], provider: string, model: string) {
-  const selectedProvider = options.find((option) => option.value === provider)
-  if (!selectedProvider) return { provider: "", model: "" }
-
-  const selectedModel = selectedProvider.children.find((option) => option.value === model)
-  return {
-    provider: selectedProvider.value,
-    model: selectedModel ? selectedModel.value : "",
-  }
+export function initialSelection(_options: ProviderOption[], provider: string, model: string) {
+  // Persisted defaults can outlive catalog/provider availability. Keep their
+  // identity until the user explicitly chooses a configured replacement.
+  return { provider, model }
 }
 
 function initialBackupSelection(options: ProviderOption[], raw: string) {
@@ -195,6 +190,9 @@ function AgentModelPicker({
         },
         [
           h("option", { value: "" }, "Provider"),
+          provider && !options.some((option) => option.value === provider)
+            ? h("option", { value: provider, disabled: true }, `${provider} (unavailable)`)
+            : null,
           ...options.map((option) =>
             h("option", { key: option.value, value: option.value }, option.label)
           ),
@@ -214,6 +212,9 @@ function AgentModelPicker({
         },
         [
           h("option", { value: "" }, "Model"),
+          model && !models.some((option) => option.value === model)
+            ? h("option", { value: model, disabled: true }, `${model} (unavailable)`)
+            : null,
           ...models.map((option) =>
             h("option", { key: option.value, value: option.value }, option.label)
           ),

@@ -9,6 +9,7 @@ defmodule SynapsisWeb.MCPLive.Index do
   def mount(_params, _session, socket) do
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Synapsis.PubSub, "tool_registry")
+      send(self(), :refresh_connected_catalog)
     end
 
     {:ok,
@@ -19,7 +20,10 @@ defmodule SynapsisWeb.MCPLive.Index do
        custom_form: %{},
        show_form: false,
        show_import: false,
-       modal_error: nil
+       modal_error: nil,
+       source_providers: Synapsis.Backplane.ProviderSource.available(),
+       catalog_loading: false,
+       catalog_errors: %{}
      )}
   end
 
@@ -50,6 +54,29 @@ defmodule SynapsisWeb.MCPLive.Index do
   end
 
   @impl true
+  def handle_event("select_provider", params, socket) do
+    case Synapsis.Backplane.select_mcp_provider(params["provider_id"], params["url"]) do
+      {:ok, _config} ->
+        {:noreply,
+         socket
+         |> refresh_states()
+         |> put_flash(:info, "Provider connection added. Refresh tools to connect.")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Provider connection is unavailable")}
+    end
+  end
+
+  def handle_event("refresh_catalog", _params, %{assigns: %{catalog_loading: true}} = socket),
+    do: {:noreply, socket}
+
+  def handle_event("refresh_catalog", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(catalog_loading: true, catalog_errors: %{})
+     |> start_async(:mcp_catalog, fn -> Synapsis.MCPSelection.refresh() end)}
+  end
+
   def handle_event("show_import", _params, socket) do
     socket =
       socket
@@ -261,6 +288,13 @@ defmodule SynapsisWeb.MCPLive.Index do
   end
 
   @impl true
+  def handle_info(:refresh_connected_catalog, socket) do
+    {:noreply,
+     socket
+     |> assign(catalog_loading: true)
+     |> start_async(:mcp_catalog, fn -> Synapsis.MCPSelection.refresh() end)}
+  end
+
   def handle_info(:refresh_plugin_states, socket) do
     {:noreply, refresh_states(socket)}
   end
@@ -270,6 +304,19 @@ defmodule SynapsisWeb.MCPLive.Index do
   end
 
   def handle_info(_msg, socket), do: {:noreply, socket}
+
+  @impl true
+  def handle_async(:mcp_catalog, {:ok, outcomes}, socket) when is_map(outcomes) do
+    errors = Map.reject(outcomes, fn {_id, outcome} -> outcome == :ok end)
+
+    {:noreply,
+     socket |> assign(catalog_loading: false, catalog_errors: errors) |> refresh_states()}
+  end
+
+  def handle_async(:mcp_catalog, _failure, socket) do
+    {:noreply,
+     assign(socket, catalog_loading: false, catalog_errors: %{"catalog" => "Refresh failed"})}
+  end
 
   defp refresh_states(socket) do
     configs = list_configs()
@@ -451,6 +498,35 @@ defmodule SynapsisWeb.MCPLive.Index do
           </.dm_link>
         </div>
       </div>
+
+      <.dm_card variant="bordered" class="mb-6">
+        <:title>Provider connection</:title>
+        <.react_form
+          for={%{}}
+          id="mcp-provider-form"
+          values={%{"provider_id" => "", "url" => ""}}
+          phx-submit="select_provider"
+          class="space-y-3"
+        >
+          <.dm_react_field
+            type="select"
+            name="provider_id"
+            label="Backplane provider"
+            options={[
+              %{value: "", label: "Select provider"}
+              | Enum.map(@source_providers, &%{value: &1.id, label: &1.name})
+            ]}
+          />
+          <.dm_react_field type="text" name="url" label="MCP URL override (optional)" />
+          <.dm_btn type="submit" variant="primary" size="sm">Add provider source</.dm_btn>
+        </.react_form>
+        <.dm_btn phx-click="refresh_catalog" disabled={@catalog_loading} size="sm" class="mt-3">
+          {if @catalog_loading, do: "Refreshing tools…", else: "Refresh live tools"}
+        </.dm_btn>
+        <p :for={{id, _error} <- @catalog_errors} role="alert" class="text-error text-sm">
+          Tool discovery failed for {id}. Tools are unavailable until a successful refresh.
+        </p>
+      </.dm_card>
 
       <%!-- Import JSON form --%>
       <.dm_modal

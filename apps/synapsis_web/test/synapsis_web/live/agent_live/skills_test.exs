@@ -12,6 +12,36 @@ defmodule SynapsisWeb.AgentLive.SkillsTest do
 
   defp skill_by_name(name), do: Enum.find(Skills.list(), &(&1.name == name))
 
+  test "remote skills group by source and only assignments are editable", %{conn: conn} do
+    {:ok, agent} = AgentConfigs.create(%{name: "remote-assignee", label: "Remote"})
+
+    {:ok, skill} =
+      Skills.create(%{
+        name: "remote-same-name",
+        scope: "global",
+        config_overrides: %{
+          "managed_by" => "backplane",
+          "backplane_source_id" => "source-a",
+          "external_id" => "remote-review",
+          "external_revision" => "r1"
+        }
+      })
+
+    {:ok, view, html} = live(conn, ~p"/agent/skills")
+    assert html =~ "source-a"
+    assert has_element?(view, "[data-skill-source='source-a']")
+    {:ok, edit, _} = live(conn, ~p"/agent/skills/#{skill.id}/edit")
+
+    react_form_submit(edit, "agent-skill-form", %{
+      "skill" => %{"name" => "tampered", "system_prompt_fragment" => "local body"},
+      "agent_ids" => [agent.id]
+    })
+
+    assert Skills.get(skill.id).name == "remote-same-name"
+    assert Skills.get(skill.id).config_overrides["external_revision"] == "r1"
+    assert AgentSkills.list_skill_ids(agent.id) == [skill.id]
+  end
+
   describe "skills routes" do
     test "lists skills inside the Agent module shell", %{conn: conn} do
       {:ok, _} = Skills.create(%{name: "review", scope: "global"})

@@ -14,6 +14,7 @@ defmodule Synapsis.MessageBuilder do
 
     opts = %{
       model: agent[:model],
+      history_projection: agent[:history_projection],
       system_prompt: system_prompt,
       max_tokens: agent[:max_tokens] || @default_max_tokens,
       provider_type: resolve_provider_type(provider_name),

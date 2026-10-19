@@ -139,8 +139,15 @@ defmodule Synapsis.Skills do
     end
   end
 
+  defp provider_available?(nil), do: true
+  defp provider_available?(id), do: match?({:ok, %{"enabled" => true}}, Store.get(:provider, id))
+
   defp source_connection_available?(connection, surface) do
-    with true <- Map.get(connection, "enabled", Map.get(connection, :enabled)) == true,
+    with true <-
+           provider_available?(
+             Map.get(connection, "provider_id", Map.get(connection, :provider_id))
+           ),
+         true <- Map.get(connection, "enabled", Map.get(connection, :enabled)) == true,
          {:ok, metadata} <- connection_metadata(connection),
          blocked when is_list(blocked) <- Map.get(metadata, "runtime_blocked_surfaces", []),
          true <- Enum.all?(blocked, &is_binary/1) do

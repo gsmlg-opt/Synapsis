@@ -713,6 +713,7 @@ defmodule Synapsis.Agent.QueryLoop do
 
     Synapsis.Provider.Adapter.format_request(messages, ctx.tools, %{
       model: ctx.model,
+      history_projection: ctx.agent_config[:history_projection],
       base_url: value(ctx.provider_config, :base_url, "base_url"),
       provider_name:
         value(ctx.provider_config, :provider_name, "provider_name") ||

@@ -15,6 +15,8 @@ defmodule Synapsis.Agent.Nodes.ReceiveMessage do
         |> Map.put(:user_input, input)
         |> Map.put(:image_parts, image_parts)
         |> Map.delete(:awaiting_input)
+        |> Map.delete(:mcp_tools_refreshed)
+        |> Map.delete(:tool_refresh_request)
 
       {:next, :default, new_state}
     else

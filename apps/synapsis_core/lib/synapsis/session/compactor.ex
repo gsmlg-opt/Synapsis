@@ -2,14 +2,16 @@ defmodule Synapsis.Session.Compactor do
   @moduledoc "Compacts old messages when approaching context window limit."
 
   alias Synapsis.{Message, ContextWindow}
-  alias Synapsis.Provider.ModelRegistry
 
-  @default_limit 128_000
   @summary_char_cap 4_000
 
   def maybe_compact(session_id, model, opts \\ []) do
     messages = load_messages(session_id)
-    limit = model_limit(model)
+
+    limit =
+      Keyword.get(opts, :context_window) ||
+        Synapsis.Providers.model_context_window(Keyword.get(opts, :provider), model)
+
     extra_tokens = Keyword.get(opts, :extra_tokens, 0)
 
     if ContextWindow.needs_compaction?(messages, limit, extra_tokens: extra_tokens) do
@@ -78,11 +80,4 @@ defmodule Synapsis.Session.Compactor do
   end
 
   defp load_messages(session_id), do: Message.list_by_session(session_id)
-
-  defp model_limit(model) do
-    case ModelRegistry.get(model) do
-      {:ok, meta} -> meta.context_window
-      {:error, :unknown} -> @default_limit
-    end
-  end
 end

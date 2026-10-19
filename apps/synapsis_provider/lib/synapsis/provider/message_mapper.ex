@@ -21,6 +21,7 @@ defmodule Synapsis.Provider.MessageMapper do
         Synapsis.Providers.default_model(option(opts, :provider_name) || Atom.to_string(protocol))
 
     with {:ok, input} <- canonical_messages(messages),
+         {:ok, input} <- project_history(input, protocol, model, opts),
          {:ok, request} <-
            Request.new(
              %{
@@ -35,6 +36,14 @@ defmodule Synapsis.Provider.MessageMapper do
          {:ok, wire_request} <-
            Codec.encode_request(protocol, request, codec_opts(protocol, model, opts)) do
       {:ok, ToolName.put_aliases(wire_request, Enum.map(tools, & &1.name))}
+    end
+  end
+
+  defp project_history(input, protocol, model, opts) do
+    if option(opts, :history_projection) == :portable do
+      Synapsis.Provider.RequestHistory.project(input, protocol, codec_opts(protocol, model, opts))
+    else
+      {:ok, input}
     end
   end
 

@@ -36,7 +36,7 @@ defmodule Synapsis.Session.Worker.Boot do
     graph_module = Keyword.get(opts, :graph_module, CodingLoop)
 
     with {:ok, session, agent, provider, provider_config} <-
-           Config.resolve_session_defaults(session),
+           resolve_boot_defaults(session),
          workspace_path = normalize_workspace_path(agent[:workspace_path]),
          {:ok, workspace_path} <- ensure_workspace_path(workspace_path),
          {:ok, graph} <- graph_module.build() do
@@ -63,6 +63,19 @@ defmodule Synapsis.Session.Worker.Boot do
 
       {:error, reason} ->
         {:stop, {:graph_build_failed, reason}}
+    end
+  end
+
+  # Keep an unavailable selection recoverable through the idle model selector.
+  # Turn admission still rejects it in Config.refresh_agent_defaults/1.
+  defp resolve_boot_defaults(session) do
+    case Config.resolve_session_defaults(session) do
+      {:error, reason} when reason in [:provider_unavailable, :model_unavailable] ->
+        agent = Config.resolve_agent(session) |> Map.put(:model_unavailable, reason)
+        {:ok, session, agent, session.provider, %{}}
+
+      result ->
+        result
     end
   end
 

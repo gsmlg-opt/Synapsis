@@ -82,6 +82,50 @@ defmodule Synapsis.Backplane.SkillLoaderTest do
     assert message =~ "digest"
   end
 
+  test "linked skill reads use provider credentials per request and reject a disabled provider",
+       %{bundle: bundle, artifact: artifact} do
+    bypass = Bypass.open()
+
+    {:ok, provider} =
+      Synapsis.Providers.create(%{
+        name: "skill-linked-#{System.unique_integer([:positive])}",
+        type: "openai",
+        base_url: "http://localhost:#{bypass.port}/v1",
+        api_key_encrypted: "first"
+      })
+
+    {:ok, connection} =
+      Connection.create(%{
+        name: "provider-skill-#{System.unique_integer([:positive])}",
+        provider_id: provider.id
+      })
+
+    on_exit(fn ->
+      Connection.delete(connection)
+      Synapsis.Providers.delete(provider.id)
+    end)
+
+    source_id = connection.id
+    manifest = %{bundle.manifest | ref: %{bundle.manifest.ref | source_id: source_id}}
+
+    Bypass.expect_once(bypass, "GET", "/skill-protocol/v1/resolve", fn conn ->
+      assert Plug.Conn.get_req_header(conn, "authorization") == ["Bearer first"]
+      {:ok, _} = Synapsis.Providers.update(provider.id, %{api_key_encrypted: "rotated"})
+      json(conn, Wire.manifest_map(manifest))
+    end)
+
+    Bypass.expect_once(bypass, "GET", "/skill-protocol/v1/artifact", fn conn ->
+      assert Plug.Conn.get_req_header(conn, "authorization") == ["Bearer rotated"]
+      Plug.Conn.send_resp(conn, 200, artifact)
+    end)
+
+    assert {:ok, body} = SkillLoader.load(entry(source_id, manifest.artifact_digest), %{})
+    assert body =~ "Full remote body"
+    {:ok, _} = Synapsis.Providers.update(provider.id, %{enabled: false})
+    assert {:error, message} = SkillLoader.load(entry(source_id, manifest.artifact_digest), %{})
+    assert message =~ "provider_unavailable"
+  end
+
   defp connection!(source_id, bypass) do
     {:ok, connection} =
       Connection.create(%{

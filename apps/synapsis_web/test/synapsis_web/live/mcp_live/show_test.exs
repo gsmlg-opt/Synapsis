@@ -28,7 +28,33 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     end
   end
 
+  defmodule NoopRefresh do
+    def refresh, do: %{}
+  end
+
+  defmodule ObservedRefresh do
+    def refresh do
+      send(
+        Application.fetch_env!(:synapsis_web, :mcp_settings_refresh_owner),
+        :settings_refresh_requested
+      )
+
+      %{}
+    end
+  end
+
   setup do
+    original = Application.get_env(:synapsis_core, :mcp_refresh)
+    Application.put_env(:synapsis_core, :mcp_refresh, {NoopRefresh, :refresh, []})
+
+    on_exit(fn ->
+      if original,
+        do: Application.put_env(:synapsis_core, :mcp_refresh, original),
+        else: Application.delete_env(:synapsis_core, :mcp_refresh)
+
+      Application.delete_env(:synapsis_web, :mcp_settings_refresh_owner)
+    end)
+
     Synapsis.DataCase.clear_config_store(:mcp)
 
     {:ok, config} =
@@ -39,6 +65,71 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
       })
 
     %{config: config}
+  end
+
+  test "requests live MCP discovery on connected open", %{conn: conn, config: config} do
+    Application.put_env(:synapsis_core, :mcp_refresh, {ObservedRefresh, :refresh, []})
+    Application.put_env(:synapsis_web, :mcp_settings_refresh_owner, self())
+    {:ok, view, _} = live(conn, ~p"/settings/mcp/#{config.id}")
+    render_async(view)
+    assert_receive :settings_refresh_requested
+    refute_receive :settings_refresh_requested, 20
+  end
+
+  test "saving headers preserves the provider-derived URL until the URL is edited", %{conn: conn} do
+    {:ok, provider} =
+      Synapsis.Providers.create(%{
+        name: "mcp-default-#{System.unique_integer([:positive])}",
+        type: "openai",
+        base_url: "https://original.example.test/prefix/v1",
+        preset: "backplane"
+      })
+
+    {:ok, config} = Synapsis.Backplane.select_mcp_provider(provider.id)
+
+    on_exit(fn ->
+      for source <- Synapsis.Backplane.Connection.list(),
+          source.provider_id == provider.id,
+          do: Synapsis.Backplane.Connection.delete(source)
+
+      Synapsis.Providers.delete(provider.id)
+    end)
+
+    {:ok, view, _} = live(conn, ~p"/settings/mcp/#{config.id}")
+    react_form_submit(view, "mcp-config-form", %{"headers" => "X-Custom: retained"})
+    unchanged = MCPConfigs.get(config.id)
+    refute unchanged.config["provider_url_override"]
+    {:ok, source} = Synapsis.Backplane.Connection.get(config.config["backplane_source_id"])
+    refute Map.has_key?(source.connection_options, "mcp_url")
+
+    {:ok, _} =
+      Synapsis.Providers.update(provider.id, %{
+        base_url: "https://changed.example.test/gateway/v1"
+      })
+
+    assert {:streamable_http, transport} = Synapsis.MCP.Transport.build(unchanged)
+    assert transport[:base_url] == "https://changed.example.test"
+    assert transport[:mcp_path] == "/gateway/mcp"
+
+    override = "https://override.example.test/custom/mcp"
+    react_form_submit(view, "mcp-config-form", %{"url" => override})
+    overridden = MCPConfigs.get(config.id)
+    assert overridden.config["provider_url_override"]
+    {:ok, source} = Synapsis.Backplane.Connection.get(source.id)
+    assert source.connection_options["mcp_url"] == override
+
+    {:ok, _} =
+      Synapsis.Providers.update(provider.id, %{base_url: "https://later.example.test/v1"})
+
+    assert {:streamable_http, overridden_transport} = Synapsis.MCP.Transport.build(overridden)
+    assert overridden_transport[:base_url] == "https://override.example.test"
+    assert overridden_transport[:mcp_path] == "/custom/mcp"
+  end
+
+  test "shows explicit live discovery status and action", %{conn: conn, config: config} do
+    {:ok, view, html} = live(conn, ~p"/settings/mcp/#{config.id}")
+    assert html =~ "Live tool discovery"
+    assert has_element?(view, "[phx-click='refresh_catalog']")
   end
 
   test "renders config details", %{conn: conn, config: config} do

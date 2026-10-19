@@ -71,6 +71,8 @@ defmodule Synapsis.Session.Worker do
     user_questions: %{},
     execution_mode: :graph,
     query_loop_task: nil,
+    mcp_refresh_task: nil,
+    mcp_refresh_timer: nil,
     runtime_pid: nil,
     runtime_ref: nil,
     runtime_epoch: nil,
@@ -418,6 +420,10 @@ defmodule Synapsis.Session.Worker do
       when is_tuple(request) and elem(request, 0) in [:switch_agent, :switch_model, :switch_mode],
       do: keep(data, [{:reply, from, {:error, :session_busy}}])
 
+  def handle_event({:call, from}, {:switch_model, _provider, _model}, status, data)
+      when status != :idle,
+      do: keep(data, [{:reply, from, {:error, :session_busy}}])
+
   def handle_event({:call, from}, {:switch_agent, name}, _state, data) do
     case Config.do_switch_agent(name, data.session) do
       {:ok, agent, session} ->
@@ -437,7 +443,7 @@ defmodule Synapsis.Session.Worker do
           model: model
         })
 
-        keep(%{data | session: session, agent: agent, provider_config: pc}, [
+        advance(Config.update_model_state(data, session, pc, agent), [
           {:reply, from, :ok}
         ])
 
@@ -568,6 +574,63 @@ defmodule Synapsis.Session.Worker do
                :runtime_admission_failed
              ],
       do: keep(data)
+
+  def handle_event(:info, {:node_request, :refresh_mcp_tools, request}, _state, data) do
+    if data.mcp_refresh_task == nil and data.engine_state[:tool_refresh_request] == request do
+      agent = data.engine_state.agent_config
+
+      task =
+        Task.Supervisor.async_nolink(Synapsis.Tool.TaskSupervisor, fn ->
+          Config.refresh_turn_tools(agent)
+        end)
+
+      timer = Process.send_after(self(), {:mcp_refresh_timeout, task.ref}, 60_000)
+      advance(%{data | mcp_refresh_task: task, mcp_refresh_timer: timer})
+    else
+      keep(data)
+    end
+  end
+
+  def handle_event(:info, {ref, agent}, _state, %{mcp_refresh_task: %Task{ref: ref}} = data)
+      when is_map(agent) do
+    Process.demonitor(ref, [:flush])
+    Process.cancel_timer(data.mcp_refresh_timer)
+    advance(finish_mcp_refresh(data, agent))
+  end
+
+  def handle_event(
+        :info,
+        {:DOWN, ref, :process, _pid, _reason},
+        _state,
+        %{mcp_refresh_task: %Task{ref: ref}} = data
+      ) do
+    Process.cancel_timer(data.mcp_refresh_timer)
+
+    advance(
+      finish_mcp_refresh(
+        data,
+        Synapsis.MCPSelection.resolve_agent(data.engine_state.agent_config, [])
+      )
+    )
+  end
+
+  def handle_event(
+        :info,
+        {:mcp_refresh_timeout, ref},
+        _state,
+        %{mcp_refresh_task: %Task{ref: ref} = task} = data
+      ) do
+    Task.shutdown(task, :brutal_kill)
+
+    advance(
+      finish_mcp_refresh(
+        data,
+        Synapsis.MCPSelection.resolve_agent(data.engine_state.agent_config, [])
+      )
+    )
+  end
+
+  def handle_event(:info, {:mcp_refresh_timeout, _ref}, _state, data), do: keep(data)
 
   def handle_event(:info, {:node_request, :start_stream, req, provider}, _state, data),
     do: advance(IOHandler.handle_start_stream(req, data, provider))
@@ -810,6 +873,9 @@ defmodule Synapsis.Session.Worker do
   def terminate(reason, _state, data) do
     cancel_user_questions(data)
     if data.runtime_task, do: Task.shutdown(data.runtime_task, :brutal_kill)
+    if data.mcp_refresh_task, do: Task.shutdown(data.mcp_refresh_task, :brutal_kill)
+    if data.mcp_refresh_timer, do: Process.cancel_timer(data.mcp_refresh_timer)
+    if data.query_loop_task, do: Task.shutdown(data.query_loop_task, :brutal_kill)
 
     if is_pid(data.runtime_pid),
       do: Synapsis.Agent.Runtime.SessionAdapter.cancel(data.runtime_pid)
@@ -1228,6 +1294,22 @@ defmodule Synapsis.Session.Worker do
 
   # --- QueryLoop helpers (unchanged) ---
 
+  defp finish_mcp_refresh(data, agent) do
+    engine_state =
+      data.engine_state
+      |> Map.put(:agent_config, agent)
+      |> Map.put(:mcp_tools_refreshed, true)
+      |> Map.delete(:tool_refresh_request)
+
+    step_engine(%{
+      data
+      | agent: agent,
+        engine_state: engine_state,
+        mcp_refresh_task: nil,
+        mcp_refresh_timer: nil
+    })
+  end
+
   defp start_query_loop(content, state) do
     messages = build_query_loop_messages(state.session_id)
     messages = messages ++ [%{role: "user", content: content}]
@@ -1257,7 +1339,13 @@ defmodule Synapsis.Session.Worker do
       agent_config: agent_config
     }
 
-    task = Task.async(fn -> Synapsis.Agent.QueryLoop.run(loop_state, loop_ctx) end)
+    task =
+      Task.Supervisor.async_nolink(Synapsis.Tool.TaskSupervisor, fn ->
+        agent = Config.refresh_turn_tools(agent_config)
+        ctx = %{loop_ctx | agent_config: agent, tools: resolve_agent_tools(agent)}
+        Synapsis.Agent.QueryLoop.run(loop_state, ctx)
+      end)
+
     %{state | query_loop_task: task}
   end
 
@@ -1295,6 +1383,13 @@ defmodule Synapsis.Session.Worker do
   end
 
   defp cancel_legacy(data) do
+    if data.mcp_refresh_task do
+      Task.shutdown(data.mcp_refresh_task, :brutal_kill)
+      Process.cancel_timer(data.mcp_refresh_timer)
+    end
+
+    data = %{data | mcp_refresh_task: nil, mcp_refresh_timer: nil}
+
     case data.execution_mode do
       :query_loop ->
         if data.query_loop_task, do: Task.shutdown(data.query_loop_task, :brutal_kill)
@@ -1428,7 +1523,7 @@ defmodule Synapsis.Session.Worker do
 
       _ordinary_session ->
         case agent[:tools] do
-          names when is_list(names) and names != [] ->
+          names when is_list(names) ->
             Synapsis.Tool.Registry.list_for_query_loop(names: names)
 
           _ ->
