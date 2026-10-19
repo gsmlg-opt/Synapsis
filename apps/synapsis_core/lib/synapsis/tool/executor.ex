@@ -260,7 +260,14 @@ defmodule Synapsis.Tool.Executor do
     start_time = System.monotonic_time(:millisecond)
 
     try do
-      result = GenServer.call(pid, {:execute, tool_name, input, context}, timeout)
+      result =
+        if context[:tool_task_link] == true and
+             Synapsis.Tool.Registry.runtime_process?({:process, pid, opts}) do
+          opts[:runtime_dispatch].execute_runtime(pid, tool_name, input, context, timeout)
+        else
+          GenServer.call(pid, {:execute, tool_name, input, context}, timeout)
+        end
+
       duration_ms = System.monotonic_time(:millisecond) - start_time
       status = if match?({:ok, _}, result), do: :completed, else: :error
       persist_tool_call(tool_name, input, result, status, duration_ms, context)

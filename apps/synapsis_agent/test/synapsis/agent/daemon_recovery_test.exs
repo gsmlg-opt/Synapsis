@@ -206,9 +206,16 @@ defmodule Synapsis.Agent.DaemonRecoveryTest do
     assert first_body =~ "recover first"
     assert_receive {:recovered_provider_request, second_body}, 2_000
     assert second_body =~ "recover second"
-    assert {:ok, _completed} = wait_for_run(first.id, "completed")
-    assert {:ok, _completed} = wait_for_run(second.id, "completed")
-    assert %{ready: true, active_run_id: nil, queued_count: 0} = Daemon.status(daemon)
+    assert {:ok, first_completed} = wait_for_run(first.id, "completed")
+    assert {:ok, second_completed} = wait_for_run(second.id, "completed")
+
+    assert {:ok, %{ready: true, active_run_id: nil, queued_count: 0}} =
+             wait_for_status(daemon, &is_nil(&1.active_run_id))
+
+    for run <- [first_completed, second_completed] do
+      assert %{root: %{status: :completed}} =
+               Synapsis.Session.Worker.snapshot(run.session_id).subagents
+    end
   end
 
   test "partial recovery still interrupts waiting runs and owns every queued run" do

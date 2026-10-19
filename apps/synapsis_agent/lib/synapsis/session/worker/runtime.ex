@@ -192,18 +192,19 @@ defmodule Synapsis.Session.Worker.Runtime do
 
       Persistence.broadcast(data.session_id, "runtime_permissions", data.runtime_permissions)
 
-      Persistence.broadcast(data.session_id, "session_status", %{
-        status: if(terminal.type == :run_failed, do: "error", else: "idle")
-      })
-
       case terminal.type do
         :run_failed ->
           {:error,
            fail(data, error_text(terminal[:error] || terminal[:outcome] || :execution_failed))}
 
         :run_cancelled ->
-          Persistence.broadcast(data.session_id, "done", %{})
-          {:ok, data}
+          if terminal[:state] == :unknown_outcome do
+            {:error, fail(data, error_text(terminal[:error] || :unknown_outcome))}
+          else
+            Persistence.broadcast(data.session_id, "done", %{})
+            Persistence.broadcast(data.session_id, "session_status", %{status: "idle"})
+            {:ok, data}
+          end
 
         :run_completed ->
           Emitter.emit_session_completed(data.session_id)
@@ -322,7 +323,11 @@ defmodule Synapsis.Session.Worker.Runtime do
     with {:ok, meta} <- Store.get_meta(data.session_id),
          meta =
            Map.merge(meta, %{
-             status: if(terminal.type == :run_failed, do: "error", else: "idle"),
+             status:
+               if(terminal.type == :run_failed or terminal[:state] == :unknown_outcome,
+                 do: "error",
+                 else: "idle"
+               ),
              updated_at: DateTime.utc_now()
            }),
          :ok <- Store.commit_turns(data.session_id, data.runtime_turn_offset, turns, meta) do
@@ -375,14 +380,15 @@ defmodule Synapsis.Session.Worker.Runtime do
     }
   end
 
-  defp result_text(%{content: value}) when is_binary(value), do: value
-
   defp result_text(value) do
-    case Jason.encode(value) do
+    case ProviderMessages.tool_result_text(value) do
       {:ok, text} -> text
-      {:error, _} -> inspect(value)
+      {:error, _} -> "Tool result unavailable"
     end
   end
+
+  defp error_text(%Backplane.AiProtocol.Error{} = reason),
+    do: Synapsis.Agent.Nodes.ProviderError.message(reason)
 
   defp error_text(%{message: message}) when is_binary(message), do: message
   defp error_text(message) when is_binary(message), do: message

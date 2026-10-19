@@ -5,8 +5,8 @@ defmodule Synapsis.Agent.Runtime.ToolRegistry do
   Pass the bound entries from the host's tool selection (for example,
   `Daemon.Toolsets.resolve_for_query_loop/1`), never model-provided descriptors.
   One positive catalog revision binds every descriptor and the run authority.
-  Admission is all-or-nothing. Process-backed tools and dynamic discovery remain
-  unsupported until their cancellation/catalog contracts are implemented.
+  Admission is all-or-nothing. Process-backed tools require caller-owned runtime
+  dispatch; dynamic discovery requires a catalog update contract.
   """
   alias Backplane.AgentRuntime.{Error, InputSchema}
   alias Backplane.AgentRuntime.ToolRegistry, as: Registry
@@ -65,7 +65,7 @@ defmodule Synapsis.Agent.Runtime.ToolRegistry do
                  schema: schema,
                  tool_name: name,
                  revision: revision,
-                 tool_timeout_ms: timeout,
+                 tool_timeout_ms: tool_timeout(entry, timeout),
                  approval_timeout_ms: approval_timeout
                }
              }) do
@@ -85,9 +85,24 @@ defmodule Synapsis.Agent.Runtime.ToolRegistry do
         "Dynamic tool discovery requires a runtime catalog update contract"
       )
 
-  # TODO: Wire host per-invocation ownership to the published #43 MCP handles before admission.
-  defp admissible(_name, {:process, _, _}),
-    do: error(:unsupported_capability, "Process-backed tools require a cancellation contract")
+  defp admissible(name, {:process, _, opts} = entry) when is_list(opts) do
+    cond do
+      not Synapsis.Tool.Registry.runtime_process?(entry) ->
+        error(:unsupported_capability, "Process-backed tools require a cancellation contract")
+
+      opts[:deferred] == true ->
+        error(:unsupported_capability, "Deferred tools are not admitted")
+
+      Synapsis.Tool.Registry.lookup(name) != {:ok, entry} ->
+        error(:resource_conflict, "Tool registration changed")
+
+      not Synapsis.Tool.Registry.runtime_available?(entry) ->
+        error(:forbidden, "Tool is unavailable")
+
+      true ->
+        :ok
+    end
+  end
 
   defp admissible(name, {:module, module, opts} = entry) when is_atom(module) and is_list(opts) do
     cond do
@@ -112,6 +127,20 @@ defmodule Synapsis.Agent.Runtime.ToolRegistry do
          tool[:description] == (opts[:description] || module.description()),
        do: :ok,
        else: error(:resource_conflict, "Tool definition differs from its host registration")
+  end
+
+  defp bound_definition(tool, {:process, _pid, opts}) do
+    if tool.parameters == (opts[:parameters] || %{}) and
+         tool[:description] == (opts[:description] || ""),
+       do: :ok,
+       else: error(:resource_conflict, "Tool definition differs from its host registration")
+  end
+
+  defp tool_timeout({_kind, _owner, opts}, timeout) do
+    case opts[:timeout] do
+      value when is_integer(value) and value > 0 -> min(value, timeout)
+      _ -> timeout
+    end
   end
 
   defp schema_supported(schema) do

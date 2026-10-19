@@ -115,13 +115,29 @@ defmodule Synapsis.Agent.Runtime.ToolBackend do
     end
   end
 
+  defp current(name, {:process, _pid, opts} = entry) do
+    cond do
+      Registry.lookup(name) != {:ok, entry} ->
+        error(:resource_conflict, "Tool registration changed")
+
+      not Registry.runtime_process?(entry) ->
+        error(:unsupported_capability, "Process tool has no runtime execution contract")
+
+      opts[:deferred] == true or not Registry.runtime_available?(entry) ->
+        error(:forbidden, "Tool is unavailable")
+
+      true ->
+        :ok
+    end
+  end
+
   defp current(_, _),
-    do: error(:unsupported_capability, "Only admitted module tools are supported")
+    do: error(:unsupported_capability, "Only admitted host tools are supported")
 
   defp result({:ok, content}), do: {:ok, %{content: content, is_error: false}}
 
   defp result({:error, :timeout}),
-    do: error(:unknown_outcome, "Tool timed out; side effects may have occurred")
+    do: error(:unknown_outcome, "Tool execution timed out; side effects may have occurred")
 
   defp result({:error, {:exit, _}}),
     do: error(:unknown_outcome, "Tool exited; side effects may have occurred")

@@ -8,7 +8,7 @@ defmodule Synapsis.Agent.Runtime.ProviderMessages do
   def from_host(messages), do: map_all(messages, &runtime_message/1)
 
   defp host_message(%{role: :tool, tool_call_id: id, result: result}) do
-    with {:ok, content} <- result_text(result) do
+    with {:ok, content} <- tool_result_text(result) do
       {:ok,
        %{
          role: :tool,
@@ -106,25 +106,41 @@ defmodule Synapsis.Agent.Runtime.ProviderMessages do
 
   defp runtime_part(_), do: unsupported("Unsupported host content part")
 
-  defp result_text(%{content: content}) when is_binary(content), do: {:ok, content}
+  @doc "Formats runtime tool results for provider history and live events, redacting diagnostic errors."
+  def tool_result_text(%{content: content}) when is_binary(content), do: {:ok, content}
 
-  defp result_text(%{content: content}) do
+  def tool_result_text(%{content: content}) do
     case Jason.encode(content) do
       {:ok, text} -> {:ok, text}
       _ -> unsupported("Tool result is not JSON encodable")
     end
   end
 
-  defp result_text(%{is_error: true}), do: {:ok, "Tool execution failed"}
+  def tool_result_text(%{is_error: true, error: %Error{class: :forbidden}}),
+    do: {:ok, "Tool denied by capability policy"}
 
-  defp result_text(result) when is_map(result) do
+  def tool_result_text(%{
+        is_error: true,
+        error: %Error{class: :resource_conflict, message: "Tool registration changed"}
+      }),
+      do: {:ok, "Tool registration changed"}
+
+  def tool_result_text(%{
+        is_error: true,
+        error: %Error{class: :not_found, message: "tool is not registered"}
+      }),
+      do: {:ok, "Tool denied: tool is not in this run catalog"}
+
+  def tool_result_text(%{is_error: true}), do: {:ok, "Tool execution failed"}
+
+  def tool_result_text(result) when is_map(result) do
     case Jason.encode(result) do
       {:ok, text} -> {:ok, text}
       _ -> unsupported("Tool result is not JSON encodable")
     end
   end
 
-  defp result_text(_), do: unsupported("Tool result has no content")
+  def tool_result_text(_), do: unsupported("Tool result has no content")
 
   defp map_all(items, fun) when is_list(items) do
     Enum.reduce_while(items, {:ok, []}, fn item, {:ok, acc} ->

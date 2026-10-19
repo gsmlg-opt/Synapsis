@@ -1,6 +1,7 @@
 defmodule Synapsis.Agent.Runtime.ProviderMessagesTest do
   use ExUnit.Case, async: true
   alias Synapsis.Agent.Runtime.ProviderMessages
+  alias Backplane.AgentRuntime.Error
   alias Synapsis.Part.{Image, Reasoning, Text, ToolResult, ToolUse}
 
   test "round trips domain history including images, signed reasoning and tool identity" do
@@ -38,6 +39,30 @@ defmodule Synapsis.Agent.Runtime.ProviderMessagesTest do
              ProviderMessages.to_host([
                %{role: :tool, tool_call_id: "c", result: %{is_error: true, error: :denied}}
              ])
+  end
+
+  test "preserves safe denial and registration errors without exposing diagnostic internals" do
+    for {error, expected} <- [
+          {Error.new(:forbidden, "private message", details: %{secret: "private details"}),
+           "Tool denied by capability policy"},
+          {Error.new(:resource_conflict, "Tool registration changed", cause: "private cause"),
+           "Tool registration changed"},
+          {Error.new(:not_found, "tool is not registered", details: %{secret: "private details"}),
+           "Tool denied: tool is not in this run catalog"},
+          {Error.new(:not_found, "private missing tool", details: %{secret: "private details"}),
+           "Tool execution failed"},
+          {Error.new(:resource_conflict, "private conflict"), "Tool execution failed"},
+          {Error.new(:execution_failure, "private failure", details: %{secret: "private details"}),
+           "Tool execution failed"}
+        ] do
+      assert {:ok, ^expected} =
+               ProviderMessages.tool_result_text(%{is_error: true, error: error})
+
+      assert {:ok, [%{parts: [%ToolResult{is_error: true, content: ^expected}]}]} =
+               ProviderMessages.to_host([
+                 %{role: :tool, tool_call_id: "c", result: %{is_error: true, error: error}}
+               ])
+    end
   end
 
   test "native collaboration results and separate assistant calls retain their identities" do

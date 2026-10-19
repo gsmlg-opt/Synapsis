@@ -57,15 +57,36 @@ defmodule Synapsis.MCP.ServerTest do
 
         "tools/call" ->
           if call_observer, do: send(call_observer, {:mcp_tool_called, req["params"]})
-          %{"content" => [%{"type" => "text", "text" => req["params"]["arguments"]["text"]}]}
+
+          if req["params"]["name"] == "pending" do
+            send(call_observer, {:mcp_tool_pending, id})
+            :pending
+          else
+            %{"content" => [%{"type" => "text", "text" => req["params"]["arguments"]["text"]}]}
+          end
 
         _ ->
           %{}
       end
 
-    conn
-    |> Plug.Conn.put_resp_header("content-type", "application/json")
-    |> Plug.Conn.resp(200, Jason.encode!(%{"jsonrpc" => "2.0", "id" => id, "result" => result}))
+    if result == :pending do
+      Plug.Conn.resp(conn, 202, "")
+    else
+      conn
+      |> Plug.Conn.put_resp_header("content-type", "application/json")
+      |> Plug.Conn.resp(200, Jason.encode!(%{"jsonrpc" => "2.0", "id" => id, "result" => result}))
+    end
+  end
+
+  defp handle_rpc(
+         conn,
+         %{"method" => "notifications/cancelled", "params" => params},
+         _server_name,
+         call_observer,
+         _tools
+       ) do
+    if call_observer, do: send(call_observer, {:mcp_tool_cancelled, params})
+    Plug.Conn.resp(conn, 202, "")
   end
 
   defp handle_rpc(conn, _notification, _server_name, _call_observer, _tools) do
@@ -141,6 +162,64 @@ defmodule Synapsis.MCP.ServerTest do
     assert unannotated_opts[:permission_level] == :write
   end
 
+  test "native runtime dispatch normalizes results and rejects undiscovered tools", %{
+    bypass: bypass
+  } do
+    {server, echo, _pending} = runtime_server(bypass)
+    assert {:ok, {:process, ^server, opts}} = Registry.lookup(echo)
+    assert opts[:runtime_dispatch] == Server
+
+    assert {:ok, "native result"} =
+             Server.execute_runtime(server, echo, %{"text" => "native result"}, %{}, 1_000)
+
+    assert {:error, :mcp_unavailable} =
+             Server.execute_runtime(server, echo <> "-unknown", %{}, %{}, 1_000)
+  end
+
+  test "native timeout cancels only its owned request and keeps the server responsive", %{
+    bypass: bypass
+  } do
+    {server, echo, pending} = runtime_server(bypass)
+
+    task = Task.async(fn -> Server.execute_runtime(server, pending, %{}, %{}, 500) end)
+    assert_receive {:mcp_tool_pending, request_id}, 2_000
+    assert :ok = Server.await_ready(server, 200)
+
+    assert {:ok, "sibling result"} =
+             Server.execute_runtime(server, echo, %{"text" => "sibling result"}, %{}, 1_000)
+
+    assert {:error, :timeout} = Task.await(task, 2_000)
+
+    assert_receive {:mcp_tool_cancelled,
+                    %{"requestId" => ^request_id, "reason" => "tool_timeout"}},
+                   2_000
+
+    assert Process.alive?(server)
+  end
+
+  test "native effect owner death cancels its request without stopping sibling calls", %{
+    bypass: bypass
+  } do
+    {server, echo, pending} = runtime_server(bypass)
+    tasks = start_supervised!(Task.Supervisor)
+
+    task =
+      Task.Supervisor.async_nolink(tasks, fn ->
+        Server.execute_runtime(server, pending, %{}, %{}, 5_000)
+      end)
+
+    assert_receive {:mcp_tool_pending, request_id}, 2_000
+    Task.shutdown(task, :brutal_kill)
+
+    assert_receive {:mcp_tool_cancelled, %{"requestId" => ^request_id, "reason" => "owner_down"}},
+                   2_000
+
+    assert {:ok, "surviving result"} =
+             Server.execute_runtime(server, echo, %{"text" => "surviving result"}, %{}, 1_000)
+
+    assert Process.alive?(server)
+  end
+
   test "revokes trusted MCP read-only admission live when source trust is removed", %{
     bypass: bypass
   } do
@@ -211,11 +290,15 @@ defmodule Synapsis.MCP.ServerTest do
 
     # Daemon Toolsets select MCP candidates through this runtime-filtered registry view.
     assert [] = Registry.list_for_query_loop(names: [tool])
+
     assert {:error, :tool_disabled} =
              Synapsis.Tool.Executor.execute_approved(tool, %{}, authorized_context)
 
     assert {:error, :mcp_unavailable} =
              GenServer.call(pid, {:execute, tool, %{"text" => "blocked"}, %{}}, 10_000)
+
+    assert {:error, :mcp_unavailable} =
+             Server.execute_runtime(pid, tool, %{"text" => "blocked"}, %{}, 1_000)
 
     refute_receive {:mcp_tool_called, _params}, 100
   end
@@ -405,5 +488,29 @@ defmodule Synapsis.MCP.ServerTest do
         Process.sleep(20)
         wait_until(fun, tries - 1)
     end
+  end
+
+  defp runtime_server(bypass) do
+    name = "runtime_#{System.unique_integer([:positive])}"
+
+    tools =
+      Enum.map(["echo", "pending"], fn name ->
+        %{"name" => name, "inputSchema" => %{"type" => "object"}}
+      end)
+
+    stub_mcp(bypass, name, self(), tools)
+
+    server =
+      start_supervised!(
+        {Server,
+         %MCPConfig{
+           name: name,
+           transport: "streamable_http",
+           url: "http://localhost:#{bypass.port}"
+         }}
+      )
+
+    assert :ok = Server.await_ready(server)
+    {server, "mcp:#{name}:echo", "mcp:#{name}:pending"}
   end
 end

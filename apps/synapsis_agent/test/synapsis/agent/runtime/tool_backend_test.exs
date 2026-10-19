@@ -222,7 +222,15 @@ defmodule Synapsis.Agent.Runtime.ToolBackendTest do
                    2_000
 
     assert_receive {:DOWN, ^ref, :process, ^task, _}, 2_000
-    assert %{phase: :terminal, error: %Error{class: :unknown_outcome}} = Conversation.status(pid)
+
+    assert %{
+             phase: :terminal,
+             error: %Error{
+               class: :unknown_outcome,
+               message: "Tool execution timed out; side effects may have occurred"
+             }
+           } = Conversation.status(pid)
+
     refute Enum.any?(Conversation.status(pid).messages, &(&1.role == :tool))
     refute_receive {:agent_runtime, ^run_id, %{type: :run_completed}}, 20
     refute_receive {:agent_runtime, ^run_id, %{type: :provider_started}}, 20

@@ -34,6 +34,13 @@ The legacy `task` and team wrappers are excluded from this catalog. Other select
 host tools use the existing registry/backend and Gateway. This feature does not
 replace the complete Synapsis tool system.
 
+MCP registrations expose caller-owned runtime dispatch through the existing
+Gateway and Executor. Native effect tasks own the published MCP tool-call
+handles; timeout or owner death cancels that call without blocking the MCP server
+or cancelling sibling calls. A timeout retains an unknown-outcome recovery fence
+because local cancellation does not establish the remote outcome. Other process
+registrations require the same explicit caller-owned dispatch contract.
+
 Children inherit the actual parent's provider, model, selected tools, reasoning
 setting and immutable permission snapshot. Following up an old child after a new
 root turn cannot grant that child the new root's broader permissions. Each
@@ -81,7 +88,8 @@ active saved run, or unconfirmed cleanup becomes `unknown_outcome` /
 - `fork_turns` supports the native `all` and `none` modes. Child model, reasoning
   and agent-type overrides accept inherited/default values only; unsupported
   values return an explicit admission error.
-- Selected unavailable, deferred or process-backed registrations fail admission.
+- Selected unavailable, deferred or process-backed registrations without a
+  caller-owned dispatch contract fail admission.
   The session `tool_search` searches the selected admitted host catalog only; it
   does not load deferred or plugin tools.
 - Restart does not reconstruct child processes or replay their work. Saved

@@ -5,6 +5,7 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
     file_read list_dir grep glob memory_search todo_read session_summarize skill tool_search
     agent_status agent_discover agent_inbox
   )
+  @collaboration_tools ~w(spawn_agent send_message followup_task interrupt_agent list_agents wait_agent)
 
   defmodule ProcessTool do
     use GenServer
@@ -48,7 +49,7 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
     assert_receive {:tool_provider_request, 1, first_request, request_pid}, 2_000
     send(request_pid, :respond)
 
-    assert Enum.sort(tool_names(first_request)) == Enum.sort(@basic_tools)
+    assert Enum.sort(tool_names(first_request)) == Enum.sort(@basic_tools ++ @collaboration_tools)
     refute "bash" in tool_names(first_request)
     refute "file_write" in tool_names(first_request)
     refute "file_delete" in tool_names(first_request)
@@ -169,53 +170,11 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
   test "default daemon run exposes and executes only annotated read-only MCP tools", %{
     tmp_dir: tmp_dir
   } do
-    suffix = System.unique_integer([:positive])
-    source_id = Ecto.UUID.generate()
-    server_name = "daemon-mcp-#{suffix}"
+    {server_name, _mcp_pid} = start_annotated_mcp()
     safe_tool = "mcp:#{server_name}:read_note"
     destructive_tool = "mcp:#{server_name}:delete_note"
     unannotated_tool = "mcp:#{server_name}:mystery"
     wire_safe_tool = Synapsis.Provider.ToolName.encode(safe_tool)
-    mcp_bypass = Bypass.open()
-
-    stub_annotated_mcp(mcp_bypass, server_name, self())
-
-    assert {:ok, _connection} =
-             Synapsis.Config.Store.put(:backplane, %{
-               "id" => source_id,
-               "enabled" => true,
-               "connection_options_json" => Jason.encode!(%{"trust_mcp_annotations" => true})
-             })
-
-    assert {:ok, mcp_config} =
-             Synapsis.MCPConfigs.create(%{
-               name: server_name,
-               transport: "streamable_http",
-               url: "http://localhost:#{mcp_bypass.port}",
-               config: %{
-                 "managed_by" => "backplane",
-                 "backplane_source_id" => source_id,
-                 "backplane_available" => true,
-                 "backplane_tools" => [
-                   %{"external_id" => "read_note", "backplane_available" => true},
-                   %{"external_id" => "delete_note", "backplane_available" => true},
-                   %{"external_id" => "mystery", "backplane_available" => true}
-                 ]
-               }
-             })
-
-    assert {:ok, mcp_pid} = Synapsis.MCP.start(mcp_config)
-    assert :ok = Synapsis.MCP.Server.await_ready(mcp_pid)
-
-    on_exit(fn ->
-      Synapsis.MCP.stop(server_name)
-
-      if current = Synapsis.MCPConfigs.get(mcp_config.id) do
-        Synapsis.MCPConfigs.delete(current)
-      end
-
-      Synapsis.Config.Store.delete(:backplane, source_id)
-    end)
 
     {daemon, _task_supervisor} = start_test_daemon()
 
@@ -364,7 +323,9 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
     assert {:ok, expected_tools} =
              Synapsis.Agent.Daemon.Toolsets.resolve("assistant_coding")
 
-    assert Enum.sort(tool_names(first_request)) == Enum.sort(expected_tools)
+    assert Enum.sort(tool_names(first_request)) ==
+             Enum.sort((expected_tools -- ["task"]) ++ @collaboration_tools)
+
     assert "bash" in tool_names(first_request)
     assert "file_write" in tool_names(first_request)
     refute "file_delete" in tool_names(first_request)
@@ -386,7 +347,7 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
   end
 
   @tag :tmp_dir
-  test "tool timeout is returned to the provider and the daemon remains alive", %{
+  test "an unmarked process tool is rejected before provider and process effects", %{
     tmp_dir: tmp_dir
   } do
     tool_name = "mcp:timeout-#{System.unique_integer([:positive])}:read"
@@ -405,25 +366,93 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
     on_exit(fn -> Synapsis.Tool.Registry.unregister(tool_name) end)
     {daemon, _task_supervisor} = start_test_daemon()
 
-    {_bypass, provider_name, agent_name} =
-      controlled_tool_provider(tmp_dir, tool_name, %{})
+    owner = self()
+    bypass = Bypass.open()
+
+    Bypass.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+      send(owner, :unexpected_provider_request)
+      Plug.Conn.send_resp(conn, 500, "unsupported tools must fail admission")
+    end)
+
+    {provider_name, agent_name} = register_provider_agent(tmp_dir, bypass)
 
     assert {:ok, queued} =
              Daemon.submit(
                daemon,
-               "Observe a tool timeout",
+               "Reject a process without a cancellation contract",
                daemon_opts(agent_name, provider_name)
              )
 
-    assert_receive {:tool_provider_request, 1, _first_request, request_pid}, 2_000
-    send(request_pid, :respond)
-    assert_receive {:process_tool_executed, ^tool_name}, 2_000
+    assert {:ok, failed} = wait_for_run(queued.id, "failed")
+    assert failed.error == "Process-backed tools require a cancellation contract"
 
-    assert_receive {:tool_provider_request, 2, second_request, _request_pid}, 2_000
-    assert Jason.encode!(second_request) =~ "Tool execution timed out"
+    assert {:ok, %{active_run_id: nil, queued_count: 0}} =
+             wait_for_status(daemon, &is_nil(&1.active_run_id))
+
+    refute_receive :unexpected_provider_request, 100
+    refute_receive {:process_tool_executed, ^tool_name}, 100
     refute_receive {"permission_requests", _payload}, 100
-    assert {:ok, _completed} = wait_for_run(queued.id, "completed")
     assert Process.alive?(Process.whereis(daemon))
+  end
+
+  @tag :tmp_dir
+  test "native MCP timeout fences uncertain effects without continuation or retry", %{
+    tmp_dir: tmp_dir
+  } do
+    {server_name, mcp_pid} = start_annotated_mcp(:pending)
+    tool_name = "mcp:#{server_name}:read_note"
+    assert {:ok, {:process, ^mcp_pid, opts}} = Synapsis.Tool.Registry.lookup(tool_name)
+    assert opts[:runtime_dispatch] == Synapsis.MCP.Server
+
+    :ok =
+      Synapsis.Tool.Registry.register_process(
+        tool_name,
+        mcp_pid,
+        opts |> Keyword.put(:timeout, 500) |> Keyword.put(:max_retries, 2)
+      )
+
+    {daemon, _task_supervisor} = start_test_daemon()
+
+    {_bypass, provider_name, agent_name} =
+      controlled_tool_provider(tmp_dir, tool_name, %{"text" => "uncertain request"})
+
+    assert {:ok, queued} =
+             Daemon.submit(
+               daemon,
+               "Observe an MCP timeout",
+               daemon_opts(agent_name, provider_name)
+             )
+
+    assert_receive {:tool_provider_request, 1, first_request, request_pid}, 2_000
+    assert Synapsis.Provider.ToolName.encode(tool_name) in tool_names(first_request)
+    assert {:ok, running} = wait_for_run(queued.id, "running")
+    assert :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{running.session_id}")
+    send(request_pid, :respond)
+
+    assert_receive {:mcp_tool_pending, request_id, %{"name" => "read_note"}}, 2_000
+
+    assert_receive {:mcp_tool_cancelled,
+                    %{"requestId" => ^request_id, "reason" => "tool_timeout"}},
+                   2_000
+
+    assert {:ok, failed} = wait_for_run(queued.id, "failed")
+    assert failed.error =~ "Tool execution timed out"
+    assert failed.error =~ "side effects may have occurred"
+
+    assert {:ok, %{active_run_id: nil, queued_count: 0}} =
+             wait_for_status(daemon, &is_nil(&1.active_run_id))
+
+    assert %{recovery_required: true, root: %{status: :unknown_outcome}} =
+             Synapsis.Session.Worker.snapshot(failed.session_id).subagents
+
+    assert {:error, :recovery_required} =
+             Synapsis.Session.Worker.set_subagents(failed.session_id, false)
+
+    refute_receive {:tool_provider_request, 2, _request, _pid}, 100
+    refute_receive {:mcp_tool_pending, _id, _params}, 100
+    refute_receive {"runtime_permissions", [_pending | _]}, 100
+    assert Process.alive?(Process.whereis(daemon))
+    assert Process.alive?(mcp_pid)
   end
 
   defp controlled_tool_provider(tmp_dir, tool_name, input) do
@@ -465,7 +494,55 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
     {bypass, provider_name, agent_name}
   end
 
-  defp stub_annotated_mcp(bypass, server_name, owner) do
+  defp start_annotated_mcp(mode \\ :echo) do
+    suffix = System.unique_integer([:positive])
+    source_id = Ecto.UUID.generate()
+    server_name = "daemon-mcp-#{suffix}"
+    mcp_bypass = Bypass.open()
+
+    stub_annotated_mcp(mcp_bypass, server_name, self(), mode)
+
+    assert {:ok, _connection} =
+             Synapsis.Config.Store.put(:backplane, %{
+               "id" => source_id,
+               "enabled" => true,
+               "connection_options_json" => Jason.encode!(%{"trust_mcp_annotations" => true})
+             })
+
+    assert {:ok, mcp_config} =
+             Synapsis.MCPConfigs.create(%{
+               name: server_name,
+               transport: "streamable_http",
+               url: "http://localhost:#{mcp_bypass.port}",
+               config: %{
+                 "managed_by" => "backplane",
+                 "backplane_source_id" => source_id,
+                 "backplane_available" => true,
+                 "backplane_tools" => [
+                   %{"external_id" => "read_note", "backplane_available" => true},
+                   %{"external_id" => "delete_note", "backplane_available" => true},
+                   %{"external_id" => "mystery", "backplane_available" => true}
+                 ]
+               }
+             })
+
+    assert {:ok, mcp_pid} = Synapsis.MCP.start(mcp_config)
+    assert :ok = Synapsis.MCP.Server.await_ready(mcp_pid)
+
+    on_exit(fn ->
+      Synapsis.MCP.stop(server_name)
+
+      if current = Synapsis.MCPConfigs.get(mcp_config.id) do
+        Synapsis.MCPConfigs.delete(current)
+      end
+
+      Synapsis.Config.Store.delete(:backplane, source_id)
+    end)
+
+    {server_name, mcp_pid}
+  end
+
+  defp stub_annotated_mcp(bypass, server_name, owner, mode) do
     tools = [
       %{
         "name" => "read_note",
@@ -495,6 +572,14 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
       request = Jason.decode!(body)
 
       case request do
+        %{"id" => id, "method" => "tools/call"} when mode == :pending ->
+          send(owner, {:mcp_tool_pending, id, request["params"]})
+          Plug.Conn.send_resp(conn, 202, "")
+
+        %{"method" => "notifications/cancelled", "params" => params} ->
+          send(owner, {:mcp_tool_cancelled, params})
+          Plug.Conn.send_resp(conn, 202, "")
+
         %{"id" => id, "method" => method} ->
           result =
             case method do

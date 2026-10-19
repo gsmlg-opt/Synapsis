@@ -21,11 +21,56 @@ defmodule Synapsis.Tool.ExecutorLifetimeTest do
     end
   end
 
+  defmodule RuntimeProcess do
+    use GenServer
+
+    def start_link(owner), do: GenServer.start_link(__MODULE__, owner)
+    def init(owner), do: {:ok, owner}
+
+    def handle_call({:execute, _name, _input, _context}, _from, owner) do
+      send(owner, :legacy_process_dispatch)
+      {:reply, {:ok, "legacy"}, owner}
+    end
+
+    def execute_runtime(pid, name, input, context, timeout) do
+      send(context.test_pid, {:runtime_process_dispatch, self(), pid, name, input, timeout})
+      {:ok, "native"}
+    end
+  end
+
   setup do
     name = "executor-lifetime-#{Ecto.UUID.generate()}"
     :ok = Registry.register_module(name, BlockingTool)
     on_exit(fn -> Registry.unregister(name) end)
     %{name: name, supervisor: start_supervised!(Task.Supervisor)}
+  end
+
+  test "native process callbacks retain the caller owner and legacy dispatch", ctx do
+    process = start_supervised!({RuntimeProcess, self()})
+
+    :ok =
+      Registry.register_process(ctx.name, process,
+        runtime_dispatch: RuntimeProcess,
+        permission_level: :read,
+        timeout: 250
+      )
+
+    context = %{
+      run_id: Ecto.UUID.generate(),
+      test_pid: self(),
+      tool_profile: :coding,
+      tool_task_link: true,
+      tool_max_retries: 0
+    }
+
+    assert {:ok, "native"} = Gateway.execute(ctx.name, %{"value" => 1}, context)
+    owner = self()
+    name = ctx.name
+    assert_receive {:runtime_process_dispatch, ^owner, ^process, ^name, %{"value" => 1}, 250}
+    refute_receive :legacy_process_dispatch
+
+    assert {:ok, "legacy"} = Gateway.execute(ctx.name, %{}, Map.delete(context, :tool_task_link))
+    assert_receive :legacy_process_dispatch
   end
 
   for linked <- [false, true] do

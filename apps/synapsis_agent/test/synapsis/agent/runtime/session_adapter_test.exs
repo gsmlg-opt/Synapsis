@@ -25,6 +25,24 @@ defmodule Synapsis.Agent.Runtime.SessionAdapterTest do
     def execute(_, _), do: {:ok, "written"}
   end
 
+  defmodule Identity do
+    use Synapsis.Tool
+    def name, do: "runtime_subagent_identity"
+    def description, do: "Read admitted host agent identity"
+    def permission_level, do: :read
+    def parameters, do: Write.parameters()
+    def execute(_, context), do: {:ok, context.agent_id}
+  end
+
+  defmodule TimedOut do
+    use Synapsis.Tool
+    def name, do: "runtime_subagent_timeout"
+    def description, do: "Report a host tool timeout"
+    def permission_level, do: :read
+    def parameters, do: Write.parameters()
+    def execute(_, _), do: {:error, :timeout}
+  end
+
   defmodule FailProjection do
     defdelegate get(key, opts), to: Concord.Turso
     defdelegate prefix_scan(key, opts), to: Concord.Turso
@@ -189,6 +207,128 @@ defmodule Synapsis.Agent.Runtime.SessionAdapterTest do
              &(&1.name == "/root/child/grandchild" and &1.parent_name == "/root/child" and
                  &1.status == :completed)
            )
+  end
+
+  test "host tool identity follows the session while old children retain their original context",
+       ctx do
+    :ok = Registry.register_module(Identity.name(), Identity)
+    on_exit(fn -> Registry.unregister(Identity.name()) end)
+
+    script = fn request ->
+      count = length(calls(request.messages))
+      child? = String.starts_with?(request.run_id, "/root/")
+      followup? = Enum.any?(request.messages, &(text(&1) == "expanded root"))
+
+      cond do
+        child? ->
+          target = if String.ends_with?(request.run_id, ":2"), do: 2, else: 1
+
+          if count < target,
+            do: tool(Identity.name(), %{}, count),
+            else: [completed("child finished")]
+
+        count == 0 ->
+          tool(Identity.name(), %{}, 0)
+
+        count == 1 and followup? ->
+          tool("followup_task", %{"target" => "child", "message" => "again"}, 1)
+
+        count == 1 ->
+          tool(
+            "spawn_agent",
+            %{"task_name" => "child", "message" => "initial", "fork_turns" => "none"},
+            1
+          )
+
+        count == 2 ->
+          tool("wait_agent", %{"timeout_ms" => 10_000}, 2)
+
+        true ->
+          [completed("root finished")]
+      end
+    end
+
+    context = %{
+      ctx.context
+      | session: %{ctx.context.session | agent: "original-agent"},
+        agent: Map.put(ctx.context.agent, :tools, [Identity.name()])
+    }
+
+    adapter = start_adapter(ctx, script)
+    SessionAdapter.prompt(adapter, context, "original root")
+    assert_receive {:runtime_started, 1, first}, 2_000
+    assert_receive {:runtime_history, 1, ^first, original}, 10_000
+    assert_receive {:runtime_event, 1, ^first, %{type: :run_completed}}, 2_000
+    assert Enum.any?(original, &match?(%{role: :tool, result: %{content: "original-agent"}}, &1))
+
+    expanded = %{context | session: %{context.session | agent: "expanded-agent"}}
+    SessionAdapter.prompt(adapter, expanded, "expanded root")
+    assert_receive {:runtime_started, 1, second}, 2_000
+    assert_receive {:runtime_history, 1, ^second, updated}, 10_000
+    assert_receive {:runtime_event, 1, ^second, %{type: :run_completed}}, 2_000
+    assert Enum.any?(updated, &match?(%{role: :tool, result: %{content: "expanded-agent"}}, &1))
+
+    state = :sys.get_state(adapter)
+    assert {:ok, record} = Synapsis.Agent.Runtime.Store.load(state.store, "/root/child:2")
+    messages = get_in(record, [:run, :context, :conversation, :messages])
+    results = for %{role: :tool, result: %{content: content}} <- messages, do: content
+    assert results == ["original-agent", "original-agent"]
+  end
+
+  test "failed root terminal carries the typed safe provider error", ctx do
+    error = %Backplane.AiProtocol.Error{
+      kind: :upstream_error,
+      stage: :response,
+      http_status: 503,
+      message: "OpenAI provider request failed"
+    }
+
+    adapter = start_adapter(ctx, fn _ -> [%{type: :response_failed, error: error}] end)
+    SessionAdapter.prompt(adapter, ctx.context, "provider failure")
+    assert_receive {:runtime_started, 1, id}, 2_000
+
+    assert_receive {:runtime_event, 1, ^id,
+                    %{type: :run_failed, error: ^error, cleanup: {:ok, %{status: :confirmed}}}},
+                   5_000
+  end
+
+  test "unknown tool outcome survives confirmed owner cleanup and adapter restart", ctx do
+    :ok = Registry.register_module(TimedOut.name(), TimedOut)
+    on_exit(fn -> Registry.unregister(TimedOut.name()) end)
+
+    adapter =
+      start_adapter(ctx, fn request ->
+        if calls(request.messages) == [],
+          do: tool(TimedOut.name(), %{}, 0),
+          else: flunk("unknown tool outcome must not continue the provider")
+      end)
+
+    context = %{ctx.context | agent: Map.put(ctx.context.agent, :tools, [TimedOut.name()])}
+    SessionAdapter.prompt(adapter, context, "timeout")
+    assert_receive {:runtime_started, 1, id}, 2_000
+
+    assert_receive {:runtime_event, 1, ^id,
+                    %{
+                      type: :run_cancelled,
+                      state: :unknown_outcome,
+                      error: %{class: :unknown_outcome},
+                      cleanup: {:ok, %{status: :confirmed}}
+                    }},
+                   5_000
+
+    assert {:ok, %{root: %{status: :unknown_outcome}, recovery_required: true}} =
+             Synapsis.Runtime.Store.get_projection(ctx.id)
+
+    SessionAdapter.cancel(adapter)
+    assert_receive {:runtime_event, 1, ^id, %{type: :run_cancelled}}, 5_000
+
+    assert {:ok, %{root: %{status: :unknown_outcome}, recovery_required: true}} =
+             Synapsis.Runtime.Store.get_projection(ctx.id)
+
+    stop_supervised!(SessionAdapter)
+    replacement = start_adapter(ctx, fn _ -> flunk("unknown outcome must not replay") end)
+    SessionAdapter.prompt(replacement, context, "retry")
+    assert_receive {:runtime_admission_failed, 1, :recovery_required}, 2_000
   end
 
   test "child permission uses exact runtime interaction and an authenticated host grant", ctx do

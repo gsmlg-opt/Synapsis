@@ -28,6 +28,7 @@ defmodule Synapsis.MCP.Server do
   require Logger
 
   alias Backplane.McpProtocol.Client, as: MCPClient
+  alias Backplane.McpProtocol.MCP.Error, as: ProtocolError
   alias Backplane.McpProtocol.MCP.Response, as: ProtocolResponse
   alias Synapsis.MCP.Response
   alias Synapsis.MCP.Transport
@@ -41,6 +42,8 @@ defmodule Synapsis.MCP.Server do
   @discovery_timeout 30_000
   @ready_timeout @await_timeout + @discovery_timeout + 2_000
   @tool_timeout 30_000
+  @runtime_lookup_timeout 1_000
+  @cancellation_timeout 1_000
   @registry_retry_ms 100
 
   # --------------------------------------------------------------------------
@@ -65,6 +68,42 @@ defmodule Synapsis.MCP.Server do
     GenServer.call(server, :await_ready, timeout)
   catch
     :exit, reason -> {:error, ready_failure(reason)}
+  end
+
+  @doc "Executes a native runtime tool call owned by the calling effect process."
+  @spec execute_runtime(GenServer.server(), String.t(), map(), map(), pos_integer()) ::
+          {:ok, String.t()} | {:error, term()}
+  def execute_runtime(server, tool_name, input, _context, timeout)
+      when is_integer(timeout) and timeout > 0 do
+    with {:ok, client, raw_name} <-
+           GenServer.call(
+             server,
+             {:runtime_tool, tool_name},
+             min(timeout, @runtime_lookup_timeout)
+           ),
+         {:ok, handle} <-
+           MCPClient.start_tool_call(client, raw_name, input,
+             registration_timeout: min(timeout, @runtime_lookup_timeout),
+             # Keep the handle live until its owner can cancel on await timeout.
+             timeout: timeout + @cancellation_timeout
+           ) do
+      case MCPClient.await_tool_call(handle, timeout) do
+        {:error, %ProtocolError{reason: :request_timeout}} ->
+          MCPClient.cancel_tool_call(handle, "tool_timeout",
+            notification_timeout: @cancellation_timeout
+          )
+
+          {:error, :timeout}
+
+        result ->
+          runtime_result(result)
+      end
+    else
+      result -> runtime_result(result)
+    end
+  catch
+    :exit, {:timeout, _call} -> {:error, :timeout}
+    :exit, _reason -> {:error, :mcp_unavailable}
   end
 
   defp via(name), do: {:via, Elixir.Registry, {Synapsis.MCP.Registry, name}}
@@ -145,6 +184,20 @@ defmodule Synapsis.MCP.Server do
   @impl true
   def handle_call(:await_ready, _from, state), do: {:reply, :ok, state}
 
+  def handle_call({:runtime_tool, full_tool_name}, _from, state) do
+    case discovered_tool(state.tools, full_tool_name) do
+      %{trust_annotations: trust_annotations} ->
+        if current_runtime_available?(state.config, full_tool_name, trust_annotations) do
+          {:reply, {:ok, state.client, Response.raw_tool_name(full_tool_name)}, state}
+        else
+          {:reply, {:error, :mcp_unavailable}, state}
+        end
+
+      nil ->
+        {:reply, {:error, :mcp_unavailable}, state}
+    end
+  end
+
   def handle_call({:execute, full_tool_name, input, _ctx}, _from, state) do
     case discovered_tool(state.tools, full_tool_name) do
       %{trust_annotations: trust_annotations} ->
@@ -162,7 +215,6 @@ defmodule Synapsis.MCP.Server do
   defp execute_tool(client, full_tool_name, input, state) do
     raw = Response.raw_tool_name(full_tool_name)
 
-    # TODO: Delegate pilot calls to monitored owners using the published #43 tool-call handles.
     case MCPClient.call_tool(client, raw, input, timeout: @tool_timeout) do
       {:ok, response} ->
         {:reply, {:ok, Response.content(ProtocolResponse.unwrap(response))}, state}
@@ -171,6 +223,18 @@ defmodule Synapsis.MCP.Server do
         {:reply, {:error, inspect(error)}, state}
     end
   end
+
+  defp runtime_result({:ok, response}),
+    do: {:ok, Response.content(ProtocolResponse.unwrap(response))}
+
+  defp runtime_result({:error, %ProtocolError{reason: reason}})
+       when reason in [:request_timeout, :registration_timeout],
+       do: {:error, :timeout}
+
+  defp runtime_result({:error, %ProtocolError{reason: reason}}),
+    do: {:error, {:mcp_error, reason}}
+
+  defp runtime_result({:error, reason}), do: {:error, reason}
 
   @impl true
   def handle_info({:EXIT, supervisor, reason}, %{supervisor: supervisor} = state) do
@@ -239,6 +303,7 @@ defmodule Synapsis.MCP.Server do
       description: description,
       parameters: parameters,
       timeout: @tool_timeout,
+      runtime_dispatch: __MODULE__,
       plugin: :mcp,
       category: :mcp,
       permission_level: permission_level,

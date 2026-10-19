@@ -7,6 +7,8 @@ defmodule Synapsis.Agent.Runtime.ToolRegistryTest do
   alias Synapsis.Tool.Registry
   alias Synapsis.Tool.Capability.PolicySnapshot
 
+  def execute_runtime(_pid, _name, _input, _context, _timeout), do: {:ok, "fixture"}
+
   setup do
     name = "catalog-#{Ecto.UUID.generate()}"
     :ok = Registry.register_module(name, EchoTool)
@@ -93,6 +95,31 @@ defmodule Synapsis.Agent.Runtime.ToolRegistryTest do
       assert {:error, %Error{class: ^class}} =
                admit([%{ctx.tool | registration: registration}], ctx.context)
     end
+  end
+
+  test "binds cancellable process definitions and finite registration deadlines", ctx do
+    :ok =
+      Registry.register_process(ctx.tool.name, self(),
+        runtime_dispatch: __MODULE__,
+        description: ctx.tool.description,
+        parameters: ctx.tool.parameters,
+        timeout: 25
+      )
+
+    {:ok, registration} = Registry.lookup(ctx.tool.name)
+    tool = %{ctx.tool | registration: registration}
+    assert {:ok, admitted} = admit([tool], ctx.context)
+    assert admitted.registry.tools[tool.name].backend_context.registration == registration
+    assert admitted.registry.tools[tool.name].backend_context.tool_timeout_ms == 25
+
+    assert {:error, %Error{class: :resource_conflict}} =
+             admit([%{tool | parameters: %{}}], ctx.context)
+
+    :ok = Registry.register_process(tool.name, self(), runtime_dispatch: String)
+    {:ok, unsupported} = Registry.lookup(tool.name)
+
+    assert {:error, %Error{class: :unsupported_capability}} =
+             admit([%{tool | registration: unsupported}], ctx.context)
   end
 
   test "fails admission for invalid authority, deadlines, safety and policy scope", ctx do

@@ -35,8 +35,12 @@ defmodule Synapsis.Agent.DaemonExecutionTest do
 
     assert completed.session_id
     assert completed.summary == "daemon complete"
-    assert {:ok, %{id: session_id}} = Synapsis.Sessions.get(completed.session_id)
+    assert {:ok, %{id: session_id} = session} = Synapsis.Sessions.get(completed.session_id)
     assert session_id == completed.session_id
+    assert Synapsis.Session.subagents_enabled?(session)
+
+    assert %{root: %{status: :completed}} =
+             Synapsis.Session.Worker.snapshot(session_id).subagents
 
     assert_receive {:agent_daemon_event,
                     %{event: "agent.run.started", run_id: ^run_id, status: "running"}},
@@ -50,7 +54,8 @@ defmodule Synapsis.Agent.DaemonExecutionTest do
                     }},
                    1_000
 
-    assert %{active_run_id: nil, queued_count: 0} = Daemon.status(daemon)
+    assert {:ok, %{active_run_id: nil, queued_count: 0}} =
+             wait_for_status(daemon, &is_nil(&1.active_run_id))
   end
 
   @tag :tmp_dir
@@ -76,6 +81,11 @@ defmodule Synapsis.Agent.DaemonExecutionTest do
     assert {:ok, failed} = wait_for_run(queued.id, "failed")
     assert failed.error == "Provider error (HTTP 503): OpenAI provider request failed"
 
+    assert %{root: %{run_id: native_run_id}} =
+             Synapsis.Session.Worker.snapshot(failed.session_id).subagents
+
+    assert is_binary(native_run_id)
+
     assert {:ok, %{ready: true, active_run_id: nil, queued_count: 0}} =
              wait_for_status(daemon, &is_nil(&1.active_run_id))
 
@@ -97,7 +107,10 @@ defmodule Synapsis.Agent.DaemonExecutionTest do
 
     assert {:ok, failed} = wait_for_run(run.id, "failed")
     assert failed.error =~ "run task exited"
-    assert %{ready: true, active_run_id: nil, queued_count: 0} = Daemon.status(daemon)
+
+    assert {:ok, %{ready: true, active_run_id: nil, queued_count: 0}} =
+             wait_for_status(daemon, &is_nil(&1.active_run_id))
+
     assert Process.alive?(Process.whereis(daemon))
 
     assert_receive {:provider_disconnected, ^request_pid}, 1_000

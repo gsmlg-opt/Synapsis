@@ -440,6 +440,7 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
   defp finish_job({:terminal, event}, %{messages: messages} = status, state) do
     root_status =
       cond do
+        event[:state] == :unknown_outcome -> :unknown_outcome
         event.type == :run_completed -> :completed
         match?({:ok, %{status: :confirmed}}, status[:cleanup]) -> :errored
         true -> :unknown_outcome
@@ -448,6 +449,7 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     state = project_root(state, root_status)
     notify(state, {:runtime_history, state.epoch, state.run_id, messages})
     event = event |> Map.put(:messages, messages) |> Map.put(:cleanup, status[:cleanup])
+    event = if status[:error], do: Map.put(event, :error, status.error), else: event
     state = %{state | root: nil}
 
     cond do
@@ -494,11 +496,15 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
 
   defp finish_job(:close, %{cleanup: result, history: history}, state) do
     failed = state.terminal_failure
-    owner_lost = state.error == :runtime_owner_lost
+
+    uncertain =
+      state.error == :runtime_owner_lost or state.roster[:recovery_required] == true or
+        get_in(state.roster, [:root, :status]) == :unknown_outcome
+
     state = %{state | closing: false, busy: false, pending: %{}, root: nil, error: :closed}
 
     state =
-      if match?({:ok, %{status: :confirmed}}, result) and not owner_lost,
+      if match?({:ok, %{status: :confirmed}}, result) and not uncertain,
         do: project_root(state, if(failed, do: :errored, else: :closed)),
         else:
           persist_roster(%{state | roster: unknown(state.roster), error: :cleanup_unconfirmed})
@@ -706,6 +712,7 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     host = %{
       run_id: run_id,
       session_id: state.session_id,
+      agent_id: context.session.agent,
       project_path: context.project_path,
       parent_agent: child?,
       session_epoch: state.epoch,
@@ -1008,11 +1015,17 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
 
   defp project_root(state, status) do
     root = %{run_id: state.run_id, namespace: state.store.namespace, status: status}
-    persist_roster(%{state | roster: Map.put(state.roster, :root, root)})
+    roster = Map.put(state.roster, :root, root)
+
+    roster =
+      if status == :unknown_outcome, do: Map.put(roster, :recovery_required, true), else: roster
+
+    persist_roster(%{state | roster: roster})
   end
 
   defp unknown(roster) do
     roster
+    |> Map.put(:recovery_required, true)
     |> Map.update(:agents, [], fn agents ->
       Enum.map(agents, fn row ->
         if row.status in @settled,

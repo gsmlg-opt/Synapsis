@@ -20,6 +20,8 @@ defmodule Synapsis.Tool.Registry do
   - `:enabled` (boolean) — overrides the module's `enabled?/0` callback.
   - `:availability_check` (zero-arity function) — optional runtime predicate;
     only an exact `true` result is available.
+  - `:runtime_dispatch` (module) — process registrations may provide an
+    `execute_runtime/5` callback that owns cancellable calls in the caller process.
   """
   use GenServer
   require Logger
@@ -110,6 +112,14 @@ defmodule Synapsis.Tool.Registry do
   end
 
   def runtime_available?(_entry), do: false
+
+  @doc "Whether a process registration supplies caller-owned runtime dispatch."
+  def runtime_process?({:process, pid, opts}) when is_pid(pid) and is_list(opts) do
+    module = opts[:runtime_dispatch]
+    is_atom(module) and not is_nil(module) and function_exported?(module, :execute_runtime, 5)
+  end
+
+  def runtime_process?(_entry), do: false
 
   @doc "Backward-compatible get returning a map format."
   def get(tool_name) do

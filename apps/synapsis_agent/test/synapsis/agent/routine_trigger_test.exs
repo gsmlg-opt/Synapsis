@@ -273,6 +273,10 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
 
     assert {:ok, running} = wait_for_run(dream.id, "running")
     assert :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{running.session_id}")
+
+    assert %{root: %{status: :running, run_id: native_run_id}} =
+             Synapsis.Session.Worker.snapshot(running.session_id).subagents
+
     send(request_pid, :respond)
 
     assert_receive {:dream_memory_stored,
@@ -289,11 +293,18 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
     assert Jason.encode!(second_request) =~ "Verify imported tools"
     assert Jason.encode!(second_request) =~ "saved"
     refute_receive {"permission_requests", _payload}, 100
+    refute_receive {"runtime_permissions", [_pending | _]}, 100
 
     assert [persisted] = Synapsis.Memory.list_semantic(scope: "agent", scope_id: agent_name)
     assert persisted.id == saved.id
     assert {:ok, completed} = wait_for_run(dream.id, "completed")
     assert completed.metadata["output"]["recent_summary"] == "Saved the release lesson"
+
+    assert %{root: %{status: :completed, run_id: ^native_run_id}} =
+             Synapsis.Session.Worker.snapshot(completed.session_id).subagents
+
+    assert {:ok, %{active_run_id: nil, queued_count: 0}} =
+             wait_for_status(daemon, &is_nil(&1.active_run_id))
   end
 
   @tag :tmp_dir
