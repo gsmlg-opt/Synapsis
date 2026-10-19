@@ -2,8 +2,9 @@ defmodule SynapsisServer.RuntimeConfigTest do
   use ExUnit.Case, async: false
 
   @runtime_config Path.expand("../../../../config/runtime.exs", __DIR__)
+  @build_config Path.expand("../../../../config/config.exs", __DIR__)
   @prod_config Path.expand("../../../../config/prod.exs", __DIR__)
-  @env_keys ~w(PHX_IP SECRET_KEY_BASE SYNAPSIS_ENCRYPTION_KEY)
+  @env_keys ~w(PHX_IP SECRET_KEY_BASE SYNAPSIS_ENCRYPTION_KEY SYNAPSIS_CONCORD_DATA_DIR)
 
   setup do
     original_env = Map.new(@env_keys, &{&1, System.get_env(&1)})
@@ -31,6 +32,43 @@ defmodule SynapsisServer.RuntimeConfigTest do
 
   test "enables the endpoint in production releases" do
     assert read_endpoint_config() |> Keyword.fetch!(:server)
+  end
+
+  @tag :tmp_dir
+  test "overrides packaged Concord paths on each boot while retaining store options", %{
+    tmp_dir: tmp_dir
+  } do
+    System.put_env("SYNAPSIS_CONCORD_DATA_DIR", Path.join(tmp_dir, "build-store"))
+    packaged_config = Config.Reader.read!(@build_config, env: :prod)
+    packaged_concord = Keyword.fetch!(packaged_config, :concord)
+
+    for boot <- ["first-boot", "second-boot"] do
+      data_dir = Path.join(tmp_dir, boot)
+      System.put_env("SYNAPSIS_CONCORD_DATA_DIR", data_dir)
+
+      runtime_config = Config.Reader.read!(@runtime_config, env: :prod)
+      boot_config = Config.Reader.merge(packaged_config, runtime_config)
+      concord = Keyword.fetch!(boot_config, :concord)
+      turso = Keyword.fetch!(concord, :turso)
+
+      assert concord[:data_dir] == data_dir
+      assert turso[:database] == Path.join(data_dir, "turso.db")
+
+      assert Map.new(Keyword.drop(concord, [:data_dir, :turso])) ==
+               Map.new(Keyword.drop(packaged_concord, [:data_dir, :turso]))
+
+      assert Map.new(Keyword.delete(turso, :database)) ==
+               Map.new(Keyword.delete(packaged_concord[:turso], :database))
+    end
+  end
+
+  test "retains packaged Concord defaults when no runtime directory is set" do
+    System.delete_env("SYNAPSIS_CONCORD_DATA_DIR")
+    packaged_config = Config.Reader.read!(@build_config, env: :prod)
+    runtime_config = Config.Reader.read!(@runtime_config, env: :prod)
+    boot_config = Config.Reader.merge(packaged_config, runtime_config)
+
+    assert boot_config[:concord] == packaged_config[:concord]
   end
 
   @tag :tmp_dir

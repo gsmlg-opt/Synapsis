@@ -251,6 +251,7 @@ jobs:
 
           curl --fail --silent --show-error http://127.0.0.1:4664/api/health >"$smoke_root/health.json"
           jq -e --arg version "$RELEASE_VERSION" '.ok == true and .version == $version' "$smoke_root/health.json"
+          test -s "$SYNAPSIS_CONCORD_DATA_DIR/turso.db"
 
           python3 - <<'PY'
           from html.parser import HTMLParser

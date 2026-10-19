@@ -6,7 +6,13 @@ import Config
 # configuration and secrets from environment variables or elsewhere.
 
 # ADR-006 C4: PostgreSQL removed — no Repo runtime config. Session/agent state is
-# in the embedded Concord store (configured in config.exs).
+# in the embedded Concord store (defaults configured in config.exs).
+
+if concord_data_dir = System.get_env("SYNAPSIS_CONCORD_DATA_DIR") do
+  config :concord,
+    data_dir: concord_data_dir,
+    turso: [database: Path.join(concord_data_dir, "turso.db")]
+end
 
 # Encryption key for provider API keys (AES-256-GCM)
 encryption_key =
