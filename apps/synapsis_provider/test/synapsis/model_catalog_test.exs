@@ -7,6 +7,29 @@ defmodule Synapsis.ModelCatalogTest do
     :ok
   end
 
+  test "runtime model selection accepts legacy providers without a catalog migration marker" do
+    cases = [
+      {%{}, nil},
+      {%{"available_models" => [%{"id" => "cached"}]}, "cached"},
+      {%{
+         "available_models" => [%{"id" => "cached"}],
+         "enabled_models" => ["enabled"]
+       }, "enabled"}
+    ]
+
+    for {{config, expected}, index} <- Enum.with_index(cases) do
+      assert {:ok, provider} =
+               Providers.create(%{
+                 name: "legacy-runtime-#{index}",
+                 type: "openai",
+                 config: config
+               })
+
+      assert provider.config["model_catalog_migrated"] == nil
+      assert Providers.first_runtime_model(provider) == expected
+    end
+  end
+
   test "configured models share provider identity and effective context with runtime admission" do
     {:ok, first} =
       Providers.create(%{
@@ -200,6 +223,16 @@ defmodule Synapsis.ModelCatalogTest do
   end
 
   test "migration retains explicit provider model lists and environment defaults" do
+    session_id = Ecto.UUID.generate()
+
+    assert :ok =
+             Synapsis.Session.Store.put_meta(session_id, %{
+               provider: "anthropic",
+               model: "saved-session"
+             })
+
+    on_exit(fn -> Synapsis.Session.Store.delete_session(session_id) end)
+
     previous = System.get_env("ANTHROPIC_MODEL")
     System.put_env("ANTHROPIC_MODEL", "environment-default")
 
@@ -218,13 +251,20 @@ defmodule Synapsis.ModelCatalogTest do
         }
       })
 
+    # Earlier umbrella apps may leave durable sessions for this named provider.
+    assert {:ok, sessions} = Synapsis.Session.Store.list_metas()
+
+    saved_models =
+      for session <- sessions,
+          (session[:provider] || session["provider"]) == "anthropic",
+          model = session[:model] || session["model"],
+          is_binary(model) and model != "",
+          do: model
+
     rows = Providers.configured_models()
 
-    assert Enum.sort(Enum.map(rows, & &1.model)) == [
-             "custom-model",
-             "environment-default",
-             "metadata-model"
-           ]
+    expected = ["custom-model", "environment-default", "metadata-model" | saved_models]
+    assert Enum.sort(Enum.map(rows, & &1.model)) == Enum.sort(Enum.uniq(expected))
 
     assert Enum.any?(rows, &(&1.model == "metadata-model" and &1.context_window == 8192))
   end

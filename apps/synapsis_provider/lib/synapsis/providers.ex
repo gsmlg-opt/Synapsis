@@ -449,7 +449,7 @@ defmodule Synapsis.Providers do
     {:ok, models} = Models.list(provider_id: provider.id, enabled: true)
 
     candidates =
-      if models == [] and not provider.config["model_catalog_migrated"] do
+      if models == [] and provider.config["model_catalog_migrated"] != true do
         case enabled_models(provider) do
           [] -> Enum.map(cached_models(provider), & &1.id)
           enabled -> enabled
