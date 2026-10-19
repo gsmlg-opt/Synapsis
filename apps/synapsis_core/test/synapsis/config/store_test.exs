@@ -68,11 +68,13 @@ defmodule Synapsis.Config.StoreTest do
     Store.put(:provider, %{id: "p1", name: "provider-one", type: "anthropic", config: %{}})
 
     path = Store.file_path(:provider)
-    assert File.read!(path) =~ ~s(id = "p1")
-    refute File.read!(path) =~ "config = {}"
+    assert {:ok, %{"providers" => [persisted]}} = Toml.decode(File.read!(path))
+    assert persisted["id"] == "p1"
+    refute Map.has_key?(persisted, "config")
 
     Store.reload(:provider)
     assert {:ok, entry} = Store.get(:provider, "p1")
+    assert entry["id"] == "p1"
     assert entry["name"] == "provider-one"
   end
 

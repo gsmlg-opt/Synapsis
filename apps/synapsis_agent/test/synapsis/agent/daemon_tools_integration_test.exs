@@ -357,6 +357,8 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
       Synapsis.Tool.Registry.register_process(tool_name, hanging,
         permission_level: :read,
         trust_annotations: true,
+        mcp_config_id: Ecto.UUID.generate(),
+        mcp_tool_name: "read",
         timeout: 25,
         max_retries: 0,
         description: "Hangs to exercise the existing tool timeout.",
@@ -404,12 +406,18 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
     assert {:ok, {:process, ^mcp_pid, opts}} = Synapsis.Tool.Registry.lookup(tool_name)
     assert opts[:runtime_dispatch] == Synapsis.MCP.Server
 
-    :ok =
-      Synapsis.Tool.Registry.register_process(
-        tool_name,
-        mcp_pid,
-        opts |> Keyword.put(:timeout, 500) |> Keyword.put(:max_retries, 2)
-      )
+    previous_refresh = Application.get_env(:synapsis_core, :mcp_refresh, :missing)
+
+    # Apply the test deadline to the registration produced by live discovery.
+    Application.put_env(
+      :synapsis_core,
+      :mcp_refresh,
+      {__MODULE__, :refresh_with_timeout, [tool_name]}
+    )
+
+    on_exit(fn ->
+      restore_application_env(:mcp_refresh, previous_refresh, :synapsis_core)
+    end)
 
     {daemon, _task_supervisor} = start_test_daemon()
 
@@ -425,6 +433,9 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
 
     assert_receive {:tool_provider_request, 1, first_request, request_pid}, 2_000
     assert Synapsis.Provider.ToolName.encode(tool_name) in tool_names(first_request)
+    assert {:ok, {:process, ^mcp_pid, refreshed_opts}} = Synapsis.Tool.Registry.lookup(tool_name)
+    assert refreshed_opts[:timeout] == 500
+    assert refreshed_opts[:max_retries] == 2
     assert {:ok, running} = wait_for_run(queued.id, "running")
     assert :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{running.session_id}")
     send(request_pid, :respond)
@@ -453,6 +464,20 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
     refute_receive {"runtime_permissions", [_pending | _]}, 100
     assert Process.alive?(Process.whereis(daemon))
     assert Process.alive?(mcp_pid)
+  end
+
+  def refresh_with_timeout(tool_name) do
+    result = Synapsis.MCP.refresh_all()
+    {:ok, {:process, pid, opts}} = Synapsis.Tool.Registry.lookup(tool_name)
+
+    :ok =
+      Synapsis.Tool.Registry.register_process(
+        tool_name,
+        pid,
+        opts |> Keyword.put(:timeout, 500) |> Keyword.put(:max_retries, 2)
+      )
+
+    result
   end
 
   defp controlled_tool_provider(tmp_dir, tool_name, input) do
