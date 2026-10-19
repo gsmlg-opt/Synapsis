@@ -9,6 +9,8 @@ defmodule Synapsis.Tool.CapabilityPolicy do
   alias Synapsis.Tool.Permission
   alias Synapsis.Tool.Permissions
 
+  @collaboration_tools ~w(spawn_agent send_message followup_task interrupt_agent list_agents wait_agent)
+
   @type tool_call :: %{required(:name) => String.t(), optional(:input) => map()}
   @type approval_request :: %{
           tool_name: String.t(),
@@ -51,6 +53,8 @@ defmodule Synapsis.Tool.CapabilityPolicy do
 
   @doc "Resolve permission level for a tool name."
   @spec permission_level(String.t()) :: atom()
+  def permission_level(tool_name) when tool_name in @collaboration_tools, do: :none
+
   def permission_level(tool_name) when is_binary(tool_name) do
     Permission.tool_permission_level(tool_name)
   rescue
@@ -121,11 +125,12 @@ defmodule Synapsis.Tool.CapabilityPolicy do
 
   defp override_decision(_, _, _), do: :no_match
 
-  defp normalize_override(v) when v in [:allow, :deny, :ask], do: v
+  defp normalize_override(v) when v in [:allow, :deny], do: v
+  defp normalize_override(v) when v in [:ask, :approval_required], do: :approval_required
   defp normalize_override("allow"), do: :allow
   defp normalize_override("deny"), do: :deny
-  defp normalize_override("ask"), do: :ask
-  defp normalize_override("requires_approval"), do: :ask
+  defp normalize_override("ask"), do: :approval_required
+  defp normalize_override("requires_approval"), do: :approval_required
   defp normalize_override(_), do: :deny
 
   defp glob_match?(pattern, tool_name, _input) do

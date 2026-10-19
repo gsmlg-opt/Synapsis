@@ -23,9 +23,11 @@ defmodule Synapsis.Agent.Runtime.ProviderMessages do
     end
   end
 
-  defp host_message(%{role: role, content: content})
+  defp host_message(%{role: role, content: content} = message)
        when role in [:system, :developer, :user, :assistant] do
     blocks = if is_binary(content), do: [%{type: :text, text: content}], else: content
+    calls = Enum.map(Map.get(message, :tool_calls, []), &Map.put(&1, :type, :tool_call))
+    blocks = blocks ++ calls
 
     with {:ok, parts} <- map_all(blocks, &host_part/1),
          do: {:ok, %{role: role, parts: parts}}
@@ -114,6 +116,14 @@ defmodule Synapsis.Agent.Runtime.ProviderMessages do
   end
 
   defp result_text(%{is_error: true}), do: {:ok, "Tool execution failed"}
+
+  defp result_text(result) when is_map(result) do
+    case Jason.encode(result) do
+      {:ok, text} -> {:ok, text}
+      _ -> unsupported("Tool result is not JSON encodable")
+    end
+  end
+
   defp result_text(_), do: unsupported("Tool result has no content")
 
   defp map_all(items, fun) when is_list(items) do

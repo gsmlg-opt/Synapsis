@@ -12,7 +12,7 @@
 
 ## NEVER DO
 
-1. **Never persist durable session state anywhere but the per-turn Concord snapshot** — the session process owns the live turn; at the turn boundary the whole turn is written as one atomic Concord transaction. Never write half a turn, and never rewrite the whole transcript.
+1. **Never rewrite the whole transcript** — the session process owns the live turn; completed history is appended as one atomic Concord snapshot. Native subagent execution also requires a separate acknowledged Concord execution journal for transitions, effects, outbox and admission facts; a transcript snapshot cannot authorize dispatch. See [session subagents](../architecture/08_SUBAGENTS.md).
 
 2. **Never make synchronous LLM calls** — Always stream async. Never block the caller.
 
@@ -32,9 +32,11 @@
 
 10. **Never assume provider response format** — Always pattern match with fallback. Providers change their SSE formats without warning.
 
+11. **Never advance two execution owners for one turn** — subagent-enabled turns delegate provider/tools exclusively to their root Conversation. Preserve exact inherited policy, invocation identity and unknown outcomes. Do not replay effects or revive old child handles after owner loss.
+
 ## ALWAYS DO
 
-1. **Always broadcast live, snapshot after** — Deltas broadcast via PubSub from process state; the durable per-turn snapshot to Concord follows fire-and-forget at the turn boundary. Readers get current/in-flight state from the process via `Session.Read.live_snapshot/1`, falling back to Concord when the process is down. On crash recovery, rehydrate from Concord's last turn, bump the epoch, and wait for input — never auto-rerun.
+1. **Always broadcast live, snapshot after** — Deltas broadcast via PubSub from process state; durable snapshots follow at the turn boundary in supervised tasks. Native subagent turns await the append acknowledgement before completing or admitting the next turn, and acknowledge execution intents before dispatch. Readers get current/in-flight state from the process via `Session.Read.live_snapshot/1`, falling back to Concord when the process is down. On crash recovery, rehydrate from Concord's last turn, bump the epoch, and wait for input — never auto-rerun.
 
 2. **Always use UUID for IDs** — No coordination needed. Never auto-increment.
 

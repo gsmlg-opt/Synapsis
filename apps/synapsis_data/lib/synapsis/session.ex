@@ -35,6 +35,10 @@ defmodule Synapsis.Session do
   @valid_statuses ~w(idle streaming tool_executing error)
   @meta_fields ~w(id title agent provider model status config debug inserted_at updated_at)a
 
+  @doc "Subagents are enabled unless the session explicitly opts out."
+  def subagents_enabled?(%{config: %{"subagents" => false}}), do: false
+  def subagents_enabled?(session) when is_map(session), do: true
+
   @doc "Build the durable `meta` map (atom keys) for Concord from a session."
   def to_meta(%__MODULE__{} = session, extra \\ %{}) do
     session

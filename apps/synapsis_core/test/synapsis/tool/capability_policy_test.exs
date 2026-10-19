@@ -123,6 +123,63 @@ defmodule Synapsis.Tool.CapabilityPolicyTest do
     end
   end
 
+  describe "capability approval overrides" do
+    test "native collaboration is orchestration while explicit overrides still apply" do
+      snapshot = PolicySnapshot.from_permission_mode("ask", session_id: "s1", attended?: false)
+
+      for name <-
+            ~w(spawn_agent send_message followup_task interrupt_agent list_agents wait_agent) do
+        assert :none = CapabilityPolicy.permission_level(name)
+
+        assert {:allow, %Grant{tool_name: ^name, permission_level: :none}} =
+                 CapabilityPolicy.evaluate(name, snapshot)
+
+        assert {:deny, _} =
+                 CapabilityPolicy.evaluate(name, %{
+                   snapshot
+                   | capability_overrides: %{name => :deny}
+                 })
+
+        assert {:deny, :approval_unavailable} =
+                 CapabilityPolicy.evaluate(name, %{
+                   snapshot
+                   | capability_overrides: %{name => :ask}
+                 })
+      end
+    end
+
+    test "ask aliases require attended approval and fail closed when unattended" do
+      for override <- [:ask, "ask", "requires_approval", :approval_required] do
+        snapshot =
+          PolicySnapshot.from_permission_mode("yolo",
+            session_id: "s1",
+            attended?: true,
+            capability_overrides: %{"spawn_agent" => override}
+          )
+
+        assert {:approval_required,
+                %{tool_name: "spawn_agent", reason: :capability_requires_approval}} =
+                 CapabilityPolicy.evaluate("spawn_agent", snapshot)
+
+        assert {:deny, :approval_unavailable} =
+                 CapabilityPolicy.evaluate("spawn_agent", %{snapshot | attended?: false})
+      end
+    end
+
+    test "explicit deny overrides remain denied with or without an operator" do
+      for decision <- [:deny, "deny"], attended? <- [true, false] do
+        snapshot =
+          PolicySnapshot.from_permission_mode("yolo",
+            session_id: "s1",
+            attended?: attended?,
+            capability_overrides: %{"spawn_agent" => decision}
+          )
+
+        assert {:deny, _} = CapabilityPolicy.evaluate("spawn_agent", snapshot)
+      end
+    end
+  end
+
   # silence unused warning for @levels in case we expand matrix later
   test "known levels enumerated" do
     assert :destructive in @levels

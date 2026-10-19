@@ -11,12 +11,23 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
     waiting? = user_questions != []
     active? = assigns.session_status in ~w(streaming tool_executing) or waiting?
     label = assistant_label(assigns.agent_config, assigns.agent_id)
+    session = Map.get(assigns, :current_session, %{})
+    subagents? = Synapsis.Session.subagents_enabled?(session)
+    roster = Map.get(assigns, :subagent_roster, %{})
+
+    recovery? =
+      roster[:recovery_required] == true or not is_nil(roster[:error]) or
+        get_in(roster, [:root, :status]) in [:unknown_outcome, "unknown_outcome"]
 
     %{
       messages:
         Enum.map(
           assigns.messages,
-          &message(&1, label, assigns.session_status == "idle" and not waiting?)
+          &message(
+            &1,
+            label,
+            assigns.session_status == "idle" and not waiting? and not subagents?
+          )
         ) ++
           live_messages(assigns, label, active?) ++
           Enum.map(assigns.queued_inputs, &queued_message/1) ++
@@ -35,11 +46,12 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
         active: active?
       },
       admission: %{
-        canSubmit: assigns.session_status in ~w(idle error streaming tool_executing),
+        canSubmit:
+          assigns.session_status in ~w(idle error streaming tool_executing) and not recovery?,
         allowWhileStreaming: true,
         sendLabel: if(active?, do: "Queue", else: "Send"),
         canSteer: active? and not waiting?,
-        canRetry: assigns.session_status == "error"
+        canRetry: assigns.session_status == "error" and not subagents?
       }
     }
   end

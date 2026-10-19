@@ -36,6 +36,27 @@ The agent runtime and persistence model accumulated three structural problems:
 
 ## Decision
 
+### 2026-10-19 amendment: native session subagents
+
+[Session subagents](../architecture/08_SUBAGENTS.md) provide the default execution owner:
+the Worker remains the session shell, while a real root Conversation exclusively
+executes provider/tools and a session-owned MultiAgent manager owns children.
+The graph reducer remains the execution path for sessions explicitly configured
+with `config["subagents"] = false`.
+
+Native execution requires an acknowledged Concord journal, separate from the
+transcript, for run transitions/effects/outbox, root admission and child admission
+intents/receipts. The data layer stores opaque aggregates with revision and
+incarnation CAS; runtime policy remains in the agent layer. Intent commits precede
+dispatch. They cannot use the fire-and-forget transcript contract below.
+
+The accepted user message is appended before prompting. At completion the native
+history suffix and metadata are appended atomically via `commit_turns/4` in a
+supervised task; terminal success and the next queued turn wait for its
+acknowledgement. Live deltas still broadcast first. Restart never replays effects
+or reconstructs children; unsettled root/child work becomes recovery-required,
+and completed saved child rows are historical.
+
 ### 1. Collapse Worker + Runner into one process; the engine becomes pure functions
 
 The graph engine (`Agent.Runtime.Runner`) stops being a GenServer and becomes a

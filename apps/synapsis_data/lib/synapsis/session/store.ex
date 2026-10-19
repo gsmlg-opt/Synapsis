@@ -177,6 +177,28 @@ defmodule Synapsis.Session.Store do
   end
 
   @doc """
+  Atomically append a turn's messages and metadata at a fixed durable offset.
+
+  The session process owns the offset. Recommitting the same turn is idempotent;
+  earlier transcript entries are never scanned or rewritten. Oversized batches
+  are rejected by Concord without splitting the atomic write.
+  """
+  def commit_turns(id, start_n, turn_maps, meta)
+      when is_binary(id) and is_integer(start_n) and start_n >= 0 and
+             is_list(turn_maps) and is_map(meta) do
+    puts =
+      turn_maps
+      |> Enum.with_index(start_n)
+      |> Enum.map(fn {turn, n} -> {turn_key(id, n), turn} end)
+
+    case KV.put_many(puts ++ [{meta_key(id), meta}], timeout: 5_000) do
+      {:ok, _results} -> :ok
+      :ok -> :ok
+      other -> normalize_error(other)
+    end
+  end
+
+  @doc """
   Replace the full ordered turn list for a session in one atomic batch: drops the
   existing `turns/*` and writes `turns/0..n-1` from `turn_maps`; session meta is
   untouched. Used by the message write path (a message == a turn).

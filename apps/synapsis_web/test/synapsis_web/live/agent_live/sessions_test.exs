@@ -315,6 +315,10 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
       assert_push_event(view, "clear_chat_input", %{})
 
+      assert_eventually(fn ->
+        Enum.any?(Sessions.get_messages(session.id), &(&1.role == "user"))
+      end)
+
       assert %Synapsis.Message{
                parts: [
                  %Synapsis.Part.Text{content: "describe"},
@@ -323,6 +327,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
              } = Enum.find(Sessions.get_messages(session.id), &(&1.role == "user"))
 
       assert data == png_image_payload()["data"]
+      assert_image_turn_completed(session)
       assert_receive {:image_provider_request, request}
       assert provider_request_has_image?(request)
     end
@@ -336,9 +341,14 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
       assert_push_event(view, "clear_chat_input", %{})
 
+      assert_eventually(fn ->
+        Enum.any?(Sessions.get_messages(session.id), &(&1.role == "user"))
+      end)
+
       assert %Synapsis.Message{parts: [%Synapsis.Part.Image{media_type: "image/png"}]} =
                Enum.find(Sessions.get_messages(session.id), &(&1.role == "user"))
 
+      assert_image_turn_completed(session)
       assert_receive {:image_provider_request, request}
       assert provider_request_has_image?(request)
     end
@@ -648,6 +658,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
     test "renders sent user message immediately before agent response", %{conn: conn} do
       bypass = Bypass.open()
       provider_name = "immediate_chat_#{System.unique_integer([:positive])}"
+      test_pid = self()
 
       :ok =
         Synapsis.Provider.Registry.register(provider_name, %{
@@ -659,6 +670,14 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       on_exit(fn -> Synapsis.Provider.Registry.unregister(provider_name) end)
 
       Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
+        send(test_pid, {:provider_waiting, self()})
+
+        receive do
+          :reply_now -> :ok
+        after
+          5_000 -> flunk("provider response was not released")
+        end
+
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.send_resp(200, """
@@ -685,11 +704,13 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       render_hook(view, "send_message", %{"value" => "show this immediately"})
 
       assert chat_json(view) =~ "show this immediately"
-      # The user message must be written before the agent responds.
-      # Don't assert exactly 1 message — on fast CI the assistant reply can
-      # already be written by the time we check.
+      assert_receive {:provider_waiting, provider_pid}, 1_000
+      assert chat_json(view) =~ "show this immediately"
+      # Native preparation acknowledges persistence before starting the provider.
       messages = Sessions.get_messages(session.id)
       assert Enum.any?(messages, &(&1.role == "user")), "expected a user message to be persisted"
+      refute Enum.any?(messages, &(&1.role == "assistant"))
+      send(provider_pid, :reply_now)
       assert_eventually(fn -> length(Sessions.get_messages(session.id)) >= 2 end)
     end
   end
@@ -766,6 +787,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       {:ok, session} =
         Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
 
+      assert {:ok, _} = Worker.set_subagents(session.id, false)
       {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
       send(view.pid, {"text_delta", %{text: "draft"}})
       render(view)
@@ -1545,6 +1567,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
   defp assert_eventually(_fun, 0), do: flunk("condition was not met before timeout")
 
   defp set_worker_running(session) do
+    assert {:ok, _session} = Worker.set_subagents(session.id, false)
     assert {:ok, _session} = SessionPersistence.update_session_status(session.id, "streaming")
     assert [{pid, _}] = Registry.lookup(Synapsis.Session.Registry, session.id)
 
@@ -1657,6 +1680,16 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
   defp provider_request_has_image?(request) do
     Enum.any?(request["messages"], fn message ->
       Enum.any?(message["content"], &(&1["type"] == "image"))
+    end)
+  end
+
+  defp assert_image_turn_completed(session) do
+    assert_eventually(fn ->
+      Enum.any?(Sessions.get_messages(session.id), fn message ->
+        message.role == "assistant" and
+          Enum.any?(message.parts, &match?(%Synapsis.Part.Text{content: "ack"}, &1))
+      end) and
+        get_in(Worker.snapshot(session.id), [:subagents, :root, :status]) == :completed
     end)
   end
 end

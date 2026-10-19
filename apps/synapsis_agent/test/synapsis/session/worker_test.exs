@@ -12,7 +12,15 @@ defmodule Synapsis.Session.WorkerTest do
   defp build_session(attrs) do
     %Session{}
     |> Session.changeset(
-      Map.merge(%{provider: "anthropic", model: "test-model", agent: "main"}, attrs)
+      Map.merge(
+        %{
+          provider: "anthropic",
+          model: "test-model",
+          agent: "main",
+          config: %{"subagents" => false}
+        },
+        attrs
+      )
     )
     |> Ecto.Changeset.apply_changes()
     |> Map.put(:id, Ecto.UUID.generate())
@@ -881,6 +889,7 @@ defmodule Synapsis.Session.WorkerTest do
 
       data = %Worker{
         session_id: "test",
+        session: %Session{config: %{"subagents" => false}},
         graph: graph,
         engine_node: :llm_stream,
         engine_state: %{},

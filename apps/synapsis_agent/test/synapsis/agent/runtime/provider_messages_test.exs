@@ -40,6 +40,38 @@ defmodule Synapsis.Agent.Runtime.ProviderMessagesTest do
              ])
   end
 
+  test "native collaboration results and separate assistant calls retain their identities" do
+    assert {:ok, [%{parts: [%ToolResult{tool_use_id: "spawn", content: content}]}]} =
+             ProviderMessages.to_host([
+               %{
+                 role: :tool,
+                 tool_call_id: "spawn",
+                 result: %{task_name: "/root/child", is_error: false}
+               }
+             ])
+
+    assert Jason.decode!(content)["task_name"] == "/root/child"
+
+    assert {:ok,
+            [
+              %{
+                parts: [
+                  %Text{content: "spawn"},
+                  %ToolUse{tool_use_id: "spawn", tool: "spawn_agent"}
+                ]
+              }
+            ]} =
+             ProviderMessages.to_host([
+               %{
+                 role: :assistant,
+                 content: "spawn",
+                 tool_calls: [
+                   %{id: "spawn", name: "spawn_agent", arguments: %{"message" => "work"}}
+                 ]
+               }
+             ])
+  end
+
   test "unsupported history fails explicitly" do
     assert {:error, _} = ProviderMessages.to_host([%{role: :user, content: [%{type: :audio}]}])
 

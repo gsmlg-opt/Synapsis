@@ -120,7 +120,8 @@ defmodule Synapsis.Session.ReleaseReadinessTest do
              Synapsis.Sessions.create(agent_name, %{
                agent: agent_name,
                provider: provider_name,
-               model: "golden-model"
+               model: "golden-model",
+               config: %{"subagents" => false}
              })
 
     on_exit(fn ->

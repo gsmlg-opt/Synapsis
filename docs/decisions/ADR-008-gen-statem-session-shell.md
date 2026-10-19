@@ -68,6 +68,15 @@ performs the same parking maneuver as boot and lands the machine in `:idle`.
 
 ## Consequences
 
+For the default [native subagent sessions](../architecture/08_SUBAGENTS.md), state is
+derived from the active Conversation and pending native interactions before the
+legacy graph fields. Normal prompts queue behind both native execution and its
+terminal persistence task, including assistant mode. Each adapter generation is
+fenced independently of the Worker's epoch. Steering routes to the current native
+Conversation; retry/regenerate/graph checkpoints are explicitly unavailable in
+this mode. Confirmed cancellation retires the generation; unconfirmed cleanup
+requires recovery.
+
 - New per-state policies (e.g. queueing prompts instead of rejecting,
   approval-specific timeouts) become single clauses on `handle_event/4`.
 - `Synapsis.Harness.Loop` and the harness Phase 4 docs are superseded by this

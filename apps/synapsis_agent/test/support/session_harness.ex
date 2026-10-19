@@ -57,7 +57,8 @@ defmodule Synapsis.Agent.TestSupport.SessionHarness do
       Synapsis.Sessions.create(agent_name, %{
         agent: agent_name,
         provider: provider.name,
-        model: "characterization-model"
+        model: "characterization-model",
+        config: Keyword.get(opts, :session_config, %{"subagents" => false})
       })
 
     %{

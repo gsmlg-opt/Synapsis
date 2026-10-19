@@ -4,6 +4,24 @@ defmodule Synapsis.SessionTest do
   alias Synapsis.Session
   alias Synapsis.Session.Store
 
+  describe "subagents_enabled?/1" do
+    test "enables new and older session shapes without an explicit opt-out" do
+      assert Session.subagents_enabled?(%Session{})
+      assert Session.subagents_enabled?(%Session{config: nil})
+      assert Session.subagents_enabled?(%{})
+      assert Session.subagents_enabled?(%{config: %{}})
+      assert Session.subagents_enabled?(%{config: %{"subagents" => true}})
+      assert Session.subagents_enabled?(Session.from_meta(%{id: Ecto.UUID.generate()}))
+    end
+
+    test "preserves an explicit opt-out through durable metadata" do
+      session = %Session{config: %{"subagents" => false}}
+      refute Session.subagents_enabled?(session)
+      refute Session.subagents_enabled?(%{config: %{"subagents" => false}})
+      refute Session.subagents_enabled?(Session.from_meta(Session.to_meta(session)))
+    end
+  end
+
   describe "changeset/2" do
     test "valid with required agent-owned fields" do
       cs =
