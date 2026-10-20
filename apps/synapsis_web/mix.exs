@@ -38,7 +38,7 @@ defmodule SynapsisWeb.MixProject do
       {:phoenix, "~> 1.8.15"},
       {:phoenix_html, "~> 4.2"},
       {:phoenix_live_view, "~> 1.2.12"},
-      {:phoenix_duskmoon, "~> 9.16.10"},
+      {:phoenix_duskmoon, "~> 10.0"},
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.4"},
       {:duskmoon_bundler_runtime, "~> 10.0.1"},
