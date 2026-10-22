@@ -20,6 +20,7 @@ defmodule Synapsis.Provider.Transport.OpenAI do
 
     url = models_url(base_url, config)
 
+    # TODO(upstream): gsmlg-opt/backplane#73 - distinguish unavailable auth state from HTTP 401.
     case Req.get(url, headers: headers, receive_timeout: 5_000, retry: false) do
       {:ok, %{status: 200, body: %{"data" => models}}} ->
         {:ok,
@@ -27,7 +28,8 @@ defmodule Synapsis.Provider.Transport.OpenAI do
            %{
              id: m["id"],
              name: m["name"] || m["id"],
-             context_window: m["context_length"] || m["context_window"] || 128_000
+             context_window:
+               m["context_length"] || m["context_window"] || default_context_window(m["id"])
            }
          end)}
 
@@ -41,6 +43,13 @@ defmodule Synapsis.Provider.Transport.OpenAI do
 
   @doc "Default base URL for OpenAI API."
   def default_base_url, do: @default_base_url
+
+  defp default_context_window(model) do
+    case Synapsis.Provider.ModelRegistry.get(model) do
+      {:ok, metadata} -> metadata.context_window
+      {:error, :unknown} -> 256_000
+    end
+  end
 
   defp models_url(base_url, config) do
     base_url = String.trim_trailing(to_string(base_url), "/")

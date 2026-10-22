@@ -8,7 +8,7 @@ defmodule Synapsis.ModelConfig do
     field(:provider_id, :binary_id)
     field(:model, :string)
     field(:name, :string)
-    field(:context_window, :integer)
+    field(:context_window, :integer, default: 256_000)
     field(:enabled, :boolean, default: true)
   end
 

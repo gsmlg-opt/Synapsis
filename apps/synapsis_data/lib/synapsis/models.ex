@@ -59,7 +59,7 @@ defmodule Synapsis.Models do
               provider_id: provider_id,
               model: model,
               name: value(candidate, :name),
-              context_window: value(candidate, :context_window),
+              context_window: value(candidate, :context_window) || %ModelConfig{}.context_window,
               enabled: value(candidate, :enabled, true)
             })
         end

@@ -230,7 +230,7 @@ defmodule Synapsis.Providers do
   defp static_context_window(model) do
     case Synapsis.Provider.ModelRegistry.get(model) do
       {:ok, metadata} -> metadata.context_window
-      {:error, :unknown} -> 128_000
+      {:error, :unknown} -> 256_000
     end
   end
 
@@ -472,7 +472,7 @@ defmodule Synapsis.Providers do
     %{
       id: id,
       name: model[:name] || id,
-      context_window: model[:context_window] || 128_000
+      context_window: positive_context(model[:context_window], id)
     }
   end
 
@@ -480,7 +480,7 @@ defmodule Synapsis.Providers do
     %{
       id: id,
       name: model["name"] || id,
-      context_window: model["context_window"] || 128_000
+      context_window: positive_context(model["context_window"], id)
     }
   end
 

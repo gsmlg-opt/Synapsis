@@ -23,7 +23,8 @@ defmodule Synapsis.Provider.Transport.AnthropicTest do
           Jason.encode!(%{
             "data" => [
               %{"id" => "claude-sonnet", "display_name" => "Claude Sonnet"},
-              %{"id" => "compatible-model", "context_length" => 64_000}
+              %{"id" => "compatible-model", "context_length" => 64_000},
+              %{"id" => "claude-sonnet-4-6"}
             ]
           })
         )
@@ -31,7 +32,12 @@ defmodule Synapsis.Provider.Transport.AnthropicTest do
 
       config = %{api_key: "test-api-key", base_url: "http://localhost:#{port}"}
       assert {:ok, models} = Anthropic.fetch_models(config)
-      assert [%{id: "claude-sonnet", name: "Claude Sonnet"}, %{id: "compatible-model"}] = models
+
+      assert [
+               %{id: "claude-sonnet", name: "Claude Sonnet", context_window: 256_000},
+               %{id: "compatible-model", context_window: 64_000},
+               %{id: "claude-sonnet-4-6", context_window: 200_000}
+             ] = models
     end
 
     test "uses /models when base_url already includes /v1", %{bypass: bypass, port: port} do

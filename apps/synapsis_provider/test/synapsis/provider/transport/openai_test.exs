@@ -19,7 +19,8 @@ defmodule Synapsis.Provider.Transport.OpenAITest do
             "data" => [
               %{"id" => "gpt-4o", "context_length" => 128_000},
               %{"id" => "gpt-4o-mini", "context_length" => 128_000},
-              %{"id" => "gpt-3.5-turbo"}
+              %{"id" => "unknown-model"},
+              %{"id" => "gpt-4.1"}
             ]
           })
         )
@@ -27,15 +28,16 @@ defmodule Synapsis.Provider.Transport.OpenAITest do
 
       config = %{api_key: "test-key", base_url: "http://localhost:#{port}"}
       assert {:ok, models} = OpenAI.fetch_models(config)
-      assert length(models) == 3
+      assert length(models) == 4
 
       gpt4o = Enum.find(models, &(&1.id == "gpt-4o"))
       assert gpt4o.name == "gpt-4o"
       assert gpt4o.context_window == 128_000
 
-      # Model without context_length defaults to 128_000
-      turbo = Enum.find(models, &(&1.id == "gpt-3.5-turbo"))
-      assert turbo.context_window == 128_000
+      unknown = Enum.find(models, &(&1.id == "unknown-model"))
+      assert unknown.context_window == 256_000
+      known = Enum.find(models, &(&1.id == "gpt-4.1"))
+      assert known.context_window == 1_047_576
     end
 
     test "sends Authorization header with api_key", %{bypass: bypass, port: port} do

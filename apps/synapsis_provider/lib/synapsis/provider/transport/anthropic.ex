@@ -58,7 +58,15 @@ defmodule Synapsis.Provider.Transport.Anthropic do
     %{
       id: id,
       name: model["display_name"] || model["name"] || id,
-      context_window: model["context_length"] || model["context_window"] || 200_000
+      context_window:
+        model["context_length"] || model["context_window"] || default_context_window(id)
     }
+  end
+
+  defp default_context_window(model) do
+    case Synapsis.Provider.ModelRegistry.get(model) do
+      {:ok, metadata} -> metadata.context_window
+      {:error, :unknown} -> 256_000
+    end
   end
 end

@@ -5,11 +5,35 @@ defmodule Synapsis.ModelsTest do
 
   setup do
     clear_config_store(:model)
+    clear_config_store(:provider)
+    on_exit(fn -> clear_config_store(:provider) end)
     :ok
   end
 
+  test "new models default to 256k without changing explicit or imported contexts" do
+    provider_id = provider_id()
+    assert {:ok, default} = Models.create(%{provider_id: provider_id, model: "default"})
+    assert default.context_window == 256_000
+
+    assert {:ok, [imported]} = Models.import(provider_id, [%{id: "unspecified"}])
+    assert imported.context_window == 256_000
+
+    assert {:ok, explicit} =
+             Models.create(%{
+               provider_id: provider_id,
+               model: "explicit",
+               context_window: 128_000
+             })
+
+    assert {:ok, [^explicit]} = Models.import(provider_id, [%{id: "explicit"}])
+    assert :ok = Store.reload(:model)
+    assert {:ok, ^default} = Models.get(default.id)
+    assert {:ok, ^imported} = Models.get(imported.id)
+    assert {:ok, ^explicit} = Models.get(explicit.id)
+  end
+
   test "catalog records round-trip through models.toml with stable identity" do
-    provider_id = Ecto.UUID.generate()
+    provider_id = provider_id()
 
     assert {:ok, model} =
              Models.create(%{provider_id: provider_id, model: "manual", context_window: 32_768})
@@ -27,7 +51,7 @@ defmodule Synapsis.ModelsTest do
 
   test "updates keep the stable catalog ID" do
     {:ok, model} =
-      Models.create(%{provider_id: Ecto.UUID.generate(), model: "original", context_window: 4096})
+      Models.create(%{provider_id: provider_id(), model: "original", context_window: 4096})
 
     assert {:ok, updated} = Models.update(model, %{id: Ecto.UUID.generate(), model: "renamed"})
     assert updated.id == model.id
@@ -48,15 +72,15 @@ defmodule Synapsis.ModelsTest do
   end
 
   test "raw model IDs are unique within a provider and independent across providers" do
-    attrs = %{provider_id: Ecto.UUID.generate(), model: "shared", context_window: 4096}
+    attrs = %{provider_id: provider_id(), model: "shared", context_window: 4096}
     assert {:ok, _} = Models.create(attrs)
     assert {:error, changeset} = Models.create(attrs)
     assert %{model: ["has already been taken for this provider"]} = errors_on(changeset)
-    assert {:ok, _} = Models.create(%{attrs | provider_id: Ecto.UUID.generate()})
+    assert {:ok, _} = Models.create(%{attrs | provider_id: provider_id()})
   end
 
   test "typed store rejects invalid raw models and duplicate provider/model identities" do
-    provider_id = Ecto.UUID.generate()
+    provider_id = provider_id()
 
     attrs = %{
       "id" => Ecto.UUID.generate(),
@@ -73,7 +97,7 @@ defmodule Synapsis.ModelsTest do
   end
 
   test "repeated import preserves context, disabled state, display name and IDs" do
-    provider_id = Ecto.UUID.generate()
+    provider_id = provider_id()
     candidates = [%{id: "remote", name: "Remote", context_window: 32_768}]
     assert {:ok, [model]} = Models.import(provider_id, candidates)
 
@@ -87,5 +111,11 @@ defmodule Synapsis.ModelsTest do
 
     assert same == edited
     assert {:ok, [^same]} = Models.list(provider_id: provider_id)
+  end
+
+  defp provider_id do
+    id = Ecto.UUID.generate()
+    assert {:ok, _} = Store.put(:provider, %{"id" => id, "name" => "provider-" <> id})
+    id
   end
 end

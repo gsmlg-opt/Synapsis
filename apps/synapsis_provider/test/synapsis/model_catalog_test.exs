@@ -7,6 +7,39 @@ defmodule Synapsis.ModelCatalogTest do
     :ok
   end
 
+  test "missing contexts use 256k while explicit and known registry capacities survive" do
+    {:ok, provider} =
+      Providers.create(%{
+        name: "context-defaults",
+        type: "openai",
+        config: %{
+          "available_models" => [
+            %{"id" => "missing-context"},
+            %{"id" => "explicit-context", "context_window" => 128_000},
+            %{"id" => "gpt-4o"}
+          ]
+        }
+      })
+
+    assert [
+             %{id: "missing-context", context_window: 256_000},
+             %{id: "explicit-context", context_window: 128_000},
+             %{id: "gpt-4o", context_window: 128_000}
+           ] = Providers.cached_models(provider)
+
+    assert [%{context_window: 256_000}] =
+             Providers.cached_models(%{
+               "config" => %{"available_models" => [%{id: "atom-context"}]}
+             })
+
+    Providers.configured_models()
+    assert Providers.model_context_window(provider.name, "missing-context") == 256_000
+    assert Providers.model_context_window(provider.name, "explicit-context") == 128_000
+    assert Providers.model_context_window(provider.name, "gpt-4o") == 128_000
+    assert Providers.model_context_window(provider.name, "unknown-context") == 256_000
+    assert Providers.model_context_window(provider.name, "claude-sonnet-4-6") == 200_000
+  end
+
   test "runtime model selection accepts legacy providers without a catalog migration marker" do
     cases = [
       {%{}, nil},
@@ -287,7 +320,7 @@ defmodule Synapsis.ModelCatalogTest do
 
     rows = Providers.configured_models()
     assert Enum.any?(rows, &(&1.model == "saved-context" and &1.context_window == 16384))
-    assert Enum.any?(rows, &(&1.model == "invalid-context" and &1.context_window == 128_000))
+    assert Enum.any?(rows, &(&1.model == "invalid-context" and &1.context_window == 256_000))
   end
 
   test "runtime config carries authoritative provider identity for signed history affinity" do
