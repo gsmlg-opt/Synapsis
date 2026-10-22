@@ -2,6 +2,33 @@ defmodule SynapsisWeb.SkillLive.IndexTest do
   use SynapsisWeb.ConnCase
   import SynapsisWeb.ReactFormHelpers
 
+  test "an open source picker refreshes providers added and deleted elsewhere", %{conn: conn} do
+    {:ok, view, _} = live(conn, ~p"/settings/skills")
+
+    {:ok, provider} =
+      Synapsis.Providers.create(%{
+        name: "live-source-#{System.unique_integer([:positive])}",
+        type: "openai",
+        preset: "backplane",
+        base_url: "https://backplane.example.test/v1"
+      })
+
+    Phoenix.PubSub.broadcast(Synapsis.PubSub, "providers:catalog", {:provider_catalog_changed})
+
+    assert has_element?(
+             view,
+             "[data-form-id='skill-source-form'] [data-dm-react-field*='#{provider.id}']"
+           )
+
+    assert {:ok, _} = Synapsis.Providers.delete(provider.id)
+    Phoenix.PubSub.broadcast(Synapsis.PubSub, "providers:catalog", {:provider_catalog_changed})
+
+    refute has_element?(
+             view,
+             "[data-form-id='skill-source-form'] [data-dm-react-field*='#{provider.id}']"
+           )
+  end
+
   setup do
     Synapsis.DataCase.clear_config_store(:skill)
     :ok

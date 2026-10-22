@@ -69,6 +69,103 @@ defmodule Synapsis.MCPTest do
 
   defp handle(conn, _notification), do: Plug.Conn.resp(conn, 202, "")
 
+  test "provider deletion stops linked clients and purges their discovered tools", %{
+    bypass: bypass
+  } do
+    name = "provider-cleanup-#{System.unique_integer([:positive])}"
+
+    {:ok, provider} =
+      Synapsis.Providers.create(%{
+        name: name,
+        type: "openai",
+        preset: "backplane",
+        base_url: "http://localhost:#{bypass.port}/v1"
+      })
+
+    {:ok, linked} =
+      MCPConfigs.create(%{
+        name: name,
+        provider_id: provider.id,
+        transport: "streamable_http",
+        url: "http://localhost:#{bypass.port}/mcp"
+      })
+
+    {:ok, independent} =
+      MCPConfigs.create(%{
+        name: name <> "-independent",
+        transport: "streamable_http",
+        url: "http://localhost:#{bypass.port}/mcp"
+      })
+
+    on_exit(fn ->
+      Synapsis.MCP.stop(linked.name)
+      Synapsis.MCP.stop(independent.name)
+      MCPConfigs.delete(independent)
+      Synapsis.Providers.delete(provider.id)
+    end)
+
+    {:ok, linked_pid} = Synapsis.MCP.start(linked)
+    {:ok, independent_pid} = Synapsis.MCP.start(independent)
+    assert :ok = Synapsis.MCP.Server.await_ready(linked_pid)
+    assert :ok = Synapsis.MCP.Server.await_ready(independent_pid)
+    assert {:ok, _} = Registry.lookup("mcp:#{name}:echo")
+
+    assert {:ok, _} = Synapsis.Providers.delete(provider.id)
+    refute Process.alive?(linked_pid)
+    assert {:error, :not_found} = Registry.lookup("mcp:#{name}:echo")
+    assert MCPConfigs.get(linked.id) == nil
+    assert Process.alive?(independent_pid)
+    assert {:ok, _} = Registry.lookup("mcp:#{independent.name}:echo")
+  end
+
+  test "a partially failed provider deletion still cleans clients already removed from config", %{
+    bypass: bypass
+  } do
+    name = "partial-cleanup-#{System.unique_integer([:positive])}"
+
+    {:ok, provider} =
+      Synapsis.Providers.create(%{
+        name: name,
+        type: "openai",
+        preset: "backplane",
+        base_url: "http://localhost:#{bypass.port}/v1"
+      })
+
+    {:ok, config} =
+      MCPConfigs.create(%{
+        name: name,
+        provider_id: provider.id,
+        transport: "streamable_http",
+        url: "http://localhost:#{bypass.port}/mcp"
+      })
+
+    {:ok, _} =
+      Store.put(:backplane, %{
+        "id" => Ecto.UUID.generate(),
+        "name" => name,
+        "provider_id" => provider.id
+      })
+
+    {:ok, pid} = Synapsis.MCP.start(config)
+    assert :ok = Synapsis.MCP.Server.await_ready(pid)
+
+    on_exit(fn ->
+      File.chmod(Store.file_path(:backplane), 0o600)
+      Synapsis.MCP.stop(name)
+      Synapsis.Providers.delete(provider.id)
+    end)
+
+    File.chmod!(Store.file_path(:backplane), 0o400)
+
+    assert {:error, _} = Synapsis.Providers.delete(provider.id)
+    refute Process.alive?(pid)
+    assert MCPConfigs.get(config.id) == nil
+    assert {:error, :not_found} = Registry.lookup("mcp:#{name}:echo")
+    assert {:ok, _} = Synapsis.Providers.get(provider.id)
+    File.chmod!(Store.file_path(:backplane), 0o600)
+    assert {:ok, _} = Synapsis.Providers.delete(provider.id)
+  end
+
   test "start, restart resets tools, stop removes them", %{bypass: bypass} do
     name = "facade_#{System.unique_integer([:positive])}"
 

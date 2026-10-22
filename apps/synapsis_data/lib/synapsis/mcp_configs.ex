@@ -141,7 +141,12 @@ defmodule Synapsis.MCPConfigs do
   defp provider_available?(nil), do: true
 
   defp provider_available?(id) do
-    match?({:ok, %{"enabled" => true}}, Store.get(:provider, id))
+    with {:ok, %{"enabled" => true} = provider} <- Store.get(:provider, id) do
+      is_nil(provider["credential_id"]) or
+        match?({:ok, _}, Synapsis.Credentials.resolve(provider["credential_id"]))
+    else
+      _ -> false
+    end
   end
 
   defp source_connection_available?(connection, surface) do
@@ -210,7 +215,12 @@ defmodule Synapsis.MCPConfigs do
   defp persist(%Ecto.Changeset{valid?: true} = changeset) do
     record = changeset |> Ecto.Changeset.apply_changes() |> ensure_id()
 
-    case Store.put(@store_type, to_store_map(record)) do
+    result =
+      if changeset.data.id,
+        do: Store.replace_existing(@store_type, record.id, to_store_map(record)),
+        else: Store.put(@store_type, to_store_map(record))
+
+    case result do
       :ok -> {:ok, record}
       {:ok, _} -> {:ok, record}
       error -> error
@@ -223,6 +233,8 @@ defmodule Synapsis.MCPConfigs do
   defp ensure_id(%MCPConfig{} = r), do: r
 
   defp to_struct(map) do
+    map = decode_backplane_tools(map)
+
     %MCPConfig{}
     |> MCPConfig.changeset(map)
     |> Ecto.Changeset.apply_changes()
@@ -230,6 +242,36 @@ defmodule Synapsis.MCPConfigs do
   end
 
   defp put_id(record, map), do: %{record | id: map["id"] || record.id}
+
+  # JSON schemas can contain nulls, which TOML cannot represent.
+  defp encode_backplane_tools(config) do
+    case Map.get(config, "backplane_tools", Map.get(config, :backplane_tools)) do
+      tools when is_list(tools) ->
+        config
+        |> Map.drop(["backplane_tools", :backplane_tools])
+        |> Map.put("backplane_tools_json", Jason.encode!(tools))
+
+      _other ->
+        config
+    end
+  end
+
+  defp decode_backplane_tools(%{"config" => %{"backplane_tools_json" => json} = config} = map)
+       when is_binary(json) do
+    case Jason.decode(json) do
+      {:ok, tools} when is_list(tools) ->
+        Map.put(
+          map,
+          "config",
+          config |> Map.delete("backplane_tools_json") |> Map.put("backplane_tools", tools)
+        )
+
+      _invalid ->
+        map
+    end
+  end
+
+  defp decode_backplane_tools(map), do: map
 
   defp to_store_map(%MCPConfig{} = r) do
     %{
@@ -243,7 +285,7 @@ defmodule Synapsis.MCPConfigs do
       "env" => r.env || %{},
       "url" => r.url,
       "headers" => r.headers || %{},
-      "config" => r.config || %{}
+      "config" => encode_backplane_tools(r.config || %{})
     }
     |> Enum.reject(fn {_k, v} -> is_nil(v) end)
     |> Map.new()

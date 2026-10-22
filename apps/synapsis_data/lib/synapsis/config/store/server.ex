@@ -49,6 +49,11 @@ defmodule Synapsis.Config.Store.Server do
     GenServer.call(via(type), {:merge_existing, id, attrs})
   end
 
+  @spec replace_existing(atom(), String.t(), map()) :: {:ok, map()} | {:error, term()}
+  def replace_existing(type, id, attrs) do
+    GenServer.call(via(type), {:replace_existing, id, attrs})
+  end
+
   @spec delete(atom(), String.t()) :: :ok | {:error, term()}
   def delete(type, id) do
     GenServer.call(via(type), {:delete, id})
@@ -108,6 +113,14 @@ defmodule Synapsis.Config.Store.Server do
     else
       nil -> {:reply, {:error, :missing_id}, state}
       {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call({:replace_existing, id, attrs}, from, state) do
+    if :ets.member(state.table, id) do
+      handle_call({:put, attrs |> atomize_keys() |> Map.put(:id, id)}, from, state)
+    else
+      {:reply, {:error, :not_found}, state}
     end
   end
 
@@ -319,7 +332,11 @@ defmodule Synapsis.Config.Store.Server do
   end
 
   defp encode_toml_value(map) when is_map(map) do
-    pairs = Enum.map_join(map, ", ", fn {k, v} -> "#{k} = #{encode_toml_value(v)}" end)
+    pairs =
+      Enum.map_join(map, ", ", fn {k, v} ->
+        "#{inspect(to_string(k))} = #{encode_toml_value(v)}"
+      end)
+
     "{#{pairs}}"
   end
 

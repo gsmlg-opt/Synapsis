@@ -368,6 +368,7 @@ defmodule SynapsisWeb.CoreComponents do
   def settings_sidebar(assigns) do
     items = [
       %{to: ~p"/settings", icon: "theme-light-dark", label: "Appearance"},
+      %{to: ~p"/settings/credentials", icon: "key", label: "Credentials"},
       %{to: ~p"/settings/providers", icon: "cloud", label: "Providers"},
       %{to: ~p"/settings/models", icon: "tune", label: "Models"},
       %{to: ~p"/settings/memory", icon: "brain", label: "Memory"},

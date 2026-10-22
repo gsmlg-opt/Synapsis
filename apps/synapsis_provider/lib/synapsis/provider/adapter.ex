@@ -56,7 +56,8 @@ defmodule Synapsis.Provider.Adapter do
   def stream({:error, error}, _config, _opts), do: {:error, error}
 
   def stream(request, config, opts) do
-    with :ok <- ensure_model_runtime_available(request, config) do
+    with {:ok, config} <- Synapsis.Providers.refresh_runtime_auth(config),
+         :ok <- ensure_model_runtime_available(request, config) do
       caller = self()
       transport_type = resolve_transport_type(config[:type] || config["type"])
       {request, tool_aliases} = ToolName.pop_aliases(request)
@@ -85,6 +86,11 @@ defmodule Synapsis.Provider.Adapter do
 
   @doc "List available models for the given provider config."
   def models(config) do
+    with {:ok, config} <- Synapsis.Providers.refresh_runtime_auth(config),
+         do: discover_models(config)
+  end
+
+  defp discover_models(config) do
     transport_type = resolve_transport_type(config[:type] || config["type"])
     base_url = config[:base_url] || config["base_url"] || ""
 
@@ -145,7 +151,8 @@ defmodule Synapsis.Provider.Adapter do
   def complete({:error, error}, _config), do: {:error, error}
 
   def complete(request, config) do
-    with :ok <- ensure_model_runtime_available(request, config) do
+    with {:ok, config} <- Synapsis.Providers.refresh_runtime_auth(config),
+         :ok <- ensure_model_runtime_available(request, config) do
       transport_type = resolve_transport_type(config[:type] || config["type"])
       {request, _tool_aliases} = ToolName.pop_aliases(request)
 

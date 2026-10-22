@@ -9,7 +9,10 @@ defmodule SynapsisWeb.ProviderLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, providers: [], page_title: "Providers")}
+    if connected?(socket), do: Synapsis.Providers.subscribe()
+
+    {:ok, credentials} = Synapsis.Credentials.list()
+    {:ok, assign(socket, providers: [], credentials: credentials, page_title: "Providers")}
   end
 
   @impl true
@@ -51,6 +54,8 @@ defmodule SynapsisWeb.ProviderLive.Index do
     {:noreply, socket |> reset_react_form("create-provider-form") |> assign(selected_preset: nil)}
   end
 
+  def handle_event("change_provider_form", _params, socket), do: {:noreply, socket}
+
   def handle_event("create_provider", params, socket) do
     preset = socket.assigns.selected_preset
 
@@ -64,16 +69,9 @@ defmodule SynapsisWeb.ProviderLive.Index do
           do: params["base_url"],
           else: preset.base_url
         ),
-      api_key_encrypted: params["api_key"]
+      credential_id:
+        if(preset.name == "openai-sub", do: nil, else: blank_to_nil(params["credential_id"]))
     }
-
-    # Do not persist blank credentials; keyless presets omit the field.
-    attrs =
-      if attrs.api_key_encrypted in [nil, ""] do
-        Map.delete(attrs, :api_key_encrypted)
-      else
-        attrs
-      end
 
     case Synapsis.Providers.create(attrs) do
       {:ok, provider} ->
@@ -119,23 +117,60 @@ defmodule SynapsisWeb.ProviderLive.Index do
     end
   end
 
+  @impl true
+  def handle_info({:provider_catalog_changed}, socket) do
+    {:ok, providers} = Synapsis.Providers.list()
+    {:ok, credentials} = Synapsis.Credentials.list()
+    {:noreply, assign(socket, providers: providers, credentials: credentials)}
+  end
+
+  defp blank_to_nil(value) when value in [nil, ""], do: nil
+  defp blank_to_nil(value), do: value
+
   defp maybe_refresh_models_on_create(provider, preset) do
     if preset.custom or Map.get(preset, :discover_models, false) do
       case Synapsis.Providers.refresh_models(provider.id) do
-        {:ok, updated} -> {updated, "Provider created and models loaded"}
-        {:error, _reason} -> {provider, "Provider created; model loading failed"}
+        {:ok, updated} ->
+          {updated, "Provider created; model suggestions loaded. Import models in Manage Models."}
+
+        {:error, _reason} ->
+          {provider, "Provider created; model loading failed"}
       end
     else
       {provider, "Provider created"}
     end
   end
 
+  defp new_provider_values(nil), do: %{"name" => "", "base_url" => "", "credential_id" => ""}
+
+  defp new_provider_values(preset) do
+    %{"name" => preset.name, "base_url" => preset.base_url, "credential_id" => ""}
+  end
+
   @impl true
   def render(assigns) do
+    provider_values =
+      react_form_draft(assigns, "create-provider-form") ||
+        new_provider_values(assigns.selected_preset)
+
+    credential_options = [
+      {"", "No credential"} | Enum.map(assigns.credentials, &{&1.id, &1.name})
+    ]
+
+    selected_id = provider_values["credential_id"]
+
+    credential_options =
+      if selected_id not in [nil, ""] and
+           not Enum.any?(assigns.credentials, &(&1.id == selected_id)),
+         do: credential_options ++ [{selected_id, "Credential unavailable"}],
+         else: credential_options
+
     assigns =
       assign(assigns,
         presets: Synapsis.Providers.preset_providers(),
-        custom_presets: @custom_presets
+        custom_presets: @custom_presets,
+        provider_values: provider_values,
+        credential_options: credential_options
       )
 
     ~H"""
@@ -177,15 +212,10 @@ defmodule SynapsisWeb.ProviderLive.Index do
             <.react_form
               for={to_form(%{})}
               id="create-provider-form"
-              values={
-                %{
-                  "name" => @selected_preset.name,
-                  "base_url" => @selected_preset.base_url,
-                  "api_key" => ""
-                }
-              }
+              values={@provider_values}
               draft={react_form_draft(assigns, "create-provider-form")}
-              structure={@selected_preset}
+              structure={[@selected_preset, @credential_options]}
+              phx-change="change_provider_form"
               phx-submit="create_provider"
               class="space-y-3"
             >
@@ -194,7 +224,7 @@ defmodule SynapsisWeb.ProviderLive.Index do
                 id="provider-name"
                 type="text"
                 name="name"
-                value={@selected_preset.name}
+                value={@provider_values["name"]}
                 placeholder="Unique name for this provider"
                 label="Name"
                 required
@@ -205,7 +235,7 @@ defmodule SynapsisWeb.ProviderLive.Index do
                   id="provider-base-url"
                   type="text"
                   name="base_url"
-                  value={@selected_preset.base_url}
+                  value={@provider_values["base_url"]}
                   placeholder="https://api.example.com/v1"
                   label="Base URL"
                   required
@@ -214,8 +244,8 @@ defmodule SynapsisWeb.ProviderLive.Index do
                 <.readonly_field label="Base URL" value={@selected_preset.base_url} />
               <% end %>
               <.dm_alert :if={@selected_preset.name == "backplane"} variant="info">
-                Production requires an access token. For local development, use
-                http://localhost:4220/v1 and leave the token empty.
+                Use http://localhost:4220/v1 for a local Backplane. Choose No credential
+                only when that server has authentication disabled. HTTP 401 means a valid token is required.
               </.dm_alert>
               <%= if @selected_preset.name == "openai-sub" do %>
                 <div class="bg-info/10 border border-info/30 rounded-lg px-3 py-2 text-sm text-info">
@@ -223,23 +253,16 @@ defmodule SynapsisWeb.ProviderLive.Index do
                   to sign in with your ChatGPT account.
                 </div>
               <% else %>
-                <.dm_input
-                  id="provider-api-key"
-                  type="password"
-                  name="api_key"
-                  value=""
-                  placeholder={
-                    if @selected_preset.name == "backplane",
-                      do: "Optional for local development",
-                      else: "Enter API key"
-                  }
-                  label={
-                    if @selected_preset.name == "backplane",
-                      do: "Access Token (optional)",
-                      else: "API Key"
-                  }
-                  required={Map.get(@selected_preset, :api_key_required, true)}
+                <.dm_select
+                  id="provider-credential"
+                  name="credential_id"
+                  value={@provider_values["credential_id"]}
+                  label="Credential"
+                  options={@credential_options}
                 />
+                <.link navigate={~p"/settings/credentials"} class="link text-sm">
+                  Manage Credentials
+                </.link>
               <% end %>
               <:actions>
                 <.dm_btn type="submit" variant="primary">

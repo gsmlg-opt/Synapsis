@@ -12,6 +12,7 @@ defmodule SynapsisServer.Router do
               SynapsisWeb.AgentLive.Toolsets,
               SynapsisWeb.AgentLive.Skills,
               SynapsisWeb.SettingsLive,
+              SynapsisWeb.CredentialLive.Index,
               SynapsisWeb.ProviderLive.Index,
               SynapsisWeb.ProviderLive.Show,
               SynapsisWeb.MemoryLive.Index,
@@ -115,6 +116,8 @@ defmodule SynapsisServer.Router do
     live "/workspace", WorkspaceLive.Explorer, :index
 
     live "/settings", SettingsLive, :index
+
+    live "/settings/credentials", CredentialLive.Index, :index
 
     live "/settings/providers", ProviderLive.Index, :index
     live "/settings/providers/new", ProviderLive.Index, :new

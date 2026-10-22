@@ -10,6 +10,15 @@ defmodule Synapsis.Backplane.ConnectionDeleteTest do
     :ok
   end
 
+  test "a late source update cannot recreate a deleted connection" do
+    assert {:ok, connection} =
+             Connection.create(%{name: "late-update", base_url: "https://backplane.example.test"})
+
+    assert :ok = Connection.delete(connection)
+    assert {:error, :not_found} = Connection.update(connection, %{status: "synced"})
+    assert {:error, :not_found} = Connection.get(connection.id)
+  end
+
   test "delete/1 propagates persistence failures and keeps the connection" do
     assert {:ok, connection} =
              Connection.create(%{

@@ -19,6 +19,7 @@ defmodule Synapsis.ProviderConfig do
     field(:preset, :string)
     field(:base_url, :string)
     field(:api_key_encrypted, Synapsis.Encrypted.Binary)
+    field(:credential_id, :binary_id)
     field(:config, :map, default: %{})
     field(:enabled, :boolean, default: true)
 
@@ -28,7 +29,17 @@ defmodule Synapsis.ProviderConfig do
 
   def changeset(provider_config, attrs) do
     provider_config
-    |> cast(attrs, [:id, :name, :type, :preset, :base_url, :api_key_encrypted, :config, :enabled])
+    |> cast(attrs, [
+      :id,
+      :name,
+      :type,
+      :preset,
+      :base_url,
+      :api_key_encrypted,
+      :credential_id,
+      :config,
+      :enabled
+    ])
     |> validate_required([:name, :type])
     |> validate_inclusion(:type, @valid_types)
     |> validate_length(:name, max: 255)

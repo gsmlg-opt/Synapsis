@@ -5,10 +5,12 @@ defmodule SynapsisWeb.AgentLive.Skills do
 
   import SynapsisWeb.AgentLive.Components
 
-  alias Synapsis.{AgentConfigs, AgentSkills, Skill, Skills}
+  alias Synapsis.{AgentConfigs, AgentSkills, Providers, Skill, Skills}
 
   @impl true
   def mount(_params, _session, socket) do
+    if connected?(socket), do: Providers.subscribe()
+
     {:ok,
      assign(socket,
        page_title: "Skills",
@@ -71,6 +73,21 @@ defmodule SynapsisWeb.AgentLive.Skills do
 
       _ ->
         {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_info({:provider_catalog_changed}, socket) do
+    socket = assign_common(socket)
+
+    if socket.assigns.live_action == :edit &&
+         is_nil(Skills.get(socket.assigns.skill.id)) do
+      {:noreply,
+       socket
+       |> put_flash(:error, "Skill not found")
+       |> push_navigate(to: ~p"/agent/skills")}
+    else
+      {:noreply, socket}
     end
   end
 

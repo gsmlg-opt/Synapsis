@@ -15,6 +15,9 @@ defmodule SynapsisWeb.SkillLive.ShowTest do
   end
 
   test "remote details show pinned metadata without an editable body", %{conn: conn} do
+    {:ok, _} = Synapsis.Config.Store.put(:backplane, %{"id" => "source-exact", "enabled" => true})
+    on_exit(fn -> Synapsis.Config.Store.delete(:backplane, "source-exact") end)
+
     {:ok, skill} =
       Synapsis.Skills.create(%{
         name: "remote-review",

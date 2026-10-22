@@ -56,6 +56,13 @@ defmodule Synapsis.Provider.Registry do
   @impl true
   def init(:ok) do
     table = :ets.new(@table, [:named_table, :set, :public, read_concurrency: true])
+
+    Application.put_env(
+      :synapsis_data,
+      :credential_change_callback,
+      &Synapsis.Providers.credentials_changed/1
+    )
+
     {:ok, table}
   end
 end

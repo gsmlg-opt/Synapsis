@@ -9,6 +9,38 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
   def refresh_mcp, do: %{}
 
+  test "session creation explains an unavailable agent model and refreshes readiness", %{
+    conn: conn
+  } do
+    {:ok, provider} =
+      Synapsis.Providers.create(%{
+        name: "live-session-provider",
+        type: "openai",
+        config: %{"model_catalog_migrated" => true}
+      })
+
+    {:ok, agent} =
+      AgentConfigs.create(%{
+        name: "live-session-agent",
+        provider: provider.name,
+        model: "chosen-model"
+      })
+
+    {:ok, view, _} = live(conn, ~p"/agent/agents/#{agent.name}/sessions")
+    refute has_element?(view, "aside el-dm-button[phx-click='create_session']:not([disabled])")
+
+    assert render_hook(view, "create_session", %{}) =~
+             "Configure an available model in agent settings"
+
+    {:ok, _} = Synapsis.Models.create(%{provider_id: provider.id, model: agent.model})
+    Phoenix.PubSub.broadcast(Synapsis.PubSub, "providers:catalog", {:provider_catalog_changed})
+    assert has_element?(view, "aside el-dm-button[phx-click='create_session']:not([disabled])")
+    assert {:ok, _} = Synapsis.Providers.delete(provider.id)
+    Phoenix.PubSub.broadcast(Synapsis.PubSub, "providers:catalog", {:provider_catalog_changed})
+    refute has_element?(view, "aside el-dm-button[phx-click='create_session']:not([disabled])")
+    assert {:ok, []} = Sessions.list(agent.name)
+  end
+
   setup do
     previous = Application.get_env(:synapsis_core, :mcp_refresh)
     Application.put_env(:synapsis_core, :mcp_refresh, {__MODULE__, :refresh_mcp, []})
@@ -23,6 +55,37 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
     Synapsis.DataCase.clear_config_store(:model)
     on_exit(fn -> Synapsis.DataCase.clear_config_store(:provider) end)
     :ok
+  end
+
+  test "saving a replacement agent model refreshes an already open session page", %{conn: conn} do
+    {:ok, provider} =
+      Synapsis.Providers.create(%{
+        name: "replacement-agent-provider",
+        type: "openai",
+        config: %{"model_catalog_migrated" => true}
+      })
+
+    {:ok, model} = Synapsis.Models.create(%{provider_id: provider.id, model: "replacement"})
+    {:ok, agent} = AgentConfigs.create(%{name: "replacement-agent"})
+    {:ok, sessions_view, _} = live(conn, ~p"/agent/agents/#{agent.name}/sessions")
+
+    refute has_element?(
+             sessions_view,
+             "aside el-dm-button[phx-click='create_session']:not([disabled])"
+           )
+
+    {:ok, editor, _} = live(conn, ~p"/agent/agents/#{agent.name}/config")
+
+    SynapsisWeb.ReactFormHelpers.react_form_submit(editor, "agent-config-form", %{
+      "agent" => %{"provider" => provider.name, "model" => model.model}
+    })
+
+    assert AgentConfigs.get(agent.id).model == model.model
+
+    assert has_element?(
+             sessions_view,
+             "aside el-dm-button[phx-click='create_session']:not([disabled])"
+           )
   end
 
   describe "agent sessions page" do
@@ -101,6 +164,39 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       assert render(view) =~ "Selected model is unavailable"
       assert {:ok, unchanged} = Sessions.get(session.id)
       assert unchanged.model == model.model
+    end
+
+    test "recovering an empty model selector after provider deletion preserves the session", %{
+      conn: conn
+    } do
+      {:ok, provider} =
+        Synapsis.Providers.create(%{
+          name: "deleted-model-recovery",
+          type: "openai",
+          config: %{"model_catalog_migrated" => true}
+        })
+
+      {:ok, model} = Synapsis.Models.create(%{provider_id: provider.id, model: "original"})
+
+      {:ok, session} =
+        Sessions.create("__global__", %{
+          provider: provider.name,
+          model: model.model,
+          agent: "main"
+        })
+
+      {:ok, view, _} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      assert {:ok, _} = Synapsis.Providers.delete(provider.id)
+      assert has_element?(view, "#session-model-selector option[value=''][selected][disabled]")
+
+      assert render_hook(view, "switch_model", %{"_target" => ["model_id"]}) =~
+               "Selected model is unavailable"
+
+      assert Process.alive?(view.pid)
+      assert {:ok, unchanged} = Sessions.get(session.id)
+      assert unchanged.provider == session.provider
+      assert unchanged.model == session.model
+      assert unchanged.config == session.config
     end
 
     test "a recreated raw model requires an explicit choice of its new catalog identity", %{

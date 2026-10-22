@@ -7,6 +7,36 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
 
   def refresh_mcp, do: %{}
 
+  test "an open agent editor refreshes model options while retaining its selected model", %{
+    conn: conn
+  } do
+    {:ok, provider} =
+      Providers.create(%{
+        name: "live-agent-provider",
+        type: "openai",
+        config: %{"model_catalog_migrated" => true}
+      })
+
+    {:ok, first} = Synapsis.Models.create(%{provider_id: provider.id, model: "saved-model"})
+
+    {:ok, agent} =
+      AgentConfigs.create(%{name: "live-agent", provider: provider.name, model: first.model})
+
+    {:ok, view, _} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+    {:ok, second} = Synapsis.Models.create(%{provider_id: provider.id, model: "new-model"})
+    Phoenix.PubSub.broadcast(Synapsis.PubSub, "providers:catalog", {:provider_catalog_changed})
+    assert_push_event(view, "agent:model-options", %{options: options})
+
+    assert Enum.any?(options, fn provider ->
+             Enum.any?(provider.children, &(&1.value == second.model))
+           end)
+
+    assert has_element?(view, "#agent-provider-model-picker[data-model='#{first.model}']")
+    assert {:ok, _} = Providers.delete(provider.id)
+    Phoenix.PubSub.broadcast(Synapsis.PubSub, "providers:catalog", {:provider_catalog_changed})
+    assert_push_event(view, "agent:model-options", %{options: []})
+  end
+
   setup do
     previous = Application.get_env(:synapsis_core, :mcp_refresh)
     Application.put_env(:synapsis_core, :mcp_refresh, {__MODULE__, :refresh_mcp, []})
@@ -24,6 +54,11 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
   end
 
   test "skill assignment groups preserve source UUID and skill identity", %{conn: conn} do
+    assert {:ok, _} =
+             Synapsis.Config.Store.put(:backplane, %{"id" => "source-group", "enabled" => true})
+
+    on_exit(fn -> Synapsis.Config.Store.delete(:backplane, "source-group") end)
+
     {:ok, skill} =
       Skills.create(%{
         name: "remote-grouped",

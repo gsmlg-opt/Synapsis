@@ -5,6 +5,7 @@ defmodule Synapsis.Backplane.ProviderSource do
   def get(id, opts \\ []) do
     with {:ok, provider} <- Providers.get(id),
          true <- provider.enabled or Keyword.get(opts, :allow_disabled, false),
+         true <- Providers.credential_available?(provider),
          url when is_binary(url) <- provider.base_url do
       endpoint = url |> String.trim_trailing("/") |> String.replace(~r{/v1$}, "")
       {:ok, %{provider: provider, endpoint: endpoint, credential: provider.api_key_encrypted}}

@@ -146,7 +146,7 @@ defmodule Synapsis.Backplane.Connection do
           updated
         end
 
-      case Store.put(@store_type, to_map(updated)) do
+      case Store.replace_existing(@store_type, connection.id, to_map(updated)) do
         {:ok, _stored} -> {:ok, updated}
         {:error, reason} -> rollback_provider(rollback, reason)
       end

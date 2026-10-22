@@ -87,7 +87,8 @@ code, pre, kbd, samp {
     font-size: 1rem;
   }
 
-  .synapsis-mcp-modal .dialog-box {
+  .synapsis-mcp-modal .dialog-box,
+  .synapsis-model-modal .dialog-box {
     width: min(40rem, calc(100vw - 2rem));
     max-height: calc(100dvh - 2rem);
     overflow-y: auto;

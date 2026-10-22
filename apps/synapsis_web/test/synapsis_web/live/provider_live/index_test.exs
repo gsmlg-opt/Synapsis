@@ -2,6 +2,77 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
   use SynapsisWeb.ConnCase
   import SynapsisWeb.ReactFormHelpers
 
+  test "an open provider list refreshes after another page adds and deletes a provider", %{
+    conn: conn
+  } do
+    {:ok, view, _} = live(conn, ~p"/settings/providers")
+    {:ok, provider} = Synapsis.Providers.create(%{name: "live-provider", type: "openai"})
+    Phoenix.PubSub.broadcast(Synapsis.PubSub, "providers:catalog", {:provider_catalog_changed})
+    assert has_element?(view, "a[href='/settings/providers/#{provider.id}']", provider.name)
+    assert {:ok, _} = Synapsis.Providers.delete(provider.id)
+    Phoenix.PubSub.broadcast(Synapsis.PubSub, "providers:catalog", {:provider_catalog_changed})
+    refute has_element?(view, "a[href='/settings/providers/#{provider.id}']")
+  end
+
+  test "credential choices refresh while preserving a provider draft", %{conn: conn} do
+    {:ok, credential} =
+      Synapsis.Credentials.create(%{name: "Selected credential", key: "draft-secret-1234"})
+
+    on_exit(fn -> Synapsis.Credentials.delete(credential.id) end)
+    {:ok, view, _} = live(conn, ~p"/settings/providers/new")
+    render_hook(view, "select_custom", %{"type" => "openai"})
+    assert has_element?(view, "select[name='credential_id'] option[value='']", "No credential")
+
+    assert has_element?(
+             view,
+             "select[name='credential_id'] option[value='#{credential.id}']",
+             credential.name
+           )
+
+    assert has_element?(view, "a[href='/settings/credentials']", "Manage Credentials")
+    refute has_element?(view, "input[name='api_key']")
+
+    react_form_change(view, "create-provider-form", %{
+      "name" => "Unsaved provider",
+      "base_url" => "https://draft.example/v1",
+      "credential_id" => credential.id
+    })
+
+    {:ok, added} =
+      Synapsis.Credentials.create(%{name: "Added elsewhere", key: "second-secret-5678"})
+
+    on_exit(fn -> Synapsis.Credentials.delete(added.id) end)
+    send(view.pid, {:provider_catalog_changed})
+
+    assert has_element?(
+             view,
+             "select[name='credential_id'] option[value='#{added.id}']",
+             added.name
+           )
+
+    [json] =
+      view
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("[data-form-id='create-provider-form']")
+      |> LazyHTML.attribute("data-initial-values")
+
+    assert %{
+             "name" => "Unsaved provider",
+             "base_url" => "https://draft.example/v1",
+             "credential_id" => id
+           } = Jason.decode!(json)
+
+    assert id == credential.id
+    assert has_element?(view, "input[name='name'][value='Unsaved provider']")
+    assert has_element?(view, "input[name='base_url'][value='https://draft.example/v1']")
+
+    assert has_element?(
+             view,
+             "select[name='credential_id'] option[value='#{credential.id}'][selected]"
+           )
+  end
+
   setup do
     clear_providers()
     :ok
@@ -60,12 +131,12 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
         |> render_click()
 
       assert html =~ "Add anthropic"
-      assert html =~ "API Key"
+      assert html =~ "Credential"
       assert html =~ ~s(value="anthropic")
-      assert has_element?(view, ~s(input[name="api_key"][required]))
+      assert has_element?(view, ~s(select[name="credential_id"]))
     end
 
-    test "selecting Backplane shows the provider form with an editable URL and optional token",
+    test "selecting Backplane shows the provider form with an editable URL and optional credential",
          %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings/providers/new")
 
@@ -75,7 +146,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
         |> render_click()
 
       assert html =~ "Add Backplane"
-      assert html =~ "Access Token (optional)"
+      assert html =~ "No credential"
       assert html =~ "http://localhost:4220/v1"
       assert has_element?(view, ~s(input[name="name"][value="backplane"]))
 
@@ -84,8 +155,8 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
                ~s(input[name="base_url"][value="https://backplane.gsmlg.net/v1"])
              )
 
-      assert has_element?(view, ~s(input[name="api_key"]))
-      refute has_element?(view, ~s(input[name="api_key"][required]))
+      assert has_element?(view, ~s(select[name="credential_id"]))
+      refute has_element?(view, ~s(input[name="api_key"]))
       assert {:ok, []} = Synapsis.Providers.list()
     end
 
@@ -103,7 +174,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
 
       react_form_submit(view, "create-provider-form", %{
         "name" => "",
-        "api_key" => "discard-this-key"
+        "credential_id" => ""
       })
 
       assert render(view) =~ "Failed to create provider"
@@ -119,8 +190,8 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
 
       refute LazyHTML.attribute(form, "id") == [mount_id]
       [json] = LazyHTML.attribute(form, "data-initial-values")
-      assert %{"name" => "backplane", "api_key" => ""} = Jason.decode!(json)
-      refute has_element?(view, "input[name='api_key'][required]")
+      assert %{"name" => "backplane", "credential_id" => ""} = Jason.decode!(json)
+      refute has_element?(view, "input[name='api_key']")
     end
 
     test "creates a keyless Backplane provider and discovers models without authorization",
@@ -145,11 +216,13 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       |> react_form_submit("create-provider-form", %{
         "name" => "backplane-dev",
         "base_url" => "http://localhost:#{bypass.port}/v1",
-        "api_key" => ""
+        "credential_id" => ""
       })
 
       flash = assert_redirected(view, ~p"/settings/providers")
-      assert flash["info"] == "Provider created and models loaded"
+
+      assert flash["info"] ==
+               "Provider created; model suggestions loaded. Import models in Manage Models."
 
       assert {:ok, provider} = Synapsis.Providers.get_by_name("backplane-dev")
       assert provider.type == "openai"
@@ -196,11 +269,14 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       view
       |> react_form_submit("create-provider-form", %{
         "name" => "my-anthropic",
-        "api_key" => "sk-test-123"
+        "credential_id" => credential_id!("sk-test-123")
       })
 
       flash = assert_redirected(view, ~p"/settings/providers")
       assert flash["info"] == "Provider created"
+      assert {:ok, provider} = Synapsis.Providers.get_by_name("my-anthropic")
+      assert is_binary(provider.credential_id)
+      assert provider.api_key_encrypted == "sk-test-123"
     end
 
     test "created provider survives a fresh page load from the config file", %{conn: conn} do
@@ -212,7 +288,10 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       |> render_click()
 
       view
-      |> react_form_submit("create-provider-form", %{"name" => name, "api_key" => "sk-test-123"})
+      |> react_form_submit("create-provider-form", %{
+        "name" => name,
+        "credential_id" => credential_id!("sk-test-123")
+      })
 
       assert_redirected(view, ~p"/settings/providers")
       :ok = Synapsis.Config.Store.reload(:provider)
@@ -232,7 +311,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       view
       |> react_form_submit("create-provider-form", %{
         "name" => "anthropic-work",
-        "api_key" => "sk-work"
+        "credential_id" => credential_id!("sk-work")
       })
 
       # Create second
@@ -245,7 +324,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       view2
       |> react_form_submit("create-provider-form", %{
         "name" => "anthropic-personal",
-        "api_key" => "sk-personal"
+        "credential_id" => credential_id!("sk-personal")
       })
 
       flash = assert_redirected(view2, ~p"/settings/providers")
@@ -270,7 +349,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
         view
         |> react_form_submit("create-provider-form", %{
           "name" => "taken-name",
-          "api_key" => "sk-other"
+          "credential_id" => credential_id!("sk-other")
         })
 
       assert html =~ "Name already taken"
@@ -290,7 +369,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       |> react_form_submit("create-provider-form", %{
         "name" => "my-local-llm",
         "base_url" => "http://localhost:#{bypass.port}",
-        "api_key" => "none"
+        "credential_id" => credential_id!("none")
       })
 
       flash = assert_redirected(view, ~p"/settings/providers")
@@ -322,11 +401,13 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       |> react_form_submit("create-provider-form", %{
         "name" => "my-compatible-llm",
         "base_url" => "http://localhost:#{bypass.port}/v1",
-        "api_key" => "sk-test"
+        "credential_id" => credential_id!("sk-test")
       })
 
       flash = assert_redirected(view, ~p"/settings/providers")
-      assert flash["info"] == "Provider created and models loaded"
+
+      assert flash["info"] ==
+               "Provider created; model suggestions loaded. Import models in Manage Models."
 
       {:ok, provider} = Synapsis.Providers.get_by_name("my-compatible-llm")
       assert [%{"id" => "model-a"}] = provider.config["available_models"]
@@ -413,5 +494,13 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
   defp clear_providers do
     {:ok, providers} = Synapsis.Providers.list()
     Enum.each(providers, fn p -> Synapsis.Providers.delete(p.id) end)
+  end
+
+  defp credential_id!(key) do
+    {:ok, credential} =
+      Synapsis.Credentials.create(%{name: "Test credential #{Ecto.UUID.generate()}", key: key})
+
+    on_exit(fn -> Synapsis.Credentials.delete(credential.id) end)
+    credential.id
   end
 end

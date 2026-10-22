@@ -100,6 +100,7 @@ defmodule Synapsis.AgentSkillsTest do
       suffix = System.unique_integer([:positive])
       source_id = Ecto.UUID.generate()
       {:ok, agent} = AgentConfigs.create(%{name: "source-guard-agent-#{suffix}"})
+      assert {:ok, _} = Store.put(:backplane, %{"id" => source_id, "enabled" => true})
 
       {:ok, skill} =
         Skills.create(%{
@@ -113,6 +114,7 @@ defmodule Synapsis.AgentSkillsTest do
         })
 
       assert {:ok, assigned_agent} = AgentSkills.assign_skills(agent, [skill.id])
+      assert :ok = Store.delete(:backplane, source_id)
       assert Skills.list_skills_for_agent(assigned_agent) == []
 
       assert {:ok, _connection} =
@@ -165,6 +167,7 @@ defmodule Synapsis.AgentSkillsTest do
       suffix = System.unique_integer([:positive])
       source_id = Ecto.UUID.generate()
       {:ok, agent} = AgentConfigs.create(%{name: "metadata-shape-agent-#{suffix}"})
+      assert {:ok, _} = Store.put(:backplane, %{"id" => source_id, "enabled" => true})
 
       {:ok, skill} =
         Skills.create(%{

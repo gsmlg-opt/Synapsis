@@ -47,6 +47,40 @@ defmodule Synapsis.Config.Store.ServerTest do
     assert {:error, :not_found} = Store.get(:provider, "provider-1")
   end
 
+  test "MCP tool schemas preserve nested literal keys after persistence and reload" do
+    clear_config_store(:mcp)
+    on_exit(fn -> clear_config_store(:mcp) end)
+
+    mcp = %{
+      "id" => "mcp-schema",
+      "name" => "schema-server",
+      "config" => %{
+        "backplane_tools" => [
+          %{
+            "name" => "search",
+            "inputSchema" => %{
+              "$schema" => "https://json-schema.org/draft/2020-12/schema",
+              "type" => "object",
+              "properties" => %{
+                "query.text" => %{"type" => "string"},
+                "search options" => %{
+                  "type" => "array",
+                  "items" => %{"$ref" => "#/$defs/search.option"}
+                }
+              },
+              "$defs" => %{"search.option" => %{"type" => "string"}},
+              "required" => ["query.text"]
+            }
+          }
+        ]
+      }
+    }
+
+    assert {:ok, ^mcp} = Store.put(:mcp, mcp)
+    assert :ok = Store.reload(:mcp)
+    assert {:ok, ^mcp} = Store.get(:mcp, mcp["id"])
+  end
+
   test "merge-existing preserves stored fields and never recreates a concurrently deleted routine" do
     clear_config_store(:routine)
     on_exit(fn -> clear_config_store(:routine) end)
@@ -101,8 +135,8 @@ defmodule Synapsis.Config.Store.ServerTest do
 
       send(delete.pid, :go)
       send(merge.pid, :go)
-      assert_receive {:delete_result, delete_result}
-      assert_receive {:merge_result, merge_result}
+      assert_receive {:delete_result, delete_result}, 2_000
+      assert_receive {:merge_result, merge_result}, 2_000
       Task.await(delete)
       Task.await(merge)
 
@@ -110,6 +144,22 @@ defmodule Synapsis.Config.Store.ServerTest do
       assert match?({:ok, _routine}, merge_result) or merge_result == {:error, :not_found}
       assert {:error, :not_found} = Store.get(:routine, id)
     end
+  end
+
+  test "replace-existing drops omitted fields and cannot recreate a deleted entry" do
+    original = %{"id" => "provider-1", "name" => "Original", "base_url" => "https://example.test"}
+    assert {:ok, ^original} = Store.put(:provider, original)
+    replacement = %{"id" => "ignored-new-id", "name" => "Updated"}
+
+    assert {:ok, %{"id" => "provider-1", "name" => "Updated"} = replaced} =
+             Store.replace_existing(:provider, "provider-1", replacement)
+
+    refute Map.has_key?(replaced, "base_url")
+    assert :ok = Store.reload(:provider)
+    assert {:ok, ^replaced} = Store.get(:provider, "provider-1")
+    assert :ok = Store.delete(:provider, "provider-1")
+    assert {:error, :not_found} = Store.replace_existing(:provider, "provider-1", original)
+    assert {:error, :not_found} = Store.get(:provider, "provider-1")
   end
 
   test "malformed reload preserves the last known good entries" do

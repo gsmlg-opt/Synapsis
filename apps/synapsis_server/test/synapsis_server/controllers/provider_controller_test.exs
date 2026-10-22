@@ -65,6 +65,40 @@ defmodule SynapsisServer.ProviderControllerTest do
   end
 
   describe "POST /api/providers" do
+    test "accepts credential references and returns safe metadata", %{conn: conn} do
+      {:ok, credential} =
+        Synapsis.Credentials.create(%{name: "API fixture", key: "secret-rest-fixture-1234"})
+
+      conn =
+        post(conn, "/api/providers", %{
+          "name" => "referenced",
+          "type" => "openai",
+          "credential_id" => credential.id
+        })
+
+      %{"data" => provider} = json_response(conn, 201)
+      assert provider["credential_id"] == credential.id
+      assert provider["has_api_key"]
+      refute conn.resp_body =~ "secret-rest-fixture-1234"
+    end
+
+    test "legacy encrypted-field key input still creates a credential", %{conn: conn} do
+      conn =
+        post(conn, "/api/providers", %{
+          "name" => "compat-key",
+          "type" => "openai",
+          "api_key_encrypted" => "compat-rest-secret-1234"
+        })
+
+      %{"data" => provider} = json_response(conn, 201)
+      assert is_binary(provider["credential_id"])
+
+      assert {:ok, "compat-rest-secret-1234"} =
+               Synapsis.Credentials.resolve(provider["credential_id"])
+
+      refute conn.resp_body =~ "compat-rest-secret-1234"
+    end
+
     test "creates provider with valid attrs", %{conn: conn} do
       conn = post(conn, "/api/providers", @valid_attrs)
       %{"data" => provider} = json_response(conn, 201)
@@ -215,6 +249,7 @@ defmodule SynapsisServer.ProviderControllerTest do
     test "rejects an unavailable Backplane provider before calling its adapter", %{conn: conn} do
       bypass = Bypass.open()
       parent = self()
+      {:ok, _} = Synapsis.Config.Store.put(:backplane, %{"id" => "source-1", "enabled" => true})
 
       Bypass.stub(bypass, "GET", "/v1/models", fn request_conn ->
         send(parent, :unavailable_provider_adapter_called)

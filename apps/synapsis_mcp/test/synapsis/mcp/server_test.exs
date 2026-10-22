@@ -547,9 +547,9 @@ defmodule Synapsis.MCP.ServerTest do
     assert {:ok, server} = Synapsis.MCP.start(config)
     assert :ok = Server.await_ready(server)
     tool = "mcp:#{config.name}:echo"
-    {:ok, _} = Synapsis.Providers.update(provider.id, %{api_key_encrypted: "rotated"})
     Agent.update(expected, fn _ -> "rotated" end)
-    refute Registry.runtime_available?(tool)
+    {:ok, _} = Synapsis.Providers.update(provider.id, %{api_key_encrypted: "rotated"})
+    refute Process.alive?(server)
     assert {:error, :mcp_unavailable} = Server.execute_runtime(server, tool, %{}, %{}, 1_000)
     assert :ok = Synapsis.MCP.refresh(config.id)
     assert Registry.runtime_available?(tool)

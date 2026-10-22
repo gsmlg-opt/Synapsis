@@ -12,7 +12,10 @@ defmodule SynapsisWeb.AgentLive.Agents do
 
   @impl true
   def mount(_params, _session, socket) do
-    if connected?(socket), do: Phoenix.PubSub.subscribe(Synapsis.PubSub, "tool_registry")
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "tool_registry")
+      Providers.subscribe()
+    end
 
     {:ok,
      assign(socket,
@@ -134,6 +137,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
     case result do
       {:ok, %AgentConfig{} = agent} ->
         {:ok, _skills} = AgentSkills.assign_skills(agent, skill_ids)
+        Providers.notify_changed()
 
         {:noreply, after_agent_save(socket, agent)}
 
@@ -173,6 +177,15 @@ defmodule SynapsisWeb.AgentLive.Agents do
   @impl true
   def handle_info({:tool_registry_changed, _payload}, socket),
     do: {:noreply, assign_mcp_catalog(socket)}
+
+  def handle_info({:provider_catalog_changed}, socket) do
+    socket = socket |> assign_common() |> assign_mcp_catalog()
+
+    {:noreply,
+     push_event(socket, "agent:model-options", %{
+       options: provider_model_cascader_options(socket.assigns.providers)
+     })}
+  end
 
   @impl true
   def render(assigns) do

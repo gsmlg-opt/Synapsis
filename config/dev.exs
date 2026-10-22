@@ -17,7 +17,7 @@ config :synapsis_server, dev_routes: true
 
 config :logger, :default_formatter,
   format: "[$level] $message $metadata\n",
-  metadata: [:reason]
+  metadata: [:provider_id, :provider_ids, :reason]
 
 config :phoenix, :stacktrace_depth, 20
 config :phoenix, :plug_init_mode, :runtime

@@ -99,7 +99,7 @@ SynapsisAgent.Application (rest_for_one)
 
 SynapsisServer.Application
 ├── SynapsisServer.Telemetry
-└── SynapsisServer.Endpoint              — Bandit, LiveView, channels, REST/SSE
+└── SynapsisServer.Endpoint              — Gaoxy, LiveView, channels, REST/SSE
 ```
 
 ## Storage Model (ADR-006)

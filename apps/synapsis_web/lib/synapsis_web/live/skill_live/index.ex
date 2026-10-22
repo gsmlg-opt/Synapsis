@@ -4,6 +4,8 @@ defmodule SynapsisWeb.SkillLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
+    if connected?(socket), do: Synapsis.Providers.subscribe()
+
     skills = list_skills()
 
     {:ok,
@@ -15,6 +17,9 @@ defmodule SynapsisWeb.SkillLive.Index do
        syncing_source: nil
      )}
   end
+
+  @impl true
+  def handle_event("change_source_form", _params, socket), do: {:noreply, socket}
 
   @impl true
   def handle_event("select_source", %{"provider_id" => id}, socket) do
@@ -76,6 +81,7 @@ defmodule SynapsisWeb.SkillLive.Index do
       assign(socket,
         syncing_source: nil,
         sources: Synapsis.Backplane.Connection.list(),
+        source_providers: Synapsis.Backplane.ProviderSource.available(),
         skills: list_skills()
       )
 
@@ -87,6 +93,16 @@ defmodule SynapsisWeb.SkillLive.Index do
         {:noreply,
          put_flash(socket, :error, "Remote skill discovery failed. Check source status.")}
     end
+  end
+
+  @impl true
+  def handle_info({:provider_catalog_changed}, socket) do
+    {:noreply,
+     assign(socket,
+       sources: Synapsis.Backplane.Connection.list(),
+       source_providers: Synapsis.Backplane.ProviderSource.available(),
+       skills: list_skills()
+     )}
   end
 
   defp source_label(skill, sources) do
@@ -123,6 +139,9 @@ defmodule SynapsisWeb.SkillLive.Index do
           for={%{}}
           id="skill-source-form"
           values={%{"provider_id" => ""}}
+          draft={react_form_draft(assigns, "skill-source-form")}
+          structure={Enum.map(@source_providers, &{&1.id, &1.name, &1.enabled})}
+          phx-change="change_source_form"
           phx-submit="select_source"
           class="space-y-3"
         >

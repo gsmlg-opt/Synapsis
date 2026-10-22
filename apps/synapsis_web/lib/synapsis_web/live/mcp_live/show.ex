@@ -3,13 +3,16 @@ defmodule SynapsisWeb.MCPLive.Show do
   use SynapsisWeb.ReactFormEvents
   require Logger
 
-  alias Synapsis.{MCPConfig, MCPConfigs}
+  alias Synapsis.{MCPConfig, MCPConfigs, Providers}
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
     case MCPConfigs.get(id) do
       %MCPConfig{} = config ->
-        if connected?(socket), do: send(self(), :refresh_open_catalog)
+        if connected?(socket) do
+          Providers.subscribe()
+          send(self(), :refresh_open_catalog)
+        end
 
         {:ok,
          assign(socket,
@@ -91,6 +94,19 @@ defmodule SynapsisWeb.MCPLive.Show do
   end
 
   @impl true
+  def handle_info({:provider_catalog_changed}, socket) do
+    case MCPConfigs.get(socket.assigns.config.id) do
+      nil ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "MCP server not found")
+         |> push_navigate(to: ~p"/settings/mcp")}
+
+      config ->
+        {:noreply, assign(socket, config: config, page_title: config.name)}
+    end
+  end
+
   def handle_info(:refresh_open_catalog, socket) do
     {:noreply,
      socket

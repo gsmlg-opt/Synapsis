@@ -4,6 +4,8 @@ defmodule SynapsisWeb.SkillLive.Show do
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
+    if connected?(socket), do: Synapsis.Providers.subscribe()
+
     case Synapsis.Skills.get(id) do
       nil ->
         {:ok,
@@ -39,6 +41,20 @@ defmodule SynapsisWeb.SkillLive.Show do
 
       {:error, _} ->
         {:noreply, put_flash(socket, :error, "Failed to update skill")}
+    end
+  end
+
+  @impl true
+  def handle_info({:provider_catalog_changed}, socket) do
+    case Synapsis.Skills.get(socket.assigns.skill.id) do
+      nil ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Skill not found")
+         |> push_navigate(to: ~p"/settings/skills")}
+
+      skill ->
+        {:noreply, assign(socket, skill: skill, page_title: skill.name)}
     end
   end
 

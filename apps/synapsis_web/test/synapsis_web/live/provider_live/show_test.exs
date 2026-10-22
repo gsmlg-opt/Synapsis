@@ -13,6 +13,63 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
     {:ok, provider: provider}
   end
 
+  test "an open provider detail leaves a provider deleted elsewhere", %{
+    conn: conn,
+    provider: provider
+  } do
+    {:ok, view, _} = live(conn, ~p"/settings/providers/#{provider.id}")
+    assert {:ok, _} = Synapsis.Providers.delete(provider.id)
+    Phoenix.PubSub.broadcast(Synapsis.PubSub, "providers:catalog", {:provider_catalog_changed})
+    assert_redirect(view, ~p"/settings/providers")
+  end
+
+  test "credential options refresh without losing connection edits", %{
+    conn: conn,
+    provider: provider
+  } do
+    {:ok, view, html} = live(conn, ~p"/settings/providers/#{provider.id}")
+    assert has_element?(view, "select[name='credential_id'] option[value='']", "No credential")
+    assert has_element?(view, "a[href='/settings/credentials']", "Manage Credentials")
+    refute has_element?(view, "input[name='api_key']")
+    refute html =~ "sk-ant-test-key"
+
+    react_form_change(view, "edit-provider-form", %{
+      "base_url" => "https://draft.example/v1",
+      "enabled" => false,
+      "credential_id" => provider.credential_id
+    })
+
+    {:ok, credential} =
+      Synapsis.Credentials.create(%{name: "Added credential", key: "extra-secret-5678"})
+
+    on_exit(fn -> Synapsis.Credentials.delete(credential.id) end)
+    send(view.pid, {:provider_catalog_changed})
+
+    assert has_element?(
+             view,
+             "select[name='credential_id'] option[value='#{credential.id}']",
+             credential.name
+           )
+
+    [json] =
+      view
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("[data-form-id='edit-provider-form']")
+      |> LazyHTML.attribute("data-initial-values")
+
+    assert %{"base_url" => "https://draft.example/v1", "enabled" => false, "credential_id" => id} =
+             Jason.decode!(json)
+
+    assert id == provider.credential_id
+    assert has_element?(view, "input[name='base_url'][value='https://draft.example/v1']")
+
+    assert has_element?(
+             view,
+             "select[name='credential_id'] option[value='#{provider.credential_id}'][selected]"
+           )
+  end
+
   describe "provider show page" do
     test "mounts and displays provider name", %{conn: conn, provider: provider} do
       {:ok, _view, html} = live(conn, ~p"/settings/providers/#{provider.id}")
@@ -74,7 +131,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       assert updated.enabled == false
     end
 
-    test "update_provider with empty api_key does not overwrite existing key", %{
+    test "update_provider preserves the selected credential", %{
       conn: conn,
       provider: provider
     } do
@@ -84,25 +141,47 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       |> react_form_submit("edit-provider-form", %{
         "base_url" => "",
         "enabled" => true,
-        "api_key" => ""
+        "credential_id" => provider.credential_id
       })
 
       {:ok, updated} = Synapsis.Providers.get(provider.id)
       assert updated.api_key_encrypted != nil
     end
 
-    test "update_provider with new api_key updates it", %{conn: conn, provider: provider} do
+    test "choosing No credential detaches without deleting the credential", %{
+      conn: conn,
+      provider: provider
+    } do
+      {:ok, view, _} = live(conn, ~p"/settings/providers/#{provider.id}")
+      react_form_submit(view, "edit-provider-form", %{"credential_id" => ""})
+      assert {:ok, updated} = Synapsis.Providers.get(provider.id)
+      assert is_nil(updated.credential_id)
+      assert is_nil(updated.api_key_encrypted)
+      assert {:ok, _} = Synapsis.Credentials.get(provider.credential_id)
+    end
+
+    test "update_provider with another credential updates its reference", %{
+      conn: conn,
+      provider: provider
+    } do
+      {:ok, credential} =
+        Synapsis.Credentials.create(%{name: "Replacement credential", key: "new-secret-key"})
+
+      on_exit(fn -> Synapsis.Credentials.delete(credential.id) end)
       {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
 
       view
       |> react_form_submit("edit-provider-form", %{
         "base_url" => "",
         "enabled" => true,
-        "api_key" => "new-secret-key"
+        "credential_id" => credential.id
       })
 
       html = render(view)
       assert html =~ "Provider updated"
+      assert {:ok, updated} = Synapsis.Providers.get(provider.id)
+      assert updated.credential_id == credential.id
+      assert updated.api_key_encrypted == "new-secret-key"
     end
 
     test "clears a stored token and refreshes models without authorization", %{conn: conn} do
@@ -163,7 +242,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       assert html =~ "backplane-model"
     end
 
-    test "clearing a token preserves noncredential edits and discards the typed key", %{
+    test "clearing a token preserves noncredential edits and clears the credential selection", %{
       conn: conn,
       provider: provider
     } do
@@ -173,14 +252,14 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       react_form_change(view, "edit-provider-form", %{
         "base_url" => draft_url,
         "enabled" => false,
-        "api_key" => "discard-this-typed-key"
+        "credential_id" => provider.credential_id
       })
 
       render_hook(view, "clear_api_key", %{})
 
       assert_push_event(view, "dm:form:reset", %{
         form_id: "edit-provider-form",
-        values: %{"base_url" => ^draft_url, "enabled" => false, "api_key" => ""}
+        values: %{"base_url" => ^draft_url, "enabled" => false, "credential_id" => ""}
       })
 
       assert {:ok, before_save} = Synapsis.Providers.get(provider.id)
@@ -232,6 +311,8 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       {:ok, view, html} = live(conn, ~p"/settings/providers/#{provider.id}")
       refute html =~ "Clear stored token"
       refute has_element?(view, "#clear-provider-api-key")
+      refute has_element?(view, "select[name='credential_id']")
+      refute has_element?(view, "input[name='api_key']")
 
       assert {:ok, %{api_key: "oauth-access-token", oauth: true}} =
                Synapsis.Provider.Registry.get(provider.name)
@@ -447,9 +528,10 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       |> element(~s(div[phx-click="toggle_chat"]))
       |> render_click()
 
-      # Simulate a stale open page after its provider has been deleted. Available
-      # persisted providers are intentionally rebuilt by the runtime resolver.
-      assert {:ok, _deleted} = Synapsis.Providers.delete(provider.id)
+      # Bypass lifecycle notifications to simulate a missing persisted record on
+      # an already open page. Normal provider deletion navigates away immediately.
+      assert :ok = Synapsis.Config.Store.delete(:provider, provider.id)
+      assert :ok = Synapsis.Provider.Registry.unregister(provider.name)
 
       render_hook(view, "chat.send", chat_params(provider, %{"text" => "hello"}))
 
@@ -465,6 +547,11 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
     end
 
     test "chat_send rejects an unavailable provider despite a stale registry entry", %{conn: conn} do
+      assert {:ok, _} =
+               Synapsis.Config.Store.put(:backplane, %{"id" => "source-1", "enabled" => true})
+
+      on_exit(fn -> Synapsis.Config.Store.delete(:backplane, "source-1") end)
+
       bypass = Bypass.open()
       test_pid = self()
 

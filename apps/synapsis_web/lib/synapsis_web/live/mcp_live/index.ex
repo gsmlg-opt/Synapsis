@@ -9,6 +9,7 @@ defmodule SynapsisWeb.MCPLive.Index do
   def mount(_params, _session, socket) do
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Synapsis.PubSub, "tool_registry")
+      Synapsis.Providers.subscribe()
       send(self(), :refresh_connected_catalog)
     end
 
@@ -45,7 +46,7 @@ defmodule SynapsisWeb.MCPLive.Index do
       show_form: true,
       show_import: false,
       modal_error: nil,
-      custom_form: %{"transport" => "stdio"}
+      custom_form: %{"provider_id" => "", "transport" => "stdio"}
     )
   end
 
@@ -54,19 +55,6 @@ defmodule SynapsisWeb.MCPLive.Index do
   end
 
   @impl true
-  def handle_event("select_provider", params, socket) do
-    case Synapsis.Backplane.select_mcp_provider(params["provider_id"], params["url"]) do
-      {:ok, _config} ->
-        {:noreply,
-         socket
-         |> refresh_states()
-         |> put_flash(:info, "Provider connection added. Refresh tools to connect.")}
-
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Provider connection is unavailable")}
-    end
-  end
-
   def handle_event("refresh_catalog", _params, %{assigns: %{catalog_loading: true}} = socket),
     do: {:noreply, socket}
 
@@ -138,7 +126,37 @@ defmodule SynapsisWeb.MCPLive.Index do
   end
 
   def handle_event("change_custom_config", params, socket) do
-    {:noreply, assign(socket, custom_form: Map.drop(params, ["_target"]))}
+    form = Map.merge(socket.assigns.custom_form, Map.drop(params, ["_target"]))
+
+    socket =
+      if form_value(form, "provider_id") != form_value(socket.assigns.custom_form, "provider_id") do
+        form = Map.put(form, "url", "")
+
+        socket
+        |> assign(custom_form: form, modal_error: nil)
+        |> reset_react_form("mcp-create-form", form)
+      else
+        assign(socket, custom_form: form)
+      end
+
+    {:noreply, socket}
+  end
+
+  def handle_event("create_config", %{"provider_id" => provider_id} = params, socket)
+      when is_binary(provider_id) and provider_id != "" do
+    case Synapsis.Backplane.select_mcp_provider(provider_id, params["url"]) do
+      {:ok, _config} ->
+        {:noreply,
+         socket
+         |> refresh_states()
+         |> assign(show_form: false, modal_error: nil)
+         |> reset_react_form("mcp-create-form")
+         |> put_flash(:info, "MCP server added")
+         |> push_patch(to: ~p"/settings/mcp")}
+
+      {:error, _} ->
+        {:noreply, modal_error(socket, "Provider connection is unavailable")}
+    end
   end
 
   def handle_event("create_config", params, socket) do
@@ -303,6 +321,8 @@ defmodule SynapsisWeb.MCPLive.Index do
     {:noreply, refresh_states(socket)}
   end
 
+  def handle_info({:provider_catalog_changed}, socket), do: {:noreply, refresh_states(socket)}
+
   def handle_info(_msg, socket), do: {:noreply, socket}
 
   @impl true
@@ -320,7 +340,12 @@ defmodule SynapsisWeb.MCPLive.Index do
 
   defp refresh_states(socket) do
     configs = list_configs()
-    assign(socket, configs: configs, plugin_states: load_plugin_states(configs))
+
+    assign(socket,
+      configs: configs,
+      plugin_states: load_plugin_states(configs),
+      source_providers: Synapsis.Backplane.ProviderSource.available()
+    )
   end
 
   defp stop_disabled_server(socket, name) do
@@ -477,6 +502,7 @@ defmodule SynapsisWeb.MCPLive.Index do
     assigns =
       assign(assigns,
         custom_form: Map.get(assigns, :custom_form, %{}),
+        custom_provider: form_value(Map.get(assigns, :custom_form, %{}), "provider_id"),
         custom_transport: form_value(Map.get(assigns, :custom_form, %{}), "transport", "stdio")
       )
 
@@ -487,9 +513,12 @@ defmodule SynapsisWeb.MCPLive.Index do
         <:crumb>MCP Servers</:crumb>
       </.breadcrumb>
 
-      <div class="flex justify-between items-center mb-6">
+      <div class="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-6">
         <h1 class="text-2xl font-bold">MCP Servers</h1>
-        <div class="flex gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+          <.dm_btn variant="ghost" size="sm" phx-click="refresh_catalog" disabled={@catalog_loading}>
+            {if @catalog_loading, do: "Refreshing tools…", else: "Refresh live tools"}
+          </.dm_btn>
           <.dm_btn variant="ghost" size="sm" phx-click="show_import">
             <.dm_mdi name="code-json" class="w-4 h-4 mr-1" /> Import JSON
           </.dm_btn>
@@ -499,34 +528,11 @@ defmodule SynapsisWeb.MCPLive.Index do
         </div>
       </div>
 
-      <.dm_card variant="bordered" class="mb-6">
-        <:title>Provider connection</:title>
-        <.react_form
-          for={%{}}
-          id="mcp-provider-form"
-          values={%{"provider_id" => "", "url" => ""}}
-          phx-submit="select_provider"
-          class="space-y-3"
-        >
-          <.dm_react_field
-            type="select"
-            name="provider_id"
-            label="Backplane provider"
-            options={[
-              %{value: "", label: "Select provider"}
-              | Enum.map(@source_providers, &%{value: &1.id, label: &1.name})
-            ]}
-          />
-          <.dm_react_field type="text" name="url" label="MCP URL override (optional)" />
-          <.dm_btn type="submit" variant="primary" size="sm">Add provider source</.dm_btn>
-        </.react_form>
-        <.dm_btn phx-click="refresh_catalog" disabled={@catalog_loading} size="sm" class="mt-3">
-          {if @catalog_loading, do: "Refreshing tools…", else: "Refresh live tools"}
-        </.dm_btn>
+      <div :if={map_size(@catalog_errors) > 0} class="mb-4 space-y-2">
         <p :for={{id, _error} <- @catalog_errors} role="alert" class="text-error text-sm">
           Tool discovery failed for {id}. Tools are unavailable until a successful refresh.
         </p>
-      </.dm_card>
+      </div>
 
       <%!-- Import JSON form --%>
       <.dm_modal
@@ -578,7 +584,9 @@ defmodule SynapsisWeb.MCPLive.Index do
               label="JSON"
             />
             <div class="flex gap-2 mt-3">
-              <.dm_btn type="submit" variant="primary">Import</.dm_btn>
+              <%!-- # TODO(upstream): duskmoon-dev/duskmoon-elements#88 - remove after reconnect-safe button listeners ship.
+                   # WORKAROUND(upstream): duskmoon-dev/duskmoon-elements#88 - native submission avoids duplicate requests after validation. --%>
+              <.dm_btn type="submit" native_submit variant="primary">Import</.dm_btn>
               <.dm_btn type="button" variant="ghost" phx-click="hide_import">Cancel</.dm_btn>
             </div>
           </.react_form>
@@ -609,89 +617,119 @@ defmodule SynapsisWeb.MCPLive.Index do
             class="space-y-4"
             values={@custom_form}
             draft={react_form_draft(assigns, "mcp-create-form")}
-            structure={@custom_transport}
+            structure={
+              {@custom_provider, @custom_transport,
+               Enum.map(@source_providers, &{&1.id, &1.name, &1.enabled})}
+            }
             phx-submit="create_config"
             phx-change="change_custom_config"
           >
-            <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#191 - preserve required, placeholders and textarea layout attributes. --%>
-            <.dm_input
-              type="text"
-              id="mcp-create-name"
-              autofocus
-              name="name"
-              value={form_value(@custom_form, "name")}
-              placeholder="Server name"
-              required
-              label="Name"
-            />
             <.dm_react_field
               type="select"
-              name="transport"
-              label="Transport"
+              name="provider_id"
+              label="Provider"
               options={[
-                %{value: "stdio", label: "stdio"},
-                %{value: "streamable_http", label: "Streamable HTTP"},
-                %{value: "sse", label: "SSE"}
+                %{value: "", label: "Custom configuration"}
+                | Enum.map(@source_providers, &%{value: &1.id, label: &1.name})
               ]}
             />
-            <div :if={@custom_transport in ["streamable_http", "sse"]} class="space-y-4">
+            <div :if={@custom_provider != ""} class="space-y-4">
+              <p class="text-sm text-on-surface-variant">
+                Uses the selected provider's MCP endpoint and credentials.
+                Leave the URL blank to use its default MCP endpoint.
+              </p>
               <.dm_input
                 type="text"
-                id="mcp-create-url"
+                id="mcp-create-provider-url"
                 name="url"
-                required
                 value={form_value(@custom_form, "url")}
-                placeholder="http://localhost:7331/mcp"
-                label="URL"
-              />
-              <.dm_textarea
-                id="mcp-create-headers"
-                name="headers"
-                value={form_value(@custom_form, "headers")}
-                rows={4}
-                placeholder="Authorization: Bearer token"
-                label="Headers (Name: Value, one per line)"
+                placeholder="Optional custom MCP endpoint"
+                label="MCP URL override (optional)"
               />
             </div>
-            <div :if={@custom_transport == "stdio"} class="space-y-4">
+            <div :if={@custom_provider == ""} class="space-y-4">
+              <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#191 - preserve required, placeholders and textarea layout attributes. --%>
               <.dm_input
                 type="text"
-                id="mcp-create-command"
-                name="command"
+                id="mcp-create-name"
+                autofocus
+                name="name"
+                value={form_value(@custom_form, "name")}
+                placeholder="Server name"
                 required
-                value={form_value(@custom_form, "command")}
-                placeholder="e.g. npx"
-                label="Command"
+                label="Name"
               />
-              <.dm_textarea
-                id="mcp-create-args"
-                name="args"
-                value={form_value(@custom_form, "args")}
-                rows={3}
-                placeholder="One argument per line"
-                label="Arguments (one per line)"
+              <.dm_react_field
+                type="select"
+                name="transport"
+                label="Transport"
+                options={[
+                  %{value: "stdio", label: "stdio"},
+                  %{value: "streamable_http", label: "Streamable HTTP"},
+                  %{value: "sse", label: "SSE"}
+                ]}
               />
-              <.dm_textarea
-                id="mcp-create-env"
-                name="env"
-                rows={3}
-                placeholder="KEY=VALUE"
-                label="Environment Variables (KEY=VALUE, one per line)"
-                value={form_value(@custom_form, "env")}
-              />
-            </div>
-            <div>
-              <input type="hidden" name="enabled" value="false" />
-              <.dm_checkbox
-                id="mcp-create-enabled"
-                name="enabled"
-                value="true"
-                label="Enabled"
-              />
+              <div :if={@custom_transport in ["streamable_http", "sse"]} class="space-y-4">
+                <.dm_input
+                  type="text"
+                  id="mcp-create-url"
+                  name="url"
+                  required
+                  value={form_value(@custom_form, "url")}
+                  placeholder="http://localhost:7331/mcp"
+                  label="URL"
+                />
+                <.dm_textarea
+                  id="mcp-create-headers"
+                  name="headers"
+                  value={form_value(@custom_form, "headers")}
+                  rows={4}
+                  placeholder="Authorization: Bearer token"
+                  label="Headers (Name: Value, one per line)"
+                />
+              </div>
+              <div :if={@custom_transport == "stdio"} class="space-y-4">
+                <.dm_input
+                  type="text"
+                  id="mcp-create-command"
+                  name="command"
+                  required
+                  value={form_value(@custom_form, "command")}
+                  placeholder="e.g. npx"
+                  label="Command"
+                />
+                <.dm_textarea
+                  id="mcp-create-args"
+                  name="args"
+                  value={form_value(@custom_form, "args")}
+                  rows={3}
+                  placeholder="One argument per line"
+                  label="Arguments (one per line)"
+                />
+                <.dm_textarea
+                  id="mcp-create-env"
+                  name="env"
+                  rows={3}
+                  placeholder="KEY=VALUE"
+                  label="Environment Variables (KEY=VALUE, one per line)"
+                  value={form_value(@custom_form, "env")}
+                />
+              </div>
+              <div>
+                <input type="hidden" name="enabled" value="false" />
+                <.dm_checkbox
+                  id="mcp-create-enabled"
+                  name="enabled"
+                  value="true"
+                  label="Enabled"
+                />
+              </div>
             </div>
             <:actions>
               <.dm_btn type="button" variant="ghost" phx-click="hide_create">Cancel</.dm_btn>
-              <.dm_btn type="submit" variant="primary">
+              <%!-- # TODO(upstream): duskmoon-dev/duskmoon-elements#88 - remove after reconnect-safe button listeners ship.
+                   # WORKAROUND(upstream): duskmoon-dev/duskmoon-elements#88 - native submission avoids duplicate requests after validation. --%>
+              <.dm_btn type="submit" native_submit variant="primary">
                 Add MCP Server
               </.dm_btn>
             </:actions>

@@ -3,6 +3,9 @@
 # help of the Config module.
 import Config
 
+# LiveView logs nested form values too; credential keys must remain redacted.
+config :phoenix, :filter_parameters, ["password", "token", "key", "secret", "authorization"]
+
 # ADR-006 C4: PostgreSQL removed — no Ecto Repo. Session/agent state lives in
 # Concord (below); configs are files; memory is the memory port.
 
@@ -56,7 +59,7 @@ config :synapsis_server, SynapsisServer.Endpoint,
 # Configure Elixir's Logger
 config :logger, :default_formatter,
   format: "$time $metadata[$level] $message\n",
-  metadata: [:request_id, :session_id, :reason]
+  metadata: [:request_id, :session_id, :provider_id, :provider_ids, :reason]
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason

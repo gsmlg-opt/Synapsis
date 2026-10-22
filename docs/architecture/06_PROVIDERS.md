@@ -138,11 +138,16 @@ remote model will accept converted signed history, particularly Google content.
 
 ## Configured Models And Session Selection
 
-Provider connections own endpoint, credentials, protocol, preset and enabled
+Provider connections own endpoint, credential reference, protocol, preset and enabled
 state in `providers.toml`. `Synapsis.Models` owns `models.toml`: stable model UUID,
 provider UUID, raw model ID, optional display name, positive token context window,
 and enabled state. Raw IDs are unique within a provider. Discovery provides import
 candidates; repeat imports preserve configured context and enabled choices.
+Missing context defaults to 256,000 tokens; explicit provider metadata and saved
+values are preserved. Model settings use a modal editor with 256k, 384k, 500k,
+768k and 1M presets (decimal tokens), retain existing custom values, and support
+bulk context, enable/disable and confirmed delete operations on selected records,
+plus importing all discovery suggestions.
 
 `Providers.configured_models/0` is the shared selectable catalog for agent defaults
 and sessions. Both provider and model must be runtime-available. One-time import
@@ -197,6 +202,12 @@ creation. Creation attempts model discovery through the OpenAI-compatible
 models endpoint (`<base_url>/models` when the URL already ends in `/v1`,
 otherwise `<base_url>/v1/models`) and caches models when discovery succeeds. A
 discovery failure leaves the provider configured for a later retry.
+Backplane suggestions come only from successful discovery; an empty discovery
+result remains empty rather than falling back to built-in OpenAI models. Model
+settings identify authentication failures and link to the provider connection.
+Open model settings reconcile the selected provider after connection changes.
+Model editor and bulk context forms use native submit buttons to avoid duplicate
+submissions when custom elements reconnect (duskmoon-dev/duskmoon-elements#88).
 
 These preset details do not create a fourth wire protocol and do not enable the
 OpenAI Responses client API.
@@ -206,3 +217,74 @@ sources resolve current provider credentials when used, preserve existing source
 UUIDs and skill locators, and keep source trust/sync state separate. MCP may save
 an explicit URL override; its default follows the provider endpoint. Creating a
 provider alone does not create either source or assign skills to agents.
+
+Backplane tool snapshots are diagnostic only; live MCP discovery owns tool
+admission. Their schemas may contain JSON nulls, so MCP configuration persists
+them in `config.backplane_tools_json`. `Synapsis.MCPConfigs` decodes this field
+to the existing `backplane_tools` list and continues to read legacy inline lists.
+
+## Provider Lifecycle
+
+### Credentials
+
+`/settings/credentials` manages named API keys and Backplane access tokens through
+modal forms. `Synapsis.Credentials` in `synapsis_data` owns encrypted records in
+`credentials.toml`, using the existing AES-256-GCM `enc:v1:` format. Providers store
+only `credential_id`; Models, linked MCP services and remote Skills keep their
+existing Provider/source identities. Multiple Providers can share a Credential.
+OAuth login, refresh and logout retain their existing lifecycle and storage.
+
+Lists return safe metadata and a masked suffix only for keys longer than eight
+characters. Edit forms never preload a saved key; leaving the key empty preserves
+it. Phoenix filters credential parameters in nested request/LiveView logs.
+Deleting a referenced Credential fails with the referencing Providers; deleting a
+Provider retains its Credential. Reference lists and blocked-deletion warnings
+refresh when Provider references change. Explicit “No credential” is a valid selection.
+Missing or corrupt explicit references fail unavailable, without falling back to
+an inline key, environment variable or unauthenticated request.
+
+Credential writes and reference checks share the Store write lock. Notifications
+run after the outer write completes, refresh Provider Registry/catalog state and
+replace already-running linked MCP clients through supervised tasks. No-op file
+reloads do not reconnect clients. External ciphertext edits, even with unchanged
+timestamps, change the authentication generation. Request and tool boundaries
+resolve current authentication and generations; correctness does not depend only
+on notification delivery. A session's next request uses the current key while an
+already-started request keeps its lifecycle. Remote Skill suppliers resolve the
+current key on use. Delayed model/tool discoveries and Backplane snapshots cannot
+publish capabilities after their authentication generation changes.
+
+Startup migrates legacy manual Provider keys after a private backup under the
+config directory's `backups/credentials-migration-*`. It saves a Credential before
+replacing the Provider's inline field, preserves UUIDs and reuses a per-Provider
+legacy marker on retries without overwriting a subsequent key rotation. Different
+Providers with equal keys are not automatically deduplicated. Failures keep the
+legacy record and log the affected Provider UUID with a sanitized error class;
+the cross-file migration is recoverable rather than crash-atomic.
+
+Provider REST inputs accept `credential_id` and retain `api_key` /
+`api_key_encrypted` compatibility: a raw-key update can rotate an unshared
+Credential, but a shared Credential requires an explicit Credentials update.
+Clearing a Provider key detaches its reference and retains the Credential.
+
+### Provider Removal
+
+Deleting a provider removes its configured models, linked Backplane sources,
+MCP services and remote skills. It also clears affected agent defaults, fallback
+models, skill assignments and MCP selections, plus tool references in agents,
+toolsets and surviving skills. Independent services, local skills and historical
+sessions remain intact. MCP teardown stops linked clients and unregisters their
+discovered tools; the provider's runtime registry entry is removed as well.
+
+Configuration mutations and immediate registry updates share a local write lock.
+Updates replace existing records without recreating deleted identities, and new
+linked writes require their provider/source to exist. Consequently, discovery or
+sync results arriving after deletion cannot revive the removed records. Cleanup
+spans several TOML files rather than a crash-atomic transaction: a persistence
+failure is reported and retains the provider/source needed to retry cleanup.
+
+Successful provider changes and model-setting operations publish a local catalog
+invalidation. Open settings, agent and session pages reload their choices while
+preserving unsaved form drafts. Discovery refreshes import candidates; importing
+models remains explicit. Recreating a provider with the same name creates a new
+identity and does not inherit the deleted provider's models or agent defaults.

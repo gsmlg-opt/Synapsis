@@ -31,6 +31,57 @@ defmodule Synapsis.MCP do
     end
   end
 
+  @doc false
+  def cleanup_provider(%{mcps: configs}) do
+    if Process.whereis(Synapsis.MCP.Registry) do
+      Enum.reduce_while(configs, :ok, fn config, :ok ->
+        case cleanup_runtime(config["id"], [config["name"]]) do
+          :ok -> {:cont, :ok}
+          {:error, reason} -> {:halt, {:error, reason}}
+        end
+      end)
+    else
+      :ok
+    end
+  end
+
+  @doc false
+  def credentials_changed(ids) do
+    if Process.whereis(Synapsis.MCP.Registry) do
+      provider_ids =
+        Synapsis.Config.Store.list(:provider)
+        |> Enum.filter(&(&1["credential_id"] in ids))
+        |> MapSet.new(& &1["id"])
+
+      configs =
+        Enum.filter(MCPConfigs.list(), fn config ->
+          MapSet.member?(provider_ids, config.provider_id) and
+            (Registry.lookup(Synapsis.MCP.Registry, {:config_id, config.id}) != [] or
+               Registry.lookup(Synapsis.MCP.Registry, config.name) != [])
+        end)
+
+      ready =
+        Enum.filter(configs, fn config ->
+          case cleanup_runtime(config.id, [config.name]) do
+            :ok ->
+              true
+
+            {:error, _} ->
+              Logger.warning("mcp_credential_invalidation_failed", mcp_config_id: config.id)
+              false
+          end
+        end)
+
+      Enum.each(ready, fn config ->
+        if MCPConfigs.runtime_available?(config) do
+          Task.Supervisor.start_child(Synapsis.MCP.TaskSupervisor, fn -> refresh(config.id) end)
+        end
+      end)
+    end
+
+    :ok
+  end
+
   def restart(%MCPConfig{} = config) do
     restart(config, :runtime)
   end
@@ -47,6 +98,7 @@ defmodule Synapsis.MCP do
           :ok ->
             case start_after_cleanup(current, availability) do
               {:ok, pid} -> await_restart(pid, current)
+              {:error, {:already_started, pid}} -> refresh_existing(pid, current)
               {:error, _} = error -> error
             end
 
@@ -139,6 +191,7 @@ defmodule Synapsis.MCP do
             [] ->
               case start(config) do
                 {:ok, pid} -> Server.await_ready(pid)
+                {:error, {:already_started, pid}} -> refresh_existing(pid, config)
                 {:error, reason} -> {:error, reason}
               end
           end
@@ -248,6 +301,15 @@ defmodule Synapsis.MCP do
           {:error, cleanup_reason} ->
             {:error, {:restart_cleanup_failed, reason, cleanup_reason}}
         end
+    end
+  end
+
+  defp refresh_existing(pid, config) do
+    key = if config.id, do: {:config_id, config.id}, else: config.name
+
+    case Registry.lookup(Synapsis.MCP.Registry, key) do
+      [{^pid, _}] -> Server.refresh(pid)
+      _ -> {:error, :mcp_unavailable}
     end
   end
 

@@ -313,14 +313,26 @@ function AgentBackupModelPicker({
 export const AgentModelPickerHook = {
   mounted(this: any) {
     this.agentModelPickerAgentId = this.el.dataset.agentId || ""
+    this.agentModelPickerOptions = this.el.dataset.options || ""
     this.renderPicker()
+    this.handleEvent("agent:model-options", ({ options }: { options: ProviderOption[] }) => {
+      const encoded = JSON.stringify(options)
+      if (encoded !== this.agentModelPickerOptions) {
+        this.agentModelPickerOptions = encoded
+        this.el.dataset.options = encoded
+        this.renderPicker()
+      }
+    })
   },
 
   updated(this: any) {
     const agentId = this.el.dataset.agentId || ""
 
-    if (agentId !== this.agentModelPickerAgentId) {
+    const options = this.el.dataset.options || ""
+
+    if (agentId !== this.agentModelPickerAgentId || options !== this.agentModelPickerOptions) {
       this.agentModelPickerAgentId = agentId
+      this.agentModelPickerOptions = options
       this.renderPicker()
     }
   },
@@ -354,14 +366,26 @@ export const AgentModelPickerHook = {
 export const AgentBackupModelPickerHook = {
   mounted(this: any) {
     this.agentBackupModelPickerAgentId = this.el.dataset.agentId || ""
+    this.agentBackupModelPickerOptions = this.el.dataset.options || ""
     this.renderPicker()
+    this.handleEvent("agent:model-options", ({ options }: { options: ProviderOption[] }) => {
+      const encoded = JSON.stringify(options)
+      if (encoded !== this.agentBackupModelPickerOptions) {
+        this.agentBackupModelPickerOptions = encoded
+        this.el.dataset.options = encoded
+        this.renderPicker()
+      }
+    })
   },
 
   updated(this: any) {
     const agentId = this.el.dataset.agentId || ""
 
-    if (agentId !== this.agentBackupModelPickerAgentId) {
+    const options = this.el.dataset.options || ""
+
+    if (agentId !== this.agentBackupModelPickerAgentId || options !== this.agentBackupModelPickerOptions) {
       this.agentBackupModelPickerAgentId = agentId
+      this.agentBackupModelPickerOptions = options
       this.renderPicker()
     }
   },

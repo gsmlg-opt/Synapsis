@@ -12,10 +12,11 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   @impl true
   def mount(%{"agent_id" => agent_id}, _session, socket) do
     agent_config = Synapsis.Agent.Resolver.resolve(agent_id)
-    provider_configured? = not is_nil(agent_config.provider)
+    provider_configured? = agent_model_ready?(agent_config)
 
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Synapsis.PubSub, "heartbeat:notifications")
+      Providers.subscribe()
     end
 
     {:ok,
@@ -140,6 +141,28 @@ defmodule SynapsisWeb.AgentLive.Sessions do
        react_chat: nil,
        react_chat_initial: nil
      )}
+  end
+
+  defp refresh_model_catalog(socket) do
+    agent_config = Synapsis.Agent.Resolver.resolve(socket.assigns.agent_id)
+
+    assign(socket,
+      agent_config: agent_config,
+      provider_configured: agent_model_ready?(agent_config),
+      configured_models: Providers.configured_models()
+    )
+  end
+
+  defp agent_model_ready?(%{provider: provider}) when provider in [nil, ""], do: false
+
+  defp agent_model_ready?(agent_config) do
+    model = agent_config.model || Providers.default_model(agent_config.provider)
+
+    case Providers.get_runtime_by_name(agent_config.provider) do
+      {:ok, provider} -> Providers.model_runtime_available?(provider, model)
+      {:error, :provider_unavailable} -> false
+      {:error, :not_found} -> true
+    end
   end
 
   # ADR-006 B2: resolve status, in-flight text and pending questions from the live read authority
@@ -354,7 +377,8 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   defp operation_reply(_result, socket),
     do: {%{status: "error", message: "Session action failed"}, socket}
 
-  defp handle_session_event("switch_model", %{"model_id" => id}, socket) do
+  defp handle_session_event("switch_model", params, socket) do
+    id = Map.get(params, "model_id")
     models = Providers.configured_models()
     socket = assign(socket, configured_models: models)
     model = Enum.find(models, &(&1.id == id))
@@ -490,7 +514,12 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     provider = agent_config.provider || "anthropic"
     model = agent_config.model || Synapsis.Providers.default_model(provider)
 
-    case Sessions.create(agent_id, %{provider: provider, model: model, agent: agent_id}) do
+    result =
+      if agent_model_ready?(agent_config),
+        do: Sessions.create(agent_id, %{provider: provider, model: model, agent: agent_id}),
+        else: {:error, :model_unavailable}
+
+    case result do
       {:ok, session} ->
         sessions = [session | socket.assigns.sessions]
 
@@ -498,6 +527,15 @@ defmodule SynapsisWeb.AgentLive.Sessions do
          socket
          |> assign(sessions: sessions)
          |> push_patch(to: ~p"/agent/agents/#{agent_id}/sessions/#{session.id}")}
+
+      {:error, :model_unavailable} ->
+        {:noreply,
+         socket
+         |> refresh_model_catalog()
+         |> put_flash(
+           :error,
+           "Agent model #{provider}/#{model} is unavailable. Configure an available model in agent settings."
+         )}
 
       {:error, reason} ->
         Logger.warning("session_create_failed", reason: inspect(reason))
@@ -780,6 +818,10 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     end
   end
 
+  def handle_info({:provider_catalog_changed}, socket) do
+    {:noreply, socket |> refresh_model_catalog() |> sync_chat()}
+  end
+
   def handle_info(message, socket) do
     {:noreply, socket} = handle_session_info(message, socket)
     {:noreply, sync_chat(socket)}
@@ -1035,7 +1077,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
                 <%= if @provider_configured do %>
                   Ready to chat
                 <% else %>
-                  Provider not configured
+                  Agent model unavailable
                 <% end %>
               </p>
             </div>
@@ -1047,7 +1089,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
             </.dm_btn>
           <% else %>
             <.dm_tooltip
-              content="Set a provider in agent config first"
+              content="Configure an available model in agent settings"
               position="bottom"
               color="warning"
             >
@@ -1175,7 +1217,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
               description={
                 if @provider_configured,
                   do: "Create or select a session to start chatting",
-                  else: "Configure a provider in settings to start chatting"
+                  else: "Configure an available model in agent settings to start chatting"
               }
             >
               <:action>

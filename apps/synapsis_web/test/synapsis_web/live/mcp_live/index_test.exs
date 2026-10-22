@@ -20,6 +20,33 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
     end
   end
 
+  test "an open source picker refreshes providers added and deleted elsewhere", %{conn: conn} do
+    {:ok, view, _} = live(conn, ~p"/settings/mcp/new")
+
+    {:ok, provider} =
+      Synapsis.Providers.create(%{
+        name: "live-source-#{System.unique_integer([:positive])}",
+        type: "openai",
+        preset: "backplane",
+        base_url: "https://backplane.example.test/v1"
+      })
+
+    Phoenix.PubSub.broadcast(Synapsis.PubSub, "providers:catalog", {:provider_catalog_changed})
+
+    assert has_element?(
+             view,
+             "[data-form-id='mcp-create-form'] [data-dm-react-field*='#{provider.id}']"
+           )
+
+    assert {:ok, _} = Synapsis.Providers.delete(provider.id)
+    Phoenix.PubSub.broadcast(Synapsis.PubSub, "providers:catalog", {:provider_catalog_changed})
+
+    refute has_element?(
+             view,
+             "[data-form-id='mcp-create-form'] [data-dm-react-field*='#{provider.id}']"
+           )
+  end
+
   setup do
     original = Application.get_env(:synapsis_core, :mcp_refresh)
     Application.put_env(:synapsis_core, :mcp_refresh, {NoopRefresh, :refresh, []})
@@ -77,33 +104,163 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
     refute_receive :settings_refresh_requested, 20
   end
 
-  test "offers provider-linked MCP creation and live refresh", %{conn: conn} do
-    {:ok, provider} =
-      Synapsis.Providers.create(%{
-        name: "mcp-provider-#{System.unique_integer([:positive])}",
-        type: "openai",
-        config: %{"preset" => "backplane"},
-        base_url: "https://backplane.example.test/v1"
-      })
+  test "opens on the configured list with creation and import forms hidden", %{conn: conn} do
+    create_mcp_config(%{name: "configured-first", command: "test-cmd"})
+    {:ok, view, _html} = live(conn, ~p"/settings/mcp")
 
-    on_exit(fn -> Synapsis.Providers.delete(provider.id) end)
-    {:ok, view, html} = live(conn, ~p"/settings/mcp")
-    assert html =~ "Provider connection"
-    assert has_element?(view, "[data-form-id='mcp-provider-form']")
+    assert has_element?(view, "a[href^='/settings/mcp/']", "configured-first")
     assert has_element?(view, "[phx-click='refresh_catalog']")
+    refute has_element?(view, "[data-form-id='mcp-provider-form']")
+    refute has_element?(view, "[data-form-id='mcp-create-form']")
+    refute has_element?(view, "[data-form-id='mcp-import-form']")
 
-    react_form_submit(view, "mcp-provider-form", %{
+    view |> element("el-dm-button[phx-click='show_import']") |> render_click()
+    assert has_element?(view, "#mcp-import-modal [data-form-id='mcp-import-form']")
+    refute has_element?(view, "[data-form-id='mcp-create-form']")
+    refute has_element?(view, "[data-form-id='mcp-provider-form']")
+    assert has_element?(view, "a[href^='/settings/mcp/']", "configured-first")
+  end
+
+  test "Add modal creates a provider source using its default endpoint", %{conn: conn} do
+    provider = create_backplane_provider("default-provider", "https://backplane.example.test/v1")
+
+    {:ok, ordinary} =
+      Synapsis.Providers.create(%{name: "ordinary-#{Ecto.UUID.generate()}", type: "openai"})
+
+    on_exit(fn -> Synapsis.Providers.delete(ordinary.id) end)
+    {:ok, view, _html} = live(conn, ~p"/settings/mcp")
+    view |> element("a[href='/settings/mcp/new']") |> render_click()
+    assert_patch(view, ~p"/settings/mcp/new")
+    html = render(view)
+    assert html =~ "Custom configuration"
+    assert html =~ provider.name
+    refute html =~ ordinary.name
+    assert form_values(view, "mcp-create-form")["provider_id"] == ""
+
+    html = react_form_change(view, "mcp-create-form", %{"provider_id" => provider.id})
+    assert html =~ "MCP URL override"
+    refute has_element?(view, "#mcp-create-name")
+    refute has_element?(view, "#mcp-create-command")
+    refute has_element?(view, "[data-form-id='mcp-provider-form']")
+    react_form_submit(view, "mcp-create-form", %{})
+
+    assert_patch(view, ~p"/settings/mcp")
+    refute has_element?(view, "#mcp-create-modal")
+    assert config = Enum.find(MCPConfigs.list(), &(&1.provider_id == provider.id))
+    assert config.url == "https://backplane.example.test/mcp"
+    assert config.transport == "streamable_http"
+    assert config.config["provider_url_override"] == false
+    assert has_element?(view, "a[href='/settings/mcp/#{config.id}']", config.name)
+  end
+
+  test "Add modal accepts an explicit provider URL override", %{conn: conn} do
+    provider = create_backplane_provider("override-provider", "https://backplane.example.test/v1")
+    {:ok, view, _html} = live(conn, ~p"/settings/mcp/new")
+    react_form_change(view, "mcp-create-form", %{"provider_id" => provider.id})
+
+    react_form_submit(view, "mcp-create-form", %{
       "provider_id" => provider.id,
       "url" => "https://override.example.test/custom/mcp"
     })
 
+    assert_patch(view, ~p"/settings/mcp")
     assert config = Enum.find(MCPConfigs.list(), &(&1.provider_id == provider.id))
     assert config.url == "https://override.example.test/custom/mcp"
-    Synapsis.MCPConfigs.delete(config)
+    assert config.config["provider_url_override"] == true
+    refute has_element?(view, "#mcp-create-modal")
+  end
 
-    for source <- Synapsis.Backplane.Connection.list(),
-        source.provider_id == provider.id,
-        do: Synapsis.Backplane.Connection.delete(source)
+  test "provider errors retain the modal draft and cancellation resets both creation modes", %{
+    conn: conn
+  } do
+    provider =
+      create_backplane_provider("unavailable-provider", "https://backplane.example.test/v1")
+
+    {:ok, view, _html} = live(conn, ~p"/settings/mcp/new")
+    react_form_change(view, "mcp-create-form", %{"name" => "manual-draft", "command" => "npx"})
+    react_form_change(view, "mcp-create-form", %{"provider_id" => provider.id})
+    assert {:ok, _} = Synapsis.Providers.update(provider.id, %{enabled: false})
+
+    react_form_submit(view, "mcp-create-form", %{"url" => "https://override.example.test/mcp"})
+
+    assert has_element?(
+             view,
+             "#mcp-create-modal [role='alert']",
+             "Provider connection is unavailable"
+           )
+
+    assert form_values(view, "mcp-create-form")["provider_id"] == provider.id
+    assert form_values(view, "mcp-create-form")["url"] == "https://override.example.test/mcp"
+    refute Enum.any?(MCPConfigs.list(), &(&1.provider_id == provider.id))
+
+    view |> element("#mcp-create-modal [phx-click='hide_create']", "Cancel") |> render_click()
+    assert_patch(view, ~p"/settings/mcp")
+    view |> element("a[href='/settings/mcp/new']") |> render_click()
+    assert_patch(view, ~p"/settings/mcp/new")
+    refute has_element?(view, "#mcp-create-modal [role='alert']")
+    assert has_element?(view, "#mcp-create-command")
+    values = form_values(view, "mcp-create-form")
+    assert values["provider_id"] == ""
+    assert values["transport"] == "stdio"
+    for key <- ["name", "command", "url"], do: assert(values[key] in [nil, ""])
+  end
+
+  test "custom fields survive provider mode and transport changes", %{conn: conn} do
+    provider = create_backplane_provider("draft-provider", "https://backplane.example.test/v1")
+    {:ok, view, _html} = live(conn, ~p"/settings/mcp/new")
+
+    react_form_change(view, "mcp-create-form", %{
+      "name" => "retained-manual",
+      "command" => "npx",
+      "args" => "-y\nserver",
+      "env" => "KEY=value"
+    })
+
+    react_form_change(view, "mcp-create-form", %{"transport" => "streamable_http"})
+    react_form_change(view, "mcp-create-form", %{"headers" => "X-Workspace: docs"})
+    react_form_change(view, "mcp-create-form", %{"provider_id" => provider.id})
+    react_form_change(view, "mcp-create-form", %{"provider_id" => ""})
+    values = form_values(view, "mcp-create-form")
+    assert values["name"] == "retained-manual"
+    assert values["transport"] == "streamable_http"
+    assert values["headers"] == "X-Workspace: docs"
+    assert has_element?(view, "#mcp-create-headers")
+
+    react_form_change(view, "mcp-create-form", %{"transport" => "stdio"})
+    values = form_values(view, "mcp-create-form")
+    assert values["command"] == "npx"
+    assert values["args"] == "-y\nserver"
+    assert values["env"] == "KEY=value"
+    react_form_submit(view, "mcp-create-form", %{})
+    assert_patch(view, ~p"/settings/mcp")
+    config = MCPConfigs.get_by_name("retained-manual")
+    assert config.provider_id == nil
+    assert config.command == "npx"
+    assert config.args == ["-y", "server"]
+    assert config.env == %{"KEY" => "value"}
+  end
+
+  test "switching providers clears prior manual and provider URL overrides", %{conn: conn} do
+    first = create_backplane_provider("first-provider", "https://first.example.test/v1")
+    second = create_backplane_provider("second-provider", "https://second.example.test/v1")
+    {:ok, view, _html} = live(conn, ~p"/settings/mcp/new")
+
+    react_form_change(view, "mcp-create-form", %{
+      "transport" => "streamable_http",
+      "url" => "https://manual.example.test/mcp"
+    })
+
+    react_form_change(view, "mcp-create-form", %{"provider_id" => first.id})
+    assert form_values(view, "mcp-create-form")["url"] == ""
+    react_form_change(view, "mcp-create-form", %{"url" => "https://override.example.test/mcp"})
+    react_form_change(view, "mcp-create-form", %{"provider_id" => second.id})
+    assert form_values(view, "mcp-create-form")["url"] == ""
+    react_form_submit(view, "mcp-create-form", %{})
+    assert_patch(view, ~p"/settings/mcp")
+    assert config = Enum.find(MCPConfigs.list(), &(&1.provider_id == second.id))
+    assert config.url == "https://second.example.test/mcp"
+    assert config.config["provider_url_override"] == false
+    refute Enum.any?(MCPConfigs.list(), &(&1.provider_id == first.id))
   end
 
   describe "MCP servers page" do
@@ -516,6 +673,41 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
       {:ok, _view, html} = live(conn, ~p"/settings/mcp")
       assert html =~ "No MCP servers configured"
     end
+  end
+
+  defp form_values(view, id) do
+    view
+    |> element("[data-form-id='#{id}']")
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("[data-initial-values]")
+    |> LazyHTML.attribute("data-initial-values")
+    |> hd()
+    |> Jason.decode!()
+  end
+
+  defp create_backplane_provider(name, base_url) do
+    {:ok, provider} =
+      Synapsis.Providers.create(%{
+        name: name <> "-" <> Ecto.UUID.generate(),
+        type: "openai",
+        config: %{"preset" => "backplane"},
+        base_url: base_url
+      })
+
+    on_exit(fn ->
+      for source <- Synapsis.Backplane.Connection.list(),
+          source.provider_id == provider.id,
+          do: Synapsis.Backplane.Connection.delete(source)
+
+      for config <- MCPConfigs.list(),
+          config.provider_id == provider.id,
+          do: MCPConfigs.delete(config)
+
+      Synapsis.Providers.delete(provider.id)
+    end)
+
+    provider
   end
 
   defp wait_until(fun, tries \\ 100) do

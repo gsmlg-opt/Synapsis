@@ -10,6 +10,7 @@ defmodule SynapsisWeb.SettingsLayoutTest do
 
   @static_settings_paths [
     "/settings",
+    "/settings/credentials",
     "/settings/providers",
     "/settings/providers/new",
     "/settings/models",
@@ -42,6 +43,16 @@ defmodule SynapsisWeb.SettingsLayoutTest do
              ),
              "expected MCP Servers menu item on #{path}"
     end
+  end
+
+  test "credentials has an active settings menu entry", %{conn: conn} do
+    {:ok, view, _} = live(conn, ~p"/settings/credentials")
+
+    assert has_element?(
+             view,
+             "[data-testid='settings-sidebar'] a[href='/settings/credentials'][aria-current='page']",
+             "Credentials"
+           )
   end
 
   test "settings appearance is active on the root settings page", %{conn: conn} do

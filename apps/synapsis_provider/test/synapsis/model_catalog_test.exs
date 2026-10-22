@@ -7,6 +7,123 @@ defmodule Synapsis.ModelCatalogTest do
     :ok
   end
 
+  test "Backplane suggestions require discovery and explicit empty caches stay empty" do
+    for config <- [%{}, %{"available_models" => []}] do
+      assert {:ok, provider} =
+               Providers.create(%{
+                 name: "backplane-#{System.unique_integer([:positive])}",
+                 preset: "backplane",
+                 type: "openai",
+                 config: Map.put(config, "model_catalog_migrated", true)
+               })
+
+      assert Providers.model_suggestions(provider) == []
+    end
+
+    assert {:ok, official} =
+             Providers.create(%{name: "official-openai", type: "openai", preset: "openai"})
+
+    assert Enum.any?(Providers.model_suggestions(official), &(&1.id == "gpt-4o"))
+
+    assert {:ok, empty} =
+             Providers.update(official.id, %{config: %{"available_models" => []}})
+
+    assert Providers.model_suggestions(empty) == []
+  end
+
+  test "Backplane discovery imports only remote suggestions and retains configured choices" do
+    bypass = Bypass.open()
+
+    Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+      Plug.Conn.resp(
+        Plug.Conn.put_resp_content_type(conn, "application/json"),
+        200,
+        Jason.encode!(%{
+          "data" => [
+            %{"id" => "backplane-existing", "context_window" => 384_000},
+            %{"id" => "backplane-new", "context_length" => 768_000}
+          ]
+        })
+      )
+    end)
+
+    assert {:ok, provider} =
+             Providers.create(%{
+               name: "remote-backplane",
+               preset: "backplane",
+               type: "openai",
+               base_url: "http://localhost:#{bypass.port}/v1",
+               config: %{"model_catalog_migrated" => true}
+             })
+
+    assert {:ok, existing} =
+             Models.create(%{
+               provider_id: provider.id,
+               model: "backplane-existing",
+               context_window: 500_000,
+               enabled: false
+             })
+
+    assert {:ok, refreshed} = Providers.refresh_models(provider.id)
+    suggestions = Providers.model_suggestions(refreshed)
+
+    assert Enum.map(suggestions, &{&1.id, &1.context_window}) == [
+             {"backplane-existing", 384_000},
+             {"backplane-new", 768_000}
+           ]
+
+    assert {:error, :not_found} = Models.get_by_identity(provider.id, "backplane-new")
+    assert {:ok, _} = Models.import(provider.id, suggestions)
+    assert {:ok, ^existing} = Models.get(existing.id)
+
+    assert :ok = Store.reload(:model)
+    assert {:ok, ^existing} = Models.get(existing.id)
+
+    assert {:ok, %{context_window: 768_000, enabled: true}} =
+             Models.get_by_identity(provider.id, "backplane-new")
+  end
+
+  test "authentication failure preserves discovered cache and configured models" do
+    bypass = Bypass.open()
+
+    Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+      Plug.Conn.resp(
+        Plug.Conn.put_resp_content_type(conn, "application/json"),
+        401,
+        Jason.encode!(%{"error" => "Unauthorized"})
+      )
+    end)
+
+    assert {:ok, provider} =
+             Providers.create(%{
+               name: "authenticated-backplane",
+               preset: "backplane",
+               type: "openai",
+               base_url: "http://localhost:#{bypass.port}/v1",
+               config: %{
+                 "model_catalog_migrated" => true,
+                 "available_models" => [%{"id" => "previous", "context_window" => 384_000}]
+               }
+             })
+
+    assert {:ok, model} =
+             Models.create(%{
+               provider_id: provider.id,
+               model: "previous",
+               context_window: 500_000
+             })
+
+    assert {:ok, original} = Store.get(:provider, provider.id)
+    assert {:error, "HTTP 401"} = Providers.refresh_models(provider.id)
+    assert :ok = Store.reload(:provider)
+    assert :ok = Store.reload(:model)
+    assert {:ok, ^original} = Store.get(:provider, provider.id)
+    assert {:ok, unchanged} = Providers.get(provider.id)
+    assert unchanged.config == provider.config
+    assert {:ok, ^model} = Models.get(model.id)
+    assert [%{id: "previous", context_window: 384_000}] = Providers.model_suggestions(provider)
+  end
+
   test "missing contexts use 256k while explicit and known registry capacities survive" do
     {:ok, provider} =
       Providers.create(%{

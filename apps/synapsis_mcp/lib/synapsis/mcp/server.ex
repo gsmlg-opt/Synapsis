@@ -123,13 +123,13 @@ defmodule Synapsis.MCP.Server do
   def init({%MCPConfig{} = config, initial_availability}) do
     Process.flag(:trap_exit, true)
 
-    case register_config_id(config) do
-      :ok ->
+    case initial_transport(config) do
+      {:ok, connection} ->
         client_name = client_name(config)
 
         opts = [
           name: client_name,
-          transport: Transport.build(config),
+          transport: elem(connection, 0),
           # TODO(upstream): gsmlg-opt/backplane#19 validator cache keys collide across clients.
           client_info: @client_info,
           capabilities: @capabilities,
@@ -151,7 +151,7 @@ defmodule Synapsis.MCP.Server do
               refresh_waiters: [],
               ready_waiters: [],
               discovery_result: nil,
-              transport: connection_transport(config)
+              transport: connection
             }
 
             {:ok, state, {:continue, :discover}}
@@ -262,12 +262,17 @@ defmodule Synapsis.MCP.Server do
   end
 
   def handle_info(:reregister_tools, %{tools: tools} = state) do
-    with :ok <- tool_registry_ready(),
+    with true <- current_transport(state.config) == state.transport,
+         true <- :atomics.get(state.catalog_valid, 1) == 1,
+         :ok <- tool_registry_ready(),
          {:ok, names} <- register_tools(tools),
          {:ok, ref} <- monitor_tool_registry_ready() do
       Logger.info("mcp_tools_reregistered", server: state.config.name, count: length(names))
       {:noreply, %{state | tool_registry_ref: ref, tool_names: names}}
     else
+      false ->
+        {:noreply, state}
+
       {:error, _reason} ->
         Process.send_after(self(), :reregister_tools, @registry_retry_ms)
         {:noreply, state}
@@ -419,8 +424,8 @@ defmodule Synapsis.MCP.Server do
           nil
 
         id ->
-          case Synapsis.Config.Store.get(:provider, id) do
-            {:ok, provider} -> {provider["enabled"], provider["updated_at"]}
+          case Synapsis.Providers.get(id) do
+            {:ok, provider} -> Synapsis.Providers.authentication_generation(provider)
             _ -> :provider_unavailable
           end
       end
@@ -479,26 +484,13 @@ defmodule Synapsis.MCP.Server do
 
   defp finish_refresh(state, result) do
     result =
-      case result do
-        {:ok, raw_tools} ->
-          tools =
-            %{"tools" => raw_tools}
-            |> Response.tools(state.config.name,
-              trust_annotations: MCPConfigs.trust_tool_annotations?(state.config)
-            )
-            |> runtime_available_tools(state.config, state.initial_availability)
-            |> attach_availability_checks(state.config, state.catalog_valid, state.transport)
-
-          Enum.each(state.tool_names, &Registry.unregister(&1, self()))
-
-          case register_tools(tools) do
-            {:ok, names} -> {:ok, tools, names}
-            {:error, reason} -> {:error, reason}
-          end
-
-        other ->
-          other
-      end
+      Synapsis.Config.Store.with_write_lock(fn ->
+        if current_transport(state.config) == state.transport do
+          register_refresh_result(state, result)
+        else
+          {:error, :connection_changed}
+        end
+      end)
 
     {reply, state} =
       case result do
@@ -508,12 +500,36 @@ defmodule Synapsis.MCP.Server do
 
         {:error, reason} ->
           :atomics.put(state.catalog_valid, 1, 0)
-          {{:error, reason}, state}
+          Enum.each(state.tool_names, &Registry.unregister(&1, self()))
+          {{:error, reason}, %{state | tools: [], tool_names: []}}
       end
 
     Enum.each(state.refresh_waiters, &GenServer.reply(&1, reply))
     Enum.each(state.ready_waiters, &GenServer.reply(&1, ready_result(reply)))
     %{state | refresh_task: nil, refresh_waiters: [], ready_waiters: [], discovery_result: reply}
+  end
+
+  defp register_refresh_result(state, result) do
+    case result do
+      {:ok, raw_tools} ->
+        tools =
+          %{"tools" => raw_tools}
+          |> Response.tools(state.config.name,
+            trust_annotations: MCPConfigs.trust_tool_annotations?(state.config)
+          )
+          |> runtime_available_tools(state.config, state.initial_availability)
+          |> attach_availability_checks(state.config, state.catalog_valid, state.transport)
+
+        Enum.each(state.tool_names, &Registry.unregister(&1, self()))
+
+        case register_tools(tools) do
+          {:ok, names} -> {:ok, tools, names}
+          {:error, reason} -> {:error, reason}
+        end
+
+      other ->
+        other
+    end
   end
 
   defp annotation_trust_available?(config, true),
@@ -523,6 +539,20 @@ defmodule Synapsis.MCP.Server do
 
   defp discovered_tool(tools, full_tool_name),
     do: Enum.find(tools, &(&1.name == full_tool_name))
+
+  defp initial_transport(config) do
+    Synapsis.Config.Store.with_write_lock(fn ->
+      with :ok <- register_available_config(config), do: {:ok, connection_transport(config)}
+    end)
+  end
+
+  defp register_available_config(%MCPConfig{provider_id: nil} = config),
+    do: register_config_id(config)
+
+  defp register_available_config(config) do
+    with {:ok, _} <- Synapsis.Backplane.ProviderSource.get(config.provider_id),
+         do: register_config_id(config)
+  end
 
   defp register_config_id(%MCPConfig{id: nil}), do: :ok
 

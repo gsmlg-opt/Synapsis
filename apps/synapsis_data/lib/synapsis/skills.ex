@@ -140,7 +140,15 @@ defmodule Synapsis.Skills do
   end
 
   defp provider_available?(nil), do: true
-  defp provider_available?(id), do: match?({:ok, %{"enabled" => true}}, Store.get(:provider, id))
+
+  defp provider_available?(id) do
+    with {:ok, %{"enabled" => true} = provider} <- Store.get(:provider, id) do
+      is_nil(provider["credential_id"]) or
+        match?({:ok, _}, Synapsis.Credentials.resolve(provider["credential_id"]))
+    else
+      _ -> false
+    end
+  end
 
   defp source_connection_available?(connection, surface) do
     with true <-
@@ -182,7 +190,12 @@ defmodule Synapsis.Skills do
   defp persist(%Ecto.Changeset{valid?: true} = changeset) do
     record = changeset |> Ecto.Changeset.apply_changes() |> ensure_id()
 
-    case Store.put(@store_type, to_store_map(record)) do
+    result =
+      if changeset.data.id,
+        do: Store.replace_existing(@store_type, record.id, to_store_map(record)),
+        else: Store.put(@store_type, to_store_map(record))
+
+    case result do
       :ok -> {:ok, record}
       {:ok, _} -> {:ok, record}
       error -> error

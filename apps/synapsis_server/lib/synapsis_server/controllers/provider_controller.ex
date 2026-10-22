@@ -256,8 +256,9 @@ defmodule SynapsisServer.ProviderController do
       name: p.name,
       type: p.type,
       base_url: p.base_url,
+      credential_id: p.credential_id,
       has_api_key: not is_nil(p.api_key_encrypted),
-      config: p.config,
+      config: Map.drop(p.config || %{}, ["oauth_tokens", :oauth_tokens, "api_key", :api_key]),
       enabled: p.enabled,
       model_tiers: Providers.model_tiers(p.name),
       inserted_at: p.inserted_at,
@@ -269,7 +270,9 @@ defmodule SynapsisServer.ProviderController do
     "name" => :name,
     "type" => :type,
     "base_url" => :base_url,
+    "credential_id" => :credential_id,
     "api_key" => :api_key_encrypted,
+    "api_key_encrypted" => :api_key_encrypted,
     "config" => :config,
     "enabled" => :enabled
   }

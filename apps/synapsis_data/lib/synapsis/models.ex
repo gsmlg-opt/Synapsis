@@ -91,7 +91,14 @@ defmodule Synapsis.Models do
       {:error,
        Ecto.Changeset.add_error(changeset, :model, "has already been taken for this provider")}
     else
-      case Store.put(:model, Map.from_struct(record) |> Map.delete(:__meta__)) do
+      attrs = Map.from_struct(record) |> Map.delete(:__meta__)
+
+      result =
+        if changeset.data.id,
+          do: Store.replace_existing(:model, record.id, attrs),
+          else: Store.put(:model, attrs)
+
+      case result do
         {:ok, _} ->
           {:ok, record}
 

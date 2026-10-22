@@ -5,17 +5,30 @@ defmodule Synapsis.Providers do
   # (TOML), keyed by id. Records round-trip as `%ProviderConfig{}` structs
   # (the Config.Store struct-mapping pattern); the in-memory Provider.Registry
   # remains the runtime authority.
-  alias Synapsis.{Config.Store, Models, ProviderConfig}
+  alias Synapsis.{Config.Store, Credentials, Models, ProviderConfig}
   alias Synapsis.Encrypted.Binary, as: EncryptedBinary
   alias Synapsis.Provider.Registry, as: ProviderRegistry
+  require Logger
 
   @store_type :provider
+  @catalog_topic "providers:catalog"
+
+  def subscribe, do: Phoenix.PubSub.subscribe(Synapsis.PubSub, @catalog_topic)
+
+  def notify_changed do
+    if Process.whereis(Synapsis.PubSub),
+      do: Phoenix.PubSub.broadcast(Synapsis.PubSub, @catalog_topic, {:provider_catalog_changed})
+
+    :ok
+  end
 
   def create(attrs) do
-    %ProviderConfig{}
-    |> ProviderConfig.changeset(attrs)
-    |> check_unique_name(nil)
-    |> persist()
+    Store.with_write_lock(fn ->
+      %ProviderConfig{}
+      |> ProviderConfig.changeset(normalize_credential_attrs(attrs))
+      |> check_unique_name(nil)
+      |> persist()
+    end)
   end
 
   def get(id) do
@@ -37,7 +50,7 @@ defmodule Synapsis.Providers do
     enabled = Map.get(provider, :enabled, Map.get(provider, "enabled", false))
     config = Map.get(provider, :config, Map.get(provider, "config", %{})) || %{}
 
-    enabled and
+    enabled and credential_available?(provider) and
       (not backplane_managed?(config) or
          (Map.get(config, "backplane_available", Map.get(config, :backplane_available)) !=
             false and
@@ -45,6 +58,60 @@ defmodule Synapsis.Providers do
   end
 
   def runtime_available?(_provider), do: false
+
+  @doc "Whether an explicit credential reference can currently be resolved."
+  def credential_available?(provider) do
+    case Map.get(provider, :credential_id, Map.get(provider, "credential_id")) do
+      nil -> true
+      id -> match?({:ok, _}, Credentials.resolve(id))
+    end
+  end
+
+  @doc false
+  def authentication_generation(provider) do
+    {provider.id, provider.updated_at, provider.enabled, provider.base_url,
+     provider.credential_id,
+     if(provider.credential_id, do: Credentials.version(provider.credential_id))}
+  end
+
+  @doc "Refresh authentication for a new request while preserving the caller's request settings."
+  def refresh_runtime_auth(config) do
+    case Map.get(config, :provider_id, Map.get(config, "provider_id")) do
+      nil ->
+        {:ok, config}
+
+      id ->
+        with {:ok, provider} <- get(id),
+             :ok <- ensure_runtime_available(provider) do
+          current = build_runtime_config(provider)
+
+          {:ok,
+           config
+           |> Map.drop([:api_key, "api_key", :oauth, "oauth", :provider_name, "provider_name"])
+           |> Map.put(:api_key, current.api_key)
+           |> Map.put(:provider_name, provider.name)
+           |> Map.put(:oauth, current[:oauth] == true)}
+        else
+          _ -> {:error, :provider_unavailable}
+        end
+    end
+  end
+
+  @doc false
+  def credentials_changed(ids) do
+    Store.list(@store_type)
+    |> Enum.filter(&(&1["credential_id"] in ids))
+    |> Enum.each(&(&1 |> to_struct() |> sync_to_registry()))
+
+    notify_changed()
+
+    case Application.get_env(:synapsis_provider, :credential_invalidation) do
+      callback when is_function(callback, 1) -> callback.(ids)
+      _ -> :ok
+    end
+
+    :ok
+  end
 
   @doc "Whether a model may participate in runtime operations for a persisted provider."
   def model_runtime_available?(provider, model)
@@ -299,22 +366,49 @@ defmodule Synapsis.Providers do
     do: Enum.filter(providers, &(&1.enabled == enabled))
 
   def update(id, attrs) do
-    with {:ok, provider} <- get(id),
-         {:ok, updated} <-
-           provider
-           |> ProviderConfig.changeset(attrs)
-           |> check_unique_name(id)
-           |> persist() do
-      if provider.name != updated.name, do: ProviderRegistry.unregister(provider.name)
-      {:ok, updated}
-    end
+    Store.with_write_lock(fn ->
+      with {:ok, provider} <- get(id),
+           {:ok, updated} <-
+             provider
+             |> ProviderConfig.changeset(normalize_credential_attrs(Map.drop(attrs, [:id, "id"])))
+             |> check_unique_name(id)
+             |> persist(id) do
+        if provider.name != updated.name, do: ProviderRegistry.unregister(provider.name)
+        {:ok, updated}
+      end
+    end)
   end
 
   def delete(id) do
-    with {:ok, provider} <- get(id),
-         :ok <- Store.delete(@store_type, id) do
-      ProviderRegistry.unregister(provider.name)
-      {:ok, provider}
+    Store.with_write_lock(fn ->
+      with {:ok, provider} <- get(id),
+           {:ok, dependencies} <- Store.provider_dependencies(id) do
+        result = Store.delete_provider(id)
+        runtime_result = cleanup_runtime(dependencies)
+        if match?({:ok, _}, result), do: ProviderRegistry.unregister(provider.name)
+        notify_changed()
+
+        case {result, runtime_result} do
+          {{:ok, _}, :ok} ->
+            {:ok, provider}
+
+          {{:error, {:provider_cleanup_failed, :provider, ^id, reason}}, _} ->
+            {:error, reason}
+
+          {{:error, _} = error, _} ->
+            error
+
+          {{:ok, _}, {:error, reason}} ->
+            {:error, {:provider_runtime_cleanup_failed, reason}}
+        end
+      end
+    end)
+  end
+
+  defp cleanup_runtime(removed) do
+    case Application.get_env(:synapsis_provider, :provider_cleanup) do
+      nil -> :ok
+      cleanup when is_function(cleanup, 1) -> cleanup.(removed)
     end
   end
 
@@ -371,6 +465,7 @@ defmodule Synapsis.Providers do
   @doc "Refresh provider models from the provider's /models endpoint and cache them in config."
   def refresh_models(id) do
     with {:ok, provider} <- get(id),
+         generation = authentication_generation(provider),
          :ok <- ensure_runtime_available(provider),
          {:ok, models} <- fetch_models(provider) do
       config =
@@ -380,23 +475,44 @@ defmodule Synapsis.Providers do
           "models_refreshed_at" => DateTime.utc_now() |> DateTime.to_iso8601()
         })
 
-      update(id, %{config: config})
+      Store.with_write_lock(fn ->
+        with :ok <- ensure_current_generation(provider, generation),
+             do: update(id, %{config: config})
+      end)
     end
   end
 
   @doc "Fetch provider models from the remote endpoint, bypassing any cached config."
   def fetch_models(provider) when is_map(provider) do
+    generation = authentication_generation(provider)
+
     with :ok <- ensure_runtime_available(provider),
          {:ok, models} <-
            provider
            |> build_runtime_config()
            |> Map.put(:discover_models, true)
-           |> Synapsis.Provider.Adapter.models() do
+           |> Synapsis.Provider.Adapter.models(),
+         :ok <- ensure_current_generation(provider, generation) do
       {:ok, filter_catalog_models(provider, models)}
     end
   end
 
+  defp ensure_current_generation(provider, generation) do
+    with {:ok, current} <- get(provider.id) do
+      if runtime_available?(current) and
+           authentication_generation(current) == generation,
+         do: :ok,
+         else: {:error, :provider_changed}
+    end
+  end
+
   @doc "Discovered or static provider metadata offered for explicit catalog import."
+  def model_suggestions(%ProviderConfig{config: %{"available_models" => models}} = provider)
+      when is_list(models),
+      do: cached_models(provider)
+
+  def model_suggestions(%ProviderConfig{preset: "backplane"}), do: []
+
   def model_suggestions(provider) do
     case cached_models(provider) do
       [] ->
@@ -620,6 +736,23 @@ defmodule Synapsis.Providers do
   end
 
   def load_all_into_registry do
+    case migrate_credentials() do
+      {:ok, _} ->
+        :ok
+
+      {:error, {:credential_migration_failed, id, reason}} ->
+        Logger.warning("provider_credential_migration_failed",
+          provider_id: id,
+          reason: migration_error_kind(reason)
+        )
+
+      {:error, reason} ->
+        Logger.warning("provider_credential_migration_failed",
+          provider_ids: Enum.map(Store.list(@store_type), & &1["id"]),
+          reason: migration_error_kind(reason)
+        )
+    end
+
     {:ok, providers} = list()
 
     Enum.each(providers, fn provider ->
@@ -627,6 +760,60 @@ defmodule Synapsis.Providers do
     end)
 
     :ok
+  end
+
+  defp migration_error_kind(reason) when is_atom(reason), do: reason
+  defp migration_error_kind({reason, _}) when is_atom(reason), do: reason
+  defp migration_error_kind(%Ecto.Changeset{}), do: :invalid_credential
+  defp migration_error_kind(_), do: :migration_failed
+
+  @doc "Migrate manual inline keys after a protected backup, preserving all existing identities."
+  def migrate_credentials do
+    Store.with_write_lock(fn ->
+      legacy =
+        Store.list(@store_type)
+        |> Enum.filter(fn raw ->
+          is_nil(raw["credential_id"]) and raw["api_key_encrypted"] not in [nil, ""] and
+            get_in(raw, ["config", "auth_mode"]) != "oauth_device"
+        end)
+
+      if legacy == [] do
+        {:ok, 0}
+      else
+        with {:ok, _backup} <- Store.backup([:provider, :credential], "credentials-migration") do
+          Enum.reduce_while(legacy, {:ok, 0}, fn raw, {:ok, count} ->
+            plaintext = decrypt_api_key(raw)["api_key_encrypted"]
+
+            result =
+              with true <- is_binary(plaintext) and plaintext != "",
+                   {:ok, credential} <-
+                     Credentials.ensure_legacy_provider_key(raw["id"], raw["name"], plaintext),
+                   {:ok, stored} <-
+                     Store.replace_existing(
+                       @store_type,
+                       raw["id"],
+                       raw
+                       |> Map.delete("api_key_encrypted")
+                       |> Map.put("credential_id", credential.id)
+                     ) do
+                stored |> to_struct() |> sync_to_registry()
+                {:ok, count + 1}
+              else
+                false -> {:error, :credential_unavailable}
+                error -> error
+              end
+
+            case result do
+              {:ok, _} = success ->
+                {:cont, success}
+
+              {:error, reason} ->
+                {:halt, {:error, {:credential_migration_failed, raw["id"], reason}}}
+            end
+          end)
+        end
+      end
+    end)
   end
 
   defp sync_to_registry(%ProviderConfig{} = provider) do
@@ -777,34 +964,119 @@ defmodule Synapsis.Providers do
       end
 
     base
-    |> Map.merge(atomize_keys(config))
+    |> Map.merge(atomize_keys(Map.drop(config, ["api_key", :api_key, "oauth", :oauth])))
+    |> Map.put(:api_key, api_key)
     |> Map.put(:provider_id, provider.id)
     |> Map.put(:provider_name, provider.name)
   end
 
   # ADR-006 C4 store <-> struct mapping (the Config.Store struct-mapping pattern).
-  defp persist(%Ecto.Changeset{valid?: true} = changeset) do
+  defp persist(changeset, existing_id \\ nil)
+
+  defp persist(%Ecto.Changeset{valid?: true} = changeset, existing_id) do
     record =
       changeset
       |> Ecto.Changeset.apply_changes()
       |> ensure_id()
       |> ensure_timestamps()
 
-    case Store.put(@store_type, to_store_map(record)) do
-      :ok ->
-        sync_to_registry(record)
-        {:ok, record}
+    with {:ok, record} <- prepare_credential(record, changeset) do
+      result =
+        if existing_id do
+          Store.replace_existing(@store_type, existing_id, to_store_map(record))
+        else
+          Store.put(@store_type, to_store_map(record))
+        end
 
-      {:ok, _} ->
-        sync_to_registry(record)
-        {:ok, record}
+      case result do
+        {:ok, stored} ->
+          record = to_struct(stored)
+          sync_to_registry(record)
+          notify_changed()
+          {:ok, record}
 
-      error ->
-        error
+        error ->
+          error
+      end
     end
   end
 
-  defp persist(%Ecto.Changeset{} = changeset), do: {:error, changeset}
+  defp persist(%Ecto.Changeset{} = changeset, _existing_id), do: {:error, changeset}
+
+  defp normalize_credential_attrs(attrs) do
+    attrs = Map.new(attrs, fn {key, value} -> {to_string(key), value} end)
+
+    case Map.get(attrs, "api_key_encrypted") do
+      value when is_binary(value) ->
+        if String.trim(value) == "", do: Map.delete(attrs, "api_key_encrypted"), else: attrs
+
+      _ ->
+        attrs
+    end
+  end
+
+  defp prepare_credential(record, changeset) do
+    cond do
+      oauth_provider?(record) ->
+        {:ok, %{record | credential_id: nil}}
+
+      Map.has_key?(changeset.params || %{}, "api_key_encrypted") ->
+        prepare_legacy_key(record, changeset)
+
+      record.credential_id ->
+        case Credentials.resolve(record.credential_id) do
+          {:ok, secret} -> {:ok, %{record | api_key_encrypted: secret}}
+          _ -> {:error, Ecto.Changeset.add_error(changeset, :credential_id, "is unavailable")}
+        end
+
+      record.api_key_encrypted && not Map.has_key?(changeset.params || %{}, "credential_id") ->
+        with {:ok, _} <- Store.backup([:provider, :credential], "credentials-migration"),
+             {:ok, credential} <-
+               Credentials.ensure_legacy_provider_key(
+                 record.id,
+                 record.name,
+                 record.api_key_encrypted
+               ),
+             {:ok, secret} <- Credentials.resolve(credential.id),
+             do: {:ok, %{record | credential_id: credential.id, api_key_encrypted: secret}}
+
+      true ->
+        {:ok, %{record | api_key_encrypted: nil}}
+    end
+  end
+
+  defp prepare_legacy_key(%{api_key_encrypted: nil} = record, _changeset),
+    do: {:ok, %{record | credential_id: nil}}
+
+  defp prepare_legacy_key(record, changeset) do
+    cond do
+      Ecto.Changeset.changed?(changeset, :credential_id) ->
+        {:error,
+         Ecto.Changeset.add_error(
+           changeset,
+           :api_key_encrypted,
+           "choose a credential or supply a key, not both"
+         )}
+
+      record.credential_id && length(Credentials.references(record.credential_id)) > 1 ->
+        {:error,
+         Ecto.Changeset.add_error(
+           changeset,
+           :api_key_encrypted,
+           "is shared; rotate it in Credentials or select another credential"
+         )}
+
+      record.credential_id ->
+        with {:ok, _} <-
+               Credentials.update(record.credential_id, %{key: record.api_key_encrypted}),
+             do: {:ok, record}
+
+      true ->
+        with {:ok, credential} <-
+               Credentials.create(%{name: record.name, key: record.api_key_encrypted}),
+             do: {:ok, %{record | credential_id: credential.id}}
+    end
+  end
 
   defp check_unique_name(%Ecto.Changeset{valid?: false} = changeset, _id), do: changeset
 
@@ -828,9 +1100,25 @@ defmodule Synapsis.Providers do
 
   defp to_struct(map) do
     %ProviderConfig{}
-    |> ProviderConfig.changeset(decrypt_api_key(map))
+    |> ProviderConfig.changeset(resolve_credential(map))
     |> Ecto.Changeset.apply_changes()
     |> restore_meta(map)
+  end
+
+  defp resolve_credential(map) do
+    case Map.get(map, "credential_id", Map.get(map, :credential_id)) do
+      nil ->
+        decrypt_api_key(map)
+
+      id ->
+        secret =
+          case Credentials.resolve(id) do
+            {:ok, value} -> value
+            _ -> nil
+          end
+
+        Map.put(map, "api_key_encrypted", secret)
+    end
   end
 
   defp restore_meta(%ProviderConfig{} = record, map) do
@@ -849,7 +1137,8 @@ defmodule Synapsis.Providers do
       "type" => r.type,
       "preset" => r.preset,
       "base_url" => r.base_url,
-      "api_key_encrypted" => encrypt_api_key(r.api_key_encrypted),
+      "credential_id" => r.credential_id,
+      "api_key_encrypted" => if(oauth_provider?(r), do: encrypt_api_key(r.api_key_encrypted)),
       "config" => r.config || %{},
       "enabled" => r.enabled,
       "inserted_at" => encode_time(r.inserted_at),

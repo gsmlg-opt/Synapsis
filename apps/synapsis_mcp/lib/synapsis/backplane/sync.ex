@@ -84,22 +84,58 @@ defmodule Synapsis.Backplane.Sync do
            }) do
       Events.started(attempted)
       previous_state = managed_capability_state(attempted)
+      generation = authentication_generation(attempted)
 
       case fetch_snapshot(attempted, opts) do
         {:ok, snapshot} ->
-          {:ok, reconciliation} = reconcile_snapshot(attempted, snapshot, opts)
-          result = finalize_sync(attempted, reconciliation, now, opts)
+          if generation == authentication_generation(attempted) do
+            {:ok, reconciliation} = reconcile_snapshot(attempted, snapshot, opts, generation)
 
-          publish_sync_result(
-            result,
-            surface_reconciled?(snapshot) and
-              (reconciliation.runtime_changed or capabilities_changed?(previous_state, result))
-          )
+            result =
+              with_current_authentication(attempted, generation, fn ->
+                finalize_sync(attempted, reconciliation, now, opts)
+              end)
+
+            publish_sync_result(
+              result,
+              surface_reconciled?(snapshot) and
+                (reconciliation.runtime_changed or capabilities_changed?(previous_state, result))
+            )
+          else
+            {:error, :connection_changed}
+          end
 
         {:error, reason} ->
-          attempted |> persist_failure(reason, connection_store) |> publish_sync_result(false)
+          with_current_authentication(attempted, generation, fn ->
+            persist_failure(attempted, reason, connection_store)
+          end)
+          |> publish_sync_result(false)
       end
     end
+  end
+
+  defp authentication_generation(%Connection{provider_id: nil} = connection) do
+    case Connection.runtime(connection) do
+      {:ok, current} -> {current.endpoint, current.credential, current.enabled}
+      _ -> :connection_unavailable
+    end
+  end
+
+  defp authentication_generation(%Connection{provider_id: id}) do
+    case Providers.get(id) do
+      # Reconciliation itself updates provider catalog metadata and updated_at.
+      # Only authentication fields fence its durable writes.
+      {:ok, provider} -> Providers.authentication_generation(%{provider | updated_at: nil})
+      _ -> :provider_unavailable
+    end
+  end
+
+  defp with_current_authentication(connection, generation, fun) do
+    Synapsis.Config.Store.with_write_lock(fn ->
+      if authentication_generation(connection) == generation,
+        do: fun.(),
+        else: {:error, :connection_changed}
+    end)
   end
 
   defp publish_sync_result({:ok, connection} = result, capabilities_updated?) do
@@ -317,7 +353,7 @@ defmodule Synapsis.Backplane.Sync do
     end
   end
 
-  defp reconcile_snapshot(connection, %Snapshot{} = snapshot, opts) do
+  defp reconcile_snapshot(connection, %Snapshot{} = snapshot, opts, generation) do
     runtime = Keyword.get(opts, :mcp_runtime, Synapsis.MCP)
     skill_store = Keyword.get(opts, :skill_store, Skills)
     mcp_store = Keyword.get(opts, :mcp_store, MCPConfigs)
@@ -334,21 +370,28 @@ defmodule Synapsis.Backplane.Sync do
     result =
       reconcile_surface(initial, :models, fn ->
         if Connection.surface_enabled?(connection, "models"),
-          do: reconcile_models_surface(initial, connection, snapshot),
+          do:
+            with_current_authentication(connection, generation, fn ->
+              reconcile_models_surface(initial, connection, snapshot)
+            end),
           else: {:ok, initial}
       end)
 
     result =
       reconcile_surface(result, :skills, fn ->
         if Connection.surface_enabled?(connection, "skills"),
-          do: reconcile_skills_surface(result, connection, snapshot, skill_store),
+          do:
+            with_current_authentication(connection, generation, fn ->
+              reconcile_skills_surface(result, connection, snapshot, skill_store)
+            end),
           else: {:ok, result}
       end)
 
     result =
       reconcile_surface(result, :mcp_tools, fn ->
         if Connection.surface_enabled?(connection, "tools"),
-          do: reconcile_tools_surface(result, connection, snapshot, runtime, mcp_store),
+          do:
+            reconcile_tools_surface(result, connection, snapshot, runtime, mcp_store, generation),
           else: {:ok, result}
       end)
 
@@ -459,11 +502,12 @@ defmodule Synapsis.Backplane.Sync do
     end
   end
 
-  defp reconcile_tools_surface(result, connection, snapshot, runtime, mcp_store) do
+  defp reconcile_tools_surface(result, connection, snapshot, runtime, mcp_store, generation) do
     if Map.has_key?(snapshot.errors, :mcp_tools) do
       {:ok, result}
     else
-      with {:ok, mcp} <- reconcile_mcp_config(connection, snapshot, runtime, mcp_store) do
+      with {:ok, mcp} <-
+             reconcile_mcp_config(connection, snapshot, runtime, mcp_store, generation) do
         {:ok,
          result
          |> put_in([:artifacts, "mcp_id"], mcp.id)
@@ -1040,7 +1084,8 @@ defmodule Synapsis.Backplane.Sync do
          connection,
          %Snapshot{mcp_servers: [capability], mcp_tools: tools},
          runtime,
-         mcp_store
+         mcp_store,
+         generation
        ) do
     mcp = find_mcp(connection.id, capability.external_id, mcp_store)
     source_name = available_mcp_name(connection, mcp)
@@ -1071,31 +1116,38 @@ defmodule Synapsis.Backplane.Sync do
     }
 
     result =
-      case mcp do
-        nil ->
-          mcp_store.create(attrs)
+      with_current_authentication(connection, generation, fn ->
+        case mcp do
+          nil ->
+            mcp_store.create(attrs)
 
-        mcp ->
-          attrs = %{
-            attrs
-            | name: reconciled_name(mcp.name, mcp.config, attrs.name),
-              headers: mcp.headers || %{},
-              config:
-                (mcp.config || %{})
-                |> Map.merge(config)
-                |> put_connection_credential(mcp, connection)
-          }
+          mcp ->
+            attrs = %{
+              attrs
+              | name: reconciled_name(mcp.name, mcp.config, attrs.name),
+                headers: mcp.headers || %{},
+                config:
+                  (mcp.config || %{})
+                  |> Map.merge(config)
+                  |> put_connection_credential(mcp, connection)
+            }
 
-          mcp_store.update(mcp, Map.delete(attrs, :enabled))
-      end
+            mcp_store.update(mcp, Map.delete(attrs, :enabled))
+        end
+      end)
 
     with {:ok, persisted} <- result do
       case reconcile_runtime_availability(runtime, persisted, :reconciliation) do
         :ok ->
-          {:ok, persisted}
+          with_current_authentication(connection, generation, fn -> {:ok, persisted} end)
 
         {:error, runtime_reason} ->
-          case restore_mcp_config(mcp_store, mcp, persisted) do
+          case with_current_authentication(connection, generation, fn ->
+                 restore_mcp_config(mcp_store, mcp, persisted)
+               end) do
+            {:error, :connection_changed} = error ->
+              error
+
             {:ok, restored} ->
               case restore_mcp_runtime(runtime, restored, persisted) do
                 :ok ->
@@ -1131,7 +1183,7 @@ defmodule Synapsis.Backplane.Sync do
     end
   end
 
-  defp reconcile_mcp_config(_connection, _snapshot, _runtime, _mcp_store),
+  defp reconcile_mcp_config(_connection, _snapshot, _runtime, _mcp_store, _generation),
     do: {:error, :missing_mcp_server_capability}
 
   defp reconciled_mcp_url(connection, nil), do: Connection.mcp_url(connection)

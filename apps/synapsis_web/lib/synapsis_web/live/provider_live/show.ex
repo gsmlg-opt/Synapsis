@@ -7,14 +7,18 @@ defmodule SynapsisWeb.ProviderLive.Show do
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
+    if connected?(socket), do: Synapsis.Providers.subscribe()
+
     case Synapsis.Providers.get(id) do
       {:ok, provider} ->
+        {:ok, credentials} = Synapsis.Credentials.list()
         all_models = fetch_models(provider)
         default_model = if all_models != [], do: hd(all_models).id, else: nil
 
         {:ok,
          assign(socket,
            provider: provider,
+           credentials: credentials,
            page_title: provider.name,
            all_models: all_models,
            # Test chat state
@@ -58,9 +62,9 @@ defmodule SynapsisWeb.ProviderLive.Show do
         enabled: params["enabled"] == "true"
       }
       |> then(fn attrs ->
-        if params["api_key"] && params["api_key"] != "",
-          do: Map.put(attrs, :api_key_encrypted, params["api_key"]),
-          else: attrs
+        if oauth_settings?(socket.assigns.provider) or not Map.has_key?(params, "credential_id"),
+          do: attrs,
+          else: Map.put(attrs, :credential_id, blank_to_nil(params["credential_id"]))
       end)
 
     case Synapsis.Providers.update(socket.assigns.provider.id, attrs) do
@@ -402,6 +406,26 @@ defmodule SynapsisWeb.ProviderLive.Show do
   # Stale poll timer fired after oauth_cancel — ignore
   def handle_info(:oauth_poll, socket), do: {:noreply, socket}
 
+  def handle_info({:provider_catalog_changed}, socket) do
+    case Synapsis.Providers.get(socket.assigns.provider.id) do
+      {:ok, provider} ->
+        {:ok, credentials} = Synapsis.Credentials.list()
+
+        {:noreply,
+         assign(socket,
+           provider: provider,
+           credentials: credentials,
+           all_models: Synapsis.Providers.cached_models(provider)
+         )}
+
+      {:error, :not_found} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Provider was deleted")
+         |> push_navigate(to: ~p"/settings/providers")}
+    end
+  end
+
   def handle_info(_msg, socket), do: {:noreply, socket}
 
   @impl true
@@ -681,7 +705,19 @@ defmodule SynapsisWeb.ProviderLive.Show do
   end
 
   defp provider_form_values(provider) do
-    %{"base_url" => provider.base_url, "api_key" => "", "enabled" => provider.enabled}
+    %{
+      "base_url" => provider.base_url,
+      "credential_id" => provider.credential_id || "",
+      "enabled" => provider.enabled
+    }
+  end
+
+  defp blank_to_nil(value) when value in [nil, ""], do: nil
+  defp blank_to_nil(value), do: value
+
+  defp oauth_settings?(provider) do
+    provider.name == "openai-sub" or provider.preset == "openai-sub" or
+      Synapsis.Providers.oauth_provider?(provider)
   end
 
   @impl true
@@ -689,7 +725,27 @@ defmodule SynapsisWeb.ProviderLive.Show do
     model_options =
       Enum.map(assigns.all_models, fn m -> {m.id, m.name} end)
 
-    assigns = assign(assigns, model_options: model_options)
+    provider_values =
+      react_form_draft(assigns, "edit-provider-form") || provider_form_values(assigns.provider)
+
+    credential_options = [
+      {"", "No credential"} | Enum.map(assigns.credentials, &{&1.id, &1.name})
+    ]
+
+    selected_id = provider_values["credential_id"]
+
+    credential_options =
+      if selected_id not in [nil, ""] and
+           not Enum.any?(assigns.credentials, &(&1.id == selected_id)),
+         do: credential_options ++ [{selected_id, "Credential unavailable"}],
+         else: credential_options
+
+    assigns =
+      assign(assigns,
+        model_options: model_options,
+        credential_options: credential_options,
+        provider_values: provider_values
+      )
 
     ~H"""
     <.settings_layout current_path="/settings/providers" content_class="max-w-4xl">
@@ -707,12 +763,13 @@ defmodule SynapsisWeb.ProviderLive.Show do
         <.react_form
           for={to_form(%{})}
           id="edit-provider-form"
-          values={provider_form_values(@provider)}
+          values={@provider_values}
           draft={react_form_draft(assigns, "edit-provider-form")}
           structure={[
             @provider.type,
-            @provider.api_key_encrypted not in [nil, ""],
-            Synapsis.Providers.oauth_provider?(@provider)
+            @provider.credential_id,
+            @credential_options,
+            oauth_settings?(@provider)
           ]}
           phx-submit="update_provider"
           phx-change="change_provider_form"
@@ -725,34 +782,38 @@ defmodule SynapsisWeb.ProviderLive.Show do
           <.dm_input
             type="text"
             name="base_url"
-            value={@provider.base_url}
+            value={@provider_values["base_url"]}
             placeholder="https://api.example.com/v1"
             label="Base URL"
           />
 
-          <div>
-            <.dm_input
-              type="password"
-              name="api_key"
-              value=""
-              placeholder="Leave empty to keep current key"
-              label="API Key"
+          <div :if={not oauth_settings?(@provider)}>
+            <.dm_select
+              id="provider-credential"
+              name="credential_id"
+              value={@provider_values["credential_id"]}
+              label="Credential"
+              options={@credential_options}
             />
+            <.link navigate={~p"/settings/credentials"} class="link text-sm">
+              Manage Credentials
+            </.link>
             <div
-              :if={
-                @provider.api_key_encrypted not in [nil, ""] and
-                  not Synapsis.Providers.oauth_provider?(@provider)
-              }
+              :if={@provider.credential_id not in [nil, ""]}
               class="flex items-center justify-between gap-3 text-xs text-success mt-1"
             >
-              <span>Key is set</span>
+              <span>
+                {if Enum.any?(@credentials, &(&1.id == @provider.credential_id)),
+                  do: "Key is set",
+                  else: "Credential unavailable"}
+              </span>
               <.dm_btn
                 id="clear-provider-api-key"
                 type="button"
                 variant="error"
                 size="xs"
                 phx-click="clear_api_key"
-                confirm="Clear the stored access token?"
+                confirm="Remove this Provider's credential reference?"
                 confirm_title="Clear stored token?"
                 confirm_text="Clear token"
               >
@@ -867,7 +928,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
           <code class="text-xs text-on-surface-variant">{model.id}</code>
         </div>
         <p class="text-xs text-on-surface-variant mt-3">
-          Discovery suggestions are imported and enabled in the model catalog.
+          These are discovery suggestions. Import models in Manage Models to make them available to agents and sessions.
         </p>
       </.dm_card>
 

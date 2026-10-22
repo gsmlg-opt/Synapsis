@@ -13,6 +13,8 @@ defmodule SynapsisWeb.AgentLive.SkillsTest do
   defp skill_by_name(name), do: Enum.find(Skills.list(), &(&1.name == name))
 
   test "remote skills group by source and only assignments are editable", %{conn: conn} do
+    {:ok, _} = Synapsis.Config.Store.put(:backplane, %{"id" => "source-a", "enabled" => true})
+    on_exit(fn -> Synapsis.Config.Store.delete(:backplane, "source-a") end)
     {:ok, agent} = AgentConfigs.create(%{name: "remote-assignee", label: "Remote"})
 
     {:ok, skill} =
