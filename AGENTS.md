@@ -134,8 +134,18 @@ If a dependency from the `gsmlg*`, `duskmoon-dev`, `Gao-OS`, or related internal
 - Do not include `Generated with Claude Code` or `Co-Authored-By: Claude` in commit messages.
 - PRs should include a concise problem/solution summary, linked issue or task, test evidence, and screenshots or GIFs for UI changes.
 
-## Agent note
+## Agent Note
 
-After we add new feature, change architecture or fix issues we write agent note.
-When save note to agent-note, should add label:
-- `project: synapsis`
+Agent Note project: synapsis
+
+Use the shared `agent-note` skill for reviewer-first project engineering knowledge.
+Before substantial design or debugging, recall relevant project notes.
+At accepted decisions, significant implementation boundaries, or reproducible
+blocker handoffs, evaluate durable findings and create/update notes only when the
+skill's quality gate passes. For meaningful implementations, maintain a coherent
+human-reviewable explanation of architecture, design rationale, actual behavior,
+verification and limits; do not save a separate task-status note after each fix. This authorizes scoped capture, not whole-project curation or deletion.
+No note is required for an ordinary completed task.
+Contributors return candidates; the coordinating agent writes shared notes.
+Apply recalled guidance only after checking its sources and target-version scope.
+If the skill or MCP is unavailable, report the limitation without claiming a write.
