@@ -40,6 +40,7 @@ defmodule Synapsis.Part do
     %Synapsis.Part.ToolResult{
       tool_use_id: data["tool_use_id"],
       content: data["content"] || "",
+      projection: data["projection"],
       is_error: data["is_error"] || false
     }
   end
@@ -92,12 +93,14 @@ defmodule Synapsis.Part do
   end
 
   defp dump_part(%Synapsis.Part.ToolResult{} = p) do
-    %{
+    data = %{
       "type" => "tool_result",
       "tool_use_id" => p.tool_use_id,
       "content" => p.content,
       "is_error" => p.is_error
     }
+
+    if is_nil(p.projection), do: data, else: Map.put(data, "projection", p.projection)
   end
 
   defp dump_part(%Synapsis.Part.Reasoning{} = reasoning) do

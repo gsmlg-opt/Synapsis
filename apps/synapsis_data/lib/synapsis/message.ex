@@ -137,8 +137,16 @@ defmodule Synapsis.Message do
       status: to_string(p.status || :pending)
     }
 
-  defp encode_part(%Synapsis.Part.ToolResult{tool_use_id: id, content: content, is_error: err}),
-    do: %{type: "tool_result", tool_use_id: id, content: content || "", is_error: err || false}
+  defp encode_part(%Synapsis.Part.ToolResult{} = part) do
+    data = %{
+      type: "tool_result",
+      tool_use_id: part.tool_use_id,
+      content: part.content || "",
+      is_error: part.is_error || false
+    }
+
+    if is_nil(part.projection), do: data, else: Map.put(data, :projection, part.projection)
+  end
 
   defp encode_part(%Synapsis.Part.Reasoning{} = reasoning),
     do: %{
@@ -184,6 +192,7 @@ defmodule Synapsis.Message do
     do: %Synapsis.Part.ToolResult{
       tool_use_id: fetch(p, :tool_use_id),
       content: fetch(p, :content) || "",
+      projection: fetch(p, :projection),
       is_error: fetch(p, :is_error) || false
     }
 

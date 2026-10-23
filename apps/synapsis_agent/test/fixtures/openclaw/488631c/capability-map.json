@@ -1,0 +1,3706 @@
+{
+  "schemaVersion": 1,
+  "referenceCommit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+  "runtimeContractAuthority": "backplane_agent_runtime",
+  "runtimeVersion": "1.10.31",
+  "assessmentScope": "tool-level initial mapping; action coverage remains pending factory capture; no implementation or parity claimed",
+  "sourceAliases": {
+    "bash": "exec",
+    "cron": "automations",
+    "apply-patch": "apply_patch",
+    "tool_call": "dispatch_action"
+  },
+  "targetAliases": {},
+  "coverage": [
+    {
+      "referenceTool": "agents_list",
+      "phase": "P5",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Sessions",
+        "Synapsis.AgentMessages"
+      ],
+      "behaviorDifferences": [
+        "Persisted session visibility and cross-session messaging are separate from the native child tree; preserve session UUID and requester scope."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "agents_wait",
+      "phase": "P5",
+      "disposition": "native-reuse",
+      "targetTools": [
+        "wait_agent"
+      ],
+      "nativeFamilies": [
+        "collaboration_v2"
+      ],
+      "targetServices": [
+        "Synapsis.Sessions",
+        "Synapsis.AgentMessages"
+      ],
+      "behaviorDifferences": [
+        "Native waiting uses native agent identities, timeout and lifecycle; collector result joining and reference timeoutSeconds require explicit behavior comparison."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "apply_patch",
+      "phase": "P3",
+      "disposition": "native-reuse",
+      "targetTools": [
+        "apply_patch"
+      ],
+      "nativeFamilies": [
+        "local"
+      ],
+      "targetServices": [
+        "Synapsis.Workspace.FileDocuments",
+        "Synapsis.Workspace.PathResolver",
+        "Synapsis.Workspace.Permissions"
+      ],
+      "behaviorDifferences": [
+        "Use the native patch grammar and revision; reference argument/result differences do not permit changing an admitted patch operation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "ask_user",
+      "phase": "P6",
+      "disposition": "native-reuse",
+      "targetTools": [
+        "request_user_input",
+        "request_user_input_async"
+      ],
+      "nativeFamilies": [
+        "interactive"
+      ],
+      "targetServices": [
+        "Synapsis.Agent.Routines",
+        "Synapsis.Heartbeats"
+      ],
+      "behaviorDifferences": [
+        "Keep native question/answer interaction identities, root qualification and budget handling; reference question schema is not copied."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "automations",
+      "phase": "P6",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Agent.Routines",
+        "Synapsis.Heartbeats"
+      ],
+      "behaviorDifferences": [
+        "Goals, suggestions, decisions and scheduler actions need domain adapters; native plan/interaction tools must not silently create goals or broaden unattended authority."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "autoreview",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "browser",
+      "phase": "P8",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Browser/service backends need trusted host adapters, resource ownership and bounded I/O; no implicit switch between host, sandbox or remote targets."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "canvas",
+      "phase": "P12",
+      "disposition": "host-adapted",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Workspace.FileDocuments",
+        "Synapsis.Workspace.Resources"
+      ],
+      "behaviorDifferences": [
+        "Device/client capabilities and pairing are not supplied by a manifest; reuse workspace services where appropriate and keep target readiness explicit."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "schema-captured; execution cases and runtime eligibility pending",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness",
+      "referenceSchemas": [
+        {
+          "recipe": "canvas/schema",
+          "evidence": "schema-export",
+          "source": "extensions/canvas/src/tool-schema.ts",
+          "export": "canvasToolDefinition",
+          "context": "recipe/default",
+          "sourceSha256": "3084464a9cf89b3843a2d9763e778c713cb1142e9eb34838d2d1578a6e2bcf3c",
+          "schemaSha256": "6e60f916bb2ecf1ab181fe0ba587a1b6611d85afbbc462ee7d8de1cc289255e4"
+        },
+        {
+          "recipe": "canvas/factory",
+          "evidence": "factory-return",
+          "source": "extensions/canvas/src/tool.ts",
+          "export": "createCanvasTool",
+          "context": "recipe/default",
+          "sourceSha256": "e0ab11c05ef8214c6a6596cd72363eeb2a0b58bfc7648a0bd40ddef011bf1151",
+          "schemaSha256": "6e60f916bb2ecf1ab181fe0ba587a1b6611d85afbbc462ee7d8de1cc289255e4"
+        }
+      ],
+      "referenceActionKeys": [
+        "hide",
+        "navigate",
+        "present"
+      ]
+    },
+    {
+      "referenceTool": "code_execution",
+      "phase": "P10",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Media services need provider-specific adapters and ordered result projections; local fixture success cannot establish live provider authorization."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "codex_endpoint_probe",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "codex_plugins",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "codex_session_interrupt",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "codex_session_read",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "codex_session_send",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "codex_sessions_list",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "codex_threads",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "computer",
+      "phase": "P12",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Workspace.FileDocuments",
+        "Synapsis.Workspace.Resources"
+      ],
+      "behaviorDifferences": [
+        "Device/client capabilities and pairing are not supplied by a manifest; reuse workspace services where appropriate and keep target readiness explicit."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "conversations_list",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "conversations_send",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [
+        "collaboration_v2"
+      ],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Native send_message/followup_task cover active children only. Arbitrary persisted-session visibility, cross-session routing and requester authorization need separate Sessions/AgentMessages adapters."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "conversations_turn",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [
+        "collaboration_v2"
+      ],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Native send_message/followup_task cover active children only. Arbitrary persisted-session visibility, cross-session routing and requester authorization need separate Sessions/AgentMessages adapters."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "crabbox",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "create_goal",
+      "phase": "P6",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Agent.Routines",
+        "Synapsis.Heartbeats"
+      ],
+      "behaviorDifferences": [
+        "Goals, suggestions, decisions and scheduler actions need domain adapters; native plan/interaction tools must not silently create goals or broaden unattended authority."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "dashboard",
+      "phase": "P12",
+      "disposition": "host-adapted",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Workspace.FileDocuments",
+        "Synapsis.Workspace.Resources"
+      ],
+      "behaviorDifferences": [
+        "Device/client capabilities and pairing are not supplied by a manifest; reuse workspace services where appropriate and keep target readiness explicit."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "decision_evaluate",
+      "phase": "P6",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Agent.Routines",
+        "Synapsis.Heartbeats"
+      ],
+      "behaviorDifferences": [
+        "Goals, suggestions, decisions and scheduler actions need domain adapters; native plan/interaction tools must not silently create goals or broaden unattended authority."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "diffs",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "dir_fetch",
+      "phase": "P12",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Workspace.FileDocuments",
+        "Synapsis.Workspace.Resources"
+      ],
+      "behaviorDifferences": [
+        "Device/client capabilities and pairing are not supplied by a manifest; reuse workspace services where appropriate and keep target readiness explicit."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "dir_list",
+      "phase": "P12",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Workspace.FileDocuments",
+        "Synapsis.Workspace.Resources"
+      ],
+      "behaviorDifferences": [
+        "Device/client capabilities and pairing are not supplied by a manifest; reuse workspace services where appropriate and keep target readiness explicit."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "discussion",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "dismiss_task",
+      "phase": "P5",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Sessions",
+        "Synapsis.AgentMessages"
+      ],
+      "behaviorDifferences": [
+        "Persisted session visibility and cross-session messaging are separate from the native child tree; preserve session UUID and requester scope."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "edit",
+      "phase": "P3",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Workspace.FileDocuments",
+        "Synapsis.Workspace.PathResolver",
+        "Synapsis.Workspace.Permissions"
+      ],
+      "behaviorDifferences": [
+        "File listing/reading/writing/editing require narrow path/action permissions; do not grant unrestricted exec_command to replace an existing narrow file grant."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "exec",
+      "phase": "P3",
+      "disposition": "native-reuse",
+      "targetTools": [
+        "exec_command",
+        "write_stdin"
+      ],
+      "nativeFamilies": [
+        "local"
+      ],
+      "targetServices": [
+        "Synapsis.Workspace.FileDocuments",
+        "Synapsis.Workspace.PathResolver",
+        "Synapsis.Workspace.Permissions"
+      ],
+      "behaviorDifferences": [
+        "OpenClaw command/yieldMs/background fields do not define the native exec_command schema; background lifetime, PTY and routing remain separate coverage questions."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "facetime_call",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "feishu_app_scopes",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "feishu_bitable_create_app",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "feishu_bitable_create_field",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "feishu_bitable_create_record",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "feishu_bitable_get_meta",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "feishu_bitable_get_record",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "feishu_bitable_list_fields",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "feishu_bitable_list_records",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "feishu_bitable_update_record",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "feishu_chat",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "feishu_doc",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "feishu_drive",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "feishu_perm",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "feishu_wiki",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "file_fetch",
+      "phase": "P12",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Workspace.FileDocuments",
+        "Synapsis.Workspace.Resources"
+      ],
+      "behaviorDifferences": [
+        "Device/client capabilities and pairing are not supplied by a manifest; reuse workspace services where appropriate and keep target readiness explicit."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "file_write",
+      "phase": "P12",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Workspace.FileDocuments",
+        "Synapsis.Workspace.Resources"
+      ],
+      "behaviorDifferences": [
+        "Device/client capabilities and pairing are not supplied by a manifest; reuse workspace services where appropriate and keep target readiness explicit."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "firecrawl_scrape",
+      "phase": "P8",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Browser/service backends need trusted host adapters, resource ownership and bounded I/O; no implicit switch between host, sandbox or remote targets."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "firecrawl_search",
+      "phase": "P8",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Browser/service backends need trusted host adapters, resource ownership and bounded I/O; no implicit switch between host, sandbox or remote targets."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "gateway",
+      "phase": "P13",
+      "disposition": "host-adapted",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Config.Store"
+      ],
+      "behaviorDifferences": [
+        "Map host-specific administration to Synapsis configuration and trusted installation/update services. Do not control an assumed external OpenClaw Gateway or load TypeScript plugins as trusted Elixir code."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "get_goal",
+      "phase": "P6",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Agent.Routines",
+        "Synapsis.Heartbeats"
+      ],
+      "behaviorDifferences": [
+        "Goals, suggestions, decisions and scheduler actions need domain adapters; native plan/interaction tools must not silently create goals or broaden unattended authority."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "github_identity_status",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "github_publish",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "github_read",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "github_search",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "google_meet",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "image_generate",
+      "phase": "P10",
+      "disposition": "native-reuse",
+      "targetTools": [
+        "image_gen::imagegen"
+      ],
+      "nativeFamilies": [
+        "services"
+      ],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Native image generation needs a configured provider adapter and structured media projection; reference vendor options remain separately assessed."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "intent",
+      "phase": "P4",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Memory",
+        "Synapsis.SkillCatalog",
+        "Synapsis.Skills"
+      ],
+      "behaviorDifferences": [
+        "Reuse existing file-backed memory/skill services and stable source identities; plugin indexing/actions and personal requester ownership still require new admitted adapters."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "llm-task",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "schema-captured; execution cases and runtime eligibility pending",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness",
+      "referenceSchemas": [
+        {
+          "recipe": "llm-task/schema",
+          "evidence": "schema-export",
+          "source": "extensions/llm-task/src/llm-task-tool-definition.ts",
+          "export": "llmTaskToolDefinition",
+          "context": "recipe/default",
+          "sourceSha256": "e2bc8bfdab03483e152f527060858d2e0f572cd12bf234519011826f623c1366",
+          "schemaSha256": "783deba47ef2e6e1b17799dc6a379d6f7aa50d148c2d1b190acbd349695d64bf"
+        },
+        {
+          "recipe": "llm-task/factory",
+          "evidence": "factory-return",
+          "source": "extensions/llm-task/src/llm-task-tool.ts",
+          "export": "createLlmTaskTool",
+          "context": "recipe/default",
+          "sourceSha256": "c8888185d56c51da47fe840e3a5f93a88637891634307345ed253b7575fb5916",
+          "schemaSha256": "783deba47ef2e6e1b17799dc6a379d6f7aa50d148c2d1b190acbd349695d64bf"
+        }
+      ],
+      "referenceActionKeys": [
+        "$call"
+      ]
+    },
+    {
+      "referenceTool": "lobster",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "local_image",
+      "phase": "P10",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Media services need provider-specific adapters and ordered result projections; local fixture success cannot establish live provider authorization."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "ls",
+      "phase": "P3",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Workspace.FileDocuments",
+        "Synapsis.Workspace.PathResolver",
+        "Synapsis.Workspace.Permissions"
+      ],
+      "behaviorDifferences": [
+        "File listing/reading/writing/editing require narrow path/action permissions; do not grant unrestricted exec_command to replace an existing narrow file grant."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "mcp_events",
+      "phase": "P9",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.MCP"
+      ],
+      "behaviorDifferences": [
+        "Use native dynamic/CodeMode/extension boundaries; OpenClaw discovery names and JavaScript wait fields are reference interfaces, not a second dispatcher."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "memory_forget",
+      "phase": "P4",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Memory",
+        "Synapsis.SkillCatalog",
+        "Synapsis.Skills"
+      ],
+      "behaviorDifferences": [
+        "Reuse existing file-backed memory/skill services and stable source identities; plugin indexing/actions and personal requester ownership still require new admitted adapters."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "memory_get",
+      "phase": "P4",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Memory",
+        "Synapsis.SkillCatalog",
+        "Synapsis.Skills"
+      ],
+      "behaviorDifferences": [
+        "Reuse existing file-backed memory/skill services and stable source identities; plugin indexing/actions and personal requester ownership still require new admitted adapters."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "memory_recall",
+      "phase": "P4",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Memory",
+        "Synapsis.SkillCatalog",
+        "Synapsis.Skills"
+      ],
+      "behaviorDifferences": [
+        "Reuse existing file-backed memory/skill services and stable source identities; plugin indexing/actions and personal requester ownership still require new admitted adapters."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "memory_search",
+      "phase": "P4",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Memory",
+        "Synapsis.SkillCatalog",
+        "Synapsis.Skills"
+      ],
+      "behaviorDifferences": [
+        "Reuse existing file-backed memory/skill services and stable source identities; plugin indexing/actions and personal requester ownership still require new admitted adapters."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "memory_store",
+      "phase": "P4",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Memory",
+        "Synapsis.SkillCatalog",
+        "Synapsis.Skills"
+      ],
+      "behaviorDifferences": [
+        "Reuse existing file-backed memory/skill services and stable source identities; plugin indexing/actions and personal requester ownership still require new admitted adapters."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "message",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "mobile_ui",
+      "phase": "P12",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Workspace.FileDocuments",
+        "Synapsis.Workspace.Resources"
+      ],
+      "behaviorDifferences": [
+        "Device/client capabilities and pairing are not supplied by a manifest; reuse workspace services where appropriate and keep target readiness explicit."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "music_generate",
+      "phase": "P10",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Media services need provider-specific adapters and ordered result projections; local fixture success cannot establish live provider authorization."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "node_inference",
+      "phase": "P12",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Workspace.FileDocuments",
+        "Synapsis.Workspace.Resources"
+      ],
+      "behaviorDifferences": [
+        "Device/client capabilities and pairing are not supplied by a manifest; reuse workspace services where appropriate and keep target readiness explicit."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "nodes",
+      "phase": "P12",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Workspace.FileDocuments",
+        "Synapsis.Workspace.Resources"
+      ],
+      "behaviorDifferences": [
+        "Device/client capabilities and pairing are not supplied by a manifest; reuse workspace services where appropriate and keep target readiness explicit."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "onepassword",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "openclaw",
+      "phase": "P13",
+      "disposition": "host-adapted",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Config.Store"
+      ],
+      "behaviorDifferences": [
+        "Map host-specific administration to Synapsis configuration and trusted installation/update services. Do not control an assumed external OpenClaw Gateway or load TypeScript plugins as trusted Elixir code."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "pdf",
+      "phase": "P10",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Media services need provider-specific adapters and ordered result projections; local fixture success cannot establish live provider authorization."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "personal_instructions",
+      "phase": "P4",
+      "disposition": "host-adapted",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Memory",
+        "Synapsis.SkillCatalog",
+        "Synapsis.Skills"
+      ],
+      "behaviorDifferences": [
+        "Reuse existing file-backed memory/skill services and stable source identities; plugin indexing/actions and personal requester ownership still require new admitted adapters."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "plugins",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [
+        "extensions"
+      ],
+      "targetServices": [
+        "Synapsis.Config.Store"
+      ],
+      "behaviorDifferences": [
+        "Map host-specific administration to Synapsis configuration and trusted installation/update services. Do not control an assumed external OpenClaw Gateway or load TypeScript plugins as trusted Elixir code."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "portal",
+      "phase": "P12",
+      "disposition": "host-adapted",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Workspace.FileDocuments",
+        "Synapsis.Workspace.Resources"
+      ],
+      "behaviorDifferences": [
+        "Device/client capabilities and pairing are not supplied by a manifest; reuse workspace services where appropriate and keep target readiness explicit."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "presence",
+      "phase": "P5",
+      "disposition": "host-adapted",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Sessions",
+        "Synapsis.AgentMessages"
+      ],
+      "behaviorDifferences": [
+        "Persisted session visibility and cross-session messaging are separate from the native child tree; preserve session UUID and requester scope."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "process",
+      "phase": "P3",
+      "disposition": "native-reuse",
+      "targetTools": [
+        "write_stdin"
+      ],
+      "nativeFamilies": [
+        "local"
+      ],
+      "targetServices": [
+        "Synapsis.Workspace.FileDocuments",
+        "Synapsis.Workspace.PathResolver",
+        "Synapsis.Workspace.Permissions"
+      ],
+      "behaviorDifferences": [
+        "Native handles, polling and stdin use write_stdin; log/kill/background-service coverage must be checked against native resource ownership rather than renamed handles."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "progress_card",
+      "phase": "P6",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Agent.Routines",
+        "Synapsis.Heartbeats"
+      ],
+      "behaviorDifferences": [
+        "Goals, suggestions, decisions and scheduler actions need domain adapters; native plan/interaction tools must not silently create goals or broaden unattended authority."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "qa_restart_unsafe_probe",
+      "phase": "P15",
+      "disposition": "host-adapted",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Recovery probe is a test-only reference and must never be admitted in a production capability catalog."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": true,
+      "productionExposure": "never"
+    },
+    {
+      "referenceTool": "qa_restart_wait",
+      "phase": "P15",
+      "disposition": "host-adapted",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Recovery probe is a test-only reference and must never be admitted in a production capability catalog."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": true,
+      "productionExposure": "never"
+    },
+    {
+      "referenceTool": "read",
+      "phase": "P3",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Workspace.FileDocuments",
+        "Synapsis.Workspace.PathResolver",
+        "Synapsis.Workspace.Permissions"
+      ],
+      "behaviorDifferences": [
+        "File listing/reading/writing/editing require narrow path/action permissions; do not grant unrestricted exec_command to replace an existing narrow file grant."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "screen",
+      "phase": "P12",
+      "disposition": "host-adapted",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Workspace.FileDocuments",
+        "Synapsis.Workspace.Resources"
+      ],
+      "behaviorDifferences": [
+        "Device/client capabilities and pairing are not supplied by a manifest; reuse workspace services where appropriate and keep target readiness explicit."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "secrets",
+      "phase": "P7",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Credentials",
+        "Synapsis.Config.Store"
+      ],
+      "behaviorDifferences": [
+        "Existing provider credentials are independent records; protected secret entry, destination egress grants and revocation require explicit host behavior."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "session_status",
+      "phase": "P5",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Sessions",
+        "Synapsis.AgentMessages"
+      ],
+      "behaviorDifferences": [
+        "Persisted session visibility and cross-session messaging are separate from the native child tree; preserve session UUID and requester scope."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "sessions",
+      "phase": "P5",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Sessions",
+        "Synapsis.AgentMessages"
+      ],
+      "behaviorDifferences": [
+        "Persisted session visibility and cross-session messaging are separate from the native child tree; preserve session UUID and requester scope."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "sessions_create",
+      "phase": "P5",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Sessions",
+        "Synapsis.AgentMessages"
+      ],
+      "behaviorDifferences": [
+        "Persisted session visibility and cross-session messaging are separate from the native child tree; preserve session UUID and requester scope."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "sessions_history",
+      "phase": "P5",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Sessions",
+        "Synapsis.AgentMessages"
+      ],
+      "behaviorDifferences": [
+        "Persisted session visibility and cross-session messaging are separate from the native child tree; preserve session UUID and requester scope."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "sessions_list",
+      "phase": "P5",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Sessions",
+        "Synapsis.AgentMessages"
+      ],
+      "behaviorDifferences": [
+        "Persisted session visibility and cross-session messaging are separate from the native child tree; preserve session UUID and requester scope."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "sessions_search",
+      "phase": "P5",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Sessions",
+        "Synapsis.AgentMessages"
+      ],
+      "behaviorDifferences": [
+        "Persisted session visibility and cross-session messaging are separate from the native child tree; preserve session UUID and requester scope."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "sessions_send",
+      "phase": "P5",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [
+        "collaboration_v2"
+      ],
+      "targetServices": [
+        "Synapsis.Sessions",
+        "Synapsis.AgentMessages"
+      ],
+      "behaviorDifferences": [
+        "Native send_message/followup_task cover active children only. Arbitrary persisted-session visibility, cross-session routing and requester authorization need separate Sessions/AgentMessages adapters."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "sessions_spawn",
+      "phase": "P5",
+      "disposition": "native-reuse",
+      "targetTools": [
+        "spawn_agent"
+      ],
+      "nativeFamilies": [
+        "collaboration_v2"
+      ],
+      "targetServices": [
+        "Synapsis.Sessions",
+        "Synapsis.AgentMessages"
+      ],
+      "behaviorDifferences": [
+        "Native spawn owns active children; persistent sessions, ACP placement and collector options are independent reference actions, not automatically supported parameters."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "sessions_yield",
+      "phase": "P5",
+      "disposition": "gap",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Sessions",
+        "Synapsis.AgentMessages"
+      ],
+      "behaviorDifferences": [
+        "No verified native mapping for the reference yielding/collector continuation behavior yet; do not substitute wait_agent or terminate a run and call it equivalent."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "show_widget",
+      "phase": "P12",
+      "disposition": "host-adapted",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Workspace.FileDocuments",
+        "Synapsis.Workspace.Resources"
+      ],
+      "behaviorDifferences": [
+        "Device/client capabilities and pairing are not supplied by a manifest; reuse workspace services where appropriate and keep target readiness explicit."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "skill_workshop",
+      "phase": "P4",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Memory",
+        "Synapsis.SkillCatalog",
+        "Synapsis.Skills"
+      ],
+      "behaviorDifferences": [
+        "Reuse existing file-backed memory/skill services and stable source identities; plugin indexing/actions and personal requester ownership still require new admitted adapters."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "skills_read",
+      "phase": "P4",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Memory",
+        "Synapsis.SkillCatalog",
+        "Synapsis.Skills"
+      ],
+      "behaviorDifferences": [
+        "Reuse existing file-backed memory/skill services and stable source identities; plugin indexing/actions and personal requester ownership still require new admitted adapters."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "skills_search",
+      "phase": "P4",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Memory",
+        "Synapsis.SkillCatalog",
+        "Synapsis.Skills"
+      ],
+      "behaviorDifferences": [
+        "Reuse existing file-backed memory/skill services and stable source identities; plugin indexing/actions and personal requester ownership still require new admitted adapters."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "slack_huddles",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "subagents",
+      "phase": "P5",
+      "disposition": "native-reuse",
+      "targetTools": [
+        "list_agents",
+        "followup_task",
+        "interrupt_agent"
+      ],
+      "nativeFamilies": [
+        "collaboration_v2"
+      ],
+      "targetServices": [
+        "Synapsis.Sessions",
+        "Synapsis.AgentMessages"
+      ],
+      "behaviorDifferences": [
+        "Native roster/followup/interrupt operate on the current child tree; reference focus and other actions need separate assessment."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "suggest_task",
+      "phase": "P5",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Sessions",
+        "Synapsis.AgentMessages"
+      ],
+      "behaviorDifferences": [
+        "Persisted session visibility and cross-session messaging are separate from the native child tree; preserve session UUID and requester scope."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "talk_voice",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "tavily_extract",
+      "phase": "P8",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Browser/service backends need trusted host adapters, resource ownership and bounded I/O; no implicit switch between host, sandbox or remote targets."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "tavily_search",
+      "phase": "P8",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Browser/service backends need trusted host adapters, resource ownership and bounded I/O; no implicit switch between host, sandbox or remote targets."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "teams_meetings",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "terminal",
+      "phase": "P3",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Workspace.FileDocuments",
+        "Synapsis.Workspace.PathResolver",
+        "Synapsis.Workspace.Permissions"
+      ],
+      "behaviorDifferences": [
+        "File listing/reading/writing/editing require narrow path/action permissions; do not grant unrestricted exec_command to replace an existing narrow file grant."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "theme",
+      "phase": "P12",
+      "disposition": "host-adapted",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Workspace.FileDocuments",
+        "Synapsis.Workspace.Resources"
+      ],
+      "behaviorDifferences": [
+        "Device/client capabilities and pairing are not supplied by a manifest; reuse workspace services where appropriate and keep target readiness explicit."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "transcripts",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "tts",
+      "phase": "P10",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Media services need provider-specific adapters and ordered result projections; local fixture success cannot establish live provider authorization."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "update_goal",
+      "phase": "P6",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Agent.Routines",
+        "Synapsis.Heartbeats"
+      ],
+      "behaviorDifferences": [
+        "Goals, suggestions, decisions and scheduler actions need domain adapters; native plan/interaction tools must not silently create goals or broaden unattended authority."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "video_generate",
+      "phase": "P10",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Media services need provider-specific adapters and ordered result projections; local fixture success cannot establish live provider authorization."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "view_image",
+      "phase": "P10",
+      "disposition": "native-reuse",
+      "targetTools": [
+        "view_image"
+      ],
+      "nativeFamilies": [
+        "local"
+      ],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Reuse native image viewing; provider media blocks and authorized local paths still need Synapsis integration verification."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "visitor_invite",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "visitor_list",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "visitor_revoke",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "voice_call",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "schema-captured; execution cases and runtime eligibility pending",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness",
+      "referenceSchemas": [
+        {
+          "recipe": "voice-call/schema",
+          "evidence": "schema-export",
+          "source": "extensions/voice-call/src/tool-schema.ts",
+          "export": "VoiceCallToolSchema",
+          "context": "recipe/default",
+          "sourceSha256": "7f1395e49f7be6600b567e3e87fce5e53a3b000d6fce776a4d1045fdaa7cf71c",
+          "schemaSha256": "d69d7ecfe927c62fcd5a4e5f9e94293e36ec9dfe4d7d5261e4e688c8671cbed1"
+        }
+      ],
+      "referenceActionKeys": [
+        "$call",
+        "continue_call",
+        "end_call",
+        "get_status",
+        "initiate_call",
+        "send_dtmf",
+        "speak_to_user",
+        "steer_call"
+      ]
+    },
+    {
+      "referenceTool": "web_fetch",
+      "phase": "P8",
+      "disposition": "native-reuse",
+      "targetTools": [
+        "web::fetch"
+      ],
+      "nativeFamilies": [
+        "services"
+      ],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Native service profile needs a configured trusted backend; redirects, extraction, byte limits and network policy require action-level coverage."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "web_search",
+      "phase": "P8",
+      "disposition": "native-reuse",
+      "targetTools": [
+        "web::search"
+      ],
+      "nativeFamilies": [
+        "services"
+      ],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Native service profile needs a configured trusted backend; no network or provider authority follows from the descriptor alone."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "whatsapp_call",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "whatsapp_login",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "wiki_apply",
+      "phase": "P4",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Memory",
+        "Synapsis.SkillCatalog",
+        "Synapsis.Skills"
+      ],
+      "behaviorDifferences": [
+        "Reuse existing file-backed memory/skill services and stable source identities; plugin indexing/actions and personal requester ownership still require new admitted adapters."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "wiki_get",
+      "phase": "P4",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Memory",
+        "Synapsis.SkillCatalog",
+        "Synapsis.Skills"
+      ],
+      "behaviorDifferences": [
+        "Reuse existing file-backed memory/skill services and stable source identities; plugin indexing/actions and personal requester ownership still require new admitted adapters."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "wiki_lint",
+      "phase": "P4",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Memory",
+        "Synapsis.SkillCatalog",
+        "Synapsis.Skills"
+      ],
+      "behaviorDifferences": [
+        "Reuse existing file-backed memory/skill services and stable source identities; plugin indexing/actions and personal requester ownership still require new admitted adapters."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "wiki_search",
+      "phase": "P4",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Memory",
+        "Synapsis.SkillCatalog",
+        "Synapsis.Skills"
+      ],
+      "behaviorDifferences": [
+        "Reuse existing file-backed memory/skill services and stable source identities; plugin indexing/actions and personal requester ownership still require new admitted adapters."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "wiki_status",
+      "phase": "P4",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Memory",
+        "Synapsis.SkillCatalog",
+        "Synapsis.Skills"
+      ],
+      "behaviorDifferences": [
+        "Reuse existing file-backed memory/skill services and stable source identities; plugin indexing/actions and personal requester ownership still require new admitted adapters."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_attachment_add",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_attachment_delete",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_attachment_read",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_block",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_board_archive",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_board_create",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_board_delete",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_boards",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_claim",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_comment",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_complete",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_create",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_decompose",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_dispatch",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_heartbeat",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_link",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_list",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_move",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_notify_advance",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_notify_events",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_notify_list",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_notify_subscribe",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_notify_unsubscribe",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_promote",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_proof",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_protocol_violation",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_read",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_reassign",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_reclaim",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_release",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_runs",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_sessions_board_move",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_sessions_board_read",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_sessions_board_update",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_specify",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_stats",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_unblock",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "workboard_worker_log",
+      "phase": "P13",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Plugin/workflow/workboard/integration abilities need admitted host adapters and domain state; native extension support does not mean arbitrary OpenClaw plugin packages are compatible."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "write",
+      "phase": "P3",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [
+        "Synapsis.Workspace.FileDocuments",
+        "Synapsis.Workspace.PathResolver",
+        "Synapsis.Workspace.Permissions"
+      ],
+      "behaviorDifferences": [
+        "File listing/reading/writing/editing require narrow path/action permissions; do not grant unrestricted exec_command to replace an existing narrow file grant."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "x_search",
+      "phase": "P10",
+      "disposition": "native-reuse",
+      "targetTools": [
+        "web::x_search"
+      ],
+      "nativeFamilies": [
+        "services"
+      ],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "The native service binding does not supply a real remote provider, credentials or acceptance evidence."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "zalouser",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    },
+    {
+      "referenceTool": "zoom_meetings",
+      "phase": "P11",
+      "disposition": "host-extension",
+      "targetTools": [],
+      "nativeFamilies": [],
+      "targetServices": [],
+      "behaviorDifferences": [
+        "Channels/calls/meetings need source-specific transports and destination authority; existing agent messaging is not proof of an external channel implementation."
+      ],
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "referenceActionStatus": "pending-factory-capture",
+      "testOnly": false,
+      "productionExposure": "requires explicit selection, native admission, permission and readiness"
+    }
+  ],
+  "controls": [
+    {
+      "referenceControl": "tool_search",
+      "kind": "structured-discovery",
+      "phase": "P9",
+      "nativeFamilies": [
+        "dynamic"
+      ],
+      "disposition": "native-reuse",
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "behaviorDifferences": [
+        "Use the native profile and lifecycle; source names, schemas, eligibility and continuation behavior require independent comparison."
+      ]
+    },
+    {
+      "referenceControl": "tool_describe",
+      "kind": "structured-discovery",
+      "phase": "P9",
+      "nativeFamilies": [
+        "dynamic"
+      ],
+      "disposition": "host-adapted",
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "behaviorDifferences": [
+        "The native dynamic family does not expose a tool_describe tool. Compare admitted descriptor discovery and metadata retrieval before implementing any host adaptation."
+      ]
+    },
+    {
+      "referenceControl": "dispatch_action",
+      "kind": "structured-dispatch",
+      "phase": "P9",
+      "nativeFamilies": [
+        "dynamic"
+      ],
+      "disposition": "host-adapted",
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "behaviorDifferences": [
+        "The native dynamic family has no dispatch_action tool. Dispatch discovered tools through their admitted identities; compare action routing without adding an authorization bypass."
+      ]
+    },
+    {
+      "referenceControl": "structured_output",
+      "kind": "collector-transport",
+      "phase": "P9",
+      "nativeFamilies": [],
+      "disposition": "gap",
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "behaviorDifferences": [
+        "Collector transport behavior has no verified native equivalent; retain a gap until result projection and provider support are proven."
+      ]
+    },
+    {
+      "referenceControl": "exec",
+      "kind": "code-mode-control; mutually exclusive with shell surface",
+      "phase": "P9",
+      "nativeFamilies": [
+        "code_mode"
+      ],
+      "disposition": "native-reuse",
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "behaviorDifferences": [
+        "Use the native profile and lifecycle; source names, schemas, eligibility and continuation behavior require independent comparison."
+      ]
+    },
+    {
+      "referenceControl": "wait",
+      "kind": "code-mode-continuation",
+      "phase": "P9",
+      "nativeFamilies": [
+        "code_mode"
+      ],
+      "disposition": "native-reuse",
+      "evidence": {
+        "implementation": "planned",
+        "localContractVerified": false,
+        "liveVerified": false
+      },
+      "behaviorDifferences": [
+        "Use the native profile and lifecycle; source names, schemas, eligibility and continuation behavior require independent comparison."
+      ]
+    }
+  ],
+  "recognizedOnly": [
+    {
+      "name": "search",
+      "status": "recognized by replay facts; no core factory found at this pin; require source evidence before enabling"
+    },
+    {
+      "name": "find",
+      "status": "recognized by replay facts; no core factory found at this pin; require source evidence before enabling"
+    },
+    {
+      "name": "grep",
+      "status": "recognized by replay facts; no core factory found at this pin; require source evidence before enabling"
+    },
+    {
+      "name": "glob",
+      "status": "recognized by replay facts; no core factory found at this pin; require source evidence before enabling"
+    }
+  ]
+}

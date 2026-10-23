@@ -4,7 +4,7 @@ defmodule Synapsis.Provider.MessageMapper do
   delegates provider wire encoding to `Backplane.AiProtocol.Codec`.
   """
 
-  alias Backplane.AiProtocol.{Codec, Error, Request}
+  alias Backplane.AiProtocol.{Codec, Error, Request, Validation}
   alias Synapsis.Provider.ToolName
   alias Synapsis.Provider.Transport
 
@@ -61,22 +61,108 @@ defmodule Synapsis.Provider.MessageMapper do
     parts = field(message, :parts) || []
     {results, content_parts} = Enum.split_with(parts, &match?(%Synapsis.Part.ToolResult{}, &1))
 
-    with {:ok, content} <- canonical_parts(content_parts) do
+    with {:ok, content} <- canonical_parts(content_parts),
+         {:ok, tool_results} <- canonical_tool_results(results) do
       messages = if content == [], do: [], else: [%{role: role, content: content}]
-
-      tool_results =
-        Enum.map(results, fn result ->
-          %{
-            role: :tool,
-            tool_call_id: result.tool_use_id,
-            status: if(result.is_error, do: :error, else: :success),
-            content: [%{type: :text, text: result.content}]
-          }
-        end)
-
       {:ok, messages ++ tool_results}
     end
   end
+
+  defp canonical_tool_results(results) do
+    Enum.reduce_while(results, {:ok, []}, fn result, {:ok, acc} ->
+      case canonical_tool_result(result) do
+        {:ok, message} -> {:cont, {:ok, [message | acc]}}
+        error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, messages} -> {:ok, Enum.reverse(messages)}
+      error -> error
+    end
+  end
+
+  defp canonical_tool_result(%Synapsis.Part.ToolResult{projection: nil} = result) do
+    {:ok,
+     %{
+       role: :tool,
+       tool_call_id: result.tool_use_id,
+       status: if(result.is_error, do: :error, else: :success),
+       content: [%{type: :text, text: result.content}]
+     }}
+  end
+
+  defp canonical_tool_result(result) do
+    with {:ok, public} <- projected_result(result),
+         {:ok, content} <- projected_content(public["content"]) do
+      {:ok,
+       %{
+         role: :tool,
+         tool_call_id: result.tool_use_id,
+         status: if(result.is_error, do: :error, else: :success),
+         content: content
+       }}
+    end
+  end
+
+  # Validate the whole public projection with native budgets. Sidecars such as
+  # structured data, artifacts and metadata are retained-only: none are sent to
+  # the model. Only the finite content shapes below become protocol blocks.
+  defp projected_result(%{projection: projection, is_error: is_error}) do
+    with %{"version" => 1, "result" => result} when map_size(projection) == 2 <- projection,
+         true <- is_map(result) and not is_struct(result),
+         true <- is_boolean(is_error) and result["is_error"] === is_error,
+         false <- Map.has_key?(result, :is_error) or Map.has_key?(result, :content),
+         :ok <- Validation.term(projection) do
+      {:ok, result}
+    else
+      _ -> invalid_projection()
+    end
+  rescue
+    _ -> invalid_projection()
+  end
+
+  defp projected_content(text) when is_binary(text) and text != "",
+    do: {:ok, [%{type: :text, text: text}]}
+
+  defp projected_content([_ | _] = blocks) do
+    Enum.reduce_while(blocks, {:ok, []}, fn block, {:ok, acc} ->
+      case projected_block(block) do
+        {:ok, content} -> {:cont, {:ok, [content | acc]}}
+        error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, content} -> {:ok, Enum.reverse(content)}
+      error -> error
+    end
+  end
+
+  defp projected_content(_), do: unsupported_projection()
+
+  defp projected_block(%{"type" => "text", "text" => text} = block)
+       when map_size(block) == 2 and is_binary(text) and text != "",
+       do: {:ok, %{type: :text, text: text}}
+
+  defp projected_block(
+         %{
+           "type" => "image",
+           "data" => %{"source" => "base64", "media_type" => media_type, "data" => data} = image
+         } = block
+       )
+       when map_size(block) == 2 and map_size(image) == 3 and
+              is_binary(media_type) and media_type != "" and is_binary(data) and data != "",
+       do: {:ok, %{type: :image, data: image}}
+
+  defp projected_block(%{"type" => type}) when type in ["text", "image"],
+    do: invalid_projection()
+
+  defp projected_block(%{"type" => type}) when is_binary(type),
+    do: unsupported_projection()
+
+  defp projected_block(_), do: invalid_projection()
+
+  defp invalid_projection, do: Error.invalid("Invalid projected tool result")
+  defp unsupported_projection, do: Error.incompatible("Unsupported projected tool result content")
 
   defp canonical_parts(parts) do
     Enum.reduce_while(parts, {:ok, []}, fn part, {:ok, acc} ->

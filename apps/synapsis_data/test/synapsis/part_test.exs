@@ -38,6 +38,54 @@ defmodule Synapsis.PartTest do
       assert %Part.ToolResult{tool_use_id: "toolu_123", content: "file contents here"} = loaded
     end
 
+    test "ToolResultPart preserves its separate structured projection through JSON" do
+      projection = %{
+        "version" => 1,
+        "result" => %{
+          "content" => [
+            %{"type" => "text", "text" => "before"},
+            %{"type" => "image", "mimeType" => "image/png", "data" => "aW1hZ2U="},
+            %{"type" => "text", "text" => "after"}
+          ],
+          "structured" => %{"items" => [1, 2]},
+          "details" => %{"truncated" => false},
+          "is_error" => false
+        }
+      }
+
+      part =
+        %Part.ToolResult{tool_use_id: "toolu_rich", content: "before\nafter"}
+        |> Map.put(:projection, projection)
+
+      assert {:ok, dumped} = Part.dump(part)
+      assert dumped["projection"] == projection
+      assert dumped["content"] == "before\nafter"
+      assert {:ok, loaded} = dumped |> Jason.encode!() |> Jason.decode!() |> Part.load()
+      assert Map.get(loaded, :projection) == projection
+      assert loaded.content == "before\nafter"
+    end
+
+    test "legacy ToolResultPart omits projection and reads it as absent" do
+      stored = %{
+        "type" => "tool_result",
+        "tool_use_id" => "toolu_old",
+        "content" => "legacy text",
+        "is_error" => false
+      }
+
+      assert {:ok, loaded} = Part.load(stored)
+      assert Map.get(loaded, :projection) == nil
+      assert {:ok, ^stored} = Part.dump(loaded)
+
+      projection = %{
+        "version" => 1,
+        "result" => %{"content" => "legacy text", "is_error" => false}
+      }
+
+      assert {:ok, cast} = Part.cast(Map.put(stored, "projection", projection))
+      assert Map.get(cast, :projection) == projection
+    end
+
     test "ReasoningPart preserves provider states" do
       provider_state = %{
         "source_profile" => "primary",

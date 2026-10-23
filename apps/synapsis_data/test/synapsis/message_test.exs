@@ -216,6 +216,63 @@ defmodule Synapsis.MessageTest do
   end
 
   describe "Concord turn round-trip" do
+    test "structured tool projection survives a new turn without rewriting legacy history", %{
+      session: session
+    } do
+      alias Synapsis.{Part.ToolResult, Session.Store}
+      on_exit(fn -> Store.delete_session(session.id) end)
+
+      legacy = %{
+        id: Ecto.UUID.generate(),
+        role: "user",
+        token_count: 0,
+        parts: [
+          %{type: "tool_result", tool_use_id: "old-call", content: "old text", is_error: false}
+        ]
+      }
+
+      projection = %{
+        "version" => 1,
+        "result" => %{
+          "content" => [
+            %{"type" => "text", "text" => "first"},
+            %{"type" => "image", "mimeType" => "image/png", "data" => "aW1hZ2U="},
+            %{"type" => "text", "text" => "last"}
+          ],
+          "structured" => %{"count" => 1},
+          "is_error" => false
+        }
+      }
+
+      part =
+        %ToolResult{tool_use_id: "new-call", content: "first\nlast"}
+        |> Map.put(:projection, projection)
+
+      message = %Message{
+        id: Ecto.UUID.generate(),
+        session_id: session.id,
+        role: "user",
+        parts: [part]
+      }
+
+      assert :ok = Store.commit_turn(session.id, 0, legacy, %{turn_count: 1})
+      assert :ok = Store.commit_turn(session.id, 1, Message.encode(message), %{turn_count: 2})
+      assert {:ok, ^legacy} = Store.get_turn(session.id, 0)
+
+      assert [%Message{parts: [old]}, %Message{parts: [current]}] =
+               Message.list_by_session(session.id)
+
+      assert old.content == "old text"
+      assert Map.get(old, :projection) == nil
+      assert current.tool_use_id == "new-call"
+      assert current.content == "first\nlast"
+      assert Map.get(current, :projection) == projection
+      assert [%Message{parts: [^current]}] = Message.list_recent_by_session(session.id, 1)
+
+      encoded_legacy = Message.encode(%Message{role: "user", parts: [old]})
+      refute Map.has_key?(hd(encoded_legacy.parts), :projection)
+    end
+
     test "append and list_by_session round-trips role and token_count", %{session: session} do
       {:ok, _msg} = Message.append(session.id, %{role: "user", token_count: 10})
 
