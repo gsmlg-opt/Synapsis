@@ -21,7 +21,9 @@ defmodule SynapsisWeb.SettingsLayoutTest do
     "/settings/mcp/new"
   ]
 
-  test "all settings pages render the shared left menu with MCP servers", %{conn: conn} do
+  test "all settings pages render the shared navigation with Skills and MCP servers", %{
+    conn: conn
+  } do
     dynamic_paths = create_dynamic_settings_paths()
 
     for path <- @static_settings_paths ++ dynamic_paths do
@@ -42,6 +44,15 @@ defmodule SynapsisWeb.SettingsLayoutTest do
                "MCP Servers"
              ),
              "expected MCP Servers menu item on #{path}"
+
+      for navigation <- ["settings-sidebar", "settings-mobile-nav"] do
+        assert has_element?(
+                 view,
+                 "[data-testid='#{navigation}'] a[href='/settings/skills']",
+                 "Skills"
+               ),
+               "expected Skills menu item in #{navigation} on #{path}"
+      end
     end
   end
 
@@ -81,8 +92,16 @@ defmodule SynapsisWeb.SettingsLayoutTest do
            )
   end
 
-  test "unlisted settings sections do not activate appearance", %{conn: conn} do
+  test "skills activates its menu entry instead of appearance", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/settings/skills")
+
+    for navigation <- ["settings-sidebar", "settings-mobile-nav"] do
+      assert has_element?(
+               view,
+               "[data-testid='#{navigation}'] a[href='/settings/skills'][aria-current='page']",
+               "Skills"
+             )
+    end
 
     refute has_element?(
              view,

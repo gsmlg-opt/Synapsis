@@ -31,15 +31,22 @@ defmodule SynapsisWeb.SkillLive.Index do
          |> put_flash(:info, "Remote skill source added. Refresh to discover skills.")}
 
       {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Provider connection is unavailable")}
+        {:noreply,
+         put_flash(socket, :error, provider_issue(id) || "Provider connection is unavailable")}
     end
   end
 
   def handle_event("refresh_source", %{"id" => id}, %{assigns: %{syncing_source: nil}} = socket) do
-    {:noreply,
-     socket
-     |> assign(syncing_source: id)
-     |> start_async(:skill_source, fn -> Synapsis.Backplane.refresh(id) end)}
+    with {:ok, source} <- Synapsis.Backplane.Connection.get(id),
+         true <- Synapsis.Backplane.Connection.surface_enabled?(source, "skills") do
+      {:noreply,
+       socket
+       |> assign(syncing_source: id)
+       |> start_async(:skill_source, fn -> Synapsis.Backplane.refresh(id) end)}
+    else
+      false -> {:noreply, put_flash(socket, :error, skills_not_enabled_message())}
+      _ -> {:noreply, put_flash(socket, :error, "Remote skill source is unavailable")}
+    end
   end
 
   def handle_event("refresh_source", _params, socket), do: {:noreply, socket}
@@ -77,6 +84,8 @@ defmodule SynapsisWeb.SkillLive.Index do
 
   @impl true
   def handle_async(:skill_source, result, socket) do
+    source_id = socket.assigns.syncing_source
+
     socket =
       assign(socket,
         syncing_source: nil,
@@ -88,6 +97,14 @@ defmodule SynapsisWeb.SkillLive.Index do
     case result do
       {:ok, {:ok, %{status: "ready"}}} ->
         {:noreply, put_flash(socket, :info, "Remote skills refreshed")}
+
+      {:ok, {:error, :provider_unavailable}} ->
+        source = Enum.find(socket.assigns.sources, &(&1.id == source_id))
+
+        reason =
+          (source && provider_issue(source.provider_id)) || "Provider connection is unavailable"
+
+        {:noreply, put_flash(socket, :error, "Remote skill discovery failed. #{reason}")}
 
       _ ->
         {:noreply,
@@ -119,6 +136,34 @@ defmodule SynapsisWeb.SkillLive.Index do
   end
 
   defp list_skills, do: Synapsis.Skills.list()
+
+  defp provider_issue(nil), do: nil
+
+  defp provider_issue(id) do
+    case Synapsis.Providers.get(id) do
+      {:ok, provider} ->
+        cond do
+          !provider.enabled ->
+            "Provider #{provider.name} is disabled. Enable it in Providers."
+
+          !Synapsis.Providers.credential_available?(provider) ->
+            "Provider #{provider.name} credential is unavailable. Update it in Providers."
+
+          is_nil(provider.base_url) || String.trim(provider.base_url) == "" ->
+            "Provider #{provider.name} has no endpoint. Set its base URL in Providers."
+
+          true ->
+            nil
+        end
+
+      {:error, :not_found} ->
+        "Provider #{id} no longer exists. Choose a provider and click Add remote source."
+    end
+  end
+
+  defp skills_not_enabled_message do
+    "Skills not enabled. Choose this provider and click Add remote source to enable skill discovery."
+  end
 
   @impl true
   def render(assigns) do
@@ -156,22 +201,24 @@ defmodule SynapsisWeb.SkillLive.Index do
           />
           <.dm_btn type="submit" variant="primary" size="sm">Add remote source</.dm_btn>
         </.react_form>
-        <div :for={source <- @sources} class="flex items-center gap-3 mt-3" data-source-id={source.id}>
-          <span>{source.name}</span><.dm_badge size="sm">{source.status}</.dm_badge>
+        <div
+          :for={source <- @sources}
+          class="flex flex-wrap items-center gap-3 mt-3 min-w-0"
+          data-source-id={source.id}
+        >
+          <% provider_issue = provider_issue(source.provider_id) %>
+          <% skills_enabled = Synapsis.Backplane.Connection.surface_enabled?(source, "skills") %>
+          <span class="break-all">{source.name}</span><.dm_badge size="sm">{source.status}</.dm_badge>
           <span :if={!source.enabled} class="text-error text-sm">Disabled</span>
-          <span
-            :if={
-              source.provider_id &&
-                !match?({:ok, _}, Synapsis.Backplane.ProviderSource.get(source.provider_id))
-            }
-            class="text-error text-sm"
-          >Provider unavailable</span>
-          <span :if={source.last_error} role="alert" class="text-error text-sm">{source.last_error}</span>
+          <span :if={provider_issue} class="min-w-0 break-words text-error text-sm">{provider_issue}</span>
+          <.dm_link :if={provider_issue} navigate={~p"/settings/providers"}>Manage providers</.dm_link>
+          <span :if={!skills_enabled && !provider_issue} class="min-w-0 break-words text-sm">{skills_not_enabled_message()}</span>
+          <span :if={source.last_error} role="alert" class="min-w-0 break-words text-error text-sm">{source.last_error}</span>
           <.dm_btn
             size="sm"
             phx-click="refresh_source"
             phx-value-id={source.id}
-            disabled={!is_nil(@syncing_source) || !source.enabled}
+            disabled={!is_nil(@syncing_source) || !source.enabled || !skills_enabled}
           >
             {if @syncing_source == source.id, do: "Refreshing…", else: "Refresh skills"}
           </.dm_btn>

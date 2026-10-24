@@ -372,6 +372,7 @@ defmodule SynapsisWeb.CoreComponents do
       %{to: ~p"/settings/providers", icon: "cloud", label: "Providers"},
       %{to: ~p"/settings/models", icon: "tune", label: "Models"},
       %{to: ~p"/settings/memory", icon: "brain", label: "Memory"},
+      %{to: ~p"/settings/skills", icon: "book-open-variant", label: "Skills"},
       %{to: ~p"/settings/mcp", icon: "server-network", label: "MCP Servers"}
     ]
 
