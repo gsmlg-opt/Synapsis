@@ -6,7 +6,15 @@ defmodule Synapsis.Agent.Runtime.StoreTest do
   alias Synapsis.Agent.Runtime.Store
 
   defmodule FaultAdapter do
-    def get(key, opts), do: Concord.Turso.get(key, opts)
+    def get(key, opts), do: Concord.KV.get(key, Keyword.put(opts, :engine, :turso))
+
+    def compare_and_swap(key, value, opts) do
+      if Process.delete({__MODULE__, :fail_next}) do
+        {:error, :injected_failure}
+      else
+        Concord.Turso.compare_and_swap(key, value, opts)
+      end
+    end
 
     def txn(spec, opts) do
       if Process.delete({__MODULE__, :fail_next}) do

@@ -3,6 +3,8 @@ defmodule SynapsisServer.SessionController do
   require Logger
 
   alias Synapsis.Sessions
+  alias Synapsis.Agent.Tools.Approval
+  alias Synapsis.Session.{EventReply, InputContext}
 
   @max_agent_bytes 255
 
@@ -43,8 +45,14 @@ defmodule SynapsisServer.SessionController do
   # fall back to Concord's last durable snapshot when the process is down.
   defp live_state(id) do
     case Synapsis.Session.Read.live_snapshot(id) do
-      {:live, %{status: status, in_flight_text: text}} ->
-        %{live: true, live_status: to_string(status), in_flight: text}
+      {:live, %{status: status, in_flight_text: text} = snapshot} ->
+        %{
+          live: true,
+          live_status: to_string(status),
+          in_flight: text,
+          error: Map.get(snapshot, :error)
+        }
+        |> put_reply_presentation(Map.get(snapshot, :reply_presentation))
 
       {:durable, %{meta: meta}} ->
         %{live: false, live_status: nil, durable_turn_count: meta[:turn_count]}
@@ -131,7 +139,7 @@ defmodule SynapsisServer.SessionController do
         conn |> put_status(400) |> json(%{error: "each image must be a file path string"})
 
       true ->
-        case Sessions.send_message(id, %{content: content, images: images}) do
+        case send_operator_message(id, %{content: content, images: images}) do
           :ok ->
             json(conn, %{status: "ok"})
 
@@ -150,7 +158,7 @@ defmodule SynapsisServer.SessionController do
         conn |> put_status(413) |> json(%{error: "content too large"})
 
       true ->
-        case Sessions.send_message(id, content) do
+        case send_operator_message(id, content) do
           :ok ->
             json(conn, %{status: "ok"})
 
@@ -238,6 +246,16 @@ defmodule SynapsisServer.SessionController do
     end
   end
 
+  defp send_operator_message(session_id, input) do
+    with {:ok, input_context} <-
+           InputContext.capture_operator(session_id, %{
+             requester_id: Approval.operator_id(),
+             origin: "rest"
+           }) do
+      Sessions.send_message(session_id, input, input_context)
+    end
+  end
+
   defp serialize_session(session) do
     %{
       id: session.id,
@@ -272,7 +290,11 @@ defmodule SynapsisServer.SessionController do
       token_count: message.token_count,
       inserted_at: message.inserted_at
     }
+    |> put_reply_presentation(EventReply.project(message))
   end
+
+  defp put_reply_presentation(data, nil), do: data
+  defp put_reply_presentation(data, view), do: Map.put(data, :reply_presentation, view)
 
   defp serialize_part(%Synapsis.Part.Text{content: content}) do
     %{type: "text", content: content}
@@ -289,7 +311,10 @@ defmodule SynapsisServer.SessionController do
   end
 
   defp serialize_part(%Synapsis.Part.ToolResult{} = p) do
-    %{type: "tool_result", tool_use_id: p.tool_use_id, content: p.content, is_error: p.is_error}
+    data =
+      %{type: "tool_result", tool_use_id: p.tool_use_id, content: p.content, is_error: p.is_error}
+
+    if is_nil(p.projection), do: data, else: Map.put(data, :projection, p.projection)
   end
 
   defp serialize_part(%Synapsis.Part.Reasoning{content: content}) do
@@ -302,6 +327,23 @@ defmodule SynapsisServer.SessionController do
 
   defp serialize_part(%Synapsis.Part.Image{media_type: media_type, data: data}) do
     %{type: "image", media_type: media_type, data: data}
+  end
+
+  defp serialize_part(%Synapsis.Part.DeliveredImage{} = part) do
+    %{
+      type: "delivered_image",
+      descriptor: part.descriptor,
+      delivery: part.delivery,
+      name: part.name
+    }
+  end
+
+  defp serialize_part(%Synapsis.Part.Video{} = part) do
+    %{type: "video", descriptor: part.descriptor, delivery: part.delivery, name: part.name}
+  end
+
+  defp serialize_part(%Synapsis.Part.Audio{} = part) do
+    %{type: "audio", descriptor: part.descriptor, delivery: part.delivery, name: part.name}
   end
 
   defp serialize_part(%Synapsis.Part.Agent{agent: agent, message: message}) do

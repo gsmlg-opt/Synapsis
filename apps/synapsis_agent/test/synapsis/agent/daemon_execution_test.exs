@@ -61,15 +61,15 @@ defmodule Synapsis.Agent.DaemonExecutionTest do
   @tag :tmp_dir
   test "marks provider failures failed and remains ready", %{tmp_dir: tmp_dir} do
     {daemon, _task_supervisor} = start_test_daemon()
-    bypass = Bypass.open()
+    fixture = Gaoxy.Test.open()
 
-    Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect_once(fixture, "POST", "/v1/chat/completions", fn conn ->
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
       |> Plug.Conn.send_resp(503, Jason.encode!(%{"error" => %{"message" => "offline"}}))
     end)
 
-    {provider_name, agent_name} = register_provider_agent(tmp_dir, bypass)
+    {provider_name, agent_name} = register_provider_agent(tmp_dir, fixture)
 
     assert {:ok, queued} =
              Daemon.submit(daemon, "Fail this run", %{

@@ -126,24 +126,24 @@ code, pre, kbd, samp {
 
   /* WORKAROUND(upstream): duskmoon-dev/duskmoonui#76
      Markdown must inherit the filled bubble's paired content color. */
-  .synapsis-react-chat .chat-bubble-filled > .markdown-body {
+  .synapsis-react-chat :is(.chat-bubble-filled, .chat-bubble-filled > .chat-bubble-content) > .markdown-body {
     color: inherit;
   }
 
-  .synapsis-react-chat .chat-bubble-filled > .markdown-body :is(a, blockquote, h6, figcaption) {
+  .synapsis-react-chat :is(.chat-bubble-filled, .chat-bubble-filled > .chat-bubble-content) > .markdown-body :is(a, blockquote, h6, figcaption) {
     color: inherit;
   }
 
-  .synapsis-react-chat .chat-bubble-filled > .markdown-body a {
+  .synapsis-react-chat :is(.chat-bubble-filled, .chat-bubble-filled > .chat-bubble-content) > .markdown-body a {
     text-decoration: underline;
   }
 
   /* Markdown's nested surface backgrounds retain their own text pairing. */
-  .synapsis-react-chat .chat-bubble-filled > .markdown-body :is(pre, code, kbd, th, tr:nth-child(2n)) {
+  .synapsis-react-chat :is(.chat-bubble-filled, .chat-bubble-filled > .chat-bubble-content) > .markdown-body :is(pre, code, kbd, th, tr:nth-child(2n)) {
     color: var(--color-on-surface);
   }
 
-  .synapsis-react-chat .chat-bubble pre {
+  .synapsis-react-chat :is(.chat-bubble, .chat-content) pre {
     max-height: 16rem;
     overflow: auto;
     white-space: pre-wrap;

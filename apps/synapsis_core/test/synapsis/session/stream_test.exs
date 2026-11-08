@@ -129,13 +129,13 @@ defmodule Synapsis.Session.StreamTest do
   end
 
   # ---------------------------------------------------------------------------
-  # start_stream/3 — successful delegation via Bypass (Anthropic)
+  # start_stream/3 — successful delegation via Gaoxy.Test (Anthropic)
   # ---------------------------------------------------------------------------
 
   describe "start_stream/3 delegates to Anthropic provider" do
     setup do
-      bypass = Bypass.open()
-      %{bypass: bypass, port: bypass.port}
+      bypass = Gaoxy.Test.open()
+      %{bypass: bypass, port: URI.parse(Gaoxy.Test.url(bypass)).port}
     end
 
     test "returns {:ok, ref} and caller receives streaming text chunks", %{
@@ -145,7 +145,7 @@ defmodule Synapsis.Session.StreamTest do
       provider_name = unique_provider_name()
       config = register_provider(provider_name, "anthropic", port)
 
-      Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.send_resp(200, """
@@ -193,7 +193,7 @@ defmodule Synapsis.Session.StreamTest do
       provider_name = unique_provider_name()
       config = register_provider(provider_name, "anthropic", port)
 
-      Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.send_resp(200, """
@@ -232,7 +232,7 @@ defmodule Synapsis.Session.StreamTest do
       provider_name = unique_provider_name()
       config = register_provider(provider_name, "anthropic", port)
 
-      Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
@@ -260,7 +260,7 @@ defmodule Synapsis.Session.StreamTest do
       provider_name = unique_provider_name()
       config = register_provider(provider_name, "anthropic", port)
 
-      Bypass.down(bypass)
+      Gaoxy.Test.verify_and_close!(bypass)
 
       request = %{model: "claude-sonnet-4-20250514", max_tokens: 10, messages: [], stream: true}
 
@@ -272,20 +272,20 @@ defmodule Synapsis.Session.StreamTest do
   end
 
   # ---------------------------------------------------------------------------
-  # start_stream/3 — successful delegation via Bypass (OpenAI)
+  # start_stream/3 — successful delegation via Gaoxy.Test (OpenAI)
   # ---------------------------------------------------------------------------
 
   describe "start_stream/3 delegates to OpenAI provider" do
     setup do
-      bypass = Bypass.open()
-      %{bypass: bypass, port: bypass.port}
+      bypass = Gaoxy.Test.open()
+      %{bypass: bypass, port: URI.parse(Gaoxy.Test.url(bypass)).port}
     end
 
     test "returns {:ok, ref} and streams OpenAI text chunks", %{bypass: bypass, port: port} do
       provider_name = unique_provider_name()
       config = register_provider(provider_name, "openai", port)
 
-      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.send_resp(200, """
@@ -324,20 +324,20 @@ defmodule Synapsis.Session.StreamTest do
   end
 
   # ---------------------------------------------------------------------------
-  # start_stream/3 — successful delegation via Bypass (Google)
+  # start_stream/3 — successful delegation via Gaoxy.Test (Google)
   # ---------------------------------------------------------------------------
 
   describe "start_stream/3 delegates to Google provider" do
     setup do
-      bypass = Bypass.open()
-      %{bypass: bypass, port: bypass.port}
+      bypass = Gaoxy.Test.open()
+      %{bypass: bypass, port: URI.parse(Gaoxy.Test.url(bypass)).port}
     end
 
     test "returns {:ok, ref} and streams Google text chunks", %{bypass: bypass, port: port} do
       provider_name = unique_provider_name()
       config = register_provider(provider_name, "google", port)
 
-      Bypass.expect_once(
+      Gaoxy.Test.expect_once(
         bypass,
         "POST",
         "/v1beta/models/gemini-2.0-flash:streamGenerateContent",
@@ -580,15 +580,15 @@ defmodule Synapsis.Session.StreamTest do
 
   describe "start_stream/3 reports streaming progress" do
     setup do
-      bypass = Bypass.open()
-      %{bypass: bypass, port: bypass.port}
+      bypass = Gaoxy.Test.open()
+      %{bypass: bypass, port: URI.parse(Gaoxy.Test.url(bypass)).port}
     end
 
     test "delivers chunks incrementally as they arrive", %{bypass: bypass, port: port} do
       provider_name = unique_provider_name()
       config = register_provider(provider_name, "anthropic", port)
 
-      Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.send_resp(200, """
@@ -624,7 +624,7 @@ defmodule Synapsis.Session.StreamTest do
       provider_name = unique_provider_name()
       config = register_provider(provider_name, "anthropic", port)
 
-      Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.send_resp(200, """
@@ -661,7 +661,7 @@ defmodule Synapsis.Session.StreamTest do
       provider_name = unique_provider_name()
       config = register_provider(provider_name, "anthropic", port)
 
-      Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.send_resp(200, """
@@ -688,8 +688,8 @@ defmodule Synapsis.Session.StreamTest do
 
   describe "start_stream/3 passes provider_config to Adapter.stream/2" do
     setup do
-      bypass = Bypass.open()
-      %{bypass: bypass, port: bypass.port}
+      bypass = Gaoxy.Test.open()
+      %{bypass: bypass, port: URI.parse(Gaoxy.Test.url(bypass)).port}
     end
 
     test "uses api_key from provider_config in request headers", %{bypass: bypass, port: port} do
@@ -699,7 +699,7 @@ defmodule Synapsis.Session.StreamTest do
       ProviderRegistry.register(provider_name, %{type: "anthropic"})
       on_exit(fn -> ProviderRegistry.unregister(provider_name) end)
 
-      Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/messages", fn conn ->
         headers = Map.new(conn.req_headers)
         assert headers["x-api-key"] == "my-special-key"
 

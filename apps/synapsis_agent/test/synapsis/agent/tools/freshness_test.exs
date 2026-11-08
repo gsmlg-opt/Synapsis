@@ -54,10 +54,42 @@ defmodule Synapsis.Agent.Tools.FreshnessTest do
     assert empty.providers == %{}
     assert empty.credentials == %{}
 
-    other = %Synapsis.SessionPermission{session_id: ctx.session}
+    other = %Synapsis.SessionPermission{session_id: ctx.session, tool_contract_version: 1}
     :ok = Store.put_value(ctx.session, "permission", other)
     assert {:ok, struct_evidence} = Freshness.capture(ctx.session, ctx.deps)
     assert struct_evidence.permission_fingerprint == PermissionSnapshot.fingerprint(other)
+  end
+
+  @tag :contract_version
+  test "legacy permissions fail before provider and credential readers even with no overrides",
+       ctx do
+    owner = self()
+
+    for version <- [0, nil, "1", 2, 1.0] do
+      raw = %{ctx.raw | tool_contract_version: version}
+
+      readers = %{
+        permission: fn _ -> {:ok, raw} end,
+        provider: fn _ ->
+          send(owner, :unexpected_version_provider_read)
+          {:error, :unavailable}
+        end,
+        credential: fn _ ->
+          send(owner, :unexpected_version_credential_read)
+          {:error, :unavailable}
+        end
+      }
+
+      assert {:error, :invalid_permission_snapshot} =
+               Freshness.capture(
+                 ctx.session,
+                 %{provider_ids: ["provider"], credential_ids: ["credential"]},
+                 readers
+               )
+
+      refute_received :unexpected_version_provider_read
+      refute_received :unexpected_version_credential_read
+    end
   end
 
   test "canonical evidence ignores dependency order and rejects duplicate or implicit dependencies",
@@ -318,6 +350,7 @@ defmodule Synapsis.Agent.Tools.FreshnessTest do
   defp permission(session),
     do: %{
       session_id: session,
+      tool_contract_version: 1,
       mode: :interactive,
       allow_read: :allow,
       allow_write: :deny,

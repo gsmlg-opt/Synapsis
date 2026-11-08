@@ -52,8 +52,7 @@ defmodule Synapsis.PromptBuilder do
   end
 
   @doc """
-  Builds memory context using Memory.ContextBuilder for XML-formatted,
-  scored retrieval with token budget allocation.
+  Builds bounded Markdown memory context for the session's configured agent workspace.
 
   Returns nil if no relevant memories found.
   """
@@ -65,10 +64,13 @@ defmodule Synapsis.PromptBuilder do
 
       {:ok, meta} ->
         session = Session.from_meta(meta)
+        agent = Synapsis.Agent.Resolver.resolve(session.agent || "main")
 
         context = %{
           agent_id: session.agent || "default",
-          agent_scope: :agent
+          agent_scope: :agent,
+          workspace_path: Path.expand(agent.workspace_path),
+          memory_context: (session.config || %{})["memory_context"] != false
         }
 
         case ContextBuilder.build(context) do

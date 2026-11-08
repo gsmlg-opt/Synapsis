@@ -1,0 +1,120 @@
+{
+  "packageName": "@openclaw/fs-safe",
+  "version": "0.26.8",
+  "archive": "fs-safe-0.26.8.tgz",
+  "tarballURL": "https://registry.npmjs.org/@openclaw/fs-safe/-/fs-safe-0.26.8.tgz",
+  "integrity": "sha512-daQnpfdOz/xrEcGr1r8WuC+Ci/piqpzCczi+o72VLe7AUsAJcfKfCwEkhr2DOD2zecUs72mQRsvsBqIr9nPv8Q==",
+  "archiveSha256": "842ef410fc59283909574a09343bf98ee5fbe2fe6d8cb743b5b409113f939ecb",
+  "license": "MIT",
+  "files": [
+    {
+      "path": "dist/local-file-access.js",
+      "sha256": "7530a957ca9d56f56deba8da1dd06be03c894c6f6472bc8571080937b57bfda8",
+      "regions": [
+        {
+          "name": "ENCODED_FILE_URL_SEPARATOR_RE",
+          "startByte": 328,
+          "endByte": 380,
+          "sha256": "32107bfc8713bd170b69feaa8011e1bd9c90ed3aac5d18f87cf3fa31b0db9732"
+        },
+        {
+          "name": "hasEncodedFileUrlSeparator",
+          "startByte": 503,
+          "endByte": 616,
+          "sha256": "4522079ed0bfd0366684889287fb3488a83e169165e2535f98e6261a62bd01a7"
+        },
+        {
+          "name": "isWindowsNetworkPath",
+          "startByte": 617,
+          "endByte": 938,
+          "sha256": "22459522cb533c420fbf91c8b8327d12f97183dd808d1c05aee29be25029816f"
+        },
+        {
+          "name": "safeFileURLToPath",
+          "startByte": 1296,
+          "endByte": 2427,
+          "sha256": "eddc0246d74b9065fd324f1a452141497b6558340bc3fb3d55dcc7304300112d"
+        }
+      ]
+    },
+    {
+      "path": "dist/string-coerce.js",
+      "sha256": "235838e43b0bd41533f87c9ba36fd067c37ee07a9977f55b7b75bb5114d2f477",
+      "regions": [
+        {
+          "name": "normalizeNullableString",
+          "startByte": 0,
+          "endByte": 185,
+          "sha256": "8dbfcf8bcd88ff9d7790b2076e2e6864cf0802d1543f5f209d2740596423e87d"
+        },
+        {
+          "name": "normalizeOptionalString",
+          "startByte": 186,
+          "endByte": 292,
+          "sha256": "0badcc810eb48d1ed7c6a8a94800f78c7f326aa22e7b66ff8cd7582a5fee3a5e"
+        },
+        {
+          "name": "normalizeOptionalLowercaseString",
+          "startByte": 293,
+          "endByte": 410,
+          "sha256": "3cfac3701b36448e0cb4675372acf015f1a437d7a00c5b8c0367f6dcb01a7587"
+        },
+        {
+          "name": "normalizeLowercaseStringOrEmpty",
+          "startByte": 411,
+          "endByte": 527,
+          "sha256": "25d61da24a3a2b014c7a7e8103d1a38be3958dd464192012a7b312bdc94feff0"
+        }
+      ]
+    },
+    {
+      "path": "dist/windows-path-alias.js",
+      "sha256": "df4bb6e0dfbec67ff14dddee059d6744b3abd18ff3d028ca233f1336270a7272",
+      "regions": [
+        {
+          "name": "hasWindowsPathAlias",
+          "startByte": 4864,
+          "endByte": 5247,
+          "sha256": "486723022a505a0fde65625441d7ed8c6a4983bd3ff13155a46802efc284cca1"
+        }
+      ]
+    },
+    {
+      "path": "dist/windows-path-syntax.js",
+      "sha256": "5bdd0ba6f0ab662850547e41723f96af72b3e79b7f8a1d794c7fcd89c9249710",
+      "regions": [
+        {
+          "name": "isWindowsSeparator",
+          "startByte": 30,
+          "endByte": 169,
+          "sha256": "4087ba49934c277d4aa274a515f6fde1f026aa4d0e4e5df5130d7f55c5745266"
+        },
+        {
+          "name": "hasWindowsDrivePrefix",
+          "startByte": 170,
+          "endByte": 368,
+          "sha256": "596a295bd726e82f08f51e98ba6f69e463dce1ec8cecec42faae7d864f85a0ab"
+        },
+        {
+          "name": "windowsNamespaceMarker",
+          "startByte": 439,
+          "endByte": 697,
+          "sha256": "0e6b73ac684fc872bb91dbb22cb2577f3ba5f762cf988516358884588282e757"
+        },
+        {
+          "name": "rootedWindowsDriveColonIndex",
+          "startByte": 698,
+          "endByte": 987,
+          "sha256": "8cf365eaed3ba794a55badf40f48cf7e386f13d369126214cafce8016e77ed15"
+        }
+      ]
+    }
+  ],
+  "imports": [
+    "import { fileURLToPath, URL } from \"node:url\";"
+  ],
+  "exports": [
+    "safeFileURLToPath"
+  ],
+  "excluded": "Whole advanced/path/native module envelopes and optional native packages are not selected."
+}

@@ -247,11 +247,11 @@ defmodule SynapsisServer.ProviderControllerTest do
     end
 
     test "rejects an unavailable Backplane provider before calling its adapter", %{conn: conn} do
-      bypass = Bypass.open()
+      bypass = Gaoxy.Test.open()
       parent = self()
       {:ok, _} = Synapsis.Config.Store.put(:backplane, %{"id" => "source-1", "enabled" => true})
 
-      Bypass.stub(bypass, "GET", "/v1/models", fn request_conn ->
+      Gaoxy.Test.stub(bypass, "GET", "/v1/models", fn request_conn ->
         send(parent, :unavailable_provider_adapter_called)
 
         request_conn
@@ -263,7 +263,7 @@ defmodule SynapsisServer.ProviderControllerTest do
         Providers.create(%{
           name: "unavailable-backplane",
           type: "openai",
-          base_url: "http://127.0.0.1:#{bypass.port}/v1",
+          base_url: Gaoxy.Test.url(bypass, "/v1"),
           enabled: true,
           config: %{
             "managed_by" => "backplane",

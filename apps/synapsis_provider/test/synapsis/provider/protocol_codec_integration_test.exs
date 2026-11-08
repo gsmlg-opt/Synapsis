@@ -31,15 +31,16 @@ defmodule Synapsis.Provider.ProtocolCodecIntegrationTest do
   end
 
   test "stream returns a cancellable pid and monitor reference" do
-    bypass = Bypass.open()
-    Bypass.down(bypass)
+    bypass = Gaoxy.Test.open()
+    base_url = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
+    Gaoxy.Test.verify_and_close!(bypass)
 
     request = %{"model" => "gpt-test", "messages" => [], "stream" => true}
 
     assert {:ok, %{pid: pid, ref: ref} = handle} =
              Adapter.stream(request, %{
                type: "openai",
-               base_url: "http://localhost:#{bypass.port}",
+               base_url: base_url,
                api_key: "test"
              })
 

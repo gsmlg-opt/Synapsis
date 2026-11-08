@@ -1,0 +1,677 @@
+{
+  "schemaVersion": 1,
+  "referencePin": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+  "harness": {
+    "path": "scripts/openclaw/capture-pdf-native.mjs",
+    "sha256": "ce8a27b194e32773d7d88e7e2313c292a4a3499c5db4a179a3475eb9361b20e5"
+  },
+  "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+  "sourceAudit": [
+    {
+      "path": "src/agents/tools/pdf-native-providers.ts",
+      "sourceSha256": "7d8b41bca5cefa9150e11597f4b345c9cd539ec3c6793c32143a74f308b905eb",
+      "executableSha256": "9772670ffa6579429cb55293269e77a68dbdd6c09f3f6f9ca285cb6124a95048",
+      "wholeModule": true,
+      "executed": true
+    }
+  ],
+  "platformBoundaries": [
+    {
+      "module": "@openclaw/ai/internal/anthropic",
+      "originalSourceExecuted": false,
+      "exports": {
+        "buildAnthropicClaudeCodeIdentity": "unused identity service outside the ordinary fixture path",
+        "buildAnthropicSystemBlocks": "returns undefined for the fixture with no system prompt",
+        "isAnthropicOAuthApiKey": "fixed ordinary provider-key fixture branch; classifier unexecuted"
+      }
+    },
+    {
+      "module": "@openclaw/ai/transports",
+      "originalSourceExecuted": false,
+      "exports": {
+        "resolveAnthropicMessagesUrl": "fixture URL resolver strips trailing slashes and appends /messages after /v1"
+      }
+    },
+    {
+      "module": "../../llm/ai-transport-host.js",
+      "originalSourceExecuted": false,
+      "exports": {}
+    },
+    {
+      "module": "../../infra/http-error-body.js",
+      "originalSourceExecuted": false,
+      "exports": {
+        "readResponseBodySnippet": "unused error body service"
+      }
+    },
+    {
+      "module": "../../media-understanding/shared.js",
+      "originalSourceExecuted": false,
+      "exports": {
+        "postJsonRequest": "records serialized request content and returns a synthetic successful Response; release counted; no sockets or timer",
+        "readProviderJsonResponse": "uses fixture Response.json; production bounded parser unexecuted",
+        "resolveProviderHttpRequestConfigWithOriginTrust": "fixture selects supplied/default base URL, strips trailing slashes, and builds Headers; production request configuration unexecuted"
+      }
+    },
+    {
+      "module": "../../plugins/provider-runtime.js",
+      "originalSourceExecuted": false,
+      "exports": {
+        "normalizeProviderTransportWithPlugin": "returns supplied base URL; plugin discovery/normalization unexecuted"
+      }
+    },
+    {
+      "module": "../../utils.js",
+      "originalSourceExecuted": false,
+      "exports": {
+        "isRecord": "fixture plain non-array object predicate"
+      }
+    },
+    {
+      "module": "../../utils/normalize-secret-input.js",
+      "originalSourceExecuted": false,
+      "exports": {
+        "normalizeSecretInput": "passes the explicit synthetic string through; production secret normalization unexecuted"
+      }
+    },
+    {
+      "module": "../provider-http-errors.js",
+      "originalSourceExecuted": false,
+      "exports": {
+        "createProviderErrorTextRedactor": "returns identity function; no error text used"
+      }
+    },
+    {
+      "module": "../provider-network-policy.js",
+      "originalSourceExecuted": false,
+      "exports": {
+        "resolveProviderTransportSsrFPolicy": "returns undefined at synthetic HTTP boundary; production network classifier unexecuted"
+      }
+    },
+    {
+      "module": "../provider-secret-egress.js",
+      "originalSourceExecuted": false,
+      "exports": {
+        "unwrapSecretSentinelsForProviderEgress": "passes synthetic fixture header string through; production secret egress unexecuted"
+      }
+    }
+  ],
+  "limits": [
+    "Only the complete pdf-native-providers.ts source executes; every import is a synthetic platform module, including the side-effect transport host.",
+    "Synthetic successful HTTP responses are local bindings with no live network or real provider validation.",
+    "120000 ms is the timeout argument observed from the source; deadline execution and production resource lifetime are unverified.",
+    "Input base64 encodes synthetic PDF byte tokens; host Gaoxy consumers substitute actual local PDF file bytes, prompt and configured model.",
+    "Anthropic URL resolution and generic trailing-slash base URL normalization are supplied fixtures, not executed upstream implementations.",
+    "Gemini helper emits inline_data/mime_type; host official codec emits inlineData/mimeType. Consumers normalize only these content keys for comparison.",
+    "The reference uses one-shot JSON HTTP; the host uses provider streaming. Comparison establishes PDF/text content branch behavior, not complete transport parity.",
+    "Imported provider configuration, identity, secret, redaction, plugin and network classification services are fixture boundaries, with no production policy claims."
+  ],
+  "observations": [
+    {
+      "id": "anthropic-one",
+      "protocol": "anthropic",
+      "input": {
+        "pdfs": [
+          {
+            "base64": "JVBERi0xLjcKcmVmZXJlbmNlLWZpcnN0CiUlRU9GCg=="
+          }
+        ],
+        "prompt": "Summarize this PDF.",
+        "modelId": "claude-sonnet-4-6"
+      },
+      "response": {
+        "content": [
+          {
+            "type": "text",
+            "text": " First PDF"
+          },
+          {
+            "type": "text",
+            "text": " analysis. "
+          }
+        ]
+      },
+      "export": "anthropicAnalyzePdf",
+      "request": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "body": {
+          "model": "claude-sonnet-4-6",
+          "max_tokens": 4096,
+          "messages": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "document",
+                  "source": {
+                    "type": "base64",
+                    "media_type": "application/pdf",
+                    "data": "JVBERi0xLjcKcmVmZXJlbmNlLWZpcnN0CiUlRU9GCg=="
+                  }
+                },
+                {
+                  "type": "text",
+                  "text": "Summarize this PDF."
+                }
+              ]
+            }
+          ]
+        },
+        "timeoutMs": 120000
+      },
+      "result": "First PDF analysis.",
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "../../utils/normalize-secret-input.js",
+          "export": "normalizeSecretInput"
+        },
+        {
+          "module": "@openclaw/ai/internal/anthropic",
+          "export": "isAnthropicOAuthApiKey"
+        },
+        {
+          "module": "@openclaw/ai/transports",
+          "export": "resolveAnthropicMessagesUrl"
+        },
+        {
+          "module": "@openclaw/ai/internal/anthropic",
+          "export": "buildAnthropicSystemBlocks"
+        },
+        {
+          "module": "../../media-understanding/shared.js",
+          "export": "resolveProviderHttpRequestConfigWithOriginTrust"
+        },
+        {
+          "module": "@openclaw/ai/transports",
+          "export": "resolveAnthropicMessagesUrl"
+        },
+        {
+          "module": "../provider-secret-egress.js",
+          "export": "unwrapSecretSentinelsForProviderEgress"
+        },
+        {
+          "module": "../provider-secret-egress.js",
+          "export": "unwrapSecretSentinelsForProviderEgress"
+        },
+        {
+          "module": "../provider-secret-egress.js",
+          "export": "unwrapSecretSentinelsForProviderEgress"
+        },
+        {
+          "module": "../provider-secret-egress.js",
+          "export": "unwrapSecretSentinelsForProviderEgress"
+        },
+        {
+          "module": "../provider-http-errors.js",
+          "export": "createProviderErrorTextRedactor"
+        },
+        {
+          "module": "../provider-network-policy.js",
+          "export": "resolveProviderTransportSsrFPolicy"
+        },
+        {
+          "module": "../../media-understanding/shared.js",
+          "export": "postJsonRequest"
+        },
+        {
+          "module": "../../media-understanding/shared.js",
+          "export": "readProviderJsonResponse"
+        },
+        {
+          "module": "../../utils.js",
+          "export": "isRecord"
+        },
+        {
+          "module": "../../media-understanding/shared.js",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "anthropic-two",
+      "protocol": "anthropic",
+      "input": {
+        "pdfs": [
+          {
+            "base64": "JVBERi0xLjcKcmVmZXJlbmNlLWZpcnN0CiUlRU9GCg=="
+          },
+          {
+            "base64": "JVBERi0xLjcKcmVmZXJlbmNlLXNlY29uZAolJUVPRgo="
+          }
+        ],
+        "prompt": "Compare these PDFs in order.",
+        "modelId": "claude-sonnet-4-6",
+        "maxTokens": 2048,
+        "baseUrl": "http://127.0.0.1:18181/anthropic/v1/"
+      },
+      "response": {
+        "content": [
+          {
+            "type": "text",
+            "text": " First PDF"
+          },
+          {
+            "type": "text",
+            "text": " analysis. "
+          }
+        ]
+      },
+      "export": "anthropicAnalyzePdf",
+      "request": {
+        "url": "http://127.0.0.1:18181/anthropic/v1/messages",
+        "body": {
+          "model": "claude-sonnet-4-6",
+          "max_tokens": 2048,
+          "messages": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "document",
+                  "source": {
+                    "type": "base64",
+                    "media_type": "application/pdf",
+                    "data": "JVBERi0xLjcKcmVmZXJlbmNlLWZpcnN0CiUlRU9GCg=="
+                  }
+                },
+                {
+                  "type": "document",
+                  "source": {
+                    "type": "base64",
+                    "media_type": "application/pdf",
+                    "data": "JVBERi0xLjcKcmVmZXJlbmNlLXNlY29uZAolJUVPRgo="
+                  }
+                },
+                {
+                  "type": "text",
+                  "text": "Compare these PDFs in order."
+                }
+              ]
+            }
+          ]
+        },
+        "timeoutMs": 120000
+      },
+      "result": "First PDF analysis.",
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "../../utils/normalize-secret-input.js",
+          "export": "normalizeSecretInput"
+        },
+        {
+          "module": "@openclaw/ai/internal/anthropic",
+          "export": "isAnthropicOAuthApiKey"
+        },
+        {
+          "module": "@openclaw/ai/transports",
+          "export": "resolveAnthropicMessagesUrl"
+        },
+        {
+          "module": "@openclaw/ai/internal/anthropic",
+          "export": "buildAnthropicSystemBlocks"
+        },
+        {
+          "module": "../../media-understanding/shared.js",
+          "export": "resolveProviderHttpRequestConfigWithOriginTrust"
+        },
+        {
+          "module": "@openclaw/ai/transports",
+          "export": "resolveAnthropicMessagesUrl"
+        },
+        {
+          "module": "../provider-secret-egress.js",
+          "export": "unwrapSecretSentinelsForProviderEgress"
+        },
+        {
+          "module": "../provider-secret-egress.js",
+          "export": "unwrapSecretSentinelsForProviderEgress"
+        },
+        {
+          "module": "../provider-secret-egress.js",
+          "export": "unwrapSecretSentinelsForProviderEgress"
+        },
+        {
+          "module": "../provider-secret-egress.js",
+          "export": "unwrapSecretSentinelsForProviderEgress"
+        },
+        {
+          "module": "../provider-http-errors.js",
+          "export": "createProviderErrorTextRedactor"
+        },
+        {
+          "module": "../provider-network-policy.js",
+          "export": "resolveProviderTransportSsrFPolicy"
+        },
+        {
+          "module": "../../media-understanding/shared.js",
+          "export": "postJsonRequest"
+        },
+        {
+          "module": "../../media-understanding/shared.js",
+          "export": "readProviderJsonResponse"
+        },
+        {
+          "module": "../../utils.js",
+          "export": "isRecord"
+        },
+        {
+          "module": "../../media-understanding/shared.js",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "gemini-one",
+      "protocol": "google",
+      "input": {
+        "pdfs": [
+          {
+            "base64": "JVBERi0xLjcKcmVmZXJlbmNlLWZpcnN0CiUlRU9GCg=="
+          }
+        ],
+        "prompt": "Summarize this PDF.",
+        "modelId": "gemini-2.5-pro"
+      },
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " First PDF"
+                },
+                {
+                  "text": " analysis. "
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "export": "geminiAnalyzePdf",
+      "request": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent",
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "inline_data": {
+                    "mime_type": "application/pdf",
+                    "data": "JVBERi0xLjcKcmVmZXJlbmNlLWZpcnN0CiUlRU9GCg=="
+                  }
+                },
+                {
+                  "text": "Summarize this PDF."
+                }
+              ]
+            }
+          ]
+        },
+        "timeoutMs": 120000
+      },
+      "result": "First PDF analysis.",
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "../../utils/normalize-secret-input.js",
+          "export": "normalizeSecretInput"
+        },
+        {
+          "module": "../../plugins/provider-runtime.js",
+          "export": "normalizeProviderTransportWithPlugin"
+        },
+        {
+          "module": "../../media-understanding/shared.js",
+          "export": "resolveProviderHttpRequestConfigWithOriginTrust"
+        },
+        {
+          "module": "../provider-secret-egress.js",
+          "export": "unwrapSecretSentinelsForProviderEgress"
+        },
+        {
+          "module": "../provider-secret-egress.js",
+          "export": "unwrapSecretSentinelsForProviderEgress"
+        },
+        {
+          "module": "../provider-http-errors.js",
+          "export": "createProviderErrorTextRedactor"
+        },
+        {
+          "module": "../provider-network-policy.js",
+          "export": "resolveProviderTransportSsrFPolicy"
+        },
+        {
+          "module": "../../media-understanding/shared.js",
+          "export": "postJsonRequest"
+        },
+        {
+          "module": "../../media-understanding/shared.js",
+          "export": "readProviderJsonResponse"
+        },
+        {
+          "module": "../../utils.js",
+          "export": "isRecord"
+        },
+        {
+          "module": "../../media-understanding/shared.js",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "gemini-two",
+      "protocol": "google",
+      "input": {
+        "pdfs": [
+          {
+            "base64": "JVBERi0xLjcKcmVmZXJlbmNlLWZpcnN0CiUlRU9GCg=="
+          },
+          {
+            "base64": "JVBERi0xLjcKcmVmZXJlbmNlLXNlY29uZAolJUVPRgo="
+          }
+        ],
+        "prompt": "Compare these PDFs in order.",
+        "modelId": "gemini-2.5-pro",
+        "baseUrl": "http://127.0.0.1:18181/google/v1beta/"
+      },
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " First PDF"
+                },
+                {
+                  "text": " analysis. "
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "export": "geminiAnalyzePdf",
+      "request": {
+        "url": "http://127.0.0.1:18181/google/v1beta/models/gemini-2.5-pro:generateContent",
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "inline_data": {
+                    "mime_type": "application/pdf",
+                    "data": "JVBERi0xLjcKcmVmZXJlbmNlLWZpcnN0CiUlRU9GCg=="
+                  }
+                },
+                {
+                  "inline_data": {
+                    "mime_type": "application/pdf",
+                    "data": "JVBERi0xLjcKcmVmZXJlbmNlLXNlY29uZAolJUVPRgo="
+                  }
+                },
+                {
+                  "text": "Compare these PDFs in order."
+                }
+              ]
+            }
+          ]
+        },
+        "timeoutMs": 120000
+      },
+      "result": "First PDF analysis.",
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "../../utils/normalize-secret-input.js",
+          "export": "normalizeSecretInput"
+        },
+        {
+          "module": "../../plugins/provider-runtime.js",
+          "export": "normalizeProviderTransportWithPlugin"
+        },
+        {
+          "module": "../../media-understanding/shared.js",
+          "export": "resolveProviderHttpRequestConfigWithOriginTrust"
+        },
+        {
+          "module": "../provider-secret-egress.js",
+          "export": "unwrapSecretSentinelsForProviderEgress"
+        },
+        {
+          "module": "../provider-secret-egress.js",
+          "export": "unwrapSecretSentinelsForProviderEgress"
+        },
+        {
+          "module": "../provider-http-errors.js",
+          "export": "createProviderErrorTextRedactor"
+        },
+        {
+          "module": "../provider-network-policy.js",
+          "export": "resolveProviderTransportSsrFPolicy"
+        },
+        {
+          "module": "../../media-understanding/shared.js",
+          "export": "postJsonRequest"
+        },
+        {
+          "module": "../../media-understanding/shared.js",
+          "export": "readProviderJsonResponse"
+        },
+        {
+          "module": "../../utils.js",
+          "export": "isRecord"
+        },
+        {
+          "module": "../../media-understanding/shared.js",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "gemini-model-escape",
+      "protocol": "google",
+      "input": {
+        "pdfs": [
+          {
+            "base64": "JVBERi0xLjcKcmVmZXJlbmNlLWZpcnN0CiUlRU9GCg=="
+          }
+        ],
+        "prompt": "Summarize this PDF.",
+        "modelId": "publisher/model beta",
+        "baseUrl": "http://127.0.0.1:18181/google/v1beta"
+      },
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " First PDF"
+                },
+                {
+                  "text": " analysis. "
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "export": "geminiAnalyzePdf",
+      "request": {
+        "url": "http://127.0.0.1:18181/google/v1beta/models/publisher%2Fmodel%20beta:generateContent",
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "inline_data": {
+                    "mime_type": "application/pdf",
+                    "data": "JVBERi0xLjcKcmVmZXJlbmNlLWZpcnN0CiUlRU9GCg=="
+                  }
+                },
+                {
+                  "text": "Summarize this PDF."
+                }
+              ]
+            }
+          ]
+        },
+        "timeoutMs": 120000
+      },
+      "result": "First PDF analysis.",
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "../../utils/normalize-secret-input.js",
+          "export": "normalizeSecretInput"
+        },
+        {
+          "module": "../../plugins/provider-runtime.js",
+          "export": "normalizeProviderTransportWithPlugin"
+        },
+        {
+          "module": "../../media-understanding/shared.js",
+          "export": "resolveProviderHttpRequestConfigWithOriginTrust"
+        },
+        {
+          "module": "../provider-secret-egress.js",
+          "export": "unwrapSecretSentinelsForProviderEgress"
+        },
+        {
+          "module": "../provider-secret-egress.js",
+          "export": "unwrapSecretSentinelsForProviderEgress"
+        },
+        {
+          "module": "../provider-http-errors.js",
+          "export": "createProviderErrorTextRedactor"
+        },
+        {
+          "module": "../provider-network-policy.js",
+          "export": "resolveProviderTransportSsrFPolicy"
+        },
+        {
+          "module": "../../media-understanding/shared.js",
+          "export": "postJsonRequest"
+        },
+        {
+          "module": "../../media-understanding/shared.js",
+          "export": "readProviderJsonResponse"
+        },
+        {
+          "module": "../../utils.js",
+          "export": "isRecord"
+        },
+        {
+          "module": "../../media-understanding/shared.js",
+          "export": "release"
+        }
+      ]
+    }
+  ]
+}

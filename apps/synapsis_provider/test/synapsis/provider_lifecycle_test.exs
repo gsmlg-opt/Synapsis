@@ -44,10 +44,10 @@ defmodule Synapsis.ProviderLifecycleTest do
   end
 
   test "a delayed discovery response cannot recreate a deleted provider or populate its replacement" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     observer = self()
 
-    Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
       send(observer, {:discovery_waiting, self()})
       receive do: (:respond -> :ok)
 
@@ -60,7 +60,7 @@ defmodule Synapsis.ProviderLifecycleTest do
       Providers.create(%{
         name: "delayed",
         type: "openai",
-        base_url: "http://localhost:#{bypass.port}/v1",
+        base_url: Gaoxy.Test.url(bypass, "/v1"),
         config: %{"model_catalog_migrated" => true}
       })
 

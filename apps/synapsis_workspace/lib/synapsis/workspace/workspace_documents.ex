@@ -12,42 +12,125 @@ defmodule Synapsis.WorkspaceDocuments do
   degrade to no-ops (files are the durable form). Full-text search degrades to a
   substring/line scan.
   """
+  alias Synapsis.Filesystem.Local
   alias Synapsis.Workspace.FileDocuments
   alias Synapsis.WorkspaceDocument
 
   @doc "Workspace root for file-backed documents."
   def root, do: System.get_env("SYNAPSIS_WORKSPACE_ROOT") || File.cwd!()
 
+  @doc "Reads captured bytes using one pinned trusted domain root, without metadata effects."
+  def read_file(path, args, opts, root \\ root()) do
+    FileDocuments.read_file(root, path, args, opts)
+  end
+
+  @doc "Pins the root and carries the validated store scope explicitly."
+  def with_paths(paths, scope \\ nil, callback) do
+    scope = domain_scope(scope)
+
+    FileDocuments.with_paths(scope.root, paths, scope.io, fn io ->
+      callback.(%{root: scope.root, io: io})
+    end)
+  end
+
+  @doc "Carries a pinned directory result and its explicit original store scope."
+  def with_directory_entries(path, scope \\ nil, callback) do
+    scope = domain_scope(scope)
+
+    FileDocuments.with_directory_entries(scope.root, path, scope.io, fn entries, io ->
+      callback.(entries, %{root: scope.root, io: io})
+    end)
+  end
+
+  @doc "Bounded file-tool operations without authorization or publication."
+  def tool_files(action, arguments, author, scope \\ nil) do
+    scope = domain_scope(scope)
+    FileDocuments.tool_perform(scope.root, action, arguments, author, scope.io)
+  end
+
+  def text_files(action, arguments, author, opts \\ [], scope \\ nil) do
+    scope = domain_scope(scope)
+
+    FileDocuments.text_perform(
+      scope.root,
+      action,
+      arguments,
+      author,
+      Keyword.merge(opts, scope.io)
+    )
+  end
+
+  def tool_index(path, depth, scope \\ nil) do
+    scope = domain_scope(scope)
+    FileDocuments.tool_index(scope.root, path, depth, scope.io)
+  end
+
+  def tool_search(path, pattern, scope \\ nil) do
+    scope = domain_scope(scope)
+    FileDocuments.tool_search(scope.root, path, pattern, scope.io)
+  end
+
   # ── document CRUD (FileDocuments-backed) ────────────────────────────────────
 
-  def get_by_path(path) do
-    case FileDocuments.get(root(), path) do
+  def get_by_path(path, scope \\ nil) do
+    scope = domain_scope(scope)
+
+    case FileDocuments.get(scope.root, path, scope.io) do
       {:ok, map} -> to_struct(map)
-      _ -> nil
+      {:error, :not_found} -> nil
+      {:error, reason} -> raise "workspace document read failed: #{inspect(reason)}"
     end
   end
 
-  def get(id) do
-    # all_docs/0 (list-backed) carries metadata only; reload via path for content.
-    case Enum.find(all_docs(), &(&1.id == id)) do
-      nil -> nil
-      doc -> get_by_path(doc.path) || doc
+  @doc "Finds an ID before acquiring its exact pair; a nested child scope cannot discover IDs."
+  def get(id, scope \\ nil) do
+    scope = domain_scope(scope)
+
+    if Keyword.has_key?(scope.io, :lease) do
+      raise "workspace document ID lookup requires an initial discovery scope"
+    end
+
+    case Enum.find(all_docs(scope), &(&1.id == id)) do
+      nil ->
+        nil
+
+      doc ->
+        with_paths([doc.path], scope, fn current_scope ->
+          case get_by_path(doc.path, current_scope) do
+            %WorkspaceDocument{id: ^id} = current -> current
+            _ -> nil
+          end
+        end)
     end
   end
 
   def list_by_prefix(prefix, opts \\ []) do
+    scope = domain_scope(nil)
     pattern = String.trim_leading(prefix, "/") <> "**"
-    root() |> FileDocuments.list(pattern: pattern) |> Enum.map(&to_struct/1) |> apply_depth(opts)
+
+    scope.root
+    |> FileDocuments.list([pattern: pattern], scope.io)
+    |> Enum.map(&to_struct/1)
+    |> apply_depth(opts)
   end
 
-  def insert(%Ecto.Changeset{} = changeset), do: put_changeset(changeset)
-  def insert(attrs) when is_map(attrs), do: put_map(attrs)
+  def insert(attrs_or_changeset, scope \\ nil)
 
-  def update(%Ecto.Changeset{} = changeset), do: put_changeset(changeset)
+  def insert(%Ecto.Changeset{} = changeset, scope),
+    do: put_changeset(changeset, domain_scope(scope))
 
-  def soft_delete(%WorkspaceDocument{path: path} = doc) do
-    FileDocuments.delete(root(), path)
-    {:ok, doc}
+  def insert(attrs, scope) when is_map(attrs), do: put_map(attrs, domain_scope(scope))
+
+  def update(%Ecto.Changeset{} = changeset, scope \\ nil),
+    do: put_changeset(changeset, domain_scope(scope))
+
+  def soft_delete(%WorkspaceDocument{path: path} = doc, scope \\ nil) do
+    scope = domain_scope(scope)
+
+    case FileDocuments.delete(scope.root, path, scope.io) do
+      :ok -> {:ok, doc}
+      error -> error
+    end
   end
 
   # ── transactions (no real txn over files) ───────────────────────────────────
@@ -64,10 +147,11 @@ defmodule Synapsis.WorkspaceDocuments do
 
   def search(query_text, _opts \\ []) do
     q = String.downcase(query_text)
+    scope = domain_scope(nil)
 
-    all_docs()
+    all_docs(scope)
     # all_docs/0 is metadata-only; load content per doc before substring matching.
-    |> Enum.map(&(get_by_path(&1.path) || &1))
+    |> Enum.map(&(get_by_path(&1.path, scope) || &1))
     |> Enum.filter(&String.contains?(String.downcase(&1.content_body || ""), q))
   end
 
@@ -82,8 +166,20 @@ defmodule Synapsis.WorkspaceDocuments do
   end
 
   def glob(pattern, _opts \\ []) do
-    Path.wildcard(Path.join(root(), pattern))
-    |> Enum.map(fn abs -> %{path: "/" <> Path.relative_to(abs, root())} end)
+    scope = domain_scope(nil)
+
+    case Local.directory_snapshot(
+           scope.root,
+           ".",
+           %{pattern: String.trim_leading(pattern, "/")},
+           scope.io
+         ) do
+      {:ok, %{entries: entries}} ->
+        Enum.map(entries, fn entry -> %{path: "/" <> entry.path} end)
+
+      {:error, reason} ->
+        raise "workspace glob failed: #{inspect(reason)}"
+    end
   end
 
   # ── version history + blob GC (no-ops in the file model) ────────────────────
@@ -131,19 +227,25 @@ defmodule Synapsis.WorkspaceDocuments do
 
   # ── internals ──────────────────────────────────────────────────────────────
 
-  defp all_docs, do: root() |> FileDocuments.list([]) |> Enum.map(&to_struct/1)
+  defp domain_scope(nil), do: %{root: root(), io: []}
+  defp domain_scope(%{root: root, io: io}), do: %{root: root, io: io}
 
-  defp put_changeset(%Ecto.Changeset{} = changeset) do
+  defp all_docs, do: all_docs(domain_scope(nil))
+
+  defp all_docs(scope),
+    do: scope.root |> FileDocuments.list([], scope.io) |> Enum.map(&to_struct/1)
+
+  defp put_changeset(%Ecto.Changeset{} = changeset, scope) do
     if changeset.valid?,
-      do: put_map(Ecto.Changeset.apply_changes(changeset)),
+      do: put_map(Ecto.Changeset.apply_changes(changeset), scope),
       else: {:error, changeset}
   end
 
-  defp put_map(attrs) do
+  defp put_map(attrs, scope) do
     map = if is_struct(attrs), do: Map.from_struct(attrs), else: attrs
     string_keyed = Map.new(map, fn {k, v} -> {to_string(k), v} end)
 
-    case FileDocuments.put(root(), string_keyed) do
+    case FileDocuments.put(scope.root, string_keyed, scope.io) do
       {:ok, doc} -> {:ok, to_struct(doc)}
       other -> other
     end

@@ -12,6 +12,7 @@ defmodule Synapsis.Sessions do
 
   @transient_statuses ~w(streaming tool_executing)
   @stale_transient_status_after_seconds 120
+  @wake_blank ~r/\A[\x{0009}-\x{000D}\x{0020}\x{00A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}]*\z/u
 
   def create(agent_name \\ "main", opts \\ %{}) do
     agent = opts[:agent] || agent_name || "main"
@@ -43,6 +44,155 @@ defmodule Synapsis.Sessions do
       persist_and_start_session(session, agent, session_runtime)
     else
       if changeset.valid?, do: {:error, :model_unavailable}, else: {:error, changeset}
+    end
+  end
+
+  @doc "Initialize the registry-reserved destination of one suggested task."
+  def create_suggested_session(proposal, destination_id, requester, opts \\ []) do
+    prepared =
+      protect_operation(fn ->
+        with {:ok, deadline} <- suggested_deadline(opts),
+             {:ok, timeout} <- suggested_remaining(deadline),
+             {:ok, source_meta} <- Store.get_meta(proposal.session_id, timeout: timeout),
+             {:ok, selection} <- suggested_selection(Session.from_meta(source_meta)),
+             {:ok, input_context} <-
+               Synapsis.Session.InputContext.capture_operator(destination_id, %{
+                 requester_id: requester,
+                 origin: "liveview"
+               }),
+             {:ok, session, permission} <-
+               suggested_session(proposal, destination_id, selection) do
+          {:ok, session, permission, input_context, deadline}
+        end
+      end)
+
+    case prepared do
+      {:ok, session, permission, input_context, deadline} ->
+        initialize_suggested_session(session, permission, input_context, deadline)
+
+      {:error, reason} ->
+        {:error, {:pre_effect, reason}}
+    end
+  end
+
+  defp suggested_deadline(opts) when is_list(opts) do
+    ceiling = System.monotonic_time(:millisecond) + 30_000
+
+    if Keyword.keyword?(opts) and Keyword.keys(opts) -- [:deadline] == [] and
+         length(opts) == length(Enum.uniq_by(opts, &elem(&1, 0))) and
+         is_integer(Keyword.get(opts, :deadline, ceiling)) do
+      {:ok, min(Keyword.get(opts, :deadline, ceiling), ceiling)}
+    else
+      {:error, :invalid_input}
+    end
+  end
+
+  defp suggested_deadline(_), do: {:error, :invalid_input}
+
+  defp suggested_remaining(deadline) do
+    remaining = deadline - System.monotonic_time(:millisecond)
+    if remaining > 0, do: {:ok, min(remaining, 5_000)}, else: {:error, :timeout}
+  end
+
+  defp suggested_selection(%Session{} = source) do
+    config = source.config || %{}
+
+    case {config["provider_id"], config["model_id"]} do
+      {nil, nil} ->
+        if creation_model_available?(source.provider, source.model) do
+          {:ok,
+           %{
+             provider: source.provider,
+             model: source.model,
+             config: model_selection_config(%{}, source.provider, source.model)
+           }}
+        else
+          {:error, :model_unavailable}
+        end
+
+      {provider_id, model_id} ->
+        with {:ok, model} <- suggested_model(provider_id, model_id, source.model),
+             {:ok, provider} <- Synapsis.Providers.get(provider_id || model.provider_id),
+             true <- model.provider_id == provider.id and model.enabled,
+             true <- Synapsis.Providers.model_runtime_available?(provider, model.model) do
+          {:ok,
+           %{
+             provider: provider.name,
+             model: model.model,
+             config: %{"provider_id" => provider.id, "model_id" => model.id}
+           }}
+        else
+          _ -> {:error, :model_unavailable}
+        end
+    end
+  end
+
+  defp suggested_model(provider_id, nil, model),
+    do: Synapsis.Models.get_by_identity(provider_id, model)
+
+  defp suggested_model(_provider_id, model_id, _model), do: Synapsis.Models.get(model_id)
+
+  defp suggested_session(proposal, destination_id, selection) do
+    now = DateTime.utc_now()
+
+    config =
+      Map.put(selection.config, "creation_context", %{
+        "version" => 1,
+        "kind" => "task_suggestion",
+        "task_id" => proposal.id,
+        "source_session_id" => proposal.session_id,
+        "cwd" => proposal.cwd
+      })
+
+    changeset =
+      Session.changeset(%Session{}, %{
+        id: destination_id,
+        title: proposal.title,
+        agent: proposal.agent_id,
+        provider: selection.provider,
+        model: selection.model,
+        config: config
+      })
+
+    permission_attrs =
+      proposal.agent_id
+      |> Synapsis.Agent.Resolver.resolve()
+      |> Map.get(:permission_mode)
+      |> Synapsis.Tool.Permission.config_for_mode()
+      |> Map.merge(%{session_id: destination_id, tool_contract_version: 1})
+
+    permission_changeset =
+      Synapsis.SessionPermission.changeset(%Synapsis.SessionPermission{}, permission_attrs)
+
+    if changeset.valid? and permission_changeset.valid? do
+      session = %{Ecto.Changeset.apply_changes(changeset) | inserted_at: now, updated_at: now}
+      permission = permission_changeset |> Ecto.Changeset.apply_changes() |> Map.from_struct()
+      {:ok, session, permission}
+    else
+      {:error, if(changeset.valid?, do: permission_changeset, else: changeset)}
+    end
+  end
+
+  defp initialize_suggested_session(session, permission, input_context, deadline) do
+    with {:ok, timeout} <- suggested_remaining(deadline) do
+      protect_operation(fn ->
+        with :ok <-
+               Store.initialize_session(session.id, Session.to_meta(session), permission,
+                 timeout: timeout
+               ),
+             {:ok, _remaining} <- suggested_remaining(deadline),
+             {:ok, _pid} <- Synapsis.Session.DynamicSupervisor.start_session(session.id) do
+          {:ok, %{session: session, input_context: input_context}}
+        else
+          _ -> {:error, :unknown_outcome}
+        end
+      end)
+      |> case do
+        {:ok, _} = result -> result
+        _ -> {:error, :unknown_outcome}
+      end
+    else
+      {:error, reason} -> {:error, {:pre_effect, reason}}
     end
   end
 
@@ -188,6 +338,8 @@ defmodule Synapsis.Sessions do
   defp with_messages(%Session{} = session),
     do: %{session | messages: Message.list_by_session(session.id)}
 
+  # Ordinary creation retains its existing cleanup path. Suggested acceptance
+  # uses the atomic fresh initialization helper above and never rolls back here.
   defp persist_and_start_session(session, agent, session_runtime) do
     result =
       protect_operation(fn ->
@@ -259,20 +411,7 @@ defmodule Synapsis.Sessions do
   end
 
   def send_message(session_id, %{content: content, images: images}) when is_list(images) do
-    image_parts =
-      images
-      |> Enum.map(&Synapsis.Image.encode_file/1)
-      |> Enum.filter(fn
-        {:ok, _} -> true
-        _ -> false
-      end)
-      |> Enum.map(fn {:ok, img} ->
-        %Synapsis.Part.Image{
-          media_type: img.media_type,
-          data: img.data,
-          path: nil
-        }
-      end)
+    image_parts = encode_image_paths(images)
 
     ensure_session_running(session_id)
     Synapsis.Session.Worker.send_message(session_id, content, image_parts)
@@ -291,6 +430,22 @@ defmodule Synapsis.Sessions do
     :exit, reason -> {:error, exit_reason(reason)}
   end
 
+  def send_message(session_id, %{content: content, images: images}, input_context)
+      when is_list(images) and is_map(input_context) do
+    send_message(session_id, content, encode_image_paths(images), input_context)
+  catch
+    :exit, reason -> {:error, exit_reason(reason)}
+  end
+
+  def send_message(session_id, %{content: content}, input_context) when is_map(input_context) do
+    send_message(session_id, content, input_context)
+  end
+
+  def send_message(session_id, content, input_context)
+      when is_binary(content) and is_map(input_context) do
+    send_message(session_id, content, [], input_context)
+  end
+
   def send_message(session_id, content, image_parts)
       when is_binary(content) and is_list(image_parts) do
     if Enum.all?(image_parts, &match?(%Synapsis.Part.Image{}, &1)) do
@@ -298,6 +453,21 @@ defmodule Synapsis.Sessions do
       Synapsis.Session.Worker.send_message(session_id, content, image_parts)
     else
       {:error, :invalid_image_parts}
+    end
+  catch
+    :exit, reason -> {:error, exit_reason(reason)}
+  end
+
+  @doc "Send a prompt with explicit provenance captured by a trusted host ingress."
+  def send_message(session_id, content, image_parts, input_context)
+      when is_binary(content) and is_list(image_parts) do
+    with :ok <- Synapsis.Session.InputContext.validate(input_context, session_id),
+         true <- Enum.all?(image_parts, &match?(%Synapsis.Part.Image{}, &1)) do
+      ensure_session_running(session_id)
+      Synapsis.Session.Worker.send_message(session_id, content, image_parts, input_context)
+    else
+      false -> {:error, :invalid_image_parts}
+      error -> error
     end
   catch
     :exit, reason -> {:error, exit_reason(reason)}
@@ -378,6 +548,92 @@ defmodule Synapsis.Sessions do
     Message.list_recent_by_session(session_id, limit)
   end
 
+  @doc "Read bounded role-and-text automation context from this exact source session."
+  def automation_context(session_id, opts \\ []),
+    do: Synapsis.Session.Worker.automation_context(session_id, opts)
+
+  @doc """
+  Append a completed assistant result through the original session owner.
+
+  An active turn returns `:deferred`; that acknowledgement is ephemeral, not a
+  durable delivery receipt. Idle delivery awaits persistence and starts no turn.
+  """
+  def append_automation_result(session_id, text, opts \\ []) do
+    with :ok <- ensure_session_running(session_id) do
+      Synapsis.Session.Worker.append_automation_result(session_id, text, opts)
+    end
+  catch
+    :exit, _ -> {:error, :unknown_outcome}
+  end
+
+  @doc """
+  Admit one manual event to the exact existing conversation's next-turn lane.
+
+  Acceptance means durable staging and live Worker ownership, not execution or
+  completion. Trusted origin UUIDs are independent of the target's Agent. The
+  shared requested deadline does not cancel an underlying dispatched store write.
+  """
+  def wake(session_id, text, opts \\ []) do
+    now = System.monotonic_time(:millisecond)
+    deadline = min(Keyword.get(opts, :deadline, now + 5_000), now + 5_000)
+    mode = Keyword.get(opts, :mode, "next-heartbeat")
+
+    with true <-
+           is_binary(session_id) and is_binary(text) and not Regex.match?(@wake_blank, text) and
+             mode in ["now", "next-heartbeat"],
+         true <- deadline > System.monotonic_time(:millisecond),
+         {:ok, meta} <-
+           Store.get_meta(session_id,
+             timeout: max(deadline - System.monotonic_time(:millisecond), 1)
+           ),
+         {:ok, agent} <-
+           Synapsis.Agent.Resolver.resolve_configured(Session.from_meta(meta).agent),
+         true <-
+           is_nil(Keyword.get(opts, :target_agent_id)) or opts[:target_agent_id] == agent.id,
+         :ok <- ensure_session_running(session_id) do
+      captured = [
+        target_agent_id: agent.id,
+        source_session_id: Keyword.get(opts, :source_session_id, session_id),
+        source_agent_id: Keyword.get(opts, :source_agent_id, agent.id),
+        mode: mode,
+        deadline: deadline
+      ]
+
+      Synapsis.Session.Worker.wake(session_id, text, captured)
+    else
+      false -> {:error, :invalid_input}
+      error -> error
+    end
+  catch
+    :exit, _ -> {:error, :unknown_outcome}
+  end
+
+  @doc """
+  Stage already-published successful music facts in their original session/Agent.
+
+  The host caller owns qualification and media lifetime. Exact repeat admission
+  returns retained state without new execution. This API does not recover jobs,
+  transfer ownership, or reuse retired native effect callbacks.
+  """
+  def stage_music_completion(session_id, attrs, opts \\ []) when is_map(attrs) do
+    now = System.monotonic_time(:millisecond)
+    deadline = min(Keyword.get(opts, :deadline, now + 5_000), now + 5_000)
+
+    with true <- deadline > now,
+         {:ok, meta} <- Store.get_meta(session_id, timeout: max(deadline - now, 1)),
+         {:ok, agent} <-
+           Synapsis.Agent.Resolver.resolve_configured(Session.from_meta(meta).agent),
+         true <- attrs[:agent_id] == agent.id,
+         :ok <- ensure_session_running(session_id) do
+      Synapsis.Session.Worker.stage_music_completion(session_id, attrs, deadline: deadline)
+    else
+      false -> {:error, :invalid_completion}
+      error -> error
+    end
+  catch
+    :exit, _ -> {:error, :unknown_outcome}
+  end
+
   def fork(session_id, opts \\ []) do
     case Synapsis.Session.Fork.fork(session_id, opts) do
       {:ok, new_session} ->
@@ -417,6 +673,22 @@ defmodule Synapsis.Sessions do
 
   def ensure_running(session_id), do: ensure_session_running(session_id)
 
+  defp encode_image_paths(images) do
+    images
+    |> Enum.map(&Synapsis.Image.encode_file/1)
+    |> Enum.filter(fn
+      {:ok, _} -> true
+      _ -> false
+    end)
+    |> Enum.map(fn {:ok, img} ->
+      %Synapsis.Part.Image{
+        media_type: img.media_type,
+        data: img.data,
+        path: nil
+      }
+    end)
+  end
+
   defp ensure_session_running(session_id) do
     case Registry.lookup(Synapsis.Session.Registry, session_id) do
       [{_pid, _}] ->
@@ -441,6 +713,7 @@ defmodule Synapsis.Sessions do
     |> Synapsis.Agent.Resolver.resolve()
     |> Map.get(:permission_mode)
     |> Synapsis.Tool.Permission.config_for_mode()
+    |> Map.put(:tool_contract_version, 1)
     |> then(&Synapsis.Tool.Permission.update_config(session.id, &1))
   end
 

@@ -31,7 +31,7 @@ defmodule SynapsisWeb.MemoryLive.ShowTest do
   describe "show page" do
     test "mounts and renders memory details", %{conn: conn} do
       mem = create_semantic_memory(%{title: "Architecture Decision", kind: "decision"})
-      {:ok, _view, html} = live(conn, ~p"/settings/memory/#{mem.id}")
+      {:ok, _view, html} = live(conn, ~p"/agent/memory/#{mem.id}")
 
       assert html =~ "Architecture Decision"
       # Kind, scope, source are rendered as badge text
@@ -40,23 +40,23 @@ defmodule SynapsisWeb.MemoryLive.ShowTest do
 
     test "renders breadcrumb navigation", %{conn: conn} do
       mem = create_semantic_memory(%{title: "Breadcrumb Test"})
-      {:ok, _view, html} = live(conn, ~p"/settings/memory/#{mem.id}")
+      {:ok, _view, html} = live(conn, ~p"/agent/memory/#{mem.id}")
 
-      assert html =~ "Settings"
+      assert html =~ "Agent"
       assert html =~ "Memory"
       assert html =~ "Breadcrumb Test"
     end
 
     test "shows summary content", %{conn: conn} do
       mem = create_semantic_memory(%{summary: "This is the detailed summary"})
-      {:ok, _view, html} = live(conn, ~p"/settings/memory/#{mem.id}")
+      {:ok, _view, html} = live(conn, ~p"/agent/memory/#{mem.id}")
 
       assert html =~ "This is the detailed summary"
     end
 
     test "shows tags", %{conn: conn} do
       mem = create_semantic_memory(%{tags: ["elixir", "architecture"]})
-      {:ok, _view, html} = live(conn, ~p"/settings/memory/#{mem.id}")
+      {:ok, _view, html} = live(conn, ~p"/agent/memory/#{mem.id}")
 
       assert html =~ "elixir"
       assert html =~ "architecture"
@@ -66,7 +66,7 @@ defmodule SynapsisWeb.MemoryLive.ShowTest do
       mem =
         create_semantic_memory(%{importance: 0.9, confidence: 0.85, contributed_by: "my_agent"})
 
-      {:ok, _view, html} = live(conn, ~p"/settings/memory/#{mem.id}")
+      {:ok, _view, html} = live(conn, ~p"/agent/memory/#{mem.id}")
 
       assert html =~ "0.9"
       assert html =~ "0.85"
@@ -79,7 +79,7 @@ defmodule SynapsisWeb.MemoryLive.ShowTest do
       fake_id = Ecto.UUID.generate()
 
       {:ok, conn} =
-        live(conn, ~p"/settings/memory/#{fake_id}")
+        live(conn, ~p"/agent/memory/#{fake_id}")
         |> follow_redirect(conn)
 
       assert html_response(conn, 200) =~ "Memory not found"
@@ -87,7 +87,7 @@ defmodule SynapsisWeb.MemoryLive.ShowTest do
 
     test "clicking edit enables edit mode", %{conn: conn} do
       mem = create_semantic_memory(%{})
-      {:ok, view, _html} = live(conn, ~p"/settings/memory/#{mem.id}")
+      {:ok, view, _html} = live(conn, ~p"/agent/memory/#{mem.id}")
 
       refute has_element?(view, "#edit-memory-form")
 
@@ -98,7 +98,7 @@ defmodule SynapsisWeb.MemoryLive.ShowTest do
 
     test "cancel edit returns to view mode", %{conn: conn} do
       mem = create_semantic_memory(%{})
-      {:ok, view, _html} = live(conn, ~p"/settings/memory/#{mem.id}")
+      {:ok, view, _html} = live(conn, ~p"/agent/memory/#{mem.id}")
 
       view |> element("[phx-click=\"edit\"]") |> render_click()
       assert has_element?(view, "#edit-memory-form")
@@ -111,7 +111,7 @@ defmodule SynapsisWeb.MemoryLive.ShowTest do
       conn: conn
     } do
       mem = create_semantic_memory(%{title: "Saved title", summary: "Saved summary"})
-      {:ok, view, _html} = live(conn, ~p"/settings/memory/#{mem.id}")
+      {:ok, view, _html} = live(conn, ~p"/agent/memory/#{mem.id}")
       render_hook(view, "edit", %{})
 
       assert has_element?(
@@ -137,7 +137,7 @@ defmodule SynapsisWeb.MemoryLive.ShowTest do
 
     test "saving edit updates memory", %{conn: conn} do
       mem = create_semantic_memory(%{title: "Original Title", summary: "Original summary"})
-      {:ok, view, _html} = live(conn, ~p"/settings/memory/#{mem.id}")
+      {:ok, view, _html} = live(conn, ~p"/agent/memory/#{mem.id}")
 
       view |> element("[phx-click=\"edit\"]") |> render_click()
 
@@ -163,7 +163,7 @@ defmodule SynapsisWeb.MemoryLive.ShowTest do
 
     test "archiving memory redirects to index", %{conn: conn} do
       mem = create_semantic_memory(%{title: "To Archive"})
-      {:ok, view, _html} = live(conn, ~p"/settings/memory/#{mem.id}")
+      {:ok, view, _html} = live(conn, ~p"/agent/memory/#{mem.id}")
 
       {:ok, conn} =
         view
@@ -176,14 +176,14 @@ defmodule SynapsisWeb.MemoryLive.ShowTest do
 
     test "hides change history when no events", %{conn: conn} do
       mem = create_semantic_memory(%{})
-      {:ok, _view, html} = live(conn, ~p"/settings/memory/#{mem.id}")
+      {:ok, _view, html} = live(conn, ~p"/agent/memory/#{mem.id}")
 
       refute html =~ "Change History"
     end
 
     test "shows evidence events when present", %{conn: conn} do
       mem = create_semantic_memory(%{evidence_event_ids: ["evt_abc12345", "evt_def67890"]})
-      {:ok, _view, html} = live(conn, ~p"/settings/memory/#{mem.id}")
+      {:ok, _view, html} = live(conn, ~p"/agent/memory/#{mem.id}")
 
       assert html =~ "Evidence Events"
       assert html =~ "evt_abc1"

@@ -4,6 +4,11 @@ inputs:
     url: github:cachix/devenv-nixpkgs/rolling
   nixpkgs-stable:
     url: github:nixos/nixpkgs/release-26.05
+  rust-overlay:
+    url: github:oxalica/rust-overlay
+    inputs:
+      nixpkgs:
+        follows: nixpkgs
 
 # If you're using non-OSS software, you can set allowUnfree to true.
 allowUnfree: true

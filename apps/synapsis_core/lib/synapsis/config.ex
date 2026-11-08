@@ -23,18 +23,20 @@ defmodule Synapsis.Config do
           "name" => "main",
           "systemPrompt" => default_system_prompt(),
           "tools" => [
-            "file_read",
-            "file_edit",
-            "file_write",
-            "bash",
-            "grep",
-            "glob"
+            "synapsis::read",
+            "synapsis::write",
+            "synapsis::edit",
+            "synapsis::ls",
+            "apply_patch",
+            "exec_command",
+            "write_stdin"
           ],
+          "toolContractVersion" => 1,
           "model" => nil,
           "modelTier" => "default",
           "reasoningEffort" => "medium",
           "readOnly" => false,
-          "permissionMode" => "ask"
+          "permissionMode" => "yolo"
         }
       },
       "providers" => %{},
@@ -129,6 +131,7 @@ defmodule Synapsis.Config do
       "model" => :model,
       "systemPrompt" => :system_prompt,
       "tools" => :tools,
+      "toolContractVersion" => :tool_contract_version,
       "reasoningEffort" => :reasoning_effort,
       "readOnly" => :read_only,
       "maxTokens" => :max_tokens,

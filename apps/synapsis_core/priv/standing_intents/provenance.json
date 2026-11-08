@@ -1,0 +1,74 @@
+{
+  "referenceCommit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+  "sources": [
+    {
+      "path": "extensions/memory-core/src/standing-intents-tool.ts",
+      "sha256": "f9a301e73a98d217fb80c8bb403f6d4e359c4a9d6ebc943ccbb160c0560d1fbf",
+      "gitBlob": "9a1bd3f74d02020014a0d7578299f52693788e33",
+      "bytes": 6411
+    },
+    {
+      "path": "extensions/memory-core/src/standing-intents-model.ts",
+      "sha256": "d7f73450e2ca58cce718e0055ebc6ffa207276eeabdc9d97d94b8391ca7c9e47",
+      "gitBlob": "49ee21f9fa0d3e76b63828f5ea7a542fffb2fedc",
+      "bytes": 9172
+    },
+    {
+      "path": "src/agents/tools/common.ts",
+      "sha256": "a69d2c0915f658d621ccacc0e76b1f34417eb3a571a86b1ef32b87edeab74bb7",
+      "gitBlob": "42f20d2be792e665eecad21e0f4a01d7257c01b4",
+      "bytes": 13719
+    },
+    {
+      "path": "src/agents/tools/tool-results.ts",
+      "sha256": "13d2e22b750609d8cc848a548a17324e99000f004e89730bf305b3960da2ce3b",
+      "gitBlob": "00228afed065575dd2f59b011a3b76ebca617e37",
+      "bytes": 536
+    },
+    {
+      "path": "src/param-key.ts",
+      "sha256": "3393299148b9059e991f9d655e3e930bc507ed1d8d6985db21e4e42466df91ef",
+      "gitBlob": "89cfb70d9d7c5410bfe73df429e126d0d9921ce7",
+      "bytes": 948
+    },
+    {
+      "path": "packages/normalization-core/src/number-coercion.ts",
+      "sha256": "8c40eca65a8fd1dc3aa40d90c22bff35c3710fcb03d2bc8227864a264d20ddc4",
+      "gitBlob": "00ac5bda035cd8e854059a0198c2a9a7928e1bc9",
+      "bytes": 13462
+    },
+    {
+      "path": "packages/normalization-core/src/string-coerce.ts",
+      "sha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf",
+      "gitBlob": "445a9cc4f8daff07f033c3958baf2b798e240e9d",
+      "bytes": 5049
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4",
+      "gitBlob": "ed064819ab537575d0cad902f7e5af4a3488b1d0",
+      "bytes": 1076
+    }
+  ],
+  "implementation": "Authored source-derived JavaScript adaptation. No original tool executor, storage, runtime, model catalog or provider executes in this helper.",
+  "adaptation": {
+    "arguments": "standing-intents-tool.ts complete create/list/cancel preparation semantics, with Core-supplied options and captured nowMs instead of Date.now",
+    "normalization": "Native ECMAScript trim/lowercase/UTF16 length/Date.parse; numeric common.ts readers and number-coercion semantics including own-camel precedence",
+    "results": "tool-results.ts jsonResult semantics; restore original rowToIntent16field insertion order from complete Core public projection before JSON.stringify(payload,null,2)",
+    "transport": "Domain-local adaptation of existing Synapsis.SkillWorkshop.Contract and its invocation-owned evaluation worker; one shared5s capped absolute deadline; ACK after actual child exit0 and Port release",
+    "errors": "Opaque adapter error; original exception class/messages are not a public parity claim",
+    "clock": "No clock read inside evaluate; only explicit nowMs from Core. Native Date.parse inherits configured Node local timezone for zone-less formats."
+  },
+  "verificationLimits": [
+    "Not original executor execution",
+    "No native intent tool exposure or trusted-ingress qualification",
+    "Cancel production branches implemented but unexecuted",
+    "Excluded negative/security/permissions/failure/budget/threshold/race/provider scenarios unexecuted"
+  ],
+  "artifacts": {
+    "LICENSE": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4",
+    "contract.mjs": "064220c1af5fc763efa0468b0059140efcd80c633cac7ef3346fb7017f6aedd6",
+    "evaluation-worker.mjs": "338120fe32462cb2fe932264b5bf1637cdcc8f00b6f1997858c7436526f9153d",
+    "worker.mjs": "d62d2dc68837cd90759b294cad4bafef236efeb6e7039804de6604344b0f9735"
+  }
+}

@@ -4,6 +4,9 @@ defmodule SynapsisServer.SessionChannel do
 
   require Logger
 
+  alias Synapsis.Agent.Tools.Approval
+  alias Synapsis.Session.{EventReply, InputContext}
+
   @impl true
   def join("session:" <> session_id, _payload, socket) do
     # NOTE: Do NOT call Phoenix.PubSub.subscribe here — the endpoint's
@@ -28,6 +31,15 @@ defmodule SynapsisServer.SessionChannel do
       debug: debug_enabled,
       debug_entries: debug_entries
     }
+
+    reply =
+      case Synapsis.Session.Read.live_snapshot(session_id) do
+        {:live, %{reply_presentation: view}} when not is_nil(view) ->
+          Map.put(reply, :reply_presentation, view)
+
+        _ ->
+          reply
+      end
 
     {:ok, reply, socket}
   end
@@ -54,7 +66,7 @@ defmodule SynapsisServer.SessionChannel do
         {:reply, {:error, %{reason: "each image must be a file path string"}}, socket}
 
       true ->
-        case Synapsis.Sessions.send_message(socket.assigns.session_id, %{
+        case send_operator_message(socket.assigns.session_id, %{
                content: content,
                images: images
              }) do
@@ -89,7 +101,7 @@ defmodule SynapsisServer.SessionChannel do
         {:reply, {:error, %{reason: "content too large"}}, socket}
 
       true ->
-        case Synapsis.Sessions.send_message(socket.assigns.session_id, content) do
+        case send_operator_message(socket.assigns.session_id, content) do
           :ok ->
             {:reply, :ok, socket}
 
@@ -302,6 +314,16 @@ defmodule SynapsisServer.SessionChannel do
     {:noreply, socket}
   end
 
+  defp send_operator_message(session_id, input) do
+    with {:ok, input_context} <-
+           InputContext.capture_operator(session_id, %{
+             requester_id: Approval.operator_id(),
+             origin: "channel"
+           }) do
+      Synapsis.Sessions.send_message(session_id, input, input_context)
+    end
+  end
+
   # -- Debug state loading --
 
   defp load_debug_state(session_id) do
@@ -325,12 +347,17 @@ defmodule SynapsisServer.SessionChannel do
   # -- Serialization --
 
   defp serialize_message(message) do
-    %{
+    data = %{
       id: message.id,
       role: message.role,
       parts: Enum.map(message.parts, &serialize_part/1),
       inserted_at: message.inserted_at
     }
+
+    case EventReply.project(message) do
+      nil -> data
+      view -> Map.put(data, :reply_presentation, view)
+    end
   end
 
   defp serialize_part(%Synapsis.Part.Text{content: content}),
@@ -345,13 +372,16 @@ defmodule SynapsisServer.SessionChannel do
       status: p.status
     }
 
-  defp serialize_part(%Synapsis.Part.ToolResult{} = p),
-    do: %{
+  defp serialize_part(%Synapsis.Part.ToolResult{} = p) do
+    data = %{
       type: "tool_result",
       tool_use_id: p.tool_use_id,
       content: p.content,
       is_error: p.is_error
     }
+
+    if is_nil(p.projection), do: data, else: Map.put(data, :projection, p.projection)
+  end
 
   defp serialize_part(%Synapsis.Part.Reasoning{content: content}),
     do: %{type: "reasoning", content: content}
@@ -361,6 +391,20 @@ defmodule SynapsisServer.SessionChannel do
 
   defp serialize_part(%Synapsis.Part.Image{media_type: mt, data: data}),
     do: %{type: "image", media_type: mt, data: data}
+
+  defp serialize_part(%Synapsis.Part.DeliveredImage{} = part),
+    do: %{
+      type: "delivered_image",
+      descriptor: part.descriptor,
+      delivery: part.delivery,
+      name: part.name
+    }
+
+  defp serialize_part(%Synapsis.Part.Video{} = part),
+    do: %{type: "video", descriptor: part.descriptor, delivery: part.delivery, name: part.name}
+
+  defp serialize_part(%Synapsis.Part.Audio{} = part),
+    do: %{type: "audio", descriptor: part.descriptor, delivery: part.delivery, name: part.name}
 
   defp serialize_part(%Synapsis.Part.Agent{agent: agent, message: message}),
     do: %{type: "agent", agent: agent, message: message}

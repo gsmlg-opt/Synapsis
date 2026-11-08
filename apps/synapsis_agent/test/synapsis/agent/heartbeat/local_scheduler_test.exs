@@ -197,8 +197,9 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
                |> Map.put("prompt", "user-edited prompt")
              )
 
-    %{timers: %{^id => %{token: token}}} = :sys.get_state(scheduler)
-    send(scheduler, {:fire, id, token})
+    key = {"routine", id}
+    %{timers: %{^key => %{token: token}}} = :sys.get_state(scheduler)
+    send(scheduler, {:fire, key, token})
 
     assert_receive {:agent_daemon_event,
                     %{event: "agent.routine.updated", routine_id: ^id, kind: "schedule"}},
@@ -207,9 +208,9 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
     assert {:ok, %{"name" => "user-renamed", "prompt" => "user-edited prompt"}} =
              ConfigStore.get(:routine, id)
 
-    %{timers: %{^id => %{token: deleted_token}}} = :sys.get_state(scheduler)
+    %{timers: %{^key => %{token: deleted_token}}} = :sys.get_state(scheduler)
     :ok = ConfigStore.delete(:routine, id)
-    send(scheduler, {:fire, id, deleted_token})
+    send(scheduler, {:fire, key, deleted_token})
 
     Process.sleep(400)
     assert {:error, :not_found} = ConfigStore.get(:routine, id)

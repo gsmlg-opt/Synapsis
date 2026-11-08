@@ -3,28 +3,6 @@ defmodule Synapsis.Sandbox.BridgeTest do
 
   alias Synapsis.Sandbox.Bridge, as: SandboxBridge
 
-  defmodule EchoTool do
-    use Synapsis.Tool
-
-    @impl true
-    def name, do: "sandbox_echo"
-
-    @impl true
-    def description, do: "Echoes sandbox input"
-
-    @impl true
-    def parameters, do: %{}
-
-    @impl true
-    def execute(input, _context), do: {:ok, %{"echo" => input["text"]}}
-  end
-
-  setup do
-    on_exit(fn ->
-      Synapsis.Tool.Registry.unregister("sandbox_echo")
-    end)
-  end
-
   @tag :tmp_dir
   test "eval sends a line-framed JSON-RPC request and returns the matching response", %{
     tmp_dir: tmp_dir
@@ -64,8 +42,6 @@ defmodule Synapsis.Sandbox.BridgeTest do
     on_exit(fn -> File.rm_rf(tmp_dir) end)
     response_path = Path.join(tmp_dir, "tool-response.jsonl")
 
-    Synapsis.Tool.Registry.register_module("sandbox_echo", EchoTool, timeout: 1_000)
-
     script =
       write_sandbox!(tmp_dir, "reverse_tool_sandbox.exs", """
       IO.puts("{\\"jsonrpc\\":\\"2.0\\",\\"id\\":\\"tool-1\\",\\"method\\":\\"sandbox_echo\\",\\"params\\":{\\"text\\":\\"hello\\"}}")
@@ -73,7 +49,25 @@ defmodule Synapsis.Sandbox.BridgeTest do
       File.write!(#{inspect(response_path)}, response)
       """)
 
-    {:ok, pid} = SandboxBridge.start_link(command: script, context: %{}, output_pid: self())
+    {:ok, pid} =
+      SandboxBridge.start_link(
+        command: script,
+        context: %{},
+        output_pid: self(),
+        owner: self(),
+        invocation_binding: %{
+          session_id: Ecto.UUID.generate(),
+          run_id: "legacy-fixture",
+          incarnation: 1,
+          catalog_revision: 1,
+          invocation_id: "outer"
+        },
+        nested_dispatch: fn %{tool_name: "sandbox_echo", arguments: input} ->
+          {:ok, %{"echo" => input["text"]}}
+        end,
+        abort: fn _ -> :ok end
+      )
+
     on_exit(fn -> stop_bridge(pid) end)
 
     assert {:ok, response} = eventually_read(response_path)

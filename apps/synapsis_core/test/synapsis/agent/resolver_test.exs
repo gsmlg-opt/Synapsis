@@ -238,7 +238,7 @@ defmodule Synapsis.Agent.ResolverTest do
       assert agent.toolset_ids == [toolset.id]
     end
 
-    test "removes retired tools from persisted agent and toolset configs" do
+    test "preserves unavailable saved tools for explicit migration rather than silently deleting them" do
       {:ok, toolset} =
         Toolsets.create(%{
           name: "retired-toolset",
@@ -253,7 +253,43 @@ defmodule Synapsis.Agent.ResolverTest do
         })
 
       agent = Resolver.resolve("retired-tool-agent")
-      assert agent.tools == ["file_read"]
+      assert agent.tools == ["workspace_read", "file_read", "notebook_edit"]
+
+      {:ok, _} = AgentConfigs.create(%{name: "direct-unavailable", tools: ["workspace_write"]})
+      assert Resolver.resolve("direct-unavailable").tools == ["workspace_write"]
+    end
+
+    test "an explicitly selected empty toolset never falls back to agent tools" do
+      {:ok, toolset} =
+        Toolsets.create(%{name: "empty-selection", tool_names: [], tool_contract_version: 1})
+
+      {:ok, _} =
+        AgentConfigs.create(%{
+          name: "empty-toolset-agent",
+          tools: ["bash"],
+          toolset_ids: [toolset.id]
+        })
+
+      agent = Resolver.resolve("empty-toolset-agent")
+      assert agent.tools == []
+      refute Map.has_key?(agent, :tool_selection_error)
+    end
+
+    test "missing selected toolsets remain visible errors even when another selected set exists" do
+      {:ok, toolset} = Toolsets.create(%{name: "existing-selection", tool_names: ["file_read"]})
+      missing = Ecto.UUID.generate()
+
+      {:ok, _} =
+        AgentConfigs.create(%{
+          name: "missing-toolset-agent",
+          tools: ["bash"],
+          toolset_ids: [toolset.id, missing]
+        })
+
+      agent = Resolver.resolve("missing-toolset-agent")
+      assert agent.tool_selection_error == {:toolsets_unavailable, [missing]}
+      assert agent.tools == []
+      assert agent.toolset_ids == [toolset.id, missing]
     end
 
     test "merges tools from multiple assigned toolsets in order" do
@@ -345,6 +381,162 @@ defmodule Synapsis.Agent.ResolverTest do
     end
   end
 
+  describe "native contract version admission" do
+    @describetag :contract_version
+
+    test "direct native selection requires explicit integer version 1 even when empty" do
+      for {version, suffix} <- [
+            {0, "legacy"},
+            {nil, "missing"},
+            {"1", "string"},
+            {2, "future"},
+            {1.0, "float"}
+          ],
+          names <- [["send_message"], []] do
+        {:ok, saved} =
+          AgentConfigs.create(%{name: "version-#{suffix}-#{length(names)}", tools: names})
+
+        assert {:ok, raw} = Store.get(:agent, saved.id)
+
+        raw =
+          if is_nil(version),
+            do: Map.delete(raw, "tool_contract_version"),
+            else: Map.put(raw, "tool_contract_version", version)
+
+        assert {:ok, _} = Store.put(:agent, raw)
+
+        resolved = Resolver.resolve(saved.name)
+        assert Map.has_key?(resolved, :tool_selection_error)
+        refute resolved[:tool_contract_version] === 1
+        assert {:ok, ^raw} = Store.get(:agent, saved.id)
+      end
+    end
+
+    test "native same-spelled names and explicit empty selection admit only version 1" do
+      for names <- [["send_message"], []] do
+        {:ok, saved} =
+          AgentConfigs.create(%{
+            name: "native-version-#{length(names)}",
+            tools: names,
+            tool_contract_version: 1
+          })
+
+        resolved = Resolver.resolve(saved.name)
+        assert resolved.tools == names
+        assert resolved.tool_contract_version === 1
+        refute Map.has_key?(resolved, :tool_selection_error)
+      end
+    end
+
+    test "every active toolset supplies the contract version instead of the overridden agent" do
+      {:ok, first} =
+        Toolsets.create(%{
+          name: "version-native-first",
+          tool_names: ["send_message"],
+          tool_contract_version: 1
+        })
+
+      {:ok, empty} =
+        Toolsets.create(%{name: "version-native-empty", tool_names: [], tool_contract_version: 1})
+
+      {:ok, inactive} =
+        Toolsets.create(%{
+          name: "version-inactive-legacy",
+          tool_names: ["bash"],
+          tool_contract_version: 0
+        })
+
+      on_exit(fn -> Enum.each([first, empty, inactive], &Toolsets.delete/1) end)
+
+      {:ok, saved} =
+        AgentConfigs.create(%{
+          name: "legacy-agent-native-toolsets",
+          tools: ["bash"],
+          toolset_id: inactive.id,
+          toolset_ids: [first.id, empty.id],
+          tool_contract_version: 0
+        })
+
+      assert {:ok, raw} = Store.get(:agent, saved.id)
+      resolved = Resolver.resolve(saved.name)
+      assert resolved.tools == ["send_message"]
+      assert resolved.tool_contract_version === 1
+      assert resolved.toolset_ids == [first.id, empty.id]
+      refute Map.has_key?(resolved, :tool_selection_error)
+      assert {:ok, ^raw} = Store.get(:agent, saved.id)
+    end
+
+    test "one legacy or malformed toolset denies all selected names without changing saved links" do
+      {:ok, native} =
+        Toolsets.create(%{
+          name: "version-mixed-native",
+          tool_names: ["send_message"],
+          tool_contract_version: 1
+        })
+
+      on_exit(fn -> Toolsets.delete(native) end)
+
+      for {version, suffix} <- [
+            {0, "legacy"},
+            {nil, "missing"},
+            {"1", "string"},
+            {2, "future"},
+            {1.0, "float"}
+          ],
+          names <- [["send_message"], []] do
+        {:ok, other} =
+          Toolsets.create(%{name: "version-mixed-#{suffix}-#{length(names)}", tool_names: names})
+
+        on_exit(fn -> Toolsets.delete(other) end)
+        assert {:ok, raw} = Store.get(:toolset, other.id)
+
+        raw =
+          if is_nil(version),
+            do: Map.delete(raw, "tool_contract_version"),
+            else: Map.put(raw, "tool_contract_version", version)
+
+        assert {:ok, _} = Store.put(:toolset, raw)
+
+        for ids <- [[other.id], [native.id, other.id]] do
+          {:ok, saved} =
+            AgentConfigs.create(%{
+              name: "version-mixed-agent-#{suffix}-#{length(names)}-#{length(ids)}",
+              tools: ["send_message"],
+              toolset_ids: ids,
+              tool_contract_version: 1
+            })
+
+          assert {:ok, agent_raw} = Store.get(:agent, saved.id)
+          resolved = Resolver.resolve(saved.name)
+          assert Map.has_key?(resolved, :tool_selection_error)
+          refute resolved[:tool_contract_version] === 1
+          assert resolved.toolset_ids == ids
+          assert {:ok, ^raw} = Store.get(:toolset, other.id)
+          assert {:ok, ^agent_raw} = Store.get(:agent, saved.id)
+        end
+      end
+    end
+
+    test "hardcoded defaults without an explicit native version fail closed" do
+      resolved = Resolver.resolve("unknown-version-agent")
+      assert Map.has_key?(resolved, :tool_selection_error)
+      refute resolved[:tool_contract_version] === 1
+    end
+
+    test "invalid direct versions do not apply saved MCP expansion" do
+      {:ok, saved} =
+        AgentConfigs.create(%{
+          name: "version-mcp-agent",
+          tools: ["send_message"],
+          config: %{"mcp_selection" => %{"default" => "all", "sources" => %{}}}
+        })
+
+      resolved = Resolver.resolve(saved.name)
+      assert Map.has_key?(resolved, :tool_selection_error)
+      assert resolved.tools == ["send_message"]
+    end
+  end
+
   describe "list_agents/0" do
     test "returns all enabled agents from DB" do
       {:ok, _} = AgentConfigs.create(%{name: "main", enabled: true})
@@ -394,19 +586,21 @@ defmodule Synapsis.Agent.ResolverTest do
       assert main.model == "gpt-4"
     end
 
-    test "removes retired built-in agents and preserves custom agents" do
+    test "preserves saved retired-name and custom agents while marking main default" do
       {:ok, _} = AgentConfigs.create(%{name: "assistant", is_default: true})
       {:ok, _} = AgentConfigs.create(%{name: "build", is_default: true})
       {:ok, _} = AgentConfigs.create(%{name: "plan", is_default: true})
       {:ok, _} = AgentConfigs.create(%{name: "main", is_default: false})
       {:ok, _} = AgentConfigs.create(%{name: "reviewer", is_default: true})
+      saved = Store.list(:agent)
 
       AgentConfigs.seed_defaults()
 
-      assert AgentConfigs.get_by_name("assistant") == nil
-      assert AgentConfigs.get_by_name("build") == nil
-      assert AgentConfigs.get_by_name("plan") == nil
-      assert AgentConfigs.get_by_name("reviewer") != nil
+      for raw <- saved do
+        expected = if raw["name"] == "main", do: Map.put(raw, "is_default", true), else: raw
+        assert {:ok, ^expected} = Store.get(:agent, raw["id"])
+      end
+
       assert AgentConfigs.get_by_name("main").is_default
     end
 

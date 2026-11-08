@@ -2,14 +2,15 @@ defmodule Synapsis.Agent.Daemon.Execution do
   @moduledoc false
 
   alias Synapsis.Agent.RunEvents
-  alias Synapsis.Agent.Daemon.Toolsets
+  alias Synapsis.Agent.Automation.Execution, as: AutomationExecution
+  alias Synapsis.Agent.Daemon.{NativeSelection, Toolsets}
   alias Synapsis.Memory.Adapter, as: MemoryAdapter
   alias Synapsis.Session.Store, as: SessionStore
 
   @max_option_length 255
   @max_error_length 500
   @string_options ~w(assistant_name provider model source tool_profile)a
-  @terminal_statuses ~w(completed failed cancelled interrupted)
+  @terminal_statuses ~w(completed failed cancelled interrupted timed_out unknown_outcome)
   @dream_list_fields ~w(memory_candidates open_questions risks proposed_tasks ignored_noise)
   @dream_run_text_limit 500
   @dream_memory_title_limit 200
@@ -77,6 +78,7 @@ defmodule Synapsis.Agent.Daemon.Execution do
          heartbeat_id: heartbeat_id,
          routine_id: option(opts, :routine_id, heartbeat_id),
          idempotency_key: option(opts, :idempotency_key),
+         scheduled_for: option(opts, :scheduled_for),
          deadline_at: option(opts, :deadline_at),
          prompt: prompt,
          tool_profile: option(opts, :tool_profile, "assistant_basic"),
@@ -117,6 +119,8 @@ defmodule Synapsis.Agent.Daemon.Execution do
          source: option(opts, :source, "system"),
          assistant_name: option(opts, :assistant_name, "main"),
          routine_id: routine_id,
+         idempotency_key: option(opts, :idempotency_key),
+         scheduled_for: option(opts, :scheduled_for),
          prompt: prompt,
          tool_profile: tool_profile,
          provider: option(opts, :provider),
@@ -143,7 +147,8 @@ defmodule Synapsis.Agent.Daemon.Execution do
         if(allow_todo_write == true, do: "assistant_dream_todo", else: "assistant_dream")
       )
 
-    if is_boolean(allow_todo_write) and profile in ~w(assistant_dream assistant_dream_todo) do
+    if profile == "native_agent" or
+         (is_boolean(allow_todo_write) and profile in ~w(assistant_dream assistant_dream_todo)) do
       {:ok, profile}
     else
       {:error, :invalid_options}
@@ -210,7 +215,32 @@ defmodule Synapsis.Agent.Daemon.Execution do
     end
   end
 
+  def persist_submission(deps, attrs, :retired_reconcile, _task_supervisor, _event_timeout) do
+    # A missing read after an already dispatched mutation is not evidence that
+    # the write cannot arrive. Preserve its generated identity and never recreate.
+    case deps.runs.fetch(attrs.id) do
+      {:ok, run} -> {:ok, run, []}
+      :not_found -> reconcile_retired_alias(deps.runs, attrs)
+      {:error, reason} -> {:retry, {:submission_read_failed, reason}}
+    end
+  end
+
+  defp reconcile_retired_alias(runs, attrs) do
+    key = Map.get(attrs, :idempotency_key)
+
+    if is_binary(key) and key != "" and function_exported?(runs, :fetch_by_idempotency_key, 1) do
+      case runs.fetch_by_idempotency_key(key) do
+        {:ok, run} -> {:ok, run, []}
+        :not_found -> {:retry, :retired_submission_pending}
+        {:error, reason} -> {:retry, {:submission_read_failed, reason}}
+      end
+    else
+      {:retry, :retired_submission_pending}
+    end
+  end
+
   def run(daemon, deps, task_supervisor, run, timeout, cleanup_timeout, event_timeout) do
+    if AutomationExecution.webhook?(run), do: Process.flag(:trap_exit, true)
     startup_grace = if run.kind == "dream", do: 250, else: 0
     deadline = System.monotonic_time(:millisecond) + timeout + startup_grace
 
@@ -263,6 +293,21 @@ defmodule Synapsis.Agent.Daemon.Execution do
           {run, {:error, {:inner_task_start_failed, reason}}, nil, []}
       end
 
+    current_run =
+      if AutomationExecution.webhook?(current_run) do
+        complete_webhook(
+          daemon,
+          task_supervisor,
+          current_run,
+          outcome,
+          session_id,
+          warnings,
+          deadline
+        )
+      else
+        current_run
+      end
+
     :ok = announce_finalizing(daemon, run.id, current_run, outcome, session_id, warnings)
 
     result =
@@ -277,9 +322,287 @@ defmodule Synapsis.Agent.Daemon.Execution do
 
     receive do
       {:runner_finalizing_ack, ^run_id} -> :ok
+      {:runner_finalizing_rejected, ^run_id} -> exit(:shutdown)
+      {:DOWN, _ref, :process, ^daemon, _reason} -> exit(:shutdown)
     after
-      5_000 -> :ok
+      5_000 ->
+        if AutomationExecution.webhook?(run), do: exit(:finalization_unacknowledged), else: :ok
     end
+  end
+
+  defp complete_webhook(daemon, supervisor, run, outcome, session_id, warnings, deadline) do
+    Process.monitor(daemon)
+    stage_ref = make_ref()
+
+    initial = %{
+      "status" => "not-delivered",
+      "delivered" => false,
+      "attempted" => false,
+      "attempt_count" => 0
+    }
+
+    run = AutomationExecution.settle_webhook(run, outcome, initial)
+
+    send(
+      daemon,
+      {:runner_delivering, self(), run.id, stage_ref, run, outcome, session_id, warnings}
+    )
+
+    case await_delivery_admission(daemon, stage_ref, deadline, run, outcome, session_id) do
+      :ok ->
+        case AutomationExecution.webhook_request(run, outcome, session_id) do
+          {:settled, observation} ->
+            AutomationExecution.settle_webhook(run, outcome, observation)
+
+          {:post, target, encoded} ->
+            start_webhook(
+              daemon,
+              supervisor,
+              run,
+              outcome,
+              session_id,
+              stage_ref,
+              target,
+              encoded,
+              deadline
+            )
+        end
+
+      :rejected ->
+        AutomationExecution.settle_webhook(
+          run,
+          outcome,
+          Map.put(initial, "error", "webhook_owner_unacknowledged")
+        )
+    end
+  end
+
+  defp await_delivery_admission(daemon, ref, deadline, run, _outcome, session_id, child \\ nil) do
+    receive do
+      {:runner_delivery_ack, ^ref, :ok} ->
+        :ok
+
+      {:runner_delivery_ack, ^ref, :rejected} ->
+        :rejected
+
+      {:DOWN, _owner_ref, :process, ^daemon, _reason} ->
+        stop_delivery_child(child)
+        exit(:shutdown)
+
+      {:prepare_cancel, task, cancel_ref} ->
+        stop_delivery_child(child)
+        send(task, {:cancel_prepared, cancel_ref, session_id, run})
+        await_delivery_cancelled(deadline)
+    after
+      max(deadline - System.monotonic_time(:millisecond), 0) -> :rejected
+    end
+  end
+
+  defp start_webhook(
+         daemon,
+         supervisor,
+         run,
+         outcome,
+         session_id,
+         stage_ref,
+         target,
+         encoded,
+         deadline
+       ) do
+    outer = self()
+    token = make_ref()
+    attempt_deadline = min(deadline, System.monotonic_time(:millisecond) + 10_000)
+
+    if attempt_deadline <= System.monotonic_time(:millisecond) do
+      AutomationExecution.settle_webhook(run, outcome, %{
+        "status" => "not-delivered",
+        "delivered" => false,
+        "attempted" => false,
+        "attempt_count" => 0,
+        "error" => "webhook_deadline_exceeded"
+      })
+    else
+      case start_task(supervisor, fn ->
+             Process.link(outer)
+
+             receive do
+               {:start_webhook, ^token} ->
+                 progress = fn observation ->
+                   acknowledgement = make_ref()
+                   send(outer, {:webhook_progress, self(), acknowledgement, observation})
+
+                   receive do
+                     {:webhook_progress_ack, ^acknowledgement, :ok} -> :ok
+                     {:webhook_progress_ack, ^acknowledgement, :rejected} -> :error
+                   after
+                     max(attempt_deadline - System.monotonic_time(:millisecond), 0) -> :error
+                   end
+                 end
+
+                 result =
+                   Synapsis.Automation.Webhook.deliver(
+                     target,
+                     encoded,
+                     attempt_deadline,
+                     progress
+                   )
+
+                 send(outer, {:webhook_result, self(), result})
+             after
+               max(attempt_deadline - System.monotonic_time(:millisecond), 0) -> :ok
+             end
+           end) do
+        {:ok, child} ->
+          child_ref = Process.monitor(child)
+          acknowledgement = make_ref()
+
+          send(
+            daemon,
+            {:runner_delivery_child, self(), run.id, stage_ref, child, acknowledgement}
+          )
+
+          case await_delivery_admission(
+                 daemon,
+                 acknowledgement,
+                 attempt_deadline,
+                 run,
+                 outcome,
+                 session_id,
+                 child
+               ) do
+            :ok ->
+              send(child, {:start_webhook, token})
+
+              await_webhook(
+                daemon,
+                run,
+                outcome,
+                session_id,
+                stage_ref,
+                child,
+                child_ref,
+                attempt_deadline
+              )
+
+            :rejected ->
+              stop_delivery_child(child)
+              Process.demonitor(child_ref, [:flush])
+              run
+          end
+
+        {:error, _reason} ->
+          AutomationExecution.settle_webhook(run, outcome, %{
+            "status" => "not-delivered",
+            "delivered" => false,
+            "attempted" => false,
+            "attempt_count" => 0,
+            "error" => "webhook_task_unavailable"
+          })
+      end
+    end
+  end
+
+  defp await_webhook(daemon, run, outcome, session_id, stage_ref, child, child_ref, deadline) do
+    receive do
+      {:webhook_progress, ^child, acknowledgement, observation} ->
+        run = AutomationExecution.settle_webhook(run, outcome, observation)
+
+        send(
+          daemon,
+          {:runner_delivery_progress, self(), run.id, stage_ref, child, acknowledgement, run}
+        )
+
+        await_webhook(daemon, run, outcome, session_id, stage_ref, child, child_ref, deadline)
+
+      {:runner_delivery_ack, acknowledgement, decision} ->
+        run =
+          if decision == :rejected and run.metadata["automation_delivery"]["status"] == "unknown",
+            do:
+              AutomationExecution.settle_webhook(run, outcome, %{
+                "status" => "not-delivered",
+                "delivered" => false,
+                "attempted" => false,
+                "attempt_count" => 0,
+                "error" => "webhook_owner_unacknowledged"
+              }),
+            else: run
+
+        send(child, {:webhook_progress_ack, acknowledgement, decision})
+        await_webhook(daemon, run, outcome, session_id, stage_ref, child, child_ref, deadline)
+
+      {:webhook_result, ^child, {:ok, observation}} ->
+        stop_delivery_child(child)
+        Process.demonitor(child_ref, [:flush])
+        AutomationExecution.settle_webhook(run, outcome, observation)
+
+      {:DOWN, ^child_ref, :process, ^child, _reason} ->
+        Process.unlink(child)
+        webhook_stopped(run, outcome, "webhook_task_exited")
+
+      {:prepare_cancel, task, cancel_ref} ->
+        stop_delivery_child(child)
+        Process.demonitor(child_ref, [:flush])
+        run = drain_webhook_progress(run, outcome, child)
+        run = webhook_stopped(run, outcome, "webhook_cancelled")
+        send(task, {:cancel_prepared, cancel_ref, session_id, run})
+        await_delivery_cancelled(deadline)
+
+      {:DOWN, _owner_ref, :process, ^daemon, _reason} ->
+        stop_delivery_child(child)
+        exit(:shutdown)
+
+      {:EXIT, ^child, _reason} ->
+        await_webhook(daemon, run, outcome, session_id, stage_ref, child, child_ref, deadline)
+    after
+      max(deadline - System.monotonic_time(:millisecond), 0) ->
+        stop_delivery_child(child)
+        Process.demonitor(child_ref, [:flush])
+
+        run
+        |> drain_webhook_progress(outcome, child)
+        |> webhook_stopped(outcome, "webhook_deadline_exceeded")
+    end
+  end
+
+  defp drain_webhook_progress(run, outcome, child) do
+    receive do
+      {:webhook_progress, ^child, _acknowledgement, observation} ->
+        run
+        |> AutomationExecution.settle_webhook(outcome, observation)
+        |> drain_webhook_progress(outcome, child)
+
+      {:webhook_result, ^child, {:ok, observation}} ->
+        run
+        |> AutomationExecution.settle_webhook(outcome, observation)
+        |> drain_webhook_progress(outcome, child)
+    after
+      0 -> run
+    end
+  end
+
+  defp webhook_stopped(run, outcome, error) do
+    observation = run.metadata["automation_delivery"]
+
+    observation =
+      if observation["status"] == "delivered",
+        do: observation,
+        else: Map.put(observation, "error", error)
+
+    AutomationExecution.settle_webhook(run, outcome, observation)
+  end
+
+  defp await_delivery_cancelled(deadline) do
+    receive do
+      _message -> await_delivery_cancelled(deadline)
+    after
+      max(deadline - System.monotonic_time(:millisecond), 0) -> exit(:shutdown)
+    end
+  end
+
+  @doc false
+  def stop_delivery_child(pid) do
+    if is_pid(pid), do: Process.unlink(pid)
+    stop_process(pid)
   end
 
   def finalize(
@@ -316,7 +639,7 @@ defmodule Synapsis.Agent.Daemon.Execution do
   def finalize(deps, run, {:ok, summary}, session_id, task_supervisor, event_timeout) do
     finalize_transition(deps, run, :completed, task_supervisor, event_timeout, fn ->
       deps.runs.mark_completed(
-        run,
+        terminal_expected(deps, run),
         summary,
         terminal_attrs(run, "completed", summary, session_id)
       )
@@ -328,17 +651,26 @@ defmodule Synapsis.Agent.Daemon.Execution do
 
     if run.deadline_at && reason == :session_timeout do
       finalize_transition(deps, run, :timed_out, task_supervisor, event_timeout, fn ->
-        deps.runs.mark_timed_out(run, %{
-          session_id: session_id,
-          error: error,
-          failure_class: "timeout"
-        })
+        attrs = terminal_attrs(run, "failed", error, session_id)
+
+        deps.runs.mark_timed_out(
+          terminal_expected(deps, run),
+          Map.merge(attrs, %{error: error, failure_class: "timeout"})
+        )
       end)
     else
       finalize_transition(deps, run, :failed, task_supervisor, event_timeout, fn ->
-        deps.runs.mark_failed(run, error, terminal_attrs(run, "failed", error, session_id))
+        deps.runs.mark_failed(
+          terminal_expected(deps, run),
+          error,
+          terminal_attrs(run, "failed", error, session_id)
+        )
       end)
     end
+  end
+
+  defp terminal_expected(deps, run) do
+    if AutomationExecution.webhook?(run), do: fetch_current(deps.runs, run), else: run
   end
 
   def finalize_intent(deps, task_supervisor, event_timeout, intent) do
@@ -361,6 +693,7 @@ defmodule Synapsis.Agent.Daemon.Execution do
         cleanup_timeout,
         event_timeout
       ) do
+    stop_delivery_child(Map.get(active, :delivery_pid))
     stop_process(active.inner_pid)
 
     cleanup_errors =
@@ -372,11 +705,23 @@ defmodule Synapsis.Agent.Daemon.Execution do
       )
 
     current_run = fetch_current(deps.runs, active.run)
+    outcome = {:error, "run task exited: #{bounded_error(reason)}"}
+
+    current_run =
+      if AutomationExecution.webhook?(current_run),
+        do:
+          AutomationExecution.settle_webhook(current_run, outcome, %{
+            "status" => "not-delivered",
+            "delivered" => false,
+            "attempted" => false,
+            "attempt_count" => 0
+          }),
+        else: current_run
 
     finalize(
       deps,
       current_run,
-      {:error, "run task exited: #{bounded_error(reason)}"},
+      outcome,
       active.session_id,
       task_supervisor,
       event_timeout
@@ -385,12 +730,13 @@ defmodule Synapsis.Agent.Daemon.Execution do
   end
 
   def cancel_active(deps, task_supervisor, active, cleanup_timeout, event_timeout) do
-    {session_id, preparation_errors} = prepare_active_cancel(active, cleanup_timeout)
+    {session_id, prepared_run, preparation_errors} =
+      prepare_active_cancel(active, cleanup_timeout)
 
     result =
       with {:ok, run} <- fetch_owned(deps.runs, active.run.id),
            {:ok, cancelled} <-
-             deps.runs.mark_cancelled(run, %{session_id: session_id || run.session_id}) do
+             deps.runs.mark_cancelled(run, cancellation_attrs(run, prepared_run, session_id)) do
         errors =
           preparation_errors ++
             bounded_session_cleanup(
@@ -427,9 +773,41 @@ defmodule Synapsis.Agent.Daemon.Execution do
           end
       end
 
+    stop_delivery_child(Map.get(active, :delivery_pid))
     stop_process(active.inner_pid)
     stop_process(active.task_pid)
     result
+  end
+
+  defp cancellation_attrs(run, prepared_run, session_id) do
+    attrs = %{session_id: session_id || run.session_id}
+
+    if AutomationExecution.webhook?(prepared_run) do
+      prepared_run =
+        if is_map(prepared_run.metadata["automation_delivery"]),
+          do: prepared_run,
+          else:
+            AutomationExecution.settle_webhook(prepared_run, {:error, :cancelled}, %{
+              "status" => "not-delivered",
+              "delivered" => false,
+              "attempted" => false,
+              "attempt_count" => 0
+            })
+
+      metadata = Map.put(prepared_run.metadata, "automation_completion_status", "failed")
+      attrs = Map.put(attrs, :metadata, metadata)
+
+      attrs =
+        if is_binary(prepared_run.summary),
+          do: Map.put(attrs, :summary, prepared_run.summary),
+          else: attrs
+
+      if is_binary(prepared_run.error),
+        do: Map.put(attrs, :error, prepared_run.error),
+        else: attrs
+    else
+      attrs
+    end
   end
 
   defp prepare_active_cancel(%{task_pid: task_pid} = active, timeout)
@@ -438,17 +816,37 @@ defmodule Synapsis.Agent.Daemon.Execution do
     send(task_pid, {:prepare_cancel, self(), ref})
 
     receive do
-      {:cancel_prepared, ^ref, session_id} -> {session_id || active.session_id, []}
+      {:cancel_prepared, ^ref, session_id, run} -> {session_id || active.session_id, run, []}
+      {:cancel_prepared, ^ref, session_id} -> {session_id || active.session_id, active.run, []}
     after
       timeout ->
+        stop_delivery_child(Map.get(active, :delivery_pid))
         stop_process(active.inner_pid)
-        {active.session_id, [bounded_error(:cancel_prepare_timeout)]}
+        stop_process(active.task_pid)
+        run = cancellation_snapshot(active, timeout)
+        {active.session_id, run, [bounded_error(:cancel_prepare_timeout)]}
     end
   end
 
   defp prepare_active_cancel(active, _timeout) do
+    stop_delivery_child(Map.get(active, :delivery_pid))
     stop_process(active.inner_pid)
-    {active.session_id, []}
+    {active.session_id, active.run, []}
+  end
+
+  defp cancellation_snapshot(active, timeout) do
+    case Map.get(active, :daemon_pid) do
+      pid when is_pid(pid) ->
+        case GenServer.call(pid, {:delivery_snapshot, active.run.id}, min(timeout, 1_000)) do
+          {:ok, run} -> run
+          _ -> active.run
+        end
+
+      _ ->
+        active.run
+    end
+  catch
+    :exit, _ -> active.run
   end
 
   def cancel_queued(deps, task_supervisor, event_timeout, run) do
@@ -543,10 +941,23 @@ defmodule Synapsis.Agent.Daemon.Execution do
   def valid_capacity(_capacity, default), do: default
 
   defp create_submission(deps, attrs, task_supervisor, event_timeout) do
-    case deps.runs.create(attrs) do
-      {:ok, run} -> submission_persisted(deps, run, task_supervisor, event_timeout)
-      {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
-      {:error, reason} -> {:retry, {:submission_write_failed, reason}}
+    key = Map.get(attrs, :idempotency_key)
+
+    existing =
+      if is_binary(key) and key != "" and
+           function_exported?(deps.runs, :get_by_idempotency_key, 1),
+         do: deps.runs.get_by_idempotency_key(key)
+
+    if existing do
+      submission_persisted(deps, existing, task_supervisor, event_timeout)
+    else
+      with {:ok, attrs} <- NativeSelection.capture(attrs) do
+        case deps.runs.create(attrs) do
+          {:ok, run} -> submission_persisted(deps, run, task_supervisor, event_timeout)
+          {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
+          {:error, reason} -> {:retry, {:submission_write_failed, reason}}
+        end
+      end
     end
   end
 
@@ -663,9 +1074,33 @@ defmodule Synapsis.Agent.Daemon.Execution do
     end
   end
 
+  defp execute_session(
+         outer,
+         daemon,
+         deps,
+         task_supervisor,
+         event_timeout,
+         %{tool_profile: "native_agent"} = run
+       ) do
+    with {:ok, _snapshot} <- NativeSelection.snapshot(run),
+         {:ok, session} <- create_session(deps.sessions, run) do
+      execute_configured_session(
+        outer,
+        daemon,
+        deps,
+        task_supervisor,
+        event_timeout,
+        run,
+        session
+      )
+    else
+      {:error, reason} -> {{:error, reason}, fetch_current(deps.runs, run), nil, []}
+    end
+  end
+
   defp execute_session(outer, daemon, deps, task_supervisor, event_timeout, run) do
-    with {:ok, tool_names} <- Toolsets.resolve(run.tool_profile),
-         {:ok, session} <- create_session(deps.sessions, run, tool_names) do
+    with {:ok, _snapshot} <- NativeSelection.snapshot(run),
+         {:ok, session} <- create_session(deps.sessions, run) do
       permission = Map.get(deps, :permission, Synapsis.Tool.Permission)
 
       case permission.update_config(session.id, @daemon_permission) do
@@ -701,9 +1136,18 @@ defmodule Synapsis.Agent.Daemon.Execution do
     send(outer, {:inner_session_created, self(), session.id})
     send(daemon, {:session_created, outer, run.id, session.id})
 
+    prepared =
+      if AutomationExecution.automated?(run),
+        do: AutomationExecution.prepare(run, deps.sessions, run.prompt)
+
+    running_attrs =
+      if prepared,
+        do: %{session_id: session.id, metadata: elem(prepared, 1)},
+        else: %{session_id: session.id}
+
     outcome =
       with :ok <- Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}"),
-           {:ok, running} <- deps.runs.mark_running(run, %{session_id: session.id}),
+           {:ok, running} <- deps.runs.mark_running(run, running_attrs),
            event_errors =
              emit_run_event(
                task_supervisor,
@@ -713,8 +1157,10 @@ defmodule Synapsis.Agent.Daemon.Execution do
                running
              ),
            :ok <- announce_running(outer, daemon, running, event_errors),
-           :ok <- deps.sessions.send_message(session.id, execution_prompt(deps, run)) do
-        {await_session(deps.sessions, session.id, []), running, event_errors}
+           prompt = if(prepared, do: elem(prepared, 0), else: execution_prompt(deps, run)),
+           :ok <- deps.sessions.send_message(session.id, prompt) do
+        {await_session(deps.sessions, session.id, [], AutomationExecution.webhook?(running)),
+         running, event_errors}
       else
         {:error, reason} -> {{:error, reason}, fetch_current(deps.runs, run), []}
       end
@@ -959,13 +1405,30 @@ defmodule Synapsis.Agent.Daemon.Execution do
   defp terminal_attrs(%{kind: "dream"}, _status, _result, session_id),
     do: %{session_id: session_id}
 
-  defp terminal_attrs(%{kind: "schedule", metadata: metadata}, status, result, session_id) do
+  defp terminal_attrs(%{kind: "schedule", metadata: metadata} = run, status, result, session_id) do
     kind = "schedule"
     output = %{"kind" => kind, "status" => status, result_key(status) => result}
-    %{session_id: session_id, metadata: Map.put(metadata || %{}, "output", output)}
+    metadata = Map.put(metadata || %{}, "output", output)
+
+    metadata =
+      if status == "completed",
+        do: AutomationExecution.delivery_metadata(%{run | metadata: metadata}),
+        else: metadata
+
+    %{session_id: session_id, metadata: metadata}
   end
 
-  defp terminal_attrs(_run, _status, _result, session_id), do: %{session_id: session_id}
+  defp terminal_attrs(run, "completed", _result, session_id) do
+    if AutomationExecution.automated?(run),
+      do: %{session_id: session_id, metadata: AutomationExecution.delivery_metadata(run)},
+      else: %{session_id: session_id}
+  end
+
+  defp terminal_attrs(run, _status, _result, session_id) do
+    if AutomationExecution.webhook?(run),
+      do: %{session_id: session_id, metadata: run.metadata},
+      else: %{session_id: session_id}
+  end
 
   defp result_key("completed"), do: "summary"
   defp result_key("failed"), do: "error"
@@ -1010,7 +1473,23 @@ defmodule Synapsis.Agent.Daemon.Execution do
             %{}
           )
 
-        {:ok, terminal_run, errors}
+        delivery_errors =
+          if event == :completed and AutomationExecution.automated?(terminal_run) and
+               not AutomationExecution.webhook?(terminal_run) do
+            bounded_tasks(
+              task_supervisor,
+              event_timeout,
+              [fn -> AutomationExecution.deliver(terminal_run, deps.sessions, event_timeout) end],
+              :automation_delivery_unknown_outcome,
+              :automation_delivery_task_start_failed,
+              :automation_delivery_task_exit,
+              :unexpected_automation_delivery_result
+            )
+          else
+            []
+          end
+
+        {:ok, terminal_run, errors ++ delivery_errors}
 
       {:error, reason} ->
         case terminal_run(deps.runs, original_run.id) do
@@ -1049,13 +1528,13 @@ defmodule Synapsis.Agent.Daemon.Execution do
     end
   end
 
-  defp await_session(sessions, session_id, chunks) do
+  defp await_session(sessions, session_id, chunks, webhook?) do
     receive do
       {"text_delta", %{text: text}} when is_binary(text) ->
-        await_session(sessions, session_id, [text | chunks])
+        await_session(sessions, session_id, [text | chunks], webhook?)
 
       {"done", _payload} ->
-        {:ok, final_summary(sessions, session_id, chunks)}
+        {:ok, final_summary(sessions, session_id, chunks, webhook?)}
 
       {"error", payload} ->
         {:error, session_error(payload)}
@@ -1064,14 +1543,31 @@ defmodule Synapsis.Agent.Daemon.Execution do
         {:error, session_error(payload)}
 
       {"session_status", %{status: "idle"}} ->
-        {:ok, final_summary(sessions, session_id, chunks)}
+        {:ok, final_summary(sessions, session_id, chunks, webhook?)}
 
       _other ->
-        await_session(sessions, session_id, chunks)
+        await_session(sessions, session_id, chunks, webhook?)
     end
   end
 
-  defp final_summary(sessions, session_id, chunks) do
+  defp final_summary(sessions, session_id, _chunks, true) do
+    messages = sessions.get_messages(session_id)
+    # The last assistant response is authoritative even when it has zero parts.
+    case Enum.find(Enum.reverse(messages), &(&1.role == "assistant")) do
+      %{parts: parts} ->
+        parts
+        |> Enum.flat_map(fn
+          %Synapsis.Part.Text{content: text} when is_binary(text) -> [text]
+          _ -> []
+        end)
+        |> Enum.join()
+
+      nil ->
+        ""
+    end
+  end
+
+  defp final_summary(sessions, session_id, chunks, false) do
     durable =
       session_id
       |> sessions.get_messages()
@@ -1100,17 +1596,14 @@ defmodule Synapsis.Agent.Daemon.Execution do
 
   defp assistant_text(_message), do: nil
 
-  defp create_session(sessions, run, tool_names) do
+  defp create_session(sessions, run) do
     opts =
       %{
         agent: run.assistant_name || "main",
         provider: run.provider,
         model: run.model,
         title: "Agent run #{run.id}",
-        config: %{
-          "daemon_run_tool_names" => tool_names,
-          "daemon_run_tool_profile" => run.tool_profile
-        }
+        config: %{"daemon_run_id" => run.id, "daemon_run_tool_contract_version" => 1}
       }
       |> Enum.reject(fn {_key, value} -> is_nil(value) end)
       |> Map.new()
@@ -1265,7 +1758,11 @@ defmodule Synapsis.Agent.Daemon.Execution do
       not is_map(option(opts, :metadata, %{})) ->
         {:error, :invalid_options}
 
-      match?({:error, _reason}, Toolsets.resolve(option(opts, :tool_profile, "assistant_basic"))) ->
+      option(opts, :tool_profile) != "native_agent" and
+          match?(
+            {:error, _reason},
+            Toolsets.resolve(option(opts, :tool_profile, "assistant_basic"))
+          ) ->
         {:error, :invalid_options}
 
       true ->

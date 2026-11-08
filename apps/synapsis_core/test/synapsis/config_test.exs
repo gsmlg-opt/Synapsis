@@ -16,8 +16,8 @@ defmodule Synapsis.ConfigTest do
       assert is_map(config["agents"])
       assert is_map(config["agents"]["main"])
       assert Map.keys(config["agents"]) == ["main"]
-      assert "file_read" in config["agents"]["main"]["tools"]
-      assert "bash" in config["agents"]["main"]["tools"]
+      assert "synapsis::read" in config["agents"]["main"]["tools"]
+      assert "exec_command" in config["agents"]["main"]["tools"]
     end
   end
 

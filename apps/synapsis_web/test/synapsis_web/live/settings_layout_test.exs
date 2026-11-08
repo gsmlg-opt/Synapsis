@@ -1,7 +1,7 @@
 defmodule SynapsisWeb.SettingsLayoutTest do
   use SynapsisWeb.ConnCase
 
-  alias Synapsis.{MCPConfigs, Memory, Providers, Skills}
+  alias Synapsis.{MCPConfigs, Providers, Skills}
 
   setup do
     Synapsis.DataCase.reset_memory_store()
@@ -15,7 +15,6 @@ defmodule SynapsisWeb.SettingsLayoutTest do
     "/settings/providers/new",
     "/settings/models",
     "/settings/memory",
-    "/settings/memory/new",
     "/settings/skills",
     "/settings/mcp",
     "/settings/mcp/new"
@@ -118,21 +117,6 @@ defmodule SynapsisWeb.SettingsLayoutTest do
         api_key_encrypted: "test-key"
       })
 
-    {:ok, memory} =
-      Memory.store_semantic(%{
-        scope: "shared",
-        scope_id: "",
-        kind: "fact",
-        title: "Layout Memory",
-        summary: "Used by the settings layout test",
-        tags: ["layout"],
-        source: "human",
-        importance: 0.5,
-        confidence: 0.8,
-        freshness: 1.0,
-        contributed_by: "test"
-      })
-
     {:ok, skill} =
       Skills.create(%{
         name: "layout-skill-#{System.unique_integer([:positive])}",
@@ -150,7 +134,6 @@ defmodule SynapsisWeb.SettingsLayoutTest do
 
     [
       "/settings/providers/#{provider.id}",
-      "/settings/memory/#{memory.id}",
       "/settings/skills/#{skill.id}",
       "/settings/mcp/#{mcp_config.id}"
     ]

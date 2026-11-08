@@ -4,13 +4,13 @@ defmodule Synapsis.Provider.Transport.OpenAITest do
   alias Synapsis.Provider.Transport.OpenAI
 
   setup do
-    bypass = Bypass.open()
-    %{bypass: bypass, port: bypass.port}
+    bypass = Gaoxy.Test.open()
+    %{bypass: bypass, port: URI.parse(Gaoxy.Test.url(bypass)).port}
   end
 
   describe "fetch_models/1" do
     test "returns parsed models on success", %{bypass: bypass, port: port} do
-      Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
@@ -41,7 +41,7 @@ defmodule Synapsis.Provider.Transport.OpenAITest do
     end
 
     test "sends Authorization header with api_key", %{bypass: bypass, port: port} do
-      Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
         headers = Map.new(conn.req_headers)
         assert headers["authorization"] == "Bearer my-secret-key"
 
@@ -55,7 +55,7 @@ defmodule Synapsis.Provider.Transport.OpenAITest do
     end
 
     test "returns error on non-200 status", %{bypass: bypass, port: port} do
-      Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(401, Jason.encode!(%{"error" => "unauthorized"}))
@@ -71,7 +71,7 @@ defmodule Synapsis.Provider.Transport.OpenAITest do
     end
 
     test "works without api_key for local models", %{bypass: bypass, port: port} do
-      Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
         headers = Map.new(conn.req_headers)
         refute Map.has_key?(headers, "authorization")
 
@@ -89,7 +89,7 @@ defmodule Synapsis.Provider.Transport.OpenAITest do
     end
 
     test "uses /models when base_url already includes /v1", %{bypass: bypass, port: port} do
-      Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "model-a"}]}))
@@ -100,7 +100,7 @@ defmodule Synapsis.Provider.Transport.OpenAITest do
     end
 
     test "uses base plus /models for compatible discovery", %{bypass: bypass, port: port} do
-      Bypass.expect_once(bypass, "GET", "/llm/v1/models", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/llm/v1/models", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "proxy-model"}]}))

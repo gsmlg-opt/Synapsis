@@ -5,7 +5,7 @@ defmodule Synapsis.Part.ToolUse do
   @type t :: %__MODULE__{
           tool: String.t(),
           tool_use_id: String.t(),
-          input: map(),
+          input: map() | binary(),
           status: :pending | :approved | :denied | :completed | :error
         }
 end

@@ -184,10 +184,10 @@ defmodule Synapsis.ProviderCredentialsTest do
   end
 
   test "late model discovery cannot publish results from before credential rotation" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     observer = self()
 
-    Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
       send(observer, {:discovery_started, self()})
       receive do: (:release -> :ok)
 
@@ -200,7 +200,7 @@ defmodule Synapsis.ProviderCredentialsTest do
       Providers.create(%{
         name: "discovery-rotation",
         type: "openai",
-        base_url: "http://localhost:#{bypass.port}/v1",
+        base_url: Gaoxy.Test.url(bypass, "/v1"),
         api_key_encrypted: "old-discovery-key"
       })
 
@@ -230,13 +230,13 @@ defmodule Synapsis.ProviderCredentialsTest do
   end
 
   test "an already-open runtime config resolves rotated authentication before completion and stream" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
 
     {:ok, provider} =
       Providers.create(%{
         name: "open-session",
         type: "openai",
-        base_url: "http://localhost:#{bypass.port}",
+        base_url: String.trim_trailing(Gaoxy.Test.url(bypass), "/"),
         api_key_encrypted: "old-session-secret"
       })
 
@@ -245,30 +245,35 @@ defmodule Synapsis.ProviderCredentialsTest do
     assert config.api_key == "old-session-secret"
     {:ok, _} = Credentials.update(provider.credential_id, %{key: "new-session-secret"})
 
-    Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
-      assert Plug.Conn.get_req_header(conn, "authorization") == ["Bearer new-session-secret"]
+    Gaoxy.Test.expect(
+      bypass,
+      "POST",
+      "/v1/chat/completions",
+      fn conn ->
+        assert Plug.Conn.get_req_header(conn, "authorization") == ["Bearer new-session-secret"]
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      conn
-      |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(
-        200,
-        Jason.encode!(%{choices: [%{message: %{content: "fresh"}, finish_reason: "stop"}]})
-      )
-    end)
+        if Jason.decode!(body)["stream"] do
+          conn
+          |> Plug.Conn.put_resp_content_type("text/event-stream")
+          |> Plug.Conn.resp(
+            200,
+            "data: {\"choices\":[{\"delta\":{\"content\":\"fresh\"},\"finish_reason\":null}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
+          )
+        else
+          conn
+          |> Plug.Conn.put_resp_content_type("application/json")
+          |> Plug.Conn.resp(
+            200,
+            Jason.encode!(%{choices: [%{message: %{content: "fresh"}, finish_reason: "stop"}]})
+          )
+        end
+      end,
+      times: 2
+    )
 
     assert {:ok, "fresh"} =
              Adapter.complete(%{"model" => "fixture-model", "messages" => []}, config)
-
-    Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
-      assert Plug.Conn.get_req_header(conn, "authorization") == ["Bearer new-session-secret"]
-
-      conn
-      |> Plug.Conn.put_resp_content_type("text/event-stream")
-      |> Plug.Conn.resp(
-        200,
-        "data: {\"choices\":[{\"delta\":{\"content\":\"fresh\"},\"finish_reason\":null}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
-      )
-    end)
 
     assert {:ok, handle} = Adapter.stream(%{"model" => "fixture-model", "messages" => []}, config)
     assert_receive :provider_done, 3_000

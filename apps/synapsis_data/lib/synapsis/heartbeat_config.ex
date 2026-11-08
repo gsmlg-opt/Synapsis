@@ -61,7 +61,10 @@ defmodule Synapsis.HeartbeatConfig do
     |> validate_length(:name, max: 255)
     |> validate_length(:schedule, max: 255)
     |> validate_length(:prompt, max: 50_000)
-    |> validate_inclusion(:tool_profile, ~w(assistant_basic assistant_workspace assistant_coding))
+    |> validate_inclusion(
+      :tool_profile,
+      ~w(native_agent assistant_basic assistant_workspace assistant_coding)
+    )
     |> validate_number(:max_runtime_ms, greater_than: 0)
     |> validate_cron_expression(:schedule)
   end

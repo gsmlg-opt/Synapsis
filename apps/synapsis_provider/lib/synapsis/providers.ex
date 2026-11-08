@@ -59,6 +59,38 @@ defmodule Synapsis.Providers do
 
   def runtime_available?(_provider), do: false
 
+  @doc "Whether a provider is dedicated to speech rather than LLM operations."
+  def speech_only?(provider) when is_map(provider),
+    do:
+      Map.get(provider, :type, Map.get(provider, "type")) in ~w(elevenlabs openai_speech xai_speech inworld_speech gradium_speech openrouter_speech deepinfra_speech vydra_speech fish_audio_speech google_speech azure_speech xiaomi_speech clawrouter_speech)
+
+  @doc "Implemented speech operations for a dedicated speech provider type."
+  def speech_capabilities(provider) when is_map(provider) do
+    case Map.get(provider, :type, Map.get(provider, "type")) do
+      "openai_speech" -> [:tts, :stt]
+      "elevenlabs" -> [:tts]
+      "xai_speech" -> [:tts]
+      "inworld_speech" -> [:tts]
+      "gradium_speech" -> [:tts]
+      "openrouter_speech" -> [:tts]
+      "deepinfra_speech" -> [:tts]
+      "vydra_speech" -> [:tts]
+      "fish_audio_speech" -> [:tts]
+      "google_speech" -> [:tts]
+      "azure_speech" -> [:tts]
+      "xiaomi_speech" -> [:tts]
+      "clawrouter_speech" -> [:tts]
+      _ -> []
+    end
+  end
+
+  def speech_capabilities(_provider), do: []
+
+  @doc false
+  def ensure_llm_provider(provider) do
+    if speech_only?(provider), do: {:error, :unsupported_provider_capability}, else: :ok
+  end
+
   @doc "Whether an explicit credential reference can currently be resolved."
   def credential_available?(provider) do
     case Map.get(provider, :credential_id, Map.get(provider, "credential_id")) do
@@ -127,7 +159,8 @@ defmodule Synapsis.Providers do
     with {:ok, provider} <- current do
       config = Map.get(provider, :config, Map.get(provider, "config", %{})) || %{}
 
-      runtime_available?(provider) and catalog_model_enabled?(provider, model) and
+      not speech_only?(provider) and runtime_available?(provider) and
+        catalog_model_enabled?(provider, model) and
         source_model_available?(config, model)
     else
       {:error, :not_found} -> false
@@ -181,6 +214,40 @@ defmodule Synapsis.Providers do
     |> Enum.sort_by(&{&1.provider, &1.name, &1.model})
   end
 
+  @doc """
+  Read-only document selection projection. Unlike configured_models/0 this never
+  migrates, imports or enables a model. Every saved provider UUID stays distinct.
+  All rows, including ineligible rows, participate in the selection generation.
+  """
+  def document_model_snapshot do
+    {:ok, providers} = list()
+    {:ok, models} = Models.ordered()
+
+    entries =
+      Enum.map(providers, fn provider ->
+        rows =
+          models
+          |> Enum.filter(&(&1.provider_id == provider.id))
+          |> Enum.map(fn model ->
+            %{
+              record: model,
+              available: model.enabled and model_runtime_available?(provider, model.model)
+            }
+          end)
+
+        %{
+          provider: provider,
+          metadata: Synapsis.Provider.DocumentModels.metadata(provider),
+          available: not speech_only?(provider) and runtime_available?(provider),
+          authentication_generation: authentication_generation(provider),
+          models: rows
+        }
+      end)
+
+    {:ok,
+     %{revision: Synapsis.Provider.DocumentModels.revision(), providers: entries, models: models}}
+  end
+
   @doc "Configured token context, with static metadata retained for legacy model pairs."
   def model_context_window(provider_name, model) do
     with {:ok, provider} <- get_by_name(provider_name),
@@ -193,7 +260,7 @@ defmodule Synapsis.Providers do
 
   @doc "Idempotently import legacy model choices without changing agent defaults."
   def migrate_model_catalog do
-    providers = Enum.reject(all(), & &1.config["model_catalog_migrated"])
+    providers = Enum.reject(all(), &(speech_only?(&1) or &1.config["model_catalog_migrated"]))
 
     with {:ok, sessions} <- legacy_sessions(providers) do
       Enum.reduce_while(providers, :ok, fn provider, :ok ->
@@ -330,8 +397,829 @@ defmodule Synapsis.Providers do
     end
   end
 
+  @doc "Prepare the current ElevenLabs UUID and saved speech settings before Agent overlays."
+  def elevenlabs_speech_config(provider_id, overlays \\ %{}) do
+    with {:ok, %ProviderConfig{type: "elevenlabs"} = provider} <- get(provider_id),
+         :ok <- ensure_runtime_available(provider),
+         true <- is_map(overlays) and not is_struct(overlays),
+         {:ok, runtime} <- runtime_config(provider.name),
+         true <- runtime[:provider_id] === provider.id do
+      saved =
+        elevenlabs_source_settings(provider.config || %{})
+        |> Map.put("baseUrl", provider.base_url || default_base_url(provider.type))
+
+      # Current connection authority is independent of speech options in TOML.
+      config =
+        Synapsis.Provider.Speech.ElevenLabs.resolve_talk_config(
+          %{"providers" => %{"elevenlabs" => saved}},
+          elevenlabs_source_settings(overlays)
+        )
+        |> Map.put(:api_key, runtime[:api_key])
+        |> Map.put(
+          :max_bytes,
+          google_setting(
+            overlays,
+            :max_bytes,
+            google_setting(provider.config || %{}, :max_bytes, 16 * 1024 * 1024)
+          )
+        )
+
+      # Saved timeout aliases are never a second timing authority.
+      timeout = google_setting(overlays, :timeout_ms, 30_000)
+
+      with true <- is_integer(timeout) and timeout > 0,
+           timeout = min(timeout, 2_147_483_647),
+           {:ok, _} <-
+             Synapsis.Provider.Speech.ElevenLabs.build_request(
+               %{text: "", target: :audio_file, timeout_ms: timeout},
+               config
+             ) do
+        {:ok,
+         %{
+           provider_id: provider.id,
+           provider_name: provider.name,
+           config: config,
+           timeout_ms: timeout
+         }}
+      else
+        _ -> {:error, :invalid_config}
+      end
+    else
+      _ -> {:error, :provider_unavailable}
+    end
+  rescue
+    _error in ArgumentError -> {:error, :invalid_config}
+  end
+
+  defp elevenlabs_source_settings(settings) do
+    fields = [
+      {:voiceId, :voice_id},
+      {:modelId, :model_id},
+      {:seed, :seed},
+      {:applyTextNormalization, :apply_text_normalization},
+      {:languageCode, :language_code},
+      {:voiceSettings, :voice_settings}
+    ]
+
+    Enum.reduce(fields, %{}, fn {source, host}, acc ->
+      case elevenlabs_saved_setting(settings, source, host) do
+        {:ok, value} when host == :voice_settings and is_map(value) ->
+          normalized =
+            Enum.reduce(
+              [
+                {:stability, :stability},
+                {:similarityBoost, :similarity_boost},
+                {:style, :style},
+                {:useSpeakerBoost, :use_speaker_boost},
+                {:speed, :speed}
+              ],
+              %{},
+              fn {source_key, host_key}, values ->
+                case elevenlabs_saved_setting(value, source_key, host_key) do
+                  {:ok, field} -> Map.put(values, Atom.to_string(source_key), field)
+                  :error -> values
+                end
+              end
+            )
+
+          Map.put(acc, Atom.to_string(source), normalized)
+
+        {:ok, value} ->
+          Map.put(acc, Atom.to_string(source), value)
+
+        :error ->
+          acc
+      end
+    end)
+  end
+
+  defp elevenlabs_saved_setting(settings, source, host) do
+    Enum.reduce_while(
+      [Atom.to_string(host), host, Atom.to_string(source), source],
+      :error,
+      fn key, :error ->
+        case Map.fetch(settings, key) do
+          {:ok, _} = found -> {:halt, found}
+          :error -> {:cont, :error}
+        end
+      end
+    )
+  end
+
+  @doc "Prepare the current Inworld UUID and saved speech settings before Agent overlays."
+  def inworld_speech_config(provider_id, overlays \\ %{}) do
+    with {:ok, %ProviderConfig{type: "inworld_speech"} = provider} <- get(provider_id),
+         :ok <- ensure_runtime_available(provider),
+         true <- is_map(overlays) and not is_struct(overlays),
+         {:ok, runtime} <- runtime_config(provider.name),
+         true <- runtime[:provider_id] === provider.id do
+      saved =
+        inworld_source_settings(provider.config || %{})
+        |> Map.put("baseUrl", provider.base_url || default_base_url(provider.type))
+
+      # Saved speech options cannot override the current connection or credential.
+      config =
+        Synapsis.Provider.Speech.Inworld.resolve_talk_config(
+          %{"providers" => %{"inworld" => saved}},
+          inworld_source_settings(overlays)
+        )
+        |> Map.put(:api_key, runtime[:api_key])
+        |> Map.put(
+          :max_bytes,
+          google_setting(
+            overlays,
+            :max_bytes,
+            google_setting(provider.config || %{}, :max_bytes, 16 * 1024 * 1024)
+          )
+        )
+
+      # Only the Agent's operation duration (or host default) selects T.
+      timeout = google_setting(overlays, :timeout_ms, 30_000)
+
+      with true <- is_integer(timeout) and timeout > 0,
+           timeout = min(timeout, 2_147_483_647),
+           {:ok, _} <-
+             Synapsis.Provider.Speech.Inworld.build_request(
+               %{text: "", target: :audio_file, timeout_ms: timeout},
+               config
+             ) do
+        {:ok,
+         %{
+           provider_id: provider.id,
+           provider_name: provider.name,
+           config: config,
+           timeout_ms: timeout
+         }}
+      else
+        _ -> {:error, :invalid_config}
+      end
+    else
+      _ -> {:error, :provider_unavailable}
+    end
+  rescue
+    _error in ArgumentError -> {:error, :invalid_config}
+  end
+
+  defp inworld_source_settings(settings) do
+    Enum.reduce(
+      [{:voiceId, :voice_id}, {:modelId, :model_id}, {:temperature, :temperature}],
+      %{},
+      fn {source, host}, acc ->
+        case inworld_saved_setting(settings, source, host) do
+          {:ok, value} -> Map.put(acc, Atom.to_string(source), value)
+          :error -> acc
+        end
+      end
+    )
+  end
+
+  defp inworld_saved_setting(settings, source, host) do
+    Enum.reduce_while(
+      [Atom.to_string(host), host, Atom.to_string(source), source],
+      :error,
+      fn key, :error ->
+        case Map.fetch(settings, key) do
+          {:ok, _} = found -> {:halt, found}
+          :error -> {:cont, :error}
+        end
+      end
+    )
+  end
+
+  @doc "Prepare current OpenAI Speech UUID settings before explicit Agent overlays."
+  def openai_speech_config(provider_id, overlays \\ %{}) do
+    with {:ok, %ProviderConfig{type: "openai_speech"} = provider} <- get(provider_id),
+         :ok <- ensure_runtime_available(provider),
+         true <- is_map(overlays) and not is_struct(overlays),
+         {:ok, runtime} <- runtime_config(provider.name),
+         true <- runtime[:provider_id] === provider.id do
+      fields = [
+        {"model", :model},
+        {"voice", :voice},
+        {"speed", :speed},
+        {"instructions", :instructions},
+        {"responseFormat", :response_format},
+        {"extraBody", :extra_body},
+        {"extra_body", :extra_body}
+      ]
+
+      normalize = fn raw ->
+        Synapsis.Provider.Speech.OpenAI.resolve_config(%{"providers" => %{"openai" => raw}})
+      end
+
+      # ProviderConfig uses an API root. This host-only preparation is distinct
+      # from source raw config and resolved synthesis URL semantics.
+      connection =
+        normalize.(%{"baseUrl" => provider.base_url || default_base_url(provider.type)})
+
+      root = connection.base_url
+      base_url = if String.ends_with?(root, "/v1"), do: root, else: root <> "/v1"
+      saved = google_source_settings(provider.config || %{}, fields)
+      explicit = google_source_settings(overlays, fields)
+      normalized_overlay = normalize.(Map.put(explicit, "baseUrl", base_url))
+
+      config =
+        Enum.reduce(
+          [
+            {:model, ["model"]},
+            {:voice, ["voice"]},
+            {:speed, ["speed"]},
+            {:instructions, ["instructions"]},
+            {:response_format, ["responseFormat"]},
+            {:extra_body, ["extraBody", "extra_body"]}
+          ],
+          normalize.(Map.put(saved, "baseUrl", base_url)),
+          fn {key, sources}, acc ->
+            if Enum.any?(sources, &Map.has_key?(explicit, &1)),
+              do: Map.merge(Map.delete(acc, key), Map.take(normalized_overlay, [key])),
+              else: acc
+          end
+        )
+        |> Map.put(:api_key, runtime[:api_key])
+        |> Map.put(
+          :max_bytes,
+          google_setting(
+            overlays,
+            :max_bytes,
+            google_setting(provider.config || %{}, :max_bytes, 16 * 1024 * 1024)
+          )
+        )
+
+      # Saved timeout aliases never become a timing authority. Admission uses
+      # the host default or an explicit Agent duration; requests retain raw T.
+      timeout = google_setting(overlays, :timeout_ms, 30_000)
+
+      with true <- is_integer(timeout) and timeout > 0,
+           timeout = min(timeout, 2_147_483_647),
+           {:ok, _} <-
+             Synapsis.Provider.Speech.OpenAI.build_request(
+               %{text: "Configuration preflight.", target: :audio_file, timeout_ms: timeout},
+               config
+             ) do
+        {:ok,
+         %{
+           provider_id: provider.id,
+           provider_name: provider.name,
+           config: config,
+           timeout_ms: timeout
+         }}
+      else
+        _ -> {:error, :invalid_config}
+      end
+    else
+      _ -> {:error, :provider_unavailable}
+    end
+  rescue
+    _error in ArgumentError -> {:error, :invalid_config}
+  end
+
+  @doc "Prepare current ClawRouter UUID connection authority and explicit Agent speech settings."
+  def clawrouter_speech_config(provider_id, overlays \\ %{}) do
+    with {:ok, %ProviderConfig{type: "clawrouter_speech"} = provider} <- get(provider_id),
+         :ok <- ensure_runtime_available(provider),
+         true <- is_map(overlays) and not is_struct(overlays),
+         {:ok, runtime} <- runtime_config(provider.name),
+         true <- runtime[:provider_id] === provider.id do
+      fields = [
+        {"model", :model},
+        {"modelId", :model_id},
+        {"speakerVoice", :speaker_voice},
+        {"speakerVoiceId", :speaker_voice_id},
+        {"voice", :voice},
+        {"voiceId", :voice_id},
+        {"responseFormat", :response_format},
+        {"speed", :speed},
+        {"profileId", :profile_id}
+      ]
+
+      normalize = fn raw ->
+        Synapsis.Provider.Speech.ClawRouter.resolve_config(%{
+          "providers" => %{"clawrouter" => raw}
+        })
+      end
+
+      # Normalize the saved aliases before overlaying explicitly supplied Agent
+      # fields, so an old speakerVoice cannot mask the new canonical voice.
+      saved = google_source_settings(provider.config || %{}, fields)
+      explicit = google_source_settings(overlays, fields)
+      normalized_overlay = normalize.(explicit)
+
+      config =
+        Enum.reduce(
+          [
+            {:model, ["model", "modelId"]},
+            {:voice, ["speakerVoice", "speakerVoiceId", "voice", "voiceId"]},
+            {:response_format, ["responseFormat"]},
+            {:speed, ["speed"]}
+          ],
+          normalize.(saved),
+          fn {key, sources}, acc ->
+            if Enum.any?(sources, &Map.has_key?(explicit, &1)),
+              do: Map.merge(Map.delete(acc, key), Map.take(normalized_overlay, [key])),
+              else: acc
+          end
+        )
+
+      connection =
+        normalize.(%{"baseUrl" => provider.base_url || default_base_url(provider.type)})
+
+      config =
+        config
+        |> Map.merge(Map.take(connection, [:base_url]))
+        |> Map.put(:api_key, runtime[:api_key])
+        |> Map.put(
+          :max_bytes,
+          google_setting(
+            overlays,
+            :max_bytes,
+            google_setting(provider.config || %{}, :max_bytes, 16 * 1024 * 1024)
+          )
+        )
+
+      # Saved timeout aliases are not a source timing authority.
+      timeout = google_setting(overlays, :timeout_ms, 30_000)
+
+      with false <-
+             Map.has_key?(normalize.(saved), :profile_id) or
+               Map.has_key?(normalized_overlay, :profile_id),
+           true <- is_integer(timeout) and timeout > 0,
+           timeout = min(timeout, 2_147_483_647),
+           {:ok, _} <-
+             Synapsis.Provider.Speech.ClawRouter.build_request(
+               %{text: "Configuration preflight.", target: :audio_file, timeout_ms: timeout},
+               config
+             ) do
+        {:ok,
+         %{
+           provider_id: provider.id,
+           provider_name: provider.name,
+           config: config,
+           timeout_ms: timeout
+         }}
+      else
+        _ -> {:error, :invalid_config}
+      end
+    else
+      _ -> {:error, :provider_unavailable}
+    end
+  rescue
+    _error in ArgumentError -> {:error, :invalid_config}
+  end
+
+  @doc "Prepare a saved Xiaomi speech UUID using current connection and explicit Agent overlays."
+  def xiaomi_speech_config(provider_id, overlays \\ %{}) do
+    with {:ok, %ProviderConfig{type: "xiaomi_speech"} = provider} <- get(provider_id),
+         :ok <- ensure_runtime_available(provider),
+         true <- is_map(overlays) and not is_struct(overlays),
+         {:ok, runtime} <- runtime_config(provider.name),
+         true <- runtime[:provider_id] === provider.id do
+      fields = [
+        {"model", :model},
+        {"modelId", :model_id},
+        {"speakerVoice", :speaker_voice},
+        {"speakerVoiceId", :speaker_voice_id},
+        {"voice", :voice},
+        {"voiceId", :voice_id},
+        {"format", :format},
+        {"style", :style}
+      ]
+
+      normalize = fn raw ->
+        Synapsis.Provider.Speech.Xiaomi.resolve_config(%{"providers" => %{"xiaomi" => raw}})
+      end
+
+      saved = google_source_settings(provider.config || %{}, fields)
+      explicit = google_source_settings(overlays, fields)
+      normalized_overlay = normalize.(explicit)
+
+      config =
+        Enum.reduce(
+          [
+            {:model, ["model", "modelId"]},
+            {:voice, ["speakerVoice", "speakerVoiceId", "voice", "voiceId"]},
+            {:format, ["format"]},
+            {:style, ["style"]}
+          ],
+          normalize.(saved),
+          fn {key, sources}, acc ->
+            if xiaomi_option_supplied?(explicit, sources, key),
+              do: Map.put(acc, key, normalized_overlay[key]),
+              else: acc
+          end
+        )
+
+      connection =
+        normalize.(%{
+          "apiKey" => runtime[:api_key],
+          "baseUrl" => provider.base_url || default_base_url(provider.type)
+        })
+
+      config =
+        config
+        |> Map.merge(Map.take(connection, [:api_key, :base_url]))
+        |> Map.put(
+          :max_bytes,
+          google_setting(
+            overlays,
+            :max_bytes,
+            google_setting(provider.config || %{}, :max_bytes, 16 * 1024 * 1024)
+          )
+        )
+
+      # Xiaomi ignores saved source timeout settings. Host admission consumes
+      # only an explicit Agent duration; the tool request can still override it.
+      timeout = google_setting(overlays, :timeout_ms, 30_000)
+
+      with true <- is_integer(timeout) and timeout > 0,
+           timeout = min(timeout, 2_147_483_647),
+           {:ok, _} <-
+             Synapsis.Provider.Speech.Xiaomi.build_request(
+               %{text: "", target: :audio_file, timeout_ms: timeout},
+               config
+             ) do
+        {:ok,
+         %{
+           provider_id: provider.id,
+           provider_name: provider.name,
+           config: config,
+           timeout_ms: timeout
+         }}
+      else
+        _ -> {:error, :invalid_config}
+      end
+    else
+      _ -> {:error, :provider_unavailable}
+    end
+  rescue
+    _error in ArgumentError -> {:error, :invalid_config}
+  end
+
+  defp xiaomi_option_supplied?(explicit, sources, field) do
+    Enum.any?(sources, fn source ->
+      case explicit[source] do
+        value when is_binary(value) ->
+          trimmed =
+            Regex.replace(
+              ~r/\A[\x{0009}-\x{000D}\x{0020}\x{00A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}]+|[\x{0009}-\x{000D}\x{0020}\x{00A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}]+\z/u,
+              value,
+              ""
+            )
+
+          trimmed != "" and (field != :format or String.downcase(trimmed) in ~w(mp3 wav))
+
+        _ ->
+          false
+      end
+    end)
+  end
+
+  @doc "Prepare a saved Azure Speech UUID with current connection authority and explicit speech overlays."
+  def azure_speech_config(provider_id, overlays \\ %{}) do
+    with {:ok, %ProviderConfig{type: "azure_speech"} = provider} <- get(provider_id),
+         :ok <- ensure_runtime_available(provider),
+         true <- is_map(overlays) and not is_struct(overlays),
+         {:ok, runtime} <- runtime_config(provider.name),
+         true <- runtime[:provider_id] === provider.id do
+      fields = [
+        {"voice", :voice},
+        {"voiceId", :voice_id},
+        {"lang", :lang},
+        {"languageCode", :language_code},
+        {"outputFormat", :output_format},
+        {"voiceNoteOutputFormat", :voice_note_output_format},
+        {"timeoutMs", :timeout_ms}
+      ]
+
+      saved = google_source_settings(provider.config || %{}, fields)
+      explicit = google_source_settings(overlays, fields)
+
+      normalize = fn raw ->
+        Synapsis.Provider.Speech.Azure.resolve_config(%{"providers" => %{"azure-speech" => raw}})
+      end
+
+      normalized_overlay = normalize.(explicit)
+
+      overlay_fields = [
+        {:voice, ["voice", "voiceId"]},
+        {:lang, ["lang", "languageCode"]},
+        {:output_format, ["outputFormat"]},
+        {:voice_note_output_format, ["voiceNoteOutputFormat"]},
+        {:timeout_ms, ["timeoutMs"]}
+      ]
+
+      config =
+        Enum.reduce(overlay_fields, normalize.(saved), fn {key, sources}, acc ->
+          if Enum.any?(sources, &Map.has_key?(explicit, &1)),
+            do: acc |> Map.delete(key) |> Map.merge(Map.take(normalized_overlay, [key])),
+            else: acc
+        end)
+
+      # Agent overlays cannot replace the current saved route or credential.
+      connection = normalize.(%{"apiKey" => runtime[:api_key], "baseUrl" => runtime[:base_url]})
+
+      config =
+        config
+        |> Map.merge(Map.take(connection, [:api_key, :base_url]))
+        |> Map.put(
+          :max_bytes,
+          google_setting(
+            overlays,
+            :max_bytes,
+            google_setting(provider.config || %{}, :max_bytes, 16 * 1024 * 1024)
+          )
+        )
+
+      timeout = Map.get(config, :timeout_ms, 30_000)
+
+      with true <- is_number(timeout) and timeout > 0 and timeout <= 2_147_483_647,
+           {:ok, _} <-
+             Synapsis.Provider.Speech.Azure.build_request(
+               %{text: "", target: :audio_file, timeout_ms: timeout},
+               config
+             ) do
+        # Keep source timeout absent when unconfigured; this separate fallback
+        # is for host admission and must not suppress a request's timeout.
+        {:ok,
+         %{
+           provider_id: provider.id,
+           provider_name: provider.name,
+           config: config,
+           timeout_ms: timeout
+         }}
+      else
+        _ -> {:error, :invalid_config}
+      end
+    else
+      _ -> {:error, :provider_unavailable}
+    end
+  rescue
+    _error in ArgumentError -> {:error, :invalid_config}
+  end
+
+  @doc "Prepare a saved Google Speech UUID using current credentials and explicit overlays."
+  def google_speech_config(provider_id, overlays \\ %{}) do
+    with {:ok, %ProviderConfig{type: "google_speech"} = provider} <- get(provider_id),
+         :ok <- ensure_runtime_available(provider),
+         true <- is_map(overlays) and not is_struct(overlays),
+         {:ok, runtime} <- runtime_config(provider.name),
+         true <- runtime[:provider_id] === provider.id do
+      fields = [
+        {"model", :model},
+        {"voiceName", :voice_name},
+        {"voice", :voice},
+        {"audioProfile", :audio_profile},
+        {"speakerName", :speaker_name},
+        {"speakers", :speakers},
+        {"promptTemplate", :prompt_template},
+        {"personaPrompt", :persona_prompt}
+      ]
+
+      # Preserve source alias precedence while normalizing saved values first.
+      raw = google_source_settings(provider.config || %{}, fields)
+      saved = Synapsis.Provider.Speech.Google.resolve_config(%{"providers" => %{"google" => raw}})
+
+      canonical =
+        Enum.reduce(fields, %{}, fn {source, host}, acc ->
+          case Map.fetch(saved, host) do
+            {:ok, value} -> Map.put(acc, source, google_source_value(host, value))
+            :error -> acc
+          end
+        end)
+
+      explicit = google_source_settings(overlays, fields)
+      # A supplied legacy voice must replace a saved normalized voiceName.
+      canonical =
+        if Map.has_key?(explicit, "voice") and not Map.has_key?(explicit, "voiceName"),
+          do: Map.delete(canonical, "voiceName"),
+          else: canonical
+
+      config =
+        canonical
+        |> Map.merge(explicit)
+        |> Map.put("apiKey", runtime[:api_key])
+        |> Map.put("baseUrl", runtime[:base_url])
+        |> then(
+          &Synapsis.Provider.Speech.Google.resolve_config(%{"providers" => %{"google" => &1}})
+        )
+        |> Map.put(
+          :max_bytes,
+          google_setting(
+            overlays,
+            :max_bytes,
+            google_setting(provider.config || %{}, :max_bytes, 16 * 1024 * 1024)
+          )
+        )
+
+      timeout =
+        google_setting(
+          overlays,
+          :timeout_ms,
+          google_setting(provider.config || %{}, :timeout_ms, 30_000)
+        )
+
+      with true <- is_integer(timeout) and timeout > 0,
+           timeout = min(timeout, 2_147_483_647),
+           {:ok, _} <-
+             Synapsis.Provider.Speech.Google.build_request(
+               %{text: "", target: :audio_file, timeout_ms: timeout},
+               config
+             ) do
+        {:ok,
+         %{
+           provider_id: provider.id,
+           provider_name: provider.name,
+           config: config,
+           timeout_ms: timeout
+         }}
+      else
+        _ -> {:error, :invalid_config}
+      end
+    else
+      _ -> {:error, :provider_unavailable}
+    end
+  rescue
+    _error in ArgumentError -> {:error, :invalid_config}
+  end
+
+  defp google_source_settings(config, fields) do
+    Enum.reduce(fields, %{}, fn {source, host}, acc ->
+      case google_saved_setting(config, source, host) do
+        {:ok, value} -> Map.put(acc, source, google_source_value(host, value))
+        :error -> acc
+      end
+    end)
+  end
+
+  defp google_source_value(:speakers, speakers) when is_list(speakers) do
+    Enum.map(speakers, fn speaker ->
+      if is_map(speaker) do
+        Enum.reduce([:speaker, :name, :voice, :voice_name, :style], speaker, fn key, value ->
+          case Map.fetch(value, key) do
+            {:ok, field} ->
+              Map.put(
+                value,
+                if(key == :voice_name, do: "voiceName", else: Atom.to_string(key)),
+                field
+              )
+
+            :error ->
+              value
+          end
+        end)
+      else
+        speaker
+      end
+    end)
+  end
+
+  defp google_source_value(_, value), do: value
+
+  defp google_saved_setting(config, source, host) do
+    Enum.reduce_while([source, Atom.to_string(host), host], :error, fn key, :error ->
+      case Map.fetch(config, key) do
+        {:ok, _} = found -> {:halt, found}
+        :error -> {:cont, :error}
+      end
+    end)
+  end
+
+  defp google_setting(config, key, default) do
+    case google_saved_setting(config, Atom.to_string(key), key) do
+      {:ok, value} -> value
+      :error -> default
+    end
+  end
+
+  @doc "Prepare a saved Fish UUID with current credentials and explicit Agent overlays."
+  def fish_audio_config(provider_id, overlays \\ %{}) do
+    with {:ok, %ProviderConfig{type: "fish_audio_speech"} = provider} <- get(provider_id),
+         :ok <- ensure_runtime_available(provider),
+         true <- is_map(overlays) and not is_struct(overlays),
+         {:ok, runtime} <- runtime_config(provider.name),
+         true <- runtime[:provider_id] === provider.id do
+      raw =
+        Enum.reduce(
+          [
+            {"model", :model},
+            {"modelId", :model_id},
+            {"speakerVoiceId", :speaker_voice_id},
+            {"voiceId", :voice_id},
+            {"referenceId", :reference_id},
+            {"latency", :latency},
+            {"speed", :speed},
+            {"temperature", :temperature},
+            {"topP", :top_p},
+            {"normalize", :normalize}
+          ],
+          %{},
+          fn {source, host}, raw ->
+            case fish_saved_setting(provider.config || %{}, source, host) do
+              {:ok, value} -> Map.put(raw, source, value)
+              :error -> raw
+            end
+          end
+        )
+        |> Map.put("apiKey", runtime[:api_key])
+        |> Map.put("baseUrl", runtime[:base_url])
+
+      saved =
+        Synapsis.Provider.Speech.FishAudio.resolve_config(%{
+          "providers" => %{"fish-audio" => raw}
+        })
+
+      # Saved aliases have already been normalized. Agent canonical fields form
+      # per-call overrides, so a saved speaker alias cannot mask a new reference.
+      overrides =
+        Enum.reduce(
+          [
+            {"model", :model},
+            {"voice_id", :voice_id},
+            {"reference_id", :reference_id},
+            {"latency", :latency},
+            {"speed", :speed},
+            {"temperature", :temperature},
+            {"top_p", :top_p},
+            {"normalize", :normalize}
+          ],
+          %{},
+          fn {source, host}, acc ->
+            case fish_saved_setting(overlays, source, host) do
+              {:ok, value} -> Map.put(acc, host, value)
+              :error -> acc
+            end
+          end
+        )
+
+      timeout =
+        fish_setting(
+          overlays,
+          :timeout_ms,
+          fish_setting(
+            provider.config || %{},
+            :timeout_ms,
+            Synapsis.Provider.Speech.FishAudio.default_timeout_ms()
+          )
+        )
+
+      max_bytes =
+        fish_setting(
+          overlays,
+          :max_bytes,
+          fish_setting(provider.config || %{}, :max_bytes, 16 * 1024 * 1024)
+        )
+
+      with true <- is_integer(timeout) and timeout > 0,
+           {:ok, built} <-
+             Synapsis.Provider.Speech.FishAudio.build_request(
+               %{
+                 text: "",
+                 target: :audio_file,
+                 timeout_ms: min(timeout, 2_147_483_647),
+                 provider_overrides: overrides
+               },
+               Map.put(saved, :max_bytes, max_bytes)
+             ) do
+        # Fish owns all vendor normalization. This preparation never decodes a
+        # wire body or accepts credential/endpoint values from Agent overlays.
+        {:ok,
+         %{
+           provider_id: provider.id,
+           provider_name: provider.name,
+           config: built.resolved_config,
+           timeout_ms: min(timeout, 2_147_483_647)
+         }}
+      else
+        _ -> {:error, :invalid_config}
+      end
+    else
+      _ -> {:error, :provider_unavailable}
+    end
+  rescue
+    _error in ArgumentError -> {:error, :invalid_config}
+  end
+
+  defp fish_saved_setting(config, source, host) do
+    Enum.reduce_while([source, Atom.to_string(host), host], :error, fn key, :error ->
+      case Map.fetch(config, key) do
+        {:ok, _} = found -> {:halt, found}
+        :error -> {:cont, :error}
+      end
+    end)
+  end
+
+  defp fish_setting(config, key, default) do
+    case fish_saved_setting(config, Atom.to_string(key), key) do
+      {:ok, value} -> value
+      :error -> default
+    end
+  end
+
   @doc "Validate a model against the persisted identity carried by a runtime config."
   def ensure_model_runtime_available(config, model) when is_map(config) do
+    with :ok <- ensure_llm_provider(config), do: ensure_persisted_model_available(config, model)
+  end
+
+  defp ensure_persisted_model_available(config, model) do
     case Map.get(config, :provider_id, Map.get(config, "provider_id")) do
       nil ->
         :ok
@@ -427,6 +1315,7 @@ defmodule Synapsis.Providers do
   @doc "Fetch available models for a provider by name."
   def models_for(provider_name) do
     with {:ok, provider} <- get_by_name(provider_name),
+         :ok <- ensure_llm_provider(provider),
          :ok <- ensure_runtime_available(provider) do
       case cached_models(provider) do
         [] ->
@@ -445,6 +1334,7 @@ defmodule Synapsis.Providers do
   @doc "Fetch all available models for a provider by id."
   def models_by_id(id) do
     with {:ok, provider} <- get(id),
+         :ok <- ensure_llm_provider(provider),
          :ok <- ensure_runtime_available(provider) do
       provider
       |> cached_models()
@@ -486,7 +1376,8 @@ defmodule Synapsis.Providers do
   def fetch_models(provider) when is_map(provider) do
     generation = authentication_generation(provider)
 
-    with :ok <- ensure_runtime_available(provider),
+    with :ok <- ensure_llm_provider(provider),
+         :ok <- ensure_runtime_available(provider),
          {:ok, models} <-
            provider
            |> build_runtime_config()
@@ -507,6 +1398,10 @@ defmodule Synapsis.Providers do
   end
 
   @doc "Discovered or static provider metadata offered for explicit catalog import."
+  def model_suggestions(%ProviderConfig{type: type})
+      when type in ~w(elevenlabs openai_speech xai_speech inworld_speech gradium_speech openrouter_speech deepinfra_speech vydra_speech fish_audio_speech google_speech azure_speech xiaomi_speech clawrouter_speech),
+      do: []
+
   def model_suggestions(%ProviderConfig{config: %{"available_models" => models}} = provider)
       when is_list(models),
       do: cached_models(provider)
@@ -579,7 +1474,8 @@ defmodule Synapsis.Providers do
 
   defp stringify_model(model) do
     model
-    |> Map.take([:id, :name, :context_window])
+    |> Map.take([:id, :name, :context_window, :input, :selection_order])
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
     |> Enum.map(fn {key, value} -> {to_string(key), value} end)
     |> Map.new()
   end
@@ -588,7 +1484,9 @@ defmodule Synapsis.Providers do
     %{
       id: id,
       name: model[:name] || id,
-      context_window: positive_context(model[:context_window], id)
+      context_window: positive_context(model[:context_window], id),
+      input: model[:input],
+      selection_order: model[:selection_order]
     }
   end
 
@@ -596,7 +1494,9 @@ defmodule Synapsis.Providers do
     %{
       id: id,
       name: model["name"] || id,
-      context_window: positive_context(model["context_window"], id)
+      context_window: positive_context(model["context_window"], id),
+      input: model["input"],
+      selection_order: model["selection_order"]
     }
   end
 
@@ -691,6 +1591,123 @@ defmodule Synapsis.Providers do
     discover_models: true
   }
 
+  @elevenlabs_preset %{
+    name: "elevenlabs",
+    label: "ElevenLabs",
+    type: "elevenlabs",
+    base_url: "https://api.elevenlabs.io",
+    base_url_editable: true,
+    discover_models: false
+  }
+
+  @openai_speech_preset %{
+    name: "openai-speech",
+    label: "OpenAI Speech",
+    type: "openai_speech",
+    base_url: "https://api.openai.com",
+    base_url_editable: true,
+    discover_models: false
+  }
+
+  @xai_speech_preset %{
+    name: "xai-speech",
+    label: "xAI Speech",
+    type: "xai_speech",
+    base_url: "https://api.x.ai/v1",
+    base_url_editable: true,
+    discover_models: false
+  }
+
+  @inworld_speech_preset %{
+    name: "inworld-speech",
+    label: "Inworld Speech",
+    type: "inworld_speech",
+    base_url: "https://api.inworld.ai",
+    base_url_editable: true,
+    discover_models: false
+  }
+
+  @gradium_speech_preset %{
+    name: "gradium-speech",
+    label: "Gradium Speech",
+    type: "gradium_speech",
+    base_url: "https://api.gradium.ai",
+    base_url_editable: true,
+    discover_models: false
+  }
+
+  @openrouter_speech_preset %{
+    name: "openrouter-speech",
+    label: "OpenRouter Speech",
+    type: "openrouter_speech",
+    base_url: "https://openrouter.ai/api/v1",
+    base_url_editable: true,
+    discover_models: false
+  }
+
+  @deepinfra_speech_preset %{
+    name: "deepinfra-speech",
+    label: "DeepInfra Speech",
+    type: "deepinfra_speech",
+    base_url: "https://api.deepinfra.com/v1/openai",
+    base_url_editable: true,
+    discover_models: false
+  }
+
+  @vydra_speech_preset %{
+    name: "vydra-speech",
+    label: "Vydra Speech",
+    type: "vydra_speech",
+    base_url: "https://www.vydra.ai/api/v1",
+    base_url_editable: true,
+    discover_models: false
+  }
+
+  @fish_audio_speech_preset %{
+    name: "fish-audio-speech",
+    label: "Fish Audio Speech",
+    type: "fish_audio_speech",
+    base_url: "https://api.fish.audio",
+    base_url_editable: true,
+    discover_models: false
+  }
+
+  @clawrouter_speech_preset %{
+    name: "clawrouter-speech",
+    label: "ClawRouter",
+    type: "clawrouter_speech",
+    base_url: "https://clawrouter.openclaw.ai/v1",
+    base_url_editable: true,
+    discover_models: false
+  }
+
+  @xiaomi_speech_preset %{
+    name: "xiaomi-speech",
+    label: "Xiaomi MiMo",
+    type: "xiaomi_speech",
+    base_url: "https://api.xiaomimimo.com/v1",
+    base_url_editable: true,
+    discover_models: false
+  }
+
+  @azure_speech_preset %{
+    name: "azure-speech",
+    label: "Azure Speech",
+    type: "azure_speech",
+    base_url: "",
+    base_url_editable: true,
+    discover_models: false
+  }
+
+  @google_speech_preset %{
+    name: "google-speech",
+    label: "Google Speech",
+    type: "google_speech",
+    base_url: "https://generativelanguage.googleapis.com/v1beta",
+    base_url_editable: true,
+    discover_models: false
+  }
+
   @default_providers [
     %{name: "anthropic", type: "anthropic", base_url: "https://api.anthropic.com"},
     %{name: "openai", type: "openai", base_url: "https://api.openai.com"},
@@ -709,7 +1726,22 @@ defmodule Synapsis.Providers do
     %{name: "openrouter", type: "openrouter", base_url: "https://openrouter.ai/api"}
   ]
 
-  @provider_presets [@backplane_preset | @default_providers]
+  @provider_presets [
+    @backplane_preset,
+    @elevenlabs_preset,
+    @openai_speech_preset,
+    @xai_speech_preset,
+    @inworld_speech_preset,
+    @gradium_speech_preset,
+    @openrouter_speech_preset,
+    @deepinfra_speech_preset,
+    @vydra_speech_preset,
+    @fish_audio_speech_preset,
+    @google_speech_preset,
+    @azure_speech_preset,
+    @xiaomi_speech_preset,
+    @clawrouter_speech_preset | @default_providers
+  ]
 
   @doc "Return the list of known provider presets and their UI metadata."
   def preset_providers, do: @provider_presets
@@ -1186,6 +2218,20 @@ defmodule Synapsis.Providers do
   @doc "Default base URL for a provider type or named provider."
   def default_base_url("anthropic"), do: "https://api.anthropic.com"
   def default_base_url("openai"), do: "https://api.openai.com"
+  def default_base_url("openai_speech"), do: "https://api.openai.com"
+  def default_base_url("inworld_speech"), do: "https://api.inworld.ai"
+  def default_base_url("gradium_speech"), do: "https://api.gradium.ai"
+  def default_base_url("openrouter_speech"), do: "https://openrouter.ai/api/v1"
+  def default_base_url("deepinfra_speech"), do: "https://api.deepinfra.com/v1/openai"
+  def default_base_url("vydra_speech"), do: "https://www.vydra.ai/api/v1"
+  def default_base_url("fish_audio_speech"), do: "https://api.fish.audio"
+  def default_base_url("azure_speech"), do: ""
+  def default_base_url("clawrouter_speech"), do: "https://clawrouter.openclaw.ai/v1"
+  def default_base_url("xiaomi_speech"), do: "https://api.xiaomimimo.com/v1"
+  def default_base_url("google_speech"), do: "https://generativelanguage.googleapis.com/v1beta"
+  def default_base_url("xai_speech"), do: "https://api.x.ai/v1"
+  def default_base_url("elevenlabs"), do: "https://api.elevenlabs.io"
+  def default_base_url("openai_responses"), do: "https://api.openai.com"
   def default_base_url("openai-sub"), do: "https://api.chatgpt.com"
   def default_base_url("openai_compat"), do: "https://api.openai.com"
   def default_base_url("google"), do: "https://generativelanguage.googleapis.com"

@@ -1,14 +1,10 @@
 defmodule Synapsis.Agent.TestSupport.BackplaneRuntimeProof do
   @moduledoc """
-  In-memory contract proof only; no production session routing or provider bridge.
+  Shared in-memory native Conversation/provider proof helpers.
 
-  The provider runs a deterministic script. The backend exercises the real host
-  Gateway with an admitted registration and fails closed on host approval errors.
-  It deliberately does not implement approval resolution or task cancellation.
-  Production adapter contracts are tested separately in ToolBackendTest and
-  ProviderAdapterTest; this backend retains the initial package-only proof.
+  The provider runs a deterministic script. EchoTool supplies an inert schema;
+  production adapters and host tools retain their separate native contracts.
   """
-
   alias Backplane.AgentRuntime.{Conversation, EphemeralStore, ToolRegistry}
 
   defmodule Provider do
@@ -16,22 +12,6 @@ defmodule Synapsis.Agent.TestSupport.BackplaneRuntimeProof do
 
     @impl true
     def stream(request, context), do: context.script.(request)
-  end
-
-  defmodule GatewayBackend do
-    def execute(operation) do
-      context = operation.backend_context
-
-      case Synapsis.Tool.Gateway.execute(
-             operation.tool_name,
-             operation.arguments,
-             context,
-             context.registration
-           ) do
-        {:ok, content} -> {:ok, %{content: content}}
-        {:error, reason} -> {:ok, %{is_error: true, content: inspect(reason)}}
-      end
-    end
   end
 
   defmodule EchoTool do
@@ -84,17 +64,6 @@ defmodule Synapsis.Agent.TestSupport.BackplaneRuntimeProof do
       ],
       opts
     )
-  end
-
-  def descriptor(name, context, schema \\ EchoTool.parameters()) do
-    %{
-      tool_name: name,
-      tool_revision: 1,
-      backend: GatewayBackend,
-      backend_context: context,
-      schema: schema,
-      safety: %{read_only: true, retry_safe: false, parallel_safe: false}
-    }
   end
 
   # The runtime call itself has an infinite timeout. Keep the proof caller bounded

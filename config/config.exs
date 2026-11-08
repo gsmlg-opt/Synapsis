@@ -3,6 +3,9 @@
 # help of the Config module.
 import Config
 
+# Cron occurrence resolution uses the IANA data bundled with the locked package.
+config :tzdata, :autoupdate, :disabled
+
 # LiveView logs nested form values too; credential keys must remain redacted.
 config :phoenix, :filter_parameters, ["password", "token", "key", "secret", "authorization"]
 
@@ -41,6 +44,9 @@ config :concord,
     pool_size: 1
   ]
 
+# Inject source metadata without making core depend on the MCP application.
+config :synapsis_core, :mcp_source_catalog, {Synapsis.MCP, :source_catalog, []}
+
 # General application configuration
 config :synapsis_server,
   generators: [timestamp_type: :utc_datetime_usec]
@@ -48,7 +54,11 @@ config :synapsis_server,
 # Configure the endpoint
 config :synapsis_server, SynapsisServer.Endpoint,
   url: [host: "localhost"],
-  adapter: Bandit.PhoenixAdapter,
+  adapter: Gaoxy.PhoenixAdapter,
+  # WORKAROUND(upstream): gsmlg-dev/gaoxy#16
+  # Gaoxy caps WebSocket messages at one quarter of this shared byte budget.
+  # Leave room for Phoenix's default 10 MB frames and concurrent HTTP responses.
+  http: [limits: %{max_bytes: 64 * 1_024 * 1_024}],
   render_errors: [
     formats: [html: SynapsisServer.ErrorHTML, json: SynapsisServer.ErrorJSON],
     layout: false

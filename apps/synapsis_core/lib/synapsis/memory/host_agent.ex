@@ -1,6 +1,6 @@
 defmodule Synapsis.Memory.HostAgent do
   @moduledoc """
-  Bounded recall from an explicitly trusted local Backplane host-agent source.
+  Bounded reads from an explicitly trusted local Backplane host-agent source.
 
   `recall/3` accepts `%{id: id, endpoint: "http://127.0.0.1:4222",
   agent_id: routing_id}` and query plus `:limit` (1..20, default 5), `:timeout`
@@ -14,7 +14,10 @@ defmodule Synapsis.Memory.HostAgent do
   record fields are retained. Citations identify the source endpoint/id and
   record ID, never file lines or project ownership. The host authorizes its
   default private partition; routing `agent_id` is provenance, not isolation.
-  Shared/project/session filtering and exact reads are unsupported.
+  `get/3` accepts a lowercase canonical UUID and only `:timeout`/`:deadline`.
+  It returns a singular `:record` with canonical online state and never falls
+  back to recall, a mirror or provisional content. Shared/project/session
+  filtering is unsupported by this client.
 
   Raw HTTP bodies are limited to 256 KiB before JSON decode; portable output is
   limited to 64 KiB. Oversize results fail without truncation. A guardian owns
@@ -30,6 +33,13 @@ defmodule Synapsis.Memory.HostAgent do
   @max_output 65_536
   @source_keys [:id, :endpoint, :agent_id]
   @state_keys ~w(mode authority consistency stale history_available pending_operations)
+  @get_state %{
+    "mode" => "online",
+    "authority" => "canonical",
+    "consistency" => "canonical",
+    "stale" => false,
+    "history_available" => true
+  }
   @optional_state ~w(overlay_truncated partition_revision last_sync_age_seconds as_of acknowledged_operations)
   @public_keys ~w(mode authority consistency stale history_available pending_operations overlay_truncated partition_revision last_sync_age_seconds as_of acknowledged_operations canonical_id provisional confidence memory_type tags score final_score distance kind lifecycle_state)a
   @public_atoms Map.new(@public_keys, &{Atom.to_string(&1), &1})
@@ -49,8 +59,38 @@ defmodule Synapsis.Memory.HostAgent do
   @doc "Recall only query/limit from the host-authorized default partition."
   def recall(source, query, opts \\ []) do
     with :ok <- validate_source(source),
-         {:ok, limit, timeout} <- input(query, opts) do
-      bounded(fn -> request(source, query, limit, timeout) end, timeout)
+         {:ok, limit, deadline} <- input(query, opts) do
+      bounded(
+        fn timeout ->
+          with {:ok, result} <- request(source, :recall, %{query: query, limit: limit}, timeout),
+               {:ok, public} <- normalize(result, source, limit) do
+            output(public)
+          end
+        end,
+        deadline
+      )
+    end
+  end
+
+  @doc "Read one canonical record from the host-authorized default partition."
+  def get(source, id, opts \\ []) do
+    with :ok <- validate_source(source),
+         true <-
+           is_binary(id) and Ecto.UUID.cast(id) == {:ok, id} and
+             options?(opts, [:timeout, :deadline]),
+         {:ok, deadline} <- deadline(opts) do
+      bounded(
+        fn timeout ->
+          with {:ok, result} <- request(source, :get, %{id: id}, timeout),
+               {:ok, public} <- normalize_get(result, source, id) do
+            output(public)
+          end
+        end,
+        deadline
+      )
+    else
+      false -> {:error, :invalid_input}
+      {:error, _} = error -> error
     end
   end
 
@@ -65,38 +105,51 @@ defmodule Synapsis.Memory.HostAgent do
   defp valid_endpoint?(_), do: false
 
   defp input(query, opts) do
-    if Keyword.keyword?(opts) and
-         Keyword.keys(opts) -- [:limit, :timeout, :deadline] == [] and
-         length(Keyword.keys(opts)) == length(Enum.uniq(Keyword.keys(opts))) and
+    if options?(opts, [:limit, :timeout, :deadline]) and
          is_binary(query) and String.valid?(query) and byte_size(query) in 1..2048 do
       limit = Keyword.get(opts, :limit, 5)
-      timeout = Keyword.get(opts, :timeout, 6000)
-      now = System.monotonic_time(:millisecond)
-      deadline = Keyword.get(opts, :deadline, now + timeout_value(timeout))
 
-      cond do
-        not (is_integer(limit) and limit in 1..20 and is_integer(timeout) and
-               timeout in 1..10_000 and is_integer(deadline)) ->
-          {:error, :invalid_input}
-
-        deadline <= now ->
-          {:error, :timeout}
-
-        true ->
-          {:ok, limit, min(timeout, deadline - now)}
+      with true <- is_integer(limit) and limit in 1..20,
+           {:ok, deadline} <- deadline(opts) do
+        {:ok, limit, deadline}
+      else
+        false -> {:error, :invalid_input}
+        {:error, _} = error -> error
       end
     else
       {:error, :invalid_input}
     end
   end
 
+  defp options?(opts, allowed) do
+    Keyword.keyword?(opts) and Keyword.keys(opts) -- allowed == [] and
+      length(Keyword.keys(opts)) == length(Enum.uniq(Keyword.keys(opts)))
+  end
+
+  defp deadline(opts) do
+    timeout = Keyword.get(opts, :timeout, 6000)
+    now = System.monotonic_time(:millisecond)
+    deadline = Keyword.get(opts, :deadline, now + timeout_value(timeout))
+
+    cond do
+      not (is_integer(timeout) and timeout in 1..10_000 and is_integer(deadline)) ->
+        {:error, :invalid_input}
+
+      deadline <= now ->
+        {:error, :timeout}
+
+      true ->
+        {:ok, min(now + timeout, deadline)}
+    end
+  end
+
   defp timeout_value(timeout) when is_integer(timeout), do: timeout
   defp timeout_value(_), do: 0
 
-  defp bounded(fun, timeout) do
+  defp bounded(fun, deadline) do
     owner = self()
     ref = make_ref()
-    {guardian, monitor} = spawn_monitor(fn -> guard(owner, ref, timeout, fun) end)
+    {guardian, monitor} = spawn_monitor(fn -> guard(owner, ref, deadline, fun) end)
 
     receive do
       {^ref, result} ->
@@ -107,16 +160,21 @@ defmodule Synapsis.Memory.HostAgent do
     end
   end
 
-  defp guard(owner, ref, timeout, fun) do
+  defp guard(owner, ref, deadline, fun) do
     Process.flag(:trap_exit, true)
     owner_monitor = Process.monitor(owner)
     guardian = self()
     result_ref = make_ref()
-    deadline = System.monotonic_time(:millisecond) + timeout
 
     {worker, monitor} =
       :erlang.spawn_opt(
-        fn -> send(guardian, {result_ref, fun.()}) end,
+        fn ->
+          # Keep the caller's absolute deadline through scheduling; an expired
+          # reader must not start HTTP even before the guardian handles its timer.
+          remaining = deadline - System.monotonic_time(:millisecond)
+          result = if remaining > 0, do: fun.(remaining), else: {:error, :timeout}
+          send(guardian, {result_ref, result})
+        end,
         [:link, :monitor, {:max_heap_size, %{size: 2_000_000, kill: true, error_logger: false}}]
       )
 
@@ -152,7 +210,7 @@ defmodule Synapsis.Memory.HostAgent do
     receive do: ({:DOWN, ^monitor, :process, ^worker, _} -> :ok)
   end
 
-  defp request(source, query, limit, timeout) do
+  defp request(source, operation, arguments, timeout) do
     # The high-level keyword constructor merges global Req defaults (including
     # credentials and plugins). Build a clean request before explicit options.
     response =
@@ -160,8 +218,10 @@ defmodule Synapsis.Memory.HostAgent do
       |> Req.Steps.attach()
       |> Req.merge(
         method: :post,
-        url: source.endpoint <> "/memory/" <> source.agent_id <> "/call/recall",
-        json: %{query: query, limit: limit},
+        url:
+          source.endpoint <>
+            "/memory/" <> source.agent_id <> "/call/" <> Atom.to_string(operation),
+        json: arguments,
         raw: true,
         into: &collect/2,
         retry: false,
@@ -172,11 +232,9 @@ defmodule Synapsis.Memory.HostAgent do
       )
       |> Req.request()
 
-    with {:ok, body} <- response_body(response),
-         {:ok, decoded} <- decode(body),
-         {:ok, result} <- envelope(decoded),
-         {:ok, public} <- normalize(result, source, limit) do
-      output(public)
+    with {:ok, body} <- response_body(response, operation),
+         {:ok, decoded} <- decode(body) do
+      envelope(decoded, operation)
     end
   end
 
@@ -197,7 +255,7 @@ defmodule Synapsis.Memory.HostAgent do
     end
   end
 
-  defp response_body({:ok, response}) do
+  defp response_body({:ok, response}, operation) do
     cond do
       Req.Response.get_private(response, :host_memory_limit, false) ->
         {:error, :response_limit}
@@ -208,6 +266,20 @@ defmodule Synapsis.Memory.HostAgent do
       response.status in [401, 403] ->
         {:error, :unauthorized}
 
+      operation == :get and response.status not in 200..299 ->
+        fallback = if response.status in 500..599, do: :unavailable, else: :http_error
+
+        case decode(body(response)) do
+          {:ok, %{"ok" => false, "error" => code}} ->
+            case get_error(code) do
+              :host_error -> {:error, fallback}
+              reason -> {:error, reason}
+            end
+
+          _ ->
+            {:error, fallback}
+        end
+
       response.status in 500..599 ->
         {:error, :unavailable}
 
@@ -215,16 +287,20 @@ defmodule Synapsis.Memory.HostAgent do
         {:error, :http_error}
 
       true ->
-        {_size, chunks} = Req.Response.get_private(response, :host_memory_body, {0, []})
-        {:ok, chunks |> Enum.reverse() |> IO.iodata_to_binary()}
+        {:ok, body(response)}
     end
   end
 
-  defp response_body({:error, %Req.TransportError{reason: reason}})
+  defp response_body({:error, %Req.TransportError{reason: reason}}, _operation)
        when reason in [:timeout, :connect_timeout],
        do: {:error, :timeout}
 
-  defp response_body({:error, _}), do: {:error, :unavailable}
+  defp response_body({:error, _}, _operation), do: {:error, :unavailable}
+
+  defp body(response) do
+    {_size, chunks} = Req.Response.get_private(response, :host_memory_body, {0, []})
+    chunks |> Enum.reverse() |> IO.iodata_to_binary()
+  end
 
   defp decode(body) do
     case Jason.decode(body) do
@@ -233,9 +309,42 @@ defmodule Synapsis.Memory.HostAgent do
     end
   end
 
-  defp envelope(%{"ok" => true, "result" => result}) when is_map(result), do: {:ok, result}
-  defp envelope(%{"ok" => false}), do: {:error, :host_error}
-  defp envelope(_), do: {:error, :malformed_result}
+  defp envelope(%{"ok" => true, "result" => result}, _) when is_map(result), do: {:ok, result}
+  defp envelope(%{"ok" => false, "error" => code}, :get), do: {:error, get_error(code)}
+  defp envelope(%{"ok" => false}, _), do: {:error, :host_error}
+  defp envelope(_, _), do: {:error, :malformed_result}
+
+  defp get_error("not_found"), do: :not_found
+  defp get_error("unauthorized"), do: :unauthorized
+  defp get_error("invalid_arguments"), do: :invalid_arguments
+  defp get_error("unsupported_filter"), do: :unsupported_filter
+  defp get_error("payload_too_large"), do: :payload_too_large
+  defp get_error("unsupported_operation"), do: :unsupported_operation
+  defp get_error("canonical_unavailable"), do: :canonical_unavailable
+  defp get_error(_), do: :host_error
+
+  defp normalize_get(result, source, id) do
+    hit = result["record"]
+
+    with true <- Map.take(result, Map.keys(@get_state)) === @get_state,
+         true <-
+           not Map.has_key?(result, "pending_operations") or result["pending_operations"] === 0,
+         true <-
+           is_map(hit) and hit["id"] === id and hit["canonical_id"] === id and
+             hit["kind"] === "memory" and Map.get(hit, "authority", "canonical") === "canonical" and
+             Map.get(hit, "provisional", false) === false,
+         {:ok, record} <- record(hit, source) do
+      state = Map.new(@get_state, fn {key, value} -> {Map.fetch!(@public_atoms, key), value} end)
+
+      {:ok,
+       Map.merge(state, %{
+         record: record,
+         source: %{id: source.id, endpoint: source.endpoint, partition: "host_default"}
+       })}
+    else
+      _ -> {:error, :malformed_result}
+    end
+  end
 
   defp normalize(result, source, limit) do
     hits = result["hits"]

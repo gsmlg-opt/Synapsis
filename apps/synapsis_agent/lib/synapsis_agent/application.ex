@@ -11,28 +11,11 @@ defmodule SynapsisAgent.Application do
       {Registry, keys: :unique, name: Synapsis.Session.TaskSupervisorRegistry},
       {Registry, keys: :unique, name: Synapsis.Agent.Registry},
       Synapsis.Session.DynamicSupervisor,
-      Synapsis.Agent.Supervisor
+      Synapsis.Agent.Supervisor,
+      Synapsis.Agent.DiffsCleanup
     ]
 
     opts = [strategy: :rest_for_one, name: SynapsisAgent.Supervisor]
-    result = Supervisor.start_link(children, opts)
-
-    case result do
-      {:ok, _pid} ->
-        Synapsis.Tool.Builtin.register_all()
-        maybe_apply(Synapsis.Workspace.Tools, :register_all, [])
-        # Heartbeat seeding and crontab sync are handled by SynapsisCore.Application
-        # to avoid duplicate execution in the umbrella boot sequence.
-        result
-
-      other ->
-        other
-    end
-  end
-
-  defp maybe_apply(mod, fun, args) do
-    if Code.ensure_loaded?(mod) and function_exported?(mod, fun, length(args)) do
-      apply(mod, fun, args)
-    end
+    Supervisor.start_link(children, opts)
   end
 end

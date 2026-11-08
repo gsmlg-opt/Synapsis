@@ -29,6 +29,7 @@ defmodule Synapsis.Agent.TestSupport.SessionHarness do
     provider_opts =
       [
         scenario: scenario,
+        install?: Keyword.get(opts, :install_provider?, true),
         counter: counter,
         text: text
       ]
@@ -37,6 +38,7 @@ defmodule Synapsis.Agent.TestSupport.SessionHarness do
       |> maybe_put(:tool_args, Keyword.get(opts, :tool_args, %{"value" => "verified"}))
       |> maybe_put(:stream_chunks, Keyword.get(opts, :stream_chunks))
       |> maybe_put(:hang_ms, Keyword.get(opts, :hang_ms))
+      |> maybe_put(:fixture_options, Keyword.get(opts, :provider_fixture_options))
 
     provider = DeterministicProvider.start!(provider_opts)
 
@@ -49,6 +51,7 @@ defmodule Synapsis.Agent.TestSupport.SessionHarness do
         provider: provider.name,
         model: "characterization-model",
         tools: tools,
+        tool_contract_version: 1,
         permission_mode: permission_mode,
         config: %{"workspace_path" => tmp_dir}
       })

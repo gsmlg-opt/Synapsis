@@ -1,0 +1,550 @@
+{
+  "schemaVersion": 1,
+  "referencePin": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+  "exporter": {
+    "path": "scripts/openclaw/capture-cron-stagger.mjs",
+    "sha256": "abd4788e656853f1f0d234a4906d765564f6a8ed7d58e2537f97f0bd327d383d"
+  },
+  "runtime": {
+    "executable": "/tmp/synapsis-openclaw-capture-runtime/node_modules/node/bin/node",
+    "version": "24.22.1",
+    "sha256": "e32e2d16081cf644f88392934288086e7662529d0d43277c34f7aad2207cfafb",
+    "platform": "linux"
+  },
+  "sourceTree": {
+    "before": {
+      "verified": true,
+      "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+      "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+      "verifiedTrackedFiles": 58558,
+      "filesSha256": "fb299c6a234f52cfcf20e3618cd11582d07e47a7773cba1334064ebdaf9fddec"
+    },
+    "after": {
+      "verified": true,
+      "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+      "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+      "verifiedTrackedFiles": 58558,
+      "filesSha256": "fb299c6a234f52cfcf20e3618cd11582d07e47a7773cba1334064ebdaf9fddec"
+    }
+  },
+  "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+  "entry": {
+    "path": "src/cron/service/jobs-scheduling.ts",
+    "exports": [
+      "computeJobNextRunAtMs",
+      "computeJobPreviousRunAtOrBeforeMs"
+    ],
+    "calls": 22
+  },
+  "sourceRecords": [
+    {
+      "path": "src/cron/service/jobs-scheduling.ts",
+      "gitBlob": "aa8c702e26dffab12c5545b415bc05ca436ce531",
+      "sha256": "d09f2e83cff17017ce19710522733cba0da17299523660bd6123f067fa37af8d",
+      "executed": true,
+      "wholeModule": true,
+      "executableSha256": "9cb757bb0c5d23be7a749e153646e0498e29d2d6a62e7a54ca9d9e9f38ec31ee"
+    },
+    {
+      "path": "packages/normalization-core/src/expect.ts",
+      "gitBlob": "28ae0592c218bf9c043715320dcc3d61df73bfbe",
+      "sha256": "ea995c248b00f6c9e17bbc9c3085971feeb0ee614d2bd9c8c902e8bc26cacb7a",
+      "executed": true,
+      "wholeModule": true,
+      "executableSha256": "364544936dba874f3ffe19baaa44d7821cafe01140b91586f940fc7423582153"
+    },
+    {
+      "path": "packages/normalization-core/src/number-coercion.ts",
+      "gitBlob": "00ac5bda035cd8e854059a0198c2a9a7928e1bc9",
+      "sha256": "8c40eca65a8fd1dc3aa40d90c22bff35c3710fcb03d2bc8227864a264d20ddc4",
+      "executed": true,
+      "wholeModule": true,
+      "executableSha256": "2f2d58d34e9b77067ea265333fb06a807ce0cdcad83639d6c257095bb9f69a97"
+    },
+    {
+      "path": "src/infra/map-size.ts",
+      "gitBlob": "ddc23ec813652519a488e5aaf89c5e3174c6175b",
+      "sha256": "36f06592cf1ae20d291e921da7cb42e8d7814372ca2d0745bec7a54a2a8a4409",
+      "executed": true,
+      "wholeModule": true,
+      "executableSha256": "fdae9cac37e2a06718e8798cd52469295c2dff8bab3c671c62fee14af324c0f4"
+    },
+    {
+      "path": "src/cron/schedule-number.ts",
+      "gitBlob": "bb4b9bcf65e1cae6dc8850cc5800bbf76c674d4d",
+      "sha256": "832c2837631dce4065d03696c2bd062c7b91e029cca0aac2496bed053a71e5cc",
+      "executed": true,
+      "wholeModule": true,
+      "executableSha256": "f1d9cd8e11ef5f535f2c2f91c260fe4136ff3953efac49db496dd4655affa897"
+    },
+    {
+      "path": "src/cron/schedule.ts",
+      "gitBlob": "b0e8e7d25211b01204330abd0c5765b355c4582e",
+      "sha256": "e3ba3f6e080488430cbeef5b0c9e25d3eaad8eba3afabbfbce970e972895ecd6",
+      "executed": true,
+      "wholeModule": true,
+      "executableSha256": "83b605c60a49fdf43521ea92af5ff089489774313eba672adf4eae3811855f78"
+    },
+    {
+      "path": "src/cron/stagger.ts",
+      "gitBlob": "48d71574e5df84db5fed1cfae5db198f07be8a07",
+      "sha256": "a4f9236ea2571076932df830fe9d64be1675dfb0241f2a33d9cc97c2ac5e782d",
+      "executed": true,
+      "wholeModule": true,
+      "executableSha256": "a79d1dda7fdfd3542b470cda795d7592ee070bc0fcc6f359cf39a2529c3cea1b"
+    },
+    {
+      "path": "packages/normalization-core/src/string-coerce.ts",
+      "gitBlob": "445a9cc4f8daff07f033c3958baf2b798e240e9d",
+      "sha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf",
+      "executed": true,
+      "wholeModule": true,
+      "executableSha256": "9a2e05da77f15162560fe904c20ba9a49a6e6996e8b8c9bc16fd611f8456f504"
+    },
+    {
+      "path": "src/infra/format-time/parse-offsetless-zoned-datetime.ts",
+      "gitBlob": "c7e610f6c87823d992151f5c96305f4a37ee6f9a",
+      "sha256": "f58e07c1849997a131e8cac042a571ff41d8714f6074e2a5dd290cd7391f0a56",
+      "executed": true,
+      "wholeModule": true,
+      "executableSha256": "695c5bbec94cce6a9f1267159865c5e50d31bbd3a080736d1dc305f5db9ac300"
+    },
+    {
+      "path": "src/cron/parse.ts",
+      "gitBlob": "9f5d7cb313d6762ad61f40bcf09b42595ded245e",
+      "sha256": "4bffa54d9d545928fe5aaf7c111c1d9db0923d61bd3d2ea3a06bb72aa112180a",
+      "executed": true,
+      "wholeModule": true,
+      "executableSha256": "fb75fcb4a3bca4624ed2c995484a73aa5ebd2d28435d7eada2de5a2505109c58"
+    },
+    {
+      "path": "src/shared/iso-time.ts",
+      "gitBlob": "bcf4cce7fb651d9d093ac996fb73d7474bec6e4f",
+      "sha256": "79699b601ce5f17bb85ec4838c1bca8fdd5560895406b42ecf6cfa4fd332e871",
+      "executed": true,
+      "wholeModule": true,
+      "executableSha256": "cf4f780c12160908cf6866d91cc2a296ef4888f7af7665158526cbc842742630"
+    }
+  ],
+  "package": {
+    "name": "croner",
+    "version": "10.0.1",
+    "archive": "/tmp/synapsis-openclaw-cron-stagger-capture/croner-10.0.1.tgz",
+    "integrity": "sha512-ixNtAJndqh173VQ4KodSdJEI6nuioBWI0V1ITNKhZZsO0pEMoDxz539T4FTTbSZ/xIOSuDnzxLVRqBVSvPNE2g==",
+    "archiveSha256": "d6d93c286125fed567b986a576ff1daa74e72d56bb63fe28248ca17cfcb00cee",
+    "upstreamLockSha256": "8ee0f9e7c0bcdecec3d791dff04f2df1f5c608c60e57fbafaf241c765eebd8d7",
+    "module": "/tmp/synapsis-openclaw-cron-stagger-capture/package/dist/croner.js",
+    "moduleSha256": "a2eb1f669c605d4775116947209c91dfec4afdcc76fe8407134938bf5a09a600",
+    "wholeModule": true,
+    "sourceImplementationExecuted": true
+  },
+  "importAliases": [
+    {
+      "specifier": "@openclaw/normalization-core",
+      "source": "packages/normalization-core/src/expect.ts",
+      "exports": [
+        "expectDefined"
+      ],
+      "barrelExecuted": false
+    },
+    {
+      "specifier": "node:crypto",
+      "kind": "actual-node-builtin"
+    }
+  ],
+  "deferredBindings": [
+    {
+      "path": "src/infra/errors.ts",
+      "sourceSha256": "70b6d0c59126f0b50aa6a4d9817bc4ac07097d0a08fbe9f269b3aad4be71676a",
+      "kind": "uninvoked-throwing-binding",
+      "exports": [
+        "formatErrorMessageWithCode"
+      ],
+      "sourceImplementationExecuted": false,
+      "generatedCode": "export const formatErrorMessageWithCode=(...args)=>__defer(\"src/infra/errors.ts:formatErrorMessageWithCode\");",
+      "generatedSha256": "56f3bd5e3a34de4a3a7c5eaa17685e4a1fd0755570a852356c0f7d1cb925c06a",
+      "invocationCount": 0
+    },
+    {
+      "path": "src/cron/active-jobs.ts",
+      "sourceSha256": "11ced26ff6ac68e52ec734c27dadc579b4c9dbbd626fdf4315f3eb1ad02d3dce",
+      "kind": "uninvoked-throwing-binding",
+      "exports": [
+        "isCronJobActive"
+      ],
+      "sourceImplementationExecuted": false,
+      "generatedCode": "export const isCronJobActive=(...args)=>__defer(\"src/cron/active-jobs.ts:isCronJobActive\");",
+      "generatedSha256": "b23f7c2717fc22fc3af18422d6009042dd29f09b4e86a704bf6bc80809e3db64",
+      "invocationCount": 0
+    },
+    {
+      "path": "src/cron/source-schedule.ts",
+      "sourceSha256": "4ce120b3ef0e3014f3663b7b0197256cee2de6af59e5f99883482e7e0d3fd32a",
+      "kind": "uninvoked-throwing-binding",
+      "exports": [
+        "createCronSourceIdentity",
+        "cronSourceIdentity",
+        "cronSourceScheduleKey",
+        "setCronSourceIdentity"
+      ],
+      "sourceImplementationExecuted": false,
+      "generatedCode": "export const createCronSourceIdentity=(...args)=>__defer(\"src/cron/source-schedule.ts:createCronSourceIdentity\");\nexport const cronSourceIdentity=(...args)=>__defer(\"src/cron/source-schedule.ts:cronSourceIdentity\");\nexport const cronSourceScheduleKey=(...args)=>__defer(\"src/cron/source-schedule.ts:cronSourceScheduleKey\");\nexport const setCronSourceIdentity=(...args)=>__defer(\"src/cron/source-schedule.ts:setCronSourceIdentity\");",
+      "generatedSha256": "6558ce108e01c07af3db8bcb30a35c08fc5fae1dbdcb065b5038220437d49433",
+      "invocationCount": 0
+    },
+    {
+      "path": "src/cron/store/delivery-codec.ts",
+      "sourceSha256": "b957580adf0a3af46798dda7efa7fde6b4917beb1674c0131e01a3e348648a75",
+      "kind": "uninvoked-throwing-binding",
+      "exports": [
+        "hasCanonicalCronDeliveryMode"
+      ],
+      "sourceImplementationExecuted": false,
+      "generatedCode": "export const hasCanonicalCronDeliveryMode=(...args)=>__defer(\"src/cron/store/delivery-codec.ts:hasCanonicalCronDeliveryMode\");",
+      "generatedSha256": "72c46893b9b5abf535370d8331a0ffdcd106850b243d615e3339f8a154bba073",
+      "invocationCount": 0
+    },
+    {
+      "path": "src/cron/stream-schedule.ts",
+      "sourceSha256": "ecc2e8a2949588bbd1abddce96d966bbc3c3fdf6f0f4dd82956d81b334a9b450",
+      "kind": "uninvoked-throwing-binding",
+      "exports": [
+        "resolveCronStreamBatching"
+      ],
+      "sourceImplementationExecuted": false,
+      "generatedCode": "export const resolveCronStreamBatching=(...args)=>__defer(\"src/cron/stream-schedule.ts:resolveCronStreamBatching\");",
+      "generatedSha256": "295ae0c12f4fedba9023227628c2528889f64ae472e3d1dfd5ee8a0ae237aa06",
+      "invocationCount": 0
+    },
+    {
+      "path": "src/cron/service/auto-disable.ts",
+      "sourceSha256": "418b6b53c028edaaa4a4ac92248bd96deba607ee72722aafbd40e866ea51f5fe",
+      "kind": "uninvoked-throwing-binding",
+      "exports": [
+        "autoDisableCronJob"
+      ],
+      "sourceImplementationExecuted": false,
+      "generatedCode": "export const autoDisableCronJob=(...args)=>__defer(\"src/cron/service/auto-disable.ts:autoDisableCronJob\");",
+      "generatedSha256": "1a7866dbc9bc5ccf3213211ce8c9eac4574d58b1c122ba18d34234c4c2edc724",
+      "invocationCount": 0
+    },
+    {
+      "path": "src/cron/service/one-shot-schedule.ts",
+      "sourceSha256": "ee18bca1aafc918f335e3ccb9b18304d6ff1e220626a8794089010e6f1e0805f",
+      "kind": "uninvoked-throwing-binding",
+      "exports": [
+        "clearInvalidForcePreservedNextRun",
+        "computeOneShotNextRunAtMs",
+        "isCronOneShotContinuationJob",
+        "resolveForcePreservedOneShotAtMs"
+      ],
+      "sourceImplementationExecuted": false,
+      "generatedCode": "export const clearInvalidForcePreservedNextRun=(...args)=>__defer(\"src/cron/service/one-shot-schedule.ts:clearInvalidForcePreservedNextRun\");\nexport const computeOneShotNextRunAtMs=(...args)=>__defer(\"src/cron/service/one-shot-schedule.ts:computeOneShotNextRunAtMs\");\nexport const isCronOneShotContinuationJob=(...args)=>__defer(\"src/cron/service/one-shot-schedule.ts:isCronOneShotContinuationJob\");\nexport const resolveForcePreservedOneShotAtMs=(...args)=>__defer(\"src/cron/service/one-shot-schedule.ts:resolveForcePreservedOneShotAtMs\");",
+      "generatedSha256": "1751b3b532b759f083663f29e477e58c83bb22be2a9e666d127fd2eb55bc0cba",
+      "invocationCount": 0
+    },
+    {
+      "path": "src/cron/service/timer-execution-timeout.ts",
+      "sourceSha256": "c71e7744e52425247b0489b9ba64c68c585d49d0bf15f819c22aa3e09530271f",
+      "kind": "uninvoked-throwing-binding",
+      "exports": [
+        "MIN_REFIRE_GAP_MS"
+      ],
+      "sourceImplementationExecuted": false,
+      "generatedCode": "export const MIN_REFIRE_GAP_MS=(...args)=>__defer(\"src/cron/service/timer-execution-timeout.ts:MIN_REFIRE_GAP_MS\");",
+      "generatedSha256": "8daa4f0dbf1a93e18204e5a4f0c53f401c69899b315ce8dee2b44bccebd291c2",
+      "invocationCount": 0
+    },
+    {
+      "path": "src/cron/service/trigger-interval.ts",
+      "sourceSha256": "885cdf9b23fa03ea6fc35ce15c507616672018403269b18073fee9e72e256203",
+      "kind": "uninvoked-throwing-binding",
+      "exports": [
+        "hasPendingCronTriggerInterval"
+      ],
+      "sourceImplementationExecuted": false,
+      "generatedCode": "export const hasPendingCronTriggerInterval=(...args)=>__defer(\"src/cron/service/trigger-interval.ts:hasPendingCronTriggerInterval\");",
+      "generatedSha256": "51341b8b8f67b88263b9c645eb5ab43bd8b4bdd162fdd7623204ea2bc3ca0379",
+      "invocationCount": 0
+    }
+  ],
+  "deferredCalls": [],
+  "scope": {
+    "pureCronNextExecuted": true,
+    "pureCronPreviousExecuted": true,
+    "staggerNormalizationExecuted": true,
+    "cronerExecuted": true,
+    "jobLifecycleExecuted": false,
+    "toolFactoryExecuted": false,
+    "synapsisExecutionProved": false
+  },
+  "limits": [
+    "Pure exported next/previous cron computation executes from complete unchanged pinned modules; this does not run job service mutation, timer ownership, lifecycle, runtime assembly or model-facing tools.",
+    "Croner10.0.1 whole ESM implementation executes. Its archive integrity matches the pinned upstream lock; archive/module/runtime/exporter hashes and complete reference blob receipts are retained.",
+    "Unused lifecycle imports have explicit throwing bindings with zero audited invocations. The normalization barrel resolves only its complete expect.ts leaf, not the whole barrel.",
+    "All scheduling observations carry explicit effective staggerMs. New automation defaults versus legacy omitted-stagger compatibility is a separate Synapsis data-layer contract.",
+    "Six-field cron expressions appear only in default-detection vectors. No local six-field cron parser support or full cron grammar equivalence is claimed.",
+    "Previous occurrence is reference-source evidence only until a separately verified Synapsis previous-occurrence API exists.",
+    "hashDerivedOffsetMs is independently derived from actual node:crypto SHA256, not a private function return; complete pinned computeJobNextRunAtMs executes the private offset function for every uncached job/window key."
+  ],
+  "normalization": [
+    {
+      "input": 0,
+      "normalized": 0
+    },
+    {
+      "input": 1,
+      "normalized": 1
+    },
+    {
+      "input": 300000,
+      "normalized": 300000
+    },
+    {
+      "input": 1234.9,
+      "normalized": 1234
+    },
+    {
+      "input": "0",
+      "normalized": 0
+    },
+    {
+      "input": "300000",
+      "normalized": 300000
+    },
+    {
+      "input": " +300000 ",
+      "normalized": 300000
+    }
+  ],
+  "defaults": [
+    {
+      "expr": "0 * * * *",
+      "staggerMs": 300000
+    },
+    {
+      "expr": "0 */2 * * *",
+      "staggerMs": 300000
+    },
+    {
+      "expr": "0 9,* * * *",
+      "staggerMs": 300000
+    },
+    {
+      "expr": "0 9 * * *",
+      "staggerMs": null
+    },
+    {
+      "expr": "30 * * * *",
+      "staggerMs": null
+    },
+    {
+      "expr": "0 0 * * * *",
+      "staggerMs": 300000
+    },
+    {
+      "expr": "0 0 */3 * * *",
+      "staggerMs": 300000
+    }
+  ],
+  "observations": [
+    {
+      "id": "hourly-window",
+      "job": {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "enabled": true,
+        "schedule": {
+          "kind": "cron",
+          "expr": "0 * * * *",
+          "tz": "Etc/UTC",
+          "staggerMs": 300000
+        },
+        "state": {}
+      },
+      "nowMs": 1793095200000,
+      "nextRunAtMs": 1793095352325,
+      "previousRunAtMs": 1793091752325,
+      "hashDerivedOffsetMs": 152325
+    },
+    {
+      "id": "hourly-before-window",
+      "job": {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "enabled": true,
+        "schedule": {
+          "kind": "cron",
+          "expr": "0 * * * *",
+          "tz": "Etc/UTC",
+          "staggerMs": 300000
+        },
+        "state": {}
+      },
+      "nowMs": 1793095140000,
+      "nextRunAtMs": 1793095352325,
+      "previousRunAtMs": 1793091752325,
+      "hashDerivedOffsetMs": 152325
+    },
+    {
+      "id": "hourly-at-effective-slot",
+      "job": {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "enabled": true,
+        "schedule": {
+          "kind": "cron",
+          "expr": "0 * * * *",
+          "tz": "Etc/UTC",
+          "staggerMs": 300000
+        },
+        "state": {}
+      },
+      "nowMs": 1793095352325,
+      "nextRunAtMs": 1793098952325,
+      "previousRunAtMs": 1793095352325,
+      "hashDerivedOffsetMs": 152325
+    },
+    {
+      "id": "hourly-after-effective-slot",
+      "job": {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "enabled": true,
+        "schedule": {
+          "kind": "cron",
+          "expr": "0 * * * *",
+          "tz": "Etc/UTC",
+          "staggerMs": 300000
+        },
+        "state": {}
+      },
+      "nowMs": 1793095352326,
+      "nextRunAtMs": 1793098952325,
+      "previousRunAtMs": 1793095352325,
+      "hashDerivedOffsetMs": 152325
+    },
+    {
+      "id": "different-uuid-window",
+      "job": {
+        "id": "22222222-2222-4222-8222-222222222222",
+        "enabled": true,
+        "schedule": {
+          "kind": "cron",
+          "expr": "0 * * * *",
+          "tz": "Etc/UTC",
+          "staggerMs": 300000
+        },
+        "state": {}
+      },
+      "nowMs": 1793095200000,
+      "nextRunAtMs": 1793095467436,
+      "previousRunAtMs": 1793091867436,
+      "hashDerivedOffsetMs": 267436
+    },
+    {
+      "id": "explicit-zero",
+      "job": {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "enabled": true,
+        "schedule": {
+          "kind": "cron",
+          "expr": "0 * * * *",
+          "tz": "Etc/UTC",
+          "staggerMs": 0
+        },
+        "state": {}
+      },
+      "nowMs": 1793095200000,
+      "nextRunAtMs": 1793098800000,
+      "previousRunAtMs": 1793095200000,
+      "hashDerivedOffsetMs": 0
+    },
+    {
+      "id": "one-ms-window-offset-zero",
+      "job": {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "enabled": true,
+        "schedule": {
+          "kind": "cron",
+          "expr": "0 * * * *",
+          "tz": "Etc/UTC",
+          "staggerMs": 1
+        },
+        "state": {}
+      },
+      "nowMs": 1793095200000,
+      "nextRunAtMs": 1793098800000,
+      "previousRunAtMs": 1793095200000,
+      "hashDerivedOffsetMs": 0
+    },
+    {
+      "id": "custom-minute-window",
+      "job": {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "enabled": true,
+        "schedule": {
+          "kind": "cron",
+          "expr": "*/5 * * * *",
+          "tz": "Etc/UTC",
+          "staggerMs": 60000
+        },
+        "state": {}
+      },
+      "nowMs": 1793095200000,
+      "nextRunAtMs": 1793095232325,
+      "previousRunAtMs": 1793094932325,
+      "hashDerivedOffsetMs": 32325
+    },
+    {
+      "id": "kathmandu-before-hour",
+      "job": {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "enabled": true,
+        "schedule": {
+          "kind": "cron",
+          "expr": "0 * * * *",
+          "tz": "Asia/Kathmandu",
+          "staggerMs": 300000
+        },
+        "state": {}
+      },
+      "nowMs": 1793095200000,
+      "nextRunAtMs": 1793096252325,
+      "previousRunAtMs": 1793092652325,
+      "hashDerivedOffsetMs": 152325
+    },
+    {
+      "id": "kathmandu-hour-window",
+      "job": {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "enabled": true,
+        "schedule": {
+          "kind": "cron",
+          "expr": "0 * * * *",
+          "tz": "Asia/Kathmandu",
+          "staggerMs": 300000
+        },
+        "state": {}
+      },
+      "nowMs": 1793096100000,
+      "nextRunAtMs": 1793096252325,
+      "previousRunAtMs": 1793092652325,
+      "hashDerivedOffsetMs": 152325
+    },
+    {
+      "id": "kathmandu-at-slot",
+      "job": {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "enabled": true,
+        "schedule": {
+          "kind": "cron",
+          "expr": "0 * * * *",
+          "tz": "Asia/Kathmandu",
+          "staggerMs": 300000
+        },
+        "state": {}
+      },
+      "nowMs": 1793096252325,
+      "nextRunAtMs": 1793099852325,
+      "previousRunAtMs": 1793096252325,
+      "hashDerivedOffsetMs": 152325
+    }
+  ]
+}

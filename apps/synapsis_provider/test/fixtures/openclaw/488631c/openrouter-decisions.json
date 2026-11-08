@@ -1,0 +1,3398 @@
+{
+  "schemaVersion": 1,
+  "referencePin": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+  "exporter": {
+    "path": "scripts/openclaw/capture-openrouter-decisions.mjs",
+    "sha256": "3a984ac9802cce03bfae18edd36863c166e2068e7ea29a66dee47bb8b437eda6"
+  },
+  "harness": {
+    "path": "scripts/openclaw/capture-recipes.mjs",
+    "sha256": "4599b804b43bedac9ba7c594aef8b43f3c2a89e18cfb8fb375316d3dd7ee0557"
+  },
+  "runtime": {
+    "executable": "/tmp/synapsis-openclaw-capture-runtime/node_modules/node/bin/node",
+    "version": "24.22.1",
+    "sha256": "e32e2d16081cf644f88392934288086e7662529d0d43277c34f7aad2207cfafb"
+  },
+  "sourceTree": {
+    "before": {
+      "verified": true,
+      "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+      "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+      "verifiedTrackedFiles": 58558,
+      "filesSha256": "fb299c6a234f52cfcf20e3618cd11582d07e47a7773cba1334064ebdaf9fddec"
+    },
+    "after": {
+      "verified": true,
+      "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+      "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+      "verifiedTrackedFiles": 58558,
+      "filesSha256": "fb299c6a234f52cfcf20e3618cd11582d07e47a7773cba1334064ebdaf9fddec"
+    }
+  },
+  "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+  "sourceRecords": [
+    {
+      "path": "src/decisions/compatibility.ts",
+      "sha256": "59a189bc5d764ecaf90f07db7df9807138c9514eb7cc76ba5639eb1f0fd5386c",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "04473ecc315381ab4d858677b2b2991ff2b1ed8a84c3444996cd5c6357da09b0"
+    },
+    {
+      "path": "src/decisions/validation-common.ts",
+      "sha256": "585633bc67b6f25de43477631cdbdcdcb828c538b231e0bb373b05f5b832dbb3",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "4897efda057cb37f68c99d6b205e85f758e34e99e129b1fbc22adb1771de5611"
+    },
+    {
+      "path": "src/decisions/validation-v2.ts",
+      "sha256": "c7988bd3b0b179901f19c0634f118ef5905eb4ad32ded3b1ea85777e9d4f33b7",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "f29d65a99b0d7d7a0de5c0292b6156b80ab5a7d88742af0f6fd1c07f49de9982"
+    },
+    {
+      "path": "src/decisions/validation.ts",
+      "sha256": "d080e2d4fd1e2a4bebb6243205959a0bb92fcf314d08aea01596410df436169a",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "fc2460c4dc45c8433b81140d472b667cae32174584f995443e84051339336ed3"
+    },
+    {
+      "path": "packages/normalization-core/src/record-coerce.ts",
+      "sha256": "541c179840c2cad4edc5c8103f77cc7f8c6b1ee5ec3e52c7c9fe097b18917f1c",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "4ca2e6e901c28a07ae5fc9b29719cce5c26c919c65ab235b4ae2d5eaf0ec338c"
+    },
+    {
+      "path": "extensions/openrouter/decision-provider.ts",
+      "sha256": "b56d62d708c165f954f661941394a5063d009eb9a14ef1ab799708749d1d9287",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "4e96b3f8d78d8dad211b13ef2430a4ee7fc8c52c2786bdfd5ecfdfc36ad359fb"
+    },
+    {
+      "path": "extensions/openrouter/provider-catalog.ts",
+      "sha256": "c5d912115bd868cd99731aca69613879584fff703d61f692407c9cf56301a30c",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "f64d0c58ee677aeffada3cebe2338689710b7c0708c81cdfa7e3e01bef4b256d"
+    },
+    {
+      "path": "extensions/openrouter/provider-routing.ts",
+      "sha256": "9e938ad23540f59778b9664cb3b87a0ee04b1e5b44ec5170e7e489207eab3857",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "70ee864454175d0bbd2c37d4a2c3aaf178e340953326f03ea8c0e97ecb9513b0"
+    },
+    {
+      "path": "src/agents/provider-request-config.ts",
+      "sha256": "cc54d8fc777b682c64adbcf9c53e1c1e24967575cb4207e31ca7542037520fc8",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "7093a1fb100992feb2db3681317b1be4a28265b9c89ba3cddb7cdb31a5310393"
+    },
+    {
+      "path": "packages/normalization-core/src/number-coercion.ts",
+      "sha256": "8c40eca65a8fd1dc3aa40d90c22bff35c3710fcb03d2bc8227864a264d20ddc4",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "2f2d58d34e9b77067ea265333fb06a807ce0cdcad83639d6c257095bb9f69a97"
+    },
+    {
+      "path": "packages/normalization-core/src/string-normalization.ts",
+      "sha256": "3150b04501197ef417d2e2d1efa1e3160cc41ddec7505a6f4d756a654138ae3c",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "fb2d80b7951beacc2e31a86eeb4f03471fc704c15c5d0fa2a7807625795571e4"
+    },
+    {
+      "path": "packages/normalization-core/src/string-coerce.ts",
+      "sha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "9a2e05da77f15162560fe904c20ba9a49a6e6996e8b8c9bc16fd611f8456f504"
+    },
+    {
+      "path": "extensions/openrouter/provider-defaults.ts",
+      "sha256": "4679f1d4c6856ed26ae072724f0638fac7c425bbb5859d3f15dc0716bc93b8b3",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "4679f1d4c6856ed26ae072724f0638fac7c425bbb5859d3f15dc0716bc93b8b3"
+    },
+    {
+      "path": "extensions/openrouter/models.ts",
+      "sha256": "34e6fa2797c16ba1ec777faae7addc33e011cb29d0d0442695a09404b1f8cbc3",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "288e847917c37ab000452743b2dfeebc13ca6f36e81451f5a355955d36bab4c9"
+    },
+    {
+      "path": "src/secrets/provider-request-secret-fields.ts",
+      "sha256": "e685ca7eecd84e037daea851e571084a88feb45ef5d8d1f010f3d747ddeaef0b",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "19cb2f0e657c08557117ae39f1daeea95d3639960779c28b97f01915447d0fe3"
+    },
+    {
+      "path": "src/agents/tools/decision-tool.ts",
+      "sha256": "dffde5d9b4d64f626fe959c1df40ac060b5527be2d3eb248decfb2acfce1b409",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/agents/tools/decision-tool-contract.ts",
+      "sha256": "baac425feedc5da0498969757fc79840e8c0d2e28aa8b7b58df3a0db9f8b3fd3",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/decisions/runtime.ts",
+      "sha256": "11ce37130d0ad5271849d06cad6df481fc1b71ff2752cb88888b48c037733c18",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/decisions/provider-host.ts",
+      "sha256": "82282f5e64f40fab52ebd7500771874ad4b90397ceca59303d55f97272a2c4f2",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/decisions/types-v2.ts",
+      "sha256": "15a28cad51849fe99396aa6b5aecd814598ef972cf9179eb9e40bc6e1dc8a3bc",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "extensions/openrouter/openclaw.plugin.json",
+      "sha256": "27607ddf251e388bf91c8a6facac37b0acad3105a7a195810864785f1de004fd",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/plugin-sdk/decisions.ts",
+      "sha256": "1fe648725f1b523a9a00a0d9fa08c10cc6441e0ca89b1963331c6be10e542112",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/plugin-sdk/provider-http.ts",
+      "sha256": "2256cc416a1d07c644917faed3c3d8bd4d6e44658197fc5ae6e1301ed85b42c4",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/plugin-sdk/agent-scope-runtime.ts",
+      "sha256": "882bf1319a1f40d23efa907803dca4c0e2c7c8c38f1cf2b485eccaad5e4416b9",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/plugin-sdk/model-ref-parse.ts",
+      "sha256": "95d4a55446f482bfffbb089d055c13f4ac2745dfb708a033f11be511da603586",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/config/types.secrets.ts",
+      "sha256": "77dc3a5d65dcb17c566ab4e5db21d3388eb7e45892987195fc177e0d2cff0019",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/plugins/provider-auth-authority.ts",
+      "sha256": "385746b8b406acd7741ac6127597b7976d563283e0d3866bb8b2693bbb281e40",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/agents/provider-attribution.ts",
+      "sha256": "6b31e4bf70eda4ba54f7ea8d76d11e6c070f2e233ab16e71444f51658e8c4460",
+      "executed": false,
+      "provenanceOnly": true
+    }
+  ],
+  "importBindings": [
+    {
+      "importer": "src/decisions/compatibility.ts",
+      "specifier": "./validation-common.js",
+      "kind": "whole-source-module",
+      "source": "src/decisions/validation-common.ts",
+      "sourceSha256": "585633bc67b6f25de43477631cdbdcdcb828c538b231e0bb373b05f5b832dbb3"
+    },
+    {
+      "importer": "src/decisions/compatibility.ts",
+      "specifier": "./validation-v2.js",
+      "kind": "whole-source-module",
+      "source": "src/decisions/validation-v2.ts",
+      "sourceSha256": "c7988bd3b0b179901f19c0634f118ef5905eb4ad32ded3b1ea85777e9d4f33b7"
+    },
+    {
+      "importer": "src/decisions/compatibility.ts",
+      "specifier": "./validation.js",
+      "kind": "whole-source-module",
+      "source": "src/decisions/validation.ts",
+      "sourceSha256": "d080e2d4fd1e2a4bebb6243205959a0bb92fcf314d08aea01596410df436169a"
+    },
+    {
+      "importer": "src/decisions/validation-common.ts",
+      "specifier": "node:util/types",
+      "kind": "actual-platform-builtin",
+      "exports": [
+        "isProxy"
+      ],
+      "generatedCode": "export const isProxy=globalThis.__platform.isProxy;",
+      "generatedSha256": "59923dca39e291775d4b47a03db8726059a6f4a84564fcf93a8d6d353ee344e1"
+    },
+    {
+      "importer": "src/decisions/validation-common.ts",
+      "specifier": "@openclaw/normalization-core/record-coerce",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "isRecord"
+      ],
+      "generatedCode": "export {isRecord} from \"capture:source:packages/normalization-core/src/record-coerce.ts\";",
+      "generatedSha256": "50141fa96156bc8c898a9cae33108648bca2f39c9e29cd5069e7962f9cb2e696",
+      "source": "packages/normalization-core/src/record-coerce.ts",
+      "sourceSha256": "541c179840c2cad4edc5c8103f77cc7f8c6b1ee5ec3e52c7c9fe097b18917f1c"
+    },
+    {
+      "importer": "src/decisions/validation-v2.ts",
+      "specifier": "./validation-common.js",
+      "kind": "whole-source-module",
+      "source": "src/decisions/validation-common.ts",
+      "sourceSha256": "585633bc67b6f25de43477631cdbdcdcb828c538b231e0bb373b05f5b832dbb3"
+    },
+    {
+      "importer": "src/decisions/validation-v2.ts",
+      "specifier": "./validation.js",
+      "kind": "whole-source-module",
+      "source": "src/decisions/validation.ts",
+      "sourceSha256": "d080e2d4fd1e2a4bebb6243205959a0bb92fcf314d08aea01596410df436169a"
+    },
+    {
+      "importer": "src/decisions/validation.ts",
+      "specifier": "./validation-common.js",
+      "kind": "whole-source-module",
+      "source": "src/decisions/validation-common.ts",
+      "sourceSha256": "585633bc67b6f25de43477631cdbdcdcb828c538b231e0bb373b05f5b832dbb3"
+    },
+    {
+      "importer": "extensions/openrouter/decision-provider.ts",
+      "specifier": "openclaw/plugin-sdk/decisions",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "validateDecisionBatchV2",
+        "validateDecisionResultV2"
+      ],
+      "generatedCode": "export {validateDecisionBatchV2,validateDecisionResultV2} from \"capture:source:src/decisions/validation-v2.ts\";",
+      "generatedSha256": "2e8febb2347dc73219595a5c50b37801ecaa93d4a3dc6970cdf9eddb585712e7",
+      "source": "src/decisions/validation-v2.ts",
+      "sourceSha256": "c7988bd3b0b179901f19c0634f118ef5905eb4ad32ded3b1ea85777e9d4f33b7"
+    },
+    {
+      "importer": "extensions/openrouter/decision-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http",
+      "kind": "successful-http-policy-reader-fixture",
+      "exports": [
+        "normalizeBaseUrl",
+        "readProviderJsonResponse",
+        "resolveProviderHttpRequestConfig",
+        "sanitizeConfiguredModelProviderRequest"
+      ],
+      "generatedCode": "\nexport {normalizeBaseUrl} from 'capture:source:src/agents/provider-request-config.ts';\nexport async function readProviderJsonResponse(response,label,options){return JSON.parse(JSON.stringify(await globalThis.__platform.read(response,options)));}\nexport function resolveProviderHttpRequestConfig(params){return {baseUrl:params.baseUrl,headers:params.defaultHeaders,allowPrivateNetwork:false};}\nexport function sanitizeConfiguredModelProviderRequest(value){return value;}",
+      "generatedSha256": "f9e584a51a29072d571cf24a5ca9c1d149fc8ca30c3d4c86c471d407ec6078db"
+    },
+    {
+      "importer": "extensions/openrouter/decision-provider.ts",
+      "specifier": "openclaw/plugin-sdk/ssrf-runtime",
+      "kind": "successful-transport-fixture",
+      "exports": [
+        "fetchWithSsrFGuard",
+        "ssrfPolicyFromHttpBaseUrlAllowedOrigin"
+      ],
+      "generatedCode": "\nexport const fetchWithSsrFGuard=globalThis.__platform.fetch;\nexport function ssrfPolicyFromHttpBaseUrlAllowedOrigin(){return {};}",
+      "generatedSha256": "9e2acfa41350ba5f40f5be6729d75032a33de7c8f4af45ef0aa0f7d6c71f7327"
+    },
+    {
+      "importer": "extensions/openrouter/decision-provider.ts",
+      "specifier": "openclaw/plugin-sdk/string-coerce-runtime",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "asOptionalRecord",
+        "asPositiveSafeInteger",
+        "filterStringEntries",
+        "normalizeOptionalString",
+        "normalizeLowercaseStringOrEmpty"
+      ],
+      "generatedCode": "\nexport {asOptionalRecord} from 'capture:source:packages/normalization-core/src/record-coerce.ts';\nexport {asPositiveSafeInteger} from 'capture:source:packages/normalization-core/src/number-coercion.ts';\nexport {filterStringEntries} from 'capture:source:packages/normalization-core/src/string-normalization.ts';\nexport {normalizeOptionalString,normalizeLowercaseStringOrEmpty} from 'capture:source:packages/normalization-core/src/string-coerce.ts';",
+      "generatedSha256": "e2dbd77a9df1fa0c234297555ff3163376e657610228c842af72fb64742368bb"
+    },
+    {
+      "importer": "extensions/openrouter/decision-provider.ts",
+      "specifier": "./provider-catalog.js",
+      "kind": "whole-source-module",
+      "source": "extensions/openrouter/provider-catalog.ts",
+      "sourceSha256": "c5d912115bd868cd99731aca69613879584fff703d61f692407c9cf56301a30c"
+    },
+    {
+      "importer": "extensions/openrouter/decision-provider.ts",
+      "specifier": "./provider-routing.js",
+      "kind": "whole-source-module",
+      "source": "extensions/openrouter/provider-routing.ts",
+      "sourceSha256": "9e938ad23540f59778b9664cb3b87a0ee04b1e5b44ec5170e7e489207eab3857"
+    },
+    {
+      "importer": "extensions/openrouter/provider-catalog.ts",
+      "specifier": "openclaw/plugin-sdk/model-catalog-pricing",
+      "kind": "uninvoked-dependency-facade",
+      "exports": [
+        "normalizeOpenRouterModelPricing"
+      ],
+      "generatedCode": "export function normalizeOpenRouterModelPricing(){globalThis.__deferredCalls.push({\"importer\":\"extensions/openrouter/provider-catalog.ts\",\"specifier\":\"openclaw/plugin-sdk/model-catalog-pricing\",\"export\":\"normalizeOpenRouterModelPricing\"});throw Error('Uninvoked decisions dependency: normalizeOpenRouterModelPricing');}",
+      "generatedSha256": "75cf5570bfd9bd22a6053b6f15b2cd78abcb2919ad0c863cb7fe209431352171",
+      "source": "src/plugin-sdk/model-catalog-pricing.ts",
+      "sourceSha256": "6e3351a043393142d0590a685d8fa4131b148b223edb73833ed2cd260130f1da",
+      "originalSourceExecuted": false
+    },
+    {
+      "importer": "extensions/openrouter/provider-catalog.ts",
+      "specifier": "openclaw/plugin-sdk/provider-catalog-live-runtime",
+      "kind": "uninvoked-dependency-facade",
+      "exports": [
+        "buildLiveModelProviderConfig"
+      ],
+      "generatedCode": "export function buildLiveModelProviderConfig(){globalThis.__deferredCalls.push({\"importer\":\"extensions/openrouter/provider-catalog.ts\",\"specifier\":\"openclaw/plugin-sdk/provider-catalog-live-runtime\",\"export\":\"buildLiveModelProviderConfig\"});throw Error('Uninvoked decisions dependency: buildLiveModelProviderConfig');}",
+      "generatedSha256": "9827012a500e23c886d708db5180e55d4baed949c37dc21b46b012ed638852f7",
+      "source": "src/plugin-sdk/provider-catalog-live-runtime.ts",
+      "sourceSha256": "5cacb214530991014d7f51dbda03b8553d52197fb8f69b7248937d2e2098e797",
+      "originalSourceExecuted": false
+    },
+    {
+      "importer": "extensions/openrouter/provider-catalog.ts",
+      "specifier": "openclaw/plugin-sdk/provider-catalog-shared",
+      "kind": "uninvoked-dependency-facade",
+      "exports": [
+        "normalizeOpenRouterModelReasoning"
+      ],
+      "generatedCode": "export function normalizeOpenRouterModelReasoning(){globalThis.__deferredCalls.push({\"importer\":\"extensions/openrouter/provider-catalog.ts\",\"specifier\":\"openclaw/plugin-sdk/provider-catalog-shared\",\"export\":\"normalizeOpenRouterModelReasoning\"});throw Error('Uninvoked decisions dependency: normalizeOpenRouterModelReasoning');}",
+      "generatedSha256": "d3eb4526a23d5ffbba15c7ee6bb0e218f19b953dc242e32815bed667e1b95269",
+      "source": "src/plugin-sdk/provider-catalog-shared.ts",
+      "sourceSha256": "aa6107524102526721ff453717dafdae3493b0645e20abfe0e91316a8f1e29ca",
+      "originalSourceExecuted": false
+    },
+    {
+      "importer": "extensions/openrouter/provider-catalog.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http",
+      "kind": "successful-http-policy-reader-fixture",
+      "exports": [
+        "normalizeBaseUrl",
+        "readProviderJsonResponse",
+        "resolveProviderHttpRequestConfig",
+        "sanitizeConfiguredModelProviderRequest"
+      ],
+      "generatedCode": "\nexport {normalizeBaseUrl} from 'capture:source:src/agents/provider-request-config.ts';\nexport async function readProviderJsonResponse(response,label,options){return JSON.parse(JSON.stringify(await globalThis.__platform.read(response,options)));}\nexport function resolveProviderHttpRequestConfig(params){return {baseUrl:params.baseUrl,headers:params.defaultHeaders,allowPrivateNetwork:false};}\nexport function sanitizeConfiguredModelProviderRequest(value){return value;}",
+      "generatedSha256": "f9e584a51a29072d571cf24a5ca9c1d149fc8ca30c3d4c86c471d407ec6078db"
+    },
+    {
+      "importer": "extensions/openrouter/provider-catalog.ts",
+      "specifier": "openclaw/plugin-sdk/ssrf-runtime",
+      "kind": "successful-transport-fixture",
+      "exports": [
+        "fetchWithSsrFGuard",
+        "ssrfPolicyFromHttpBaseUrlAllowedOrigin"
+      ],
+      "generatedCode": "\nexport const fetchWithSsrFGuard=globalThis.__platform.fetch;\nexport function ssrfPolicyFromHttpBaseUrlAllowedOrigin(){return {};}",
+      "generatedSha256": "9e2acfa41350ba5f40f5be6729d75032a33de7c8f4af45ef0aa0f7d6c71f7327"
+    },
+    {
+      "importer": "extensions/openrouter/provider-catalog.ts",
+      "specifier": "openclaw/plugin-sdk/string-coerce-runtime",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "asOptionalRecord",
+        "asPositiveSafeInteger",
+        "filterStringEntries",
+        "normalizeOptionalString",
+        "normalizeLowercaseStringOrEmpty"
+      ],
+      "generatedCode": "\nexport {asOptionalRecord} from 'capture:source:packages/normalization-core/src/record-coerce.ts';\nexport {asPositiveSafeInteger} from 'capture:source:packages/normalization-core/src/number-coercion.ts';\nexport {filterStringEntries} from 'capture:source:packages/normalization-core/src/string-normalization.ts';\nexport {normalizeOptionalString,normalizeLowercaseStringOrEmpty} from 'capture:source:packages/normalization-core/src/string-coerce.ts';",
+      "generatedSha256": "e2dbd77a9df1fa0c234297555ff3163376e657610228c842af72fb64742368bb"
+    },
+    {
+      "importer": "extensions/openrouter/provider-catalog.ts",
+      "specifier": "./provider-defaults.js",
+      "kind": "whole-source-module",
+      "source": "extensions/openrouter/provider-defaults.ts",
+      "sourceSha256": "4679f1d4c6856ed26ae072724f0638fac7c425bbb5859d3f15dc0716bc93b8b3"
+    },
+    {
+      "importer": "extensions/openrouter/provider-routing.ts",
+      "specifier": "openclaw/plugin-sdk/agent-scope-runtime",
+      "kind": "explicit-agent-config-fixture",
+      "exports": [
+        "resolveAgentConfig"
+      ],
+      "generatedCode": "export function resolveAgentConfig(config,agentId){return config.agents?.entries?.[agentId];}",
+      "generatedSha256": "9de5ef79597d948be758496f7a6cfa9aeaf0407b1530fca36532a38d19103521"
+    },
+    {
+      "importer": "extensions/openrouter/provider-routing.ts",
+      "specifier": "./models.js",
+      "kind": "whole-source-module",
+      "source": "extensions/openrouter/models.ts",
+      "sourceSha256": "34e6fa2797c16ba1ec777faae7addc33e011cb29d0d0442695a09404b1f8cbc3"
+    },
+    {
+      "importer": "src/agents/provider-request-config.ts",
+      "specifier": "@openclaw/normalization-core/string-coerce",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "normalizeLowercaseStringOrEmpty"
+      ],
+      "generatedCode": "export {normalizeLowercaseStringOrEmpty} from \"capture:source:packages/normalization-core/src/string-coerce.ts\";",
+      "generatedSha256": "dfd53375301e69a1f05c7163a4e5cbbc9148008e60062fb2a665185b39777a3c",
+      "source": "packages/normalization-core/src/string-coerce.ts",
+      "sourceSha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf"
+    },
+    {
+      "importer": "src/agents/provider-request-config.ts",
+      "specifier": "../config/types.secrets.js",
+      "kind": "uninvoked-dependency-facade",
+      "exports": [
+        "assertSecretInputResolved"
+      ],
+      "generatedCode": "export function assertSecretInputResolved(){globalThis.__deferredCalls.push({\"importer\":\"src/agents/provider-request-config.ts\",\"specifier\":\"../config/types.secrets.js\",\"export\":\"assertSecretInputResolved\"});throw Error('Uninvoked decisions dependency: assertSecretInputResolved');}",
+      "generatedSha256": "c2b81ff9611354021043b55ff131e874a2c328624f6f1ffb6f310c13fcb82c63",
+      "source": "src/config/types.secrets.ts",
+      "sourceSha256": "77dc3a5d65dcb17c566ab4e5db21d3388eb7e45892987195fc177e0d2cff0019",
+      "originalSourceExecuted": false
+    },
+    {
+      "importer": "src/agents/provider-request-config.ts",
+      "specifier": "../plugins/provider-auth-authority.js",
+      "kind": "uninvoked-dependency-facade",
+      "exports": [
+        "attachProviderAuthAuthority",
+        "getProviderAuthAuthority"
+      ],
+      "generatedCode": "export function attachProviderAuthAuthority(){globalThis.__deferredCalls.push({\"importer\":\"src/agents/provider-request-config.ts\",\"specifier\":\"../plugins/provider-auth-authority.js\",\"export\":\"attachProviderAuthAuthority\"});throw Error('Uninvoked decisions dependency: attachProviderAuthAuthority');}\nexport function getProviderAuthAuthority(){globalThis.__deferredCalls.push({\"importer\":\"src/agents/provider-request-config.ts\",\"specifier\":\"../plugins/provider-auth-authority.js\",\"export\":\"getProviderAuthAuthority\"});throw Error('Uninvoked decisions dependency: getProviderAuthAuthority');}",
+      "generatedSha256": "34168cfc88a2543f12f57913f2917814c064f9e4ad2b391d96593a1688992487",
+      "source": "src/plugins/provider-auth-authority.ts",
+      "sourceSha256": "385746b8b406acd7741ac6127597b7976d563283e0d3866bb8b2693bbb281e40",
+      "originalSourceExecuted": false
+    },
+    {
+      "importer": "src/agents/provider-request-config.ts",
+      "specifier": "../secrets/provider-request-secret-fields.js",
+      "kind": "whole-source-module",
+      "source": "src/secrets/provider-request-secret-fields.ts",
+      "sourceSha256": "e685ca7eecd84e037daea851e571084a88feb45ef5d8d1f010f3d747ddeaef0b"
+    },
+    {
+      "importer": "src/agents/provider-request-config.ts",
+      "specifier": "./provider-attribution.js",
+      "kind": "uninvoked-dependency-facade",
+      "exports": [
+        "resolveProviderRequestCapabilities"
+      ],
+      "generatedCode": "export function resolveProviderRequestCapabilities(){globalThis.__deferredCalls.push({\"importer\":\"src/agents/provider-request-config.ts\",\"specifier\":\"./provider-attribution.js\",\"export\":\"resolveProviderRequestCapabilities\"});throw Error('Uninvoked decisions dependency: resolveProviderRequestCapabilities');}",
+      "generatedSha256": "9423041b0a9b3155329ab7a0c406aedcb393f093b8e3a2fa2b6c1672df01acd8",
+      "source": "src/agents/provider-attribution.ts",
+      "sourceSha256": "6b31e4bf70eda4ba54f7ea8d76d11e6c070f2e233ab16e71444f51658e8c4460",
+      "originalSourceExecuted": false
+    },
+    {
+      "importer": "packages/normalization-core/src/number-coercion.ts",
+      "specifier": "./string-coerce.ts",
+      "kind": "whole-source-module",
+      "source": "packages/normalization-core/src/string-coerce.ts",
+      "sourceSha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf"
+    },
+    {
+      "importer": "packages/normalization-core/src/string-normalization.ts",
+      "specifier": "./string-coerce.js",
+      "kind": "whole-source-module",
+      "source": "packages/normalization-core/src/string-coerce.ts",
+      "sourceSha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf"
+    },
+    {
+      "importer": "extensions/openrouter/models.ts",
+      "specifier": "openclaw/plugin-sdk/model-ref-parse",
+      "kind": "uninvoked-dependency-facade",
+      "exports": [
+        "normalizeOpenRouterModelFamilyId"
+      ],
+      "generatedCode": "export function normalizeOpenRouterModelFamilyId(){globalThis.__deferredCalls.push({\"importer\":\"extensions/openrouter/models.ts\",\"specifier\":\"openclaw/plugin-sdk/model-ref-parse\",\"export\":\"normalizeOpenRouterModelFamilyId\"});throw Error('Uninvoked decisions dependency: normalizeOpenRouterModelFamilyId');}",
+      "generatedSha256": "e04a6800d826b9426ba153fab95186685816c3ecf235f1a3305949791372fdf8",
+      "source": "src/plugin-sdk/model-ref-parse.ts",
+      "sourceSha256": "95d4a55446f482bfffbb089d055c13f4ac2745dfb708a033f11be511da603586",
+      "originalSourceExecuted": false
+    },
+    {
+      "importer": "extensions/openrouter/models.ts",
+      "specifier": "openclaw/plugin-sdk/string-coerce-runtime",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "asOptionalRecord",
+        "asPositiveSafeInteger",
+        "filterStringEntries",
+        "normalizeOptionalString",
+        "normalizeLowercaseStringOrEmpty"
+      ],
+      "generatedCode": "\nexport {asOptionalRecord} from 'capture:source:packages/normalization-core/src/record-coerce.ts';\nexport {asPositiveSafeInteger} from 'capture:source:packages/normalization-core/src/number-coercion.ts';\nexport {filterStringEntries} from 'capture:source:packages/normalization-core/src/string-normalization.ts';\nexport {normalizeOptionalString,normalizeLowercaseStringOrEmpty} from 'capture:source:packages/normalization-core/src/string-coerce.ts';",
+      "generatedSha256": "e2dbd77a9df1fa0c234297555ff3163376e657610228c842af72fb64742368bb"
+    }
+  ],
+  "deferredCalls": [],
+  "observations": [
+    {
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "params": {},
+      "id": "native-113",
+      "arguments": {
+        "contractVersion": 2,
+        "state": {
+          "type": "json",
+          "value": {
+            "ticket": "Supplied ticket 😀"
+          }
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "model": "typesafe/jev-1.13",
+      "response": {
+        "model": "typesafe/jev-1.13-served",
+        "provider": "TypeSafe",
+        "answers": {
+          "check": {
+            "type": "noul",
+            "noul": 0.37
+          },
+          "route": {
+            "type": "choice",
+            "choice": "a",
+            "probabilities": {
+              "a": 0.49,
+              "b": 0.5
+            },
+            "confidence": 0.1
+          },
+          "urgency": {
+            "type": "score",
+            "score": 0.71,
+            "probabilities": {
+              "0": 0.3,
+              "1": 0.69
+            },
+            "confidence": 0.2
+          }
+        },
+        "usage": {
+          "input_tokens": 476,
+          "output_tokens": 70,
+          "cost": 0.000019992
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "json",
+          "value": {
+            "ticket": "Supplied ticket 😀"
+          }
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/systemone",
+        "method": "POST",
+        "body": {
+          "model": "typesafe/jev-1.13",
+          "state": {
+            "ticket": "Supplied ticket 😀"
+          },
+          "questions": {
+            "check": {
+              "type": "noul",
+              "instructions": "Is this urgent?"
+            },
+            "route": {
+              "type": "choice",
+              "instructions": "Which team?",
+              "criteria": {
+                "a": null,
+                "b": "Billing"
+              }
+            },
+            "urgency": {
+              "type": "score",
+              "instructions": "How urgent?",
+              "criteria": [
+                "Low",
+                "High"
+              ]
+            }
+          }
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "typesafe/jev-1.13-served",
+          "answers": {
+            "check": {
+              "type": "boolean",
+              "probabilityTrue": 0.37
+            },
+            "route": {
+              "type": "choice",
+              "choice": "a",
+              "probabilities": {
+                "a": 0.49,
+                "b": 0.5
+              },
+              "confidence": 0.1
+            },
+            "urgency": {
+              "type": "score",
+              "score": 0.71,
+              "probabilities": [
+                0.3,
+                0.69
+              ],
+              "confidence": 0.2
+            }
+          },
+          "usage": {
+            "inputTokens": 476,
+            "outputTokens": 70,
+            "costUsd": 0.000019992
+          },
+          "metadata": {
+            "provider": "TypeSafe"
+          }
+        }
+      },
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576,
+          "timeoutMs": 30000
+        }
+      ]
+    },
+    {
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "params": {},
+      "id": "native-114",
+      "arguments": {
+        "contractVersion": 2,
+        "state": {
+          "type": "json",
+          "value": {
+            "ticket": "Supplied ticket 😀"
+          }
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "model": "typesafe/jev-1.14",
+      "response": {
+        "model": "typesafe/jev-1.14-served",
+        "provider": "TypeSafe",
+        "answers": {
+          "check": {
+            "type": "noul",
+            "noul": 0.37
+          },
+          "route": {
+            "type": "choice",
+            "choice": "a",
+            "probabilities": {
+              "a": 0.49,
+              "b": 0.5
+            },
+            "confidence": 0.1
+          },
+          "urgency": {
+            "type": "score",
+            "score": 0.71,
+            "probabilities": {
+              "0": 0.3,
+              "1": 0.69
+            },
+            "confidence": 0.2
+          }
+        },
+        "usage": {
+          "input_tokens": 476,
+          "output_tokens": 70,
+          "cost": 0.000019992
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "json",
+          "value": {
+            "ticket": "Supplied ticket 😀"
+          }
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/systemone",
+        "method": "POST",
+        "body": {
+          "model": "typesafe/jev-1.14",
+          "state": {
+            "ticket": "Supplied ticket 😀"
+          },
+          "questions": {
+            "check": {
+              "type": "noul",
+              "instructions": "Is this urgent?"
+            },
+            "route": {
+              "type": "choice",
+              "instructions": "Which team?",
+              "criteria": {
+                "a": null,
+                "b": "Billing"
+              }
+            },
+            "urgency": {
+              "type": "score",
+              "instructions": "How urgent?",
+              "criteria": [
+                "Low",
+                "High"
+              ]
+            }
+          }
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "typesafe/jev-1.14-served",
+          "answers": {
+            "check": {
+              "type": "boolean",
+              "probabilityTrue": 0.37
+            },
+            "route": {
+              "type": "choice",
+              "choice": "a",
+              "probabilities": {
+                "a": 0.49,
+                "b": 0.5
+              },
+              "confidence": 0.1
+            },
+            "urgency": {
+              "type": "score",
+              "score": 0.71,
+              "probabilities": [
+                0.3,
+                0.69
+              ],
+              "confidence": 0.2
+            }
+          },
+          "usage": {
+            "inputTokens": 476,
+            "outputTokens": 70,
+            "costUsd": 0.000019992
+          },
+          "metadata": {
+            "provider": "TypeSafe"
+          }
+        }
+      },
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576,
+          "timeoutMs": 30000
+        }
+      ]
+    },
+    {
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "params": {},
+      "id": "native-latest",
+      "arguments": {
+        "contractVersion": 2,
+        "state": {
+          "type": "json",
+          "value": {
+            "ticket": "Supplied ticket 😀"
+          }
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "model": "~typesafe/jev-latest",
+      "response": {
+        "model": "~typesafe/jev-latest-served",
+        "provider": "TypeSafe",
+        "answers": {
+          "check": {
+            "type": "noul",
+            "noul": 0.37
+          },
+          "route": {
+            "type": "choice",
+            "choice": "a",
+            "probabilities": {
+              "a": 0.49,
+              "b": 0.5
+            },
+            "confidence": 0.1
+          },
+          "urgency": {
+            "type": "score",
+            "score": 0.71,
+            "probabilities": {
+              "0": 0.3,
+              "1": 0.69
+            },
+            "confidence": 0.2
+          }
+        },
+        "usage": {
+          "input_tokens": 476,
+          "output_tokens": 70,
+          "cost": 0.000019992
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "json",
+          "value": {
+            "ticket": "Supplied ticket 😀"
+          }
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/systemone",
+        "method": "POST",
+        "body": {
+          "model": "~typesafe/jev-latest",
+          "state": {
+            "ticket": "Supplied ticket 😀"
+          },
+          "questions": {
+            "check": {
+              "type": "noul",
+              "instructions": "Is this urgent?"
+            },
+            "route": {
+              "type": "choice",
+              "instructions": "Which team?",
+              "criteria": {
+                "a": null,
+                "b": "Billing"
+              }
+            },
+            "urgency": {
+              "type": "score",
+              "instructions": "How urgent?",
+              "criteria": [
+                "Low",
+                "High"
+              ]
+            }
+          }
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "~typesafe/jev-latest-served",
+          "answers": {
+            "check": {
+              "type": "boolean",
+              "probabilityTrue": 0.37
+            },
+            "route": {
+              "type": "choice",
+              "choice": "a",
+              "probabilities": {
+                "a": 0.49,
+                "b": 0.5
+              },
+              "confidence": 0.1
+            },
+            "urgency": {
+              "type": "score",
+              "score": 0.71,
+              "probabilities": [
+                0.3,
+                0.69
+              ],
+              "confidence": 0.2
+            }
+          },
+          "usage": {
+            "inputTokens": 476,
+            "outputTokens": 70,
+            "costUsd": 0.000019992
+          },
+          "metadata": {
+            "provider": "TypeSafe"
+          }
+        }
+      },
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576,
+          "timeoutMs": 30000
+        }
+      ]
+    },
+    {
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "params": {},
+      "id": "legacy-text",
+      "arguments": {
+        "state": "  Explicit text 雪\n",
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "model": "typesafe/jev-1.13",
+      "response": {
+        "model": "typesafe/jev-1.13-served",
+        "provider": "TypeSafe",
+        "answers": {
+          "check": {
+            "type": "noul",
+            "noul": 0.37
+          },
+          "route": {
+            "type": "choice",
+            "choice": "a",
+            "probabilities": {
+              "a": 0.49,
+              "b": 0.5
+            },
+            "confidence": 0.1
+          },
+          "urgency": {
+            "type": "score",
+            "score": 0.71,
+            "probabilities": {
+              "0": 0.3,
+              "1": 0.69
+            },
+            "confidence": 0.2
+          }
+        },
+        "usage": {
+          "input_tokens": 476,
+          "output_tokens": 70,
+          "cost": 0.000019992
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "text",
+          "text": "  Explicit text 雪\n"
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/systemone",
+        "method": "POST",
+        "body": {
+          "model": "typesafe/jev-1.13",
+          "state": "  Explicit text 雪\n",
+          "questions": {
+            "check": {
+              "type": "noul",
+              "instructions": "Is this urgent?"
+            },
+            "route": {
+              "type": "choice",
+              "instructions": "Which team?",
+              "criteria": {
+                "a": null,
+                "b": "Billing"
+              }
+            },
+            "urgency": {
+              "type": "score",
+              "instructions": "How urgent?",
+              "criteria": [
+                "Low",
+                "High"
+              ]
+            }
+          }
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "typesafe/jev-1.13-served",
+          "answers": {
+            "check": {
+              "type": "boolean",
+              "probabilityTrue": 0.37
+            },
+            "route": {
+              "type": "choice",
+              "choice": "a",
+              "probabilities": {
+                "a": 0.49,
+                "b": 0.5
+              },
+              "confidence": 0.1
+            },
+            "urgency": {
+              "type": "score",
+              "score": 0.71,
+              "probabilities": [
+                0.3,
+                0.69
+              ],
+              "confidence": 0.2
+            }
+          },
+          "usage": {
+            "inputTokens": 476,
+            "outputTokens": 70,
+            "costUsd": 0.000019992
+          },
+          "metadata": {
+            "provider": "TypeSafe"
+          }
+        }
+      },
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576,
+          "timeoutMs": 30000
+        }
+      ]
+    },
+    {
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "params": {},
+      "id": "json-array",
+      "arguments": {
+        "contractVersion": 2,
+        "state": {
+          "type": "json",
+          "value": [
+            "ordered",
+            "evidence"
+          ]
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "model": "typesafe/jev-1.13",
+      "response": {
+        "model": "typesafe/jev-1.13-served",
+        "provider": "TypeSafe",
+        "answers": {
+          "check": {
+            "type": "noul",
+            "noul": 0.37
+          },
+          "route": {
+            "type": "choice",
+            "choice": "a",
+            "probabilities": {
+              "a": 0.49,
+              "b": 0.5
+            },
+            "confidence": 0.1
+          },
+          "urgency": {
+            "type": "score",
+            "score": 0.71,
+            "probabilities": {
+              "0": 0.3,
+              "1": 0.69
+            },
+            "confidence": 0.2
+          }
+        },
+        "usage": {
+          "input_tokens": 476,
+          "output_tokens": 70,
+          "cost": 0.000019992
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "json",
+          "value": [
+            "ordered",
+            "evidence"
+          ]
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/systemone",
+        "method": "POST",
+        "body": {
+          "model": "typesafe/jev-1.13",
+          "state": [
+            "ordered",
+            "evidence"
+          ],
+          "questions": {
+            "check": {
+              "type": "noul",
+              "instructions": "Is this urgent?"
+            },
+            "route": {
+              "type": "choice",
+              "instructions": "Which team?",
+              "criteria": {
+                "a": null,
+                "b": "Billing"
+              }
+            },
+            "urgency": {
+              "type": "score",
+              "instructions": "How urgent?",
+              "criteria": [
+                "Low",
+                "High"
+              ]
+            }
+          }
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "typesafe/jev-1.13-served",
+          "answers": {
+            "check": {
+              "type": "boolean",
+              "probabilityTrue": 0.37
+            },
+            "route": {
+              "type": "choice",
+              "choice": "a",
+              "probabilities": {
+                "a": 0.49,
+                "b": 0.5
+              },
+              "confidence": 0.1
+            },
+            "urgency": {
+              "type": "score",
+              "score": 0.71,
+              "probabilities": [
+                0.3,
+                0.69
+              ],
+              "confidence": 0.2
+            }
+          },
+          "usage": {
+            "inputTokens": 476,
+            "outputTokens": 70,
+            "costUsd": 0.000019992
+          },
+          "metadata": {
+            "provider": "TypeSafe"
+          }
+        }
+      },
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576,
+          "timeoutMs": 30000
+        }
+      ]
+    },
+    {
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "params": {},
+      "id": "json-string",
+      "arguments": {
+        "contractVersion": 2,
+        "state": {
+          "type": "json",
+          "value": "Explicit JSON string"
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "model": "typesafe/jev-1.13",
+      "response": {
+        "model": "typesafe/jev-1.13-served",
+        "provider": "TypeSafe",
+        "answers": {
+          "check": {
+            "type": "noul",
+            "noul": 0.37
+          },
+          "route": {
+            "type": "choice",
+            "choice": "a",
+            "probabilities": {
+              "a": 0.49,
+              "b": 0.5
+            },
+            "confidence": 0.1
+          },
+          "urgency": {
+            "type": "score",
+            "score": 0.71,
+            "probabilities": {
+              "0": 0.3,
+              "1": 0.69
+            },
+            "confidence": 0.2
+          }
+        },
+        "usage": {
+          "input_tokens": 476,
+          "output_tokens": 70,
+          "cost": 0.000019992
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "json",
+          "value": "Explicit JSON string"
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/systemone",
+        "method": "POST",
+        "body": {
+          "model": "typesafe/jev-1.13",
+          "state": "Explicit JSON string",
+          "questions": {
+            "check": {
+              "type": "noul",
+              "instructions": "Is this urgent?"
+            },
+            "route": {
+              "type": "choice",
+              "instructions": "Which team?",
+              "criteria": {
+                "a": null,
+                "b": "Billing"
+              }
+            },
+            "urgency": {
+              "type": "score",
+              "instructions": "How urgent?",
+              "criteria": [
+                "Low",
+                "High"
+              ]
+            }
+          }
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "typesafe/jev-1.13-served",
+          "answers": {
+            "check": {
+              "type": "boolean",
+              "probabilityTrue": 0.37
+            },
+            "route": {
+              "type": "choice",
+              "choice": "a",
+              "probabilities": {
+                "a": 0.49,
+                "b": 0.5
+              },
+              "confidence": 0.1
+            },
+            "urgency": {
+              "type": "score",
+              "score": 0.71,
+              "probabilities": [
+                0.3,
+                0.69
+              ],
+              "confidence": 0.2
+            }
+          },
+          "usage": {
+            "inputTokens": 476,
+            "outputTokens": 70,
+            "costUsd": 0.000019992
+          },
+          "metadata": {
+            "provider": "TypeSafe"
+          }
+        }
+      },
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576,
+          "timeoutMs": 30000
+        }
+      ]
+    },
+    {
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "params": {},
+      "id": "image-png",
+      "arguments": {
+        "contractVersion": 2,
+        "state": {
+          "type": "image",
+          "dataUri": "data:image/png;base64,AA=="
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "model": "typesafe/jev-1.13",
+      "response": {
+        "model": "typesafe/jev-1.13-served",
+        "provider": "TypeSafe",
+        "answers": {
+          "check": {
+            "type": "noul",
+            "noul": 0.37
+          },
+          "route": {
+            "type": "choice",
+            "choice": "a",
+            "probabilities": {
+              "a": 0.49,
+              "b": 0.5
+            },
+            "confidence": 0.1
+          },
+          "urgency": {
+            "type": "score",
+            "score": 0.71,
+            "probabilities": {
+              "0": 0.3,
+              "1": 0.69
+            },
+            "confidence": 0.2
+          }
+        },
+        "usage": {
+          "input_tokens": 476,
+          "output_tokens": 70,
+          "cost": 0.000019992
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "image",
+          "dataUri": "data:image/png;base64,AA=="
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/systemone",
+        "method": "POST",
+        "body": {
+          "model": "typesafe/jev-1.13",
+          "state": [
+            {
+              "type": "image_url",
+              "image_url": {
+                "url": "data:image/png;base64,AA=="
+              }
+            }
+          ],
+          "questions": {
+            "check": {
+              "type": "noul",
+              "instructions": "Is this urgent?"
+            },
+            "route": {
+              "type": "choice",
+              "instructions": "Which team?",
+              "criteria": {
+                "a": null,
+                "b": "Billing"
+              }
+            },
+            "urgency": {
+              "type": "score",
+              "instructions": "How urgent?",
+              "criteria": [
+                "Low",
+                "High"
+              ]
+            }
+          }
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "typesafe/jev-1.13-served",
+          "answers": {
+            "check": {
+              "type": "boolean",
+              "probabilityTrue": 0.37
+            },
+            "route": {
+              "type": "choice",
+              "choice": "a",
+              "probabilities": {
+                "a": 0.49,
+                "b": 0.5
+              },
+              "confidence": 0.1
+            },
+            "urgency": {
+              "type": "score",
+              "score": 0.71,
+              "probabilities": [
+                0.3,
+                0.69
+              ],
+              "confidence": 0.2
+            }
+          },
+          "usage": {
+            "inputTokens": 476,
+            "outputTokens": 70,
+            "costUsd": 0.000019992
+          },
+          "metadata": {
+            "provider": "TypeSafe"
+          }
+        }
+      },
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576,
+          "timeoutMs": 30000
+        }
+      ]
+    },
+    {
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "params": {},
+      "id": "image-jpeg-empty-text",
+      "arguments": {
+        "contractVersion": 2,
+        "state": {
+          "type": "image",
+          "dataUri": "data:image/jpeg;base64,AQID",
+          "text": ""
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "model": "typesafe/jev-1.13",
+      "response": {
+        "model": "typesafe/jev-1.13-served",
+        "provider": "TypeSafe",
+        "answers": {
+          "check": {
+            "type": "noul",
+            "noul": 0.37
+          },
+          "route": {
+            "type": "choice",
+            "choice": "a",
+            "probabilities": {
+              "a": 0.49,
+              "b": 0.5
+            },
+            "confidence": 0.1
+          },
+          "urgency": {
+            "type": "score",
+            "score": 0.71,
+            "probabilities": {
+              "0": 0.3,
+              "1": 0.69
+            },
+            "confidence": 0.2
+          }
+        },
+        "usage": {
+          "input_tokens": 476,
+          "output_tokens": 70,
+          "cost": 0.000019992
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "image",
+          "dataUri": "data:image/jpeg;base64,AQID",
+          "text": ""
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/systemone",
+        "method": "POST",
+        "body": {
+          "model": "typesafe/jev-1.13",
+          "state": [
+            "",
+            {
+              "type": "image_url",
+              "image_url": {
+                "url": "data:image/jpeg;base64,AQID"
+              }
+            }
+          ],
+          "questions": {
+            "check": {
+              "type": "noul",
+              "instructions": "Is this urgent?"
+            },
+            "route": {
+              "type": "choice",
+              "instructions": "Which team?",
+              "criteria": {
+                "a": null,
+                "b": "Billing"
+              }
+            },
+            "urgency": {
+              "type": "score",
+              "instructions": "How urgent?",
+              "criteria": [
+                "Low",
+                "High"
+              ]
+            }
+          }
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "typesafe/jev-1.13-served",
+          "answers": {
+            "check": {
+              "type": "boolean",
+              "probabilityTrue": 0.37
+            },
+            "route": {
+              "type": "choice",
+              "choice": "a",
+              "probabilities": {
+                "a": 0.49,
+                "b": 0.5
+              },
+              "confidence": 0.1
+            },
+            "urgency": {
+              "type": "score",
+              "score": 0.71,
+              "probabilities": [
+                0.3,
+                0.69
+              ],
+              "confidence": 0.2
+            }
+          },
+          "usage": {
+            "inputTokens": 476,
+            "outputTokens": 70,
+            "costUsd": 0.000019992
+          },
+          "metadata": {
+            "provider": "TypeSafe"
+          }
+        }
+      },
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576,
+          "timeoutMs": 30000
+        }
+      ]
+    },
+    {
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "params": {},
+      "id": "box-114-png",
+      "model": "typesafe/jev-1.14",
+      "arguments": {
+        "contractVersion": 2,
+        "state": {
+          "type": "image",
+          "dataUri": "data:image/png;base64,AA==",
+          "text": "Listing photo"
+        },
+        "questions": {
+          "target": {
+            "type": "box",
+            "instructions": "the red product"
+          }
+        }
+      },
+      "response": {
+        "model": "typesafe/jev-1.14-served",
+        "provider": "TypeSafe",
+        "answers": {
+          "target": {
+            "type": "box",
+            "box": {
+              "top": 0.25,
+              "bottom": 0.75,
+              "left": 0.25,
+              "right": 0.76
+            },
+            "confidence": 0.91
+          }
+        },
+        "usage": {
+          "input_tokens": 476,
+          "output_tokens": 70,
+          "cost": 0.000019992
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "image",
+          "dataUri": "data:image/png;base64,AA==",
+          "text": "Listing photo"
+        },
+        "questions": {
+          "target": {
+            "type": "box",
+            "instructions": "the red product"
+          }
+        }
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/systemone",
+        "method": "POST",
+        "body": {
+          "model": "typesafe/jev-1.14",
+          "state": [
+            "Listing photo",
+            {
+              "type": "image_url",
+              "image_url": {
+                "url": "data:image/png;base64,AA=="
+              }
+            }
+          ],
+          "questions": {
+            "target": {
+              "type": "box",
+              "instructions": "the red product"
+            }
+          }
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "typesafe/jev-1.14-served",
+          "answers": {
+            "target": {
+              "type": "box",
+              "box": {
+                "top": 0.25,
+                "bottom": 0.75,
+                "left": 0.25,
+                "right": 0.76
+              },
+              "confidence": 0.91
+            }
+          },
+          "usage": {
+            "inputTokens": 476,
+            "outputTokens": 70,
+            "costUsd": 0.000019992
+          },
+          "metadata": {
+            "provider": "TypeSafe"
+          }
+        }
+      },
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576,
+          "timeoutMs": 30000
+        }
+      ]
+    },
+    {
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "params": {},
+      "id": "box-latest-jpeg",
+      "model": "~typesafe/jev-latest",
+      "arguments": {
+        "contractVersion": 2,
+        "state": {
+          "type": "image",
+          "dataUri": "data:image/jpeg;base64,AQID",
+          "text": "Listing photo"
+        },
+        "questions": {
+          "target": {
+            "type": "box",
+            "instructions": "the red product"
+          }
+        }
+      },
+      "response": {
+        "model": "~typesafe/jev-latest-served",
+        "provider": "TypeSafe",
+        "answers": {
+          "target": {
+            "type": "box",
+            "box": {
+              "top": 0.25,
+              "bottom": 0.75,
+              "left": 0.25,
+              "right": 0.76
+            },
+            "confidence": 0.91
+          }
+        },
+        "usage": {
+          "input_tokens": 476,
+          "output_tokens": 70,
+          "cost": 0.000019992
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "image",
+          "dataUri": "data:image/jpeg;base64,AQID",
+          "text": "Listing photo"
+        },
+        "questions": {
+          "target": {
+            "type": "box",
+            "instructions": "the red product"
+          }
+        }
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/systemone",
+        "method": "POST",
+        "body": {
+          "model": "~typesafe/jev-latest",
+          "state": [
+            "Listing photo",
+            {
+              "type": "image_url",
+              "image_url": {
+                "url": "data:image/jpeg;base64,AQID"
+              }
+            }
+          ],
+          "questions": {
+            "target": {
+              "type": "box",
+              "instructions": "the red product"
+            }
+          }
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "~typesafe/jev-latest-served",
+          "answers": {
+            "target": {
+              "type": "box",
+              "box": {
+                "top": 0.25,
+                "bottom": 0.75,
+                "left": 0.25,
+                "right": 0.76
+              },
+              "confidence": 0.91
+            }
+          },
+          "usage": {
+            "inputTokens": 476,
+            "outputTokens": 70,
+            "costUsd": 0.000019992
+          },
+          "metadata": {
+            "provider": "TypeSafe"
+          }
+        }
+      },
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576,
+          "timeoutMs": 30000
+        }
+      ]
+    },
+    {
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "params": {},
+      "id": "cost-zero",
+      "arguments": {
+        "contractVersion": 2,
+        "state": {
+          "type": "json",
+          "value": {
+            "ticket": "Supplied ticket 😀"
+          }
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "model": "typesafe/jev-1.13",
+      "response": {
+        "model": "typesafe/jev-1.13-served",
+        "provider": "TypeSafe",
+        "answers": {
+          "check": {
+            "type": "noul",
+            "noul": 0.37
+          },
+          "route": {
+            "type": "choice",
+            "choice": "a",
+            "probabilities": {
+              "a": 0.49,
+              "b": 0.5
+            },
+            "confidence": 0.1
+          },
+          "urgency": {
+            "type": "score",
+            "score": 0.71,
+            "probabilities": {
+              "0": 0.3,
+              "1": 0.69
+            },
+            "confidence": 0.2
+          }
+        },
+        "usage": {
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cost": 0
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "json",
+          "value": {
+            "ticket": "Supplied ticket 😀"
+          }
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/systemone",
+        "method": "POST",
+        "body": {
+          "model": "typesafe/jev-1.13",
+          "state": {
+            "ticket": "Supplied ticket 😀"
+          },
+          "questions": {
+            "check": {
+              "type": "noul",
+              "instructions": "Is this urgent?"
+            },
+            "route": {
+              "type": "choice",
+              "instructions": "Which team?",
+              "criteria": {
+                "a": null,
+                "b": "Billing"
+              }
+            },
+            "urgency": {
+              "type": "score",
+              "instructions": "How urgent?",
+              "criteria": [
+                "Low",
+                "High"
+              ]
+            }
+          }
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "typesafe/jev-1.13-served",
+          "answers": {
+            "check": {
+              "type": "boolean",
+              "probabilityTrue": 0.37
+            },
+            "route": {
+              "type": "choice",
+              "choice": "a",
+              "probabilities": {
+                "a": 0.49,
+                "b": 0.5
+              },
+              "confidence": 0.1
+            },
+            "urgency": {
+              "type": "score",
+              "score": 0.71,
+              "probabilities": [
+                0.3,
+                0.69
+              ],
+              "confidence": 0.2
+            }
+          },
+          "usage": {
+            "inputTokens": 0,
+            "outputTokens": 0,
+            "costUsd": 0
+          },
+          "metadata": {
+            "provider": "TypeSafe"
+          }
+        }
+      },
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576,
+          "timeoutMs": 30000
+        }
+      ]
+    },
+    {
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "params": {},
+      "id": "cost-absent",
+      "arguments": {
+        "contractVersion": 2,
+        "state": {
+          "type": "json",
+          "value": {
+            "ticket": "Supplied ticket 😀"
+          }
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "model": "typesafe/jev-1.13",
+      "response": {
+        "model": "typesafe/jev-1.13-served",
+        "answers": {
+          "check": {
+            "type": "noul",
+            "noul": 0.37
+          },
+          "route": {
+            "type": "choice",
+            "choice": "a",
+            "probabilities": {
+              "a": 0.49,
+              "b": 0.5
+            },
+            "confidence": 0.1
+          },
+          "urgency": {
+            "type": "score",
+            "score": 0.71,
+            "probabilities": {
+              "0": 0.3,
+              "1": 0.69
+            },
+            "confidence": 0.2
+          }
+        },
+        "usage": {
+          "input_tokens": 3,
+          "output_tokens": 1
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "json",
+          "value": {
+            "ticket": "Supplied ticket 😀"
+          }
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/systemone",
+        "method": "POST",
+        "body": {
+          "model": "typesafe/jev-1.13",
+          "state": {
+            "ticket": "Supplied ticket 😀"
+          },
+          "questions": {
+            "check": {
+              "type": "noul",
+              "instructions": "Is this urgent?"
+            },
+            "route": {
+              "type": "choice",
+              "instructions": "Which team?",
+              "criteria": {
+                "a": null,
+                "b": "Billing"
+              }
+            },
+            "urgency": {
+              "type": "score",
+              "instructions": "How urgent?",
+              "criteria": [
+                "Low",
+                "High"
+              ]
+            }
+          }
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "typesafe/jev-1.13-served",
+          "answers": {
+            "check": {
+              "type": "boolean",
+              "probabilityTrue": 0.37
+            },
+            "route": {
+              "type": "choice",
+              "choice": "a",
+              "probabilities": {
+                "a": 0.49,
+                "b": 0.5
+              },
+              "confidence": 0.1
+            },
+            "urgency": {
+              "type": "score",
+              "score": 0.71,
+              "probabilities": [
+                0.3,
+                0.69
+              ],
+              "confidence": 0.2
+            }
+          },
+          "usage": {
+            "inputTokens": 3,
+            "outputTokens": 1
+          }
+        }
+      },
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576,
+          "timeoutMs": 30000
+        }
+      ]
+    },
+    {
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "params": {},
+      "id": "usage-extended",
+      "arguments": {
+        "contractVersion": 2,
+        "state": {
+          "type": "json",
+          "value": {
+            "ticket": "Supplied ticket 😀"
+          }
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "model": "typesafe/jev-1.13",
+      "response": {
+        "model": "typesafe/jev-1.13-served",
+        "provider": "TypeSafe",
+        "answers": {
+          "check": {
+            "type": "noul",
+            "noul": 0.37
+          },
+          "route": {
+            "type": "choice",
+            "choice": "a",
+            "probabilities": {
+              "a": 0.49,
+              "b": 0.5
+            },
+            "confidence": 0.1
+          },
+          "urgency": {
+            "type": "score",
+            "score": 0.71,
+            "probabilities": {
+              "0": 0.3,
+              "1": 0.69
+            },
+            "confidence": 0.2
+          }
+        },
+        "usage": {
+          "input_tokens": 2,
+          "output_tokens": 1,
+          "cost": 0,
+          "provider_units": 3,
+          "details": {
+            "cached": 1
+          }
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "json",
+          "value": {
+            "ticket": "Supplied ticket 😀"
+          }
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/systemone",
+        "method": "POST",
+        "body": {
+          "model": "typesafe/jev-1.13",
+          "state": {
+            "ticket": "Supplied ticket 😀"
+          },
+          "questions": {
+            "check": {
+              "type": "noul",
+              "instructions": "Is this urgent?"
+            },
+            "route": {
+              "type": "choice",
+              "instructions": "Which team?",
+              "criteria": {
+                "a": null,
+                "b": "Billing"
+              }
+            },
+            "urgency": {
+              "type": "score",
+              "instructions": "How urgent?",
+              "criteria": [
+                "Low",
+                "High"
+              ]
+            }
+          }
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "typesafe/jev-1.13-served",
+          "answers": {
+            "check": {
+              "type": "boolean",
+              "probabilityTrue": 0.37
+            },
+            "route": {
+              "type": "choice",
+              "choice": "a",
+              "probabilities": {
+                "a": 0.49,
+                "b": 0.5
+              },
+              "confidence": 0.1
+            },
+            "urgency": {
+              "type": "score",
+              "score": 0.71,
+              "probabilities": [
+                0.3,
+                0.69
+              ],
+              "confidence": 0.2
+            }
+          },
+          "usage": {
+            "inputTokens": 2,
+            "outputTokens": 1,
+            "costUsd": 0,
+            "raw": {
+              "input_tokens": 2,
+              "output_tokens": 1,
+              "cost": 0,
+              "provider_units": 3,
+              "details": {
+                "cached": 1
+              }
+            }
+          },
+          "metadata": {
+            "provider": "TypeSafe"
+          }
+        }
+      },
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576,
+          "timeoutMs": 30000
+        }
+      ]
+    },
+    {
+      "baseUrl": "https://router.example.test/tenant/api/v1",
+      "params": {},
+      "id": "custom-prefix",
+      "arguments": {
+        "contractVersion": 2,
+        "state": {
+          "type": "json",
+          "value": {
+            "ticket": "Supplied ticket 😀"
+          }
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "model": "typesafe/jev-1.14",
+      "response": {
+        "model": "typesafe/jev-1.14-served",
+        "provider": "TypeSafe",
+        "answers": {
+          "check": {
+            "type": "noul",
+            "noul": 0.37
+          },
+          "route": {
+            "type": "choice",
+            "choice": "a",
+            "probabilities": {
+              "a": 0.49,
+              "b": 0.5
+            },
+            "confidence": 0.1
+          },
+          "urgency": {
+            "type": "score",
+            "score": 0.71,
+            "probabilities": {
+              "0": 0.3,
+              "1": 0.69
+            },
+            "confidence": 0.2
+          }
+        },
+        "usage": {
+          "input_tokens": 476,
+          "output_tokens": 70,
+          "cost": 0.000019992
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "json",
+          "value": {
+            "ticket": "Supplied ticket 😀"
+          }
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "request": {
+        "url": "https://router.example.test/tenant/api/v1/systemone",
+        "method": "POST",
+        "body": {
+          "model": "typesafe/jev-1.14",
+          "state": {
+            "ticket": "Supplied ticket 😀"
+          },
+          "questions": {
+            "check": {
+              "type": "noul",
+              "instructions": "Is this urgent?"
+            },
+            "route": {
+              "type": "choice",
+              "instructions": "Which team?",
+              "criteria": {
+                "a": null,
+                "b": "Billing"
+              }
+            },
+            "urgency": {
+              "type": "score",
+              "instructions": "How urgent?",
+              "criteria": [
+                "Low",
+                "High"
+              ]
+            }
+          }
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "typesafe/jev-1.14-served",
+          "answers": {
+            "check": {
+              "type": "boolean",
+              "probabilityTrue": 0.37
+            },
+            "route": {
+              "type": "choice",
+              "choice": "a",
+              "probabilities": {
+                "a": 0.49,
+                "b": 0.5
+              },
+              "confidence": 0.1
+            },
+            "urgency": {
+              "type": "score",
+              "score": 0.71,
+              "probabilities": [
+                0.3,
+                0.69
+              ],
+              "confidence": 0.2
+            }
+          },
+          "usage": {
+            "inputTokens": 476,
+            "outputTokens": 70,
+            "costUsd": 0.000019992
+          },
+          "metadata": {
+            "provider": "TypeSafe"
+          }
+        }
+      },
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576,
+          "timeoutMs": 30000
+        }
+      ]
+    },
+    {
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "params": {
+        "provider": {
+          "order": [
+            "typesafe"
+          ],
+          "only": [
+            "typesafe"
+          ],
+          "require_parameters": true
+        }
+      },
+      "id": "provider-preferences",
+      "arguments": {
+        "contractVersion": 2,
+        "state": {
+          "type": "json",
+          "value": {
+            "ticket": "Supplied ticket 😀"
+          }
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "model": "typesafe/jev-1.14",
+      "providerParams": {
+        "provider": {
+          "order": [
+            "typesafe"
+          ],
+          "only": [
+            "default"
+          ]
+        }
+      },
+      "modelParams": {
+        "provider": {
+          "only": [
+            "model-choice"
+          ],
+          "require_parameters": true
+        }
+      },
+      "extraParams": {
+        "provider": {
+          "only": [
+            "typesafe"
+          ]
+        }
+      },
+      "response": {
+        "model": "typesafe/jev-1.14-served",
+        "provider": "TypeSafe",
+        "answers": {
+          "check": {
+            "type": "noul",
+            "noul": 0.37
+          },
+          "route": {
+            "type": "choice",
+            "choice": "a",
+            "probabilities": {
+              "a": 0.49,
+              "b": 0.5
+            },
+            "confidence": 0.1
+          },
+          "urgency": {
+            "type": "score",
+            "score": 0.71,
+            "probabilities": {
+              "0": 0.3,
+              "1": 0.69
+            },
+            "confidence": 0.2
+          }
+        },
+        "usage": {
+          "input_tokens": 476,
+          "output_tokens": 70,
+          "cost": 0.000019992
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "json",
+          "value": {
+            "ticket": "Supplied ticket 😀"
+          }
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": "Is this urgent?"
+          },
+          "route": {
+            "type": "choice",
+            "instructions": "Which team?",
+            "criteria": {
+              "a": null,
+              "b": "Billing"
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": "How urgent?",
+            "criteria": [
+              "Low",
+              "High"
+            ]
+          }
+        }
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/systemone",
+        "method": "POST",
+        "body": {
+          "model": "typesafe/jev-1.14",
+          "state": {
+            "ticket": "Supplied ticket 😀"
+          },
+          "questions": {
+            "check": {
+              "type": "noul",
+              "instructions": "Is this urgent?"
+            },
+            "route": {
+              "type": "choice",
+              "instructions": "Which team?",
+              "criteria": {
+                "a": null,
+                "b": "Billing"
+              }
+            },
+            "urgency": {
+              "type": "score",
+              "instructions": "How urgent?",
+              "criteria": [
+                "Low",
+                "High"
+              ]
+            }
+          },
+          "provider": {
+            "order": [
+              "typesafe"
+            ],
+            "only": [
+              "typesafe"
+            ],
+            "require_parameters": true
+          }
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "typesafe/jev-1.14-served",
+          "answers": {
+            "check": {
+              "type": "boolean",
+              "probabilityTrue": 0.37
+            },
+            "route": {
+              "type": "choice",
+              "choice": "a",
+              "probabilities": {
+                "a": 0.49,
+                "b": 0.5
+              },
+              "confidence": 0.1
+            },
+            "urgency": {
+              "type": "score",
+              "score": 0.71,
+              "probabilities": [
+                0.3,
+                0.69
+              ],
+              "confidence": 0.2
+            }
+          },
+          "usage": {
+            "inputTokens": 476,
+            "outputTokens": 70,
+            "costUsd": 0.000019992
+          },
+          "metadata": {
+            "provider": "TypeSafe"
+          }
+        }
+      },
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576,
+          "timeoutMs": 30000
+        }
+      ]
+    },
+    {
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "params": {},
+      "id": "structured-instructions",
+      "arguments": {
+        "contractVersion": 2,
+        "state": {
+          "type": "json",
+          "value": {
+            "ticket": "Supplied ticket 😀"
+          }
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": {
+              "ask": "Is this urgent?"
+            },
+            "criteria": {
+              "true": [
+                "Urgent"
+              ],
+              "false": {
+                "label": "Routine"
+              }
+            }
+          },
+          "route": {
+            "type": "choice",
+            "instructions": [
+              "Choose"
+            ],
+            "criteria": {
+              "a": [
+                "Accounts"
+              ],
+              "b": {
+                "name": "Billing"
+              }
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": {
+              "ask": "Rate"
+            },
+            "criteria": [
+              {
+                "label": "Low"
+              },
+              [
+                "High"
+              ]
+            ]
+          }
+        }
+      },
+      "model": "typesafe/jev-1.13",
+      "response": {
+        "model": "typesafe/jev-1.13-served",
+        "provider": "TypeSafe",
+        "answers": {
+          "check": {
+            "type": "noul",
+            "noul": 0.37
+          },
+          "route": {
+            "type": "choice",
+            "choice": "a",
+            "probabilities": {
+              "a": 0.49,
+              "b": 0.5
+            },
+            "confidence": 0.1
+          },
+          "urgency": {
+            "type": "score",
+            "score": 0.71,
+            "probabilities": {
+              "0": 0.3,
+              "1": 0.69
+            },
+            "confidence": 0.2
+          }
+        },
+        "usage": {
+          "input_tokens": 476,
+          "output_tokens": 70,
+          "cost": 0.000019992
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "json",
+          "value": {
+            "ticket": "Supplied ticket 😀"
+          }
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": {
+              "ask": "Is this urgent?"
+            },
+            "criteria": {
+              "true": [
+                "Urgent"
+              ],
+              "false": {
+                "label": "Routine"
+              }
+            }
+          },
+          "route": {
+            "type": "choice",
+            "instructions": [
+              "Choose"
+            ],
+            "criteria": {
+              "a": [
+                "Accounts"
+              ],
+              "b": {
+                "name": "Billing"
+              }
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "instructions": {
+              "ask": "Rate"
+            },
+            "criteria": [
+              {
+                "label": "Low"
+              },
+              [
+                "High"
+              ]
+            ]
+          }
+        }
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/systemone",
+        "method": "POST",
+        "body": {
+          "model": "typesafe/jev-1.13",
+          "state": {
+            "ticket": "Supplied ticket 😀"
+          },
+          "questions": {
+            "check": {
+              "type": "noul",
+              "instructions": {
+                "ask": "Is this urgent?"
+              },
+              "criteria": {
+                "true": [
+                  "Urgent"
+                ],
+                "false": {
+                  "label": "Routine"
+                }
+              }
+            },
+            "route": {
+              "type": "choice",
+              "instructions": [
+                "Choose"
+              ],
+              "criteria": {
+                "a": [
+                  "Accounts"
+                ],
+                "b": {
+                  "name": "Billing"
+                }
+              }
+            },
+            "urgency": {
+              "type": "score",
+              "instructions": {
+                "ask": "Rate"
+              },
+              "criteria": [
+                {
+                  "label": "Low"
+                },
+                [
+                  "High"
+                ]
+              ]
+            }
+          }
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "typesafe/jev-1.13-served",
+          "answers": {
+            "check": {
+              "type": "boolean",
+              "probabilityTrue": 0.37
+            },
+            "route": {
+              "type": "choice",
+              "choice": "a",
+              "probabilities": {
+                "a": 0.49,
+                "b": 0.5
+              },
+              "confidence": 0.1
+            },
+            "urgency": {
+              "type": "score",
+              "score": 0.71,
+              "probabilities": [
+                0.3,
+                0.69
+              ],
+              "confidence": 0.2
+            }
+          },
+          "usage": {
+            "inputTokens": 476,
+            "outputTokens": 70,
+            "costUsd": 0.000019992
+          },
+          "metadata": {
+            "provider": "TypeSafe"
+          }
+        }
+      },
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576,
+          "timeoutMs": 30000
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "Complete unchanged OpenRouter decision provider, catalog URL normalizer, routing/model helpers, V1/V2 validation/compatibility and normalization modules execute; no copied protocol bodies.",
+    "Synthetic successful HTTP Response only. HTTP policy/headers/request sanitization/SSRF/body reader and Agent-config lookup are explicit facades; production transport, timeout/overflow/cancellation and account authority bodies are unexecuted.",
+    "Actual provider preference merge executes against explicit provider/model/Agent fixture inputs. This is source algorithm evidence, not Synapsis reference-config inheritance or dynamic capability discovery parity.",
+    "Exact request/result values, box, rounded distributions, served model/provider, optional zero/absent cost and full extra raw usage execute; no real model quality or endpoint support claim.",
+    "Native map UTF16/Jason representation remains a host adaptation; supplied JSON state is a JSON value on SystemOne, not an OpenAI-style JSON text string. No exact incoming-order/JavaScript-byte claim.",
+    "Only successful boolean/choice/score and supported box/image routes execute; no unsupported/error/auth/security/permission/cancellation behavior is tested."
+  ]
+}

@@ -1,0 +1,1212 @@
+{
+  "referenceCommit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+  "scriptSha256": "f235571f53f3c3557270248fe9a7cb9e6d047ede6d34df12446e804cddd78d8d",
+  "sourceRecords": [
+    {
+      "path": "extensions/browser/src/browser/cdp-ax.ts",
+      "sha256": "ff15437c81414743f8bea6215ee23984ba2a67fdadd703bc8f32c6237597fb66",
+      "executableSha256": "f390c305eb5bf23bf1f2b4fda4884082214c705eab7051bda97b3f3b7bafcf85",
+      "executed": true
+    },
+    {
+      "path": "extensions/browser/src/browser/cdp-page-session.ts",
+      "sha256": "0fde37ada3184b76821909b5cc7bf148f1bd83de3a08192d05015ad6d3387a00",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "extensions/browser/src/browser/cdp-role-snapshot-dom.ts",
+      "sha256": "0b17dca6e71000ad075267726b3300b8686e10da216adfdb12b68dbede58672d",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "extensions/browser/src/browser/cdp-role-snapshot-tree.ts",
+      "sha256": "32b5a85ada674a85ca6770f1497aa2c166259465a288211e1e027ff271b69866",
+      "executableSha256": "4c68bba34a57c0006f5404767061543a1b40699cb463aeed11ca58014149ea27",
+      "executed": true
+    },
+    {
+      "path": "extensions/browser/src/browser/cdp-role-snapshot.ts",
+      "sha256": "d50b903846911002a6c577eff4d7a7551e385daa693e5c2fa6b5084c4dc7dbb8",
+      "executableSha256": "8a77a2ec4197b66ffbedde3c87ce4891e01954137ce5228495aa0025d28a2aa3",
+      "executed": true
+    },
+    {
+      "path": "extensions/browser/src/browser/cdp.helpers.ts",
+      "sha256": "9c45bd30ac027e4b57a8a8235367601cf03404d6da3c4460f6177849740ed0af",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "extensions/browser/src/browser/pw-role-snapshot.ts",
+      "sha256": "21f50478fcd37a1c2dd31028f0604bd284cef9a34cad5214ae6018dcc329e479",
+      "executableSha256": "79784e88cc1e8d0f6ed5fd986cb6cbc3a418518cce38a4ab2e57132a2214e197",
+      "executed": true
+    },
+    {
+      "path": "extensions/browser/src/browser/snapshot-depth-limit.ts",
+      "sha256": "f4f7380776e50da9b43be5fcb290c3be40cd4fd4cb3a8a6eb4e6ccfa51f96289",
+      "executableSha256": "57a439e4c2693f69bda2e5145d5ba7b08dc2f351b4defc14288a66e51ba498a6",
+      "executed": true
+    },
+    {
+      "path": "extensions/browser/src/browser/snapshot-roles.ts",
+      "sha256": "02fd06d9e02776ff4a4a5c9b5e107a54110ea1451b20bad18e4b143931966749",
+      "executableSha256": "02fd06d9e02776ff4a4a5c9b5e107a54110ea1451b20bad18e4b143931966749",
+      "executed": true
+    },
+    {
+      "path": "extensions/browser/src/browser/snapshot-urls.ts",
+      "sha256": "e7f7b75cba56683dd7fc30d072f61e4dddb4aeb411daab58deb741b7582bd3ed",
+      "executableSha256": "03c5e333ec333ad52aba090e32afb6367b415a9fd186a757cfd341141ee306a4",
+      "executed": true
+    },
+    {
+      "path": "packages/normalization-core/src/string-coerce.ts",
+      "sha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf",
+      "executableSha256": "adf85733aece35eddd1e1c0db1f6ec2778f1974678244131a2620212d35baf5d",
+      "executed": true
+    },
+    {
+      "path": "src/plugin-sdk/expect-runtime.ts",
+      "sha256": "43fc34565d2b08ce83035f05ed5539c5ce6d0f36db938376ce5c1904c03d582f",
+      "executableSha256": "7ab1739f9d60a3c08a3dccd4a5209718758a2371e13d43aa815f9e57ed046008",
+      "executed": true
+    }
+  ],
+  "facades": [
+    {
+      "import": "./cdp-page-session.js",
+      "source": "extensions/browser/src/browser/cdp-page-session.ts",
+      "reason": "Session preparation is a no-op for the synthetic caller-owned CDP session."
+    },
+    {
+      "import": "./cdp-role-snapshot-dom.js",
+      "source": "extensions/browser/src/browser/cdp-role-snapshot-dom.ts",
+      "reason": "Scoped captures skip cursor discovery; iframe frame-ID enrichment returns an empty Map. URL discovery is disabled. Unused cursor/URL functions throw."
+    },
+    {
+      "import": "./cdp.helpers.js",
+      "source": "extensions/browser/src/browser/cdp.helpers.ts",
+      "reason": "Socket assembly is unavailable; the public caller-owned-session entrypoint executes."
+    }
+  ],
+  "importRedirections": {
+    "openclaw/plugin-sdk/expect-runtime": "src/plugin-sdk/expect-runtime.ts",
+    "openclaw/plugin-sdk/string-coerce-runtime": "packages/normalization-core/src/string-coerce.ts"
+  },
+  "boundaries": [
+    "Complete cdp-role-snapshot.ts executes through public snapshotRoleViaCdpSession, including private pre-render ordinal assignment and scoped AX recovery. Complete tree, formatter/finalizer, role sets, depth and URL appendix modules execute after type stripping only.",
+    "All source bytes match the exact Git commit. Facaded platform sources are provenance-only and are not claimed as executed. SDK imports redirect to complete pinned implementation modules.",
+    "Synthetic successful scoped AX responses only; no real CDP driver/socket/DOM assembly, page-wide cursor discovery, iframe enrichment/recursion, URL discovery, real providers or Chromium execution.",
+    "Equivalence covers scoped native text and source-assigned backend identities/ordinals. Local whole-line budgets, alias spelling, delta summaries, URL/label appendices and host cleanup remain separate functional checks.",
+    "The local formatter preserves leading depth indentation when compact shaping suppresses initial structural lines; the pin finalizes joined text with trim(). The compact equivalence vector uses a visible main root, so this intentional existing boundary is not claimed as complete text parity."
+  ],
+  "vectors": [
+    {
+      "name": "duplicates-unique-mixed-roles-and-names",
+      "nodes": [
+        {
+          "nodeId": "1",
+          "backendDOMNodeId": 1,
+          "role": {
+            "value": "generic"
+          },
+          "name": {
+            "value": ""
+          },
+          "childIds": [
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8"
+          ]
+        },
+        {
+          "nodeId": "2",
+          "backendDOMNodeId": 2,
+          "role": {
+            "value": "button"
+          },
+          "name": {
+            "value": "Save"
+          },
+          "childIds": []
+        },
+        {
+          "nodeId": "3",
+          "backendDOMNodeId": 3,
+          "role": {
+            "value": "button"
+          },
+          "name": {
+            "value": "Save"
+          },
+          "childIds": []
+        },
+        {
+          "nodeId": "4",
+          "backendDOMNodeId": 4,
+          "role": {
+            "value": "link"
+          },
+          "name": {
+            "value": "Save"
+          },
+          "childIds": []
+        },
+        {
+          "nodeId": "5",
+          "backendDOMNodeId": 5,
+          "role": {
+            "value": "button"
+          },
+          "name": {
+            "value": "Other"
+          },
+          "childIds": []
+        },
+        {
+          "nodeId": "6",
+          "backendDOMNodeId": 6,
+          "role": {
+            "value": "link"
+          },
+          "name": {
+            "value": "Save"
+          },
+          "childIds": []
+        },
+        {
+          "nodeId": "7",
+          "backendDOMNodeId": 7,
+          "role": {
+            "value": "button"
+          },
+          "name": {
+            "value": ""
+          },
+          "childIds": []
+        },
+        {
+          "nodeId": "8",
+          "backendDOMNodeId": 8,
+          "role": {
+            "value": "button"
+          },
+          "name": {
+            "value": ""
+          },
+          "childIds": []
+        }
+      ],
+      "rootBackendNodeId": 1,
+      "options": {},
+      "expected": {
+        "result": {
+          "snapshot": "- button \"Save\" [ref=e1]\n- button \"Save\" [ref=e2] [nth=1]\n- link \"Save\" [ref=e3]\n- button \"Other\" [ref=e4]\n- link \"Save\" [ref=e5] [nth=1]\n- button [ref=e6]\n- button [ref=e7] [nth=1]",
+          "refs": {
+            "e1": {
+              "role": "button",
+              "name": "Save",
+              "nth": 0,
+              "backendDOMNodeId": 2
+            },
+            "e2": {
+              "role": "button",
+              "name": "Save",
+              "nth": 1,
+              "backendDOMNodeId": 3
+            },
+            "e3": {
+              "role": "link",
+              "name": "Save",
+              "nth": 0,
+              "backendDOMNodeId": 4
+            },
+            "e4": {
+              "role": "button",
+              "name": "Other",
+              "backendDOMNodeId": 5
+            },
+            "e5": {
+              "role": "link",
+              "name": "Save",
+              "nth": 1,
+              "backendDOMNodeId": 6
+            },
+            "e6": {
+              "role": "button",
+              "nth": 0,
+              "backendDOMNodeId": 7
+            },
+            "e7": {
+              "role": "button",
+              "nth": 1,
+              "backendDOMNodeId": 8
+            }
+          },
+          "stats": {
+            "lines": 7,
+            "chars": 181,
+            "refs": 7,
+            "interactive": 7
+          }
+        },
+        "commands": [
+          {
+            "method": "Accessibility.queryAXTree",
+            "params": {
+              "backendNodeId": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "raw-bfs-versus-render-dfs",
+      "nodes": [
+        {
+          "nodeId": "1",
+          "backendDOMNodeId": 1,
+          "role": {
+            "value": "generic"
+          },
+          "name": {
+            "value": ""
+          },
+          "childIds": [
+            "2",
+            "3"
+          ]
+        },
+        {
+          "nodeId": "2",
+          "backendDOMNodeId": 2,
+          "role": {
+            "value": "group"
+          },
+          "name": {
+            "value": ""
+          },
+          "childIds": [
+            "4"
+          ]
+        },
+        {
+          "nodeId": "3",
+          "backendDOMNodeId": 3,
+          "role": {
+            "value": "button"
+          },
+          "name": {
+            "value": "Repeat"
+          },
+          "childIds": []
+        },
+        {
+          "nodeId": "4",
+          "backendDOMNodeId": 4,
+          "role": {
+            "value": "button"
+          },
+          "name": {
+            "value": "Repeat"
+          },
+          "childIds": []
+        }
+      ],
+      "rootBackendNodeId": 1,
+      "options": {},
+      "expected": {
+        "result": {
+          "snapshot": "- group\n  - button \"Repeat\" [ref=e2] [nth=1]\n- button \"Repeat\" [ref=e1]",
+          "refs": {
+            "e1": {
+              "role": "button",
+              "name": "Repeat",
+              "nth": 0,
+              "backendDOMNodeId": 3
+            },
+            "e2": {
+              "role": "button",
+              "name": "Repeat",
+              "nth": 1,
+              "backendDOMNodeId": 4
+            }
+          },
+          "stats": {
+            "lines": 3,
+            "chars": 71,
+            "refs": 2,
+            "interactive": 2
+          }
+        },
+        "commands": [
+          {
+            "method": "Accessibility.queryAXTree",
+            "params": {
+              "backendNodeId": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "depth-filter-retains-original-ordinal",
+      "nodes": [
+        {
+          "nodeId": "1",
+          "backendDOMNodeId": 1,
+          "role": {
+            "value": "generic"
+          },
+          "name": {
+            "value": ""
+          },
+          "childIds": [
+            "2",
+            "3"
+          ]
+        },
+        {
+          "nodeId": "2",
+          "backendDOMNodeId": 2,
+          "role": {
+            "value": "group"
+          },
+          "name": {
+            "value": ""
+          },
+          "childIds": [
+            "4"
+          ]
+        },
+        {
+          "nodeId": "3",
+          "backendDOMNodeId": 3,
+          "role": {
+            "value": "button"
+          },
+          "name": {
+            "value": "Repeat"
+          },
+          "childIds": []
+        },
+        {
+          "nodeId": "4",
+          "backendDOMNodeId": 4,
+          "role": {
+            "value": "button"
+          },
+          "name": {
+            "value": "Repeat"
+          },
+          "childIds": []
+        }
+      ],
+      "rootBackendNodeId": 1,
+      "options": {
+        "maxDepth": 0
+      },
+      "expected": {
+        "result": {
+          "snapshot": "- group\n- button \"Repeat\" [ref=e1]",
+          "refs": {
+            "e1": {
+              "role": "button",
+              "name": "Repeat",
+              "nth": 0,
+              "backendDOMNodeId": 3
+            }
+          },
+          "stats": {
+            "lines": 2,
+            "chars": 34,
+            "refs": 1,
+            "interactive": 1
+          }
+        },
+        "commands": [
+          {
+            "method": "Accessibility.queryAXTree",
+            "params": {
+              "backendNodeId": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "interactive-flattens-after-ordinal-assignment",
+      "nodes": [
+        {
+          "nodeId": "1",
+          "backendDOMNodeId": 1,
+          "role": {
+            "value": "generic"
+          },
+          "name": {
+            "value": ""
+          },
+          "childIds": [
+            "2",
+            "3"
+          ]
+        },
+        {
+          "nodeId": "2",
+          "backendDOMNodeId": 2,
+          "role": {
+            "value": "group"
+          },
+          "name": {
+            "value": ""
+          },
+          "childIds": [
+            "4"
+          ]
+        },
+        {
+          "nodeId": "3",
+          "backendDOMNodeId": 3,
+          "role": {
+            "value": "button"
+          },
+          "name": {
+            "value": "Repeat"
+          },
+          "childIds": []
+        },
+        {
+          "nodeId": "4",
+          "backendDOMNodeId": 4,
+          "role": {
+            "value": "button"
+          },
+          "name": {
+            "value": "Repeat"
+          },
+          "childIds": []
+        }
+      ],
+      "rootBackendNodeId": 1,
+      "options": {
+        "interactive": true
+      },
+      "expected": {
+        "result": {
+          "snapshot": "- button \"Repeat\" [ref=e2] [nth=1]\n- button \"Repeat\" [ref=e1]",
+          "refs": {
+            "e1": {
+              "role": "button",
+              "name": "Repeat",
+              "nth": 0,
+              "backendDOMNodeId": 3
+            },
+            "e2": {
+              "role": "button",
+              "name": "Repeat",
+              "nth": 1,
+              "backendDOMNodeId": 4
+            }
+          },
+          "stats": {
+            "lines": 2,
+            "chars": 61,
+            "refs": 2,
+            "interactive": 2
+          }
+        },
+        "commands": [
+          {
+            "method": "Accessibility.queryAXTree",
+            "params": {
+              "backendNodeId": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "compact-retains-depth-and-ordinal",
+      "nodes": [
+        {
+          "nodeId": "1",
+          "backendDOMNodeId": 1,
+          "role": {
+            "value": "main"
+          },
+          "name": {
+            "value": "Workspace"
+          },
+          "childIds": [
+            "2",
+            "3"
+          ]
+        },
+        {
+          "nodeId": "2",
+          "backendDOMNodeId": 2,
+          "role": {
+            "value": "group"
+          },
+          "name": {
+            "value": ""
+          },
+          "childIds": [
+            "4"
+          ]
+        },
+        {
+          "nodeId": "3",
+          "backendDOMNodeId": 3,
+          "role": {
+            "value": "button"
+          },
+          "name": {
+            "value": "Repeat"
+          },
+          "childIds": []
+        },
+        {
+          "nodeId": "4",
+          "backendDOMNodeId": 4,
+          "role": {
+            "value": "button"
+          },
+          "name": {
+            "value": "Repeat"
+          },
+          "childIds": []
+        }
+      ],
+      "rootBackendNodeId": 1,
+      "options": {
+        "compact": true
+      },
+      "expected": {
+        "result": {
+          "snapshot": "- main \"Workspace\" [ref=e1]\n    - button \"Repeat\" [ref=e3] [nth=1]\n  - button \"Repeat\" [ref=e2]",
+          "refs": {
+            "e1": {
+              "role": "main",
+              "name": "Workspace",
+              "backendDOMNodeId": 1
+            },
+            "e2": {
+              "role": "button",
+              "name": "Repeat",
+              "nth": 0,
+              "backendDOMNodeId": 3
+            },
+            "e3": {
+              "role": "button",
+              "name": "Repeat",
+              "nth": 1,
+              "backendDOMNodeId": 4
+            }
+          },
+          "stats": {
+            "lines": 3,
+            "chars": 95,
+            "refs": 3,
+            "interactive": 2
+          }
+        },
+        "commands": [
+          {
+            "method": "Accessibility.queryAXTree",
+            "params": {
+              "backendNodeId": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "transparent-root-and-children",
+      "nodes": [
+        {
+          "nodeId": "1",
+          "backendDOMNodeId": 1,
+          "role": {
+            "value": "generic"
+          },
+          "name": {
+            "value": ""
+          },
+          "childIds": [
+            "2",
+            "3"
+          ]
+        },
+        {
+          "nodeId": "2",
+          "backendDOMNodeId": 2,
+          "role": {
+            "value": "presentation"
+          },
+          "name": {
+            "value": ""
+          },
+          "childIds": [
+            "4"
+          ]
+        },
+        {
+          "nodeId": "3",
+          "backendDOMNodeId": 3,
+          "role": {
+            "value": "button"
+          },
+          "name": {
+            "value": "Same"
+          },
+          "childIds": []
+        },
+        {
+          "nodeId": "4",
+          "backendDOMNodeId": 4,
+          "role": {
+            "value": "button"
+          },
+          "name": {
+            "value": "Same"
+          },
+          "childIds": []
+        }
+      ],
+      "rootBackendNodeId": 1,
+      "options": {},
+      "expected": {
+        "result": {
+          "snapshot": "- button \"Same\" [ref=e2] [nth=1]\n- button \"Same\" [ref=e1]",
+          "refs": {
+            "e1": {
+              "role": "button",
+              "name": "Same",
+              "nth": 0,
+              "backendDOMNodeId": 3
+            },
+            "e2": {
+              "role": "button",
+              "name": "Same",
+              "nth": 1,
+              "backendDOMNodeId": 4
+            }
+          },
+          "stats": {
+            "lines": 2,
+            "chars": 57,
+            "refs": 2,
+            "interactive": 2
+          }
+        },
+        "commands": [
+          {
+            "method": "Accessibility.queryAXTree",
+            "params": {
+              "backendNodeId": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ignored-root-native-recovery",
+      "nodes": [
+        {
+          "nodeId": "1",
+          "backendDOMNodeId": 1,
+          "role": {
+            "value": "none"
+          },
+          "name": {
+            "value": ""
+          },
+          "childIds": [
+            "2",
+            "3"
+          ],
+          "ignored": true,
+          "frameId": "synthetic-frame"
+        },
+        {
+          "nodeId": "2",
+          "backendDOMNodeId": 2,
+          "role": {
+            "value": "group"
+          },
+          "name": {
+            "value": ""
+          },
+          "childIds": [
+            "4"
+          ]
+        },
+        {
+          "nodeId": "3",
+          "backendDOMNodeId": 3,
+          "role": {
+            "value": "button"
+          },
+          "name": {
+            "value": "Recovered"
+          },
+          "childIds": []
+        },
+        {
+          "nodeId": "4",
+          "backendDOMNodeId": 4,
+          "role": {
+            "value": "button"
+          },
+          "name": {
+            "value": "Recovered"
+          },
+          "childIds": []
+        }
+      ],
+      "rootBackendNodeId": 1,
+      "options": {},
+      "ignoredRootRecovery": true,
+      "expected": {
+        "result": {
+          "snapshot": "- group\n  - button \"Recovered\" [ref=e2] [nth=1]\n- button \"Recovered\" [ref=e1]",
+          "refs": {
+            "e1": {
+              "role": "button",
+              "name": "Recovered",
+              "nth": 0,
+              "backendDOMNodeId": 3
+            },
+            "e2": {
+              "role": "button",
+              "name": "Recovered",
+              "nth": 1,
+              "backendDOMNodeId": 4
+            }
+          },
+          "stats": {
+            "lines": 3,
+            "chars": 77,
+            "refs": 2,
+            "interactive": 2
+          }
+        },
+        "commands": [
+          {
+            "method": "Accessibility.queryAXTree",
+            "params": {
+              "backendNodeId": 1
+            }
+          },
+          {
+            "method": "Accessibility.getPartialAXTree",
+            "params": {
+              "backendNodeId": 1,
+              "fetchRelatives": true
+            }
+          },
+          {
+            "method": "Accessibility.getFullAXTree",
+            "params": {
+              "frameId": "synthetic-frame"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "scoped-leaf-iframe",
+      "nodes": [
+        {
+          "nodeId": "1",
+          "backendDOMNodeId": 1,
+          "role": {
+            "value": "generic"
+          },
+          "name": {
+            "value": ""
+          },
+          "childIds": [
+            "2",
+            "3"
+          ]
+        },
+        {
+          "nodeId": "2",
+          "backendDOMNodeId": 2,
+          "role": {
+            "value": "Iframe"
+          },
+          "name": {
+            "value": "Local frame"
+          },
+          "childIds": []
+        },
+        {
+          "nodeId": "3",
+          "backendDOMNodeId": 3,
+          "role": {
+            "value": "Iframe"
+          },
+          "name": {
+            "value": "Local frame"
+          },
+          "childIds": []
+        }
+      ],
+      "rootBackendNodeId": 1,
+      "options": {},
+      "expected": {
+        "result": {
+          "snapshot": "- Iframe \"Local frame\" [ref=e1]\n- Iframe \"Local frame\" [ref=e2] [nth=1]",
+          "refs": {
+            "e1": {
+              "role": "iframe",
+              "name": "Local frame",
+              "nth": 0,
+              "backendDOMNodeId": 2
+            },
+            "e2": {
+              "role": "iframe",
+              "name": "Local frame",
+              "nth": 1,
+              "backendDOMNodeId": 3
+            }
+          },
+          "stats": {
+            "lines": 2,
+            "chars": 71,
+            "refs": 2,
+            "interactive": 0
+          }
+        },
+        "commands": [
+          {
+            "method": "Accessibility.queryAXTree",
+            "params": {
+              "backendNodeId": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "empty-transparent-root",
+      "nodes": [
+        {
+          "nodeId": "1",
+          "backendDOMNodeId": 1,
+          "role": {
+            "value": "generic"
+          },
+          "name": {
+            "value": ""
+          },
+          "childIds": []
+        }
+      ],
+      "rootBackendNodeId": 1,
+      "options": {},
+      "expected": {
+        "result": {
+          "snapshot": "(empty)",
+          "refs": {},
+          "stats": {
+            "lines": 1,
+            "chars": 7,
+            "refs": 0,
+            "interactive": 0
+          }
+        },
+        "commands": [
+          {
+            "method": "Accessibility.queryAXTree",
+            "params": {
+              "backendNodeId": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "interactive-empty",
+      "nodes": [
+        {
+          "nodeId": "1",
+          "backendDOMNodeId": 1,
+          "role": {
+            "value": "generic"
+          },
+          "name": {
+            "value": ""
+          },
+          "childIds": [
+            "2"
+          ]
+        },
+        {
+          "nodeId": "2",
+          "backendDOMNodeId": 2,
+          "role": {
+            "value": "heading"
+          },
+          "name": {
+            "value": "Report"
+          },
+          "childIds": []
+        }
+      ],
+      "rootBackendNodeId": 1,
+      "options": {
+        "interactive": true
+      },
+      "expected": {
+        "result": {
+          "snapshot": "(no interactive elements)",
+          "refs": {},
+          "stats": {
+            "lines": 1,
+            "chars": 25,
+            "refs": 0,
+            "interactive": 0
+          }
+        },
+        "commands": [
+          {
+            "method": "Accessibility.queryAXTree",
+            "params": {
+              "backendNodeId": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "compact-empty",
+      "nodes": [
+        {
+          "nodeId": "1",
+          "backendDOMNodeId": 1,
+          "role": {
+            "value": "generic"
+          },
+          "name": {
+            "value": ""
+          },
+          "childIds": [
+            "2"
+          ]
+        },
+        {
+          "nodeId": "2",
+          "backendDOMNodeId": 2,
+          "role": {
+            "value": "group"
+          },
+          "name": {
+            "value": ""
+          },
+          "childIds": []
+        }
+      ],
+      "rootBackendNodeId": 1,
+      "options": {
+        "compact": true
+      },
+      "expected": {
+        "result": {
+          "snapshot": "(empty)",
+          "refs": {},
+          "stats": {
+            "lines": 1,
+            "chars": 7,
+            "refs": 0,
+            "interactive": 0
+          }
+        },
+        "commands": [
+          {
+            "method": "Accessibility.queryAXTree",
+            "params": {
+              "backendNodeId": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "states-values-and-whitespace",
+      "nodes": [
+        {
+          "nodeId": "1",
+          "backendDOMNodeId": 1,
+          "role": {
+            "value": "main"
+          },
+          "name": {
+            "value": " Workspace "
+          },
+          "childIds": [
+            "2",
+            "3",
+            "4",
+            "5"
+          ]
+        },
+        {
+          "nodeId": "2",
+          "backendDOMNodeId": 2,
+          "role": {
+            "value": "textbox"
+          },
+          "name": {
+            "value": " Notes\nline "
+          },
+          "childIds": [],
+          "value": {
+            "value": "first\nsecond \"quoted\""
+          },
+          "properties": [
+            {
+              "name": "invalid",
+              "value": {
+                "value": "grammar"
+              }
+            }
+          ]
+        },
+        {
+          "nodeId": "3",
+          "backendDOMNodeId": 3,
+          "role": {
+            "value": "checkbox"
+          },
+          "name": {
+            "value": "Choice"
+          },
+          "childIds": [],
+          "properties": [
+            {
+              "name": "checked",
+              "value": {
+                "value": "mixed"
+              }
+            },
+            {
+              "name": "disabled",
+              "value": {
+                "value": true
+              }
+            }
+          ]
+        },
+        {
+          "nodeId": "4",
+          "backendDOMNodeId": 4,
+          "role": {
+            "value": "heading"
+          },
+          "name": {
+            "value": "Title"
+          },
+          "childIds": [],
+          "properties": [
+            {
+              "name": "level",
+              "value": {
+                "value": 2
+              }
+            }
+          ]
+        },
+        {
+          "nodeId": "5",
+          "backendDOMNodeId": 5,
+          "role": {
+            "value": "tab"
+          },
+          "name": {
+            "value": " Current "
+          },
+          "childIds": [],
+          "properties": [
+            {
+              "name": "expanded",
+              "value": {
+                "value": "true"
+              }
+            },
+            {
+              "name": "pressed",
+              "value": {
+                "value": "mixed"
+              }
+            },
+            {
+              "name": "selected",
+              "value": {
+                "value": true
+              }
+            }
+          ]
+        }
+      ],
+      "rootBackendNodeId": 1,
+      "options": {},
+      "expected": {
+        "result": {
+          "snapshot": "- main \" Workspace \" [ref=e1]\n  - textbox \" Notes\\nline \" [ref=e2] [invalid=grammar] value=\"first\\nsecond \\\"quoted\\\"\"\n  - checkbox \"Choice\" [ref=e3] [checked=mixed] [disabled]\n  - heading \"Title\" [ref=e4] [level=2]\n  - tab \" Current \" [ref=e5] [expanded] [pressed=mixed] [selected]",
+          "refs": {
+            "e1": {
+              "role": "main",
+              "name": " Workspace ",
+              "backendDOMNodeId": 1
+            },
+            "e2": {
+              "role": "textbox",
+              "name": " Notes\nline ",
+              "backendDOMNodeId": 2
+            },
+            "e3": {
+              "role": "checkbox",
+              "name": "Choice",
+              "backendDOMNodeId": 3
+            },
+            "e4": {
+              "role": "heading",
+              "name": "Title",
+              "backendDOMNodeId": 4
+            },
+            "e5": {
+              "role": "tab",
+              "name": " Current ",
+              "backendDOMNodeId": 5
+            }
+          },
+          "stats": {
+            "lines": 5,
+            "chars": 281,
+            "refs": 5,
+            "interactive": 3
+          }
+        },
+        "commands": [
+          {
+            "method": "Accessibility.queryAXTree",
+            "params": {
+              "backendNodeId": 1
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

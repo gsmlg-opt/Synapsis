@@ -1,0 +1,4464 @@
+{
+  "schemaVersion": 1,
+  "referencePin": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+  "harness": {
+    "path": "scripts/openclaw/capture-elevenlabs-speech.mjs",
+    "sha256": "663338acc6a9f90970712cbb00b0934bd54a9b8c5b5547ceb02b85411d6a3581"
+  },
+  "checkout": {
+    "before": {
+      "verified": true,
+      "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+      "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+      "verifiedTrackedFiles": 58558,
+      "filesSha256": "fb299c6a234f52cfcf20e3618cd11582d07e47a7773cba1334064ebdaf9fddec"
+    },
+    "after": {
+      "verified": true,
+      "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+      "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+      "verifiedTrackedFiles": 58558,
+      "filesSha256": "fb299c6a234f52cfcf20e3618cd11582d07e47a7773cba1334064ebdaf9fddec"
+    }
+  },
+  "transformation": {
+    "api": "node:module.stripTypeScriptTypes",
+    "options": {
+      "mode": "transform",
+      "sourceMap": false
+    },
+    "sdkFacades": [
+      {
+        "module": "openclaw/plugin-sdk/number-runtime",
+        "source": "export { parseStrictFiniteNumber, parseStrictInteger } from \"packages/normalization-core/src/number-coercion.ts\";\n",
+        "sha256": "b1f0c298b193242b0d9ad77d15e74ade434d051a32db84c5311dbc6333ee2008"
+      },
+      {
+        "module": "openclaw/plugin-sdk/string-coerce-runtime",
+        "source": "export { asFiniteNumberInRange, asSafeIntegerInRange } from \"packages/normalization-core/src/number-coercion.ts\";\nexport { asOptionalRecord } from \"packages/normalization-core/src/record-coerce.ts\";\nexport { normalizeOptionalString, normalizeLowercaseStringOrEmpty } from \"packages/normalization-core/src/string-coerce.ts\";\nexport { asBoolean, parseBooleanValue } from \"src/utils/boolean.ts\";\n",
+        "sha256": "92113745426f64aba2bbe622da3ff6890fc12b02036476d7c2a88ee2fad7c0c2"
+      },
+      {
+        "module": "openclaw/plugin-sdk/speech-provider",
+        "source": "export { createSpeechDirectiveParser } from \"src/tts/directive-parser.ts\";\nexport { normalizeApplyTextNormalization, normalizeLanguageCode, normalizeSeed, requireInRange, resolveSpeechProviderApiKey } from \"src/tts/tts-provider-helpers.ts\";\nexport { MAX_AUDIO_BYTES } from \"packages/media-core/src/constants.ts\";\n",
+        "sha256": "e16b4ace995697129336054a7447e1674233784ea91df48a605abc33e70189a7"
+      },
+      {
+        "module": "@openclaw/normalization-core/string-coerce",
+        "source": "export { normalizeOptionalLowercaseString, normalizeOptionalString } from \"packages/normalization-core/src/string-coerce.ts\";\n",
+        "sha256": "00b21ddd66b6d6f529553b7e4dae1fa820b9d0ccb7fa0402710ddcaa49319134"
+      },
+      {
+        "module": "@openclaw/normalization-core/number-coercion",
+        "source": "export { asFiniteNumberInRange, parseStrictFiniteNumber } from \"packages/normalization-core/src/number-coercion.ts\";\n",
+        "sha256": "c77a062bbb09181f44fb560ac9523bd0d26d1904f9cd8c381e88954a3f2e35c0"
+      }
+    ],
+    "staticImports": [
+      {
+        "importer": "extensions/elevenlabs/speech-provider-factory.ts",
+        "specifier": "openclaw/plugin-sdk/number-runtime",
+        "resolved": "openclaw/plugin-sdk/number-runtime"
+      },
+      {
+        "importer": "extensions/elevenlabs/speech-provider-factory.ts",
+        "specifier": "openclaw/plugin-sdk/secret-input",
+        "resolved": "openclaw/plugin-sdk/secret-input"
+      },
+      {
+        "importer": "extensions/elevenlabs/speech-provider-factory.ts",
+        "specifier": "openclaw/plugin-sdk/speech-provider",
+        "resolved": "openclaw/plugin-sdk/speech-provider"
+      },
+      {
+        "importer": "extensions/elevenlabs/speech-provider-factory.ts",
+        "specifier": "openclaw/plugin-sdk/string-coerce-runtime",
+        "resolved": "openclaw/plugin-sdk/string-coerce-runtime"
+      },
+      {
+        "importer": "extensions/elevenlabs/speech-provider-factory.ts",
+        "specifier": "./config-api.js",
+        "resolved": "extensions/elevenlabs/config-api.ts"
+      },
+      {
+        "importer": "extensions/elevenlabs/speech-provider-factory.ts",
+        "specifier": "./shared.js",
+        "resolved": "extensions/elevenlabs/shared.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/number-runtime",
+        "specifier": "packages/normalization-core/src/number-coercion.ts",
+        "resolved": "packages/normalization-core/src/number-coercion.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/speech-provider",
+        "specifier": "src/tts/directive-parser.ts",
+        "resolved": "src/tts/directive-parser.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/speech-provider",
+        "specifier": "src/tts/tts-provider-helpers.ts",
+        "resolved": "src/tts/tts-provider-helpers.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/speech-provider",
+        "specifier": "packages/media-core/src/constants.ts",
+        "resolved": "packages/media-core/src/constants.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/string-coerce-runtime",
+        "specifier": "packages/normalization-core/src/number-coercion.ts",
+        "resolved": "packages/normalization-core/src/number-coercion.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/string-coerce-runtime",
+        "specifier": "packages/normalization-core/src/record-coerce.ts",
+        "resolved": "packages/normalization-core/src/record-coerce.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/string-coerce-runtime",
+        "specifier": "packages/normalization-core/src/string-coerce.ts",
+        "resolved": "packages/normalization-core/src/string-coerce.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/string-coerce-runtime",
+        "specifier": "src/utils/boolean.ts",
+        "resolved": "src/utils/boolean.ts"
+      },
+      {
+        "importer": "packages/normalization-core/src/number-coercion.ts",
+        "specifier": "./string-coerce.ts",
+        "resolved": "packages/normalization-core/src/string-coerce.ts"
+      },
+      {
+        "importer": "src/tts/directive-parser.ts",
+        "specifier": "./directive-number.js",
+        "resolved": "src/tts/directive-number.ts"
+      },
+      {
+        "importer": "src/tts/tts-provider-helpers.ts",
+        "specifier": "node:fs",
+        "resolved": "node:fs"
+      },
+      {
+        "importer": "src/tts/tts-provider-helpers.ts",
+        "specifier": "@openclaw/normalization-core/string-coerce",
+        "resolved": "@openclaw/normalization-core/string-coerce"
+      },
+      {
+        "importer": "src/utils/boolean.ts",
+        "specifier": "@openclaw/normalization-core/string-coerce",
+        "resolved": "@openclaw/normalization-core/string-coerce"
+      },
+      {
+        "importer": "src/tts/directive-number.ts",
+        "specifier": "@openclaw/normalization-core/number-coercion",
+        "resolved": "@openclaw/normalization-core/number-coercion"
+      },
+      {
+        "importer": "@openclaw/normalization-core/string-coerce",
+        "specifier": "packages/normalization-core/src/string-coerce.ts",
+        "resolved": "packages/normalization-core/src/string-coerce.ts"
+      },
+      {
+        "importer": "@openclaw/normalization-core/number-coercion",
+        "specifier": "packages/normalization-core/src/number-coercion.ts",
+        "resolved": "packages/normalization-core/src/number-coercion.ts"
+      }
+    ],
+    "dynamicImports": [
+      {
+        "importer": "extensions/elevenlabs/speech-provider-factory.ts",
+        "specifier": "openclaw/plugin-sdk/provider-http",
+        "resolved": "openclaw/plugin-sdk/provider-http"
+      },
+      {
+        "importer": "extensions/elevenlabs/speech-provider-factory.ts",
+        "specifier": "openclaw/plugin-sdk/ssrf-runtime",
+        "resolved": "openclaw/plugin-sdk/ssrf-runtime"
+      }
+    ]
+  },
+  "sourceAudit": [
+    {
+      "path": "extensions/elevenlabs/speech-provider-factory.ts",
+      "gitBlob": "e5592940b1c1a16fc32f70762be8d7a3814e0c3b",
+      "sourceSha256": "1dfdf84813b290c1f6269eb97f27ff8882a5fee66b86a38a05543a791056b6c3",
+      "executableSha256": "01e61d0921fc88f68c1ca1307adcce38efbd6109d1c305ec6743a61805efc109",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "extensions/elevenlabs/shared.ts",
+      "gitBlob": "0794454e15eb32d86130766f69685cfd9e873f24",
+      "sourceSha256": "1d6e1f2fd0400ae6a45898cdba92d249d429b198f101281ff13977e53e094702",
+      "executableSha256": "1dc5ae4b19e453c9f575ac1ae461b023db4daa696205821fd186e054cf1169c4",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "src/tts/tts-provider-helpers.ts",
+      "gitBlob": "21347cace4ebcf7e3f5b8c276a9ac3a070390240",
+      "sourceSha256": "1f1425d541d933324b9cafc5135997487d26d9ff1638b2dd7b653498f5357747",
+      "executableSha256": "02e64150c164d3a239f92129f5885ef5d141bc9b3e4beb13b9d75f6fc6fb5663",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "src/tts/directive-parser.ts",
+      "gitBlob": "5c532ddbb3543dce4c0d2008f27c8f6113f83589",
+      "sourceSha256": "5f629cc79bf82a2783885fbf97e87d87045c01b852298ba9e781c5b996c48329",
+      "executableSha256": "ce851780e5334aa7fa7df68425c1aa0d74eaa94e1aafc578e19bb294cf86943f",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "src/tts/directive-number.ts",
+      "gitBlob": "99f652f291ff6aa43dff23d3b79be1350fb80268",
+      "sourceSha256": "9d87677afe48ecc851ca209efdb820ef3c191b642a5e9c4f8b483cef57aaed4a",
+      "executableSha256": "1d50bc3491581e30f5bd95ac592f677ccd693ba5360ccbb36cd3bb2d702e0175",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "src/utils/boolean.ts",
+      "gitBlob": "663b1d97a0fc29b277e46606d04f617a0e7d3452",
+      "sourceSha256": "45ae6b249b06da03a2100bbc91c142872e1e7b03091eff51c1e55a9bffc09a3a",
+      "executableSha256": "f74ee3d359082d33ab1cfe28b4ef5205ddc91ca4fff8248f765a014d78870f67",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "packages/normalization-core/src/string-coerce.ts",
+      "gitBlob": "445a9cc4f8daff07f033c3958baf2b798e240e9d",
+      "sourceSha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf",
+      "executableSha256": "9a2e05da77f15162560fe904c20ba9a49a6e6996e8b8c9bc16fd611f8456f504",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "packages/normalization-core/src/number-coercion.ts",
+      "gitBlob": "00ac5bda035cd8e854059a0198c2a9a7928e1bc9",
+      "sourceSha256": "8c40eca65a8fd1dc3aa40d90c22bff35c3710fcb03d2bc8227864a264d20ddc4",
+      "executableSha256": "2f2d58d34e9b77067ea265333fb06a807ce0cdcad83639d6c257095bb9f69a97",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "packages/normalization-core/src/record-coerce.ts",
+      "gitBlob": "78eba9cd0e4c75f94e71dfb3fcb7f4cf4eeeef16",
+      "sourceSha256": "541c179840c2cad4edc5c8103f77cc7f8c6b1ee5ec3e52c7c9fe097b18917f1c",
+      "executableSha256": "4ca2e6e901c28a07ae5fc9b29719cce5c26c919c65ab235b4ae2d5eaf0ec338c",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "packages/media-core/src/constants.ts",
+      "gitBlob": "03db8b857c1d69601903eda22f204b02ce640f6f",
+      "sourceSha256": "eaf6503c56b32bab745da862d150c76896805e7db2f5bb12283e2930b64cb184",
+      "executableSha256": "270d96507dc42b7b2f509f182368362ad39f161af14c52828379845c596408cb",
+      "wholeModule": true,
+      "executed": true
+    }
+  ],
+  "platformBoundaries": [
+    {
+      "module": "openclaw/plugin-sdk/secret-input",
+      "originalSourceExecuted": false,
+      "exports": {
+        "normalizeResolvedSecretInputString": "returns only the explicit fixture string; production secret resolution unexecuted"
+      }
+    },
+    {
+      "module": "extensions/elevenlabs/config-api.ts",
+      "originalSourceExecuted": false,
+      "exports": {
+        "resolveElevenLabsApiKeyWithProfileFallback": "counted undefined fixture; production environment/profile discovery unexecuted, including its eager call with an explicit key"
+      }
+    },
+    {
+      "module": "node:fs",
+      "originalSourceExecuted": false,
+      "exports": {
+        "rmSync": "uninvoked binding for the complete helper module; no cleanup or filesystem callback executes"
+      }
+    },
+    {
+      "module": "openclaw/plugin-sdk/provider-http",
+      "originalSourceExecuted": false,
+      "exports": {
+        "assertOkOrThrowProviderError": "asserts synthetic successful Response status; production error processing unexecuted",
+        "readProviderBinaryResponse": "returns exact fixture Response bytes as Buffer; production MIME validation and default 16 MiB bounded reader unexecuted"
+      }
+    },
+    {
+      "module": "openclaw/plugin-sdk/ssrf-runtime",
+      "originalSourceExecuted": false,
+      "exports": {
+        "fetchWithSsrFGuard": "records complete fixture request URL, headers, body, timeout and audit context; returns synthetic successful Response and counted release; no sockets",
+        "ssrfPolicyFromHttpBaseUrlAllowedHostname": "counted undefined fixture; production network policy unexecuted"
+      }
+    }
+  ],
+  "counts": {
+    "observations": 31,
+    "synthesisCallbacks": 31,
+    "httpRequests": 31,
+    "releases": 31,
+    "wholeModules": 10,
+    "trackedFilesBefore": 58558,
+    "trackedFilesAfter": 58558
+  },
+  "limits": [
+    "All 58,558 pinned tracked blobs verified before and after; each of ten complete modules also compared directly with its pinned Git object before TypeScript erasure.",
+    "Whole-module execution means module evaluation, not every export or callback; only factory construction, nested raw resolveConfig and successful ordinary synthesize run.",
+    "SDK facades contain export wiring only; actual number/string/record/boolean normalization, directive-parser construction, output planning and request serialization execute from complete originals.",
+    "Fresh per-vector VM process.env={} and cfg={}; explicit fixture secret and eagerly invoked undefined profile-discovery boundary; no live config, environment, profile or provider connection.",
+    "Successful synthetic HTTP returns eight fixed byte tokens and counts release; no real audio decoding, MIME validation, production resource lifetime or transport behavior is established.",
+    "Production binary reader defaults to 16 MiB but remains a platform fixture here; no per-request maxBytes options are passed by this provider, and the bounded reader itself is unexecuted.",
+    "12345 ms is the forwarded request timeout; synchronous VM and asynchronous capture deadline are 2000 ms. Production request deadlines and outer runtime default limits are unexecuted.",
+    "No streamSynthesize, synthesizeTelephony, listVoices, directive parsing, Talk resolution, transcription, plugin registration, readiness or full-runtime callback is executed.",
+    "Format-family metadata and opaque fixture bytes are source observations, not codec or native publication claims. Native scope supports MP3/Opus/WAV; PCM/ulaw/alaw/other formats are source-only evidence.",
+    "Result contains outputFormat/fileExtension/voiceCompatible and no MIME or sample rate; the source uses family metadata without decoding fixture bytes."
+  ],
+  "observations": [
+    {
+      "id": "default-file",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_multilingual_v2",
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=mp3_44100_128",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "mp3_44100_128"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_multilingual_v2",
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_multilingual_v2\",\"voice_settings\":{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3_44100_128",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "default-note",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "voice-note",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "voice-note",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_multilingual_v2",
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=opus_48000_64",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "opus_48000_64"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_multilingual_v2",
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_multilingual_v2\",\"voice_settings\":{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "opus_48000_64",
+        "fileExtension": ".opus",
+        "voiceCompatible": true
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "file-opus",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "outputFormat": "opus_48000_64"
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "outputFormat": "opus_48000_64"
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_multilingual_v2",
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=opus_48000_64",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "opus_48000_64"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_multilingual_v2",
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_multilingual_v2\",\"voice_settings\":{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "opus_48000_64",
+        "fileExtension": ".opus",
+        "voiceCompatible": true
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "note-mp3",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "voice-note",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "outputFormat": "mp3_22050_32"
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "voice-note",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "outputFormat": "mp3_22050_32"
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_multilingual_v2",
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=mp3_22050_32",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "mp3_22050_32"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_multilingual_v2",
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_multilingual_v2\",\"voice_settings\":{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3_22050_32",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "file-wav",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "outputFormat": "wav_44100"
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "outputFormat": "wav_44100"
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_multilingual_v2",
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=wav_44100",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "wav_44100"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_multilingual_v2",
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_multilingual_v2\",\"voice_settings\":{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "wav_44100",
+        "fileExtension": ".wav",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "file-pcm",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "outputFormat": "pcm_22050"
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "outputFormat": "pcm_22050"
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_multilingual_v2",
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=pcm_22050",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "pcm_22050"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_multilingual_v2",
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_multilingual_v2\",\"voice_settings\":{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "pcm_22050",
+        "fileExtension": ".pcm",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "file-ulaw",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "outputFormat": "ulaw_8000"
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "outputFormat": "ulaw_8000"
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_multilingual_v2",
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=ulaw_8000",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "ulaw_8000"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_multilingual_v2",
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_multilingual_v2\",\"voice_settings\":{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "ulaw_8000",
+        "fileExtension": ".ulaw",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "file-alaw",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "outputFormat": "alaw_8000"
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "outputFormat": "alaw_8000"
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_multilingual_v2",
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=alaw_8000",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "alaw_8000"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_multilingual_v2",
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_multilingual_v2\",\"voice_settings\":{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "alaw_8000",
+        "fileExtension": ".alaw",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "other-format",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "outputFormat": "flac_44100"
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "outputFormat": "flac_44100"
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_multilingual_v2",
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=flac_44100",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "flac_44100"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_multilingual_v2",
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_multilingual_v2\",\"voice_settings\":{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "flac_44100",
+        "fileExtension": ".bin",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "format-spelling",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "outputFormat": "  OpUs_48000_64  "
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "outputFormat": "  OpUs_48000_64  "
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_multilingual_v2",
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=OpUs_48000_64",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "OpUs_48000_64"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_multilingual_v2",
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_multilingual_v2\",\"voice_settings\":{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "OpUs_48000_64",
+        "fileExtension": ".opus",
+        "voiceCompatible": true
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "configured",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "baseUrl": " https://speech.example.test/prefix/// ",
+              "voiceId": " ABCDEFGHIJ0123456789 ",
+              "modelId": " eleven_v3 ",
+              "seed": 17,
+              "applyTextNormalization": " ON ",
+              "languageCode": " EN ",
+              "voiceSettings": {
+                "stability": 0.3,
+                "similarityBoost": 0.6,
+                "style": 0.4,
+                "useSpeakerBoost": false,
+                "speed": 1.2
+              }
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "baseUrl": " https://speech.example.test/prefix/// ",
+              "voiceId": " ABCDEFGHIJ0123456789 ",
+              "modelId": " eleven_v3 ",
+              "seed": 17,
+              "applyTextNormalization": " ON ",
+              "languageCode": " EN ",
+              "voiceSettings": {
+                "stability": 0.3,
+                "similarityBoost": 0.6,
+                "style": 0.4,
+                "useSpeakerBoost": false,
+                "speed": 1.2
+              }
+            }
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://speech.example.test/prefix",
+        "voiceId": "ABCDEFGHIJ0123456789",
+        "modelId": "eleven_v3",
+        "seed": 17,
+        "applyTextNormalization": "ON",
+        "languageCode": "EN",
+        "voiceSettings": {
+          "stability": 0.3,
+          "similarityBoost": 0.6,
+          "style": 0.4,
+          "useSpeakerBoost": false,
+          "speed": 1.2
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://speech.example.test/prefix/v1/text-to-speech/ABCDEFGHIJ0123456789?output_format=mp3_44100_128",
+        "method": "POST",
+        "path": "/prefix/v1/text-to-speech/ABCDEFGHIJ0123456789",
+        "query": {
+          "output_format": "mp3_44100_128"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_v3",
+          "seed": 17,
+          "apply_text_normalization": "on",
+          "language_code": "en",
+          "voice_settings": {
+            "stability": 0.3,
+            "similarity_boost": 0.6,
+            "style": 0.4,
+            "use_speaker_boost": false,
+            "speed": 1.2
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_v3\",\"seed\":17,\"apply_text_normalization\":\"on\",\"language_code\":\"en\",\"voice_settings\":{\"stability\":0.3,\"similarity_boost\":0.6,\"style\":0.4,\"use_speaker_boost\":false,\"speed\":1.2}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3_44100_128",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "settings-lower",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "voiceSettings": {
+                "stability": 0,
+                "similarityBoost": 0,
+                "style": 0,
+                "useSpeakerBoost": false,
+                "speed": 0.5
+              }
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "voiceSettings": {
+                "stability": 0,
+                "similarityBoost": 0,
+                "style": 0,
+                "useSpeakerBoost": false,
+                "speed": 0.5
+              }
+            }
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_multilingual_v2",
+        "voiceSettings": {
+          "stability": 0,
+          "similarityBoost": 0,
+          "style": 0,
+          "useSpeakerBoost": false,
+          "speed": 0.5
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=mp3_44100_128",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "mp3_44100_128"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_multilingual_v2",
+          "voice_settings": {
+            "stability": 0,
+            "similarity_boost": 0,
+            "style": 0,
+            "use_speaker_boost": false,
+            "speed": 0.5
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_multilingual_v2\",\"voice_settings\":{\"stability\":0,\"similarity_boost\":0,\"style\":0,\"use_speaker_boost\":false,\"speed\":0.5}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3_44100_128",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "settings-upper",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "voiceSettings": {
+                "stability": 1,
+                "similarityBoost": 1,
+                "style": 1,
+                "useSpeakerBoost": true,
+                "speed": 2
+              }
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "voiceSettings": {
+                "stability": 1,
+                "similarityBoost": 1,
+                "style": 1,
+                "useSpeakerBoost": true,
+                "speed": 2
+              }
+            }
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_multilingual_v2",
+        "voiceSettings": {
+          "stability": 1,
+          "similarityBoost": 1,
+          "style": 1,
+          "useSpeakerBoost": true,
+          "speed": 2
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=mp3_44100_128",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "mp3_44100_128"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_multilingual_v2",
+          "voice_settings": {
+            "stability": 1,
+            "similarity_boost": 1,
+            "style": 1,
+            "use_speaker_boost": true,
+            "speed": 2
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_multilingual_v2\",\"voice_settings\":{\"stability\":1,\"similarity_boost\":1,\"style\":1,\"use_speaker_boost\":true,\"speed\":2}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3_44100_128",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "settings-partial",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "voiceSettings": {
+                "stability": 0.2,
+                "speed": 1.3
+              }
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "voiceSettings": {
+                "stability": 0.2,
+                "speed": 1.3
+              }
+            }
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_multilingual_v2",
+        "voiceSettings": {
+          "stability": 0.2,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1.3
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=mp3_44100_128",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "mp3_44100_128"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_multilingual_v2",
+          "voice_settings": {
+            "stability": 0.2,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1.3
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_multilingual_v2\",\"voice_settings\":{\"stability\":0.2,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1.3}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3_44100_128",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "seed-zero",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "seed": 0
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "seed": 0
+            }
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_multilingual_v2",
+        "seed": 0,
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=mp3_44100_128",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "mp3_44100_128"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_multilingual_v2",
+          "seed": 0,
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_multilingual_v2\",\"seed\":0,\"voice_settings\":{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3_44100_128",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "seed-upper",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "seed": 4294967295
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "seed": 4294967295
+            }
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_multilingual_v2",
+        "seed": 4294967295,
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=mp3_44100_128",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "mp3_44100_128"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_multilingual_v2",
+          "seed": 4294967295,
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_multilingual_v2\",\"seed\":4294967295,\"voice_settings\":{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3_44100_128",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "config-alias-turbo25",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "modelId": " eleven_turbo_v2_5 "
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "modelId": " eleven_turbo_v2_5 "
+            }
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_flash_v2_5",
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=mp3_44100_128",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "mp3_44100_128"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_flash_v2_5",
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_flash_v2_5\",\"voice_settings\":{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3_44100_128",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "config-alias-turbo2",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "modelId": "eleven_turbo_v2"
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "modelId": "eleven_turbo_v2"
+            }
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_flash_v2",
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=mp3_44100_128",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "mp3_44100_128"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_flash_v2",
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_flash_v2\",\"voice_settings\":{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3_44100_128",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "override-alias-turbo25",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "modelId": " eleven_turbo_v2_5 "
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "modelId": " eleven_turbo_v2_5 "
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_multilingual_v2",
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=mp3_44100_128",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "mp3_44100_128"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_flash_v2_5",
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_flash_v2_5\",\"voice_settings\":{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3_44100_128",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "override-alias-turbo2",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "modelId": "eleven_turbo_v2"
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "modelId": "eleven_turbo_v2"
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_multilingual_v2",
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=mp3_44100_128",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "mp3_44100_128"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_flash_v2",
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_flash_v2\",\"voice_settings\":{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3_44100_128",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "custom-model",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "modelId": " custom-speech-model "
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "modelId": " custom-speech-model "
+            }
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "custom-speech-model",
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=mp3_44100_128",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "mp3_44100_128"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "custom-speech-model",
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"custom-speech-model\",\"voice_settings\":{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3_44100_128",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "normalization-auto",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "applyTextNormalization": " AUTO ",
+              "languageCode": " DE "
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "applyTextNormalization": " AUTO ",
+              "languageCode": " DE "
+            }
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_multilingual_v2",
+        "applyTextNormalization": "AUTO",
+        "languageCode": "DE",
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=mp3_44100_128",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "mp3_44100_128"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_multilingual_v2",
+          "apply_text_normalization": "auto",
+          "language_code": "de",
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_multilingual_v2\",\"apply_text_normalization\":\"auto\",\"language_code\":\"de\",\"voice_settings\":{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3_44100_128",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "normalization-on",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "applyTextNormalization": "on",
+              "languageCode": "fr"
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "applyTextNormalization": "on",
+              "languageCode": "fr"
+            }
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_multilingual_v2",
+        "applyTextNormalization": "on",
+        "languageCode": "fr",
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=mp3_44100_128",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "mp3_44100_128"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_multilingual_v2",
+          "apply_text_normalization": "on",
+          "language_code": "fr",
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_multilingual_v2\",\"apply_text_normalization\":\"on\",\"language_code\":\"fr\",\"voice_settings\":{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3_44100_128",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "normalization-off",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "applyTextNormalization": " Off ",
+              "languageCode": " ZH "
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "applyTextNormalization": " Off ",
+              "languageCode": " ZH "
+            }
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_multilingual_v2",
+        "applyTextNormalization": "Off",
+        "languageCode": "ZH",
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=mp3_44100_128",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "mp3_44100_128"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_multilingual_v2",
+          "apply_text_normalization": "off",
+          "language_code": "zh",
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_multilingual_v2\",\"apply_text_normalization\":\"off\",\"language_code\":\"zh\",\"voice_settings\":{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3_44100_128",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "overrides",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "voiceId": "ABCDEFGHIJ0123456789",
+              "modelId": "eleven_v3",
+              "seed": 17,
+              "applyTextNormalization": "on",
+              "languageCode": "de",
+              "voiceSettings": {
+                "stability": 0.2,
+                "speed": 1.2
+              }
+            }
+          }
+        },
+        "providerOverrides": {
+          "voiceId": " 0123456789ABCDEFGHIJ ",
+          "modelId": " eleven_flash_v2_5 ",
+          "seed": 0,
+          "applyTextNormalization": " OFF ",
+          "languageCode": " EN ",
+          "latencyTier": 4,
+          "outputFormat": "wav_44100",
+          "voiceSettings": {
+            "similarityBoost": 0,
+            "style": 1,
+            "useSpeakerBoost": false,
+            "speed": 0.5
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "voiceId": "ABCDEFGHIJ0123456789",
+              "modelId": "eleven_v3",
+              "seed": 17,
+              "applyTextNormalization": "on",
+              "languageCode": "de",
+              "voiceSettings": {
+                "stability": 0.2,
+                "speed": 1.2
+              }
+            }
+          }
+        },
+        "providerOverrides": {
+          "voiceId": " 0123456789ABCDEFGHIJ ",
+          "modelId": " eleven_flash_v2_5 ",
+          "seed": 0,
+          "applyTextNormalization": " OFF ",
+          "languageCode": " EN ",
+          "latencyTier": 4,
+          "outputFormat": "wav_44100",
+          "voiceSettings": {
+            "similarityBoost": 0,
+            "style": 1,
+            "useSpeakerBoost": false,
+            "speed": 0.5
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "ABCDEFGHIJ0123456789",
+        "modelId": "eleven_v3",
+        "seed": 17,
+        "applyTextNormalization": "on",
+        "languageCode": "de",
+        "voiceSettings": {
+          "stability": 0.2,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1.2
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/0123456789ABCDEFGHIJ?output_format=wav_44100&optimize_streaming_latency=4",
+        "method": "POST",
+        "path": "/v1/text-to-speech/0123456789ABCDEFGHIJ",
+        "query": {
+          "output_format": "wav_44100",
+          "optimize_streaming_latency": "4"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_flash_v2_5",
+          "seed": 0,
+          "apply_text_normalization": "off",
+          "language_code": "en",
+          "voice_settings": {
+            "stability": 0.2,
+            "similarity_boost": 0,
+            "style": 1,
+            "use_speaker_boost": false,
+            "speed": 0.5
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_flash_v2_5\",\"seed\":0,\"apply_text_normalization\":\"off\",\"language_code\":\"en\",\"voice_settings\":{\"stability\":0.2,\"similarity_boost\":0,\"style\":1,\"use_speaker_boost\":false,\"speed\":0.5}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "wav_44100",
+        "fileExtension": ".wav",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "override-settings-upper",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "seed": 4294967295,
+          "voiceSettings": {
+            "stability": 1,
+            "similarityBoost": 1,
+            "style": 1,
+            "useSpeakerBoost": true,
+            "speed": 2
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "seed": 4294967295,
+          "voiceSettings": {
+            "stability": 1,
+            "similarityBoost": 1,
+            "style": 1,
+            "useSpeakerBoost": true,
+            "speed": 2
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_multilingual_v2",
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=mp3_44100_128",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "mp3_44100_128"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_multilingual_v2",
+          "seed": 4294967295,
+          "voice_settings": {
+            "stability": 1,
+            "similarity_boost": 1,
+            "style": 1,
+            "use_speaker_boost": true,
+            "speed": 2
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_multilingual_v2\",\"seed\":4294967295,\"voice_settings\":{\"stability\":1,\"similarity_boost\":1,\"style\":1,\"use_speaker_boost\":true,\"speed\":2}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3_44100_128",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "latency-zero",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "latencyTier": 0
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "latencyTier": 0
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_multilingual_v2",
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=mp3_44100_128&optimize_streaming_latency=0",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "mp3_44100_128",
+          "optimize_streaming_latency": "0"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_multilingual_v2",
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_multilingual_v2\",\"voice_settings\":{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3_44100_128",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "latency-upper",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "latencyTier": 4
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "latencyTier": 4
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_multilingual_v2",
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=mp3_44100_128&optimize_streaming_latency=4",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "mp3_44100_128",
+          "optimize_streaming_latency": "4"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_multilingual_v2",
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_multilingual_v2\",\"voice_settings\":{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3_44100_128",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "v3-latency",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "modelId": "eleven_v3"
+            }
+          }
+        },
+        "providerOverrides": {
+          "latencyTier": 4
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech",
+              "modelId": "eleven_v3"
+            }
+          }
+        },
+        "providerOverrides": {
+          "latencyTier": 4
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_v3",
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=mp3_44100_128",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "mp3_44100_128"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "eleven_v3",
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"eleven_v3\",\"voice_settings\":{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3_44100_128",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "v3-override-latency",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "modelId": " ELEVEN_V3 ",
+          "latencyTier": 0
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "modelId": " ELEVEN_V3 ",
+          "latencyTier": 0
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_multilingual_v2",
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=mp3_44100_128",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "mp3_44100_128"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg"
+        },
+        "body": {
+          "text": "Plain speech fixture.",
+          "model_id": "ELEVEN_V3",
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1
+          }
+        },
+        "bodyText": "{\"text\":\"Plain speech fixture.\",\"model_id\":\"ELEVEN_V3\",\"voice_settings\":{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3_44100_128",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "authored-text",
+      "input": {
+        "text": "  Ordinary speech.\n你好 🌍 — café.\t ",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "  Ordinary speech.\n你好 🌍 — café.\t ",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "rawConfig": {
+          "providers": {
+            "elevenlabs": {
+              "apiKey": "fixture-elevenlabs-speech"
+            }
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-elevenlabs-speech",
+        "baseUrl": "https://api.elevenlabs.io",
+        "voiceId": "pMsXgVXv3BLzUgSXRplE",
+        "modelId": "eleven_multilingual_v2",
+        "voiceSettings": {
+          "stability": 0.5,
+          "similarityBoost": 0.75,
+          "style": 0,
+          "useSpeakerBoost": true,
+          "speed": 1
+        }
+      },
+      "providerMetadata": {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "autoSelectOrder": 20,
+        "defaultModel": "eleven_multilingual_v2",
+        "models": [
+          "eleven_v3",
+          "eleven_multilingual_v2",
+          "eleven_flash_v2_5",
+          "eleven_flash_v2",
+          "eleven_turbo_v2_5",
+          "eleven_monolingual_v1"
+        ]
+      },
+      "request": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE?output_format=mp3_44100_128",
+        "method": "POST",
+        "path": "/v1/text-to-speech/pMsXgVXv3BLzUgSXRplE",
+        "query": {
+          "output_format": "mp3_44100_128"
+        },
+        "headers": {
+          "xi-api-key": "fixture-elevenlabs-speech",
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg"
+        },
+        "body": {
+          "text": "  Ordinary speech.\n你好 🌍 — café.\t ",
+          "model_id": "eleven_multilingual_v2",
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0,
+            "use_speaker_boost": true,
+            "speed": 1
+          }
+        },
+        "bodyText": "{\"text\":\"  Ordinary speech.\\n你好 🌍 — café.\\t \",\"model_id\":\"eleven_multilingual_v2\",\"voice_settings\":{\"stability\":0.5,\"similarity_boost\":0.75,\"style\":0,\"use_speaker_boost\":true,\"speed\":1}}",
+        "timeoutMs": 12345,
+        "auditContext": "elevenlabs.tts"
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3_44100_128",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "extensions/elevenlabs/config-api.ts",
+          "export": "resolveElevenLabsApiKeyWithProfileFallback"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "label": "ElevenLabs API error",
+          "kind": "audio",
+          "optionsProvided": false
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    }
+  ]
+}

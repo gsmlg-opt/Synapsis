@@ -173,8 +173,18 @@ jobs:
       - name: Remove stale release archives
         run: rm -f _build/prod/synapsis-*.tar.gz
 
+      - name: Set up filesystem runtime
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.22.1'
+
       - name: Build OTP release
-        run: mix release synapsis --overwrite
+        run: |
+          FILESYSTEM_NODE_PATH="$(node -p 'process.execPath')"
+          export SYNAPSIS_FILESYSTEM_RUNTIME_ROOT="$(dirname "$(dirname "$FILESYSTEM_NODE_PATH")")"
+          test "$("$FILESYSTEM_NODE_PATH" --version)" = 'v24.22.1'
+          test -f "$SYNAPSIS_FILESYSTEM_RUNTIME_ROOT/LICENSE"
+          mix release synapsis --overwrite
         env:
           SECRET_KEY_BASE: ${{ secrets.SECRET_KEY_BASE || 'build-only-placeholder-key-that-is-at-least-64-bytes-long-for-phoenix' }}
 

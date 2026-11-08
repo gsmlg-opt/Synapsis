@@ -1,0 +1,266 @@
+{
+  "schemaVersion": 1,
+  "referencePin": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+  "exporter": {
+    "path": "scripts/openclaw/capture-event-reply.mjs",
+    "sha256": "24fb83e959bfa06c3682305c206adf7eb88a93aa99ebba691625ef5e293cc8dd"
+  },
+  "runtime": {
+    "executable": "/tmp/synapsis-openclaw-capture-runtime/node_modules/node/bin/node",
+    "version": "24.22.1",
+    "sha256": "e32e2d16081cf644f88392934288086e7662529d0d43277c34f7aad2207cfafb",
+    "platform": "linux"
+  },
+  "sourceTree": {
+    "before": {
+      "verified": true,
+      "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+      "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+      "verifiedTrackedFiles": 58558,
+      "filesSha256": "fb299c6a234f52cfcf20e3618cd11582d07e47a7773cba1334064ebdaf9fddec"
+    },
+    "after": {
+      "verified": true,
+      "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+      "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+      "verifiedTrackedFiles": 58558,
+      "filesSha256": "fb299c6a234f52cfcf20e3618cd11582d07e47a7773cba1334064ebdaf9fddec"
+    }
+  },
+  "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+  "entry": {
+    "path": "src/auto-reply/heartbeat.ts",
+    "export": "stripHeartbeatToken",
+    "mode": "message",
+    "calls": 18
+  },
+  "sourceRecords": [
+    {
+      "path": "src/auto-reply/heartbeat.ts",
+      "sha256": "7c82c8d03e4cbcd4027b35960ec292e1716cf30aaa9faf5caf36e7f785aeeb55",
+      "executableSha256": "d7afc3c97df3b2876c2f0d70b5e7e3729c097bf4ff4a04220e1e8e27894d8b83",
+      "executed": true,
+      "wholeModule": true
+    },
+    {
+      "path": "packages/normalization-core/src/string-coerce.ts",
+      "sha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf",
+      "executableSha256": "9a2e05da77f15162560fe904c20ba9a49a6e6996e8b8c9bc16fd611f8456f504",
+      "executed": true,
+      "wholeModule": true
+    },
+    {
+      "path": "src/shared/regexp.ts",
+      "sha256": "bafc7ca866952c3df452c25ca0c6ef30756ff2c9f44463ad76da30857aeab35e",
+      "executableSha256": "311e2b26f4d966fdcc5fe4d4bf71da43c89cebc1acb81938192a144a8f75419b",
+      "executed": true,
+      "wholeModule": true
+    },
+    {
+      "path": "src/auto-reply/tokens.ts",
+      "sha256": "5c19012815e8f501789bf6e98dccbf4ba6b36d4a030fd7f2badff43dea07e507",
+      "executableSha256": "a2f51d3de091f10cca6d79ca2e24b0daeae087b19af2e7e38600bf4962ff639d",
+      "executed": true,
+      "wholeModule": true
+    }
+  ],
+  "importBindings": [],
+  "scope": {
+    "pureMessageHelperExecuted": true,
+    "heartbeatModeExecuted": false,
+    "normalizeReplyCallsiteExecuted": false,
+    "dispatchExecuted": false,
+    "nativeRuntimeExecuted": false,
+    "browserExecuted": false,
+    "cliExecuted": false
+  },
+  "limits": [
+    "Only stripHeartbeatToken in explicit message mode executes from four complete unchanged pinned TypeScript modules; evaluating whole modules does not claim every function executes.",
+    "All tracked reference blobs are verified before and after; source, transformed executable, exporter and fixed runtime hashes are recorded. No source or installed package is patched, sliced or replaced by a facade.",
+    "The Markdown wrapper **HEARTBEAT_OK** preserves the observed original-candidate result ****; it is not suppressed according to an inferred cleanup intention.",
+    "The non-Unicode JavaScript suffix regex counts UTF-16 units and uses ASCII word characters; two astral symbols strip while three remain, and accented non-word suffixes strip.",
+    "Heartbeat quiet-history suppression, normalize-reply callsite, full dispatch, native lifecycle, browser, media and CLI delivery do not execute in this helper capture."
+  ],
+  "observations": [
+    {
+      "id": "exact-ack",
+      "raw": "HEARTBEAT_OK",
+      "mode": "message",
+      "actual": {
+        "shouldSkip": true,
+        "text": "",
+        "didStrip": true
+      }
+    },
+    {
+      "id": "prefix-meaningful",
+      "raw": "HEARTBEAT_OK all good",
+      "mode": "message",
+      "actual": {
+        "shouldSkip": false,
+        "text": "all good",
+        "didStrip": true
+      }
+    },
+    {
+      "id": "suffix-meaningful",
+      "raw": "All done HEARTBEAT_OK",
+      "mode": "message",
+      "actual": {
+        "shouldSkip": false,
+        "text": "All done",
+        "didStrip": true
+      }
+    },
+    {
+      "id": "repeated-edges",
+      "raw": "HEARTBEAT_OK HEARTBEAT_OK All done HEARTBEAT_OK",
+      "mode": "message",
+      "actual": {
+        "shouldSkip": false,
+        "text": "All done",
+        "didStrip": true
+      }
+    },
+    {
+      "id": "markdown-wrapper",
+      "raw": "**HEARTBEAT_OK**",
+      "mode": "message",
+      "actual": {
+        "shouldSkip": false,
+        "text": "****",
+        "didStrip": true
+      }
+    },
+    {
+      "id": "html-wrapper-meaningful",
+      "raw": "<code>HEARTBEAT_OK</code> all good",
+      "mode": "message",
+      "actual": {
+        "shouldSkip": false,
+        "text": "all good",
+        "didStrip": true
+      }
+    },
+    {
+      "id": "html-nbsp-wrapper",
+      "raw": "<b>HEARTBEAT_OK</b>&nbsp;Ready",
+      "mode": "message",
+      "actual": {
+        "shouldSkip": false,
+        "text": "Ready",
+        "didStrip": true
+      }
+    },
+    {
+      "id": "suffix-period",
+      "raw": "I should not respond HEARTBEAT_OK.",
+      "mode": "message",
+      "actual": {
+        "shouldSkip": false,
+        "text": "I should not respond.",
+        "didStrip": true
+      }
+    },
+    {
+      "id": "suffix-punctuation",
+      "raw": "All done HEARTBEAT_OK!!!",
+      "mode": "message",
+      "actual": {
+        "shouldSkip": false,
+        "text": "All done!!!",
+        "didStrip": true
+      }
+    },
+    {
+      "id": "prefix-punctuation",
+      "raw": "HEARTBEAT_OK.",
+      "mode": "message",
+      "actual": {
+        "shouldSkip": false,
+        "text": ".",
+        "didStrip": true
+      }
+    },
+    {
+      "id": "js-trim-and-collapse",
+      "raw": "﻿ HEARTBEAT_OK Ready  now ",
+      "mode": "message",
+      "actual": {
+        "shouldSkip": false,
+        "text": "Ready now",
+        "didStrip": true
+      }
+    },
+    {
+      "id": "unicode-prose",
+      "raw": "HEARTBEAT_OK 完成 🙂",
+      "mode": "message",
+      "actual": {
+        "shouldSkip": false,
+        "text": "完成 🙂",
+        "didStrip": true
+      }
+    },
+    {
+      "id": "meaningful-nel",
+      "raw": "HEARTBEAT_OK Ready",
+      "mode": "message",
+      "actual": {
+        "shouldSkip": false,
+        "text": "Ready",
+        "didStrip": true
+      }
+    },
+    {
+      "id": "ordinary-unchanged",
+      "raw": "Ordinary\n\nanswer",
+      "mode": "message",
+      "actual": {
+        "shouldSkip": false,
+        "text": "Ordinary\n\nanswer",
+        "didStrip": false
+      }
+    },
+    {
+      "id": "interior-marker-unchanged",
+      "raw": "hello HEARTBEAT_OK there",
+      "mode": "message",
+      "actual": {
+        "shouldSkip": false,
+        "text": "hello HEARTBEAT_OK there",
+        "didStrip": false
+      }
+    },
+    {
+      "id": "four-utf16-suffix-units",
+      "raw": "Ready HEARTBEAT_OK🙂🙂",
+      "mode": "message",
+      "actual": {
+        "shouldSkip": false,
+        "text": "Ready🙂🙂",
+        "didStrip": true
+      }
+    },
+    {
+      "id": "six-utf16-suffix-units",
+      "raw": "Ready HEARTBEAT_OK🙂🙂🙂",
+      "mode": "message",
+      "actual": {
+        "shouldSkip": false,
+        "text": "Ready HEARTBEAT_OK🙂🙂🙂",
+        "didStrip": false
+      }
+    },
+    {
+      "id": "ascii-word-class-unicode-suffix",
+      "raw": "Ready HEARTBEAT_OKé",
+      "mode": "message",
+      "actual": {
+        "shouldSkip": false,
+        "text": "Readyé",
+        "didStrip": true
+      }
+    }
+  ]
+}

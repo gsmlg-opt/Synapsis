@@ -12,25 +12,17 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
     {:search, "Search"},
     {:execution, "Runtime"},
     {:web, "Web"},
+    {:media, "Media"},
     {:planning, "Planning"},
     {:orchestration, "Orchestration"},
     {:interaction, "Interaction"},
     {:session, "Sessions"},
     {:memory, "Memory"},
-    {:workspace, "Workspace"},
     {:communication, "Communication"},
     {:workflow, "Workflow"},
     {:swarm, "Swarm"},
-    {:notebook, "Notebook"},
-    {:computer, "Computer"},
     {:uncategorized, "Other"}
   ]
-
-  @retired_tool_names ~w(
-    workspace_read workspace_write workspace_delete workspace_list workspace_search
-    notebook_read notebook_edit
-    fetch web_search
-  )
 
   @impl true
   def mount(_params, _session, socket) do
@@ -47,14 +39,16 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
        available_tools: [],
        mcp_sources: [],
        selected_source: "built-in",
-       mcp_refreshing: false,
-       mcp_refresh_errors: %{},
        selection_revision: 0
      )}
   end
 
   @impl true
   def handle_info({:tool_registry_changed, _payload}, socket) do
+    {:noreply, socket}
+  end
+
+  def handle_info({:mcp_source_catalog_changed, _payload}, socket) do
     {:noreply, assign_tool_catalog(socket)}
   end
 
@@ -64,27 +58,27 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
       socket
       |> assign_common()
       |> apply_action(socket.assigns.live_action, params)
-
-    socket =
-      if connected?(socket) and socket.assigns.live_action in [:new, :edit],
-        do: refresh_mcp_catalog(socket),
-        else: socket
+      |> assign_tool_catalog()
 
     {:noreply, socket}
   end
 
   @impl true
   def handle_event("refresh_mcp_tools", _params, socket),
-    do: {:noreply, refresh_mcp_catalog(socket)}
+    do: {:noreply, assign_tool_catalog(socket)}
 
   def handle_event("save_toolset", %{"toolset" => attrs} = params, socket) do
     tool_names =
-      params
-      |> Map.get("tool_names", [])
-      |> List.wrap()
-      |> active_tool_names()
+      selected_tool_names(
+        params,
+        socket.assigns.selected_tool_names,
+        socket.assigns.toolset.tool_contract_version
+      )
 
-    attrs = Map.put(attrs, "tool_names", tool_names)
+    attrs =
+      attrs
+      |> Map.put("tool_names", tool_names)
+      |> Map.put("tool_contract_version", socket.assigns.toolset.tool_contract_version)
 
     result =
       case socket.assigns.live_action do
@@ -110,7 +104,13 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
 
   def handle_event("change_toolset_form", params, socket) do
     toolset_attrs = Map.get(params, "toolset", %{})
-    selected_tool_names = selected_tool_names(params)
+
+    selected_tool_names =
+      selected_tool_names(
+        params,
+        socket.assigns.selected_tool_names,
+        socket.assigns.toolset.tool_contract_version
+      )
 
     {:noreply,
      assign(socket,
@@ -121,14 +121,22 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
 
   def handle_event("select_tool_source", %{"source" => source}, socket) do
     source =
-      socket.assigns.available_tools
-      |> tool_source_options(socket.assigns.mcp_sources)
+      socket.assigns.mcp_sources
+      |> tool_source_options()
       |> Enum.find_value("built-in", fn {value, _label} ->
         if value == source, do: value
       end)
 
     {:noreply, assign(socket, :selected_source, source)}
   end
+
+  def handle_event(
+        event,
+        _params,
+        %{assigns: %{toolset: %Toolset{tool_contract_version: 0}}} = socket
+      )
+      when event in ["select_all_tools", "select_tool_group"],
+      do: {:noreply, socket}
 
   def handle_event("select_all_tools", _params, socket) do
     tool_names =
@@ -204,16 +212,9 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
         </div>
 
         <div :if={@live_action in [:new, :edit]} class="mb-4">
-          <.dm_btn type="button" phx-click="refresh_mcp_tools" disabled={@mcp_refreshing} size="sm">
-            {if @mcp_refreshing, do: "Refreshing MCP tools…", else: "Refresh live MCP tools"}
+          <.dm_btn type="button" phx-click="refresh_mcp_tools" size="sm">
+            Refresh local MCP catalog
           </.dm_btn>
-          <p
-            :for={{source_id, _reason} <- @mcp_refresh_errors}
-            role="alert"
-            class="text-sm text-error mt-2"
-          >
-            MCP discovery failed: {source_id}. Tools remain unavailable until refresh succeeds.
-          </p>
         </div>
 
         <.toolset_form
@@ -233,6 +234,9 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
               <div class="min-w-0">
                 <div class="flex items-center gap-2">
                   <h2 class="font-semibold">{toolset.name}</h2>
+                  <span class="text-xs text-on-surface-variant">
+                    {if toolset.tool_contract_version == 1, do: "Native v1", else: "Legacy v0"}
+                  </span>
                   <.dm_badge :if={toolset.is_builtin} variant="primary" size="sm">built-in</.dm_badge>
                 </div>
                 <p class="text-xs text-on-surface-variant mt-1">{toolset.description}</p>
@@ -283,21 +287,36 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
   attr :draft, :map, default: nil
 
   defp toolset_form(assigns) do
+    selected_names = Enum.uniq(assigns.selected_tool_names)
     available_names = Enum.map(assigns.available_tools, & &1.name)
-    unavailable_names = assigns.selected_tool_names -- available_names
-    source_options = tool_source_options(assigns.available_tools, assigns.mcp_sources)
+    legacy? = assigns.toolset.tool_contract_version == 0
+
+    unavailable_names =
+      if legacy?, do: [], else: Enum.reject(selected_names, &(&1 in available_names))
+
+    source_options = tool_source_options(assigns.mcp_sources)
     source_tools = tools_for_source(assigns.available_tools, assigns.selected_source)
+    source_names = Enum.map(source_tools, & &1.name)
     tool_groups = available_tool_groups(source_tools)
     selected_source_label = source_label(assigns.selected_source, assigns.mcp_sources)
 
     assigns =
       assigns
+      |> assign(:legacy?, legacy?)
+      |> assign(:legacy_names, if(legacy?, do: selected_names, else: []))
+      |> assign(
+        :draft,
+        if(assigns.draft, do: Map.put(assigns.draft, "tool_names", assigns.selected_tool_names))
+      )
       |> assign(:unavailable_names, unavailable_names)
       |> assign(:source_options, source_options)
       |> assign(:source_tools, source_tools)
       |> assign(
         :off_source_names,
-        assigns.selected_tool_names -- (Enum.map(source_tools, & &1.name) ++ unavailable_names)
+        if(legacy?,
+          do: [],
+          else: Enum.reject(selected_names, &(&1 in source_names or &1 in unavailable_names))
+        )
       )
       |> assign(:tool_groups, tool_groups)
       |> assign(:selected_source_label, selected_source_label)
@@ -305,6 +324,16 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
     ~H"""
     <.dm_card variant="bordered" class="mb-6">
       <:title>{if @toolset.id, do: "Edit Toolset", else: "New Toolset"}</:title>
+      <p :if={@toolset.tool_contract_version == 0} class="mb-4 text-sm text-warning">
+        Legacy selection · contract v0. Explicit migration required before native runtime use.
+        Saving metadata keeps the saved selection and version. Native tools below are a read-only
+        preview; create a new native Toolset to select them explicitly.
+        <.dm_link navigate={~p"/agent/tools/new"}>New native Toolset</.dm_link>
+      </p>
+      <p :if={@toolset.tool_contract_version == 1} class="mb-4 text-sm text-on-surface-variant">
+        Native contract v1. This catalog describes supported tools; it does not establish runtime
+        readiness or grant permission. Saved unavailable selections remain removable.
+      </p>
 
       <.react_form
         for={%{}}
@@ -312,7 +341,12 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
         id="toolset-form"
         values={toolset_form_values(@toolset, @selected_tool_names)}
         draft={@draft}
-        structure={[@selected_source, Enum.map(@available_tools, & &1.name), @selection_revision]}
+        structure={[
+          @selected_source,
+          @available_tools,
+          Enum.map(@mcp_sources, &Map.take(&1, [:id, :name, :enabled, :status, :tool_count])),
+          @selection_revision
+        ]}
         phx-submit="save_toolset"
         phx-change="change_toolset_form"
         class="space-y-4"
@@ -328,7 +362,31 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
         />
 
         <input :for={name <- @off_source_names} type="hidden" name="tool_names[]" value={name} />
-        <div>
+        <section
+          :if={@legacy?}
+          data-tool-category="legacy-selection"
+          class="rounded-lg border border-warning/50 bg-surface-container-high p-3"
+        >
+          <h3 class="text-sm font-semibold mb-2">Saved legacy selection</h3>
+          <p class="text-xs text-on-surface-variant mb-3">
+            Uncheck a saved name to remove all its occurrences. Other saved names keep their order
+            and duplicates, including names also shown in the native preview.
+          </p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <label
+              :for={name <- @legacy_names}
+              class="flex items-start gap-2 rounded border border-warning/50 bg-surface p-2 text-sm"
+            >
+              <input type="checkbox" name="tool_names[]" value={name} checked />
+              <span class="font-mono text-xs break-all">{name}</span>
+            </label>
+          </div>
+          <p :if={@legacy_names == []} class="text-xs text-on-surface-variant">
+            No saved legacy names.
+          </p>
+        </section>
+        <div data-testid={if @legacy?, do: "native-catalog-preview", else: "native-catalog"}>
+          <p :if={@legacy?} class="text-sm font-medium mb-3">Native catalog · read-only preview</p>
           <div class="mb-3">
             <div class="mb-2 text-sm font-medium">Tool source</div>
             <div class="flex flex-wrap gap-2" data-testid="tool-source-selector">
@@ -350,7 +408,13 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
               <div class="text-sm font-medium">Tools</div>
               <div class="text-xs text-on-surface-variant">{@selected_source_label}</div>
             </div>
-            <.dm_btn type="button" variant="ghost" size="xs" phx-click="select_all_tools">
+            <.dm_btn
+              :if={!@legacy?}
+              type="button"
+              variant="ghost"
+              size="xs"
+              phx-click="select_all_tools"
+            >
               Select all from source
             </.dm_btn>
           </div>
@@ -359,8 +423,7 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
               :if={@source_tools == []}
               class="rounded-lg border border-outline-variant bg-surface-container-high p-4 text-sm text-on-surface-variant"
             >
-              No tools are registered for this source. Start the MCP server from Settings > MCP
-              Servers to discover its tools.
+              No tools are present in the local MCP snapshot. Check Settings &gt; MCP Servers.
             </div>
 
             <section
@@ -374,6 +437,7 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
                   <span class="text-xs text-on-surface-variant">{length(tools)} tools</span>
                 </div>
                 <.dm_btn
+                  :if={!@legacy?}
                   type="button"
                   variant="ghost"
                   size="xs"
@@ -389,13 +453,14 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
                   class="flex items-start gap-2 rounded border border-outline-variant bg-surface p-2 text-sm"
                 >
                   <input
+                    :if={!@legacy?}
                     type="checkbox"
                     name="tool_names[]"
                     value={tool.name}
                     checked={tool.name in @selected_tool_names}
                   />
                   <span class="min-w-0">
-                    <span class="font-mono text-xs">{tool.name}</span>
+                    <span class="font-mono text-xs break-all">{tool.name}</span>
                     <span class="block text-xs text-on-surface-variant truncate">
                       {tool.description}
                     </span>
@@ -440,41 +505,53 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
     """
   end
 
-  defp refresh_mcp_catalog(%{assigns: %{mcp_refreshing: true}} = socket), do: socket
-
-  defp refresh_mcp_catalog(socket) do
-    socket
-    |> assign(mcp_refreshing: true, mcp_refresh_errors: %{})
-    |> start_async(:mcp_tools, fn -> Synapsis.MCPSelection.refresh() end)
-  end
-
-  @impl true
-  def handle_async(:mcp_tools, {:ok, outcomes}, socket) when is_map(outcomes) do
-    errors = Map.reject(outcomes, fn {_id, outcome} -> outcome == :ok end)
-
-    {:noreply,
-     socket |> assign(mcp_refreshing: false, mcp_refresh_errors: errors) |> assign_tool_catalog()}
-  end
-
-  def handle_async(:mcp_tools, _failure, socket) do
-    {:noreply,
-     socket
-     |> assign(mcp_refreshing: false, mcp_refresh_errors: %{"catalog" => :failed})
-     |> assign_tool_catalog()}
-  end
-
   defp assign_common(socket) do
     assign(socket,
       toolsets: Toolsets.list()
     )
-    |> assign_tool_catalog()
   end
 
   defp assign_tool_catalog(socket) do
-    assign(socket,
-      available_tools: available_tools(),
-      mcp_sources: Toolsets.list_mcp_sources()
-    )
+    {mcp_tools, sources} = native_mcp_catalog()
+    tools = Synapsis.Agent.Tools.DisplayCatalog.list() ++ mcp_tools
+    known_sources = ["built-in" | Enum.map(sources, & &1.id)]
+
+    selected_source =
+      if socket.assigns.selected_source in known_sources,
+        do: socket.assigns.selected_source,
+        else: initial_tool_source(socket.assigns.selected_tool_names, known_sources)
+
+    assign(socket, available_tools: tools, mcp_sources: sources, selected_source: selected_source)
+  end
+
+  defp native_mcp_catalog do
+    Toolsets.list_mcp_sources()
+    |> Enum.map(fn source ->
+      snapshot =
+        if Synapsis.MCPConfigs.runtime_available?(source),
+          do: Synapsis.MCP.runtime_snapshot(source.id),
+          else: {:error, :disabled}
+
+      {tools, status} =
+        case snapshot do
+          {:ok, %{source_id: id, tools: tools}} when id == source.id ->
+            {Enum.map(tools, fn tool ->
+               %{
+                 name: "mcp::#{source.id}::#{tool.raw_name}",
+                 description: tool.description || "",
+                 category: :uncategorized,
+                 source: source.id
+               }
+             end), :available}
+
+          _ ->
+            {[], if(source.enabled, do: :unavailable, else: :disabled)}
+        end
+
+      {tools, source |> Map.put(:status, status) |> Map.put(:tool_count, length(tools))}
+    end)
+    |> Enum.unzip()
+    |> then(fn {tools, sources} -> {List.flatten(tools), sources} end)
   end
 
   defp apply_action(socket, :index, _params) do
@@ -489,7 +566,7 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
   defp apply_action(socket, :new, _params) do
     assign(socket,
       page_title: "New Toolset",
-      toolset: %Toolset{tool_names: []},
+      toolset: %Toolset{tool_names: [], tool_contract_version: 1},
       selected_tool_names: [],
       selected_source: "built-in"
     )
@@ -502,7 +579,7 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
           page_title: "Edit Toolset",
           toolset: toolset,
           selected_tool_names: toolset.tool_names || [],
-          selected_source: initial_tool_source(toolset.tool_names || [])
+          selected_source: nil
         )
 
       nil ->
@@ -519,11 +596,18 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
     }
   end
 
-  defp selected_tool_names(params) do
-    params
-    |> Map.get("tool_names", [])
-    |> List.wrap()
-    |> active_tool_names()
+  defp selected_tool_names(params, existing, version) do
+    submitted =
+      params
+      |> Map.get("tool_names", [])
+      |> List.wrap()
+      |> active_tool_names()
+
+    # Native checkboxes submit DOM order and coalesce duplicates. Selection is
+    # per name, so retain the saved order and every occurrence still selected.
+    retained = Enum.filter(existing, &(&1 in submitted))
+    additions = Enum.reject(submitted, &(&1 in existing))
+    if version == 0, do: retained, else: retained ++ additions
   end
 
   defp preview_toolset(%Toolset{} = toolset, attrs) do
@@ -535,88 +619,52 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
   end
 
   defp merge_tool_names(existing, additions) do
-    (List.wrap(existing) ++ List.wrap(additions))
-    |> Enum.reject(&(&1 in [nil, ""]))
-    |> Enum.uniq()
-  end
+    existing = existing |> List.wrap() |> active_tool_names()
 
-  defp available_tools do
-    category_lookup = tool_category_lookup()
+    additions =
+      additions
+      |> List.wrap()
+      |> active_tool_names()
+      |> Enum.uniq()
+      |> Enum.reject(&(&1 in existing))
 
-    Synapsis.Tool.Registry.list()
-    |> Enum.reject(&retired_tool_name?(&1.name))
-    |> Enum.filter(fn tool ->
-      not String.starts_with?(tool.name, "mcp:") or
-        Synapsis.Tool.Registry.runtime_available?(tool.name)
-    end)
-    |> Enum.map(fn tool ->
-      category = Map.get(category_lookup, tool.name, :uncategorized)
-
-      %{
-        name: tool.name,
-        description: tool.description || "",
-        category: category,
-        category_label: category_label(category),
-        source: tool_source(tool.name)
-      }
-    end)
-    |> Enum.sort_by(&{category_index(&1.category), &1.name})
-  rescue
-    ArgumentError -> []
+    existing ++ additions
   end
 
   defp active_tool_names(tool_names) do
-    tool_names
-    |> Enum.reject(&(&1 in [nil, ""]))
-    |> Enum.reject(&retired_tool_name?/1)
+    Enum.reject(tool_names, &(&1 in [nil, ""]))
   end
-
-  defp retired_tool_name?(name), do: name in @retired_tool_names
-
-  defp tool_source("mcp:" <> rest) do
-    rest
-    |> String.split(":", parts: 2)
-    |> List.first()
-  end
-
-  defp tool_source(_name), do: "built-in"
 
   defp tools_for_source(tools, source) do
     Enum.filter(tools, &(&1.source == source))
   end
 
-  defp tool_source_options(tools, mcp_sources) do
-    configured_sources = Enum.map(mcp_sources, & &1.name)
+  defp tool_source_options(mcp_sources) do
+    configured =
+      Enum.map(mcp_sources, fn source ->
+        {source.id, "MCP: #{source.name} · #{source.tool_count} tools · #{source.status}"}
+      end)
 
-    registered_sources =
-      tools
-      |> Enum.map(& &1.source)
-      |> Enum.reject(&(&1 == "built-in"))
-
-    mcp_options =
-      (configured_sources ++ registered_sources)
-      |> Enum.uniq()
-      |> Enum.sort()
-      |> Enum.map(&{&1, "MCP: #{&1}"})
-
-    [{"built-in", "Built in"} | mcp_options]
+    [{"built-in", "Built in"} | Enum.sort_by(configured, &elem(&1, 1))]
   end
 
   defp source_label("built-in", _mcp_sources), do: "Built-in tools"
 
   defp source_label(source, mcp_sources) do
-    case Enum.find(mcp_sources, &(&1.name == source)) do
+    case Enum.find(mcp_sources, &(&1.id == source)) do
       nil -> "MCP source: #{source}"
       mcp -> "MCP source: #{mcp.name}"
     end
   end
 
-  defp initial_tool_source(tool_names) do
-    Enum.find_value(tool_names, "built-in", fn name ->
-      case tool_source(name) do
-        "built-in" -> nil
-        source -> source
-      end
+  defp initial_tool_source(tool_names, known_sources) do
+    Enum.find_value(tool_names, "built-in", fn
+      "mcp::" <> rest ->
+        source = rest |> String.split("::", parts: 2) |> List.first()
+        if source in known_sources, do: source
+
+      _ ->
+        nil
     end)
   end
 
@@ -635,26 +683,5 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
       end)
       |> Enum.reject(fn {_category, _label, category_tools} -> category_tools == [] end)
     end)
-  end
-
-  defp tool_category_lookup do
-    Enum.reduce(@tool_categories, %{}, fn {category, _label}, acc ->
-      category
-      |> Synapsis.Tool.Registry.list_by_category()
-      |> Enum.reduce(acc, fn tool, inner -> Map.put(inner, tool.name, category) end)
-    end)
-  end
-
-  defp category_label(category) do
-    @tool_categories
-    |> Enum.find_value("Other", fn
-      {^category, label} -> label
-      _ -> nil
-    end)
-  end
-
-  defp category_index(category) do
-    Enum.find_index(@tool_categories, fn {known, _label} -> known == category end) ||
-      length(@tool_categories)
   end
 end

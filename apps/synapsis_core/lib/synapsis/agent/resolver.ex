@@ -4,21 +4,22 @@ defmodule Synapsis.Agent.Resolver do
   falling back to hardcoded defaults if not found.
   """
 
-  alias Synapsis.{AgentConfigs, AgentSkills, SkillCatalog, Toolset, Toolsets}
-
-  @retired_tool_names ~w(
-    workspace_read workspace_write workspace_delete workspace_list workspace_search
-    notebook_read notebook_edit
-    fetch web_search
-  )
+  alias Synapsis.{
+    AgentConfig,
+    AgentConfigs,
+    AgentSkills,
+    Config.Store,
+    SkillCatalog,
+    SkillDiscovery
+  }
 
   def resolve(agent_name, project_config \\ %{}) do
     name = to_string(agent_name)
 
     agent =
-      case AgentConfigs.get_by_name(name) do
-        %Synapsis.AgentConfig{} = ac ->
-          from_db(ac)
+      case Enum.find(Store.list(:agent), &(&1["name"] == name)) do
+        raw when is_map(raw) ->
+          from_db(raw)
 
         nil ->
           name
@@ -29,8 +30,25 @@ defmodule Synapsis.Agent.Resolver do
 
     agent
     |> apply_project_agent_config(project_config)
-    |> Synapsis.MCPSelection.apply()
     |> snapshot_skills()
+  end
+
+  @doc "Resolve a saved Agent without the legacy missing-name fallback."
+  def resolve_configured(agent_name, project_config \\ %{}) do
+    case Enum.find(Store.list(:agent), &(&1["name"] == to_string(agent_name))) do
+      raw when is_map(raw) ->
+        agent =
+          raw |> from_db() |> apply_project_agent_config(project_config) |> snapshot_skills()
+
+        cond do
+          not agent.enabled -> {:error, :agent_unavailable}
+          Map.has_key?(agent, :skill_discovery_error) -> {:error, agent.skill_discovery_error}
+          true -> {:ok, agent}
+        end
+
+      nil ->
+        {:error, :agent_unavailable}
+    end
   end
 
   @doc "List all available agent names from the database."
@@ -38,7 +56,33 @@ defmodule Synapsis.Agent.Resolver do
     AgentConfigs.list_enabled()
   end
 
-  defp from_db(ac) do
+  defp from_db(raw) do
+    # Keep names, links and the uncast version from one source snapshot. Ecto
+    # accepts values such as "1" that are not explicit native provenance.
+    config =
+      case raw["config"] do
+        json when is_binary(json) ->
+          case Jason.decode(json) do
+            {:ok, decoded} -> decoded
+            _ -> raw["config"]
+          end
+
+        config ->
+          config
+      end
+
+    ac =
+      %AgentConfig{}
+      |> AgentConfig.changeset(Map.put(raw, "config", config))
+      |> Ecto.Changeset.apply_changes()
+
+    selection = %{
+      tools: raw["tools"] || [],
+      toolset_id: raw["toolset_id"],
+      toolset_ids: raw["toolset_ids"] || [],
+      tool_contract_version: Map.get(raw, "tool_contract_version", 0)
+    }
+
     model_tier =
       case ac.model_tier do
         "fast" -> :fast
@@ -47,6 +91,7 @@ defmodule Synapsis.Agent.Resolver do
       end
 
     %{
+      id: raw["id"],
       name: ac.name,
       label: ac.label || String.capitalize(ac.name),
       icon: ac.icon || "robot-outline",
@@ -54,20 +99,26 @@ defmodule Synapsis.Agent.Resolver do
       model: ac.model,
       provider: ac.provider,
       system_prompt: ac.system_prompt || default_system_prompt(),
-      tools: resolve_tools(ac),
-      toolset_id: ac.toolset_id,
-      toolset_ids: selected_toolset_ids(ac),
+      toolset_id: selection.toolset_id,
+      toolset_ids: selected_toolset_ids(selection),
       skills: AgentSkills.list_skills_for_agent(ac),
       workspace_path: workspace_path(ac.name, ac.config),
       reasoning_effort: ac.reasoning_effort || "medium",
       read_only: ac.read_only || false,
       max_tokens: ac.max_tokens || 8192,
       model_tier: model_tier,
-      permission_mode: ac.permission_mode || "ask",
+      permission_mode: ac.permission_mode || "yolo",
       fallback_models: ac.fallback_models || "",
       is_default: ac.is_default || false,
-      enabled: ac.enabled
+      enabled: ac.enabled,
+      mcp_resource_source_ids: Map.get(ac.config || %{}, "mcp_resource_source_ids", []),
+      deferred_tool_names: Map.get(ac.config || %{}, "deferred_tool_names", [])
     }
+    |> Map.merge(resolve_tools(selection))
+    |> Map.update!(
+      :tool_selection_sources,
+      &Map.put(&1, "agent", agent_source(raw, selection, config))
+    )
     |> maybe_mcp_selection(ac.config)
   end
 
@@ -96,11 +147,15 @@ defmodule Synapsis.Agent.Resolver do
       read_only: attrs.read_only,
       max_tokens: attrs.max_tokens,
       model_tier: model_tier(Map.get(attrs, :model_tier)),
-      permission_mode: Map.get(attrs, :permission_mode, "ask"),
+      permission_mode: Map.get(attrs, :permission_mode) || "yolo",
       fallback_models: Map.get(attrs, :fallback_models, ""),
       is_default: attrs.is_default,
-      enabled: attrs.enabled
+      enabled: attrs.enabled,
+      mcp_resource_source_ids:
+        Map.get(Map.get(attrs, :config, %{}) || %{}, "mcp_resource_source_ids", []),
+      deferred_tool_names: Map.get(Map.get(attrs, :config, %{}) || %{}, "deferred_tool_names", [])
     }
+    |> Map.merge(resolve_tools(attrs))
   end
 
   defp from_default(nil), do: "main" |> AgentConfigs.default_attrs() |> from_default()
@@ -117,9 +172,31 @@ defmodule Synapsis.Agent.Resolver do
   defp apply_project_agent_config(agent, _project_config), do: agent
 
   defp snapshot_skills(agent) do
-    agent
-    |> Map.put(:skill_catalog, SkillCatalog.snapshot(agent[:skills] || []))
-    |> Map.put(:skill_loader, Application.get_env(:synapsis_core, :skill_loader))
+    case refresh_skills(agent) do
+      {:ok, captured} -> captured
+      {:error, reason} -> Map.put(agent, :skill_discovery_error, reason)
+    end
+  end
+
+  @doc "Capture the prompt catalog and native reader snapshot as one immutable pair."
+  def refresh_skills(%{id: id} = agent) when is_binary(id) do
+    execution = %{deadline: System.monotonic_time(:millisecond) + 5_000}
+
+    with {:ok, snapshot} <- SkillDiscovery.capture(id, execution) do
+      {:ok,
+       agent
+       |> Map.delete(:skill_discovery_error)
+       |> Map.put(:skill_snapshot, snapshot)
+       |> Map.put(:skill_catalog, SkillDiscovery.entries(snapshot))
+       |> Map.put(:skill_loader, Application.get_env(:synapsis_core, :skill_loader))}
+    end
+  end
+
+  def refresh_skills(agent) when is_map(agent) do
+    {:ok,
+     agent
+     |> Map.put(:skill_catalog, SkillCatalog.snapshot(agent[:skills] || []))
+     |> Map.put(:skill_loader, Application.get_env(:synapsis_core, :skill_loader))}
   end
 
   defp project_agent_config(config, agent_name) do
@@ -153,28 +230,100 @@ defmodule Synapsis.Agent.Resolver do
   defp default_name(_name), do: "main"
 
   defp resolve_tools(%{} = agent) do
-    toolset_ids = selected_toolset_ids(agent)
-    tools = Map.get(agent, :tools) || []
-
-    case toolset_ids do
+    case selected_toolset_ids(agent) do
       [] ->
-        active_tool_names(tools)
+        selection = %{
+          tools: Map.get(agent, :tools) || [],
+          tool_contract_version: Map.get(agent, :tool_contract_version, 0),
+          tool_selection_sources: %{"toolsets" => []}
+        }
+
+        cond do
+          selection.tool_contract_version !== 1 ->
+            Map.put(
+              selection,
+              :tool_selection_error,
+              {:unsupported_tool_contract_version, selection.tool_contract_version}
+            )
+
+          not is_list(selection.tools) ->
+            Map.put(selection, :tool_selection_error, :invalid_tool_selection)
+
+          true ->
+            selection
+        end
 
       ids ->
-        ids
-        |> Toolsets.list_by_ids()
-        |> Enum.flat_map(fn %Toolset{tool_names: tool_names} -> tool_names || [] end)
-        |> active_tool_names()
-        |> Enum.uniq()
-        |> case do
-          [] -> active_tool_names(tools)
-          tool_names -> tool_names
+        by_id = Map.new(Store.list(:toolset), &{&1["id"], &1})
+        missing = Enum.reject(ids, &Map.has_key?(by_id, &1))
+
+        case missing do
+          [] ->
+            toolsets = Enum.map(ids, &Map.fetch!(by_id, &1))
+            versions = Enum.map(toolsets, &{&1["id"], Map.get(&1, "tool_contract_version", 0)})
+            invalid = Enum.reject(versions, fn {_id, version} -> version === 1 end)
+            names = Enum.map(toolsets, &(&1["tool_names"] || []))
+
+            selection = %{
+              tools:
+                if(Enum.all?(names, &is_list/1),
+                  do: names |> Enum.flat_map(& &1) |> Enum.uniq(),
+                  else: []
+                ),
+              tool_contract_version: if(invalid == [], do: 1),
+              tool_selection_sources: %{"toolsets" => Enum.map(toolsets, &toolset_source/1)}
+            }
+
+            cond do
+              invalid != [] ->
+                Map.put(
+                  selection,
+                  :tool_selection_error,
+                  {:unsupported_tool_contract_versions, invalid}
+                )
+
+              not Enum.all?(names, &is_list/1) ->
+                Map.put(selection, :tool_selection_error, :invalid_tool_selection)
+
+              true ->
+                selection
+            end
+
+          missing ->
+            %{
+              tools: [],
+              tool_contract_version: nil,
+              tool_selection_error: {:toolsets_unavailable, missing},
+              tool_selection_sources: %{"toolsets" => []}
+            }
         end
     end
   end
 
-  defp active_tool_names(tool_names) when is_list(tool_names) do
-    Enum.reject(tool_names, &(&1 in @retired_tool_names))
+  defp agent_source(raw, selection, config) do
+    source = %{
+      "id" => raw["id"],
+      "name" => raw["name"],
+      "tool_contract_version" => selection.tool_contract_version,
+      "tool_names" => selection.tools,
+      "toolset_ids" => selected_toolset_ids(selection),
+      "mcp_resource_source_ids" => Map.get(config || %{}, "mcp_resource_source_ids", []),
+      "deferred_tool_names" => Map.get(config || %{}, "deferred_tool_names", [])
+    }
+
+    case Map.fetch(config || %{}, "mcp_selection") do
+      {:ok, policy} -> Map.put(source, "mcp_selection", policy)
+      :error -> source
+    end
+  end
+
+  defp toolset_source(raw) do
+    %{
+      "id" => raw["id"],
+      "name" => raw["name"],
+      "tool_contract_version" => Map.get(raw, "tool_contract_version", 0),
+      "tool_names" => raw["tool_names"] || []
+    }
   end
 
   defp selected_toolset_ids(%{toolset_ids: ids}) when is_list(ids) and ids != [] do

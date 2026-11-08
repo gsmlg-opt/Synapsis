@@ -321,6 +321,10 @@ defmodule SynapsisWeb.MCPLive.Index do
     {:noreply, refresh_states(socket)}
   end
 
+  def handle_info({:mcp_source_catalog_changed, _payload}, socket) do
+    {:noreply, refresh_states(socket)}
+  end
+
   def handle_info({:provider_catalog_changed}, socket), do: {:noreply, refresh_states(socket)}
 
   def handle_info(_msg, socket), do: {:noreply, socket}
@@ -367,23 +371,16 @@ defmodule SynapsisWeb.MCPLive.Index do
 
   defp list_configs, do: MCPConfigs.list()
 
-  # Derive running status from Synapsis.MCP.list/0 and tool names from the tool
-  # registry: MCP tools are registered as "mcp:<server_name>:<tool>".
+  # Running state belongs to MCP processes; tool names/counts belong to source metadata.
   defp load_plugin_states(configs) do
+    tools_by_source = Enum.group_by(Synapsis.MCP.source_catalog(), & &1.mcp_config_id)
     running = MapSet.new(Synapsis.MCP.list())
 
     for config <- configs, into: %{} do
       running? = MapSet.member?(running, config.name)
-      tools = if running?, do: tools_for_server(config.name), else: []
+      tools = if running?, do: Map.get(tools_by_source, config.id, []), else: []
       {config.name, %{running: running?, tools: tools}}
     end
-  end
-
-  defp tools_for_server(name) do
-    prefix = "mcp:#{name}:"
-
-    Synapsis.Tool.Registry.list()
-    |> Enum.filter(fn tool -> String.starts_with?(to_string(tool.name), prefix) end)
   end
 
   defp parse_mcp_json(json) do

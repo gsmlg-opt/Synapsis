@@ -3,12 +3,12 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@duskmoon-dev/core": "1.20.4",
-    "@duskmoon-dev/css-art": "1.20.4",
-    "@duskmoon-dev/elements": "1.9.1",
-    "@duskmoon-dev/art-elements": "1.9.1",
-    "@duskmoon-dev/el-markdown": "1.9.1",
-    "@duskmoon-dev/el-markdown-input": "1.9.1",
+    "@duskmoon-dev/core": "1.20.7",
+    "@duskmoon-dev/css-art": "1.20.7",
+    "@duskmoon-dev/elements": "1.10.2",
+    "@duskmoon-dev/art-elements": "1.10.2",
+    "@duskmoon-dev/el-markdown": "1.10.2",
+    "@duskmoon-dev/el-markdown-input": "1.10.2",
     "@mdi/svg": "^7.4.47",
     "@synapsis/hooks": "workspace:*",
     "bootstrap-icons": "^1.13.2",
@@ -18,11 +18,11 @@
     "phoenix_live_view": "file:../../deps/phoenix_live_view",
     "tailwindcss": "4.3.3",
     "@duskmoon-dev/components": "0.5.3",
-    "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   },
   "devDependencies": {
-    "@types/phoenix": "^1.6.7",
+    "@types/phoenix": "^1.6.8",
     "typescript": "7.0.2"
   }
 }

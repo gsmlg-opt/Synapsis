@@ -40,8 +40,16 @@ defmodule Synapsis.Toolsets do
   def create(attrs) when is_map(attrs), do: persist(Toolset.changeset(%Toolset{}, attrs))
 
   @doc "Update a toolset."
-  def update(%Toolset{} = toolset, attrs) when is_map(attrs),
-    do: persist(Toolset.changeset(toolset, attrs))
+  def update(%Toolset{} = toolset, attrs) when is_map(attrs) do
+    Store.with_write_lock(fn ->
+      with {:ok, current} <- Store.get(@store_type, toolset.id) do
+        current
+        |> to_struct()
+        |> Toolset.changeset(Map.drop(attrs, [:id, "id"]))
+        |> persist_update(toolset.id)
+      end
+    end)
+  end
 
   @doc "Delete a custom toolset."
   def delete(%Toolset{is_builtin: true}), do: {:error, :protected}
@@ -66,6 +74,22 @@ defmodule Synapsis.Toolsets do
 
   defp persist(%Ecto.Changeset{} = changeset), do: {:error, changeset}
 
+  defp persist_update(%Ecto.Changeset{valid?: true} = changeset, id) do
+    changes =
+      changeset.changes
+      |> Map.delete(:id)
+      |> Map.new(fn
+        {:tool_names, names} -> {"tool_names", names || []}
+        {key, value} -> {Atom.to_string(key), value}
+      end)
+
+    with {:ok, merged} <- Store.merge_existing(@store_type, id, changes) do
+      {:ok, to_struct(merged)}
+    end
+  end
+
+  defp persist_update(%Ecto.Changeset{} = changeset, _id), do: {:error, changeset}
+
   defp ensure_id(%Toolset{id: nil} = r), do: %{r | id: Ecto.UUID.generate()}
   defp ensure_id(r), do: r
 
@@ -81,6 +105,7 @@ defmodule Synapsis.Toolsets do
       "name" => r.name,
       "description" => r.description,
       "tool_names" => r.tool_names || [],
+      "tool_contract_version" => r.tool_contract_version,
       "is_builtin" => r.is_builtin
     }
     |> Enum.reject(fn {_k, v} -> is_nil(v) end)

@@ -1,0 +1,1824 @@
+{
+  "schemaVersion": 1,
+  "referencePin": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+  "exporter": {
+    "path": "scripts/openclaw/capture-browser-query.mjs",
+    "sha256": "33fca6c3ed3ec2ad8bf1b160541ed204764d276cf40255fdbfb0c19161d597a8"
+  },
+  "harness": {
+    "path": "scripts/openclaw/capture-recipes.mjs",
+    "sha256": "4599b804b43bedac9ba7c594aef8b43f3c2a89e18cfb8fb375316d3dd7ee0557"
+  },
+  "runtime": {
+    "executable": "/tmp/synapsis-openclaw-capture-runtime/node_modules/node/bin/node",
+    "version": "24.22.1",
+    "sha256": "e32e2d16081cf644f88392934288086e7662529d0d43277c34f7aad2207cfafb"
+  },
+  "host": {
+    "generatedCode": "globalThis.__captureAudit=[];globalThis.__fixture=undefined;",
+    "sha256": "4bd5ef0c1cf85b686e3da173d1bceb86767d0ceeb0134310d48e93d162689716"
+  },
+  "sourceTree": {
+    "before": {
+      "verified": true,
+      "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+      "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+      "verifiedTrackedFiles": 58558,
+      "filesSha256": "fb299c6a234f52cfcf20e3618cd11582d07e47a7773cba1334064ebdaf9fddec"
+    },
+    "after": {
+      "verified": true,
+      "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+      "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+      "verifiedTrackedFiles": 58558,
+      "filesSha256": "fb299c6a234f52cfcf20e3618cd11582d07e47a7773cba1334064ebdaf9fddec"
+    }
+  },
+  "sourceRecords": [
+    {
+      "path": "extensions/browser/src/browser-tool.snapshot.ts",
+      "sha256": "e03ce145f366854232bd012f8718832ede70290d19bab5204d33bfb230652aa5",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "9bf7ca0ebcfbfe29631578b93e00660f71d3a5021d3630150fcb51035e7af3eb"
+    },
+    {
+      "path": "extensions/browser/src/browser/constants.ts",
+      "sha256": "e5a584a36f4020c5abc840bb2d4246c56c1ab222c7e7d22c6772ad76396cdec3",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "8265ee46747fbe3ab95209fba885d3e2b89c060a6b9cb30bc25d469a48f74dee"
+    },
+    {
+      "path": "extensions/browser/src/browser/pw-role-snapshot.ts",
+      "sha256": "21f50478fcd37a1c2dd31028f0604bd284cef9a34cad5214ae6018dcc329e479",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "cf4ecec0fc1d633387ad2ed0e1adb1686723f81226883c0d8d37bf8e85de426a"
+    },
+    {
+      "path": "extensions/browser/src/browser/vision.ts",
+      "sha256": "378d688c1f1a7d45a135a168a8bd0fa6ec1c8ef4995e4feebf89cb59e35524bb",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "fca557a91e4858a9cfd33a9148719e8ca66291532fc4c6b2ce0e803f3de91970"
+    },
+    {
+      "path": "src/agents/tools/common.ts",
+      "sha256": "a69d2c0915f658d621ccacc0e76b1f34417eb3a571a86b1ef32b87edeab74bb7",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "367ee7eeaa356433fbb2bc151ca3ada80e527388062e9beda85eb05bdede38e8"
+    },
+    {
+      "path": "packages/normalization-core/src/utf16-slice.ts",
+      "sha256": "12fd3212b08522a1523263c92f654151ad01605ee48a0ff58a1256889fb7cb5f",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "8c36e4400e17c643598f7dd0134b80cb0dc324e63040fb9f02335a53ec4b1ec7"
+    },
+    {
+      "path": "packages/normalization-core/src/record-coerce.ts",
+      "sha256": "541c179840c2cad4edc5c8103f77cc7f8c6b1ee5ec3e52c7c9fe097b18917f1c",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "4ca2e6e901c28a07ae5fc9b29719cce5c26c919c65ab235b4ae2d5eaf0ec338c"
+    },
+    {
+      "path": "packages/normalization-core/src/string-coerce.ts",
+      "sha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "9a2e05da77f15162560fe904c20ba9a49a6e6996e8b8c9bc16fd611f8456f504"
+    },
+    {
+      "path": "src/agents/tools/tool-results.ts",
+      "sha256": "13d2e22b750609d8cc848a548a17324e99000f004e89730bf305b3960da2ce3b",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "9bcf53f6fe745040a89a9a190256a74f5fe24450227e37b73ac425eb18d03802"
+    },
+    {
+      "path": "extensions/browser/src/browser/snapshot-roles.ts",
+      "sha256": "02fd06d9e02776ff4a4a5c9b5e107a54110ea1451b20bad18e4b143931966749",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "0324531da07389f26693da308a3f2cc2e916ba31208841a1439687f0c134524f"
+    },
+    {
+      "path": "src/param-key.ts",
+      "sha256": "3393299148b9059e991f9d655e3e930bc507ed1d8d6985db21e4e42466df91ef",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "15ead0ab1c801f2419d26180deaaa3b58a67f27ba6b2549970ab768e3157b533"
+    },
+    {
+      "path": "src/agents/tool-input-error.ts",
+      "sha256": "70582ae2f67d5d23ce514ee93f249e2c659ddf32e7bf70b1692dcadcf03af7bc",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "26a87c59529e58f4454454b11905c9de10d3858fe001f47fda9032c2640ba152"
+    },
+    {
+      "path": "src/plugin-sdk/expect-runtime.ts",
+      "sha256": "43fc34565d2b08ce83035f05ed5539c5ce6d0f36db938376ce5c1904c03d582f",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "364544936dba874f3ffe19baaa44d7821cafe01140b91586f940fc7423582153"
+    },
+    {
+      "path": "packages/normalization-core/src/number-coercion.ts",
+      "sha256": "8c40eca65a8fd1dc3aa40d90c22bff35c3710fcb03d2bc8227864a264d20ddc4",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "2f2d58d34e9b77067ea265333fb06a807ce0cdcad83639d6c257095bb9f69a97"
+    },
+    {
+      "path": "packages/normalization-core/src/string-normalization.ts",
+      "sha256": "3150b04501197ef417d2e2d1efa1e3160cc41ddec7505a6f4d756a654138ae3c",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "fb2d80b7951beacc2e31a86eeb4f03471fc704c15c5d0fa2a7807625795571e4"
+    },
+    {
+      "path": "extensions/browser/src/browser/client.ts",
+      "sha256": "5103d68e2b105e40df5e3740e51a5a37525106e77fd091652ce5cc542017f3c5",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "extensions/browser/src/browser-tool.runtime.ts",
+      "sha256": "1b5f3e0635e3f68ab38ef315b685cd38c445df3127f0ae6f8cb3407918aec640",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/security/external-content.ts",
+      "sha256": "4cefa29a1f53e0ee852c55e4a4f183c75e49b1fe5159781185778ef3e1b3aceb",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/infra/fs-safe.ts",
+      "sha256": "acab39ab706c0807be4c20231a4999aef99f0d7efc269246c49f5c097a162789",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "packages/media-core/src/mime.ts",
+      "sha256": "8a09bf1b2c75f5f8a3ef3fe51aa07c97fb46e4a712faca89ccd72eaa9464fdb0",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/agents/tool-result-limits.ts",
+      "sha256": "a04aed3851e79cd087b2421569d7850a84b69a30b09f6bd0ab6b9d4d4e01aa9f",
+      "executed": false,
+      "provenanceOnly": true
+    }
+  ],
+  "importBindings": [
+    {
+      "importer": "extensions/browser/src/browser-tool.snapshot.ts",
+      "specifier": "openclaw/plugin-sdk/channel-actions",
+      "kind": "explicit-success-service-facade",
+      "exports": [
+        "imageResultFromFile"
+      ],
+      "generatedCode": "export async function imageResultFromFile(params){__fixture.imageCalls.push(params);return {content:[{type:'text',text:params.extraText},{type:'image',data:'fixture-image',mimeType:'image/png'}],details:params.details};}",
+      "generatedSha256": "7868029ee24dd529df1edf530095ad434f043a0bff05e0218e73d3accabd10da",
+      "source": "src/agents/tools/common.ts",
+      "sourceSha256": "a69d2c0915f658d621ccacc0e76b1f34417eb3a571a86b1ef32b87edeab74bb7",
+      "originalImplementationExecuted": false
+    },
+    {
+      "importer": "extensions/browser/src/browser-tool.snapshot.ts",
+      "specifier": "openclaw/plugin-sdk/param-readers",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "readNonNegativeIntegerParam",
+        "readPositiveIntegerParam"
+      ],
+      "generatedCode": "export {readNonNegativeIntegerParam,readPositiveIntegerParam} from \"capture:source:src/agents/tools/common.ts\";",
+      "generatedSha256": "82a794c9cb84c2924a168427d480defd998ff0ba73cffaa55b9aec0334db906d",
+      "source": "src/agents/tools/common.ts",
+      "sourceSha256": "a69d2c0915f658d621ccacc0e76b1f34417eb3a571a86b1ef32b87edeab74bb7"
+    },
+    {
+      "importer": "extensions/browser/src/browser-tool.snapshot.ts",
+      "specifier": "openclaw/plugin-sdk/runtime-config-snapshot",
+      "kind": "explicit-success-service-facade",
+      "exports": [
+        "readRuntimeConfig"
+      ],
+      "generatedCode": "export function readRuntimeConfig(){return {};}",
+      "generatedSha256": "dc6fcfa41c677321adf62f4b5834129a637dda487f729aaa123975683ec305f3",
+      "source": "src/config/config.ts",
+      "sourceSha256": "af4ff44d1c1dae49fde3f28a71d0f243233a74e44c6acbd9643f69d0170d62df",
+      "originalImplementationExecuted": false
+    },
+    {
+      "importer": "extensions/browser/src/browser-tool.snapshot.ts",
+      "specifier": "openclaw/plugin-sdk/security-runtime",
+      "kind": "ordinary-envelope-and-prefix-facade",
+      "exports": [
+        "formatErrorMessage",
+        "truncateSanitizedExternalContent",
+        "wrapExternalContent"
+      ],
+      "generatedCode": "import {truncateUtf16Safe} from \"capture:source:packages/normalization-core/src/utf16-slice.ts\";\nexport function formatErrorMessage(){throw Error('Error projection outside ordinary query capture');}\nexport function truncateSanitizedExternalContent(value,maxChars){const text=truncateUtf16Safe(value,maxChars);return {text,truncated:text.length<value.length,retainedRawChars:text.length};}\nexport function wrapExternalContent(value){return '<browser-fixture>'+value+'</browser-fixture>';}",
+      "generatedSha256": "55d91fe1473d7b1a7337af34cc77b503de9528659bcbb0edf5f8fcd9657cef37",
+      "source": "src/security/external-content.ts",
+      "sourceSha256": "4cefa29a1f53e0ee852c55e4a4f183c75e49b1fe5159781185778ef3e1b3aceb",
+      "originalSourceExecuted": false
+    },
+    {
+      "importer": "extensions/browser/src/browser-tool.snapshot.ts",
+      "specifier": "openclaw/plugin-sdk/string-coerce-runtime",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "asRecord",
+        "normalizeOptionalString",
+        "readStringValue"
+      ],
+      "generatedCode": "export {asRecord} from \"capture:source:packages/normalization-core/src/record-coerce.ts\";export {normalizeOptionalString,readStringValue} from \"capture:source:packages/normalization-core/src/string-coerce.ts\";",
+      "generatedSha256": "45bdf93ecc91773fba2940b23435d855658161363f7de9bea7fa9c633f49c121",
+      "sources": [
+        {
+          "source": "packages/normalization-core/src/record-coerce.ts",
+          "sha256": "541c179840c2cad4edc5c8103f77cc7f8c6b1ee5ec3e52c7c9fe097b18917f1c"
+        },
+        {
+          "source": "packages/normalization-core/src/string-coerce.ts",
+          "sha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf"
+        }
+      ]
+    },
+    {
+      "importer": "extensions/browser/src/browser-tool.snapshot.ts",
+      "specifier": "openclaw/plugin-sdk/text-utility-runtime",
+      "kind": "exact-source-constant-projection",
+      "exports": [
+        "DEFAULT_MAX_LIVE_TOOL_RESULT_CHARS"
+      ],
+      "generatedCode": "export const DEFAULT_MAX_LIVE_TOOL_RESULT_CHARS = 16_000;",
+      "generatedSha256": "ad432e75c1d1c4f439622b2126ba6d3aa6d4bb4f211455be608f5c7441d441e4",
+      "source": "src/agents/tool-result-limits.ts",
+      "sourceSha256": "a04aed3851e79cd087b2421569d7850a84b69a30b09f6bd0ab6b9d4d4e01aa9f",
+      "originalWholeModuleExecuted": false
+    },
+    {
+      "importer": "extensions/browser/src/browser-tool.snapshot.ts",
+      "specifier": "openclaw/plugin-sdk/tool-results",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "textResult"
+      ],
+      "generatedCode": "export {textResult} from \"capture:source:src/agents/tools/tool-results.ts\";",
+      "generatedSha256": "b478f96db34c1f39454f71b2724b807a2abc0cc59906d881bdccdcd24aafe2c0",
+      "source": "src/agents/tools/tool-results.ts",
+      "sourceSha256": "13d2e22b750609d8cc848a548a17324e99000f004e89730bf305b3960da2ce3b"
+    },
+    {
+      "importer": "extensions/browser/src/browser-tool.snapshot.ts",
+      "specifier": "./browser-tool.runtime.js",
+      "kind": "explicit-success-service-facade",
+      "exports": [
+        "resolveRuntimeImageSanitization"
+      ],
+      "generatedCode": "export function resolveRuntimeImageSanitization(){return {fixture:true};}",
+      "generatedSha256": "7fb7fe6118d104c55e0544153231cf5e6c9bb3f05ce95f7b81e4b3e94d5231b1",
+      "source": "extensions/browser/src/browser-tool.runtime.ts",
+      "sourceSha256": "1b5f3e0635e3f68ab38ef315b685cd38c445df3127f0ae6f8cb3407918aec640",
+      "originalImplementationExecuted": false
+    },
+    {
+      "importer": "extensions/browser/src/browser-tool.snapshot.ts",
+      "specifier": "./browser/client.js",
+      "kind": "explicit-success-service-facade",
+      "exports": [
+        "browserSnapshot"
+      ],
+      "generatedCode": "export async function browserSnapshot(target,options){__fixture.calls.push({target,options});return JSON.parse(JSON.stringify(__fixture.snapshot));}",
+      "generatedSha256": "90c71bba9d4328fd003ffe6d4344b273917473f4f4fa8c92009c4414d9ce8f44",
+      "source": "extensions/browser/src/browser/client.ts",
+      "sourceSha256": "5103d68e2b105e40df5e3740e51a5a37525106e77fd091652ce5cc542017f3c5",
+      "originalImplementationExecuted": false
+    },
+    {
+      "importer": "extensions/browser/src/browser/pw-role-snapshot.ts",
+      "specifier": "openclaw/plugin-sdk/expect-runtime",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "expectDefined"
+      ],
+      "generatedCode": "export {expectDefined} from \"capture:source:src/plugin-sdk/expect-runtime.ts\";",
+      "generatedSha256": "8018da23232821af520d8bc7cbaca1fbd9154307881872a6bd28d13c95c423b7",
+      "source": "src/plugin-sdk/expect-runtime.ts",
+      "sourceSha256": "43fc34565d2b08ce83035f05ed5539c5ce6d0f36db938376ce5c1904c03d582f"
+    },
+    {
+      "importer": "extensions/browser/src/browser/pw-role-snapshot.ts",
+      "specifier": "openclaw/plugin-sdk/string-coerce-runtime",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "normalizeLowercaseStringOrEmpty"
+      ],
+      "generatedCode": "export {normalizeLowercaseStringOrEmpty} from \"capture:source:packages/normalization-core/src/string-coerce.ts\";",
+      "generatedSha256": "dfd53375301e69a1f05c7163a4e5cbbc9148008e60062fb2a665185b39777a3c",
+      "source": "packages/normalization-core/src/string-coerce.ts",
+      "sourceSha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf"
+    },
+    {
+      "importer": "extensions/browser/src/browser/vision.ts",
+      "specifier": "node:fs/promises",
+      "kind": "explicit-success-service-facade",
+      "exports": [
+        "readFile"
+      ],
+      "generatedCode": "export function readFile(){throw Error('Vision file access outside ordinary query capture');}",
+      "generatedSha256": "63ef49ddffb6b806c5e3e9d3aa33a60e09fe2d6b235e09329fc085a72c3b4b56",
+      "source": "node:fs/promises",
+      "originalImplementationExecuted": false
+    },
+    {
+      "importer": "src/agents/tools/common.ts",
+      "specifier": "@openclaw/media-core/mime",
+      "kind": "explicit-success-service-facade",
+      "exports": [
+        "detectMime"
+      ],
+      "generatedCode": "export function detectMime(){throw Error('MIME detection outside ordinary query capture');}",
+      "generatedSha256": "e367c13430a3a1d190d1c2f3a21e85756917e26ef5beee9b5670ad0554eeb719",
+      "source": "packages/media-core/src/mime.ts",
+      "sourceSha256": "8a09bf1b2c75f5f8a3ef3fe51aa07c97fb46e4a712faca89ccd72eaa9464fdb0",
+      "originalImplementationExecuted": false
+    },
+    {
+      "importer": "src/agents/tools/common.ts",
+      "specifier": "@openclaw/normalization-core/number-coercion",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "asPositiveSafeInteger",
+        "asSafeIntegerInRange",
+        "parseStrictFiniteNumber"
+      ],
+      "generatedCode": "export {asPositiveSafeInteger,asSafeIntegerInRange,parseStrictFiniteNumber} from \"capture:source:packages/normalization-core/src/number-coercion.ts\";",
+      "generatedSha256": "8837874c0371d0c341e63656563880033d8f59146fb1f000316920128d992f3c",
+      "source": "packages/normalization-core/src/number-coercion.ts",
+      "sourceSha256": "8c40eca65a8fd1dc3aa40d90c22bff35c3710fcb03d2bc8227864a264d20ddc4"
+    },
+    {
+      "importer": "src/agents/tools/common.ts",
+      "specifier": "@openclaw/normalization-core/string-normalization",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "normalizeSingleOrTrimmedStringList"
+      ],
+      "generatedCode": "export {normalizeSingleOrTrimmedStringList} from \"capture:source:packages/normalization-core/src/string-normalization.ts\";",
+      "generatedSha256": "ff322ee485d98152cdfa76fc22800de8f75ff060a7f9f725d175abce6c3c340e",
+      "source": "packages/normalization-core/src/string-normalization.ts",
+      "sourceSha256": "3150b04501197ef417d2e2d1efa1e3160cc41ddec7505a6f4d756a654138ae3c"
+    },
+    {
+      "importer": "src/agents/tools/common.ts",
+      "specifier": "../../infra/fs-safe.js",
+      "kind": "explicit-success-service-facade",
+      "exports": [
+        "readLocalFileSafely"
+      ],
+      "generatedCode": "export function readLocalFileSafely(){throw Error('Filesystem reading outside ordinary query capture');}",
+      "generatedSha256": "a8df807e29e6dae6eccb4fb9ffda1cc532134898772c996e39c7c4755a185aab",
+      "source": "src/infra/fs-safe.ts",
+      "sourceSha256": "acab39ab706c0807be4c20231a4999aef99f0d7efc269246c49f5c097a162789",
+      "originalImplementationExecuted": false
+    },
+    {
+      "importer": "src/agents/tools/common.ts",
+      "specifier": "@openclaw/normalization-core/record-coerce",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "asNonArrayRecord"
+      ],
+      "generatedCode": "export {asNonArrayRecord} from \"capture:source:packages/normalization-core/src/record-coerce.ts\";",
+      "generatedSha256": "795855d48a94c2d39cf3ff626d3b3e057d93755f80c8cb66c3b3b2e238abd58a",
+      "source": "packages/normalization-core/src/record-coerce.ts",
+      "sourceSha256": "541c179840c2cad4edc5c8103f77cc7f8c6b1ee5ec3e52c7c9fe097b18917f1c"
+    },
+    {
+      "importer": "src/param-key.ts",
+      "specifier": "@openclaw/normalization-core/string-coerce",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "lowercasePreservingWhitespace"
+      ],
+      "generatedCode": "export {lowercasePreservingWhitespace} from \"capture:source:packages/normalization-core/src/string-coerce.ts\";",
+      "generatedSha256": "0c70b5248bd9d165eb302dc7b9c9d94b71962886ddc330661b38caa8f2b085f6",
+      "source": "packages/normalization-core/src/string-coerce.ts",
+      "sourceSha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf"
+    }
+  ],
+  "observations": [
+    {
+      "id": "ai-case-unicode-whitespace",
+      "snapshot": {
+        "ok": true,
+        "format": "ai",
+        "targetId": "source-tab",
+        "url": "https://fixture.example/",
+        "snapshot": "- button \"Sign IN 雪😀\" [ref=e1]\n- button \"Sign out\" [ref=e2]\n- heading \"A guide\" [ref=e3]",
+        "refs": {
+          "e2": {
+            "role": "button",
+            "name": "Sign out"
+          },
+          "e1": {
+            "role": "button",
+            "name": "Sign IN 雪😀"
+          },
+          "e3": {
+            "role": "heading",
+            "name": "A guide"
+          }
+        }
+      },
+      "input": {
+        "action": "snapshot",
+        "query": " ﻿IN\tSIGN 雪😀 "
+      },
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "1 matching line(s) in the returned snapshot.\n<browser-fixture>- button \"Sign IN 雪😀\" [ref=e1]</browser-fixture>"
+          }
+        ],
+        "details": {
+          "ok": true,
+          "format": "ai",
+          "targetId": "source-tab",
+          "url": "https://fixture.example/",
+          "matchCount": 1,
+          "stats": {
+            "lines": 1,
+            "chars": 31,
+            "refs": 1,
+            "interactive": 1
+          },
+          "refs": 1,
+          "externalContent": {
+            "untrusted": true,
+            "source": "browser",
+            "kind": "snapshot",
+            "format": "ai",
+            "wrapped": true
+          },
+          "text": "1 matching line(s) in the returned snapshot.\n<browser-fixture>- button \"Sign IN 雪😀\" [ref=e1]</browser-fixture>"
+        }
+      },
+      "boundedText": "- button \"Sign IN 雪😀\" [ref=e1]",
+      "calls": [
+        {
+          "target": {
+            "fixture": true
+          },
+          "options": {
+            "timeoutMs": 20000
+          }
+        }
+      ],
+      "imageCalls": []
+    },
+    {
+      "id": "ai-source-order-and-repeated-tokens",
+      "snapshot": {
+        "ok": true,
+        "format": "ai",
+        "targetId": "source-tab",
+        "url": "https://fixture.example/",
+        "snapshot": "- button \"Sign IN 雪😀\" [ref=e1]\n- button \"Sign out\" [ref=e2]\n- heading \"A guide\" [ref=e3]",
+        "refs": {
+          "e2": {
+            "role": "button",
+            "name": "Sign out"
+          },
+          "e1": {
+            "role": "button",
+            "name": "Sign IN 雪😀"
+          },
+          "e3": {
+            "role": "heading",
+            "name": "A guide"
+          }
+        }
+      },
+      "input": {
+        "action": "snapshot",
+        "query": "sign sign"
+      },
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "2 matching line(s) in the returned snapshot.\n<browser-fixture>- button \"Sign IN 雪😀\" [ref=e1]\n- button \"Sign out\" [ref=e2]</browser-fixture>"
+          }
+        ],
+        "details": {
+          "ok": true,
+          "format": "ai",
+          "targetId": "source-tab",
+          "url": "https://fixture.example/",
+          "matchCount": 2,
+          "stats": {
+            "lines": 2,
+            "chars": 60,
+            "refs": 2,
+            "interactive": 2
+          },
+          "refs": 2,
+          "externalContent": {
+            "untrusted": true,
+            "source": "browser",
+            "kind": "snapshot",
+            "format": "ai",
+            "wrapped": true
+          },
+          "text": "2 matching line(s) in the returned snapshot.\n<browser-fixture>- button \"Sign IN 雪😀\" [ref=e1]\n- button \"Sign out\" [ref=e2]</browser-fixture>"
+        }
+      },
+      "boundedText": "- button \"Sign IN 雪😀\" [ref=e1]\n- button \"Sign out\" [ref=e2]",
+      "calls": [
+        {
+          "target": {
+            "fixture": true
+          },
+          "options": {
+            "timeoutMs": 20000
+          }
+        }
+      ],
+      "imageCalls": []
+    },
+    {
+      "id": "raw-full-line-role-token",
+      "snapshot": {
+        "ok": true,
+        "format": "aria",
+        "targetId": "source-tab",
+        "url": "https://fixture.example/",
+        "nodes": [
+          {
+            "ref": "ax1",
+            "role": "button",
+            "name": "Sign IN 雪😀",
+            "actionable": true
+          },
+          {
+            "ref": "ax2",
+            "role": "InlineTextBox",
+            "name": "Sign out",
+            "actionable": false
+          },
+          {
+            "ref": "ax3",
+            "role": "StaticText",
+            "name": "Sign IN 雪😀",
+            "actionable": false
+          },
+          {
+            "ref": "ax4",
+            "role": "textbox",
+            "name": "Notes",
+            "value": "Ordinary value 雪😀",
+            "description": "Long description",
+            "actionable": true
+          }
+        ]
+      },
+      "input": {
+        "action": "snapshot",
+        "snapshotFormat": "aria",
+        "query": "Sign IN"
+      },
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "3 matching line(s) in the returned snapshot.\n<browser-fixture>- button \"Sign IN 雪😀\" [ref=ax1]\n- InlineTextBox \"Sign out\" [ref=ax2]\n- StaticText \"Sign IN 雪😀\" [ref=ax3]</browser-fixture>"
+          }
+        ],
+        "details": {
+          "ok": true,
+          "format": "aria",
+          "targetId": "source-tab",
+          "url": "https://fixture.example/",
+          "matchCount": 3,
+          "stats": {
+            "lines": 3,
+            "chars": 106,
+            "refs": 3,
+            "interactive": 1
+          },
+          "refs": 3,
+          "externalContent": {
+            "untrusted": true,
+            "source": "browser",
+            "kind": "snapshot",
+            "format": "aria",
+            "wrapped": true
+          },
+          "text": "3 matching line(s) in the returned snapshot.\n<browser-fixture>- button \"Sign IN 雪😀\" [ref=ax1]\n- InlineTextBox \"Sign out\" [ref=ax2]\n- StaticText \"Sign IN 雪😀\" [ref=ax3]</browser-fixture>"
+        }
+      },
+      "boundedText": "- button \"Sign IN 雪😀\" [ref=ax1]\n- InlineTextBox \"Sign out\" [ref=ax2]\n- StaticText \"Sign IN 雪😀\" [ref=ax3]",
+      "calls": [
+        {
+          "target": {
+            "fixture": true
+          },
+          "options": {
+            "format": "aria",
+            "timeoutMs": 20000
+          }
+        }
+      ],
+      "imageCalls": []
+    },
+    {
+      "id": "raw-unicode",
+      "snapshot": {
+        "ok": true,
+        "format": "aria",
+        "targetId": "source-tab",
+        "url": "https://fixture.example/",
+        "nodes": [
+          {
+            "ref": "ax1",
+            "role": "button",
+            "name": "Sign IN 雪😀",
+            "actionable": true
+          },
+          {
+            "ref": "ax2",
+            "role": "InlineTextBox",
+            "name": "Sign out",
+            "actionable": false
+          },
+          {
+            "ref": "ax3",
+            "role": "StaticText",
+            "name": "Sign IN 雪😀",
+            "actionable": false
+          },
+          {
+            "ref": "ax4",
+            "role": "textbox",
+            "name": "Notes",
+            "value": "Ordinary value 雪😀",
+            "description": "Long description",
+            "actionable": true
+          }
+        ]
+      },
+      "input": {
+        "action": "snapshot",
+        "snapshotFormat": "aria",
+        "query": "sign in 雪😀"
+      },
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "2 matching line(s) in the returned snapshot.\n<browser-fixture>- button \"Sign IN 雪😀\" [ref=ax1]\n- StaticText \"Sign IN 雪😀\" [ref=ax3]</browser-fixture>"
+          }
+        ],
+        "details": {
+          "ok": true,
+          "format": "aria",
+          "targetId": "source-tab",
+          "url": "https://fixture.example/",
+          "matchCount": 2,
+          "stats": {
+            "lines": 2,
+            "chars": 69,
+            "refs": 2,
+            "interactive": 1
+          },
+          "refs": 2,
+          "externalContent": {
+            "untrusted": true,
+            "source": "browser",
+            "kind": "snapshot",
+            "format": "aria",
+            "wrapped": true
+          },
+          "text": "2 matching line(s) in the returned snapshot.\n<browser-fixture>- button \"Sign IN 雪😀\" [ref=ax1]\n- StaticText \"Sign IN 雪😀\" [ref=ax3]</browser-fixture>"
+        }
+      },
+      "boundedText": "- button \"Sign IN 雪😀\" [ref=ax1]\n- StaticText \"Sign IN 雪😀\" [ref=ax3]",
+      "calls": [
+        {
+          "target": {
+            "fixture": true
+          },
+          "options": {
+            "format": "aria",
+            "timeoutMs": 20000
+          }
+        }
+      ],
+      "imageCalls": []
+    },
+    {
+      "id": "raw-value-description",
+      "snapshot": {
+        "ok": true,
+        "format": "aria",
+        "targetId": "source-tab",
+        "url": "https://fixture.example/",
+        "nodes": [
+          {
+            "ref": "ax1",
+            "role": "button",
+            "name": "Sign IN 雪😀",
+            "actionable": true
+          },
+          {
+            "ref": "ax2",
+            "role": "InlineTextBox",
+            "name": "Sign out",
+            "actionable": false
+          },
+          {
+            "ref": "ax3",
+            "role": "StaticText",
+            "name": "Sign IN 雪😀",
+            "actionable": false
+          },
+          {
+            "ref": "ax4",
+            "role": "textbox",
+            "name": "Notes",
+            "value": "Ordinary value 雪😀",
+            "description": "Long description",
+            "actionable": true
+          }
+        ]
+      },
+      "input": {
+        "action": "snapshot",
+        "snapshotFormat": "aria",
+        "query": "value description"
+      },
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "1 matching line(s) in the returned snapshot.\n<browser-fixture>- textbox \"Notes\" [ref=ax4] value=\"Ordinary value 雪😀\" description=\"Long description\"</browser-fixture>"
+          }
+        ],
+        "details": {
+          "ok": true,
+          "format": "aria",
+          "targetId": "source-tab",
+          "url": "https://fixture.example/",
+          "matchCount": 1,
+          "stats": {
+            "lines": 1,
+            "chars": 85,
+            "refs": 1,
+            "interactive": 1
+          },
+          "refs": 1,
+          "externalContent": {
+            "untrusted": true,
+            "source": "browser",
+            "kind": "snapshot",
+            "format": "aria",
+            "wrapped": true
+          },
+          "text": "1 matching line(s) in the returned snapshot.\n<browser-fixture>- textbox \"Notes\" [ref=ax4] value=\"Ordinary value 雪😀\" description=\"Long description\"</browser-fixture>"
+        }
+      },
+      "boundedText": "- textbox \"Notes\" [ref=ax4] value=\"Ordinary value 雪😀\" description=\"Long description\"",
+      "calls": [
+        {
+          "target": {
+            "fixture": true
+          },
+          "options": {
+            "format": "aria",
+            "timeoutMs": 20000
+          }
+        }
+      ],
+      "imageCalls": []
+    },
+    {
+      "id": "ai-zero-match",
+      "snapshot": {
+        "ok": true,
+        "format": "ai",
+        "targetId": "source-tab",
+        "url": "https://fixture.example/",
+        "snapshot": "- button \"Sign IN 雪😀\" [ref=e1]\n- button \"Sign out\" [ref=e2]\n- heading \"A guide\" [ref=e3]",
+        "refs": {
+          "e2": {
+            "role": "button",
+            "name": "Sign out"
+          },
+          "e1": {
+            "role": "button",
+            "name": "Sign IN 雪😀"
+          },
+          "e3": {
+            "role": "heading",
+            "name": "A guide"
+          }
+        }
+      },
+      "input": {
+        "action": "snapshot",
+        "query": "ordinary zero matches"
+      },
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "No matching lines in the returned snapshot. Refine the query or take a broader snapshot.\n<browser-fixture></browser-fixture>"
+          }
+        ],
+        "details": {
+          "ok": true,
+          "format": "ai",
+          "targetId": "source-tab",
+          "url": "https://fixture.example/",
+          "matchCount": 0,
+          "stats": {
+            "lines": 0,
+            "chars": 0,
+            "refs": 0,
+            "interactive": 0
+          },
+          "refs": 0,
+          "externalContent": {
+            "untrusted": true,
+            "source": "browser",
+            "kind": "snapshot",
+            "format": "ai",
+            "wrapped": true
+          },
+          "text": "No matching lines in the returned snapshot. Refine the query or take a broader snapshot.\n<browser-fixture></browser-fixture>"
+        }
+      },
+      "boundedText": "",
+      "calls": [
+        {
+          "target": {
+            "fixture": true
+          },
+          "options": {
+            "timeoutMs": 20000
+          }
+        }
+      ],
+      "imageCalls": []
+    },
+    {
+      "id": "raw-zero-match",
+      "snapshot": {
+        "ok": true,
+        "format": "aria",
+        "targetId": "source-tab",
+        "url": "https://fixture.example/",
+        "nodes": [
+          {
+            "ref": "ax1",
+            "role": "button",
+            "name": "Sign IN 雪😀",
+            "actionable": true
+          },
+          {
+            "ref": "ax2",
+            "role": "InlineTextBox",
+            "name": "Sign out",
+            "actionable": false
+          },
+          {
+            "ref": "ax3",
+            "role": "StaticText",
+            "name": "Sign IN 雪😀",
+            "actionable": false
+          },
+          {
+            "ref": "ax4",
+            "role": "textbox",
+            "name": "Notes",
+            "value": "Ordinary value 雪😀",
+            "description": "Long description",
+            "actionable": true
+          }
+        ]
+      },
+      "input": {
+        "action": "snapshot",
+        "snapshotFormat": "aria",
+        "query": "ordinary zero matches"
+      },
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "No matching lines in the returned snapshot. Refine the query or take a broader snapshot.\n<browser-fixture></browser-fixture>"
+          }
+        ],
+        "details": {
+          "ok": true,
+          "format": "aria",
+          "targetId": "source-tab",
+          "url": "https://fixture.example/",
+          "matchCount": 0,
+          "stats": {
+            "lines": 0,
+            "chars": 0,
+            "refs": 0,
+            "interactive": 0
+          },
+          "refs": 0,
+          "externalContent": {
+            "untrusted": true,
+            "source": "browser",
+            "kind": "snapshot",
+            "format": "aria",
+            "wrapped": true
+          },
+          "text": "No matching lines in the returned snapshot. Refine the query or take a broader snapshot.\n<browser-fixture></browser-fixture>"
+        }
+      },
+      "boundedText": "",
+      "calls": [
+        {
+          "target": {
+            "fixture": true
+          },
+          "options": {
+            "format": "aria",
+            "timeoutMs": 20000
+          }
+        }
+      ],
+      "imageCalls": []
+    },
+    {
+      "id": "ai-small-cap",
+      "snapshot": {
+        "ok": true,
+        "format": "ai",
+        "targetId": "source-tab",
+        "url": "https://fixture.example/",
+        "snapshot": "- button \"Sign IN 雪😀\" [ref=e1]\n- button \"Sign out\" [ref=e2]\n- heading \"A guide\" [ref=e3]",
+        "refs": {
+          "e2": {
+            "role": "button",
+            "name": "Sign out"
+          },
+          "e1": {
+            "role": "button",
+            "name": "Sign IN 雪😀"
+          },
+          "e3": {
+            "role": "heading",
+            "name": "A guide"
+          }
+        }
+      },
+      "input": {
+        "action": "snapshot",
+        "query": "sign in",
+        "maxChars": 5
+      },
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "1 matching line(s) in the returned snapshot.\n<browser-fixture>- but</browser-fixture>"
+          }
+        ],
+        "details": {
+          "ok": true,
+          "format": "ai",
+          "targetId": "source-tab",
+          "url": "https://fixture.example/",
+          "matchCount": 1,
+          "stats": {
+            "lines": 1,
+            "chars": 5,
+            "refs": 0,
+            "interactive": 0
+          },
+          "refs": 0,
+          "truncated": true,
+          "externalContent": {
+            "untrusted": true,
+            "source": "browser",
+            "kind": "snapshot",
+            "format": "ai",
+            "wrapped": true
+          },
+          "text": "1 matching line(s) in the returned snapshot.\n<browser-fixture>- but</browser-fixture>"
+        }
+      },
+      "boundedText": "- but",
+      "calls": [
+        {
+          "target": {
+            "fixture": true
+          },
+          "options": {
+            "maxChars": 5,
+            "timeoutMs": 20000
+          }
+        }
+      ],
+      "imageCalls": []
+    },
+    {
+      "id": "raw-small-cap",
+      "snapshot": {
+        "ok": true,
+        "format": "aria",
+        "targetId": "source-tab",
+        "url": "https://fixture.example/",
+        "nodes": [
+          {
+            "ref": "ax1",
+            "role": "button",
+            "name": "Sign IN 雪😀",
+            "actionable": true
+          },
+          {
+            "ref": "ax2",
+            "role": "InlineTextBox",
+            "name": "Sign out",
+            "actionable": false
+          },
+          {
+            "ref": "ax3",
+            "role": "StaticText",
+            "name": "Sign IN 雪😀",
+            "actionable": false
+          },
+          {
+            "ref": "ax4",
+            "role": "textbox",
+            "name": "Notes",
+            "value": "Ordinary value 雪😀",
+            "description": "Long description",
+            "actionable": true
+          }
+        ]
+      },
+      "input": {
+        "action": "snapshot",
+        "snapshotFormat": "aria",
+        "query": "button sign in",
+        "maxChars": 5
+      },
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "1 matching line(s) in the returned snapshot.\n<browser-fixture>- but</browser-fixture>"
+          }
+        ],
+        "details": {
+          "ok": true,
+          "format": "aria",
+          "targetId": "source-tab",
+          "url": "https://fixture.example/",
+          "matchCount": 1,
+          "stats": {
+            "lines": 1,
+            "chars": 5,
+            "refs": 0,
+            "interactive": 0
+          },
+          "refs": 0,
+          "truncated": true,
+          "externalContent": {
+            "untrusted": true,
+            "source": "browser",
+            "kind": "snapshot",
+            "format": "aria",
+            "wrapped": true
+          },
+          "text": "1 matching line(s) in the returned snapshot.\n<browser-fixture>- but</browser-fixture>"
+        }
+      },
+      "boundedText": "- but",
+      "calls": [
+        {
+          "target": {
+            "fixture": true
+          },
+          "options": {
+            "format": "aria",
+            "maxChars": 5,
+            "timeoutMs": 20000
+          }
+        }
+      ],
+      "imageCalls": []
+    },
+    {
+      "id": "ai-marker-cap",
+      "snapshot": {
+        "ok": true,
+        "format": "ai",
+        "targetId": "source-tab",
+        "url": "https://fixture.example/",
+        "snapshot": "- button \"Long ordinary title Long ordinary title Long ordinary title Long ordinary title Long ordinary title Long ordinary title Long ordinary title Long ordinary title Long ordinary title Long ordinary title Long ordinary title Long ordinary title \" [ref=e1]",
+        "refs": {
+          "e2": {
+            "role": "button",
+            "name": "Sign out"
+          },
+          "e1": {
+            "role": "button",
+            "name": "Sign IN 雪😀"
+          },
+          "e3": {
+            "role": "heading",
+            "name": "A guide"
+          }
+        }
+      },
+      "input": {
+        "action": "snapshot",
+        "query": "ordinary",
+        "maxChars": 70
+      },
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "1 matching line(s) in the returned snapshot.\n<browser-fixture>- button \"Long or\n[truncated — retry with a smaller maxChars or limit]</browser-fixture>"
+          }
+        ],
+        "details": {
+          "ok": true,
+          "format": "ai",
+          "targetId": "source-tab",
+          "url": "https://fixture.example/",
+          "matchCount": 1,
+          "stats": {
+            "lines": 2,
+            "chars": 70,
+            "refs": 0,
+            "interactive": 0
+          },
+          "refs": 0,
+          "truncated": true,
+          "externalContent": {
+            "untrusted": true,
+            "source": "browser",
+            "kind": "snapshot",
+            "format": "ai",
+            "wrapped": true
+          },
+          "text": "1 matching line(s) in the returned snapshot.\n<browser-fixture>- button \"Long or\n[truncated — retry with a smaller maxChars or limit]</browser-fixture>"
+        }
+      },
+      "boundedText": "- button \"Long or\n[truncated — retry with a smaller maxChars or limit]",
+      "calls": [
+        {
+          "target": {
+            "fixture": true
+          },
+          "options": {
+            "maxChars": 70,
+            "timeoutMs": 20000
+          }
+        }
+      ],
+      "imageCalls": []
+    },
+    {
+      "id": "raw-zero-cap-default",
+      "snapshot": {
+        "ok": true,
+        "format": "aria",
+        "targetId": "source-tab",
+        "url": "https://fixture.example/",
+        "nodes": [
+          {
+            "ref": "ax1",
+            "role": "button",
+            "name": "Sign IN 雪😀",
+            "actionable": true
+          },
+          {
+            "ref": "ax2",
+            "role": "InlineTextBox",
+            "name": "Sign out",
+            "actionable": false
+          },
+          {
+            "ref": "ax3",
+            "role": "StaticText",
+            "name": "Sign IN 雪😀",
+            "actionable": false
+          },
+          {
+            "ref": "ax4",
+            "role": "textbox",
+            "name": "Notes",
+            "value": "Ordinary value 雪😀",
+            "description": "Long description",
+            "actionable": true
+          }
+        ]
+      },
+      "input": {
+        "action": "snapshot",
+        "snapshotFormat": "aria",
+        "query": "button sign",
+        "maxChars": 0
+      },
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "1 matching line(s) in the returned snapshot.\n<browser-fixture>- button \"Sign IN 雪😀\" [ref=ax1]</browser-fixture>"
+          }
+        ],
+        "details": {
+          "ok": true,
+          "format": "aria",
+          "targetId": "source-tab",
+          "url": "https://fixture.example/",
+          "matchCount": 1,
+          "stats": {
+            "lines": 1,
+            "chars": 32,
+            "refs": 1,
+            "interactive": 1
+          },
+          "refs": 1,
+          "externalContent": {
+            "untrusted": true,
+            "source": "browser",
+            "kind": "snapshot",
+            "format": "aria",
+            "wrapped": true
+          },
+          "text": "1 matching line(s) in the returned snapshot.\n<browser-fixture>- button \"Sign IN 雪😀\" [ref=ax1]</browser-fixture>"
+        }
+      },
+      "boundedText": "- button \"Sign IN 雪😀\" [ref=ax1]",
+      "calls": [
+        {
+          "target": {
+            "fixture": true
+          },
+          "options": {
+            "format": "aria",
+            "timeoutMs": 20000
+          }
+        }
+      ],
+      "imageCalls": []
+    },
+    {
+      "id": "ai-source-truncated",
+      "snapshot": {
+        "ok": true,
+        "format": "ai",
+        "targetId": "source-tab",
+        "url": "https://fixture.example/",
+        "snapshot": "- button \"Sign IN 雪😀\" [ref=e1]\n- button \"Sign out\" [ref=e2]\n- heading \"A guide\" [ref=e3]",
+        "refs": {
+          "e2": {
+            "role": "button",
+            "name": "Sign out"
+          },
+          "e1": {
+            "role": "button",
+            "name": "Sign IN 雪😀"
+          },
+          "e3": {
+            "role": "heading",
+            "name": "A guide"
+          }
+        },
+        "truncated": true
+      },
+      "input": {
+        "action": "snapshot",
+        "query": "sign in"
+      },
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "1 matching line(s) in the returned snapshot (source truncated).\n<browser-fixture>- button \"Sign IN 雪😀\" [ref=e1]</browser-fixture>"
+          }
+        ],
+        "details": {
+          "ok": true,
+          "format": "ai",
+          "targetId": "source-tab",
+          "url": "https://fixture.example/",
+          "matchCount": 1,
+          "stats": {
+            "lines": 1,
+            "chars": 31,
+            "refs": 1,
+            "interactive": 1
+          },
+          "refs": 1,
+          "truncated": true,
+          "externalContent": {
+            "untrusted": true,
+            "source": "browser",
+            "kind": "snapshot",
+            "format": "ai",
+            "wrapped": true
+          },
+          "text": "1 matching line(s) in the returned snapshot (source truncated).\n<browser-fixture>- button \"Sign IN 雪😀\" [ref=e1]</browser-fixture>"
+        }
+      },
+      "boundedText": "- button \"Sign IN 雪😀\" [ref=e1]",
+      "calls": [
+        {
+          "target": {
+            "fixture": true
+          },
+          "options": {
+            "timeoutMs": 20000
+          }
+        }
+      ],
+      "imageCalls": []
+    },
+    {
+      "id": "ai-delta-selection",
+      "snapshot": {
+        "ok": true,
+        "format": "ai",
+        "targetId": "source-tab",
+        "url": "https://fixture.example/",
+        "snapshot": "- button \"Sign IN 雪😀\" [ref=e1] [new]\n- button \"Sign out\" [ref=e2] [new]\n- heading \"A guide\" [ref=e3]",
+        "refs": {
+          "e2": {
+            "role": "button",
+            "name": "Sign out"
+          },
+          "e1": {
+            "role": "button",
+            "name": "Sign IN 雪😀"
+          },
+          "e3": {
+            "role": "heading",
+            "name": "A guide"
+          }
+        },
+        "newElements": 2
+      },
+      "input": {
+        "action": "snapshot",
+        "query": "sign in"
+      },
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "1 matching line(s) in the returned snapshot.\n<browser-fixture>- button \"Sign IN 雪😀\" [ref=e1] [new]</browser-fixture>"
+          }
+        ],
+        "details": {
+          "ok": true,
+          "format": "ai",
+          "targetId": "source-tab",
+          "url": "https://fixture.example/",
+          "matchCount": 1,
+          "stats": {
+            "lines": 1,
+            "chars": 37,
+            "refs": 1,
+            "interactive": 1
+          },
+          "refs": 1,
+          "newElements": 1,
+          "externalContent": {
+            "untrusted": true,
+            "source": "browser",
+            "kind": "snapshot",
+            "format": "ai",
+            "wrapped": true
+          },
+          "text": "1 matching line(s) in the returned snapshot.\n<browser-fixture>- button \"Sign IN 雪😀\" [ref=e1] [new]</browser-fixture>"
+        }
+      },
+      "boundedText": "- button \"Sign IN 雪😀\" [ref=e1] [new]",
+      "calls": [
+        {
+          "target": {
+            "fixture": true
+          },
+          "options": {
+            "timeoutMs": 20000
+          }
+        }
+      ],
+      "imageCalls": []
+    },
+    {
+      "id": "ai-blank-pass-through",
+      "snapshot": {
+        "ok": true,
+        "format": "ai",
+        "targetId": "source-tab",
+        "url": "https://fixture.example/",
+        "snapshot": "- button \"Sign IN 雪😀\" [ref=e1]\n- button \"Sign out\" [ref=e2]\n- heading \"A guide\" [ref=e3]",
+        "refs": {
+          "e2": {
+            "role": "button",
+            "name": "Sign out"
+          },
+          "e1": {
+            "role": "button",
+            "name": "Sign IN 雪😀"
+          },
+          "e3": {
+            "role": "heading",
+            "name": "A guide"
+          }
+        }
+      },
+      "input": {
+        "action": "snapshot",
+        "query": " \t﻿  "
+      },
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "<browser-fixture>- button \"Sign IN 雪😀\" [ref=e1]\n- button \"Sign out\" [ref=e2]\n- heading \"A guide\" [ref=e3]</browser-fixture>"
+          }
+        ],
+        "details": {
+          "ok": true,
+          "format": "ai",
+          "targetId": "source-tab",
+          "url": "https://fixture.example/",
+          "refs": 3,
+          "externalContent": {
+            "untrusted": true,
+            "source": "browser",
+            "kind": "snapshot",
+            "format": "ai",
+            "wrapped": true
+          },
+          "text": "<browser-fixture>- button \"Sign IN 雪😀\" [ref=e1]\n- button \"Sign out\" [ref=e2]\n- heading \"A guide\" [ref=e3]</browser-fixture>"
+        }
+      },
+      "boundedText": "- button \"Sign IN 雪😀\" [ref=e1]\n- button \"Sign out\" [ref=e2]\n- heading \"A guide\" [ref=e3]",
+      "calls": [
+        {
+          "target": {
+            "fixture": true
+          },
+          "options": {
+            "timeoutMs": 20000
+          }
+        }
+      ],
+      "imageCalls": []
+    },
+    {
+      "id": "raw-blank-pass-through",
+      "snapshot": {
+        "ok": true,
+        "format": "aria",
+        "targetId": "source-tab",
+        "url": "https://fixture.example/",
+        "nodes": [
+          {
+            "ref": "ax1",
+            "role": "button",
+            "name": "Sign IN 雪😀",
+            "actionable": true
+          },
+          {
+            "ref": "ax2",
+            "role": "InlineTextBox",
+            "name": "Sign out",
+            "actionable": false
+          },
+          {
+            "ref": "ax3",
+            "role": "StaticText",
+            "name": "Sign IN 雪😀",
+            "actionable": false
+          },
+          {
+            "ref": "ax4",
+            "role": "textbox",
+            "name": "Notes",
+            "value": "Ordinary value 雪😀",
+            "description": "Long description",
+            "actionable": true
+          }
+        ]
+      },
+      "input": {
+        "action": "snapshot",
+        "snapshotFormat": "aria",
+        "query": " \t "
+      },
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "<browser-fixture>{\n  \"ok\": true,\n  \"format\": \"aria\",\n  \"targetId\": \"source-tab\",\n  \"url\": \"https://fixture.example/\",\n  \"nodes\": [\n    {\n      \"ref\": \"ax1\",\n      \"role\": \"button\",\n      \"name\": \"Sign IN 雪😀\",\n      \"actionable\": true\n    },\n    {\n      \"ref\": \"ax2\",\n      \"role\": \"InlineTextBox\",\n      \"name\": \"Sign out\",\n      \"actionable\": false\n    },\n    {\n      \"ref\": \"ax3\",\n      \"role\": \"StaticText\",\n      \"name\": \"Sign IN 雪😀\",\n      \"actionable\": false\n    },\n    {\n      \"ref\": \"ax4\",\n      \"role\": \"textbox\",\n      \"name\": \"Notes\",\n      \"value\": \"Ordinary value 雪😀\",\n      \"description\": \"Long description\",\n      \"actionable\": true\n    }\n  ]\n}</browser-fixture>"
+          }
+        ],
+        "details": {
+          "ok": true,
+          "text": "<browser-fixture>{\n  \"ok\": true,\n  \"format\": \"aria\",\n  \"targetId\": \"source-tab\",\n  \"url\": \"https://fixture.example/\",\n  \"nodes\": [\n    {\n      \"ref\": \"ax1\",\n      \"role\": \"button\",\n      \"name\": \"Sign IN 雪😀\",\n      \"actionable\": true\n    },\n    {\n      \"ref\": \"ax2\",\n      \"role\": \"InlineTextBox\",\n      \"name\": \"Sign out\",\n      \"actionable\": false\n    },\n    {\n      \"ref\": \"ax3\",\n      \"role\": \"StaticText\",\n      \"name\": \"Sign IN 雪😀\",\n      \"actionable\": false\n    },\n    {\n      \"ref\": \"ax4\",\n      \"role\": \"textbox\",\n      \"name\": \"Notes\",\n      \"value\": \"Ordinary value 雪😀\",\n      \"description\": \"Long description\",\n      \"actionable\": true\n    }\n  ]\n}</browser-fixture>",
+          "externalContent": {
+            "untrusted": true,
+            "source": "browser",
+            "kind": "snapshot",
+            "format": "aria",
+            "wrapped": true
+          },
+          "format": "aria",
+          "targetId": "source-tab",
+          "url": "https://fixture.example/",
+          "nodeCount": 4
+        }
+      },
+      "boundedText": "{\n  \"ok\": true,\n  \"format\": \"aria\",\n  \"targetId\": \"source-tab\",\n  \"url\": \"https://fixture.example/\",\n  \"nodes\": [\n    {\n      \"ref\": \"ax1\",\n      \"role\": \"button\",\n      \"name\": \"Sign IN 雪😀\",\n      \"actionable\": true\n    },\n    {\n      \"ref\": \"ax2\",\n      \"role\": \"InlineTextBox\",\n      \"name\": \"Sign out\",\n      \"actionable\": false\n    },\n    {\n      \"ref\": \"ax3\",\n      \"role\": \"StaticText\",\n      \"name\": \"Sign IN 雪😀\",\n      \"actionable\": false\n    },\n    {\n      \"ref\": \"ax4\",\n      \"role\": \"textbox\",\n      \"name\": \"Notes\",\n      \"value\": \"Ordinary value 雪😀\",\n      \"description\": \"Long description\",\n      \"actionable\": true\n    }\n  ]\n}",
+      "calls": [
+        {
+          "target": {
+            "fixture": true
+          },
+          "options": {
+            "format": "aria",
+            "timeoutMs": 20000
+          }
+        }
+      ],
+      "imageCalls": []
+    },
+    {
+      "id": "ai-labels-selection",
+      "snapshot": {
+        "ok": true,
+        "format": "ai",
+        "targetId": "source-tab",
+        "url": "https://fixture.example/",
+        "snapshot": "- button \"Sign IN 雪😀\" [ref=e1]\n- button \"Sign out\" [ref=e2]\n- heading \"A guide\" [ref=e3]",
+        "refs": {
+          "e2": {
+            "role": "button",
+            "name": "Sign out"
+          },
+          "e1": {
+            "role": "button",
+            "name": "Sign IN 雪😀"
+          },
+          "e3": {
+            "role": "heading",
+            "name": "A guide"
+          }
+        },
+        "imagePath": "/fixture/image.png",
+        "imageType": "png",
+        "labels": true,
+        "labelsCount": 2,
+        "labelsSkipped": 0,
+        "annotations": [
+          {
+            "ref": "e1"
+          },
+          {
+            "ref": "e2"
+          }
+        ]
+      },
+      "input": {
+        "action": "snapshot",
+        "query": "sign in",
+        "labels": true
+      },
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "1 matching line(s) in the returned snapshot.\n<browser-fixture>- button \"Sign IN 雪😀\" [ref=e1]</browser-fixture>"
+          },
+          {
+            "type": "image",
+            "data": "fixture-image",
+            "mimeType": "image/png"
+          }
+        ],
+        "details": {
+          "ok": true,
+          "format": "ai",
+          "targetId": "source-tab",
+          "url": "https://fixture.example/",
+          "matchCount": 1,
+          "stats": {
+            "lines": 1,
+            "chars": 31,
+            "refs": 1,
+            "interactive": 1
+          },
+          "refs": 1,
+          "labels": true,
+          "labelsCount": 2,
+          "labelsSkipped": 0,
+          "annotations": [
+            {
+              "ref": "e1"
+            },
+            {
+              "ref": "e2"
+            }
+          ],
+          "imagePath": "/fixture/image.png",
+          "imageType": "png",
+          "externalContent": {
+            "untrusted": true,
+            "source": "browser",
+            "kind": "snapshot",
+            "format": "ai",
+            "wrapped": true
+          },
+          "text": "1 matching line(s) in the returned snapshot.\n<browser-fixture>- button \"Sign IN 雪😀\" [ref=e1]</browser-fixture>",
+          "media": {
+            "outbound": false
+          }
+        }
+      },
+      "boundedText": "- button \"Sign IN 雪😀\" [ref=e1]",
+      "calls": [
+        {
+          "target": {
+            "fixture": true
+          },
+          "options": {
+            "labels": true,
+            "timeoutMs": 20000
+          }
+        }
+      ],
+      "imageCalls": [
+        {
+          "label": "browser:snapshot",
+          "path": "/fixture/image.png",
+          "extraText": "1 matching line(s) in the returned snapshot.\n<browser-fixture>- button \"Sign IN 雪😀\" [ref=e1]</browser-fixture>",
+          "details": {
+            "ok": true,
+            "format": "ai",
+            "targetId": "source-tab",
+            "url": "https://fixture.example/",
+            "matchCount": 1,
+            "stats": {
+              "lines": 1,
+              "chars": 31,
+              "refs": 1,
+              "interactive": 1
+            },
+            "refs": 1,
+            "labels": true,
+            "labelsCount": 2,
+            "labelsSkipped": 0,
+            "annotations": [
+              {
+                "ref": "e1"
+              },
+              {
+                "ref": "e2"
+              }
+            ],
+            "imagePath": "/fixture/image.png",
+            "imageType": "png",
+            "externalContent": {
+              "untrusted": true,
+              "source": "browser",
+              "kind": "snapshot",
+              "format": "ai",
+              "wrapped": true
+            },
+            "text": "1 matching line(s) in the returned snapshot.\n<browser-fixture>- button \"Sign IN 雪😀\" [ref=e1]</browser-fixture>",
+            "media": {
+              "outbound": false
+            }
+          },
+          "imageSanitization": {
+            "fixture": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "ai-lexical-yaml-ref",
+      "snapshot": {
+        "ok": true,
+        "format": "ai",
+        "targetId": "source-tab",
+        "url": "https://fixture.example/",
+        "snapshot": "- 'button \"Sign IN 雪😀\" [ref=e1]':\n  - /url: https://fixture.example/sign",
+        "refs": {
+          "e1": {
+            "role": "button",
+            "name": "Sign IN 雪😀"
+          }
+        }
+      },
+      "input": {
+        "action": "snapshot",
+        "query": "sign in"
+      },
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "1 matching line(s) in the returned snapshot.\n<browser-fixture>- 'button \"Sign IN 雪😀\" [ref=e1]':</browser-fixture>"
+          }
+        ],
+        "details": {
+          "ok": true,
+          "format": "ai",
+          "targetId": "source-tab",
+          "url": "https://fixture.example/",
+          "matchCount": 1,
+          "stats": {
+            "lines": 1,
+            "chars": 34,
+            "refs": 1,
+            "interactive": 1
+          },
+          "refs": 1,
+          "externalContent": {
+            "untrusted": true,
+            "source": "browser",
+            "kind": "snapshot",
+            "format": "ai",
+            "wrapped": true
+          },
+          "text": "1 matching line(s) in the returned snapshot.\n<browser-fixture>- 'button \"Sign IN 雪😀\" [ref=e1]':</browser-fixture>"
+        }
+      },
+      "boundedText": "- 'button \"Sign IN 雪😀\" [ref=e1]':",
+      "calls": [
+        {
+          "target": {
+            "fixture": true
+          },
+          "options": {
+            "timeoutMs": 20000
+          }
+        }
+      ],
+      "imageCalls": []
+    }
+  ],
+  "boundaries": {
+    "wholeSnapshotActionExecuted": true,
+    "realBrowserTransportExecuted": false,
+    "realConfigServiceExecuted": false,
+    "realExternalEnvelopeExecuted": false,
+    "realSanitizerExecuted": false,
+    "realImageLoadingExecuted": false,
+    "networkExecuted": false
+  },
+  "limits": [
+    "Complete pinned snapshot action, actual normalization/numeric readers, ref parser/finalizer/role sets and text-result execute.",
+    "Lower browserSnapshot/configuration/image-loading are explicit successful input facades; no browser runtime, registration, network or file reading executes.",
+    "External envelope and sanitized prefix are explicit ordinary-text facades using the actual UTF16 helper. No security, permission or sanitizer behavior is tested or established.",
+    "Source wrapping retains the real 16000 live-text constant and query budget arithmetic with a deterministic synthetic envelope. Host uses existing native JSON/UTF8 budgets and no new text envelope; full byte parity is not claimed.",
+    "Host raw AX aliases/actionable-only public refs and filtered nodes are explicit adaptations. Full captured private handles and delta baselines remain independent of query projection."
+  ]
+}

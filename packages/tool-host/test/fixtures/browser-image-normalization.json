@@ -1,0 +1,526 @@
+{
+  "referenceCommit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+  "scriptSha256": "6ec1ce0b990d3037387bc3455db5aafe54d3d880b3adf0065b2f725f6c922253",
+  "rastermillVersion": "0.4.0",
+  "sourceRecords": [
+    {
+      "path": "extensions/browser/src/browser/screenshot-annotate.ts",
+      "sha256": "b0ebcc95f4ccb2d6c05c457f70a8718b9748d0628e64611a6e52e8e9a192d7ef",
+      "executableSha256": "682f770635594e1ae9aee0d61a540b2a13c980235bb57a5d50e9dfd198d445b1",
+      "executed": true
+    },
+    {
+      "path": "extensions/browser/src/browser/screenshot.ts",
+      "sha256": "63737a5276fe4cd31331563d9640a88928e3929cbead24527d96d081982bd405",
+      "executableSha256": "4ed53ed7f2e3ccd714c86ee20a0c33cf6249a42d630cf1efe2e2839b133fb97a",
+      "executed": true
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4",
+      "executed": false,
+      "role": "provenance-only; process facade, worker contract, package or license"
+    },
+    {
+      "path": "package.json",
+      "sha256": "5f3a32b44b1d1a3eb9e8628845e195d054e4e41b28b1349d7dbc7dff723d9920",
+      "executed": false,
+      "role": "provenance-only; process facade, worker contract, package or license"
+    },
+    {
+      "path": "packages/media-core/src/base64.ts",
+      "sha256": "93e6ef481601a3bee0a6cbd304506a0b1ab4e1e05d363be78a00ebe7b63173ac",
+      "executableSha256": "14af4a9d348fd044852a27ea00a3cfaf52faf699f0dac0938d7076e621c9a4f3",
+      "executed": true
+    },
+    {
+      "path": "packages/normalization-core/src/expect.ts",
+      "sha256": "ea995c248b00f6c9e17bbc9c3085971feeb0ee614d2bd9c8c902e8bc26cacb7a",
+      "executableSha256": "48d70d50b19bbf4cb2c1fffdda884d5a5211c3983881969af2df0fd41be62170",
+      "executed": true
+    },
+    {
+      "path": "packages/normalization-core/src/format.ts",
+      "sha256": "e629a028da50930716a7991f07741709ac6a481f22be43f558f3252371bdea03",
+      "executableSha256": "7780067f1007dac33e1bd36fbf0193844ab4a8aea8ebcd1fe2fc2e83d984ca2f",
+      "executed": true
+    },
+    {
+      "path": "packages/normalization-core/src/number-coercion.ts",
+      "sha256": "8c40eca65a8fd1dc3aa40d90c22bff35c3710fcb03d2bc8227864a264d20ddc4",
+      "executableSha256": "1924891ed8947cbcf8fb90aabdac29d7353c186efc491f627491ee1c3b9f95d5",
+      "executed": true
+    },
+    {
+      "path": "packages/normalization-core/src/string-coerce.ts",
+      "sha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf",
+      "executableSha256": "adf85733aece35eddd1e1c0db1f6ec2778f1974678244131a2620212d35baf5d",
+      "executed": true
+    },
+    {
+      "path": "src/agents/content-blocks.ts",
+      "sha256": "9f0ada69154fd06186a313dd329f96b0351a28eeae8e5f5cd1a0c8fbec6e42db",
+      "executableSha256": "5097db16d376fb702482b0b74b133beffef415d17edda6e1f42a9305730bb8c4",
+      "executed": true
+    },
+    {
+      "path": "src/agents/image-sanitization.ts",
+      "sha256": "118f06f63dbf7538706010c9999123c43803e8cc842ba356970ba0b51f779553",
+      "executableSha256": "d95b71c5212ab9f35f646650696784d8389147f7e0d5609e59a5a707008dcb3a",
+      "executed": true
+    },
+    {
+      "path": "src/agents/tool-images.ts",
+      "sha256": "ecda2331619e9de83b2e344e809d376c6b7b2d2050c2a26762cbfa36575a243d",
+      "executableSha256": "e535961535ccedeeb0b64733963c20582338335d593406e6369feae73b2f9cb8",
+      "executed": true
+    },
+    {
+      "path": "src/infra/lru-cache.ts",
+      "sha256": "8915c917e7580b9ad6614337cef68a447a7cdd44e838ba9acd2e7f64df9050f6",
+      "executableSha256": "ac33e046b39c785ed2a2f3fccb135049b683ac7a8b3924615e31885f2307e005",
+      "executed": true
+    },
+    {
+      "path": "src/infra/resolve-system-bin.ts",
+      "sha256": "527d2853863e676d4a48cdb1b88e3b08f86e8f84749eb957192a67532c63a314",
+      "executed": false,
+      "role": "provenance-only; process facade, worker contract, package or license"
+    },
+    {
+      "path": "src/infra/tmp-openclaw-dir.ts",
+      "sha256": "cbf3ec755fe046f9f99796837ad3bdde556914e9abccf70a247fe7931d602381",
+      "executed": false,
+      "role": "provenance-only; process facade, worker contract, package or license"
+    },
+    {
+      "path": "src/logging/subsystem.ts",
+      "sha256": "1887ac3184d7fae3e5ba97903a79e4e6ddd8aa1233f450b0b385f46587608d8c",
+      "executed": false,
+      "role": "provenance-only; process facade, worker contract, package or license"
+    },
+    {
+      "path": "src/media/image-ops.ts",
+      "sha256": "aa744137a4e37dc9b3cdc45db0ea1441e0939dda4c6364cbfa4eec3f759e4672",
+      "executableSha256": "0a514fd387ae1a878b499e4319409e6e119e32162f6817ecf304d99eb670bf02",
+      "executed": true
+    },
+    {
+      "path": "src/media/image-processor-config.ts",
+      "sha256": "ccbdafaa3eedbc4a36048db2f50c6561482093a44d11dc02c16449dcaee31bae",
+      "executableSha256": "d88771baadd3b923ea5d37f12620ab50a0477f4b5168fe1af03e6f55e1f21c14",
+      "executed": true
+    },
+    {
+      "path": "src/media/image-processor.ts",
+      "sha256": "8d69a9434c0deeb2ccf7332b3014d9761a08be453776f8878dbd993caa95e72f",
+      "executed": false,
+      "role": "provenance-only; process facade, worker contract, package or license"
+    },
+    {
+      "path": "src/media/image-processor.worker.ts",
+      "sha256": "ac0d8fac5ef44ff83c38b85fccb78531e04056d5bc46f4880369602b9da3bbb0",
+      "executed": false,
+      "role": "provenance-only; process facade, worker contract, package or license"
+    }
+  ],
+  "boundaries": [
+    "Complete pinned TypeScript modules, stripped types only; all loaded source bytes checked against git pin.",
+    "Image-processor worker orchestration facade uses actual pinned createLocalImageProcessor(internal) and real Rastermill0.4.0/Photon codecs.",
+    "Logging and system-command/temp resolvers are explicit facades; no external codec fallback, Browser route registration, storage, provider or full plugin assembly executed.",
+    "Vectors prove normalization algorithms and annotation arithmetic, not route integration or full invalid-image/replay sanitization."
+  ],
+  "vectors": [
+    {
+      "name": "small-png",
+      "recipe": {
+        "width": 320,
+        "height": 180
+      },
+      "inputAnnotations": [
+        {
+          "ref": "e1",
+          "number": 1,
+          "role": "button",
+          "name": "Fixture",
+          "box": {
+            "x": 121,
+            "y": 91,
+            "width": 97,
+            "height": 49
+          }
+        }
+      ],
+      "expected": {
+        "input": {
+          "bytes": 542,
+          "sha256": "8d7a3dd47ed348388df4aed560e1b77ae28fcf2c1b14870e473d909dca65024e",
+          "mimeType": "image/png",
+          "dimensions": {
+            "width": 320,
+            "height": 180
+          }
+        },
+        "saved": {
+          "bytes": 542,
+          "sha256": "8d7a3dd47ed348388df4aed560e1b77ae28fcf2c1b14870e473d909dca65024e",
+          "mimeType": "image/png",
+          "dimensions": {
+            "width": 320,
+            "height": 180
+          }
+        },
+        "inline": {
+          "bytes": 542,
+          "sha256": "8d7a3dd47ed348388df4aed560e1b77ae28fcf2c1b14870e473d909dca65024e",
+          "mimeType": "image/png",
+          "dimensions": {
+            "width": 320,
+            "height": 180
+          }
+        },
+        "annotations": [
+          {
+            "ref": "e1",
+            "number": 1,
+            "role": "button",
+            "name": "Fixture",
+            "box": {
+              "x": 121,
+              "y": 91,
+              "width": 97,
+              "height": 49
+            }
+          }
+        ],
+        "detailsPreserved": true
+      }
+    },
+    {
+      "name": "model-only-resize",
+      "recipe": {
+        "width": 1500,
+        "height": 600
+      },
+      "inputAnnotations": [
+        {
+          "ref": "e1",
+          "number": 1,
+          "role": "button",
+          "name": "Fixture",
+          "box": {
+            "x": 121,
+            "y": 91,
+            "width": 97,
+            "height": 49
+          }
+        }
+      ],
+      "expected": {
+        "input": {
+          "bytes": 4488,
+          "sha256": "21b1e08c01dbb95224d443441522678451577463937289dc1319c823682479bf",
+          "mimeType": "image/png",
+          "dimensions": {
+            "width": 1500,
+            "height": 600
+          }
+        },
+        "saved": {
+          "bytes": 4488,
+          "sha256": "21b1e08c01dbb95224d443441522678451577463937289dc1319c823682479bf",
+          "mimeType": "image/png",
+          "dimensions": {
+            "width": 1500,
+            "height": 600
+          }
+        },
+        "inline": {
+          "bytes": 16361,
+          "sha256": "afa9f2b72d68e8b8a892bf9ab7bfc078cc902e303cfb937460be2709e18a27e1",
+          "mimeType": "image/jpeg",
+          "dimensions": {
+            "width": 1200,
+            "height": 480
+          }
+        },
+        "annotations": [
+          {
+            "ref": "e1",
+            "number": 1,
+            "role": "button",
+            "name": "Fixture",
+            "box": {
+              "x": 121,
+              "y": 91,
+              "width": 97,
+              "height": 49
+            }
+          }
+        ],
+        "detailsPreserved": true
+      }
+    },
+    {
+      "name": "wide-two-stages",
+      "recipe": {
+        "width": 2400,
+        "height": 900
+      },
+      "inputAnnotations": [
+        {
+          "ref": "e1",
+          "number": 1,
+          "role": "button",
+          "name": "Fixture",
+          "box": {
+            "x": 121,
+            "y": 91,
+            "width": 97,
+            "height": 49
+          }
+        }
+      ],
+      "expected": {
+        "input": {
+          "bytes": 9967,
+          "sha256": "bd4d52bc5aa1be820964d82f983b672368fb5083051342c75b49abf7d7a3d783",
+          "mimeType": "image/png",
+          "dimensions": {
+            "width": 2400,
+            "height": 900
+          }
+        },
+        "saved": {
+          "bytes": 41736,
+          "sha256": "b8755ed77020eb712adb8f54098f9b8427c8ba5e4ed5adc83862abdc3e16b343",
+          "mimeType": "image/jpeg",
+          "dimensions": {
+            "width": 2000,
+            "height": 750
+          }
+        },
+        "inline": {
+          "bytes": 15573,
+          "sha256": "04ac411487fd6ebffd271cb38ad6ebe1c6cb0517c12e2db204724c397c971e78",
+          "mimeType": "image/jpeg",
+          "dimensions": {
+            "width": 1200,
+            "height": 450
+          }
+        },
+        "annotations": [
+          {
+            "ref": "e1",
+            "number": 1,
+            "role": "button",
+            "name": "Fixture",
+            "box": {
+              "x": 101,
+              "y": 76,
+              "width": 81,
+              "height": 41
+            }
+          }
+        ],
+        "detailsPreserved": true
+      }
+    },
+    {
+      "name": "tall-two-stages",
+      "recipe": {
+        "width": 900,
+        "height": 2400
+      },
+      "inputAnnotations": [
+        {
+          "ref": "e1",
+          "number": 1,
+          "role": "button",
+          "name": "Fixture",
+          "box": {
+            "x": 121,
+            "y": 91,
+            "width": 97,
+            "height": 49
+          }
+        }
+      ],
+      "expected": {
+        "input": {
+          "bytes": 11833,
+          "sha256": "fc1b530ec1d3c5a8f16c41a3fdcc31cf5fe031de951f4f7759dae109f9dedd63",
+          "mimeType": "image/png",
+          "dimensions": {
+            "width": 900,
+            "height": 2400
+          }
+        },
+        "saved": {
+          "bytes": 41736,
+          "sha256": "7e69ef6565890a533de05e9f3c2f16351916e430d8264d30bacfc34fa0c00dfb",
+          "mimeType": "image/jpeg",
+          "dimensions": {
+            "width": 750,
+            "height": 2000
+          }
+        },
+        "inline": {
+          "bytes": 15573,
+          "sha256": "8df793cfe29f7bb523312df236e6cb0edd4698b3d2a3936ede5f810f9b3dd951",
+          "mimeType": "image/jpeg",
+          "dimensions": {
+            "width": 450,
+            "height": 1200
+          }
+        },
+        "annotations": [
+          {
+            "ref": "e1",
+            "number": 1,
+            "role": "button",
+            "name": "Fixture",
+            "box": {
+              "x": 101,
+              "y": 76,
+              "width": 81,
+              "height": 41
+            }
+          }
+        ],
+        "detailsPreserved": true
+      }
+    },
+    {
+      "name": "rounded-model-height",
+      "recipe": {
+        "width": 1601,
+        "height": 903
+      },
+      "inputAnnotations": [
+        {
+          "ref": "e1",
+          "number": 1,
+          "role": "button",
+          "name": "Fixture",
+          "box": {
+            "x": 121,
+            "y": 91,
+            "width": 97,
+            "height": 49
+          }
+        }
+      ],
+      "expected": {
+        "input": {
+          "bytes": 7086,
+          "sha256": "788af21d35683a0d376d2896689869faa9bf0ca5e627bc72fa9c4f6247bf35b8",
+          "mimeType": "image/png",
+          "dimensions": {
+            "width": 1601,
+            "height": 903
+          }
+        },
+        "saved": {
+          "bytes": 7086,
+          "sha256": "788af21d35683a0d376d2896689869faa9bf0ca5e627bc72fa9c4f6247bf35b8",
+          "mimeType": "image/png",
+          "dimensions": {
+            "width": 1601,
+            "height": 903
+          }
+        },
+        "inline": {
+          "bytes": 22923,
+          "sha256": "3357205d3d79efbafced3f35fc7ccede06c760f44fe11b1e0b5c762b30f906c9",
+          "mimeType": "image/jpeg",
+          "dimensions": {
+            "width": 1200,
+            "height": 677
+          }
+        },
+        "annotations": [
+          {
+            "ref": "e1",
+            "number": 1,
+            "role": "button",
+            "name": "Fixture",
+            "box": {
+              "x": 121,
+              "y": 91,
+              "width": 97,
+              "height": 49
+            }
+          }
+        ],
+        "detailsPreserved": true
+      }
+    },
+    {
+      "name": "byte-trigger-noise",
+      "recipe": {
+        "width": 1400,
+        "height": 1400,
+        "pattern": "noise"
+      },
+      "inputAnnotations": [
+        {
+          "ref": "e1",
+          "number": 1,
+          "role": "button",
+          "name": "Fixture",
+          "box": {
+            "x": 121,
+            "y": 91,
+            "width": 97,
+            "height": 49
+          }
+        }
+      ],
+      "expected": {
+        "input": {
+          "bytes": 6726052,
+          "sha256": "a06b6b3bb32148e4aa4b12b287ad1a809ab14c278d778d0bc538f9d57fbb5584",
+          "mimeType": "image/png",
+          "dimensions": {
+            "width": 1400,
+            "height": 1400
+          }
+        },
+        "saved": {
+          "bytes": 3096765,
+          "sha256": "4bd16cbebdcc35bdf18fb36be670f20086e4f5a02923032de4bc840ce18e5be8",
+          "mimeType": "image/jpeg",
+          "dimensions": {
+            "width": 1400,
+            "height": 1400
+          }
+        },
+        "inline": {
+          "bytes": 2020594,
+          "sha256": "e384dbf167676aafba0108e6c5a73702e51c6c68ee2710326c8d5aade50f527c",
+          "mimeType": "image/jpeg",
+          "dimensions": {
+            "width": 1200,
+            "height": 1200
+          }
+        },
+        "annotations": [
+          {
+            "ref": "e1",
+            "number": 1,
+            "role": "button",
+            "name": "Fixture",
+            "box": {
+              "x": 121,
+              "y": 91,
+              "width": 97,
+              "height": 49
+            }
+          }
+        ],
+        "detailsPreserved": true
+      }
+    }
+  ]
+}

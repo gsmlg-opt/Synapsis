@@ -1,6 +1,9 @@
 defmodule SynapsisWeb.MemoryLive.Index do
   use SynapsisWeb, :live_view
   use SynapsisWeb.ReactFormEvents
+  import SynapsisWeb.AgentLive.Components
+
+  alias Synapsis.Memory.{Settings, WorkspaceReader}
 
   @impl true
   def mount(_params, _session, socket) do
@@ -12,7 +15,19 @@ defmodule SynapsisWeb.MemoryLive.Index do
      socket
      |> assign(
        page_title: "Memory",
-       active_tab: "knowledge",
+       active_tab: "workspace",
+       agents: Synapsis.AgentConfigs.list(),
+       selected_agent: nil,
+       workspace_root: nil,
+       workspace_files: [],
+       workspace_document: nil,
+       workspace_loading: false,
+       workspace_error: nil,
+       host_enabled: Settings.host_enabled?(),
+       host_loading: false,
+       host_result: nil,
+       host_source: nil,
+       host_error: nil,
        # Knowledge tab
        scope_filter: "all",
        kind_filter: "all",
@@ -41,7 +56,10 @@ defmodule SynapsisWeb.MemoryLive.Index do
   def handle_params(_params, _uri, socket) do
     case socket.assigns.live_action do
       :new ->
-        {:noreply, socket |> reset_react_form("create-memory-form") |> assign(show_create: true)}
+        {:noreply,
+         socket
+         |> reset_react_form("create-memory-form")
+         |> assign(show_create: true, active_tab: "knowledge")}
 
       _ ->
         {:noreply, socket}
@@ -49,8 +67,102 @@ defmodule SynapsisWeb.MemoryLive.Index do
   end
 
   @impl true
-  def handle_event("switch_tab", %{"tab" => tab}, socket) do
-    {:noreply, socket |> assign(active_tab: tab) |> load_data()}
+  def handle_event("switch_tab", %{"tab" => tab}, socket)
+      when tab in ~w(workspace knowledge events checkpoints) do
+    {:noreply,
+     socket
+     |> cancel_async(:host_recall)
+     |> assign(
+       active_tab: tab,
+       host_enabled: Settings.host_enabled?(),
+       host_result: nil,
+       host_source: nil,
+       host_loading: false
+     )
+     |> load_data()}
+  end
+
+  def handle_event("switch_tab", %{"tab" => "host"}, socket) do
+    socket =
+      socket
+      |> cancel_async(:host_recall)
+      |> assign(host_result: nil, host_source: nil, host_loading: false, host_error: nil)
+
+    if Settings.host_enabled?(),
+      do: {:noreply, assign(socket, active_tab: "host", host_enabled: true)},
+      else: {:noreply, assign(socket, active_tab: "workspace", host_enabled: false)}
+  end
+
+  def handle_event("select_agent", %{"agent" => name}, socket) do
+    case Enum.find(Synapsis.AgentConfigs.list(), &(&1.name == name)) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Select a configured agent")}
+
+      _ ->
+        root =
+          name
+          |> Synapsis.Agent.Resolver.resolve()
+          |> Map.fetch!(:workspace_path)
+          |> Path.expand()
+
+        {:noreply,
+         socket
+         |> cancel_async(:workspace_list)
+         |> cancel_async(:workspace_read)
+         |> assign(selected_agent: name, workspace_root: root, workspace_document: nil)
+         |> load_workspace()}
+    end
+  end
+
+  def handle_event("refresh_workspace", _params, socket) do
+    {:noreply,
+     socket |> cancel_async(:workspace_list) |> cancel_async(:workspace_read) |> load_workspace()}
+  end
+
+  def handle_event("read_workspace", %{"path" => path} = params, socket) do
+    root = socket.assigns.workspace_root
+
+    from =
+      case Integer.parse(params["from"] || "1") do
+        {value, ""} when value > 0 -> value
+        _ -> 1
+      end
+
+    if root && Enum.any?(socket.assigns.workspace_files, &(&1.path == path)) do
+      {:noreply,
+       socket
+       |> cancel_async(:workspace_read)
+       |> assign(workspace_loading: true, workspace_error: nil)
+       |> start_async(:workspace_read, fn ->
+         WorkspaceReader.read(root, path, from: from, lines: 120)
+       end)}
+    else
+      {:noreply, put_flash(socket, :error, "Select a listed workspace memory file")}
+    end
+  end
+
+  def handle_event("recall_host", %{"query" => query}, socket) do
+    case Settings.host_source() do
+      {:ok, source} ->
+        {:noreply,
+         socket
+         |> cancel_async(:host_recall)
+         |> assign(host_loading: true, host_error: nil, host_result: nil, host_source: source)
+         |> start_async(:host_recall, fn -> Synapsis.Memory.recall_host(query, source: source) end)}
+
+      {:error, reason} ->
+        {:noreply,
+         socket
+         |> cancel_async(:host_recall)
+         |> assign(
+           active_tab: "workspace",
+           host_enabled: false,
+           host_result: nil,
+           host_source: nil,
+           host_error: reason,
+           host_loading: false
+         )}
+    end
   end
 
   def handle_event("filter_scope", %{"scope" => scope}, socket) do
@@ -132,6 +244,63 @@ defmodule SynapsisWeb.MemoryLive.Index do
   def handle_info({:memory_updated, _}, socket), do: {:noreply, load_data(socket)}
   def handle_info(_, socket), do: {:noreply, socket}
 
+  @impl true
+  def handle_async(:workspace_list, {:ok, {:ok, result}}, socket) do
+    {:noreply, assign(socket, workspace_files: result.files, workspace_loading: false)}
+  end
+
+  def handle_async(:workspace_read, {:ok, {:ok, document}}, socket) do
+    {:noreply, assign(socket, workspace_document: document, workspace_loading: false)}
+  end
+
+  def handle_async(name, result, socket) when name in [:workspace_list, :workspace_read] do
+    reason =
+      case result do
+        {:ok, {:error, reason}} when is_atom(reason) -> reason
+        _ -> :unavailable
+      end
+
+    {:noreply, assign(socket, workspace_error: reason, workspace_loading: false)}
+  end
+
+  def handle_async(:host_recall, {:ok, {:ok, result}}, socket) do
+    if Settings.host_source() == {:ok, socket.assigns.host_source},
+      do: {:noreply, assign(socket, host_result: result, host_loading: false)},
+      else:
+        {:noreply,
+         assign(socket,
+           host_result: nil,
+           host_loading: false,
+           host_enabled: Settings.host_enabled?(),
+           host_error: :config_changed
+         )}
+  end
+
+  def handle_async(:host_recall, result, socket) do
+    reason =
+      case result do
+        {:ok, {:error, reason}} when is_atom(reason) -> reason
+        _ -> :unavailable
+      end
+
+    {:noreply, assign(socket, host_result: nil, host_error: reason, host_loading: false)}
+  end
+
+  defp load_workspace(%{assigns: %{workspace_root: nil}} = socket), do: socket
+
+  defp load_workspace(socket) do
+    root = socket.assigns.workspace_root
+
+    socket
+    |> assign(
+      workspace_loading: true,
+      workspace_error: nil,
+      workspace_files: [],
+      workspace_document: nil
+    )
+    |> start_async(:workspace_list, fn -> WorkspaceReader.list(root) end)
+  end
+
   defp load_data(socket) do
     case socket.assigns.active_tab do
       "knowledge" -> load_knowledge(socket)
@@ -187,14 +356,31 @@ defmodule SynapsisWeb.MemoryLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <.settings_layout current_path="/settings/memory" content_class="max-w-6xl">
+    <.agent_shell active={:memory}>
       <.breadcrumb class="mb-4">
-        <:crumb to={~p"/settings"}>Settings</:crumb>
+        <:crumb to={~p"/agent/agents"}>Agent</:crumb>
         <:crumb>Memory</:crumb>
       </.breadcrumb>
 
       <%!-- Tab navigation --%>
-      <div class="flex gap-2 mb-4">
+      <div class="flex flex-wrap gap-2 mb-4">
+        <.dm_btn
+          variant={if @active_tab == "workspace", do: "primary", else: "ghost"}
+          size="sm"
+          phx-click="switch_tab"
+          phx-value-tab="workspace"
+        >
+          Workspace Markdown
+        </.dm_btn>
+        <.dm_btn
+          :if={@host_enabled}
+          variant={if @active_tab == "host", do: "primary", else: "ghost"}
+          size="sm"
+          phx-click="switch_tab"
+          phx-value-tab="host"
+        >
+          Host agent
+        </.dm_btn>
         <.dm_btn
           variant={if @active_tab == "knowledge", do: "primary", else: "ghost"}
           size="sm"
@@ -220,6 +406,120 @@ defmodule SynapsisWeb.MemoryLive.Index do
           <.dm_mdi name="content-save-check" /> Checkpoints
         </.dm_btn>
       </div>
+
+      <%= if @active_tab == "workspace" do %>
+        <.dm_card variant="bordered" class="mb-4">
+          <:title>Workspace Markdown</:title>
+          <p class="text-sm text-on-surface-variant mb-3">
+            Read MEMORY.md and memory/**/*.md from a configured agent workspace.
+          </p>
+          <.form for={%{}} id="memory-agent-form" phx-change="select_agent">
+            <label for="memory-agent" class="label">Agent</label>
+            <select id="memory-agent" name="agent" class="select w-full" value={@selected_agent || ""}>
+              <option value="">Select an agent</option>
+              <option
+                :for={agent <- @agents}
+                value={agent.name}
+                selected={agent.name == @selected_agent}
+              >
+                {agent.label || agent.name}
+              </option>
+            </select>
+          </.form>
+          <p :if={@agents == []} class="text-sm mt-3">Configure an agent to view workspace memory.</p>
+          <%= if @selected_agent do %>
+            <div class="flex items-center justify-between gap-2 mt-3">
+              <span class="text-sm text-on-surface-variant break-all">{@workspace_root}</span>
+              <.dm_btn variant="ghost" size="sm" phx-click="refresh_workspace">Refresh</.dm_btn>
+            </div>
+            <p :if={@workspace_loading} role="status" class="mt-3">Loading workspace memory…</p>
+            <p :if={@workspace_error == :unavailable} role="alert" class="mt-3">
+              Workspace is unavailable or has not been initialized. Run an agent session or check its workspace configuration.
+            </p>
+            <p :if={@workspace_error && @workspace_error != :unavailable} role="alert" class="mt-3">
+              Workspace memory could not be read ({@workspace_error}).
+            </p>
+            <p :if={!@workspace_loading && !@workspace_error && @workspace_files == []} class="mt-3">
+              No workspace memory files yet.
+            </p>
+            <div id="workspace-memory-files" class="space-y-2 mt-3">
+              <div :for={file <- @workspace_files} class="flex items-center gap-3">
+                <.dm_btn
+                  variant="ghost"
+                  size="sm"
+                  phx-click="read_workspace"
+                  phx-value-path={file.path}
+                >
+                  {file.path}
+                </.dm_btn>
+                <span class="text-xs text-on-surface-variant">{file.size} bytes</span>
+              </div>
+            </div>
+            <%= if @workspace_document do %>
+              <article id="workspace-memory-content" class="mt-4">
+                <h3 class="font-semibold">{@workspace_document.path}</h3>
+                <p class="text-xs text-on-surface-variant">
+                  Lines {@workspace_document.from}–{@workspace_document.to}
+                </p>
+                <pre class="overflow-auto whitespace-pre-wrap break-words text-sm bg-surface-container-high p-3 mt-2"><code :for={{line, number} <- Enum.with_index(Enum.take(String.split(@workspace_document.content, "\n"), max(@workspace_document.to - @workspace_document.from + 1, 0)), @workspace_document.from)}><span class="text-on-surface-variant select-none">{number}  </span>{line}{"\n"}</code></pre>
+                <.dm_btn
+                  :if={@workspace_document.next_from}
+                  variant="ghost"
+                  size="sm"
+                  phx-click="read_workspace"
+                  phx-value-path={@workspace_document.path}
+                  phx-value-from={@workspace_document.next_from}
+                >
+                  Next lines
+                </.dm_btn>
+                <p :if={@workspace_document.truncated} class="text-xs text-on-surface-variant">
+                  This is a bounded excerpt.
+                </p>
+                <p
+                  :if={@workspace_document.notice}
+                  role="note"
+                  class="text-sm text-on-surface-variant"
+                >
+                  {@workspace_document.notice}
+                </p>
+              </article>
+            <% end %>
+          <% end %>
+        </.dm_card>
+      <% end %>
+
+      <%= if @active_tab == "host" && @host_enabled do %>
+        <.dm_card variant="bordered">
+          <:title>Backplane host agent memory</:title>
+          <p class="text-sm text-on-surface-variant mb-3">
+            Search memory available to the host account. Agent ID selects a host route. Results carry host record IDs, separate from workspace file references.
+          </p>
+          <.form for={%{}} id="host-memory-query" phx-submit="recall_host">
+            <label for="host-memory-query-text" class="label">Recall query</label>
+            <.dm_input id="host-memory-query-text" name="query" value="" required maxlength="2048" />
+            <.dm_btn type="submit" variant="primary" class="mt-2" disabled={@host_loading}>
+              Recall
+            </.dm_btn>
+          </.form>
+          <p :if={@host_loading} role="status" class="mt-3">Recalling host memory…</p>
+          <p :if={@host_error} role="alert" class="mt-3">Host recall failed ({@host_error}).</p>
+          <%= if @host_result do %>
+            <div id="host-memory-state" class="text-sm mt-3 space-y-1">
+              <p>Mode: {@host_result.mode} · Authority: {@host_result.authority}</p>
+              <p>Consistency: {@host_result.consistency} · Stale: {to_string(@host_result.stale)}</p>
+              <p>Source: {@host_result.source.id} · {@host_result.source.endpoint}</p>
+            </div>
+            <p :if={@host_result.hits == []} class="mt-3">No matching host memories.</p>
+            <article
+              :for={hit <- @host_result.hits}
+              class="border border-outline-variant rounded p-3 mt-3"
+            >
+              <p class="text-xs text-on-surface-variant">Host record: {hit.memory_id}</p>
+              <p class="whitespace-pre-wrap text-sm mt-1">{hit.content}</p>
+            </article>
+          <% end %>
+        </.dm_card>
+      <% end %>
 
       <%!-- Knowledge tab --%>
       <%= if @active_tab == "knowledge" do %>
@@ -353,7 +653,7 @@ defmodule SynapsisWeb.MemoryLive.Index do
                   <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-1 flex-wrap">
                       <.dm_link
-                        navigate={~p"/settings/memory/#{memory.id}"}
+                        navigate={~p"/agent/memory/#{memory.id}"}
                         class="font-semibold text-on-surface hover:text-primary"
                       >
                         {memory.title}
@@ -467,7 +767,7 @@ defmodule SynapsisWeb.MemoryLive.Index do
           </.dm_table>
         <% end %>
       <% end %>
-    </.settings_layout>
+    </.agent_shell>
     """
   end
 

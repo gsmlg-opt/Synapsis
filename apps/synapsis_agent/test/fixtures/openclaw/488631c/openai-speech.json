@@ -1,0 +1,1450 @@
+{
+  "schemaVersion": 1,
+  "referencePin": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+  "harness": {
+    "path": "scripts/openclaw/capture-openai-speech.mjs",
+    "sha256": "6b4956757a83e56c2538dd0b868e119e0a90d2aec992f21f4f37b7561deb23ea"
+  },
+  "transformation": {
+    "api": "node:module.stripTypeScriptTypes",
+    "options": {
+      "mode": "transform",
+      "sourceMap": false
+    },
+    "sdkFacades": [
+      {
+        "module": "openclaw/plugin-sdk/string-coerce-runtime",
+        "source": "export { asFiniteNumber } from \"packages/normalization-core/src/number-coercion.ts\";\nexport { asOptionalRecord } from \"packages/normalization-core/src/record-coerce.ts\";\nexport { normalizeLowercaseStringOrEmpty, normalizeOptionalLowercaseString, normalizeOptionalString } from \"packages/normalization-core/src/string-coerce.ts\";\n",
+        "sha256": "cd6ba1897aee998dcffc9663b64a74e98a4e50fb7102e7e4d571f863508cb40f"
+      },
+      {
+        "module": "openclaw/plugin-sdk/number-runtime",
+        "source": "export { resolveExpiresAtMsFromEpochSeconds } from \"packages/normalization-core/src/number-coercion.ts\";\n",
+        "sha256": "b438d1ee12bdc6632bc9bff443b0d110bc8b07079776aefe1bc6d47835182544"
+      }
+    ],
+    "staticImports": [
+      {
+        "importer": "extensions/openai/speech-provider.ts",
+        "specifier": "openclaw/plugin-sdk/secret-input",
+        "resolved": "openclaw/plugin-sdk/secret-input"
+      },
+      {
+        "importer": "extensions/openai/speech-provider.ts",
+        "specifier": "openclaw/plugin-sdk/speech-provider",
+        "resolved": "openclaw/plugin-sdk/speech-provider"
+      },
+      {
+        "importer": "extensions/openai/speech-provider.ts",
+        "specifier": "openclaw/plugin-sdk/string-coerce-runtime",
+        "resolved": "openclaw/plugin-sdk/string-coerce-runtime"
+      },
+      {
+        "importer": "extensions/openai/speech-provider.ts",
+        "specifier": "./realtime-provider-shared.js",
+        "resolved": "extensions/openai/realtime-provider-shared.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/string-coerce-runtime",
+        "specifier": "packages/normalization-core/src/number-coercion.ts",
+        "resolved": "packages/normalization-core/src/number-coercion.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/string-coerce-runtime",
+        "specifier": "packages/normalization-core/src/record-coerce.ts",
+        "resolved": "packages/normalization-core/src/record-coerce.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/string-coerce-runtime",
+        "specifier": "packages/normalization-core/src/string-coerce.ts",
+        "resolved": "packages/normalization-core/src/string-coerce.ts"
+      },
+      {
+        "importer": "extensions/openai/realtime-provider-shared.ts",
+        "specifier": "openclaw/plugin-sdk/number-runtime",
+        "resolved": "openclaw/plugin-sdk/number-runtime"
+      },
+      {
+        "importer": "extensions/openai/realtime-provider-shared.ts",
+        "specifier": "openclaw/plugin-sdk/string-coerce-runtime",
+        "resolved": "openclaw/plugin-sdk/string-coerce-runtime"
+      },
+      {
+        "importer": "packages/normalization-core/src/number-coercion.ts",
+        "specifier": "./string-coerce.ts",
+        "resolved": "packages/normalization-core/src/string-coerce.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/number-runtime",
+        "specifier": "packages/normalization-core/src/number-coercion.ts",
+        "resolved": "packages/normalization-core/src/number-coercion.ts"
+      }
+    ],
+    "dynamicImports": [
+      {
+        "importer": "extensions/openai/speech-provider.ts",
+        "specifier": "openclaw/plugin-sdk/media-generation-runtime",
+        "resolved": "openclaw/plugin-sdk/media-generation-runtime"
+      },
+      {
+        "importer": "extensions/openai/speech-provider.ts",
+        "specifier": "openclaw/plugin-sdk/provider-http",
+        "resolved": "openclaw/plugin-sdk/provider-http"
+      },
+      {
+        "importer": "extensions/openai/speech-provider.ts",
+        "specifier": "openclaw/plugin-sdk/proxy-capture",
+        "resolved": "openclaw/plugin-sdk/proxy-capture"
+      },
+      {
+        "importer": "extensions/openai/speech-provider.ts",
+        "specifier": "openclaw/plugin-sdk/ssrf-runtime",
+        "resolved": "openclaw/plugin-sdk/ssrf-runtime"
+      },
+      {
+        "importer": "extensions/openai/speech-provider.ts",
+        "specifier": "openclaw/plugin-sdk/media-runtime",
+        "resolved": "openclaw/plugin-sdk/media-runtime"
+      }
+    ]
+  },
+  "sourceAudit": [
+    {
+      "path": "extensions/openai/speech-provider.ts",
+      "gitBlob": "b1e50a3dde970c3cbac6cfdc2ee47d5ed9717567",
+      "sourceSha256": "3f4596ec176bbdbc4366da8a8c80ce308cecf41838969b4677ad0ec2074de2ba",
+      "executableSha256": "6ae2343a77afa81f628e51501789c28b7d55a3493a3e8cf0f53d627acc3abf9e",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "extensions/openai/realtime-provider-shared.ts",
+      "gitBlob": "54413b6dcae2bcedd331c4ac5c2631da78e41ee6",
+      "sourceSha256": "61cebe19e80cff8a42999889483e92b2653d3b6dbdc613db0e358cd19d53d873",
+      "executableSha256": "e2c65f6831ad42190109481ba6e3f55d2edb1e1b4e56c56c544fc09c857460fa",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "packages/normalization-core/src/string-coerce.ts",
+      "gitBlob": "445a9cc4f8daff07f033c3958baf2b798e240e9d",
+      "sourceSha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf",
+      "executableSha256": "9a2e05da77f15162560fe904c20ba9a49a6e6996e8b8c9bc16fd611f8456f504",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "packages/normalization-core/src/number-coercion.ts",
+      "gitBlob": "00ac5bda035cd8e854059a0198c2a9a7928e1bc9",
+      "sourceSha256": "8c40eca65a8fd1dc3aa40d90c22bff35c3710fcb03d2bc8227864a264d20ddc4",
+      "executableSha256": "2f2d58d34e9b77067ea265333fb06a807ce0cdcad83639d6c257095bb9f69a97",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "packages/normalization-core/src/record-coerce.ts",
+      "gitBlob": "78eba9cd0e4c75f94e71dfb3fcb7f4cf4eeeef16",
+      "sourceSha256": "541c179840c2cad4edc5c8103f77cc7f8c6b1ee5ec3e52c7c9fe097b18917f1c",
+      "executableSha256": "4ca2e6e901c28a07ae5fc9b29719cce5c26c919c65ab235b4ae2d5eaf0ec338c",
+      "wholeModule": true,
+      "executed": true
+    }
+  ],
+  "platformBoundaries": [
+    {
+      "module": "openclaw/plugin-sdk/secret-input",
+      "originalSourceExecuted": false,
+      "exports": {
+        "normalizeResolvedSecretInputString": "returns only the explicit synthetic fixture string; production secret resolution unexecuted"
+      }
+    },
+    {
+      "module": "openclaw/plugin-sdk/speech-provider",
+      "originalSourceExecuted": false,
+      "exports": {
+        "createSpeechDirectiveParser": "records construction and returns an unused callback; directive parsing unexecuted",
+        "parseSpeechDirectiveNumberOverride": "unused directive numeric parser; throws if called"
+      }
+    },
+    {
+      "module": "openclaw/plugin-sdk/media-generation-runtime",
+      "originalSourceExecuted": false,
+      "exports": {
+        "resolveGeneratedMediaMaxBytes": "explicit 16 MiB audio limit fixture; production configuration resolver unexecuted"
+      }
+    },
+    {
+      "module": "openclaw/plugin-sdk/provider-http",
+      "originalSourceExecuted": false,
+      "exports": {
+        "assertOkOrThrowProviderError": "asserts the synthetic successful Response is OK; production error handling unexecuted",
+        "readProviderBinaryResponse": "records maxBytes and returns exact synthetic Response bytes as Buffer; production bounded reader unexecuted",
+        "resolveProviderRequestHeaders": "returns supplied fixture headers; values are not recorded; production header resolution unexecuted"
+      }
+    },
+    {
+      "module": "openclaw/plugin-sdk/proxy-capture",
+      "originalSourceExecuted": false,
+      "exports": {
+        "isDebugProxyGlobalFetchPatchInstalled": "fixed false fixture; no global proxy patch",
+        "captureHttpExchangeAsync": "counted resolved no-op; no exchange persistence or network"
+      }
+    },
+    {
+      "module": "openclaw/plugin-sdk/ssrf-runtime",
+      "originalSourceExecuted": false,
+      "exports": {
+        "fetchWithSsrFGuard": "records URL, method, parsed JSON body and timeout; returns synthetic successful HTTP Response and counted release; no sockets",
+        "ssrfPolicyFromHttpBaseUrlAllowedHostname": "counted undefined fixture; production network policy unexecuted"
+      }
+    },
+    {
+      "module": "openclaw/plugin-sdk/media-runtime",
+      "originalSourceExecuted": false,
+      "exports": {
+        "isVoiceMessageCompatibleAudio": "explicit extension fixture accepts .opus only for the exercised formats; original media detection unexecuted"
+      }
+    }
+  ],
+  "limits": [
+    "Complete speech-provider.ts, realtime-provider-shared.ts and all three normalization modules execute unchanged apart from TypeScript erasure; SDK facades only re-export originals.",
+    "Only buildOpenAISpeechProvider, resolveConfig and successful synthesize/synthesizeTelephony callbacks are exercised; other shared/provider exports are provenance, not behavior coverage.",
+    "Each vector has a fresh isolated VM with process.env={} and cfg={}; no live environment, configuration files, provider connection or network is read.",
+    "The synthetic successful HTTP boundary returns eight fixed byte tokens, records request content and timeout, and counts release; it does not validate real audio or production resource lifetime.",
+    "The explicit 16 MiB media limit and binary response reader are fixtures; production limit resolution and bounded response streaming are unexecuted.",
+    "The voice compatibility fixture recognizes .opus among the exercised .mp3/.opus/.wav formats; original media detection and audio decoding are unexecuted.",
+    "Speech directive parser construction returns an unused callback; no directive parsing or numeric directive behavior is exercised.",
+    "Secret strings, request headers, proxy capture and network policy are explicit platform fixtures; imported production implementations are unexecuted and header values are omitted from the artifact.",
+    "12345 ms is the observed request timeout argument. The harness applies a 2000 ms synchronous VM and asynchronous deadline; production request deadline behavior is unverified.",
+    "Ordinary extra body fields and their final spread precedence are observed; no sanitizer-specific branch is exercised.",
+    "This oracle makes no registration, readiness, eligibility, full runtime or real provider claim."
+  ],
+  "observations": [
+    {
+      "id": "default-file",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openai-speech"
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openai-speech",
+        "baseUrl": "https://api.openai.com/v1",
+        "model": "gpt-4o-mini-tts",
+        "voice": "coral"
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/audio/speech",
+        "method": "POST",
+        "body": {
+          "model": "gpt-4o-mini-tts",
+          "input": "Plain speech fixture.",
+          "voice": "coral",
+          "response_format": "mp3"
+        },
+        "timeoutMs": 12345
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/speech-provider",
+          "export": "createSpeechDirectiveParser"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/media-generation-runtime",
+          "export": "resolveGeneratedMediaMaxBytes"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "resolveProviderRequestHeaders"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "isDebugProxyGlobalFetchPatchInstalled"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "captureHttpExchangeAsync"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "maxBytes": 16777216
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "default-note",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "voice-note",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openai-speech"
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openai-speech",
+        "baseUrl": "https://api.openai.com/v1",
+        "model": "gpt-4o-mini-tts",
+        "voice": "coral"
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/audio/speech",
+        "method": "POST",
+        "body": {
+          "model": "gpt-4o-mini-tts",
+          "input": "Plain speech fixture.",
+          "voice": "coral",
+          "response_format": "opus"
+        },
+        "timeoutMs": 12345
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "opus",
+        "fileExtension": ".opus",
+        "voiceCompatible": true
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/speech-provider",
+          "export": "createSpeechDirectiveParser"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/media-generation-runtime",
+          "export": "resolveGeneratedMediaMaxBytes"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "resolveProviderRequestHeaders"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "isDebugProxyGlobalFetchPatchInstalled"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "captureHttpExchangeAsync"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "maxBytes": 16777216
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        },
+        {
+          "module": "openclaw/plugin-sdk/media-runtime",
+          "export": "isVoiceMessageCompatibleAudio"
+        }
+      ]
+    },
+    {
+      "id": "file-opus",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openai-speech",
+          "responseFormat": "opus"
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openai-speech",
+        "baseUrl": "https://api.openai.com/v1",
+        "model": "gpt-4o-mini-tts",
+        "voice": "coral",
+        "responseFormat": "opus"
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/audio/speech",
+        "method": "POST",
+        "body": {
+          "model": "gpt-4o-mini-tts",
+          "input": "Plain speech fixture.",
+          "voice": "coral",
+          "response_format": "opus"
+        },
+        "timeoutMs": 12345
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "opus",
+        "fileExtension": ".opus",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/speech-provider",
+          "export": "createSpeechDirectiveParser"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/media-generation-runtime",
+          "export": "resolveGeneratedMediaMaxBytes"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "resolveProviderRequestHeaders"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "isDebugProxyGlobalFetchPatchInstalled"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "captureHttpExchangeAsync"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "maxBytes": 16777216
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "note-wav",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "voice-note",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openai-speech",
+          "responseFormat": " WAV "
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openai-speech",
+        "baseUrl": "https://api.openai.com/v1",
+        "model": "gpt-4o-mini-tts",
+        "voice": "coral",
+        "responseFormat": "wav"
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/audio/speech",
+        "method": "POST",
+        "body": {
+          "model": "gpt-4o-mini-tts",
+          "input": "Plain speech fixture.",
+          "voice": "coral",
+          "response_format": "wav"
+        },
+        "timeoutMs": 12345
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "wav",
+        "fileExtension": ".wav",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/speech-provider",
+          "export": "createSpeechDirectiveParser"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/media-generation-runtime",
+          "export": "resolveGeneratedMediaMaxBytes"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "resolveProviderRequestHeaders"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "isDebugProxyGlobalFetchPatchInstalled"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "captureHttpExchangeAsync"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "maxBytes": 16777216
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        },
+        {
+          "module": "openclaw/plugin-sdk/media-runtime",
+          "export": "isVoiceMessageCompatibleAudio"
+        }
+      ]
+    },
+    {
+      "id": "file-wav",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openai-speech",
+          "responseFormat": "wav"
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openai-speech",
+        "baseUrl": "https://api.openai.com/v1",
+        "model": "gpt-4o-mini-tts",
+        "voice": "coral",
+        "responseFormat": "wav"
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/audio/speech",
+        "method": "POST",
+        "body": {
+          "model": "gpt-4o-mini-tts",
+          "input": "Plain speech fixture.",
+          "voice": "coral",
+          "response_format": "wav"
+        },
+        "timeoutMs": 12345
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "wav",
+        "fileExtension": ".wav",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/speech-provider",
+          "export": "createSpeechDirectiveParser"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/media-generation-runtime",
+          "export": "resolveGeneratedMediaMaxBytes"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "resolveProviderRequestHeaders"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "isDebugProxyGlobalFetchPatchInstalled"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "captureHttpExchangeAsync"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "maxBytes": 16777216
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "groq-file",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openai-speech",
+          "baseUrl": "https://api.groq.com/openai/v1",
+          "model": "playai-tts",
+          "voice": "Fritz-PlayAI"
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openai-speech",
+        "baseUrl": "https://api.groq.com/openai/v1",
+        "model": "playai-tts",
+        "voice": "Fritz-PlayAI"
+      },
+      "request": {
+        "url": "https://api.groq.com/openai/v1/audio/speech",
+        "method": "POST",
+        "body": {
+          "model": "playai-tts",
+          "input": "Plain speech fixture.",
+          "voice": "Fritz-PlayAI",
+          "response_format": "wav"
+        },
+        "timeoutMs": 12345
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "wav",
+        "fileExtension": ".wav",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/speech-provider",
+          "export": "createSpeechDirectiveParser"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/media-generation-runtime",
+          "export": "resolveGeneratedMediaMaxBytes"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "resolveProviderRequestHeaders"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "isDebugProxyGlobalFetchPatchInstalled"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "captureHttpExchangeAsync"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "maxBytes": 16777216
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "groq-note",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "voice-note",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openai-speech",
+          "baseUrl": "https://api.groq.com/openai/v1",
+          "model": "playai-tts",
+          "voice": "Fritz-PlayAI"
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openai-speech",
+        "baseUrl": "https://api.groq.com/openai/v1",
+        "model": "playai-tts",
+        "voice": "Fritz-PlayAI"
+      },
+      "request": {
+        "url": "https://api.groq.com/openai/v1/audio/speech",
+        "method": "POST",
+        "body": {
+          "model": "playai-tts",
+          "input": "Plain speech fixture.",
+          "voice": "Fritz-PlayAI",
+          "response_format": "wav"
+        },
+        "timeoutMs": 12345
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "wav",
+        "fileExtension": ".wav",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/speech-provider",
+          "export": "createSpeechDirectiveParser"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/media-generation-runtime",
+          "export": "resolveGeneratedMediaMaxBytes"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "resolveProviderRequestHeaders"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "isDebugProxyGlobalFetchPatchInstalled"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "captureHttpExchangeAsync"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "maxBytes": 16777216
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        },
+        {
+          "module": "openclaw/plugin-sdk/media-runtime",
+          "export": "isVoiceMessageCompatibleAudio"
+        }
+      ]
+    },
+    {
+      "id": "configured-openai",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openai-speech",
+          "model": " gpt-4o-mini-tts-2025-12-15 ",
+          "voice": " nova ",
+          "speed": 1.25,
+          "instructions": " Speak evenly. "
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openai-speech",
+        "baseUrl": "https://api.openai.com/v1",
+        "model": "gpt-4o-mini-tts-2025-12-15",
+        "voice": "nova",
+        "speed": 1.25,
+        "instructions": "Speak evenly."
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/audio/speech",
+        "method": "POST",
+        "body": {
+          "model": "gpt-4o-mini-tts-2025-12-15",
+          "input": "Plain speech fixture.",
+          "voice": "nova",
+          "response_format": "mp3",
+          "speed": 1.25,
+          "instructions": "Speak evenly."
+        },
+        "timeoutMs": 12345
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/speech-provider",
+          "export": "createSpeechDirectiveParser"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/media-generation-runtime",
+          "export": "resolveGeneratedMediaMaxBytes"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "resolveProviderRequestHeaders"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "isDebugProxyGlobalFetchPatchInstalled"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "captureHttpExchangeAsync"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "maxBytes": 16777216
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "legacy-model",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openai-speech",
+          "model": "tts-1",
+          "instructions": " Speak evenly. "
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openai-speech",
+        "baseUrl": "https://api.openai.com/v1",
+        "model": "tts-1",
+        "voice": "coral",
+        "instructions": "Speak evenly."
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/audio/speech",
+        "method": "POST",
+        "body": {
+          "model": "tts-1",
+          "input": "Plain speech fixture.",
+          "voice": "coral",
+          "response_format": "mp3"
+        },
+        "timeoutMs": 12345
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/speech-provider",
+          "export": "createSpeechDirectiveParser"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/media-generation-runtime",
+          "export": "resolveGeneratedMediaMaxBytes"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "resolveProviderRequestHeaders"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "isDebugProxyGlobalFetchPatchInstalled"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "captureHttpExchangeAsync"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "maxBytes": 16777216
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "custom-voice-model",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openai-speech",
+          "baseUrl": " https://speech.example.test/v1/// ",
+          "model": "local-voice-model",
+          "voice": "speaker-7",
+          "speed": 4.5,
+          "instructions": " Speak warmly. "
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openai-speech",
+        "baseUrl": "https://speech.example.test/v1",
+        "model": "local-voice-model",
+        "voice": "speaker-7",
+        "speed": 4.5,
+        "instructions": "Speak warmly."
+      },
+      "request": {
+        "url": "https://speech.example.test/v1/audio/speech",
+        "method": "POST",
+        "body": {
+          "model": "local-voice-model",
+          "input": "Plain speech fixture.",
+          "voice": "speaker-7",
+          "response_format": "mp3",
+          "speed": 4.5,
+          "instructions": "Speak warmly."
+        },
+        "timeoutMs": 12345
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/speech-provider",
+          "export": "createSpeechDirectiveParser"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/media-generation-runtime",
+          "export": "resolveGeneratedMediaMaxBytes"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "resolveProviderRequestHeaders"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "isDebugProxyGlobalFetchPatchInstalled"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "captureHttpExchangeAsync"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "maxBytes": 16777216
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "provider-overrides",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openai-speech",
+          "model": "tts-1",
+          "voice": "alloy",
+          "speed": 1.1
+        },
+        "providerOverrides": {
+          "model": "tts-1-hd",
+          "voice": "echo",
+          "speed": 1.5
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openai-speech",
+        "baseUrl": "https://api.openai.com/v1",
+        "model": "tts-1",
+        "voice": "alloy",
+        "speed": 1.1
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/audio/speech",
+        "method": "POST",
+        "body": {
+          "model": "tts-1-hd",
+          "input": "Plain speech fixture.",
+          "voice": "echo",
+          "response_format": "mp3",
+          "speed": 1.5
+        },
+        "timeoutMs": 12345
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/speech-provider",
+          "export": "createSpeechDirectiveParser"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/media-generation-runtime",
+          "export": "resolveGeneratedMediaMaxBytes"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "resolveProviderRequestHeaders"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "isDebugProxyGlobalFetchPatchInstalled"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "captureHttpExchangeAsync"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "maxBytes": 16777216
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "extra-body-fields",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openai-speech",
+          "extraBody": {
+            "language": "en",
+            "seed": 7
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openai-speech",
+        "baseUrl": "https://api.openai.com/v1",
+        "model": "gpt-4o-mini-tts",
+        "voice": "coral",
+        "extraBody": {
+          "language": "en",
+          "seed": 7
+        }
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/audio/speech",
+        "method": "POST",
+        "body": {
+          "model": "gpt-4o-mini-tts",
+          "input": "Plain speech fixture.",
+          "voice": "coral",
+          "response_format": "mp3",
+          "language": "en",
+          "seed": 7
+        },
+        "timeoutMs": 12345
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/speech-provider",
+          "export": "createSpeechDirectiveParser"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/media-generation-runtime",
+          "export": "resolveGeneratedMediaMaxBytes"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "resolveProviderRequestHeaders"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "isDebugProxyGlobalFetchPatchInstalled"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "captureHttpExchangeAsync"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "maxBytes": 16777216
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "extra-body-final-wins",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openai-speech",
+          "speed": 1.1,
+          "extra_body": {
+            "model": "tts-1-hd",
+            "input": "Replacement plain speech.",
+            "speed": 0.8
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openai-speech",
+        "baseUrl": "https://api.openai.com/v1",
+        "model": "gpt-4o-mini-tts",
+        "voice": "coral",
+        "speed": 1.1,
+        "extraBody": {
+          "model": "tts-1-hd",
+          "input": "Replacement plain speech.",
+          "speed": 0.8
+        }
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/audio/speech",
+        "method": "POST",
+        "body": {
+          "model": "tts-1-hd",
+          "input": "Replacement plain speech.",
+          "voice": "coral",
+          "response_format": "mp3",
+          "speed": 0.8
+        },
+        "timeoutMs": 12345
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/speech-provider",
+          "export": "createSpeechDirectiveParser"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/media-generation-runtime",
+          "export": "resolveGeneratedMediaMaxBytes"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "resolveProviderRequestHeaders"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "isDebugProxyGlobalFetchPatchInstalled"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "captureHttpExchangeAsync"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "maxBytes": 16777216
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "telephony",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "telephony",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openai-speech",
+          "responseFormat": "wav"
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openai-speech",
+        "baseUrl": "https://api.openai.com/v1",
+        "model": "gpt-4o-mini-tts",
+        "voice": "coral",
+        "responseFormat": "wav"
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/audio/speech",
+        "method": "POST",
+        "body": {
+          "model": "gpt-4o-mini-tts",
+          "input": "Plain speech fixture.",
+          "voice": "coral",
+          "response_format": "pcm"
+        },
+        "timeoutMs": 12345
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "pcm",
+        "sampleRate": 24000
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/speech-provider",
+          "export": "createSpeechDirectiveParser"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString"
+        },
+        {
+          "module": "openclaw/plugin-sdk/media-generation-runtime",
+          "export": "resolveGeneratedMediaMaxBytes"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "resolveProviderRequestHeaders"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "isDebugProxyGlobalFetchPatchInstalled"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard"
+        },
+        {
+          "module": "openclaw/plugin-sdk/proxy-capture",
+          "export": "captureHttpExchangeAsync"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderBinaryResponse",
+          "maxBytes": 16777216
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release"
+        }
+      ]
+    }
+  ]
+}

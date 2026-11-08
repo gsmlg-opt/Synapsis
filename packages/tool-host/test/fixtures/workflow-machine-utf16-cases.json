@@ -1,0 +1,1100 @@
+{
+  "provenance": {
+    "package": "@clawdbot/lobster",
+    "version": "2026.9.16",
+    "archive_sha256": "ef24c4e1eabb9d694f9e311826264dd6111566dcdc74d62ad0d13cdd6cda47e1",
+    "source_sha256": {
+      "dist/src/commands/stdlib/map.js": "faeebf18c5db3903ae5e03270b87f49e5a1b8a5324276add6ca52c83763d8e27",
+      "dist/src/commands/stdlib/sort.js": "a3d7fca0d780ebaac95e461703f27a8b4623ce40ac6f9e8e5d0d5eea5665d90f",
+      "dist/src/commands/stdlib/where.js": "0fdca14cfbf13abaadfc1fbb1bd44ce5d1fb2ccee04cb60c93120f52a944f8cc",
+      "dist/src/commands/stdlib/dedupe.js": "44884031087e54b4c10210b615827ab4852d72dd203e61ff6ad792ce1ae85f4f",
+      "dist/src/commands/stdlib/group_by.js": "60befdc46480c45bf0d1c869a603780348fcf0b62b66a5cc34e4ef860d106cdc",
+      "dist/src/commands/stdlib/table.js": "a95a58ca8153f97596e7bf5eb1236e25c0ebdd0ddbf416fadcf2a4f4d07dd13e",
+      "dist/src/commands/stdlib/ask.js": "9133cbe30bddd28d322d3017f428317a6f98ab2bd9f43992b9f74594e3af6537",
+      "dist/src/core/value_path.js": "e07cfee4e8fb4953ffbf02b8b51b5bbb4f01a6950515b2a1f9d31b0eb922171f",
+      "dist/src/validation.js": "a9e087f2b5502be86dc223f2746c1d598446d4c1b5537f697003418417933f6b",
+      "dist/src/state/store.js": "8a0e750ccbf3e44135e96d82f4836d474369e8401feb8b498a77165afa29e77c",
+      "dist/src/state/atomic_file.js": "87870c3439c4c8da907ada7f9a7412d5f84cc52e5225bb0deeab19b416c7d3b5"
+    },
+    "expectations": "Independent source-derived literals frozen before implementation; source oracle imports unchanged whole archive modules."
+  },
+  "strings": {
+    "high": {
+      "units": [
+        55357
+      ],
+      "base64": "Pdg=",
+      "json": "\"\\ud83d\"",
+      "tag": {
+        "type": "string",
+        "utf16le": "Pdg="
+      }
+    },
+    "low": {
+      "units": [
+        56832
+      ],
+      "base64": "AN4=",
+      "json": "\"\\ude00\"",
+      "tag": {
+        "type": "string",
+        "utf16le": "AN4="
+      }
+    },
+    "first_high": {
+      "units": [
+        55296
+      ],
+      "base64": "ANg=",
+      "json": "\"\\ud800\"",
+      "tag": {
+        "type": "string",
+        "utf16le": "ANg="
+      }
+    },
+    "pair": {
+      "units": [
+        55357,
+        56832
+      ],
+      "base64": "PdgA3g==",
+      "json": "\"\ud83d\ude00\"",
+      "tag": {
+        "type": "string",
+        "value": "\ud83d\ude00"
+      }
+    },
+    "high_lf_low": {
+      "units": [
+        55357,
+        10,
+        56832
+      ],
+      "base64": "PdgKAADe",
+      "json": "\"\\ud83d\\n\\ude00\"",
+      "tag": {
+        "type": "string",
+        "utf16le": "PdgKAADe"
+      }
+    },
+    "unaligned_lf": {
+      "units": [
+        2561,
+        0
+      ],
+      "base64": "AQoAAA==",
+      "json": "\"\u0a01\\u0000\"",
+      "tag": {
+        "type": "string",
+        "value": "\u0a01\u0000"
+      }
+    }
+  },
+  "cases": [
+    {
+      "id": "map-scalar-dot-and-this",
+      "pipeline": "map 'dot={{.}}' 'self={{this}}'",
+      "stages": [
+        {
+          "name": "map",
+          "args": {
+            "_": [
+              "dot={{.}}",
+              "self={{this}}"
+            ]
+          }
+        }
+      ],
+      "input": [
+        {
+          "$string": "high"
+        },
+        {
+          "$string": "low"
+        }
+      ],
+      "expected_json": [
+        "{\"value\":\"\\ud83d\",\"dot\":\"\\ud83d\",\"self\":\"\\ud83d\"}",
+        "{\"value\":\"\\ude00\",\"dot\":\"\\ude00\",\"self\":\"\\ude00\"}"
+      ],
+      "fields": {
+        "dot": [
+          "high",
+          "low"
+        ],
+        "self": [
+          "high",
+          "low"
+        ]
+      }
+    },
+    {
+      "id": "map-string-indices-length-and-rejoin",
+      "pipeline": "map 'hi={{emoji.0}}' 'lo={{emoji.1}}' 'n={{emoji.length}}' 'tail={{parts.2}}' 'parts_n={{parts.length}}' 'joined={{emoji.0}}{{emoji.1}}'",
+      "stages": [
+        {
+          "name": "map",
+          "args": {
+            "_": [
+              "hi={{emoji.0}}",
+              "lo={{emoji.1}}",
+              "n={{emoji.length}}",
+              "tail={{parts.2}}",
+              "parts_n={{parts.length}}",
+              "joined={{emoji.0}}{{emoji.1}}"
+            ]
+          }
+        }
+      ],
+      "input": [
+        {
+          "emoji": "\ud83d\ude00",
+          "parts": {
+            "$string": "high_lf_low"
+          }
+        }
+      ],
+      "expected_json": [
+        "{\"emoji\":\"\ud83d\ude00\",\"parts\":\"\\ud83d\\n\\ude00\",\"hi\":\"\\ud83d\",\"lo\":\"\\ude00\",\"n\":\"2\",\"tail\":\"\\ude00\",\"parts_n\":\"3\",\"joined\":\"\ud83d\ude00\"}"
+      ],
+      "fields": {
+        "hi": [
+          "high"
+        ],
+        "lo": [
+          "low"
+        ],
+        "tail": [
+          "low"
+        ],
+        "joined": [
+          "pair"
+        ]
+      }
+    },
+    {
+      "id": "map-separate-replacements-rejoin-shared-alias",
+      "pipeline": "map 'joined={{hi}}{{lo}}' 'seen={{hi}}'",
+      "stages": [
+        {
+          "name": "map",
+          "args": {
+            "_": [
+              "joined={{hi}}{{lo}}",
+              "seen={{hi}}"
+            ]
+          }
+        }
+      ],
+      "input": [
+        {
+          "hi": {
+            "$string": "high"
+          },
+          "lo": {
+            "$string": "low"
+          }
+        }
+      ],
+      "expected_json": [
+        "{\"hi\":\"\\ud83d\",\"lo\":\"\\ude00\",\"joined\":\"\ud83d\ude00\",\"seen\":\"\\ud83d\"}",
+        "{\"hi\":\"\\ud83d\",\"lo\":\"\\ude00\",\"joined\":\"\ud83d\ude00\",\"seen\":\"\\ud83d\"}"
+      ],
+      "alias_first": true,
+      "fields": {
+        "joined": [
+          "pair",
+          "pair"
+        ],
+        "seen": [
+          "high",
+          "high"
+        ]
+      }
+    },
+    {
+      "id": "map-structured-json-and-whole-aliases",
+      "pipeline": "map --wrap row 'a={{a}}' 'obj={{obj}}' 'dot={{.}}' 'self={{this}}'",
+      "stages": [
+        {
+          "name": "map",
+          "args": {
+            "wrap": "row",
+            "_": [
+              "a={{a}}",
+              "obj={{obj}}",
+              "dot={{.}}",
+              "self={{this}}"
+            ]
+          }
+        }
+      ],
+      "input": [
+        {
+          "a": [
+            {
+              "$string": "high"
+            },
+            {
+              "$string": "low"
+            }
+          ],
+          "obj": {
+            "s": {
+              "$string": "high"
+            }
+          }
+        }
+      ],
+      "expected_json": [
+        "{\"row\":{\"a\":[\"\\ud83d\",\"\\ude00\"],\"obj\":{\"s\":\"\\ud83d\"}},\"a\":\"[\\\"\\\\ud83d\\\",\\\"\\\\ude00\\\"]\",\"obj\":\"{\\\"s\\\":\\\"\\\\ud83d\\\"}\",\"dot\":\"{\\\"a\\\":[\\\"\\\\ud83d\\\",\\\"\\\\ude00\\\"],\\\"obj\\\":{\\\"s\\\":\\\"\\\\ud83d\\\"}}\",\"self\":\"{\\\"a\\\":[\\\"\\\\ud83d\\\",\\\"\\\\ude00\\\"],\\\"obj\\\":{\\\"s\\\":\\\"\\\\ud83d\\\"}}\"}"
+      ]
+    },
+    {
+      "id": "sort-utf16-order-and-little-endian-gotcha",
+      "pipeline": "sort --key k",
+      "stages": [
+        {
+          "name": "sort",
+          "args": {
+            "key": "k"
+          }
+        }
+      ],
+      "input": [
+        {
+          "k": "\ue000"
+        },
+        {
+          "k": {
+            "$string": "low"
+          }
+        },
+        {
+          "k": {
+            "$string": "high"
+          }
+        },
+        {
+          "k": "\ud83d\ude00"
+        },
+        {
+          "k": "\u00ff"
+        },
+        {
+          "k": "\u0100"
+        },
+        {
+          "k": {
+            "$string": "first_high"
+          }
+        }
+      ],
+      "expected_json": [
+        "{\"k\":\"\u00ff\"}",
+        "{\"k\":\"\u0100\"}",
+        "{\"k\":\"\\ud800\"}",
+        "{\"k\":\"\\ud83d\"}",
+        "{\"k\":\"\ud83d\ude00\"}",
+        "{\"k\":\"\\ude00\"}",
+        "{\"k\":\"\ue000\"}"
+      ],
+      "indices": [
+        4,
+        5,
+        6,
+        2,
+        3,
+        1,
+        0
+      ]
+    },
+    {
+      "id": "sort-descending-exact-tagged-values",
+      "pipeline": "sort --key k --desc",
+      "stages": [
+        {
+          "name": "sort",
+          "args": {
+            "key": "k",
+            "desc": true
+          }
+        }
+      ],
+      "input": [
+        {
+          "k": "\ue000"
+        },
+        {
+          "k": {
+            "$string": "low"
+          }
+        },
+        {
+          "k": {
+            "$string": "high"
+          }
+        },
+        {
+          "k": "\ud83d\ude00"
+        },
+        {
+          "k": "\u00ff"
+        },
+        {
+          "k": "\u0100"
+        },
+        {
+          "k": {
+            "$string": "first_high"
+          }
+        }
+      ],
+      "expected_json": [
+        "{\"k\":\"\ue000\"}",
+        "{\"k\":\"\\ude00\"}",
+        "{\"k\":\"\ud83d\ude00\"}",
+        "{\"k\":\"\\ud83d\"}",
+        "{\"k\":\"\\ud800\"}",
+        "{\"k\":\"\u0100\"}",
+        "{\"k\":\"\u00ff\"}"
+      ],
+      "indices": [
+        0,
+        1,
+        3,
+        2,
+        6,
+        5,
+        4
+      ]
+    },
+    {
+      "id": "sort-array-comma-coercion",
+      "pipeline": "sort",
+      "stages": [
+        {
+          "name": "sort",
+          "args": {}
+        }
+      ],
+      "input": [
+        [
+          {
+            "$string": "low"
+          }
+        ],
+        [
+          {
+            "$string": "high"
+          }
+        ],
+        [
+          "\ud83d\ude00"
+        ],
+        [
+          "\u0100"
+        ],
+        [
+          "\u00ff"
+        ],
+        [
+          {
+            "$string": "high"
+          },
+          null,
+          [
+            {
+              "$string": "low"
+            }
+          ]
+        ]
+      ],
+      "expected_json": [
+        "[\"\u00ff\"]",
+        "[\"\u0100\"]",
+        "[\"\\ud83d\"]",
+        "[\"\\ud83d\",null,[\"\\ude00\"]]",
+        "[\"\ud83d\ude00\"]",
+        "[\"\\ude00\"]"
+      ],
+      "indices": [
+        4,
+        3,
+        1,
+        5,
+        2,
+        0
+      ]
+    },
+    {
+      "id": "sort-path-index-high-low",
+      "pipeline": "sort --key k.0",
+      "stages": [
+        {
+          "name": "sort",
+          "args": {
+            "key": "k.0"
+          }
+        }
+      ],
+      "input": [
+        {
+          "k": {
+            "$string": "low"
+          }
+        },
+        {
+          "k": "\ud83d\ude00"
+        },
+        {
+          "k": {
+            "$string": "first_high"
+          }
+        }
+      ],
+      "expected_json": [
+        "{\"k\":\"\\ud800\"}",
+        "{\"k\":\"\ud83d\ude00\"}",
+        "{\"k\":\"\\ude00\"}"
+      ],
+      "indices": [
+        2,
+        1,
+        0
+      ]
+    },
+    {
+      "id": "where-lone-and-valid-string-lexical",
+      "pipeline": "where 'k<\ue000'",
+      "stages": [
+        {
+          "name": "where",
+          "args": {
+            "_": [
+              "k<\ue000"
+            ]
+          }
+        }
+      ],
+      "input": [
+        {
+          "k": {
+            "$string": "high"
+          }
+        },
+        {
+          "k": {
+            "$string": "low"
+          }
+        },
+        {
+          "k": "\ue000"
+        },
+        {
+          "k": "\ud83d\ude00"
+        }
+      ],
+      "expected_json": [
+        "{\"k\":\"\\ud83d\"}",
+        "{\"k\":\"\\ude00\"}",
+        "{\"k\":\"\ud83d\ude00\"}"
+      ],
+      "indices": [
+        0,
+        1,
+        3
+      ]
+    },
+    {
+      "id": "where-tagged-exact-equality",
+      "pipeline": "where 'k=\ud83d\ude00'",
+      "stages": [
+        {
+          "name": "where",
+          "args": {
+            "_": [
+              "k=\ud83d\ude00"
+            ]
+          }
+        }
+      ],
+      "input": [
+        {
+          "k": {
+            "$string": "high"
+          }
+        },
+        {
+          "k": {
+            "$string": "low"
+          }
+        },
+        {
+          "k": "\ue000"
+        },
+        {
+          "k": "\ud83d\ude00"
+        }
+      ],
+      "expected_json": [
+        "{\"k\":\"\ud83d\ude00\"}"
+      ],
+      "indices": [
+        3
+      ]
+    },
+    {
+      "id": "where-tagged-exact-inequality",
+      "pipeline": "where 'k!=\ud83d\ude00'",
+      "stages": [
+        {
+          "name": "where",
+          "args": {
+            "_": [
+              "k!=\ud83d\ude00"
+            ]
+          }
+        }
+      ],
+      "input": [
+        {
+          "k": {
+            "$string": "high"
+          }
+        },
+        {
+          "k": {
+            "$string": "low"
+          }
+        },
+        {
+          "k": "\ue000"
+        },
+        {
+          "k": "\ud83d\ude00"
+        }
+      ],
+      "expected_json": [
+        "{\"k\":\"\\ud83d\"}",
+        "{\"k\":\"\\ude00\"}",
+        "{\"k\":\"\ue000\"}"
+      ],
+      "indices": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "id": "where-array-primitive-lexical",
+      "pipeline": "where 'k<\ue000'",
+      "stages": [
+        {
+          "name": "where",
+          "args": {
+            "_": [
+              "k<\ue000"
+            ]
+          }
+        }
+      ],
+      "input": [
+        {
+          "k": [
+            {
+              "$string": "high"
+            },
+            null,
+            {
+              "$string": "low"
+            }
+          ]
+        },
+        {
+          "k": [
+            "\ue000"
+          ]
+        },
+        {
+          "k": [
+            "\ud83d\ude00"
+          ]
+        }
+      ],
+      "expected_json": [
+        "{\"k\":[\"\\ud83d\",null,\"\\ude00\"]}",
+        "{\"k\":[\"\ud83d\ude00\"]}"
+      ],
+      "indices": [
+        0,
+        2
+      ]
+    },
+    {
+      "id": "where-lone-number-coercion-equal",
+      "pipeline": "where 'k=0'",
+      "stages": [
+        {
+          "name": "where",
+          "args": {
+            "_": [
+              "k=0"
+            ]
+          }
+        }
+      ],
+      "input": [
+        {
+          "k": {
+            "$string": "high"
+          }
+        },
+        {
+          "k": {
+            "$string": "low"
+          }
+        }
+      ],
+      "expected_json": [],
+      "indices": []
+    },
+    {
+      "id": "where-lone-number-coercion-unequal",
+      "pipeline": "where 'k!=0'",
+      "stages": [
+        {
+          "name": "where",
+          "args": {
+            "_": [
+              "k!=0"
+            ]
+          }
+        }
+      ],
+      "input": [
+        {
+          "k": {
+            "$string": "high"
+          }
+        },
+        {
+          "k": {
+            "$string": "low"
+          }
+        }
+      ],
+      "expected_json": [
+        "{\"k\":\"\\ud83d\"}",
+        "{\"k\":\"\\ude00\"}"
+      ],
+      "indices": [
+        0,
+        1
+      ]
+    },
+    {
+      "id": "where-lone-number-coercion-less",
+      "pipeline": "where 'k<0'",
+      "stages": [
+        {
+          "name": "where",
+          "args": {
+            "_": [
+              "k<0"
+            ]
+          }
+        }
+      ],
+      "input": [
+        {
+          "k": {
+            "$string": "high"
+          }
+        },
+        {
+          "k": {
+            "$string": "low"
+          }
+        }
+      ],
+      "expected_json": [],
+      "indices": []
+    },
+    {
+      "id": "where-lone-number-coercion-at-most",
+      "pipeline": "where 'k<=0'",
+      "stages": [
+        {
+          "name": "where",
+          "args": {
+            "_": [
+              "k<=0"
+            ]
+          }
+        }
+      ],
+      "input": [
+        {
+          "k": {
+            "$string": "high"
+          }
+        },
+        {
+          "k": {
+            "$string": "low"
+          }
+        }
+      ],
+      "expected_json": [],
+      "indices": []
+    },
+    {
+      "id": "where-lone-number-coercion-greater",
+      "pipeline": "where 'k>0'",
+      "stages": [
+        {
+          "name": "where",
+          "args": {
+            "_": [
+              "k>0"
+            ]
+          }
+        }
+      ],
+      "input": [
+        {
+          "k": {
+            "$string": "high"
+          }
+        },
+        {
+          "k": {
+            "$string": "low"
+          }
+        }
+      ],
+      "expected_json": [],
+      "indices": []
+    },
+    {
+      "id": "where-lone-number-coercion-at-least",
+      "pipeline": "where 'k>=0'",
+      "stages": [
+        {
+          "name": "where",
+          "args": {
+            "_": [
+              "k>=0"
+            ]
+          }
+        }
+      ],
+      "input": [
+        {
+          "k": {
+            "$string": "high"
+          }
+        },
+        {
+          "k": {
+            "$string": "low"
+          }
+        }
+      ],
+      "expected_json": [],
+      "indices": []
+    },
+    {
+      "id": "where-array-lone-number-coercion",
+      "pipeline": "where 'k!=0'",
+      "stages": [
+        {
+          "name": "where",
+          "args": {
+            "_": [
+              "k!=0"
+            ]
+          }
+        }
+      ],
+      "input": [
+        {
+          "k": [
+            {
+              "$string": "high"
+            }
+          ]
+        },
+        {
+          "k": [
+            {
+              "$string": "low"
+            }
+          ]
+        }
+      ],
+      "expected_json": [
+        "{\"k\":[\"\\ud83d\"]}",
+        "{\"k\":[\"\\ude00\"]}"
+      ],
+      "indices": [
+        0,
+        1
+      ]
+    },
+    {
+      "id": "dedupe-lone-signatures",
+      "pipeline": "dedupe",
+      "stages": [
+        {
+          "name": "dedupe",
+          "args": {}
+        }
+      ],
+      "input": [
+        {
+          "$string": "high"
+        },
+        {
+          "$string": "low"
+        },
+        {
+          "$string": "high"
+        },
+        "\ud83d\ude00",
+        "\ud83d\ude00"
+      ],
+      "expected_json": [
+        "\"\\ud83d\"",
+        "\"\\ude00\"",
+        "\"\ud83d\ude00\""
+      ],
+      "indices": [
+        0,
+        1,
+        3
+      ]
+    },
+    {
+      "id": "dedupe-index-signatures",
+      "pipeline": "dedupe --key k.0",
+      "stages": [
+        {
+          "name": "dedupe",
+          "args": {
+            "key": "k.0"
+          }
+        }
+      ],
+      "input": [
+        {
+          "k": "\ud83d\ude00"
+        },
+        {
+          "k": {
+            "$string": "high"
+          }
+        },
+        {
+          "k": {
+            "$string": "low"
+          }
+        }
+      ],
+      "expected_json": [
+        "{\"k\":\"\ud83d\ude00\"}",
+        "{\"k\":\"\\ude00\"}"
+      ],
+      "indices": [
+        0,
+        2
+      ]
+    },
+    {
+      "id": "groupBy-lone-keys-and-original-items",
+      "pipeline": "groupBy --key k",
+      "stages": [
+        {
+          "name": "groupBy",
+          "args": {
+            "key": "k"
+          }
+        }
+      ],
+      "input": [
+        {
+          "k": {
+            "$string": "high"
+          },
+          "n": 1
+        },
+        {
+          "k": {
+            "$string": "low"
+          },
+          "n": 2
+        },
+        {
+          "k": {
+            "$string": "high"
+          },
+          "n": 3
+        }
+      ],
+      "expected_json": [
+        "{\"key\":\"\\ud83d\",\"items\":[{\"k\":\"\\ud83d\",\"n\":1},{\"k\":\"\\ud83d\",\"n\":3}],\"count\":2}",
+        "{\"key\":\"\\ude00\",\"items\":[{\"k\":\"\\ude00\",\"n\":2}],\"count\":1}"
+      ],
+      "group_indices": [
+        [
+          0,
+          2
+        ],
+        [
+          1
+        ]
+      ],
+      "group_keys": [
+        "high",
+        "low"
+      ]
+    }
+  ],
+  "previews": [
+    {
+      "id": "joined-lone-input-units",
+      "input": [
+        {
+          "$string": "high"
+        },
+        {
+          "$string": "low"
+        }
+      ],
+      "expected_units": [
+        55357,
+        10,
+        56832
+      ],
+      "expected_json": "\"\\ud83d\\n\\ude00\""
+    },
+    {
+      "id": "object-preview-json-escape",
+      "input": [
+        {
+          "k": {
+            "$string": "high"
+          }
+        }
+      ],
+      "expected_units": [
+        123,
+        34,
+        107,
+        34,
+        58,
+        34,
+        92,
+        117,
+        100,
+        56,
+        51,
+        100,
+        34,
+        125
+      ],
+      "expected_json": "\"{\\\"k\\\":\\\"\\\\ud83d\\\"}\""
+    },
+    {
+      "id": "slice-at-2000-splits-a-valid-pair",
+      "input_repeat": {
+        "unit": 97,
+        "count": 1999,
+        "suffix": "\ud83d\ude00x"
+      },
+      "expected_repeat": {
+        "unit": 97,
+        "count": 1999,
+        "tail_units": [
+          55357
+        ]
+      },
+      "expected_json_repeat": {
+        "prefix": "a",
+        "count": 1999,
+        "tail": "\\ud83d"
+      }
+    }
+  ],
+  "tables": [
+    {
+      "id": "object-cells-exact-width-lf-and-unaligned-bytes",
+      "input": [
+        {
+          "v": {
+            "$string": "high_lf_low"
+          },
+          "w": {
+            "$string": "unaligned_lf"
+          }
+        },
+        {
+          "v": "\ud83d\ude00",
+          "w": {
+            "$string": "low"
+          }
+        }
+      ],
+      "stdout": "v    w  \n---  ---\n\ufffd \ufffd  \u0a01\u0000 \n\ud83d\ude00   \ufffd  \n",
+      "writes_json": [
+        "\"v    w  \\n\"",
+        "\"---  ---\\n\"",
+        "\"\\ud83d \\ude00  \u0a01\\u0000 \\n\"",
+        "\"\ud83d\ude00   \\ude00  \\n\""
+      ]
+    },
+    {
+      "id": "string-fallback-encodes-each-write",
+      "input": [
+        {
+          "$string": "high"
+        },
+        {
+          "$string": "low"
+        },
+        "\ud83d\ude00",
+        {
+          "$string": "high_lf_low"
+        }
+      ],
+      "stdout": "\ufffd\n\ufffd\n\ud83d\ude00\n\ufffd\n\ufffd\n",
+      "writes_json": [
+        "\"\\ud83d\\n\"",
+        "\"\\ude00\\n\"",
+        "\"\ud83d\ude00\\n\"",
+        "\"\\ud83d\\n\\ude00\\n\""
+      ]
+    },
+    {
+      "id": "array-fallback-uses-preserved-json-escapes",
+      "input": [
+        [
+          {
+            "$string": "high"
+          }
+        ],
+        [
+          {
+            "$string": "low"
+          }
+        ]
+      ],
+      "stdout": "[\"\\ud83d\"]\n[\"\\ude00\"]\n",
+      "writes_json": [
+        "\"[\\\"\\\\ud83d\\\"]\\n\"",
+        "\"[\\\"\\\\ude00\\\"]\\n\""
+      ]
+    }
+  ]
+}

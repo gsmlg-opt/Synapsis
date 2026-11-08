@@ -1,0 +1,5261 @@
+{
+  "schemaVersion": 1,
+  "referencePin": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+  "harness": {
+    "path": "scripts/openclaw/capture-xiaomi-speech.mjs",
+    "sha256": "046bcf13958dba8d867a953aca6e00925ee949b1467e2b6834d7b15cab4b4688"
+  },
+  "checkout": {
+    "before": {
+      "verified": true,
+      "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+      "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+      "verifiedTrackedFiles": 58558,
+      "filesSha256": "8bc3e47adbc99a7db036fb44fbae3c27cafdc22e5075fee2943414d575def7f5"
+    },
+    "after": {
+      "verified": true,
+      "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+      "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+      "verifiedTrackedFiles": 58558,
+      "filesSha256": "8bc3e47adbc99a7db036fb44fbae3c27cafdc22e5075fee2943414d575def7f5"
+    }
+  },
+  "transformation": {
+    "api": "node:module.stripTypeScriptTypes",
+    "options": {
+      "mode": "transform",
+      "sourceMap": false
+    },
+    "sdkFacades": [
+      {
+        "module": "openclaw/plugin-sdk/number-runtime",
+        "source": "export { resolveTimerTimeoutMs } from 'packages/normalization-core/src/number-coercion.ts';",
+        "sha256": "14d52fd01514ba4c8f3996369ab407ab10bda692fdf07a61813295f531ccf16a"
+      },
+      {
+        "module": "openclaw/plugin-sdk/speech-provider",
+        "source": "export { createSpeechDirectiveParser } from 'src/tts/directive-parser.ts';\nexport { resolveSpeechProviderApiKey } from 'src/tts/tts-provider-helpers.ts';",
+        "sha256": "201de3dfdf5a54387f78eed68644705774096806aff5f2af896fc18a2f722014"
+      },
+      {
+        "module": "openclaw/plugin-sdk/string-coerce-runtime",
+        "source": "export { asOptionalRecord } from 'packages/normalization-core/src/record-coerce.ts';\nexport { normalizeOptionalString } from 'packages/normalization-core/src/string-coerce.ts';",
+        "sha256": "3579b5887046b3d40019d7b573187274571098b864d168cbf3ba13ae8ebef066"
+      },
+      {
+        "module": "openclaw/plugin-sdk/blob-runtime",
+        "source": "export * from 'src/plugin-sdk/blob-runtime.ts';",
+        "sha256": "a6fd968e3fb2b241bbb1905791a28890dd1d05158923bb26dbc6c4637168d6f0"
+      },
+      {
+        "module": "@openclaw/normalization-core/string-coerce",
+        "source": "export * from 'packages/normalization-core/src/string-coerce.ts';",
+        "sha256": "7a858f26ca6f435c412fd1fbbdc3bad60b65f8c4467a86343664b9dc5ae297a7"
+      },
+      {
+        "module": "@openclaw/normalization-core/number-coercion",
+        "source": "export * from 'packages/normalization-core/src/number-coercion.ts';",
+        "sha256": "e7d6cfe75766a4cdd8ad0be37d6e8e7d1d203e84f7e45fef3f8cb77c3f3e1a87"
+      },
+      {
+        "module": "@openclaw/media-core/base64",
+        "source": "export * from 'packages/media-core/src/base64.ts';",
+        "sha256": "27aceb37e9e1a2671bb02cc6e56886d375f0d0aabcfc3c87630ba18f37abd50b"
+      }
+    ],
+    "staticImports": [
+      {
+        "importer": "extensions/xiaomi/speech-provider.ts",
+        "specifier": "openclaw/plugin-sdk/number-runtime",
+        "resolved": "openclaw/plugin-sdk/number-runtime"
+      },
+      {
+        "importer": "extensions/xiaomi/speech-provider.ts",
+        "specifier": "openclaw/plugin-sdk/secret-input",
+        "resolved": "openclaw/plugin-sdk/secret-input"
+      },
+      {
+        "importer": "extensions/xiaomi/speech-provider.ts",
+        "specifier": "openclaw/plugin-sdk/speech-provider",
+        "resolved": "openclaw/plugin-sdk/speech-provider"
+      },
+      {
+        "importer": "extensions/xiaomi/speech-provider.ts",
+        "specifier": "openclaw/plugin-sdk/string-coerce-runtime",
+        "resolved": "openclaw/plugin-sdk/string-coerce-runtime"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/number-runtime",
+        "specifier": "packages/normalization-core/src/number-coercion.ts",
+        "resolved": "packages/normalization-core/src/number-coercion.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/speech-provider",
+        "specifier": "src/tts/directive-parser.ts",
+        "resolved": "src/tts/directive-parser.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/speech-provider",
+        "specifier": "src/tts/tts-provider-helpers.ts",
+        "resolved": "src/tts/tts-provider-helpers.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/string-coerce-runtime",
+        "specifier": "packages/normalization-core/src/record-coerce.ts",
+        "resolved": "packages/normalization-core/src/record-coerce.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/string-coerce-runtime",
+        "specifier": "packages/normalization-core/src/string-coerce.ts",
+        "resolved": "packages/normalization-core/src/string-coerce.ts"
+      },
+      {
+        "importer": "packages/normalization-core/src/number-coercion.ts",
+        "specifier": "./string-coerce.ts",
+        "resolved": "packages/normalization-core/src/string-coerce.ts"
+      },
+      {
+        "importer": "src/tts/directive-parser.ts",
+        "specifier": "./directive-number.js",
+        "resolved": "src/tts/directive-number.ts"
+      },
+      {
+        "importer": "src/tts/tts-provider-helpers.ts",
+        "specifier": "node:fs",
+        "resolved": "node:fs"
+      },
+      {
+        "importer": "src/tts/tts-provider-helpers.ts",
+        "specifier": "@openclaw/normalization-core/string-coerce",
+        "resolved": "@openclaw/normalization-core/string-coerce"
+      },
+      {
+        "importer": "src/tts/directive-number.ts",
+        "specifier": "@openclaw/normalization-core/number-coercion",
+        "resolved": "@openclaw/normalization-core/number-coercion"
+      },
+      {
+        "importer": "@openclaw/normalization-core/string-coerce",
+        "specifier": "packages/normalization-core/src/string-coerce.ts",
+        "resolved": "packages/normalization-core/src/string-coerce.ts"
+      },
+      {
+        "importer": "@openclaw/normalization-core/number-coercion",
+        "specifier": "packages/normalization-core/src/number-coercion.ts",
+        "resolved": "packages/normalization-core/src/number-coercion.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/blob-runtime",
+        "specifier": "src/plugin-sdk/blob-runtime.ts",
+        "resolved": "src/plugin-sdk/blob-runtime.ts"
+      },
+      {
+        "importer": "src/plugin-sdk/blob-runtime.ts",
+        "specifier": "@openclaw/media-core/base64",
+        "resolved": "@openclaw/media-core/base64"
+      },
+      {
+        "importer": "@openclaw/media-core/base64",
+        "specifier": "packages/media-core/src/base64.ts",
+        "resolved": "packages/media-core/src/base64.ts"
+      }
+    ],
+    "dynamicImports": [
+      {
+        "importer": "extensions/xiaomi/speech-provider.ts",
+        "specifier": "openclaw/plugin-sdk/blob-runtime",
+        "resolved": "openclaw/plugin-sdk/blob-runtime"
+      },
+      {
+        "importer": "extensions/xiaomi/speech-provider.ts",
+        "specifier": "openclaw/plugin-sdk/provider-http",
+        "resolved": "openclaw/plugin-sdk/provider-http"
+      },
+      {
+        "importer": "extensions/xiaomi/speech-provider.ts",
+        "specifier": "openclaw/plugin-sdk/ssrf-runtime",
+        "resolved": "openclaw/plugin-sdk/ssrf-runtime"
+      },
+      {
+        "importer": "extensions/xiaomi/speech-provider.ts",
+        "specifier": "openclaw/plugin-sdk/media-runtime",
+        "resolved": "openclaw/plugin-sdk/media-runtime"
+      }
+    ]
+  },
+  "sourceAudit": [
+    {
+      "path": "extensions/xiaomi/speech-provider.ts",
+      "gitBlob": "7a989e1c60ea7c73ed20dc40768765ce5f21864a",
+      "sourceSha256": "09f7d68df2a8f1a4887be97a19a475f23a9fe3ac4679d0a0247089fcd1e0b369",
+      "sourceBytes": 8273,
+      "executableSha256": "be3dc0bf325119304016193931a527d7a933ec113bebb79a5c3f5f71beae4bb6",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "packages/normalization-core/src/string-coerce.ts",
+      "gitBlob": "445a9cc4f8daff07f033c3958baf2b798e240e9d",
+      "sourceSha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf",
+      "sourceBytes": 5049,
+      "executableSha256": "9a2e05da77f15162560fe904c20ba9a49a6e6996e8b8c9bc16fd611f8456f504",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "packages/normalization-core/src/record-coerce.ts",
+      "gitBlob": "78eba9cd0e4c75f94e71dfb3fcb7f4cf4eeeef16",
+      "sourceSha256": "541c179840c2cad4edc5c8103f77cc7f8c6b1ee5ec3e52c7c9fe097b18917f1c",
+      "sourceBytes": 3097,
+      "executableSha256": "4ca2e6e901c28a07ae5fc9b29719cce5c26c919c65ab235b4ae2d5eaf0ec338c",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "packages/normalization-core/src/number-coercion.ts",
+      "gitBlob": "00ac5bda035cd8e854059a0198c2a9a7928e1bc9",
+      "sourceSha256": "8c40eca65a8fd1dc3aa40d90c22bff35c3710fcb03d2bc8227864a264d20ddc4",
+      "sourceBytes": 13462,
+      "executableSha256": "2f2d58d34e9b77067ea265333fb06a807ce0cdcad83639d6c257095bb9f69a97",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "packages/media-core/src/base64.ts",
+      "gitBlob": "31eead019c4aeecd081ba7836e7ec408a367ae1c",
+      "sourceSha256": "93e6ef481601a3bee0a6cbd304506a0b1ab4e1e05d363be78a00ebe7b63173ac",
+      "sourceBytes": 4599,
+      "executableSha256": "79873227363e5e57fa1cb6931618313441b1b7da5d7cc586a7d593c14582e13e",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "src/plugin-sdk/blob-runtime.ts",
+      "gitBlob": "447880ab6d5897585e32852880135c7e0f6968f1",
+      "sourceSha256": "73551b7bf55cb99a9054e8e3642666b043a739fd7c86d9c4c513d564ba432b20",
+      "sourceBytes": 381,
+      "executableSha256": "f728cde6f30a803bb45e2a661d6081134ae6899c5ff7a927dac3380c5398562d",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "src/tts/directive-parser.ts",
+      "gitBlob": "5c532ddbb3543dce4c0d2008f27c8f6113f83589",
+      "sourceSha256": "5f629cc79bf82a2783885fbf97e87d87045c01b852298ba9e781c5b996c48329",
+      "sourceBytes": 1887,
+      "executableSha256": "ce851780e5334aa7fa7df68425c1aa0d74eaa94e1aafc578e19bb294cf86943f",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "src/tts/directive-number.ts",
+      "gitBlob": "99f652f291ff6aa43dff23d3b79be1350fb80268",
+      "sourceSha256": "9d87677afe48ecc851ca209efdb820ef3c191b642a5e9c4f8b483cef57aaed4a",
+      "sourceBytes": 1203,
+      "executableSha256": "1d50bc3491581e30f5bd95ac592f677ccd693ba5360ccbb36cd3bb2d702e0175",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "src/tts/tts-provider-helpers.ts",
+      "gitBlob": "21347cace4ebcf7e3f5b8c276a9ac3a070390240",
+      "sourceSha256": "1f1425d541d933324b9cafc5135997487d26d9ff1638b2dd7b653498f5357747",
+      "sourceBytes": 2144,
+      "executableSha256": "02e64150c164d3a239f92129f5885ef5d141bc9b3e4beb13b9d75f6fc6fb5663",
+      "wholeModule": true,
+      "executed": true
+    }
+  ],
+  "dataAudit": [
+    {
+      "path": "extensions/xiaomi/openclaw.plugin.json",
+      "gitBlob": "b90606c62b912754235f788a968d4c47cf9e50a0",
+      "sourceSha256": "f800df8aab3a93766e8ecb200245fb9a1ec57e2fe96c5d908006d36031f1e333",
+      "sourceBytes": 7490,
+      "usage": "Complete original plugin data/registration/catalog provenance; not evaluated or registered.",
+      "evaluated": false
+    },
+    {
+      "path": "extensions/xiaomi/index.ts",
+      "gitBlob": "fc814821c025ecf509a4193d96fb268b917ccf8b",
+      "sourceSha256": "1f56174c97638771063695fcbfa88e2c8529e2a4a7e39851251c20f362099d71",
+      "sourceBytes": 8741,
+      "usage": "Complete original plugin data/registration/catalog provenance; not evaluated or registered.",
+      "evaluated": false
+    },
+    {
+      "path": "extensions/xiaomi/capability-catalog.ts",
+      "gitBlob": "39425d8715cfee278245f20cffdbfa991c5cb208",
+      "sourceSha256": "f91aafea66bb7c6db5632cfdfa91d81c23c1962e00764dadf686c3ed87ccdc04",
+      "sourceBytes": 252,
+      "usage": "Complete original plugin data/registration/catalog provenance; not evaluated or registered.",
+      "evaluated": false
+    },
+    {
+      "path": "LICENSE",
+      "gitBlob": "ed064819ab537575d0cad902f7e5af4a3488b1d0",
+      "sourceSha256": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4",
+      "sourceBytes": 1076,
+      "usage": "Complete original license provenance.",
+      "evaluated": false
+    }
+  ],
+  "provenanceData": [
+    {
+      "path": "extensions/xiaomi/openclaw.plugin.json",
+      "text": "{\n  \"id\": \"xiaomi\",\n  \"categories\": [\"models\"],\n  \"capabilityCatalogEntry\": \"./capability-catalog.ts\",\n  \"activation\": {\n    \"onStartup\": false\n  },\n  \"enabledByDefault\": true,\n  \"providers\": [\"xiaomi\", \"xiaomi-token-plan\"],\n  \"autoEnableWhenConfiguredProviders\": [\"xiaomi\", \"xiaomi-token-plan\"],\n  \"setup\": {\n    \"providers\": [\n      {\n        \"id\": \"xiaomi\",\n        \"envVars\": [\"XIAOMI_API_KEY\"]\n      },\n      {\n        \"id\": \"xiaomi-token-plan\",\n        \"envVars\": [\"XIAOMI_TOKEN_PLAN_API_KEY\"]\n      }\n    ]\n  },\n  \"modelCatalog\": {\n    \"modelsDev\": {\n      \"xiaomi\": \"xiaomi\",\n      \"xiaomi-token-plan\": \"xiaomi-token-plan-sgp\"\n    },\n    \"providers\": {\n      \"xiaomi\": {\n        \"baseUrl\": \"https://api.xiaomimimo.com/v1\",\n        \"api\": \"openai-completions\",\n        \"models\": [\n          {\n            \"id\": \"mimo-v2.6-pro\",\n            \"name\": \"Xiaomi MiMo V2.6 Pro\",\n            \"input\": [\"text\", \"image\"],\n            \"reasoning\": true,\n            \"contextWindow\": 1048576,\n            \"maxTokens\": 131072,\n            \"cost\": {\n              \"input\": 0.435,\n              \"output\": 0.87,\n              \"cacheRead\": 0.0036,\n              \"cacheWrite\": 0\n            },\n            \"compat\": { \"codeMode\": \"preferred\" }\n          },\n          {\n            \"id\": \"mimo-v2.6-flash\",\n            \"name\": \"Xiaomi MiMo V2.6 Flash\",\n            \"input\": [\"text\", \"image\"],\n            \"reasoning\": true,\n            \"contextWindow\": 1048576,\n            \"maxTokens\": 131072,\n            \"cost\": {\n              \"input\": 0.14,\n              \"output\": 0.28,\n              \"cacheRead\": 0.0028,\n              \"cacheWrite\": 0\n            },\n            \"compat\": { \"codeMode\": \"preferred\" }\n          },\n          {\n            \"id\": \"mimo-v2.6-pro-ultraspeed\",\n            \"name\": \"Xiaomi MiMo V2.6 Pro UltraSpeed\",\n            \"input\": [\"text\", \"image\"],\n            \"reasoning\": true,\n            \"contextWindow\": 1048576,\n            \"maxTokens\": 131072,\n            \"cost\": {\n              \"input\": 4.35,\n              \"output\": 8.7,\n              \"cacheRead\": 0.036,\n              \"cacheWrite\": 0\n            }\n          },\n          {\n            \"id\": \"mimo-v2.5\",\n            \"name\": \"Xiaomi MiMo V2.5\",\n            \"input\": [\"text\", \"image\"],\n            \"reasoning\": true,\n            \"contextWindow\": 1048576,\n            \"maxTokens\": 131072,\n            \"cost\": {\n              \"input\": 0.14,\n              \"output\": 0.28,\n              \"cacheRead\": 0.0028,\n              \"cacheWrite\": 0\n            },\n            \"compat\": { \"codeMode\": \"preferred\" }\n          },\n          {\n            \"id\": \"mimo-v2.5-pro\",\n            \"name\": \"Xiaomi MiMo V2.5 Pro\",\n            \"input\": [\"text\"],\n            \"reasoning\": true,\n            \"contextWindow\": 1048576,\n            \"maxTokens\": 131072,\n            \"cost\": {\n              \"input\": 0.435,\n              \"output\": 0.87,\n              \"cacheRead\": 0.0036,\n              \"cacheWrite\": 0\n            }\n          }\n        ]\n      },\n      \"xiaomi-token-plan\": {\n        \"baseUrl\": \"https://token-plan-sgp.xiaomimimo.com/v1\",\n        \"api\": \"openai-completions\",\n        \"models\": [\n          {\n            \"id\": \"mimo-v2.6-pro\",\n            \"name\": \"Xiaomi MiMo V2.6 Pro\",\n            \"input\": [\"text\", \"image\"],\n            \"reasoning\": true,\n            \"contextWindow\": 1048576,\n            \"maxTokens\": 131072,\n            \"cost\": { \"input\": 0, \"output\": 0, \"cacheRead\": 0, \"cacheWrite\": 0 },\n            \"compat\": { \"codeMode\": \"preferred\" }\n          },\n          {\n            \"id\": \"mimo-v2.6-flash\",\n            \"name\": \"Xiaomi MiMo V2.6 Flash\",\n            \"input\": [\"text\", \"image\"],\n            \"reasoning\": true,\n            \"contextWindow\": 1048576,\n            \"maxTokens\": 131072,\n            \"cost\": { \"input\": 0, \"output\": 0, \"cacheRead\": 0, \"cacheWrite\": 0 },\n            \"compat\": { \"codeMode\": \"preferred\" }\n          },\n          {\n            \"id\": \"mimo-v2.5-pro\",\n            \"name\": \"Xiaomi MiMo V2.5 Pro\",\n            \"input\": [\"text\"],\n            \"reasoning\": true,\n            \"contextWindow\": 1048576,\n            \"maxTokens\": 131072,\n            \"cost\": { \"input\": 0, \"output\": 0, \"cacheRead\": 0, \"cacheWrite\": 0 }\n          },\n          {\n            \"id\": \"mimo-v2.5\",\n            \"name\": \"Xiaomi MiMo V2.5\",\n            \"input\": [\"text\", \"image\"],\n            \"reasoning\": true,\n            \"contextWindow\": 1048576,\n            \"maxTokens\": 131072,\n            \"cost\": { \"input\": 0, \"output\": 0, \"cacheRead\": 0, \"cacheWrite\": 0 },\n            \"compat\": { \"codeMode\": \"preferred\" }\n          }\n        ]\n      }\n    },\n    \"discovery\": {\n      \"xiaomi\": \"refreshable\",\n      \"xiaomi-token-plan\": \"refreshable\"\n    }\n  },\n  \"providerEndpoints\": [\n    {\n      \"endpointClass\": \"xiaomi-native\",\n      \"hosts\": [\n        \"api.xiaomimimo.com\",\n        \"token-plan-ams.xiaomimimo.com\",\n        \"token-plan-cn.xiaomimimo.com\",\n        \"token-plan-sgp.xiaomimimo.com\"\n      ]\n    }\n  ],\n  \"contracts\": {\n    \"speechProviders\": [\"xiaomi\", \"mimo\"],\n    \"usageProviders\": [\"xiaomi\", \"xiaomi-token-plan\"]\n  },\n  \"providerAuthChoices\": [\n    {\n      \"provider\": \"xiaomi\",\n      \"method\": \"api-key\",\n      \"choiceId\": \"xiaomi-api-key\",\n      \"appGuidedSecret\": true,\n      \"choiceLabel\": \"Xiaomi API key (Pay-as-you-go)\",\n      \"groupId\": \"xiaomi\",\n      \"groupLabel\": \"Xiaomi\",\n      \"groupHint\": \"Pay-as-you-go / Token Plan\",\n      \"optionKey\": \"xiaomiApiKey\",\n      \"cliFlag\": \"--xiaomi-api-key\",\n      \"cliOption\": \"--xiaomi-api-key <key>\",\n      \"cliDescription\": \"Xiaomi MiMo pay-as-you-go API key\"\n    },\n    {\n      \"provider\": \"xiaomi-token-plan\",\n      \"method\": \"token-plan-ams\",\n      \"choiceId\": \"xiaomi-token-plan-ams\",\n      \"appGuidedSecret\": true,\n      \"choiceLabel\": \"Xiaomi Token Plan (Europe)\",\n      \"choiceHint\": \"Endpoint preset: token-plan-ams.xiaomimimo.com/v1\",\n      \"groupId\": \"xiaomi\",\n      \"groupLabel\": \"Xiaomi\",\n      \"groupHint\": \"Pay-as-you-go / Token Plan\",\n      \"optionKey\": \"xiaomiTokenPlanApiKey\",\n      \"cliFlag\": \"--xiaomi-token-plan-api-key\",\n      \"cliOption\": \"--xiaomi-token-plan-api-key <key>\",\n      \"cliDescription\": \"Xiaomi MiMo Token Plan API key\"\n    },\n    {\n      \"provider\": \"xiaomi-token-plan\",\n      \"method\": \"token-plan-cn\",\n      \"choiceId\": \"xiaomi-token-plan-cn\",\n      \"appGuidedSecret\": true,\n      \"choiceLabel\": \"Xiaomi Token Plan (China)\",\n      \"choiceHint\": \"Endpoint preset: token-plan-cn.xiaomimimo.com/v1\",\n      \"groupId\": \"xiaomi\",\n      \"groupLabel\": \"Xiaomi\",\n      \"groupHint\": \"Pay-as-you-go / Token Plan\",\n      \"optionKey\": \"xiaomiTokenPlanApiKey\",\n      \"cliFlag\": \"--xiaomi-token-plan-api-key\",\n      \"cliOption\": \"--xiaomi-token-plan-api-key <key>\",\n      \"cliDescription\": \"Xiaomi MiMo Token Plan API key\"\n    },\n    {\n      \"provider\": \"xiaomi-token-plan\",\n      \"method\": \"token-plan-sgp\",\n      \"choiceId\": \"xiaomi-token-plan-sgp\",\n      \"appGuidedSecret\": true,\n      \"choiceLabel\": \"Xiaomi Token Plan (Singapore)\",\n      \"choiceHint\": \"Endpoint preset: token-plan-sgp.xiaomimimo.com/v1\",\n      \"groupId\": \"xiaomi\",\n      \"groupLabel\": \"Xiaomi\",\n      \"groupHint\": \"Pay-as-you-go / Token Plan\",\n      \"optionKey\": \"xiaomiTokenPlanApiKey\",\n      \"cliFlag\": \"--xiaomi-token-plan-api-key\",\n      \"cliOption\": \"--xiaomi-token-plan-api-key <key>\",\n      \"cliDescription\": \"Xiaomi MiMo Token Plan API key\"\n    }\n  ],\n  \"configSchema\": {\n    \"type\": \"object\",\n    \"additionalProperties\": false,\n    \"properties\": {}\n  }\n}\n"
+    },
+    {
+      "path": "extensions/xiaomi/index.ts",
+      "text": "import { definePluginEntry } from \"openclaw/plugin-sdk/plugin-entry\";\nimport type {\n  OpenClawConfig,\n  ProviderAuthMethod,\n  ProviderRuntimeModel,\n  ProviderThinkingProfile,\n  ProviderWrapStreamFnContext,\n} from \"openclaw/plugin-sdk/plugin-entry\";\nimport { createProviderApiKeyAuthMethod } from \"openclaw/plugin-sdk/provider-auth-api-key\";\nimport { buildOpenAICompatibleLiveProviderCatalog } from \"openclaw/plugin-sdk/provider-catalog-live-runtime\";\nimport {\n  applyModelCompatPatch,\n  buildProviderReplayFamilyHooks,\n} from \"openclaw/plugin-sdk/provider-model-shared\";\nimport { createDeepSeekV4OpenAICompatibleThinkingWrapper } from \"openclaw/plugin-sdk/provider-stream-shared\";\nimport { PROVIDER_LABELS } from \"openclaw/plugin-sdk/provider-usage\";\nimport { normalizeOptionalString } from \"openclaw/plugin-sdk/string-coerce-runtime\";\nimport {\n  applyXiaomiConnectionConfig,\n  applyXiaomiTokenPlanConfig,\n  XIAOMI_DEFAULT_MODEL_REF,\n  XIAOMI_TOKEN_PLAN_DEFAULT_MODEL_REF,\n} from \"./onboard.js\";\nimport {\n  buildXiaomiProvider,\n  buildXiaomiTokenPlanProvider,\n  XIAOMI_PROVIDER_ID,\n  XIAOMI_TOKEN_PLAN_PROVIDER_ID,\n  type XiaomiTokenPlanRegion,\n} from \"./provider-catalog.js\";\nimport { buildXiaomiSpeechProvider } from \"./speech-provider.js\";\n\nconst PAYG_FLAG_NAME = \"--xiaomi-api-key\";\nconst PAYG_OPTION_KEY = \"xiaomiApiKey\";\nconst PAYG_ENV_VAR = \"XIAOMI_API_KEY\";\nconst TOKEN_PLAN_FLAG_NAME = \"--xiaomi-token-plan-api-key\";\nconst TOKEN_PLAN_OPTION_KEY = \"xiaomiTokenPlanApiKey\";\nconst TOKEN_PLAN_ENV_VAR = \"XIAOMI_TOKEN_PLAN_API_KEY\";\nconst XIAOMI_WIZARD_GROUP = {\n  groupId: \"xiaomi\",\n  groupLabel: \"Xiaomi\",\n  groupHint: \"Pay-as-you-go / Token Plan\",\n};\nconst MIMO_REASONING_MODEL_IDS = new Set([\n  \"mimo-v2.5\",\n  \"mimo-v2.5-pro\",\n  \"mimo-v2.6-flash\",\n  \"mimo-v2.6-pro\",\n  \"mimo-v2.6-pro-ultraspeed\",\n]);\n\nconst MIMO_THINKING_PROFILE = {\n  levels: ([\"off\", \"minimal\", \"low\", \"medium\", \"high\", \"xhigh\", \"max\"] as const).map((id) => ({\n    id,\n  })),\n  defaultLevel: \"high\",\n} satisfies ProviderThinkingProfile;\n\nconst XIAOMI_PROVIDER_HOOKS = {\n  ...buildProviderReplayFamilyHooks({\n    family: \"openai-compatible\",\n    dropReasoningFromHistory: false,\n  }),\n  normalizeResolvedModel: ({ model }: { model: ProviderRuntimeModel }) =>\n    applyModelCompatPatch(model, { omitEmptyArrayItems: true }),\n  wrapStreamFn: (ctx: ProviderWrapStreamFnContext) =>\n    createDeepSeekV4OpenAICompatibleThinkingWrapper({\n      baseStreamFn: ctx.streamFn,\n      thinkingLevel: ctx.thinkingLevel,\n      shouldPatchModel: (model) =>\n        (model.provider === XIAOMI_PROVIDER_ID ||\n          model.provider === XIAOMI_TOKEN_PLAN_PROVIDER_ID) &&\n        MIMO_REASONING_MODEL_IDS.has(model.id.toLowerCase()),\n    }),\n  resolveThinkingProfile: ({ modelId }: { modelId: string }) =>\n    MIMO_REASONING_MODEL_IDS.has(modelId.toLowerCase()) ? MIMO_THINKING_PROFILE : undefined,\n  isModernModelRef: ({ modelId }: { modelId: string }) =>\n    MIMO_REASONING_MODEL_IDS.has(modelId.toLowerCase()),\n};\n\nfunction assertCompatibleXiaomiKey(actualKey: string, expectedKind: \"payg\" | \"token-plan\"): void {\n  const normalized = actualKey.trim().toLowerCase();\n  const expectedPrefix = expectedKind === \"payg\" ? \"sk-\" : \"tp-\";\n  const kindLabel = expectedKind === \"payg\" ? \"pay-as-you-go\" : \"Token Plan\";\n\n  if (normalized.startsWith(expectedPrefix)) {\n    return;\n  }\n  if (expectedKind === \"payg\" && normalized.startsWith(\"tp-\")) {\n    throw new Error(\n      \"This looks like a Xiaomi MiMo Token Plan key (tp-...). \" +\n        \"Re-run onboarding with one of: --auth-choice xiaomi-token-plan-cn, \" +\n        \"--auth-choice xiaomi-token-plan-sgp, or --auth-choice xiaomi-token-plan-ams.\",\n    );\n  }\n  if (expectedKind === \"token-plan\" && normalized.startsWith(\"sk-\")) {\n    throw new Error(\n      \"This looks like a Xiaomi MiMo pay-as-you-go key (sk-...). \" +\n        `Re-run onboarding with --auth-choice xiaomi-api-key or pass ${PAYG_FLAG_NAME}.`,\n    );\n  }\n  throw new Error(\n    `Xiaomi MiMo ${kindLabel} keys must start with \"${expectedPrefix}\". ` +\n      \"The entered key does not match the expected format.\",\n  );\n}\n\nfunction createXiaomiApiKeyAuthMethod(region?: XiaomiTokenPlanRegion): ProviderAuthMethod {\n  const regionLabel = region === \"ams\" ? \"Europe\" : region === \"cn\" ? \"China\" : \"Singapore\";\n  const choiceLabel = region\n    ? `Xiaomi Token Plan (${regionLabel})`\n    : \"Xiaomi API key (Pay-as-you-go)\";\n  const choiceHint = region\n    ? `Endpoint preset: token-plan-${region}.xiaomimimo.com/v1`\n    : \"Endpoint: api.xiaomimimo.com/v1\";\n  const auth = region\n    ? ({\n        providerId: XIAOMI_TOKEN_PLAN_PROVIDER_ID,\n        optionKey: TOKEN_PLAN_OPTION_KEY,\n        flagName: TOKEN_PLAN_FLAG_NAME,\n        envVar: TOKEN_PLAN_ENV_VAR,\n        promptMessage: `Enter Xiaomi MiMo Token Plan API key (tp-...) for ${regionLabel}`,\n        expectedKind: \"token-plan\",\n        defaultModel: XIAOMI_TOKEN_PLAN_DEFAULT_MODEL_REF,\n        applyConfig: (cfg: OpenClawConfig) => applyXiaomiTokenPlanConfig(cfg, region),\n      } as const)\n    : ({\n        providerId: XIAOMI_PROVIDER_ID,\n        optionKey: PAYG_OPTION_KEY,\n        flagName: PAYG_FLAG_NAME,\n        envVar: PAYG_ENV_VAR,\n        promptMessage: \"Enter Xiaomi MiMo API key (pay-as-you-go, sk-...)\",\n        expectedKind: \"payg\",\n        defaultModel: XIAOMI_DEFAULT_MODEL_REF,\n        applyConfig: applyXiaomiConnectionConfig,\n      } as const);\n  return createProviderApiKeyAuthMethod({\n    providerId: auth.providerId,\n    methodId: region ? `token-plan-${region}` : \"api-key\",\n    label: choiceLabel,\n    hint: choiceHint,\n    optionKey: auth.optionKey,\n    flagName: auth.flagName,\n    envVar: auth.envVar,\n    promptMessage: auth.promptMessage,\n    defaultModel: auth.defaultModel,\n    applyConfig: auth.applyConfig,\n    validateApiKey: (key) => {\n      assertCompatibleXiaomiKey(key, auth.expectedKind);\n      return undefined;\n    },\n    wizard: {\n      choiceId: region ? `xiaomi-token-plan-${region}` : \"xiaomi-api-key\",\n      choiceLabel,\n      choiceHint,\n      ...XIAOMI_WIZARD_GROUP,\n    },\n  });\n}\n\nexport default definePluginEntry({\n  id: XIAOMI_PROVIDER_ID,\n  name: \"Xiaomi Provider\",\n  description: \"Xiaomi provider plugin\",\n  register(api) {\n    for (const provider of [\n      {\n        id: XIAOMI_PROVIDER_ID,\n        label: \"Xiaomi\",\n        envVar: PAYG_ENV_VAR,\n        auth: () => [createXiaomiApiKeyAuthMethod()],\n        buildProvider: buildXiaomiProvider,\n        displayName: PROVIDER_LABELS.xiaomi,\n        requiresRegion: false,\n      },\n      {\n        id: XIAOMI_TOKEN_PLAN_PROVIDER_ID,\n        label: \"Xiaomi Token Plan\",\n        envVar: TOKEN_PLAN_ENV_VAR,\n        auth: () => ([\"ams\", \"cn\", \"sgp\"] as const).map(createXiaomiApiKeyAuthMethod),\n        buildProvider: buildXiaomiTokenPlanProvider,\n        displayName: \"Xiaomi MiMo Token Plan\",\n        requiresRegion: true,\n      },\n    ]) {\n      api.registerProvider({\n        id: provider.id,\n        label: provider.label,\n        docsPath: \"/providers/xiaomi\",\n        envVars: [provider.envVar],\n        auth: provider.auth(),\n        catalog: {\n          order: \"simple\",\n          run: async (ctx) => {\n            const auth = ctx.resolveProviderApiKey(provider.id);\n            if (!auth.apiKey) {\n              return null;\n            }\n            const explicitBaseUrl = normalizeOptionalString(\n              ctx.config.models?.providers?.[provider.id]?.baseUrl,\n            );\n            if (provider.requiresRegion && !explicitBaseUrl) {\n              return null;\n            }\n            return await buildOpenAICompatibleLiveProviderCatalog({\n              discoveryMode: \"strict\",\n              providerId: provider.id,\n              providerConfig: {\n                ...provider.buildProvider(),\n                ...(explicitBaseUrl ? { baseUrl: explicitBaseUrl } : {}),\n              },\n              apiKey: auth.apiKey,\n              discoveryApiKey: auth.discoveryApiKey,\n              profileId: auth.profileId,\n            });\n          },\n        },\n        staticCatalog: {\n          order: \"simple\",\n          run: async () => ({ provider: provider.buildProvider() }),\n        },\n        ...XIAOMI_PROVIDER_HOOKS,\n        resolveUsageAuth: async (ctx) => {\n          const apiKey = (\n            await ctx.resolveApiKeyCandidatesFromConfigAndStore?.({\n              providerIds: [provider.id],\n              envDirect: [ctx.env[provider.envVar]],\n            })\n          )?.[0];\n          return apiKey ? { token: apiKey } : null;\n        },\n        fetchUsageSnapshot: async () => ({\n          provider: provider.id,\n          displayName: provider.displayName,\n          windows: [],\n        }),\n      });\n    }\n\n    api.registerSpeechProvider(buildXiaomiSpeechProvider());\n  },\n});\n"
+    },
+    {
+      "path": "extensions/xiaomi/capability-catalog.ts",
+      "text": "import type { PluginCapabilityCatalog } from \"openclaw/plugin-sdk/plugin-entry\";\nimport { buildXiaomiSpeechProvider } from \"./speech-provider.js\";\n\nexport default {\n  speechProviders: [buildXiaomiSpeechProvider()],\n} satisfies PluginCapabilityCatalog;\n"
+    },
+    {
+      "path": "LICENSE",
+      "text": "MIT License\n\nCopyright (c) 2026 OpenClaw Foundation\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+    }
+  ],
+  "pluginManifest": {
+    "id": "xiaomi",
+    "categories": [
+      "models"
+    ],
+    "capabilityCatalogEntry": "./capability-catalog.ts",
+    "activation": {
+      "onStartup": false
+    },
+    "enabledByDefault": true,
+    "providers": [
+      "xiaomi",
+      "xiaomi-token-plan"
+    ],
+    "autoEnableWhenConfiguredProviders": [
+      "xiaomi",
+      "xiaomi-token-plan"
+    ],
+    "setup": {
+      "providers": [
+        {
+          "id": "xiaomi",
+          "envVars": [
+            "XIAOMI_API_KEY"
+          ]
+        },
+        {
+          "id": "xiaomi-token-plan",
+          "envVars": [
+            "XIAOMI_TOKEN_PLAN_API_KEY"
+          ]
+        }
+      ]
+    },
+    "modelCatalog": {
+      "modelsDev": {
+        "xiaomi": "xiaomi",
+        "xiaomi-token-plan": "xiaomi-token-plan-sgp"
+      },
+      "providers": {
+        "xiaomi": {
+          "baseUrl": "https://api.xiaomimimo.com/v1",
+          "api": "openai-completions",
+          "models": [
+            {
+              "id": "mimo-v2.6-pro",
+              "name": "Xiaomi MiMo V2.6 Pro",
+              "input": [
+                "text",
+                "image"
+              ],
+              "reasoning": true,
+              "contextWindow": 1048576,
+              "maxTokens": 131072,
+              "cost": {
+                "input": 0.435,
+                "output": 0.87,
+                "cacheRead": 0.0036,
+                "cacheWrite": 0
+              },
+              "compat": {
+                "codeMode": "preferred"
+              }
+            },
+            {
+              "id": "mimo-v2.6-flash",
+              "name": "Xiaomi MiMo V2.6 Flash",
+              "input": [
+                "text",
+                "image"
+              ],
+              "reasoning": true,
+              "contextWindow": 1048576,
+              "maxTokens": 131072,
+              "cost": {
+                "input": 0.14,
+                "output": 0.28,
+                "cacheRead": 0.0028,
+                "cacheWrite": 0
+              },
+              "compat": {
+                "codeMode": "preferred"
+              }
+            },
+            {
+              "id": "mimo-v2.6-pro-ultraspeed",
+              "name": "Xiaomi MiMo V2.6 Pro UltraSpeed",
+              "input": [
+                "text",
+                "image"
+              ],
+              "reasoning": true,
+              "contextWindow": 1048576,
+              "maxTokens": 131072,
+              "cost": {
+                "input": 4.35,
+                "output": 8.7,
+                "cacheRead": 0.036,
+                "cacheWrite": 0
+              }
+            },
+            {
+              "id": "mimo-v2.5",
+              "name": "Xiaomi MiMo V2.5",
+              "input": [
+                "text",
+                "image"
+              ],
+              "reasoning": true,
+              "contextWindow": 1048576,
+              "maxTokens": 131072,
+              "cost": {
+                "input": 0.14,
+                "output": 0.28,
+                "cacheRead": 0.0028,
+                "cacheWrite": 0
+              },
+              "compat": {
+                "codeMode": "preferred"
+              }
+            },
+            {
+              "id": "mimo-v2.5-pro",
+              "name": "Xiaomi MiMo V2.5 Pro",
+              "input": [
+                "text"
+              ],
+              "reasoning": true,
+              "contextWindow": 1048576,
+              "maxTokens": 131072,
+              "cost": {
+                "input": 0.435,
+                "output": 0.87,
+                "cacheRead": 0.0036,
+                "cacheWrite": 0
+              }
+            }
+          ]
+        },
+        "xiaomi-token-plan": {
+          "baseUrl": "https://token-plan-sgp.xiaomimimo.com/v1",
+          "api": "openai-completions",
+          "models": [
+            {
+              "id": "mimo-v2.6-pro",
+              "name": "Xiaomi MiMo V2.6 Pro",
+              "input": [
+                "text",
+                "image"
+              ],
+              "reasoning": true,
+              "contextWindow": 1048576,
+              "maxTokens": 131072,
+              "cost": {
+                "input": 0,
+                "output": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0
+              },
+              "compat": {
+                "codeMode": "preferred"
+              }
+            },
+            {
+              "id": "mimo-v2.6-flash",
+              "name": "Xiaomi MiMo V2.6 Flash",
+              "input": [
+                "text",
+                "image"
+              ],
+              "reasoning": true,
+              "contextWindow": 1048576,
+              "maxTokens": 131072,
+              "cost": {
+                "input": 0,
+                "output": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0
+              },
+              "compat": {
+                "codeMode": "preferred"
+              }
+            },
+            {
+              "id": "mimo-v2.5-pro",
+              "name": "Xiaomi MiMo V2.5 Pro",
+              "input": [
+                "text"
+              ],
+              "reasoning": true,
+              "contextWindow": 1048576,
+              "maxTokens": 131072,
+              "cost": {
+                "input": 0,
+                "output": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0
+              }
+            },
+            {
+              "id": "mimo-v2.5",
+              "name": "Xiaomi MiMo V2.5",
+              "input": [
+                "text",
+                "image"
+              ],
+              "reasoning": true,
+              "contextWindow": 1048576,
+              "maxTokens": 131072,
+              "cost": {
+                "input": 0,
+                "output": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0
+              },
+              "compat": {
+                "codeMode": "preferred"
+              }
+            }
+          ]
+        }
+      },
+      "discovery": {
+        "xiaomi": "refreshable",
+        "xiaomi-token-plan": "refreshable"
+      }
+    },
+    "providerEndpoints": [
+      {
+        "endpointClass": "xiaomi-native",
+        "hosts": [
+          "api.xiaomimimo.com",
+          "token-plan-ams.xiaomimimo.com",
+          "token-plan-cn.xiaomimimo.com",
+          "token-plan-sgp.xiaomimimo.com"
+        ]
+      }
+    ],
+    "contracts": {
+      "speechProviders": [
+        "xiaomi",
+        "mimo"
+      ],
+      "usageProviders": [
+        "xiaomi",
+        "xiaomi-token-plan"
+      ]
+    },
+    "providerAuthChoices": [
+      {
+        "provider": "xiaomi",
+        "method": "api-key",
+        "choiceId": "xiaomi-api-key",
+        "appGuidedSecret": true,
+        "choiceLabel": "Xiaomi API key (Pay-as-you-go)",
+        "groupId": "xiaomi",
+        "groupLabel": "Xiaomi",
+        "groupHint": "Pay-as-you-go / Token Plan",
+        "optionKey": "xiaomiApiKey",
+        "cliFlag": "--xiaomi-api-key",
+        "cliOption": "--xiaomi-api-key <key>",
+        "cliDescription": "Xiaomi MiMo pay-as-you-go API key"
+      },
+      {
+        "provider": "xiaomi-token-plan",
+        "method": "token-plan-ams",
+        "choiceId": "xiaomi-token-plan-ams",
+        "appGuidedSecret": true,
+        "choiceLabel": "Xiaomi Token Plan (Europe)",
+        "choiceHint": "Endpoint preset: token-plan-ams.xiaomimimo.com/v1",
+        "groupId": "xiaomi",
+        "groupLabel": "Xiaomi",
+        "groupHint": "Pay-as-you-go / Token Plan",
+        "optionKey": "xiaomiTokenPlanApiKey",
+        "cliFlag": "--xiaomi-token-plan-api-key",
+        "cliOption": "--xiaomi-token-plan-api-key <key>",
+        "cliDescription": "Xiaomi MiMo Token Plan API key"
+      },
+      {
+        "provider": "xiaomi-token-plan",
+        "method": "token-plan-cn",
+        "choiceId": "xiaomi-token-plan-cn",
+        "appGuidedSecret": true,
+        "choiceLabel": "Xiaomi Token Plan (China)",
+        "choiceHint": "Endpoint preset: token-plan-cn.xiaomimimo.com/v1",
+        "groupId": "xiaomi",
+        "groupLabel": "Xiaomi",
+        "groupHint": "Pay-as-you-go / Token Plan",
+        "optionKey": "xiaomiTokenPlanApiKey",
+        "cliFlag": "--xiaomi-token-plan-api-key",
+        "cliOption": "--xiaomi-token-plan-api-key <key>",
+        "cliDescription": "Xiaomi MiMo Token Plan API key"
+      },
+      {
+        "provider": "xiaomi-token-plan",
+        "method": "token-plan-sgp",
+        "choiceId": "xiaomi-token-plan-sgp",
+        "appGuidedSecret": true,
+        "choiceLabel": "Xiaomi Token Plan (Singapore)",
+        "choiceHint": "Endpoint preset: token-plan-sgp.xiaomimimo.com/v1",
+        "groupId": "xiaomi",
+        "groupLabel": "Xiaomi",
+        "groupHint": "Pay-as-you-go / Token Plan",
+        "optionKey": "xiaomiTokenPlanApiKey",
+        "cliFlag": "--xiaomi-token-plan-api-key",
+        "cliOption": "--xiaomi-token-plan-api-key <key>",
+        "cliDescription": "Xiaomi MiMo Token Plan API key"
+      }
+    ],
+    "configSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {}
+    }
+  },
+  "license": {
+    "path": "LICENSE",
+    "text": "MIT License\n\nCopyright (c) 2026 OpenClaw Foundation\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+  },
+  "platformBoundaries": [
+    {
+      "module": "openclaw/plugin-sdk/secret-input",
+      "exports": {
+        "normalizeResolvedSecretInputString": "Records explicit dummy value/path and trims strings only. No real secret resolution or credential authority executes."
+      }
+    },
+    {
+      "module": "openclaw/plugin-sdk/provider-http",
+      "exports": {
+        "assertOkOrThrowProviderError": "Records the synthetic successful response identity and label only. Original status/error behavior is unexecuted.",
+        "readProviderJsonResponse": "Records response identity/label and returns fresh positive recipe JSON. Original body reader, decoder, limits and deadlines are unexecuted."
+      }
+    },
+    {
+      "module": "openclaw/plugin-sdk/ssrf-runtime",
+      "exports": {
+        "ssrfPolicyFromHttpBaseUrlAllowedHostname": "Records the source-produced base URL and supplies an opaque named fixture policy. No hostname or network policy algorithm executes.",
+        "fetchWithSsrFGuard": "Records exact source URL, JSON/headers/timeout/audit fields and returns a synthetic 200 response plus counted release. No network or guard implementation executes."
+      }
+    },
+    {
+      "module": "openclaw/plugin-sdk/media-runtime",
+      "exports": {
+        "transcodeAudioBufferToOpus": "Records actual source-decoded binary, selected input extension, temp prefix and raw request timeout; returns opaque recipe bytes. No files, FFmpeg or codec executes."
+      }
+    },
+    {
+      "module": "node:fs",
+      "exports": {
+        "rmSync": "Linked solely for complete original module evaluation; never invoked by these ordinary recipes."
+      }
+    }
+  ],
+  "globalBoundaries": {
+    "process": "Isolated VM process.env={} only. Original route/key code reads absent fields as provenance; no ambient environment, credential fallback or configured predicate is qualified.",
+    "fetch": "Throwing ambient binding; only the explicitly named synthetic successful guarded-fetch facade is invoked.",
+    "Buffer": "Node native Buffer carries original source-canonicalized synthetic opaque audio bytes; this does not establish a real media format or codec.",
+    "clock": "Actual source numeric helper floors supplied positive fractional HTTP timeouts; raw timeouts reach synthetic media. No real timeout, retry, cancellation or recovery semantics are qualified."
+  },
+  "providerMetadata": {
+    "id": "xiaomi",
+    "label": "Xiaomi MiMo",
+    "aliases": [
+      "mimo"
+    ],
+    "autoSelectOrder": 45,
+    "defaultModel": "mimo-v2.5-tts",
+    "models": [
+      "mimo-v2.5-tts",
+      "mimo-v2.5-tts-voicedesign"
+    ],
+    "voices": [
+      "mimo_default",
+      "default_zh",
+      "default_en",
+      "Mia",
+      "Chloe",
+      "Milo",
+      "Dean"
+    ]
+  },
+  "providerCallbacks": [
+    "resolveConfig",
+    "parseDirectiveToken",
+    "listVoices",
+    "isConfigured",
+    "isConfiguredAsync",
+    "synthesize"
+  ],
+  "counts": {
+    "config": 10,
+    "synthesis": 21,
+    "voices": 1,
+    "totalObservations": 32,
+    "httpRequests": 21,
+    "releases": 21,
+    "transcodes": 5,
+    "wholeModules": 9,
+    "trackedFilesBefore": 58558,
+    "trackedFilesAfter": 58558
+  },
+  "configObservations": [
+    {
+      "id": "config-canonical-defaults",
+      "input": {
+        "rawConfig": {
+          "providers": {
+            "xiaomi": {
+              "apiKey": "fixture-xiaomi-speech"
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "rawConfig": {
+          "providers": {
+            "xiaomi": {
+              "apiKey": "fixture-xiaomi-speech"
+            }
+          }
+        }
+      },
+      "result": {
+        "apiKey": "fixture-xiaomi-speech",
+        "baseUrl": "https://api.xiaomimimo.com/v1",
+        "model": "mimo-v2.5-tts",
+        "voice": "mimo_default",
+        "format": "mp3"
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "requests": [],
+      "releaseCount": 0,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        }
+      ],
+      "transcodes": []
+    },
+    {
+      "id": "config-mimo-complete",
+      "input": {
+        "rawConfig": {
+          "providers": {
+            "mimo": {
+              "apiKey": " fixture-xiaomi-speech ",
+              "baseUrl": " https://Alias.Example/tenant/v2/// ",
+              "modelId": " custom-mimo ",
+              "voiceId": " Custom Voice ",
+              "format": " WAV ",
+              "style": " 轻柔、清晰。 "
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "rawConfig": {
+          "providers": {
+            "mimo": {
+              "apiKey": " fixture-xiaomi-speech ",
+              "baseUrl": " https://Alias.Example/tenant/v2/// ",
+              "modelId": " custom-mimo ",
+              "voiceId": " Custom Voice ",
+              "format": " WAV ",
+              "style": " 轻柔、清晰。 "
+            }
+          }
+        }
+      },
+      "result": {
+        "apiKey": "fixture-xiaomi-speech",
+        "baseUrl": "https://Alias.Example/tenant/v2",
+        "model": "custom-mimo",
+        "voice": "Custom Voice",
+        "format": "wav",
+        "style": "轻柔、清晰。"
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "requests": [],
+      "releaseCount": 0,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": " fixture-xiaomi-speech "
+        }
+      ],
+      "transcodes": []
+    },
+    {
+      "id": "config-canonical-whole-object-precedence",
+      "input": {
+        "rawConfig": {
+          "providers": {
+            "xiaomi": {
+              "apiKey": "fixture-xiaomi-speech"
+            },
+            "mimo": {
+              "apiKey": "fixture-xiaomi-speech",
+              "baseUrl": "https://ignored.example/v7",
+              "model": "ignored-model",
+              "voice": "Dean",
+              "format": "wav",
+              "style": "ignored style"
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "rawConfig": {
+          "providers": {
+            "xiaomi": {
+              "apiKey": "fixture-xiaomi-speech"
+            },
+            "mimo": {
+              "apiKey": "fixture-xiaomi-speech",
+              "baseUrl": "https://ignored.example/v7",
+              "model": "ignored-model",
+              "voice": "Dean",
+              "format": "wav",
+              "style": "ignored style"
+            }
+          }
+        }
+      },
+      "result": {
+        "apiKey": "fixture-xiaomi-speech",
+        "baseUrl": "https://api.xiaomimimo.com/v1",
+        "model": "mimo-v2.5-tts",
+        "voice": "mimo_default",
+        "format": "mp3"
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "requests": [],
+      "releaseCount": 0,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        }
+      ],
+      "transcodes": []
+    },
+    {
+      "id": "config-model-primary-and-voice-alias-precedence",
+      "input": {
+        "rawConfig": {
+          "providers": {
+            "xiaomi": {
+              "apiKey": "fixture-xiaomi-speech",
+              "model": " mimo-v2.5-tts ",
+              "modelId": "mimo-v2.5-tts-voicedesign",
+              "speakerVoice": " Mia ",
+              "speakerVoiceId": "Chloe",
+              "voice": "Milo",
+              "voiceId": "Dean",
+              "format": " MP3 "
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "rawConfig": {
+          "providers": {
+            "xiaomi": {
+              "apiKey": "fixture-xiaomi-speech",
+              "model": " mimo-v2.5-tts ",
+              "modelId": "mimo-v2.5-tts-voicedesign",
+              "speakerVoice": " Mia ",
+              "speakerVoiceId": "Chloe",
+              "voice": "Milo",
+              "voiceId": "Dean",
+              "format": " MP3 "
+            }
+          }
+        }
+      },
+      "result": {
+        "apiKey": "fixture-xiaomi-speech",
+        "baseUrl": "https://api.xiaomimimo.com/v1",
+        "model": "mimo-v2.5-tts",
+        "voice": "Mia",
+        "format": "mp3"
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "requests": [],
+      "releaseCount": 0,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        }
+      ],
+      "transcodes": []
+    },
+    {
+      "id": "config-speakerVoice",
+      "input": {
+        "rawConfig": {
+          "providers": {
+            "xiaomi": {
+              "apiKey": "fixture-xiaomi-speech",
+              "speakerVoice": " default_zh "
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "rawConfig": {
+          "providers": {
+            "xiaomi": {
+              "apiKey": "fixture-xiaomi-speech",
+              "speakerVoice": " default_zh "
+            }
+          }
+        }
+      },
+      "result": {
+        "apiKey": "fixture-xiaomi-speech",
+        "baseUrl": "https://api.xiaomimimo.com/v1",
+        "model": "mimo-v2.5-tts",
+        "voice": "default_zh",
+        "format": "mp3"
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "requests": [],
+      "releaseCount": 0,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        }
+      ],
+      "transcodes": []
+    },
+    {
+      "id": "config-speakerVoiceId-before-voice",
+      "input": {
+        "rawConfig": {
+          "providers": {
+            "xiaomi": {
+              "apiKey": "fixture-xiaomi-speech",
+              "speakerVoiceId": " Chloe ",
+              "voice": "Milo",
+              "voiceId": "Dean"
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "rawConfig": {
+          "providers": {
+            "xiaomi": {
+              "apiKey": "fixture-xiaomi-speech",
+              "speakerVoiceId": " Chloe ",
+              "voice": "Milo",
+              "voiceId": "Dean"
+            }
+          }
+        }
+      },
+      "result": {
+        "apiKey": "fixture-xiaomi-speech",
+        "baseUrl": "https://api.xiaomimimo.com/v1",
+        "model": "mimo-v2.5-tts",
+        "voice": "Chloe",
+        "format": "mp3"
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "requests": [],
+      "releaseCount": 0,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        }
+      ],
+      "transcodes": []
+    },
+    {
+      "id": "config-voice-before-voiceId",
+      "input": {
+        "rawConfig": {
+          "providers": {
+            "xiaomi": {
+              "apiKey": "fixture-xiaomi-speech",
+              "voice": " Milo ",
+              "voiceId": "Dean"
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "rawConfig": {
+          "providers": {
+            "xiaomi": {
+              "apiKey": "fixture-xiaomi-speech",
+              "voice": " Milo ",
+              "voiceId": "Dean"
+            }
+          }
+        }
+      },
+      "result": {
+        "apiKey": "fixture-xiaomi-speech",
+        "baseUrl": "https://api.xiaomimimo.com/v1",
+        "model": "mimo-v2.5-tts",
+        "voice": "Milo",
+        "format": "mp3"
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "requests": [],
+      "releaseCount": 0,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        }
+      ],
+      "transcodes": []
+    },
+    {
+      "id": "config-voiceId",
+      "input": {
+        "rawConfig": {
+          "providers": {
+            "xiaomi": {
+              "apiKey": "fixture-xiaomi-speech",
+              "voiceId": " Dean "
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "rawConfig": {
+          "providers": {
+            "xiaomi": {
+              "apiKey": "fixture-xiaomi-speech",
+              "voiceId": " Dean "
+            }
+          }
+        }
+      },
+      "result": {
+        "apiKey": "fixture-xiaomi-speech",
+        "baseUrl": "https://api.xiaomimimo.com/v1",
+        "model": "mimo-v2.5-tts",
+        "voice": "Dean",
+        "format": "mp3"
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "requests": [],
+      "releaseCount": 0,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        }
+      ],
+      "transcodes": []
+    },
+    {
+      "id": "config-modelId-design-wav-style",
+      "input": {
+        "rawConfig": {
+          "providers": {
+            "xiaomi": {
+              "apiKey": "fixture-xiaomi-speech",
+              "modelId": " mimo-v2.5-tts-voicedesign ",
+              "format": " WaV ",
+              "style": " A bright storyteller. "
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "rawConfig": {
+          "providers": {
+            "xiaomi": {
+              "apiKey": "fixture-xiaomi-speech",
+              "modelId": " mimo-v2.5-tts-voicedesign ",
+              "format": " WaV ",
+              "style": " A bright storyteller. "
+            }
+          }
+        }
+      },
+      "result": {
+        "apiKey": "fixture-xiaomi-speech",
+        "baseUrl": "https://api.xiaomimimo.com/v1",
+        "model": "mimo-v2.5-tts-voicedesign",
+        "voice": "mimo_default",
+        "format": "wav",
+        "style": "A bright storyteller."
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "requests": [],
+      "releaseCount": 0,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        }
+      ],
+      "transcodes": []
+    },
+    {
+      "id": "config-custom-base-model-voice",
+      "input": {
+        "rawConfig": {
+          "providers": {
+            "xiaomi": {
+              "apiKey": "fixture-xiaomi-speech",
+              "baseUrl": " https://Custom.Example/api/prefix//// ",
+              "model": " experimental-tts-v9 ",
+              "speakerVoice": " My Custom Voice ",
+              "format": " mP3 ",
+              "style": "  Gentle\nclear﻿ "
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "rawConfig": {
+          "providers": {
+            "xiaomi": {
+              "apiKey": "fixture-xiaomi-speech",
+              "baseUrl": " https://Custom.Example/api/prefix//// ",
+              "model": " experimental-tts-v9 ",
+              "speakerVoice": " My Custom Voice ",
+              "format": " mP3 ",
+              "style": "  Gentle\nclear﻿ "
+            }
+          }
+        }
+      },
+      "result": {
+        "apiKey": "fixture-xiaomi-speech",
+        "baseUrl": "https://Custom.Example/api/prefix",
+        "model": "experimental-tts-v9",
+        "voice": "My Custom Voice",
+        "format": "mp3",
+        "style": "Gentle\nclear"
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "requests": [],
+      "releaseCount": 0,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        }
+      ],
+      "transcodes": []
+    }
+  ],
+  "observations": [
+    {
+      "id": "ordinary-mp3-audio-file",
+      "input": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech"
+        },
+        "target": "audio-file",
+        "timeoutMs": 21000
+      },
+      "inputAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech"
+        },
+        "target": "audio-file",
+        "timeoutMs": 21000
+      },
+      "result": {
+        "audioBase64": "AQIDBA==",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "synthesisRequest": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech"
+        },
+        "target": "audio-file",
+        "timeoutMs": 21000
+      },
+      "synthesisRequestAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech"
+        },
+        "target": "audio-file",
+        "timeoutMs": 21000
+      },
+      "response": {
+        "json": {
+          "choices": [
+            {
+              "message": {
+                "audio": {
+                  "data": "AQIDBA=="
+                }
+              }
+            }
+          ]
+        }
+      },
+      "requests": [
+        {
+          "url": "https://api.xiaomimimo.com/v1/chat/completions",
+          "init": {
+            "method": "POST",
+            "headers": {
+              "api-key": "fixture-xiaomi-speech",
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "model": "mimo-v2.5-tts",
+              "messages": [
+                {
+                  "role": "assistant",
+                  "content": "Synthetic source speech."
+                }
+              ],
+              "audio": {
+                "format": "mp3",
+                "voice": "mimo_default"
+              }
+            }
+          },
+          "timeoutMs": 21000,
+          "policy": {
+            "fixturePolicy": "xiaomi-source-url"
+          },
+          "auditContext": "xiaomi.tts"
+        }
+      ],
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname",
+          "url": "https://api.xiaomimimo.com/v1"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError",
+          "status": 200,
+          "label": "Xiaomi TTS API error"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderJsonResponse",
+          "status": 200,
+          "label": "Xiaomi TTS API"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release",
+          "requestIndex": 0
+        }
+      ],
+      "transcodes": []
+    },
+    {
+      "id": "ordinary-mp3-voice-note",
+      "input": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech"
+        },
+        "target": "voice-note",
+        "timeoutMs": 21001.75
+      },
+      "inputAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech"
+        },
+        "target": "voice-note",
+        "timeoutMs": 21001.75
+      },
+      "result": {
+        "audioBase64": "T1BVUw==",
+        "outputFormat": "opus",
+        "fileExtension": ".opus",
+        "voiceCompatible": true
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "synthesisRequest": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech"
+        },
+        "target": "voice-note",
+        "timeoutMs": 21001.75
+      },
+      "synthesisRequestAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech"
+        },
+        "target": "voice-note",
+        "timeoutMs": 21001.75
+      },
+      "response": {
+        "json": {
+          "choices": [
+            {
+              "message": {
+                "audio": {
+                  "data": "BQYHCA"
+                }
+              }
+            }
+          ]
+        },
+        "transcodeAudioBase64": "T1BVUw=="
+      },
+      "requests": [
+        {
+          "url": "https://api.xiaomimimo.com/v1/chat/completions",
+          "init": {
+            "method": "POST",
+            "headers": {
+              "api-key": "fixture-xiaomi-speech",
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "model": "mimo-v2.5-tts",
+              "messages": [
+                {
+                  "role": "assistant",
+                  "content": "Synthetic source speech."
+                }
+              ],
+              "audio": {
+                "format": "mp3",
+                "voice": "mimo_default"
+              }
+            }
+          },
+          "timeoutMs": 21001,
+          "policy": {
+            "fixturePolicy": "xiaomi-source-url"
+          },
+          "auditContext": "xiaomi.tts"
+        }
+      ],
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname",
+          "url": "https://api.xiaomimimo.com/v1"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError",
+          "status": 200,
+          "label": "Xiaomi TTS API error"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderJsonResponse",
+          "status": 200,
+          "label": "Xiaomi TTS API"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/media-runtime",
+          "export": "transcodeAudioBufferToOpus",
+          "audioBase64": "BQYHCA==",
+          "audioHex": "05060708",
+          "byteLength": 4,
+          "inputExtension": "mp3",
+          "tempPrefix": "tts-xiaomi-",
+          "timeoutMs": 21001.75,
+          "outputAudioBase64": "T1BVUw==",
+          "outputAudioHex": "4f505553",
+          "outputByteLength": 4
+        }
+      ],
+      "transcodes": [
+        {
+          "audioBase64": "BQYHCA==",
+          "audioHex": "05060708",
+          "byteLength": 4,
+          "inputExtension": "mp3",
+          "tempPrefix": "tts-xiaomi-",
+          "timeoutMs": 21001.75,
+          "outputAudioBase64": "T1BVUw==",
+          "outputAudioHex": "4f505553",
+          "outputByteLength": 4
+        }
+      ]
+    },
+    {
+      "id": "ordinary-wav-audio-file",
+      "input": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "format": " WAV ",
+          "voice": "default_zh"
+        },
+        "target": "audio-file",
+        "timeoutMs": 21002
+      },
+      "inputAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "format": " WAV ",
+          "voice": "default_zh"
+        },
+        "target": "audio-file",
+        "timeoutMs": 21002
+      },
+      "result": {
+        "audioBase64": "CQoLDA==",
+        "outputFormat": "wav",
+        "fileExtension": ".wav",
+        "voiceCompatible": false
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "synthesisRequest": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "format": " WAV ",
+          "voice": "default_zh"
+        },
+        "target": "audio-file",
+        "timeoutMs": 21002
+      },
+      "synthesisRequestAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "format": " WAV ",
+          "voice": "default_zh"
+        },
+        "target": "audio-file",
+        "timeoutMs": 21002
+      },
+      "response": {
+        "json": {
+          "choices": [
+            {
+              "message": {
+                "audio": {
+                  "data": " CQ\toL\n DA==\r "
+                }
+              }
+            }
+          ]
+        }
+      },
+      "requests": [
+        {
+          "url": "https://api.xiaomimimo.com/v1/chat/completions",
+          "init": {
+            "method": "POST",
+            "headers": {
+              "api-key": "fixture-xiaomi-speech",
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "model": "mimo-v2.5-tts",
+              "messages": [
+                {
+                  "role": "assistant",
+                  "content": "Synthetic source speech."
+                }
+              ],
+              "audio": {
+                "format": "wav",
+                "voice": "default_zh"
+              }
+            }
+          },
+          "timeoutMs": 21002,
+          "policy": {
+            "fixturePolicy": "xiaomi-source-url"
+          },
+          "auditContext": "xiaomi.tts"
+        }
+      ],
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname",
+          "url": "https://api.xiaomimimo.com/v1"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError",
+          "status": 200,
+          "label": "Xiaomi TTS API error"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderJsonResponse",
+          "status": 200,
+          "label": "Xiaomi TTS API"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release",
+          "requestIndex": 0
+        }
+      ],
+      "transcodes": []
+    },
+    {
+      "id": "ordinary-wav-voice-note",
+      "input": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "format": "wav",
+          "voice": "default_en"
+        },
+        "target": "voice-note",
+        "timeoutMs": 21003.5
+      },
+      "inputAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "format": "wav",
+          "voice": "default_en"
+        },
+        "target": "voice-note",
+        "timeoutMs": 21003.5
+      },
+      "result": {
+        "audioBase64": "T1BVUw==",
+        "outputFormat": "opus",
+        "fileExtension": ".opus",
+        "voiceCompatible": true
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "synthesisRequest": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "format": "wav",
+          "voice": "default_en"
+        },
+        "target": "voice-note",
+        "timeoutMs": 21003.5
+      },
+      "synthesisRequestAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "format": "wav",
+          "voice": "default_en"
+        },
+        "target": "voice-note",
+        "timeoutMs": 21003.5
+      },
+      "response": {
+        "json": {
+          "choices": [
+            {
+              "message": {
+                "audio": {
+                  "data": "AQIDBA=="
+                }
+              }
+            }
+          ]
+        },
+        "transcodeAudioBase64": "T1BVUw=="
+      },
+      "requests": [
+        {
+          "url": "https://api.xiaomimimo.com/v1/chat/completions",
+          "init": {
+            "method": "POST",
+            "headers": {
+              "api-key": "fixture-xiaomi-speech",
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "model": "mimo-v2.5-tts",
+              "messages": [
+                {
+                  "role": "assistant",
+                  "content": "Synthetic source speech."
+                }
+              ],
+              "audio": {
+                "format": "wav",
+                "voice": "default_en"
+              }
+            }
+          },
+          "timeoutMs": 21003,
+          "policy": {
+            "fixturePolicy": "xiaomi-source-url"
+          },
+          "auditContext": "xiaomi.tts"
+        }
+      ],
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname",
+          "url": "https://api.xiaomimimo.com/v1"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError",
+          "status": 200,
+          "label": "Xiaomi TTS API error"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderJsonResponse",
+          "status": 200,
+          "label": "Xiaomi TTS API"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/media-runtime",
+          "export": "transcodeAudioBufferToOpus",
+          "audioBase64": "AQIDBA==",
+          "audioHex": "01020304",
+          "byteLength": 4,
+          "inputExtension": "wav",
+          "tempPrefix": "tts-xiaomi-",
+          "timeoutMs": 21003.5,
+          "outputAudioBase64": "T1BVUw==",
+          "outputAudioHex": "4f505553",
+          "outputByteLength": 4
+        }
+      ],
+      "transcodes": [
+        {
+          "audioBase64": "AQIDBA==",
+          "audioHex": "01020304",
+          "byteLength": 4,
+          "inputExtension": "wav",
+          "tempPrefix": "tts-xiaomi-",
+          "timeoutMs": 21003.5,
+          "outputAudioBase64": "T1BVUw==",
+          "outputAudioHex": "4f505553",
+          "outputByteLength": 4
+        }
+      ]
+    },
+    {
+      "id": "design-mp3-audio-file",
+      "input": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "voice": "Mia"
+        },
+        "target": "audio-file",
+        "timeoutMs": 21004
+      },
+      "inputAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "voice": "Mia"
+        },
+        "target": "audio-file",
+        "timeoutMs": 21004
+      },
+      "result": {
+        "audioBase64": "AQIDBA==",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "synthesisRequest": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "voice": "Mia"
+        },
+        "target": "audio-file",
+        "timeoutMs": 21004
+      },
+      "synthesisRequestAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "voice": "Mia"
+        },
+        "target": "audio-file",
+        "timeoutMs": 21004
+      },
+      "response": {
+        "json": {
+          "choices": [
+            {
+              "message": {
+                "audio": {
+                  "data": "AQIDBA=="
+                }
+              }
+            }
+          ]
+        }
+      },
+      "requests": [
+        {
+          "url": "https://api.xiaomimimo.com/v1/chat/completions",
+          "init": {
+            "method": "POST",
+            "headers": {
+              "api-key": "fixture-xiaomi-speech",
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "model": "mimo-v2.5-tts-voicedesign",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Warm, natural, and friendly voice with clear pronunciation and conversational pacing."
+                },
+                {
+                  "role": "assistant",
+                  "content": "Synthetic source speech."
+                }
+              ],
+              "audio": {
+                "format": "mp3"
+              }
+            }
+          },
+          "timeoutMs": 21004,
+          "policy": {
+            "fixturePolicy": "xiaomi-source-url"
+          },
+          "auditContext": "xiaomi.tts"
+        }
+      ],
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname",
+          "url": "https://api.xiaomimimo.com/v1"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError",
+          "status": 200,
+          "label": "Xiaomi TTS API error"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderJsonResponse",
+          "status": 200,
+          "label": "Xiaomi TTS API"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release",
+          "requestIndex": 0
+        }
+      ],
+      "transcodes": []
+    },
+    {
+      "id": "design-mp3-voice-note",
+      "input": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "speakerVoice": "Chloe"
+        },
+        "target": "voice-note",
+        "timeoutMs": 21005.25
+      },
+      "inputAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "speakerVoice": "Chloe"
+        },
+        "target": "voice-note",
+        "timeoutMs": 21005.25
+      },
+      "result": {
+        "audioBase64": "T1BVUw==",
+        "outputFormat": "opus",
+        "fileExtension": ".opus",
+        "voiceCompatible": true
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "synthesisRequest": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "speakerVoice": "Chloe"
+        },
+        "target": "voice-note",
+        "timeoutMs": 21005.25
+      },
+      "synthesisRequestAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "speakerVoice": "Chloe"
+        },
+        "target": "voice-note",
+        "timeoutMs": 21005.25
+      },
+      "response": {
+        "json": {
+          "choices": [
+            {
+              "message": {
+                "audio": {
+                  "data": "BQYHCA"
+                }
+              }
+            }
+          ]
+        },
+        "transcodeAudioBase64": "T1BVUw=="
+      },
+      "requests": [
+        {
+          "url": "https://api.xiaomimimo.com/v1/chat/completions",
+          "init": {
+            "method": "POST",
+            "headers": {
+              "api-key": "fixture-xiaomi-speech",
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "model": "mimo-v2.5-tts-voicedesign",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Warm, natural, and friendly voice with clear pronunciation and conversational pacing."
+                },
+                {
+                  "role": "assistant",
+                  "content": "Synthetic source speech."
+                }
+              ],
+              "audio": {
+                "format": "mp3"
+              }
+            }
+          },
+          "timeoutMs": 21005,
+          "policy": {
+            "fixturePolicy": "xiaomi-source-url"
+          },
+          "auditContext": "xiaomi.tts"
+        }
+      ],
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname",
+          "url": "https://api.xiaomimimo.com/v1"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError",
+          "status": 200,
+          "label": "Xiaomi TTS API error"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderJsonResponse",
+          "status": 200,
+          "label": "Xiaomi TTS API"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/media-runtime",
+          "export": "transcodeAudioBufferToOpus",
+          "audioBase64": "BQYHCA==",
+          "audioHex": "05060708",
+          "byteLength": 4,
+          "inputExtension": "mp3",
+          "tempPrefix": "tts-xiaomi-",
+          "timeoutMs": 21005.25,
+          "outputAudioBase64": "T1BVUw==",
+          "outputAudioHex": "4f505553",
+          "outputByteLength": 4
+        }
+      ],
+      "transcodes": [
+        {
+          "audioBase64": "BQYHCA==",
+          "audioHex": "05060708",
+          "byteLength": 4,
+          "inputExtension": "mp3",
+          "tempPrefix": "tts-xiaomi-",
+          "timeoutMs": 21005.25,
+          "outputAudioBase64": "T1BVUw==",
+          "outputAudioHex": "4f505553",
+          "outputByteLength": 4
+        }
+      ]
+    },
+    {
+      "id": "design-wav-audio-file",
+      "input": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "format": "wav",
+          "voiceId": "Milo"
+        },
+        "target": "audio-file",
+        "timeoutMs": 21006
+      },
+      "inputAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "format": "wav",
+          "voiceId": "Milo"
+        },
+        "target": "audio-file",
+        "timeoutMs": 21006
+      },
+      "result": {
+        "audioBase64": "AQIDBA==",
+        "outputFormat": "wav",
+        "fileExtension": ".wav",
+        "voiceCompatible": false
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "synthesisRequest": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "format": "wav",
+          "voiceId": "Milo"
+        },
+        "target": "audio-file",
+        "timeoutMs": 21006
+      },
+      "synthesisRequestAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "format": "wav",
+          "voiceId": "Milo"
+        },
+        "target": "audio-file",
+        "timeoutMs": 21006
+      },
+      "response": {
+        "json": {
+          "choices": [
+            {
+              "message": {
+                "audio": {
+                  "data": "AQIDBA=="
+                }
+              }
+            }
+          ]
+        }
+      },
+      "requests": [
+        {
+          "url": "https://api.xiaomimimo.com/v1/chat/completions",
+          "init": {
+            "method": "POST",
+            "headers": {
+              "api-key": "fixture-xiaomi-speech",
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "model": "mimo-v2.5-tts-voicedesign",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Warm, natural, and friendly voice with clear pronunciation and conversational pacing."
+                },
+                {
+                  "role": "assistant",
+                  "content": "Synthetic source speech."
+                }
+              ],
+              "audio": {
+                "format": "wav"
+              }
+            }
+          },
+          "timeoutMs": 21006,
+          "policy": {
+            "fixturePolicy": "xiaomi-source-url"
+          },
+          "auditContext": "xiaomi.tts"
+        }
+      ],
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname",
+          "url": "https://api.xiaomimimo.com/v1"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError",
+          "status": 200,
+          "label": "Xiaomi TTS API error"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderJsonResponse",
+          "status": 200,
+          "label": "Xiaomi TTS API"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release",
+          "requestIndex": 0
+        }
+      ],
+      "transcodes": []
+    },
+    {
+      "id": "design-wav-voice-note",
+      "input": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "format": " WaV ",
+          "speakerVoiceId": "Dean"
+        },
+        "target": "voice-note",
+        "timeoutMs": 21007.875
+      },
+      "inputAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "format": " WaV ",
+          "speakerVoiceId": "Dean"
+        },
+        "target": "voice-note",
+        "timeoutMs": 21007.875
+      },
+      "result": {
+        "audioBase64": "T1BVUw==",
+        "outputFormat": "opus",
+        "fileExtension": ".opus",
+        "voiceCompatible": true
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "synthesisRequest": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "format": " WaV ",
+          "speakerVoiceId": "Dean"
+        },
+        "target": "voice-note",
+        "timeoutMs": 21007.875
+      },
+      "synthesisRequestAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "format": " WaV ",
+          "speakerVoiceId": "Dean"
+        },
+        "target": "voice-note",
+        "timeoutMs": 21007.875
+      },
+      "response": {
+        "json": {
+          "choices": [
+            {
+              "message": {
+                "audio": {
+                  "data": " CQ\toL\n DA==\r "
+                }
+              }
+            }
+          ]
+        },
+        "transcodeAudioBase64": "T1BVUw=="
+      },
+      "requests": [
+        {
+          "url": "https://api.xiaomimimo.com/v1/chat/completions",
+          "init": {
+            "method": "POST",
+            "headers": {
+              "api-key": "fixture-xiaomi-speech",
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "model": "mimo-v2.5-tts-voicedesign",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Warm, natural, and friendly voice with clear pronunciation and conversational pacing."
+                },
+                {
+                  "role": "assistant",
+                  "content": "Synthetic source speech."
+                }
+              ],
+              "audio": {
+                "format": "wav"
+              }
+            }
+          },
+          "timeoutMs": 21007,
+          "policy": {
+            "fixturePolicy": "xiaomi-source-url"
+          },
+          "auditContext": "xiaomi.tts"
+        }
+      ],
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname",
+          "url": "https://api.xiaomimimo.com/v1"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError",
+          "status": 200,
+          "label": "Xiaomi TTS API error"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderJsonResponse",
+          "status": 200,
+          "label": "Xiaomi TTS API"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/media-runtime",
+          "export": "transcodeAudioBufferToOpus",
+          "audioBase64": "CQoLDA==",
+          "audioHex": "090a0b0c",
+          "byteLength": 4,
+          "inputExtension": "wav",
+          "tempPrefix": "tts-xiaomi-",
+          "timeoutMs": 21007.875,
+          "outputAudioBase64": "T1BVUw==",
+          "outputAudioHex": "4f505553",
+          "outputByteLength": 4
+        }
+      ],
+      "transcodes": [
+        {
+          "audioBase64": "CQoLDA==",
+          "audioHex": "090a0b0c",
+          "byteLength": 4,
+          "inputExtension": "wav",
+          "tempPrefix": "tts-xiaomi-",
+          "timeoutMs": 21007.875,
+          "outputAudioBase64": "T1BVUw==",
+          "outputAudioHex": "4f505553",
+          "outputByteLength": 4
+        }
+      ]
+    },
+    {
+      "id": "override-speakerVoice",
+      "input": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "voice": "default_en"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "speakerVoice": " Mia "
+        }
+      },
+      "inputAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "voice": "default_en"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "speakerVoice": " Mia "
+        }
+      },
+      "result": {
+        "audioBase64": "AQIDBA==",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "synthesisRequest": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "voice": "default_en"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "speakerVoice": " Mia "
+        }
+      },
+      "synthesisRequestAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "voice": "default_en"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "speakerVoice": " Mia "
+        }
+      },
+      "response": {
+        "json": {
+          "choices": [
+            {
+              "message": {
+                "audio": {
+                  "data": "AQIDBA=="
+                }
+              }
+            }
+          ]
+        }
+      },
+      "requests": [
+        {
+          "url": "https://api.xiaomimimo.com/v1/chat/completions",
+          "init": {
+            "method": "POST",
+            "headers": {
+              "api-key": "fixture-xiaomi-speech",
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "model": "mimo-v2.5-tts",
+              "messages": [
+                {
+                  "role": "assistant",
+                  "content": "Synthetic source speech."
+                }
+              ],
+              "audio": {
+                "format": "mp3",
+                "voice": "Mia"
+              }
+            }
+          },
+          "timeoutMs": 30000,
+          "policy": {
+            "fixturePolicy": "xiaomi-source-url"
+          },
+          "auditContext": "xiaomi.tts"
+        }
+      ],
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname",
+          "url": "https://api.xiaomimimo.com/v1"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError",
+          "status": 200,
+          "label": "Xiaomi TTS API error"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderJsonResponse",
+          "status": 200,
+          "label": "Xiaomi TTS API"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release",
+          "requestIndex": 0
+        }
+      ],
+      "transcodes": []
+    },
+    {
+      "id": "override-speakerVoiceId-before-voice",
+      "input": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "speakerVoice": "mimo_default"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "speakerVoiceId": " Chloe ",
+          "voice": "Milo",
+          "voiceId": "Dean"
+        }
+      },
+      "inputAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "speakerVoice": "mimo_default"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "speakerVoiceId": " Chloe ",
+          "voice": "Milo",
+          "voiceId": "Dean"
+        }
+      },
+      "result": {
+        "audioBase64": "AQIDBA==",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "synthesisRequest": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "speakerVoice": "mimo_default"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "speakerVoiceId": " Chloe ",
+          "voice": "Milo",
+          "voiceId": "Dean"
+        }
+      },
+      "synthesisRequestAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "speakerVoice": "mimo_default"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "speakerVoiceId": " Chloe ",
+          "voice": "Milo",
+          "voiceId": "Dean"
+        }
+      },
+      "response": {
+        "json": {
+          "choices": [
+            {
+              "message": {
+                "audio": {
+                  "data": "AQIDBA=="
+                }
+              }
+            }
+          ]
+        }
+      },
+      "requests": [
+        {
+          "url": "https://api.xiaomimimo.com/v1/chat/completions",
+          "init": {
+            "method": "POST",
+            "headers": {
+              "api-key": "fixture-xiaomi-speech",
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "model": "mimo-v2.5-tts",
+              "messages": [
+                {
+                  "role": "assistant",
+                  "content": "Synthetic source speech."
+                }
+              ],
+              "audio": {
+                "format": "mp3",
+                "voice": "Chloe"
+              }
+            }
+          },
+          "timeoutMs": 30000,
+          "policy": {
+            "fixturePolicy": "xiaomi-source-url"
+          },
+          "auditContext": "xiaomi.tts"
+        }
+      ],
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname",
+          "url": "https://api.xiaomimimo.com/v1"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError",
+          "status": 200,
+          "label": "Xiaomi TTS API error"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderJsonResponse",
+          "status": 200,
+          "label": "Xiaomi TTS API"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release",
+          "requestIndex": 0
+        }
+      ],
+      "transcodes": []
+    },
+    {
+      "id": "override-voice-before-voiceId",
+      "input": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "speakerVoiceId": "default_zh"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "voice": " Milo ",
+          "voiceId": "Dean"
+        }
+      },
+      "inputAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "speakerVoiceId": "default_zh"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "voice": " Milo ",
+          "voiceId": "Dean"
+        }
+      },
+      "result": {
+        "audioBase64": "AQIDBA==",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "synthesisRequest": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "speakerVoiceId": "default_zh"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "voice": " Milo ",
+          "voiceId": "Dean"
+        }
+      },
+      "synthesisRequestAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "speakerVoiceId": "default_zh"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "voice": " Milo ",
+          "voiceId": "Dean"
+        }
+      },
+      "response": {
+        "json": {
+          "choices": [
+            {
+              "message": {
+                "audio": {
+                  "data": "AQIDBA=="
+                }
+              }
+            }
+          ]
+        }
+      },
+      "requests": [
+        {
+          "url": "https://api.xiaomimimo.com/v1/chat/completions",
+          "init": {
+            "method": "POST",
+            "headers": {
+              "api-key": "fixture-xiaomi-speech",
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "model": "mimo-v2.5-tts",
+              "messages": [
+                {
+                  "role": "assistant",
+                  "content": "Synthetic source speech."
+                }
+              ],
+              "audio": {
+                "format": "mp3",
+                "voice": "Milo"
+              }
+            }
+          },
+          "timeoutMs": 30000,
+          "policy": {
+            "fixturePolicy": "xiaomi-source-url"
+          },
+          "auditContext": "xiaomi.tts"
+        }
+      ],
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname",
+          "url": "https://api.xiaomimimo.com/v1"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError",
+          "status": 200,
+          "label": "Xiaomi TTS API error"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderJsonResponse",
+          "status": 200,
+          "label": "Xiaomi TTS API"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release",
+          "requestIndex": 0
+        }
+      ],
+      "transcodes": []
+    },
+    {
+      "id": "override-voiceId",
+      "input": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "voice": "Mia"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "voiceId": " Dean "
+        }
+      },
+      "inputAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "voice": "Mia"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "voiceId": " Dean "
+        }
+      },
+      "result": {
+        "audioBase64": "AQIDBA==",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "synthesisRequest": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "voice": "Mia"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "voiceId": " Dean "
+        }
+      },
+      "synthesisRequestAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "voice": "Mia"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "voiceId": " Dean "
+        }
+      },
+      "response": {
+        "json": {
+          "choices": [
+            {
+              "message": {
+                "audio": {
+                  "data": "AQIDBA=="
+                }
+              }
+            }
+          ]
+        }
+      },
+      "requests": [
+        {
+          "url": "https://api.xiaomimimo.com/v1/chat/completions",
+          "init": {
+            "method": "POST",
+            "headers": {
+              "api-key": "fixture-xiaomi-speech",
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "model": "mimo-v2.5-tts",
+              "messages": [
+                {
+                  "role": "assistant",
+                  "content": "Synthetic source speech."
+                }
+              ],
+              "audio": {
+                "format": "mp3",
+                "voice": "Dean"
+              }
+            }
+          },
+          "timeoutMs": 30000,
+          "policy": {
+            "fixturePolicy": "xiaomi-source-url"
+          },
+          "auditContext": "xiaomi.tts"
+        }
+      ],
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname",
+          "url": "https://api.xiaomimimo.com/v1"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError",
+          "status": 200,
+          "label": "Xiaomi TTS API error"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderJsonResponse",
+          "status": 200,
+          "label": "Xiaomi TTS API"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release",
+          "requestIndex": 0
+        }
+      ],
+      "transcodes": []
+    },
+    {
+      "id": "override-model-and-all-voice-alias-precedence",
+      "input": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "config-model",
+          "voice": "config-voice",
+          "format": "wav"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "model": " override-model ",
+          "modelId": "ignored-model",
+          "speakerVoice": " default_en ",
+          "speakerVoiceId": "Mia",
+          "voice": "Chloe",
+          "voiceId": "Milo",
+          "format": " MP3 "
+        }
+      },
+      "inputAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "config-model",
+          "voice": "config-voice",
+          "format": "wav"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "model": " override-model ",
+          "modelId": "ignored-model",
+          "speakerVoice": " default_en ",
+          "speakerVoiceId": "Mia",
+          "voice": "Chloe",
+          "voiceId": "Milo",
+          "format": " MP3 "
+        }
+      },
+      "result": {
+        "audioBase64": "AQIDBA==",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "synthesisRequest": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "config-model",
+          "voice": "config-voice",
+          "format": "wav"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "model": " override-model ",
+          "modelId": "ignored-model",
+          "speakerVoice": " default_en ",
+          "speakerVoiceId": "Mia",
+          "voice": "Chloe",
+          "voiceId": "Milo",
+          "format": " MP3 "
+        }
+      },
+      "synthesisRequestAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "config-model",
+          "voice": "config-voice",
+          "format": "wav"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "model": " override-model ",
+          "modelId": "ignored-model",
+          "speakerVoice": " default_en ",
+          "speakerVoiceId": "Mia",
+          "voice": "Chloe",
+          "voiceId": "Milo",
+          "format": " MP3 "
+        }
+      },
+      "response": {
+        "json": {
+          "choices": [
+            {
+              "message": {
+                "audio": {
+                  "data": "AQIDBA=="
+                }
+              }
+            }
+          ]
+        }
+      },
+      "requests": [
+        {
+          "url": "https://api.xiaomimimo.com/v1/chat/completions",
+          "init": {
+            "method": "POST",
+            "headers": {
+              "api-key": "fixture-xiaomi-speech",
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "model": "override-model",
+              "messages": [
+                {
+                  "role": "assistant",
+                  "content": "Synthetic source speech."
+                }
+              ],
+              "audio": {
+                "format": "mp3",
+                "voice": "default_en"
+              }
+            }
+          },
+          "timeoutMs": 30000,
+          "policy": {
+            "fixturePolicy": "xiaomi-source-url"
+          },
+          "auditContext": "xiaomi.tts"
+        }
+      ],
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname",
+          "url": "https://api.xiaomimimo.com/v1"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError",
+          "status": 200,
+          "label": "Xiaomi TTS API error"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderJsonResponse",
+          "status": 200,
+          "label": "Xiaomi TTS API"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release",
+          "requestIndex": 0
+        }
+      ],
+      "transcodes": []
+    },
+    {
+      "id": "override-modelId",
+      "input": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "config-model"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "modelId": " custom-override-model "
+        }
+      },
+      "inputAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "config-model"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "modelId": " custom-override-model "
+        }
+      },
+      "result": {
+        "audioBase64": "AQIDBA==",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "synthesisRequest": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "config-model"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "modelId": " custom-override-model "
+        }
+      },
+      "synthesisRequestAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "config-model"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "modelId": " custom-override-model "
+        }
+      },
+      "response": {
+        "json": {
+          "choices": [
+            {
+              "message": {
+                "audio": {
+                  "data": "AQIDBA=="
+                }
+              }
+            }
+          ]
+        }
+      },
+      "requests": [
+        {
+          "url": "https://api.xiaomimimo.com/v1/chat/completions",
+          "init": {
+            "method": "POST",
+            "headers": {
+              "api-key": "fixture-xiaomi-speech",
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "model": "custom-override-model",
+              "messages": [
+                {
+                  "role": "assistant",
+                  "content": "Synthetic source speech."
+                }
+              ],
+              "audio": {
+                "format": "mp3",
+                "voice": "mimo_default"
+              }
+            }
+          },
+          "timeoutMs": 30000,
+          "policy": {
+            "fixturePolicy": "xiaomi-source-url"
+          },
+          "auditContext": "xiaomi.tts"
+        }
+      ],
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname",
+          "url": "https://api.xiaomimimo.com/v1"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError",
+          "status": 200,
+          "label": "Xiaomi TTS API error"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderJsonResponse",
+          "status": 200,
+          "label": "Xiaomi TTS API"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release",
+          "requestIndex": 0
+        }
+      ],
+      "transcodes": []
+    },
+    {
+      "id": "override-into-voice-design",
+      "input": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "voice": "Mia",
+          "format": "mp3"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "modelId": " mimo-v2.5-tts-voicedesign ",
+          "voiceId": "Dean",
+          "format": " WAV "
+        }
+      },
+      "inputAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "voice": "Mia",
+          "format": "mp3"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "modelId": " mimo-v2.5-tts-voicedesign ",
+          "voiceId": "Dean",
+          "format": " WAV "
+        }
+      },
+      "result": {
+        "audioBase64": "AQIDBA==",
+        "outputFormat": "wav",
+        "fileExtension": ".wav",
+        "voiceCompatible": false
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "synthesisRequest": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "voice": "Mia",
+          "format": "mp3"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "modelId": " mimo-v2.5-tts-voicedesign ",
+          "voiceId": "Dean",
+          "format": " WAV "
+        }
+      },
+      "synthesisRequestAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "voice": "Mia",
+          "format": "mp3"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "modelId": " mimo-v2.5-tts-voicedesign ",
+          "voiceId": "Dean",
+          "format": " WAV "
+        }
+      },
+      "response": {
+        "json": {
+          "choices": [
+            {
+              "message": {
+                "audio": {
+                  "data": "AQIDBA=="
+                }
+              }
+            }
+          ]
+        }
+      },
+      "requests": [
+        {
+          "url": "https://api.xiaomimimo.com/v1/chat/completions",
+          "init": {
+            "method": "POST",
+            "headers": {
+              "api-key": "fixture-xiaomi-speech",
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "model": "mimo-v2.5-tts-voicedesign",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Warm, natural, and friendly voice with clear pronunciation and conversational pacing."
+                },
+                {
+                  "role": "assistant",
+                  "content": "Synthetic source speech."
+                }
+              ],
+              "audio": {
+                "format": "wav"
+              }
+            }
+          },
+          "timeoutMs": 30000,
+          "policy": {
+            "fixturePolicy": "xiaomi-source-url"
+          },
+          "auditContext": "xiaomi.tts"
+        }
+      ],
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname",
+          "url": "https://api.xiaomimimo.com/v1"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError",
+          "status": 200,
+          "label": "Xiaomi TTS API error"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderJsonResponse",
+          "status": 200,
+          "label": "Xiaomi TTS API"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release",
+          "requestIndex": 0
+        }
+      ],
+      "transcodes": []
+    },
+    {
+      "id": "override-out-of-voice-design",
+      "input": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "voice": "default_zh",
+          "format": "wav"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "model": " mimo-v2.5-tts ",
+          "speakerVoice": " default_en ",
+          "format": " MP3 "
+        }
+      },
+      "inputAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "voice": "default_zh",
+          "format": "wav"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "model": " mimo-v2.5-tts ",
+          "speakerVoice": " default_en ",
+          "format": " MP3 "
+        }
+      },
+      "result": {
+        "audioBase64": "AQIDBA==",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "synthesisRequest": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "voice": "default_zh",
+          "format": "wav"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "model": " mimo-v2.5-tts ",
+          "speakerVoice": " default_en ",
+          "format": " MP3 "
+        }
+      },
+      "synthesisRequestAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "voice": "default_zh",
+          "format": "wav"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "model": " mimo-v2.5-tts ",
+          "speakerVoice": " default_en ",
+          "format": " MP3 "
+        }
+      },
+      "response": {
+        "json": {
+          "choices": [
+            {
+              "message": {
+                "audio": {
+                  "data": "AQIDBA=="
+                }
+              }
+            }
+          ]
+        }
+      },
+      "requests": [
+        {
+          "url": "https://api.xiaomimimo.com/v1/chat/completions",
+          "init": {
+            "method": "POST",
+            "headers": {
+              "api-key": "fixture-xiaomi-speech",
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "model": "mimo-v2.5-tts",
+              "messages": [
+                {
+                  "role": "assistant",
+                  "content": "Synthetic source speech."
+                }
+              ],
+              "audio": {
+                "format": "mp3",
+                "voice": "default_en"
+              }
+            }
+          },
+          "timeoutMs": 30000,
+          "policy": {
+            "fixturePolicy": "xiaomi-source-url"
+          },
+          "auditContext": "xiaomi.tts"
+        }
+      ],
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname",
+          "url": "https://api.xiaomimimo.com/v1"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError",
+          "status": 200,
+          "label": "Xiaomi TTS API error"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderJsonResponse",
+          "status": 200,
+          "label": "Xiaomi TTS API"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release",
+          "requestIndex": 0
+        }
+      ],
+      "transcodes": []
+    },
+    {
+      "id": "custom-prefix-model-voice-style-exact-text-first-choice",
+      "input": {
+        "text": "  你好，MiMo 👋\n\"quoted\" <xml> & café\r\n尾行  ",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "baseUrl": " https://Custom.Example/tenant/v8/// ",
+          "model": " custom-source-model ",
+          "voice": " My Custom Voice ",
+          "format": " WAV ",
+          "style": "  Soft & clear <read>\n亲切﻿ "
+        },
+        "target": "voice-note",
+        "timeoutMs": 34567.625
+      },
+      "inputAfter": {
+        "text": "  你好，MiMo 👋\n\"quoted\" <xml> & café\r\n尾行  ",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "baseUrl": " https://Custom.Example/tenant/v8/// ",
+          "model": " custom-source-model ",
+          "voice": " My Custom Voice ",
+          "format": " WAV ",
+          "style": "  Soft & clear <read>\n亲切﻿ "
+        },
+        "target": "voice-note",
+        "timeoutMs": 34567.625
+      },
+      "result": {
+        "audioBase64": "U1lOVEg=",
+        "outputFormat": "opus",
+        "fileExtension": ".opus",
+        "voiceCompatible": true
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "synthesisRequest": {
+        "text": "  你好，MiMo 👋\n\"quoted\" <xml> & café\r\n尾行  ",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "baseUrl": " https://Custom.Example/tenant/v8/// ",
+          "model": " custom-source-model ",
+          "voice": " My Custom Voice ",
+          "format": " WAV ",
+          "style": "  Soft & clear <read>\n亲切﻿ "
+        },
+        "target": "voice-note",
+        "timeoutMs": 34567.625
+      },
+      "synthesisRequestAfter": {
+        "text": "  你好，MiMo 👋\n\"quoted\" <xml> & café\r\n尾行  ",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "baseUrl": " https://Custom.Example/tenant/v8/// ",
+          "model": " custom-source-model ",
+          "voice": " My Custom Voice ",
+          "format": " WAV ",
+          "style": "  Soft & clear <read>\n亲切﻿ "
+        },
+        "target": "voice-note",
+        "timeoutMs": 34567.625
+      },
+      "response": {
+        "json": {
+          "choices": [
+            {
+              "message": {
+                "audio": {
+                  "data": " CQ\toL\n DA==\r "
+                },
+                "content": "ignored transcript"
+              }
+            },
+            {
+              "message": {
+                "audio": {
+                  "data": "EBESEw=="
+                }
+              }
+            }
+          ],
+          "usage": {
+            "total_tokens": 23
+          }
+        },
+        "transcodeAudioBase64": "U1lOVEg="
+      },
+      "requests": [
+        {
+          "url": "https://Custom.Example/tenant/v8/chat/completions",
+          "init": {
+            "method": "POST",
+            "headers": {
+              "api-key": "fixture-xiaomi-speech",
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "model": "custom-source-model",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Soft & clear <read>\n亲切"
+                },
+                {
+                  "role": "assistant",
+                  "content": "  你好，MiMo 👋\n\"quoted\" <xml> & café\r\n尾行  "
+                }
+              ],
+              "audio": {
+                "format": "wav",
+                "voice": "My Custom Voice"
+              }
+            }
+          },
+          "timeoutMs": 34567,
+          "policy": {
+            "fixturePolicy": "xiaomi-source-url"
+          },
+          "auditContext": "xiaomi.tts"
+        }
+      ],
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname",
+          "url": "https://Custom.Example/tenant/v8"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError",
+          "status": 200,
+          "label": "Xiaomi TTS API error"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderJsonResponse",
+          "status": 200,
+          "label": "Xiaomi TTS API"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/media-runtime",
+          "export": "transcodeAudioBufferToOpus",
+          "audioBase64": "CQoLDA==",
+          "audioHex": "090a0b0c",
+          "byteLength": 4,
+          "inputExtension": "wav",
+          "tempPrefix": "tts-xiaomi-",
+          "timeoutMs": 34567.625,
+          "outputAudioBase64": "U1lOVEg=",
+          "outputAudioHex": "53594e5448",
+          "outputByteLength": 5
+        }
+      ],
+      "transcodes": [
+        {
+          "audioBase64": "CQoLDA==",
+          "audioHex": "090a0b0c",
+          "byteLength": 4,
+          "inputExtension": "wav",
+          "tempPrefix": "tts-xiaomi-",
+          "timeoutMs": 34567.625,
+          "outputAudioBase64": "U1lOVEg=",
+          "outputAudioHex": "53594e5448",
+          "outputByteLength": 5
+        }
+      ]
+    },
+    {
+      "id": "ordinary-config-style",
+      "input": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "style": " Calm, measured narration. "
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000
+      },
+      "inputAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "style": " Calm, measured narration. "
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000
+      },
+      "result": {
+        "audioBase64": "AQIDBA==",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "synthesisRequest": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "style": " Calm, measured narration. "
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000
+      },
+      "synthesisRequestAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "style": " Calm, measured narration. "
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000
+      },
+      "response": {
+        "json": {
+          "choices": [
+            {
+              "message": {
+                "audio": {
+                  "data": "AQIDBA=="
+                }
+              }
+            }
+          ]
+        }
+      },
+      "requests": [
+        {
+          "url": "https://api.xiaomimimo.com/v1/chat/completions",
+          "init": {
+            "method": "POST",
+            "headers": {
+              "api-key": "fixture-xiaomi-speech",
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "model": "mimo-v2.5-tts",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Calm, measured narration."
+                },
+                {
+                  "role": "assistant",
+                  "content": "Synthetic source speech."
+                }
+              ],
+              "audio": {
+                "format": "mp3",
+                "voice": "mimo_default"
+              }
+            }
+          },
+          "timeoutMs": 30000,
+          "policy": {
+            "fixturePolicy": "xiaomi-source-url"
+          },
+          "auditContext": "xiaomi.tts"
+        }
+      ],
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname",
+          "url": "https://api.xiaomimimo.com/v1"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError",
+          "status": 200,
+          "label": "Xiaomi TTS API error"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderJsonResponse",
+          "status": 200,
+          "label": "Xiaomi TTS API"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release",
+          "requestIndex": 0
+        }
+      ],
+      "transcodes": []
+    },
+    {
+      "id": "ordinary-override-style",
+      "input": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "style": "Configured style",
+          "format": "mp3"
+        },
+        "target": "audio-file",
+        "timeoutMs": 32123.75,
+        "providerOverrides": {
+          "style": " Bright\nprecise style. ",
+          "format": " WAV "
+        }
+      },
+      "inputAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "style": "Configured style",
+          "format": "mp3"
+        },
+        "target": "audio-file",
+        "timeoutMs": 32123.75,
+        "providerOverrides": {
+          "style": " Bright\nprecise style. ",
+          "format": " WAV "
+        }
+      },
+      "result": {
+        "audioBase64": "AQIDBA==",
+        "outputFormat": "wav",
+        "fileExtension": ".wav",
+        "voiceCompatible": false
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "synthesisRequest": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "style": "Configured style",
+          "format": "mp3"
+        },
+        "target": "audio-file",
+        "timeoutMs": 32123.75,
+        "providerOverrides": {
+          "style": " Bright\nprecise style. ",
+          "format": " WAV "
+        }
+      },
+      "synthesisRequestAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "style": "Configured style",
+          "format": "mp3"
+        },
+        "target": "audio-file",
+        "timeoutMs": 32123.75,
+        "providerOverrides": {
+          "style": " Bright\nprecise style. ",
+          "format": " WAV "
+        }
+      },
+      "response": {
+        "json": {
+          "choices": [
+            {
+              "message": {
+                "audio": {
+                  "data": "AQIDBA=="
+                }
+              }
+            }
+          ]
+        }
+      },
+      "requests": [
+        {
+          "url": "https://api.xiaomimimo.com/v1/chat/completions",
+          "init": {
+            "method": "POST",
+            "headers": {
+              "api-key": "fixture-xiaomi-speech",
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "model": "mimo-v2.5-tts",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Bright\nprecise style."
+                },
+                {
+                  "role": "assistant",
+                  "content": "Synthetic source speech."
+                }
+              ],
+              "audio": {
+                "format": "wav",
+                "voice": "mimo_default"
+              }
+            }
+          },
+          "timeoutMs": 32123,
+          "policy": {
+            "fixturePolicy": "xiaomi-source-url"
+          },
+          "auditContext": "xiaomi.tts"
+        }
+      ],
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname",
+          "url": "https://api.xiaomimimo.com/v1"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError",
+          "status": 200,
+          "label": "Xiaomi TTS API error"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderJsonResponse",
+          "status": 200,
+          "label": "Xiaomi TTS API"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release",
+          "requestIndex": 0
+        }
+      ],
+      "transcodes": []
+    },
+    {
+      "id": "design-config-style",
+      "input": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "style": " Whispering, but clear. ",
+          "voice": "Dean"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000
+      },
+      "inputAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "style": " Whispering, but clear. ",
+          "voice": "Dean"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000
+      },
+      "result": {
+        "audioBase64": "AQIDBA==",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": false
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "synthesisRequest": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "style": " Whispering, but clear. ",
+          "voice": "Dean"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000
+      },
+      "synthesisRequestAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "style": " Whispering, but clear. ",
+          "voice": "Dean"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000
+      },
+      "response": {
+        "json": {
+          "choices": [
+            {
+              "message": {
+                "audio": {
+                  "data": "AQIDBA=="
+                }
+              }
+            }
+          ]
+        }
+      },
+      "requests": [
+        {
+          "url": "https://api.xiaomimimo.com/v1/chat/completions",
+          "init": {
+            "method": "POST",
+            "headers": {
+              "api-key": "fixture-xiaomi-speech",
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "model": "mimo-v2.5-tts-voicedesign",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Whispering, but clear."
+                },
+                {
+                  "role": "assistant",
+                  "content": "Synthetic source speech."
+                }
+              ],
+              "audio": {
+                "format": "mp3"
+              }
+            }
+          },
+          "timeoutMs": 30000,
+          "policy": {
+            "fixturePolicy": "xiaomi-source-url"
+          },
+          "auditContext": "xiaomi.tts"
+        }
+      ],
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname",
+          "url": "https://api.xiaomimimo.com/v1"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError",
+          "status": 200,
+          "label": "Xiaomi TTS API error"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderJsonResponse",
+          "status": 200,
+          "label": "Xiaomi TTS API"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release",
+          "requestIndex": 0
+        }
+      ],
+      "transcodes": []
+    },
+    {
+      "id": "design-override-style",
+      "input": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "style": "Configured design style",
+          "format": "wav"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "style": " A warm radio host. ",
+          "speakerVoiceId": "Chloe"
+        }
+      },
+      "inputAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "style": "Configured design style",
+          "format": "wav"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "style": " A warm radio host. ",
+          "speakerVoiceId": "Chloe"
+        }
+      },
+      "result": {
+        "audioBase64": "AQIDBA==",
+        "outputFormat": "wav",
+        "fileExtension": ".wav",
+        "voiceCompatible": false
+      },
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "synthesisRequest": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "style": "Configured design style",
+          "format": "wav"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "style": " A warm radio host. ",
+          "speakerVoiceId": "Chloe"
+        }
+      },
+      "synthesisRequestAfter": {
+        "text": "Synthetic source speech.",
+        "providerConfig": {
+          "apiKey": "fixture-xiaomi-speech",
+          "model": "mimo-v2.5-tts-voicedesign",
+          "style": "Configured design style",
+          "format": "wav"
+        },
+        "target": "audio-file",
+        "timeoutMs": 30000,
+        "providerOverrides": {
+          "style": " A warm radio host. ",
+          "speakerVoiceId": "Chloe"
+        }
+      },
+      "response": {
+        "json": {
+          "choices": [
+            {
+              "message": {
+                "audio": {
+                  "data": "AQIDBA=="
+                }
+              }
+            }
+          ]
+        }
+      },
+      "requests": [
+        {
+          "url": "https://api.xiaomimimo.com/v1/chat/completions",
+          "init": {
+            "method": "POST",
+            "headers": {
+              "api-key": "fixture-xiaomi-speech",
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "model": "mimo-v2.5-tts-voicedesign",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "A warm radio host."
+                },
+                {
+                  "role": "assistant",
+                  "content": "Synthetic source speech."
+                }
+              ],
+              "audio": {
+                "format": "wav"
+              }
+            }
+          },
+          "timeoutMs": 30000,
+          "policy": {
+            "fixturePolicy": "xiaomi-source-url"
+          },
+          "auditContext": "xiaomi.tts"
+        }
+      ],
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.xiaomi.apiKey",
+          "value": "fixture-xiaomi-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "ssrfPolicyFromHttpBaseUrlAllowedHostname",
+          "url": "https://api.xiaomimimo.com/v1"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "fetchWithSsrFGuard",
+          "requestIndex": 0
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "assertOkOrThrowProviderError",
+          "status": 200,
+          "label": "Xiaomi TTS API error"
+        },
+        {
+          "module": "openclaw/plugin-sdk/provider-http",
+          "export": "readProviderJsonResponse",
+          "status": 200,
+          "label": "Xiaomi TTS API"
+        },
+        {
+          "module": "openclaw/plugin-sdk/ssrf-runtime",
+          "export": "release",
+          "requestIndex": 0
+        }
+      ],
+      "transcodes": []
+    }
+  ],
+  "voiceObservations": [
+    {
+      "id": "voices-static-seven-ordered",
+      "input": {},
+      "inputAfter": {},
+      "result": [
+        {
+          "id": "mimo_default",
+          "name": "mimo_default"
+        },
+        {
+          "id": "default_zh",
+          "name": "default_zh"
+        },
+        {
+          "id": "default_en",
+          "name": "default_en"
+        },
+        {
+          "id": "Mia",
+          "name": "Mia"
+        },
+        {
+          "id": "Chloe",
+          "name": "Chloe"
+        },
+        {
+          "id": "Milo",
+          "name": "Milo"
+        },
+        {
+          "id": "Dean",
+          "name": "Dean"
+        }
+      ],
+      "providerMetadata": {
+        "id": "xiaomi",
+        "label": "Xiaomi MiMo",
+        "aliases": [
+          "mimo"
+        ],
+        "autoSelectOrder": 45,
+        "defaultModel": "mimo-v2.5-tts",
+        "models": [
+          "mimo-v2.5-tts",
+          "mimo-v2.5-tts-voicedesign"
+        ],
+        "voices": [
+          "mimo_default",
+          "default_zh",
+          "default_en",
+          "Mia",
+          "Chloe",
+          "Milo",
+          "Dean"
+        ]
+      },
+      "providerCallbacks": [
+        "resolveConfig",
+        "parseDirectiveToken",
+        "listVoices",
+        "isConfigured",
+        "isConfiguredAsync",
+        "synthesize"
+      ],
+      "requests": [],
+      "releaseCount": 0,
+      "platformCalls": [],
+      "transcodes": []
+    }
+  ],
+  "limits": [
+    "All 58558 pinned tracked blobs/modes are verified before and after; complete original executable modules match pinned Git bytes before TypeScript erasure only.",
+    "All nine whole modules evaluate: provider, TTS helpers, directive parser/number, string/record/number normalization, base64 and original blob-runtime. Whole-module evaluation is not all-branch execution.",
+    "Original factory, metadata, config, static listVoices and buffered synthesis execute ordinary successful recipes. Original directive parser construction executes; directive dispatch and isConfigured/isConfiguredAsync remain uninvoked.",
+    "Original field aliases, provider-object precedence, exact JSON request construction, voice-design/style decision, numeric HTTP timeout helper, successful response extraction and base64 canonicalizer execute.",
+    "Original first-nonblank explicit dummy-key helper and source api-key header execute as provenance, not authentication/credential/security qualification. Real secret resolution, guarded HTTP, status checks and JSON readers are named positive synthetic facades.",
+    "Synthetic Opus boundary records original decoded MP3/WAV bytes, source input extension/prefix and raw timeout, then returns fixed opaque recipe bytes after successful release. Codec/transcoding/playback/channel delivery remain unqualified.",
+    "Static catalog returns all seven ordered source voices without HTTP. Manifest, index, capability catalog and license are complete original data provenance only; plugin activation/registration is not executed.",
+    "No dedicated Talk, preparation, streaming or telephony callback is invented. No real HTTP, supplier, codec, runtime dependency or host production implementation executes.",
+    "No security/permission/authTLS, negative/error/failure/cancel/crash, mixed, budget/truncation/eviction/threshold/race, real provider or remote MCP execution."
+  ]
+}

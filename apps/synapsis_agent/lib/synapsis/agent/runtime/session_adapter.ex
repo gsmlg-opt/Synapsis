@@ -2,32 +2,92 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
   @moduledoc "Session-owned root Conversation and nested Backplane collaboration runtime."
   use GenServer
 
-  alias Backplane.AgentRuntime.{Codex, Conversation, Error, ToolCatalog}
+  alias Backplane.AgentRuntime.{Codex, Conversation, Error, Goal, ToolCatalog}
   alias Backplane.AgentRuntime.Codex.{MultiAgent, Session}
 
   alias Synapsis.Agent.Runtime.{
+    GoalLifecycle,
+    GoalStore,
     ProviderAdapter,
     ProviderMessages,
-    SessionTools,
-    Store,
-    ToolRegistry
+    RunInventory,
+    Store
   }
 
   alias Synapsis.Runtime.Store, as: Journal
-  alias Synapsis.Tool.{Gateway, Registry}
-  alias Synapsis.Tool.Capability.PolicySnapshot
+  alias Synapsis.Session.Worker.{Config, GoalHost}
+
+  alias Synapsis.Agent.Tools.{
+    Approval,
+    Browser,
+    CodeMode,
+    Decisions,
+    Diffs,
+    Discovery,
+    Filesystem,
+    FilesystemResultContract,
+    MCPResources,
+    NativeLocal,
+    PDF,
+    Policy,
+    Profiles,
+    ProcessInspection,
+    SkillBodyCache,
+    SkillResultContract,
+    Questions,
+    TTS,
+    Workflows
+  }
+
+  alias Synapsis.Agent.Tools.Media.CodeExecution
+  alias Synapsis.Agent.Tools.Web.{Extract, Fetch, Scrape, Search, XSearch}
 
   @collaboration ~w(spawn_agent send_message followup_task interrupt_agent list_agents wait_agent)
-  @legacy ~w(task teammate team_delete team_create send_message)
   @terminal [:run_completed, :run_failed, :run_cancelled]
   @settled [:completed, :errored, :interrupted, :closed, :shutdown]
+  @filesystem_names Filesystem.names()
+  @filesystem_identity_fields ~w(run_id incarnation catalog_revision invocation_id tool_name tool_revision turn_id step_id attempt_id tool_call_id)a
+  @filesystem_correlation_fields ~w(turn_id step_id attempt_id tool_call_id)a
+  @filesystem_candidate_fields ~w(original_path public_path source_path requested_absolute target source_prefix)a
+  @workflow_identity_fields [:caller | @filesystem_identity_fields]
+  @prepared_target_limit 1_024
+  @prepared_target_bytes_limit 16 * 1_024 * 1_024
+  @prepared_target_record_limit 64 * 1_024
 
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts)
   def prompt(pid, context, content), do: GenServer.cast(pid, {:prompt, context, content})
   def input(pid, content), do: GenServer.cast(pid, {:input, content})
   def cancel(pid), do: GenServer.cast(pid, :cancel)
   def resolve(pid, id, decision), do: GenServer.cast(pid, {:resolve, id, decision})
+
+  def answer_question(pid, id, response),
+    do: GenServer.cast(pid, {:answer_question, id, response})
+
   def snapshot(pid), do: GenServer.call(pid, :snapshot)
+
+  @doc "Read the current native root identity without reading or mutating its history."
+  def automation_snapshot(pid, timeout \\ 5_000),
+    do: GenServer.call(pid, :automation_snapshot, timeout)
+
+  @doc false
+  def workflow_effect_registration(adapter, run_id, incarnation) do
+    parent_key = {run_id, incarnation}
+
+    fn proof, identity, binding, target ->
+      case proof do
+        %{deadline_ms: deadline, call_timeout_ms: timeout}
+        when is_integer(deadline) and is_integer(timeout) and timeout in 1..5_000 ->
+          workflow_call(
+            adapter,
+            {:workflow_effect_register, parent_key, proof, identity, binding, target},
+            {deadline, timeout}
+          )
+
+        _ ->
+          {:error, :invalid_workflow_proof}
+      end
+    end
+  end
 
   @impl true
   def init(opts) do
@@ -36,69 +96,53 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     id = Keyword.fetch!(opts, :session_id)
     {:ok, store} = Store.new(1)
 
-    saved =
-      case Journal.get_projection(id) do
-        {:ok, value} -> value
-        _ -> %{agents: [], admissions: []}
-      end
+    state =
+      %{
+        owner: owner,
+        owner_ref: Process.monitor(owner),
+        session_id: id,
+        adapter: self(),
+        epoch: Keyword.fetch!(opts, :epoch),
+        provider: Keyword.get(opts, :provider, ProviderAdapter),
+        fixture_context: Keyword.get(opts, :provider_context, %{}),
+        limit: Keyword.get(opts, :max_concurrent_threads_per_session, 4),
+        goal: nil,
+        goal_binding: nil,
+        goal_recovery: %{diagnostic: :none},
+        session: nil,
+        manager: nil,
+        binding: nil,
+        collaboration_descriptors: [],
+        child_sessions: %{},
+        browser_resources: %{},
+        mcp_resource_runtimes: %{},
+        local_runtime: nil,
+        tool_contexts: %{},
+        discovery_cleanup: %{},
+        store: store,
+        root: nil,
+        context: nil,
+        run_id: nil,
+        runs: %{},
+        jobs: %{},
+        pending: %{},
+        roster: %{agents: [], admissions: []},
+        initializing: true,
+        queued_prompt: nil,
+        recovery_inventory: nil,
+        busy: false,
+        closing: false,
+        terminal_failure: nil,
+        error: :initializing
+      }
 
-    {:ok, intents} = Journal.list_facts(id, :admission_intent)
-    {:ok, receipts} = Journal.list_facts(id, :admission_receipt)
-
-    unresolved =
-      Enum.any?(intents, fn intent ->
-        not Enum.any?(receipts, &(&1.attempt_id == intent.attempt_id))
-      end) or
-        Enum.any?(receipts, fn receipt ->
-          receipt.process_started and
-            not Enum.any?(saved[:agents] || [], &(&1.agent_id == receipt.agent_id))
-        end)
-
-    uncertain =
-      unresolved or Enum.any?(saved[:agents] || [], &(&1.status not in @settled)) or
-        (is_map(saved[:root]) and saved.root.status not in @settled)
-
-    roster = if uncertain, do: unknown(saved), else: saved
-
-    roster =
-      roster
-      |> Map.put(:recovery_required, uncertain)
-      |> Map.update(:agents, [], fn agents ->
-        Enum.map(agents, &Map.merge(&1, %{historical: true, resident: false}))
-      end)
-
-    if uncertain, do: Journal.put_projection(id, roster)
-    send(owner, {:runtime_roster, Keyword.fetch!(opts, :epoch), roster})
-
-    {:ok,
-     %{
-       owner: owner,
-       owner_ref: Process.monitor(owner),
-       session_id: id,
-       adapter: self(),
-       epoch: Keyword.fetch!(opts, :epoch),
-       provider: Keyword.get(opts, :provider, ProviderAdapter),
-       fixture_context: Keyword.get(opts, :provider_context, %{}),
-       limit: Keyword.get(opts, :max_concurrent_threads_per_session, 4),
-       session: nil,
-       manager: nil,
-       contracts: [],
-       store: store,
-       root: nil,
-       context: nil,
-       run_id: nil,
-       runs: %{},
-       jobs: %{},
-       pending: %{},
-       roster: roster,
-       busy: false,
-       closing: false,
-       terminal_failure: nil,
-       error: if(uncertain, do: :recovery_required)
-     }}
+    {:ok, job(state, :recovery_loaded, fn -> load_goal_recovery(state) end)}
   end
 
   @impl true
+  def handle_call(:automation_snapshot, _from, state),
+    do: {:reply, Map.take(state, [:root, :run_id, :epoch]), state}
+
   def handle_call(:snapshot, _from, state),
     do:
       {:reply,
@@ -108,59 +152,373 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
          Enum.map(state.pending, fn {id, x} -> Map.put(x.request, :interaction_id, id) end)
        ), state}
 
-  def handle_call({:child_options, request, run_id, parent}, _from, state) do
+  def handle_call({:tool_context, identity, catalog}, _from, state) do
+    key = {identity[:run_id], identity[:incarnation]}
+
+    result =
+      case Map.get(state.tool_contexts, key) do
+        %{workflow: %{phase: :pending}} ->
+          failure(:forbidden, "Workflow tool catalog context is not active")
+
+        %{workflow: %{budget: budget}, snapshot: snapshot} ->
+          if workflow_budget_active?(budget),
+            do: Profiles.project_catalog(identity, snapshot, catalog),
+            else: failure(:forbidden, "Workflow tool catalog context has expired")
+
+        %{snapshot: _} = entry ->
+          project_skill_catalog(entry, identity, catalog)
+
+        nil ->
+          failure(:forbidden, "Tool catalog context is unavailable or stale")
+      end
+
+    {:reply, result, state}
+  end
+
+  def handle_call({:skill_successor_context, operation, catalog}, _from, state) do
+    key = {operation[:run_id], operation[:incarnation]}
+
+    result =
+      with %{skill_context: context, skill_ceiling: ceiling} = entry <- state.tool_contexts[key],
+           {:ok, issued} <- project_skill_catalog(entry, operation, catalog),
+           {:ok, %{descriptor: %{backend: Synapsis.Agent.Tools.SkillWorkshop}}} <-
+             Profiles.preparation_binding(operation, issued) do
+        {:ok, issued, context, state.binding, ceiling}
+      else
+        _ -> failure(:forbidden, "Skill successor has no matching producer catalog")
+      end
+
+    {:reply, result, state}
+  end
+
+  def handle_call(
+        {:skill_successor_register, operation, predecessor, update, prepared},
+        _from,
+        state
+      ) do
+    key = {operation[:run_id], operation[:incarnation]}
+
+    with %{snapshot: _} = entry <- state.tool_contexts[key],
+         {:ok, issued} <- project_skill_catalog(entry, operation, predecessor),
+         {:ok, %{descriptor: %{backend: Synapsis.Agent.Tools.SkillWorkshop}}} <-
+           Profiles.preparation_binding(operation, issued),
+         {:ok, expected} <-
+           ToolCatalog.validate(update, predecessor.revision, %{
+             run_id: operation.run_id,
+             incarnation: operation.incarnation
+           }),
+         {:ok, _} <-
+           Profiles.project_catalog(
+             %{
+               run_id: operation.run_id,
+               incarnation: operation.incarnation,
+               catalog_revision: expected.revision
+             },
+             prepared.snapshot,
+             expected
+           ) do
+      successor = %{
+        revision: expected.revision,
+        publication_id: expected.publication_id,
+        predecessor: predecessor,
+        producer_invocation_id: operation.invocation_id,
+        snapshot: prepared.snapshot,
+        discovery: prepared.discovery,
+        skill_body_cache: prepared.skill_body_cache
+      }
+
+      next = Map.update(entry, :skill_successors, [successor], &(&1 ++ [successor]))
+      {:reply, :ok, put_in(state, [:tool_contexts, key], next)}
+    else
+      _ ->
+        {:reply, failure(:forbidden, "Skill successor evidence does not match its producer"),
+         state}
+    end
+  end
+
+  def handle_call(
+        {:workflow_effect_register, parent_key, proof, identity, binding, target},
+        {owner, _},
+        state
+      ) do
+    with {:ok, parent, authority, descriptors} <-
+           workflow_parent(state, parent_key, proof, identity, binding, target),
+         key = {identity.run_id, identity.incarnation},
+         false <- Map.has_key?(state.tool_contexts, key) do
+      ref = make_ref()
+      adapter = self()
+      budget = {proof.deadline_ms, proof.call_timeout_ms}
+      preparation = filesystem_preparation(adapter, identity.run_id, identity.incarnation, budget)
+      resolver = workflow_tool_context_resolver(adapter, key, budget)
+      registration = workflow_effect_registration(adapter, identity.run_id, identity.incarnation)
+
+      ticket = %{
+        preparation: preparation,
+        tool_context_resolver: resolver,
+        tool_filesystem: %{
+          path_environment: descriptors[target.tool_name].backend_context.path_environment,
+          prepared_target_resolver: preparation.fetch,
+          execution_options: descriptors[target.tool_name].backend_context.execution_options
+        },
+        authority: authority,
+        activate: fn bundle, snapshot ->
+          workflow_call(adapter, {:workflow_effect_activate, key, ref, bundle, snapshot}, budget)
+        end,
+        release: fn cleanup_deadline ->
+          workflow_call(
+            adapter,
+            {:workflow_effect_release, key, ref},
+            {cleanup_deadline, proof.call_timeout_ms}
+          )
+        end
+      }
+
+      # Profiles construction stays in the Effect task. This closed entry owns
+      # only its exact catalog inputs and the new preparation callbacks.
+      entry = %{
+        snapshot: nil,
+        discovery: nil,
+        prepared_targets: %{},
+        prepared_target_bytes: 0,
+        prepared_targets_closed?: true,
+        workflow: %{
+          phase: :pending,
+          ref: ref,
+          parent_key: parent_key,
+          parent_identity: proof.identity,
+          parent_catalog: proof.catalog,
+          owner: owner,
+          monitor: Process.monitor(owner),
+          identity: identity,
+          binding: binding,
+          authority: authority,
+          descriptors: workflow_child_descriptors(descriptors, identity, binding, preparation),
+          permission: parent.permission,
+          evidence: parent.evidence,
+          permission_levels: Map.take(parent.permission_levels, Map.keys(descriptors)),
+          budget: budget,
+          host_context: %{
+            tool_operator_id: Approval.operator_id(),
+            filesystem_preparation: preparation,
+            tool_context_resolver: resolver,
+            workflow_effect_registration: registration
+          }
+        }
+      }
+
+      {:reply, {:ok, ticket}, put_in(state, [:tool_contexts, key], entry)}
+    else
+      _ -> {:reply, {:error, :workflow_registration_unavailable}, state}
+    end
+  end
+
+  def handle_call({:workflow_effect_activate, key, ref, bundle, snapshot}, {owner, _}, state) do
+    with %{workflow: %{ref: ^ref, owner: ^owner, phase: :pending} = workflow} = entry <-
+           state.tool_contexts[key],
+         true <- workflow_parent_active?(state, workflow),
+         true <- workflow_budget_active?(workflow.budget),
+         :ok <- workflow_activation(bundle, snapshot, workflow) do
+      entry = %{
+        entry
+        | snapshot: snapshot,
+          prepared_targets_closed?: false,
+          workflow: %{workflow | phase: :active}
+      }
+
+      {:reply, {:ok, workflow.host_context}, put_in(state, [:tool_contexts, key], entry)}
+    else
+      _ -> {:reply, {:error, :workflow_activation_unavailable}, state}
+    end
+  end
+
+  def handle_call({:workflow_effect_release, key, ref}, _from, state) do
+    # Native ResourceRegistry cleanup runs in a different process from the
+    # reserving owner; the opaque ticket, rather than that PID, bears release.
+    case state.tool_contexts[key] do
+      %{workflow: %{ref: ^ref}} when is_reference(ref) ->
+        {:reply, :ok, close_prepared_targets(state, key)}
+
+      nil when is_reference(ref) ->
+        {:reply, :ok, state}
+
+      _ ->
+        {:reply, {:error, :workflow_ticket_mismatch}, state}
+    end
+  end
+
+  def handle_call({:filesystem_target_reserve, identity, catalog, digest}, {producer, _}, state) do
+    with {:ok, context_key, entry, key, correlation, _descriptor} <-
+           filesystem_target_context(state, identity, catalog),
+         true <- filesystem_digest?(digest) and is_pid(producer) and Process.alive?(producer) do
+      case entry.prepared_targets[key] do
+        nil ->
+          if map_size(entry.prepared_targets) < @prepared_target_limit do
+            envelope = %{
+              state: :reserved,
+              token: make_ref(),
+              producer_pid: producer,
+              monitor: Process.monitor(producer),
+              raw_arguments_digest: digest,
+              correlation: correlation,
+              record: nil
+            }
+
+            case put_prepared_target(state, context_key, entry, key, envelope) do
+              {:ok, reserved} ->
+                {:reply, {:ok, {:new, envelope.token}}, reserved}
+
+              {:error, _} = error ->
+                Process.demonitor(envelope.monitor, [:flush])
+                {:reply, error, state}
+            end
+          else
+            {:reply, {:error, :prepared_target_limit}, state}
+          end
+
+        %{state: :sealed, correlation: ^correlation, record: record}
+        when digest == record.raw_arguments_digest or digest == record.prepared_arguments_digest ->
+          {:reply, {:ok, {:existing, record}}, state}
+
+        _ ->
+          {:reply, {:error, :prepared_target_conflict}, state}
+      end
+    else
+      false -> {:reply, {:error, :invalid_prepared_target}, state}
+      {:error, _} = error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call(
+        {:filesystem_target_seal, identity, catalog, token, candidate, digest},
+        {producer, _},
+        state
+      ) do
+    with {:ok, context_key, entry, key, correlation, descriptor} <-
+           filesystem_target_context(state, identity, catalog),
+         true <- filesystem_digest?(digest) and is_reference(token) and is_pid(producer),
+         %{state: phase, token: ^token, producer_pid: ^producer, correlation: ^correlation} =
+           envelope <- entry.prepared_targets[key],
+         true <- phase in [:reserved, :sealed] and Process.alive?(producer),
+         {:ok, record} <-
+           filesystem_target_record(identity, descriptor, key, envelope, candidate, digest) do
+      case envelope do
+        %{state: :sealed, record: ^record} ->
+          {:reply, {:ok, record}, state}
+
+        %{state: :reserved} ->
+          sealed = %{envelope | state: :sealed, record: record}
+
+          case put_prepared_target(state, context_key, entry, key, sealed) do
+            {:ok, sealed_state} -> {:reply, {:ok, record}, sealed_state}
+            {:error, _} = error -> {:reply, error, state}
+          end
+
+        _ ->
+          {:reply, {:error, :prepared_target_conflict}, state}
+      end
+    else
+      {:error, _} = error -> {:reply, error, state}
+      _ -> {:reply, {:error, :prepared_target_conflict}, state}
+    end
+  end
+
+  def handle_call({:filesystem_target_fetch, identity, catalog, digest}, _from, state) do
+    result =
+      with {:ok, _context_key, entry, key, correlation, _descriptor} <-
+             filesystem_target_context(state, identity, catalog),
+           true <- filesystem_digest?(digest),
+           %{state: :sealed, correlation: ^correlation, record: record} <-
+             entry.prepared_targets[key],
+           true <- record.prepared_arguments_digest === digest do
+        {:ok, record}
+      else
+        {:error, _} = error -> error
+        _ -> {:error, :prepared_target_unavailable}
+      end
+
+    {:reply, result, state}
+  end
+
+  def handle_call({:filesystem_target_abandon, identity, catalog, token}, {producer, _}, state) do
+    with {:ok, context_key, entry, key, correlation, _descriptor} <-
+           filesystem_target_context(state, identity, catalog),
+         true <- is_reference(token) and is_pid(producer) and Process.alive?(producer),
+         %{state: phase, token: ^token, producer_pid: ^producer, correlation: ^correlation} =
+           envelope <- entry.prepared_targets[key],
+         true <- phase in [:reserved, :abandoned] do
+      demonitor_prepared_target(envelope)
+      abandoned = %{envelope | state: :abandoned, monitor: nil}
+      {:ok, abandoned_state} = put_prepared_target(state, context_key, entry, key, abandoned)
+      {:reply, :ok, abandoned_state}
+    else
+      {:error, _} = error -> {:reply, error, state}
+      _ -> {:reply, {:error, :prepared_target_conflict}, state}
+    end
+  end
+
+  def handle_call({:child_options, request, run_id, parent}, from, state) do
     if state.closing or state.error do
       {:reply, failure(:resource_conflict, "Subagent admission is closed"), state}
     else
-      identity = parent.child
+      with %{context: %{mode_provenance: mode_provenance} = caller_context} <-
+             state.runs[parent.run_id],
+           true <- parent[:goal] == state.goal,
+           {:ok, parent_attribution} <- Goal.attribution(state.goal, parent.goal_binding) do
+        identity = parent.child
 
-      previous =
-        Enum.find_value(state.runs, fn {_id, run} ->
-          if run.identity[:agent_id] == identity.agent_id, do: run.context
-        end)
+        previous =
+          Enum.find_value(state.runs, fn {_id, run} ->
+            if run.identity[:agent_id] == identity.agent_id, do: run.context
+          end)
 
-      parent_context = previous || get_in(state.runs, [parent.run_id, :context]) || state.context
+        parent_context =
+          (previous || caller_context)
+          |> Map.put(:mode_provenance, mode_provenance)
+          |> Map.put(:input_context, nil)
 
-      intent =
-        Map.merge(identity, %{
-          parent_name: parent.name,
-          parent_run_id: parent.run_id,
-          namespace: state.store.namespace
-        })
+        intent =
+          Map.merge(identity, %{
+            parent_name: parent.name,
+            parent_run_id: parent.run_id,
+            namespace: state.store.namespace
+          })
 
-      with :ok <-
-             Journal.put_fact(state.session_id, :admission_intent, identity.attempt_id, intent),
-           :ok <- child_configuration(request, parent_context),
-           {:ok, messages} <- fork_messages(state, request, parent),
-           {:ok, options} <-
-             options(
-               state,
-               parent_context,
-               run_id,
-               identity.incarnation,
-               messages,
-               parent.authority,
-               true
-             ) do
-        {:reply,
-         {:ok,
-          Keyword.put(options, :host_metadata, Map.take(intent, [:name, :agent_id, :parent_name]))},
-         %{
-           state
-           | runs:
-               Map.put(state.runs, run_id, %{
-                 identity: identity,
-                 store: state.store,
-                 context: parent_context
-               })
-         }}
+        locator =
+          RunInventory.child(
+            state.session_id,
+            state.store,
+            identity,
+            parent.run_id,
+            mode_provenance
+          )
+
+        tag = {:child_prepare, from, request, run_id, parent, parent_context, intent}
+
+        attribution =
+          GoalLifecycle.child_fact(
+            state.session_id,
+            state.store,
+            identity,
+            parent_attribution,
+            mode_provenance
+          )
+
+        {:noreply,
+         job(state, tag, fn ->
+           with :ok <-
+                  Journal.put_fact(
+                    state.session_id,
+                    :admission_intent,
+                    identity.attempt_id,
+                    intent
+                  ),
+                :ok <- RunInventory.retain(locator),
+                :ok <- GoalLifecycle.retain(attribution),
+                do: :ok
+         end)}
       else
-        {:error, %Error{}} = error ->
-          {:reply, error, state}
-
-        {:error, _} ->
-          {:reply, failure(:execution_failure, "Subagent intent could not be persisted"),
-           %{state | error: :storage_failed}}
+        _ ->
+          {:reply, failure(:resource_conflict, "Parent run context is unavailable"), state}
       end
     end
   end
@@ -176,6 +534,19 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
 
     case result do
       :ok ->
+        state =
+          case state.child_sessions[receipt.agent_id] do
+            %{identity: identity, binding: binding}
+            when receipt.status == :rejected and not receipt.process_started and
+                   identity.attempt_id == receipt.attempt_id and
+                   identity.run_id == receipt.run_id and
+                   identity.incarnation == receipt.incarnation ->
+              discard_child_reservation(state, identity, binding)
+
+            _ ->
+              state
+          end
+
         {:reply, :ok, state}
 
       _ ->
@@ -185,18 +556,36 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
   end
 
   @impl true
+  def handle_cast({:prompt, context, content}, %{initializing: true} = state) do
+    if state.queued_prompt || state.closing do
+      notify(state, {:runtime_admission_failed, state.epoch, :runtime_busy})
+      {:noreply, state}
+    else
+      {:noreply, %{state | queued_prompt: {context, content}}}
+    end
+  end
+
   def handle_cast({:prompt, context, content}, state) do
     if state.busy or state.closing or state.error do
       notify(state, {:runtime_roster, state.epoch, state.roster})
       notify(state, {:runtime_admission_failed, state.epoch, state.error || :runtime_busy})
       {:noreply, state}
     else
-      run_id = Ecto.UUID.generate()
-      context = Map.put(context, :policy_snapshot, policy(context, state.session_id, run_id))
-      state = %{state | busy: true, context: context, run_id: run_id}
+      case Config.mode_provenance(context.session) do
+        {:ok, mode_provenance} ->
+          context = Map.put(context, :mode_provenance, mode_provenance)
+          run_id = Ecto.UUID.generate()
+          state = %{state | busy: true, context: context, run_id: run_id}
 
-      {:noreply,
-       job(state, :prepare, fn -> prepare(self_host(state), state, context, run_id, content) end)}
+          {:noreply,
+           job(state, :prepare_inputs, fn ->
+             prepare(self_host(state), state, context, run_id, content)
+           end)}
+
+        {:error, reason} ->
+          notify(state, {:runtime_admission_failed, state.epoch, reason})
+          {:noreply, state}
+      end
     end
   end
 
@@ -209,17 +598,57 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
   end
 
   def handle_cast({:resolve, id, decision}, state) do
-    case Map.pop(state.pending, id) do
-      {nil, _} ->
-        {:noreply, state}
+    case Map.get(state.pending, id) do
+      %{request: request, run_id: run_id, destination: destination}
+      when is_boolean(decision) ->
+        scope = request_field(request, :scope)
+        operation = request_field(request, :operation)
 
-      {item, pending} ->
-        value = approval(item.request, item.host, decision)
+        if is_map(scope) and is_map(operation) and
+             request_field(scope, :session_id) === state.session_id and
+             request_field(scope, :requester_id) === Approval.operator_id() and
+             request_field(operation, :run_id) === run_id and not state.closing do
+          answer = if decision, do: :approved, else: :denied
+          trusted = %{scope: scope, operation: operation}
 
-        {:noreply,
-         job(%{state | pending: pending}, {:resolve, id}, fn ->
-           Conversation.resolve(item.pid, id, value)
-         end)}
+          {:noreply,
+           job(state, {:resolve, id}, fn ->
+             case destination do
+               {:root, pid} ->
+                 Approval.resolve(pid, id, answer, trusted)
+
+               {:managed, manager, correlation} ->
+                 Approval.resolve_managed(manager, correlation, answer, trusted)
+             end
+           end)}
+        else
+          finish_job({:resolve, id}, failure(:forbidden, "Approval scope is unavailable"), state)
+        end
+
+      _ ->
+        finish_job({:resolve, id}, failure(:forbidden, "Approval is no longer available"), state)
+    end
+  end
+
+  def handle_cast({:answer_question, id, response}, state) do
+    case Map.get(state.pending, id) do
+      %{
+        request: %{kind: :user_question, scope: scope, operation: operation},
+        run_id: run_id,
+        destination: {:root, pid}
+      }
+      when is_binary(response) and not state.closing ->
+        if scope.session_id === state.session_id and operation.run_id === run_id do
+          {:noreply,
+           job(state, {:resolve, id}, fn ->
+             Questions.resolve(pid, id, response, %{scope: scope, operation: operation})
+           end)}
+        else
+          finish_job({:resolve, id}, failure(:forbidden, "Question scope is unavailable"), state)
+        end
+
+      _ ->
+        finish_job({:resolve, id}, failure(:forbidden, "Question is no longer available"), state)
     end
   end
 
@@ -247,34 +676,43 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
         {:noreply, state}
 
       event.type in @terminal ->
+        state =
+          close_prepared_targets(state, if(event.type == :run_completed, do: run_id, else: :all))
+
         # Loading committed history never calls the collaboration manager.
+        state =
+          if event.type == :run_completed,
+            do: state,
+            else: %{
+              state
+              | child_sessions:
+                  Map.new(state.child_sessions, fn {id, child} ->
+                    {id, %{child | closing: true}}
+                  end)
+            }
+
         {:noreply,
          job(state, {:terminal, event}, fn ->
            status = Conversation.status(state.root)
-           stop(state.root)
+           stop(state.root, owner_stop_timeout(state))
+
+           status =
+             Map.put(status, :discovery_cleanup, release_discovery(state.tool_contexts, run_id))
 
            if event.type == :run_completed,
              do: status,
-             else: Map.put(status, :cleanup, Session.close(state.session))
+             else: Map.put(status, :cleanup, close_sessions(state))
          end)}
 
       event.type == :interaction_requested ->
-        {:noreply, remember_permission(state, state.root, event)}
+        {:noreply, remember_permission(state, {:root, state.root}, run_id, event)}
+
+      event.type == :interaction_resolved ->
+        {:noreply, forget_permission(state, event.interaction_id)}
 
       true ->
         notify(state, {:runtime_event, state.epoch, run_id, event})
         {:noreply, state}
-    end
-  end
-
-  def handle_info({:runtime_permission_owner, pid, request}, state) do
-    if request.run_id == state.run_id do
-      {:noreply, state}
-    else
-      {:noreply,
-       job(state, {:permission, pid, request}, fn ->
-         await_permission(pid, request.approval_id, 500)
-       end)}
     end
   end
 
@@ -301,17 +739,45 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     state = persist_roster(%{state | roster: roster})
 
     state =
+      case event do
+        %{type: :interaction_requested, agent: %{pending_interaction: pending} = agent}
+        when is_map(pending) ->
+          remember_permission(
+            state,
+            {:managed, state.manager, pending.correlation},
+            agent.run_id,
+            %{type: :interaction_requested, interaction_id: pending.id, request: pending.request}
+          )
+
+        %{type: :interaction_resolved, interaction_id: id} ->
+          forget_permission(state, id)
+
+        _ ->
+          state
+      end
+
+    state =
       if event[:agent] && event.agent.status in @settled,
         do: forget_run_permissions(state, event.agent.run_id),
+        else: state
+
+    state =
+      if event[:agent] && event.agent.status in @settled,
+        do:
+          state
+          |> close_prepared_targets(event.agent.run_id)
+          |> cleanup_discovery(event.agent.run_id),
         else: state
 
     {:noreply, state}
   end
 
   def handle_info({:DOWN, ref, :process, _pid, reason}, state) when ref == state.owner_ref,
-    do: {:stop, :normal, %{state | error: {:owner_down, reason}}}
+    do: {:stop, :normal, close_prepared_targets(%{state | error: {:owner_down, reason}}, :all)}
 
-  def handle_info({:DOWN, ref, :process, _pid, reason}, state) do
+  def handle_info({:DOWN, ref, :process, pid, reason}, state) do
+    state = state |> close_workflow_owner(ref, pid) |> settle_prepared_target_producer(ref, pid)
+
     case Enum.find(state.jobs, fn {_key, {_pid, monitor, _tag}} -> monitor == ref end) do
       {key, {_pid, _monitor, tag}} ->
         finish_job(
@@ -326,7 +792,17 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
   end
 
   def handle_info({:EXIT, pid, reason}, state) do
-    if pid in [state.session, state.manager, state.root] and reason not in [:normal, :shutdown] do
+    local = if state.local_runtime, do: state.local_runtime.server
+
+    child_lost =
+      Enum.any?(state.child_sessions, fn {_id, child} ->
+        child.session == pid and not child.closing and not state.closing and
+          state.error != :closed
+      end)
+
+    if child_lost or (pid == state.goal and not state.closing) or
+         (pid in [state.session, state.manager, state.root, local] and
+            reason not in [:normal, :shutdown]) do
       state = persist_roster(%{state | roster: unknown(state.roster), error: :runtime_owner_lost})
 
       notify(
@@ -345,15 +821,102 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
 
   @impl true
   def terminate(_reason, state) do
+    state = close_prepared_targets(state, :all)
     Enum.each(state.jobs, fn {_ref, {pid, _, _}} -> Process.exit(pid, :kill) end)
     # Session and manager termination fence their owned effects and children;
     # no journal record is ever used to replay an interrupted effect.
-    Enum.each([state.root, state.session, state.manager], &stop/1)
+    Enum.each([state.root, state.session, state.manager], &stop(&1, owner_stop_timeout(state)))
+    close_child_sessions(state)
+    if state.local_runtime, do: stop(state.local_runtime.server)
+    stop(state.goal)
 
     if state.busy or Enum.any?(state.roster[:agents] || [], &(&1.status not in @settled)),
       do: Journal.put_projection(state.session_id, unknown(state.roster))
 
     :ok
+  end
+
+  defp load_goal_recovery(state) do
+    with {:ok, recovered} <- recover(state.session_id),
+         {:ok, facts} <- Journal.list_facts(state.session_id, :goal_attribution),
+         {:ok, goal} <-
+           Goal.start_link(
+             thread_id: state.session_id,
+             owner_pid: state.adapter,
+             store: GoalStore,
+             store_context: :local,
+             host: GoalHost,
+             host_context: %{
+               owner: state.owner,
+               adapter: state.adapter,
+               epoch: state.epoch,
+               session_id: state.session_id
+             }
+           ) do
+      Process.unlink(goal)
+      {:ok, Map.merge(recovered, %{goal: goal, attributions: facts})}
+    end
+  end
+
+  defp recover(id) do
+    saved =
+      case Journal.get_projection(id) do
+        {:ok, value} -> {:ok, value}
+        :not_found -> {:ok, %{agents: [], admissions: []}}
+        error -> error
+      end
+
+    with {:ok, saved} <- saved,
+         {:ok, intents} <- Journal.list_facts(id, :admission_intent),
+         {:ok, receipts} <- Journal.list_facts(id, :admission_receipt),
+         {:ok, inventory} <- RunInventory.load(id) do
+      unresolved =
+        Enum.any?(intents, fn intent ->
+          not Enum.any?(receipts, &(&1.attempt_id == intent.attempt_id))
+        end) or
+          Enum.any?(receipts, fn receipt ->
+            receipt.process_started and
+              not Enum.any?(saved[:agents] || [], &(&1.agent_id == receipt.agent_id))
+          end)
+
+      structural_uncertain =
+        unresolved or Enum.any?(saved[:agents] || [], &(&1.status not in @settled)) or
+          (is_map(saved[:root]) and saved.root.status not in @settled)
+
+      {:ok, %{saved: saved, inventory: inventory, structural_uncertain: structural_uncertain}}
+    else
+      {:error, reason} ->
+        {:error,
+         Error.new(:execution_failure, "Runtime recovery inventory could not be loaded",
+           details: %{reason: reason}
+         )}
+    end
+  end
+
+  defp finalize_goal_recovery(id, recovered) do
+    with {:ok, inventory} <- RunInventory.load(id) do
+      uncertain =
+        recovered.structural_uncertain or Enum.any?(inventory.entries, &unsettled_inventory?/1)
+
+      roster = if uncertain, do: unknown(recovered.saved), else: recovered.saved
+
+      roster =
+        roster
+        |> Map.put(:recovery_required, uncertain)
+        |> Map.update(:agents, [], fn agents ->
+          Enum.map(agents, &Map.merge(&1, %{historical: true, resident: false}))
+        end)
+
+      with :ok <- if(uncertain, do: Journal.put_projection(id, roster), else: :ok),
+           do: {:ok, %{roster: roster, inventory: inventory, uncertain: uncertain}}
+    end
+  end
+
+  defp unsettled_inventory?(%{availability: :absent}), do: true
+
+  defp unsettled_inventory?(%{aggregate: aggregate}) do
+    aggregate.run.state not in [:completed, :failed, :cancelled, :timed_out] or
+      get_in(aggregate, [:run, :context, :conversation, :goal_outbox]) not in [nil, []]
   end
 
   defp self_host(state), do: state.adapter
@@ -376,9 +939,212 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     :exit, reason -> failure(:unknown_outcome, "Runtime owner unavailable: #{inspect(reason)}")
   end
 
+  defp finish_job(:recovery_loaded, {:ok, recovered}, state) do
+    Process.link(recovered.goal)
+    state = %{state | goal: recovered.goal}
+
+    if recovered.structural_uncertain or
+         Enum.any?(recovered.inventory.entries, fn entry ->
+           entry.availability != :present or
+             entry.aggregate.run.state not in [:completed, :failed, :cancelled, :timed_out]
+         end) do
+      # Retained terminal receipts do not settle another unresolved/live run.
+      continue_goal_recovery(state, [], recovered)
+    else
+      with {:ok, record} <- Goal.snapshot(state.goal),
+           {:ok, groups} <-
+             GoalLifecycle.plan(recovered.inventory, recovered.attributions, record) do
+        continue_goal_recovery(state, groups, recovered)
+      else
+        {:error, error} -> finish_job(:recover, {:error, error}, state)
+      end
+    end
+  end
+
+  defp finish_job(:recovery_loaded, {:error, error}, state),
+    do: finish_job(:recover, {:error, error}, state)
+
+  defp finish_job({:goal_recovery, remaining, recovered}, {:ok, _aggregate}, state),
+    do: continue_goal_recovery(state, remaining, recovered)
+
+  defp finish_job({:goal_recovery, _, _}, {:error, error}, state),
+    do: finish_job(:recover, {:error, error}, state)
+
+  defp finish_job(:recover, {:ok, recovered}, state) do
+    queued = state.queued_prompt
+
+    state = %{
+      state
+      | initializing: false,
+        queued_prompt: nil,
+        roster: recovered.roster,
+        recovery_inventory: recovered.inventory,
+        goal_recovery: %{
+          diagnostic: if(recovered.uncertain, do: :recovery_required, else: :none)
+        },
+        error: if(recovered.uncertain, do: :recovery_required)
+    }
+
+    notify(state, {:runtime_roster, state.epoch, state.roster})
+
+    cond do
+      state.closing ->
+        {:noreply, cancelled_without_runtime(state)}
+
+      queued && state.error ->
+        notify(state, {:runtime_admission_failed, state.epoch, state.error})
+        {:noreply, state}
+
+      queued ->
+        {context, content} = queued
+        handle_cast({:prompt, context, content}, state)
+
+      true ->
+        {:noreply, state}
+    end
+  end
+
+  defp finish_job(:recover, {:error, error}, state) do
+    state = %{
+      state
+      | initializing: false,
+        queued_prompt: nil,
+        goal_recovery: %{diagnostic: :recovery_required},
+        roster: unknown(state.roster),
+        error: :storage_failed
+    }
+
+    notify(state, {:runtime_roster, state.epoch, state.roster})
+    notify(state, {:runtime_admission_failed, state.epoch, error})
+    {:noreply, state}
+  end
+
+  defp finish_job(:prepare_inputs, {:ok, runtime}, state) do
+    Enum.each([runtime.session, runtime.manager], &Process.link/1)
+    if runtime.local_runtime, do: Process.link(runtime.local_runtime.server)
+
+    state =
+      Map.merge(
+        state,
+        Map.take(runtime, [
+          :session,
+          :manager,
+          :binding,
+          :collaboration_descriptors,
+          :local_runtime
+        ])
+      )
+
+    attrs = %{
+      thread_id: state.session_id,
+      run_id: state.run_id,
+      incarnation: 1,
+      mode: state.context.mode_provenance.mode,
+      authority: Keyword.fetch!(runtime.options, :authority),
+      usage_authoritative: false
+    }
+
+    if state.closing or state.error do
+      {:error, error} = failure(:resource_conflict, "Runtime preparation is closed")
+      discard_prepared_root(state, error, nil)
+    else
+      with {:ok, binding, attribution} <- bind_root_goal(state.goal, attrs) do
+        fact =
+          GoalLifecycle.root_fact(
+            state.session_id,
+            state.store,
+            attribution,
+            state.context.mode_provenance
+          )
+
+        state = %{state | goal_binding: binding}
+
+        {:noreply,
+         job(state, :prepare, fn ->
+           result =
+             safe(fn ->
+               with :ok <- GoalLifecycle.retain(fact),
+                    {:ok, root} <-
+                      Conversation.start_link(
+                        Keyword.merge(runtime.options,
+                          subscriber: state.adapter,
+                          session_binding: runtime.binding,
+                          thread_id: state.session_id,
+                          goal: state.goal,
+                          goal_binding: binding
+                        )
+                      ) do
+                 Process.unlink(root)
+                 {:ok, Map.put(runtime, :root, root)}
+               end
+             end)
+
+           case result do
+             {:error, error} -> cleanup_prepared_root(state, error, binding)
+             success -> success
+           end
+         end)}
+      else
+        {:error, error, binding} -> discard_prepared_root(state, error, binding)
+      end
+    end
+  end
+
+  defp finish_job(:prepare_inputs, {:error, error}, state),
+    do: finish_job(:prepare, {:error, error}, state)
+
+  defp finish_job({:child_prepare, from, request, run_id, parent, context, intent}, :ok, state) do
+    {reply, state} =
+      if state.closing or state.error do
+        {failure(:resource_conflict, "Subagent admission is closed"), state}
+      else
+        {:reply, reply, state} = prepared_child(request, run_id, parent, context, intent, state)
+        {reply, state}
+      end
+
+    GenServer.reply(from, reply)
+    {:noreply, state}
+  end
+
+  defp finish_job({:child_prepare, from, _, _, _, _, _}, {:error, reason}, state) do
+    error =
+      Error.new(:execution_failure, "Subagent run address could not be persisted",
+        details: %{reason: reason}
+      )
+
+    GenServer.reply(from, {:error, error})
+    {:noreply, %{state | error: :storage_failed}}
+  end
+
   defp finish_job(:prepare, {:ok, runtime}, state) do
     Enum.each([runtime.session, runtime.manager, runtime.root], &Process.link/1)
-    state = Map.merge(state, Map.take(runtime, [:session, :manager, :root, :contracts]))
+    if runtime.local_runtime, do: Process.link(runtime.local_runtime.server)
+
+    state =
+      Map.merge(
+        state,
+        Map.take(runtime, [
+          :session,
+          :manager,
+          :root,
+          :binding,
+          :collaboration_descriptors,
+          :local_runtime
+        ])
+      )
+
+    state = %{
+      state
+      | browser_resources: merge_browser_resources(state.browser_resources, runtime),
+        mcp_resource_runtimes: merge_mcp_resource_runtimes(state.mcp_resource_runtimes, runtime),
+        tool_contexts: Map.put(state.tool_contexts, runtime.metadata.key, runtime.metadata.entry)
+    }
+
+    # Preparation can finish after close has already fenced the adapter.
+    state =
+      if state.closing or state.error,
+        do: close_prepared_targets(state, :all),
+        else: state
 
     state = %{
       state
@@ -394,9 +1160,11 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
 
     cond do
       state.error == :storage_failed ->
+        state = close_prepared_targets(state, :all)
+
         {:noreply,
          job(state, :admission_failure_close, fn ->
-           result = Session.close(state.session)
+           result = close_sessions(state)
            Enum.each([state.root, state.manager, state.session], &stop/1)
            result
          end)}
@@ -412,6 +1180,13 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     end
   end
 
+  defp finish_job(
+         :prepare,
+         {:error, %Error{class: :unknown_outcome} = error},
+         %{closing: true} = state
+       ),
+       do: finish_job(:close, {:error, error}, state)
+
   defp finish_job(:prepare, {:error, error}, state) do
     if state.closing do
       {:noreply, cancelled_without_runtime(state)}
@@ -422,6 +1197,8 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
   end
 
   defp finish_job(:admission_failure_close, result, state) do
+    state = close_prepared_targets(state, :all)
+
     class =
       if match?({:ok, %{status: :confirmed}}, result),
         do: :execution_failure,
@@ -446,6 +1223,7 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
         true -> :unknown_outcome
       end
 
+    state = record_discovery_cleanup(state, Map.get(status, :discovery_cleanup, %{}))
     state = project_root(state, root_status)
     notify(state, {:runtime_history, state.epoch, state.run_id, messages})
     event = event |> Map.put(:messages, messages) |> Map.put(:cleanup, status[:cleanup])
@@ -473,28 +1251,33 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
          %{
            state
            | busy: false,
-             pending:
-               Map.reject(state.pending, fn {_, item} -> item.request.run_id == state.run_id end)
+             pending: Map.reject(state.pending, fn {_, item} -> item.run_id == state.run_id end)
          }}
     end
   end
 
-  defp finish_job({:permission, pid, _request}, {:ok, event}, state),
-    do: {:noreply, remember_permission(state, pid, event)}
-
-  defp finish_job({:permission, _, _}, _, state), do: {:noreply, state}
+  defp finish_job({:discovery_cleanup, _run_id}, results, state) when is_map(results),
+    do: {:noreply, record_discovery_cleanup(state, results)}
 
   defp finish_job({:resolve, id}, :ok, state) do
-    notify(
-      state,
-      {:runtime_event, state.epoch, state.run_id,
-       %{type: :interaction_resolved, interaction_id: id}}
-    )
+    {:noreply, forget_permission(state, id)}
+  end
+
+  defp finish_job({:child_cleanup, agent_id, binding}, result, state) do
+    state =
+      case state.child_sessions[agent_id] do
+        %{binding: ^binding} = child ->
+          put_in(state, [:child_sessions, agent_id], %{child | cleanup: result})
+
+        _ ->
+          state
+      end
 
     {:noreply, state}
   end
 
   defp finish_job(:close, %{cleanup: result, history: history}, state) do
+    state = close_prepared_targets(state, :all)
     failed = state.terminal_failure
 
     uncertain =
@@ -533,6 +1316,8 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
   end
 
   defp finish_job(:close, {:error, error}, state) do
+    state = close_prepared_targets(state, :all)
+
     state =
       persist_roster(%{
         state
@@ -570,40 +1355,130 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
 
   defp finish_job(_tag, _, state), do: {:noreply, state}
 
+  defp bind_root_goal(goal, attrs) do
+    case safe(fn -> Goal.bind(goal, attrs) end) do
+      {:ok, binding} ->
+        case safe(fn -> Goal.attribution(goal, binding) end) do
+          {:ok, attribution} -> {:ok, binding, attribution}
+          {:error, error} -> {:error, error, binding}
+        end
+
+      {:error, error} ->
+        {:error, error, nil}
+    end
+  end
+
+  defp discard_prepared_root(state, error, binding),
+    do: {:noreply, job(state, :prepare, fn -> cleanup_prepared_root(state, error, binding) end)}
+
+  # Only a preparation which returned no Conversation reaches this cleanup.
+  # Normal live Conversation delivery and unbinding remain native-owned.
+  defp cleanup_prepared_root(state, error, binding) do
+    cleanup = close_sessions(state)
+    Enum.each([state.manager, state.session], &stop/1)
+    if state.local_runtime, do: stop(state.local_runtime.server)
+
+    binding_cleanup =
+      if binding do
+        case safe(fn -> Goal.attribution(state.goal, binding) end) do
+          {:ok, _} -> safe(fn -> Goal.unbind(state.goal, binding) end)
+          {:error, %Error{class: :forbidden}} -> {:ok, :unbound}
+          other -> other
+        end
+      else
+        {:ok, :unbound}
+      end
+
+    if match?({:ok, %{status: :confirmed}}, cleanup) and
+         binding_cleanup == {:ok, :unbound} do
+      {:error, error}
+    else
+      {:error,
+       Error.new(:unknown_outcome, "Prepared runtime cleanup was not confirmed",
+         details: %{preparation: error, cleanup: cleanup, binding_cleanup: binding_cleanup}
+       )}
+    end
+  end
+
+  defp continue_goal_recovery(state, [], recovered) do
+    state = %{state | goal_recovery: %{diagnostic: :none}}
+
+    {:noreply,
+     job(state, :recover, fn -> finalize_goal_recovery(state.session_id, recovered) end)}
+  end
+
+  defp continue_goal_recovery(state, [group | remaining], recovered) do
+    case GoalLifecycle.bind_recovery(state.goal, group) do
+      {:ok, bound} ->
+        {:noreply,
+         job(state, {:goal_recovery, remaining, recovered}, fn ->
+           GoalLifecycle.deliver_and_ack(state.goal, group, bound)
+         end)}
+
+      {:error, error} ->
+        finish_job(:recover, {:error, error}, state)
+    end
+  end
+
   defp prepare(host, state, context, run_id, content) do
-    with {:ok, history} <- ProviderMessages.from_host(context.messages),
-         {:ok, host_bundle} <- host_bundle(state, context, run_id, false),
-         authority = combined_authority(host_bundle.authority),
+    locator = RunInventory.root(state.session_id, state.store, run_id, context.mode_provenance)
+
+    with :ok <- RunInventory.retain(locator),
+         {:ok, history} <- ProviderMessages.from_host(context.messages),
+         {:ok, selection} <- Profiles.selection(context),
+         {:ok, plan} <- Discovery.plan(context.agent, selection),
+         {:ok, revisions} <-
+           Synapsis.Agent.Tools.MCPSources.revisions(context.agent, plan.runtime),
+         authority = authority(state.session_id, run_id, plan.runtime, revisions),
          {:ok, session, manager} <- owners(host, state, authority) do
       result =
-        with {:ok, binding} <- Session.bind(session, authority, incarnation: 1),
-             {:ok, collab} <-
-               Codex.profile(
-                 :collaboration_v2,
-                 %{collaboration_runtime: manager, session_binding: binding},
-                 %{authority | grants: @collaboration}
-               ),
-             runtime = %{
-               state
-               | session: session,
-                 manager: manager,
-                 contracts: Map.values(collab.registry.tools)
-             },
-             {:ok, opts} <- options(runtime, context, run_id, 1, history, authority, false),
-             {:ok, root} <-
-               Conversation.start_link(
-                 Keyword.merge(opts, subscriber: host, session_binding: binding)
-               ) do
-          Enum.each([root, session, manager], &Process.unlink/1)
+        with {:ok, local_runtime} <- NativeLocal.open(selection, state.local_runtime) do
+          result =
+            with {:ok, binding} <- Session.bind(session, authority, incarnation: 1),
+                 {:ok, native} <-
+                   collaboration_profile(%{collaboration_runtime: manager}, authority, selection),
+                 runtime = %{
+                   state
+                   | session: session,
+                     manager: manager,
+                     binding: binding,
+                     local_runtime: local_runtime,
+                     collaboration_descriptors:
+                       Enum.flat_map(native, &Map.values(&1.registry.tools))
+                 },
+                 {:ok, opts, metadata} <-
+                   options(runtime, context, run_id, 1, history, authority, false) do
+              Enum.each([session, manager], &Process.unlink/1)
+              if local_runtime, do: Process.unlink(local_runtime.server)
 
-          {:ok,
-           %{
-             root: root,
-             session: session,
-             manager: manager,
-             contracts: runtime.contracts,
-             content: content
-           }}
+              {:ok,
+               %{
+                 options: opts,
+                 session: session,
+                 manager: manager,
+                 binding: binding,
+                 local_runtime: local_runtime,
+                 collaboration_descriptors: runtime.collaboration_descriptors,
+                 browser_resources:
+                   Map.take(metadata.browser_resources, [{binding.owner_id, binding.incarnation}]),
+                 browser_pruned:
+                   Map.drop(state.browser_resources, Map.keys(metadata.browser_resources)),
+                 mcp_resource_runtimes:
+                   Map.take(metadata.mcp_resource_runtimes, [
+                     {binding.owner_id, binding.incarnation}
+                   ]),
+                 mcp_resource_pruned:
+                   Map.drop(state.mcp_resource_runtimes, Map.keys(metadata.mcp_resource_runtimes)),
+                 metadata: metadata,
+                 content: content
+               }}
+            end
+
+          if match?({:error, _}, result) and not is_nil(local_runtime) and
+               local_runtime != state.local_runtime,
+             do: stop(local_runtime.server)
+
+          result
         end
 
       if match?({:error, _}, result) do
@@ -620,7 +1495,7 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     do: {:ok, session, manager}
 
   defp owners(host, state, authority) do
-    with {:ok, session} <- Session.start_link(owner_pid: host),
+    with {:ok, session} <- Session.start_link(owner_pid: host, cleanup_timeout: 20_000),
          {:ok, manager} <-
            MultiAgent.start_link(
              parent_run_id: authority.run_id,
@@ -629,7 +1504,11 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
              subscriber: host,
              max_concurrent_threads_per_session: state.limit,
              child_options: fn request, run_id, parent ->
-               GenServer.call(host, {:child_options, request, run_id, parent}, 10_000)
+               GenServer.call(
+                 host,
+                 {:child_options, request, run_id, parent},
+                 if("synapsis::browser" in authority.grants, do: 25_000, else: 10_000)
+               )
              end,
              admission_receipt: fn receipt ->
                GenServer.call(host, {:receipt, receipt}, 10_000)
@@ -639,43 +1518,395 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     end
   end
 
-  defp options(state, context, run_id, incarnation, messages, parent_authority, child?) do
-    with {:ok, host} <- host_bundle(state, context, run_id, child?),
-         authority = combined_authority(host.authority),
-         grants = Enum.filter(authority.grants, &(&1 in parent_authority.grants)),
-         authority = %{authority | grants: grants},
-         descriptors =
-           Map.values(host.registry.tools) ++
-             collaboration_descriptors(
-               state.contracts,
-               host.host_context,
-               self_host(state),
-               child?
-             ),
-         descriptors = Enum.filter(descriptors, &(&1.tool_name in grants)),
-         {:ok, bundle} <-
-           ToolCatalog.admit_batch(
-             descriptors,
-             authority: authority,
-             mode: :strict
-           ) do
-      tools = bundle.tools
+  defp prepared_child(request, run_id, parent, parent_context, intent, state) do
+    identity = parent.child
 
-      provider_context =
-        Map.merge(
+    with :ok <- child_configuration(request, parent_context),
+         {:ok, messages} <- fork_messages(state, request, parent) do
+      case reserve_child_session(state, identity, run_id, parent.authority) do
+        {:ok, binding, state} ->
+          result =
+            options(
+              %{state | binding: binding},
+              parent_context,
+              run_id,
+              identity.incarnation,
+              messages,
+              parent.authority,
+              true
+            )
+
+          case result do
+            {:ok, options, metadata} ->
+              options =
+                options
+                |> Keyword.put(:session_binding, binding)
+                |> Keyword.put(:thread_id, identity.run_id)
+                |> Keyword.put(
+                  :host_metadata,
+                  Map.take(intent, [:name, :agent_id, :parent_name])
+                )
+
+              {:reply, {:ok, options},
+               %{
+                 state
+                 | tool_contexts: Map.put(state.tool_contexts, metadata.key, metadata.entry),
+                   browser_resources: metadata.browser_resources,
+                   mcp_resource_runtimes: metadata.mcp_resource_runtimes,
+                   runs:
+                     Map.put(state.runs, run_id, %{
+                       identity: identity,
+                       store: state.store,
+                       context: parent_context
+                     })
+               }}
+
+            {:error, _} = error ->
+              {:reply, error, discard_child_reservation(state, identity, binding)}
+          end
+
+        {:error, error, state} ->
+          {:reply, {:error, error}, state}
+      end
+    else
+      {:error, %Error{}} = error ->
+        {:reply, error, state}
+
+      {:error, _} ->
+        {:reply, failure(:execution_failure, "Subagent intent could not be persisted"),
+         %{state | error: :storage_failed}}
+    end
+  end
+
+  defp reserve_child_session(state, identity, run_id, authority) do
+    case child_session_owner(state, identity) do
+      {:ok, child, state, new?} ->
+        ceiling = run_authority(state, authority, run_id)
+
+        case Session.bind(child.session, ceiling, incarnation: identity.incarnation) do
+          {:ok, binding} ->
+            child = %{child | binding: binding, identity: identity}
+            {:ok, binding, put_in(state, [:child_sessions, identity.agent_id], child)}
+
+          {:error, error} ->
+            # Refusal to bind an existing owner must leave its active resources intact.
+            state =
+              if new? do
+                stop(child.session)
+                %{state | child_sessions: Map.delete(state.child_sessions, identity.agent_id)}
+              else
+                state
+              end
+
+            {:error, error, state}
+        end
+
+      {:error, _, _} = error ->
+        error
+    end
+  end
+
+  defp child_session_owner(state, identity) do
+    case state.child_sessions[identity.agent_id] do
+      nil ->
+        start_child_session(state, identity)
+
+      %{cleanup: {:ok, %{status: :confirmed}}} = child ->
+        state = forget_closed_child_browser(state, child)
+        stop(child.session)
+        start_child_session(state, identity)
+
+      %{closing: true} ->
+        {:error, Error.new(:resource_conflict, "Child Session cleanup is pending"), state}
+
+      child ->
+        case safe(fn -> Session.status(child.session) end) do
+          %{phase: :closed, cleanup: {:ok, %{status: :confirmed}}} ->
+            state =
+              state |> forget_closed_child_browser(child) |> forget_closed_child_resources(child)
+
+            stop(child.session)
+            start_child_session(state, identity)
+
+          %{phase: :closed} ->
+            {:error, Error.new(:unknown_outcome, "Child Session cleanup is unconfirmed"), state}
+
+          %{phase: _} ->
+            {:ok, child, state, false}
+
+          {:error, error} ->
+            {:error, error, state}
+        end
+    end
+  end
+
+  defp forget_closed_child_browser(state, %{session: session, binding: binding})
+       when is_map(binding) do
+    key = {binding.owner_id, binding.incarnation}
+
+    case state.browser_resources[key] do
+      %{binding: %{session: ^session, owner_id: owner, incarnation: incarnation}}
+      when owner === binding.owner_id and incarnation === binding.incarnation ->
+        %{state | browser_resources: Map.delete(state.browser_resources, key)}
+
+      _ ->
+        state
+    end
+  end
+
+  defp forget_closed_child_browser(state, _child), do: state
+
+  defp forget_closed_child_resources(state, %{session: session, binding: binding})
+       when is_map(binding) do
+    key = {binding.owner_id, binding.incarnation}
+
+    case state.mcp_resource_runtimes[key] do
+      %{binding: %{session: ^session, owner_id: owner, incarnation: incarnation}}
+      when owner === binding.owner_id and incarnation === binding.incarnation ->
+        %{state | mcp_resource_runtimes: Map.delete(state.mcp_resource_runtimes, key)}
+
+      _ ->
+        state
+    end
+  end
+
+  defp forget_closed_child_resources(state, _child), do: state
+
+  defp start_child_session(state, identity) do
+    case Session.start_link(owner_pid: self_host(state), cleanup_timeout: 20_000) do
+      {:ok, session} ->
+        child = %{
+          session: session,
+          binding: nil,
+          identity: identity,
+          closing: false,
+          cleanup: :not_requested
+        }
+
+        {:ok, child, put_in(state, [:child_sessions, identity.agent_id], child), true}
+
+      {:error, error} ->
+        {:error, error, state}
+    end
+  end
+
+  defp discard_child_reservation(state, identity, binding) do
+    state =
+      state
+      |> put_in([:child_sessions, identity.agent_id, :closing], true)
+      |> close_prepared_targets({identity.run_id, identity.incarnation})
+
+    job(state, {:child_cleanup, identity.agent_id, binding}, fn ->
+      Session.close(binding)
+    end)
+  end
+
+  defp run_authority(state, authority, run_id) do
+    authority
+    |> Map.put(:caller, "synapsis:" <> state.session_id)
+    |> Map.put(:run_id, run_id)
+  end
+
+  defp pdf_model_context(context, provider_context) do
+    runtime = provider_context.provider_config
+    model = provider_context.request_options[:model]
+
+    provider =
+      case runtime[:provider_id] do
+        id when is_binary(id) ->
+          case Synapsis.Providers.get(id) do
+            {:ok, saved} -> saved.name
+            _ -> nil
+          end
+
+        _ ->
+          runtime[:provider_name]
+      end
+
+    active =
+      if is_binary(provider) and is_binary(model) do
+        supports_images =
+          with {:ok, saved} <- Synapsis.Providers.get_by_name(provider),
+               {:ok, record} <- Synapsis.Models.get_by_identity(saved.id, model),
+               input when is_list(input) <- record.input do
+            "image" in input
+          else
+            _ ->
+              case Synapsis.Provider.ModelRegistry.get(model) do
+                {:ok, metadata} -> metadata.supports_images
+                _ -> false
+              end
+          end
+
+        %{provider: provider, model: model, supports_images: supports_images}
+      end
+
+    %{
+      configured_default:
+        context.agent[:configured_default_model] ||
+          Config.configured_default_model(context.agent[:name], context.session.config || %{}),
+      active_model: active
+    }
+  end
+
+  defp options(state, context, run_id, incarnation, messages, parent_authority, child?) do
+    identity = %{
+      caller: "synapsis:" <> state.session_id,
+      session_id: state.session_id,
+      run_id: run_id,
+      incarnation: incarnation,
+      catalog_revision: 1
+    }
+
+    filesystem_preparation = filesystem_preparation(self_host(state), run_id, incarnation)
+    ceiling = run_authority(state, parent_authority, run_id)
+    skill_preparation = skill_search_preparation(self_host(state), run_id, incarnation)
+    workshop_preparation = skill_workshop_preparation(self_host(state), run_id, incarnation)
+
+    with {:ok, selected} <- Profiles.selection(context),
+         {:ok, plan} <-
+           Discovery.plan(
+             context.agent,
+             selected,
+             if(child? and Map.get(context.agent, :deferred_tool_names, []) != [], do: ceiling)
+           ),
+         selection = plan.selected,
+         context = %{
+           context
+           | agent:
+               context.agent
+               |> Map.put(:tools, selection)
+               |> Map.put(:deferred_tool_names, plan.deferred)
+         },
+         context = filesystem_context(context, selection, filesystem_preparation.fetch),
+         # Admission and execution use this same final provider/request pair, including
+         # the existing fixture overlay. Never infer the active model from a historical
+         # session selection after these request options have been assembled.
+         provider_context =
+           %{
+             provider_config: context.provider_config,
+             request_options: %{
+               model: context.agent[:model] || context.session.model,
+               system_prompt: system_prompt(context, child?),
+               max_tokens: context.agent[:max_tokens] || 8192,
+               reasoning_effort: context.agent[:reasoning_effort],
+               history_projection: context.agent[:history_projection]
+             }
+           }
+           |> Map.merge(state.fixture_context),
+         context =
+           if("synapsis::pdf" in selection,
+             do:
+               Map.put(context, :pdf_model_context, pdf_model_context(context, provider_context)),
+             else: context
+           ),
+         {:ok, native} <- native_bundles(state, ceiling, selection, child?),
+         {:ok, local} <-
+           NativeLocal.bundles(local_context(state, context, run_id, child?), ceiling, selection),
+         {:ok, process_inspection} <-
+           ProcessInspection.bundles(
+             local_context(state, context, run_id, child?),
+             identity,
+             ceiling,
+             selection
+           ),
+         {:ok, code_mode} <-
+           CodeMode.bundles(%{session_binding: state.binding}, ceiling, selection),
+         {:ok, web} <- Fetch.bundles(context, identity, ceiling, selection, state.binding),
+         {:ok, web_search} <-
+           Search.bundles(context, identity, ceiling, selection, state.binding),
+         {:ok, web_extract} <-
+           Extract.bundles(context, identity, ceiling, selection, state.binding),
+         {:ok, web_scrape} <-
+           Scrape.bundles(context, identity, ceiling, selection, state.binding),
+         {:ok, x_search} <-
+           XSearch.bundles(context, identity, ceiling, selection, state.binding),
+         {:ok, remote_analysis} <-
+           CodeExecution.bundles(context, identity, ceiling, selection, state.binding),
+         {:ok, diffs} <- Diffs.bundles(context, identity, ceiling, selection, state.binding),
+         {:ok, pdf} <- PDF.bundles(context, identity, ceiling, selection, state.binding),
+         {:ok, workflows} <-
+           Workflows.bundles(context, identity, ceiling, selection, state.binding),
+         {:ok, tts} <- TTS.bundles(context, identity, ceiling, selection, state.binding),
+         {:ok, decisions} <-
+           Decisions.bundles(context, identity, ceiling, selection, state.binding),
+         {:ok, browser, browser_resources} <-
+           Browser.bundles(
+             context,
+             identity,
+             ceiling,
+             selection,
+             state.binding,
+             state.browser_resources
+           ),
+         {:ok, resources, mcp_resource_runtimes} <-
+           MCPResources.bundles(
+             context,
+             identity,
+             ceiling,
+             selection,
+             state.binding,
+             state.mcp_resource_runtimes
+           ),
+         {:ok,
           %{
-            provider_config: context.provider_config,
-            tools: tools,
-            request_options: %{
-              model: context.agent[:model] || context.session.model,
-              system_prompt: context.system_prompt,
-              max_tokens: context.agent[:max_tokens] || 8192,
-              reasoning_effort: context.agent[:reasoning_effort],
-              history_projection: context.agent[:history_projection]
-            }
-          },
-          state.fixture_context
-        )
+            bundle: bundle,
+            snapshot: snapshot,
+            discovery: discovery,
+            skill_body_cache: skill_cache
+          }} <-
+           Profiles.build(
+             context
+             |> Map.put(:tool_primary?, not child?)
+             |> Map.put(:skill_search_preparation, skill_preparation)
+             |> Map.put(:skill_workshop_preparation, workshop_preparation)
+             |> Map.put(:tool_session_binding, state.binding),
+             identity,
+             native ++
+               local ++
+               process_inspection ++
+               code_mode ++
+               web ++
+               web_search ++
+               web_extract ++
+               web_scrape ++
+               x_search ++
+               remote_analysis ++
+               browser ++ diffs ++ pdf ++ workflows ++ tts ++ decisions ++ resources,
+             ceiling
+           ) do
+      tool_context_resolver = fn invocation, catalog ->
+        GenServer.call(self_host(state), {:tool_context, invocation, catalog}, 5_000)
+      end
+
+      provider_context = Map.put(provider_context, :tool_context_resolver, tool_context_resolver)
+
+      host_context = %{
+        mode_provenance: context.mode_provenance,
+        input_context: context[:input_context],
+        tool_operator_id: Approval.operator_id(),
+        tool_context_resolver: tool_context_resolver,
+        filesystem_preparation: filesystem_preparation,
+        workflow_effect_registration:
+          workflow_effect_registration(self_host(state), run_id, incarnation)
+      }
+
+      metadata = %{
+        key: {run_id, incarnation},
+        entry: %{
+          snapshot: snapshot,
+          discovery: discovery,
+          skill_body_cache: skill_cache,
+          skill_context: context,
+          skill_ceiling: ceiling,
+          skill_successors: [],
+          prepared_targets: %{},
+          prepared_target_bytes: 0,
+          prepared_targets_closed?: false
+        },
+        browser_resources: browser_resources,
+        mcp_resource_runtimes: mcp_resource_runtimes
+      }
 
       {:ok,
        [
@@ -685,126 +1916,856 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
          context: state.store,
          provider: state.provider,
          provider_context: provider_context,
+         host_context: host_context,
+         hooks: Policy,
          messages: messages,
          registry: bundle.registry,
-         tools: tools,
+         tools: bundle.tools,
          authority: bundle.authority,
          schema_admission: :strict,
+         tool_result_contract: &select_tool_result_contract/2,
          work: 100,
          run_timeout: :infinity,
          effect_timeout: 600_000,
          commit_timeout: 5_000,
-         cleanup_timeout: 5_000
-       ]}
+         cleanup_timeout: if("synapsis::browser" in selection, do: 20_000, else: 5_000)
+       ], metadata}
     end
   end
 
-  defp host_bundle(state, context, run_id, child?) do
-    names = context.agent[:tools]
-    tools = context.agent[:resolved_tools] || Registry.list_for_query_loop(names: names)
-
-    requested =
-      if(is_list(names), do: names, else: Enum.map(tools, & &1.name))
-      |> Enum.reject(&(&1 in (@legacy ++ ["tool_search"])))
-
-    tools = Enum.reject(tools, &(&1.name in (@legacy ++ ["tool_search"])))
-    missing = requested -- Enum.map(tools, & &1.name)
-
-    host = %{
-      run_id: run_id,
-      session_id: state.session_id,
-      agent_id: context.session.agent,
-      project_path: context.project_path,
-      parent_agent: child?,
-      session_epoch: state.epoch,
-      policy_snapshot: policy(context, state.session_id, run_id),
-      skill_catalog: context.agent[:skill_catalog],
-      skill_loader: context.agent[:skill_loader]
-    }
-
-    with true <-
-           missing == [] ||
-             failure(
-               :unsupported_capability,
-               "Selected tools unavailable or deferred: #{Enum.join(missing, ", ")}"
-             ),
-         {:ok, admitted} <-
-           ToolRegistry.admit(tools, host, revision: 1, caller: "synapsis:" <> state.session_id) do
-      entries =
-        Map.new(admitted.registry.tools, fn {name, descriptor} ->
-          descriptor =
-            descriptor |> Map.put(:description, Enum.find(tools, &(&1.name == name)).description)
-
-          descriptor = %{
-            descriptor
-            | backend: SessionTools,
-              backend_context:
-                Map.put(descriptor.backend_context, :interaction_observer, self_host(state))
-          }
-
-          {name, descriptor}
-        end)
-
-      discovery? = is_nil(names) or "tool_search" in names
-
-      entries =
-        if discovery? do
-          discovery = %{
-            tool_name: "tool_search",
-            tool_revision: 1,
-            backend: SessionTools,
-            backend_context: %{
-              host_context: host,
-              bounded_discovery: Enum.map(tools, &Map.take(&1, [:name, :description]))
-            },
-            schema: Synapsis.Tool.ToolSearch.parameters(),
-            description:
-              "Search this run's admitted tools only. Does not discover or activate deferred or plugin tools.",
-            safety: %{read_only: true, retry_safe: true, parallel_safe: true}
-          }
-
-          Map.put(entries, "tool_search", discovery)
-        else
-          entries
-        end
-
-      authority =
-        Map.update!(
-          admitted.authority,
-          :grants,
-          &if(discovery?, do: &1 ++ ["tool_search"], else: &1)
-        )
-
-      {:ok,
-       admitted
-       |> Map.put(:registry, %{admitted.registry | tools: entries})
-       |> Map.put(:authority, authority)
-       |> Map.put(:host_context, host)}
+  defp select_tool_result_contract(descriptor, identity) do
+    case SkillResultContract.select(descriptor, identity) do
+      :default -> FilesystemResultContract.select(descriptor, identity)
+      selected -> selected
     end
   end
 
-  defp policy(context, session_id, run_id) do
-    snapshot =
-      context[:policy_snapshot] ||
-        PolicySnapshot.from_session_config(Synapsis.Tool.Permission.session_config(session_id),
-          attended?: true
-        )
+  # Every candidate is frozen before native staging. Resolve only against the
+  # actual Conversation catalog, never the most recently prepared host snapshot.
+  defp project_skill_catalog(entry, identity, catalog) do
+    candidates = [
+      %{revision: 1, snapshot: entry.snapshot} | Map.get(entry, :skill_successors, [])
+    ]
 
-    %{snapshot | session_id: session_id, run_id: run_id}
-  end
-
-  defp collaboration_descriptors(contracts, host, observer, child?) do
-    Enum.map(contracts, fn contract ->
-      bound =
-        Map.merge(contract.backend_context, %{host_context: host, interaction_observer: observer})
-
-      bound = if child?, do: Map.delete(bound, :session_binding), else: bound
-      %{contract | backend: SessionTools, backend_context: bound}
+    candidates
+    |> Enum.filter(fn candidate ->
+      candidate.revision < catalog.revision or
+        (candidate.revision == catalog.revision and
+           Map.get(candidate, :publication_id) === Map.get(catalog, :publication_id))
+    end)
+    |> Enum.sort_by(& &1.revision, :desc)
+    |> Enum.reduce_while({:error, :scope_mismatch}, fn candidate, _ ->
+      case Profiles.project_catalog(identity, candidate.snapshot, catalog) do
+        {:ok, projected} -> {:halt, {:ok, projected}}
+        _ -> {:cont, {:error, :scope_mismatch}}
+      end
     end)
   end
 
-  defp combined_authority(authority),
-    do: Map.update!(authority, :grants, &Enum.uniq(&1 ++ @collaboration))
+  defp skill_workshop_preparation(adapter, run_id, incarnation) do
+    fn operation, catalog ->
+      with true <- operation[:run_id] === run_id and operation[:incarnation] === incarnation,
+           {:ok, issued, context, binding, ceiling} <-
+             GenServer.call(adapter, {:skill_successor_context, operation, catalog}, 5_000),
+           {:ok, live} <- skill_execution(operation),
+           {:ok, snapshot} <-
+             Synapsis.SkillDiscovery.capture(
+               Synapsis.SkillReader.agent_id(issued.skill_snapshot),
+               live
+             ),
+           {:ok, prepared} <-
+             Profiles.skill_successor(
+               context,
+               issued,
+               catalog,
+               snapshot,
+               binding,
+               skill_search_preparation(adapter, run_id, incarnation),
+               ceiling
+             ) do
+        update = %{
+          run_id: run_id,
+          incarnation: incarnation,
+          publication_id: Ecto.UUID.generate(),
+          expected_revision: catalog.revision,
+          catalog: Map.put(prepared.bundle, :revision, catalog.revision + 1)
+        }
+
+        case GenServer.call(
+               adapter,
+               {:skill_successor_register, operation, catalog, update, prepared},
+               5_000
+             ) do
+          :ok ->
+            {:ok, update}
+
+          error ->
+            SkillBodyCache.release(prepared.skill_body_cache)
+            Discovery.release(prepared.discovery)
+            error
+        end
+      else
+        false -> {:error, :scope_mismatch}
+        error -> error
+      end
+    end
+  end
+
+  defp skill_execution(%{backend_context: %{effect_deadline: getter}})
+       when is_function(getter, 0) do
+    with {:ok, %{deadline_ms: deadline, remaining_ms: remaining, paused: false}} <- getter.(),
+         true <- is_integer(deadline) and remaining > 0 do
+      {:ok,
+       %{
+         deadline: deadline,
+         assert_live: fn ->
+           case getter.() do
+             {:ok, %{remaining_ms: value, paused: false}} when value > 0 -> :ok
+             _ -> {:error, :timeout}
+           end
+         end
+       }}
+    else
+      _ -> {:error, :timeout}
+    end
+  end
+
+  defp skill_execution(_), do: {:error, :invalid_execution}
+
+  defp skill_search_preparation(adapter, run_id, incarnation) do
+    fn operation, catalog ->
+      if operation[:run_id] === run_id and operation[:incarnation] === incarnation do
+        with {:ok, snapshot} <-
+               GenServer.call(adapter, {:tool_context, operation, catalog}, 5_000),
+             do: Profiles.prepare_skill_search(operation, catalog, snapshot)
+      else
+        {:error, :scope_mismatch}
+      end
+    end
+  end
+
+  defp filesystem_context(context, selection, resolver) do
+    if Enum.any?(selection, &(&1 in @filesystem_names)) do
+      options = [
+        node_executable: Application.get_env(:synapsis_agent, :filesystem_node),
+        model_budget: filesystem_model_budget(context.agent[:model_context_window])
+      ]
+
+      options =
+        case Synapsis.Provider.ModelRegistry.get(context.agent[:model] || context.session.model) do
+          {:ok, %{supports_images: vision}} when is_boolean(vision) ->
+            Keyword.put(options, :model_has_vision, vision)
+
+          _ ->
+            options
+        end
+
+      Map.put(context, :tool_filesystem, %{
+        path_environment: %{
+          cwd: context.project_path,
+          os_home: System.user_home(),
+          platform: filesystem_platform(),
+          workspace_root: Path.expand(Synapsis.WorkspaceDocuments.root())
+        },
+        prepared_target_resolver: resolver,
+        execution_options: options
+      })
+    else
+      context
+    end
+  end
+
+  defp filesystem_platform do
+    case :os.type() do
+      {:unix, :linux} -> :linux
+      {:unix, :darwin} -> :darwin
+      {:win32, _} -> :win32
+      _ -> nil
+    end
+  end
+
+  # OpenClaw 488631c agents/tool-result-limits.ts. BEAM numbers are finite;
+  # missing or nonnumeric model context leaves the source budget unspecified.
+  defp filesystem_model_budget(context) when is_number(context) and context > 0 do
+    tokens = floor(context)
+
+    hard_cap =
+      cond do
+        tokens >= 200_000 -> 64_000
+        tokens >= 100_000 -> 32_000
+        true -> 16_000
+      end
+
+    %{
+      maxChars: min(floor(context * 0.3) * 4, hard_cap),
+      maxContextChars: max(1_024, floor(max(1, tokens) * 2 * 0.5))
+    }
+  end
+
+  defp filesystem_model_budget(_), do: nil
+
+  defp workflow_tool_context_resolver(adapter, {run_id, incarnation}, budget) do
+    fn identity, catalog ->
+      if is_map(identity) and identity[:run_id] === run_id and
+           identity[:incarnation] === incarnation,
+         do: workflow_call(adapter, {:tool_context, identity, catalog}, budget),
+         else: {:error, :scope_mismatch}
+    end
+  end
+
+  defp workflow_call(adapter, message, nil), do: GenServer.call(adapter, message, 5_000)
+
+  defp workflow_call(adapter, message, {deadline, timeout}) do
+    remaining = deadline - System.monotonic_time(:millisecond)
+
+    if remaining > 0,
+      do: GenServer.call(adapter, message, min(remaining, timeout)),
+      else: {:error, :workflow_deadline_expired}
+  end
+
+  defp workflow_budget_active?({deadline, timeout}),
+    do:
+      is_integer(deadline) and is_integer(timeout) and timeout in 1..5_000 and
+        deadline > System.monotonic_time(:millisecond)
+
+  defp workflow_parent(state, parent_key, proof, identity, binding, target) do
+    with true <- not state.closing and is_nil(state.error),
+         true <- is_map(proof) and not is_struct(proof),
+         true <-
+           Enum.sort(Map.keys(proof)) ===
+             Enum.sort([:identity, :catalog, :authority, :deadline_ms, :call_timeout_ms]),
+         true <- workflow_budget_active?({proof.deadline_ms, proof.call_timeout_ms}),
+         true <- workflow_parent_identity?(proof.identity, parent_key),
+         %{prepared_targets_closed?: false, snapshot: snapshot} <-
+           state.tool_contexts[parent_key],
+         {:ok, parent} <- Profiles.project_catalog(proof.identity, snapshot, proof.catalog),
+         true <- proof.authority === proof.catalog.authority,
+         true <- workflow_child_identity?(identity, parent.scope, state.tool_contexts),
+         true <- workflow_child_binding?(binding, identity),
+         %{tool_name: name, tool_revision: revision} <- target,
+         true <- map_size(target) == 2 and name in @filesystem_names and revision === 1,
+         names = ["exec", "wait", name],
+         descriptors = Map.take(proof.catalog.registry.tools, names),
+         true <- Enum.sort(Map.keys(descriptors)) === Enum.sort(names),
+         true <- workflow_parent_descriptors?(descriptors, names, proof, target),
+         %{tool_revision: invocation_revision} <-
+           proof.catalog.registry.tools[proof.identity.tool_name],
+         true <- invocation_revision === proof.identity.tool_revision,
+         {:ok, admitted} <-
+           ToolCatalog.admit_batch(proof.catalog,
+             mode: :strict,
+             run_id: proof.identity.run_id
+           ),
+         true <- workflow_admitted_authority?(admitted.authority, proof.authority) do
+      {:ok, parent, workflow_authority(proof.authority, names, identity.run_id), descriptors}
+    else
+      _ -> {:error, :invalid_workflow_proof}
+    end
+  end
+
+  defp workflow_parent_identity?(identity, {run_id, incarnation})
+       when is_map(identity) and not is_struct(identity) do
+    Enum.sort(Map.keys(identity)) === Enum.sort(@workflow_identity_fields) and
+      identity[:run_id] === run_id and identity[:incarnation] === incarnation and
+      filesystem_identity_string?(identity[:caller]) and
+      filesystem_target_identity?(Map.delete(identity, :caller))
+  end
+
+  defp workflow_parent_identity?(_, _), do: false
+
+  defp workflow_child_identity?(identity, scope, contexts)
+       when is_map(identity) and not is_struct(identity) do
+    Enum.sort(Map.keys(identity)) ===
+      Enum.sort([:caller, :session_id, :run_id, :incarnation, :catalog_revision]) and
+      identity[:caller] === scope.caller and identity[:session_id] === scope.session_id and
+      filesystem_identity_string?(identity[:run_id]) and is_integer(identity[:incarnation]) and
+      identity.incarnation > 0 and
+      identity[:catalog_revision] === 1 and
+      not Enum.any?(contexts, fn {{run_id, _}, _} -> run_id === identity.run_id end)
+  end
+
+  defp workflow_child_identity?(_, _, _), do: false
+
+  defp workflow_child_binding?(binding, identity) when is_map(binding) do
+    binding[:run_id] === identity.run_id and binding[:run_incarnation] === identity.incarnation and
+      is_pid(binding[:session]) and is_pid(binding[:resource_registry]) and
+      is_reference(binding[:token]) and is_pid(binding[:owner_pid]) and
+      filesystem_identity_string?(binding[:owner_id]) and is_integer(binding[:incarnation]) and
+      binding.incarnation > 0
+  end
+
+  defp workflow_child_binding?(_, _), do: false
+
+  defp workflow_parent_descriptors?(descriptors, names, proof, target) do
+    authority = proof.authority
+
+    is_map(authority) and is_list(authority[:grants]) and
+      Enum.all?(names, fn name ->
+        descriptor = descriptors[name]
+
+        name in authority.grants and
+          descriptor[:tool_name] === name and
+          descriptor[:tool_revision] ===
+            Map.get(Map.get(authority, :tool_revisions, %{}), name, authority[:tool_revision]) and
+          not Map.has_key?(Map.get(authority, :tool_bindings, %{}), name)
+      end) and
+      Enum.all?(["exec", "wait"], fn name ->
+        descriptor = descriptors[name]
+
+        descriptor[:backend] === Backplane.AgentRuntime.Codex.Backend and
+          is_map(descriptor[:backend_context]) and
+          descriptor.backend_context[:family] === :code_mode and
+          is_map(descriptor.backend_context[:context]) and
+          is_map(descriptor.backend_context[:session_binding]) and
+          descriptor.backend_context.session_binding[:run_id] === proof.identity.run_id and
+          descriptor.backend_context.session_binding[:run_incarnation] ===
+            proof.identity.incarnation
+      end) and
+      descriptors["exec"].backend_context.session_binding ===
+        descriptors["wait"].backend_context.session_binding and
+      descriptors[target.tool_name][:backend] === Filesystem and
+      descriptors[target.tool_name][:tool_revision] === target.tool_revision and
+      filesystem_descriptor_context?(
+        descriptors[target.tool_name][:backend_context],
+        proof.identity
+      ) and
+      Enum.all?([:run_id, :incarnation, :catalog_revision], fn field ->
+        descriptors[target.tool_name].backend_context[field] === proof.identity[field]
+      end) and
+      is_map(descriptors[target.tool_name].backend_context[:path_environment]) and
+      is_list(descriptors[target.tool_name].backend_context[:execution_options]) and
+      is_function(descriptors[target.tool_name].backend_context[:prepared_target_resolver], 3)
+  end
+
+  defp workflow_authority(authority, names, run_id) do
+    authority
+    |> Map.put(:run_id, run_id)
+    |> Map.put(:grants, names)
+    |> Map.update(:tool_revisions, %{}, &Map.take(&1, names))
+    |> then(fn narrowed ->
+      if Map.has_key?(narrowed, :tool_bindings),
+        do: Map.update!(narrowed, :tool_bindings, &Map.take(&1, names)),
+        else: narrowed
+    end)
+  end
+
+  defp workflow_admitted_authority?(admitted, expected) do
+    # Re-admitting a registry map sorts descriptors; grant order is preserved
+    # in the actual child authority checked separately during activation.
+    Map.drop(admitted, [:grants]) === Map.drop(expected, [:grants]) and
+      Enum.sort(admitted.grants) === Enum.sort(expected.grants)
+  end
+
+  defp workflow_child_descriptors(descriptors, identity, binding, preparation) do
+    Map.new(descriptors, fn {name, descriptor} ->
+      backend = descriptor.backend_context
+
+      backend =
+        if name in ["exec", "wait"] do
+          context =
+            Map.merge(backend.context, %{
+              session_binding: binding,
+              resource_registry: binding.resource_registry,
+              session_registry: binding.resource_registry
+            })
+
+          Map.merge(backend, %{session_binding: binding, context: context})
+        else
+          backend
+          |> Map.merge(Map.take(identity, [:run_id, :incarnation, :catalog_revision]))
+          |> Map.put(:prepared_target_resolver, preparation.fetch)
+        end
+
+      {name, Map.put(descriptor, :backend_context, backend)}
+    end)
+  end
+
+  defp workflow_parent_active?(state, workflow) do
+    with true <- not state.closing and is_nil(state.error),
+         %{prepared_targets_closed?: false, snapshot: snapshot} <-
+           state.tool_contexts[workflow.parent_key],
+         {:ok, _} <-
+           Profiles.project_catalog(workflow.parent_identity, snapshot, workflow.parent_catalog) do
+      true
+    else
+      _ -> false
+    end
+  end
+
+  defp workflow_activation(bundle, snapshot, workflow) when is_map(bundle) and is_map(snapshot) do
+    names = Map.keys(workflow.descriptors) |> Enum.sort()
+
+    expected_scope =
+      Map.put(
+        workflow.identity,
+        :permission_fingerprint,
+        workflow.evidence.permission_fingerprint
+      )
+
+    with %{registry: %{tools: descriptors}, authority: authority, tools: tools} <- bundle,
+         true <- descriptors === workflow.descriptors and authority === workflow.authority,
+         true <- snapshot[:scope] === expected_scope,
+         true <- snapshot[:issued_descriptors] === descriptors,
+         true <- snapshot[:permission] === workflow.permission,
+         true <- snapshot[:evidence] === workflow.evidence,
+         true <- is_map(snapshot[:selected]) and Enum.sort(Map.keys(snapshot.selected)) === names,
+         true <- snapshot[:permission_levels] === workflow.permission_levels,
+         true <- is_map(snapshot[:known_bindings]),
+         catalog = %{revision: 1, registry: bundle.registry, tools: tools, authority: authority},
+         {:ok, _} <- Profiles.project_catalog(workflow.identity, snapshot, catalog),
+         {:ok, admitted} <-
+           ToolCatalog.admit_batch(bundle, mode: :strict, run_id: workflow.identity.run_id),
+         true <- admitted.registry === bundle.registry,
+         true <- workflow_admitted_authority?(admitted.authority, authority) do
+      :ok
+    else
+      _ -> {:error, :invalid_workflow_catalog}
+    end
+  end
+
+  defp workflow_activation(_, _, _), do: {:error, :invalid_workflow_catalog}
+
+  defp filesystem_preparation(adapter, run_id, incarnation, budget \\ nil) do
+    binding = {run_id, incarnation}
+
+    %{
+      reserve: fn identity, catalog, digest ->
+        filesystem_preparation_call(
+          adapter,
+          binding,
+          identity,
+          {:filesystem_target_reserve, identity, catalog, digest},
+          budget
+        )
+      end,
+      seal: fn identity, catalog, token, candidate, digest ->
+        filesystem_preparation_call(
+          adapter,
+          binding,
+          identity,
+          {:filesystem_target_seal, identity, catalog, token, candidate, digest},
+          budget
+        )
+      end,
+      fetch: fn identity, catalog, digest ->
+        filesystem_preparation_call(
+          adapter,
+          binding,
+          identity,
+          {:filesystem_target_fetch, identity, catalog, digest},
+          budget
+        )
+      end,
+      abandon: fn identity, catalog, token ->
+        filesystem_preparation_call(
+          adapter,
+          binding,
+          identity,
+          {:filesystem_target_abandon, identity, catalog, token},
+          budget
+        )
+      end
+    }
+  end
+
+  defp filesystem_preparation_call(adapter, {run_id, incarnation}, identity, message, budget)
+       when is_map(identity) do
+    if identity[:run_id] === run_id and identity[:incarnation] === incarnation,
+      do: workflow_call(adapter, message, budget),
+      else: {:error, :scope_mismatch}
+  end
+
+  defp filesystem_preparation_call(_, _, _, _, _), do: {:error, :invalid_prepared_target}
+
+  defp filesystem_target_context(state, identity, catalog) do
+    with true <- not state.closing and is_nil(state.error),
+         true <- filesystem_target_identity?(identity),
+         context_key = {identity.run_id, identity.incarnation},
+         %{prepared_targets_closed?: false, prepared_targets: targets} = entry <-
+           state.tool_contexts[context_key],
+         true <- is_map(targets),
+         true <- workflow_preparation_active?(entry),
+         {:ok, projected} <- Profiles.project_catalog(identity, entry.snapshot, catalog),
+         {:ok, descriptor} <- Map.fetch(projected.issued_descriptors, identity.tool_name),
+         true <-
+           identity.tool_name in @filesystem_names and identity.tool_revision === 1 and
+             descriptor[:tool_name] === identity.tool_name and
+             descriptor[:tool_revision] === 1 and descriptor[:backend] === Filesystem,
+         true <-
+           Map.has_key?(projected.selected, identity.tool_name) and
+             filesystem_descriptor_context?(descriptor[:backend_context], identity) do
+      key =
+        {identity.run_id, identity.incarnation, identity.catalog_revision, identity.invocation_id,
+         identity.tool_name, identity.tool_revision}
+
+      correlation =
+        identity
+        |> Map.take(@filesystem_correlation_fields)
+        |> Map.put(
+          :enclosing_invocation_id,
+          identity[:enclosing_invocation_id] || identity.invocation_id
+        )
+
+      {:ok, context_key, entry, key, correlation, descriptor}
+    else
+      {:error, _} = error -> error
+      _ -> {:error, :prepared_target_unavailable}
+    end
+  end
+
+  defp filesystem_target_identity?(identity) when is_map(identity) and not is_struct(identity) do
+    required = @filesystem_identity_fields
+
+    Map.keys(identity) -- (required ++ [:enclosing_invocation_id]) == [] and
+      Enum.all?(required, &Map.has_key?(identity, &1)) and
+      Enum.all?(required -- [:incarnation, :catalog_revision, :tool_revision], fn field ->
+        filesystem_identity_string?(identity[field])
+      end) and
+      Enum.all?([:incarnation, :catalog_revision, :tool_revision], fn field ->
+        is_integer(identity[field]) and identity[field] > 0
+      end) and
+      (is_nil(identity[:enclosing_invocation_id]) or
+         filesystem_identity_string?(identity.enclosing_invocation_id))
+  end
+
+  defp filesystem_target_identity?(_), do: false
+
+  defp filesystem_identity_string?(value),
+    do:
+      is_binary(value) and byte_size(value) in 1..4_096 and String.valid?(value) and
+        String.trim(value) != "" and not String.contains?(value, "\0")
+
+  defp filesystem_digest?(value), do: is_binary(value) and byte_size(value) == 32
+
+  defp filesystem_descriptor_context?(context, identity) when is_map(context) do
+    context[:run_id] === identity.run_id and context[:incarnation] === identity.incarnation and
+      is_integer(context[:catalog_revision]) and context.catalog_revision > 0 and
+      filesystem_absolute_path?(context[:root]) and is_map(context[:workspace]) and
+      context.workspace[:role] in [:global, :agent, :session, :user]
+  end
+
+  defp filesystem_descriptor_context?(_, _), do: false
+
+  defp filesystem_target_record(identity, descriptor, key, envelope, candidate, digest) do
+    with true <- is_map(candidate) and not is_struct(candidate),
+         true <- Enum.sort(Map.keys(candidate)) == Enum.sort(@filesystem_candidate_fields),
+         true <- filesystem_public_path?(candidate.original_path, identity.tool_name),
+         true <- filesystem_public_path?(candidate.public_path, identity.tool_name),
+         true <- filesystem_path_string?(candidate.source_path) and candidate.source_path != "",
+         true <-
+           is_nil(candidate.requested_absolute) or
+             filesystem_absolute_path?(candidate.requested_absolute),
+         {:ok, namespace, resource_path} <-
+           filesystem_target_shape(candidate, descriptor.backend_context),
+         true <- filesystem_source_prefix?(candidate, identity.tool_name) do
+      verb =
+        case identity.tool_name do
+          "synapsis::read" -> "read"
+          "synapsis::write" -> "write"
+          "synapsis::edit" -> "edit"
+          "synapsis::ls" -> "list"
+        end
+
+      {:ok,
+       Map.merge(candidate, %{
+         version: 1,
+         key: key,
+         correlation: envelope.correlation,
+         raw_arguments_digest: envelope.raw_arguments_digest,
+         prepared_arguments_digest: digest,
+         action: namespace <> "." <> verb,
+         resource: namespace <> ":" <> resource_path
+       })}
+    else
+      _ -> {:error, :invalid_prepared_target}
+    end
+  end
+
+  defp filesystem_public_path?(:omitted, "synapsis::ls"), do: true
+  defp filesystem_public_path?(path, _name), do: filesystem_path_string?(path)
+
+  defp filesystem_path_string?(path),
+    do:
+      is_binary(path) and byte_size(path) <= @prepared_target_record_limit and
+        String.valid?(path) and not String.contains?(path, "\0")
+
+  defp filesystem_absolute_path?(path),
+    do:
+      filesystem_path_string?(path) and path != "" and Path.type(path) == :absolute and
+        Path.expand(path, "/") == path
+
+  defp filesystem_relative_path?("."), do: true
+
+  defp filesystem_relative_path?(path),
+    do:
+      filesystem_path_string?(path) and path != "" and Path.type(path) == :relative and
+        Path.join(Path.split(path)) == path and
+        not Enum.any?(Path.split(path), &(&1 in [".", ".."]))
+
+  defp filesystem_target_shape(%{target: {:local, absolute, relative}}, _context) do
+    # Root aliases can map to a different physical prefix. The domain owner
+    # revalidates containment; this metadata owner checks only tuple structure.
+    if filesystem_absolute_path?(absolute) and filesystem_relative_path?(relative),
+      do: {:ok, "filesystem", absolute},
+      else: {:error, :invalid_prepared_target}
+  end
+
+  defp filesystem_target_shape(
+         %{target: {:workspace, logical}, source_path: source, requested_absolute: nil},
+         %{workspace: workspace}
+       ) do
+    if is_map(workspace) and filesystem_absolute_path?(logical) and
+         source === "@synapsis" <> logical,
+       do: {:ok, "workspace", logical},
+       else: {:error, :invalid_prepared_target}
+  end
+
+  defp filesystem_target_shape(_, _), do: {:error, :invalid_prepared_target}
+
+  defp filesystem_source_prefix?(%{source_prefix: ""}, _name), do: true
+
+  defp filesystem_source_prefix?(
+         %{
+           target: {:local, selected, _},
+           requested_absolute: requested,
+           source_prefix: prefix
+         },
+         "synapsis::read"
+       )
+       when is_binary(requested) and is_binary(prefix) do
+    requested_name = Path.basename(requested)
+    selected_name = Path.basename(selected)
+
+    requested_name != selected_name and
+      prefix === "[Resolved filename: #{requested_name} -> #{selected_name}.]\n"
+  end
+
+  defp filesystem_source_prefix?(_, _), do: false
+
+  defp put_prepared_target(state, context_key, entry, key, envelope) do
+    previous = entry.prepared_targets[key]
+    previous_bytes = if previous, do: prepared_target_size(key, previous), else: 0
+    bytes = prepared_target_size(key, envelope)
+    total = entry.prepared_target_bytes - previous_bytes + bytes
+
+    if bytes <= @prepared_target_record_limit and total <= @prepared_target_bytes_limit do
+      entry = %{
+        entry
+        | prepared_targets: Map.put(entry.prepared_targets, key, envelope),
+          prepared_target_bytes: total
+      }
+
+      {:ok, put_in(state, [:tool_contexts, context_key], entry)}
+    else
+      {:error, :prepared_target_limit}
+    end
+  end
+
+  defp prepared_target_size(key, envelope),
+    do: byte_size(:erlang.term_to_binary({key, envelope}, [:deterministic]))
+
+  defp demonitor_prepared_target(%{monitor: monitor}) when is_reference(monitor),
+    do: Process.demonitor(monitor, [:flush])
+
+  defp demonitor_prepared_target(_), do: :ok
+
+  defp settle_prepared_target_producer(state, monitor, producer) do
+    Enum.reduce(state.tool_contexts, state, fn {context_key, entry}, state ->
+      Enum.reduce(Map.get(entry, :prepared_targets, %{}), state, fn
+        {key, %{monitor: ^monitor, producer_pid: ^producer} = envelope}, state ->
+          settled = %{
+            envelope
+            | monitor: nil,
+              state: if(envelope.state == :reserved, do: :abandoned, else: envelope.state)
+          }
+
+          {:ok, state} =
+            put_prepared_target(
+              state,
+              context_key,
+              state.tool_contexts[context_key],
+              key,
+              settled
+            )
+
+          state
+
+        _, state ->
+          state
+      end)
+    end)
+  end
+
+  defp workflow_preparation_active?(%{workflow: %{phase: :active, budget: budget}}),
+    do: workflow_budget_active?(budget)
+
+  defp workflow_preparation_active?(%{workflow: _}), do: false
+  defp workflow_preparation_active?(_), do: true
+
+  defp close_workflow_owner(state, monitor, owner) do
+    Enum.reduce(state.tool_contexts, state, fn
+      {key, %{workflow: %{monitor: ^monitor, owner: ^owner}}}, state ->
+        close_prepared_targets(state, key)
+
+      _, state ->
+        state
+    end)
+  end
+
+  defp close_prepared_targets(state, scope) do
+    keys =
+      for {{run_id, _} = key, _entry} <- state.tool_contexts,
+          scope == :all or scope === key or scope === run_id,
+          into: MapSet.new(),
+          do: key
+
+    keys = workflow_descendants(state.tool_contexts, keys)
+
+    contexts =
+      Enum.reduce(state.tool_contexts, state.tool_contexts, fn {key, entry}, acc ->
+        if MapSet.member?(keys, key) do
+          Enum.each(Map.get(entry, :prepared_targets, %{}), fn {_, envelope} ->
+            demonitor_prepared_target(envelope)
+          end)
+
+          case entry do
+            %{workflow: %{monitor: monitor}} -> Process.demonitor(monitor, [:flush])
+            _ -> :ok
+          end
+
+          if not skill_resources?(entry) do
+            Map.delete(acc, key)
+          else
+            Map.put(
+              acc,
+              key,
+              Map.merge(entry, %{
+                prepared_targets: %{},
+                prepared_target_bytes: 0,
+                prepared_targets_closed?: true
+              })
+            )
+          end
+        else
+          acc
+        end
+      end)
+
+    %{state | tool_contexts: contexts}
+  end
+
+  defp workflow_descendants(contexts, keys) do
+    descendants =
+      Enum.reduce(contexts, keys, fn
+        {key, %{workflow: %{parent_key: parent_key}}}, acc ->
+          if MapSet.member?(acc, parent_key), do: MapSet.put(acc, key), else: acc
+
+        _, acc ->
+          acc
+      end)
+
+    if MapSet.equal?(keys, descendants),
+      do: descendants,
+      else: workflow_descendants(contexts, descendants)
+  end
+
+  defp local_context(state, context, run_id, _child?) do
+    %{
+      workspace: context.project_path,
+      caller: %{run_id: run_id},
+      command: if(state.local_runtime, do: state.local_runtime.command),
+      session_registry: state.binding.resource_registry,
+      session_binding: state.binding
+    }
+  end
+
+  defp native_bundles(state, authority, selection, true) do
+    selected = Enum.filter(selection, &(&1 in @collaboration))
+
+    # Child options run inside the manager's synchronous admission callback.
+    # Bind the cached originals just as Codex.profile/4 does, without calling that manager.
+    descriptors =
+      state.collaboration_descriptors
+      |> Enum.filter(&(&1.tool_name in selected))
+      |> Enum.map(fn descriptor ->
+        Map.update!(descriptor, :backend_context, &Map.put(&1, :session_binding, state.binding))
+      end)
+
+    cond do
+      selected == [] ->
+        {:ok, []}
+
+      not Enum.all?(selected, &(&1 in authority.grants)) ->
+        failure(:forbidden, "Collaboration tools exceed the parent authority ceiling")
+
+      Enum.sort(Enum.map(descriptors, & &1.tool_name)) != Enum.sort(selected) ->
+        failure(:unsupported_capability, "Selected collaboration descriptors are unavailable")
+
+      true ->
+        native_authority = %{
+          authority
+          | grants: selected,
+            tool_revisions: Map.take(authority.tool_revisions, selected)
+        }
+
+        case ToolCatalog.admit_batch(descriptors, authority: native_authority, mode: :strict) do
+          {:ok, bundle} -> {:ok, [bundle]}
+          error -> error
+        end
+    end
+  end
+
+  defp native_bundles(state, authority, selection, false) do
+    collaboration_profile(
+      %{collaboration_runtime: state.manager, session_binding: state.binding},
+      authority,
+      selection
+    )
+  end
+
+  defp collaboration_profile(context, authority, selection) do
+    selected = Enum.filter(selection, &(&1 in @collaboration))
+
+    if selected != [] do
+      if Enum.all?(selected, &(&1 in authority.grants)) do
+        native_authority = %{
+          authority
+          | grants: selected,
+            tool_revisions: Map.take(authority.tool_revisions, selected)
+        }
+
+        # TODO(upstream): gsmlg-opt/backplane#99 — confirmed provider interruption
+        # currently prevents the parent Session's native transfer/completion check.
+        case Codex.profile(:collaboration_v2, context, native_authority, tools: selected) do
+          {:ok, bundle} -> {:ok, [bundle]}
+          error -> error
+        end
+      else
+        failure(:forbidden, "Collaboration tools exceed the parent authority ceiling")
+      end
+    else
+      {:ok, []}
+    end
+  end
+
+  defp authority(session_id, run_id, selection, revisions) do
+    %{
+      caller: "synapsis:" <> session_id,
+      run_id: run_id,
+      grants: selection,
+      tool_revision: 1,
+      tool_revisions: revisions
+    }
+  end
+
+  defp system_prompt(context, false), do: context.system_prompt
+
+  defp system_prompt(context, true) do
+    case context[:child_system_prompt] do
+      prompt when is_binary(prompt) and prompt != "" -> prompt
+      _ -> Synapsis.Agent.ContextBuilder.load_base_prompt(:coding, context.agent)
+    end
+  end
 
   defp child_configuration(request, context) do
     opts = request.options
@@ -880,52 +2841,47 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     if MapSet.size(pending) == 0, do: messages, else: Enum.take(messages, safe)
   end
 
-  defp await_permission(_pid, _approval, 0),
-    do: failure(:timeout, "Permission request did not commit")
+  defp remember_permission(state, destination, run_id, event) do
+    request = event.request
+    identity = get_in(state.runs, [run_id, :identity]) || %{name: "/root"}
 
-  defp await_permission(pid, approval, remaining) do
-    case Conversation.status(pid) do
-      %{
-        conversation: %{
-          pending_interaction: %{id: id, request: %{approval_id: ^approval} = request}
-        }
-      } ->
-        {:ok, %{type: :interaction_requested, interaction_id: id, request: request}}
+    item = %{destination: destination, request: request, run_id: run_id}
 
-      %{phase: phase} when phase in [:terminal, :storage_failed, :recovery_required] ->
-        failure(:cancelled, "Permission request ended")
+    event =
+      event
+      |> Map.put(:request, display_request(request))
+      |> Map.put(:child, identity)
+      |> Map.put(:run_id, run_id)
 
-      _ ->
-        receive do
-        after
-          10 -> await_permission(pid, approval, remaining - 1)
-        end
-    end
+    notify(state, {:runtime_event, state.epoch, state.run_id, event})
+    %{state | pending: Map.put(state.pending, event.interaction_id, item)}
   end
 
-  defp remember_permission(state, pid, event) do
-    request = event.request
-    identity = get_in(state.runs, [request.run_id, :identity]) || %{name: "/root"}
+  defp display_request(request) do
+    operation = request_field(request, :operation) || request
 
-    host = %{
-      session_id: state.session_id,
-      run_id: request.run_id,
-      policy_snapshot:
-        policy(
-          get_in(state.runs, [request.run_id, :context]) || state.context,
-          state.session_id,
-          request.run_id
-        )
-    }
+    request
+    |> Map.put(:tool_name, request_field(operation, :tool_name))
+    |> Map.put(:arguments, request_field(operation, :arguments))
+  end
 
-    item = %{pid: pid, request: request, host: host}
-    notify(state, {:runtime_event, state.epoch, state.run_id, Map.put(event, :child, identity)})
-    %{state | pending: Map.put(state.pending, event.interaction_id, item)}
+  defp request_field(map, key), do: Map.get(map, key, Map.get(map, Atom.to_string(key)))
+
+  defp forget_permission(state, id) do
+    if Map.has_key?(state.pending, id) do
+      notify(
+        state,
+        {:runtime_event, state.epoch, state.run_id,
+         %{type: :interaction_resolved, interaction_id: id}}
+      )
+    end
+
+    %{state | pending: Map.delete(state.pending, id)}
   end
 
   defp forget_run_permissions(state, run_id) do
     {closed, pending} =
-      Enum.split_with(state.pending, fn {_, item} -> item.request.run_id == run_id end)
+      Enum.split_with(state.pending, fn {_, item} -> item.run_id == run_id end)
 
     Enum.each(closed, fn {id, _} ->
       notify(
@@ -938,40 +2894,58 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     %{state | pending: Map.new(pending)}
   end
 
-  defp approval(request, host, decision) when decision in [true, :allow, "allow_once"] do
-    with {:ok, grant} <-
-           Gateway.authorize(
-             request.tool_name,
-             request.arguments,
-             host.policy_snapshot,
-             Map.put(host, :operator_approval, true)
-           ),
-         true <- grant.source == :operator_approval do
-      %{approval_id: request.approval_id, grant: grant}
-    else
-      _ -> %{approval_id: request.approval_id, denied: true}
+  defp close(%{initializing: true} = state),
+    do: close_prepared_targets(%{state | closing: true}, :all)
+
+  defp close(%{closing: true} = state), do: close_prepared_targets(state, :all)
+  defp close(%{error: :closed} = state), do: close_prepared_targets(state, :all)
+
+  defp close(state) do
+    state = close_prepared_targets(state, :all)
+
+    preparing? =
+      Enum.any?(state.jobs, fn {_, {_, _, tag}} -> tag in [:prepare_inputs, :prepare] end)
+
+    cond do
+      # The preparation result owns cleanup until it either hands over a live
+      # Conversation or confirms that no runtime remains. Do not race a second
+      # close job against it or publish a terminal result ahead of that cleanup.
+      preparing? ->
+        %{state | closing: true}
+
+      is_pid(state.session) ->
+        job(%{state | closing: true}, :close, fn ->
+          # The root can already be retired by an in-flight terminal status job.
+          # A vanished root must not prevent closing its session-owned children.
+          if is_pid(state.root), do: safe(fn -> Conversation.cancel(state.root) end)
+          cleanup = close_sessions(state)
+          history = closed_history(state)
+          stop(state.root, owner_stop_timeout(state))
+          %{cleanup: cleanup, history: history}
+        end)
+
+      true ->
+        if state.busy, do: %{state | closing: true}, else: cancelled_without_runtime(state)
     end
   end
 
-  defp approval(request, _host, _decision), do: %{approval_id: request.approval_id, denied: true}
+  defp close_sessions(state) do
+    # Root closure reconciles adopted children through the native manager first.
+    cleanup = safe(fn -> Session.close(state.session) end)
+    children = close_child_sessions(state)
 
-  defp close(%{closing: true} = state), do: state
-  defp close(%{error: :closed} = state), do: state
+    if Enum.all?(children, &match?({:ok, %{status: :confirmed}}, &1)),
+      do: cleanup,
+      else: failure(:unknown_outcome, "Child Session cleanup is unconfirmed")
+  end
 
-  defp close(state) do
-    if is_pid(state.session) do
-      job(%{state | closing: true}, :close, fn ->
-        # The root can already be retired by an in-flight terminal status job.
-        # A vanished root must not prevent closing its session-owned children.
-        if is_pid(state.root), do: safe(fn -> Conversation.cancel(state.root) end)
-        cleanup = Session.close(state.session)
-        history = closed_history(state)
-        stop(state.root)
-        %{cleanup: cleanup, history: history}
-      end)
-    else
-      if state.busy, do: %{state | closing: true}, else: cancelled_without_runtime(state)
-    end
+  defp close_child_sessions(state) do
+    Enum.map(state.child_sessions, fn {_id, child} ->
+      # The adapter also owns reservations rejected before native adoption.
+      result = safe(fn -> Session.close(child.session) end)
+      stop(child.session, owner_stop_timeout(state))
+      result
+    end)
   end
 
   defp closed_history(state) do
@@ -992,6 +2966,8 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
   end
 
   defp cancelled_without_runtime(state) do
+    state = close_prepared_targets(state, :all)
+
     notify(
       state,
       {:runtime_event, state.epoch, state.run_id,
@@ -1043,14 +3019,99 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
   defp upsert(items, item, key),
     do: Enum.reject(items, &(Map.fetch!(&1, key) == Map.fetch!(item, key))) ++ [item]
 
-  defp stop(pid) when is_pid(pid) do
+  defp skill_resources?(entry),
+    do:
+      not is_nil(entry.discovery) or not is_nil(Map.get(entry, :skill_body_cache)) or
+        Map.get(entry, :skill_successors, []) != []
+
+  defp cleanup_discovery(state, run_id) do
+    pending? =
+      Enum.any?(state.jobs, fn {_, {_, _, tag}} -> tag == {:discovery_cleanup, run_id} end)
+
+    if pending? or
+         not Enum.any?(state.tool_contexts, fn {{id, _}, entry} ->
+           id == run_id and
+             skill_resources?(entry)
+         end) do
+      state
+    else
+      job(state, {:discovery_cleanup, run_id}, fn ->
+        release_discovery(state.tool_contexts, run_id)
+      end)
+    end
+  end
+
+  defp release_discovery(contexts, run_id) do
+    for {{id, _} = key, entry} <- contexts,
+        id == run_id and
+          skill_resources?(entry),
+        into: %{} do
+      resources = [entry | Map.get(entry, :skill_successors, [])]
+
+      discovery =
+        Enum.map(resources, fn resource ->
+          safe(fn -> Discovery.release(resource.discovery) end)
+        end)
+
+      bodies =
+        Enum.map(resources, fn resource ->
+          safe(fn -> SkillBodyCache.release(Map.get(resource, :skill_body_cache)) end)
+        end)
+
+      result =
+        if Enum.all?(discovery, &(&1 == :ok)) and Enum.all?(bodies, &(&1 == :ok)),
+          do: :ok,
+          else: {:error, %{discovery: discovery, skill_bodies: bodies}}
+
+      {key, result}
+    end
+  end
+
+  defp record_discovery_cleanup(state, results) do
+    confirmed = for {key, :ok} <- results, do: key
+    state = Enum.reduce(confirmed, state, &close_prepared_targets(&2, &1))
+
+    %{
+      state
+      | tool_contexts: Map.drop(state.tool_contexts, confirmed),
+        discovery_cleanup: Map.merge(state.discovery_cleanup, results)
+    }
+  end
+
+  defp merge_browser_resources(live, runtime) do
+    # Root preparation runs outside this server. Remove only unchanged records
+    # it observed as settled; preserve resources installed by newer child options.
+    live =
+      Enum.reduce(runtime.browser_pruned, live, fn {key, previous}, cache ->
+        if cache[key] === previous, do: Map.delete(cache, key), else: cache
+      end)
+
+    Map.merge(live, runtime.browser_resources)
+  end
+
+  defp merge_mcp_resource_runtimes(live, runtime) do
+    # Root preparation can overlap child options. Preserve newer child records.
+    live =
+      Enum.reduce(runtime.mcp_resource_pruned, live, fn {key, previous}, cache ->
+        if cache[key] === previous, do: Map.delete(cache, key), else: cache
+      end)
+
+    Map.merge(live, runtime.mcp_resource_runtimes)
+  end
+
+  defp owner_stop_timeout(state),
+    do: if(map_size(state.browser_resources) > 0, do: 25_000, else: 10_000)
+
+  defp stop(pid, timeout \\ 10_000)
+
+  defp stop(pid, timeout) when is_pid(pid) do
     Process.unlink(pid)
-    if Process.alive?(pid), do: GenServer.stop(pid, :shutdown, 10_000)
+    if Process.alive?(pid), do: GenServer.stop(pid, :shutdown, timeout)
   catch
     :exit, _ -> Process.exit(pid, :kill)
   end
 
-  defp stop(_), do: :ok
+  defp stop(_, _), do: :ok
   defp notify(state, event), do: send(state.owner, event)
   defp failure(class, message), do: {:error, Error.new(class, message)}
 end

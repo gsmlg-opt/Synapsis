@@ -15,6 +15,7 @@ defmodule SynapsisServer.Router do
               SynapsisWeb.CredentialLive.Index,
               SynapsisWeb.ProviderLive.Index,
               SynapsisWeb.ProviderLive.Show,
+              SynapsisWeb.MemorySettingsLive.Index,
               SynapsisWeb.MemoryLive.Index,
               SynapsisWeb.MemoryLive.Show,
               SynapsisWeb.SkillLive.Index,
@@ -41,6 +42,18 @@ defmodule SynapsisServer.Router do
   scope "/api", SynapsisServer do
     get "/agent/events", SSEController, :agent_events
     get "/sessions/:id/events", SSEController, :events
+    get "/media/audio/:session_id/:delivery_id", MediaController, :audio
+    get "/media/image/:session_id/:delivery_id", MediaController, :image
+    get "/media/video/:session_id/:delivery_id", MediaController, :video
+    get "/diffs/files/:session_id/:delivery_id", DiffsController, :file
+    head "/diffs/files/:session_id/:delivery_id", DiffsController, :file
+  end
+
+  scope "/plugins/diffs", SynapsisServer do
+    get "/view/:artifact_id/:token", DiffsController, :viewer
+    head "/view/:artifact_id/:token", DiffsController, :viewer
+    get "/assets/:asset", DiffsController, :asset
+    head "/assets/:asset", DiffsController, :asset
   end
 
   scope "/api", SynapsisServer do
@@ -125,9 +138,10 @@ defmodule SynapsisServer.Router do
 
     live "/settings/models", ModelTierLive.Index, :index
 
-    live "/settings/memory", MemoryLive.Index, :index
-    live "/settings/memory/new", MemoryLive.Index, :new
-    live "/settings/memory/:id", MemoryLive.Show, :show
+    live "/settings/memory", MemorySettingsLive.Index, :index
+    live "/agent/memory", MemoryLive.Index, :index
+    live "/agent/memory/new", MemoryLive.Index, :new
+    live "/agent/memory/:id", MemoryLive.Show, :show
 
     live "/settings/skills", SkillLive.Index, :index
     live "/settings/skills/:id", SkillLive.Show, :show

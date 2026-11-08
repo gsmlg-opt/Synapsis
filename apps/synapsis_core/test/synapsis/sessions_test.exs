@@ -38,6 +38,10 @@ defmodule Synapsis.SessionsTest do
     end
   end
 
+  defmodule InertSessionRuntime do
+    def start_session(_session_id), do: {:ok, self()}
+  end
+
   setup do
     Synapsis.DataCase.clear_config_store(:provider)
     Synapsis.DataCase.clear_config_store(:model)
@@ -53,6 +57,33 @@ defmodule Synapsis.SessionsTest do
     end)
 
     :ok
+  end
+
+  @tag :contract_version
+  test "new sessions author native permissions while the existing shared writer stays legacy" do
+    assert {:ok, session} =
+             Sessions.create("main", %{
+               provider: "contract-version-fixture",
+               model: "fixture-model",
+               session_runtime: InertSessionRuntime
+             })
+
+    on_exit(fn -> Sessions.delete(session.id) end)
+    assert %{tool_contract_version: 1} = Store.get_value(session.id, "permission")
+
+    legacy_id = Ecto.UUID.generate()
+    on_exit(fn -> Store.delete_session(legacy_id) end)
+    attrs = Synapsis.Tool.Permission.config_for_mode("ask")
+
+    assert {:ok, %{tool_contract_version: 0}} =
+             Synapsis.Tool.Permission.update_config(legacy_id, attrs)
+
+    assert %{tool_contract_version: 0} = Store.get_value(legacy_id, "permission")
+
+    assert {:ok, %{tool_contract_version: 0}} =
+             Synapsis.Tool.Permission.update_config(session.id, attrs)
+
+    assert %{tool_contract_version: 0} = Store.get_value(session.id, "permission")
   end
 
   test "retains an unavailable saved model until an explicit choice is made" do

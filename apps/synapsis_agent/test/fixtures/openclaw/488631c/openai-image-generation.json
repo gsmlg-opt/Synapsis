@@ -1,0 +1,2764 @@
+{
+  "schemaVersion": 1,
+  "referencePin": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+  "exporter": {
+    "path": "scripts/openclaw/capture-openai-image-generation.mjs",
+    "sha256": "b1b5f849e98e10a6706084a51f6e47e421bfbf631bc6824021fd27eef76c6a42"
+  },
+  "harness": {
+    "path": "scripts/openclaw/capture-recipes.mjs",
+    "sha256": "4599b804b43bedac9ba7c594aef8b43f3c2a89e18cfb8fb375316d3dd7ee0557"
+  },
+  "runtime": {
+    "executable": "/tmp/synapsis-openclaw-capture-runtime/node_modules/node/bin/node",
+    "version": "24.22.1",
+    "sha256": "e32e2d16081cf644f88392934288086e7662529d0d43277c34f7aad2207cfafb",
+    "platform": "linux"
+  },
+  "sourceTree": {
+    "before": {
+      "verified": true,
+      "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+      "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+      "verifiedTrackedFiles": 58558,
+      "filesSha256": "fb299c6a234f52cfcf20e3618cd11582d07e47a7773cba1334064ebdaf9fddec"
+    },
+    "after": {
+      "verified": true,
+      "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+      "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+      "verifiedTrackedFiles": 58558,
+      "filesSha256": "fb299c6a234f52cfcf20e3618cd11582d07e47a7773cba1334064ebdaf9fddec"
+    }
+  },
+  "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+  "sourceRecords": [
+    {
+      "path": "extensions/openai/image-generation-provider.ts",
+      "sha256": "666491a30d6a9d8e04ab91e86dc6c2a3dc56fad6ee5dfd39f39398096a0f64d4",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "23f08df5e30131e8beab7fb917a0dfd827954e24bddc53fc4974014c88d5c29a"
+    },
+    {
+      "path": "extensions/openai/base-url.ts",
+      "sha256": "068ee95c417972ef95114eb6871cb4d200a4fb3b441f703ef907f1adc41ac55a",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "107c5849473b17f67d289cfbadf0bf886752dd516d3b75a6ccaf9bbb9021fd21"
+    },
+    {
+      "path": "extensions/openai/default-models.ts",
+      "sha256": "cac65682da4d77279b7e32a248778e8f19f9a81a14275e3eaa86e37476d39cb2",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "f808a1ce980678e7967595576af01511202db96af35661849ac09c739a354d57"
+    },
+    {
+      "path": "extensions/openai/shared.ts",
+      "sha256": "00515449d4b4477102f83dc2cee953382ccc1b053a3b06395676288b231ad6f4",
+      "executed": true,
+      "wholeModule": false,
+      "projection": {
+        "startByte": 854,
+        "endByte": 1044,
+        "sourceRegionSha256": "2b2f4356ee54417fbb9249afe793a5da6f4cc96ab54006542b4f70e6eaf1df20",
+        "prelude": "import {normalizeOptionalString} from 'capture:source:packages/normalization-core/src/string-coerce.ts';\nimport {OPENAI_API_BASE_URL} from 'capture:source:extensions/openai/base-url.ts';",
+        "generatedCode": "import {normalizeOptionalString} from 'capture:source:packages/normalization-core/src/string-coerce.ts';\nimport {OPENAI_API_BASE_URL} from 'capture:source:extensions/openai/base-url.ts';\nexport function resolveConfiguredOpenAIBaseUrl(cfg: OpenClawConfig | undefined): string {\n  return normalizeOptionalString(cfg?.models?.providers?.openai?.baseUrl) ?? OPENAI_API_BASE_URL;\n}\n",
+        "generatedSha256": "36fa00319f66c53dc264e9d424ee7f9aee38ffd0854cf1c2f5d3e3954080e16c"
+      },
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "795032e96663d5a5e1529e49cf870d3774c159d5b1767811b5bb5f4cb360f461"
+    },
+    {
+      "path": "src/plugin-sdk/blob-runtime.ts",
+      "sha256": "73551b7bf55cb99a9054e8e3642666b043a739fd7c86d9c4c513d564ba432b20",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "f728cde6f30a803bb45e2a661d6081134ae6899c5ff7a927dac3380c5398562d"
+    },
+    {
+      "path": "packages/media-core/src/mime.ts",
+      "sha256": "8a09bf1b2c75f5f8a3ef3fe51aa07c97fb46e4a712faca89ccd72eaa9464fdb0",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "915445fb0acc700d45eb959f73b66a64a3b0749ba914a30c79c4a2298bbf7b8f"
+    },
+    {
+      "path": "packages/normalization-core/src/number-coercion.ts",
+      "sha256": "8c40eca65a8fd1dc3aa40d90c22bff35c3710fcb03d2bc8227864a264d20ddc4",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "2f2d58d34e9b77067ea265333fb06a807ce0cdcad83639d6c257095bb9f69a97"
+    },
+    {
+      "path": "packages/normalization-core/src/record-coerce.ts",
+      "sha256": "541c179840c2cad4edc5c8103f77cc7f8c6b1ee5ec3e52c7c9fe097b18917f1c",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "4ca2e6e901c28a07ae5fc9b29719cce5c26c919c65ab235b4ae2d5eaf0ec338c"
+    },
+    {
+      "path": "packages/normalization-core/src/string-coerce.ts",
+      "sha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "9a2e05da77f15162560fe904c20ba9a49a6e6996e8b8c9bc16fd611f8456f504"
+    },
+    {
+      "path": "packages/normalization-core/src/utf16-slice.ts",
+      "sha256": "12fd3212b08522a1523263c92f654151ad01605ee48a0ff58a1256889fb7cb5f",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "8c36e4400e17c643598f7dd0134b80cb0dc324e63040fb9f02335a53ec4b1ec7"
+    },
+    {
+      "path": "packages/media-core/src/base64.ts",
+      "sha256": "93e6ef481601a3bee0a6cbd304506a0b1ab4e1e05d363be78a00ebe7b63173ac",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "79873227363e5e57fa1cb6931618313441b1b7da5d7cc586a7d593c14582e13e"
+    },
+    {
+      "path": "packages/media-core/src/constants.ts",
+      "sha256": "eaf6503c56b32bab745da862d150c76896805e7db2f5bb12283e2930b64cb184",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "270d96507dc42b7b2f509f182368362ad39f161af14c52828379845c596408cb"
+    },
+    {
+      "path": "packages/media-core/src/file-name.ts",
+      "sha256": "b9cc04ae86593cc254802d9639f4b1af147ff59ab7d9f1224b4dec11aabd42a4",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "bad954614c53b6337369a2844ba0ff986c590c6f29c00a7e5054d5519beb9a43"
+    },
+    {
+      "path": "extensions/openai/image-generation-response.ts",
+      "sha256": "113f45bca592432f64d2370d250efb04092c360912d9ae9e36d6a4cc3c096a8d",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "ed3decae344af8a0476e4cd538e9837a828e4c2b6cf659f8e2e9fc784878ad5d"
+    },
+    {
+      "path": "src/media-generation/runtime-shared.ts",
+      "sha256": "35c47e07a0f503d420eff11198a67fef62fc7da11f6b1ec4216681e5265b3153",
+      "executed": true,
+      "wholeModule": false,
+      "projection": {
+        "startByte": 14895,
+        "endByte": 19724,
+        "sourceRegionSha256": "120231e62b3cf73545519d2458a57047cd442d2eabe0c2f051c838778dc7cf50",
+        "prelude": "import {normalizeOptionalString} from 'capture:source:packages/normalization-core/src/string-coerce.ts';",
+        "generatedCode": "import {normalizeOptionalString} from 'capture:source:packages/normalization-core/src/string-coerce.ts';\nfunction normalizeSupportedValues<TValue extends string>(values?: readonly TValue[]): TValue[] {\n  return (values ?? []).filter((entry) => Boolean(normalizeOptionalString(entry)));\n}\n\nfunction selectClosestValue<T extends string>(\n  values: readonly T[],\n  score: (value: T) => { primary: number; secondary: number } | undefined,\n): T | undefined {\n  let best: { value: T; primary: number; secondary: number } | undefined;\n  for (const value of values) {\n    const next = score(value);\n    if (\n      next &&\n      (!best ||\n        (next.primary !== best.primary\n          ? next.primary < best.primary\n          : next.secondary !== best.secondary\n            ? next.secondary < best.secondary\n            : value.localeCompare(best.value) < 0))\n    ) {\n      best = { value, ...next };\n    }\n  }\n  return best?.value;\n}\n\nfunction parsePositiveDimensionPair(\n  raw: string | null | undefined,\n  pattern: RegExp,\n): { width: number; height: number } | null {\n  const trimmed = normalizeOptionalString(raw);\n  if (!trimmed) {\n    return null;\n  }\n  const match = pattern.exec(trimmed);\n  if (!match) {\n    return null;\n  }\n  const width = Number(match[1]);\n  const height = Number(match[2]);\n  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {\n    return null;\n  }\n  return { width, height };\n}\n\nfunction parseAspectRatioValue(raw?: string | null): ParsedAspectRatio | null {\n  const pair = parsePositiveDimensionPair(raw, /^(\\d+(?:\\.\\d+)?)\\s*:\\s*(\\d+(?:\\.\\d+)?)$/);\n  if (!pair) {\n    return null;\n  }\n  return {\n    width: pair.width,\n    height: pair.height,\n    value: pair.width / pair.height,\n  };\n}\n\nfunction parseSizeValue(raw?: string | null): ParsedSize | null {\n  const pair = parsePositiveDimensionPair(raw, /^(\\d+)\\s*x\\s*(\\d+)$/i);\n  if (!pair) {\n    return null;\n  }\n  if (!Number.isSafeInteger(pair.width) || !Number.isSafeInteger(pair.height)) {\n    return null;\n  }\n  return {\n    width: pair.width,\n    height: pair.height,\n    aspectRatio: pair.width / pair.height,\n    area: pair.width * pair.height,\n  };\n}\n\nfunction greatestCommonDivisor(a: number, b: number): number {\n  let left = Math.abs(a);\n  let right = Math.abs(b);\n  while (right !== 0) {\n    const next = left % right;\n    left = right;\n    right = next;\n  }\n  return left || 1;\n}\n\n/** Derives a reduced aspect ratio string from a WIDTHxHEIGHT size. */\nfunction deriveAspectRatioFromSize(size?: string): string | undefined {\n  const parsed = parseSizeValue(size);\n  if (!parsed) {\n    return undefined;\n  }\n  const divisor = greatestCommonDivisor(parsed.width, parsed.height);\n  return `${parsed.width / divisor}:${parsed.height / divisor}`;\n}\n\nexport function resolveClosestAspectRatio(params: {\n  requestedAspectRatio?: string;\n  requestedSize?: string;\n  supportedAspectRatios?: readonly string[];\n}): string | undefined {\n  const supported = normalizeSupportedValues(params.supportedAspectRatios);\n  if (supported.length === 0) {\n    return params.requestedAspectRatio ?? deriveAspectRatioFromSize(params.requestedSize);\n  }\n  if (params.requestedAspectRatio && supported.includes(params.requestedAspectRatio)) {\n    return params.requestedAspectRatio;\n  }\n  const requested =\n    parseAspectRatioValue(params.requestedAspectRatio) ??\n    parseAspectRatioValue(deriveAspectRatioFromSize(params.requestedSize));\n  if (!requested) {\n    return undefined;\n  }\n\n  return selectClosestValue(supported, (candidate) => {\n    const parsed = parseAspectRatioValue(candidate);\n    if (!parsed) {\n      return undefined;\n    }\n    return {\n      primary: Math.abs(Math.log(parsed.value / requested.value)),\n      secondary: Math.abs(parsed.width * requested.height - requested.width * parsed.height),\n    };\n  });\n}\n\n/** Chooses the closest supported size by aspect ratio and area. */\nexport function resolveClosestSize(params: {\n  requestedSize?: string;\n  requestedAspectRatio?: string;\n  supportedSizes?: readonly string[];\n}): string | undefined {\n  const supported = normalizeSupportedValues(params.supportedSizes);\n  if (supported.length === 0) {\n    return params.requestedSize;\n  }\n  if (params.requestedSize && supported.includes(params.requestedSize)) {\n    return params.requestedSize;\n  }\n  const requested = parseSizeValue(params.requestedSize);\n  const requestedAspectRatio = parseAspectRatioValue(params.requestedAspectRatio);\n  if (!requested && !requestedAspectRatio) {\n    return undefined;\n  }\n\n  return selectClosestValue(supported, (candidate) => {\n    const parsed = parseSizeValue(candidate);\n    if (!parsed) {\n      return undefined;\n    }\n    return {\n      primary: Math.abs(\n        Math.log(parsed.aspectRatio / (requested?.aspectRatio ?? requestedAspectRatio!.value)),\n      ),\n      secondary: requested ? Math.abs(Math.log(parsed.area / requested.area)) : parsed.area,\n    };\n  });\n}\n\n",
+        "generatedSha256": "a5d8db94a5e850eee883460316d15441f13913ba2ad645a10f6b9e70b320f5d3"
+      },
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "e3716fb0c52224e449355a6aaa9f154cf187c7d2410be800d450b22a9f295fd0"
+    },
+    {
+      "path": "src/media/configured-max-bytes.ts",
+      "sha256": "07d61d83f1ed8c14e0cd7a5f5532d2cc64d28e0a6d15c36690670a3900df3a6d",
+      "executed": true,
+      "wholeModule": false,
+      "projection": {
+        "startByte": 566,
+        "endByte": 1986,
+        "sourceRegionSha256": "b3324c9d499c92dc251f88899264b48624eca7531fef202334561a4f2f1ac70b",
+        "prelude": "import {maxBytesForKind} from 'capture:source:packages/media-core/src/constants.ts';",
+        "generatedCode": "import {maxBytesForKind} from 'capture:source:packages/media-core/src/constants.ts';\nconst MB = 1024 * 1024;\n/** Native local audio/video displayed by webchat is streamed, independently of channel caps. */\nexport const WEBCHAT_LOCAL_MEDIA_MAX_BYTES = 4 * 1024 * MB;\nconst TELEGRAM_DEFAULT_MEDIA_MAX_MB = 100;\n/**\n * Holds the largest raw image a supported model returns: Gemini \"4K\" at 5632x3072 is 51.9 MB as\n * uncompressed RGB, which bounds an opaque PNG; transparent gpt-image output tops out at 3840x2160\n * RGBA (33.2 MB). Measured Gemini 4K photo PNGs were 27-29 MiB.\n */\nconst GENERATED_IMAGE_DOWNLOAD_MAX_BYTES = 64 * MB;\ntype GeneratedMediaKind = Extract<MediaKind, \"audio\" | \"image\" | \"video\">;\n\n/** Returns the configured media cap, falling back to the media-core per-kind default. */\nexport function resolveGeneratedMediaMaxBytes(\n  cfg: OpenClawConfig | undefined,\n  kind: GeneratedMediaKind,\n) {\n  const configured = cfg?.agents?.defaults?.mediaMaxMb;\n  return typeof configured === \"number\" && Number.isFinite(configured) && configured > 0\n    ? Math.floor(configured * MB)\n    : maxBytesForKind(kind);\n}\n\n/**\n * Bounds a provider's download of generated images. Persistence re-encodes oversized images to\n * the media cap, so this guards memory only and never drops below the configured cap.\n */\nexport function resolveGeneratedImageDownloadMaxBytes(cfg: OpenClawConfig | undefined) {\n  return Math.max(resolveGeneratedMediaMaxBytes(cfg, \"image\"), GENERATED_IMAGE_DOWNLOAD_MAX_BYTES);\n}\n\n",
+        "generatedSha256": "b70bb51022d1e2edba67dece3470f944b6115c92387d28e7559a9f8116f15d97"
+      },
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "7fa500422cbabcbe04ad0d4dfb77deccc13c4bf8bfbb664b51d99018cb0f78fd"
+    },
+    {
+      "path": "src/image-generation/openai-compatible-image-urls.ts",
+      "sha256": "e7de20602c9ede254240160bc8ea279583f67f5f82e863d45663be3bb3da88ce",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "5f12b0c1c598080cea3bf2d2f5d1f46000f7a0c2e745145442a76651d03460b5"
+    },
+    {
+      "path": "src/image-generation/image-assets.ts",
+      "sha256": "8c6d47d65f2ea808679c857532e4af96ddab6f9d68005ee53527b494f5e88682",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "e31d4b115b24002d5ffd06823f80fcc3193369c687706e07aef915519531eca4"
+    },
+    {
+      "path": "src/plugin-sdk/image-generation.ts",
+      "sha256": "a231cd3d22750bb4ba9d8f42175803b8d9fa7a6c63fcde394f27855ece74257a",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/plugin-sdk/provider-http.ts",
+      "sha256": "2256cc416a1d07c644917faed3c3d8bd4d6e44658197fc5ae6e1301ed85b42c4",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/plugin-sdk/provider-auth-runtime.ts",
+      "sha256": "b1a1127b62cd8937aa6a3c744e45f74aa05373e80561533d58052401f12c6eee",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/plugin-sdk/provider-onboard.ts",
+      "sha256": "4e5d527f6ba6487b7e919ce1385e8cd9a575097d15139e6c6aa840ddd7b4949f",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/plugin-sdk/media-generation-runtime.ts",
+      "sha256": "12167922a386fabe012fe14d7b8590fed6fbc5ab73ee7c571916e9e4b4f36744",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/plugin-sdk/ssrf-policy.ts",
+      "sha256": "146d0ffb8eab689629a5f7e0170e392e49259b44f29d7364f725f694ea58ca67",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/plugin-sdk/media-mime.ts",
+      "sha256": "db32d356f7463485c107489ec7c29b39e70251908382ddb8f399039f25cceb74",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/plugin-sdk/string-coerce-runtime.ts",
+      "sha256": "9b3d30c868101d6005cadd5990dbcb62bf9afe91171aaf35191c996005484c47",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/agents/provider-http-errors.ts",
+      "sha256": "cb03b6f1d53d6d123ab88a57367e6b5b0a3286aee90cedf5499e12051af22006",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/infra/net/fetch-guard.ts",
+      "sha256": "02ebb334645b1635dc0b9b903ea8ce889fae8a25aaca728891e7c23725509fb1",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/infra/net/ssrf.ts",
+      "sha256": "55672237725d4294850fd6ddd720c74258d2aa733b7775d5d1469cbda2f56aea",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/infra/http-body.ts",
+      "sha256": "2b07e968a91619cac103eeebabd899a97e51d64f9bcf95951166acfcd9e28819",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "extensions/openai/provider-policy-api.ts",
+      "sha256": "468ec6b8ef9283d229a271e8290b159f7db8fe7020867cce9509f4de72de0cac",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "extensions/openai/index.ts",
+      "sha256": "1595b8226cd3420bf4fd5ed32498b832045d3bf52b63bb0e469c32d0bc0a3921",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "extensions/openai/openclaw.plugin.json",
+      "sha256": "f28b87cc29867144eeef9d15dc05fa58aaf2db5ed5098e7c01189d9d2ad04048",
+      "executed": false,
+      "provenanceOnly": true
+    }
+  ],
+  "importBindings": [
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "node:path",
+      "kind": "actual-platform-builtin",
+      "exports": [
+        "default"
+      ],
+      "generatedCode": "export default globalThis.__platform.path;",
+      "generatedSha256": "fa2d4eae8206217c0110f454f25e6450d2436bcf9aef3f3d245ddd87d1137e50",
+      "platform": "node:path (Linux POSIX)"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/blob-runtime",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "bufferToBlobPart"
+      ],
+      "generatedCode": "export {bufferToBlobPart} from \"capture:source:src/plugin-sdk/blob-runtime.ts\";",
+      "generatedSha256": "c7f2aea470593d2515747fe2b6032902105f38f399b44e69c6b6ea68f29436c5",
+      "source": "src/plugin-sdk/blob-runtime.ts",
+      "sourceSha256": "73551b7bf55cb99a9054e8e3642666b043a739fd7c86d9c4c513d564ba432b20"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/media-mime",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "extensionForMime"
+      ],
+      "generatedCode": "export {extensionForMime} from \"capture:source:packages/media-core/src/mime.ts\";",
+      "generatedSha256": "75101ea43904d97fa514f05e30e394499b1c4c175ac4d3805d51faaa6ac34c31",
+      "source": "packages/media-core/src/mime.ts",
+      "sourceSha256": "8a09bf1b2c75f5f8a3ef3fe51aa07c97fb46e4a712faca89ccd72eaa9464fdb0",
+      "origin": "src/plugin-sdk/media-mime.ts",
+      "originSha256": "db32d356f7463485c107489ec7c29b39e70251908382ddb8f399039f25cceb74"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/number-runtime",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "resolveIntegerOption"
+      ],
+      "generatedCode": "export {resolveIntegerOption} from \"capture:source:packages/normalization-core/src/number-coercion.ts\";",
+      "generatedSha256": "cb8775436723aad7a857ec21cf48c33e500fd7599a87383bbece1dcf781b4251",
+      "source": "packages/normalization-core/src/number-coercion.ts",
+      "sourceSha256": "8c40eca65a8fd1dc3aa40d90c22bff35c3710fcb03d2bc8227864a264d20ddc4"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-onboard",
+      "kind": "uninvoked-dependency-facade",
+      "exports": [
+        "resolveAgentModelFallbackValues",
+        "resolveAgentModelPrimaryValue",
+        "applyAgentDefaultModelPrimary",
+        "ensureModelAllowlistEntry"
+      ],
+      "generatedCode": "export function resolveAgentModelFallbackValues(){throw Error('Uninvoked image dependency: resolveAgentModelFallbackValues');}\nexport function resolveAgentModelPrimaryValue(){throw Error('Uninvoked image dependency: resolveAgentModelPrimaryValue');}\nexport function applyAgentDefaultModelPrimary(){throw Error('Uninvoked image dependency: applyAgentDefaultModelPrimary');}\nexport function ensureModelAllowlistEntry(){throw Error('Uninvoked image dependency: ensureModelAllowlistEntry');}",
+      "generatedSha256": "819d16cece289f77f2ae00aab27a80b0093b06d03071c05f166b36300390202c",
+      "source": "src/plugin-sdk/provider-onboard.ts",
+      "sourceSha256": "4e5d527f6ba6487b7e919ce1385e8cd9a575097d15139e6c6aa840ddd7b4949f",
+      "originalSourceExecuted": false
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/ssrf-policy",
+      "kind": "successful-policy-fixture",
+      "exports": [
+        "isPrivateNetworkOptInEnabled"
+      ],
+      "generatedCode": "export function isPrivateNetworkOptInEnabled(){return false;}",
+      "generatedSha256": "2458969bdc35fd8060b1e7d76ccab44a00099fdd39dc39ae6b84f8d6d7c43d90",
+      "source": "src/plugin-sdk/ssrf-policy.ts",
+      "sourceSha256": "146d0ffb8eab689629a5f7e0170e392e49259b44f29d7364f725f694ea58ca67",
+      "originalSourceExecuted": false
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/string-coerce-runtime",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "filterStringRecord",
+        "asOptionalRecord",
+        "asSafeIntegerInRange",
+        "normalizeOptionalString"
+      ],
+      "generatedCode": "export {filterStringRecord,asOptionalRecord} from 'capture:source:packages/normalization-core/src/record-coerce.ts';\nexport {asSafeIntegerInRange} from 'capture:source:packages/normalization-core/src/number-coercion.ts';\nexport {normalizeOptionalString} from 'capture:source:packages/normalization-core/src/string-coerce.ts';",
+      "generatedSha256": "e3af77fabe034c3733208ac900322158919a81e861ea10fe9b743af575420a3c",
+      "origin": "src/plugin-sdk/string-coerce-runtime.ts",
+      "originSha256": "9b3d30c868101d6005cadd5990dbcb62bf9afe91171aaf35191c996005484c47"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/text-utility-runtime",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "truncateUtf16Safe"
+      ],
+      "generatedCode": "export {truncateUtf16Safe} from \"capture:source:packages/normalization-core/src/utf16-slice.ts\";",
+      "generatedSha256": "18a7904e7cbf218b6e3a4c7841a02d25a2ae70e2a63ebf0fe4eece55cd8a1441",
+      "source": "packages/normalization-core/src/utf16-slice.ts",
+      "sourceSha256": "12fd3212b08522a1523263c92f654151ad01605ee48a0ff58a1256889fb7cb5f"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./base-url.js",
+      "kind": "whole-source-module",
+      "source": "extensions/openai/base-url.ts",
+      "sourceSha256": "068ee95c417972ef95114eb6871cb4d200a4fb3b441f703ef907f1adc41ac55a"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./default-models.js",
+      "kind": "whole-source-module",
+      "source": "extensions/openai/default-models.ts",
+      "sourceSha256": "cac65682da4d77279b7e32a248778e8f19f9a81a14275e3eaa86e37476d39cb2"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./provider-policy-api.js",
+      "kind": "uninvoked-dependency-facade",
+      "exports": [
+        "resolveModelAuthPolicy"
+      ],
+      "generatedCode": "export function resolveModelAuthPolicy(){throw Error('Uninvoked image dependency: resolveModelAuthPolicy');}",
+      "generatedSha256": "5ea0300506408c3c6dc6cea51e8202996f6b20aa2541229b3ea6e6d1f01127e4",
+      "source": "extensions/openai/provider-policy-api.ts",
+      "sourceSha256": "468ec6b8ef9283d229a271e8290b159f7db8fe7020867cce9509f4de72de0cac",
+      "originalSourceExecuted": false
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./shared.js",
+      "kind": "complete-source-region-projection",
+      "exports": [
+        "resolveConfiguredOpenAIBaseUrl"
+      ],
+      "generatedCode": "import { normalizeOptionalString } from 'capture:source:packages/normalization-core/src/string-coerce.ts';\nimport { OPENAI_API_BASE_URL } from 'capture:source:extensions/openai/base-url.ts';\nexport function resolveConfiguredOpenAIBaseUrl(cfg) {\n    return normalizeOptionalString(cfg?.models?.providers?.openai?.baseUrl) ?? OPENAI_API_BASE_URL;\n}\n",
+      "generatedSha256": "795032e96663d5a5e1529e49cf870d3774c159d5b1767811b5bb5f4cb360f461",
+      "source": "extensions/openai/shared.ts",
+      "sourceSha256": "00515449d4b4477102f83dc2cee953382ccc1b053a3b06395676288b231ad6f4"
+    },
+    {
+      "importer": "extensions/openai/base-url.ts",
+      "specifier": "openclaw/plugin-sdk/string-coerce-runtime",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "filterStringRecord",
+        "asOptionalRecord",
+        "asSafeIntegerInRange",
+        "normalizeOptionalString"
+      ],
+      "generatedCode": "export {filterStringRecord,asOptionalRecord} from 'capture:source:packages/normalization-core/src/record-coerce.ts';\nexport {asSafeIntegerInRange} from 'capture:source:packages/normalization-core/src/number-coercion.ts';\nexport {normalizeOptionalString} from 'capture:source:packages/normalization-core/src/string-coerce.ts';",
+      "generatedSha256": "e3af77fabe034c3733208ac900322158919a81e861ea10fe9b743af575420a3c",
+      "origin": "src/plugin-sdk/string-coerce-runtime.ts",
+      "originSha256": "9b3d30c868101d6005cadd5990dbcb62bf9afe91171aaf35191c996005484c47"
+    },
+    {
+      "importer": "extensions/openai/default-models.ts",
+      "specifier": "openclaw/plugin-sdk/provider-onboard",
+      "kind": "uninvoked-dependency-facade",
+      "exports": [
+        "resolveAgentModelFallbackValues",
+        "resolveAgentModelPrimaryValue",
+        "applyAgentDefaultModelPrimary",
+        "ensureModelAllowlistEntry"
+      ],
+      "generatedCode": "export function resolveAgentModelFallbackValues(){throw Error('Uninvoked image dependency: resolveAgentModelFallbackValues');}\nexport function resolveAgentModelPrimaryValue(){throw Error('Uninvoked image dependency: resolveAgentModelPrimaryValue');}\nexport function applyAgentDefaultModelPrimary(){throw Error('Uninvoked image dependency: applyAgentDefaultModelPrimary');}\nexport function ensureModelAllowlistEntry(){throw Error('Uninvoked image dependency: ensureModelAllowlistEntry');}",
+      "generatedSha256": "819d16cece289f77f2ae00aab27a80b0093b06d03071c05f166b36300390202c",
+      "source": "src/plugin-sdk/provider-onboard.ts",
+      "sourceSha256": "4e5d527f6ba6487b7e919ce1385e8cd9a575097d15139e6c6aa840ddd7b4949f",
+      "originalSourceExecuted": false
+    },
+    {
+      "importer": "src/plugin-sdk/blob-runtime.ts",
+      "specifier": "@openclaw/media-core/base64",
+      "kind": "whole-source-module",
+      "source": "packages/media-core/src/base64.ts",
+      "sourceSha256": "93e6ef481601a3bee0a6cbd304506a0b1ab4e1e05d363be78a00ebe7b63173ac"
+    },
+    {
+      "importer": "packages/media-core/src/mime.ts",
+      "specifier": "node:path",
+      "kind": "actual-platform-builtin",
+      "exports": [
+        "default"
+      ],
+      "generatedCode": "export default globalThis.__platform.path;",
+      "generatedSha256": "fa2d4eae8206217c0110f454f25e6450d2436bcf9aef3f3d245ddd87d1137e50",
+      "platform": "node:path (Linux POSIX)"
+    },
+    {
+      "importer": "packages/media-core/src/mime.ts",
+      "specifier": "./constants.js",
+      "kind": "whole-source-module",
+      "source": "packages/media-core/src/constants.ts",
+      "sourceSha256": "eaf6503c56b32bab745da862d150c76896805e7db2f5bb12283e2930b64cb184"
+    },
+    {
+      "importer": "packages/media-core/src/mime.ts",
+      "specifier": "./file-name.js",
+      "kind": "whole-source-module",
+      "source": "packages/media-core/src/file-name.ts",
+      "sourceSha256": "b9cc04ae86593cc254802d9639f4b1af147ff59ab7d9f1224b4dec11aabd42a4"
+    },
+    {
+      "importer": "packages/normalization-core/src/number-coercion.ts",
+      "specifier": "./string-coerce.ts",
+      "kind": "whole-source-module",
+      "source": "packages/normalization-core/src/string-coerce.ts",
+      "sourceSha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf"
+    },
+    {
+      "importer": "packages/media-core/src/file-name.ts",
+      "specifier": "node:path",
+      "kind": "actual-platform-builtin",
+      "exports": [
+        "default"
+      ],
+      "generatedCode": "export default globalThis.__platform.path;",
+      "generatedSha256": "fa2d4eae8206217c0110f454f25e6450d2436bcf9aef3f3d245ddd87d1137e50",
+      "platform": "node:path (Linux POSIX)"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-auth-runtime",
+      "kind": "successful-explicit-key-fixture",
+      "exports": [
+        "resolveApiKeyForProvider"
+      ],
+      "generatedCode": "export async function resolveApiKeyForProvider(){return {apiKey:'fixture-openai-images',mode:'api-key'};}",
+      "generatedSha256": "62dd0a24de3e2e88ac8644efe61da1f322eeb5d9c0eaf9c40244bc5a020a7551",
+      "source": "src/plugin-sdk/provider-auth-runtime.ts",
+      "sourceSha256": "b1a1127b62cd8937aa6a3c744e45f74aa05373e80561533d58052401f12c6eee",
+      "originalSourceExecuted": false,
+      "boundary": "Fixed synthetic successful direct configuration only; credential lookup and profiles are not executed or tested."
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http",
+      "kind": "successful-native-http-reader-fixture",
+      "exports": [
+        "createProviderOperationDeadline",
+        "postJsonRequest",
+        "postMultipartRequest",
+        "resolveProviderHttpRequestConfig",
+        "sanitizeConfiguredModelProviderRequest",
+        "assertOkOrThrowHttpError",
+        "readProviderJsonResponse",
+        "resolveProviderOperationTimeoutMs"
+      ],
+      "generatedCode": "\nexport function createProviderOperationDeadline(params){return params;}\nexport const postJsonRequest=globalThis.__platform.post;\nexport const postMultipartRequest=globalThis.__platform.post;\nexport function resolveProviderHttpRequestConfig(params){return {baseUrl:params.baseUrl.trim().replace(/\\/+$/,''),headers:{},allowPrivateNetwork:false};}\nexport function sanitizeConfiguredModelProviderRequest(){return undefined;}\nexport async function assertOkOrThrowHttpError(){}\nexport const readProviderJsonResponse=globalThis.__platform.readJson;\nexport function resolveProviderOperationTimeoutMs(params){return params.deadline.timeoutMs;}\n",
+      "generatedSha256": "5981357b3725453010996f88f7e986ca6d8abaac38b44dd6f5bfe3c32e982df0",
+      "source": "src/plugin-sdk/provider-http.ts",
+      "sourceSha256": "2256cc416a1d07c644917faed3c3d8bd4d6e44658197fc5ae6e1301ed85b42c4",
+      "originalSourceExecuted": false,
+      "boundary": "Native successful Response.json, explicit config, fixed deadline and request recorder; production HTTP, bounded reader, retries and deadline enforcement unexecuted."
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./image-generation-response.js",
+      "kind": "whole-source-module",
+      "source": "extensions/openai/image-generation-response.ts",
+      "sourceSha256": "113f45bca592432f64d2370d250efb04092c360912d9ae9e36d6a4cc3c096a8d"
+    },
+    {
+      "importer": "extensions/openai/image-generation-response.ts",
+      "specifier": "openclaw/plugin-sdk/image-generation",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "inlineOpenAiCompatibleImageUrls",
+        "parseOpenAiCompatibleImageResponse",
+        "resolveInlineImageJsonResponseMaxBytes"
+      ],
+      "generatedCode": "export {inlineOpenAiCompatibleImageUrls} from 'capture:source:src/image-generation/openai-compatible-image-urls.ts';\nexport {parseOpenAiCompatibleImageResponse,resolveInlineImageJsonResponseMaxBytes} from 'capture:source:src/image-generation/image-assets.ts';",
+      "generatedSha256": "9cd97a64c1e08aea8be86126d234bddf35cdb976c186af5fac9a0c6ab1f53049",
+      "origin": "src/plugin-sdk/image-generation.ts",
+      "originSha256": "a231cd3d22750bb4ba9d8f42175803b8d9fa7a6c63fcde394f27855ece74257a"
+    },
+    {
+      "importer": "extensions/openai/image-generation-response.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http",
+      "kind": "successful-native-http-reader-fixture",
+      "exports": [
+        "createProviderOperationDeadline",
+        "postJsonRequest",
+        "postMultipartRequest",
+        "resolveProviderHttpRequestConfig",
+        "sanitizeConfiguredModelProviderRequest",
+        "assertOkOrThrowHttpError",
+        "readProviderJsonResponse",
+        "resolveProviderOperationTimeoutMs"
+      ],
+      "generatedCode": "\nexport function createProviderOperationDeadline(params){return params;}\nexport const postJsonRequest=globalThis.__platform.post;\nexport const postMultipartRequest=globalThis.__platform.post;\nexport function resolveProviderHttpRequestConfig(params){return {baseUrl:params.baseUrl.trim().replace(/\\/+$/,''),headers:{},allowPrivateNetwork:false};}\nexport function sanitizeConfiguredModelProviderRequest(){return undefined;}\nexport async function assertOkOrThrowHttpError(){}\nexport const readProviderJsonResponse=globalThis.__platform.readJson;\nexport function resolveProviderOperationTimeoutMs(params){return params.deadline.timeoutMs;}\n",
+      "generatedSha256": "5981357b3725453010996f88f7e986ca6d8abaac38b44dd6f5bfe3c32e982df0",
+      "source": "src/plugin-sdk/provider-http.ts",
+      "sourceSha256": "2256cc416a1d07c644917faed3c3d8bd4d6e44658197fc5ae6e1301ed85b42c4",
+      "originalSourceExecuted": false,
+      "boundary": "Native successful Response.json, explicit config, fixed deadline and request recorder; production HTTP, bounded reader, retries and deadline enforcement unexecuted."
+    },
+    {
+      "importer": "extensions/openai/image-generation-response.ts",
+      "specifier": "openclaw/plugin-sdk/string-coerce-runtime",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "filterStringRecord",
+        "asOptionalRecord",
+        "asSafeIntegerInRange",
+        "normalizeOptionalString"
+      ],
+      "generatedCode": "export {filterStringRecord,asOptionalRecord} from 'capture:source:packages/normalization-core/src/record-coerce.ts';\nexport {asSafeIntegerInRange} from 'capture:source:packages/normalization-core/src/number-coercion.ts';\nexport {normalizeOptionalString} from 'capture:source:packages/normalization-core/src/string-coerce.ts';",
+      "generatedSha256": "e3af77fabe034c3733208ac900322158919a81e861ea10fe9b743af575420a3c",
+      "origin": "src/plugin-sdk/string-coerce-runtime.ts",
+      "originSha256": "9b3d30c868101d6005cadd5990dbcb62bf9afe91171aaf35191c996005484c47"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "capture:geometry",
+      "kind": "complete-source-region-projection",
+      "exports": [
+        "resolveClosestSize"
+      ],
+      "generatedCode": "import { normalizeOptionalString } from 'capture:source:packages/normalization-core/src/string-coerce.ts';\nfunction normalizeSupportedValues(values) {\n    return (values ?? []).filter((entry)=>Boolean(normalizeOptionalString(entry)));\n}\nfunction selectClosestValue(values, score) {\n    let best;\n    for (const value of values){\n        const next = score(value);\n        if (next && (!best || (next.primary !== best.primary ? next.primary < best.primary : next.secondary !== best.secondary ? next.secondary < best.secondary : value.localeCompare(best.value) < 0))) {\n            best = {\n                value,\n                ...next\n            };\n        }\n    }\n    return best?.value;\n}\nfunction parsePositiveDimensionPair(raw, pattern) {\n    const trimmed = normalizeOptionalString(raw);\n    if (!trimmed) {\n        return null;\n    }\n    const match = pattern.exec(trimmed);\n    if (!match) {\n        return null;\n    }\n    const width = Number(match[1]);\n    const height = Number(match[2]);\n    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {\n        return null;\n    }\n    return {\n        width,\n        height\n    };\n}\nfunction parseAspectRatioValue(raw) {\n    const pair = parsePositiveDimensionPair(raw, /^(\\d+(?:\\.\\d+)?)\\s*:\\s*(\\d+(?:\\.\\d+)?)$/);\n    if (!pair) {\n        return null;\n    }\n    return {\n        width: pair.width,\n        height: pair.height,\n        value: pair.width / pair.height\n    };\n}\nfunction parseSizeValue(raw) {\n    const pair = parsePositiveDimensionPair(raw, /^(\\d+)\\s*x\\s*(\\d+)$/i);\n    if (!pair) {\n        return null;\n    }\n    if (!Number.isSafeInteger(pair.width) || !Number.isSafeInteger(pair.height)) {\n        return null;\n    }\n    return {\n        width: pair.width,\n        height: pair.height,\n        aspectRatio: pair.width / pair.height,\n        area: pair.width * pair.height\n    };\n}\nfunction greatestCommonDivisor(a, b) {\n    let left = Math.abs(a);\n    let right = Math.abs(b);\n    while(right !== 0){\n        const next = left % right;\n        left = right;\n        right = next;\n    }\n    return left || 1;\n}\nfunction deriveAspectRatioFromSize(size) {\n    const parsed = parseSizeValue(size);\n    if (!parsed) {\n        return undefined;\n    }\n    const divisor = greatestCommonDivisor(parsed.width, parsed.height);\n    return `${parsed.width / divisor}:${parsed.height / divisor}`;\n}\nexport function resolveClosestAspectRatio(params) {\n    const supported = normalizeSupportedValues(params.supportedAspectRatios);\n    if (supported.length === 0) {\n        return params.requestedAspectRatio ?? deriveAspectRatioFromSize(params.requestedSize);\n    }\n    if (params.requestedAspectRatio && supported.includes(params.requestedAspectRatio)) {\n        return params.requestedAspectRatio;\n    }\n    const requested = parseAspectRatioValue(params.requestedAspectRatio) ?? parseAspectRatioValue(deriveAspectRatioFromSize(params.requestedSize));\n    if (!requested) {\n        return undefined;\n    }\n    return selectClosestValue(supported, (candidate)=>{\n        const parsed = parseAspectRatioValue(candidate);\n        if (!parsed) {\n            return undefined;\n        }\n        return {\n            primary: Math.abs(Math.log(parsed.value / requested.value)),\n            secondary: Math.abs(parsed.width * requested.height - requested.width * parsed.height)\n        };\n    });\n}\nexport function resolveClosestSize(params) {\n    const supported = normalizeSupportedValues(params.supportedSizes);\n    if (supported.length === 0) {\n        return params.requestedSize;\n    }\n    if (params.requestedSize && supported.includes(params.requestedSize)) {\n        return params.requestedSize;\n    }\n    const requested = parseSizeValue(params.requestedSize);\n    const requestedAspectRatio = parseAspectRatioValue(params.requestedAspectRatio);\n    if (!requested && !requestedAspectRatio) {\n        return undefined;\n    }\n    return selectClosestValue(supported, (candidate)=>{\n        const parsed = parseSizeValue(candidate);\n        if (!parsed) {\n            return undefined;\n        }\n        return {\n            primary: Math.abs(Math.log(parsed.aspectRatio / (requested?.aspectRatio ?? requestedAspectRatio.value))),\n            secondary: requested ? Math.abs(Math.log(parsed.area / requested.area)) : parsed.area\n        };\n    });\n}\n",
+      "generatedSha256": "e3716fb0c52224e449355a6aaa9f154cf187c7d2410be800d450b22a9f295fd0",
+      "source": "src/media-generation/runtime-shared.ts",
+      "sourceSha256": "35c47e07a0f503d420eff11198a67fef62fc7da11f6b1ec4216681e5265b3153"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "capture:caps",
+      "kind": "complete-source-region-projection",
+      "exports": [
+        "resolveGeneratedImageDownloadMaxBytes"
+      ],
+      "generatedCode": "import { maxBytesForKind } from 'capture:source:packages/media-core/src/constants.ts';\nconst MB = 1024 * 1024;\nexport const WEBCHAT_LOCAL_MEDIA_MAX_BYTES = 4 * 1024 * MB;\nconst TELEGRAM_DEFAULT_MEDIA_MAX_MB = 100;\nconst GENERATED_IMAGE_DOWNLOAD_MAX_BYTES = 64 * MB;\nexport function resolveGeneratedMediaMaxBytes(cfg, kind) {\n    const configured = cfg?.agents?.defaults?.mediaMaxMb;\n    return typeof configured === \"number\" && Number.isFinite(configured) && configured > 0 ? Math.floor(configured * MB) : maxBytesForKind(kind);\n}\nexport function resolveGeneratedImageDownloadMaxBytes(cfg) {\n    return Math.max(resolveGeneratedMediaMaxBytes(cfg, \"image\"), GENERATED_IMAGE_DOWNLOAD_MAX_BYTES);\n}\n",
+      "generatedSha256": "7fa500422cbabcbe04ad0d4dfb77deccc13c4bf8bfbb664b51d99018cb0f78fd",
+      "source": "src/media/configured-max-bytes.ts",
+      "sourceSha256": "07d61d83f1ed8c14e0cd7a5f5532d2cc64d28e0a6d15c36690670a3900df3a6d"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/media-generation-runtime",
+      "kind": "source-region-export-alias",
+      "exports": [
+        "resolveClosestSize",
+        "resolveGeneratedImageDownloadMaxBytes"
+      ],
+      "generatedCode": "export {resolveClosestSize} from 'capture:image-geometry';\nexport {resolveGeneratedImageDownloadMaxBytes} from 'capture:image-caps';",
+      "generatedSha256": "96c5aa6d0a528a3d4cae4f448fc8c2fb5290c4bafbcb3b780f86b86bdad027f3",
+      "origin": "src/plugin-sdk/media-generation-runtime.ts",
+      "originSha256": "12167922a386fabe012fe14d7b8590fed6fbc5ab73ee7c571916e9e4b4f36744"
+    },
+    {
+      "importer": "src/image-generation/openai-compatible-image-urls.ts",
+      "specifier": "@openclaw/normalization-core/record-coerce",
+      "kind": "whole-source-module",
+      "source": "packages/normalization-core/src/record-coerce.ts",
+      "sourceSha256": "541c179840c2cad4edc5c8103f77cc7f8c6b1ee5ec3e52c7c9fe097b18917f1c"
+    },
+    {
+      "importer": "src/image-generation/openai-compatible-image-urls.ts",
+      "specifier": "@openclaw/normalization-core/string-coerce",
+      "kind": "whole-source-module",
+      "source": "packages/normalization-core/src/string-coerce.ts",
+      "sourceSha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf"
+    },
+    {
+      "importer": "src/image-generation/openai-compatible-image-urls.ts",
+      "specifier": "../agents/provider-http-errors.js",
+      "kind": "successful-binary-reader-fixture",
+      "exports": [
+        "assertOkOrThrowHttpError",
+        "readProviderBinaryResponse"
+      ],
+      "generatedCode": "export async function assertOkOrThrowHttpError(){}\nexport const readProviderBinaryResponse=globalThis.__platform.readBinary;",
+      "generatedSha256": "1d4107c73c398d737efe99ddfd5dfd331fbdaf171357c22f158df6939ab22f43",
+      "source": "src/agents/provider-http-errors.ts",
+      "sourceSha256": "cb03b6f1d53d6d123ab88a57367e6b5b0a3286aee90cedf5499e12051af22006",
+      "originalSourceExecuted": false
+    },
+    {
+      "importer": "src/image-generation/openai-compatible-image-urls.ts",
+      "specifier": "../infra/net/fetch-guard.js",
+      "kind": "successful-native-download-fixture",
+      "exports": [
+        "fetchWithSsrFGuard"
+      ],
+      "generatedCode": "export const fetchWithSsrFGuard=globalThis.__platform.download;",
+      "generatedSha256": "4cfffa81397ed9f00eed3f4131b5d3ea1434e4b78846f766e1dde0ff001428b0",
+      "source": "src/infra/net/fetch-guard.ts",
+      "sourceSha256": "02ebb334645b1635dc0b9b903ea8ce889fae8a25aaca728891e7c23725509fb1",
+      "originalSourceExecuted": false
+    },
+    {
+      "importer": "src/image-generation/openai-compatible-image-urls.ts",
+      "specifier": "../infra/net/ssrf.js",
+      "kind": "successful-policy-fixture",
+      "exports": [
+        "mergeSsrFPolicies"
+      ],
+      "generatedCode": "export function mergeSsrFPolicies(){return undefined;}",
+      "generatedSha256": "9bca888956755d8d5c87adc519602727e5a72d7579f0b95418742e2cf11c61e4",
+      "source": "src/infra/net/ssrf.ts",
+      "sourceSha256": "55672237725d4294850fd6ddd720c74258d2aa733b7775d5d1469cbda2f56aea",
+      "originalSourceExecuted": false
+    },
+    {
+      "importer": "src/image-generation/image-assets.ts",
+      "specifier": "@openclaw/media-core/base64",
+      "kind": "whole-source-module",
+      "source": "packages/media-core/src/base64.ts",
+      "sourceSha256": "93e6ef481601a3bee0a6cbd304506a0b1ab4e1e05d363be78a00ebe7b63173ac"
+    },
+    {
+      "importer": "src/image-generation/image-assets.ts",
+      "specifier": "@openclaw/media-core/constants",
+      "kind": "whole-source-module",
+      "source": "packages/media-core/src/constants.ts",
+      "sourceSha256": "eaf6503c56b32bab745da862d150c76896805e7db2f5bb12283e2930b64cb184"
+    },
+    {
+      "importer": "src/image-generation/image-assets.ts",
+      "specifier": "@openclaw/normalization-core/record-coerce",
+      "kind": "whole-source-module",
+      "source": "packages/normalization-core/src/record-coerce.ts",
+      "sourceSha256": "541c179840c2cad4edc5c8103f77cc7f8c6b1ee5ec3e52c7c9fe097b18917f1c"
+    },
+    {
+      "importer": "src/image-generation/image-assets.ts",
+      "specifier": "@openclaw/normalization-core/string-coerce",
+      "kind": "whole-source-module",
+      "source": "packages/normalization-core/src/string-coerce.ts",
+      "sourceSha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf"
+    }
+  ],
+  "dynamicImports": [
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-auth-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./image-generation-response.js"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/media-generation-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-auth-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./image-generation-response.js"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/media-generation-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-auth-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./image-generation-response.js"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/media-generation-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-auth-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./image-generation-response.js"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/media-generation-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-auth-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./image-generation-response.js"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/media-generation-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-auth-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./image-generation-response.js"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/media-generation-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-auth-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./image-generation-response.js"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/media-generation-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-auth-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./image-generation-response.js"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/media-generation-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-auth-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./image-generation-response.js"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/media-generation-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-auth-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./image-generation-response.js"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/media-generation-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-auth-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./image-generation-response.js"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/media-generation-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-auth-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./image-generation-response.js"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/media-generation-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-auth-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./image-generation-response.js"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/media-generation-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-auth-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./image-generation-response.js"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/media-generation-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-auth-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./image-generation-response.js"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/media-generation-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-auth-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./image-generation-response.js"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/media-generation-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-auth-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./image-generation-response.js"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/media-generation-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-auth-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./image-generation-response.js"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/media-generation-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-auth-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./image-generation-response.js"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/media-generation-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-auth-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./image-generation-response.js"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/media-generation-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-auth-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./image-generation-response.js"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/media-generation-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-auth-runtime"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/provider-http"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "./image-generation-response.js"
+    },
+    {
+      "importer": "extensions/openai/image-generation-provider.ts",
+      "specifier": "openclaw/plugin-sdk/media-generation-runtime"
+    }
+  ],
+  "limits": [
+    "Complete unchanged provider.generateImage, response wrapper, asset parser, URL inlining, Blob helper, normalization/base64/numeric/MIME modules execute. Three complete original source regions provide configured base URL, geometry and download cap; byte offsets, source-region/generated/executable hashes reconstruct each projection.",
+    "All 58,558 tracked reference blobs are verified before/after; source, executable, exporter, shared harness, runtime, per-import facade and source projection hashes are recorded.",
+    "Lower HTTP, configuration/key lookup, account/profile/policy, status and bounded stream reader bodies are unexecuted synthetic successful facades. Native Response.json/arrayBuffer records limits and native FormData/Blob/File serializes actual bytes; no retry, timeout enforcement, real network, credential discovery or registration claim.",
+    "Response cap is the actual source formula ceil(64 MiB * requested count * 4/3) + 1 MiB. Actual download cap is 64 MiB. Recorded limits do not verify production overflow or streaming behavior.",
+    "Ordered multipart entries omit native random boundaries and File.lastModified. Filenames use Linux node:path basename; native Blob MIME lowercasing preserves parameters. Small image bytes are protocol fixtures without codec or visual-quality verification.",
+    "Azure default version and explicit version execute through a per-vector synthetic VM process.env object; the host uses explicit config, with no real environment lookup or mutation.",
+    "Source-only transparent gpt-image-2 reroute is hostComparable=false: Synapsis preserves selected model and requires explicit compatible selection. It is not a host equivalence or enabled model-routing claim.",
+    "Inactive provider groundwork only: no tool/catalog/config enablement, files, durable media, task lifecycle, delivery, real provider or whole P10/reference-goal completion."
+  ],
+  "observations": [
+    {
+      "id": "default-size",
+      "hostComparable": true,
+      "input": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-1.5",
+        "timeoutMs": 12345
+      },
+      "config": {
+        "baseUrl": "https://api.openai.com/v1"
+      },
+      "response": {
+        "json": {
+          "data": [
+            {
+              "b64_json": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+            }
+          ]
+        },
+        "downloads": []
+      },
+      "inputAfter": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-1.5",
+        "timeoutMs": 12345
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/images/generations",
+        "method": "POST",
+        "timeoutMs": 12345,
+        "jsonBody": {
+          "model": "gpt-image-1.5",
+          "prompt": " Draw a small blue square. ",
+          "n": 1,
+          "size": "1024x1024"
+        }
+      },
+      "result": {
+        "images": [
+          {
+            "mimeType": "image/png",
+            "fileName": "image-1.png",
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          }
+        ],
+        "model": "gpt-image-1.5"
+      },
+      "downloads": [],
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "kind": "json",
+          "maxBytes": 90527062,
+          "timeoutMs": 12345
+        }
+      ]
+    },
+    {
+      "id": "explicit-count",
+      "hostComparable": true,
+      "input": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-2",
+        "timeoutMs": 12345,
+        "count": 4
+      },
+      "config": {
+        "baseUrl": "https://api.openai.com/v1"
+      },
+      "response": {
+        "json": {
+          "data": [
+            {
+              "b64_json": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+            },
+            {
+              "b64_json": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+            },
+            {
+              "b64_json": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+            },
+            {
+              "b64_json": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+            }
+          ]
+        },
+        "downloads": []
+      },
+      "inputAfter": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-2",
+        "timeoutMs": 12345,
+        "count": 4
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/images/generations",
+        "method": "POST",
+        "timeoutMs": 12345,
+        "jsonBody": {
+          "model": "gpt-image-2",
+          "prompt": " Draw a small blue square. ",
+          "n": 4,
+          "size": "1024x1024"
+        }
+      },
+      "result": {
+        "images": [
+          {
+            "mimeType": "image/png",
+            "fileName": "image-1.png",
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          },
+          {
+            "mimeType": "image/png",
+            "fileName": "image-2.png",
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          },
+          {
+            "mimeType": "image/png",
+            "fileName": "image-3.png",
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          },
+          {
+            "mimeType": "image/png",
+            "fileName": "image-4.png",
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          }
+        ],
+        "model": "gpt-image-2"
+      },
+      "downloads": [],
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "kind": "json",
+          "maxBytes": 358962518,
+          "timeoutMs": 12345
+        }
+      ]
+    },
+    {
+      "id": "legacy-closest-size",
+      "hostComparable": true,
+      "input": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-1",
+        "timeoutMs": 12345,
+        "size": "1600x900"
+      },
+      "config": {
+        "baseUrl": "https://api.openai.com/v1"
+      },
+      "response": {
+        "json": {
+          "data": [
+            {
+              "b64_json": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+            }
+          ]
+        },
+        "downloads": []
+      },
+      "inputAfter": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-1",
+        "timeoutMs": 12345,
+        "size": "1600x900"
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/images/generations",
+        "method": "POST",
+        "timeoutMs": 12345,
+        "jsonBody": {
+          "model": "gpt-image-1",
+          "prompt": " Draw a small blue square. ",
+          "n": 1,
+          "size": "1536x1024"
+        }
+      },
+      "result": {
+        "images": [
+          {
+            "mimeType": "image/png",
+            "fileName": "image-1.png",
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          }
+        ],
+        "model": "gpt-image-1",
+        "metadata": {
+          "requestedSize": "1600x900",
+          "normalizedSize": "1536x1024"
+        }
+      },
+      "downloads": [],
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "kind": "json",
+          "maxBytes": 90527062,
+          "timeoutMs": 12345
+        }
+      ]
+    },
+    {
+      "id": "native-closest-size",
+      "hostComparable": true,
+      "input": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-1.5",
+        "timeoutMs": 12345,
+        "size": "2048x1536"
+      },
+      "config": {
+        "baseUrl": "https://api.openai.com/v1"
+      },
+      "response": {
+        "json": {
+          "data": [
+            {
+              "b64_json": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+            }
+          ]
+        },
+        "downloads": []
+      },
+      "inputAfter": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-1.5",
+        "timeoutMs": 12345,
+        "size": "2048x1536"
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/images/generations",
+        "method": "POST",
+        "timeoutMs": 12345,
+        "jsonBody": {
+          "model": "gpt-image-1.5",
+          "prompt": " Draw a small blue square. ",
+          "n": 1,
+          "size": "1536x1024"
+        }
+      },
+      "result": {
+        "images": [
+          {
+            "mimeType": "image/png",
+            "fileName": "image-1.png",
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          }
+        ],
+        "model": "gpt-image-1.5",
+        "metadata": {
+          "requestedSize": "2048x1536",
+          "normalizedSize": "1536x1024"
+        }
+      },
+      "downloads": [],
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "kind": "json",
+          "maxBytes": 90527062,
+          "timeoutMs": 12345
+        }
+      ]
+    },
+    {
+      "id": "flexible-gpt-image-2",
+      "hostComparable": true,
+      "input": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-2",
+        "timeoutMs": 12345,
+        "size": "1600x960"
+      },
+      "config": {
+        "baseUrl": "https://api.openai.com/v1"
+      },
+      "response": {
+        "json": {
+          "data": [
+            {
+              "b64_json": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+            }
+          ]
+        },
+        "downloads": []
+      },
+      "inputAfter": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-2",
+        "timeoutMs": 12345,
+        "size": "1600x960"
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/images/generations",
+        "method": "POST",
+        "timeoutMs": 12345,
+        "jsonBody": {
+          "model": "gpt-image-2",
+          "prompt": " Draw a small blue square. ",
+          "n": 1,
+          "size": "1600x960"
+        }
+      },
+      "result": {
+        "images": [
+          {
+            "mimeType": "image/png",
+            "fileName": "image-1.png",
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          }
+        ],
+        "model": "gpt-image-2"
+      },
+      "downloads": [],
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "kind": "json",
+          "maxBytes": 90527062,
+          "timeoutMs": 12345
+        }
+      ]
+    },
+    {
+      "id": "flexible-dated-model",
+      "hostComparable": true,
+      "input": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-2-2026-04-21",
+        "timeoutMs": 12345,
+        "size": "1600x960"
+      },
+      "config": {
+        "baseUrl": "https://api.openai.com/v1"
+      },
+      "response": {
+        "json": {
+          "data": [
+            {
+              "b64_json": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+            }
+          ]
+        },
+        "downloads": []
+      },
+      "inputAfter": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-2-2026-04-21",
+        "timeoutMs": 12345,
+        "size": "1600x960"
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/images/generations",
+        "method": "POST",
+        "timeoutMs": 12345,
+        "jsonBody": {
+          "model": "gpt-image-2-2026-04-21",
+          "prompt": " Draw a small blue square. ",
+          "n": 1,
+          "size": "1600x960"
+        }
+      },
+      "result": {
+        "images": [
+          {
+            "mimeType": "image/png",
+            "fileName": "image-1.png",
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          }
+        ],
+        "model": "gpt-image-2-2026-04-21"
+      },
+      "downloads": [],
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "kind": "json",
+          "maxBytes": 90527062,
+          "timeoutMs": 12345
+        }
+      ]
+    },
+    {
+      "id": "flexible-gpt-image-2.5",
+      "hostComparable": true,
+      "input": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-2.5-flare",
+        "timeoutMs": 12345,
+        "size": "1600x960",
+        "quality": "xhigh"
+      },
+      "config": {
+        "baseUrl": "https://api.openai.com/v1"
+      },
+      "response": {
+        "json": {
+          "data": [
+            {
+              "b64_json": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+            }
+          ]
+        },
+        "downloads": []
+      },
+      "inputAfter": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-2.5-flare",
+        "timeoutMs": 12345,
+        "size": "1600x960",
+        "quality": "xhigh"
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/images/generations",
+        "method": "POST",
+        "timeoutMs": 12345,
+        "jsonBody": {
+          "model": "gpt-image-2.5-flare",
+          "prompt": " Draw a small blue square. ",
+          "n": 1,
+          "size": "1600x960",
+          "quality": "xhigh"
+        }
+      },
+      "result": {
+        "images": [
+          {
+            "mimeType": "image/png",
+            "fileName": "image-1.png",
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          }
+        ],
+        "model": "gpt-image-2.5-flare"
+      },
+      "downloads": [],
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "kind": "json",
+          "maxBytes": 90527062,
+          "timeoutMs": 12345
+        }
+      ]
+    },
+    {
+      "id": "auto-gpt-image-2.5",
+      "hostComparable": true,
+      "input": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-2.5-sunburst",
+        "timeoutMs": 12345,
+        "size": "auto",
+        "quality": "max"
+      },
+      "config": {
+        "baseUrl": "https://api.openai.com/v1"
+      },
+      "response": {
+        "json": {
+          "data": [
+            {
+              "b64_json": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+            }
+          ]
+        },
+        "downloads": []
+      },
+      "inputAfter": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-2.5-sunburst",
+        "timeoutMs": 12345,
+        "size": "auto",
+        "quality": "max"
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/images/generations",
+        "method": "POST",
+        "timeoutMs": 12345,
+        "jsonBody": {
+          "model": "gpt-image-2.5-sunburst",
+          "prompt": " Draw a small blue square. ",
+          "n": 1,
+          "size": "auto",
+          "quality": "max"
+        }
+      },
+      "result": {
+        "images": [
+          {
+            "mimeType": "image/png",
+            "fileName": "image-1.png",
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          }
+        ],
+        "model": "gpt-image-2.5-sunburst"
+      },
+      "downloads": [],
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "kind": "json",
+          "maxBytes": 90527062,
+          "timeoutMs": 12345
+        }
+      ]
+    },
+    {
+      "id": "jpeg-options",
+      "hostComparable": true,
+      "input": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-1.5",
+        "timeoutMs": 12345,
+        "outputFormat": "jpeg",
+        "quality": "high",
+        "background": "opaque",
+        "providerOptions": {
+          "openai": {
+            "background": "auto",
+            "moderation": "low",
+            "outputCompression": 73,
+            "user": "fixture-user"
+          }
+        }
+      },
+      "config": {
+        "baseUrl": "https://api.openai.com/v1"
+      },
+      "response": {
+        "json": {
+          "data": [
+            {
+              "b64_json": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/EH//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/EH//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/EH//2Q==",
+              "revised_prompt": "  Refined square.\n "
+            }
+          ]
+        },
+        "downloads": []
+      },
+      "inputAfter": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-1.5",
+        "timeoutMs": 12345,
+        "outputFormat": "jpeg",
+        "quality": "high",
+        "background": "opaque",
+        "providerOptions": {
+          "openai": {
+            "background": "auto",
+            "moderation": "low",
+            "outputCompression": 73,
+            "user": "fixture-user"
+          }
+        }
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/images/generations",
+        "method": "POST",
+        "timeoutMs": 12345,
+        "jsonBody": {
+          "model": "gpt-image-1.5",
+          "prompt": " Draw a small blue square. ",
+          "n": 1,
+          "size": "1024x1024",
+          "quality": "high",
+          "output_format": "jpeg",
+          "background": "auto",
+          "moderation": "low",
+          "output_compression": 73,
+          "user": "fixture-user"
+        }
+      },
+      "result": {
+        "images": [
+          {
+            "mimeType": "image/jpeg",
+            "fileName": "image-1.jpg",
+            "revisedPrompt": "Refined square.",
+            "bytesBase64": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/EH//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/EH//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/EH//2Q=="
+          }
+        ],
+        "model": "gpt-image-1.5"
+      },
+      "downloads": [],
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "kind": "json",
+          "maxBytes": 90527062,
+          "timeoutMs": 12345
+        }
+      ]
+    },
+    {
+      "id": "webp-options",
+      "hostComparable": true,
+      "input": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-1.5",
+        "timeoutMs": 12345,
+        "outputFormat": "webp",
+        "providerOptions": {
+          "openai": {
+            "outputCompression": 80
+          }
+        }
+      },
+      "config": {
+        "baseUrl": "https://api.openai.com/v1"
+      },
+      "response": {
+        "json": {
+          "data": [
+            {
+              "b64_json": "UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA"
+            }
+          ]
+        },
+        "downloads": []
+      },
+      "inputAfter": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-1.5",
+        "timeoutMs": 12345,
+        "outputFormat": "webp",
+        "providerOptions": {
+          "openai": {
+            "outputCompression": 80
+          }
+        }
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/images/generations",
+        "method": "POST",
+        "timeoutMs": 12345,
+        "jsonBody": {
+          "model": "gpt-image-1.5",
+          "prompt": " Draw a small blue square. ",
+          "n": 1,
+          "size": "1024x1024",
+          "output_format": "webp",
+          "output_compression": 80
+        }
+      },
+      "result": {
+        "images": [
+          {
+            "mimeType": "image/webp",
+            "fileName": "image-1.webp",
+            "bytesBase64": "UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA"
+          }
+        ],
+        "model": "gpt-image-1.5"
+      },
+      "downloads": [],
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "kind": "json",
+          "maxBytes": 90527062,
+          "timeoutMs": 12345
+        }
+      ]
+    },
+    {
+      "id": "png-options",
+      "hostComparable": true,
+      "input": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-1.5",
+        "timeoutMs": 12345,
+        "outputFormat": "png",
+        "background": "transparent",
+        "providerOptions": {
+          "openai": {
+            "outputCompression": 80
+          }
+        }
+      },
+      "config": {
+        "baseUrl": "https://api.openai.com/v1"
+      },
+      "response": {
+        "json": {
+          "data": [
+            {
+              "b64_json": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+            }
+          ]
+        },
+        "downloads": []
+      },
+      "inputAfter": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-1.5",
+        "timeoutMs": 12345,
+        "outputFormat": "png",
+        "background": "transparent",
+        "providerOptions": {
+          "openai": {
+            "outputCompression": 80
+          }
+        }
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/images/generations",
+        "method": "POST",
+        "timeoutMs": 12345,
+        "jsonBody": {
+          "model": "gpt-image-1.5",
+          "prompt": " Draw a small blue square. ",
+          "n": 1,
+          "size": "1024x1024",
+          "output_format": "png",
+          "background": "transparent"
+        }
+      },
+      "result": {
+        "images": [
+          {
+            "mimeType": "image/png",
+            "fileName": "image-1.png",
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          }
+        ],
+        "model": "gpt-image-1.5"
+      },
+      "downloads": [],
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "kind": "json",
+          "maxBytes": 90527062,
+          "timeoutMs": 12345
+        }
+      ]
+    },
+    {
+      "id": "custom-prefix",
+      "hostComparable": true,
+      "input": {
+        "prompt": " Draw a small blue square. ",
+        "model": "Vendor/Image-X",
+        "timeoutMs": 12345,
+        "size": "1280x720",
+        "quality": "high"
+      },
+      "config": {
+        "baseUrl": " https://images.example.test/custom/v2/// "
+      },
+      "response": {
+        "json": {
+          "data": [
+            {
+              "b64_json": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+            }
+          ]
+        },
+        "downloads": []
+      },
+      "inputAfter": {
+        "prompt": " Draw a small blue square. ",
+        "model": "Vendor/Image-X",
+        "timeoutMs": 12345,
+        "size": "1280x720",
+        "quality": "high"
+      },
+      "request": {
+        "url": "https://images.example.test/custom/v2/images/generations",
+        "method": "POST",
+        "timeoutMs": 12345,
+        "jsonBody": {
+          "model": "Vendor/Image-X",
+          "prompt": " Draw a small blue square. ",
+          "n": 1,
+          "size": "1280x720",
+          "quality": "high"
+        }
+      },
+      "result": {
+        "images": [
+          {
+            "mimeType": "image/png",
+            "fileName": "image-1.png",
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          }
+        ],
+        "model": "Vendor/Image-X"
+      },
+      "downloads": [],
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "kind": "json",
+          "maxBytes": 90527062,
+          "timeoutMs": 12345
+        }
+      ]
+    },
+    {
+      "id": "edit-one",
+      "hostComparable": true,
+      "input": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-1.5",
+        "timeoutMs": 12345,
+        "inputImages": [
+          {
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII=",
+            "mimeType": "image/png",
+            "fileName": "  photos/day/square.png  "
+          }
+        ]
+      },
+      "config": {
+        "baseUrl": "https://api.openai.com/v1"
+      },
+      "response": {
+        "json": {
+          "data": [
+            {
+              "b64_json": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+            }
+          ]
+        },
+        "downloads": []
+      },
+      "inputAfter": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-1.5",
+        "timeoutMs": 12345,
+        "inputImages": [
+          {
+            "mimeType": "image/png",
+            "fileName": "  photos/day/square.png  ",
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/images/edits",
+        "method": "POST",
+        "timeoutMs": 12345,
+        "formEntries": [
+          {
+            "name": "model",
+            "value": "gpt-image-1.5"
+          },
+          {
+            "name": "prompt",
+            "value": " Draw a small blue square. "
+          },
+          {
+            "name": "n",
+            "value": "1"
+          },
+          {
+            "name": "size",
+            "value": "1024x1024"
+          },
+          {
+            "name": "image[]",
+            "fileName": "square.png",
+            "mimeType": "image/png",
+            "size": 68,
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "result": {
+        "images": [
+          {
+            "mimeType": "image/png",
+            "fileName": "image-1.png",
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          }
+        ],
+        "model": "gpt-image-1.5"
+      },
+      "downloads": [],
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "kind": "json",
+          "maxBytes": 90527062,
+          "timeoutMs": 12345
+        }
+      ]
+    },
+    {
+      "id": "edit-many-native-mime",
+      "hostComparable": true,
+      "input": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-2.5-flare",
+        "timeoutMs": 12345,
+        "count": 2,
+        "outputFormat": "jpeg",
+        "quality": "xhigh",
+        "inputImages": [
+          {
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          },
+          {
+            "bytesBase64": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/EH//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/EH//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/EH//2Q==",
+            "mimeType": " Image/JPEG; ColorSpace=RGB "
+          },
+          {
+            "bytesBase64": "UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA",
+            "mimeType": "image/webp"
+          }
+        ]
+      },
+      "config": {
+        "baseUrl": "https://api.openai.com/v1"
+      },
+      "response": {
+        "json": {
+          "data": [
+            {
+              "b64_json": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/EH//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/EH//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/EH//2Q=="
+            },
+            {
+              "b64_json": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/EH//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/EH//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/EH//2Q=="
+            }
+          ]
+        },
+        "downloads": []
+      },
+      "inputAfter": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-2.5-flare",
+        "timeoutMs": 12345,
+        "count": 2,
+        "outputFormat": "jpeg",
+        "quality": "xhigh",
+        "inputImages": [
+          {
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          },
+          {
+            "mimeType": " Image/JPEG; ColorSpace=RGB ",
+            "bytesBase64": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/EH//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/EH//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/EH//2Q=="
+          },
+          {
+            "mimeType": "image/webp",
+            "bytesBase64": "UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA"
+          }
+        ]
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/images/edits",
+        "method": "POST",
+        "timeoutMs": 12345,
+        "formEntries": [
+          {
+            "name": "model",
+            "value": "gpt-image-2.5-flare"
+          },
+          {
+            "name": "prompt",
+            "value": " Draw a small blue square. "
+          },
+          {
+            "name": "n",
+            "value": "2"
+          },
+          {
+            "name": "size",
+            "value": "1024x1024"
+          },
+          {
+            "name": "quality",
+            "value": "xhigh"
+          },
+          {
+            "name": "output_format",
+            "value": "jpeg"
+          },
+          {
+            "name": "image[]",
+            "fileName": "image-1.png",
+            "mimeType": "image/png",
+            "size": 68,
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          },
+          {
+            "name": "image[]",
+            "fileName": "image-2.jpg",
+            "mimeType": "image/jpeg; colorspace=rgb",
+            "size": 517,
+            "bytesBase64": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/EH//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/EH//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/EH//2Q=="
+          },
+          {
+            "name": "image[]",
+            "fileName": "image-3.webp",
+            "mimeType": "image/webp",
+            "size": 42,
+            "bytesBase64": "UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA"
+          }
+        ]
+      },
+      "result": {
+        "images": [
+          {
+            "mimeType": "image/jpeg",
+            "fileName": "image-1.jpg",
+            "bytesBase64": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/EH//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/EH//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/EH//2Q=="
+          },
+          {
+            "mimeType": "image/jpeg",
+            "fileName": "image-2.jpg",
+            "bytesBase64": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/EH//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/EH//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/EH//2Q=="
+          }
+        ],
+        "model": "gpt-image-2.5-flare"
+      },
+      "downloads": [],
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "kind": "json",
+          "maxBytes": 180005547,
+          "timeoutMs": 12345
+        }
+      ]
+    },
+    {
+      "id": "ordered-inline",
+      "hostComparable": true,
+      "input": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-1.5",
+        "timeoutMs": 12345,
+        "count": 3
+      },
+      "config": {
+        "baseUrl": "https://api.openai.com/v1"
+      },
+      "response": {
+        "json": {
+          "data": [
+            {
+              "b64_json": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII=",
+              "mime_type": " image/png ",
+              "revised_prompt": " First "
+            },
+            {
+              "b64_json": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/EH//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/EH//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/EH//2Q==",
+              "mime_type": "Image/JPEG; mode=RGB",
+              "revised_prompt": " \n "
+            },
+            {
+              "b64_json": "UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA",
+              "mime_type": "image/webp"
+            }
+          ]
+        },
+        "downloads": []
+      },
+      "inputAfter": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-1.5",
+        "timeoutMs": 12345,
+        "count": 3
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/images/generations",
+        "method": "POST",
+        "timeoutMs": 12345,
+        "jsonBody": {
+          "model": "gpt-image-1.5",
+          "prompt": " Draw a small blue square. ",
+          "n": 3,
+          "size": "1024x1024"
+        }
+      },
+      "result": {
+        "images": [
+          {
+            "mimeType": "image/png",
+            "fileName": "image-1.png",
+            "revisedPrompt": "First",
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          },
+          {
+            "mimeType": "Image/JPEG; mode=RGB",
+            "fileName": "image-2.jpg",
+            "bytesBase64": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/EH//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/EH//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/EH//2Q=="
+          },
+          {
+            "mimeType": "image/webp",
+            "fileName": "image-3.webp",
+            "bytesBase64": "UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA"
+          }
+        ],
+        "model": "gpt-image-1.5"
+      },
+      "downloads": [],
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "kind": "json",
+          "maxBytes": 269484032,
+          "timeoutMs": 12345
+        }
+      ]
+    },
+    {
+      "id": "ordered-urls",
+      "hostComparable": true,
+      "input": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-1.5",
+        "timeoutMs": 12345,
+        "count": 2
+      },
+      "config": {
+        "baseUrl": "https://api.openai.com/v1"
+      },
+      "response": {
+        "json": {
+          "data": [
+            {
+              "url": "https://assets.example.test/one",
+              "revised_prompt": " One "
+            },
+            {
+              "url": "https://assets.example.test/two",
+              "revised_prompt": " Two "
+            }
+          ]
+        },
+        "downloads": [
+          {
+            "url": "https://assets.example.test/one",
+            "contentType": "Image/JPEG; charset=binary",
+            "bytesBase64": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/EH//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/EH//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/EH//2Q=="
+          },
+          {
+            "url": "https://assets.example.test/two",
+            "contentType": "image/webp",
+            "bytesBase64": "UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA"
+          }
+        ]
+      },
+      "inputAfter": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-1.5",
+        "timeoutMs": 12345,
+        "count": 2
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/images/generations",
+        "method": "POST",
+        "timeoutMs": 12345,
+        "jsonBody": {
+          "model": "gpt-image-1.5",
+          "prompt": " Draw a small blue square. ",
+          "n": 2,
+          "size": "1024x1024"
+        }
+      },
+      "result": {
+        "images": [
+          {
+            "mimeType": "image/jpeg",
+            "fileName": "image-1.jpg",
+            "revisedPrompt": "One",
+            "bytesBase64": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/EH//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/EH//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/EH//2Q=="
+          },
+          {
+            "mimeType": "image/webp",
+            "fileName": "image-2.webp",
+            "revisedPrompt": "Two",
+            "bytesBase64": "UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA"
+          }
+        ],
+        "model": "gpt-image-1.5"
+      },
+      "downloads": [
+        {
+          "url": "https://assets.example.test/one",
+          "method": "GET",
+          "timeoutMs": 12345,
+          "releaseCount": 1,
+          "maxBytes": 67108864
+        },
+        {
+          "url": "https://assets.example.test/two",
+          "method": "GET",
+          "timeoutMs": 12345,
+          "releaseCount": 1,
+          "maxBytes": 67108864
+        }
+      ],
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "kind": "json",
+          "maxBytes": 180005547,
+          "timeoutMs": 12345
+        },
+        {
+          "kind": "binary",
+          "maxBytes": 67108864,
+          "timeoutMs": 12345
+        },
+        {
+          "kind": "binary",
+          "maxBytes": 67108864,
+          "timeoutMs": 12345
+        }
+      ]
+    },
+    {
+      "id": "mixed-inline-url",
+      "hostComparable": true,
+      "input": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-1.5",
+        "timeoutMs": 12345,
+        "count": 3
+      },
+      "config": {
+        "baseUrl": "https://api.openai.com/v1"
+      },
+      "response": {
+        "json": {
+          "data": [
+            {
+              "b64_json": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+            },
+            {
+              "url": "https://assets.example.test/middle"
+            },
+            {
+              "b64_json": "UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA",
+              "mime_type": "image/webp",
+              "url": "https://assets.example.test/unused-inline-url"
+            }
+          ]
+        },
+        "downloads": [
+          {
+            "url": "https://assets.example.test/middle",
+            "contentType": "image/jpeg",
+            "bytesBase64": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/EH//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/EH//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/EH//2Q=="
+          }
+        ]
+      },
+      "inputAfter": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-1.5",
+        "timeoutMs": 12345,
+        "count": 3
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/images/generations",
+        "method": "POST",
+        "timeoutMs": 12345,
+        "jsonBody": {
+          "model": "gpt-image-1.5",
+          "prompt": " Draw a small blue square. ",
+          "n": 3,
+          "size": "1024x1024"
+        }
+      },
+      "result": {
+        "images": [
+          {
+            "mimeType": "image/png",
+            "fileName": "image-1.png",
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          },
+          {
+            "mimeType": "image/jpeg",
+            "fileName": "image-2.jpg",
+            "bytesBase64": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/EH//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/EH//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/EH//2Q=="
+          },
+          {
+            "mimeType": "image/webp",
+            "fileName": "image-3.webp",
+            "bytesBase64": "UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA"
+          }
+        ],
+        "model": "gpt-image-1.5"
+      },
+      "downloads": [
+        {
+          "url": "https://assets.example.test/middle",
+          "method": "GET",
+          "timeoutMs": 12345,
+          "releaseCount": 1,
+          "maxBytes": 67108864
+        }
+      ],
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "kind": "json",
+          "maxBytes": 269484032,
+          "timeoutMs": 12345
+        },
+        {
+          "kind": "binary",
+          "maxBytes": 67108864,
+          "timeoutMs": 12345
+        }
+      ]
+    },
+    {
+      "id": "usage-zero-nested",
+      "hostComparable": true,
+      "input": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-1.5",
+        "timeoutMs": 12345
+      },
+      "config": {
+        "baseUrl": "https://api.openai.com/v1"
+      },
+      "response": {
+        "json": {
+          "data": [
+            {
+              "b64_json": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+            }
+          ],
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 2,
+            "total_tokens": 2,
+            "input_tokens_details": {
+              "text_tokens": 0,
+              "image_tokens": 0
+            },
+            "output_tokens_details": {
+              "text_tokens": 0,
+              "image_tokens": 2
+            }
+          }
+        },
+        "downloads": []
+      },
+      "inputAfter": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-1.5",
+        "timeoutMs": 12345
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/images/generations",
+        "method": "POST",
+        "timeoutMs": 12345,
+        "jsonBody": {
+          "model": "gpt-image-1.5",
+          "prompt": " Draw a small blue square. ",
+          "n": 1,
+          "size": "1024x1024"
+        }
+      },
+      "result": {
+        "images": [
+          {
+            "mimeType": "image/png",
+            "fileName": "image-1.png",
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          }
+        ],
+        "model": "gpt-image-1.5",
+        "metadata": {
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 2,
+            "total_tokens": 2,
+            "input_tokens_details": {
+              "text_tokens": 0,
+              "image_tokens": 0
+            },
+            "output_tokens_details": {
+              "text_tokens": 0,
+              "image_tokens": 2
+            }
+          }
+        }
+      },
+      "downloads": [],
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "kind": "json",
+          "maxBytes": 90527062,
+          "timeoutMs": 12345
+        }
+      ]
+    },
+    {
+      "id": "usage-absent",
+      "hostComparable": true,
+      "input": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-1.5",
+        "timeoutMs": 12345
+      },
+      "config": {
+        "baseUrl": "https://api.openai.com/v1"
+      },
+      "response": {
+        "json": {
+          "data": [
+            {
+              "b64_json": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+            }
+          ]
+        },
+        "downloads": []
+      },
+      "inputAfter": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-1.5",
+        "timeoutMs": 12345
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/images/generations",
+        "method": "POST",
+        "timeoutMs": 12345,
+        "jsonBody": {
+          "model": "gpt-image-1.5",
+          "prompt": " Draw a small blue square. ",
+          "n": 1,
+          "size": "1024x1024"
+        }
+      },
+      "result": {
+        "images": [
+          {
+            "mimeType": "image/png",
+            "fileName": "image-1.png",
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          }
+        ],
+        "model": "gpt-image-1.5"
+      },
+      "downloads": [],
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "kind": "json",
+          "maxBytes": 90527062,
+          "timeoutMs": 12345
+        }
+      ]
+    },
+    {
+      "id": "azure-default-version",
+      "hostComparable": true,
+      "input": {
+        "prompt": " Draw a small blue square. ",
+        "model": "square-deployment",
+        "timeoutMs": 12345,
+        "size": "1600x900"
+      },
+      "config": {
+        "baseUrl": "https://images.openai.azure.com/openai/v1/"
+      },
+      "response": {
+        "json": {
+          "data": [
+            {
+              "b64_json": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+            }
+          ]
+        },
+        "downloads": []
+      },
+      "inputAfter": {
+        "prompt": " Draw a small blue square. ",
+        "model": "square-deployment",
+        "timeoutMs": 12345,
+        "size": "1600x900"
+      },
+      "request": {
+        "url": "https://images.openai.azure.com/openai/deployments/square-deployment/images/generations?api-version=2024-12-01-preview",
+        "method": "POST",
+        "timeoutMs": 12345,
+        "jsonBody": {
+          "prompt": " Draw a small blue square. ",
+          "n": 1,
+          "size": "2048x1152"
+        }
+      },
+      "result": {
+        "images": [
+          {
+            "mimeType": "image/png",
+            "fileName": "image-1.png",
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          }
+        ],
+        "model": "square-deployment",
+        "metadata": {
+          "requestedSize": "1600x900",
+          "normalizedSize": "2048x1152"
+        }
+      },
+      "downloads": [],
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "kind": "json",
+          "maxBytes": 90527062,
+          "timeoutMs": 12345
+        }
+      ]
+    },
+    {
+      "id": "azure-explicit-version-edit",
+      "hostComparable": true,
+      "input": {
+        "prompt": " Draw a small blue square. ",
+        "model": "square-deployment",
+        "timeoutMs": 12345,
+        "inputImages": [
+          {
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII=",
+            "mimeType": "image/png",
+            "fileName": "square.png"
+          }
+        ]
+      },
+      "config": {
+        "baseUrl": "https://images.openai.azure.com/openai/v1/",
+        "apiVersion": "2025-04-01-preview"
+      },
+      "response": {
+        "json": {
+          "data": [
+            {
+              "b64_json": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+            }
+          ]
+        },
+        "downloads": []
+      },
+      "inputAfter": {
+        "prompt": " Draw a small blue square. ",
+        "model": "square-deployment",
+        "timeoutMs": 12345,
+        "inputImages": [
+          {
+            "mimeType": "image/png",
+            "fileName": "square.png",
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "request": {
+        "url": "https://images.openai.azure.com/openai/deployments/square-deployment/images/edits?api-version=2025-04-01-preview",
+        "method": "POST",
+        "timeoutMs": 12345,
+        "formEntries": [
+          {
+            "name": "prompt",
+            "value": " Draw a small blue square. "
+          },
+          {
+            "name": "n",
+            "value": "1"
+          },
+          {
+            "name": "size",
+            "value": "1024x1024"
+          },
+          {
+            "name": "image[]",
+            "fileName": "square.png",
+            "mimeType": "image/png",
+            "size": 68,
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "result": {
+        "images": [
+          {
+            "mimeType": "image/png",
+            "fileName": "image-1.png",
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          }
+        ],
+        "model": "square-deployment"
+      },
+      "downloads": [],
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "kind": "json",
+          "maxBytes": 90527062,
+          "timeoutMs": 12345
+        }
+      ]
+    },
+    {
+      "id": "source-only-transparent-reroute",
+      "hostComparable": false,
+      "input": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-2",
+        "timeoutMs": 12345,
+        "background": "transparent"
+      },
+      "config": {
+        "baseUrl": "https://api.openai.com/v1"
+      },
+      "response": {
+        "json": {
+          "data": [
+            {
+              "b64_json": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+            }
+          ]
+        },
+        "downloads": []
+      },
+      "adaptationReason": "Pinned public default gpt-image-2 transparently reroutes to gpt-image-1.5. Synapsis preserves the explicit selected model and requires a compatible selection before HTTP.",
+      "inputAfter": {
+        "prompt": " Draw a small blue square. ",
+        "model": "gpt-image-2",
+        "timeoutMs": 12345,
+        "background": "transparent"
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/images/generations",
+        "method": "POST",
+        "timeoutMs": 12345,
+        "jsonBody": {
+          "model": "gpt-image-1.5",
+          "prompt": " Draw a small blue square. ",
+          "n": 1,
+          "size": "1024x1024",
+          "background": "transparent"
+        }
+      },
+      "result": {
+        "images": [
+          {
+            "mimeType": "image/png",
+            "fileName": "image-1.png",
+            "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVJkAAAAASUVORK5CYII="
+          }
+        ],
+        "model": "gpt-image-1.5"
+      },
+      "downloads": [],
+      "releaseCount": 1,
+      "readerCalls": [
+        {
+          "kind": "json",
+          "maxBytes": 90527062,
+          "timeoutMs": 12345
+        }
+      ]
+    }
+  ]
+}

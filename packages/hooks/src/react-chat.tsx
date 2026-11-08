@@ -7,6 +7,7 @@ import { Input } from '@duskmoon-dev/components/input'
 import { encodeChatImages } from './chat-image-input'
 import { useSynapsisChatSubmission } from './chat-submission'
 import { createChatRequestId } from './chat-request-id'
+import { AudioContent, ToolResultContent } from './tool-result'
 
 type ChatProps = {
   state: { conversationId: string }
@@ -38,20 +39,35 @@ function AttachmentPreview({ file }: { file: File }) {
 
 function Tool({ tool }: { tool: Record<string, any> }) {
   const status = ['complete', 'completed'].includes(tool.status) ? 'success' : tool.status
-  return <Chat.Tool status={status || 'pending'} open={status === 'running' || status === 'error'}>
-    <Chat.ToolHeader>{tool.name || tool.tool || 'Tool'} <Chat.ToolStatus>{tool.status}</Chat.ToolStatus></Chat.ToolHeader>
-    {tool.input != null && <Chat.ToolCall><pre>{JSON.stringify(tool.input, null, 2)}</pre></Chat.ToolCall>}
-    {tool.result != null && <Chat.ToolResult><pre>{typeof tool.result === 'string' ? tool.result : JSON.stringify(tool.result, null, 2)}</pre></Chat.ToolResult>}
-  </Chat.Tool>
+  return <Chat.Work className={`chat-tool-${status || 'pending'}`} open={status === 'running' || status === 'error'}>
+    <Chat.WorkSummary>{tool.name || tool.tool || 'Tool'} <Chat.ToolStatus>{tool.status}</Chat.ToolStatus></Chat.WorkSummary>
+    <Chat.WorkBody>
+      {tool.input != null && <Chat.ToolCall><pre>{JSON.stringify(tool.input, null, 2)}</pre></Chat.ToolCall>}
+      {tool.display != null ? <ToolResultContent display={tool.display} /> :
+        tool.result != null && <Chat.ToolResult><pre>{typeof tool.result === 'string' ? tool.result : JSON.stringify(tool.result, null, 2)}</pre></Chat.ToolResult>}
+    </Chat.WorkBody>
+  </Chat.Work>
 }
 
 function Part({ part }: { part: Record<string, any> }) {
   switch (part.type) {
     case 'text': return <Markdown className="chat-bubble-content" markdown={part.content || ''} />
-    case 'reasoning': return <Chat.Reasoning><summary>Thinking</summary><Markdown markdown={part.content || ''} /></Chat.Reasoning>
+    case 'reasoning': return <Chat.Work><Chat.WorkSummary>Thinking</Chat.WorkSummary><Chat.WorkBody><Markdown markdown={part.content || ''} /></Chat.WorkBody></Chat.Work>
     case 'image': return <img src={`data:${part.media_type};base64,${part.data}`} alt="Attached image" loading="lazy" decoding="async" className="max-h-96 max-w-full rounded-lg object-contain" />
+    case 'delivered_image': return <figure className="min-w-0 max-w-full space-y-1">
+      <img src={part.src} alt={part.filename || 'Assistant image'} loading="lazy" decoding="async" className="max-h-96 max-w-full rounded-lg object-contain" />
+      <figcaption><a href={part.src} download={part.filename} className="text-sm underline">Download image</a></figcaption>
+    </figure>
+    case 'video': return <figure className="min-w-0 max-w-full space-y-1">
+      <video controls preload="none" aria-label={part.filename || 'Assistant video'} className="block max-h-96 w-full min-w-0 max-w-full rounded-lg object-contain">
+        <source src={part.src} type={part.mediaType} />
+        Your browser does not support video playback.
+      </video>
+      <figcaption><a href={part.src} download={part.filename} className="text-sm underline">Download video</a></figcaption>
+    </figure>
+    case 'audio': return <AudioContent src={part.src} mediaType={part.mediaType} filename={part.filename} label={part.filename || 'Audio attachment'} />
     case 'tool_use': return <Tool tool={{ ...part, name: part.name || part.tool }} />
-    case 'tool_result': return <Chat.Tool status={part.is_error ? 'error' : 'success'}><Chat.ToolHeader>Tool result</Chat.ToolHeader><Chat.ToolResult><pre>{part.content}</pre></Chat.ToolResult></Chat.Tool>
+    case 'tool_result': return <Tool tool={{ name: 'Tool result', status: part.is_error ? 'error' : 'success', result: part.content, display: part.display }} />
     case 'file': return <details><summary>{part.path}</summary><pre>{part.content}</pre></details>
     case 'compaction': return <details><summary>{part.count} messages compacted</summary><Markdown markdown={part.summary || part.content || ''} /></details>
     default: return null
@@ -78,7 +94,9 @@ function Message(props: ChatProps) {
   const timestampValue = meta.timestamp || heartbeat?.timestamp
   const timestamp = timestampValue && new Date(timestampValue)
   const time = timestamp && !Number.isNaN(timestamp.getTime()) ? timestamp.toLocaleTimeString() : null
-  return <Chat id={targetId} timeline={timeline} placement={user ? 'end' : 'start'} role="article" data-message-id={message.id}>
+  const Row = user ? Chat : Chat.Agent
+  const Content = user ? Chat.Bubble : Chat.Content
+  return <Row id={targetId} timeline={timeline} {...(user ? { placement: 'end' as const } : {})} role="article" data-message-id={message.id}>
     {!user && metadata.assistantAvatar && <Chat.Avatar aria-hidden="true">{metadata.assistantAvatar}</Chat.Avatar>}
     <Chat.Header>
       <span className="font-medium">{message.author || (user ? 'You' : 'Assistant')}</span>
@@ -86,8 +104,8 @@ function Message(props: ChatProps) {
       {meta.tokenCount > 0 && <span className="text-xs text-on-surface-variant">{user ? 'in' : 'out'}: {meta.tokenCount}</span>}
       {queued && <span className="text-xs text-on-surface-variant">Queued</span>}
     </Chat.Header>
-    <Chat.Bubble color={user ? 'primary' : undefined} filled={user} size="sm" streaming={message.status === 'streaming'}>
-      {meta.reasoning && <Chat.Reasoning><summary>Thinking</summary><Markdown markdown={meta.reasoning} /></Chat.Reasoning>}
+    <Content {...(user ? { color: 'primary' as const, filled: true, size: 'sm' as const, collapsible: true } : {})} streaming={message.status === 'streaming'}>
+      {meta.reasoning && <Chat.Work><Chat.WorkSummary>Thinking</Chat.WorkSummary><Chat.WorkBody><Markdown markdown={meta.reasoning} /></Chat.WorkBody></Chat.Work>}
       {message.role === 'error' ? <p role="alert" className="text-error">{message.error || message.content}</p> :
         !codeAgent && (meta.parts?.length ? meta.parts.map((part: Record<string, any>, index: number) => <Part key={index} part={part} />) : <Markdown className="chat-bubble-content" markdown={message.content || ''} />)}
       {(message.tools || []).map((tool: Record<string, any>) => <Tool key={tool.id} tool={tool} />)}
@@ -99,14 +117,18 @@ function Message(props: ChatProps) {
           <Button size="sm" appearance="ghost" disabled={disabled} onClick={() => action('deny_tool', { tool_use_id: permission.tool_use_id })}>Deny</Button>
         </Chat.Actions>
       </div>)}
-      {codeAgent && <details open={codeAgent.status === 'running'}>
-        <summary>Code Agent — {codeAgent.status}</summary>
-        <p>{codeAgent.prompt}</p>
-        {(codeAgent.tool_calls || []).map((tool: Record<string, any>, index: number) => <Tool key={tool.id || index} tool={tool} />)}
+      {codeAgent && <>
+        <Chat.Work open={codeAgent.status === 'running'}>
+          <Chat.WorkSummary>Code Agent — {codeAgent.status}</Chat.WorkSummary>
+          <Chat.WorkBody>
+            <p>{codeAgent.prompt}</p>
+            {(codeAgent.tool_calls || []).map((tool: Record<string, any>, index: number) => <Tool key={tool.id || index} tool={tool} />)}
+          </Chat.WorkBody>
+        </Chat.Work>
         {codeAgent.completion && <Markdown markdown={codeAgent.completion} />}
-      </details>}
+      </>}
       {heartbeat && <span className="text-xs text-on-surface-variant">Heartbeat · {heartbeat.name}</span>}
-    </Chat.Bubble>
+    </Content>
     {message.error && message.role !== 'error' && <p role="alert" className="text-error">{message.error}</p>}
     <Chat.Footer>
       <Chat.Actions hover>
@@ -118,7 +140,7 @@ function Message(props: ChatProps) {
       </Chat.Actions>
       {notice && <span role="status" className="text-xs text-on-surface-variant">{notice}</span>}
     </Chat.Footer>
-  </Chat>
+  </Row>
 }
 
 function UserQuestion({ question, bridge, connected, synchronizing }: {

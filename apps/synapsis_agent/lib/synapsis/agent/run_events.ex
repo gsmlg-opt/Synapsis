@@ -72,6 +72,12 @@ defmodule Synapsis.Agent.RunEvents do
   end
 
   def publish_routine_triggered(routine, %AgentRun{} = run) when is_map(routine) do
+    source =
+      case automation_ref(run) do
+        %{"source" => source} -> source
+        nil -> value(routine, :__config_type) || routine_source(routine)
+      end
+
     Phoenix.PubSub.broadcast(
       Synapsis.PubSub,
       @topic,
@@ -84,20 +90,30 @@ defmodule Synapsis.Agent.RunEvents do
          run_id: run.id,
          status: run.status,
          at: DateTime.utc_now()
-       }}
+       }
+       |> put_source(source)}
     )
   end
 
   def publish_routine_updated(routine) when is_map(routine) do
-    publish_routine_updated(value(routine, :id), value(routine, :kind) || "heartbeat")
+    publish_routine_updated(
+      value(routine, :id),
+      value(routine, :kind) || "heartbeat",
+      routine_source(routine)
+    )
   end
 
   def publish_routine_updated(id, kind) when is_binary(id) do
+    publish_routine_updated(id, kind, nil)
+  end
+
+  defp publish_routine_updated(id, kind, source) when is_binary(id) do
     Phoenix.PubSub.broadcast(
       Synapsis.PubSub,
       @topic,
       {:agent_daemon_event,
-       %{event: "agent.routine.updated", routine_id: id, kind: kind, at: DateTime.utc_now()}}
+       %{event: "agent.routine.updated", routine_id: id, kind: kind, at: DateTime.utc_now()}
+       |> put_source(source)}
     )
   end
 
@@ -210,6 +226,16 @@ defmodule Synapsis.Agent.RunEvents do
       |> Map.put(:routine_id, run.routine_id)
       |> Map.put(:started_at, encode_datetime(run.started_at))
       |> Map.put(:inserted_at, encode_datetime(run.inserted_at))
+      |> Map.put(:routine_schedule, value(run.metadata || %{}, :routine_schedule))
+      |> put_automation_ref(:automation_ref, run)
+
+    {completion, truncated} = Synapsis.RoutineRuns.completion_projection(run)
+    payload = Map.merge(payload, completion)
+
+    payload =
+      if map_size(truncated) > 0,
+        do: Map.put(payload, :truncated, Map.merge(Map.get(payload, :truncated, %{}), truncated)),
+        else: payload
 
     if event == :failed, do: Map.put(payload, :error, run.error), else: payload
   end
@@ -233,6 +259,32 @@ defmodule Synapsis.Agent.RunEvents do
   defp normalize_result(_other), do: :ok
 
   defp value(map, key), do: Map.get(map, key, Map.get(map, Atom.to_string(key)))
+
+  defp routine_source(routine), do: value(routine, :source) || value(routine, :__config_type)
+
+  defp put_source(payload, source) when source in ["routine", "heartbeat"],
+    do: Map.put(payload, :source, source)
+
+  defp put_source(payload, _source), do: payload
+
+  defp put_automation_ref(payload, key, run) do
+    case automation_ref(run) do
+      nil -> payload
+      ref -> Map.put(payload, key, ref)
+    end
+  end
+
+  defp automation_ref(%{routine_id: id, metadata: metadata})
+       when is_map(metadata) do
+    ref = value(metadata, :automation_ref)
+
+    if is_map(ref) and value(ref, :source) in ["routine", "heartbeat"] and
+         value(ref, :id) == id and match?({:ok, ^id}, Ecto.UUID.cast(id)) do
+      %{"source" => value(ref, :source), "id" => id}
+    end
+  end
+
+  defp automation_ref(_run), do: nil
 
   defp fetch(map, keys) do
     Enum.find_value(keys, fn key ->
@@ -299,6 +351,7 @@ defmodule Synapsis.Agent.RunEvents do
       "heartbeat_id" => run.heartbeat_id,
       "routine_id" => run.routine_id
     }
+    |> put_automation_ref("automation_ref", run)
   end
 
   defp memory_scope(%AgentRun{session_id: session_id})

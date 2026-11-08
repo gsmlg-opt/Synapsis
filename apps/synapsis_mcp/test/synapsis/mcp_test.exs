@@ -27,17 +27,17 @@ defmodule Synapsis.MCPTest do
 
     on_exit(fn -> Synapsis.DataCase.clear_config_store(:backplane) end)
 
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     test_pid = self()
 
-    Bypass.stub(bypass, "POST", "/mcp", fn conn ->
+    Gaoxy.Test.stub(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
       send(test_pid, {:mcp_request, request["method"]})
       handle(conn, request)
     end)
 
-    Bypass.stub(bypass, "GET", "/mcp", fn conn -> Plug.Conn.resp(conn, 200, "") end)
+    Gaoxy.Test.stub(bypass, "GET", "/mcp", fn conn -> Plug.Conn.resp(conn, 200, "") end)
     {:ok, bypass: bypass}
   end
 
@@ -79,7 +79,7 @@ defmodule Synapsis.MCPTest do
         name: name,
         type: "openai",
         preset: "backplane",
-        base_url: "http://localhost:#{bypass.port}/v1"
+        base_url: Gaoxy.Test.url(bypass, "/v1")
       })
 
     {:ok, linked} =
@@ -87,14 +87,14 @@ defmodule Synapsis.MCPTest do
         name: name,
         provider_id: provider.id,
         transport: "streamable_http",
-        url: "http://localhost:#{bypass.port}/mcp"
+        url: Gaoxy.Test.url(bypass, "/mcp")
       })
 
     {:ok, independent} =
       MCPConfigs.create(%{
         name: name <> "-independent",
         transport: "streamable_http",
-        url: "http://localhost:#{bypass.port}/mcp"
+        url: Gaoxy.Test.url(bypass, "/mcp")
       })
 
     on_exit(fn ->
@@ -128,7 +128,7 @@ defmodule Synapsis.MCPTest do
         name: name,
         type: "openai",
         preset: "backplane",
-        base_url: "http://localhost:#{bypass.port}/v1"
+        base_url: Gaoxy.Test.url(bypass, "/v1")
       })
 
     {:ok, config} =
@@ -136,7 +136,7 @@ defmodule Synapsis.MCPTest do
         name: name,
         provider_id: provider.id,
         transport: "streamable_http",
-        url: "http://localhost:#{bypass.port}/mcp"
+        url: Gaoxy.Test.url(bypass, "/mcp")
       })
 
     {:ok, _} =
@@ -172,7 +172,7 @@ defmodule Synapsis.MCPTest do
     cfg = %MCPConfig{
       name: name,
       transport: "streamable_http",
-      url: "http://localhost:#{bypass.port}"
+      url: String.trim_trailing(Gaoxy.Test.url(bypass), "/")
     }
 
     {:ok, _} = Synapsis.MCP.start(cfg)
@@ -198,7 +198,7 @@ defmodule Synapsis.MCPTest do
       MCPConfigs.create(%{
         name: name,
         transport: "streamable_http",
-        url: "http://localhost:#{bypass.port}"
+        url: String.trim_trailing(Gaoxy.Test.url(bypass), "/")
       })
 
     on_exit(fn ->
@@ -239,7 +239,7 @@ defmodule Synapsis.MCPTest do
       MCPConfigs.create(%{
         name: "healthy-#{suffix}",
         transport: "streamable_http",
-        url: "http://localhost:#{bypass.port}"
+        url: String.trim_trailing(Gaoxy.Test.url(bypass), "/")
       })
 
     on_exit(fn ->
@@ -279,10 +279,10 @@ defmodule Synapsis.MCPTest do
   end
 
   test "restart reports discovery failure before returning" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     {:ok, mode} = Agent.start_link(fn -> :available end)
 
-    Bypass.stub(bypass, "POST", "/mcp", fn conn ->
+    Gaoxy.Test.stub(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
 
@@ -340,14 +340,14 @@ defmodule Synapsis.MCPTest do
       end
     end)
 
-    Bypass.stub(bypass, "GET", "/mcp", fn conn -> Plug.Conn.resp(conn, 200, "") end)
+    Gaoxy.Test.stub(bypass, "GET", "/mcp", fn conn -> Plug.Conn.resp(conn, 200, "") end)
 
     name = "restart_readiness_#{System.unique_integer([:positive])}"
 
     config = %MCPConfig{
       name: name,
       transport: "streamable_http",
-      url: "http://localhost:#{bypass.port}"
+      url: String.trim_trailing(Gaoxy.Test.url(bypass), "/")
     }
 
     on_exit(fn -> Synapsis.MCP.stop(name) end)
@@ -389,7 +389,7 @@ defmodule Synapsis.MCPTest do
     config = %MCPConfig{
       name: name,
       transport: "streamable_http",
-      url: "http://localhost:#{bypass.port}"
+      url: String.trim_trailing(Gaoxy.Test.url(bypass), "/")
     }
 
     assert {:error, {:restart_cleanup_failed, {:runtime_stop_timeout, ^name}}} =
@@ -410,7 +410,7 @@ defmodule Synapsis.MCPTest do
       MCPConfigs.create(%{
         name: old_name,
         transport: "streamable_http",
-        url: "http://localhost:#{bypass.port}",
+        url: String.trim_trailing(Gaoxy.Test.url(bypass), "/"),
         enabled: true
       })
 
@@ -485,7 +485,7 @@ defmodule Synapsis.MCPTest do
     available = %MCPConfig{
       name: name,
       transport: "streamable_http",
-      url: "http://localhost:#{bypass.port}",
+      url: String.trim_trailing(Gaoxy.Test.url(bypass), "/"),
       config: source_config
     }
 
@@ -515,7 +515,7 @@ defmodule Synapsis.MCPTest do
       MCPConfigs.create(%{
         name: name,
         transport: "streamable_http",
-        url: "http://localhost:#{bypass.port}",
+        url: String.trim_trailing(Gaoxy.Test.url(bypass), "/"),
         enabled: true,
         config: %{
           "managed_by" => "backplane",
@@ -561,7 +561,7 @@ defmodule Synapsis.MCPTest do
       MCPConfigs.create(%{
         name: name,
         transport: "streamable_http",
-        url: "http://localhost:#{bypass.port}",
+        url: String.trim_trailing(Gaoxy.Test.url(bypass), "/"),
         enabled: true
       })
 
@@ -590,7 +590,7 @@ defmodule Synapsis.MCPTest do
       MCPConfigs.create(%{
         name: name,
         transport: "streamable_http",
-        url: "http://localhost:#{bypass.port}",
+        url: String.trim_trailing(Gaoxy.Test.url(bypass), "/"),
         enabled: true
       })
 
@@ -617,7 +617,7 @@ defmodule Synapsis.MCPTest do
       MCPConfigs.create(%{
         name: old_name,
         transport: "streamable_http",
-        url: "http://localhost:#{bypass.port}",
+        url: String.trim_trailing(Gaoxy.Test.url(bypass), "/"),
         enabled: true
       })
 
@@ -650,7 +650,7 @@ defmodule Synapsis.MCPTest do
       MCPConfigs.create(%{
         name: old_name,
         transport: "streamable_http",
-        url: "http://localhost:#{bypass.port}",
+        url: String.trim_trailing(Gaoxy.Test.url(bypass), "/"),
         enabled: true
       })
 

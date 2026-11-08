@@ -7,7 +7,7 @@ defmodule Synapsis.Agent.Tools.BaselineTest do
               "docs/superpowers/specs/2026-10-23-openclaw-tool-alignment-baseline.json"
             )
   @mapping Path.expand("../../../fixtures/openclaw/488631c/capability-map.json", __DIR__)
-  @native Path.expand("../../../fixtures/backplane/1.10.31/contracts.json", __DIR__)
+  @native Path.expand("../../../fixtures/backplane/1.10.60/contracts.json", __DIR__)
   @reference Path.expand("../../../fixtures/openclaw/488631c/capture.json", __DIR__)
 
   test "every pinned reference has a distinct capability assessment under Backplane authority" do
@@ -16,7 +16,7 @@ defmodule Synapsis.Agent.Tools.BaselineTest do
 
     assert mapping["referenceCommit"] == baseline["sha"]
     assert mapping["runtimeContractAuthority"] == "backplane_agent_runtime"
-    assert mapping["runtimeVersion"] == "1.10.31"
+    assert mapping["runtimeVersion"] == "1.10.60"
 
     names = Enum.map(mapping["coverage"], & &1["referenceTool"])
     assert Enum.sort(names) == baseline["union"]

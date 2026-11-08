@@ -54,6 +54,36 @@ defmodule Synapsis.SkillCatalog do
     |> Enum.sort_by(&sort_key/1)
   end
 
+  @doc "Construct a private learned entry from trusted workshop content facts."
+  def from_workshop(
+        %Synapsis.SkillWorkshop.Scope{} = scope,
+        %{
+          name: name,
+          description: description,
+          revision: revision,
+          document_digest: document_digest,
+          prompt_visible: prompt_visible
+        } = facts
+      )
+      when map_size(facts) == 5 do
+    %Entry{
+      authority: :workshop,
+      source_id: scope.agent_id,
+      skill_id: name,
+      revision: revision,
+      artifact_digest: document_digest,
+      name: name,
+      description: one_line(description),
+      locator:
+        "workshop://#{encode(scope.agent_id)}/#{encode(name)}?revision=#{encode(revision)}",
+      scope: :agent,
+      loader: %{type: :workshop, root: scope.root},
+      body: nil,
+      enabled: true,
+      prompt_visible: prompt_visible
+    }
+  end
+
   @doc "A Skill identity is source-aware and never name-only."
   def identity(%Entry{} = entry), do: {entry.authority, entry.source_id, entry.skill_id}
 

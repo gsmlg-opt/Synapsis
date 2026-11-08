@@ -35,14 +35,16 @@ defmodule SynapsisWeb.MixProject do
       {:synapsis_agent, in_umbrella: true},
       {:synapsis_mcp, in_umbrella: true},
       {:synapsis_workspace, in_umbrella: true},
-      {:phoenix, "~> 1.8.15"},
+      {:phoenix, "~> 1.8"},
       {:phoenix_html, "~> 4.2"},
-      {:phoenix_live_view, "~> 1.2.12"},
+      {:phoenix_live_view, "~> 1.2"},
       {:phoenix_duskmoon, "~> 10.0"},
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.4"},
-      {:duskmoon_bundler_runtime, "~> 10.0.1"},
-      {:duskmoon_bundler, "~> 10.0.1", runtime: Mix.env() in [:dev, :test]},
+      {:gaoxy_test, "~> 0.15.1", only: :test},
+      {:websock_adapter, "~> 0.15.1", hex: :gaoxy_websock_adapter, override: true},
+      {:duskmoon_bundler_runtime, "~> 10.1.2"},
+      {:duskmoon_bundler, "~> 10.1.2", runtime: Mix.env() in [:dev, :test]},
       {:lazy_html, "~> 0.1.13"}
     ]
   end

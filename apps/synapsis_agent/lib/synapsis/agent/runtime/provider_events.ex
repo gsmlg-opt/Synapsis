@@ -2,8 +2,19 @@ defmodule Synapsis.Agent.Runtime.ProviderEvents do
   @moduledoc "Accumulates current Synapsis provider events into runtime events and terminal history."
 
   alias Backplane.AgentRuntime.Error
+  alias Synapsis.Agent.Runtime.ProviderUsage
 
-  def new, do: %{blocks: [], pending: %{}, completed: MapSet.new()}
+  def new,
+    do: %{
+      blocks: [],
+      pending: %{},
+      completed: MapSet.new(),
+      usage: ProviderUsage.new(),
+      model: nil
+    }
+
+  def push(state, {:resolved_model, model}) when is_binary(model) and model != "",
+    do: {:ok, [], %{state | model: model}}
 
   def push(state, {:text_delta, text}) when is_binary(text),
     do: {:ok, [%{type: :content_text_delta, delta: text}], append_text(state, :text, text)}
@@ -30,8 +41,7 @@ defmodule Synapsis.Agent.Runtime.ProviderEvents do
   end
 
   def push(state, {:usage, usage}) when is_map(usage) do
-    usage = if is_struct(usage), do: Map.from_struct(usage), else: usage
-    {:ok, [%{type: :usage_updated, usage: usage}], state}
+    {:ok, [], %{state | usage: ProviderUsage.push(state.usage, usage)}}
   end
 
   def push(state, {:tool_call_delta, index, id, name, delta}) when is_binary(delta) do
@@ -70,12 +80,14 @@ defmodule Synapsis.Agent.Runtime.ProviderEvents do
     end
   end
 
-  def push(state, {:tool_call_done, index, id, name, arguments}) when is_map(arguments) do
+  def push(state, {:tool_call_done, index, id, name, arguments})
+      when is_map(arguments) or is_binary(arguments) do
     pending = Map.get(state.pending, index, %{})
     id = id || pending[:id]
     name = name || pending[:name]
 
     if not is_binary(id) or id == "" or not is_binary(name) or name == "" or
+         (is_binary(arguments) and not String.valid?(arguments)) or
          MapSet.member?(state.completed, index) or
          (not is_nil(pending[:id]) and pending.id != id) or
          (not is_nil(pending[:name]) and pending.name != name) or
@@ -98,8 +110,17 @@ defmodule Synapsis.Agent.Runtime.ProviderEvents do
   def push(state, :ignore), do: {:ok, [], state}
   def push(_, _), do: malformed("Unsupported or malformed host provider event")
 
-  def finish(%{pending: pending, blocks: blocks}) when map_size(pending) == 0,
-    do: {:ok, %{type: :response_completed, message: %{role: :assistant, content: blocks}}}
+  def finish(%{pending: pending, blocks: blocks, usage: usage, model: model})
+      when map_size(pending) == 0 do
+    message = %{role: :assistant, content: blocks}
+    message = if is_nil(model), do: message, else: Map.put(message, :model, model)
+    event = %{type: :response_completed, message: message}
+
+    case ProviderUsage.snapshot(usage) do
+      nil -> {:ok, event}
+      snapshot -> {:ok, Map.put(event, :usage, snapshot)}
+    end
+  end
 
   def finish(_), do: malformed("Provider ended with an incomplete tool call")
 

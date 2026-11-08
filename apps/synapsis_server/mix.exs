@@ -36,16 +36,18 @@ defmodule SynapsisServer.MixProject do
       {:synapsis_provider, in_umbrella: true},
       {:synapsis_mcp, in_umbrella: true},
       {:synapsis_sandbox, in_umbrella: true},
-      {:phoenix, "~> 1.8.15"},
+      {:phoenix, "~> 1.8.16"},
       {:phoenix_html, "~> 4.2"},
-      {:phoenix_live_view, "~> 1.2.12"},
+      {:phoenix_live_view, "~> 1.2.13"},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
       {:jason, "~> 1.4"},
+      {:gaoxy_test, "~> 0.15.1", only: :test},
       {:dns_cluster, "~> 0.3.1"},
-      {:bandit, "~> 1.6"},
+      {:gaoxy_http, "~> 0.15.1"},
+      {:websock_adapter, "~> 0.15.1", hex: :gaoxy_websock_adapter, override: true},
       {:cors_plug, "~> 3.0"},
-      {:duskmoon_bundler, "~> 10.0.1", runtime: Mix.env() in [:dev, :test]}
+      {:duskmoon_bundler, "~> 10.1.2", runtime: Mix.env() in [:dev, :test]}
     ]
   end
 end

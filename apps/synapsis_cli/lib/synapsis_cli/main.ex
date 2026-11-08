@@ -359,7 +359,7 @@ defmodule SynapsisCli.Main do
         owner_watcher = start_owner_watcher(owner)
 
         try do
-          result = stream_sse_request(url, opts, owner, request_ref)
+          result = stream_sse_request(url, session_id, opts, owner, request_ref)
           send(owner, {request_ref, :complete, result})
         after
           send(owner_watcher, {:stop, self()})
@@ -384,8 +384,15 @@ defmodule SynapsisCli.Main do
     end
   end
 
-  defp stream_sse_request(url, opts, owner, request_ref) do
-    initial_state = %{buffer: <<>>, ready?: false, terminal: nil}
+  defp stream_sse_request(url, session_id, opts, owner, request_ref) do
+    initial_state = %{
+      buffer: <<>>,
+      ready?: false,
+      terminal: nil,
+      session_id: session_id,
+      reply_presentation: nil,
+      printed_reply_messages: MapSet.new()
+    }
 
     into = fn {:data, data}, {request, response} ->
       state = Req.Response.get_private(response, :synapsis_cli_sse, initial_state)
@@ -438,9 +445,9 @@ defmodule SynapsisCli.Main do
 
     if ready? and not state.ready?, do: send(owner, {request_ref, :ready})
 
-    case consume_sse_chunk(buffer) do
-      {:continue, buffer} -> {:cont, %{state | buffer: buffer, ready?: ready?}}
-      {:halt, result} -> {:halt, %{state | buffer: <<>>, ready?: ready?, terminal: result}}
+    case consume_sse_chunk(buffer, state) do
+      {:continue, buffer, state} -> {:cont, %{state | buffer: buffer, ready?: ready?}}
+      {:halt, result, state} -> {:halt, %{state | buffer: <<>>, ready?: ready?, terminal: result}}
     end
   end
 
@@ -494,18 +501,18 @@ defmodule SynapsisCli.Main do
     end
   end
 
-  defp consume_sse_chunk(buffer) do
+  defp consume_sse_chunk(buffer, state) do
     case next_sse_frame(buffer) do
       :more ->
-        {:continue, buffer}
+        {:continue, buffer, state}
 
       {:error, reason} ->
-        {:halt, {:error, reason}}
+        {:halt, {:error, reason}, state}
 
       {:ok, frame, rest} ->
-        case process_sse_event(parse_sse_event(frame)) do
-          :continue -> consume_sse_chunk(rest)
-          {:halt, result} -> {:halt, result}
+        case process_sse_event(parse_sse_event(frame), state) do
+          {:continue, state} -> consume_sse_chunk(rest, state)
+          {:halt, result, state} -> {:halt, result, state}
         end
     end
   end
@@ -552,6 +559,123 @@ defmodule SynapsisCli.Main do
   defp trim_optional_space(<<" ", rest::binary>>), do: rest
   defp trim_optional_space(value), do: value
 
+  # An SSE request ends at the existing done/idle boundary. Its snapshot or first
+  # event reply owns this one subscription; queued envelopes for another event
+  # cannot replace that occurrence or print into immutable stdout.
+  defp process_sse_event({"text_delta", payload} = event, state) do
+    case Jason.decode(payload) do
+      {:ok,
+       %{"reply_presentation" => %{"version" => 1, "policy" => "manual_event_message"} = view}} ->
+        {:continue, present_event_reply(state, view, false)}
+
+      _ ->
+        ordinary_sse_event(event, state)
+    end
+  end
+
+  defp process_sse_event({"reply_presentation", payload}, state) do
+    case Jason.decode(payload) do
+      {:ok, view} when is_map(view) -> {:continue, present_event_reply(state, view, false)}
+      _ -> {:continue, state}
+    end
+  end
+
+  defp process_sse_event({"session_state", payload}, state) do
+    case Jason.decode(payload) do
+      {:ok, %{"status" => status, "reply_presentation" => view}}
+      when status in ~w(running streaming tool_executing) and is_map(view) ->
+        {:continue, present_event_reply(state, view, true)}
+
+      _ ->
+        {:continue, state}
+    end
+  end
+
+  defp process_sse_event(event, state), do: ordinary_sse_event(event, state)
+
+  defp ordinary_sse_event(event, state) do
+    case process_sse_event(event) do
+      :continue -> {:continue, state}
+      {:halt, result} -> {:halt, result, state}
+    end
+  end
+
+  defp present_event_reply(state, view, snapshot?) do
+    with %{
+           "version" => 1,
+           "policy" => "manual_event_message",
+           "session_id" => session_id,
+           "occurrence_id" => occurrence_id,
+           "run_id" => run_id,
+           "revision" => revision,
+           "phase" => phase
+         } <- view,
+         true <- session_id == state.session_id,
+         true <- is_binary(occurrence_id) and is_integer(revision),
+         true <- is_nil(run_id) or is_binary(run_id),
+         {:ok, presentation} <- reply_scope(state.reply_presentation, occurrence_id, run_id),
+         true <- revision > presentation.revision and not presentation.closed? do
+      presentation = %{presentation | run_id: run_id, revision: revision}
+      state = %{state | reply_presentation: presentation}
+
+      state =
+        cond do
+          snapshot? ->
+            Enum.reduce(Map.get(view, "committed_messages", []), state, &print_event_reply/2)
+
+          phase == "committed" ->
+            print_event_reply(view, state)
+
+          true ->
+            state
+        end
+
+      put_in(state.reply_presentation.closed?, phase == "closed")
+    else
+      _ -> state
+    end
+  end
+
+  defp reply_scope(nil, occurrence_id, run_id) do
+    {:ok,
+     %{
+       occurrence_id: occurrence_id,
+       run_id: run_id,
+       revision: -1,
+       closed?: false,
+       printed_text?: false
+     }}
+  end
+
+  defp reply_scope(
+         %{occurrence_id: occurrence_id, run_id: current_run} = presentation,
+         occurrence_id,
+         run_id
+       )
+       when is_nil(current_run) or current_run == run_id,
+       do: {:ok, presentation}
+
+  defp reply_scope(_presentation, _occurrence_id, _run_id), do: :other_occurrence
+
+  defp print_event_reply(%{"message_id" => id, "text" => text} = message, state)
+       when is_binary(id) and is_binary(text) do
+    if MapSet.member?(state.printed_reply_messages, id) do
+      state
+    else
+      state = %{state | printed_reply_messages: MapSet.put(state.printed_reply_messages, id)}
+
+      if message["hidden"] != true and text != "" do
+        if state.reply_presentation.printed_text?, do: IO.write("\n\n")
+        IO.write(text)
+        put_in(state.reply_presentation.printed_text?, true)
+      else
+        state
+      end
+    end
+  end
+
+  defp print_event_reply(_message, state), do: state
+
   defp process_sse_event({"text_delta", payload}) do
     case Jason.decode(payload) do
       {:ok, %{"text" => text}} when is_binary(text) -> IO.write(text)
@@ -587,6 +711,11 @@ defmodule SynapsisCli.Main do
 
   defp process_sse_event({"tool_result", payload}) do
     case Jason.decode(payload) do
+      {:ok, %{"projection" => projection} = event} when not is_nil(projection) ->
+        {is_error, preview} = SynapsisCli.ToolResult.preview(event)
+        color = if is_error, do: IO.ANSI.red(), else: IO.ANSI.green()
+        IO.puts("#{color}#{preview}#{IO.ANSI.reset()}")
+
       {:ok, %{"content" => content, "is_error" => is_error}} when is_binary(content) ->
         color = if is_error, do: IO.ANSI.red(), else: IO.ANSI.green()
         IO.puts("#{color}#{String.slice(content, 0, 500)}#{IO.ANSI.reset()}")

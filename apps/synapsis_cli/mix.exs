@@ -33,7 +33,7 @@ defmodule SynapsisCli.MixProject do
       {:req, "~> 0.7.5"},
       {:jason, "~> 1.4"},
       {:owl, "~> 0.12"},
-      {:bypass, "~> 2.1", only: :test}
+      {:gaoxy_test, "~> 0.15.1", only: :test}
     ]
   end
 end

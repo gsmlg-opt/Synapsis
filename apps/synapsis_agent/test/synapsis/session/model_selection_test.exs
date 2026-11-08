@@ -8,9 +8,15 @@ defmodule Synapsis.Session.ModelSelectionTest do
   @moduletag :tmp_dir
 
   setup %{tmp_dir: tmp_dir} do
-    harness = SessionHarness.setup_session!(tmp_dir: tmp_dir, session_config: %{})
+    harness =
+      SessionHarness.setup_session!(
+        tmp_dir: tmp_dir,
+        session_config: %{},
+        install_provider?: false
+      )
+
     SessionHarness.subscribe!(harness.session.id)
-    Bypass.stub(harness.provider.bypass, "POST", "/v1/chat/completions", &answer/1)
+    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/chat/completions", &answer/1)
     on_exit(fn -> SessionHarness.cleanup!(harness) end)
     %{harness: harness, id: harness.session.id}
   end
@@ -21,20 +27,16 @@ defmodule Synapsis.Session.ModelSelectionTest do
   } do
     owner = self()
 
-    Bypass.stub(harness.provider.bypass, "POST", "/v1/chat/completions", fn conn ->
-      answer(conn)
-    end)
-
     assert :ok = Worker.send_message(id, "original history")
     assert_receive {:run_event, %{type: "session.completed"}}, 10_000
 
-    bypass = Bypass.open()
+    fixture = Gaoxy.Test.open()
 
     {:ok, target} =
       Providers.create(%{
         name: "model-target-#{System.unique_integer([:positive])}",
         type: "openai",
-        base_url: "http://localhost:#{bypass.port}",
+        base_url: String.trim_trailing(Gaoxy.Test.url(fixture), "/"),
         api_key_encrypted: "target-key"
       })
 
@@ -46,7 +48,7 @@ defmodule Synapsis.Session.ModelSelectionTest do
       Providers.delete(target.id)
     end)
 
-    Bypass.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(fixture, "POST", "/v1/chat/completions", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
       send(owner, {:target_request, request})

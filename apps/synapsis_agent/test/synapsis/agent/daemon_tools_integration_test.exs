@@ -38,7 +38,7 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
 
     {daemon, _task_supervisor} = start_test_daemon()
 
-    {_bypass, provider_name, agent_name} =
+    {_fixture, provider_name, agent_name} =
       controlled_tool_provider(tmp_dir, "file_read", %{"path" => "safe.txt"})
 
     assert :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, Daemon.topic())
@@ -93,7 +93,7 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
 
     {daemon, _task_supervisor} = start_test_daemon()
 
-    {_bypass, provider_name, agent_name} =
+    {_fixture, provider_name, agent_name} =
       controlled_tool_provider(tmp_dir, "file_read", %{"path" => "anything"})
 
     assert {:ok, {:process, ^replacement, _opts}} =
@@ -132,7 +132,7 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
   } do
     {daemon, _task_supervisor} = start_test_daemon()
 
-    {_bypass, provider_name, agent_name} =
+    {_fixture, provider_name, agent_name} =
       controlled_tool_provider(tmp_dir, "file_read", %{"path" => "anything"})
 
     assert {:ok, queued} =
@@ -178,7 +178,7 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
 
     {daemon, _task_supervisor} = start_test_daemon()
 
-    {_provider_bypass, provider_name, agent_name} =
+    {_provider_fixture, provider_name, agent_name} =
       controlled_tool_provider(tmp_dir, safe_tool, %{"text" => "deployment note"})
 
     assert :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, Daemon.topic())
@@ -230,7 +230,7 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
     target = Path.join(tmp_dir, "must-not-exist.txt")
     {daemon, _task_supervisor} = start_test_daemon()
 
-    {_bypass, provider_name, agent_name} =
+    {_fixture, provider_name, agent_name} =
       controlled_tool_provider(tmp_dir, "file_write", %{
         "path" => "must-not-exist.txt",
         "content" => "not allowed"
@@ -276,15 +276,15 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
     Application.put_env(:synapsis_agent, :daemon_tool_test_owner, self())
     on_exit(fn -> restore_application_env(:daemon_tool_test_owner, previous_owner) end)
 
-    bypass = Bypass.open()
+    fixture = Gaoxy.Test.open()
     owner = self()
 
-    Bypass.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(fixture, "POST", "/v1/chat/completions", fn conn ->
       send(owner, :unexpected_provider_request)
       Plug.Conn.send_resp(conn, 500, "prompt must not be sent")
     end)
 
-    {provider_name, agent_name} = register_provider_agent(tmp_dir, bypass)
+    {provider_name, agent_name} = register_provider_agent(tmp_dir, fixture)
     {daemon, _task_supervisor} = start_test_daemon(permission: FailingPermission)
 
     assert {:ok, queued} =
@@ -305,7 +305,7 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
   } do
     {daemon, _task_supervisor} = start_test_daemon()
 
-    {_bypass, provider_name, agent_name} =
+    {_fixture, provider_name, agent_name} =
       controlled_tool_provider(tmp_dir, "file_write", %{
         "path" => "coding-output.txt",
         "content" => "written by daemon"
@@ -369,14 +369,14 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
     {daemon, _task_supervisor} = start_test_daemon()
 
     owner = self()
-    bypass = Bypass.open()
+    fixture = Gaoxy.Test.open()
 
-    Bypass.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(fixture, "POST", "/v1/chat/completions", fn conn ->
       send(owner, :unexpected_provider_request)
       Plug.Conn.send_resp(conn, 500, "unsupported tools must fail admission")
     end)
 
-    {provider_name, agent_name} = register_provider_agent(tmp_dir, bypass)
+    {provider_name, agent_name} = register_provider_agent(tmp_dir, fixture)
 
     assert {:ok, queued} =
              Daemon.submit(
@@ -421,7 +421,7 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
 
     {daemon, _task_supervisor} = start_test_daemon()
 
-    {_bypass, provider_name, agent_name} =
+    {_fixture, provider_name, agent_name} =
       controlled_tool_provider(tmp_dir, tool_name, %{"text" => "uncertain request"})
 
     assert {:ok, queued} =
@@ -482,10 +482,10 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
 
   defp controlled_tool_provider(tmp_dir, tool_name, input) do
     owner = self()
-    bypass = Bypass.open()
+    fixture = Gaoxy.Test.open()
     {:ok, counter} = Agent.start_link(fn -> 0 end)
 
-    Bypass.expect(bypass, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect(fixture, "POST", "/v1/chat/completions", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
       request_number = Agent.get_and_update(counter, &{&1 + 1, &1 + 1})
@@ -515,17 +515,17 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
       end
     end)
 
-    {provider_name, agent_name} = register_provider_agent(tmp_dir, bypass)
-    {bypass, provider_name, agent_name}
+    {provider_name, agent_name} = register_provider_agent(tmp_dir, fixture)
+    {fixture, provider_name, agent_name}
   end
 
   defp start_annotated_mcp(mode \\ :echo) do
     suffix = System.unique_integer([:positive])
     source_id = Ecto.UUID.generate()
     server_name = "daemon-mcp-#{suffix}"
-    mcp_bypass = Bypass.open()
+    mcp_fixture = Gaoxy.Test.open()
 
-    stub_annotated_mcp(mcp_bypass, server_name, self(), mode)
+    stub_annotated_mcp(mcp_fixture, server_name, self(), mode)
 
     assert {:ok, _connection} =
              Synapsis.Config.Store.put(:backplane, %{
@@ -538,7 +538,7 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
              Synapsis.MCPConfigs.create(%{
                name: server_name,
                transport: "streamable_http",
-               url: "http://localhost:#{mcp_bypass.port}",
+               url: String.trim_trailing(Gaoxy.Test.url(mcp_fixture), "/"),
                config: %{
                  "managed_by" => "backplane",
                  "backplane_source_id" => source_id,
@@ -567,7 +567,7 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
     {server_name, mcp_pid}
   end
 
-  defp stub_annotated_mcp(bypass, server_name, owner, mode) do
+  defp stub_annotated_mcp(fixture, server_name, owner, mode) do
     tools = [
       %{
         "name" => "read_note",
@@ -592,7 +592,7 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
       }
     ]
 
-    Bypass.stub(bypass, "POST", "/mcp", fn conn ->
+    Gaoxy.Test.stub(fixture, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
 
@@ -641,7 +641,7 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
     end)
 
     for method <- ["GET", "DELETE"] do
-      Bypass.stub(bypass, method, "/mcp", &Plug.Conn.send_resp(&1, 200, ""))
+      Gaoxy.Test.stub(fixture, method, "/mcp", &Plug.Conn.send_resp(&1, 200, ""))
     end
   end
 

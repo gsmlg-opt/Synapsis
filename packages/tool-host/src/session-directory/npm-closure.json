@@ -1,0 +1,724 @@
+{
+  "version": 1,
+  "referenceCommit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+  "lockfile": "pnpm-lock.yaml",
+  "lockSha256": "8ee0f9e7c0bcdecec3d791dff04f2df1f5c608c60e57fbafaf241c765eebd8d7",
+  "roots": [
+    "mdast-util-from-markdown@2.1.0(supports-color@10.2.2)",
+    "mdast-util-gfm-table@2.0.0(supports-color@10.2.2)",
+    "micromark-extension-gfm-table@2.1.2",
+    "zod@4.6.7"
+  ],
+  "packages": [
+    {
+      "packageName": "@types/debug",
+      "version": "4.1.13",
+      "pnpmSnapshotKey": "@types/debug@4.1.13",
+      "pnpmPackageKey": "@types/debug@4.1.13",
+      "integrity": "sha512-KSVgmQmzMwPlmtljOomayoR89W4FynCAi3E8PPs7vmDVPe84hT+vGPKkJfThkmXs0x0jAaa9U8uW8bbfyS2fWw==",
+      "tarballURL": "https://registry.npmjs.org/@types/debug/-/debug-4.1.13.tgz",
+      "archive": "types--debug-4.1.13.tgz",
+      "snapshotSha256": "3bcf0eb75c8d89d33f88b106874913cc420d1dc21bec04aa47f01f4c954887c1",
+      "packageRecordSha256": "359b3f40f01c50bc57bde5a3d399f93c5016ff9ef73153040453492a52360410",
+      "dependencies": {
+        "@types/ms": "@types/ms@2.1.0"
+      }
+    },
+    {
+      "packageName": "@types/mdast",
+      "version": "4.0.4",
+      "pnpmSnapshotKey": "@types/mdast@4.0.4",
+      "pnpmPackageKey": "@types/mdast@4.0.4",
+      "integrity": "sha512-kGaNbPh1k7AFzgpud/gMdvIm5xuECykRR+JnWKQno9TAXVa6WIVCGTPvYGekIDL4uwCZQSYbUxNBSb1aUo79oA==",
+      "tarballURL": "https://registry.npmjs.org/@types/mdast/-/mdast-4.0.4.tgz",
+      "archive": "types--mdast-4.0.4.tgz",
+      "snapshotSha256": "d2df3234f1b118c85fc57b7994119f176e9839d157531a407714e69cfa59a508",
+      "packageRecordSha256": "76f9cf539d87df8e5d25f754587c9595af35fa42d2f0ec50ab004413c2a39dcc",
+      "dependencies": {
+        "@types/unist": "@types/unist@3.0.3"
+      }
+    },
+    {
+      "packageName": "@types/ms",
+      "version": "2.1.0",
+      "pnpmSnapshotKey": "@types/ms@2.1.0",
+      "pnpmPackageKey": "@types/ms@2.1.0",
+      "integrity": "sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==",
+      "tarballURL": "https://registry.npmjs.org/@types/ms/-/ms-2.1.0.tgz",
+      "archive": "types--ms-2.1.0.tgz",
+      "snapshotSha256": "16c2c35bc933e7079361a1edccf2eb4883b8cd66685d2d64d980ad818cd56805",
+      "packageRecordSha256": "e61f66f1a0e85abec379fbb0119834172d1a25949a896f9767d5e259126acd48"
+    },
+    {
+      "packageName": "@types/unist",
+      "version": "3.0.3",
+      "pnpmSnapshotKey": "@types/unist@3.0.3",
+      "pnpmPackageKey": "@types/unist@3.0.3",
+      "integrity": "sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==",
+      "tarballURL": "https://registry.npmjs.org/@types/unist/-/unist-3.0.3.tgz",
+      "archive": "types--unist-3.0.3.tgz",
+      "snapshotSha256": "28093d48305f9244e9974c4176424bcce05fbc9b5af56a25e5d9693615e8a543",
+      "packageRecordSha256": "1d3646a582a5a95712198d14717d644b087cb15bc7c859a1ae1c54aeeb98800a"
+    },
+    {
+      "packageName": "character-entities",
+      "version": "2.0.2",
+      "pnpmSnapshotKey": "character-entities@2.0.2",
+      "pnpmPackageKey": "character-entities@2.0.2",
+      "integrity": "sha512-shx7oQ0Awen/BRIdkjkvz54PnEEI/EjwXDSIZp86/KKdbafHh1Df/RYGBhn4hbe2+uKC9FnT5UCEdyPz3ai9hQ==",
+      "tarballURL": "https://registry.npmjs.org/character-entities/-/character-entities-2.0.2.tgz",
+      "archive": "character-entities-2.0.2.tgz",
+      "snapshotSha256": "029608da01e6e956262bbda8c67d6533b3562506b1585b1351f25c627a376295",
+      "packageRecordSha256": "44541aa5f104a66eb782fff68f2e7e50b8e0636b6780adb6fde44a56cf2e5e3d"
+    },
+    {
+      "packageName": "debug",
+      "version": "4.4.3",
+      "pnpmSnapshotKey": "debug@4.4.3(supports-color@10.2.2)",
+      "pnpmPackageKey": "debug@4.4.3",
+      "integrity": "sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==",
+      "tarballURL": "https://registry.npmjs.org/debug/-/debug-4.4.3.tgz",
+      "archive": "debug-4.4.3.tgz",
+      "snapshotSha256": "d75981bd118bf53f19485589604f2350ab88d2b9602c218d667bec6cae4b57bc",
+      "packageRecordSha256": "6d249336c5818df2146a2810d094c259317124b3f9f8f48d19824254a5979e0b",
+      "dependencies": {
+        "ms": "ms@2.1.3"
+      },
+      "optionalDependencies": {
+        "supports-color": "supports-color@10.2.2"
+      }
+    },
+    {
+      "packageName": "decode-named-character-reference",
+      "version": "1.3.0",
+      "pnpmSnapshotKey": "decode-named-character-reference@1.3.0",
+      "pnpmPackageKey": "decode-named-character-reference@1.3.0",
+      "integrity": "sha512-GtpQYB283KrPp6nRw50q3U9/VfOutZOe103qlN7BPP6Ad27xYnOIWv4lPzo8HCAL+mMZofJ9KEy30fq6MfaK6Q==",
+      "tarballURL": "https://registry.npmjs.org/decode-named-character-reference/-/decode-named-character-reference-1.3.0.tgz",
+      "archive": "decode-named-character-reference-1.3.0.tgz",
+      "snapshotSha256": "0528ef6b9179b09aa19159ffebcba8ea16ba67bd46b18018e29974a381c5e64a",
+      "packageRecordSha256": "6808bedf35338e3c10ed1ba9ee575b8fc48bc29790c830d507930c69fe39607e",
+      "dependencies": {
+        "character-entities": "character-entities@2.0.2"
+      }
+    },
+    {
+      "packageName": "dequal",
+      "version": "2.0.3",
+      "pnpmSnapshotKey": "dequal@2.0.3",
+      "pnpmPackageKey": "dequal@2.0.3",
+      "integrity": "sha512-0je+qPKHEMohvfRTCEo3CrPG6cAzAYgmzKyxRiYSSDkS6eGJdyVJm7WaYA5ECaAD9wLB2T4EEeymA5aFVcYXCA==",
+      "tarballURL": "https://registry.npmjs.org/dequal/-/dequal-2.0.3.tgz",
+      "archive": "dequal-2.0.3.tgz",
+      "snapshotSha256": "252128443080ee02b2e2a3ce28804e56ad85bf154f74456d4914551f2bcb7dcc",
+      "packageRecordSha256": "3e898937c659a046e8dff9f45035cd9a43e2024e09d46c16fec714964b66bf53"
+    },
+    {
+      "packageName": "devlop",
+      "version": "1.1.0",
+      "pnpmSnapshotKey": "devlop@1.1.0",
+      "pnpmPackageKey": "devlop@1.1.0",
+      "integrity": "sha512-RWmIqhcFf1lRYBvNmr7qTNuyCt/7/ns2jbpp1+PalgE/rDQcBT0fioSMUpJ93irlUhC5hrg4cYqe6U+0ImW0rA==",
+      "tarballURL": "https://registry.npmjs.org/devlop/-/devlop-1.1.0.tgz",
+      "archive": "devlop-1.1.0.tgz",
+      "snapshotSha256": "24945d60c45b3adbf1d5817ad064aa6e877b70a9530f990de51fa5339669fd3d",
+      "packageRecordSha256": "318ce55ddd7f49b1a2558d72bf6d9517498ac518e82326f69586348874f00b45",
+      "dependencies": {
+        "dequal": "dequal@2.0.3"
+      }
+    },
+    {
+      "packageName": "longest-streak",
+      "version": "3.1.0",
+      "pnpmSnapshotKey": "longest-streak@3.1.0",
+      "pnpmPackageKey": "longest-streak@3.1.0",
+      "integrity": "sha512-9Ri+o0JYgehTaVBBDoMqIl8GXtbWg711O3srftcHhZ0dqnETqLaoIK0x17fUw9rFSlK/0NlsKe0Ahhyl5pXE2g==",
+      "tarballURL": "https://registry.npmjs.org/longest-streak/-/longest-streak-3.1.0.tgz",
+      "archive": "longest-streak-3.1.0.tgz",
+      "snapshotSha256": "8e1f2d0d6dc5017ee08e199189573633e9027696e24e7fb1e7314412a426872d",
+      "packageRecordSha256": "4e35c3833344206e188738b58bb8b57ff41a59d7b80901b63620a9582d8c1f51"
+    },
+    {
+      "packageName": "markdown-table",
+      "version": "3.0.4",
+      "pnpmSnapshotKey": "markdown-table@3.0.4",
+      "pnpmPackageKey": "markdown-table@3.0.4",
+      "integrity": "sha512-wiYz4+JrLyb/DqW2hkFJxP7Vd7JuTDm77fvbM8VfEQdmSMqcImWeeRbHwZjBjIFki/VaMK2BhFi7oUUZeM5bqw==",
+      "tarballURL": "https://registry.npmjs.org/markdown-table/-/markdown-table-3.0.4.tgz",
+      "archive": "markdown-table-3.0.4.tgz",
+      "snapshotSha256": "7c1ca2ec808a8c7851f6a017b09f5b91be1c0f6f358643be47fade207e3a617b",
+      "packageRecordSha256": "ee3524489166ccc71c422a323429236a95c070e376354863e9b1e3dc29a6a3d8"
+    },
+    {
+      "packageName": "mdast-util-from-markdown",
+      "version": "2.1.0",
+      "pnpmSnapshotKey": "mdast-util-from-markdown@2.1.0(supports-color@10.2.2)",
+      "pnpmPackageKey": "mdast-util-from-markdown@2.1.0",
+      "integrity": "sha512-KRLgmPaP2H1ul2bpoJkOS+9pAcDAAj9Nu1mqLnh8NLeJG5tlvj42TH80PIGBpROWlRXLk0lDrWNuZCFy/tsB4A==",
+      "tarballURL": "https://registry.npmjs.org/mdast-util-from-markdown/-/mdast-util-from-markdown-2.1.0.tgz",
+      "archive": "mdast-util-from-markdown-2.1.0.tgz",
+      "snapshotSha256": "bc6ea63899c724442e0161a08cada72bd4033799fef592594d68239cb139e076",
+      "packageRecordSha256": "10f5d7185915ed6e7096819b1f4eccc9bc8b88087e982198b2a6287b95b13369",
+      "dependencies": {
+        "@types/mdast": "@types/mdast@4.0.4",
+        "@types/unist": "@types/unist@3.0.3",
+        "decode-named-character-reference": "decode-named-character-reference@1.3.0",
+        "devlop": "devlop@1.1.0",
+        "mdast-util-to-string": "mdast-util-to-string@4.0.0",
+        "micromark": "micromark@4.0.3(supports-color@10.2.2)",
+        "micromark-util-decode-numeric-character-reference": "micromark-util-decode-numeric-character-reference@2.0.2",
+        "micromark-util-decode-string": "micromark-util-decode-string@2.0.1",
+        "micromark-util-normalize-identifier": "micromark-util-normalize-identifier@2.0.1",
+        "micromark-util-symbol": "micromark-util-symbol@2.0.1",
+        "micromark-util-types": "micromark-util-types@2.0.3",
+        "unist-util-stringify-position": "unist-util-stringify-position@4.0.0"
+      }
+    },
+    {
+      "packageName": "mdast-util-gfm-table",
+      "version": "2.0.0",
+      "pnpmSnapshotKey": "mdast-util-gfm-table@2.0.0(supports-color@10.2.2)",
+      "pnpmPackageKey": "mdast-util-gfm-table@2.0.0",
+      "integrity": "sha512-78UEvebzz/rJIxLvE7ZtDd/vIQ0RHv+3Mh5DR96p7cS7HsBhYIICDBCu8csTNWNO6tBWfqXPWekRuj2FNOGOZg==",
+      "tarballURL": "https://registry.npmjs.org/mdast-util-gfm-table/-/mdast-util-gfm-table-2.0.0.tgz",
+      "archive": "mdast-util-gfm-table-2.0.0.tgz",
+      "snapshotSha256": "551160592f422f5c60a547ab41d9b7593bb29fd5bf2322ba5a8ab06107de37b4",
+      "packageRecordSha256": "80160aa6045cf571617aa374bf16034dfdb5181b5832d6c7719983ce1e4115c5",
+      "dependencies": {
+        "@types/mdast": "@types/mdast@4.0.4",
+        "devlop": "devlop@1.1.0",
+        "markdown-table": "markdown-table@3.0.4",
+        "mdast-util-from-markdown": "mdast-util-from-markdown@2.1.0(supports-color@10.2.2)",
+        "mdast-util-to-markdown": "mdast-util-to-markdown@2.2.0"
+      }
+    },
+    {
+      "packageName": "mdast-util-phrasing",
+      "version": "4.1.0",
+      "pnpmSnapshotKey": "mdast-util-phrasing@4.1.0",
+      "pnpmPackageKey": "mdast-util-phrasing@4.1.0",
+      "integrity": "sha512-TqICwyvJJpBwvGAMZjj4J2n0X8QWp21b9l0o7eXyVJ25YNWYbJDVIyD1bZXE6WtV6RmKJVYmQAKWa0zWOABz2w==",
+      "tarballURL": "https://registry.npmjs.org/mdast-util-phrasing/-/mdast-util-phrasing-4.1.0.tgz",
+      "archive": "mdast-util-phrasing-4.1.0.tgz",
+      "snapshotSha256": "b5a40ba962f60c60547538765f39d851c4230bdcc987190925c0057f75063321",
+      "packageRecordSha256": "1bb38acbdb510c67d903b893b2bdf12a0d0c0a9c01fbdbe81431e0bd5c2e05ff",
+      "dependencies": {
+        "@types/mdast": "@types/mdast@4.0.4",
+        "unist-util-is": "unist-util-is@6.0.1"
+      }
+    },
+    {
+      "packageName": "mdast-util-to-markdown",
+      "version": "2.2.0",
+      "pnpmSnapshotKey": "mdast-util-to-markdown@2.2.0",
+      "pnpmPackageKey": "mdast-util-to-markdown@2.2.0",
+      "integrity": "sha512-2Jn/ADrHFFyyniBMi0bncTbJqU78K3/TEYvzvwrWWzD9MYPUa/Gm4r3nOeKFQg/PDM5BsbDYdc8ackW4NTY6NA==",
+      "tarballURL": "https://registry.npmjs.org/mdast-util-to-markdown/-/mdast-util-to-markdown-2.2.0.tgz",
+      "archive": "mdast-util-to-markdown-2.2.0.tgz",
+      "snapshotSha256": "1e9b2ea9f07a243a2a819a481d69c996d8485aa2876779c9b4d71efbe6a667b6",
+      "packageRecordSha256": "9ff29d43ad4abd6cd0ae1b8d502c9917d637c65a5f7213f4482e5457dbd9a24d",
+      "dependencies": {
+        "@types/mdast": "@types/mdast@4.0.4",
+        "@types/unist": "@types/unist@3.0.3",
+        "longest-streak": "longest-streak@3.1.0",
+        "mdast-util-phrasing": "mdast-util-phrasing@4.1.0",
+        "mdast-util-to-string": "mdast-util-to-string@4.0.0",
+        "micromark-util-character": "micromark-util-character@2.1.1",
+        "micromark-util-classify-character": "micromark-util-classify-character@2.0.1",
+        "micromark-util-decode-string": "micromark-util-decode-string@2.0.1",
+        "micromark-util-html-tag-name": "micromark-util-html-tag-name@2.0.1",
+        "unist-util-visit": "unist-util-visit@5.1.0",
+        "zwitch": "zwitch@2.0.4"
+      }
+    },
+    {
+      "packageName": "mdast-util-to-string",
+      "version": "4.0.0",
+      "pnpmSnapshotKey": "mdast-util-to-string@4.0.0",
+      "pnpmPackageKey": "mdast-util-to-string@4.0.0",
+      "integrity": "sha512-0H44vDimn51F0YwvxSJSm0eCDOJTRlmN0R1yBh4HLj9wiV1Dn0QoXGbvFAWj2hSItVTlCmBF1hqKlIyUBVFLPg==",
+      "tarballURL": "https://registry.npmjs.org/mdast-util-to-string/-/mdast-util-to-string-4.0.0.tgz",
+      "archive": "mdast-util-to-string-4.0.0.tgz",
+      "snapshotSha256": "bb57ba91c7cd4a0a415961088da4fcfe7b1faa65e216eca2b7c8598c965d7cfc",
+      "packageRecordSha256": "1748594622b0ed37fa8ae6f27442a0cff2bdfc8fa35bf417b6a5c94875996b91",
+      "dependencies": {
+        "@types/mdast": "@types/mdast@4.0.4"
+      }
+    },
+    {
+      "packageName": "micromark",
+      "version": "4.0.3",
+      "pnpmSnapshotKey": "micromark@4.0.3(supports-color@10.2.2)",
+      "pnpmPackageKey": "micromark@4.0.3",
+      "integrity": "sha512-oGYfQzHSG5dOMovQcJ3fyTmZlWAWpi0XA0sJwJs+i6OT88o1+Jtw/8z0CmdowSLxGhhFK89rQ/oXph/wN02PNw==",
+      "tarballURL": "https://registry.npmjs.org/micromark/-/micromark-4.0.3.tgz",
+      "archive": "micromark-4.0.3.tgz",
+      "snapshotSha256": "1ad71c5d9a8acccbe92ba6eb06fc4e2fe8a2f56d9fdcd9bd1b5a6da0fcda86a8",
+      "packageRecordSha256": "157caa9ff83ff1462eaac9977bae63bdda6dabe7367c3de44e8bdf30aeda18ba",
+      "dependencies": {
+        "@types/debug": "@types/debug@4.1.13",
+        "debug": "debug@4.4.3(supports-color@10.2.2)",
+        "decode-named-character-reference": "decode-named-character-reference@1.3.0",
+        "devlop": "devlop@1.1.0",
+        "micromark-core-commonmark": "micromark-core-commonmark@2.0.4",
+        "micromark-factory-space": "micromark-factory-space@2.1.0",
+        "micromark-util-character": "micromark-util-character@2.1.1",
+        "micromark-util-chunked": "micromark-util-chunked@2.0.1",
+        "micromark-util-combine-extensions": "micromark-util-combine-extensions@2.0.1",
+        "micromark-util-decode-numeric-character-reference": "micromark-util-decode-numeric-character-reference@2.0.2",
+        "micromark-util-edit-map": "micromark-util-edit-map@1.0.0",
+        "micromark-util-encode": "micromark-util-encode@2.0.1",
+        "micromark-util-normalize-identifier": "micromark-util-normalize-identifier@2.0.1",
+        "micromark-util-resolve-all": "micromark-util-resolve-all@2.0.1",
+        "micromark-util-sanitize-uri": "micromark-util-sanitize-uri@2.0.1",
+        "micromark-util-subtokenize": "micromark-util-subtokenize@2.1.0",
+        "micromark-util-symbol": "micromark-util-symbol@2.0.1",
+        "micromark-util-types": "micromark-util-types@2.0.3"
+      }
+    },
+    {
+      "packageName": "micromark-core-commonmark",
+      "version": "2.0.4",
+      "pnpmSnapshotKey": "micromark-core-commonmark@2.0.4",
+      "pnpmPackageKey": "micromark-core-commonmark@2.0.4",
+      "integrity": "sha512-wxEeE8v8XVvOrxn1TZj74qYhAtTQsSqufHVS3uNVyT1MupXxhyaHk8/9xDNPh9BmL77QNDgWTkZ3RsYHB2ry7w==",
+      "tarballURL": "https://registry.npmjs.org/micromark-core-commonmark/-/micromark-core-commonmark-2.0.4.tgz",
+      "archive": "micromark-core-commonmark-2.0.4.tgz",
+      "snapshotSha256": "1d86c45e88648d446d38843e1c8a18ceba7682e1c94e8a1625e7e07b2064ff8c",
+      "packageRecordSha256": "f26e5728c2a9d2bf4da5630cd32aa6ccb4336e1208c6655a91fdfecdeb0f1bd1",
+      "dependencies": {
+        "decode-named-character-reference": "decode-named-character-reference@1.3.0",
+        "devlop": "devlop@1.1.0",
+        "micromark-factory-destination": "micromark-factory-destination@2.0.1",
+        "micromark-factory-label": "micromark-factory-label@2.0.1",
+        "micromark-factory-space": "micromark-factory-space@2.1.0",
+        "micromark-factory-title": "micromark-factory-title@2.0.1",
+        "micromark-factory-whitespace": "micromark-factory-whitespace@2.0.1",
+        "micromark-util-character": "micromark-util-character@2.1.1",
+        "micromark-util-chunked": "micromark-util-chunked@2.0.1",
+        "micromark-util-classify-character": "micromark-util-classify-character@2.0.1",
+        "micromark-util-edit-map": "micromark-util-edit-map@1.0.0",
+        "micromark-util-html-tag-name": "micromark-util-html-tag-name@2.0.1",
+        "micromark-util-normalize-identifier": "micromark-util-normalize-identifier@2.0.1",
+        "micromark-util-resolve-all": "micromark-util-resolve-all@2.0.1",
+        "micromark-util-subtokenize": "micromark-util-subtokenize@2.1.0",
+        "micromark-util-symbol": "micromark-util-symbol@2.0.1",
+        "micromark-util-types": "micromark-util-types@2.0.3"
+      }
+    },
+    {
+      "packageName": "micromark-extension-gfm-table",
+      "version": "2.1.2",
+      "pnpmSnapshotKey": "micromark-extension-gfm-table@2.1.2",
+      "pnpmPackageKey": "micromark-extension-gfm-table@2.1.2",
+      "integrity": "sha512-pRzm4kDTu0MjlmBkxmS9yYhw60nncfcEwu9NNdPFSQEFXS95ZKyIIyTSHu/o3ReBUrLKYEq+7YaXCRn/bPB4MA==",
+      "tarballURL": "https://registry.npmjs.org/micromark-extension-gfm-table/-/micromark-extension-gfm-table-2.1.2.tgz",
+      "archive": "micromark-extension-gfm-table-2.1.2.tgz",
+      "snapshotSha256": "ee0fe012f6f4989e3588a3d3e3aecbef6989a735c5a6be229a70816e87227c0a",
+      "packageRecordSha256": "828cc9af4f95034d58ef323a1e7b00b1f3f443c6275ed9fb96799c241e30013b",
+      "dependencies": {
+        "devlop": "devlop@1.1.0",
+        "micromark-factory-space": "micromark-factory-space@2.1.0",
+        "micromark-util-character": "micromark-util-character@2.1.1",
+        "micromark-util-symbol": "micromark-util-symbol@2.0.1",
+        "micromark-util-types": "micromark-util-types@2.0.3"
+      }
+    },
+    {
+      "packageName": "micromark-factory-destination",
+      "version": "2.0.1",
+      "pnpmSnapshotKey": "micromark-factory-destination@2.0.1",
+      "pnpmPackageKey": "micromark-factory-destination@2.0.1",
+      "integrity": "sha512-Xe6rDdJlkmbFRExpTOmRj9N3MaWmbAgdpSrBQvCFqhezUn4AHqJHbaEnfbVYYiexVSs//tqOdY/DxhjdCiJnIA==",
+      "tarballURL": "https://registry.npmjs.org/micromark-factory-destination/-/micromark-factory-destination-2.0.1.tgz",
+      "archive": "micromark-factory-destination-2.0.1.tgz",
+      "snapshotSha256": "2151b89d59ef0842faeab12356456055f3bfec6ac47fb38b07dd83bb271e0b1f",
+      "packageRecordSha256": "3dfda17abca5e72d9a754119e584d9531a5fd08c1eee97eda91df1d728a630f9",
+      "dependencies": {
+        "micromark-util-character": "micromark-util-character@2.1.1",
+        "micromark-util-symbol": "micromark-util-symbol@2.0.1",
+        "micromark-util-types": "micromark-util-types@2.0.3"
+      }
+    },
+    {
+      "packageName": "micromark-factory-label",
+      "version": "2.0.1",
+      "pnpmSnapshotKey": "micromark-factory-label@2.0.1",
+      "pnpmPackageKey": "micromark-factory-label@2.0.1",
+      "integrity": "sha512-VFMekyQExqIW7xIChcXn4ok29YE3rnuyveW3wZQWWqF4Nv9Wk5rgJ99KzPvHjkmPXF93FXIbBp6YdW3t71/7Vg==",
+      "tarballURL": "https://registry.npmjs.org/micromark-factory-label/-/micromark-factory-label-2.0.1.tgz",
+      "archive": "micromark-factory-label-2.0.1.tgz",
+      "snapshotSha256": "b48267e4e1c5638b48639946ad275a78424b16f7721c7ef159f9ea691240405e",
+      "packageRecordSha256": "20d0000b257856bcf6d70eb5c217a05fcb6997d5e48d11ba489babf35b2942a7",
+      "dependencies": {
+        "devlop": "devlop@1.1.0",
+        "micromark-util-character": "micromark-util-character@2.1.1",
+        "micromark-util-symbol": "micromark-util-symbol@2.0.1",
+        "micromark-util-types": "micromark-util-types@2.0.3"
+      }
+    },
+    {
+      "packageName": "micromark-factory-space",
+      "version": "2.1.0",
+      "pnpmSnapshotKey": "micromark-factory-space@2.1.0",
+      "pnpmPackageKey": "micromark-factory-space@2.1.0",
+      "integrity": "sha512-fS8hnLIjnjvdQIj39Geug8wWsR0HrYZ43KShKxNfwT7t2LOHo/LbWZEzEaSOjwtjdCsjoE6syHhonEzW0zv0+Q==",
+      "tarballURL": "https://registry.npmjs.org/micromark-factory-space/-/micromark-factory-space-2.1.0.tgz",
+      "archive": "micromark-factory-space-2.1.0.tgz",
+      "snapshotSha256": "6049706c19dc6040f8c810ee6ac239ff1d0f5fa153aa32a141c4daab9a28632c",
+      "packageRecordSha256": "01db733045e568efc966c3390646f78f299e4f192c994ae2b45e43803270da45",
+      "dependencies": {
+        "micromark-util-character": "micromark-util-character@2.1.1",
+        "micromark-util-types": "micromark-util-types@2.0.3"
+      }
+    },
+    {
+      "packageName": "micromark-factory-title",
+      "version": "2.0.1",
+      "pnpmSnapshotKey": "micromark-factory-title@2.0.1",
+      "pnpmPackageKey": "micromark-factory-title@2.0.1",
+      "integrity": "sha512-5bZ+3CjhAd9eChYTHsjy6TGxpOFSKgKKJPJxr293jTbfry2KDoWkhBb6TcPVB4NmzaPhMs1Frm9AZH7OD4Cjzw==",
+      "tarballURL": "https://registry.npmjs.org/micromark-factory-title/-/micromark-factory-title-2.0.1.tgz",
+      "archive": "micromark-factory-title-2.0.1.tgz",
+      "snapshotSha256": "31f13999ea1a03e07d6240ec4cc2996d30ea0b637b4b91a908f66866a222df6c",
+      "packageRecordSha256": "2462ebae18e0e7b801126bdb5c95200ded9ad5d2813294401fe262c7ecfe5c5c",
+      "dependencies": {
+        "micromark-factory-space": "micromark-factory-space@2.1.0",
+        "micromark-util-character": "micromark-util-character@2.1.1",
+        "micromark-util-symbol": "micromark-util-symbol@2.0.1",
+        "micromark-util-types": "micromark-util-types@2.0.3"
+      }
+    },
+    {
+      "packageName": "micromark-factory-whitespace",
+      "version": "2.0.1",
+      "pnpmSnapshotKey": "micromark-factory-whitespace@2.0.1",
+      "pnpmPackageKey": "micromark-factory-whitespace@2.0.1",
+      "integrity": "sha512-Ob0nuZ3PKt/n0hORHyvoD9uZhr+Za8sFoP+OnMcnWK5lngSzALgQYKMr9RJVOWLqQYuyn6ulqGWSXdwf6F80lQ==",
+      "tarballURL": "https://registry.npmjs.org/micromark-factory-whitespace/-/micromark-factory-whitespace-2.0.1.tgz",
+      "archive": "micromark-factory-whitespace-2.0.1.tgz",
+      "snapshotSha256": "99beacfcadff87d4362a176963a14b18622d4bddcc0dc72a9de6ed2365d0f782",
+      "packageRecordSha256": "c1b9536f1db5e46e07f61d42651f3b309c8416b4d05ab4dd4b0013e0aff8bfcf",
+      "dependencies": {
+        "micromark-factory-space": "micromark-factory-space@2.1.0",
+        "micromark-util-character": "micromark-util-character@2.1.1",
+        "micromark-util-symbol": "micromark-util-symbol@2.0.1",
+        "micromark-util-types": "micromark-util-types@2.0.3"
+      }
+    },
+    {
+      "packageName": "micromark-util-character",
+      "version": "2.1.1",
+      "pnpmSnapshotKey": "micromark-util-character@2.1.1",
+      "pnpmPackageKey": "micromark-util-character@2.1.1",
+      "integrity": "sha512-wv8tdUTJ3thSFFFJKtpYKOYiGP2+v96Hvk4Tu8KpCAsTMs6yi+nVmGh1syvSCsaxz45J6Jbw+9DD6g97+NV67Q==",
+      "tarballURL": "https://registry.npmjs.org/micromark-util-character/-/micromark-util-character-2.1.1.tgz",
+      "archive": "micromark-util-character-2.1.1.tgz",
+      "snapshotSha256": "85b37856cfd959f86a843ebbf8dbf5e399bb5d5c0d787b212b5050917502c0bb",
+      "packageRecordSha256": "3d80512d03c6cf8497622b040699bca556ba6cc3f8f7f789fd899ffb6c69286d",
+      "dependencies": {
+        "micromark-util-symbol": "micromark-util-symbol@2.0.1",
+        "micromark-util-types": "micromark-util-types@2.0.3"
+      }
+    },
+    {
+      "packageName": "micromark-util-chunked",
+      "version": "2.0.1",
+      "pnpmSnapshotKey": "micromark-util-chunked@2.0.1",
+      "pnpmPackageKey": "micromark-util-chunked@2.0.1",
+      "integrity": "sha512-QUNFEOPELfmvv+4xiNg2sRYeS/P84pTW0TCgP5zc9FpXetHY0ab7SxKyAQCNCc1eK0459uoLI1y5oO5Vc1dbhA==",
+      "tarballURL": "https://registry.npmjs.org/micromark-util-chunked/-/micromark-util-chunked-2.0.1.tgz",
+      "archive": "micromark-util-chunked-2.0.1.tgz",
+      "snapshotSha256": "e5cca4a7288c9e36d4a667ea151268079c538052fff1539ce2cb9f05ebee4530",
+      "packageRecordSha256": "0e0cf0b99e05abd0ad5b8d5dcd386b1d65a998a99a0d561baf05b89514404055",
+      "dependencies": {
+        "micromark-util-symbol": "micromark-util-symbol@2.0.1"
+      }
+    },
+    {
+      "packageName": "micromark-util-classify-character",
+      "version": "2.0.1",
+      "pnpmSnapshotKey": "micromark-util-classify-character@2.0.1",
+      "pnpmPackageKey": "micromark-util-classify-character@2.0.1",
+      "integrity": "sha512-K0kHzM6afW/MbeWYWLjoHQv1sgg2Q9EccHEDzSkxiP/EaagNzCm7T/WMKZ3rjMbvIpvBiZgwR3dKMygtA4mG1Q==",
+      "tarballURL": "https://registry.npmjs.org/micromark-util-classify-character/-/micromark-util-classify-character-2.0.1.tgz",
+      "archive": "micromark-util-classify-character-2.0.1.tgz",
+      "snapshotSha256": "0544e2928aab9e321fbbb31128f5f39eb6797b8f21f0908a59040e62a8d7c981",
+      "packageRecordSha256": "27c4d35a6241748a97612675f9167a1090f16efb89a462c9347cbd401dca989a",
+      "dependencies": {
+        "micromark-util-character": "micromark-util-character@2.1.1",
+        "micromark-util-symbol": "micromark-util-symbol@2.0.1",
+        "micromark-util-types": "micromark-util-types@2.0.3"
+      }
+    },
+    {
+      "packageName": "micromark-util-combine-extensions",
+      "version": "2.0.1",
+      "pnpmSnapshotKey": "micromark-util-combine-extensions@2.0.1",
+      "pnpmPackageKey": "micromark-util-combine-extensions@2.0.1",
+      "integrity": "sha512-OnAnH8Ujmy59JcyZw8JSbK9cGpdVY44NKgSM7E9Eh7DiLS2E9RNQf0dONaGDzEG9yjEl5hcqeIsj4hfRkLH/Bg==",
+      "tarballURL": "https://registry.npmjs.org/micromark-util-combine-extensions/-/micromark-util-combine-extensions-2.0.1.tgz",
+      "archive": "micromark-util-combine-extensions-2.0.1.tgz",
+      "snapshotSha256": "9a44446ba936fea259bed5b9ae91935cb77ee800cc943e061e0a62e20d73f9cb",
+      "packageRecordSha256": "0c7a857d6656a0976836a30a5b984eb8aa7a8ded5ec649dcb4f2f113424dce42",
+      "dependencies": {
+        "micromark-util-chunked": "micromark-util-chunked@2.0.1",
+        "micromark-util-types": "micromark-util-types@2.0.3"
+      }
+    },
+    {
+      "packageName": "micromark-util-decode-numeric-character-reference",
+      "version": "2.0.2",
+      "pnpmSnapshotKey": "micromark-util-decode-numeric-character-reference@2.0.2",
+      "pnpmPackageKey": "micromark-util-decode-numeric-character-reference@2.0.2",
+      "integrity": "sha512-ccUbYk6CwVdkmCQMyr64dXz42EfHGkPQlBj5p7YVGzq8I7CtjXZJrubAYezf7Rp+bjPseiROqe7G6foFd+lEuw==",
+      "tarballURL": "https://registry.npmjs.org/micromark-util-decode-numeric-character-reference/-/micromark-util-decode-numeric-character-reference-2.0.2.tgz",
+      "archive": "micromark-util-decode-numeric-character-reference-2.0.2.tgz",
+      "snapshotSha256": "24fe66eb942770386c19f752716b6660fa9d6b6ce3769170dd129b3a2d081082",
+      "packageRecordSha256": "ae44b9dc8af645453797c2445fd642e2485228b67fa81596a304bd3e6f2e2e79",
+      "dependencies": {
+        "micromark-util-symbol": "micromark-util-symbol@2.0.1"
+      }
+    },
+    {
+      "packageName": "micromark-util-decode-string",
+      "version": "2.0.1",
+      "pnpmSnapshotKey": "micromark-util-decode-string@2.0.1",
+      "pnpmPackageKey": "micromark-util-decode-string@2.0.1",
+      "integrity": "sha512-nDV/77Fj6eH1ynwscYTOsbK7rR//Uj0bZXBwJZRfaLEJ1iGBR6kIfNmlNqaqJf649EP0F3NWNdeJi03elllNUQ==",
+      "tarballURL": "https://registry.npmjs.org/micromark-util-decode-string/-/micromark-util-decode-string-2.0.1.tgz",
+      "archive": "micromark-util-decode-string-2.0.1.tgz",
+      "snapshotSha256": "7d36bbaa46c65894638258c0400add941a9e0b0948821b20de0bac49002fb589",
+      "packageRecordSha256": "7bd1fb078fb2d8a32d4db5b4c1733a8e27176a31827d333d98e62ea4f25373a2",
+      "dependencies": {
+        "decode-named-character-reference": "decode-named-character-reference@1.3.0",
+        "micromark-util-character": "micromark-util-character@2.1.1",
+        "micromark-util-decode-numeric-character-reference": "micromark-util-decode-numeric-character-reference@2.0.2",
+        "micromark-util-symbol": "micromark-util-symbol@2.0.1"
+      }
+    },
+    {
+      "packageName": "micromark-util-edit-map",
+      "version": "1.0.0",
+      "pnpmSnapshotKey": "micromark-util-edit-map@1.0.0",
+      "pnpmPackageKey": "micromark-util-edit-map@1.0.0",
+      "integrity": "sha512-Pa2ljlsEL6sVwFaYeyrOLSYbQt73JvGbPOYFq+9AElXiSnfI5Q4465RRZ1sHv7lDjDOnGRDDaqPXqClqWK/q1Q==",
+      "tarballURL": "https://registry.npmjs.org/micromark-util-edit-map/-/micromark-util-edit-map-1.0.0.tgz",
+      "archive": "micromark-util-edit-map-1.0.0.tgz",
+      "snapshotSha256": "82fe2f63f9909374803ca98d6382b03792091e77b2bf51a7ad0a3e7376531dca",
+      "packageRecordSha256": "e0c6ccecef78cae1a2692e4ebce5deb9592805f903fae6223e6f3e4429ab8ba1",
+      "dependencies": {
+        "micromark-util-types": "micromark-util-types@2.0.3"
+      }
+    },
+    {
+      "packageName": "micromark-util-encode",
+      "version": "2.0.1",
+      "pnpmSnapshotKey": "micromark-util-encode@2.0.1",
+      "pnpmPackageKey": "micromark-util-encode@2.0.1",
+      "integrity": "sha512-c3cVx2y4KqUnwopcO9b/SCdo2O67LwJJ/UyqGfbigahfegL9myoEFoDYZgkT7f36T0bLrM9hZTAaAyH+PCAXjw==",
+      "tarballURL": "https://registry.npmjs.org/micromark-util-encode/-/micromark-util-encode-2.0.1.tgz",
+      "archive": "micromark-util-encode-2.0.1.tgz",
+      "snapshotSha256": "c306605d6f083f9d58d415c211b4df7d6298d2da9362a0fff45ca4bdfa83d874",
+      "packageRecordSha256": "fa60342fe926d59ffef478b0b43bb3d148147fe09c59bbe626cc56d7f5af5a7b"
+    },
+    {
+      "packageName": "micromark-util-html-tag-name",
+      "version": "2.0.1",
+      "pnpmSnapshotKey": "micromark-util-html-tag-name@2.0.1",
+      "pnpmPackageKey": "micromark-util-html-tag-name@2.0.1",
+      "integrity": "sha512-2cNEiYDhCWKI+Gs9T0Tiysk136SnR13hhO8yW6BGNyhOC4qYFnwF1nKfD3HFAIXA5c45RrIG1ub11GiXeYd1xA==",
+      "tarballURL": "https://registry.npmjs.org/micromark-util-html-tag-name/-/micromark-util-html-tag-name-2.0.1.tgz",
+      "archive": "micromark-util-html-tag-name-2.0.1.tgz",
+      "snapshotSha256": "779aa90c1a69215c413e28242d5cfb7727fdb203465f55be9eb30093bd4a7d0a",
+      "packageRecordSha256": "603352bdc5166b173f088898b96efeb765c6984695cec89516e4edd0f776bf8e"
+    },
+    {
+      "packageName": "micromark-util-normalize-identifier",
+      "version": "2.0.1",
+      "pnpmSnapshotKey": "micromark-util-normalize-identifier@2.0.1",
+      "pnpmPackageKey": "micromark-util-normalize-identifier@2.0.1",
+      "integrity": "sha512-sxPqmo70LyARJs0w2UclACPUUEqltCkJ6PhKdMIDuJ3gSf/Q+/GIe3WKl0Ijb/GyH9lOpUkRAO2wp0GVkLvS9Q==",
+      "tarballURL": "https://registry.npmjs.org/micromark-util-normalize-identifier/-/micromark-util-normalize-identifier-2.0.1.tgz",
+      "archive": "micromark-util-normalize-identifier-2.0.1.tgz",
+      "snapshotSha256": "b81077c3625fb12c58744bc1867b844604d943859bcf204c7fd32191e044269c",
+      "packageRecordSha256": "3c309ded53312c31b148d61979b3ce0d3bfb9d8c80c7ad0dc3536f94daa65c03",
+      "dependencies": {
+        "micromark-util-symbol": "micromark-util-symbol@2.0.1"
+      }
+    },
+    {
+      "packageName": "micromark-util-resolve-all",
+      "version": "2.0.1",
+      "pnpmSnapshotKey": "micromark-util-resolve-all@2.0.1",
+      "pnpmPackageKey": "micromark-util-resolve-all@2.0.1",
+      "integrity": "sha512-VdQyxFWFT2/FGJgwQnJYbe1jjQoNTS4RjglmSjTUlpUMa95Htx9NHeYW4rGDJzbjvCsl9eLjMQwGeElsqmzcHg==",
+      "tarballURL": "https://registry.npmjs.org/micromark-util-resolve-all/-/micromark-util-resolve-all-2.0.1.tgz",
+      "archive": "micromark-util-resolve-all-2.0.1.tgz",
+      "snapshotSha256": "4aa115671b0838f1733405e3982ba97d3568c6068dbc0319248703dadf07dbc6",
+      "packageRecordSha256": "0559936b00f6fb3317cdbd828388ed63783b50e0cab0e07cc55645c57a9d7b4a",
+      "dependencies": {
+        "micromark-util-types": "micromark-util-types@2.0.3"
+      }
+    },
+    {
+      "packageName": "micromark-util-sanitize-uri",
+      "version": "2.0.1",
+      "pnpmSnapshotKey": "micromark-util-sanitize-uri@2.0.1",
+      "pnpmPackageKey": "micromark-util-sanitize-uri@2.0.1",
+      "integrity": "sha512-9N9IomZ/YuGGZZmQec1MbgxtlgougxTodVwDzzEouPKo3qFWvymFHWcnDi2vzV1ff6kas9ucW+o3yzJK9YB1AQ==",
+      "tarballURL": "https://registry.npmjs.org/micromark-util-sanitize-uri/-/micromark-util-sanitize-uri-2.0.1.tgz",
+      "archive": "micromark-util-sanitize-uri-2.0.1.tgz",
+      "snapshotSha256": "2184d9717f9f6054be43d6ed786ae27a610115069e496eb12c37c3223145ed70",
+      "packageRecordSha256": "49dd0d3ac274b17fa988aa79d7fbd3a6f16ca22869e49d3762ad9e1d4d56f43c",
+      "dependencies": {
+        "micromark-util-character": "micromark-util-character@2.1.1",
+        "micromark-util-encode": "micromark-util-encode@2.0.1",
+        "micromark-util-symbol": "micromark-util-symbol@2.0.1"
+      }
+    },
+    {
+      "packageName": "micromark-util-subtokenize",
+      "version": "2.1.0",
+      "pnpmSnapshotKey": "micromark-util-subtokenize@2.1.0",
+      "pnpmPackageKey": "micromark-util-subtokenize@2.1.0",
+      "integrity": "sha512-XQLu552iSctvnEcgXw6+Sx75GflAPNED1qx7eBJ+wydBb2KCbRZe+NwvIEEMM83uml1+2WSXpBAcp9IUCgCYWA==",
+      "tarballURL": "https://registry.npmjs.org/micromark-util-subtokenize/-/micromark-util-subtokenize-2.1.0.tgz",
+      "archive": "micromark-util-subtokenize-2.1.0.tgz",
+      "snapshotSha256": "a69d96cd075138271d5300e7ec5d2e55771794971ecb12525f7a3d32ba921a35",
+      "packageRecordSha256": "ee115bff7286ba20c6719b85bacf7510a44bb68231d5c1535387eedd5d231582",
+      "dependencies": {
+        "devlop": "devlop@1.1.0",
+        "micromark-util-chunked": "micromark-util-chunked@2.0.1",
+        "micromark-util-symbol": "micromark-util-symbol@2.0.1",
+        "micromark-util-types": "micromark-util-types@2.0.3"
+      }
+    },
+    {
+      "packageName": "micromark-util-symbol",
+      "version": "2.0.1",
+      "pnpmSnapshotKey": "micromark-util-symbol@2.0.1",
+      "pnpmPackageKey": "micromark-util-symbol@2.0.1",
+      "integrity": "sha512-vs5t8Apaud9N28kgCrRUdEed4UJ+wWNvicHLPxCa9ENlYuAY31M0ETy5y1vA33YoNPDFTghEbnh6efaE8h4x0Q==",
+      "tarballURL": "https://registry.npmjs.org/micromark-util-symbol/-/micromark-util-symbol-2.0.1.tgz",
+      "archive": "micromark-util-symbol-2.0.1.tgz",
+      "snapshotSha256": "3c0badf28d33cefa465f113a92340848a41282fdfc2c88a69c6ac1392eebe872",
+      "packageRecordSha256": "bceb4364f35bf9ecd9f346b2df4c08f161d58eeb1881dc6fb02d22442aa0eabf"
+    },
+    {
+      "packageName": "micromark-util-types",
+      "version": "2.0.3",
+      "pnpmSnapshotKey": "micromark-util-types@2.0.3",
+      "pnpmPackageKey": "micromark-util-types@2.0.3",
+      "integrity": "sha512-oxB2Ik03hI0gv+VNn9tnh1t1YEe9MDPptViAEgfdf3YQHsn0pzGTgCdlSCJXcwhqm8phaEuM7zeEu3QQzVBrPg==",
+      "tarballURL": "https://registry.npmjs.org/micromark-util-types/-/micromark-util-types-2.0.3.tgz",
+      "archive": "micromark-util-types-2.0.3.tgz",
+      "snapshotSha256": "b8f46d881c5fd05856b0842b48dbe961fb0a6653f894fd09bb92d19d27b4ef48",
+      "packageRecordSha256": "e29b080909ea27902b7fdfb8fa9fd4e88fa9110abf3b0afc66029457ab348978"
+    },
+    {
+      "packageName": "ms",
+      "version": "2.1.3",
+      "pnpmSnapshotKey": "ms@2.1.3",
+      "pnpmPackageKey": "ms@2.1.3",
+      "integrity": "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==",
+      "tarballURL": "https://registry.npmjs.org/ms/-/ms-2.1.3.tgz",
+      "archive": "ms-2.1.3.tgz",
+      "snapshotSha256": "671aeade85514416e849b135705edb67861ff0fa37c53f7f5fbe995549e24dc1",
+      "packageRecordSha256": "95ba3ea5c7b59fd4daa597bb0320b3d71cd3d3a0210e74bec93915a81bbed263"
+    },
+    {
+      "packageName": "supports-color",
+      "version": "10.2.2",
+      "pnpmSnapshotKey": "supports-color@10.2.2",
+      "pnpmPackageKey": "supports-color@10.2.2",
+      "integrity": "sha512-SS+jx45GF1QjgEXQx4NJZV9ImqmO2NPz5FNsIHrsDjh2YsHnawpan7SNQ1o8NuhrbHZy9AZhIoCUiCeaW/C80g==",
+      "tarballURL": "https://registry.npmjs.org/supports-color/-/supports-color-10.2.2.tgz",
+      "archive": "supports-color-10.2.2.tgz",
+      "snapshotSha256": "79259ae868d9814e4528c7f81b77e0013650c629791bb4cdcf72522fdf6502ec",
+      "packageRecordSha256": "cfcd489e1f18ffb96639d336d3d6592a63b290555ec9ce1b5e848fa97da9400c"
+    },
+    {
+      "packageName": "unist-util-is",
+      "version": "6.0.1",
+      "pnpmSnapshotKey": "unist-util-is@6.0.1",
+      "pnpmPackageKey": "unist-util-is@6.0.1",
+      "integrity": "sha512-LsiILbtBETkDz8I9p1dQ0uyRUWuaQzd/cuEeS1hoRSyW5E5XGmTzlwY1OrNzzakGowI9Dr/I8HVaw4hTtnxy8g==",
+      "tarballURL": "https://registry.npmjs.org/unist-util-is/-/unist-util-is-6.0.1.tgz",
+      "archive": "unist-util-is-6.0.1.tgz",
+      "snapshotSha256": "7ff2650286583200f04ae8429c42374297b1420432cc4eaf32affd19149672ee",
+      "packageRecordSha256": "8ca503066c525edd78ba35dcba9b3066e54f0a5f786e025d6d6ba16cf3d8e030",
+      "dependencies": {
+        "@types/unist": "@types/unist@3.0.3"
+      }
+    },
+    {
+      "packageName": "unist-util-stringify-position",
+      "version": "4.0.0",
+      "pnpmSnapshotKey": "unist-util-stringify-position@4.0.0",
+      "pnpmPackageKey": "unist-util-stringify-position@4.0.0",
+      "integrity": "sha512-0ASV06AAoKCDkS2+xw5RXJywruurpbC4JZSm7nr7MOt1ojAzvyyaO+UxZf18j8FCF6kmzCZKcAgN/yu2gm2XgQ==",
+      "tarballURL": "https://registry.npmjs.org/unist-util-stringify-position/-/unist-util-stringify-position-4.0.0.tgz",
+      "archive": "unist-util-stringify-position-4.0.0.tgz",
+      "snapshotSha256": "6152c329b975d97ea7a2757f2aee155466f45ae80d2646bb365460b8ff2afc7b",
+      "packageRecordSha256": "03779f0b6ccb15d95e6f8ba6bd71ade646112a389ed635603d90bcf802fa0bc3",
+      "dependencies": {
+        "@types/unist": "@types/unist@3.0.3"
+      }
+    },
+    {
+      "packageName": "unist-util-visit",
+      "version": "5.1.0",
+      "pnpmSnapshotKey": "unist-util-visit@5.1.0",
+      "pnpmPackageKey": "unist-util-visit@5.1.0",
+      "integrity": "sha512-m+vIdyeCOpdr/QeQCu2EzxX/ohgS8KbnPDgFni4dQsfSCtpz8UqDyY5GjRru8PDKuYn7Fq19j1CQ+nJSsGKOzg==",
+      "tarballURL": "https://registry.npmjs.org/unist-util-visit/-/unist-util-visit-5.1.0.tgz",
+      "archive": "unist-util-visit-5.1.0.tgz",
+      "snapshotSha256": "cb3c91c6a762197451ed9cca9f0cc523f8d143365f846275fdede297d05628eb",
+      "packageRecordSha256": "f1c3db6d283543be5fa363bb0240562dea6d8dc5e8dbc1beed241fa8e5401245",
+      "dependencies": {
+        "@types/unist": "@types/unist@3.0.3",
+        "unist-util-is": "unist-util-is@6.0.1",
+        "unist-util-visit-parents": "unist-util-visit-parents@6.0.2"
+      }
+    },
+    {
+      "packageName": "unist-util-visit-parents",
+      "version": "6.0.2",
+      "pnpmSnapshotKey": "unist-util-visit-parents@6.0.2",
+      "pnpmPackageKey": "unist-util-visit-parents@6.0.2",
+      "integrity": "sha512-goh1s1TBrqSqukSc8wrjwWhL0hiJxgA8m4kFxGlQ+8FYQ3C/m11FcTs4YYem7V664AhHVvgoQLk890Ssdsr2IQ==",
+      "tarballURL": "https://registry.npmjs.org/unist-util-visit-parents/-/unist-util-visit-parents-6.0.2.tgz",
+      "archive": "unist-util-visit-parents-6.0.2.tgz",
+      "snapshotSha256": "0c7b98f4c70932856931b4bcb4b5b9b32fa71342165a7fbcb3cb2a00282545ee",
+      "packageRecordSha256": "2ac8e8d44b426203f517ca009bae83d570e74704f118c5bc69b5ce7ea53f1258",
+      "dependencies": {
+        "@types/unist": "@types/unist@3.0.3",
+        "unist-util-is": "unist-util-is@6.0.1"
+      }
+    },
+    {
+      "packageName": "zod",
+      "version": "4.6.7",
+      "pnpmSnapshotKey": "zod@4.6.7",
+      "pnpmPackageKey": "zod@4.6.7",
+      "integrity": "sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==",
+      "tarballURL": "https://registry.npmjs.org/zod/-/zod-4.6.7.tgz",
+      "archive": "zod-4.6.7.tgz",
+      "snapshotSha256": "5b944f542c8fbd16238ddfd5b30822136134353c9afc92b76abe4f3a4fb6fad3",
+      "packageRecordSha256": "039a538c214e1df59ffcfdd3b6d1cf187d6c50cab887f0c391dd268df8cdd214",
+      "dependencies": {}
+    },
+    {
+      "packageName": "zwitch",
+      "version": "2.0.4",
+      "pnpmSnapshotKey": "zwitch@2.0.4",
+      "pnpmPackageKey": "zwitch@2.0.4",
+      "integrity": "sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==",
+      "tarballURL": "https://registry.npmjs.org/zwitch/-/zwitch-2.0.4.tgz",
+      "archive": "zwitch-2.0.4.tgz",
+      "snapshotSha256": "c88aaef40a5147274bc6bd10fad6fb53b7e7666659d946e8e99477cb8fe16e08",
+      "packageRecordSha256": "363d045c289a1898ab27159ed0184112952469d61a09f273049f39cb1f14b9bf"
+    }
+  ]
+}

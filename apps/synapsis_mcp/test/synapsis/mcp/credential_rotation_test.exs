@@ -46,7 +46,7 @@ defmodule Synapsis.MCP.CredentialRotationTest do
         else: Application.delete_env(:synapsis_provider, :credential_invalidation)
     end)
 
-    %{bypass: Bypass.open()}
+    %{bypass: Gaoxy.Test.open()}
   end
 
   test "missing explicit credentials are unavailable even with allow_disabled", %{bypass: bypass} do
@@ -223,7 +223,7 @@ defmodule Synapsis.MCP.CredentialRotationTest do
       Providers.create(%{
         name: name,
         type: "openai",
-        base_url: "http://localhost:#{bypass.port}/v1",
+        base_url: Gaoxy.Test.url(bypass, "/v1"),
         credential_id: credential.id
       })
 
@@ -232,7 +232,7 @@ defmodule Synapsis.MCP.CredentialRotationTest do
         name: name,
         provider_id: provider.id,
         transport: "streamable_http",
-        url: "http://localhost:#{bypass.port}/mcp"
+        url: Gaoxy.Test.url(bypass, "/mcp")
       })
 
     {credential, provider, config}
@@ -248,7 +248,7 @@ defmodule Synapsis.MCP.CredentialRotationTest do
   end
 
   defp rpc_stub(bypass, name, before_response \\ fn conn, _ -> conn end) do
-    Bypass.stub(bypass, "POST", "/mcp", fn conn ->
+    Gaoxy.Test.stub(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
       conn = before_response.(conn, request)
@@ -285,7 +285,7 @@ defmodule Synapsis.MCP.CredentialRotationTest do
     end)
 
     for method <- ["GET", "DELETE"],
-        do: Bypass.stub(bypass, method, "/mcp", &Plug.Conn.resp(&1, 200, ""))
+        do: Gaoxy.Test.stub(bypass, method, "/mcp", &Plug.Conn.resp(&1, 200, ""))
   end
 
   defp wait_until(fun, tries \\ 100) do

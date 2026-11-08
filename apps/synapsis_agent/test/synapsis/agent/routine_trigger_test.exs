@@ -126,10 +126,10 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
     File.write!(Path.join(tmp_dir, "scheduled.txt"), file_content)
 
     owner = self()
-    bypass = Bypass.open()
+    fixture = Gaoxy.Test.open()
     {:ok, counter} = Agent.start_link(fn -> 0 end)
 
-    Bypass.expect(bypass, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect(fixture, "POST", "/v1/chat/completions", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
       request_number = Agent.get_and_update(counter, &{&1 + 1, &1 + 1})
@@ -152,7 +152,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
       end
     end)
 
-    {provider_name, agent_name} = register_provider_agent(tmp_dir, bypass)
+    {provider_name, agent_name} = register_provider_agent(tmp_dir, fixture)
     {daemon, _task_supervisor} = start_test_daemon()
 
     assert {:ok, schedule} =
@@ -228,10 +228,10 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
       })
 
     owner = self()
-    bypass = Bypass.open()
+    fixture = Gaoxy.Test.open()
     {:ok, counter} = Agent.start_link(fn -> 0 end)
 
-    Bypass.expect(bypass, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect(fixture, "POST", "/v1/chat/completions", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
       request_number = Agent.get_and_update(counter, &{&1 + 1, &1 + 1})
@@ -254,7 +254,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
       end
     end)
 
-    {provider_name, agent_name} = register_provider_agent(tmp_dir, bypass)
+    {provider_name, agent_name} = register_provider_agent(tmp_dir, fixture)
     {daemon, _task_supervisor} = start_test_daemon()
 
     assert {:ok, dream} =
@@ -334,7 +334,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
              })
 
     owner = self()
-    bypass = Bypass.open()
+    fixture = Gaoxy.Test.open()
 
     dream_json =
       Jason.encode!(%{
@@ -346,13 +346,13 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
         "ignored_noise" => []
       })
 
-    Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect_once(fixture, "POST", "/v1/chat/completions", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       send(owner, {:dream_request, body})
       send_sse(conn, [text_chunk(dream_json), finish_chunk("stop")])
     end)
 
-    {provider_name, agent_name} = register_provider_agent(tmp_dir, bypass)
+    {provider_name, agent_name} = register_provider_agent(tmp_dir, fixture)
 
     assert {:ok, recent_session} =
              Synapsis.Sessions.create(agent_name, %{
@@ -451,7 +451,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
     refs_before = git!(tmp_dir, ["show-ref"])
     objects_before = git!(tmp_dir, ["count-objects", "-v"])
     owner = self()
-    bypass = Bypass.open()
+    fixture = Gaoxy.Test.open()
 
     dream_json =
       Jason.encode!(%{
@@ -463,13 +463,13 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
         "ignored_noise" => []
       })
 
-    Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect_once(fixture, "POST", "/v1/chat/completions", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       send(owner, {:dream_project_status_request, body})
       send_sse(conn, [text_chunk(dream_json), finish_chunk("stop")])
     end)
 
-    {provider_name, agent_name} = register_provider_agent(tmp_dir, bypass)
+    {provider_name, agent_name} = register_provider_agent(tmp_dir, fixture)
     {daemon, _task_supervisor} = start_test_daemon()
 
     assert {:ok, dream} =
@@ -540,7 +540,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
              })
 
     owner = self()
-    bypass = Bypass.open()
+    fixture = Gaoxy.Test.open()
 
     dream_json =
       Jason.encode!(%{
@@ -552,13 +552,13 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
         "ignored_noise" => []
       })
 
-    Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect_once(fixture, "POST", "/v1/chat/completions", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       send(owner, {:bounded_dream_request, body})
       send_sse(conn, [text_chunk(dream_json), finish_chunk("stop")])
     end)
 
-    {provider_name, agent_name} = register_provider_agent(tmp_dir, bypass)
+    {provider_name, agent_name} = register_provider_agent(tmp_dir, fixture)
 
     assert {:ok, recent_session} =
              Synapsis.Sessions.create(agent_name, %{
@@ -674,13 +674,13 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
 
   @tag :tmp_dir
   test "provider failure leaves the dream run failed and the daemon healthy", %{tmp_dir: tmp_dir} do
-    bypass = Bypass.open()
+    fixture = Gaoxy.Test.open()
 
-    Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect_once(fixture, "POST", "/v1/chat/completions", fn conn ->
       Plug.Conn.send_resp(conn, 503, "provider unavailable")
     end)
 
-    {provider_name, agent_name} = register_provider_agent(tmp_dir, bypass)
+    {provider_name, agent_name} = register_provider_agent(tmp_dir, fixture)
     {daemon, _task_supervisor} = start_test_daemon()
 
     assert {:ok, dream} =

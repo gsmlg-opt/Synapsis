@@ -1,0 +1,2639 @@
+{
+  "schemaVersion": 1,
+  "referencePin": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+  "exporter": {
+    "path": "scripts/openclaw/capture-openai-decisions.mjs",
+    "sha256": "b07a75b9998a6d83e6dcfdfcad48a560b3aaaf9ce15603b5f31944c1a58a6cb8"
+  },
+  "harness": {
+    "path": "scripts/openclaw/capture-recipes.mjs",
+    "sha256": "4599b804b43bedac9ba7c594aef8b43f3c2a89e18cfb8fb375316d3dd7ee0557"
+  },
+  "runtime": {
+    "executable": "/tmp/synapsis-openclaw-capture-runtime/node_modules/node/bin/node",
+    "version": "24.22.1",
+    "sha256": "e32e2d16081cf644f88392934288086e7662529d0d43277c34f7aad2207cfafb"
+  },
+  "sourceTree": {
+    "before": {
+      "verified": true,
+      "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+      "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+      "verifiedTrackedFiles": 58558,
+      "filesSha256": "fb299c6a234f52cfcf20e3618cd11582d07e47a7773cba1334064ebdaf9fddec"
+    },
+    "after": {
+      "verified": true,
+      "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+      "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+      "verifiedTrackedFiles": 58558,
+      "filesSha256": "fb299c6a234f52cfcf20e3618cd11582d07e47a7773cba1334064ebdaf9fddec"
+    }
+  },
+  "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+  "sourceRecords": [
+    {
+      "path": "src/decisions/compatibility.ts",
+      "sha256": "59a189bc5d764ecaf90f07db7df9807138c9514eb7cc76ba5639eb1f0fd5386c",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "04473ecc315381ab4d858677b2b2991ff2b1ed8a84c3444996cd5c6357da09b0"
+    },
+    {
+      "path": "src/decisions/validation-common.ts",
+      "sha256": "585633bc67b6f25de43477631cdbdcdcb828c538b231e0bb373b05f5b832dbb3",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "4897efda057cb37f68c99d6b205e85f758e34e99e129b1fbc22adb1771de5611"
+    },
+    {
+      "path": "src/decisions/validation-v2.ts",
+      "sha256": "c7988bd3b0b179901f19c0634f118ef5905eb4ad32ded3b1ea85777e9d4f33b7",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "f29d65a99b0d7d7a0de5c0292b6156b80ab5a7d88742af0f6fd1c07f49de9982"
+    },
+    {
+      "path": "src/decisions/validation.ts",
+      "sha256": "d080e2d4fd1e2a4bebb6243205959a0bb92fcf314d08aea01596410df436169a",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "fc2460c4dc45c8433b81140d472b667cae32174584f995443e84051339336ed3"
+    },
+    {
+      "path": "packages/normalization-core/src/record-coerce.ts",
+      "sha256": "541c179840c2cad4edc5c8103f77cc7f8c6b1ee5ec3e52c7c9fe097b18917f1c",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "4ca2e6e901c28a07ae5fc9b29719cce5c26c919c65ab235b4ae2d5eaf0ec338c"
+    },
+    {
+      "path": "extensions/openai/decision-provider.runtime.ts",
+      "sha256": "47969a9056cc7452f8319ba4369281d11bcefdb8a6f3c77470330732de211f9d",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "47ade0ed416e17bf2926a2d31a5226dd88db5f3e2348d0d011e9beab0297adab"
+    },
+    {
+      "path": "extensions/openai/base-url.ts",
+      "sha256": "068ee95c417972ef95114eb6871cb4d200a4fb3b441f703ef907f1adc41ac55a",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "107c5849473b17f67d289cfbadf0bf886752dd516d3b75a6ccaf9bbb9021fd21"
+    },
+    {
+      "path": "src/plugin-sdk/decisions-openai-runtime.ts",
+      "sha256": "eb4dfd52aa62648b79fea90c9a37c68509b0c2bbb1ad55391479c84428a71feb",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "477491bbea26263d7faadec4ffbfa2b799476e607ec07f714b4fe118bbbeeb03"
+    },
+    {
+      "path": "packages/normalization-core/src/string-coerce.ts",
+      "sha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf",
+      "executed": true,
+      "wholeModule": true,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "9a2e05da77f15162560fe904c20ba9a49a6e6996e8b8c9bc16fd611f8456f504"
+    },
+    {
+      "path": "src/agents/tools/decision-tool.ts",
+      "sha256": "dffde5d9b4d64f626fe959c1df40ac060b5527be2d3eb248decfb2acfce1b409",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/agents/tools/decision-tool-contract.ts",
+      "sha256": "baac425feedc5da0498969757fc79840e8c0d2e28aa8b7b58df3a0db9f8b3fd3",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/decisions/runtime.ts",
+      "sha256": "11ce37130d0ad5271849d06cad6df481fc1b71ff2752cb88888b48c037733c18",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/decisions/provider-host.ts",
+      "sha256": "82282f5e64f40fab52ebd7500771874ad4b90397ceca59303d55f97272a2c4f2",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/decisions/types-v2.ts",
+      "sha256": "15a28cad51849fe99396aa6b5aecd814598ef972cf9179eb9e40bc6e1dc8a3bc",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "extensions/openai/decision-provider.ts",
+      "sha256": "02e587621d11992f2bcd3180658baff7ddd46132baded62c1e929e624ccee06a",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "extensions/openai/openclaw.plugin.json",
+      "sha256": "f28b87cc29867144eeef9d15dc05fa58aaf2db5ed5098e7c01189d9d2ad04048",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/plugin-sdk/provider-http.ts",
+      "sha256": "2256cc416a1d07c644917faed3c3d8bd4d6e44658197fc5ae6e1301ed85b42c4",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/plugin-sdk/extension-shared.ts",
+      "sha256": "db3ea5ad7275cac1df77656648db340d6caeb81d886efd2fe8c6e1e644ad5f79",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/plugin-sdk/agent-harness-runtime.ts",
+      "sha256": "29bad3293a0f574868aa7b5985aefbadefcb3e4661587862a20be55f9d6dae15",
+      "executed": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/plugin-sdk/fetch-runtime.ts",
+      "sha256": "4ea7daa755349afa8c3d73a8310be9013421b55e18797d76e6cfbdde5af3e520",
+      "executed": false,
+      "provenanceOnly": true
+    }
+  ],
+  "importBindings": [
+    {
+      "importer": "src/decisions/compatibility.ts",
+      "specifier": "./validation-common.js",
+      "kind": "whole-source-module",
+      "source": "src/decisions/validation-common.ts",
+      "sourceSha256": "585633bc67b6f25de43477631cdbdcdcb828c538b231e0bb373b05f5b832dbb3"
+    },
+    {
+      "importer": "src/decisions/compatibility.ts",
+      "specifier": "./validation-v2.js",
+      "kind": "whole-source-module",
+      "source": "src/decisions/validation-v2.ts",
+      "sourceSha256": "c7988bd3b0b179901f19c0634f118ef5905eb4ad32ded3b1ea85777e9d4f33b7"
+    },
+    {
+      "importer": "src/decisions/compatibility.ts",
+      "specifier": "./validation.js",
+      "kind": "whole-source-module",
+      "source": "src/decisions/validation.ts",
+      "sourceSha256": "d080e2d4fd1e2a4bebb6243205959a0bb92fcf314d08aea01596410df436169a"
+    },
+    {
+      "importer": "src/decisions/validation-common.ts",
+      "specifier": "node:util/types",
+      "kind": "actual-platform-builtin",
+      "exports": [
+        "isProxy"
+      ],
+      "generatedCode": "export const isProxy=globalThis.__platform.isProxy;",
+      "generatedSha256": "59923dca39e291775d4b47a03db8726059a6f4a84564fcf93a8d6d353ee344e1"
+    },
+    {
+      "importer": "src/decisions/validation-common.ts",
+      "specifier": "@openclaw/normalization-core/record-coerce",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "isRecord"
+      ],
+      "generatedCode": "export {isRecord} from \"capture:source:packages/normalization-core/src/record-coerce.ts\";",
+      "generatedSha256": "50141fa96156bc8c898a9cae33108648bca2f39c9e29cd5069e7962f9cb2e696",
+      "source": "packages/normalization-core/src/record-coerce.ts",
+      "sourceSha256": "541c179840c2cad4edc5c8103f77cc7f8c6b1ee5ec3e52c7c9fe097b18917f1c"
+    },
+    {
+      "importer": "src/decisions/validation-v2.ts",
+      "specifier": "./validation-common.js",
+      "kind": "whole-source-module",
+      "source": "src/decisions/validation-common.ts",
+      "sourceSha256": "585633bc67b6f25de43477631cdbdcdcb828c538b231e0bb373b05f5b832dbb3"
+    },
+    {
+      "importer": "src/decisions/validation-v2.ts",
+      "specifier": "./validation.js",
+      "kind": "whole-source-module",
+      "source": "src/decisions/validation.ts",
+      "sourceSha256": "d080e2d4fd1e2a4bebb6243205959a0bb92fcf314d08aea01596410df436169a"
+    },
+    {
+      "importer": "src/decisions/validation.ts",
+      "specifier": "./validation-common.js",
+      "kind": "whole-source-module",
+      "source": "src/decisions/validation-common.ts",
+      "sourceSha256": "585633bc67b6f25de43477631cdbdcdcb828c538b231e0bb373b05f5b832dbb3"
+    },
+    {
+      "importer": "extensions/openai/decision-provider.runtime.ts",
+      "specifier": "openclaw/plugin-sdk/decisions-openai-runtime",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "evaluateOpenAICompatibleDecision"
+      ],
+      "generatedCode": "export {evaluateOpenAICompatibleDecision} from \"capture:source:src/plugin-sdk/decisions-openai-runtime.ts\";",
+      "generatedSha256": "6ee1d5a5e4547fa33c07c5396da06a95a612c788194e4d15cbbf54932f90a8b7",
+      "source": "src/plugin-sdk/decisions-openai-runtime.ts",
+      "sourceSha256": "eb4dfd52aa62648b79fea90c9a37c68509b0c2bbb1ad55391479c84428a71feb"
+    },
+    {
+      "importer": "extensions/openai/decision-provider.runtime.ts",
+      "specifier": "./base-url.js",
+      "kind": "whole-source-module",
+      "source": "extensions/openai/base-url.ts",
+      "sourceSha256": "068ee95c417972ef95114eb6871cb4d200a4fb3b441f703ef907f1adc41ac55a"
+    },
+    {
+      "importer": "extensions/openai/base-url.ts",
+      "specifier": "openclaw/plugin-sdk/string-coerce-runtime",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "normalizeOptionalString"
+      ],
+      "generatedCode": "export {normalizeOptionalString} from \"capture:source:packages/normalization-core/src/string-coerce.ts\";",
+      "generatedSha256": "729618d354fddb78c849285b0fc7a8a3e7e158524745dd34e9deaeec4a6cc41d",
+      "source": "packages/normalization-core/src/string-coerce.ts",
+      "sourceSha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf"
+    },
+    {
+      "importer": "src/plugin-sdk/decisions-openai-runtime.ts",
+      "specifier": "./agent-harness-runtime.js",
+      "kind": "explicit-prepared-model-fixture",
+      "exports": [
+        "getModelProviderRequestTransport"
+      ],
+      "generatedCode": "export function getModelProviderRequestTransport(){return undefined;}",
+      "generatedSha256": "2b36d83c2c729524b45f00f7cf458e561219c48bfaaa76a13d66b785ad02d3ad"
+    },
+    {
+      "importer": "src/plugin-sdk/decisions-openai-runtime.ts",
+      "specifier": "./decisions.js",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "validateDecisionBatchV2"
+      ],
+      "generatedCode": "export {validateDecisionBatchV2} from \"capture:source:src/decisions/validation-v2.ts\";",
+      "generatedSha256": "a17341d782276be66c732b03461b988e52371a90ac92c3b910f1079735655958",
+      "source": "src/decisions/validation-v2.ts",
+      "sourceSha256": "c7988bd3b0b179901f19c0634f118ef5905eb4ad32ded3b1ea85777e9d4f33b7"
+    },
+    {
+      "importer": "src/plugin-sdk/decisions-openai-runtime.ts",
+      "specifier": "./extension-shared.js",
+      "kind": "explicit-deadline-fixture",
+      "exports": [
+        "buildTimeoutAbortSignal"
+      ],
+      "generatedCode": "export function buildTimeoutAbortSignal(params){globalThis.__timeout=params.timeoutMs;return {signal:params.signal,cleanup(){globalThis.__cleanups++;}};}",
+      "generatedSha256": "32926e453a893cb71cd487d11a30999a56609467d25973286746b312b59757e4"
+    },
+    {
+      "importer": "src/plugin-sdk/decisions-openai-runtime.ts",
+      "specifier": "./fetch-runtime.js",
+      "kind": "explicit-environment-fixture",
+      "exports": [
+        "shouldUseEnvHttpProxyForUrl",
+        "withTrustedEnvProxyGuardedFetchMode"
+      ],
+      "generatedCode": "export function shouldUseEnvHttpProxyForUrl(){return false;} export function withTrustedEnvProxyGuardedFetchMode(){throw Error(\"uninvoked proxy mode\");}",
+      "generatedSha256": "ee9c5cdd921c0d8446c60ff95659754ba50b9f9459eb87fe86243686b22dee68"
+    },
+    {
+      "importer": "src/plugin-sdk/decisions-openai-runtime.ts",
+      "specifier": "./provider-http.js",
+      "kind": "successful-http-policy-reader-fixture",
+      "exports": [
+        "createProviderCredentialMatcher",
+        "fetchWithProviderHttpGuard",
+        "readProviderJsonObjectResponse",
+        "resolveProviderHttpRequestConfig"
+      ],
+      "generatedCode": "\nexport function createProviderCredentialMatcher(){return ()=>false;}\nexport const fetchWithProviderHttpGuard=globalThis.__platform.fetch;\nexport function readProviderJsonObjectResponse(response,label,options){return globalThis.__platform.read(response,options);}\nexport function resolveProviderHttpRequestConfig(params){return {baseUrl:params.baseUrl,headers:params.defaultHeaders,allowPrivateNetwork:false};}\n",
+      "generatedSha256": "43407e688dbffdf8fd3cec897c7a12817804b778af6f48e91472c054a9bc923b"
+    },
+    {
+      "importer": "src/plugin-sdk/decisions-openai-runtime.ts",
+      "specifier": "./retry-runtime.js",
+      "kind": "uninvoked-dependency-facade",
+      "exports": [
+        "parseRetryAfterHeaderSeconds"
+      ],
+      "generatedCode": "export function parseRetryAfterHeaderSeconds(){globalThis.__deferredCalls.push({\"importer\":\"src/plugin-sdk/decisions-openai-runtime.ts\",\"specifier\":\"./retry-runtime.js\",\"export\":\"parseRetryAfterHeaderSeconds\"});throw Error('Uninvoked decisions dependency: parseRetryAfterHeaderSeconds');}",
+      "generatedSha256": "76c0074d3e993d97ff64199738596c753eab613274a728885fdbc3077fe9044e",
+      "source": "src/plugin-sdk/retry-runtime.ts",
+      "sourceSha256": "02f2012496a005b4cd1b72cb11afd82c9e1fce5589027fd9f77cf53c514e523a",
+      "originalSourceExecuted": false
+    },
+    {
+      "importer": "src/plugin-sdk/decisions-openai-runtime.ts",
+      "specifier": "./string-coerce-runtime.js",
+      "kind": "whole-source-export-alias",
+      "exports": [
+        "isRecord"
+      ],
+      "generatedCode": "export {isRecord} from \"capture:source:packages/normalization-core/src/record-coerce.ts\";",
+      "generatedSha256": "50141fa96156bc8c898a9cae33108648bca2f39c9e29cd5069e7962f9cb2e696",
+      "source": "packages/normalization-core/src/record-coerce.ts",
+      "sourceSha256": "541c179840c2cad4edc5c8103f77cc7f8c6b1ee5ec3e52c7c9fe097b18917f1c"
+    }
+  ],
+  "deferredCalls": [],
+  "observations": [
+    {
+      "id": "text-three",
+      "arguments": {
+        "contractVersion": 2,
+        "state": {
+          "type": "text",
+          "text": "  The parcel is damaged. 😀\n"
+        },
+        "questions": {
+          "damaged": {
+            "type": "boolean",
+            "instructions": "Is the parcel damaged?",
+            "criteria": {
+              "true": "Damaged parcel",
+              "false": null
+            }
+          },
+          "route": {
+            "type": "choice",
+            "instructions": {
+              "task": "Choose route"
+            },
+            "criteria": {
+              "sales": [
+                "New order"
+              ],
+              "support": {
+                "team": "support"
+              }
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "criteria": [
+              "Low",
+              {
+                "level": "Medium"
+              },
+              null
+            ]
+          }
+        }
+      },
+      "baseUrl": "https://api.openai.com/v1",
+      "response": {
+        "model": "returned-decision-model",
+        "answers": [
+          {
+            "name": "damaged",
+            "type": "predicate",
+            "probability": 0.95
+          },
+          {
+            "name": "route",
+            "type": "choice",
+            "choice": "support",
+            "confidence": 1.7,
+            "probabilities": [
+              {
+                "value": "support",
+                "probability": 0.8
+              },
+              {
+                "value": "sales",
+                "probability": 0.7
+              }
+            ]
+          },
+          {
+            "name": "urgency",
+            "type": "score",
+            "score": 1.25,
+            "confidence": -0.2,
+            "probabilities": [
+              {
+                "label": "2",
+                "value": 2,
+                "probability": 0.3
+              },
+              {
+                "label": "0",
+                "value": 0,
+                "probability": 0.05
+              },
+              {
+                "label": "1",
+                "value": 1,
+                "probability": 0.65
+              }
+            ]
+          }
+        ],
+        "usage": {
+          "input_tokens": 42,
+          "output_tokens": 0,
+          "total_tokens": 42
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "text",
+          "text": "  The parcel is damaged. 😀\n"
+        },
+        "questions": {
+          "damaged": {
+            "type": "boolean",
+            "instructions": "Is the parcel damaged?",
+            "criteria": {
+              "true": "Damaged parcel",
+              "false": null
+            }
+          },
+          "route": {
+            "type": "choice",
+            "instructions": {
+              "task": "Choose route"
+            },
+            "criteria": {
+              "sales": [
+                "New order"
+              ],
+              "support": {
+                "team": "support"
+              }
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "criteria": [
+              "Low",
+              {
+                "level": "Medium"
+              },
+              null
+            ]
+          }
+        }
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/decisions",
+        "method": "POST",
+        "body": {
+          "model": "gpt-6-luna",
+          "input": "  The parcel is damaged. 😀\n",
+          "questions": [
+            {
+              "type": "predicate",
+              "name": "damaged",
+              "instructions": "Is the parcel damaged?\nTrue criterion: Damaged parcel\nFalse criterion: null"
+            },
+            {
+              "type": "choice",
+              "name": "route",
+              "instructions": "{\"task\":\"Choose route\"}",
+              "choices": [
+                {
+                  "value": "sales",
+                  "description": "[\"New order\"]"
+                },
+                {
+                  "value": "support",
+                  "description": "{\"team\":\"support\"}"
+                }
+              ]
+            },
+            {
+              "type": "score",
+              "name": "urgency",
+              "instructions": "",
+              "levels": [
+                {
+                  "label": "0",
+                  "description": "Low"
+                },
+                {
+                  "label": "1",
+                  "description": "{\"level\":\"Medium\"}"
+                },
+                {
+                  "label": "2",
+                  "description": "null"
+                }
+              ]
+            }
+          ]
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "returned-decision-model",
+          "answers": {
+            "damaged": {
+              "type": "boolean",
+              "probabilityTrue": 0.95
+            },
+            "route": {
+              "type": "choice",
+              "choice": "support",
+              "confidence": 1.7,
+              "probabilities": {
+                "support": 0.8,
+                "sales": 0.7
+              }
+            },
+            "urgency": {
+              "type": "score",
+              "score": 1.25,
+              "confidence": -0.2,
+              "probabilities": [
+                0.05,
+                0.65,
+                0.3
+              ]
+            }
+          },
+          "usage": {
+            "inputTokens": 42,
+            "outputTokens": 0
+          }
+        }
+      },
+      "releaseCount": 1,
+      "cleanupCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576
+        }
+      ]
+    },
+    {
+      "id": "json-three",
+      "arguments": {
+        "contractVersion": 2,
+        "state": {
+          "type": "json",
+          "value": {
+            "count": 2,
+            "report": "The parcel is damaged"
+          }
+        },
+        "questions": {
+          "damaged": {
+            "type": "boolean",
+            "instructions": "Is the parcel damaged?",
+            "criteria": {
+              "true": "Damaged parcel",
+              "false": null
+            }
+          },
+          "route": {
+            "type": "choice",
+            "instructions": {
+              "task": "Choose route"
+            },
+            "criteria": {
+              "sales": [
+                "New order"
+              ],
+              "support": {
+                "team": "support"
+              }
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "criteria": [
+              "Low",
+              {
+                "level": "Medium"
+              },
+              null
+            ]
+          }
+        }
+      },
+      "baseUrl": "https://api.openai.com/v1",
+      "response": {
+        "model": "returned-decision-model",
+        "answers": [
+          {
+            "name": "damaged",
+            "type": "predicate",
+            "probability": 0.95
+          },
+          {
+            "name": "route",
+            "type": "choice",
+            "choice": "support",
+            "confidence": 1.7,
+            "probabilities": [
+              {
+                "value": "support",
+                "probability": 0.8
+              },
+              {
+                "value": "sales",
+                "probability": 0.7
+              }
+            ]
+          },
+          {
+            "name": "urgency",
+            "type": "score",
+            "score": 1.25,
+            "confidence": -0.2,
+            "probabilities": [
+              {
+                "label": "2",
+                "value": 2,
+                "probability": 0.3
+              },
+              {
+                "label": "0",
+                "value": 0,
+                "probability": 0.05
+              },
+              {
+                "label": "1",
+                "value": 1,
+                "probability": 0.65
+              }
+            ]
+          }
+        ],
+        "usage": {
+          "input_tokens": 42,
+          "output_tokens": 0,
+          "total_tokens": 42
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "json",
+          "value": {
+            "count": 2,
+            "report": "The parcel is damaged"
+          }
+        },
+        "questions": {
+          "damaged": {
+            "type": "boolean",
+            "instructions": "Is the parcel damaged?",
+            "criteria": {
+              "true": "Damaged parcel",
+              "false": null
+            }
+          },
+          "route": {
+            "type": "choice",
+            "instructions": {
+              "task": "Choose route"
+            },
+            "criteria": {
+              "sales": [
+                "New order"
+              ],
+              "support": {
+                "team": "support"
+              }
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "criteria": [
+              "Low",
+              {
+                "level": "Medium"
+              },
+              null
+            ]
+          }
+        }
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/decisions",
+        "method": "POST",
+        "body": {
+          "model": "gpt-6-luna",
+          "input": "{\"count\":2,\"report\":\"The parcel is damaged\"}",
+          "questions": [
+            {
+              "type": "predicate",
+              "name": "damaged",
+              "instructions": "Is the parcel damaged?\nTrue criterion: Damaged parcel\nFalse criterion: null"
+            },
+            {
+              "type": "choice",
+              "name": "route",
+              "instructions": "{\"task\":\"Choose route\"}",
+              "choices": [
+                {
+                  "value": "sales",
+                  "description": "[\"New order\"]"
+                },
+                {
+                  "value": "support",
+                  "description": "{\"team\":\"support\"}"
+                }
+              ]
+            },
+            {
+              "type": "score",
+              "name": "urgency",
+              "instructions": "",
+              "levels": [
+                {
+                  "label": "0",
+                  "description": "Low"
+                },
+                {
+                  "label": "1",
+                  "description": "{\"level\":\"Medium\"}"
+                },
+                {
+                  "label": "2",
+                  "description": "null"
+                }
+              ]
+            }
+          ]
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "returned-decision-model",
+          "answers": {
+            "damaged": {
+              "type": "boolean",
+              "probabilityTrue": 0.95
+            },
+            "route": {
+              "type": "choice",
+              "choice": "support",
+              "confidence": 1.7,
+              "probabilities": {
+                "support": 0.8,
+                "sales": 0.7
+              }
+            },
+            "urgency": {
+              "type": "score",
+              "score": 1.25,
+              "confidence": -0.2,
+              "probabilities": [
+                0.05,
+                0.65,
+                0.3
+              ]
+            }
+          },
+          "usage": {
+            "inputTokens": 42,
+            "outputTokens": 0
+          }
+        }
+      },
+      "releaseCount": 1,
+      "cleanupCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576
+        }
+      ]
+    },
+    {
+      "id": "legacy-text",
+      "arguments": {
+        "state": "Legacy supplied evidence",
+        "questions": {
+          "damaged": {
+            "type": "boolean",
+            "instructions": "Is the parcel damaged?",
+            "criteria": {
+              "true": "Damaged parcel",
+              "false": null
+            }
+          },
+          "route": {
+            "type": "choice",
+            "instructions": {
+              "task": "Choose route"
+            },
+            "criteria": {
+              "sales": [
+                "New order"
+              ],
+              "support": {
+                "team": "support"
+              }
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "criteria": [
+              "Low",
+              {
+                "level": "Medium"
+              },
+              null
+            ]
+          }
+        }
+      },
+      "baseUrl": "https://api.openai.com/v1",
+      "response": {
+        "model": "returned-decision-model",
+        "answers": [
+          {
+            "name": "damaged",
+            "type": "predicate",
+            "probability": 0.95
+          },
+          {
+            "name": "route",
+            "type": "choice",
+            "choice": "support",
+            "confidence": 1.7,
+            "probabilities": [
+              {
+                "value": "support",
+                "probability": 0.8
+              },
+              {
+                "value": "sales",
+                "probability": 0.7
+              }
+            ]
+          },
+          {
+            "name": "urgency",
+            "type": "score",
+            "score": 1.25,
+            "confidence": -0.2,
+            "probabilities": [
+              {
+                "label": "2",
+                "value": 2,
+                "probability": 0.3
+              },
+              {
+                "label": "0",
+                "value": 0,
+                "probability": 0.05
+              },
+              {
+                "label": "1",
+                "value": 1,
+                "probability": 0.65
+              }
+            ]
+          }
+        ],
+        "usage": {
+          "input_tokens": 42,
+          "output_tokens": 0,
+          "total_tokens": 42
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "text",
+          "text": "Legacy supplied evidence"
+        },
+        "questions": {
+          "damaged": {
+            "type": "boolean",
+            "instructions": "Is the parcel damaged?",
+            "criteria": {
+              "true": "Damaged parcel",
+              "false": null
+            }
+          },
+          "route": {
+            "type": "choice",
+            "instructions": {
+              "task": "Choose route"
+            },
+            "criteria": {
+              "sales": [
+                "New order"
+              ],
+              "support": {
+                "team": "support"
+              }
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "criteria": [
+              "Low",
+              {
+                "level": "Medium"
+              },
+              null
+            ]
+          }
+        }
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/decisions",
+        "method": "POST",
+        "body": {
+          "model": "gpt-6-luna",
+          "input": "Legacy supplied evidence",
+          "questions": [
+            {
+              "type": "predicate",
+              "name": "damaged",
+              "instructions": "Is the parcel damaged?\nTrue criterion: Damaged parcel\nFalse criterion: null"
+            },
+            {
+              "type": "choice",
+              "name": "route",
+              "instructions": "{\"task\":\"Choose route\"}",
+              "choices": [
+                {
+                  "value": "sales",
+                  "description": "[\"New order\"]"
+                },
+                {
+                  "value": "support",
+                  "description": "{\"team\":\"support\"}"
+                }
+              ]
+            },
+            {
+              "type": "score",
+              "name": "urgency",
+              "instructions": "",
+              "levels": [
+                {
+                  "label": "0",
+                  "description": "Low"
+                },
+                {
+                  "label": "1",
+                  "description": "{\"level\":\"Medium\"}"
+                },
+                {
+                  "label": "2",
+                  "description": "null"
+                }
+              ]
+            }
+          ]
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "returned-decision-model",
+          "answers": {
+            "damaged": {
+              "type": "boolean",
+              "probabilityTrue": 0.95
+            },
+            "route": {
+              "type": "choice",
+              "choice": "support",
+              "confidence": 1.7,
+              "probabilities": {
+                "support": 0.8,
+                "sales": 0.7
+              }
+            },
+            "urgency": {
+              "type": "score",
+              "score": 1.25,
+              "confidence": -0.2,
+              "probabilities": [
+                0.05,
+                0.65,
+                0.3
+              ]
+            }
+          },
+          "usage": {
+            "inputTokens": 42,
+            "outputTokens": 0
+          }
+        }
+      },
+      "releaseCount": 1,
+      "cleanupCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576
+        }
+      ]
+    },
+    {
+      "id": "legacy-null",
+      "arguments": {
+        "state": null,
+        "questions": {
+          "damaged": {
+            "type": "boolean",
+            "instructions": "Is the parcel damaged?",
+            "criteria": {
+              "true": "Damaged parcel",
+              "false": null
+            }
+          },
+          "route": {
+            "type": "choice",
+            "instructions": {
+              "task": "Choose route"
+            },
+            "criteria": {
+              "sales": [
+                "New order"
+              ],
+              "support": {
+                "team": "support"
+              }
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "criteria": [
+              "Low",
+              {
+                "level": "Medium"
+              },
+              null
+            ]
+          }
+        }
+      },
+      "baseUrl": "https://api.openai.com/v1",
+      "response": {
+        "model": "returned-decision-model",
+        "answers": [
+          {
+            "name": "damaged",
+            "type": "predicate",
+            "probability": 0.95
+          },
+          {
+            "name": "route",
+            "type": "choice",
+            "choice": "support",
+            "confidence": 1.7,
+            "probabilities": [
+              {
+                "value": "support",
+                "probability": 0.8
+              },
+              {
+                "value": "sales",
+                "probability": 0.7
+              }
+            ]
+          },
+          {
+            "name": "urgency",
+            "type": "score",
+            "score": 1.25,
+            "confidence": -0.2,
+            "probabilities": [
+              {
+                "label": "2",
+                "value": 2,
+                "probability": 0.3
+              },
+              {
+                "label": "0",
+                "value": 0,
+                "probability": 0.05
+              },
+              {
+                "label": "1",
+                "value": 1,
+                "probability": 0.65
+              }
+            ]
+          }
+        ],
+        "usage": {
+          "input_tokens": 42,
+          "output_tokens": 0,
+          "total_tokens": 42
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "json",
+          "value": null
+        },
+        "questions": {
+          "damaged": {
+            "type": "boolean",
+            "instructions": "Is the parcel damaged?",
+            "criteria": {
+              "true": "Damaged parcel",
+              "false": null
+            }
+          },
+          "route": {
+            "type": "choice",
+            "instructions": {
+              "task": "Choose route"
+            },
+            "criteria": {
+              "sales": [
+                "New order"
+              ],
+              "support": {
+                "team": "support"
+              }
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "criteria": [
+              "Low",
+              {
+                "level": "Medium"
+              },
+              null
+            ]
+          }
+        }
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/decisions",
+        "method": "POST",
+        "body": {
+          "model": "gpt-6-luna",
+          "input": "null",
+          "questions": [
+            {
+              "type": "predicate",
+              "name": "damaged",
+              "instructions": "Is the parcel damaged?\nTrue criterion: Damaged parcel\nFalse criterion: null"
+            },
+            {
+              "type": "choice",
+              "name": "route",
+              "instructions": "{\"task\":\"Choose route\"}",
+              "choices": [
+                {
+                  "value": "sales",
+                  "description": "[\"New order\"]"
+                },
+                {
+                  "value": "support",
+                  "description": "{\"team\":\"support\"}"
+                }
+              ]
+            },
+            {
+              "type": "score",
+              "name": "urgency",
+              "instructions": "",
+              "levels": [
+                {
+                  "label": "0",
+                  "description": "Low"
+                },
+                {
+                  "label": "1",
+                  "description": "{\"level\":\"Medium\"}"
+                },
+                {
+                  "label": "2",
+                  "description": "null"
+                }
+              ]
+            }
+          ]
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "returned-decision-model",
+          "answers": {
+            "damaged": {
+              "type": "boolean",
+              "probabilityTrue": 0.95
+            },
+            "route": {
+              "type": "choice",
+              "choice": "support",
+              "confidence": 1.7,
+              "probabilities": {
+                "support": 0.8,
+                "sales": 0.7
+              }
+            },
+            "urgency": {
+              "type": "score",
+              "score": 1.25,
+              "confidence": -0.2,
+              "probabilities": [
+                0.05,
+                0.65,
+                0.3
+              ]
+            }
+          },
+          "usage": {
+            "inputTokens": 42,
+            "outputTokens": 0
+          }
+        }
+      },
+      "releaseCount": 1,
+      "cleanupCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576
+        }
+      ]
+    },
+    {
+      "id": "legacy-array",
+      "arguments": {
+        "state": [
+          {
+            "fact": "one"
+          },
+          null,
+          "two"
+        ],
+        "questions": {
+          "damaged": {
+            "type": "boolean",
+            "instructions": "Is the parcel damaged?",
+            "criteria": {
+              "true": "Damaged parcel",
+              "false": null
+            }
+          },
+          "route": {
+            "type": "choice",
+            "instructions": {
+              "task": "Choose route"
+            },
+            "criteria": {
+              "sales": [
+                "New order"
+              ],
+              "support": {
+                "team": "support"
+              }
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "criteria": [
+              "Low",
+              {
+                "level": "Medium"
+              },
+              null
+            ]
+          }
+        }
+      },
+      "baseUrl": "https://api.openai.com/v1",
+      "response": {
+        "model": "returned-decision-model",
+        "answers": [
+          {
+            "name": "damaged",
+            "type": "predicate",
+            "probability": 0.95
+          },
+          {
+            "name": "route",
+            "type": "choice",
+            "choice": "support",
+            "confidence": 1.7,
+            "probabilities": [
+              {
+                "value": "support",
+                "probability": 0.8
+              },
+              {
+                "value": "sales",
+                "probability": 0.7
+              }
+            ]
+          },
+          {
+            "name": "urgency",
+            "type": "score",
+            "score": 1.25,
+            "confidence": -0.2,
+            "probabilities": [
+              {
+                "label": "2",
+                "value": 2,
+                "probability": 0.3
+              },
+              {
+                "label": "0",
+                "value": 0,
+                "probability": 0.05
+              },
+              {
+                "label": "1",
+                "value": 1,
+                "probability": 0.65
+              }
+            ]
+          }
+        ],
+        "usage": {
+          "input_tokens": 42,
+          "output_tokens": 0,
+          "total_tokens": 42
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "json",
+          "value": [
+            {
+              "fact": "one"
+            },
+            null,
+            "two"
+          ]
+        },
+        "questions": {
+          "damaged": {
+            "type": "boolean",
+            "instructions": "Is the parcel damaged?",
+            "criteria": {
+              "true": "Damaged parcel",
+              "false": null
+            }
+          },
+          "route": {
+            "type": "choice",
+            "instructions": {
+              "task": "Choose route"
+            },
+            "criteria": {
+              "sales": [
+                "New order"
+              ],
+              "support": {
+                "team": "support"
+              }
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "criteria": [
+              "Low",
+              {
+                "level": "Medium"
+              },
+              null
+            ]
+          }
+        }
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/decisions",
+        "method": "POST",
+        "body": {
+          "model": "gpt-6-luna",
+          "input": "[{\"fact\":\"one\"},null,\"two\"]",
+          "questions": [
+            {
+              "type": "predicate",
+              "name": "damaged",
+              "instructions": "Is the parcel damaged?\nTrue criterion: Damaged parcel\nFalse criterion: null"
+            },
+            {
+              "type": "choice",
+              "name": "route",
+              "instructions": "{\"task\":\"Choose route\"}",
+              "choices": [
+                {
+                  "value": "sales",
+                  "description": "[\"New order\"]"
+                },
+                {
+                  "value": "support",
+                  "description": "{\"team\":\"support\"}"
+                }
+              ]
+            },
+            {
+              "type": "score",
+              "name": "urgency",
+              "instructions": "",
+              "levels": [
+                {
+                  "label": "0",
+                  "description": "Low"
+                },
+                {
+                  "label": "1",
+                  "description": "{\"level\":\"Medium\"}"
+                },
+                {
+                  "label": "2",
+                  "description": "null"
+                }
+              ]
+            }
+          ]
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "returned-decision-model",
+          "answers": {
+            "damaged": {
+              "type": "boolean",
+              "probabilityTrue": 0.95
+            },
+            "route": {
+              "type": "choice",
+              "choice": "support",
+              "confidence": 1.7,
+              "probabilities": {
+                "support": 0.8,
+                "sales": 0.7
+              }
+            },
+            "urgency": {
+              "type": "score",
+              "score": 1.25,
+              "confidence": -0.2,
+              "probabilities": [
+                0.05,
+                0.65,
+                0.3
+              ]
+            }
+          },
+          "usage": {
+            "inputTokens": 42,
+            "outputTokens": 0
+          }
+        }
+      },
+      "releaseCount": 1,
+      "cleanupCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576
+        }
+      ]
+    },
+    {
+      "id": "image-text",
+      "arguments": {
+        "contractVersion": 2,
+        "state": {
+          "type": "image",
+          "dataUri": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aA3sAAAAASUVORK5CYII=",
+          "text": "Inspect supplied image only"
+        },
+        "questions": {
+          "damaged": {
+            "type": "boolean",
+            "instructions": "Is the parcel damaged?",
+            "criteria": {
+              "true": "Damaged parcel",
+              "false": null
+            }
+          },
+          "route": {
+            "type": "choice",
+            "instructions": {
+              "task": "Choose route"
+            },
+            "criteria": {
+              "sales": [
+                "New order"
+              ],
+              "support": {
+                "team": "support"
+              }
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "criteria": [
+              "Low",
+              {
+                "level": "Medium"
+              },
+              null
+            ]
+          }
+        }
+      },
+      "baseUrl": "https://api.openai.com/v1",
+      "response": {
+        "model": "returned-decision-model",
+        "answers": [
+          {
+            "name": "damaged",
+            "type": "predicate",
+            "probability": 0.95
+          },
+          {
+            "name": "route",
+            "type": "choice",
+            "choice": "support",
+            "confidence": 1.7,
+            "probabilities": [
+              {
+                "value": "support",
+                "probability": 0.8
+              },
+              {
+                "value": "sales",
+                "probability": 0.7
+              }
+            ]
+          },
+          {
+            "name": "urgency",
+            "type": "score",
+            "score": 1.25,
+            "confidence": -0.2,
+            "probabilities": [
+              {
+                "label": "2",
+                "value": 2,
+                "probability": 0.3
+              },
+              {
+                "label": "0",
+                "value": 0,
+                "probability": 0.05
+              },
+              {
+                "label": "1",
+                "value": 1,
+                "probability": 0.65
+              }
+            ]
+          }
+        ],
+        "usage": {
+          "input_tokens": 42,
+          "output_tokens": 0,
+          "total_tokens": 42
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "image",
+          "dataUri": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aA3sAAAAASUVORK5CYII=",
+          "text": "Inspect supplied image only"
+        },
+        "questions": {
+          "damaged": {
+            "type": "boolean",
+            "instructions": "Is the parcel damaged?",
+            "criteria": {
+              "true": "Damaged parcel",
+              "false": null
+            }
+          },
+          "route": {
+            "type": "choice",
+            "instructions": {
+              "task": "Choose route"
+            },
+            "criteria": {
+              "sales": [
+                "New order"
+              ],
+              "support": {
+                "team": "support"
+              }
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "criteria": [
+              "Low",
+              {
+                "level": "Medium"
+              },
+              null
+            ]
+          }
+        }
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/decisions",
+        "method": "POST",
+        "body": {
+          "model": "gpt-6-luna",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "Inspect supplied image only"
+                },
+                {
+                  "type": "input_image",
+                  "image_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aA3sAAAAASUVORK5CYII="
+                }
+              ]
+            }
+          ],
+          "questions": [
+            {
+              "type": "predicate",
+              "name": "damaged",
+              "instructions": "Is the parcel damaged?\nTrue criterion: Damaged parcel\nFalse criterion: null"
+            },
+            {
+              "type": "choice",
+              "name": "route",
+              "instructions": "{\"task\":\"Choose route\"}",
+              "choices": [
+                {
+                  "value": "sales",
+                  "description": "[\"New order\"]"
+                },
+                {
+                  "value": "support",
+                  "description": "{\"team\":\"support\"}"
+                }
+              ]
+            },
+            {
+              "type": "score",
+              "name": "urgency",
+              "instructions": "",
+              "levels": [
+                {
+                  "label": "0",
+                  "description": "Low"
+                },
+                {
+                  "label": "1",
+                  "description": "{\"level\":\"Medium\"}"
+                },
+                {
+                  "label": "2",
+                  "description": "null"
+                }
+              ]
+            }
+          ]
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "returned-decision-model",
+          "answers": {
+            "damaged": {
+              "type": "boolean",
+              "probabilityTrue": 0.95
+            },
+            "route": {
+              "type": "choice",
+              "choice": "support",
+              "confidence": 1.7,
+              "probabilities": {
+                "support": 0.8,
+                "sales": 0.7
+              }
+            },
+            "urgency": {
+              "type": "score",
+              "score": 1.25,
+              "confidence": -0.2,
+              "probabilities": [
+                0.05,
+                0.65,
+                0.3
+              ]
+            }
+          },
+          "usage": {
+            "inputTokens": 42,
+            "outputTokens": 0
+          }
+        }
+      },
+      "releaseCount": 1,
+      "cleanupCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576
+        }
+      ]
+    },
+    {
+      "id": "image-only",
+      "arguments": {
+        "contractVersion": 2,
+        "state": {
+          "type": "image",
+          "dataUri": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aA3sAAAAASUVORK5CYII="
+        },
+        "questions": {
+          "damaged": {
+            "type": "boolean",
+            "instructions": "Is the parcel damaged?",
+            "criteria": {
+              "true": "Damaged parcel",
+              "false": null
+            }
+          },
+          "route": {
+            "type": "choice",
+            "instructions": {
+              "task": "Choose route"
+            },
+            "criteria": {
+              "sales": [
+                "New order"
+              ],
+              "support": {
+                "team": "support"
+              }
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "criteria": [
+              "Low",
+              {
+                "level": "Medium"
+              },
+              null
+            ]
+          }
+        }
+      },
+      "baseUrl": "https://api.openai.com/v1",
+      "response": {
+        "model": "returned-decision-model",
+        "answers": [
+          {
+            "name": "damaged",
+            "type": "predicate",
+            "probability": 0.95
+          },
+          {
+            "name": "route",
+            "type": "choice",
+            "choice": "support",
+            "confidence": 1.7,
+            "probabilities": [
+              {
+                "value": "support",
+                "probability": 0.8
+              },
+              {
+                "value": "sales",
+                "probability": 0.7
+              }
+            ]
+          },
+          {
+            "name": "urgency",
+            "type": "score",
+            "score": 1.25,
+            "confidence": -0.2,
+            "probabilities": [
+              {
+                "label": "2",
+                "value": 2,
+                "probability": 0.3
+              },
+              {
+                "label": "0",
+                "value": 0,
+                "probability": 0.05
+              },
+              {
+                "label": "1",
+                "value": 1,
+                "probability": 0.65
+              }
+            ]
+          }
+        ],
+        "usage": {
+          "input_tokens": 42,
+          "output_tokens": 0,
+          "total_tokens": 42
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "image",
+          "dataUri": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aA3sAAAAASUVORK5CYII="
+        },
+        "questions": {
+          "damaged": {
+            "type": "boolean",
+            "instructions": "Is the parcel damaged?",
+            "criteria": {
+              "true": "Damaged parcel",
+              "false": null
+            }
+          },
+          "route": {
+            "type": "choice",
+            "instructions": {
+              "task": "Choose route"
+            },
+            "criteria": {
+              "sales": [
+                "New order"
+              ],
+              "support": {
+                "team": "support"
+              }
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "criteria": [
+              "Low",
+              {
+                "level": "Medium"
+              },
+              null
+            ]
+          }
+        }
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/decisions",
+        "method": "POST",
+        "body": {
+          "model": "gpt-6-luna",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_image",
+                  "image_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aA3sAAAAASUVORK5CYII="
+                }
+              ]
+            }
+          ],
+          "questions": [
+            {
+              "type": "predicate",
+              "name": "damaged",
+              "instructions": "Is the parcel damaged?\nTrue criterion: Damaged parcel\nFalse criterion: null"
+            },
+            {
+              "type": "choice",
+              "name": "route",
+              "instructions": "{\"task\":\"Choose route\"}",
+              "choices": [
+                {
+                  "value": "sales",
+                  "description": "[\"New order\"]"
+                },
+                {
+                  "value": "support",
+                  "description": "{\"team\":\"support\"}"
+                }
+              ]
+            },
+            {
+              "type": "score",
+              "name": "urgency",
+              "instructions": "",
+              "levels": [
+                {
+                  "label": "0",
+                  "description": "Low"
+                },
+                {
+                  "label": "1",
+                  "description": "{\"level\":\"Medium\"}"
+                },
+                {
+                  "label": "2",
+                  "description": "null"
+                }
+              ]
+            }
+          ]
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "returned-decision-model",
+          "answers": {
+            "damaged": {
+              "type": "boolean",
+              "probabilityTrue": 0.95
+            },
+            "route": {
+              "type": "choice",
+              "choice": "support",
+              "confidence": 1.7,
+              "probabilities": {
+                "support": 0.8,
+                "sales": 0.7
+              }
+            },
+            "urgency": {
+              "type": "score",
+              "score": 1.25,
+              "confidence": -0.2,
+              "probabilities": [
+                0.05,
+                0.65,
+                0.3
+              ]
+            }
+          },
+          "usage": {
+            "inputTokens": 42,
+            "outputTokens": 0
+          }
+        }
+      },
+      "releaseCount": 1,
+      "cleanupCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576
+        }
+      ]
+    },
+    {
+      "id": "missing-instructions",
+      "arguments": {
+        "contractVersion": 2,
+        "state": {
+          "type": "text",
+          "text": "  The parcel is damaged. 😀\n"
+        },
+        "questions": {
+          "check": {
+            "type": "boolean"
+          }
+        }
+      },
+      "baseUrl": "https://api.openai.com/v1",
+      "response": {
+        "model": "returned-decision-model",
+        "answers": [
+          {
+            "name": "check",
+            "type": "predicate",
+            "probability": 0.95
+          }
+        ],
+        "usage": {
+          "input_tokens": 42,
+          "output_tokens": 0,
+          "total_tokens": 42
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "text",
+          "text": "  The parcel is damaged. 😀\n"
+        },
+        "questions": {
+          "check": {
+            "type": "boolean"
+          }
+        }
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/decisions",
+        "method": "POST",
+        "body": {
+          "model": "gpt-6-luna",
+          "input": "  The parcel is damaged. 😀\n",
+          "questions": [
+            {
+              "type": "predicate",
+              "name": "check",
+              "instructions": ""
+            }
+          ]
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "returned-decision-model",
+          "answers": {
+            "check": {
+              "type": "boolean",
+              "probabilityTrue": 0.95
+            }
+          },
+          "usage": {
+            "inputTokens": 42,
+            "outputTokens": 0
+          }
+        }
+      },
+      "releaseCount": 1,
+      "cleanupCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576
+        }
+      ]
+    },
+    {
+      "id": "null-instructions",
+      "arguments": {
+        "contractVersion": 2,
+        "state": {
+          "type": "text",
+          "text": "  The parcel is damaged. 😀\n"
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": null,
+            "criteria": null
+          }
+        }
+      },
+      "baseUrl": "https://api.openai.com/v1",
+      "response": {
+        "model": "returned-decision-model",
+        "answers": [
+          {
+            "name": "check",
+            "type": "predicate",
+            "probability": 0.95
+          }
+        ],
+        "usage": {
+          "input_tokens": 42,
+          "output_tokens": 0,
+          "total_tokens": 42
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "text",
+          "text": "  The parcel is damaged. 😀\n"
+        },
+        "questions": {
+          "check": {
+            "type": "boolean",
+            "instructions": null,
+            "criteria": null
+          }
+        }
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/decisions",
+        "method": "POST",
+        "body": {
+          "model": "gpt-6-luna",
+          "input": "  The parcel is damaged. 😀\n",
+          "questions": [
+            {
+              "type": "predicate",
+              "name": "check",
+              "instructions": "null"
+            }
+          ]
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "returned-decision-model",
+          "answers": {
+            "check": {
+              "type": "boolean",
+              "probabilityTrue": 0.95
+            }
+          },
+          "usage": {
+            "inputTokens": 42,
+            "outputTokens": 0
+          }
+        }
+      },
+      "releaseCount": 1,
+      "cleanupCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576
+        }
+      ]
+    },
+    {
+      "id": "explicit-choice-estimates",
+      "arguments": {
+        "contractVersion": 2,
+        "state": {
+          "type": "text",
+          "text": "  The parcel is damaged. 😀\n"
+        },
+        "questions": {
+          "damaged": {
+            "type": "boolean",
+            "instructions": "Is the parcel damaged?",
+            "criteria": {
+              "true": "Damaged parcel",
+              "false": null
+            }
+          },
+          "route": {
+            "type": "choice",
+            "instructions": {
+              "task": "Choose route"
+            },
+            "criteria": {
+              "sales": [
+                "New order"
+              ],
+              "support": {
+                "team": "support"
+              }
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "criteria": [
+              "Low",
+              {
+                "level": "Medium"
+              },
+              null
+            ]
+          }
+        }
+      },
+      "baseUrl": "https://api.openai.com/v1",
+      "response": {
+        "model": "returned-decision-model",
+        "answers": [
+          {
+            "name": "damaged",
+            "type": "predicate",
+            "probability": 0.95
+          },
+          {
+            "name": "route",
+            "type": "choice",
+            "choice": "support",
+            "confidence": 1.7,
+            "probabilities": [
+              {
+                "value": "support",
+                "probability": 0.2
+              },
+              {
+                "value": "sales",
+                "probability": 0.7
+              }
+            ]
+          },
+          {
+            "name": "urgency",
+            "type": "score",
+            "score": 1.25,
+            "confidence": -0.2,
+            "probabilities": [
+              {
+                "label": "2",
+                "value": 2,
+                "probability": 0.3
+              },
+              {
+                "label": "0",
+                "value": 0,
+                "probability": 0.05
+              },
+              {
+                "label": "1",
+                "value": 1,
+                "probability": 0.65
+              }
+            ]
+          }
+        ],
+        "usage": {
+          "input_tokens": 42,
+          "output_tokens": 0,
+          "total_tokens": 42
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "text",
+          "text": "  The parcel is damaged. 😀\n"
+        },
+        "questions": {
+          "damaged": {
+            "type": "boolean",
+            "instructions": "Is the parcel damaged?",
+            "criteria": {
+              "true": "Damaged parcel",
+              "false": null
+            }
+          },
+          "route": {
+            "type": "choice",
+            "instructions": {
+              "task": "Choose route"
+            },
+            "criteria": {
+              "sales": [
+                "New order"
+              ],
+              "support": {
+                "team": "support"
+              }
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "criteria": [
+              "Low",
+              {
+                "level": "Medium"
+              },
+              null
+            ]
+          }
+        }
+      },
+      "request": {
+        "url": "https://api.openai.com/v1/decisions",
+        "method": "POST",
+        "body": {
+          "model": "gpt-6-luna",
+          "input": "  The parcel is damaged. 😀\n",
+          "questions": [
+            {
+              "type": "predicate",
+              "name": "damaged",
+              "instructions": "Is the parcel damaged?\nTrue criterion: Damaged parcel\nFalse criterion: null"
+            },
+            {
+              "type": "choice",
+              "name": "route",
+              "instructions": "{\"task\":\"Choose route\"}",
+              "choices": [
+                {
+                  "value": "sales",
+                  "description": "[\"New order\"]"
+                },
+                {
+                  "value": "support",
+                  "description": "{\"team\":\"support\"}"
+                }
+              ]
+            },
+            {
+              "type": "score",
+              "name": "urgency",
+              "instructions": "",
+              "levels": [
+                {
+                  "label": "0",
+                  "description": "Low"
+                },
+                {
+                  "label": "1",
+                  "description": "{\"level\":\"Medium\"}"
+                },
+                {
+                  "label": "2",
+                  "description": "null"
+                }
+              ]
+            }
+          ]
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "returned-decision-model",
+          "answers": {
+            "damaged": {
+              "type": "boolean",
+              "probabilityTrue": 0.95
+            },
+            "route": {
+              "type": "choice",
+              "choice": "support",
+              "confidence": 1.7,
+              "probabilities": {
+                "support": 0.2,
+                "sales": 0.7
+              }
+            },
+            "urgency": {
+              "type": "score",
+              "score": 1.25,
+              "confidence": -0.2,
+              "probabilities": [
+                0.05,
+                0.65,
+                0.3
+              ]
+            }
+          },
+          "usage": {
+            "inputTokens": 42,
+            "outputTokens": 0
+          }
+        }
+      },
+      "releaseCount": 1,
+      "cleanupCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576
+        }
+      ]
+    },
+    {
+      "id": "custom-api-prefix",
+      "arguments": {
+        "contractVersion": 2,
+        "state": {
+          "type": "text",
+          "text": "  The parcel is damaged. 😀\n"
+        },
+        "questions": {
+          "damaged": {
+            "type": "boolean",
+            "instructions": "Is the parcel damaged?",
+            "criteria": {
+              "true": "Damaged parcel",
+              "false": null
+            }
+          },
+          "route": {
+            "type": "choice",
+            "instructions": {
+              "task": "Choose route"
+            },
+            "criteria": {
+              "sales": [
+                "New order"
+              ],
+              "support": {
+                "team": "support"
+              }
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "criteria": [
+              "Low",
+              {
+                "level": "Medium"
+              },
+              null
+            ]
+          }
+        }
+      },
+      "baseUrl": "https://decisions.example.test/custom/v1",
+      "response": {
+        "model": "returned-decision-model",
+        "answers": [
+          {
+            "name": "damaged",
+            "type": "predicate",
+            "probability": 0.95
+          },
+          {
+            "name": "route",
+            "type": "choice",
+            "choice": "support",
+            "confidence": 1.7,
+            "probabilities": [
+              {
+                "value": "support",
+                "probability": 0.8
+              },
+              {
+                "value": "sales",
+                "probability": 0.7
+              }
+            ]
+          },
+          {
+            "name": "urgency",
+            "type": "score",
+            "score": 1.25,
+            "confidence": -0.2,
+            "probabilities": [
+              {
+                "label": "2",
+                "value": 2,
+                "probability": 0.3
+              },
+              {
+                "label": "0",
+                "value": 0,
+                "probability": 0.05
+              },
+              {
+                "label": "1",
+                "value": 1,
+                "probability": 0.65
+              }
+            ]
+          }
+        ],
+        "usage": {
+          "input_tokens": 42,
+          "output_tokens": 0,
+          "total_tokens": 42
+        }
+      },
+      "batch": {
+        "state": {
+          "type": "text",
+          "text": "  The parcel is damaged. 😀\n"
+        },
+        "questions": {
+          "damaged": {
+            "type": "boolean",
+            "instructions": "Is the parcel damaged?",
+            "criteria": {
+              "true": "Damaged parcel",
+              "false": null
+            }
+          },
+          "route": {
+            "type": "choice",
+            "instructions": {
+              "task": "Choose route"
+            },
+            "criteria": {
+              "sales": [
+                "New order"
+              ],
+              "support": {
+                "team": "support"
+              }
+            }
+          },
+          "urgency": {
+            "type": "score",
+            "criteria": [
+              "Low",
+              {
+                "level": "Medium"
+              },
+              null
+            ]
+          }
+        }
+      },
+      "request": {
+        "url": "https://decisions.example.test/custom/v1/decisions",
+        "method": "POST",
+        "body": {
+          "model": "gpt-6-luna",
+          "input": "  The parcel is damaged. 😀\n",
+          "questions": [
+            {
+              "type": "predicate",
+              "name": "damaged",
+              "instructions": "Is the parcel damaged?\nTrue criterion: Damaged parcel\nFalse criterion: null"
+            },
+            {
+              "type": "choice",
+              "name": "route",
+              "instructions": "{\"task\":\"Choose route\"}",
+              "choices": [
+                {
+                  "value": "sales",
+                  "description": "[\"New order\"]"
+                },
+                {
+                  "value": "support",
+                  "description": "{\"team\":\"support\"}"
+                }
+              ]
+            },
+            {
+              "type": "score",
+              "name": "urgency",
+              "instructions": "",
+              "levels": [
+                {
+                  "label": "0",
+                  "description": "Low"
+                },
+                {
+                  "label": "1",
+                  "description": "{\"level\":\"Medium\"}"
+                },
+                {
+                  "label": "2",
+                  "description": "null"
+                }
+              ]
+            }
+          ]
+        },
+        "timeoutMs": 30000
+      },
+      "outcome": {
+        "status": "ok",
+        "result": {
+          "model": "returned-decision-model",
+          "answers": {
+            "damaged": {
+              "type": "boolean",
+              "probabilityTrue": 0.95
+            },
+            "route": {
+              "type": "choice",
+              "choice": "support",
+              "confidence": 1.7,
+              "probabilities": {
+                "support": 0.8,
+                "sales": 0.7
+              }
+            },
+            "urgency": {
+              "type": "score",
+              "score": 1.25,
+              "confidence": -0.2,
+              "probabilities": [
+                0.05,
+                0.65,
+                0.3
+              ]
+            }
+          },
+          "usage": {
+            "inputTokens": 42,
+            "outputTokens": 0
+          }
+        }
+      },
+      "releaseCount": 1,
+      "cleanupCount": 1,
+      "readerCalls": [
+        {
+          "maxBytes": 1048576
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "Whole unchanged native OpenAI wrapper, SDK translator/parser, V1/V2 validators, compatibility and normalization modules execute; no copied protocol bodies.",
+    "Synthetic successful HTTP Response only; no socket, provider quality, real account, credential selection, model capability discovery or full runtime/tool factory executes.",
+    "Prepared request, HTTP policy, credential matcher, timeout/cleanup and JSON response reader are explicit facades. Production policy, timeout/overflow/cancellation bodies and transport release are unexecuted.",
+    "Reference object iteration and JSON.stringify execute with canonical ASCII fixture keys; Synapsis native map sorting and Jason numeric encoding are documented host adaptations, not exact incoming-order or numeric-byte parity.",
+    "Only boolean/choice/score and text/json/image routes execute. No list/sort/tags/box or other provider implementation claim."
+  ]
+}

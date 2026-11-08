@@ -34,6 +34,24 @@ defmodule Synapsis.Agent.Nodes.BuildPromptTest do
              Message.list_by_session(session.id)
   end
 
+  @tag :tmp_dir
+  test "uses the runtime workspace and omits memory for child sessions", %{
+    session: session,
+    tmp_dir: root
+  } do
+    File.write!(Path.join(root, "MEMORY.md"), "Agent workspace decision")
+    {:ok, _} = append_user_message(session.id, "remember the design")
+    state = build_state(session)
+
+    assert {:next, :default, prepared} = BuildPrompt.run(state, %{project_path: root})
+    assert system_text(prepared.request) =~ "Agent workspace decision"
+
+    assert {:next, :default, child} =
+             BuildPrompt.run(state, %{project_path: root, memory_context: false})
+
+    refute system_text(child.request) =~ "Agent workspace decision"
+  end
+
   test "injects multiple queued steers in FIFO order", %{session: session} do
     {:ok, _message} = append_user_message(session.id, "fix it")
     {:ok, first} = PendingInputStore.append_steer(session.id, "first steer")

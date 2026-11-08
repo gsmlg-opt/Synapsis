@@ -21,6 +21,9 @@ defmodule Synapsis.Message do
     field(:token_count, :integer, default: 0)
     field(:session_id, :binary_id)
     field(:inserted_at, :utc_datetime_usec)
+    field(:input_provenance, :map)
+    field(:internal_turn_source, :string)
+    field(:reply_presentation, :map)
   end
 
   @valid_roles ~w(user assistant system)
@@ -80,6 +83,12 @@ defmodule Synapsis.Message do
     Store.replace_turns(session_id, encode_all(messages))
   end
 
+  @doc "Replace a session's entire message list and metadata in one publication."
+  @spec persist_list(String.t(), [%__MODULE__{}], map()) :: :ok | {:error, term()}
+  def persist_list(session_id, messages, meta) when is_list(messages) and is_map(meta) do
+    Store.replace_turns(session_id, encode_all(messages), meta)
+  end
+
   @doc "Update a single message (matched by id) within its session's turns."
   @spec update_message(%__MODULE__{}) :: {:ok, %__MODULE__{}} | {:error, term()}
   def update_message(%__MODULE__{id: id, session_id: session_id} = message)
@@ -104,7 +113,13 @@ defmodule Synapsis.Message do
       inserted_at: message.inserted_at,
       parts: Enum.map(message.parts || [], &encode_part/1)
     }
+    |> put_optional(:input_provenance, message.input_provenance)
+    |> put_optional(:internal_turn_source, message.internal_turn_source)
+    |> put_optional(:reply_presentation, message.reply_presentation)
   end
+
+  defp put_optional(map, _key, nil), do: map
+  defp put_optional(map, key, value), do: Map.put(map, key, value)
 
   defp encode_all(messages), do: Enum.map(messages, &encode/1)
 
@@ -165,6 +180,20 @@ defmodule Synapsis.Message do
   defp encode_part(%Synapsis.Part.Image{media_type: mt, data: data, path: path}),
     do: %{type: "image", media_type: mt, data: data, path: path}
 
+  defp encode_part(%Synapsis.Part.DeliveredImage{} = part),
+    do: %{
+      type: "delivered_image",
+      descriptor: part.descriptor,
+      delivery: part.delivery,
+      name: part.name
+    }
+
+  defp encode_part(%Synapsis.Part.Video{} = part),
+    do: %{type: "video", descriptor: part.descriptor, delivery: part.delivery, name: part.name}
+
+  defp encode_part(%Synapsis.Part.Audio{} = part),
+    do: %{type: "audio", descriptor: part.descriptor, delivery: part.delivery, name: part.name}
+
   defp encode_part(other), do: %{type: "unknown", raw: inspect(other)}
 
   defp decode_turn(turn, session_id) do
@@ -174,6 +203,9 @@ defmodule Synapsis.Message do
       token_count: fetch(turn, :token_count) || 0,
       inserted_at: fetch(turn, :inserted_at),
       session_id: session_id,
+      input_provenance: fetch(turn, :input_provenance),
+      internal_turn_source: fetch(turn, :internal_turn_source),
+      reply_presentation: fetch(turn, :reply_presentation),
       parts: turn |> fetch(:parts) |> List.wrap() |> Enum.map(&decode_part/1)
     }
   end
@@ -214,6 +246,27 @@ defmodule Synapsis.Message do
       media_type: fetch(p, :media_type),
       data: fetch(p, :data),
       path: fetch(p, :path)
+    }
+
+  defp decode_part(%{type: "delivered_image"} = p),
+    do: %Synapsis.Part.DeliveredImage{
+      descriptor: fetch(p, :descriptor),
+      delivery: fetch(p, :delivery),
+      name: fetch(p, :name)
+    }
+
+  defp decode_part(%{type: "video"} = p),
+    do: %Synapsis.Part.Video{
+      descriptor: fetch(p, :descriptor),
+      delivery: fetch(p, :delivery),
+      name: fetch(p, :name)
+    }
+
+  defp decode_part(%{type: "audio"} = p),
+    do: %Synapsis.Part.Audio{
+      descriptor: fetch(p, :descriptor),
+      delivery: fetch(p, :delivery),
+      name: fetch(p, :name)
     }
 
   defp decode_part(_other), do: %Synapsis.Part.Text{content: ""}

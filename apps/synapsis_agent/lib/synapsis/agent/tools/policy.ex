@@ -9,7 +9,7 @@ defmodule Synapsis.Agent.Tools.Policy do
 
   Policy is `%{scope: scope, tools: %{name => %{tool_revision: revision,
   classify: classifier}}, decisions: %{{name, action, resource} => decision}}`.
-  Each trusted classifier accepts the original invocation and returns
+  Each trusted classifier accepts the prepared invocation and returns
   `{:ok, %{action: nonempty_string, resource: nonempty_string}}` or
   `{:error, reason}`. The host owns classification of tool-specific arguments;
   model-supplied permission labels have no authority. Classifiers should be
@@ -19,16 +19,61 @@ defmodule Synapsis.Agent.Tools.Policy do
   Registry/Grant interpretation, or autonomous-mode shortcuts apply. `:ask`
   requires an explicit trusted interactive Approval context; without it the
   result remains `{:deny, :approval_required}`. Approval never edits input.
-  Allow returns `:allow`, preserving the original function or custom input.
+  Allow preserves the original function or custom input, except canonical
+  filesystem tools return their prepared argument map to native admission.
 
   Resource IDs are opaque: matching them provides neither filesystem containment
   nor live credential verification. Host classifiers and readiness producers must
-  enforce those domain requirements. This module is not wired into production.
+  enforce those domain requirements. Production resolves immutable run snapshots
+  through the trusted `tool_context_resolver` before evaluating each invocation.
   """
 
-  alias Synapsis.Agent.Tools.{Approval, Readiness}
+  alias Synapsis.Agent.Tools.{Approval, Filesystem, Profiles, Readiness}
 
-  @spec prepare_tool(map(), map()) :: :allow | {:deny, term()}
+  @approval_timeout 300_000
+
+  def tool_effect_timeout(invocation, context) do
+    case Synapsis.Agent.Tools.Browser.tool_effect_timeout(invocation, context) do
+      :default ->
+        case Synapsis.Agent.Tools.Workflows.tool_effect_timeout(invocation, context) do
+          :default ->
+            case Synapsis.Agent.Tools.TTS.tool_effect_timeout(invocation, context) do
+              :default -> Synapsis.Agent.Tools.Diffs.tool_effect_timeout(invocation, context)
+              result -> result
+            end
+
+          result ->
+            result
+        end
+
+      result ->
+        result
+    end
+  end
+
+  @spec prepare_tool(map(), map()) :: :allow | {:allow, map()} | {:deny, term()}
+  def prepare_tool(invocation, %{tool_context_resolver: resolver} = context)
+      when is_function(resolver, 2) or is_function(resolver, 1) do
+    expiry = System.system_time(:millisecond) + @approval_timeout
+
+    with {:ok, snapshot} <- resolve_snapshot(invocation, context),
+         {:ok, %{descriptor: descriptor}} <- Profiles.preparation_binding(invocation, snapshot),
+         {:ok, prepared, canonical?} <- prepare_arguments(invocation, descriptor, context),
+         {:ok, trusted} <- production_context(prepared, snapshot, context, expiry) do
+      case prepare_tool(prepared, trusted) do
+        :allow when canonical? -> {:allow, prepared.arguments}
+        result -> result
+      end
+    else
+      {:error, reason} -> {:deny, reason}
+      _ -> {:deny, :invalid_policy_context}
+    end
+  rescue
+    _ -> {:deny, :tool_context_unavailable}
+  catch
+    _, _ -> {:deny, :tool_context_unavailable}
+  end
+
   def prepare_tool(invocation, context) do
     case evaluate(invocation, context) do
       {:ok, %{decision: :allow}} -> :allow
@@ -61,6 +106,51 @@ defmodule Synapsis.Agent.Tools.Policy do
   end
 
   def evaluate(_, _), do: {:deny, :invalid_policy_context}
+
+  defp prepare_arguments(
+         invocation,
+         %{backend: Filesystem, tool_revision: 1, tool_name: name} = descriptor,
+         context
+       )
+       when name in ~w(synapsis::read synapsis::write synapsis::edit synapsis::ls) do
+    with {:ok, arguments} <- Filesystem.prepare_arguments(invocation, descriptor, context),
+         do: {:ok, %{invocation | arguments: arguments}, true}
+  end
+
+  defp prepare_arguments(invocation, _descriptor, _context), do: {:ok, invocation, false}
+
+  defp production_context(invocation, snapshot, context, expiry) do
+    with {:ok, sidecars} <- Profiles.prepare_context(invocation, snapshot) do
+      trusted = Map.merge(Map.take(context, [:input_kind, :interact]), sidecars)
+
+      if snapshot.permission.mode == :interactive and
+           context[:tool_operator_id] == Approval.operator_id() do
+        approval = %{
+          mode: :interactive,
+          scope: Map.put(sidecars.tool_scope, :requester_id, Approval.operator_id()),
+          expires_at: expiry,
+          refresh: fn ->
+            with {:ok, current} <- resolve_snapshot(invocation, context),
+                 do: production_context(invocation, current, context, expiry)
+          end
+        }
+
+        {:ok, Map.put(trusted, :tool_approval, approval)}
+      else
+        {:ok, trusted}
+      end
+    end
+  end
+
+  defp resolve_snapshot(invocation, %{tool_context_resolver: resolver, catalog_snapshot: catalog})
+       when is_function(resolver, 2),
+       do: resolver.(invocation, catalog)
+
+  defp resolve_snapshot(invocation, %{tool_context_resolver: resolver})
+       when is_function(resolver, 1),
+       do: resolver.(invocation)
+
+  defp resolve_snapshot(_, _), do: {:error, :invalid_tool_snapshot}
 
   defp matching_scope(invocation, scope, policy_scope) do
     if policy_scope === scope and

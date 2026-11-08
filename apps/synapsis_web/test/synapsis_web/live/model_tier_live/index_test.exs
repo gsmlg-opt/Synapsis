@@ -170,16 +170,16 @@ defmodule SynapsisWeb.ModelTierLive.IndexTest do
     conn: conn,
     provider: provider
   } do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
 
-    Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
       Plug.Conn.send_resp(conn, 401, "")
     end)
 
     {:ok, _} =
       Providers.update(provider.id, %{
         preset: "backplane",
-        base_url: "http://localhost:#{bypass.port}/v1",
+        base_url: Gaoxy.Test.url(bypass, "/v1"),
         config: %{"model_catalog_migrated" => true}
       })
 
@@ -452,9 +452,9 @@ defmodule SynapsisWeb.ModelTierLive.IndexTest do
   end
 
   test "failed asynchronous discovery keeps configured models", %{conn: conn, provider: provider} do
-    bypass = Bypass.open()
-    Bypass.down(bypass)
-    {:ok, _} = Providers.update(provider.id, %{base_url: "http://localhost:#{bypass.port}/v1"})
+    bypass = Gaoxy.Test.open()
+    Gaoxy.Test.verify_and_close!(bypass)
+    {:ok, _} = Providers.update(provider.id, %{base_url: Gaoxy.Test.url(bypass, "/v1")})
 
     {:ok, model} =
       Models.create(%{provider_id: provider.id, model: "manual", context_window: 4096})

@@ -1,6 +1,6 @@
 defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
   @moduledoc """
-  Bypass-backed OpenAI-compatible provider double for lifecycle tests.
+  Gaoxy.Test-backed OpenAI-compatible provider double for lifecycle tests.
 
   Supported scenarios:
 
@@ -29,7 +29,7 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
           | :multi_turn_tool_result
 
   @type harness :: %{
-          bypass: map(),
+          fixture: map(),
           name: String.t(),
           base_url: String.t(),
           scenario: scenario(),
@@ -39,7 +39,7 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
         }
 
   @doc """
-  Start a Bypass server, install the scenario handler, and register a provider.
+  Start a Gaoxy.Test server, install the scenario handler, and register a provider.
 
   Options:
 
@@ -49,6 +49,8 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
   - `:stream_chunks` — list of text strings for `:streamed_success`
   - `:tool_name`, `:tool_call_id`, `:tool_args` — for tool scenarios
   - `:counter` — optional Agent pid; each request appends the decoded body
+  - `:install?` — false when the test installs its own route before any request
+  - `:fixture_options` — options for `Gaoxy.Test.open/1` (default `[]`)
   """
   @spec start!(keyword()) :: harness()
   def start!(opts \\ []) do
@@ -63,20 +65,22 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
     counter = Keyword.get(opts, :counter)
     hang_ms = Keyword.get(opts, :hang_ms, 5_000)
 
-    bypass = Bypass.open()
+    fixture = Gaoxy.Test.open(Keyword.get(opts, :fixture_options, []))
 
-    install!(bypass, scenario, %{
-      text: text,
-      stream_chunks: stream_chunks,
-      tool_name: tool_name,
-      tool_call_id: tool_call_id,
-      tool_args: tool_args,
-      counter: counter,
-      hang_ms: hang_ms,
-      owner: self()
-    })
+    if Keyword.get(opts, :install?, true) do
+      install!(fixture, scenario, %{
+        text: text,
+        stream_chunks: stream_chunks,
+        tool_name: tool_name,
+        tool_call_id: tool_call_id,
+        tool_args: tool_args,
+        counter: counter,
+        hang_ms: hang_ms,
+        owner: self()
+      })
+    end
 
-    base_url = "http://localhost:#{bypass.port}"
+    base_url = String.trim_trailing(Gaoxy.Test.url(fixture), "/")
 
     :ok =
       Synapsis.Provider.Registry.register(name, %{
@@ -86,7 +90,7 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
       })
 
     %{
-      bypass: bypass,
+      fixture: fixture,
       name: name,
       base_url: base_url,
       scenario: scenario,
@@ -96,25 +100,24 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
     }
   end
 
-  @doc "Unregister the provider. Bypass closes with the test process."
+  @doc "Unregister the provider. Gaoxy.Test closes with the test process."
   @spec stop(harness()) :: :ok
   def stop(%{name: name}) do
     Synapsis.Provider.Registry.unregister(name)
     :ok
   end
 
-  @doc "Install a scenario handler on an existing Bypass."
+  @doc "Install a scenario handler on an existing Gaoxy.Test."
   @spec install!(map(), scenario(), map()) :: :ok
-  def install!(bypass, scenario, ctx \\ %{}) do
+  def install!(fixture, scenario, ctx \\ %{}) do
     fun = fn conn ->
-      conn = if scenario == :hang, do: AbortableHTTP.arm(conn), else: conn
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
       maybe_record(ctx[:counter], request)
       handle_request(conn, scenario, request, ctx)
     end
 
-    Bypass.expect(bypass, "POST", @chat_path, fun)
+    Gaoxy.Test.expect(fixture, "POST", @chat_path, fun)
 
     :ok
   end
@@ -172,9 +175,14 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
       Enum.map_join(chunks, "\n\n", fn chunk -> "data: #{Jason.encode!(chunk)}" end) <>
         "\n\ndata: [DONE]\n\n"
 
-    conn
-    |> Plug.Conn.put_resp_content_type("text/event-stream")
-    |> Plug.Conn.send_resp(200, body)
+    if conn.state == :chunked do
+      {:ok, conn} = Plug.Conn.chunk(conn, body)
+      conn
+    else
+      conn
+      |> Plug.Conn.put_resp_content_type("text/event-stream")
+      |> Plug.Conn.send_resp(200, body)
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -203,8 +211,8 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
 
   defp handle_request(conn, :hang, _request, ctx) do
     case AbortableHTTP.await(conn, :release_hang, Map.get(ctx, :hang_ms, 5_000), ctx.owner) do
-      :disconnected -> Plug.Conn.resp(conn, 204, "")
-      _ -> send_sse(conn, [text_chunk(ctx.text), finish_chunk("stop")])
+      {:disconnected, conn} -> conn
+      {_outcome, conn} -> send_sse(conn, [text_chunk(ctx.text), finish_chunk("stop")])
     end
   end
 

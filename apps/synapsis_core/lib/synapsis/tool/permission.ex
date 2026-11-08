@@ -1,64 +1,14 @@
 defmodule Synapsis.Tool.Permission do
   @moduledoc """
-  Tool permission checking with per-session configuration, glob overrides,
-  and mode-aware resolution.
+  Shared session permission configuration and persistence.
 
-  ## Resolution order (3 steps)
-
-  1. **Per-tool glob overrides** — if a matching override exists in the session
-     config, its decision wins immediately.
-  2. **Permission level vs session config** — the tool's permission level is
-     checked against the session's mode and allow_* settings.
-  3. **Default policy** — `:requires_approval`.
-
-  ## Return values
-
-  - `:allowed`             — tool may proceed without user interaction
-  - `:denied`              — tool is blocked
-  - `:requires_approval`   — user must approve before execution
+  Native tool authorization belongs to the admitted runtime policy. Legacy
+  Registry-based invocation checks and tool-level lookup APIs are retired.
   """
 
   alias Synapsis.Tool.Permission.SessionConfig
 
   @permission_modes ~w(yolo ask restrict)
-
-  # ---------------------------------------------------------------------------
-  # Public API
-  # ---------------------------------------------------------------------------
-
-  @doc """
-  Check permission for a tool invocation (new 3-arity API).
-
-  `context` is a map that may contain `:session_id`.
-  """
-  @spec check(String.t(), map(), map()) :: :allowed | :denied | :requires_approval
-  def check(tool_name, input, context) do
-    session_id = Map.get(context, :session_id)
-    config = session_config(session_id)
-    do_check(tool_name, input, config)
-  end
-
-  @doc """
-  Backward-compatible 2-arity check.
-
-  Delegates to `check/3` by extracting a session_id when possible and using
-  an empty input map.
-  """
-  @spec check(String.t(), term()) :: :approved | :denied | :requires_approval
-  def check(tool_name, session) do
-    session_id = extract_session_id(session)
-    config = session_config(session_id)
-
-    case do_check(tool_name, %{}, config) do
-      :allowed -> :approved
-      :denied -> :denied
-      :requires_approval -> :requires_approval
-    end
-  end
-
-  # ---------------------------------------------------------------------------
-  # Session config loading
-  # ---------------------------------------------------------------------------
 
   @doc """
   Load a `SessionConfig` for the given session ID.
@@ -84,26 +34,103 @@ defmodule Synapsis.Tool.Permission do
   end
 
   @doc """
-  Upsert session permission configuration in the database.
+  Update session permission configuration with one revision-fenced write.
 
-  `attrs` is a map with keys matching `SessionPermission` fields
+  `attrs` is a canonical atom-key map matching `SessionPermission` fields
   (`:mode`, `:allow_read`, `:allow_write`, `:allow_execute`, `:allow_destructive`,
-  `:tool_overrides`).
+  `:tool_overrides`, `:tool_contract_version`). Existing raw fields are preserved;
+  the returned struct is a projection, not an exact persisted-value receipt.
+
+  One requested five-second budget covers snapshot, changeset and CAS. Read
+  errors propagate; malformed persisted records return `:invalid_permission_record`.
+  Exhaustion before dispatch returns `:timeout`. A dispatched CAS preserves
+  acknowledged success or conflict; all other outcomes are `:unknown_outcome`
+  and must not be automatically retried. This is not a hard interruption or
+  no-late-write guarantee, and known late success remains success.
   """
   @spec update_config(binary(), map()) ::
-          {:ok, Synapsis.SessionPermission.t()} | {:error, Ecto.Changeset.t()}
+          {:ok, Synapsis.SessionPermission.t()} | {:error, term()}
   def update_config(session_id, attrs) do
-    attrs = Map.put(attrs, :session_id, session_id)
-    changeset = Synapsis.SessionPermission.changeset(%Synapsis.SessionPermission{}, attrs)
+    deadline = System.monotonic_time(:millisecond) + 5_000
 
-    if changeset.valid? do
-      record = Ecto.Changeset.apply_changes(changeset)
-      # ADR-006 C4: a single session-scoped Concord value (round-trips terms).
-      :ok = Synapsis.Session.Store.put_value(session_id, "permission", Map.from_struct(record))
-      {:ok, record}
-    else
-      {:error, changeset}
+    with :ok <- update_config_input(session_id, attrs),
+         {:ok, timeout} <- update_config_remaining(deadline),
+         {:ok, raw, current, revision} <- update_config_snapshot(session_id, timeout),
+         {:ok, changeset, record} <-
+           update_config_changeset(current, Map.put(attrs, :session_id, session_id)),
+         replacement =
+           if(is_nil(raw),
+             do: Map.from_struct(record),
+             else: Map.merge(raw, changeset.changes)
+           ),
+         {:ok, timeout} <- update_config_remaining(deadline) do
+      update_config_put(session_id, replacement, revision, record, timeout)
     end
+  end
+
+  defp update_config_input(session_id, attrs) when is_binary(session_id) and is_map(attrs) do
+    if not is_struct(attrs) and Enum.all?(Map.keys(attrs), &is_atom/1),
+      do: :ok,
+      else: {:error, :invalid_input}
+  end
+
+  defp update_config_input(_, _), do: {:error, :invalid_input}
+
+  defp update_config_snapshot(session_id, timeout) do
+    case Synapsis.Session.Store.value_snapshot(session_id, "permission", timeout: timeout) do
+      :not_found ->
+        {:ok, nil, %Synapsis.SessionPermission{}, 0}
+
+      {:ok, %{value: raw, revision: revision}} when is_integer(revision) and revision > 0 ->
+        fields = Synapsis.SessionPermission.__schema__(:fields)
+
+        if is_map(raw) and not is_struct(raw) and
+             Map.get(raw, :session_id) === session_id and
+             not Enum.any?(fields, &Map.has_key?(raw, Atom.to_string(&1))) do
+          {:ok, raw, struct(Synapsis.SessionPermission, raw), revision}
+        else
+          {:error, :invalid_permission_record}
+        end
+
+      {:error, _} = error ->
+        error
+
+      _ ->
+        {:error, :invalid_permission_record}
+    end
+  end
+
+  defp update_config_changeset(current, attrs) do
+    changeset = Synapsis.SessionPermission.changeset(current, attrs)
+
+    if changeset.valid?,
+      do: {:ok, changeset, Ecto.Changeset.apply_changes(changeset)},
+      else: {:error, changeset}
+  rescue
+    _ -> {:error, :invalid_input}
+  end
+
+  defp update_config_remaining(deadline) do
+    remaining = deadline - System.monotonic_time(:millisecond)
+    if remaining > 0, do: {:ok, remaining}, else: {:error, :timeout}
+  end
+
+  defp update_config_put(session_id, replacement, revision, record, timeout) do
+    case Synapsis.Session.Store.put_value_if_revision(
+           session_id,
+           "permission",
+           replacement,
+           revision,
+           timeout: timeout
+         ) do
+      :ok -> {:ok, record}
+      {:error, :conflict} -> {:error, :conflict}
+      _ -> {:error, :unknown_outcome}
+    end
+  rescue
+    _ -> {:error, :unknown_outcome}
+  catch
+    _, _ -> {:error, :unknown_outcome}
   end
 
   @doc "Return the agent-level permission modes accepted by the UI and schema."
@@ -147,81 +174,6 @@ defmodule Synapsis.Tool.Permission do
     end
   end
 
-  # ---------------------------------------------------------------------------
-  # Permission level resolution
-  # ---------------------------------------------------------------------------
-
-  @doc """
-  Resolve the permission level for a tool by checking (in order):
-  1. Registry opts `:permission_level`
-  2. Module callback `permission_level/0`
-  3. Default `:write`
-  """
-  @spec tool_permission_level(String.t()) :: atom()
-  def tool_permission_level(tool_name) do
-    case Synapsis.Tool.Registry.lookup(tool_name) do
-      {:ok, {:module, module, opts}} ->
-        opts[:permission_level] ||
-          (function_exported?(module, :permission_level, 0) && module.permission_level()) ||
-          :write
-
-      {:ok, {:process, _pid, opts}} ->
-        Keyword.get(opts, :permission_level, :write)
-
-      {:error, :not_found} ->
-        :write
-    end
-  end
-
-  # ---------------------------------------------------------------------------
-  # Internal resolution
-  # ---------------------------------------------------------------------------
-
-  defp do_check(tool_name, input, %SessionConfig{} = config) do
-    # Step 1: Check per-tool glob overrides
-    case resolve_override(tool_name, input, config.overrides) do
-      {:ok, decision} ->
-        decision
-
-      :no_match ->
-        # Step 2: Resolve by permission level + session mode
-        level = tool_permission_level(tool_name)
-        resolve_by_level(level, config)
-    end
-  end
-
-  # ---------------------------------------------------------------------------
-  # Step 1: Glob override resolution
-  # ---------------------------------------------------------------------------
-
-  @doc """
-  Check overrides list for a matching tool+pattern entry.
-
-  Override format: `%{tool: "bash", pattern: "git *", decision: :allowed}`
-  or shorthand string `"bash(git *)"` parsed via `parse_override/1`.
-
-  Returns `{:ok, decision}` or `:no_match`.
-  """
-  @spec resolve_override(String.t(), map(), list()) :: {:ok, atom()} | :no_match
-  def resolve_override(_tool_name, _input, []), do: :no_match
-
-  def resolve_override(tool_name, input, overrides) when is_list(overrides) do
-    input_str = select_input_field(tool_name, input)
-
-    overrides
-    |> Enum.find_value(fn override ->
-      override = normalize_override(override)
-
-      if override.tool == tool_name && glob_match?(override.pattern, input_str) do
-        {:ok, override.decision}
-      end
-    end)
-    |> case do
-      {:ok, _} = result -> result
-      nil -> :no_match
-    end
-  end
-
   @doc """
   Parse an override string like `"bash(git *)"` into a map.
   """
@@ -233,113 +185,11 @@ defmodule Synapsis.Tool.Permission do
     end
   end
 
-  # ---------------------------------------------------------------------------
-  # Step 2: Level-based resolution
-  # ---------------------------------------------------------------------------
-
-  defp resolve_by_level(level, %SessionConfig{mode: :autonomous} = config) do
-    case level do
-      :none -> :allowed
-      :read -> :allowed
-      :write -> :allowed
-      :execute -> :allowed
-      :destructive -> resolve_allow_setting(config.allow_destructive)
-    end
-  end
-
-  defp resolve_by_level(level, %SessionConfig{mode: :interactive} = config) do
-    case level do
-      :none -> :allowed
-      :read -> resolve_allow_setting(config.allow_read)
-      :write -> resolve_allow_setting(config.allow_write)
-      :execute -> resolve_allow_setting(config.allow_execute)
-      :destructive -> resolve_allow_setting(config.allow_destructive)
-    end
-  end
-
-  defp resolve_allow_setting(:allow), do: :allowed
-  defp resolve_allow_setting(:deny), do: :denied
-  defp resolve_allow_setting(:ask), do: :requires_approval
-  # Default policy (step 3)
-  defp resolve_allow_setting(_), do: :requires_approval
-
-  # ---------------------------------------------------------------------------
-  # Input field selection
-  # ---------------------------------------------------------------------------
-
-  defp select_input_field("bash", input),
-    do: Map.get(input, "command", Map.get(input, :command, ""))
-
-  defp select_input_field("file_read", input),
-    do: Map.get(input, "path", Map.get(input, :path, ""))
-
-  defp select_input_field("file_write", input),
-    do: Map.get(input, "path", Map.get(input, :path, ""))
-
-  defp select_input_field("file_edit", input),
-    do: Map.get(input, "path", Map.get(input, :path, ""))
-
-  defp select_input_field("file_move", input),
-    do: Map.get(input, "path", Map.get(input, :path, ""))
-
-  defp select_input_field("file_delete", input),
-    do: Map.get(input, "path", Map.get(input, :path, ""))
-
-  defp select_input_field("grep", input),
-    do: Map.get(input, "pattern", Map.get(input, :pattern, ""))
-
-  defp select_input_field("glob", input),
-    do: Map.get(input, "pattern", Map.get(input, :pattern, ""))
-
-  defp select_input_field(_tool, input) do
-    inspect(input)
-  end
-
-  # ---------------------------------------------------------------------------
-  # Glob matching
-  # ---------------------------------------------------------------------------
-
-  defp glob_match?("*", _input), do: true
-  defp glob_match?(nil, _input), do: true
-
-  defp glob_match?(pattern, input) when is_binary(pattern) and is_binary(input) do
-    regex_str =
-      pattern
-      |> Regex.escape()
-      |> String.replace("\\*", ".*")
-      |> String.replace("\\?", ".")
-
-    case Regex.compile("^#{regex_str}$") do
-      {:ok, regex} -> String.match?(input, regex)
-      _ -> false
-    end
-  end
-
-  defp glob_match?(_pattern, _input), do: false
-
-  # ---------------------------------------------------------------------------
-  # Helpers
-  # ---------------------------------------------------------------------------
-
-  defp normalize_override(%{tool: _, pattern: _, decision: _} = override), do: override
-
-  defp normalize_override(%{tool: _, pattern: _} = override) do
-    Map.put(override, :decision, :allowed)
-  end
-
-  defp normalize_override(str) when is_binary(str) do
-    parse_override(str)
-    |> Map.put(:decision, :allowed)
-  end
+  defp normalize_permission_mode(mode) when mode in [nil, ""], do: "yolo"
 
   defp normalize_permission_mode(mode) when is_atom(mode),
     do: mode |> Atom.to_string() |> normalize_permission_mode()
 
   defp normalize_permission_mode(mode) when mode in @permission_modes, do: mode
   defp normalize_permission_mode(_mode), do: "ask"
-
-  defp extract_session_id(id) when is_binary(id), do: id
-  defp extract_session_id(%{id: id}) when is_binary(id), do: id
-  defp extract_session_id(%{session_id: id}) when is_binary(id), do: id
-  defp extract_session_id(_), do: nil
 end

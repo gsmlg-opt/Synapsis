@@ -3,7 +3,7 @@ defmodule Synapsis.Agent.Tools.ConformanceTest do
 
   @root Path.expand("../../../../../..", __DIR__)
   @capture Path.join(@root, "scripts/backplane/capture-contracts.exs")
-  @fixture Path.join(@root, "apps/synapsis_agent/test/fixtures/backplane/1.10.31/contracts.json")
+  @fixture Path.join(@root, "apps/synapsis_agent/test/fixtures/backplane/1.10.37/contracts.json")
 
   Code.require_file(Path.join(@root, "scripts/backplane/contracts.exs"))
 
@@ -100,22 +100,40 @@ defmodule Synapsis.Agent.Tools.ConformanceTest do
     assert File.regular?(@fixture)
   end
 
-  test "pinned public APIs include preparation callbacks and collaboration bindings" do
+  test "pinned public APIs include preparation, child interaction and opt-in plugin bindings" do
     apis = Map.new(Capture.snapshot()["provenance"]["public_apis"], &{&1["module"], &1})
     adapter = apis["Elixir.Backplane.AgentRuntime.ConversationAdapter"]
     assert "prepare_tool/2" in adapter["callbacks"]
     assert "prepare_tool/2" in adapter["optional_callbacks"]
 
+    assert "decide/2" in apis["Elixir.Backplane.AgentRuntime.Approval"]["exports"]
+
     collaboration = apis["Elixir.Backplane.AgentRuntime.Codex.MultiAgent"]
     assert "bind_contract/3" in collaboration["exports"]
     assert "call_bound/2" in collaboration["exports"]
+    assert "resolve_interaction/3" in collaboration["exports"]
+    assert "cancel_interaction/3" in collaboration["exports"]
+    assert "subscribe/2" in collaboration["exports"]
+    assert "unsubscribe/2" in collaboration["exports"]
+
+    session = apis["Elixir.Backplane.AgentRuntime.Codex.Session"]
+
+    for export <- ~w(bind/3 adopt_managed_child/3 validate/2 close/2 status/1) do
+      assert export in session["exports"]
+    end
+
+    plugins = apis["Elixir.Backplane.AgentRuntime.Plugins.Session"]
+
+    for export <- ~w(start_link/1 snapshot/1 catalog/2 load_skill/3 resource/3 call_tool/4 stop/1) do
+      assert export in plugins["exports"]
+    end
   end
 
   test "public native profiles and provenance match the deterministic snapshot" do
     snapshot = Capture.snapshot()
     assert File.read!(@fixture) == Capture.encode(snapshot)
     assert Capture.encode(snapshot) == Capture.encode(Capture.snapshot())
-    assert snapshot["provenance"]["version"] == "1.10.31"
+    assert snapshot["provenance"]["version"] == "1.10.37"
 
     for {_family, profile} <- snapshot["profiles"] do
       assert profile["status"] == "admitted"

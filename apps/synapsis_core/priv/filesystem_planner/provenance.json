@@ -1,0 +1,2060 @@
+{
+  "version": 1,
+  "reference": {
+    "repository": "openclaw/openclaw",
+    "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b"
+  },
+  "fixture": {
+    "path": "apps/synapsis_agent/test/fixtures/openclaw/488631c/edit-plans.json",
+    "sha256": "a8336d1ff91930d238e08569fc1fb5ed23f6a542cf6dd90d9a758be1f6f604f0"
+  },
+  "transformation": {
+    "version": 1,
+    "api": "node:module.stripTypeScriptTypes",
+    "mode": "strip",
+    "sourceMap": false,
+    "moduleRewrite": "only static import/export specifiers from the explicit pinned module graph"
+  },
+  "sources": [
+    {
+      "path": "packages/normalization-core/src/balanced-json.ts",
+      "sourceSha256": "8146d5a69413b7d246127842446bc5dee6458524a49278b3400ffab818737ca7",
+      "generated": "vendor/openclaw/packages/normalization-core/src/balanced-json.mjs",
+      "generatedSha256": "c88741e6dd8eda085d7ae6c2708717833028d51ec6404c9e6e62169dd452c699"
+    },
+    {
+      "path": "packages/normalization-core/src/boolean-coercion.ts",
+      "sourceSha256": "80e0ae20af6854c84ca9cb970be7668dbfb6364e091457ad5e05b2fb2f0cfc06",
+      "generated": "vendor/openclaw/packages/normalization-core/src/boolean-coercion.mjs",
+      "generatedSha256": "213192c937c6e8ef9ce1d9fa94c3fc5680be4b4cb34ba2b8e29821e86a10503f"
+    },
+    {
+      "path": "packages/normalization-core/src/cjk-chars.ts",
+      "sourceSha256": "4fd72b01592ca56ac87842841ccac645d1bb4d7268ba89a154c95190d49b41d1",
+      "generated": "vendor/openclaw/packages/normalization-core/src/cjk-chars.mjs",
+      "generatedSha256": "25cb3d6bcc7a7eaabdb4e545250cf03610fb53cc33f0885629a23f0e098f8519"
+    },
+    {
+      "path": "packages/normalization-core/src/code-points.ts",
+      "sourceSha256": "0d1f6eb4f23a2e8b86ae3bbe8a095536e33c1fda6b2d64bfca00a8ad93983d8e",
+      "generated": "vendor/openclaw/packages/normalization-core/src/code-points.mjs",
+      "generatedSha256": "60c9197642df3253ea54d21a94277794a4bcf03e48df8110be402c60265498c5"
+    },
+    {
+      "path": "packages/normalization-core/src/error-coercion.ts",
+      "sourceSha256": "b7f977eb4b8d49b849412df8ea194ea37edc8ff333325e8122bd42ce6a42d629",
+      "generated": "vendor/openclaw/packages/normalization-core/src/error-coercion.mjs",
+      "generatedSha256": "49ef899c15bf0bb688dc02d624180cafc96b3ec6029aed768876bfd2933798a6"
+    },
+    {
+      "path": "packages/normalization-core/src/expect.ts",
+      "sourceSha256": "ea995c248b00f6c9e17bbc9c3085971feeb0ee614d2bd9c8c902e8bc26cacb7a",
+      "generated": "vendor/openclaw/packages/normalization-core/src/expect.mjs",
+      "generatedSha256": "48d70d50b19bbf4cb2c1fffdda884d5a5211c3983881969af2df0fd41be62170"
+    },
+    {
+      "path": "packages/normalization-core/src/format.ts",
+      "sourceSha256": "e629a028da50930716a7991f07741709ac6a481f22be43f558f3252371bdea03",
+      "generated": "vendor/openclaw/packages/normalization-core/src/format.mjs",
+      "generatedSha256": "0af70c219935246be7d622d5c02af9c3847a16b52e9db5d6e4ad676f74e6d3a3"
+    },
+    {
+      "path": "packages/normalization-core/src/index.ts",
+      "sourceSha256": "ae53275a1aba0f142533ad09efcac8fea3ee9ed7db06cfaaff827cec17c1e770",
+      "generated": "vendor/openclaw/packages/normalization-core/src/index.mjs",
+      "generatedSha256": "2d1aac63ca33291b4e36238b2c7c9b92a7a11b5cb2ada171fc8a7917edff4294"
+    },
+    {
+      "path": "packages/normalization-core/src/json-coercion.ts",
+      "sourceSha256": "de0883df2f119da1a06a5d1731a1b68b019fe822b79453b4c6cb2439364431b8",
+      "generated": "vendor/openclaw/packages/normalization-core/src/json-coercion.mjs",
+      "generatedSha256": "a9e665a9fa861eef0f32d303ac1b2e3232853315e1fa29b80bb54ea99e2c652d"
+    },
+    {
+      "path": "packages/normalization-core/src/number-coercion.ts",
+      "sourceSha256": "8c40eca65a8fd1dc3aa40d90c22bff35c3710fcb03d2bc8227864a264d20ddc4",
+      "generated": "vendor/openclaw/packages/normalization-core/src/number-coercion.mjs",
+      "generatedSha256": "e6d23a5f4f177e6e3c0a07b90aefd53f7515589262704fb2e7990c85b29026c1"
+    },
+    {
+      "path": "packages/normalization-core/src/record-coerce.ts",
+      "sourceSha256": "541c179840c2cad4edc5c8103f77cc7f8c6b1ee5ec3e52c7c9fe097b18917f1c",
+      "generated": "vendor/openclaw/packages/normalization-core/src/record-coerce.mjs",
+      "generatedSha256": "353392b0a4d897a84a7a12b36a3e25f063fa02c72ae5ac0792a6ce1e9611a387"
+    },
+    {
+      "path": "packages/normalization-core/src/response-bytes.ts",
+      "sourceSha256": "0b05d3d7fd06dd61c2aa95f871092378fa9f791d0a9a52bc9a67786f15f338fc",
+      "generated": "vendor/openclaw/packages/normalization-core/src/response-bytes.mjs",
+      "generatedSha256": "b1955d5f150314eb88ef9456afc1e742fc4e209130a2ba9205e8ca93e2e4a846"
+    },
+    {
+      "path": "packages/normalization-core/src/stable-stringify.ts",
+      "sourceSha256": "675e4f2f44f143aef1cb0f069e77eac91fe3a3d693202344d503ebd987eee128",
+      "generated": "vendor/openclaw/packages/normalization-core/src/stable-stringify.mjs",
+      "generatedSha256": "b6ca184b08c255a76911fe9585d1a6fc62e9c49ff5f071f4dccd269415b9b9bc"
+    },
+    {
+      "path": "packages/normalization-core/src/string-coerce.ts",
+      "sourceSha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf",
+      "generated": "vendor/openclaw/packages/normalization-core/src/string-coerce.mjs",
+      "generatedSha256": "adf85733aece35eddd1e1c0db1f6ec2778f1974678244131a2620212d35baf5d"
+    },
+    {
+      "path": "packages/normalization-core/src/string-normalization.ts",
+      "sourceSha256": "3150b04501197ef417d2e2d1efa1e3160cc41ddec7505a6f4d756a654138ae3c",
+      "generated": "vendor/openclaw/packages/normalization-core/src/string-normalization.mjs",
+      "generatedSha256": "be938e8144f43ec4e0706d51db7374521060c8b7ca289582b7979bcd9f56fc73"
+    },
+    {
+      "path": "packages/normalization-core/src/text-decoding.ts",
+      "sourceSha256": "f686401f7b95e09aa196f646a99a708c73d6068339d230cce029efa046cd14dc",
+      "generated": "vendor/openclaw/packages/normalization-core/src/text-decoding.mjs",
+      "generatedSha256": "153aa34d43a0ec15a0455844e1b0d52e2c580c74e750570b650ad3db8b2bf177"
+    },
+    {
+      "path": "packages/normalization-core/src/utf16-slice.ts",
+      "sourceSha256": "12fd3212b08522a1523263c92f654151ad01605ee48a0ff58a1256889fb7cb5f",
+      "generated": "vendor/openclaw/packages/normalization-core/src/utf16-slice.mjs",
+      "generatedSha256": "248e5e359ce0025a5de9366aac4a1fea449235459ace1e29c3eddc3199864faf"
+    },
+    {
+      "path": "src/agents/line-endings.ts",
+      "sourceSha256": "ee524e9a8205f430b90571091b2095ec496faa62ecc73a1851a5067521b48fad",
+      "generated": "vendor/openclaw/src/agents/line-endings.mjs",
+      "generatedSha256": "bab9d45f3eb862f83fe12e8be2ecf8929faf15f60f082bf70e506610c8e17157"
+    },
+    {
+      "path": "src/agents/sessions/tools/edit-diff.ts",
+      "sourceSha256": "a3e7ee440f55d0d4d6479b7a27219358e18e1e00a66acbc9e57425b7544e33fc",
+      "generated": "vendor/openclaw/src/agents/sessions/tools/edit-diff.mjs",
+      "generatedSha256": "bdf10a5be7f868e1a7401760efb0947c16cb5ed8fbfd7b17af9b00ca82f43644"
+    },
+    {
+      "path": "src/agents/sessions/tools/edit-replacements.ts",
+      "sourceSha256": "98748d589728c943599fc304e087bbaf216385188d6bc92dfd339a01639be8ba",
+      "generated": "vendor/openclaw/src/agents/sessions/tools/edit-replacements.mjs",
+      "generatedSha256": "24c8da9008f5372612bfe462a8d5e393347e0a454ea3f24fe5ff46994bd96d41"
+    },
+    {
+      "path": "src/agents/sessions/tools/file-diff.ts",
+      "sourceSha256": "d0fd2940666cae5607dfe6023c68312b2f7b0721f485e760a8a292404878d88a",
+      "generated": "vendor/openclaw/src/agents/sessions/tools/file-diff.mjs",
+      "generatedSha256": "87d3c8bc1ef7288be92782133a76a25f84195f3328bca21aa5168a4d0a14c6a6"
+    },
+    {
+      "path": "src/agents/tool-input-error.ts",
+      "sourceSha256": "70582ae2f67d5d23ce514ee93f249e2c659ddf32e7bf70b1692dcadcf03af7bc",
+      "generated": "vendor/openclaw/src/agents/tool-input-error.mjs",
+      "generatedSha256": "6252860751b97bd73f694138e7543a593d66077b705cdc4d94972d9dcf39253e"
+    },
+    {
+      "path": "src/shared/levenshtein-distance.ts",
+      "sourceSha256": "83b6499c03c700fba9362d21f90e9d7415741d000bce350585828fd42cb549c0",
+      "generated": "vendor/openclaw/src/shared/levenshtein-distance.mjs",
+      "generatedSha256": "505e6e8c7c61091f95e6236d9e7c69a114a6c1d44dc3bbc5d6352ffda9258c47"
+    }
+  ],
+  "host": [
+    {
+      "path": "packages/tool-host/src/filesystem/planner.mjs",
+      "generated": "planner.mjs",
+      "sourceSha256": "bca9bda7912e46530f869fa5195ab16b29902683ba0bcea03b416ac202642f2f",
+      "generatedSha256": "bca9bda7912e46530f869fa5195ab16b29902683ba0bcea03b416ac202642f2f"
+    },
+    {
+      "path": "packages/tool-host/src/filesystem/worker.mjs",
+      "generated": "worker.mjs",
+      "sourceSha256": "cd8a1036749f0cc52f68d61a21e3bf6f04ee480f0ef99e7a6bfc65ea9f38ec09",
+      "generatedSha256": "cd8a1036749f0cc52f68d61a21e3bf6f04ee480f0ef99e7a6bfc65ea9f38ec09"
+    },
+    {
+      "path": "packages/tool-host/src/filesystem/stdio.mjs",
+      "generated": "stdio.mjs",
+      "sourceSha256": "2abc32a82ee693988765fc413036228324289d25f2502ed2a9978a108f2b42fe",
+      "generatedSha256": "2abc32a82ee693988765fc413036228324289d25f2502ed2a9978a108f2b42fe"
+    }
+  ],
+  "sourceLicense": {
+    "id": "MIT",
+    "path": "LICENSE",
+    "sha256": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4"
+  },
+  "aliases": {
+    "@openclaw/normalization-core": "packages/normalization-core/src/index.ts",
+    "@openclaw/normalization-core/utf16-slice": "packages/normalization-core/src/utf16-slice.ts"
+  },
+  "aliasEvidence": [
+    {
+      "specifier": "@openclaw/normalization-core",
+      "target": "packages/normalization-core/src/index.ts",
+      "originalMapping": "./packages/normalization-core/src/index.ts",
+      "path": "tsconfig.json",
+      "sourceSha256": "7ccd7e1a86ea71116777e6fc8836b050c0b0c3307ea04a1738663a03ddb798f5"
+    },
+    {
+      "specifier": "@openclaw/normalization-core/utf16-slice",
+      "target": "packages/normalization-core/src/utf16-slice.ts",
+      "originalMapping": "./packages/normalization-core/src/utf16-slice.ts",
+      "path": "tsconfig.json",
+      "sourceSha256": "7ccd7e1a86ea71116777e6fc8836b050c0b0c3307ea04a1738663a03ddb798f5"
+    }
+  ],
+  "diff": {
+    "name": "diff",
+    "version": "9.0.0",
+    "integrity": "sha512-svtcdpS8CgJyqAjEQIXdb3OjhFVVYjzGAPO8WGCmRbrml64SPw/jJD4GoE98aR7r25A0XcgrK3F02yw9R/vhQw==",
+    "entry": {
+      "path": "libesm/index.js",
+      "originalExport": "./libesm/index.js",
+      "conditions": [
+        "import",
+        "default"
+      ],
+      "manifestSha256": "1c625fe9bba43722c8d8fbd8c2b70edcab5473d75f8d66a862f9800b415aa014"
+    },
+    "originalDependency": {
+      "manifest": "package.json",
+      "manifestSha256": "5f3a32b44b1d1a3eb9e8628845e195d054e4e41b28b1349d7dbc7dff723d9920",
+      "lock": "pnpm-lock.yaml",
+      "lockSha256": "8ee0f9e7c0bcdecec3d791dff04f2df1f5c608c60e57fbafaf241c765eebd8d7"
+    },
+    "archive": {
+      "path": "diff-9.0.0.tgz",
+      "url": "https://registry.npmjs.org/diff/-/diff-9.0.0.tgz",
+      "bytes": 152500,
+      "sha256": "b898bf23c95594607576e25ddd4013f1d51ed0e862aaf0732815830c87b3b58f",
+      "integrity": "sha512-svtcdpS8CgJyqAjEQIXdb3OjhFVVYjzGAPO8WGCmRbrml64SPw/jJD4GoE98aR7r25A0XcgrK3F02yw9R/vhQw=="
+    },
+    "license": {
+      "id": "BSD-3-Clause",
+      "path": "LICENSE",
+      "sha256": "eda81a415869e67809f6a9f3fd6056062cb83a462118e07eec5e92b2e0c40ce9"
+    },
+    "files": [
+      {
+        "path": "CONTRIBUTING.md",
+        "sha256": "b5cc876e0e69332f1e8aa27f32ce9932d56c571692a05158d34e99b85f84d8b4"
+      },
+      {
+        "path": "LICENSE",
+        "sha256": "eda81a415869e67809f6a9f3fd6056062cb83a462118e07eec5e92b2e0c40ce9"
+      },
+      {
+        "path": "README.md",
+        "sha256": "79d02cee5a2ae6d2634f9a513f08360050ec5b8cefdb6f0079ac82c88a15f044"
+      },
+      {
+        "path": "dist/diff.js",
+        "sha256": "5773c7efb34715bb9a9b6a9ebf5b0ff00f85f9efa6d9fd69fc65e181364f7b2e"
+      },
+      {
+        "path": "dist/diff.min.js",
+        "sha256": "b51a9d2885f2c090dc97b981027395f7e7e6558a46c75ae3747db267913a89ab"
+      },
+      {
+        "path": "eslint.config.mjs",
+        "sha256": "701aca397f6a2842dda8f0cdfaeb732b90e1617336f75aa09078abd69e940e8d"
+      },
+      {
+        "path": "libcjs/convert/dmp.d.ts",
+        "sha256": "c49a2c2b75a2c37ee620759e00517d2a5b37231432e6606cbb9a6493591eb6c5"
+      },
+      {
+        "path": "libcjs/convert/dmp.d.ts.map",
+        "sha256": "5262035a6160dc4a684530b9d103fa814862ecbfd721c5024c0367d909bfe9d6"
+      },
+      {
+        "path": "libcjs/convert/dmp.js",
+        "sha256": "492e1ec0ffb5ea0f312fc85e1820aef743c80eb9917ca4e1f767cc55debb1aff"
+      },
+      {
+        "path": "libcjs/convert/xml.d.ts",
+        "sha256": "b342336b75a5615111f5dba9bfefe4329015473c3fb61c1fb3d9257457aac201"
+      },
+      {
+        "path": "libcjs/convert/xml.d.ts.map",
+        "sha256": "918618579cd70597d08cf7ce493013958ffbc0af79039a35fc24ce2ca8b3780a"
+      },
+      {
+        "path": "libcjs/convert/xml.js",
+        "sha256": "16865f6ff0686110fd5c05eb2b8c92125fe00b39222b4375c086bbc17b29c5eb"
+      },
+      {
+        "path": "libcjs/diff/array.d.ts",
+        "sha256": "0a5634f7bbf1e77f453a8469795472ceef410f9a2a6902a38e830ee997e11aad"
+      },
+      {
+        "path": "libcjs/diff/array.d.ts.map",
+        "sha256": "2d035d34ce7c9f6ed87f20ee3fe98e4a2aaab1d0013cf8971110b1bbb5823bda"
+      },
+      {
+        "path": "libcjs/diff/array.js",
+        "sha256": "57857ba295ddf6bf6049a648e0a148578acab321340f6f48ca3ca2c3ffc9c928"
+      },
+      {
+        "path": "libcjs/diff/base.d.ts",
+        "sha256": "14cad32342459938e4dc3e43290c21815e8c50ff9987fbb6a707c20fab488a0c"
+      },
+      {
+        "path": "libcjs/diff/base.d.ts.map",
+        "sha256": "f2586bf2f20ca3b260123b444adb5e7f8155c9f32346de79c15bed91b9e8035c"
+      },
+      {
+        "path": "libcjs/diff/base.js",
+        "sha256": "9897b9222fa9b54c8bd9591932a8e753315cdeb702dcf94bc033b5f403c87dbf"
+      },
+      {
+        "path": "libcjs/diff/character.d.ts",
+        "sha256": "4bd23b962c6702f2d842017b6fcbe35d63899e4524ff6af4facc74598c113522"
+      },
+      {
+        "path": "libcjs/diff/character.d.ts.map",
+        "sha256": "b67af1c7447f40ea9f095bedcb148e97323cdac1af17ef42029ae2ece85c8ed2"
+      },
+      {
+        "path": "libcjs/diff/character.js",
+        "sha256": "4f78d19e7c9e76532b825e0e5fdd3caf72b10b355e616a513439c6c286c4d3fc"
+      },
+      {
+        "path": "libcjs/diff/css.d.ts",
+        "sha256": "60bd054853cda7ee357f147bf903e2f88cd78a9b3e37732c218a3493ae226986"
+      },
+      {
+        "path": "libcjs/diff/css.d.ts.map",
+        "sha256": "cda76c7d614cca884b2548d7db489c7d273add402d252281130249f0c8c3dd16"
+      },
+      {
+        "path": "libcjs/diff/css.js",
+        "sha256": "e95da54d7873638cf7410af7a94632096b7636727c80bedbcf3b77588c310439"
+      },
+      {
+        "path": "libcjs/diff/json.d.ts",
+        "sha256": "fdd3335862781599d7de3dc5659b5a8135aa3954b9c1492723432bc0d484e85e"
+      },
+      {
+        "path": "libcjs/diff/json.d.ts.map",
+        "sha256": "5d574296d689bab498fad7bd5d68f85e726cc670bb8d8893358b418e1b81f997"
+      },
+      {
+        "path": "libcjs/diff/json.js",
+        "sha256": "a450d696f3e928efc5ddefab7bb700cdf9059e39dc6b1c0754feda7c58350840"
+      },
+      {
+        "path": "libcjs/diff/line.d.ts",
+        "sha256": "8e7155b1873201785456300ffcdd7f0bcc869f995b7df50ad27ea33740b122a3"
+      },
+      {
+        "path": "libcjs/diff/line.d.ts.map",
+        "sha256": "ce4b4da26c3d142302d7d4961995f8783d795958036f336ddb9c6131122aad21"
+      },
+      {
+        "path": "libcjs/diff/line.js",
+        "sha256": "a456bb324508d58a3dd0db8fde805fe9913584a52c0bb31d73ae319a3f170021"
+      },
+      {
+        "path": "libcjs/diff/sentence.d.ts",
+        "sha256": "d449145a9a77065e6438e42469cad4ddb83b92c53be6ec94ad2a87b21be3249e"
+      },
+      {
+        "path": "libcjs/diff/sentence.d.ts.map",
+        "sha256": "02ba8e2ccc9dbc51dd466151d13120fa66bc44ddf2d8f3b5160b554c26d7b10e"
+      },
+      {
+        "path": "libcjs/diff/sentence.js",
+        "sha256": "c1da80a96f63b0c7673880359d7c79ce5bd161eead23bd9e7f0423e6b31c751b"
+      },
+      {
+        "path": "libcjs/diff/word.d.ts",
+        "sha256": "3f34c292613d80c8efdc20534366cd9cb08ff7cb60c92bef5658826ee095bc69"
+      },
+      {
+        "path": "libcjs/diff/word.d.ts.map",
+        "sha256": "cc45ae7ed5dedee0779c81a180b8d4eba238a7baf85af256c1b2f75aea5a9141"
+      },
+      {
+        "path": "libcjs/diff/word.js",
+        "sha256": "be7d90a270ce7a254c800f6c5ffe03f86df5f2a2f18e4ea6d605127df7654f36"
+      },
+      {
+        "path": "libcjs/index.d.ts",
+        "sha256": "c3ee2fb2465660509cd53a26c5fa8df4b5f4d8d34d84f8c58b77656d714ad4a8"
+      },
+      {
+        "path": "libcjs/index.d.ts.map",
+        "sha256": "198e22bfb5f5c3d5e46227a817f4d3019bbcd86267f87b2df537854b8dd992d2"
+      },
+      {
+        "path": "libcjs/index.js",
+        "sha256": "49e8adffb233644578b4aef1c4fefa0b11da5d9fb6abe1f26c40eef2313f2c41"
+      },
+      {
+        "path": "libcjs/package.json",
+        "sha256": "560ea6123d6cdf8e30c003ddb5f9cbcc8b4343df27eeb46cecdc645782aa67b4"
+      },
+      {
+        "path": "libcjs/patch/apply.d.ts",
+        "sha256": "688962814dc9d6a47ba11ec5ded89fb6cc7e82a4390c23d51e6f479f80760049"
+      },
+      {
+        "path": "libcjs/patch/apply.d.ts.map",
+        "sha256": "4a1f620f1a25e7ddd7a3f6537e5c0ebd56c9f023514f8de2fdfa1d8bf16dafa0"
+      },
+      {
+        "path": "libcjs/patch/apply.js",
+        "sha256": "837f20a666db68ab084ccf5069172482fc1256f1e9ff95a11d7ddb53eb2a175d"
+      },
+      {
+        "path": "libcjs/patch/create.d.ts",
+        "sha256": "299bd9b268b5bf44c02721cdc6d59cb6cb1ee3c628721460ce491d6c2a2f5045"
+      },
+      {
+        "path": "libcjs/patch/create.d.ts.map",
+        "sha256": "e66113474ce37e287db490536547a2c6a3c77c184c86cbc8d125f2346e95ea82"
+      },
+      {
+        "path": "libcjs/patch/create.js",
+        "sha256": "b6142fc6de57271f6d7e0ccdf2621264f12a3925e210ab41b7219cc670cefa38"
+      },
+      {
+        "path": "libcjs/patch/line-endings.d.ts",
+        "sha256": "0eb5ff25a78fcc2a2088e0f28e36dfffce1a83a0accb6ed903f8b81f3964c14c"
+      },
+      {
+        "path": "libcjs/patch/line-endings.d.ts.map",
+        "sha256": "166e856902edd31382a590d19c99584dbcc2482ae70270699e5da797741b2ad4"
+      },
+      {
+        "path": "libcjs/patch/line-endings.js",
+        "sha256": "a2cddea5004a8c274692061fff69539cf6b56b18da1bd17fd409e7450c4b8a6f"
+      },
+      {
+        "path": "libcjs/patch/parse.d.ts",
+        "sha256": "222809ec2ea4e3c84748f0e19a3337df924de02a677c0fef728da0f345c2d798"
+      },
+      {
+        "path": "libcjs/patch/parse.d.ts.map",
+        "sha256": "23afb0bc1a65e8bc21a2a62ce7e2d34abcbbef673d7ef9cdb2059ac093f6c2b4"
+      },
+      {
+        "path": "libcjs/patch/parse.js",
+        "sha256": "d64b16ba5a9eeca2116e436a6e2dbe045ebc8420475a759e1c566eb70ea944dd"
+      },
+      {
+        "path": "libcjs/patch/reverse.d.ts",
+        "sha256": "1d6fe13f2a2eb6d221907f9c6e29b32cc13e9c7593372996c1d34b3c6bd39b8a"
+      },
+      {
+        "path": "libcjs/patch/reverse.d.ts.map",
+        "sha256": "7060a9b2abdd16a22b803a5c90e2de9529c8a592b9fa78dab40342b422dab451"
+      },
+      {
+        "path": "libcjs/patch/reverse.js",
+        "sha256": "492cdd3bbc7accf15d7b183c9c47f63adfe8a0c934f859bd8876e57a43602060"
+      },
+      {
+        "path": "libcjs/types.d.ts",
+        "sha256": "c800ee866627d523f3b0633f97112b0ea942f64b23127a9f6efe64ee23447a7c"
+      },
+      {
+        "path": "libcjs/types.d.ts.map",
+        "sha256": "26fd7696da7cb84021ef8a18370a410f9601f46f089ee93ccb40a71c47c54f72"
+      },
+      {
+        "path": "libcjs/types.js",
+        "sha256": "d43aa81f5bc89faa359e0f97c814ba25155591ff078fbb9bfd40f8c7c9683230"
+      },
+      {
+        "path": "libcjs/util/array.d.ts",
+        "sha256": "9b181c0e2b265d7c12205426643b366e7850e789dd9cdf48dd2452fe806e148d"
+      },
+      {
+        "path": "libcjs/util/array.d.ts.map",
+        "sha256": "ed0fe147615d1348c03b2d7f4433f900fde05a1a0abbeb841da2d8f1d3043071"
+      },
+      {
+        "path": "libcjs/util/array.js",
+        "sha256": "e1d66b3da1772e05bf8ce36b1033682910008a13a4c821f548df09b3a134094f"
+      },
+      {
+        "path": "libcjs/util/distance-iterator.d.ts",
+        "sha256": "be1a5aebf79d0f7739f8c27a65393a23723535f39de3ab62ab088d22937bf9a7"
+      },
+      {
+        "path": "libcjs/util/distance-iterator.d.ts.map",
+        "sha256": "d937c682f41787763b5f7ce5d19072e9a12c32c985554e2755106a4be22572a5"
+      },
+      {
+        "path": "libcjs/util/distance-iterator.js",
+        "sha256": "efd38507d6f47459cf544098df0630cd1002b13985eb64d3012f0b3259e35f4e"
+      },
+      {
+        "path": "libcjs/util/params.d.ts",
+        "sha256": "90b80eea50f29206d12cff5377a443c97b69c0f0f766edf78b5e5b8d90903b83"
+      },
+      {
+        "path": "libcjs/util/params.d.ts.map",
+        "sha256": "af149eeab485d9ce8a49deba23ff42717d672acc81a939c4bbab97166a2a5f34"
+      },
+      {
+        "path": "libcjs/util/params.js",
+        "sha256": "247420b57246f4406ab2c84983397171808c212d16137d4b9fbf04ee49063823"
+      },
+      {
+        "path": "libcjs/util/string.d.ts",
+        "sha256": "26c1c2ff9bf23092a17d2279654a572211357d6e62acb1c9ec7a2063df5ec613"
+      },
+      {
+        "path": "libcjs/util/string.d.ts.map",
+        "sha256": "3b4d262f26a214645dd70c9c9f35fd6b587155b015e801e33850d27f9c914158"
+      },
+      {
+        "path": "libcjs/util/string.js",
+        "sha256": "12cc9eecf8d1cc4c9c76ddcd475564599c5ed270cb05c4c111e80a6409afafda"
+      },
+      {
+        "path": "libesm/convert/dmp.d.ts",
+        "sha256": "c49a2c2b75a2c37ee620759e00517d2a5b37231432e6606cbb9a6493591eb6c5"
+      },
+      {
+        "path": "libesm/convert/dmp.d.ts.map",
+        "sha256": "5262035a6160dc4a684530b9d103fa814862ecbfd721c5024c0367d909bfe9d6"
+      },
+      {
+        "path": "libesm/convert/dmp.js",
+        "sha256": "05bad2211249703a43f2d4250fb0e0831511a32aed763cd21890c1b5ee7032c4"
+      },
+      {
+        "path": "libesm/convert/xml.d.ts",
+        "sha256": "b342336b75a5615111f5dba9bfefe4329015473c3fb61c1fb3d9257457aac201"
+      },
+      {
+        "path": "libesm/convert/xml.d.ts.map",
+        "sha256": "918618579cd70597d08cf7ce493013958ffbc0af79039a35fc24ce2ca8b3780a"
+      },
+      {
+        "path": "libesm/convert/xml.js",
+        "sha256": "c9dfceeb2ab8248f6dee37f0ce253317939fe1302ffb4483ccf777400a3ac552"
+      },
+      {
+        "path": "libesm/diff/array.d.ts",
+        "sha256": "0a5634f7bbf1e77f453a8469795472ceef410f9a2a6902a38e830ee997e11aad"
+      },
+      {
+        "path": "libesm/diff/array.d.ts.map",
+        "sha256": "2d035d34ce7c9f6ed87f20ee3fe98e4a2aaab1d0013cf8971110b1bbb5823bda"
+      },
+      {
+        "path": "libesm/diff/array.js",
+        "sha256": "5bcc1320c7ee74e565421a556d81ed3fdd82ff2f366e6151beebac6b425f528f"
+      },
+      {
+        "path": "libesm/diff/base.d.ts",
+        "sha256": "14cad32342459938e4dc3e43290c21815e8c50ff9987fbb6a707c20fab488a0c"
+      },
+      {
+        "path": "libesm/diff/base.d.ts.map",
+        "sha256": "f2586bf2f20ca3b260123b444adb5e7f8155c9f32346de79c15bed91b9e8035c"
+      },
+      {
+        "path": "libesm/diff/base.js",
+        "sha256": "faa81734df6ea7f8034efc5572ad1bbf19c50b300fdd183baf0d7813c5eec3b2"
+      },
+      {
+        "path": "libesm/diff/character.d.ts",
+        "sha256": "4bd23b962c6702f2d842017b6fcbe35d63899e4524ff6af4facc74598c113522"
+      },
+      {
+        "path": "libesm/diff/character.d.ts.map",
+        "sha256": "b67af1c7447f40ea9f095bedcb148e97323cdac1af17ef42029ae2ece85c8ed2"
+      },
+      {
+        "path": "libesm/diff/character.js",
+        "sha256": "75677c2b3c5990099675493b415ce59f92f5de4709de59fa481b9fb563168deb"
+      },
+      {
+        "path": "libesm/diff/css.d.ts",
+        "sha256": "60bd054853cda7ee357f147bf903e2f88cd78a9b3e37732c218a3493ae226986"
+      },
+      {
+        "path": "libesm/diff/css.d.ts.map",
+        "sha256": "cda76c7d614cca884b2548d7db489c7d273add402d252281130249f0c8c3dd16"
+      },
+      {
+        "path": "libesm/diff/css.js",
+        "sha256": "db85fa43d4e4d4bbe3707d9e575de338589deb9a4cc8243c7f15fa5e2c87724d"
+      },
+      {
+        "path": "libesm/diff/json.d.ts",
+        "sha256": "fdd3335862781599d7de3dc5659b5a8135aa3954b9c1492723432bc0d484e85e"
+      },
+      {
+        "path": "libesm/diff/json.d.ts.map",
+        "sha256": "5d574296d689bab498fad7bd5d68f85e726cc670bb8d8893358b418e1b81f997"
+      },
+      {
+        "path": "libesm/diff/json.js",
+        "sha256": "c97ec8c04a7c4fc37a605d5863018ead1cac1c19128a7333bcb19d33fa6771b7"
+      },
+      {
+        "path": "libesm/diff/line.d.ts",
+        "sha256": "8e7155b1873201785456300ffcdd7f0bcc869f995b7df50ad27ea33740b122a3"
+      },
+      {
+        "path": "libesm/diff/line.d.ts.map",
+        "sha256": "ce4b4da26c3d142302d7d4961995f8783d795958036f336ddb9c6131122aad21"
+      },
+      {
+        "path": "libesm/diff/line.js",
+        "sha256": "e3ef2d8c8c3a56f6b9fb04609f545b2aae2f84a02c31c5de3201aef1b0545f90"
+      },
+      {
+        "path": "libesm/diff/sentence.d.ts",
+        "sha256": "d449145a9a77065e6438e42469cad4ddb83b92c53be6ec94ad2a87b21be3249e"
+      },
+      {
+        "path": "libesm/diff/sentence.d.ts.map",
+        "sha256": "02ba8e2ccc9dbc51dd466151d13120fa66bc44ddf2d8f3b5160b554c26d7b10e"
+      },
+      {
+        "path": "libesm/diff/sentence.js",
+        "sha256": "dad3b5952b2d8f29d8a01618580661c1757ed0bcce5e2af969b17eff613ca93b"
+      },
+      {
+        "path": "libesm/diff/word.d.ts",
+        "sha256": "3f34c292613d80c8efdc20534366cd9cb08ff7cb60c92bef5658826ee095bc69"
+      },
+      {
+        "path": "libesm/diff/word.d.ts.map",
+        "sha256": "cc45ae7ed5dedee0779c81a180b8d4eba238a7baf85af256c1b2f75aea5a9141"
+      },
+      {
+        "path": "libesm/diff/word.js",
+        "sha256": "c1d6a6c52ef517e4ea9df6d71465fa520ce677d1b4e127425e3c2d8cf14f7a22"
+      },
+      {
+        "path": "libesm/index.d.ts",
+        "sha256": "c3ee2fb2465660509cd53a26c5fa8df4b5f4d8d34d84f8c58b77656d714ad4a8"
+      },
+      {
+        "path": "libesm/index.d.ts.map",
+        "sha256": "198e22bfb5f5c3d5e46227a817f4d3019bbcd86267f87b2df537854b8dd992d2"
+      },
+      {
+        "path": "libesm/index.js",
+        "sha256": "b1f400fd24da44377867ede7ab847a34940423f8bbf3fc5475d8c7647759a2aa"
+      },
+      {
+        "path": "libesm/package.json",
+        "sha256": "5e433a0d28d7f422b2c6fbc3058b931d19d29bdc49c154b312099680e992e3f5"
+      },
+      {
+        "path": "libesm/patch/apply.d.ts",
+        "sha256": "688962814dc9d6a47ba11ec5ded89fb6cc7e82a4390c23d51e6f479f80760049"
+      },
+      {
+        "path": "libesm/patch/apply.d.ts.map",
+        "sha256": "4a1f620f1a25e7ddd7a3f6537e5c0ebd56c9f023514f8de2fdfa1d8bf16dafa0"
+      },
+      {
+        "path": "libesm/patch/apply.js",
+        "sha256": "f8096efdfda914e9b85a8cb270dfb1a57f0d483656368327c89b80098955589e"
+      },
+      {
+        "path": "libesm/patch/create.d.ts",
+        "sha256": "299bd9b268b5bf44c02721cdc6d59cb6cb1ee3c628721460ce491d6c2a2f5045"
+      },
+      {
+        "path": "libesm/patch/create.d.ts.map",
+        "sha256": "e66113474ce37e287db490536547a2c6a3c77c184c86cbc8d125f2346e95ea82"
+      },
+      {
+        "path": "libesm/patch/create.js",
+        "sha256": "f29a276d2b036858b2f6a509b1e6e147efa572d4820317ee7285d6fe4f2888de"
+      },
+      {
+        "path": "libesm/patch/line-endings.d.ts",
+        "sha256": "0eb5ff25a78fcc2a2088e0f28e36dfffce1a83a0accb6ed903f8b81f3964c14c"
+      },
+      {
+        "path": "libesm/patch/line-endings.d.ts.map",
+        "sha256": "166e856902edd31382a590d19c99584dbcc2482ae70270699e5da797741b2ad4"
+      },
+      {
+        "path": "libesm/patch/line-endings.js",
+        "sha256": "65af590b9426800782d692a7b1923ad1d6d6bbc1c74e9863053c6cfe1d97f3f4"
+      },
+      {
+        "path": "libesm/patch/parse.d.ts",
+        "sha256": "222809ec2ea4e3c84748f0e19a3337df924de02a677c0fef728da0f345c2d798"
+      },
+      {
+        "path": "libesm/patch/parse.d.ts.map",
+        "sha256": "23afb0bc1a65e8bc21a2a62ce7e2d34abcbbef673d7ef9cdb2059ac093f6c2b4"
+      },
+      {
+        "path": "libesm/patch/parse.js",
+        "sha256": "0d8c9a406b8ee41be2e1e6d32f7ccece5c04f6995e6f1f71d4bf4485a5c1bce9"
+      },
+      {
+        "path": "libesm/patch/reverse.d.ts",
+        "sha256": "1d6fe13f2a2eb6d221907f9c6e29b32cc13e9c7593372996c1d34b3c6bd39b8a"
+      },
+      {
+        "path": "libesm/patch/reverse.d.ts.map",
+        "sha256": "7060a9b2abdd16a22b803a5c90e2de9529c8a592b9fa78dab40342b422dab451"
+      },
+      {
+        "path": "libesm/patch/reverse.js",
+        "sha256": "8d4e2d14cff3632a9c9a6d42d52aca16593d97812efe8c185e39094ceb7badf2"
+      },
+      {
+        "path": "libesm/types.d.ts",
+        "sha256": "c800ee866627d523f3b0633f97112b0ea942f64b23127a9f6efe64ee23447a7c"
+      },
+      {
+        "path": "libesm/types.d.ts.map",
+        "sha256": "26fd7696da7cb84021ef8a18370a410f9601f46f089ee93ccb40a71c47c54f72"
+      },
+      {
+        "path": "libesm/types.js",
+        "sha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"
+      },
+      {
+        "path": "libesm/util/array.d.ts",
+        "sha256": "9b181c0e2b265d7c12205426643b366e7850e789dd9cdf48dd2452fe806e148d"
+      },
+      {
+        "path": "libesm/util/array.d.ts.map",
+        "sha256": "ed0fe147615d1348c03b2d7f4433f900fde05a1a0abbeb841da2d8f1d3043071"
+      },
+      {
+        "path": "libesm/util/array.js",
+        "sha256": "8bbc0246a6d709eb776531a7a2062066a77916643364945c1a713a00eca33e46"
+      },
+      {
+        "path": "libesm/util/distance-iterator.d.ts",
+        "sha256": "be1a5aebf79d0f7739f8c27a65393a23723535f39de3ab62ab088d22937bf9a7"
+      },
+      {
+        "path": "libesm/util/distance-iterator.d.ts.map",
+        "sha256": "d937c682f41787763b5f7ce5d19072e9a12c32c985554e2755106a4be22572a5"
+      },
+      {
+        "path": "libesm/util/distance-iterator.js",
+        "sha256": "41e12ebbedb76278e3bd37ede510e009a5952897a3e748e9673b4e5c8ae660e5"
+      },
+      {
+        "path": "libesm/util/params.d.ts",
+        "sha256": "90b80eea50f29206d12cff5377a443c97b69c0f0f766edf78b5e5b8d90903b83"
+      },
+      {
+        "path": "libesm/util/params.d.ts.map",
+        "sha256": "af149eeab485d9ce8a49deba23ff42717d672acc81a939c4bbab97166a2a5f34"
+      },
+      {
+        "path": "libesm/util/params.js",
+        "sha256": "bb76a1c299071b6f8314bb7195ad701af06f092c629aed8b4fef4a7474ab3759"
+      },
+      {
+        "path": "libesm/util/string.d.ts",
+        "sha256": "26c1c2ff9bf23092a17d2279654a572211357d6e62acb1c9ec7a2063df5ec613"
+      },
+      {
+        "path": "libesm/util/string.d.ts.map",
+        "sha256": "3b4d262f26a214645dd70c9c9f35fd6b587155b015e801e33850d27f9c914158"
+      },
+      {
+        "path": "libesm/util/string.js",
+        "sha256": "0836eacdebdb30c8aba0e898f9c7a45e236d036848ccfb058f56745f5ff020d3"
+      },
+      {
+        "path": "package.json",
+        "sha256": "1c625fe9bba43722c8d8fbd8c2b70edcab5473d75f8d66a862f9800b415aa014"
+      },
+      {
+        "path": "release-notes.md",
+        "sha256": "5502028b897961ddcc3390af0998a0611eac8bbedb54029867c99a68aad5a704"
+      }
+    ],
+    "esmModules": [
+      {
+        "path": "libesm/convert/dmp.js",
+        "sourceSha256": "05bad2211249703a43f2d4250fb0e0831511a32aed763cd21890c1b5ee7032c4",
+        "oracleStatus": "evaluated"
+      },
+      {
+        "path": "libesm/convert/xml.js",
+        "sourceSha256": "c9dfceeb2ab8248f6dee37f0ce253317939fe1302ffb4483ccf777400a3ac552",
+        "oracleStatus": "evaluated"
+      },
+      {
+        "path": "libesm/diff/array.js",
+        "sourceSha256": "5bcc1320c7ee74e565421a556d81ed3fdd82ff2f366e6151beebac6b425f528f",
+        "oracleStatus": "evaluated"
+      },
+      {
+        "path": "libesm/diff/base.js",
+        "sourceSha256": "faa81734df6ea7f8034efc5572ad1bbf19c50b300fdd183baf0d7813c5eec3b2",
+        "oracleStatus": "evaluated"
+      },
+      {
+        "path": "libesm/diff/character.js",
+        "sourceSha256": "75677c2b3c5990099675493b415ce59f92f5de4709de59fa481b9fb563168deb",
+        "oracleStatus": "evaluated"
+      },
+      {
+        "path": "libesm/diff/css.js",
+        "sourceSha256": "db85fa43d4e4d4bbe3707d9e575de338589deb9a4cc8243c7f15fa5e2c87724d",
+        "oracleStatus": "evaluated"
+      },
+      {
+        "path": "libesm/diff/json.js",
+        "sourceSha256": "c97ec8c04a7c4fc37a605d5863018ead1cac1c19128a7333bcb19d33fa6771b7",
+        "oracleStatus": "evaluated"
+      },
+      {
+        "path": "libesm/diff/line.js",
+        "sourceSha256": "e3ef2d8c8c3a56f6b9fb04609f545b2aae2f84a02c31c5de3201aef1b0545f90",
+        "oracleStatus": "evaluated"
+      },
+      {
+        "path": "libesm/diff/sentence.js",
+        "sourceSha256": "dad3b5952b2d8f29d8a01618580661c1757ed0bcce5e2af969b17eff613ca93b",
+        "oracleStatus": "evaluated"
+      },
+      {
+        "path": "libesm/diff/word.js",
+        "sourceSha256": "c1d6a6c52ef517e4ea9df6d71465fa520ce677d1b4e127425e3c2d8cf14f7a22",
+        "oracleStatus": "evaluated"
+      },
+      {
+        "path": "libesm/index.js",
+        "sourceSha256": "b1f400fd24da44377867ede7ab847a34940423f8bbf3fc5475d8c7647759a2aa",
+        "oracleStatus": "evaluated"
+      },
+      {
+        "path": "libesm/patch/apply.js",
+        "sourceSha256": "f8096efdfda914e9b85a8cb270dfb1a57f0d483656368327c89b80098955589e",
+        "oracleStatus": "evaluated"
+      },
+      {
+        "path": "libesm/patch/create.js",
+        "sourceSha256": "f29a276d2b036858b2f6a509b1e6e147efa572d4820317ee7285d6fe4f2888de",
+        "oracleStatus": "evaluated"
+      },
+      {
+        "path": "libesm/patch/line-endings.js",
+        "sourceSha256": "65af590b9426800782d692a7b1923ad1d6d6bbc1c74e9863053c6cfe1d97f3f4",
+        "oracleStatus": "evaluated"
+      },
+      {
+        "path": "libesm/patch/parse.js",
+        "sourceSha256": "0d8c9a406b8ee41be2e1e6d32f7ccece5c04f6995e6f1f71d4bf4485a5c1bce9",
+        "oracleStatus": "evaluated"
+      },
+      {
+        "path": "libesm/patch/reverse.js",
+        "sourceSha256": "8d4e2d14cff3632a9c9a6d42d52aca16593d97812efe8c185e39094ceb7badf2",
+        "oracleStatus": "evaluated"
+      },
+      {
+        "path": "libesm/types.js",
+        "sourceSha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881",
+        "oracleStatus": "unlinked"
+      },
+      {
+        "path": "libesm/util/array.js",
+        "sourceSha256": "8bbc0246a6d709eb776531a7a2062066a77916643364945c1a713a00eca33e46",
+        "oracleStatus": "unlinked"
+      },
+      {
+        "path": "libesm/util/distance-iterator.js",
+        "sourceSha256": "41e12ebbedb76278e3bd37ede510e009a5952897a3e748e9673b4e5c8ae660e5",
+        "oracleStatus": "evaluated"
+      },
+      {
+        "path": "libesm/util/params.js",
+        "sourceSha256": "bb76a1c299071b6f8314bb7195ad701af06f092c629aed8b4fef4a7474ab3759",
+        "oracleStatus": "evaluated"
+      },
+      {
+        "path": "libesm/util/string.js",
+        "sourceSha256": "0836eacdebdb30c8aba0e898f9c7a45e236d036848ccfb058f56745f5ff020d3",
+        "oracleStatus": "evaluated"
+      }
+    ]
+  },
+  "importMap": [
+    {
+      "importer": "diff@9.0.0/libesm/diff/array.js",
+      "specifier": "./base.js",
+      "target": "diff@9.0.0/libesm/diff/base.js",
+      "generatedImporter": "vendor/diff/libesm/diff/array.js",
+      "generatedSpecifier": "./base.js",
+      "generatedTarget": "vendor/diff/libesm/diff/base.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/diff/character.js",
+      "specifier": "./base.js",
+      "target": "diff@9.0.0/libesm/diff/base.js",
+      "generatedImporter": "vendor/diff/libesm/diff/character.js",
+      "generatedSpecifier": "./base.js",
+      "generatedTarget": "vendor/diff/libesm/diff/base.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/diff/css.js",
+      "specifier": "./base.js",
+      "target": "diff@9.0.0/libesm/diff/base.js",
+      "generatedImporter": "vendor/diff/libesm/diff/css.js",
+      "generatedSpecifier": "./base.js",
+      "generatedTarget": "vendor/diff/libesm/diff/base.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/diff/json.js",
+      "specifier": "./base.js",
+      "target": "diff@9.0.0/libesm/diff/base.js",
+      "generatedImporter": "vendor/diff/libesm/diff/json.js",
+      "generatedSpecifier": "./base.js",
+      "generatedTarget": "vendor/diff/libesm/diff/base.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/diff/json.js",
+      "specifier": "./line.js",
+      "target": "diff@9.0.0/libesm/diff/line.js",
+      "generatedImporter": "vendor/diff/libesm/diff/json.js",
+      "generatedSpecifier": "./line.js",
+      "generatedTarget": "vendor/diff/libesm/diff/line.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/diff/line.js",
+      "specifier": "../util/params.js",
+      "target": "diff@9.0.0/libesm/util/params.js",
+      "generatedImporter": "vendor/diff/libesm/diff/line.js",
+      "generatedSpecifier": "../util/params.js",
+      "generatedTarget": "vendor/diff/libesm/util/params.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/diff/line.js",
+      "specifier": "./base.js",
+      "target": "diff@9.0.0/libesm/diff/base.js",
+      "generatedImporter": "vendor/diff/libesm/diff/line.js",
+      "generatedSpecifier": "./base.js",
+      "generatedTarget": "vendor/diff/libesm/diff/base.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/diff/sentence.js",
+      "specifier": "./base.js",
+      "target": "diff@9.0.0/libesm/diff/base.js",
+      "generatedImporter": "vendor/diff/libesm/diff/sentence.js",
+      "generatedSpecifier": "./base.js",
+      "generatedTarget": "vendor/diff/libesm/diff/base.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/diff/word.js",
+      "specifier": "../util/string.js",
+      "target": "diff@9.0.0/libesm/util/string.js",
+      "generatedImporter": "vendor/diff/libesm/diff/word.js",
+      "generatedSpecifier": "../util/string.js",
+      "generatedTarget": "vendor/diff/libesm/util/string.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/diff/word.js",
+      "specifier": "./base.js",
+      "target": "diff@9.0.0/libesm/diff/base.js",
+      "generatedImporter": "vendor/diff/libesm/diff/word.js",
+      "generatedSpecifier": "./base.js",
+      "generatedTarget": "vendor/diff/libesm/diff/base.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/index.js",
+      "specifier": "./convert/dmp.js",
+      "target": "diff@9.0.0/libesm/convert/dmp.js",
+      "generatedImporter": "vendor/diff/libesm/index.js",
+      "generatedSpecifier": "./convert/dmp.js",
+      "generatedTarget": "vendor/diff/libesm/convert/dmp.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/index.js",
+      "specifier": "./convert/xml.js",
+      "target": "diff@9.0.0/libesm/convert/xml.js",
+      "generatedImporter": "vendor/diff/libesm/index.js",
+      "generatedSpecifier": "./convert/xml.js",
+      "generatedTarget": "vendor/diff/libesm/convert/xml.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/index.js",
+      "specifier": "./diff/array.js",
+      "target": "diff@9.0.0/libesm/diff/array.js",
+      "generatedImporter": "vendor/diff/libesm/index.js",
+      "generatedSpecifier": "./diff/array.js",
+      "generatedTarget": "vendor/diff/libesm/diff/array.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/index.js",
+      "specifier": "./diff/base.js",
+      "target": "diff@9.0.0/libesm/diff/base.js",
+      "generatedImporter": "vendor/diff/libesm/index.js",
+      "generatedSpecifier": "./diff/base.js",
+      "generatedTarget": "vendor/diff/libesm/diff/base.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/index.js",
+      "specifier": "./diff/character.js",
+      "target": "diff@9.0.0/libesm/diff/character.js",
+      "generatedImporter": "vendor/diff/libesm/index.js",
+      "generatedSpecifier": "./diff/character.js",
+      "generatedTarget": "vendor/diff/libesm/diff/character.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/index.js",
+      "specifier": "./diff/css.js",
+      "target": "diff@9.0.0/libesm/diff/css.js",
+      "generatedImporter": "vendor/diff/libesm/index.js",
+      "generatedSpecifier": "./diff/css.js",
+      "generatedTarget": "vendor/diff/libesm/diff/css.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/index.js",
+      "specifier": "./diff/json.js",
+      "target": "diff@9.0.0/libesm/diff/json.js",
+      "generatedImporter": "vendor/diff/libesm/index.js",
+      "generatedSpecifier": "./diff/json.js",
+      "generatedTarget": "vendor/diff/libesm/diff/json.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/index.js",
+      "specifier": "./diff/line.js",
+      "target": "diff@9.0.0/libesm/diff/line.js",
+      "generatedImporter": "vendor/diff/libesm/index.js",
+      "generatedSpecifier": "./diff/line.js",
+      "generatedTarget": "vendor/diff/libesm/diff/line.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/index.js",
+      "specifier": "./diff/sentence.js",
+      "target": "diff@9.0.0/libesm/diff/sentence.js",
+      "generatedImporter": "vendor/diff/libesm/index.js",
+      "generatedSpecifier": "./diff/sentence.js",
+      "generatedTarget": "vendor/diff/libesm/diff/sentence.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/index.js",
+      "specifier": "./diff/word.js",
+      "target": "diff@9.0.0/libesm/diff/word.js",
+      "generatedImporter": "vendor/diff/libesm/index.js",
+      "generatedSpecifier": "./diff/word.js",
+      "generatedTarget": "vendor/diff/libesm/diff/word.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/index.js",
+      "specifier": "./patch/apply.js",
+      "target": "diff@9.0.0/libesm/patch/apply.js",
+      "generatedImporter": "vendor/diff/libesm/index.js",
+      "generatedSpecifier": "./patch/apply.js",
+      "generatedTarget": "vendor/diff/libesm/patch/apply.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/index.js",
+      "specifier": "./patch/create.js",
+      "target": "diff@9.0.0/libesm/patch/create.js",
+      "generatedImporter": "vendor/diff/libesm/index.js",
+      "generatedSpecifier": "./patch/create.js",
+      "generatedTarget": "vendor/diff/libesm/patch/create.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/index.js",
+      "specifier": "./patch/parse.js",
+      "target": "diff@9.0.0/libesm/patch/parse.js",
+      "generatedImporter": "vendor/diff/libesm/index.js",
+      "generatedSpecifier": "./patch/parse.js",
+      "generatedTarget": "vendor/diff/libesm/patch/parse.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/index.js",
+      "specifier": "./patch/reverse.js",
+      "target": "diff@9.0.0/libesm/patch/reverse.js",
+      "generatedImporter": "vendor/diff/libesm/index.js",
+      "generatedSpecifier": "./patch/reverse.js",
+      "generatedTarget": "vendor/diff/libesm/patch/reverse.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/patch/apply.js",
+      "specifier": "../util/distance-iterator.js",
+      "target": "diff@9.0.0/libesm/util/distance-iterator.js",
+      "generatedImporter": "vendor/diff/libesm/patch/apply.js",
+      "generatedSpecifier": "../util/distance-iterator.js",
+      "generatedTarget": "vendor/diff/libesm/util/distance-iterator.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/patch/apply.js",
+      "specifier": "../util/string.js",
+      "target": "diff@9.0.0/libesm/util/string.js",
+      "generatedImporter": "vendor/diff/libesm/patch/apply.js",
+      "generatedSpecifier": "../util/string.js",
+      "generatedTarget": "vendor/diff/libesm/util/string.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/patch/apply.js",
+      "specifier": "./line-endings.js",
+      "target": "diff@9.0.0/libesm/patch/line-endings.js",
+      "generatedImporter": "vendor/diff/libesm/patch/apply.js",
+      "generatedSpecifier": "./line-endings.js",
+      "generatedTarget": "vendor/diff/libesm/patch/line-endings.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/patch/apply.js",
+      "specifier": "./parse.js",
+      "target": "diff@9.0.0/libesm/patch/parse.js",
+      "generatedImporter": "vendor/diff/libesm/patch/apply.js",
+      "generatedSpecifier": "./parse.js",
+      "generatedTarget": "vendor/diff/libesm/patch/parse.js"
+    },
+    {
+      "importer": "diff@9.0.0/libesm/patch/create.js",
+      "specifier": "../diff/line.js",
+      "target": "diff@9.0.0/libesm/diff/line.js",
+      "generatedImporter": "vendor/diff/libesm/patch/create.js",
+      "generatedSpecifier": "../diff/line.js",
+      "generatedTarget": "vendor/diff/libesm/diff/line.js"
+    },
+    {
+      "importer": "packages/normalization-core/src/format.ts",
+      "specifier": "./expect.js",
+      "target": "packages/normalization-core/src/expect.ts",
+      "generatedImporter": "vendor/openclaw/packages/normalization-core/src/format.mjs",
+      "generatedSpecifier": "./expect.mjs",
+      "generatedTarget": "vendor/openclaw/packages/normalization-core/src/expect.mjs"
+    },
+    {
+      "importer": "packages/normalization-core/src/index.ts",
+      "specifier": "./balanced-json.js",
+      "target": "packages/normalization-core/src/balanced-json.ts",
+      "generatedImporter": "vendor/openclaw/packages/normalization-core/src/index.mjs",
+      "generatedSpecifier": "./balanced-json.mjs",
+      "generatedTarget": "vendor/openclaw/packages/normalization-core/src/balanced-json.mjs"
+    },
+    {
+      "importer": "packages/normalization-core/src/index.ts",
+      "specifier": "./boolean-coercion.js",
+      "target": "packages/normalization-core/src/boolean-coercion.ts",
+      "generatedImporter": "vendor/openclaw/packages/normalization-core/src/index.mjs",
+      "generatedSpecifier": "./boolean-coercion.mjs",
+      "generatedTarget": "vendor/openclaw/packages/normalization-core/src/boolean-coercion.mjs"
+    },
+    {
+      "importer": "packages/normalization-core/src/index.ts",
+      "specifier": "./cjk-chars.js",
+      "target": "packages/normalization-core/src/cjk-chars.ts",
+      "generatedImporter": "vendor/openclaw/packages/normalization-core/src/index.mjs",
+      "generatedSpecifier": "./cjk-chars.mjs",
+      "generatedTarget": "vendor/openclaw/packages/normalization-core/src/cjk-chars.mjs"
+    },
+    {
+      "importer": "packages/normalization-core/src/index.ts",
+      "specifier": "./code-points.js",
+      "target": "packages/normalization-core/src/code-points.ts",
+      "generatedImporter": "vendor/openclaw/packages/normalization-core/src/index.mjs",
+      "generatedSpecifier": "./code-points.mjs",
+      "generatedTarget": "vendor/openclaw/packages/normalization-core/src/code-points.mjs"
+    },
+    {
+      "importer": "packages/normalization-core/src/index.ts",
+      "specifier": "./error-coercion.js",
+      "target": "packages/normalization-core/src/error-coercion.ts",
+      "generatedImporter": "vendor/openclaw/packages/normalization-core/src/index.mjs",
+      "generatedSpecifier": "./error-coercion.mjs",
+      "generatedTarget": "vendor/openclaw/packages/normalization-core/src/error-coercion.mjs"
+    },
+    {
+      "importer": "packages/normalization-core/src/index.ts",
+      "specifier": "./expect.js",
+      "target": "packages/normalization-core/src/expect.ts",
+      "generatedImporter": "vendor/openclaw/packages/normalization-core/src/index.mjs",
+      "generatedSpecifier": "./expect.mjs",
+      "generatedTarget": "vendor/openclaw/packages/normalization-core/src/expect.mjs"
+    },
+    {
+      "importer": "packages/normalization-core/src/index.ts",
+      "specifier": "./format.js",
+      "target": "packages/normalization-core/src/format.ts",
+      "generatedImporter": "vendor/openclaw/packages/normalization-core/src/index.mjs",
+      "generatedSpecifier": "./format.mjs",
+      "generatedTarget": "vendor/openclaw/packages/normalization-core/src/format.mjs"
+    },
+    {
+      "importer": "packages/normalization-core/src/index.ts",
+      "specifier": "./json-coercion.js",
+      "target": "packages/normalization-core/src/json-coercion.ts",
+      "generatedImporter": "vendor/openclaw/packages/normalization-core/src/index.mjs",
+      "generatedSpecifier": "./json-coercion.mjs",
+      "generatedTarget": "vendor/openclaw/packages/normalization-core/src/json-coercion.mjs"
+    },
+    {
+      "importer": "packages/normalization-core/src/index.ts",
+      "specifier": "./number-coercion.js",
+      "target": "packages/normalization-core/src/number-coercion.ts",
+      "generatedImporter": "vendor/openclaw/packages/normalization-core/src/index.mjs",
+      "generatedSpecifier": "./number-coercion.mjs",
+      "generatedTarget": "vendor/openclaw/packages/normalization-core/src/number-coercion.mjs"
+    },
+    {
+      "importer": "packages/normalization-core/src/index.ts",
+      "specifier": "./record-coerce.js",
+      "target": "packages/normalization-core/src/record-coerce.ts",
+      "generatedImporter": "vendor/openclaw/packages/normalization-core/src/index.mjs",
+      "generatedSpecifier": "./record-coerce.mjs",
+      "generatedTarget": "vendor/openclaw/packages/normalization-core/src/record-coerce.mjs"
+    },
+    {
+      "importer": "packages/normalization-core/src/index.ts",
+      "specifier": "./response-bytes.js",
+      "target": "packages/normalization-core/src/response-bytes.ts",
+      "generatedImporter": "vendor/openclaw/packages/normalization-core/src/index.mjs",
+      "generatedSpecifier": "./response-bytes.mjs",
+      "generatedTarget": "vendor/openclaw/packages/normalization-core/src/response-bytes.mjs"
+    },
+    {
+      "importer": "packages/normalization-core/src/index.ts",
+      "specifier": "./stable-stringify.js",
+      "target": "packages/normalization-core/src/stable-stringify.ts",
+      "generatedImporter": "vendor/openclaw/packages/normalization-core/src/index.mjs",
+      "generatedSpecifier": "./stable-stringify.mjs",
+      "generatedTarget": "vendor/openclaw/packages/normalization-core/src/stable-stringify.mjs"
+    },
+    {
+      "importer": "packages/normalization-core/src/index.ts",
+      "specifier": "./string-coerce.js",
+      "target": "packages/normalization-core/src/string-coerce.ts",
+      "generatedImporter": "vendor/openclaw/packages/normalization-core/src/index.mjs",
+      "generatedSpecifier": "./string-coerce.mjs",
+      "generatedTarget": "vendor/openclaw/packages/normalization-core/src/string-coerce.mjs"
+    },
+    {
+      "importer": "packages/normalization-core/src/index.ts",
+      "specifier": "./string-normalization.js",
+      "target": "packages/normalization-core/src/string-normalization.ts",
+      "generatedImporter": "vendor/openclaw/packages/normalization-core/src/index.mjs",
+      "generatedSpecifier": "./string-normalization.mjs",
+      "generatedTarget": "vendor/openclaw/packages/normalization-core/src/string-normalization.mjs"
+    },
+    {
+      "importer": "packages/normalization-core/src/index.ts",
+      "specifier": "./text-decoding.js",
+      "target": "packages/normalization-core/src/text-decoding.ts",
+      "generatedImporter": "vendor/openclaw/packages/normalization-core/src/index.mjs",
+      "generatedSpecifier": "./text-decoding.mjs",
+      "generatedTarget": "vendor/openclaw/packages/normalization-core/src/text-decoding.mjs"
+    },
+    {
+      "importer": "packages/normalization-core/src/index.ts",
+      "specifier": "./utf16-slice.js",
+      "target": "packages/normalization-core/src/utf16-slice.ts",
+      "generatedImporter": "vendor/openclaw/packages/normalization-core/src/index.mjs",
+      "generatedSpecifier": "./utf16-slice.mjs",
+      "generatedTarget": "vendor/openclaw/packages/normalization-core/src/utf16-slice.mjs"
+    },
+    {
+      "importer": "packages/normalization-core/src/json-coercion.ts",
+      "specifier": "./record-coerce.js",
+      "target": "packages/normalization-core/src/record-coerce.ts",
+      "generatedImporter": "vendor/openclaw/packages/normalization-core/src/json-coercion.mjs",
+      "generatedSpecifier": "./record-coerce.mjs",
+      "generatedTarget": "vendor/openclaw/packages/normalization-core/src/record-coerce.mjs"
+    },
+    {
+      "importer": "packages/normalization-core/src/number-coercion.ts",
+      "specifier": "./string-coerce.ts",
+      "target": "packages/normalization-core/src/string-coerce.ts",
+      "generatedImporter": "vendor/openclaw/packages/normalization-core/src/number-coercion.mjs",
+      "generatedSpecifier": "./string-coerce.mjs",
+      "generatedTarget": "vendor/openclaw/packages/normalization-core/src/string-coerce.mjs"
+    },
+    {
+      "importer": "packages/normalization-core/src/string-normalization.ts",
+      "specifier": "./string-coerce.js",
+      "target": "packages/normalization-core/src/string-coerce.ts",
+      "generatedImporter": "vendor/openclaw/packages/normalization-core/src/string-normalization.mjs",
+      "generatedSpecifier": "./string-coerce.mjs",
+      "generatedTarget": "vendor/openclaw/packages/normalization-core/src/string-coerce.mjs"
+    },
+    {
+      "importer": "packages/tool-host/src/filesystem/planner.mjs",
+      "specifier": "./vendor/openclaw/src/agents/sessions/tools/edit-diff.mjs",
+      "target": "vendor/openclaw/src/agents/sessions/tools/edit-diff.mjs",
+      "generatedImporter": "planner.mjs",
+      "generatedSpecifier": "./vendor/openclaw/src/agents/sessions/tools/edit-diff.mjs",
+      "generatedTarget": "vendor/openclaw/src/agents/sessions/tools/edit-diff.mjs"
+    },
+    {
+      "importer": "packages/tool-host/src/filesystem/planner.mjs",
+      "specifier": "./vendor/openclaw/src/agents/sessions/tools/file-diff.mjs",
+      "target": "vendor/openclaw/src/agents/sessions/tools/file-diff.mjs",
+      "generatedImporter": "planner.mjs",
+      "generatedSpecifier": "./vendor/openclaw/src/agents/sessions/tools/file-diff.mjs",
+      "generatedTarget": "vendor/openclaw/src/agents/sessions/tools/file-diff.mjs"
+    },
+    {
+      "importer": "packages/tool-host/src/filesystem/stdio.mjs",
+      "specifier": "node:worker_threads",
+      "target": "node:worker_threads",
+      "generatedImporter": "stdio.mjs",
+      "generatedSpecifier": "node:worker_threads",
+      "generatedTarget": "node:worker_threads"
+    },
+    {
+      "importer": "packages/tool-host/src/filesystem/worker.mjs",
+      "specifier": "./planner.mjs",
+      "target": "planner.mjs",
+      "generatedImporter": "worker.mjs",
+      "generatedSpecifier": "./planner.mjs",
+      "generatedTarget": "planner.mjs"
+    },
+    {
+      "importer": "packages/tool-host/src/filesystem/worker.mjs",
+      "specifier": "node:worker_threads",
+      "target": "node:worker_threads",
+      "generatedImporter": "worker.mjs",
+      "generatedSpecifier": "node:worker_threads",
+      "generatedTarget": "node:worker_threads"
+    },
+    {
+      "importer": "src/agents/sessions/tools/edit-diff.ts",
+      "specifier": "../../../shared/levenshtein-distance.js",
+      "target": "src/shared/levenshtein-distance.ts",
+      "generatedImporter": "vendor/openclaw/src/agents/sessions/tools/edit-diff.mjs",
+      "generatedSpecifier": "../../../shared/levenshtein-distance.mjs",
+      "generatedTarget": "vendor/openclaw/src/shared/levenshtein-distance.mjs"
+    },
+    {
+      "importer": "src/agents/sessions/tools/edit-diff.ts",
+      "specifier": "../../line-endings.js",
+      "target": "src/agents/line-endings.ts",
+      "generatedImporter": "vendor/openclaw/src/agents/sessions/tools/edit-diff.mjs",
+      "generatedSpecifier": "../../line-endings.mjs",
+      "generatedTarget": "vendor/openclaw/src/agents/line-endings.mjs"
+    },
+    {
+      "importer": "src/agents/sessions/tools/edit-diff.ts",
+      "specifier": "../../tool-input-error.js",
+      "target": "src/agents/tool-input-error.ts",
+      "generatedImporter": "vendor/openclaw/src/agents/sessions/tools/edit-diff.mjs",
+      "generatedSpecifier": "../../tool-input-error.mjs",
+      "generatedTarget": "vendor/openclaw/src/agents/tool-input-error.mjs"
+    },
+    {
+      "importer": "src/agents/sessions/tools/edit-diff.ts",
+      "specifier": "./edit-replacements.js",
+      "target": "src/agents/sessions/tools/edit-replacements.ts",
+      "generatedImporter": "vendor/openclaw/src/agents/sessions/tools/edit-diff.mjs",
+      "generatedSpecifier": "./edit-replacements.mjs",
+      "generatedTarget": "vendor/openclaw/src/agents/sessions/tools/edit-replacements.mjs"
+    },
+    {
+      "importer": "src/agents/sessions/tools/edit-diff.ts",
+      "specifier": "./file-diff.js",
+      "target": "src/agents/sessions/tools/file-diff.ts",
+      "generatedImporter": "vendor/openclaw/src/agents/sessions/tools/edit-diff.mjs",
+      "generatedSpecifier": "./file-diff.mjs",
+      "generatedTarget": "vendor/openclaw/src/agents/sessions/tools/file-diff.mjs"
+    },
+    {
+      "importer": "src/agents/sessions/tools/edit-diff.ts",
+      "specifier": "@openclaw/normalization-core/utf16-slice",
+      "target": "packages/normalization-core/src/utf16-slice.ts",
+      "generatedImporter": "vendor/openclaw/src/agents/sessions/tools/edit-diff.mjs",
+      "generatedSpecifier": "../../../../packages/normalization-core/src/utf16-slice.mjs",
+      "generatedTarget": "vendor/openclaw/packages/normalization-core/src/utf16-slice.mjs"
+    },
+    {
+      "importer": "src/agents/sessions/tools/edit-replacements.ts",
+      "specifier": "../../line-endings.js",
+      "target": "src/agents/line-endings.ts",
+      "generatedImporter": "vendor/openclaw/src/agents/sessions/tools/edit-replacements.mjs",
+      "generatedSpecifier": "../../line-endings.mjs",
+      "generatedTarget": "vendor/openclaw/src/agents/line-endings.mjs"
+    },
+    {
+      "importer": "src/agents/sessions/tools/file-diff.ts",
+      "specifier": "../../line-endings.js",
+      "target": "src/agents/line-endings.ts",
+      "generatedImporter": "vendor/openclaw/src/agents/sessions/tools/file-diff.mjs",
+      "generatedSpecifier": "../../line-endings.mjs",
+      "generatedTarget": "vendor/openclaw/src/agents/line-endings.mjs"
+    },
+    {
+      "importer": "src/agents/sessions/tools/file-diff.ts",
+      "specifier": "diff",
+      "target": "diff@9.0.0/libesm/index.js",
+      "generatedImporter": "vendor/openclaw/src/agents/sessions/tools/file-diff.mjs",
+      "generatedSpecifier": "../../../../../diff/libesm/index.js",
+      "generatedTarget": "vendor/diff/libesm/index.js"
+    },
+    {
+      "importer": "src/shared/levenshtein-distance.ts",
+      "specifier": "@openclaw/normalization-core",
+      "target": "packages/normalization-core/src/index.ts",
+      "generatedImporter": "vendor/openclaw/src/shared/levenshtein-distance.mjs",
+      "generatedSpecifier": "../../packages/normalization-core/src/index.mjs",
+      "generatedTarget": "vendor/openclaw/packages/normalization-core/src/index.mjs"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "pinned-provenance.json",
+      "sha256": "741d908a9ab363f3fa20f9100ec99f60dfa84b9f1a72a2f145b1a7864f6ec5d1"
+    },
+    {
+      "path": "planner.mjs",
+      "sha256": "bca9bda7912e46530f869fa5195ab16b29902683ba0bcea03b416ac202642f2f"
+    },
+    {
+      "path": "stdio.mjs",
+      "sha256": "2abc32a82ee693988765fc413036228324289d25f2502ed2a9978a108f2b42fe"
+    },
+    {
+      "path": "vendor/diff/CONTRIBUTING.md",
+      "sha256": "b5cc876e0e69332f1e8aa27f32ce9932d56c571692a05158d34e99b85f84d8b4"
+    },
+    {
+      "path": "vendor/diff/LICENSE",
+      "sha256": "eda81a415869e67809f6a9f3fd6056062cb83a462118e07eec5e92b2e0c40ce9"
+    },
+    {
+      "path": "vendor/diff/README.md",
+      "sha256": "79d02cee5a2ae6d2634f9a513f08360050ec5b8cefdb6f0079ac82c88a15f044"
+    },
+    {
+      "path": "vendor/diff/dist/diff.js",
+      "sha256": "5773c7efb34715bb9a9b6a9ebf5b0ff00f85f9efa6d9fd69fc65e181364f7b2e"
+    },
+    {
+      "path": "vendor/diff/dist/diff.min.js",
+      "sha256": "b51a9d2885f2c090dc97b981027395f7e7e6558a46c75ae3747db267913a89ab"
+    },
+    {
+      "path": "vendor/diff/eslint.config.mjs",
+      "sha256": "701aca397f6a2842dda8f0cdfaeb732b90e1617336f75aa09078abd69e940e8d"
+    },
+    {
+      "path": "vendor/diff/libcjs/convert/dmp.d.ts",
+      "sha256": "c49a2c2b75a2c37ee620759e00517d2a5b37231432e6606cbb9a6493591eb6c5"
+    },
+    {
+      "path": "vendor/diff/libcjs/convert/dmp.d.ts.map",
+      "sha256": "5262035a6160dc4a684530b9d103fa814862ecbfd721c5024c0367d909bfe9d6"
+    },
+    {
+      "path": "vendor/diff/libcjs/convert/dmp.js",
+      "sha256": "492e1ec0ffb5ea0f312fc85e1820aef743c80eb9917ca4e1f767cc55debb1aff"
+    },
+    {
+      "path": "vendor/diff/libcjs/convert/xml.d.ts",
+      "sha256": "b342336b75a5615111f5dba9bfefe4329015473c3fb61c1fb3d9257457aac201"
+    },
+    {
+      "path": "vendor/diff/libcjs/convert/xml.d.ts.map",
+      "sha256": "918618579cd70597d08cf7ce493013958ffbc0af79039a35fc24ce2ca8b3780a"
+    },
+    {
+      "path": "vendor/diff/libcjs/convert/xml.js",
+      "sha256": "16865f6ff0686110fd5c05eb2b8c92125fe00b39222b4375c086bbc17b29c5eb"
+    },
+    {
+      "path": "vendor/diff/libcjs/diff/array.d.ts",
+      "sha256": "0a5634f7bbf1e77f453a8469795472ceef410f9a2a6902a38e830ee997e11aad"
+    },
+    {
+      "path": "vendor/diff/libcjs/diff/array.d.ts.map",
+      "sha256": "2d035d34ce7c9f6ed87f20ee3fe98e4a2aaab1d0013cf8971110b1bbb5823bda"
+    },
+    {
+      "path": "vendor/diff/libcjs/diff/array.js",
+      "sha256": "57857ba295ddf6bf6049a648e0a148578acab321340f6f48ca3ca2c3ffc9c928"
+    },
+    {
+      "path": "vendor/diff/libcjs/diff/base.d.ts",
+      "sha256": "14cad32342459938e4dc3e43290c21815e8c50ff9987fbb6a707c20fab488a0c"
+    },
+    {
+      "path": "vendor/diff/libcjs/diff/base.d.ts.map",
+      "sha256": "f2586bf2f20ca3b260123b444adb5e7f8155c9f32346de79c15bed91b9e8035c"
+    },
+    {
+      "path": "vendor/diff/libcjs/diff/base.js",
+      "sha256": "9897b9222fa9b54c8bd9591932a8e753315cdeb702dcf94bc033b5f403c87dbf"
+    },
+    {
+      "path": "vendor/diff/libcjs/diff/character.d.ts",
+      "sha256": "4bd23b962c6702f2d842017b6fcbe35d63899e4524ff6af4facc74598c113522"
+    },
+    {
+      "path": "vendor/diff/libcjs/diff/character.d.ts.map",
+      "sha256": "b67af1c7447f40ea9f095bedcb148e97323cdac1af17ef42029ae2ece85c8ed2"
+    },
+    {
+      "path": "vendor/diff/libcjs/diff/character.js",
+      "sha256": "4f78d19e7c9e76532b825e0e5fdd3caf72b10b355e616a513439c6c286c4d3fc"
+    },
+    {
+      "path": "vendor/diff/libcjs/diff/css.d.ts",
+      "sha256": "60bd054853cda7ee357f147bf903e2f88cd78a9b3e37732c218a3493ae226986"
+    },
+    {
+      "path": "vendor/diff/libcjs/diff/css.d.ts.map",
+      "sha256": "cda76c7d614cca884b2548d7db489c7d273add402d252281130249f0c8c3dd16"
+    },
+    {
+      "path": "vendor/diff/libcjs/diff/css.js",
+      "sha256": "e95da54d7873638cf7410af7a94632096b7636727c80bedbcf3b77588c310439"
+    },
+    {
+      "path": "vendor/diff/libcjs/diff/json.d.ts",
+      "sha256": "fdd3335862781599d7de3dc5659b5a8135aa3954b9c1492723432bc0d484e85e"
+    },
+    {
+      "path": "vendor/diff/libcjs/diff/json.d.ts.map",
+      "sha256": "5d574296d689bab498fad7bd5d68f85e726cc670bb8d8893358b418e1b81f997"
+    },
+    {
+      "path": "vendor/diff/libcjs/diff/json.js",
+      "sha256": "a450d696f3e928efc5ddefab7bb700cdf9059e39dc6b1c0754feda7c58350840"
+    },
+    {
+      "path": "vendor/diff/libcjs/diff/line.d.ts",
+      "sha256": "8e7155b1873201785456300ffcdd7f0bcc869f995b7df50ad27ea33740b122a3"
+    },
+    {
+      "path": "vendor/diff/libcjs/diff/line.d.ts.map",
+      "sha256": "ce4b4da26c3d142302d7d4961995f8783d795958036f336ddb9c6131122aad21"
+    },
+    {
+      "path": "vendor/diff/libcjs/diff/line.js",
+      "sha256": "a456bb324508d58a3dd0db8fde805fe9913584a52c0bb31d73ae319a3f170021"
+    },
+    {
+      "path": "vendor/diff/libcjs/diff/sentence.d.ts",
+      "sha256": "d449145a9a77065e6438e42469cad4ddb83b92c53be6ec94ad2a87b21be3249e"
+    },
+    {
+      "path": "vendor/diff/libcjs/diff/sentence.d.ts.map",
+      "sha256": "02ba8e2ccc9dbc51dd466151d13120fa66bc44ddf2d8f3b5160b554c26d7b10e"
+    },
+    {
+      "path": "vendor/diff/libcjs/diff/sentence.js",
+      "sha256": "c1da80a96f63b0c7673880359d7c79ce5bd161eead23bd9e7f0423e6b31c751b"
+    },
+    {
+      "path": "vendor/diff/libcjs/diff/word.d.ts",
+      "sha256": "3f34c292613d80c8efdc20534366cd9cb08ff7cb60c92bef5658826ee095bc69"
+    },
+    {
+      "path": "vendor/diff/libcjs/diff/word.d.ts.map",
+      "sha256": "cc45ae7ed5dedee0779c81a180b8d4eba238a7baf85af256c1b2f75aea5a9141"
+    },
+    {
+      "path": "vendor/diff/libcjs/diff/word.js",
+      "sha256": "be7d90a270ce7a254c800f6c5ffe03f86df5f2a2f18e4ea6d605127df7654f36"
+    },
+    {
+      "path": "vendor/diff/libcjs/index.d.ts",
+      "sha256": "c3ee2fb2465660509cd53a26c5fa8df4b5f4d8d34d84f8c58b77656d714ad4a8"
+    },
+    {
+      "path": "vendor/diff/libcjs/index.d.ts.map",
+      "sha256": "198e22bfb5f5c3d5e46227a817f4d3019bbcd86267f87b2df537854b8dd992d2"
+    },
+    {
+      "path": "vendor/diff/libcjs/index.js",
+      "sha256": "49e8adffb233644578b4aef1c4fefa0b11da5d9fb6abe1f26c40eef2313f2c41"
+    },
+    {
+      "path": "vendor/diff/libcjs/package.json",
+      "sha256": "560ea6123d6cdf8e30c003ddb5f9cbcc8b4343df27eeb46cecdc645782aa67b4"
+    },
+    {
+      "path": "vendor/diff/libcjs/patch/apply.d.ts",
+      "sha256": "688962814dc9d6a47ba11ec5ded89fb6cc7e82a4390c23d51e6f479f80760049"
+    },
+    {
+      "path": "vendor/diff/libcjs/patch/apply.d.ts.map",
+      "sha256": "4a1f620f1a25e7ddd7a3f6537e5c0ebd56c9f023514f8de2fdfa1d8bf16dafa0"
+    },
+    {
+      "path": "vendor/diff/libcjs/patch/apply.js",
+      "sha256": "837f20a666db68ab084ccf5069172482fc1256f1e9ff95a11d7ddb53eb2a175d"
+    },
+    {
+      "path": "vendor/diff/libcjs/patch/create.d.ts",
+      "sha256": "299bd9b268b5bf44c02721cdc6d59cb6cb1ee3c628721460ce491d6c2a2f5045"
+    },
+    {
+      "path": "vendor/diff/libcjs/patch/create.d.ts.map",
+      "sha256": "e66113474ce37e287db490536547a2c6a3c77c184c86cbc8d125f2346e95ea82"
+    },
+    {
+      "path": "vendor/diff/libcjs/patch/create.js",
+      "sha256": "b6142fc6de57271f6d7e0ccdf2621264f12a3925e210ab41b7219cc670cefa38"
+    },
+    {
+      "path": "vendor/diff/libcjs/patch/line-endings.d.ts",
+      "sha256": "0eb5ff25a78fcc2a2088e0f28e36dfffce1a83a0accb6ed903f8b81f3964c14c"
+    },
+    {
+      "path": "vendor/diff/libcjs/patch/line-endings.d.ts.map",
+      "sha256": "166e856902edd31382a590d19c99584dbcc2482ae70270699e5da797741b2ad4"
+    },
+    {
+      "path": "vendor/diff/libcjs/patch/line-endings.js",
+      "sha256": "a2cddea5004a8c274692061fff69539cf6b56b18da1bd17fd409e7450c4b8a6f"
+    },
+    {
+      "path": "vendor/diff/libcjs/patch/parse.d.ts",
+      "sha256": "222809ec2ea4e3c84748f0e19a3337df924de02a677c0fef728da0f345c2d798"
+    },
+    {
+      "path": "vendor/diff/libcjs/patch/parse.d.ts.map",
+      "sha256": "23afb0bc1a65e8bc21a2a62ce7e2d34abcbbef673d7ef9cdb2059ac093f6c2b4"
+    },
+    {
+      "path": "vendor/diff/libcjs/patch/parse.js",
+      "sha256": "d64b16ba5a9eeca2116e436a6e2dbe045ebc8420475a759e1c566eb70ea944dd"
+    },
+    {
+      "path": "vendor/diff/libcjs/patch/reverse.d.ts",
+      "sha256": "1d6fe13f2a2eb6d221907f9c6e29b32cc13e9c7593372996c1d34b3c6bd39b8a"
+    },
+    {
+      "path": "vendor/diff/libcjs/patch/reverse.d.ts.map",
+      "sha256": "7060a9b2abdd16a22b803a5c90e2de9529c8a592b9fa78dab40342b422dab451"
+    },
+    {
+      "path": "vendor/diff/libcjs/patch/reverse.js",
+      "sha256": "492cdd3bbc7accf15d7b183c9c47f63adfe8a0c934f859bd8876e57a43602060"
+    },
+    {
+      "path": "vendor/diff/libcjs/types.d.ts",
+      "sha256": "c800ee866627d523f3b0633f97112b0ea942f64b23127a9f6efe64ee23447a7c"
+    },
+    {
+      "path": "vendor/diff/libcjs/types.d.ts.map",
+      "sha256": "26fd7696da7cb84021ef8a18370a410f9601f46f089ee93ccb40a71c47c54f72"
+    },
+    {
+      "path": "vendor/diff/libcjs/types.js",
+      "sha256": "d43aa81f5bc89faa359e0f97c814ba25155591ff078fbb9bfd40f8c7c9683230"
+    },
+    {
+      "path": "vendor/diff/libcjs/util/array.d.ts",
+      "sha256": "9b181c0e2b265d7c12205426643b366e7850e789dd9cdf48dd2452fe806e148d"
+    },
+    {
+      "path": "vendor/diff/libcjs/util/array.d.ts.map",
+      "sha256": "ed0fe147615d1348c03b2d7f4433f900fde05a1a0abbeb841da2d8f1d3043071"
+    },
+    {
+      "path": "vendor/diff/libcjs/util/array.js",
+      "sha256": "e1d66b3da1772e05bf8ce36b1033682910008a13a4c821f548df09b3a134094f"
+    },
+    {
+      "path": "vendor/diff/libcjs/util/distance-iterator.d.ts",
+      "sha256": "be1a5aebf79d0f7739f8c27a65393a23723535f39de3ab62ab088d22937bf9a7"
+    },
+    {
+      "path": "vendor/diff/libcjs/util/distance-iterator.d.ts.map",
+      "sha256": "d937c682f41787763b5f7ce5d19072e9a12c32c985554e2755106a4be22572a5"
+    },
+    {
+      "path": "vendor/diff/libcjs/util/distance-iterator.js",
+      "sha256": "efd38507d6f47459cf544098df0630cd1002b13985eb64d3012f0b3259e35f4e"
+    },
+    {
+      "path": "vendor/diff/libcjs/util/params.d.ts",
+      "sha256": "90b80eea50f29206d12cff5377a443c97b69c0f0f766edf78b5e5b8d90903b83"
+    },
+    {
+      "path": "vendor/diff/libcjs/util/params.d.ts.map",
+      "sha256": "af149eeab485d9ce8a49deba23ff42717d672acc81a939c4bbab97166a2a5f34"
+    },
+    {
+      "path": "vendor/diff/libcjs/util/params.js",
+      "sha256": "247420b57246f4406ab2c84983397171808c212d16137d4b9fbf04ee49063823"
+    },
+    {
+      "path": "vendor/diff/libcjs/util/string.d.ts",
+      "sha256": "26c1c2ff9bf23092a17d2279654a572211357d6e62acb1c9ec7a2063df5ec613"
+    },
+    {
+      "path": "vendor/diff/libcjs/util/string.d.ts.map",
+      "sha256": "3b4d262f26a214645dd70c9c9f35fd6b587155b015e801e33850d27f9c914158"
+    },
+    {
+      "path": "vendor/diff/libcjs/util/string.js",
+      "sha256": "12cc9eecf8d1cc4c9c76ddcd475564599c5ed270cb05c4c111e80a6409afafda"
+    },
+    {
+      "path": "vendor/diff/libesm/convert/dmp.d.ts",
+      "sha256": "c49a2c2b75a2c37ee620759e00517d2a5b37231432e6606cbb9a6493591eb6c5"
+    },
+    {
+      "path": "vendor/diff/libesm/convert/dmp.d.ts.map",
+      "sha256": "5262035a6160dc4a684530b9d103fa814862ecbfd721c5024c0367d909bfe9d6"
+    },
+    {
+      "path": "vendor/diff/libesm/convert/dmp.js",
+      "sha256": "05bad2211249703a43f2d4250fb0e0831511a32aed763cd21890c1b5ee7032c4"
+    },
+    {
+      "path": "vendor/diff/libesm/convert/xml.d.ts",
+      "sha256": "b342336b75a5615111f5dba9bfefe4329015473c3fb61c1fb3d9257457aac201"
+    },
+    {
+      "path": "vendor/diff/libesm/convert/xml.d.ts.map",
+      "sha256": "918618579cd70597d08cf7ce493013958ffbc0af79039a35fc24ce2ca8b3780a"
+    },
+    {
+      "path": "vendor/diff/libesm/convert/xml.js",
+      "sha256": "c9dfceeb2ab8248f6dee37f0ce253317939fe1302ffb4483ccf777400a3ac552"
+    },
+    {
+      "path": "vendor/diff/libesm/diff/array.d.ts",
+      "sha256": "0a5634f7bbf1e77f453a8469795472ceef410f9a2a6902a38e830ee997e11aad"
+    },
+    {
+      "path": "vendor/diff/libesm/diff/array.d.ts.map",
+      "sha256": "2d035d34ce7c9f6ed87f20ee3fe98e4a2aaab1d0013cf8971110b1bbb5823bda"
+    },
+    {
+      "path": "vendor/diff/libesm/diff/array.js",
+      "sha256": "5bcc1320c7ee74e565421a556d81ed3fdd82ff2f366e6151beebac6b425f528f"
+    },
+    {
+      "path": "vendor/diff/libesm/diff/base.d.ts",
+      "sha256": "14cad32342459938e4dc3e43290c21815e8c50ff9987fbb6a707c20fab488a0c"
+    },
+    {
+      "path": "vendor/diff/libesm/diff/base.d.ts.map",
+      "sha256": "f2586bf2f20ca3b260123b444adb5e7f8155c9f32346de79c15bed91b9e8035c"
+    },
+    {
+      "path": "vendor/diff/libesm/diff/base.js",
+      "sha256": "faa81734df6ea7f8034efc5572ad1bbf19c50b300fdd183baf0d7813c5eec3b2"
+    },
+    {
+      "path": "vendor/diff/libesm/diff/character.d.ts",
+      "sha256": "4bd23b962c6702f2d842017b6fcbe35d63899e4524ff6af4facc74598c113522"
+    },
+    {
+      "path": "vendor/diff/libesm/diff/character.d.ts.map",
+      "sha256": "b67af1c7447f40ea9f095bedcb148e97323cdac1af17ef42029ae2ece85c8ed2"
+    },
+    {
+      "path": "vendor/diff/libesm/diff/character.js",
+      "sha256": "75677c2b3c5990099675493b415ce59f92f5de4709de59fa481b9fb563168deb"
+    },
+    {
+      "path": "vendor/diff/libesm/diff/css.d.ts",
+      "sha256": "60bd054853cda7ee357f147bf903e2f88cd78a9b3e37732c218a3493ae226986"
+    },
+    {
+      "path": "vendor/diff/libesm/diff/css.d.ts.map",
+      "sha256": "cda76c7d614cca884b2548d7db489c7d273add402d252281130249f0c8c3dd16"
+    },
+    {
+      "path": "vendor/diff/libesm/diff/css.js",
+      "sha256": "db85fa43d4e4d4bbe3707d9e575de338589deb9a4cc8243c7f15fa5e2c87724d"
+    },
+    {
+      "path": "vendor/diff/libesm/diff/json.d.ts",
+      "sha256": "fdd3335862781599d7de3dc5659b5a8135aa3954b9c1492723432bc0d484e85e"
+    },
+    {
+      "path": "vendor/diff/libesm/diff/json.d.ts.map",
+      "sha256": "5d574296d689bab498fad7bd5d68f85e726cc670bb8d8893358b418e1b81f997"
+    },
+    {
+      "path": "vendor/diff/libesm/diff/json.js",
+      "sha256": "c97ec8c04a7c4fc37a605d5863018ead1cac1c19128a7333bcb19d33fa6771b7"
+    },
+    {
+      "path": "vendor/diff/libesm/diff/line.d.ts",
+      "sha256": "8e7155b1873201785456300ffcdd7f0bcc869f995b7df50ad27ea33740b122a3"
+    },
+    {
+      "path": "vendor/diff/libesm/diff/line.d.ts.map",
+      "sha256": "ce4b4da26c3d142302d7d4961995f8783d795958036f336ddb9c6131122aad21"
+    },
+    {
+      "path": "vendor/diff/libesm/diff/line.js",
+      "sha256": "e3ef2d8c8c3a56f6b9fb04609f545b2aae2f84a02c31c5de3201aef1b0545f90"
+    },
+    {
+      "path": "vendor/diff/libesm/diff/sentence.d.ts",
+      "sha256": "d449145a9a77065e6438e42469cad4ddb83b92c53be6ec94ad2a87b21be3249e"
+    },
+    {
+      "path": "vendor/diff/libesm/diff/sentence.d.ts.map",
+      "sha256": "02ba8e2ccc9dbc51dd466151d13120fa66bc44ddf2d8f3b5160b554c26d7b10e"
+    },
+    {
+      "path": "vendor/diff/libesm/diff/sentence.js",
+      "sha256": "dad3b5952b2d8f29d8a01618580661c1757ed0bcce5e2af969b17eff613ca93b"
+    },
+    {
+      "path": "vendor/diff/libesm/diff/word.d.ts",
+      "sha256": "3f34c292613d80c8efdc20534366cd9cb08ff7cb60c92bef5658826ee095bc69"
+    },
+    {
+      "path": "vendor/diff/libesm/diff/word.d.ts.map",
+      "sha256": "cc45ae7ed5dedee0779c81a180b8d4eba238a7baf85af256c1b2f75aea5a9141"
+    },
+    {
+      "path": "vendor/diff/libesm/diff/word.js",
+      "sha256": "c1d6a6c52ef517e4ea9df6d71465fa520ce677d1b4e127425e3c2d8cf14f7a22"
+    },
+    {
+      "path": "vendor/diff/libesm/index.d.ts",
+      "sha256": "c3ee2fb2465660509cd53a26c5fa8df4b5f4d8d34d84f8c58b77656d714ad4a8"
+    },
+    {
+      "path": "vendor/diff/libesm/index.d.ts.map",
+      "sha256": "198e22bfb5f5c3d5e46227a817f4d3019bbcd86267f87b2df537854b8dd992d2"
+    },
+    {
+      "path": "vendor/diff/libesm/index.js",
+      "sha256": "b1f400fd24da44377867ede7ab847a34940423f8bbf3fc5475d8c7647759a2aa"
+    },
+    {
+      "path": "vendor/diff/libesm/package.json",
+      "sha256": "5e433a0d28d7f422b2c6fbc3058b931d19d29bdc49c154b312099680e992e3f5"
+    },
+    {
+      "path": "vendor/diff/libesm/patch/apply.d.ts",
+      "sha256": "688962814dc9d6a47ba11ec5ded89fb6cc7e82a4390c23d51e6f479f80760049"
+    },
+    {
+      "path": "vendor/diff/libesm/patch/apply.d.ts.map",
+      "sha256": "4a1f620f1a25e7ddd7a3f6537e5c0ebd56c9f023514f8de2fdfa1d8bf16dafa0"
+    },
+    {
+      "path": "vendor/diff/libesm/patch/apply.js",
+      "sha256": "f8096efdfda914e9b85a8cb270dfb1a57f0d483656368327c89b80098955589e"
+    },
+    {
+      "path": "vendor/diff/libesm/patch/create.d.ts",
+      "sha256": "299bd9b268b5bf44c02721cdc6d59cb6cb1ee3c628721460ce491d6c2a2f5045"
+    },
+    {
+      "path": "vendor/diff/libesm/patch/create.d.ts.map",
+      "sha256": "e66113474ce37e287db490536547a2c6a3c77c184c86cbc8d125f2346e95ea82"
+    },
+    {
+      "path": "vendor/diff/libesm/patch/create.js",
+      "sha256": "f29a276d2b036858b2f6a509b1e6e147efa572d4820317ee7285d6fe4f2888de"
+    },
+    {
+      "path": "vendor/diff/libesm/patch/line-endings.d.ts",
+      "sha256": "0eb5ff25a78fcc2a2088e0f28e36dfffce1a83a0accb6ed903f8b81f3964c14c"
+    },
+    {
+      "path": "vendor/diff/libesm/patch/line-endings.d.ts.map",
+      "sha256": "166e856902edd31382a590d19c99584dbcc2482ae70270699e5da797741b2ad4"
+    },
+    {
+      "path": "vendor/diff/libesm/patch/line-endings.js",
+      "sha256": "65af590b9426800782d692a7b1923ad1d6d6bbc1c74e9863053c6cfe1d97f3f4"
+    },
+    {
+      "path": "vendor/diff/libesm/patch/parse.d.ts",
+      "sha256": "222809ec2ea4e3c84748f0e19a3337df924de02a677c0fef728da0f345c2d798"
+    },
+    {
+      "path": "vendor/diff/libesm/patch/parse.d.ts.map",
+      "sha256": "23afb0bc1a65e8bc21a2a62ce7e2d34abcbbef673d7ef9cdb2059ac093f6c2b4"
+    },
+    {
+      "path": "vendor/diff/libesm/patch/parse.js",
+      "sha256": "0d8c9a406b8ee41be2e1e6d32f7ccece5c04f6995e6f1f71d4bf4485a5c1bce9"
+    },
+    {
+      "path": "vendor/diff/libesm/patch/reverse.d.ts",
+      "sha256": "1d6fe13f2a2eb6d221907f9c6e29b32cc13e9c7593372996c1d34b3c6bd39b8a"
+    },
+    {
+      "path": "vendor/diff/libesm/patch/reverse.d.ts.map",
+      "sha256": "7060a9b2abdd16a22b803a5c90e2de9529c8a592b9fa78dab40342b422dab451"
+    },
+    {
+      "path": "vendor/diff/libesm/patch/reverse.js",
+      "sha256": "8d4e2d14cff3632a9c9a6d42d52aca16593d97812efe8c185e39094ceb7badf2"
+    },
+    {
+      "path": "vendor/diff/libesm/types.d.ts",
+      "sha256": "c800ee866627d523f3b0633f97112b0ea942f64b23127a9f6efe64ee23447a7c"
+    },
+    {
+      "path": "vendor/diff/libesm/types.d.ts.map",
+      "sha256": "26fd7696da7cb84021ef8a18370a410f9601f46f089ee93ccb40a71c47c54f72"
+    },
+    {
+      "path": "vendor/diff/libesm/types.js",
+      "sha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"
+    },
+    {
+      "path": "vendor/diff/libesm/util/array.d.ts",
+      "sha256": "9b181c0e2b265d7c12205426643b366e7850e789dd9cdf48dd2452fe806e148d"
+    },
+    {
+      "path": "vendor/diff/libesm/util/array.d.ts.map",
+      "sha256": "ed0fe147615d1348c03b2d7f4433f900fde05a1a0abbeb841da2d8f1d3043071"
+    },
+    {
+      "path": "vendor/diff/libesm/util/array.js",
+      "sha256": "8bbc0246a6d709eb776531a7a2062066a77916643364945c1a713a00eca33e46"
+    },
+    {
+      "path": "vendor/diff/libesm/util/distance-iterator.d.ts",
+      "sha256": "be1a5aebf79d0f7739f8c27a65393a23723535f39de3ab62ab088d22937bf9a7"
+    },
+    {
+      "path": "vendor/diff/libesm/util/distance-iterator.d.ts.map",
+      "sha256": "d937c682f41787763b5f7ce5d19072e9a12c32c985554e2755106a4be22572a5"
+    },
+    {
+      "path": "vendor/diff/libesm/util/distance-iterator.js",
+      "sha256": "41e12ebbedb76278e3bd37ede510e009a5952897a3e748e9673b4e5c8ae660e5"
+    },
+    {
+      "path": "vendor/diff/libesm/util/params.d.ts",
+      "sha256": "90b80eea50f29206d12cff5377a443c97b69c0f0f766edf78b5e5b8d90903b83"
+    },
+    {
+      "path": "vendor/diff/libesm/util/params.d.ts.map",
+      "sha256": "af149eeab485d9ce8a49deba23ff42717d672acc81a939c4bbab97166a2a5f34"
+    },
+    {
+      "path": "vendor/diff/libesm/util/params.js",
+      "sha256": "bb76a1c299071b6f8314bb7195ad701af06f092c629aed8b4fef4a7474ab3759"
+    },
+    {
+      "path": "vendor/diff/libesm/util/string.d.ts",
+      "sha256": "26c1c2ff9bf23092a17d2279654a572211357d6e62acb1c9ec7a2063df5ec613"
+    },
+    {
+      "path": "vendor/diff/libesm/util/string.d.ts.map",
+      "sha256": "3b4d262f26a214645dd70c9c9f35fd6b587155b015e801e33850d27f9c914158"
+    },
+    {
+      "path": "vendor/diff/libesm/util/string.js",
+      "sha256": "0836eacdebdb30c8aba0e898f9c7a45e236d036848ccfb058f56745f5ff020d3"
+    },
+    {
+      "path": "vendor/diff/package.json",
+      "sha256": "1c625fe9bba43722c8d8fbd8c2b70edcab5473d75f8d66a862f9800b415aa014"
+    },
+    {
+      "path": "vendor/diff/release-notes.md",
+      "sha256": "5502028b897961ddcc3390af0998a0611eac8bbedb54029867c99a68aad5a704"
+    },
+    {
+      "path": "vendor/openclaw/LICENSE",
+      "sha256": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4"
+    },
+    {
+      "path": "vendor/openclaw/packages/normalization-core/src/balanced-json.mjs",
+      "sha256": "c88741e6dd8eda085d7ae6c2708717833028d51ec6404c9e6e62169dd452c699"
+    },
+    {
+      "path": "vendor/openclaw/packages/normalization-core/src/boolean-coercion.mjs",
+      "sha256": "213192c937c6e8ef9ce1d9fa94c3fc5680be4b4cb34ba2b8e29821e86a10503f"
+    },
+    {
+      "path": "vendor/openclaw/packages/normalization-core/src/cjk-chars.mjs",
+      "sha256": "25cb3d6bcc7a7eaabdb4e545250cf03610fb53cc33f0885629a23f0e098f8519"
+    },
+    {
+      "path": "vendor/openclaw/packages/normalization-core/src/code-points.mjs",
+      "sha256": "60c9197642df3253ea54d21a94277794a4bcf03e48df8110be402c60265498c5"
+    },
+    {
+      "path": "vendor/openclaw/packages/normalization-core/src/error-coercion.mjs",
+      "sha256": "49ef899c15bf0bb688dc02d624180cafc96b3ec6029aed768876bfd2933798a6"
+    },
+    {
+      "path": "vendor/openclaw/packages/normalization-core/src/expect.mjs",
+      "sha256": "48d70d50b19bbf4cb2c1fffdda884d5a5211c3983881969af2df0fd41be62170"
+    },
+    {
+      "path": "vendor/openclaw/packages/normalization-core/src/format.mjs",
+      "sha256": "0af70c219935246be7d622d5c02af9c3847a16b52e9db5d6e4ad676f74e6d3a3"
+    },
+    {
+      "path": "vendor/openclaw/packages/normalization-core/src/index.mjs",
+      "sha256": "2d1aac63ca33291b4e36238b2c7c9b92a7a11b5cb2ada171fc8a7917edff4294"
+    },
+    {
+      "path": "vendor/openclaw/packages/normalization-core/src/json-coercion.mjs",
+      "sha256": "a9e665a9fa861eef0f32d303ac1b2e3232853315e1fa29b80bb54ea99e2c652d"
+    },
+    {
+      "path": "vendor/openclaw/packages/normalization-core/src/number-coercion.mjs",
+      "sha256": "e6d23a5f4f177e6e3c0a07b90aefd53f7515589262704fb2e7990c85b29026c1"
+    },
+    {
+      "path": "vendor/openclaw/packages/normalization-core/src/record-coerce.mjs",
+      "sha256": "353392b0a4d897a84a7a12b36a3e25f063fa02c72ae5ac0792a6ce1e9611a387"
+    },
+    {
+      "path": "vendor/openclaw/packages/normalization-core/src/response-bytes.mjs",
+      "sha256": "b1955d5f150314eb88ef9456afc1e742fc4e209130a2ba9205e8ca93e2e4a846"
+    },
+    {
+      "path": "vendor/openclaw/packages/normalization-core/src/stable-stringify.mjs",
+      "sha256": "b6ca184b08c255a76911fe9585d1a6fc62e9c49ff5f071f4dccd269415b9b9bc"
+    },
+    {
+      "path": "vendor/openclaw/packages/normalization-core/src/string-coerce.mjs",
+      "sha256": "adf85733aece35eddd1e1c0db1f6ec2778f1974678244131a2620212d35baf5d"
+    },
+    {
+      "path": "vendor/openclaw/packages/normalization-core/src/string-normalization.mjs",
+      "sha256": "be938e8144f43ec4e0706d51db7374521060c8b7ca289582b7979bcd9f56fc73"
+    },
+    {
+      "path": "vendor/openclaw/packages/normalization-core/src/text-decoding.mjs",
+      "sha256": "153aa34d43a0ec15a0455844e1b0d52e2c580c74e750570b650ad3db8b2bf177"
+    },
+    {
+      "path": "vendor/openclaw/packages/normalization-core/src/utf16-slice.mjs",
+      "sha256": "248e5e359ce0025a5de9366aac4a1fea449235459ace1e29c3eddc3199864faf"
+    },
+    {
+      "path": "vendor/openclaw/src/agents/line-endings.mjs",
+      "sha256": "bab9d45f3eb862f83fe12e8be2ecf8929faf15f60f082bf70e506610c8e17157"
+    },
+    {
+      "path": "vendor/openclaw/src/agents/sessions/tools/edit-diff.mjs",
+      "sha256": "bdf10a5be7f868e1a7401760efb0947c16cb5ed8fbfd7b17af9b00ca82f43644"
+    },
+    {
+      "path": "vendor/openclaw/src/agents/sessions/tools/edit-replacements.mjs",
+      "sha256": "24c8da9008f5372612bfe462a8d5e393347e0a454ea3f24fe5ff46994bd96d41"
+    },
+    {
+      "path": "vendor/openclaw/src/agents/sessions/tools/file-diff.mjs",
+      "sha256": "87d3c8bc1ef7288be92782133a76a25f84195f3328bca21aa5168a4d0a14c6a6"
+    },
+    {
+      "path": "vendor/openclaw/src/agents/tool-input-error.mjs",
+      "sha256": "6252860751b97bd73f694138e7543a593d66077b705cdc4d94972d9dcf39253e"
+    },
+    {
+      "path": "vendor/openclaw/src/shared/levenshtein-distance.mjs",
+      "sha256": "505e6e8c7c61091f95e6236d9e7c69a114a6c1d44dc3bbc5d6352ffda9258c47"
+    },
+    {
+      "path": "worker.mjs",
+      "sha256": "cd8a1036749f0cc52f68d61a21e3bf6f04ee480f0ef99e7a6bfc65ea9f38ec09"
+    }
+  ]
+}

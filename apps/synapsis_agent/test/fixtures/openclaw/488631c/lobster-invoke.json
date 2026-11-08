@@ -1,0 +1,438 @@
+{
+  "referencePin": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+  "referenceRecords": [
+    {
+      "path": "extensions/lobster/package.json",
+      "sha256": "d545f48ee794bde23eca46384afac0b63802a21c96e0946f28d2f46d2a3d4d20",
+      "bytes": 867
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "sha256": "8ee0f9e7c0bcdecec3d791dff04f2df1f5c608c60e57fbafaf241c765eebd8d7",
+      "bytes": 646948
+    }
+  ],
+  "package": {
+    "name": "@clawdbot/lobster",
+    "version": "2026.9.16",
+    "integrity": "sha512-F7Izhqs6tdaSOp5l2vocqa+HXvqiPw3ny8o81kIguqUPL/jJ+72tpib2A5twxTPM2ruK23cdG1B8kO6joHUlVw==",
+    "archiveBytes": 195429,
+    "archiveSha256": "ef24c4e1eabb9d694f9e311826264dd6111566dcdc74d62ad0d13cdd6cda47e1"
+  },
+  "sources": [
+    {
+      "path": "package/dist/src/commands/stdlib/openclaw_invoke.js",
+      "sha256": "8f30e8f834446dbdb527f96dcf9b86caf8392139c0f96f3d9aac864d1705dd71",
+      "bytes": 8052,
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "package/dist/src/read_response_text.js",
+      "sha256": "7afd34f45b0b0f6c94fb291b7d6a7a3a006e420e2771f8c526d9323d0f529c9a",
+      "bytes": 2531,
+      "wholeModule": true,
+      "executed": true
+    }
+  ],
+  "evaluatedModules": [
+    "package/dist/src/commands/stdlib/openclaw_invoke.js",
+    "package/dist/src/read_response_text.js"
+  ],
+  "platformBoundary": {
+    "fetch": "synthetic ordinary-success response transport",
+    "response": "native Response and actual source reader",
+    "nativeExecution": false
+  },
+  "harness": {
+    "path": "scripts/openclaw/capture-lobster-invoke.mjs",
+    "sha256": "b2c2ea3e975b79dd08df87ead0b793002b01696854e9afbdfc8e2126d8e35192"
+  },
+  "commands": [
+    {
+      "name": "openclaw.invoke",
+      "meta": {
+        "description": "Call a local OpenClaw tool endpoint",
+        "argsSchema": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": "OpenClaw control URL (or OPENCLAW_URL / CLAWD_URL)"
+            },
+            "token": {
+              "type": "string",
+              "description": "Bearer token (or OPENCLAW_TOKEN / CLAWD_TOKEN)"
+            },
+            "tool": {
+              "type": "string",
+              "description": "Tool name (e.g. message, cron, github, etc.)"
+            },
+            "action": {
+              "type": "string",
+              "description": "Tool action"
+            },
+            "args-json": {
+              "type": "string",
+              "description": "JSON string of tool args"
+            },
+            "sessionKey": {
+              "type": "string",
+              "description": "Optional session key attribution"
+            },
+            "session-key": {
+              "type": "string",
+              "description": "Alias for sessionKey"
+            },
+            "dryRun": {
+              "type": "boolean",
+              "description": "Dry run"
+            },
+            "dry-run": {
+              "type": "boolean",
+              "description": "Alias for dryRun"
+            },
+            "each": {
+              "type": "boolean",
+              "description": "Map each pipeline item into tool args"
+            },
+            "itemKey": {
+              "type": "string",
+              "description": "Key to set from the pipeline item (default: item)"
+            },
+            "item-key": {
+              "type": "string",
+              "description": "Alias for itemKey"
+            },
+            "_": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "tool",
+            "action"
+          ]
+        },
+        "sideEffects": [
+          "calls_clawd_tool"
+        ]
+      },
+      "help": "openclaw.invoke — call a local OpenClaw tool endpoint\n\nUsage:\n  openclaw.invoke --tool message --action send --args-json '{\"provider\":\"telegram\",\"to\":\"...\",\"message\":\"...\"}'\n  openclaw.invoke --tool message --action send --args-json '{...}' --dry-run\n  ... | openclaw.invoke --tool message --action send --each --item-key message --args-json '{\"provider\":\"telegram\",\"to\":\"...\"}'\n\nConfig:\n  - Uses OPENCLAW_URL env var by default (or pass --url).\n  - Backward compatible: CLAWD_URL is also supported.\n  - Optional Bearer token via OPENCLAW_TOKEN env var (or pass --token).\n  - Backward compatible: CLAWD_TOKEN is also supported.\n  - Optional attribution via --session-key <sessionKey>.\n\nNotes:\n  - This is a thin transport bridge. Lobster should not own OAuth/secrets.\n"
+    },
+    {
+      "name": "clawd.invoke",
+      "meta": {
+        "description": "Call a local OpenClaw tool endpoint",
+        "argsSchema": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": "OpenClaw control URL (or OPENCLAW_URL / CLAWD_URL)"
+            },
+            "token": {
+              "type": "string",
+              "description": "Bearer token (or OPENCLAW_TOKEN / CLAWD_TOKEN)"
+            },
+            "tool": {
+              "type": "string",
+              "description": "Tool name (e.g. message, cron, github, etc.)"
+            },
+            "action": {
+              "type": "string",
+              "description": "Tool action"
+            },
+            "args-json": {
+              "type": "string",
+              "description": "JSON string of tool args"
+            },
+            "sessionKey": {
+              "type": "string",
+              "description": "Optional session key attribution"
+            },
+            "session-key": {
+              "type": "string",
+              "description": "Alias for sessionKey"
+            },
+            "dryRun": {
+              "type": "boolean",
+              "description": "Dry run"
+            },
+            "dry-run": {
+              "type": "boolean",
+              "description": "Alias for dryRun"
+            },
+            "each": {
+              "type": "boolean",
+              "description": "Map each pipeline item into tool args"
+            },
+            "itemKey": {
+              "type": "string",
+              "description": "Key to set from the pipeline item (default: item)"
+            },
+            "item-key": {
+              "type": "string",
+              "description": "Alias for itemKey"
+            },
+            "_": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "tool",
+            "action"
+          ]
+        },
+        "sideEffects": [
+          "calls_clawd_tool"
+        ]
+      },
+      "help": "clawd.invoke — call a local OpenClaw tool endpoint\n\nUsage:\n  clawd.invoke --tool message --action send --args-json '{\"provider\":\"telegram\",\"to\":\"...\",\"message\":\"...\"}'\n  clawd.invoke --tool message --action send --args-json '{...}' --dry-run\n  ... | clawd.invoke --tool message --action send --each --item-key message --args-json '{\"provider\":\"telegram\",\"to\":\"...\"}'\n\nConfig:\n  - Uses OPENCLAW_URL env var by default (or pass --url).\n  - Backward compatible: CLAWD_URL is also supported.\n  - Optional Bearer token via OPENCLAW_TOKEN env var (or pass --token).\n  - Backward compatible: CLAWD_TOKEN is also supported.\n  - Optional attribution via --session-key <sessionKey>.\n\nNotes:\n  - This is a thin transport bridge. Lobster should not own OAuth/secrets.\n"
+    }
+  ],
+  "cases": [
+    {
+      "id": "single-drains-input-false",
+      "command": "openclaw.invoke",
+      "args": {
+        "tool": "fixture.read",
+        "action": "read",
+        "args-json": "{\"path\":\"雪.txt\"}"
+      },
+      "input": [
+        "ignored",
+        {
+          "old": 1
+        }
+      ],
+      "env": {
+        "OPENCLAW_URL": "http://127.0.0.1:4242/base?ignored=1"
+      },
+      "replies": [
+        {
+          "ok": true,
+          "result": false
+        }
+      ],
+      "observed": {
+        "trace": [
+          "run:start",
+          "input:open",
+          "input:yield:0",
+          "input:yield:1",
+          "input:finally",
+          "effect",
+          "fetch:0",
+          "run:return",
+          "output:0",
+          "output:done"
+        ],
+        "calls": [
+          {
+            "url": "http://127.0.0.1:4242/tools/invoke",
+            "method": "POST",
+            "headers": {
+              "content-type": "application/json"
+            },
+            "body": "{\"tool\":\"fixture.read\",\"action\":\"read\",\"args\":{\"path\":\"雪.txt\"}}"
+          }
+        ],
+        "output": [
+          false
+        ]
+      }
+    },
+    {
+      "id": "each-merges-before-publishing",
+      "command": "openclaw.invoke",
+      "args": {
+        "tool": "fixture.write",
+        "action": "write",
+        "each": true,
+        "item-key": "value",
+        "args-json": "{\"keep\":0,\"value\":\"old\"}"
+      },
+      "input": [
+        {
+          "tag": "一"
+        },
+        false
+      ],
+      "env": {
+        "OPENCLAW_URL": "http://127.0.0.1:4242/base?ignored=1"
+      },
+      "replies": [
+        {
+          "ok": true,
+          "result": [
+            {
+              "n": 1
+            },
+            {
+              "n": 2
+            }
+          ]
+        },
+        {
+          "ok": true,
+          "result": null
+        }
+      ],
+      "observed": {
+        "trace": [
+          "run:start",
+          "input:open",
+          "input:yield:0",
+          "effect",
+          "fetch:0",
+          "input:yield:1",
+          "effect",
+          "fetch:1",
+          "input:finally",
+          "run:return",
+          "output:0",
+          "output:1",
+          "output:2",
+          "output:done"
+        ],
+        "calls": [
+          {
+            "url": "http://127.0.0.1:4242/tools/invoke",
+            "method": "POST",
+            "headers": {
+              "content-type": "application/json"
+            },
+            "body": "{\"tool\":\"fixture.write\",\"action\":\"write\",\"args\":{\"keep\":0,\"value\":{\"tag\":\"一\"}}}"
+          },
+          {
+            "url": "http://127.0.0.1:4242/tools/invoke",
+            "method": "POST",
+            "headers": {
+              "content-type": "application/json"
+            },
+            "body": "{\"tool\":\"fixture.write\",\"action\":\"write\",\"args\":{\"keep\":0,\"value\":false}}"
+          }
+        ],
+        "output": [
+          {
+            "n": 1
+          },
+          {
+            "n": 2
+          },
+          null
+        ]
+      }
+    },
+    {
+      "id": "legacy-command-environment-raw-array",
+      "command": "clawd.invoke",
+      "args": {
+        "tool": "fixture.list",
+        "action": "list"
+      },
+      "input": [],
+      "env": {
+        "CLAWD_URL": "http://localhost:4242/old"
+      },
+      "replies": [
+        [
+          {
+            "label": "raw"
+          },
+          0
+        ]
+      ],
+      "observed": {
+        "trace": [
+          "run:start",
+          "input:open",
+          "input:finally",
+          "effect",
+          "fetch:0",
+          "run:return",
+          "output:0",
+          "output:1",
+          "output:done"
+        ],
+        "calls": [
+          {
+            "url": "http://localhost:4242/tools/invoke",
+            "method": "POST",
+            "headers": {
+              "content-type": "application/json"
+            },
+            "body": "{\"tool\":\"fixture.list\",\"action\":\"list\",\"args\":{}}"
+          }
+        ],
+        "output": [
+          {
+            "label": "raw"
+          },
+          0
+        ]
+      }
+    },
+    {
+      "id": "explicit-url-own-item-key-object",
+      "command": "openclaw.invoke",
+      "args": {
+        "url": "http://127.0.0.1:4243/explicit",
+        "tool": "fixture.write",
+        "action": "write",
+        "each": true,
+        "itemKey": "payload",
+        "args-json": "{\"item\":\"unchanged\",\"payload\":\"old\"}",
+        "sessionKey": "fixture-session"
+      },
+      "input": [
+        "雪😀"
+      ],
+      "env": {},
+      "replies": [
+        {
+          "ok": true,
+          "result": {
+            "z": 1,
+            "a": 2
+          }
+        }
+      ],
+      "observed": {
+        "trace": [
+          "run:start",
+          "input:open",
+          "input:yield:0",
+          "effect",
+          "fetch:0",
+          "input:finally",
+          "run:return",
+          "output:0",
+          "output:done"
+        ],
+        "calls": [
+          {
+            "url": "http://127.0.0.1:4243/tools/invoke",
+            "method": "POST",
+            "headers": {
+              "content-type": "application/json"
+            },
+            "body": "{\"tool\":\"fixture.write\",\"action\":\"write\",\"args\":{\"item\":\"unchanged\",\"payload\":\"雪😀\"},\"sessionKey\":\"fixture-session\"}"
+          }
+        ],
+        "output": [
+          {
+            "z": 1,
+            "a": 2
+          }
+        ]
+      }
+    }
+  ]
+}

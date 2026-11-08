@@ -6,7 +6,7 @@ defmodule Synapsis.Agent.ContextBuilder do
   1. Base Prompt (hardcoded per agent type)
   2. Soul (workspace file)
   3. Identity (workspace file)
-  4. Skills Manifest (computed from tool registry)
+  4. Skills Manifest (selected tool descriptions)
   5. Memory Context (auto-retrieved)
   6. Bootstrap (workspace file)
   7. Agent Context (conditional)
@@ -17,6 +17,7 @@ defmodule Synapsis.Agent.ContextBuilder do
   require Logger
 
   alias Synapsis.{SkillCatalog, Workspace.Identity}
+  alias Synapsis.Agent.Tools.DisplayCatalog
   alias Synapsis.Memory.ContextBuilder, as: MemoryContextBuilder
   alias Synapsis.Provider.ModelRegistry
 
@@ -33,6 +34,8 @@ defmodule Synapsis.Agent.ContextBuilder do
     * `:user_message` — latest user message for memory search
     * `:model_context_window` — explicit model context window size
     * `:agent_config` — agent configuration map
+    * `:workspace_path` — trusted workspace for Markdown memory
+    * `:memory_context` — false for child or shared conversations
 
   """
   @spec build_system_prompt(atom(), keyword()) :: String.t()
@@ -49,7 +52,16 @@ defmodule Synapsis.Agent.ContextBuilder do
       {:identity, load_identity()},
       {:skill_catalog, build_skill_catalog(agent_config, skill_context_window)},
       {:skills, build_skills_manifest(agent_id, agent_config)},
-      {:memory, load_memory_context(user_message, agent_id, memory_context_window)},
+      {:memory,
+       if(Keyword.get(opts, :memory_context, true),
+         do:
+           load_memory_context(
+             user_message,
+             agent_id,
+             memory_context_window,
+             Keyword.get(opts, :workspace_path)
+           )
+       )},
       {:bootstrap, load_bootstrap()},
       {:agent, load_agent_context(agent_id)}
     ]
@@ -116,22 +128,21 @@ defmodule Synapsis.Agent.ContextBuilder do
   end
 
   @doc """
-  Build a compact skills manifest listing available tools.
+  Build a compact manifest describing the selected tools.
 
-  Queries the tool registry for enabled tools and formats them as a one-line-per-tool list.
-  MCP/LSP tools get a provider prefix.
+  Explicit resolved definitions are authoritative. Otherwise, native contract v1
+  selections use static display metadata and already captured MCP source snapshots.
+  This descriptive projection does not establish runtime admission or readiness.
   """
   @spec build_skills_manifest(String.t() | nil) :: String.t() | nil
   @spec build_skills_manifest(String.t() | nil, map()) :: String.t() | nil
   def build_skills_manifest(agent_id, agent_config \\ %{})
 
   def build_skills_manifest(_agent_id, agent_config) do
-    tool_names = assigned_tool_names(agent_config)
-
     tools =
       case Map.get(agent_config, :resolved_tools) do
         tools when is_list(tools) -> tools
-        _other -> Synapsis.Tool.Registry.list_for_llm() |> maybe_filter_tools(tool_names)
+        _other -> selected_tool_metadata(agent_config)
       end
 
     case tools do
@@ -148,7 +159,7 @@ defmodule Synapsis.Agent.ContextBuilder do
           end)
           |> Enum.join("\n")
 
-        "Available skills:\n#{lines}"
+        "Selected tools:\n#{lines}"
     end
   rescue
     e in [RuntimeError, Ecto.QueryError] ->
@@ -157,19 +168,18 @@ defmodule Synapsis.Agent.ContextBuilder do
   end
 
   @doc """
-  Load relevant memory entries for the current turn.
-
-  Uses the latest user message as the search query. Token budget is 5% of model
-  context window, hard capped at 10 entries.
+  Load bounded workspace Markdown for the current root turn.
+  Earlier notes are retrieved on demand by memory_search.
   """
   @memory_context_timeout 4_000
 
   @spec load_memory_context(String.t(), String.t() | nil, pos_integer()) :: String.t() | nil
-  def load_memory_context(query, agent_id, model_context_window) do
+  def load_memory_context(query, agent_id, model_context_window, workspace_path \\ nil) do
     context = %{
       query: query || "",
       agent_id: agent_id || "",
       agent_scope: :agent,
+      workspace_path: workspace_path,
       memory_token_budget: memory_token_budget(model_context_window)
     }
 
@@ -284,28 +294,36 @@ defmodule Synapsis.Agent.ContextBuilder do
     end
   end
 
-  defp maybe_filter_tools(tools, []), do: tools
-  defp maybe_filter_tools(tools, nil), do: tools
-  defp maybe_filter_tools(_tools, :none), do: []
-  defp maybe_filter_tools(tools, :all), do: tools
+  defp selected_tool_metadata(%{tool_contract_version: 1, tools: names} = agent_config)
+       when is_list(names) do
+    display = Map.new(DisplayCatalog.list(), &{&1.name, Map.take(&1, [:name, :description])})
 
-  defp maybe_filter_tools(tools, tool_names) when is_list(tool_names) do
-    names = MapSet.new(tool_names)
-    Enum.filter(tools, &(MapSet.member?(names, &1.name) || MapSet.member?(names, &1[:name])))
+    Enum.flat_map(names, fn name ->
+      case Map.fetch(display, name) do
+        {:ok, metadata} -> [metadata]
+        :error -> captured_mcp_metadata(agent_config, name)
+      end
+    end)
   end
 
-  defp assigned_tool_names(agent_config) when is_map(agent_config) do
-    cond do
-      Map.has_key?(agent_config, :tools) -> explicit_tool_names(Map.get(agent_config, :tools))
-      Map.has_key?(agent_config, "tools") -> explicit_tool_names(Map.get(agent_config, "tools"))
-      true -> :all
+  defp selected_tool_metadata(_agent_config), do: []
+
+  defp captured_mcp_metadata(agent_config, "mcp::" <> qualified = name) do
+    with [id, raw_name] <- String.split(qualified, "::", parts: 2),
+         sources when is_map(sources) <- agent_config[:mcp_sources],
+         %{source_id: ^id, tools: tools} when is_list(tools) <- sources[id],
+         %{description: description} <-
+           Enum.find(tools, fn
+             %{raw_name: ^raw_name} -> true
+             _ -> false
+           end) do
+      [%{name: name, description: description}]
+    else
+      _ -> []
     end
   end
 
-  defp assigned_tool_names(_agent_config), do: :all
-  defp explicit_tool_names([]), do: :none
-  defp explicit_tool_names(nil), do: :none
-  defp explicit_tool_names(tool_names), do: tool_names
+  defp captured_mcp_metadata(_agent_config, _name), do: []
 
   defp positive_integer_or_nil(value) when is_integer(value) and value > 0, do: value
   defp positive_integer_or_nil(_value), do: nil

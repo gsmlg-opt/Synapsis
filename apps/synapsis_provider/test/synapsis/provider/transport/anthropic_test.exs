@@ -4,13 +4,13 @@ defmodule Synapsis.Provider.Transport.AnthropicTest do
   alias Synapsis.Provider.Transport.Anthropic
 
   setup do
-    bypass = Bypass.open()
-    %{bypass: bypass, port: bypass.port}
+    bypass = Gaoxy.Test.open()
+    %{bypass: bypass, port: URI.parse(Gaoxy.Test.url(bypass)).port}
   end
 
   describe "fetch_models/1" do
     test "returns parsed models from /models", %{bypass: bypass, port: port} do
-      Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
         headers = Map.new(conn.req_headers)
         assert headers["x-api-key"] == "test-api-key"
         assert headers["authorization"] == "Bearer test-api-key"
@@ -41,7 +41,7 @@ defmodule Synapsis.Provider.Transport.AnthropicTest do
     end
 
     test "uses /models when base_url already includes /v1", %{bypass: bypass, port: port} do
-      Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "model-a"}]}))
@@ -52,7 +52,7 @@ defmodule Synapsis.Provider.Transport.AnthropicTest do
     end
 
     test "uses base plus /v1/models for compatible providers", %{bypass: bypass, port: port} do
-      Bypass.expect_once(bypass, "GET", "/llm/anthropic/v1/models", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/llm/anthropic/v1/models", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "versioned-model"}]}))

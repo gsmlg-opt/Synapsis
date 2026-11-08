@@ -1,0 +1,1034 @@
+{
+  "referencePin": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+  "referenceRecords": [
+    {
+      "path": "extensions/lobster/package.json",
+      "sha256": "d545f48ee794bde23eca46384afac0b63802a21c96e0946f28d2f46d2a3d4d20"
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "sha256": "8ee0f9e7c0bcdecec3d791dff04f2df1f5c608c60e57fbafaf241c765eebd8d7"
+    },
+    {
+      "path": "pnpm-workspace.yaml",
+      "sha256": "fe963519c37c92625e3105dae16d1e749c95e9ad7d82ddbfca9db1b6bd63962e"
+    },
+    {
+      "path": "package.json",
+      "sha256": "5f3a32b44b1d1a3eb9e8628845e195d054e4e41b28b1349d7dbc7dff723d9920"
+    }
+  ],
+  "sourcePackage": {
+    "name": "@clawdbot/lobster",
+    "version": "2026.9.16",
+    "integrity": "sha512-F7Izhqs6tdaSOp5l2vocqa+HXvqiPw3ny8o81kIguqUPL/jJ+72tpib2A5twxTPM2ruK23cdG1B8kO6joHUlVw==",
+    "installed": false,
+    "packageJsonSha256": "8ec4aaa1901574565cd1407720185faa4c41e1400f926b726d777a253bfcb13d"
+  },
+  "executedWorkflowRuntime": true,
+  "productionCatalogInstalled": false,
+  "checkpointPersistenceExecuted": false,
+  "fullToolRuntimeExecuted": false,
+  "nativeToolExecution": false,
+  "sourceRecords": [
+    {
+      "path": "package/dist/src/command_tokens.js",
+      "sha256": "a8cd45e37b2348cc3f847c1b06b2e2959594f360e05521f3ae45f57966a495fa",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "package/dist/src/commands/stdlib/ask.js",
+      "sha256": "9133cbe30bddd28d322d3017f428317a6f98ab2bd9f43992b9f74594e3af6537",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "package/dist/src/commands/stdlib/head.js",
+      "sha256": "3045374b51c27c675ac529982d5f37aebb81fd15da94e41a329cdf2992650aa1",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "package/dist/src/commands/stdlib/json.js",
+      "sha256": "9e3f24e0a2bcba55e466f300901fd0f0b2d079fa075a55ee296c54201df76b58",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "package/dist/src/commands/stdlib/pick.js",
+      "sha256": "3d224840f187aa86c8414873f3782827e80e0ef9e176c085ceb2bb05f12d402c",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "package/dist/src/input_request.js",
+      "sha256": "4ee71a924f205641da2ea138a352ebe81ade206f90f7d666c66f6abea3e9aaa4",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "package/dist/src/parser.js",
+      "sha256": "e8f3f5cc67b1739b7347da70ea9a543d68f8e5f622387910d0202bb0f5b030ce",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "package/dist/src/renderers/json.js",
+      "sha256": "1a739a179aacb410add5fe954aec53e05fc89434b8e0aa8d8718b69fabfce681",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "package/dist/src/runtime.js",
+      "sha256": "7cff8ff2120145f8f8155d7904efe04dc018bfe281725a76a677c7a885fcfd53",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "package/dist/src/state/atomic_file.js",
+      "sha256": "87870c3439c4c8da907ada7f9a7412d5f84cc52e5225bb0deeab19b416c7d3b5",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "package/dist/src/state/store.js",
+      "sha256": "8a0e750ccbf3e44135e96d82f4836d474369e8401feb8b498a77165afa29e77c",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "package/dist/src/validation.js",
+      "sha256": "a9e087f2b5502be86dc223f2746c1d598446d4c1b5537f697003418417933f6b",
+      "wholeModule": true,
+      "executed": true
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "ajv",
+      "version": "8.20.0",
+      "integrity": "sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA==",
+      "installed": false,
+      "packageJsonSha256": "1f9033ee5a6515e7d76938b7072941862d1ed228a6879cc7fe10cdeb75107989",
+      "license": {
+        "path": "package/LICENSE",
+        "sha256": "a05350a88e318e4f5f2c2a1ff1e2e88daa4dd38e6e78b71cccae422bdc762cc3",
+        "text": "The MIT License (MIT)\n\nCopyright (c) 2015-2021 Evgeny Poberezkin\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n\n"
+      }
+    },
+    {
+      "name": "fast-deep-equal",
+      "version": "3.1.3",
+      "integrity": "sha512-f3qQ9oQy9j2AhBe/H9VC91wLmKBCCU/gDOnKNAYG5hswO7BLKj09Hc5HYNz9cGI++xlpDCIgDaitVs03ATR84Q==",
+      "installed": false,
+      "packageJsonSha256": "a5c63940db0260739be9e2ac67f3aac268df4db5770420ee4e34e493152f97d2",
+      "license": {
+        "path": "package/LICENSE",
+        "sha256": "7bf9b2de73a6b356761c948d0e9eeb4be6c1270bd04c79cd489c1e400ffdfc1a",
+        "text": "MIT License\n\nCopyright (c) 2017 Evgeny Poberezkin\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+      }
+    },
+    {
+      "name": "fast-uri",
+      "version": "4.2.2",
+      "integrity": "sha512-EwVpUMzLVNOmcWW0zi5G3JJwkopB6XXjnVvNBGfqrMMsVew2hkQWl5e/pe/CfYUeS6jt4cIO2MnamEW7v/7wPw==",
+      "installed": false,
+      "packageJsonSha256": "c181566b934b386b614dcd5d7aeb438ebd6bfaa6b3f54f187eccccb3983cfb48",
+      "license": {
+        "path": "package/LICENSE",
+        "sha256": "b010b0dfdfdb23d7396e03b82cd4621fc9bb8f95d6b0aea70b9c24e12074c786",
+        "text": "Copyright (c) 2011-2021, Gary Court until https://github.com/garycourt/uri-js/commit/a1acf730b4bba3f1097c9f52e7d9d3aba8cdcaae\nCopyright (c) 2021-present The Fastify team <https://github.com/fastify/fastify#team>\nAll rights reserved.\n\nRedistribution and use in source and binary forms, with or without\nmodification, are permitted provided that the following conditions are met:\n    * Redistributions of source code must retain the above copyright\n      notice, this list of conditions and the following disclaimer.\n    * Redistributions in binary form must reproduce the above copyright\n      notice, this list of conditions and the following disclaimer in the\n      documentation and/or other materials provided with the distribution.\n    * The names of any contributors may not be used to endorse or promote\n      products derived from this software without specific prior written\n      permission.\n\nTHIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\" AND\nANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED\nWARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE\nDISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS AND CONTRIBUTORS BE LIABLE FOR ANY\nDIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES\n(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;\nLOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND\nON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT\n(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS\nSOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n\n                                  *   *   *\n\nThe complete list of contributors can be found at:\n- https://github.com/garycourt/uri-js/graphs/contributors"
+      }
+    },
+    {
+      "name": "json-schema-traverse",
+      "version": "1.0.0",
+      "integrity": "sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug==",
+      "installed": false,
+      "packageJsonSha256": "156fb24af02845c190701360d06dfda35ef04282e34a734289ea9535ad9819ae",
+      "license": {
+        "path": "package/LICENSE",
+        "sha256": "7bf9b2de73a6b356761c948d0e9eeb4be6c1270bd04c79cd489c1e400ffdfc1a",
+        "text": "MIT License\n\nCopyright (c) 2017 Evgeny Poberezkin\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+      }
+    },
+    {
+      "name": "require-from-string",
+      "version": "2.0.2",
+      "integrity": "sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==",
+      "installed": false,
+      "packageJsonSha256": "c0002f7d4c7d7e2a885cf0f97226344902417c3a0980f2beca41962d2bc1f6d8",
+      "license": {
+        "path": "package/license",
+        "sha256": "6ee0feb1f6ef996ff5a68600f8cf98909cf412d39ef3cdceaefd87d636fa1b7f",
+        "text": "The MIT License (MIT)\n\nCopyright (c) Vsevolod Strukchinsky <floatdrop@gmail.com> (github.com/floatdrop)\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in\nall copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\nTHE SOFTWARE.\n"
+      }
+    }
+  ],
+  "dependencyFiles": [
+    {
+      "path": "ajv/dist/ajv.js",
+      "sha256": "edaed56fc546f5551b0d6dc2ff2a9cc25c2d6c83318a086eaa8c3ad0b2479297",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/compile/codegen/code.js",
+      "sha256": "1287153722f1fc3c5342647de7ae1d7b6fb68bdb3378a0776a937d273fc97e0d",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/compile/codegen/index.js",
+      "sha256": "f03b2b72597ef86878d1d4030580c2d0964046efad4867f3d05aa91065ba034c",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/compile/codegen/scope.js",
+      "sha256": "d2a0a97af2faa2cad88702314fe421e235ab17f11e0d62883d58d8d4dc734286",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/compile/errors.js",
+      "sha256": "53990f8f2cc05922bba410ae68231d3f869de4f8343277ede5b4834fa564c6c2",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/compile/index.js",
+      "sha256": "05b34da22814f3787bfa3ac68dad59c9047f56e55a607e0a20719ebf5afe69ac",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/compile/names.js",
+      "sha256": "3cab37a2240b996b9bed92fe7a041d91689cfe3ad2e9ae4c0ab99e4146408493",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/compile/ref_error.js",
+      "sha256": "81c98fdf34c3037c91bfcc02277ec32156c71e34048f36cfe4e084416e916cb7",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/compile/resolve.js",
+      "sha256": "df75af0e0cf03fa1c6452e8dc61019f5aec645a8a5f6f494dc4e13cb5502d2d9",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/compile/rules.js",
+      "sha256": "ec1d86500f497aa8e20f9f0c1695951159d9a909669d00a261ce1bb22b3cf0a9",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/compile/util.js",
+      "sha256": "fa911f5631f29d4d6420adfe086cb693b94b08de2719475c78c54bcb82f831a5",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/compile/validate/applicability.js",
+      "sha256": "50c5cba5894a7fb9874b3432355b46ec71b73c9368dafb1323ded8567cca8fc0",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/compile/validate/boolSchema.js",
+      "sha256": "c08abdbdbd3d8b1dcc0552a20fbc7d837ed44f4ca6abb2e464985590ac94377f",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/compile/validate/dataType.js",
+      "sha256": "697bd7005361ec7066a23c18830a10b0ef28aec1a33138b4e3098bf78c4fae52",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/compile/validate/defaults.js",
+      "sha256": "05721971df94faa57b09c8cfd60c2eef81b6d14910a7dea5f539d693a029c428",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/compile/validate/index.js",
+      "sha256": "cb2103e5f890e04592c10d24b45857dad91155bae9f9460138a2459bdaaea2cd",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/compile/validate/keyword.js",
+      "sha256": "ab8f070c75c25eee9be5c837f364748909b58f5db66149a2beccbd2f66afeb76",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/compile/validate/subschema.js",
+      "sha256": "ca783d6052af91e65ebb59a5b48b47fb459a2241d37ca6a042f767d4ce451bdc",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/core.js",
+      "sha256": "51be29c7ed7288622f755c0f1bebd3da4a9907d77aa2c33b0f2a0a5b6b339603",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/refs/data.json",
+      "sha256": "d24ab8a97c18b3f5afdde7d7024a0e0ac1df0614a16a41cb88f81379edcc2db3",
+      "wholeModule": true,
+      "executed": false,
+      "kind": "json-data"
+    },
+    {
+      "path": "ajv/dist/refs/json-schema-draft-07.json",
+      "sha256": "f7e8b13cad4fecff9771f3626fef33e20e59027b90938a28fd9d2f6c17cd0773",
+      "wholeModule": true,
+      "executed": false,
+      "kind": "json-data"
+    },
+    {
+      "path": "ajv/dist/runtime/equal.js",
+      "sha256": "c94467da09ee94e5d194483a7ab821b9bb3bf1c04397270f2ab53dea9de59274",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/runtime/ucs2length.js",
+      "sha256": "1df012dd3d23fced07255a7204798004509687cb1f431ae0ab976db436bbd890",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/runtime/uri.js",
+      "sha256": "d1d61baf97ed87d7310df847a78ed73d19c8cc003207bf5aaec977500bdb1578",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/runtime/validation_error.js",
+      "sha256": "11bf5b4affc8114e5e7cdf65b93006c2d997ab60ada1152c22e136f9b828b815",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/applicator/additionalItems.js",
+      "sha256": "7beb0fbda5e349907067c8398bb8cc3260a6267b6e5dff9793a5ab2171934099",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/applicator/additionalProperties.js",
+      "sha256": "e237cb180cd2e3f2e676feb714d7dcc6a42116640f9db2ad830cd20d9dfc540a",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/applicator/allOf.js",
+      "sha256": "98f46a6434ebe5f851b406480e18b776dd7f1bcc275e28c16a13bfef3cc067c7",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/applicator/anyOf.js",
+      "sha256": "8d7368d4aebad0514b713191b934993b4f0bf570e1bab93b07dc69712db2cec5",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/applicator/contains.js",
+      "sha256": "56165dc93cd8b0b4611db50a97f1e7d7f9af6c5ffe95a7a5b054d6eeaa7f6a8c",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/applicator/dependencies.js",
+      "sha256": "c1a83bf484b6fde4d268935f079ddba5e74a2f589dfc6d15ca2e20ba4d06ee5b",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/applicator/if.js",
+      "sha256": "42374ee5dc681433579cc689b0c4ae5343f5bf78d4d6a561722b9277c5335ec4",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/applicator/index.js",
+      "sha256": "5a61978f6d81bbabfa8b9ccb71d7de816ed6dd1fd7de5c72657439a76c2a7cb3",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/applicator/items.js",
+      "sha256": "fa87f74adc3aac1f1b5e3e7dddf73294e6850e1dd49ed131fca4352e9645c54e",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/applicator/items2020.js",
+      "sha256": "c449ef64aec16263c7935293ed450cfc2da3ba66f6df5f99c3198c05f169838f",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/applicator/not.js",
+      "sha256": "ab2f2758d4ea97ac8763fe5540dd0f4d877859676fe5d6c750a18deca387f718",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/applicator/oneOf.js",
+      "sha256": "e2aeb6c22d49fd5f348bedcf7f5c4d7b31f5a05dd7ff1a0c531374c6968792a2",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/applicator/patternProperties.js",
+      "sha256": "0d43da49a82452c439ba990de7372ad5cedb663717918a5f6dae07025abff655",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/applicator/prefixItems.js",
+      "sha256": "16264f7b3233a6dcb98b48700643efbd3ebc4d11e27b3eacffc83ccb5f44fb23",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/applicator/properties.js",
+      "sha256": "c896873ae7251093a2c8880545b69b6e8cb55c44817a53ec830a49818d74104f",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/applicator/propertyNames.js",
+      "sha256": "b3411cfeaff8efd5e6de12971bb5dc339e64b61fbe62d3b950794c077315c2e7",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/applicator/thenElse.js",
+      "sha256": "9bc42eb8699d57188a7ec2a710d3f38052f92bd78c5d4d0442cf98cf2ebbe22d",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/code.js",
+      "sha256": "9212ddf8bd0a4c3b1c4b44cdadd141183b2b36f561b91d13df53c83911e3bf63",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/core/id.js",
+      "sha256": "49c8eff694ce4371450c1f9986e934fcbf4bd143311caef5332113f29175bc11",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/core/index.js",
+      "sha256": "f420e1011b95e27b54c58323a7ed4ffbd0a88cdb4496f771bb6782c2aa22d23e",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/core/ref.js",
+      "sha256": "1422c1454b3621d890066042048f37746fe1cf213088307099816199889bbfd1",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/discriminator/index.js",
+      "sha256": "b58b58025d2dbe5a6967376faec9295b860a338664c47037e9a1035c1e8fb88e",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/discriminator/types.js",
+      "sha256": "2365341d1f30dc72cece7703e908e47aacb8f904b9f66ec4019fe889ae1e57fa",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/draft7.js",
+      "sha256": "8c62022c6c3aa302c3ea6f6709a697fc9eb6385d243fa7c2156dbe9f02228170",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/format/format.js",
+      "sha256": "6fae0d5124fd821b1a9959492f7d6d7b528bee8830d49a7a4759fc9a9ab81d5f",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/format/index.js",
+      "sha256": "d5dad5f95c9c5f48f8ca956cdbb927aafc7b56baabfca8c0b0403d92c5ebeb67",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/metadata.js",
+      "sha256": "45c178744a7ec57e20c85ceeaea8d9f36b5663636ab7e495ea2c3c1bf4a58609",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/validation/const.js",
+      "sha256": "ace994e9ab97a70899a9484794794f4be5ee03bfb3cf32242d3f091d77f0329a",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/validation/enum.js",
+      "sha256": "61062b318a40eb52fc5a8283e7f4781db98349841744961ef4fe04a4722ebf22",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/validation/index.js",
+      "sha256": "4a1839832de5f10ff423c1c0c6cb232b5b6e1b34980a28862cf56b2763136de4",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/validation/limitItems.js",
+      "sha256": "49f0427d29b38aef2fa8aead26e68bda12deb9a2da22f7a7804ba0fed44e1fec",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/validation/limitLength.js",
+      "sha256": "379c28317faaf7784680b6049c3562692d3df6d65cce33f48e6c6c723beeeec2",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/validation/limitNumber.js",
+      "sha256": "3dd4bd41dbfc76c522078ff54b6479683485c4e97faa04cfcfaf2d8cb0fb8e65",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/validation/limitProperties.js",
+      "sha256": "8523a3f7b36c34882ca32b0ec71a2157d7930907cb86b778a97c1514fa6258ac",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/validation/multipleOf.js",
+      "sha256": "df128c2a6ca74ae57c65fbfe3aea8a101447a3ae8c41fd53cfc5693fa23cc8bd",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/validation/pattern.js",
+      "sha256": "86e84206bfc6a66ef18bf1fe43fbc56ebe7f7f4d57841197b6d044c529e0c195",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/validation/required.js",
+      "sha256": "b953bc18d94274bd73374dd5b4282d7a21159cec8c0e7a357e1eaf3f326b9054",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "ajv/dist/vocabularies/validation/uniqueItems.js",
+      "sha256": "666d1a2aa25c0dfe3cf41312d0f9d40e9f99eb2c19be7469134ad89005aadd52",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "fast-deep-equal/index.js",
+      "sha256": "eb469e206280321a3878f2335ec98aa2104a155079d8ed83a23029098dccd215",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "fast-uri/index.js",
+      "sha256": "2e42a1862516bcc1a85f65acf370fd33da762411fac324d5796d7a4a90fd7ebd",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "fast-uri/lib/schemes.js",
+      "sha256": "f7524e001d061e9f164f57df552c19e5a8e51ea53735f7ae9e0a8342373ea728",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "fast-uri/lib/utils.js",
+      "sha256": "e6a79da9c40ceccf367b9b7c484c17bc3a97e737e72c4e23e485ec05a6281169",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    },
+    {
+      "path": "json-schema-traverse/index.js",
+      "sha256": "024191b747afac01b28ff11d744e9f82720bbad5f716163ba5c962eb62aa2350",
+      "wholeModule": true,
+      "executed": true,
+      "kind": "commonjs"
+    }
+  ],
+  "nativeImports": [
+    "node:crypto",
+    "node:fs",
+    "node:os",
+    "node:path"
+  ],
+  "harness": {
+    "path": "scripts/openclaw/capture-lobster-runtime.mjs",
+    "sha256": "304cc522224f3d055656dffd80fa636cbf8bda66eaccff36023c81686d822731",
+    "stringCodeGeneration": "actual Ajv compiler",
+    "sourceStream": "explicit async-generator fixture",
+    "observations": "wrappers record real command.run order; source fixture records each yield",
+    "resume": "explicit recipe slices remaining pipeline and supplies state/response as fixed tool runtime does; no persistence"
+  },
+  "license": {
+    "path": "package/LICENSE",
+    "sha256": "0197dda80dd142fdcaa45eaa2b55ad1d2adeb16c1fac2d445bd1cbaf9a7251fb",
+    "text": "MIT License\n\nCopyright (c) 2026 Vignesh\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+  },
+  "cases": [
+    {
+      "id": "lazy-head-one",
+      "pipeline": "fixture_source | head --n 1 | json",
+      "input": [],
+      "sourceItems": [
+        {
+          "id": 1,
+          "label": "一"
+        },
+        {
+          "id": 2,
+          "label": "二"
+        }
+      ],
+      "runs": [
+        {
+          "trace": [
+            "run:fixture_source",
+            "run:head",
+            "run:json",
+            "pull:1"
+          ],
+          "result": {
+            "items": [
+              {
+                "id": 1,
+                "label": "一"
+              }
+            ],
+            "halted": false,
+            "haltedAt": null,
+            "executionStarted": true,
+            "rendered": false,
+            "renderedItems": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "lazy-head-zero",
+      "pipeline": "fixture_source | head --n 0 | json",
+      "input": [],
+      "sourceItems": [
+        {
+          "id": 1,
+          "label": "一"
+        },
+        {
+          "id": 2,
+          "label": "二"
+        }
+      ],
+      "runs": [
+        {
+          "trace": [
+            "run:fixture_source",
+            "run:head",
+            "run:json"
+          ],
+          "result": {
+            "items": [],
+            "halted": false,
+            "haltedAt": null,
+            "executionStarted": true,
+            "rendered": false,
+            "renderedItems": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "pure-pick",
+      "pipeline": "pick id,label | json",
+      "input": [
+        {
+          "id": 1,
+          "label": "一",
+          "extra": true
+        },
+        {
+          "id": 2,
+          "label": "二",
+          "extra": false
+        }
+      ],
+      "runs": [
+        {
+          "trace": [
+            "run:pick",
+            "run:json"
+          ],
+          "result": {
+            "items": [
+              {
+                "id": 1,
+                "label": "一"
+              },
+              {
+                "id": 2,
+                "label": "二"
+              }
+            ],
+            "halted": false,
+            "haltedAt": null,
+            "executionStarted": true,
+            "rendered": false,
+            "renderedItems": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "ask-same-stage",
+      "pipeline": "fixture_source | ask --prompt 'Review' --schema '{\"type\":\"string\"}' --subject-from-stdin | json",
+      "input": [],
+      "sourceItems": [
+        "draft"
+      ],
+      "resume": {
+        "mode": "same_stage",
+        "response": "continue"
+      },
+      "runs": [
+        {
+          "trace": [
+            "run:fixture_source",
+            "run:ask",
+            "pull:draft"
+          ],
+          "result": {
+            "items": [
+              {
+                "type": "input_request",
+                "prompt": "Review",
+                "responseSchema": {
+                  "type": "string"
+                },
+                "subject": {
+                  "text": "draft"
+                },
+                "items": [],
+                "commandInput": {
+                  "pending": {
+                    "requestIndex": 0,
+                    "metadata": {
+                      "prompt": "Review",
+                      "responseSchema": {
+                        "type": "string"
+                      },
+                      "subject": {
+                        "text": "draft"
+                      },
+                      "signature": "{\"prompt\":\"Review\",\"responseSchema\":{\"type\":\"string\"},\"subject\":{\"text\":\"draft\"}}"
+                    },
+                    "suspendedState": {
+                      "type": "ask",
+                      "subject": {
+                        "text": "draft"
+                      }
+                    }
+                  },
+                  "history": []
+                }
+              }
+            ],
+            "halted": true,
+            "haltedAt": {
+              "index": 1,
+              "name": "ask",
+              "inPlace": true
+            },
+            "executionStarted": true,
+            "rendered": false,
+            "renderedItems": []
+          }
+        },
+        {
+          "trace": [
+            "run:ask",
+            "run:json"
+          ],
+          "result": {
+            "items": [
+              "continue"
+            ],
+            "halted": false,
+            "haltedAt": null,
+            "executionStarted": true,
+            "rendered": false,
+            "renderedItems": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "ask-emit-next-stage",
+      "pipeline": "ask --prompt 'Review' --schema '{\"type\":\"boolean\"}' --emit | json",
+      "input": [
+        "draft"
+      ],
+      "resume": {
+        "mode": "next_stage",
+        "response": true
+      },
+      "runs": [
+        {
+          "trace": [
+            "run:ask"
+          ],
+          "result": {
+            "items": [
+              {
+                "type": "input_request",
+                "prompt": "Review",
+                "responseSchema": {
+                  "type": "boolean"
+                },
+                "items": [
+                  "draft"
+                ]
+              }
+            ],
+            "halted": true,
+            "haltedAt": {
+              "index": 0,
+              "name": "ask",
+              "inPlace": false
+            },
+            "executionStarted": false,
+            "rendered": false,
+            "renderedItems": []
+          }
+        },
+        {
+          "trace": [
+            "run:json"
+          ],
+          "result": {
+            "items": [
+              true
+            ],
+            "halted": false,
+            "haltedAt": null,
+            "executionStarted": true,
+            "rendered": false,
+            "renderedItems": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "json-renderer",
+      "pipeline": "pick id,label | json",
+      "input": [
+        {
+          "id": 1,
+          "label": "一",
+          "extra": true
+        }
+      ],
+      "renderOutput": true,
+      "runs": [
+        {
+          "trace": [
+            "run:pick",
+            "run:json"
+          ],
+          "result": {
+            "items": [],
+            "halted": false,
+            "haltedAt": null,
+            "executionStarted": true,
+            "rendered": true,
+            "renderedItems": [
+              {
+                "id": 1,
+                "label": "一"
+              }
+            ],
+            "stdout": "[\n  {\n    \"id\": 1,\n    \"label\": \"一\"\n  }\n]\n"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ask-known-array",
+      "pipeline": "ask --prompt 'Review' --schema '{\"type\":\"string\"}' --subject-from-stdin | json",
+      "input": [
+        "draft"
+      ],
+      "resume": {
+        "mode": "same_stage",
+        "response": "continue"
+      },
+      "runs": [
+        {
+          "trace": [
+            "run:ask"
+          ],
+          "result": {
+            "items": [
+              {
+                "type": "input_request",
+                "prompt": "Review",
+                "responseSchema": {
+                  "type": "string"
+                },
+                "subject": {
+                  "text": "draft"
+                },
+                "items": [
+                  "draft"
+                ],
+                "commandInput": {
+                  "pending": {
+                    "requestIndex": 0,
+                    "metadata": {
+                      "prompt": "Review",
+                      "responseSchema": {
+                        "type": "string"
+                      },
+                      "subject": {
+                        "text": "draft"
+                      },
+                      "signature": "{\"prompt\":\"Review\",\"responseSchema\":{\"type\":\"string\"},\"subject\":{\"text\":\"draft\"}}"
+                    },
+                    "suspendedState": {
+                      "type": "ask",
+                      "subject": {
+                        "text": "draft"
+                      }
+                    }
+                  },
+                  "history": []
+                }
+              }
+            ],
+            "halted": true,
+            "haltedAt": {
+              "index": 0,
+              "name": "ask",
+              "inPlace": true
+            },
+            "executionStarted": false,
+            "rendered": false,
+            "renderedItems": []
+          }
+        },
+        {
+          "trace": [
+            "run:ask",
+            "run:json"
+          ],
+          "result": {
+            "items": [
+              "continue"
+            ],
+            "halted": false,
+            "haltedAt": null,
+            "executionStarted": true,
+            "rendered": false,
+            "renderedItems": []
+          }
+        }
+      ]
+    }
+  ]
+}

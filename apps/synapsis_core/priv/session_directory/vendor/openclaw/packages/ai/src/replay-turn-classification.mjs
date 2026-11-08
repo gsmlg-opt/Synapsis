@@ -1,0 +1,1 @@
+export const STREAM_ERROR_FALLBACK_TEXT = "[assistant turn failed before producing content]";

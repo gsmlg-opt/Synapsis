@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "reference": {
+    "repository": "openclaw/openclaw",
+    "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b"
+  },
+  "sources": {
+    "src/agents/utils/mime.ts": "5401bf3725ab4704ef448c49ba5094733e7640fb7d4cb0ca8a719159e5a084f6",
+    "src/agents/utils/image-resize.ts": "1e5c5325eea58493267ca95a0bb6a695529243021a678c5c37927808513ebdcd",
+    "packages/media-core/src/attachment-classify.ts": "7ee4a151ae34d6adfe363eefbd5bec44966b0bbf0b7f191baf352d6a5385d765",
+    "packages/media-core/src/mime.ts": "8a09bf1b2c75f5f8a3ef3fe51aa07c97fb46e4a712faca89ccd72eaa9464fdb0",
+    "packages/media-core/src/constants.ts": "eaf6503c56b32bab745da862d150c76896805e7db2f5bb12283e2930b64cb184",
+    "packages/media-core/src/file-name.ts": "b9cc04ae86593cc254802d9639f4b1af147ff59ab7d9f1224b4dec11aabd42a4",
+    "LICENSE": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4"
+  },
+  "aliases": {
+    "src/media/image-ops.ts": "packages/tool-host/src/filesystem/read_codec.mjs"
+  },
+  "limits": {
+    "inputPixels": 25000000,
+    "outputPixels": 25000000
+  },
+  "scope": "Original detector/classifier/processImage modules. Host codec adapter uses existing owned worker; native-only fallback and real Windows system decoder remain full-goal prerequisites."
+}

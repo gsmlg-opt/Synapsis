@@ -3,7 +3,7 @@ defmodule Synapsis.Agent.Events.RunEvent do
   Typed internal run/session event envelope (Track B).
 
   PubSub projections such as `{"done", %{}}` remain UI-facing. Internal
-  consumers (SessionBridge, heartbeat, future RunCoordinator) must correlate
+  consumers (heartbeat, future RunCoordinator) must correlate
   on these typed events instead of parsing UI strings or transcripts.
   """
 

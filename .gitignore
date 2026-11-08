@@ -82,6 +82,16 @@ apps/**/.trees/
 # nodejs
 node_modules
 
+# Packaged filesystem read helper runtime closure (including Photon WASM).
+!apps/synapsis_core/priv/filesystem_read/node_modules/
+!apps/synapsis_core/priv/filesystem_read/node_modules/**
+!apps/synapsis_core/priv/workflow_schema/node_modules/
+!apps/synapsis_core/priv/workflow_schema/node_modules/**
+!packages/tool-host/src/session-directory/vendor/node_modules/
+!packages/tool-host/src/session-directory/vendor/node_modules/**
+!apps/synapsis_core/priv/session_directory/vendor/node_modules/
+!apps/synapsis_core/priv/session_directory/vendor/node_modules/**
+
 # Devenv
 .devenv*
 devenv.local.nix

@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "reference": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+  "files": {
+    "LICENSE": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4",
+    "extensions/diffs/src/render.ts": "48e3c7e22ae8addd310d4eb4f0e3a33e7f1b83671363001480eae19d8f7854d8",
+    "extensions/diffs/src/language-hints.ts": "a8e71bd3303a538f3cd3acd438eab441d70b3c2eff49f2cf509f61691e222db2",
+    "extensions/diffs/src/shiki-curated-languages.ts": "7f7c209dbc25d67b59b1e54f06cb8794e95c7e3ca65d9ff939079dab238fc9f9",
+    "extensions/diffs/src/viewer-client.ts": "199eaefd89aa62fabf436958be50e164ec13f24abfc6cdef6edd9d9a36791af5",
+    "extensions/diffs/src/viewer-payload.ts": "0c67b7e18b20c44366db50a70dbb6f0bfe3de8c00ecfc58382f2078c693912d6",
+    "extensions/diffs/src/types.ts": "9a34a38473c6ccbafa28d697ae0bcfc0acf22af590800899b668cbe1934e9a79",
+    "extensions/diffs/src/browser.runtime.ts": "34ed1006d3939bf09e4c4a1ce7408c45d25374009ae3ec4c9d9c6b267b1f2720",
+    "extensions/diffs/src/viewer-assets.ts": "fcfc833538e197311de043aaf8dcd24754019aee62a1d293ee519dc09efa70c8",
+    "src/shared/html-escape.ts": "c9d2e3591479cbb5af86622eb9a8ee2ee8bd8d923d138b6e50725e2b0b288e39",
+    "src/plugin-sdk/text-utility-runtime.ts": "84be30c9435d3d0dcce7f31ee96d7d4c7371b0c4cfe47e677fe8461de9c2d508",
+    "scripts/diffs-shiki-curated.ts": "a388358f89b0019882494b2480ec61b798d1447dc4dcccf19b0ab1181974545c",
+    "scripts/build-diffs-viewer-runtime.mts": "ec2f73af3db927673bf7e7ee3a457015f9654963bf057cdde864b78958872da6"
+  }
+}

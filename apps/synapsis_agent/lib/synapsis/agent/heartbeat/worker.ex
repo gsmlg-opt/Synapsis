@@ -36,16 +36,46 @@ defmodule Synapsis.Agent.Heartbeat.Worker do
   defp trigger_options(config) do
     id = value(config, :id)
 
-    %{
+    options = %{
       heartbeat_id: id,
       routine_id: id,
+      idempotency_key: value(config, :__idempotency_key),
+      scheduled_for: value(config, :__scheduled_for),
       prompt: value(config, :prompt),
       assistant_name: value(config, :agent_name, "main") || "main",
       tool_profile: value(config, :tool_profile, "assistant_basic") || "assistant_basic",
       no_overlap: value(config, :no_overlap, true) != false,
       max_runtime_ms: value(config, :max_runtime_ms, :timer.minutes(2)),
-      metadata: %{"heartbeat_name" => value(config, :name)}
+      metadata: automation_metadata(config)
     }
+
+    if value(config, :automation_contract_version) == 1,
+      do: Map.merge(options, %{provider: value(config, :provider), model: value(config, :model)}),
+      else: options
+  end
+
+  defp automation_metadata(config) do
+    metadata = %{"heartbeat_name" => value(config, :name)}
+
+    metadata =
+      if context = value(config, :__schedule_context),
+        do: Map.put(metadata, "routine_schedule", context),
+        else: metadata
+
+    source =
+      case config do
+        %Synapsis.HeartbeatConfig{} -> "heartbeat"
+        _ -> value(config, :__config_type)
+      end
+
+    id = value(config, :id)
+
+    metadata =
+      if source in ["routine", "heartbeat"] and match?({:ok, ^id}, Ecto.UUID.cast(id)),
+        do: Map.put(metadata, "automation_ref", %{"source" => source, "id" => id}),
+        else: metadata
+
+    Synapsis.Agent.Automation.Execution.metadata(config, metadata)
   end
 
   defp value(config, key, default \\ nil) do

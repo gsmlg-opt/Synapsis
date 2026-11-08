@@ -2,7 +2,9 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
   @moduledoc "Presentation projection for the Agent session React Chat island."
 
   alias Synapsis.Part
-  alias SynapsisWeb.MessageHelpers
+  alias Synapsis.Agent.MediaDelivery
+  alias Synapsis.Session.EventReply
+  alias SynapsisWeb.{MessageHelpers, ToolResultView}
 
   def live_id(session_id), do: "agent-live-#{session_id}"
 
@@ -21,13 +23,23 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
 
     %{
       messages:
-        Enum.map(
+        Enum.flat_map(
           assigns.messages,
-          &message(
-            &1,
-            label,
-            assigns.session_status == "idle" and not waiting? and not subagents?
-          )
+          fn raw ->
+            case display_message(raw) do
+              nil ->
+                []
+
+              displayed ->
+                [
+                  message(
+                    displayed,
+                    label,
+                    assigns.session_status == "idle" and not waiting? and not subagents?
+                  )
+                ]
+            end
+          end
         ) ++
           live_messages(assigns, label, active?) ++
           Enum.map(assigns.queued_inputs, &queued_message/1) ++
@@ -56,6 +68,22 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
     }
   end
 
+  # The authored input remains in durable/provider history. Only this explicit
+  # host completion source is internal to chat presentation; assistant Audio and
+  # ordinary prompts still use the existing display projection.
+  defp display_message(%Synapsis.Message{
+         role: "user",
+         internal_turn_source: "event",
+         input_provenance: %{
+           "kind" => "inter_session",
+           "event_type" => "task_completion",
+           "source_tool" => "music_generate"
+         }
+       }),
+       do: nil
+
+  defp display_message(message), do: EventReply.display_message(message)
+
   defp message(message, label, can_regenerate?) do
     parts = Enum.map(message.parts || [], &part(&1, message.role))
 
@@ -80,8 +108,13 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
   end
 
   defp live_messages(assigns, label, active?) do
-    if active? or assigns.streaming_text != "" or assigns.streaming_reasoning != "" or
-         map_size(assigns.tool_calls) > 0 or assigns.permission_requests != [] do
+    presentation = Map.get(assigns, :reply_presentation)
+    settled? = is_map(presentation) and presentation.phase in ["committed", "closed"]
+    text = if is_map(presentation), do: presentation[:text] || "", else: assigns.streaming_text
+
+    if not settled? and
+         (active? or text != "" or assigns.streaming_reasoning != "" or
+            map_size(assigns.tool_calls) > 0 or assigns.permission_requests != []) do
       tools =
         Enum.map(Enum.sort(assigns.tool_calls), fn {id, tool} ->
           %{
@@ -89,7 +122,8 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
             name: tool[:name] || "tool",
             status: tool[:status] || "pending",
             input: tool[:input] || %{},
-            result: tool[:result]
+            result: tool[:result],
+            display: tool[:display]
           }
         end)
 
@@ -97,7 +131,7 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
         %{
           id: live_id(assigns.current_session.id),
           role: "assistant",
-          content: assigns.streaming_text,
+          content: text,
           status:
             cond do
               Map.get(assigns, :user_questions, []) != [] -> "pending"
@@ -190,6 +224,41 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
   defp part(%Part.Image{} = image, _role),
     do: image |> Map.from_struct() |> Map.put(:type, "image")
 
+  defp part(%Part.DeliveredImage{} = image, _role) do
+    case MediaDelivery.image_url(image.delivery) do
+      {:ok, src} ->
+        %{
+          type: "delivered_image",
+          src: src,
+          filename: delivered_image_name(image.name || "image")
+        }
+
+      _ ->
+        %{type: "text", content: Part.DeliveredImage.summary(image)}
+    end
+  end
+
+  defp part(%Part.Audio{} = audio, _role) do
+    case ToolResultView.audio_delivery(audio.descriptor, audio.delivery) do
+      {:ok, block} -> %{block | filename: audio.name || block.filename}
+      :error -> %{type: "text", content: Part.Audio.summary(audio)}
+    end
+  end
+
+  defp part(%Part.Video{} = video, _role) do
+    with :ok <- Synapsis.Workspace.Media.validate_video_descriptor(video.descriptor),
+         {:ok, src} <- MediaDelivery.video_url(video.delivery) do
+      %{
+        type: "video",
+        src: src,
+        mediaType: video.descriptor["mime_type"],
+        filename: video.name || "video.#{video.descriptor["format"]}"
+      }
+    else
+      _ -> %{type: "text", content: Part.Video.summary(video)}
+    end
+  end
+
   defp part(%Part.File{} = file, _role), do: file |> Map.from_struct() |> Map.put(:type, "file")
 
   defp part(%Part.ToolUse{} = tool, _role),
@@ -202,7 +271,12 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
     }
 
   defp part(%Part.ToolResult{} = tool, _role),
-    do: tool |> Map.from_struct() |> Map.put(:type, "tool_result")
+    do:
+      tool
+      |> Map.from_struct()
+      |> Map.delete(:projection)
+      |> Map.put(:type, "tool_result")
+      |> Map.put(:display, ToolResultView.present(tool))
 
   defp part(%Part.Agent{} = agent, _role),
     do: agent |> Map.from_struct() |> Map.put(:type, "agent")
@@ -224,4 +298,15 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
   end
 
   defp assistant_avatar(_config), do: nil
+
+  defp delivered_image_name(name) when byte_size(name) <= 320, do: name
+
+  defp delivered_image_name(name),
+    do: name |> binary_part(0, 317) |> complete_image_name() |> Kernel.<>("...")
+
+  defp complete_image_name(name) do
+    if String.valid?(name),
+      do: name,
+      else: name |> binary_part(0, byte_size(name) - 1) |> complete_image_name()
+  end
 end

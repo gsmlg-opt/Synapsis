@@ -1821,9 +1821,9 @@ defmodule Synapsis.Backplane.SyncTest do
   end
 
   test "a real MCP runtime recovers from a durable tools block only after readiness" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
 
-    Bypass.stub(bypass, "POST", "/mcp", fn conn ->
+    Gaoxy.Test.stub(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
 
@@ -1859,12 +1859,12 @@ defmodule Synapsis.Backplane.SyncTest do
       end
     end)
 
-    Bypass.stub(bypass, "GET", "/mcp", fn conn -> Plug.Conn.send_resp(conn, 200, "") end)
+    Gaoxy.Test.stub(bypass, "GET", "/mcp", fn conn -> Plug.Conn.send_resp(conn, 200, "") end)
 
     {:ok, connection} =
       Connection.create(%{
         name: "real-runtime-recovery",
-        endpoint: "http://localhost:#{bypass.port}"
+        endpoint: String.trim_trailing(Gaoxy.Test.url(bypass), "/")
       })
 
     v1 =
@@ -1979,31 +1979,31 @@ defmodule Synapsis.Backplane.SyncTest do
   end
 
   test "real client uses audited paths and nonblank Bearer credential" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
 
     {:ok, connection} =
       Connection.new(%{
         name: "http",
-        base_url: endpoint_url(bypass.port),
+        base_url: String.trim_trailing(Gaoxy.Test.url(bypass), "/"),
         credential: "client-secret"
       })
 
-    Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
       assert Plug.Conn.get_req_header(conn, "authorization") == ["Bearer client-secret"]
       json(conn, %{"object" => "list", "data" => [%{"id" => "model-a"}]})
     end)
 
-    Bypass.expect_once(bypass, "GET", "/skills", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills", fn conn ->
       assert Plug.Conn.get_req_header(conn, "authorization") == ["Bearer client-secret"]
       json(conn, %{"data" => [%{"slug" => "review", "name" => "Review"}]})
     end)
 
-    Bypass.expect_once(bypass, "GET", "/skills/review", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills/review", fn conn ->
       assert Plug.Conn.get_req_header(conn, "authorization") == ["Bearer client-secret"]
       json(conn, %{"slug" => "review", "name" => "Review", "content" => "Review it."})
     end)
 
-    Bypass.expect(bypass, "POST", "/mcp", fn conn ->
+    Gaoxy.Test.expect(bypass, "POST", "/mcp", fn conn ->
       assert Plug.Conn.get_req_header(conn, "authorization") == ["Bearer client-secret"]
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
@@ -2043,24 +2043,22 @@ defmodule Synapsis.Backplane.SyncTest do
   end
 
   test "real client omits authorization for a blank credential" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
 
     {:ok, connection} =
       Connection.new(%{
         name: "keyless",
-        base_url: endpoint_url(bypass.port),
+        base_url: String.trim_trailing(Gaoxy.Test.url(bypass), "/"),
         credential: "  "
       })
 
-    Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
       assert Plug.Conn.get_req_header(conn, "authorization") == []
       json(conn, %{"data" => []})
     end)
 
     assert {:ok, []} = Client.fetch_models(connection, timeout: 500)
   end
-
-  defp endpoint_url(port), do: "http://localhost:#{port}"
 
   defp run_sync(connection, snapshot, opts \\ []) do
     sync_opts =

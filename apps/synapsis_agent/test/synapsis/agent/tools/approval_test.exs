@@ -2,6 +2,7 @@ defmodule Synapsis.Agent.Tools.ApprovalTest do
   use ExUnit.Case, async: false
 
   alias Backplane.AgentRuntime.{Conversation, EphemeralStore, Error, ToolCatalog}
+  alias Backplane.AgentRuntime.Approval, as: NativeApproval
   alias Synapsis.Agent.TestSupport.BackplaneRuntimeProof, as: Proof
   alias Synapsis.Agent.Tools.{Approval, PermissionSnapshot, Policy}
 
@@ -75,6 +76,41 @@ defmodule Synapsis.Agent.Tools.ApprovalTest do
 
     Agent.update(state, fn _ -> context end)
     %{invocation: invocation, context: context, state: state}
+  end
+
+  test "native approval rejects missing, blank and nonbinary resolvers for either decision",
+       ctx do
+    for outcome <- [:approved, :denied] do
+      {approval, decision} = native_approval_decision(ctx.invocation, outcome)
+      resolvers = [nil, "", " \t\r\n", "\u00A0\u2003", :untrusted, 42, false, %{}, []]
+      invalid_decisions = Enum.map(resolvers, &Map.put(decision, :resolver_id, &1))
+
+      for invalid <- [decision | invalid_decisions] do
+        assert {:error,
+                %Error{
+                  class: :validation,
+                  message: "resolver identity must be a nonblank binary"
+                }} = NativeApproval.decide(approval, invalid)
+      end
+    end
+  end
+
+  test "native approval forbids the model resolver for either decision", ctx do
+    for outcome <- [:approved, :denied] do
+      {approval, decision} = native_approval_decision(ctx.invocation, outcome)
+
+      assert {:error, %Error{class: :forbidden, message: "model cannot self-approve"}} =
+               NativeApproval.decide(approval, Map.put(decision, :resolver_id, approval.run_id))
+    end
+  end
+
+  test "native approval accepts opaque host identity structure without authenticating it", ctx do
+    for outcome <- [:approved, :denied], resolver <- ["authenticated-host", " host ", <<255>>] do
+      {approval, decision} = native_approval_decision(ctx.invocation, outcome)
+
+      assert {:ok, ^outcome} =
+               NativeApproval.decide(approval, Map.put(decision, :resolver_id, resolver))
+    end
   end
 
   test "dynamic ask preserves pinned input and requests serializable native interaction", ctx do
@@ -264,6 +300,7 @@ defmodule Synapsis.Agent.Tools.ApprovalTest do
   test "compiled session permission asks before native intent and dispatches exactly once", ctx do
     permission = %Synapsis.SessionPermission{
       session_id: ctx.context.tool_scope.session_id,
+      tool_contract_version: 1,
       mode: :interactive,
       allow_read: :ask,
       allow_write: :deny,
@@ -450,6 +487,29 @@ defmodule Synapsis.Agent.Tools.ApprovalTest do
     assert_receive {:approval_backend, _}, 1_000
     assert_receive {:agent_runtime, "approval-run", %{type: :run_completed}}, 1_000
     assert length(tool_intents(options)) == 1
+  end
+
+  defp native_approval_decision(invocation, outcome) do
+    now = System.monotonic_time(:millisecond)
+
+    approval = %{
+      approval_id: "native-resolver-contract",
+      run_id: invocation.run_id,
+      tool_name: invocation.tool_name,
+      tool_revision: invocation.tool_revision,
+      arguments_digest:
+        :crypto.hash(:sha256, :erlang.term_to_binary(invocation.arguments))
+        |> Base.encode16(case: :lower),
+      current_time: now,
+      expires_at: now + 60_000
+    }
+
+    decision =
+      approval
+      |> Map.take([:approval_id, :tool_name, :tool_revision, :arguments_digest])
+      |> Map.put(:decision, outcome)
+
+    {approval, decision}
   end
 
   defp start_conversation(ctx, native_approval \\ false) do

@@ -2,7 +2,6 @@ defmodule Synapsis.Session.Sharing do
   @moduledoc "Export session as a shareable JSON file."
 
   alias Synapsis.{Message, Session, Sessions}
-  alias Synapsis.Session.Store
 
   def export(session_id) do
     case Sessions.get(session_id) do
@@ -83,9 +82,9 @@ defmodule Synapsis.Session.Sharing do
         }
       end)
 
-    Store.put_meta(session.id, Session.to_meta(session))
-    :ok = Message.persist_list(session.id, messages)
-    {:ok, session}
+    with :ok <- Message.persist_list(session.id, messages, Session.to_meta(session)) do
+      {:ok, session}
+    end
   end
 
   defp export_message(message) do

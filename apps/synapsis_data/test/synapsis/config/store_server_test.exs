@@ -9,6 +9,34 @@ defmodule Synapsis.Config.Store.ServerTest do
     :ok
   end
 
+  test "memory persists a singleton without plural memorys array tables" do
+    clear_config_store(:memory)
+
+    on_exit(fn ->
+      clear_config_store(:memory)
+      Store.reload(:memory)
+    end)
+
+    entry = %{
+      "id" => "default",
+      "backend" => "workspace",
+      "host_agent" => %{
+        "enabled" => false,
+        "endpoint" => "http://127.0.0.1:4222",
+        "agent_id" => "synapsis"
+      }
+    }
+
+    assert {:ok, ^entry} = Store.put(:memory, entry)
+    assert Path.basename(Store.file_path(:memory)) == "memory.toml"
+    content = File.read!(Store.file_path(:memory))
+    refute content =~ "[[memorys]]"
+    refute content =~ "\"id\" ="
+    assert :ok = Store.reload(:memory)
+    assert {:ok, ^entry} = Store.get(:memory, "default")
+    assert {:error, :invalid_memory} = Store.put(:memory, Map.put(entry, "id", "second"))
+  end
+
   test "failed persistence leaves the published entry unchanged" do
     original = %{"id" => "provider-1", "name" => "Original"}
     updated = %{"id" => "provider-1", "name" => "Updated"}
@@ -74,6 +102,47 @@ defmodule Synapsis.Config.Store.ServerTest do
           }
         ]
       }
+    }
+
+    assert {:ok, ^mcp} = Store.put(:mcp, mcp)
+    assert :ok = Store.reload(:mcp)
+    assert {:ok, ^mcp} = Store.get(:mcp, mcp["id"])
+  end
+
+  test "large MCP catalog strings survive persistence without display truncation" do
+    clear_config_store(:mcp)
+    on_exit(fn -> clear_config_store(:mcp) end)
+
+    catalog =
+      Jason.encode!(%{
+        "backplane_tools" => [
+          %{
+            "name" => "complete_catalog",
+            "description" => String.duplicate("schema data ", 1_200)
+          }
+        ]
+      })
+
+    mcp = %{"id" => "mcp-large-catalog", "name" => "large-catalog", "config" => catalog}
+
+    assert {:ok, ^mcp} = Store.put(:mcp, mcp)
+    assert {:ok, decoded} = Store.file_path(:mcp) |> File.read!() |> Toml.decode()
+    assert hd(decoded["mcps"])["config"] == catalog
+    assert :ok = Store.reload(:mcp)
+    assert {:ok, ^mcp} = Store.get(:mcp, mcp["id"])
+  end
+
+  test "configuration strings and keys use TOML compatible escaping" do
+    clear_config_store(:mcp)
+    on_exit(fn -> clear_config_store(:mcp) end)
+
+    literal = "literal " <> <<35>> <> "{expression} and controls " <> <<27, 127>>
+    long_key = String.duplicate("key", 1_500)
+
+    mcp = %{
+      "id" => "mcp-string-escaping",
+      "name" => "escaped-catalog",
+      "config" => %{long_key => literal, "backplane_tools" => [%{"description" => literal}]}
     }
 
     assert {:ok, ^mcp} = Store.put(:mcp, mcp)

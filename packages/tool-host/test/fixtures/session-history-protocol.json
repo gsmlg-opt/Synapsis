@@ -1,0 +1,135 @@
+{
+  "referenceCommit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+  "protocol": 1,
+  "historyProtocol": 1,
+  "servicePolicy": {
+    "version": 1,
+    "referenceCommit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+    "logging": {
+      "kind": "pinned-default",
+      "mappedOverride": "absent"
+    }
+  },
+  "historyStart": {
+    "type": "history_start",
+    "protocol": 1,
+    "historyProtocol": 1,
+    "id": "h1",
+    "target": {
+      "slot": "t1",
+      "sessionId": "d36ff20e-e150-4f65-9de1-49d9f5eefb8b"
+    },
+    "snapshot": {
+      "viewId": "host-view-fixture",
+      "totalTurns": 2
+    },
+    "row": {
+      "id": "d36ff20e-e150-4f65-9de1-49d9f5eefb8b",
+      "title": "Ordinary history"
+    },
+    "limit": 2,
+    "servicePolicy": {
+      "version": 1,
+      "referenceCommit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+      "logging": {
+        "kind": "pinned-default",
+        "mappedOverride": "absent"
+      }
+    }
+  },
+  "initialRead": {
+    "type": "history_read",
+    "protocol": 1,
+    "historyProtocol": 1,
+    "id": "h1",
+    "readId": "r1",
+    "slot": "t1",
+    "operation": "recent",
+    "options": {
+      "maxMessages": 7,
+      "maxLines": 7,
+      "maxBytes": 1048576,
+      "allowResetArchiveFallback": true,
+      "captureReadWindow": true,
+      "readOnly": true
+    }
+  },
+  "readResult": {
+    "type": "history_read_result",
+    "protocol": 1,
+    "historyProtocol": 1,
+    "id": "h1",
+    "readId": "r1",
+    "slot": "t1",
+    "viewId": "host-view-fixture",
+    "totalTurns": 2,
+    "rows": [
+      {
+        "index": 0,
+        "ordinal": 1,
+        "message": {
+          "role": "user",
+          "timestamp": "2026-11-06T00:00:00.000Z",
+          "content": [
+            {
+              "type": "text",
+              "text": "Write the report."
+            }
+          ],
+          "__openclaw": {
+            "seq": 1,
+            "id": "46c1e480-4d11-4be8-a56d-bd90f572cf30"
+          }
+        }
+      },
+      {
+        "index": 7,
+        "ordinal": 2,
+        "message": {
+          "role": "assistant",
+          "timestamp": "2026-11-06T00:00:01.000Z",
+          "content": [
+            {
+              "type": "text",
+              "text": "The report is ready."
+            }
+          ],
+          "__openclaw": {
+            "seq": 2,
+            "id": "12cb4786-1667-4f83-b053-dd106661bb67"
+          }
+        }
+      }
+    ]
+  },
+  "limits": {
+    "outerProtocol": 1,
+    "historyProtocol": 1,
+    "wireMaxBytes": 65536,
+    "rawChunkMaxBytes": 32768,
+    "logicalTransferMaxBytes": 8388608,
+    "sourceLogicalPageMaxRecords": 401,
+    "sourcePageMaxJSONBytes": 1048576,
+    "workerHeapMiB": 128,
+    "enrichedFragmentMaxBytes": 65536,
+    "metadataFragmentMaxBytes": 65536,
+    "maxTargets": 200
+  },
+  "resultContract": {
+    "type": "history_result",
+    "candidateFields": [
+      "messages",
+      "enriched",
+      "metadata"
+    ],
+    "retainedFragmentKind": "json",
+    "oversizeFragmentKind": "oversize",
+    "fragmentIndentSpaces": 4,
+    "noTerminalNewline": true
+  },
+  "runtime": {
+    "engine": "node-worker",
+    "heapLimitMb": 128,
+    "workerExitObserved": false
+  }
+}

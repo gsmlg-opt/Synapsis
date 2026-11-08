@@ -8,11 +8,11 @@ defmodule Synapsis.MCP.ToolCallContractTest do
 
   setup do
     owner = self()
-    bypass = Bypass.open()
-    Bypass.stub(bypass, "GET", "/mcp", &Plug.Conn.resp(&1, 200, ""))
-    Bypass.stub(bypass, "DELETE", "/mcp", &Plug.Conn.resp(&1, 200, ""))
+    bypass = Gaoxy.Test.open()
+    Gaoxy.Test.stub(bypass, "GET", "/mcp", &Plug.Conn.resp(&1, 200, ""))
+    Gaoxy.Test.stub(bypass, "DELETE", "/mcp", &Plug.Conn.resp(&1, 200, ""))
 
-    Bypass.stub(bypass, "POST", "/mcp", fn conn ->
+    Gaoxy.Test.stub(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
 
@@ -40,7 +40,7 @@ defmodule Synapsis.MCP.ToolCallContractTest do
       end
     end)
 
-    config = %MCPConfig{transport: "streamable_http", url: "http://localhost:#{bypass.port}/mcp"}
+    config = %MCPConfig{transport: "streamable_http", url: Gaoxy.Test.url(bypass, "/mcp")}
     client = __MODULE__.Client
 
     start_supervised!(

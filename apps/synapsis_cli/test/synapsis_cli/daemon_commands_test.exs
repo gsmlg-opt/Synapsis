@@ -6,10 +6,10 @@ defmodule SynapsisCli.DaemonCommandsTest do
   alias SynapsisCli.Main
 
   test "agent status calls the daemon status route and reports non-2xx as an error" do
-    bypass = Bypass.open()
-    host = "http://localhost:#{bypass.port}"
+    bypass = Gaoxy.Test.open()
+    host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
 
-    Bypass.expect_once(bypass, "GET", "/api/agent/daemon/status", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/api/agent/daemon/status", fn conn ->
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
       |> Plug.Conn.resp(503, Jason.encode!(%{"error" => "not ready"}))
@@ -24,10 +24,10 @@ defmodule SynapsisCli.DaemonCommandsTest do
   end
 
   test "heartbeat run sends only its optional stored-routine name" do
-    bypass = Bypass.open()
-    host = "http://localhost:#{bypass.port}"
+    bypass = Gaoxy.Test.open()
+    host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
 
-    Bypass.expect_once(bypass, "POST", "/api/agent/heartbeat/trigger", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "POST", "/api/agent/heartbeat/trigger", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       assert %{"name" => "health-check"} = Jason.decode!(body)
 
@@ -45,10 +45,10 @@ defmodule SynapsisCli.DaemonCommandsTest do
   end
 
   test "dream run uses the stored-dream selector endpoint" do
-    bypass = Bypass.open()
-    host = "http://localhost:#{bypass.port}"
+    bypass = Gaoxy.Test.open()
+    host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
 
-    Bypass.expect_once(bypass, "POST", "/api/agent/dream/trigger", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "POST", "/api/agent/dream/trigger", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       assert %{} = Jason.decode!(body)
 
@@ -62,11 +62,11 @@ defmodule SynapsisCli.DaemonCommandsTest do
   end
 
   test "schedule run resolves one exact name to its stable ID before triggering" do
-    bypass = Bypass.open()
-    host = "http://localhost:#{bypass.port}"
+    bypass = Gaoxy.Test.open()
+    host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
     routine_id = "c7aac594-48a9-4c79-90e4-fda3eadd2484"
 
-    Bypass.expect_once(bypass, "GET", "/api/agent/routines", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/api/agent/routines", fn conn ->
       assert conn.query_string == "kind=schedule"
 
       conn
@@ -86,7 +86,7 @@ defmodule SynapsisCli.DaemonCommandsTest do
       )
     end)
 
-    Bypass.expect_once(bypass, "POST", "/api/agent/routines/#{routine_id}/trigger", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "POST", "/api/agent/routines/#{routine_id}/trigger", fn conn ->
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
       |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => "schedule-run"}}))
@@ -98,10 +98,10 @@ defmodule SynapsisCli.DaemonCommandsTest do
   end
 
   test "backplane add creates a keyless connection without inventing a credential" do
-    bypass = Bypass.open()
-    host = "http://localhost:#{bypass.port}"
+    bypass = Gaoxy.Test.open()
+    host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
 
-    Bypass.expect_once(bypass, "POST", "/api/backplane/connections", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "POST", "/api/backplane/connections", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
       assert %{"name" => "local", "endpoint" => "http://backplane.internal"} =
@@ -128,10 +128,10 @@ defmodule SynapsisCli.DaemonCommandsTest do
   end
 
   test "backplane add forwards explicit local trust for MCP annotations" do
-    bypass = Bypass.open()
-    host = "http://localhost:#{bypass.port}"
+    bypass = Gaoxy.Test.open()
+    host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
 
-    Bypass.expect_once(bypass, "POST", "/api/backplane/connections", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "POST", "/api/backplane/connections", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
       assert %{
@@ -160,11 +160,11 @@ defmodule SynapsisCli.DaemonCommandsTest do
   end
 
   test "backplane test resolves one exact connection name to its stable ID" do
-    bypass = Bypass.open()
-    host = "http://localhost:#{bypass.port}"
+    bypass = Gaoxy.Test.open()
+    host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
     connection_id = "e76af13e-f4c3-4ff4-bb9d-41bb1dd2440f"
 
-    Bypass.expect_once(bypass, "GET", "/api/backplane/connections", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/api/backplane/connections", fn conn ->
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
       |> Plug.Conn.resp(
@@ -178,7 +178,7 @@ defmodule SynapsisCli.DaemonCommandsTest do
       )
     end)
 
-    Bypass.expect_once(
+    Gaoxy.Test.expect_once(
       bypass,
       "POST",
       "/api/backplane/connections/#{connection_id}/test",
@@ -195,11 +195,11 @@ defmodule SynapsisCli.DaemonCommandsTest do
   end
 
   test "backplane sync resolves its name and rejects ambiguous matches" do
-    bypass = Bypass.open()
-    host = "http://localhost:#{bypass.port}"
+    bypass = Gaoxy.Test.open()
+    host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
     connection_id = "49259943-c9e2-43e3-b782-cf6cc252921b"
 
-    Bypass.expect_once(bypass, "GET", "/api/backplane/connections", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/api/backplane/connections", fn conn ->
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
       |> Plug.Conn.resp(
@@ -208,7 +208,7 @@ defmodule SynapsisCli.DaemonCommandsTest do
       )
     end)
 
-    Bypass.expect_once(
+    Gaoxy.Test.expect_once(
       bypass,
       "POST",
       "/api/backplane/connections/#{connection_id}/refresh",
@@ -223,10 +223,10 @@ defmodule SynapsisCli.DaemonCommandsTest do
              assert :ok = Main.run(["backplane", "sync", "production", "--host", host])
            end) =~ ~s("status":"ready")
 
-    ambiguous = Bypass.open()
-    ambiguous_host = "http://localhost:#{ambiguous.port}"
+    ambiguous = Gaoxy.Test.open()
+    ambiguous_host = String.trim_trailing(Gaoxy.Test.url(ambiguous), "/")
 
-    Bypass.expect_once(ambiguous, "GET", "/api/backplane/connections", fn conn ->
+    Gaoxy.Test.expect_once(ambiguous, "GET", "/api/backplane/connections", fn conn ->
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
       |> Plug.Conn.resp(
@@ -247,14 +247,14 @@ defmodule SynapsisCli.DaemonCommandsTest do
   end
 
   test "backplane add reads an optional credential from the named environment variable only" do
-    bypass = Bypass.open()
-    host = "http://localhost:#{bypass.port}"
+    bypass = Gaoxy.Test.open()
+    host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
     env_name = "SYNAPSIS_TEST_BACKPLANE_CREDENTIAL_#{System.unique_integer([:positive])}"
     secret = "secret-value-that-must-not-be-printed"
     System.put_env(env_name, secret)
     on_exit(fn -> System.delete_env(env_name) end)
 
-    Bypass.expect_once(bypass, "POST", "/api/backplane/connections", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "POST", "/api/backplane/connections", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       assert %{"credential" => ^secret} = Jason.decode!(body)
 
@@ -299,11 +299,11 @@ defmodule SynapsisCli.DaemonCommandsTest do
   end
 
   test "invalid credential options fail before creating a Backplane connection" do
-    bypass = Bypass.open()
-    host = "http://localhost:#{bypass.port}"
+    bypass = Gaoxy.Test.open()
+    host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
     owner = self()
 
-    Bypass.stub(bypass, "POST", "/api/backplane/connections", fn conn ->
+    Gaoxy.Test.stub(bypass, "POST", "/api/backplane/connections", fn conn ->
       send(owner, {:unexpected_request, conn.method, conn.request_path})
       json(conn, 201, %{"data" => %{"id" => "unexpected"}})
     end)
@@ -407,25 +407,25 @@ defmodule SynapsisCli.DaemonCommandsTest do
   end
 
   test "does not follow redirects for a credential-bearing Backplane request" do
-    source = Bypass.open()
-    redirect_target = Bypass.open()
-    host = "http://localhost:#{source.port}"
+    source = Gaoxy.Test.open()
+    redirect_target = Gaoxy.Test.open()
+    host = String.trim_trailing(Gaoxy.Test.url(source), "/")
     owner = self()
     env_name = "SYNAPSIS_TEST_REDIRECT_CREDENTIAL_#{System.unique_integer([:positive])}"
 
     System.put_env(env_name, "must-not-be-redirected")
     on_exit(fn -> System.delete_env(env_name) end)
 
-    Bypass.expect_once(source, "POST", "/api/backplane/connections", fn conn ->
+    Gaoxy.Test.expect_once(source, "POST", "/api/backplane/connections", fn conn ->
       conn
       |> Plug.Conn.put_resp_header(
         "location",
-        "http://127.0.0.1:#{redirect_target.port}/capture"
+        Gaoxy.Test.url(redirect_target, "/capture")
       )
       |> Plug.Conn.resp(307, "")
     end)
 
-    Bypass.stub(redirect_target, "POST", "/capture", fn conn ->
+    Gaoxy.Test.stub(redirect_target, "POST", "/capture", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       send(owner, {:redirected_credential, body})
       json(conn, 201, %{"data" => %{"id" => "redirected"}})
@@ -449,20 +449,20 @@ defmodule SynapsisCli.DaemonCommandsTest do
   end
 
   test "bare daemon command namespaces return usage without starting a session" do
-    bypass = Bypass.open()
-    host = "http://localhost:#{bypass.port}"
+    bypass = Gaoxy.Test.open()
+    host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
     owner = self()
 
-    Bypass.stub(bypass, "POST", "/api/sessions", fn conn ->
+    Gaoxy.Test.stub(bypass, "POST", "/api/sessions", fn conn ->
       send(owner, {:unexpected_session_request, conn.method, conn.request_path})
       json(conn, 201, %{"data" => %{"id" => "unexpected-session"}})
     end)
 
-    Bypass.stub(bypass, "POST", "/api/sessions/unexpected-session/messages", fn conn ->
+    Gaoxy.Test.stub(bypass, "POST", "/api/sessions/unexpected-session/messages", fn conn ->
       json(conn, 200, %{})
     end)
 
-    Bypass.stub(bypass, "GET", "/api/sessions/unexpected-session/events", fn conn ->
+    Gaoxy.Test.stub(bypass, "GET", "/api/sessions/unexpected-session/events", fn conn ->
       Plug.Conn.resp(conn, 200, "")
     end)
 
@@ -483,29 +483,29 @@ defmodule SynapsisCli.DaemonCommandsTest do
   end
 
   test "manual, list, cancel, schedule-list, and backplane-list commands use exact routes" do
-    bypass = Bypass.open()
-    host = "http://localhost:#{bypass.port}"
+    bypass = Gaoxy.Test.open()
+    host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
 
-    Bypass.expect_once(bypass, "POST", "/api/agent/runs", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "POST", "/api/agent/runs", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       assert %{"prompt" => "inspect deployment"} = Jason.decode!(body)
       json(conn, 201, %{"data" => %{"id" => "manual-run"}})
     end)
 
-    Bypass.expect_once(bypass, "GET", "/api/agent/runs", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/api/agent/runs", fn conn ->
       json(conn, 200, %{"data" => []})
     end)
 
-    Bypass.expect_once(bypass, "POST", "/api/agent/runs/manual-run/cancel", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "POST", "/api/agent/runs/manual-run/cancel", fn conn ->
       json(conn, 200, %{"data" => %{"id" => "manual-run", "status" => "cancelled"}})
     end)
 
-    Bypass.expect_once(bypass, "GET", "/api/agent/routines", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/api/agent/routines", fn conn ->
       assert conn.query_string == "kind=schedule"
       json(conn, 200, %{"data" => []})
     end)
 
-    Bypass.expect_once(bypass, "GET", "/api/backplane/connections", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/api/backplane/connections", fn conn ->
       json(conn, 200, %{"data" => []})
     end)
 

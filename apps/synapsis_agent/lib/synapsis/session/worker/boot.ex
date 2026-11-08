@@ -1,5 +1,5 @@
 defmodule Synapsis.Session.Worker.Boot do
-  @moduledoc "Handles Worker initialization: session loading and graph construction."
+  @moduledoc "Handles Worker initialization: session loading and idle metadata."
 
   alias Synapsis.Session
   alias Synapsis.Session.Store
@@ -9,15 +9,16 @@ defmodule Synapsis.Session.Worker.Boot do
   @transient_statuses ~w(streaming tool_executing)
 
   @doc """
-  Load the session and build the initial graph + engine state/ctx.
+  Load the session and initialize idle compatibility metadata.
+  The graph slot is always nil; turn execution belongs to the native runtime.
 
   Returns `{session, agent, provider_config, graph, engine_state, engine_ctx, project_path}`
   or `{:stop, reason}`.
   """
-  def load_and_boot(session_id, opts \\ []) do
+  def load_and_boot(session_id, _opts \\ []) do
     case Store.get_meta(session_id) do
       {:error, :not_found} -> {:stop, {:error, :session_not_found}}
-      {:ok, meta} -> boot(reset_transient_status(Session.from_meta(meta)), session_id, opts)
+      {:ok, meta} -> boot(reset_transient_status(Session.from_meta(meta)), session_id)
     end
   end
 
@@ -30,33 +31,29 @@ defmodule Synapsis.Session.Worker.Boot do
 
   defp reset_transient_status(session), do: session
 
-  defp boot(session, session_id, opts) do
+  defp boot(session, session_id) do
     Process.flag(:trap_exit, true)
-
-    graph_module = Keyword.get(opts, :graph_module, CodingLoop)
 
     with {:ok, session, agent, provider, provider_config} <-
            resolve_boot_defaults(session),
          workspace_path = normalize_workspace_path(agent[:workspace_path]),
-         {:ok, workspace_path} <- ensure_workspace_path(workspace_path),
-         {:ok, graph} <- graph_module.build() do
+         {:ok, workspace_path} <- ensure_workspace_path(workspace_path) do
       engine_state =
-        graph_module.initial_state(%{
-          session_id: session_id,
-          provider_config: provider_config,
-          agent_config: agent
-        })
+        %{session_id: session_id, provider_config: provider_config, agent_config: agent}
+        |> CodingLoop.initial_state()
+        |> Map.put(:awaiting_input, true)
 
       engine_ctx = %{
         provider: provider,
         model: agent[:model] || session.model,
         project_path: workspace_path,
+        memory_context: (session.config || %{})["memory_context"] != false,
         agent_id: session.agent || agent[:name] || "main"
       }
 
       Synapsis.Memory.Writer.subscribe_session(session_id)
 
-      {session, agent, provider_config, graph, engine_state, engine_ctx, workspace_path}
+      {session, agent, provider_config, nil, engine_state, engine_ctx, workspace_path}
     else
       {:error, {:workspace_unavailable, _path, _reason} = reason} ->
         {:stop, reason}

@@ -18,6 +18,51 @@ defmodule Synapsis.AgentRun.Store do
     with {:ok, raw} <- read(@runs <> id), do: {:ok, AgentRun.from_store(raw)}
   end
 
+  @doc "Read one run within the caller's absolute monotonic deadline."
+  def fetch_until(id, deadline) do
+    with {:ok, timeout} <- read_budget(deadline),
+         {:ok, value} <- adapter().get(@runs <> id, timeout: timeout),
+         {:ok, _} <- read_budget(deadline) do
+      {:ok, value |> Concord.Compression.decompress() |> AgentRun.from_store()}
+    else
+      {:error, :not_found} -> :not_found
+      result -> result
+    end
+  end
+
+  @doc "Enumerate the complete bounded current candidate set, never UUID time order."
+  def bounded_candidates(deadline) do
+    with {:ok, timeout} <- read_budget(deadline),
+         {:ok, records, %{has_more: false}} <-
+           adapter().list(
+             range: {@runs, "coord/agent_runs0"},
+             keys_only: true,
+             limit: 1_000,
+             timeout: timeout
+           ),
+         {:ok, _} <- read_budget(deadline) do
+      Enum.reduce_while(records, {:ok, []}, fn record, {:ok, runs} ->
+        id = String.replace_prefix(record.key, @runs, "")
+
+        case fetch_until(id, deadline) do
+          {:ok, run} -> {:cont, {:ok, [run | runs]}}
+          :not_found -> {:cont, {:ok, runs}}
+          {:error, _} = error -> {:halt, error}
+        end
+      end)
+    else
+      {:ok, _, %{has_more: true}} -> {:error, :scan_limit}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp read_budget(deadline) do
+    case min(deadline - System.monotonic_time(:millisecond), @timeout) do
+      remaining when remaining > 0 -> {:ok, remaining}
+      _ -> {:error, :timeout}
+    end
+  end
+
   def fetch_by_idempotency(key) do
     with {:ok, index} <- read(@idempotency <> key) do
       case Map.get(index, "run_id") || Map.get(index, :run_id) do

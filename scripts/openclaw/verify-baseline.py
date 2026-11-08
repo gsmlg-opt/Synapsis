@@ -11,6 +11,33 @@ from pathlib import Path, PurePosixPath
 import re
 import sys
 
+from cron_schema_verification import verify_cron_schema_captures
+
+from pdf_factory_verification import (
+    PDF_FACTORY_SOURCE,
+    verify_pdf_factory_recipe,
+    verify_pdf_matrix,
+    verify_pdf_projection,
+)
+
+from tts_factory_verification import (
+    TTS_FACTORY_SOURCE,
+    verify_tts_factory_recipe,
+    verify_tts_matrix,
+    verify_tts_projection,
+)
+
+from session_factory_verification import (
+    verify_session_factory_recipe,
+    verify_session_projection,
+)
+
+SESSION_FACTORY_SOURCES = {
+    'src/agents/tools/sessions-list-tool.ts',
+    'src/agents/tools/sessions-history-tool.ts',
+    'src/agents/tools/session-status-tool.ts',
+}
+
 
 def require(condition, message):
     if not condition:
@@ -56,6 +83,369 @@ def computed_counts(core, plugins, manifests):
     }, core | plugin_names, plugin_names - core
 
 
+
+def verify_projection_selection(projection, fixtures):
+    if projection.get('kind', '').startswith('tts-'):
+        verify_tts_projection(projection, fixtures, require, safe_path)
+        return
+    if projection.get('kind', '').startswith('pdf-'):
+        verify_pdf_projection(projection, fixtures, require, safe_path)
+        return
+    if projection.get('kind', '').startswith('session-'):
+        verify_session_projection(projection, fixtures, require, safe_path)
+        return
+    browser_root = 'extensions/browser/src/'
+    constant_source = browser_root + 'browser/act-policy.ts'
+    capability_sources = {
+        browser_root + 'browser/engines/registry.ts',
+        browser_root + 'browser/engines/lightpanda.ts',
+    }
+    source = projection['source']
+    if source == 'packages/normalization-core/src/string-coerce.ts':
+        require(set(projection) == {
+            'importer', 'specifier', 'source', 'sourceSha256', 'exports',
+            'kind', 'generatedCode', 'generatedSha256',
+        }, 'unsupported normalization projection metadata')
+        require(projection['importer'] == browser_root + 'browser-tool-binding.ts'
+                and projection['specifier'] == 'openclaw/plugin-sdk/string-coerce-runtime'
+                and projection['exports'] == ['normalizeOptionalString']
+                and projection['kind'] == 'whole-module-export',
+                'unsupported normalization export projection')
+        generated = 'export {normalizeOptionalString} from ' + json.dumps('capture:source:' + source) + ';'
+        require(projection['generatedCode'] == generated
+                and projection['generatedSha256'] == hashlib.sha256(generated.encode()).hexdigest(),
+                'normalization export wrapper differs from source-bound projection')
+        return
+    if source not in capability_sources | {constant_source} and not (
+            'selection' in projection or 'generatedSha256' in projection):
+        return  # Existing whole-module export projections retain their source checks.
+    require(set(projection) == {
+        'importer', 'specifier', 'source', 'sourceSha256', 'exports',
+        'selection', 'generatedSha256',
+    }, 'unsupported selected projection metadata')
+    selection = projection['selection']
+    require(isinstance(selection, dict) and set(selection) == {
+        'kind', 'startByte', 'endByte', 'sha256',
+    }, 'unsupported projection selection metadata')
+    require(projection['importer'] == browser_root + 'browser-tool.schema.ts',
+            'unsupported selected projection importer')
+    kind = selection['kind']
+    if kind == 'exported-constant':
+        require(source == constant_source
+                and projection['specifier'] == './browser/act-policy.js'
+                and projection['exports'] == ['ACT_MAX_VIEWPORT_DIMENSION'],
+                'unsupported exported-constant projection')
+        pattern = rb'^(export const ACT_MAX_VIEWPORT_DIMENSION = [0-9_]+;)$'
+    elif kind == 'complete-object-method':
+        require(source in capability_sources
+                and projection['specifier'] == 'capture:profile-capabilities'
+                and projection['exports'] == ['capabilities'],
+                'unsupported complete-object-method projection')
+        pattern = rb'^(  capabilities\(profile\) \{[\s\S]*?^  \}),$'
+    else:
+        raise ValueError(f'unsupported projection selection kind: {kind}')
+    snapshot = safe_path(fixtures / 'sources', source)
+    require(snapshot.is_file(), f'missing projection source snapshot: {source}')
+    original = snapshot.read_bytes()
+    matches = list(re.finditer(pattern, original, re.MULTILINE))
+    require(len(matches) == 1, f'projection must select exactly one original region: {source}')
+    match = matches[0]
+    start, end = selection['startByte'], selection['endByte']
+    require(type(start) is int and type(end) is int
+            and 0 <= start < end <= len(original)
+            and (start, end) == match.span(1),
+            f'projection selection byte range mismatch: {source}')
+    selected = original[start:end]
+    require(isinstance(selection['sha256'], str)
+            and re.fullmatch(r'[a-f0-9]{64}', selection['sha256']) is not None
+            and hashlib.sha256(selected).hexdigest() == selection['sha256'],
+            f'projection selection hash mismatch: {source}')
+    generated = (selected if kind == 'exported-constant' else
+                 b'export const capabilities = ({\n' + selected + b'\n}).capabilities;')
+    require(isinstance(projection['generatedSha256'], str)
+            and re.fullmatch(r'[a-f0-9]{64}', projection['generatedSha256']) is not None
+            and hashlib.sha256(generated).hexdigest() == projection['generatedSha256'],
+            f'projection generated hash mismatch: {source}')
+
+
+def verify_synthetic_config_input(binding, callback=False):
+    common = {'kind', 'sourceImplementation', 'input', 'inputJson', 'inputSha256', 'generatedCode', 'generatedSha256'}
+    require(set(binding) == (common if callback else common | {'importer', 'specifier', 'export', 'inputSource', 'calls'}),
+            'unsupported synthetic config input metadata')
+    require(binding['kind'] == 'synthetic-config-input'
+            and binding['sourceImplementation'] == 'not-executed'
+            and isinstance(binding['input'], dict),
+            'synthetic config input must not claim runtime config implementation')
+    # These bounded Browser inputs contain only ordinary JSON config fields.
+    input_json = json.dumps(binding['input'], sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+    require(binding['inputJson'] == input_json
+            and binding['inputSha256'] == hashlib.sha256(input_json.encode()).hexdigest(),
+            'synthetic config input bytes/hash mismatch')
+    generated = ('()=>{globalThis.__captureConfigReads++;return ' if callback else
+                 'export function readRuntimeConfig(){globalThis.__captureConfigReads++;return ') + input_json + ';}'
+    require(binding['generatedCode'] == generated
+            and binding['generatedSha256'] == hashlib.sha256(generated.encode()).hexdigest(),
+            'synthetic config wrapper differs from recorded input')
+    if not callback:
+        require(binding['importer'] == 'extensions/browser/src/browser-tool.ts'
+                and binding['specifier'] == 'openclaw/plugin-sdk/runtime-config-snapshot'
+                and binding['export'] == 'readRuntimeConfig'
+                and binding['inputSource'] in ('recipe.syntheticConfig', 'representativeContext.options.config')
+                and type(binding['calls']) is int and binding['calls'] == 1,
+                'unsupported Browser SDK synthetic config binding')
+
+
+def verify_browser_factory_recipe(recipe, capture, tracked):
+    require(recipe['export'] == 'createBrowserTool' and recipe['evidence'] == 'factory-return',
+            'unsupported Browser factory recipe')
+    bindings = recipe.get('configBindings', [])
+    require(len(bindings) == 1, 'Browser factory must record its synthetic SDK config input')
+    binding = bindings[0]
+    verify_synthetic_config_input(binding)
+    comparison = recipe.get('definitionComparison', {})
+    require(comparison.get('freshVm') is True
+            and comparison.get('source') == 'extensions/browser/src/browser-tool-description.ts'
+            and comparison.get('sourceSha256') == tracked.get(comparison.get('source'))
+            and comparison.get('export') == 'createBrowserToolDefinition'
+            and comparison.get('selector') == 'metadata'
+            and comparison.get('args') == recipe['args']
+            and comparison.get('executeInvoked') is False
+            and type(comparison.get('configReaderCalls')) is int and comparison['configReaderCalls'] == 1
+            and comparison.get('attemptedCalls') == []
+            and comparison.get('configBindings') == [],
+            'Browser factory comparison must invoke the real definition in an independent equivalent VM')
+    verify_synthetic_config_input(comparison.get('configReader', {}), callback=True)
+    require(comparison['configReader']['input'] == binding['input'], 'definition config input differs from factory input')
+    require(comparison.get('metadata') == {key: value for key, value in recipe['descriptor'].items() if key != 'executeObserved'}
+            and any(row.get('path') == comparison['source'] and row.get('sha256') == comparison['sourceSha256']
+                    for row in comparison.get('loadedFiles', [])),
+            'independently invoked definition metadata differs from actual factory descriptor')
+    context = recipe.get('representativeContext')
+    if context:
+        require(context in capture['contexts']
+                and recipe['id'] == 'browser/factory/context/' + context['id']
+                and recipe['context'] == 'recipe/context/' + context['id']
+                and recipe['args'] == [context['options']]
+                and binding['inputSource'] == 'representativeContext.options.config'
+                and binding['input'] == context['options']['config'],
+                'Browser representative config input differs from its actual context input')
+    else:
+        require(binding['inputSource'] == 'recipe.syntheticConfig', 'Browser variant must identify synthetic config input')
+    require(recipe['eligibility']['status'] == 'unresolved' and recipe['registration']['status'] == 'unresolved',
+            'Browser construction does not establish runtime admission or lazy registration')
+    schema_id = recipe.get('schemaRecipe', recipe.get('constructorSchemaRecipe'))
+    if schema_id:
+        schemas = [row for row in capture['recipes'] if row['id'] == schema_id and row['status'] == 'captured']
+        require(len(schemas) == 1 and schemas[0]['source'] == 'extensions/browser/src/browser-tool.schema.ts'
+                and schemas[0]['schema']['parameters'] == recipe['schema']['parameters']
+                and schemas[0]['capabilities'] == recipe['capabilities'],
+                'Browser factory metadata differs from its source-backed schema variant')
+    if recipe.get('schemaRecipe'):
+        supplied = recipe.get('capabilityInput', {})
+        schema = schemas[0]
+        require(supplied.get('source') == schema['source'] and supplied.get('sourceSha256') == schema['sourceSha256']
+                and supplied.get('export') == 'resolveBrowserToolCapabilities'
+                and supplied.get('params') == schema['args'][0]
+                and supplied.get('evidence') == 'supplied-capabilities; no host config/profile resolution'
+                and recipe['args'] == [{'toolCapabilities': recipe['capabilities']}]
+                and binding['input'] == {},
+                'Browser supplied capabilities must retain source-backed input provenance')
+    require(recipe['schema']['actions'] == sorted(recipe['capabilities']['actions'])
+            and recipe['schema']['parameters']['properties']['kind']['enum'] == recipe['capabilities']['actKinds'],
+            'Browser captured action/kind metadata differs from capabilities')
+    output = recipe.get('outputSchema', {})
+    require(recipe['descriptor'].get('outputSchema') == output.get('parameters')
+            and json.loads(output['schemaJson']) == output['parameters']
+            and hashlib.sha256(output['schemaJson'].encode()).hexdigest() == output['schemaSha256'],
+            'Browser output schema bytes/hash differ from actual descriptor')
+
+
+def verify_browser_registrations(capture, fixtures, tracked, expected_sources):
+    rows = capture.get('browserRegistrations', [])
+    require(isinstance(rows, list), 'Browser registration captures must be an array')
+    ids = [row['id'] for row in rows]
+    require(len(ids) == len(set(ids)), 'duplicate Browser registration callback capture')
+    registration_source = 'extensions/browser/plugin-registration.ts'
+    definition_source = 'extensions/browser/src/browser-tool-description.ts'
+    prefix = '''import {createBrowserToolDefinition as upstreamCreateBrowserToolDefinition} from "capture:browser-definition";
+const registration={callback:undefined,options:undefined,calls:0};
+const api={registerTool(callback,options){registration.callback=callback;registration.options=options;registration.calls++;}};
+function createBrowserToolDefinition(opts,getConfig){
+  globalThis.__captureDefinitionOptions=opts;
+  return upstreamCreateBrowserToolDefinition(opts,()=>{
+    const config=getConfig();
+    globalThis.__captureDefinitionConfig=config;
+    globalThis.__captureDefinitionConfigReads++;
+    return config;
+  });
+}
+function loadBrowserRegistrationRuntimeModule(){
+  globalThis.__captureAudit.push({kind:"execution-service",export:"loadBrowserRegistrationRuntimeModule"});
+  throw Error("blocked Browser registration runtime");
+}
+'''
+    suffix = '\nexport {registration};\n'
+    dump = lambda value: json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+    digest = lambda value: hashlib.sha256(value.encode()).hexdigest()
+    dependencies = {row['path']: row['sha256'] for row in capture['dependencies']}
+    for row in rows:
+        require(row.get('source') == registration_source
+                and row.get('sourceSha256') == tracked.get(registration_source)
+                and row.get('evidence') == 'projected-registerTool-callback'
+                and row.get('executeInvoked') is False,
+                'Browser callback must identify its source and limited evidence')
+        require(row.get('boundaries') == dict.fromkeys([
+            'fullPluginRegistrationInvoked', 'pluginLoaderInvoked', 'runtimeAdmissionExecuted',
+            'servicesStarted', 'runtimeModuleLoaded', 'actionsExecuted'], False),
+                'Browser callback projection must preserve unexecuted boundaries')
+        evidence_rows = [row]
+        if row.get('status') == 'captured':
+            require(row.get('attemptedCalls') == [] and row.get('descriptorMatch') is True,
+                    'Browser callback capture contains unresolved effects or metadata')
+            require(sum(projection.get('kind') == 'browser-registration-regions'
+                        for projection in row.get('projections', [])) == 1
+                    and any(item.get('path') == registration_source
+                            and item.get('sha256') == row['sourceSha256']
+                            for item in row.get('loadedFiles', [])),
+                    'Browser callback capture must include its exact projection and source')
+            require(row.get('registration') == {
+                'options': {'name': 'browser', 'workspaceAccess': False},
+                'registerToolCalls': 1, 'callbackInvoked': True,
+                'fullPluginRegistrationInvoked': False}, 'Browser registerTool observation differs')
+            source_input = row['input']
+            ctx = source_input['context']
+            getter = source_input.get('getRuntimeConfig')
+            if getter and getter['returnKind'] == 'value':
+                selected, origin = getter['value'], 'ctx.getRuntimeConfig()'
+            elif ctx.get('runtimeConfig') is not None:
+                selected, origin = ctx['runtimeConfig'], 'ctx.runtimeConfig'
+            else:
+                selected, origin = ctx['config'], 'ctx.config'
+            require(isinstance(selected, dict), 'Browser callback config input must be an object')
+            selection = row['configSelection']
+            require(selection['origin'] == origin and selection['input'] == selected
+                    and selection['inputJson'] == dump(selected)
+                    and selection['inputSha256'] == digest(dump(selected))
+                    and type(selection['getterCalls']) is int
+                    and selection['getterCalls'] == int(getter is not None)
+                    and type(selection['definitionReaderCalls']) is int
+                    and selection['definitionReaderCalls'] == 1,
+                    'Browser callback config selection differs from recorded input')
+            getter_value = dump(getter['value']) if getter and getter['returnKind'] == 'value' else 'undefined'
+            getter_code = '()=>{globalThis.__captureContextConfigReads++;return ' + getter_value + ';}'
+            setup = 'globalThis.__captureContext=' + dump(ctx) + ';globalThis.__captureContextConfigReads=0;globalThis.__captureDefinitionConfigReads=0;'
+            if getter:
+                setup += 'globalThis.__captureContext.getRuntimeConfig=' + getter_code + ';'
+            require(row['contextBinding'] == {
+                'kind': 'synthetic-context-input', 'sourceImplementation': 'not-executed',
+                'generatedCode': setup, 'generatedSha256': digest(setup)},
+                    'Browser synthetic callback context wrapper differs')
+            expected_options = {}
+            for source_key, target_key in [('sessionKey', 'agentSessionKey'), ('agentId', 'agentId'),
+                                           ('agentDir', 'agentDir'), ('workspaceDir', 'workspaceDir')]:
+                if ctx.get(source_key):
+                    expected_options[target_key] = ctx[source_key]
+            model = ctx.get('activeModel', {})
+            if model.get('provider') or model.get('modelId'):
+                expected_options['activeModel'] = {key: model[source_key]
+                    for key, source_key in [('provider', 'provider'), ('model', 'modelId')] if source_key in model}
+            channel = ctx.get('deliveryContext', {}).get('channel', ctx.get('messageChannel'))
+            if ctx.get('sessionKey') or channel:
+                media = {}
+                if ctx.get('sessionKey'):
+                    media['sessionKey'] = ctx['sessionKey']
+                if channel:
+                    media['channel'] = channel
+                tokens = set(ctx.get('sessionKey', '').lower().split(':'))
+                chat = next((kind for kind in ['group', 'channel', 'direct'] if kind in tokens),
+                            'direct' if 'dm' in tokens else None)
+                if chat:
+                    media['chatType'] = chat
+                expected_options['mediaScope'] = media
+            if 'browser' in ctx.get('toolBindings', {}):
+                expected_options['runToolBinding'] = ctx['toolBindings']['browser']
+            require(row['options'] == expected_options, 'Browser ordinary callback options differ from source context')
+            comparison = row['definitionComparison']
+            require(any(item.get('path') == definition_source
+                        and item.get('sha256') == tracked.get(definition_source)
+                        for item in comparison.get('loadedFiles', [])),
+                    'Browser callback comparison must include the real definition source')
+            config_json = dump(selected)
+            config_code = '()=>{globalThis.__captureConfigReads++;return ' + config_json + ';}'
+            require(comparison.get('freshVm') is True and comparison.get('source') == definition_source
+                    and comparison.get('sourceSha256') == tracked.get(definition_source)
+                    and comparison.get('export') == 'createBrowserToolDefinition'
+                    and comparison.get('selector') == 'metadata' and comparison.get('args') == [row['options']]
+                    and comparison.get('executeInvoked') is False and comparison.get('attemptedCalls') == []
+                    and comparison.get('configInput') == {
+                        'kind': 'synthetic-config-input', 'sourceImplementation': 'not-executed',
+                        'origin': origin, 'input': selected, 'inputJson': config_json,
+                        'inputSha256': digest(config_json), 'generatedCode': config_code,
+                        'generatedSha256': digest(config_code), 'calls': 1},
+                    'Browser callback comparison must use a fresh real definition with equivalent input')
+            require(row['descriptor'].get('executeObserved') is True
+                    and comparison['metadata'] == {key: value for key, value in row['descriptor'].items() if key != 'executeObserved'},
+                    'Browser callback full metadata differs from independent definition')
+            for key, descriptor_key in [('schema', 'parameters'), ('outputSchema', 'outputSchema')]:
+                schema = row[key]
+                require(schema['parameters'] == row['descriptor'][descriptor_key]
+                        and json.loads(schema['schemaJson']) == schema['parameters']
+                        and digest(schema['schemaJson']) == schema['schemaSha256'],
+                        'Browser callback schema/output bytes or hash differ')
+            require(row['schema']['actions'] == sorted(comparison['capabilities']['actions'])
+                    and row['schema']['parameters']['properties']['kind']['enum'] == comparison['capabilities']['actKinds'],
+                    'Browser callback schema differs from definition capabilities')
+            if 'representativeContext' in row:
+                context = row['representativeContext']
+                require(context in capture['contexts'] and row['context'] == context['id']
+                        and row['id'] == 'browser/registration/context/' + context['id']
+                        and ctx == {'sessionKey': context['options']['agentSessionKey'], 'agentId': 'reference',
+                                    'workspaceDir': '/reference/workspace', 'config': context['options']['config']},
+                        'Browser callback representative context differs from source input')
+            evidence_rows.append(comparison)
+        for evidence in evidence_rows:
+            typebox = evidence.get('typebox', {})
+            if typebox.get('files') or row.get('status') == 'captured':
+                require(typebox.get('version') == '1.3.37', 'Browser callback TypeBox version differs')
+            for item in typebox.get('files', []):
+                require(dependencies.get(item['path']) == item['sha256'], 'Browser callback dependency provenance differs')
+            for item in evidence.get('loadedFiles', []):
+                require(tracked.get(item['path']) == item['sha256'], 'Browser callback loaded source hash differs')
+                expected_sources[item['path']] = item['sha256']
+            for projection in evidence.get('projections', []):
+                require(tracked.get(projection['source']) == projection['sourceSha256'], 'Browser callback projection source differs')
+                expected_sources[projection['source']] = projection['sourceSha256']
+                if projection.get('kind') != 'browser-registration-regions':
+                    verify_projection_selection(projection, fixtures)
+                    continue
+                require(projection['source'] == registration_source
+                        and projection['wrapperVersion'] == 'browser-registration-v1'
+                        and projection['importer'] == 'capture:browser-registration'
+                        and projection['specifier'] == 'capture:registration-callback'
+                        and projection['exports'] == ['registration'], 'unsupported Browser callback projection')
+                original = safe_path(fixtures / 'sources', registration_source).read_bytes()
+                selections = projection['selections']
+                regions = [('deriveChatTypeFromSessionKey', 'complete-function'), ('createLazyBrowserTool', 'complete-function'),
+                           ('createBrowserToolOptions', 'complete-function'), ('api.registerTool', 'complete-statement')]
+                require([(item['name'], item['kind']) for item in selections] == regions,
+                        'Browser callback projection regions differ')
+                for item in selections:
+                    pattern = (rb'^  api\.registerTool\([\s\S]*?^  \);$' if item['kind'] == 'complete-statement' else
+                               rb'^function ' + item['name'].encode() + rb'\([\s\S]*?^\}')
+                    matches = list(re.finditer(pattern, original, re.MULTILINE))
+                    require(len(matches) == 1 and (item['startByte'], item['endByte']) == matches[0].span(),
+                            'Browser callback projection source byte selection differs')
+                    selected_bytes = original[item['startByte']:item['endByte']]
+                    require(selected_bytes.decode() == item['selectedCode']
+                            and hashlib.sha256(selected_bytes).hexdigest() == item['sha256'],
+                            'Browser callback selected source bytes/hash differ')
+                generated = prefix + '\n\n'.join(item['selectedCode'] for item in selections) + suffix
+                require(projection['generatedCode'] == generated and projection['generatedSha256'] == digest(generated)
+                        and projection['transformation'] == 'node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)'
+                        and re.fullmatch(r'[a-f0-9]{64}', projection['executableSha256']) is not None,
+                        'Browser callback generated source wrapper/hash differs')
+
+
 def verify_inventory(manifest, capture, fixtures):
     require(capture['schemaVersion'] == 1, 'unsupported capture schemaVersion')
     source = capture['source']
@@ -85,9 +475,17 @@ def verify_inventory(manifest, capture, fixtures):
     licenses = files_by_path(capture['licenses'], 'source license', fixtures)
     require('LICENSE' in licenses, 'missing copied root LICENSE provenance')
     expected_sources.update(licenses)
+    verify_cron_schema_captures(capture, tracked, fixtures, expected_sources, require, safe_path)
+    verify_pdf_matrix(capture, require)
+    verify_tts_matrix(capture, require)
     for recipe in capture.get('recipes', []):
         require(recipe.get('executeInvoked') is False, 'recipe must not invoke execute')
-        require(recipe.get('context') == 'recipe/default', 'recipe construction is not runtime eligibility evidence')
+        browser_factory = recipe.get('source') == 'extensions/browser/src/browser-tool.ts'
+        session_factory = recipe.get('source') in SESSION_FACTORY_SOURCES
+        pdf_factory = recipe.get('source') == PDF_FACTORY_SOURCE
+        tts_factory = recipe.get('source') == TTS_FACTORY_SOURCE
+        require(recipe.get('context') == 'recipe/default' or browser_factory or session_factory or pdf_factory or tts_factory,
+                'recipe construction is not runtime eligibility evidence')
         typebox = recipe.get('typebox', {})
         if typebox.get('files') or typebox.get('version') is not None:
             require(typebox.get('version') == '1.3.37', 'recipe TypeBox dependency must be pinned to 1.3.37')
@@ -107,14 +505,28 @@ def verify_inventory(manifest, capture, fixtures):
             require(recipe['evidence'] in ('schema-export', 'factory-return'), 'invalid recipe evidence kind')
             if recipe['evidence'] == 'factory-return':
                 require(recipe.get('descriptorMatch') is True, 'factory descriptor does not match schema definition')
+                if browser_factory:
+                    verify_browser_factory_recipe(recipe, capture, tracked)
+                if session_factory:
+                    verify_session_factory_recipe(recipe, capture, tracked, fixtures, require, safe_path)
+                if pdf_factory:
+                    verify_pdf_factory_recipe(recipe, capture, tracked, fixtures, require, safe_path)
+                if tts_factory:
+                    verify_tts_factory_recipe(recipe, capture, tracked, fixtures, require, safe_path)
             schema = recipe['schema']
             require(json.loads(schema['schemaJson']) == schema['parameters'], 'recipe schema bytes differ from parameters')
             require(hashlib.sha256(schema['schemaJson'].encode()).hexdigest() == schema['schemaSha256'], 'recipe schema hash mismatch')
-        for row in recipe.get('loadedFiles', []):
-            require(tracked.get(row['path']) == row['sha256'], 'recipe loaded-file hash mismatch')
-            expected_sources[row['path']] = row['sha256']
-        for projection in recipe.get('projections', []):
-            require(tracked.get(projection['source']) == projection['sourceSha256'], 'recipe projection source hash mismatch')
+        for evidence in [recipe] + ([recipe['definitionComparison']] if 'definitionComparison' in recipe else []):
+            if evidence.get('typebox', {}).get('files'):
+                require(evidence['typebox'].get('version') == '1.3.37', 'comparison TypeBox dependency must be pinned to 1.3.37')
+            for row in evidence.get('loadedFiles', []):
+                require(tracked.get(row['path']) == row['sha256'], 'recipe loaded-file hash mismatch')
+                expected_sources[row['path']] = row['sha256']
+            for projection in evidence.get('projections', []):
+                require(tracked.get(projection['source']) == projection['sourceSha256'], 'recipe projection source hash mismatch')
+                expected_sources[projection['source']] = projection['sourceSha256']
+                verify_projection_selection(projection, fixtures)
+    verify_browser_registrations(capture, fixtures, tracked, expected_sources)
     for path, expected in expected_sources.items():
         require(tracked.get(path) == expected, f'tracked source hash mismatch: {path}')
         snapshot = safe_path(fixtures / 'sources', path)
@@ -132,7 +544,7 @@ def verify_inventory(manifest, capture, fixtures):
 
 def completeness(capture, union):
     gaps = list(capture.get('completeness', {}).get('gaps', []))
-    for recipe in capture.get('recipes', []):
+    for recipe in capture.get('recipes', []) + [row for row in capture.get('schemaCaptures', []) if row.get('evidence') == 'schema-builder']:
         if recipe.get('status') != 'captured':
             gaps.append({'kind': 'unresolved-recipe', 'recipe': recipe['id']})
         else:
@@ -203,7 +615,7 @@ def coverage_gaps(fixtures, manifest, capture, union):
         for factory in capture['factories']:
             if factory['status'] == 'executed' and factory['tool']['name'] == tool:
                 actions.update(factory['tool']['actions'] or ['$call'])
-        for recipe in capture.get('recipes', []):
+        for recipe in capture.get('recipes', []) + [item for item in capture.get('schemaCaptures', []) if item.get('evidence') == 'schema-builder']:
             if recipe['status'] == 'captured' and recipe['referenceTool'] == tool:
                 actions.update(recipe['schema']['actions'])
                 if recipe['schema']['actionlessBranches']:

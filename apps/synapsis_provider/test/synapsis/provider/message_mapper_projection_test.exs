@@ -69,6 +69,52 @@ defmodule Synapsis.Provider.MessageMapperProjectionTest do
     assert part.projection == projection
   end
 
+  test "raw MCP text and image retain metadata while encoding ordered Anthropic content" do
+    image = %{
+      "type" => "image",
+      "data" => "AA==",
+      "mimeType" => "image/png",
+      "annotations" => %{"audience" => ["user"]},
+      "_meta" => %{"fixture" => "retained-image"}
+    }
+
+    annotated =
+      Map.merge(text("before"), %{
+        "annotations" => %{"priority" => 0.5},
+        "_meta" => %{"fixture" => "retained-text"}
+      })
+
+    part = projected([annotated, image, text("after")])
+    original = part.projection
+    assert {:ok, wire} = build(:anthropic, part)
+    result = wire["messages"] |> List.last() |> Map.fetch!("content") |> hd()
+
+    assert result["content"] == [
+             %{"type" => "text", "text" => "before"},
+             %{
+               "type" => "image",
+               "source" => %{"type" => "base64", "media_type" => "image/png", "data" => "AA=="}
+             },
+             %{"type" => "text", "text" => "after"}
+           ]
+
+    assert part.projection === original
+    refute Jason.encode!(wire) =~ "retained-"
+    refute Jason.encode!(wire) =~ "annotations"
+  end
+
+  test "malformed raw MCP images and metadata fail without discarding extra content" do
+    for block <- [
+          %{"type" => "image", "data" => "AA==", "mimeType" => ""},
+          %{"type" => "image", "data" => "", "mimeType" => "image/png"},
+          %{"type" => "image", "data" => "AA==", "mimeType" => "image/png", "text" => "extra"},
+          Map.put(text("public"), "annotations", []),
+          Map.put(text("public"), "_meta", "private-value")
+        ] do
+      assert_invalid(projected([block]))
+    end
+  end
+
   test "projected text works across the three existing provider codecs" do
     for protocol <- [:anthropic, :openai, :google] do
       assert {:ok, wire} = build(protocol, projected([text("projected")]))
@@ -183,7 +229,12 @@ defmodule Synapsis.Provider.MessageMapperProjectionTest do
       )
     end)
 
-    part = projected([text("before"), @image, text("after")])
+    part =
+      projected([
+        Map.put(text("before"), "annotations", %{"priority" => 0.5}),
+        %{"type" => "image", "data" => "AA==", "mimeType" => "image/png"},
+        text("after")
+      ])
 
     request =
       Adapter.format_request(messages(part), [], %{provider_type: "anthropic", model: "test"})

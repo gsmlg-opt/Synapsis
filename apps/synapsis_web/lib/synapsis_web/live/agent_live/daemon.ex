@@ -43,7 +43,8 @@ defmodule SynapsisWeb.AgentLive.Daemon do
      |> assign(
        page_title: "Agent Daemon",
        operation: nil,
-       manual_form: to_form(%{"prompt" => ""}, as: :manual),
+       manual_form: new_manual_form(),
+       agent_options: agent_options(),
        routine_form: new_routine_form(),
        connection_form: new_connection_form()
      )
@@ -203,6 +204,23 @@ defmodule SynapsisWeb.AgentLive.Daemon do
             phx-submit="submit_manual"
             phx-change="change_daemon_form"
           >
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <.dm_react_field
+                type="select"
+                name="manual[assistant_name]"
+                label="Execution Agent"
+                options={@agent_options}
+              />
+              <.dm_react_field
+                type="select"
+                name="manual[tool_profile]"
+                label="Tools"
+                options={[
+                  %{value: "", label: "Default"},
+                  %{value: "native_agent", label: "Configured Agent tools"}
+                ]}
+              />
+            </div>
             <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#191 - preserve native validation, autocomplete and textarea layout attributes. --%>
             <.dm_textarea
               field={@manual_form[:prompt]}
@@ -283,7 +301,7 @@ defmodule SynapsisWeb.AgentLive.Daemon do
                       {field(routine, :name)}
                     </p>
                     <p class="font-mono text-xs text-on-surface-variant">
-                      {field(routine, :schedule)}
+                      {schedule_label(field(routine, :schedule))}
                     </p>
                   </div>
                   <div class="flex items-center gap-1">
@@ -391,13 +409,20 @@ defmodule SynapsisWeb.AgentLive.Daemon do
                 </div>
                 <.dm_react_field
                   type="select"
+                  name="routine[agent_name]"
+                  label="Execution Agent"
+                  options={@agent_options}
+                />
+                <.dm_react_field
+                  type="select"
                   name="routine[tool_profile]"
                   label="Toolset"
                   options={[
                     %{value: "assistant_basic", label: "Basic"},
                     %{value: "assistant_workspace", label: "Workspace"},
                     %{value: "assistant_coding", label: "Coding"},
-                    %{value: "assistant_dream", label: "Dream"}
+                    %{value: "assistant_dream", label: "Dream"},
+                    %{value: "native_agent", label: "Configured Agent tools"}
                   ]}
                 />
                 <.dm_textarea
@@ -618,8 +643,13 @@ defmodule SynapsisWeb.AgentLive.Daemon do
   def handle_event("change_daemon_form", _params, socket),
     do: {:noreply, sanitize_connection_draft(socket)}
 
-  def handle_event("submit_manual", %{"manual" => %{"prompt" => prompt}}, socket) do
+  def handle_event("submit_manual", %{"manual" => %{"prompt" => prompt} = params}, socket) do
     prompt = String.trim(prompt)
+
+    opts =
+      %{source: "web"}
+      |> put_optional(:assistant_name, params["assistant_name"])
+      |> put_optional(:tool_profile, params["tool_profile"])
 
     cond do
       prompt == "" ->
@@ -638,7 +668,7 @@ defmodule SynapsisWeb.AgentLive.Daemon do
             failure: "Unable to queue the run",
             reset: :manual_form
           },
-          fn -> dependency(:daemon, Daemon).submit(prompt, %{source: "web"}) end
+          fn -> dependency(:daemon, Daemon).submit(prompt, opts) end
         )
     end
   end
@@ -724,6 +754,8 @@ defmodule SynapsisWeb.AgentLive.Daemon do
       "prompt" => params |> Map.get("prompt", "") |> String.trim(),
       "enabled" => Map.get(params, "enabled") == "true"
     }
+
+    attrs = put_optional(attrs, "agent_name", params["agent_name"])
 
     start_operation(
       socket,
@@ -937,8 +969,8 @@ defmodule SynapsisWeb.AgentLive.Daemon do
   defp reset_operation_form(socket, :manual_form),
     do:
       socket
-      |> assign(manual_form: to_form(%{"prompt" => ""}, as: :manual))
-      |> reset_react_form("manual-run-form", %{"manual" => %{"prompt" => ""}})
+      |> assign(manual_form: new_manual_form())
+      |> reset_react_form("manual-run-form", %{"manual" => new_manual_form().params})
 
   defp reset_operation_form(socket, :routine_form),
     do:
@@ -1005,6 +1037,28 @@ defmodule SynapsisWeb.AgentLive.Daemon do
     do: "primary"
 
   defp status_variant(_status), do: "secondary"
+
+  defp schedule_label(schedule) when is_binary(schedule), do: schedule
+
+  defp schedule_label(schedule) when is_map(schedule) do
+    case field(schedule, :kind) do
+      "cron" ->
+        [field(schedule, :expr), field(schedule, :tz)]
+        |> Enum.reject(&(&1 in [nil, ""]))
+        |> Enum.join(" · ")
+
+      "at" ->
+        "At #{field(schedule, :at)}"
+
+      "every" ->
+        "Every #{field(schedule, :everyMs)} ms"
+
+      _ ->
+        "Unknown schedule"
+    end
+  end
+
+  defp schedule_label(_schedule), do: ""
 
   defp field(record, key) when is_map(record),
     do: Map.get(record, key, Map.get(record, Atom.to_string(key)))
@@ -1101,6 +1155,27 @@ defmodule SynapsisWeb.AgentLive.Daemon do
       "default"
   end
 
+  defp agent_options do
+    agents =
+      dependency(:agents, Synapsis.AgentConfigs).list_enabled()
+      |> Enum.map(fn agent ->
+        name = field(agent, :name)
+        %{value: name, label: field(agent, :label) || name}
+      end)
+
+    [%{value: "", label: "Default Agent"} | agents]
+  end
+
+  defp put_optional(attrs, key, value) when is_binary(value) do
+    if String.trim(value) == "", do: attrs, else: Map.put(attrs, key, value)
+  end
+
+  defp put_optional(attrs, _key, _value), do: attrs
+
+  defp new_manual_form do
+    to_form(%{"prompt" => "", "assistant_name" => "", "tool_profile" => ""}, as: :manual)
+  end
+
   defp new_routine_form do
     to_form(
       %{
@@ -1108,6 +1183,7 @@ defmodule SynapsisWeb.AgentLive.Daemon do
         "kind" => "schedule",
         "schedule" => "0 * * * *",
         "tool_profile" => "assistant_basic",
+        "agent_name" => "",
         "prompt" => "",
         "enabled" => true
       },

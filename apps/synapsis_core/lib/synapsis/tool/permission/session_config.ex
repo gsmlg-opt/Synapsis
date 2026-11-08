@@ -25,11 +25,11 @@ defmodule Synapsis.Tool.Permission.SessionConfig do
   @enforce_keys [:session_id]
   defstruct [
     :session_id,
-    mode: :interactive,
+    mode: :autonomous,
     allow_read: :allow,
     allow_write: :allow,
-    allow_execute: :ask,
-    allow_destructive: :ask,
+    allow_execute: :allow,
+    allow_destructive: :allow,
     overrides: []
   ]
 

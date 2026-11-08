@@ -5,7 +5,7 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProviderTest do
 
   @moduletag :tmp_dir
 
-  test "success scenario returns streamed text over Bypass" do
+  test "success scenario returns streamed text over Gaoxy.Test" do
     harness = DeterministicProvider.start!(scenario: :success, text: "hello-det")
     on_exit(fn -> DeterministicProvider.stop(harness) end)
 

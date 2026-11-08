@@ -14,6 +14,7 @@ defmodule Synapsis.Toolset do
     field(:name, :string)
     field(:description, :string)
     field(:tool_names, {:array, :string}, default: [])
+    field(:tool_contract_version, :integer, default: 0)
     field(:is_builtin, :boolean, default: false)
 
     field(:inserted_at, :utc_datetime_usec)
@@ -22,8 +23,10 @@ defmodule Synapsis.Toolset do
 
   def changeset(toolset, attrs) do
     toolset
-    |> cast(attrs, [:id, :name, :description, :tool_names, :is_builtin])
+    |> cast(attrs, [:id, :name, :description, :tool_names, :tool_contract_version, :is_builtin])
     |> validate_required([:name])
+    |> validate_required([:tool_contract_version])
+    |> validate_inclusion(:tool_contract_version, [0, 1])
     |> validate_length(:name, max: 255)
     |> validate_length(:description, max: 2_000)
   end

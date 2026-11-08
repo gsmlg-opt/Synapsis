@@ -32,9 +32,9 @@ defmodule Synapsis.ModelCatalogTest do
   end
 
   test "Backplane discovery imports only remote suggestions and retains configured choices" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
 
-    Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
       Plug.Conn.resp(
         Plug.Conn.put_resp_content_type(conn, "application/json"),
         200,
@@ -52,7 +52,7 @@ defmodule Synapsis.ModelCatalogTest do
                name: "remote-backplane",
                preset: "backplane",
                type: "openai",
-               base_url: "http://localhost:#{bypass.port}/v1",
+               base_url: Gaoxy.Test.url(bypass, "/v1"),
                config: %{"model_catalog_migrated" => true}
              })
 
@@ -84,9 +84,9 @@ defmodule Synapsis.ModelCatalogTest do
   end
 
   test "authentication failure preserves discovered cache and configured models" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
 
-    Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
       Plug.Conn.resp(
         Plug.Conn.put_resp_content_type(conn, "application/json"),
         401,
@@ -99,7 +99,7 @@ defmodule Synapsis.ModelCatalogTest do
                name: "authenticated-backplane",
                preset: "backplane",
                type: "openai",
-               base_url: "http://localhost:#{bypass.port}/v1",
+               base_url: Gaoxy.Test.url(bypass, "/v1"),
                config: %{
                  "model_catalog_migrated" => true,
                  "available_models" => [%{"id" => "previous", "context_window" => 384_000}]
@@ -270,9 +270,9 @@ defmodule Synapsis.ModelCatalogTest do
   end
 
   test "discovery refresh provides suggestions without changing imported choices" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
 
-    Bypass.expect(bypass, "GET", "/v1/models", fn conn ->
+    Gaoxy.Test.expect(bypass, "GET", "/v1/models", fn conn ->
       Plug.Conn.resp(
         Plug.Conn.put_resp_content_type(conn, "application/json"),
         200,
@@ -286,7 +286,7 @@ defmodule Synapsis.ModelCatalogTest do
       Providers.create(%{
         name: "discover-catalog",
         type: "openai",
-        base_url: "http://localhost:#{bypass.port}/v1",
+        base_url: Gaoxy.Test.url(bypass, "/v1"),
         config: %{"model_catalog_migrated" => true}
       })
 

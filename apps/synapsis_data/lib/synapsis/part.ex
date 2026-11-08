@@ -61,6 +61,30 @@ defmodule Synapsis.Part do
     }
   end
 
+  defp load_part(%{"type" => "delivered_image"} = data) do
+    %Synapsis.Part.DeliveredImage{
+      descriptor: data["descriptor"],
+      delivery: data["delivery"],
+      name: data["name"]
+    }
+  end
+
+  defp load_part(%{"type" => "video"} = data) do
+    %Synapsis.Part.Video{
+      descriptor: data["descriptor"],
+      delivery: data["delivery"],
+      name: data["name"]
+    }
+  end
+
+  defp load_part(%{"type" => "audio"} = data) do
+    %Synapsis.Part.Audio{
+      descriptor: data["descriptor"],
+      delivery: data["delivery"],
+      name: data["name"]
+    }
+  end
+
   defp load_part(%{"type" => "file"} = data) do
     %Synapsis.Part.File{path: data["path"], content: data["content"] || ""}
   end
@@ -123,6 +147,33 @@ defmodule Synapsis.Part do
 
   defp dump_part(%Synapsis.Part.File{path: path, content: content}) do
     %{"type" => "file", "path" => path, "content" => content}
+  end
+
+  defp dump_part(%Synapsis.Part.DeliveredImage{} = p) do
+    %{
+      "type" => "delivered_image",
+      "descriptor" => p.descriptor,
+      "delivery" => p.delivery,
+      "name" => p.name
+    }
+  end
+
+  defp dump_part(%Synapsis.Part.Video{} = p) do
+    %{
+      "type" => "video",
+      "descriptor" => p.descriptor,
+      "delivery" => p.delivery,
+      "name" => p.name
+    }
+  end
+
+  defp dump_part(%Synapsis.Part.Audio{} = p) do
+    %{
+      "type" => "audio",
+      "descriptor" => p.descriptor,
+      "delivery" => p.delivery,
+      "name" => p.name
+    }
   end
 
   defp dump_part(%Synapsis.Part.Snapshot{files: files}) do

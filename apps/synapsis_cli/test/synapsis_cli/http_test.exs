@@ -8,23 +8,23 @@ defmodule SynapsisCli.HTTPTest do
 
   describe "oneshot mode with --prompt" do
     test "creates session and streams response from server" do
-      bypass = Bypass.open()
-      host = "http://localhost:#{bypass.port}"
+      bypass = Gaoxy.Test.open()
+      host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
       session_id = "test-session-#{System.unique_integer([:positive])}"
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => session_id}}))
       end)
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.resp(200, Jason.encode!(%{"ok" => true}))
       end)
 
-      Bypass.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.resp(
@@ -47,11 +47,11 @@ defmodule SynapsisCli.HTTPTest do
       # calling process. Instead, verify the server receives the request
       # and the error format is correct by testing the happy-path boundary:
       # the session creation returns 500, which create_session converts to
-      # an {:error, _} tuple. We verify Bypass received the request.
-      bypass = Bypass.open()
-      host = "http://localhost:#{bypass.port}"
+      # an {:error, _} tuple. We verify Gaoxy.Test received the request.
+      bypass = Gaoxy.Test.open()
+      host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.resp(500, Jason.encode!(%{"error" => "internal"}))
@@ -77,11 +77,11 @@ defmodule SynapsisCli.HTTPTest do
     end
 
     test "sends provider and model in session creation body" do
-      bypass = Bypass.open()
-      host = "http://localhost:#{bypass.port}"
+      bypass = Gaoxy.Test.open()
+      host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
       session_id = "test-session-#{System.unique_integer([:positive])}"
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         decoded = Jason.decode!(body)
 
@@ -94,13 +94,13 @@ defmodule SynapsisCli.HTTPTest do
         |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => session_id}}))
       end)
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.resp(200, Jason.encode!(%{"ok" => true}))
       end)
 
-      Bypass.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.resp(200, "event: done\ndata: \n\n")
@@ -121,11 +121,11 @@ defmodule SynapsisCli.HTTPTest do
     end
 
     test "omits provider and model from body when not specified" do
-      bypass = Bypass.open()
-      host = "http://localhost:#{bypass.port}"
+      bypass = Gaoxy.Test.open()
+      host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
       session_id = "test-session-#{System.unique_integer([:positive])}"
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         decoded = Jason.decode!(body)
 
@@ -138,13 +138,13 @@ defmodule SynapsisCli.HTTPTest do
         |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => session_id}}))
       end)
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.resp(200, Jason.encode!(%{"ok" => true}))
       end)
 
-      Bypass.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.resp(200, "event: done\ndata: \n\n")
@@ -156,17 +156,17 @@ defmodule SynapsisCli.HTTPTest do
     end
 
     test "sends message content in POST body" do
-      bypass = Bypass.open()
-      host = "http://localhost:#{bypass.port}"
+      bypass = Gaoxy.Test.open()
+      host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
       session_id = "test-session-#{System.unique_integer([:positive])}"
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => session_id}}))
       end)
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         decoded = Jason.decode!(body)
         assert decoded["content"] == "explain this code"
@@ -176,7 +176,7 @@ defmodule SynapsisCli.HTTPTest do
         |> Plug.Conn.resp(200, Jason.encode!(%{"ok" => true}))
       end)
 
-      Bypass.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.resp(200, "event: done\ndata: \n\n")
@@ -192,17 +192,17 @@ defmodule SynapsisCli.HTTPTest do
 
   describe "positional args as prompt" do
     test "joins multiple positional args into a single prompt" do
-      bypass = Bypass.open()
-      host = "http://localhost:#{bypass.port}"
+      bypass = Gaoxy.Test.open()
+      host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
       session_id = "test-session-#{System.unique_integer([:positive])}"
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => session_id}}))
       end)
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         decoded = Jason.decode!(body)
         assert decoded["content"] == "fix the bug"
@@ -212,7 +212,7 @@ defmodule SynapsisCli.HTTPTest do
         |> Plug.Conn.resp(200, Jason.encode!(%{"ok" => true}))
       end)
 
-      Bypass.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.resp(200, "event: done\ndata: \n\n")
@@ -229,49 +229,47 @@ defmodule SynapsisCli.HTTPTest do
   describe "default host" do
     @tag :default_host
     test "uses localhost:4657 when --host not given" do
-      # Start Bypass on port 4657 (the default) to verify the CLI connects there.
-      # If port 4657 is already in use, skip this test gracefully.
-      bypass =
-        try do
-          Bypass.open(port: 4657)
-        rescue
-          RuntimeError -> nil
-        end
+      fixture = Gaoxy.Test.open()
+      address = URI.parse(Gaoxy.Test.url(fixture))
+      previous_options = Req.default_options()
+      on_exit(fn -> Req.default_options(previous_options) end)
 
-      if bypass do
-        session_id = "default-host-#{System.unique_integer([:positive])}"
-
-        Bypass.expect_once(bypass, "POST", "/api/sessions", fn conn ->
-          conn
-          |> Plug.Conn.put_resp_content_type("application/json")
-          |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => session_id}}))
-        end)
-
-        Bypass.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
-          conn
-          |> Plug.Conn.put_resp_content_type("application/json")
-          |> Plug.Conn.resp(200, Jason.encode!(%{"ok" => true}))
-        end)
-
-        Bypass.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
-          conn
-          |> Plug.Conn.put_resp_content_type("text/event-stream")
-          |> Plug.Conn.resp(200, "event: done\ndata: \n\n")
-        end)
-
-        # No --host flag: should default to localhost:4657
-        output =
-          capture_io(fn ->
-            SynapsisCli.Main.main(["--prompt", "test"])
-          end)
-
-        assert is_binary(output)
-        Bypass.down(bypass)
-      else
-        # Port 4657 is in use; we can't test the default host binding.
-        # Verify the module attribute value instead.
-        assert SynapsisCli.Main.__info__(:module) == SynapsisCli.Main
+      # Check the actual CLI destination before routing to the isolated fixture.
+      # This exercises the default without binding or contacting port 4657.
+      redirect = fn request ->
+        Req.Request.prepend_request_steps(request,
+          default_host: fn request ->
+            assert %URI{scheme: "http", host: "localhost", port: 4657} = request.url
+            %{request | url: %{request.url | host: address.host, port: address.port}}
+          end
+        )
       end
+
+      plugins = [redirect | Keyword.get(previous_options, :plugins, [])]
+      Req.default_options(Keyword.put(previous_options, :plugins, plugins))
+      session_id = "default-host-#{System.unique_integer([:positive])}"
+
+      Gaoxy.Test.expect_once(fixture, "POST", "/api/sessions", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => session_id}}))
+      end)
+
+      Gaoxy.Test.expect_once(fixture, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(200, Jason.encode!(%{"ok" => true}))
+      end)
+
+      Gaoxy.Test.expect_once(fixture, "GET", "/api/sessions/#{session_id}/events", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("text/event-stream")
+        |> Plug.Conn.resp(200, "event: done\ndata: \n\n")
+      end)
+
+      capture_io(fn ->
+        assert :ok = SynapsisCli.Main.run(["--prompt", "test"])
+      end)
     end
   end
 
@@ -279,17 +277,17 @@ defmodule SynapsisCli.HTTPTest do
 
   describe "SSE streaming renders different event types" do
     setup do
-      bypass = Bypass.open()
-      host = "http://localhost:#{bypass.port}"
+      bypass = Gaoxy.Test.open()
+      host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
       session_id = "test-session-#{System.unique_integer([:positive])}"
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => session_id}}))
       end)
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.resp(200, Jason.encode!(%{"ok" => true}))
@@ -302,7 +300,7 @@ defmodule SynapsisCli.HTTPTest do
       sse_body =
         "event: tool_use\ndata: {\"tool\":\"bash\"}\n\nevent: done\ndata: \n\n"
 
-      Bypass.expect_once(
+      Gaoxy.Test.expect_once(
         ctx.bypass,
         "GET",
         "/api/sessions/#{ctx.session_id}/events",
@@ -325,7 +323,7 @@ defmodule SynapsisCli.HTTPTest do
       sse_body =
         "event: tool_result\ndata: {\"content\":\"OK\",\"is_error\":false}\n\nevent: done\ndata: \n\n"
 
-      Bypass.expect_once(
+      Gaoxy.Test.expect_once(
         ctx.bypass,
         "GET",
         "/api/sessions/#{ctx.session_id}/events",
@@ -349,7 +347,7 @@ defmodule SynapsisCli.HTTPTest do
       sse_body =
         "event: tool_result\ndata: {\"content\":\"FAIL\",\"is_error\":true}\n\nevent: done\ndata: \n\n"
 
-      Bypass.expect_once(
+      Gaoxy.Test.expect_once(
         ctx.bypass,
         "GET",
         "/api/sessions/#{ctx.session_id}/events",
@@ -373,7 +371,7 @@ defmodule SynapsisCli.HTTPTest do
       sse_body =
         "event: reasoning\ndata: {\"text\":\"Let me think...\"}\n\nevent: done\ndata: \n\n"
 
-      Bypass.expect_once(
+      Gaoxy.Test.expect_once(
         ctx.bypass,
         "GET",
         "/api/sessions/#{ctx.session_id}/events",
@@ -396,7 +394,7 @@ defmodule SynapsisCli.HTTPTest do
       sse_body =
         "event: error\ndata: {\"message\":\"rate limited\"}\n\nevent: done\ndata: \n\n"
 
-      Bypass.expect_once(
+      Gaoxy.Test.expect_once(
         ctx.bypass,
         "GET",
         "/api/sessions/#{ctx.session_id}/events",
@@ -423,8 +421,8 @@ defmodule SynapsisCli.HTTPTest do
 
   describe "SSE stream transport" do
     test "subscribes before submission, preserves split UTF-8 frames, and halts on done" do
-      bypass = Bypass.open()
-      host = "http://localhost:#{bypass.port}"
+      bypass = Gaoxy.Test.open()
+      host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
       session_id = "ordered-session-#{System.unique_integer([:positive])}"
 
       state =
@@ -432,11 +430,11 @@ defmodule SynapsisCli.HTTPTest do
           {Agent, fn -> %{subscribed: false, initial_sent: false, stream: nil} end}
         )
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions", fn conn ->
         json(conn, 201, %{"data" => %{"id" => session_id}})
       end)
 
-      Bypass.stub(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
+      Gaoxy.Test.stub(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
         stream = self()
         Agent.update(state, &%{&1 | subscribed: true, stream: stream})
 
@@ -470,7 +468,7 @@ defmodule SynapsisCli.HTTPTest do
         conn
       end)
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
         assert %{subscribed: true, initial_sent: true, stream: stream} = Agent.get(state, & &1)
         send(stream, :message_submitted)
         json(conn, 200, %{"ok" => true})
@@ -486,20 +484,20 @@ defmodule SynapsisCli.HTTPTest do
     end
 
     test "returns a non-2xx stream response without submitting a message" do
-      bypass = Bypass.open()
-      host = "http://localhost:#{bypass.port}"
+      bypass = Gaoxy.Test.open()
+      host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
       session_id = "failed-stream-#{System.unique_integer([:positive])}"
       owner = self()
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions", fn conn ->
         json(conn, 201, %{"data" => %{"id" => session_id}})
       end)
 
-      Bypass.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
         json(conn, 503, %{"error" => "unavailable"})
       end)
 
-      Bypass.stub(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
+      Gaoxy.Test.stub(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
         send(owner, :unexpected_message_submission)
         json(conn, 200, %{})
       end)
@@ -513,21 +511,21 @@ defmodule SynapsisCli.HTTPTest do
     end
 
     test "returns an error when the stream closes without a terminal event" do
-      bypass = Bypass.open()
-      host = "http://localhost:#{bypass.port}"
+      bypass = Gaoxy.Test.open()
+      host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
       session_id = "closed-stream-#{System.unique_integer([:positive])}"
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions", fn conn ->
         json(conn, 201, %{"data" => %{"id" => session_id}})
       end)
 
-      Bypass.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.resp(200, "event: text_delta\ndata: {\"text\":\"partial\"}\n\n")
       end)
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
         json(conn, 200, %{"ok" => true})
       end)
 
@@ -538,15 +536,15 @@ defmodule SynapsisCli.HTTPTest do
     end
 
     test "returns an explicit error when an SSE frame exceeds the buffer limit" do
-      bypass = Bypass.open()
-      host = "http://localhost:#{bypass.port}"
+      bypass = Gaoxy.Test.open()
+      host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
       session_id = "oversized-stream-#{System.unique_integer([:positive])}"
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions", fn conn ->
         json(conn, 201, %{"data" => %{"id" => session_id}})
       end)
 
-      Bypass.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
         body =
           "event: session_state\ndata: {\"status\":\"waiting\"}\n\n" <>
             String.duplicate("x", 16 * 1024 * 1024 + 1)
@@ -556,7 +554,7 @@ defmodule SynapsisCli.HTTPTest do
         |> Plug.Conn.resp(200, body)
       end)
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
         json(conn, 200, %{"ok" => true})
       end)
 
@@ -588,23 +586,23 @@ defmodule SynapsisCli.HTTPTest do
 
   describe "message send failure" do
     test "returns the non-200 message response" do
-      bypass = Bypass.open()
-      host = "http://localhost:#{bypass.port}"
+      bypass = Gaoxy.Test.open()
+      host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
       session_id = "test-session-#{System.unique_integer([:positive])}"
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => session_id}}))
       end)
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.resp(422, Jason.encode!(%{"error" => "validation failed"}))
       end)
 
-      Bypass.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.resp(200, "event: session_state\ndata: {\"status\":\"waiting\"}\n\n")

@@ -3,6 +3,8 @@ defmodule Synapsis.Memory.HostAgentTest do
 
   alias Synapsis.Memory.HostAgent
 
+  @record_id "b9a3299b-29da-4e7e-bc8b-c1d4f98a70e1"
+
   setup do
     server = Gaoxy.Test.open()
 
@@ -568,13 +570,18 @@ defmodule Synapsis.Memory.HostAgentTest do
     :erlang.trace_pattern({Req, :request, 1}, true, [:local])
     on_exit(fn -> :erlang.trace_pattern({Req, :request, 1}, false, [:local]) end)
 
-    for trigger <- [:owner_loss, :deadline] do
+    for {operation, input} <- [recall: "q", get: @record_id],
+        trigger <- [:owner_loss, :deadline] do
       parent = self()
 
       caller =
         spawn(fn ->
           receive do
-            :go -> send(parent, {:result, HostAgent.recall(ctx.source, "q", timeout: 200)})
+            :go ->
+              send(
+                parent,
+                {:result, apply(HostAgent, operation, [ctx.source, input, [timeout: 200]])}
+              )
           end
         end)
 
@@ -589,6 +596,192 @@ defmodule Synapsis.Memory.HostAgentTest do
       assert_receive {:DOWN, ^monitor, :process, ^worker, :killed}, 600
       if trigger == :deadline, do: assert_receive({:result, {:error, :timeout}}, 500)
     end
+  end
+
+  test "exact get posts only its canonical id and exposes a singular checked record", ctx do
+    set_req_defaults(auth: {:bearer, "unrelated-token"}, headers: [{"cookie", "secret"}])
+    parent = self()
+
+    Gaoxy.Test.expect_once(ctx.server, "POST", "/memory/synapsis/call/get", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      send(parent, {:get_request, Jason.decode!(body), conn.req_headers})
+
+      result =
+        exact()
+        |> put_in(["record", "provenance"], %{"checkout_root" => "/private", "token" => "secret"})
+        |> Map.put("secret", "hidden")
+
+      reply(conn, result)
+    end)
+
+    assert {:ok, result} = HostAgent.get(ctx.source, @record_id)
+    assert result.record.memory_id == @record_id
+    assert result.record.canonical_id == @record_id
+    assert result.record.content == "Complete canonical content"
+
+    assert result.record.citation == %{
+             source_id: "local-host",
+             endpoint: ctx.source.endpoint,
+             memory_id: @record_id
+           }
+
+    assert result.source == %{
+             id: "local-host",
+             endpoint: ctx.source.endpoint,
+             partition: "host_default"
+           }
+
+    assert Map.take(result, [:mode, :authority, :consistency, :stale, :history_available]) == %{
+             mode: "online",
+             authority: "canonical",
+             consistency: "canonical",
+             stale: false,
+             history_available: true
+           }
+
+    refute Map.has_key?(result, :pending_operations)
+    refute Map.has_key?(result, :hits)
+    refute inspect(result) =~ "secret"
+    refute inspect(result) =~ "/private"
+    assert_receive {:get_request, %{"id" => @record_id} = payload, headers}
+    assert map_size(payload) == 1
+
+    refute Enum.any?(headers, fn {name, _} -> name in ["authorization", "cookie", "x-api-key"] end)
+  end
+
+  test "exact get rejects noncanonical IDs and caller supplied selectors before HTTP", ctx do
+    for id <- [nil, "record", String.upcase(@record_id), String.replace(@record_id, "-", "")] do
+      assert {:error, :invalid_input} = HostAgent.get(ctx.source, id)
+    end
+
+    for opts <- [
+          [project: "project"],
+          [source: %{cwd: "/tmp"}],
+          [memory_access_id: @record_id],
+          [limit: 1],
+          [adapter: fn _ -> raise "must not run" end],
+          [timeout: 1, timeout: 2],
+          [timeout: 0],
+          [timeout: 10_001],
+          [deadline: "later"],
+          %{},
+          nil
+        ] do
+      assert {:error, :invalid_input} = HostAgent.get(ctx.source, @record_id, opts)
+    end
+
+    assert {:error, :invalid_source} =
+             HostAgent.get(Map.put(ctx.source, :project, "other"), @record_id)
+
+    assert Gaoxy.Test.requests(ctx.server).entries == []
+  end
+
+  test "exact get requires canonical online state and matching record aliases", _ctx do
+    for result <- [
+          Map.delete(exact(), "record"),
+          Map.delete(exact(), "history_available"),
+          Map.put(exact(), "mode", "offline"),
+          Map.put(exact(), "authority", "canonical_with_provisional"),
+          Map.put(exact(), "consistency", "bounded_stale"),
+          Map.put(exact(), "stale", true),
+          Map.put(exact(), "history_available", false),
+          Map.put(exact(), "pending_operations", 1),
+          update_in(exact(), ["record"], &Map.delete(&1, "id")),
+          update_in(exact(), ["record"], &Map.delete(&1, "canonical_id")),
+          put_in(exact(), ["record", "id"], Ecto.UUID.generate()),
+          put_in(exact(), ["record", "canonical_id"], Ecto.UUID.generate()),
+          put_in(exact(), ["record", "memory_id"], Ecto.UUID.generate()),
+          put_in(exact(), ["record", "kind"], "provisional"),
+          put_in(exact(), ["record", "authority"], "provisional"),
+          put_in(exact(), ["record", "provisional"], true),
+          put_in(exact(), ["record", "tags"], %{})
+        ] do
+      ctx = fixture()
+      Gaoxy.Test.expect_once(ctx.server, "POST", "/memory/synapsis/call/get", &reply(&1, result))
+      assert {:error, :malformed_result} = HostAgent.get(ctx.source, @record_id)
+    end
+  end
+
+  test "exact get preserves upstream failures without any recall or list fallback", _ctx do
+    for {status, code, reason} <- [
+          {404, "not_found", :not_found},
+          {403, "unauthorized", :unauthorized},
+          {400, "invalid_arguments", :invalid_arguments},
+          {400, "unsupported_filter", :unsupported_filter},
+          {413, "payload_too_large", :payload_too_large},
+          {501, "unsupported_operation", :unsupported_operation},
+          {503, "canonical_unavailable", :canonical_unavailable},
+          {200, "not_found", :not_found},
+          {200, "canonical_unavailable", :canonical_unavailable},
+          {200, "unsupported_operation", :unsupported_operation},
+          {200, "private upstream message", :host_error},
+          {503, "private error", :unavailable},
+          {404, "private route error", :http_error}
+        ] do
+      ctx = fixture()
+
+      Gaoxy.Test.expect_once(ctx.server, "POST", "/memory/synapsis/call/get", fn conn ->
+        Plug.Conn.resp(conn, status, Jason.encode!(%{"ok" => false, "error" => code}))
+      end)
+
+      assert {:error, ^reason} = HostAgent.get(ctx.source, @record_id)
+      assert length(Gaoxy.Test.requests(ctx.server).entries) == 1
+    end
+  end
+
+  test "exact get fails on transport, public output and total deadline limits", _ctx do
+    for {content, reason} <- [
+          {String.duplicate("x", 270_000), :response_limit},
+          {String.duplicate("x", 66_000), :output_limit}
+        ] do
+      ctx = fixture()
+
+      Gaoxy.Test.expect_once(ctx.server, "POST", "/memory/synapsis/call/get", fn conn ->
+        reply(conn, put_in(exact(), ["record", "content"], content))
+      end)
+
+      assert {:error, ^reason} = HostAgent.get(ctx.source, @record_id)
+    end
+
+    ctx = fixture()
+
+    assert {:error, :timeout} =
+             HostAgent.get(ctx.source, @record_id,
+               deadline: System.monotonic_time(:millisecond) - 1
+             )
+
+    assert Gaoxy.Test.requests(ctx.server).entries == []
+
+    Gaoxy.Test.expect_once(ctx.server, "POST", "/memory/synapsis/call/get", fn conn ->
+      conn = Plug.Conn.send_chunked(conn, 200)
+
+      Enum.reduce_while(1..12, conn, fn _, conn ->
+        Process.sleep(15)
+
+        case Plug.Conn.chunk(conn, " ") do
+          {:ok, conn} -> {:cont, conn}
+          {:error, _} -> {:halt, conn}
+        end
+      end)
+    end)
+
+    assert {:error, :timeout} = HostAgent.get(ctx.source, @record_id, timeout: 30)
+  end
+
+  defp exact do
+    %{
+      "record" => %{
+        "id" => @record_id,
+        "canonical_id" => @record_id,
+        "kind" => "memory",
+        "content" => "Complete canonical content"
+      },
+      "mode" => "online",
+      "authority" => "canonical",
+      "consistency" => "canonical",
+      "stale" => false,
+      "history_available" => true
+    }
   end
 
   defp set_req_defaults(options) do

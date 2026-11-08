@@ -1,3 +1,5 @@
+Code.require_file("rel/filesystem_runtime.exs", __DIR__)
+
 defmodule Synapsis.MixProject do
   use Mix.Project
 
@@ -27,18 +29,31 @@ defmodule Synapsis.MixProject do
           synapsis_workspace: :permanent,
           synapsis_web: :permanent
         ],
-        steps: [:assemble, :tar]
+        steps: [:assemble, &Synapsis.Release.FilesystemRuntime.bundle/1, :tar]
       ]
     ]
   end
 
   defp deps do
-    []
+    [
+      {:websock_adapter, "~> 0.15.1", hex: :gaoxy_websock_adapter, override: true}
+    ]
   end
 
   defp aliases do
     [
+      compile: [&compile_with_native_pty/1],
       "synapsis.run": ["phx.server"]
     ]
+  end
+
+  defp compile_with_native_pty(args) do
+    result = Mix.Task.run("compile", args)
+
+    if match?({status, _} when status in [:ok, :noop], result) and
+         :os.type() == {:unix, :linux} and "--no-compile" not in args,
+       do: Mix.Task.run("backplane.pty.build")
+
+    result
   end
 end

@@ -185,9 +185,9 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
     end
 
     test "clears a stored token and refreshes models without authorization", %{conn: conn} do
-      bypass = Bypass.open()
+      bypass = Gaoxy.Test.open()
 
-      Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
         headers = Map.new(conn.req_headers)
         refute Map.has_key?(headers, "authorization")
 
@@ -200,7 +200,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
         create_provider!(%{
           name: "backplane-clear",
           type: "openai",
-          base_url: "http://localhost:#{bypass.port}/v1",
+          base_url: Gaoxy.Test.url(bypass, "/v1"),
           api_key_encrypted: "placeholder-token",
           config: %{"available_models" => [%{"id" => "old-model", "name" => "Old Model"}]}
         })
@@ -419,9 +419,9 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
     end
 
     test "refresh_models reloads models from provider settings", %{conn: conn} do
-      bypass = Bypass.open()
+      bypass = Gaoxy.Test.open()
 
-      Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "fresh-model"}]}))
@@ -431,7 +431,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
         create_provider!(%{
           name: "refreshable-provider",
           type: "openai",
-          base_url: "http://localhost:#{bypass.port}/v1",
+          base_url: Gaoxy.Test.url(bypass, "/v1"),
           api_key_encrypted: "sk-test",
           config: %{"available_models" => [%{"id" => "old-model", "name" => "Old Model"}]}
         })
@@ -518,7 +518,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
 
       html = render_hook(view, "chat.send", chat_params(provider, %{"text" => ""}))
       refute html =~ "Provider not registered"
-      assert_reply view, %{status: "error", message: "Enter a message"}
+      assert_reply(view, %{status: "error", message: "Enter a message"})
     end
 
     test "chat_send without registered provider shows error", %{conn: conn, provider: provider} do
@@ -535,15 +535,15 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
 
       render_hook(view, "chat.send", chat_params(provider, %{"text" => "hello"}))
 
-      assert_reply view, %{
+      assert_reply(view, %{
         status: "error",
         message: "Provider not registered. Save and enable it first."
-      }
+      })
 
-      assert_push_event view, "chat:event", %{
+      assert_push_event(view, "chat:event", %{
         type: "chat.message",
         message: %{status: "error", error: "Provider not registered. Save and enable it first."}
-      }
+      })
     end
 
     test "chat_send rejects an unavailable provider despite a stale registry entry", %{conn: conn} do
@@ -552,10 +552,10 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
 
       on_exit(fn -> Synapsis.Config.Store.delete(:backplane, "source-1") end)
 
-      bypass = Bypass.open()
+      bypass = Gaoxy.Test.open()
       test_pid = self()
 
-      Bypass.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
         send(test_pid, :provider_http_called)
 
         conn
@@ -567,7 +567,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
         create_provider!(%{
           name: "unavailable-chat",
           type: "openai",
-          base_url: "http://localhost:#{bypass.port}",
+          base_url: String.trim_trailing(Gaoxy.Test.url(bypass), "/"),
           api_key_encrypted: "stale-secret",
           config: %{
             "managed_by" => "backplane",
@@ -580,7 +580,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       :ok =
         Synapsis.Provider.Registry.register(provider.name, %{
           type: "openai",
-          base_url: "http://localhost:#{bypass.port}",
+          base_url: String.trim_trailing(Gaoxy.Test.url(bypass), "/"),
           api_key: "stale-secret"
         })
 
@@ -598,17 +598,17 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
 
       refute_receive :provider_http_called, 200
       assert {:error, :not_found} = Synapsis.Provider.Registry.get(provider.name)
-      assert_reply view, %{status: "error", message: "Provider is currently unavailable."}
+      assert_reply(view, %{status: "error", message: "Provider is currently unavailable."})
     end
 
     test "chat_send rejects a source-disabled model before an HTTP request", %{conn: conn} do
-      bypass = Bypass.open()
+      bypass = Gaoxy.Test.open()
       test_pid = self()
 
       assert {:ok, _connection} =
                Synapsis.Config.Store.put(:backplane, %{"id" => "source-1", "enabled" => true})
 
-      Bypass.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
         send(test_pid, :provider_http_called)
 
         conn
@@ -620,7 +620,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
         create_provider!(%{
           name: "mixed-model-chat",
           type: "openai",
-          base_url: "http://localhost:#{bypass.port}",
+          base_url: String.trim_trailing(Gaoxy.Test.url(bypass), "/"),
           config: %{
             "managed_by" => "backplane",
             "backplane_source_id" => "source-1",
@@ -662,14 +662,14 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       )
 
       refute_receive :provider_http_called, 200
-      assert_reply view, %{status: "error", message: "Model is currently unavailable."}
+      assert_reply(view, %{status: "error", message: "Model is currently unavailable."})
     end
 
     test "chat_send preserves available non-Backplane providers", %{conn: conn} do
-      bypass = Bypass.open()
+      bypass = Gaoxy.Test.open()
       test_pid = self()
 
-      Bypass.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
         send(test_pid, :local_provider_http_called)
 
         conn
@@ -681,7 +681,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
         create_provider!(%{
           name: "local-chat",
           type: "openai",
-          base_url: "http://localhost:#{bypass.port}",
+          base_url: String.trim_trailing(Gaoxy.Test.url(bypass), "/"),
           config: %{
             "available_models" => [%{"id" => "local-model", "name" => "Local Model"}]
           }
@@ -695,7 +695,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
 
       render_hook(view, "chat.send", chat_params(provider, %{"text" => "hello"}))
 
-      assert_reply view, %{status: "ok"}
+      assert_reply(view, %{status: "ok"})
       assert_receive :local_provider_http_called, 1_000
     end
 
@@ -724,7 +724,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
         chat_params(provider, %{"conversation_id" => "other", "text" => "hello"})
       )
 
-      assert_reply view, %{status: "error", message: "Conversation is no longer available"}
+      assert_reply(view, %{status: "error", message: "Conversation is no longer available"})
 
       render_hook(
         view,
@@ -732,7 +732,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
         chat_params(provider, %{"request_id" => nil, "text" => "hello"})
       )
 
-      assert_reply view, %{status: "error", message: "Invalid request ID"}
+      assert_reply(view, %{status: "error", message: "Invalid request ID"})
 
       render_hook(
         view,
@@ -740,21 +740,21 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
         chat_params(provider, %{"text" => "hello", "images" => [%{}]})
       )
 
-      assert_reply view, %{
+      assert_reply(view, %{
         status: "error",
         message: "Provider test chat does not support attachments"
-      }
+      })
 
       render_hook(view, "chat.sync", chat_params(provider))
-      assert_reply view, %{status: "ok"}
+      assert_reply(view, %{status: "ok"})
 
-      assert_push_event view, "chat:event", %{
+      assert_push_event(view, "chat:event", %{
         type: "chat.snapshot",
         messages: [],
         metadata: %{kind: "provider", attachmentsAllowed: false, canStop: true},
         runtime: %{active: false},
         admission: %{canSubmit: true}
-      }
+      })
     end
 
     test "provider stream sends ordered deltas and preserves its assistant ID", %{conn: conn} do
@@ -762,42 +762,42 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
       render_hook(view, "toggle_chat", %{})
       render_hook(view, "chat.send", chat_params(provider, %{"text" => "hello"}))
-      assert_reply view, %{status: "ok"}
+      assert_reply(view, %{status: "ok"})
       assert_receive {:provider_request, request_pid}, 1_000
 
-      assert_push_event view, "chat:event", %{
+      assert_push_event(view, "chat:event", %{
         type: "chat.message",
         message_id: assistant_id,
         message: %{role: "assistant", status: "streaming"},
         runtime: %{active: true},
         admission: %{canSubmit: false}
-      }
+      })
 
       send(request_pid, {:respond, 200, chat_stream_response("Hello world!")})
 
-      assert_push_event view, "chat:event", %{
+      assert_push_event(view, "chat:event", %{
         type: "chat.delta",
         message_id: ^assistant_id,
         sequence: 2,
         text: "Hello world!"
-      }
+      })
 
-      assert_push_event view, "chat:event", %{
+      assert_push_event(view, "chat:event", %{
         type: "chat.message",
         message_id: ^assistant_id,
         sequence: 3,
         message: %{content: "Hello world!", status: "complete"},
         runtime: %{active: false},
         admission: %{canSubmit: true}
-      }
+      })
 
       render_hook(view, "chat.sync", chat_params(provider))
 
-      assert_push_event view, "chat:event", %{
+      assert_push_event(view, "chat:event", %{
         type: "chat.snapshot",
         sequences: %{^assistant_id => 3},
         messages: [%{role: "user"}, %{id: ^assistant_id, content: "Hello world!"}]
-      }
+      })
     end
 
     test "provider admission deduplicates requests and rejects a second active send", %{
@@ -808,27 +808,29 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       render_hook(view, "toggle_chat", %{})
       params = chat_params(provider, %{"text" => "hello"})
       render_hook(view, "chat.send", params)
-      assert_reply view, %{status: "ok"}
+      assert_reply(view, %{status: "ok"})
       assert_receive {:provider_request, request_pid}, 1_000
 
       render_hook(view, "chat.send", params)
-      assert_reply view, %{status: "ok"}
+      assert_reply(view, %{status: "ok"})
       render_hook(view, "chat.send", chat_params(provider, %{"text" => "second"}))
-      assert_reply view, %{status: "error", message: "Wait for the provider response"}
+      assert_reply(view, %{status: "error", message: "Wait for the provider response"})
       refute_receive {:provider_request, _}, 100
 
+      send(request_pid, :establish_stream)
+      assert_receive {:provider_stream_ready, ^request_pid}, 1_000
       render_hook(view, "chat.stop", chat_params(provider))
-      assert_reply view, %{status: "ok"}
+      assert_reply(view, %{status: "ok"})
       send(request_pid, :release)
       send(view.pid, {:provider_chunk, {:text_delta, "stale"}})
       send(view.pid, :provider_done)
       render_hook(view, "chat.sync", chat_params(provider))
 
-      assert_push_event view, "chat:event", %{
+      assert_push_event(view, "chat:event", %{
         type: "chat.snapshot",
         runtime: %{active: false},
         messages: [%{role: "user"}, %{role: "assistant", status: "cancelled", content: ""}]
-      }
+      })
     end
 
     test "provider errors have stable IDs and Clear cancels an admitted stream", %{conn: conn} do
@@ -836,37 +838,39 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
       render_hook(view, "toggle_chat", %{})
       render_hook(view, "chat.send", chat_params(provider, %{"text" => "hello"}))
-      assert_reply view, %{status: "ok"}
+      assert_reply(view, %{status: "ok"})
       assert_receive {:provider_request, request_pid}, 1_000
       send(request_pid, {:respond, 401, Jason.encode!(%{error: %{message: "Invalid API key"}})})
 
-      assert_push_event view, "chat:event", %{
+      assert_push_event(view, "chat:event", %{
         type: "chat.snapshot",
         messages: [
           %{role: "user"},
           %{id: error_id, role: "error", status: "error", content: error}
         ]
-      }
+      })
 
       assert is_binary(error_id)
       assert error =~ "Error:"
 
       render_hook(view, "chat_clear", %{})
-      assert_push_event view, "chat:event", %{type: "chat.snapshot", messages: []}
+      assert_push_event(view, "chat:event", %{type: "chat.snapshot", messages: []})
       render_hook(view, "chat.send", chat_params(provider, %{"text" => "second"}))
-      assert_reply view, %{status: "ok"}
+      assert_reply(view, %{status: "ok"})
       assert_receive {:provider_request, next_request_pid}, 1_000
+      send(next_request_pid, :establish_stream)
+      assert_receive {:provider_stream_ready, ^next_request_pid}, 1_000
       render_hook(view, "chat_clear", %{})
       send(next_request_pid, :release)
       send(view.pid, {:provider_chunk, {:text_delta, "stale"}})
       send(view.pid, :provider_done)
       render_hook(view, "chat.sync", chat_params(provider))
 
-      assert_push_event view, "chat:event", %{
+      assert_push_event(view, "chat:event", %{
         type: "chat.snapshot",
         messages: [],
         runtime: %{active: false}
-      }
+      })
     end
   end
 
@@ -882,15 +886,27 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
   end
 
   defp controlled_chat_provider(test_pid) do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
 
-    Bypass.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
-      Process.flag(:trap_exit, true)
+    Gaoxy.Test.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+      {:ok, _body, conn} = Plug.Conn.read_body(conn)
       send(test_pid, {:provider_request, self()})
 
       receive do
-        :release ->
-          conn
+        :establish_stream ->
+          conn =
+            conn
+            |> Gaoxy.HTTP.put_stream_timeout(6_000)
+            |> Plug.Conn.put_resp_content_type("text/event-stream")
+            |> Plug.Conn.send_chunked(200)
+
+          send(test_pid, {:provider_stream_ready, self()})
+
+          receive do
+            :release -> conn
+          after
+            5_000 -> raise "test stream was not released"
+          end
 
         {:respond, status, body} ->
           conn
@@ -907,7 +923,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       create_provider!(%{
         name: "react-chat",
         type: "openai",
-        base_url: "http://localhost:#{bypass.port}",
+        base_url: String.trim_trailing(Gaoxy.Test.url(bypass), "/"),
         config: %{"available_models" => [%{"id" => "test-model", "name" => "Test Model"}]}
       })
 

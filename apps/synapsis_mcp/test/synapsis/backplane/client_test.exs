@@ -4,18 +4,18 @@ defmodule Synapsis.Backplane.ClientTest do
   alias Synapsis.Backplane.{Client, Connection}
 
   test "discovers the exact Backplane REST and MCP contracts into one snapshot", %{test: test} do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     connection = connection!(bypass, credential: "client-secret")
     archive = archive!(test, "review", "Review from the archive.")
     parent = self()
 
-    Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
       send(parent, :models)
       assert Plug.Conn.get_req_header(conn, "authorization") == ["Bearer client-secret"]
       json(conn, %{"object" => "list", "data" => [%{"id" => "model-a"}]})
     end)
 
-    Bypass.expect_once(bypass, "GET", "/skills", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills", fn conn ->
       send(parent, :skills)
       assert conn.query_string == "limit=100"
       assert Plug.Conn.get_req_header(conn, "authorization") == ["Bearer client-secret"]
@@ -40,7 +40,7 @@ defmodule Synapsis.Backplane.ClientTest do
       })
     end)
 
-    Bypass.expect_once(bypass, "GET", "/skills/review", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills/review", fn conn ->
       send(parent, :archive_detail)
 
       json(conn, %{
@@ -53,7 +53,7 @@ defmodule Synapsis.Backplane.ClientTest do
       })
     end)
 
-    Bypass.expect_once(bypass, "GET", "/skills/review/archive", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills/review/archive", fn conn ->
       send(parent, :archive)
 
       conn
@@ -61,7 +61,7 @@ defmodule Synapsis.Backplane.ClientTest do
       |> Plug.Conn.send_resp(200, archive)
     end)
 
-    Bypass.expect_once(bypass, "GET", "/skills/generated", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills/generated", fn conn ->
       send(parent, :generated_detail)
 
       json(conn, %{
@@ -73,7 +73,7 @@ defmodule Synapsis.Backplane.ClientTest do
       })
     end)
 
-    Bypass.expect(bypass, "POST", "/mcp", fn conn ->
+    Gaoxy.Test.expect(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       message = Jason.decode!(body)
 
@@ -145,19 +145,19 @@ defmodule Synapsis.Backplane.ClientTest do
   end
 
   test "discovers advertised MCP prompts and resources through the tools session" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     connection = connection!(bypass)
     parent = self()
 
-    Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
       json(conn, %{"data" => []})
     end)
 
-    Bypass.expect_once(bypass, "GET", "/skills", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills", fn conn ->
       json(conn, %{"data" => []})
     end)
 
-    Bypass.expect(bypass, "POST", "/mcp", fn conn ->
+    Gaoxy.Test.expect(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       method = Jason.decode!(body)["method"]
       send(parent, {:mcp_method, method, Plug.Conn.get_req_header(conn, "mcp-session-id")})
@@ -239,14 +239,15 @@ defmodule Synapsis.Backplane.ClientTest do
   end
 
   test "follows MCP pagination cursors for every discovered catalog in one session" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     connection = connection!(bypass)
     parent = self()
 
-    Bypass.expect_once(bypass, "GET", "/v1/models", fn conn -> json(conn, %{"data" => []}) end)
-    Bypass.expect_once(bypass, "GET", "/skills", fn conn -> json(conn, %{"data" => []}) end)
+    Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn -> json(conn, %{"data" => []}) end)
 
-    Bypass.expect(bypass, "POST", "/mcp", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills", fn conn -> json(conn, %{"data" => []}) end)
+
+    Gaoxy.Test.expect(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       message = Jason.decode!(body)
       cursor = get_in(message, ["params", "cursor"])
@@ -369,10 +370,10 @@ defmodule Synapsis.Backplane.ClientTest do
   end
 
   test "fails the tools surface when a later MCP page fails" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     connection = connection!(bypass)
 
-    Bypass.expect(bypass, "POST", "/mcp", fn conn ->
+    Gaoxy.Test.expect(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       message = Jason.decode!(body)
 
@@ -413,10 +414,10 @@ defmodule Synapsis.Backplane.ClientTest do
   end
 
   test "fails MCP pagination when a server repeats a cursor" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     connection = connection!(bypass)
 
-    Bypass.expect(bypass, "POST", "/mcp", fn conn ->
+    Gaoxy.Test.expect(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       message = Jason.decode!(body)
 
@@ -453,11 +454,11 @@ defmodule Synapsis.Backplane.ClientTest do
   end
 
   test "stops MCP pagination at the configured page limit" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     connection = connection!(bypass)
     parent = self()
 
-    Bypass.expect(bypass, "POST", "/mcp", fn conn ->
+    Gaoxy.Test.expect(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       message = Jason.decode!(body)
       cursor = get_in(message, ["params", "cursor"])
@@ -498,18 +499,18 @@ defmodule Synapsis.Backplane.ClientTest do
   end
 
   test "keeps tools and successful optional capabilities when an advertised MCP surface fails" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     connection = connection!(bypass)
 
-    Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
       json(conn, %{"data" => []})
     end)
 
-    Bypass.expect_once(bypass, "GET", "/skills", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills", fn conn ->
       json(conn, %{"data" => []})
     end)
 
-    Bypass.expect(bypass, "POST", "/mcp", fn conn ->
+    Gaoxy.Test.expect(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       message = Jason.decode!(body)
 
@@ -587,18 +588,18 @@ defmodule Synapsis.Backplane.ClientTest do
   end
 
   test "keeps successful surfaces when another discovery surface fails" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     connection = connection!(bypass)
 
-    Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
       Plug.Conn.send_resp(conn, 503, "offline")
     end)
 
-    Bypass.expect_once(bypass, "GET", "/skills", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills", fn conn ->
       json(conn, %{"data" => []})
     end)
 
-    Bypass.expect_once(bypass, "POST", "/mcp", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "POST", "/mcp", fn conn ->
       Plug.Conn.send_resp(conn, 503, "offline")
     end)
 
@@ -608,7 +609,7 @@ defmodule Synapsis.Backplane.ClientTest do
   end
 
   test "marks an exact-limit skill catalog incomplete" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     connection = connection!(bypass)
 
     skills =
@@ -617,45 +618,28 @@ defmodule Synapsis.Backplane.ClientTest do
         %{"id" => slug, "slug" => slug, "name" => slug, "source_kind" => "generated"}
       end
 
-    Bypass.expect(bypass, fn conn ->
-      case {conn.method, conn.request_path} do
-        {"GET", "/v1/models"} ->
-          json(conn, %{"data" => []})
-
-        {"GET", "/skills"} ->
-          assert conn.query_string == "limit=100"
-          json(conn, %{"data" => skills})
-
-        {"GET", "/skills/" <> slug} ->
-          json(conn, %{
-            "id" => slug,
-            "slug" => slug,
-            "name" => slug,
-            "source_kind" => "generated",
-            "content" => "Content for #{slug}"
-          })
-
-        {"POST", "/mcp"} ->
-          {:ok, body, conn} = Plug.Conn.read_body(conn)
-
-          case Jason.decode!(body)["method"] do
-            "initialize" ->
-              conn
-              |> Plug.Conn.put_resp_header("mcp-session-id", "exact-limit-session")
-              |> json(%{
-                "jsonrpc" => "2.0",
-                "id" => 1,
-                "result" => %{"protocolVersion" => "2025-03-26"}
-              })
-
-            "notifications/initialized" ->
-              Plug.Conn.send_resp(conn, 202, "")
-
-            "tools/list" ->
-              json(conn, %{"jsonrpc" => "2.0", "id" => 2, "result" => %{"tools" => []}})
-          end
-      end
+    Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
+      json(conn, %{"data" => []})
     end)
+
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills", fn conn ->
+      assert conn.query_string == "limit=100"
+      json(conn, %{"data" => skills})
+    end)
+
+    for %{"slug" => slug} <- skills do
+      Gaoxy.Test.expect_once(bypass, "GET", "/skills/#{slug}", fn conn ->
+        json(conn, %{
+          "id" => slug,
+          "slug" => slug,
+          "name" => slug,
+          "source_kind" => "generated",
+          "content" => "Content for #{slug}"
+        })
+      end)
+    end
+
+    expect_empty_mcp(bypass)
 
     assert {:ok, snapshot} = Client.fetch_snapshot(connection, timeout: 500)
     assert length(snapshot.skills) == 100
@@ -663,17 +647,17 @@ defmodule Synapsis.Backplane.ClientTest do
   end
 
   test "bounds model, skill list, and generated skill detail JSON before decoding" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     connection = connection!(bypass)
 
-    Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
       chunked_json(conn, %{"data" => [%{"id" => String.duplicate("m", 5_000)}]})
     end)
 
     assert {:error, :models_response_too_large} =
              Client.fetch_models(connection, timeout: 500, max_models_response_bytes: 256)
 
-    Bypass.expect_once(bypass, "GET", "/skills", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills", fn conn ->
       chunked_json(conn, %{
         "data" => [%{"slug" => "large", "description" => String.duplicate("s", 5_000)}]
       })
@@ -682,7 +666,7 @@ defmodule Synapsis.Backplane.ClientTest do
     assert {:error, :skills_response_too_large} =
              Client.list_skills(connection, timeout: 500, max_skills_response_bytes: 256)
 
-    Bypass.expect_once(bypass, "GET", "/skills/generated", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills/generated", fn conn ->
       chunked_json(conn, %{
         "slug" => "generated",
         "source_kind" => "generated",
@@ -697,16 +681,15 @@ defmodule Synapsis.Backplane.ClientTest do
                max_skill_content_bytes: 10_000
              )
 
-    # The expected client-side stream halt closes the test server's Cowboy request process.
-    Bypass.pass(bypass)
+    Gaoxy.Test.verify!(bypass)
   end
 
   test "bounds every MCP response phase before decoding" do
     for oversized_phase <- [:initialize, :initialized, :tools] do
-      bypass = Bypass.open()
+      bypass = Gaoxy.Test.open()
       connection = connection!(bypass)
 
-      Bypass.expect(bypass, "POST", "/mcp", fn conn ->
+      Gaoxy.Test.expect(bypass, "POST", "/mcp", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         method = Jason.decode!(body)["method"]
 
@@ -739,15 +722,15 @@ defmodule Synapsis.Backplane.ClientTest do
       assert {:error, :mcp_response_too_large} =
                Client.list_tools(connection, timeout: 500, max_mcp_response_bytes: 256)
 
-      Bypass.pass(bypass)
+      Gaoxy.Test.verify!(bypass)
     end
   end
 
   test "enforces a total request timeout against drip-fed response chunks" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     connection = connection!(bypass)
 
-    Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
       conn =
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
@@ -762,15 +745,15 @@ defmodule Synapsis.Backplane.ClientTest do
     end)
 
     assert {:error, %{reason: :timeout}} = Client.fetch_models(connection, timeout: 60)
-    Bypass.pass(bypass)
+    Gaoxy.Test.verify!(bypass)
   end
 
   test "accepts more than 100 models when the bounded response is valid" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     connection = connection!(bypass)
     models = for index <- 1..101, do: %{"id" => "model-#{index}"}
 
-    Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
       json(conn, %{"object" => "list", "data" => models})
     end)
 
@@ -781,13 +764,13 @@ defmodule Synapsis.Backplane.ClientTest do
   test "retains explicit unavailable content metadata for database and github skills", %{
     test: test
   } do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     connection = connection!(bypass)
     archive = archive!(test, "archive", "Archive body.")
 
-    Bypass.expect_once(bypass, "GET", "/v1/models", fn conn -> json(conn, %{"data" => []}) end)
+    Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn -> json(conn, %{"data" => []}) end)
 
-    Bypass.expect_once(bypass, "GET", "/skills", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills", fn conn ->
       json(conn, %{
         "data" => [
           %{"id" => "archive-id", "slug" => "archive", "source_kind" => "archive"},
@@ -798,7 +781,7 @@ defmodule Synapsis.Backplane.ClientTest do
       })
     end)
 
-    Bypass.expect_once(bypass, "GET", "/skills/archive", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills/archive", fn conn ->
       json(conn, %{
         "id" => "archive-id",
         "slug" => "archive",
@@ -808,11 +791,11 @@ defmodule Synapsis.Backplane.ClientTest do
       })
     end)
 
-    Bypass.expect_once(bypass, "GET", "/skills/archive/archive", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills/archive/archive", fn conn ->
       Plug.Conn.send_resp(conn, 200, archive)
     end)
 
-    Bypass.expect_once(bypass, "GET", "/skills/generated", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills/generated", fn conn ->
       json(conn, %{
         "id" => "generated-id",
         "slug" => "generated",
@@ -822,7 +805,7 @@ defmodule Synapsis.Backplane.ClientTest do
     end)
 
     for kind <- ~w(database github) do
-      Bypass.expect_once(bypass, "GET", "/skills/#{kind}", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/skills/#{kind}", fn conn ->
         json(conn, %{
           "id" => "#{kind}-id",
           "slug" => kind,
@@ -851,7 +834,7 @@ defmodule Synapsis.Backplane.ClientTest do
   end
 
   test "verifies archive content hashes and rejects missing hashes", %{test: test} do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     connection = connection!(bypass)
     archive = archive!(test, "hash", "Hash body.")
 
@@ -871,10 +854,10 @@ defmodule Synapsis.Backplane.ClientTest do
           {"missing", %{"slug" => "missing", "source_kind" => "archive"},
            :missing_archive_content_hash}
         ] do
-      Bypass.expect_once(bypass, "GET", "/skills/#{slug}", fn conn -> json(conn, detail) end)
+      Gaoxy.Test.expect_once(bypass, "GET", "/skills/#{slug}", fn conn -> json(conn, detail) end)
 
       if expected == :archive_content_hash_mismatch do
-        Bypass.expect_once(bypass, "GET", "/skills/#{slug}/archive", fn conn ->
+        Gaoxy.Test.expect_once(bypass, "GET", "/skills/#{slug}/archive", fn conn ->
           Plug.Conn.send_resp(conn, 200, archive)
         end)
       end
@@ -884,18 +867,18 @@ defmodule Synapsis.Backplane.ClientTest do
   end
 
   test "redacts credentials from per-surface protocol errors" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     connection = connection!(bypass, credential: "never-print-this")
 
-    Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
       json(conn, %{"data" => []})
     end)
 
-    Bypass.expect_once(bypass, "GET", "/skills", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills", fn conn ->
       json(conn, %{"data" => []})
     end)
 
-    Bypass.expect_once(bypass, "POST", "/mcp", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "POST", "/mcp", fn conn ->
       json(conn, %{
         "jsonrpc" => "2.0",
         "id" => 1,
@@ -909,7 +892,7 @@ defmodule Synapsis.Backplane.ClientTest do
   end
 
   test "rejects unsafe and over-limit archive contents", %{test: test} do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     connection = connection!(bypass)
 
     for {slug, entries, expected} <- [
@@ -920,7 +903,7 @@ defmodule Synapsis.Backplane.ClientTest do
         ] do
       archive = archive_entries!(test, slug, entries)
 
-      Bypass.expect_once(bypass, "GET", "/skills/#{slug}", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/skills/#{slug}", fn conn ->
         json(conn, %{
           "slug" => slug,
           "source_kind" => "archive",
@@ -928,7 +911,7 @@ defmodule Synapsis.Backplane.ClientTest do
         })
       end)
 
-      Bypass.expect_once(bypass, "GET", "/skills/#{slug}/archive", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/skills/#{slug}/archive", fn conn ->
         Plug.Conn.send_resp(conn, 200, archive)
       end)
 
@@ -941,14 +924,14 @@ defmodule Synapsis.Backplane.ClientTest do
   end
 
   test "reads a validated Backplane archive that contains its root directory", %{test: test} do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     connection = connection!(bypass)
     archive = archive_with_directory!(test, "rooted", "Rooted body.")
 
     assert {:ok, [{_name, :directory, 0, _mtime, _mode, _uid, _gid} | _rest]} =
              :erl_tar.table({:binary, archive}, [:compressed, :verbose])
 
-    Bypass.expect_once(bypass, "GET", "/skills/rooted", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills/rooted", fn conn ->
       json(conn, %{
         "slug" => "rooted",
         "source_kind" => "archive",
@@ -956,7 +939,7 @@ defmodule Synapsis.Backplane.ClientTest do
       })
     end)
 
-    Bypass.expect_once(bypass, "GET", "/skills/rooted/archive", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills/rooted/archive", fn conn ->
       Plug.Conn.send_resp(conn, 200, archive)
     end)
 
@@ -965,7 +948,7 @@ defmodule Synapsis.Backplane.ClientTest do
   end
 
   test "reads a GNU PAX archive accepted by Backplane archive inspection" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     connection = connection!(bypass)
     content = valid_skill_md("pax-skill")
     archive = pax_archive!("./pax/SKILL.md", content)
@@ -976,7 +959,7 @@ defmodule Synapsis.Backplane.ClientTest do
     assert IO.chardata_to_string(name) == "./pax/SKILL.md"
     assert size == byte_size(content)
 
-    Bypass.expect_once(bypass, "GET", "/skills/pax", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills/pax", fn conn ->
       json(conn, %{
         "slug" => "pax",
         "source_kind" => "archive",
@@ -984,7 +967,7 @@ defmodule Synapsis.Backplane.ClientTest do
       })
     end)
 
-    Bypass.expect_once(bypass, "GET", "/skills/pax/archive", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills/pax/archive", fn conn ->
       Plug.Conn.send_resp(conn, 200, archive)
     end)
 
@@ -993,7 +976,7 @@ defmodule Synapsis.Backplane.ClientTest do
   end
 
   test "allows valid directory metadata below the total-entry guard", %{test: test} do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     connection = connection!(bypass)
     regular = archive!(test, "bounded", "Bounded body.") |> :zlib.gunzip()
 
@@ -1004,7 +987,7 @@ defmodule Synapsis.Backplane.ClientTest do
 
     archive = :zlib.gzip(directories <> regular)
 
-    Bypass.expect_once(bypass, "GET", "/skills/bounded", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills/bounded", fn conn ->
       json(conn, %{
         "slug" => "bounded",
         "source_kind" => "archive",
@@ -1012,7 +995,7 @@ defmodule Synapsis.Backplane.ClientTest do
       })
     end)
 
-    Bypass.expect_once(bypass, "GET", "/skills/bounded/archive", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills/bounded/archive", fn conn ->
       Plug.Conn.send_resp(conn, 200, archive)
     end)
 
@@ -1021,7 +1004,7 @@ defmodule Synapsis.Backplane.ClientTest do
   end
 
   test "matches Backplane's 500 regular-file archive limit", %{test: test} do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     connection = connection!(bypass)
 
     for {slug, count, expected} <- [
@@ -1034,7 +1017,7 @@ defmodule Synapsis.Backplane.ClientTest do
 
       archive = archive_entries!(test, slug, entries)
 
-      Bypass.expect_once(bypass, "GET", "/skills/#{slug}", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/skills/#{slug}", fn conn ->
         json(conn, %{
           "slug" => slug,
           "source_kind" => "archive",
@@ -1042,7 +1025,7 @@ defmodule Synapsis.Backplane.ClientTest do
         })
       end)
 
-      Bypass.expect_once(bypass, "GET", "/skills/#{slug}/archive", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/skills/#{slug}/archive", fn conn ->
         Plug.Conn.send_resp(conn, 200, archive)
       end)
 
@@ -1058,13 +1041,13 @@ defmodule Synapsis.Backplane.ClientTest do
   end
 
   test "rejects symlink and special archive entries before extraction" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     connection = connection!(bypass)
 
     for {slug, type} <- [{"symlink", "2"}, {"character-device", "3"}] do
       archive = unsafe_type_archive!(slug, type)
 
-      Bypass.expect_once(bypass, "GET", "/skills/#{slug}", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/skills/#{slug}", fn conn ->
         json(conn, %{
           "slug" => slug,
           "source_kind" => "archive",
@@ -1072,7 +1055,7 @@ defmodule Synapsis.Backplane.ClientTest do
         })
       end)
 
-      Bypass.expect_once(bypass, "GET", "/skills/#{slug}/archive", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/skills/#{slug}/archive", fn conn ->
         Plug.Conn.send_resp(conn, 200, archive)
       end)
 
@@ -1082,13 +1065,13 @@ defmodule Synapsis.Backplane.ClientTest do
   end
 
   test "rejects an archive with a corrupt tar header checksum", %{test: test} do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     connection = connection!(bypass)
     tar = archive!(test, "checksum", "Checksum body.") |> :zlib.gunzip()
     <<header::binary-size(512), rest::binary>> = tar
     archive = :zlib.gzip(put_tar_field(header, 0, 1, "X") <> rest)
 
-    Bypass.expect_once(bypass, "GET", "/skills/checksum", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills/checksum", fn conn ->
       json(conn, %{
         "slug" => "checksum",
         "source_kind" => "archive",
@@ -1096,7 +1079,7 @@ defmodule Synapsis.Backplane.ClientTest do
       })
     end)
 
-    Bypass.expect_once(bypass, "GET", "/skills/checksum/archive", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills/checksum/archive", fn conn ->
       Plug.Conn.send_resp(conn, 200, archive)
     end)
 
@@ -1105,12 +1088,12 @@ defmodule Synapsis.Backplane.ClientTest do
   end
 
   test "stops inflating a high-ratio gzip archive at the expanded-size bound", %{test: test} do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     connection = connection!(bypass)
     archive = archive!(test, "bomb", String.duplicate("x", 1_000_000))
     assert byte_size(archive) < 10_000
 
-    Bypass.expect_once(bypass, "GET", "/skills/bomb", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills/bomb", fn conn ->
       json(conn, %{
         "slug" => "bomb",
         "source_kind" => "archive",
@@ -1118,7 +1101,7 @@ defmodule Synapsis.Backplane.ClientTest do
       })
     end)
 
-    Bypass.expect_once(bypass, "GET", "/skills/bomb/archive", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skills/bomb/archive", fn conn ->
       Plug.Conn.send_resp(conn, 200, archive)
     end)
 
@@ -1131,10 +1114,10 @@ defmodule Synapsis.Backplane.ClientTest do
   end
 
   test "omits authorization for blank credentials" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     connection = connection!(bypass, credential: "  ")
 
-    Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
       assert Plug.Conn.get_req_header(conn, "authorization") == []
       json(conn, %{"data" => []})
     end)
@@ -1143,19 +1126,19 @@ defmodule Synapsis.Backplane.ClientTest do
   end
 
   test "paginates the Skill Protocol v1 catalog and preserves exact references" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
 
     {:ok, connection} =
       Connection.new(%{
         name: "skill-protocol",
-        endpoint: "http://localhost:#{bypass.port}",
+        endpoint: String.trim_trailing(Gaoxy.Test.url(bypass), "/"),
         credential: "protocol-secret"
       })
 
     digest_a = "sha256:" <> String.duplicate("a", 64)
     digest_b = "sha256:" <> String.duplicate("b", 64)
 
-    Bypass.expect(bypass, "GET", "/skill-protocol/v1/catalog", fn conn ->
+    Gaoxy.Test.expect(bypass, "GET", "/skill-protocol/v1/catalog", fn conn ->
       params = URI.decode_query(conn.query_string)
       assert Plug.Conn.get_req_header(conn, "authorization") == ["Bearer protocol-secret"]
 
@@ -1191,7 +1174,7 @@ defmodule Synapsis.Backplane.ClientTest do
     {:ok, connection} =
       Connection.new(%{
         name: "http",
-        endpoint: "http://localhost:#{bypass.port}",
+        endpoint: String.trim_trailing(Gaoxy.Test.url(bypass), "/"),
         credential: Keyword.get(opts, :credential),
         connection_options: %{"skill_protocol" => "legacy"}
       })
@@ -1379,7 +1362,7 @@ defmodule Synapsis.Backplane.ClientTest do
   end
 
   defp expect_empty_mcp(bypass) do
-    Bypass.expect(bypass, "POST", "/mcp", fn conn ->
+    Gaoxy.Test.expect(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
       case Jason.decode!(body)["method"] do

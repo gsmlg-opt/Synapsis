@@ -12,6 +12,7 @@ defmodule Synapsis.Agent.Routine.Definition do
     :kind,
     :schedule,
     :prompt,
+    source: nil,
     scope: :global,
     project_ref: nil,
     enabled: true,
@@ -54,6 +55,7 @@ defmodule Synapsis.Agent.Routine.Definition do
           agent_name: String.t(),
           provider: String.t() | nil,
           model: String.t() | nil,
+          source: String.t() | nil,
           metadata: map()
         }
 
@@ -80,6 +82,7 @@ defmodule Synapsis.Agent.Routine.Definition do
            id: id,
            name: name,
            kind: :heartbeat,
+           source: "heartbeat",
            scope: :global,
            enabled: truthy?(get(map, :enabled, get(map, "enabled", true))),
            schedule: schedule,

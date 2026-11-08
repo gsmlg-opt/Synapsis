@@ -31,14 +31,11 @@ defmodule SynapsisProvider.MixProject do
     [
       {:synapsis_data, in_umbrella: true},
       {:phoenix_pubsub, "~> 2.4.1"},
-      {:backplane_ai_protocol, "~> 1.10.31"},
+      {:backplane_ai_protocol, "~> 1.10.57"},
       {:req, "~> 0.7"},
       {:finch, "~> 0.24"},
       {:jason, "~> 1.4"},
-      {:bypass, "~> 2.1", only: :test},
-      # Security floors for Bypass's test-only Plug/Cowboy transport.
-      {:cowboy, "~> 2.20", only: :test},
-      {:cowlib, "~> 2.21", only: :test}
+      {:gaoxy_test, "~> 0.15.1", only: :test}
     ]
   end
 end

@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "reference": {
+    "repository": "openclaw/openclaw",
+    "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b"
+  },
+  "sources": {
+    "extensions/web-readability/web-content-extractor.ts": "f3b6b465fe636de519481a675abd7f870ee23828b2cf4d9735d34357e71bbad0",
+    "src/agents/tools/web-shared.ts": "11a08d69eb1593a2645359c58afb40480033f7a77992917a473cd4c5a914e8e9",
+    "src/agents/tools/web-fetch-utils.ts": "68c7a68fcc5268771b538f33f6c503b551dfa71fda23efc870e3d67a6ce6b3f9",
+    "src/agents/tools/web-fetch-attributes.ts": "36d46f42db43b71f74db1b3a5cfcb2e00871366667e94ff7241c6f9a4f5e5ce2",
+    "src/agents/tools/web-fetch-visibility.ts": "66341d00e6e66415941aaa6c61929a881fae5132346b2365a42dc42a51201f16",
+    "src/plugin-sdk/web-content-extractor.ts": "2d54ac9b6944d8f4c51bf1e69ce3ec0d31e24102d31302384833718fb8c378ab",
+    "src/infra/map-size.ts": "36f06592cf1ae20d291e921da7cb42e8d7814372ca2d0745bec7a54a2a8a4409",
+    "src/infra/unicode-visibility.ts": "aac2934bfe554e3f40010f8eda03710a434e51a321b7d80be3f3d11e66c97246",
+    "src/security/external-content.ts": "4cefa29a1f53e0ee852c55e4a4f183c75e49b1fe5159781185778ef3e1b3aceb",
+    "src/security/external-content-source.ts": "9c2f8175964acbe160c0e6883d9082a76d0a21cf397d44cf09f129aa45d4887c",
+    "src/shared/html-entities.ts": "1036bcf3cc641cd635c2358743f82c5d4dd6e988141ccaa5b9e00d51b1fc10d0",
+    "src/shared/lazy-runtime.ts": "6709ac635ccf826538eaf21b74bb2ce66a6648382b6c7da279ad28eed109348b",
+    "src/shared/lazy-promise.ts": "65312193327ce287f03d450205cbdd8b9d1b28efc634bdedca295ae0a011c5a8",
+    "src/shared/regexp.ts": "bafc7ca866952c3df452c25ca0c6ef30756ff2c9f44463ad76da30857aeab35e",
+    "packages/markdown-core/src/html-scanner.ts": "f92c7c67564e03fd212fed247ea8818d2b80eb72b1545e8edb7510dfac1812d6",
+    "packages/normalization-core/src/number-coercion.ts": "8c40eca65a8fd1dc3aa40d90c22bff35c3710fcb03d2bc8227864a264d20ddc4",
+    "packages/normalization-core/src/string-coerce.ts": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf",
+    "packages/normalization-core/src/utf16-slice.ts": "12fd3212b08522a1523263c92f654151ad01605ee48a0ff58a1256889fb7cb5f",
+    "packages/normalization-core/src/response-bytes.ts": "0b05d3d7fd06dd61c2aa95f871092378fa9f791d0a9a52bc9a67786f15f338fc",
+    "packages/normalization-core/src/text-decoding.ts": "f686401f7b95e09aa196f646a99a708c73d6068339d230cce029efa046cd14dc",
+    "LICENSE": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4",
+    "extensions/web-readability/package.json": "3d89f41c964d8c6d4c88c4f34c9476ee13f554e6c2612b9be3a66becd7139846",
+    "src/agents/tools/web-fetch.ts": "8517c0d70ad9622b584a032dbca9b02317521ee1c4ba1e19e0dca0c2f8aaf8c5"
+  },
+  "referenceOnly": [
+    "src/agents/tools/web-fetch.ts",
+    "extensions/web-readability/package.json"
+  ],
+  "aliases": {
+    "openclaw/plugin-sdk/lazy-runtime": "src/shared/lazy-runtime.ts",
+    "openclaw/plugin-sdk/web-content-extractor": "src/plugin-sdk/web-content-extractor.ts",
+    "@openclaw/normalization-core": "normalization.mjs"
+  },
+  "assembly": {
+    "source": "src/agents/tools/web-fetch.ts",
+    "ranges": [
+      [
+        219,
+        222
+      ],
+      [
+        242,
+        246
+      ],
+      [
+        279,
+        306
+      ],
+      [
+        378,
+        380
+      ],
+      [
+        436,
+        538
+      ],
+      [
+        694,
+        785
+      ],
+      [
+        885,
+        891
+      ],
+      [
+        904,
+        908
+      ]
+    ],
+    "adaptations": [
+      "Captured bytes are decoded by original readResponseText using an in-memory Response, without network.",
+      "Direct original Readability plugin replaces runtime plugin/provider discovery. Original basic HTML fallback remains.",
+      "Host supplies validated actual final URL/status. Metadata wrapping and exact-number JSON follow pinned source.",
+      "Host time/cache/persistence are outside this immutable computation. No spill filesystem effects; threshold spill parity remains outside qualification."
+    ]
+  },
+  "scope": "Original document decoder, sanitization, Markdown, exact numeric tokens, wrappers and actual Readability. Whole factory/provider/spill equivalence is not claimed."
+}

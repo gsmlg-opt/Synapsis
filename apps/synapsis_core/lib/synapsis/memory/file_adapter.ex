@@ -48,7 +48,7 @@ defmodule Synapsis.Memory.FileAdapter do
     scope_id_filter = Keyword.get(filters, :scope_id)
     kind_filter = Keyword.get(filters, :kinds)
 
-    list()
+    list(Keyword.delete(filters, :limit))
     |> Enum.filter(fn m ->
       mem_tags = m.tags |> List.wrap() |> Enum.map(&String.downcase(to_string(&1)))
       text = [m.title, m.summary, Enum.join(mem_tags, " ")] |> Enum.join(" ") |> String.downcase()
@@ -62,10 +62,14 @@ defmodule Synapsis.Memory.FileAdapter do
         (is_nil(kind_filter) or m.kind in kind_filter)
     end)
     |> Enum.sort_by(& &1.importance, :desc)
+    |> take_limit(filters)
   end
 
   @impl Synapsis.Memory.Adapter
   def get(id), do: read_by_id(id)
+
+  @doc "Read an exact record within caller-selected semantic scope pairs."
+  def get(id, filters), do: read_by_id(id, filters)
 
   @impl Synapsis.Memory.Adapter
   def list(filters \\ []) do
@@ -73,27 +77,41 @@ defmodule Synapsis.Memory.FileAdapter do
     scope_id = Keyword.get(filters, :scope_id)
     dir = memory_dir()
 
-    pattern =
-      case {scope, scope_id} do
-        {nil, _} -> Path.join(dir, "**/*.md")
-        {s, nil} -> Path.join([dir, to_string(s), "**/*.md"])
-        {s, sid} -> Path.join([dir, to_string(s), sid, "*.md"])
+    patterns =
+      case Keyword.get(filters, :scopes) do
+        scopes when is_list(scopes) ->
+          Enum.map(scopes, fn {s, sid} ->
+            Path.join([dir, to_string(s), directory_id(sid), "*.md"])
+          end)
+
+        nil ->
+          case {scope, scope_id} do
+            {nil, _} -> [Path.join(dir, "**/*.md")]
+            {s, nil} -> [Path.join([dir, to_string(s), "**/*.md"])]
+            {s, sid} -> [Path.join([dir, to_string(s), directory_id(sid), "*.md"])]
+          end
       end
 
-    pattern
-    |> Path.wildcard()
+    patterns
+    |> Enum.flat_map(&Path.wildcard/1)
+    |> Enum.uniq()
     |> Enum.flat_map(fn path ->
       case read_file(path) do
         {:ok, m} -> [m]
         _ -> []
       end
     end)
+    |> Enum.filter(&scope_match?(&1, filters))
     |> Enum.reject(& &1[:archived_at])
+    |> take_limit(filters)
   end
 
   @impl Synapsis.Memory.Adapter
-  def update(id, attrs) do
-    case read_by_id(id) do
+  def update(id, attrs), do: update(id, attrs, [])
+
+  @doc "Update an exact record while retaining its expected scope."
+  def update(id, attrs, filters) do
+    case read_by_id(id, filters) do
       {:ok, existing} ->
         updated =
           existing
@@ -115,12 +133,16 @@ defmodule Synapsis.Memory.FileAdapter do
   end
 
   @impl Synapsis.Memory.Adapter
-  def archive(id) do
-    case read_by_id(id) do
+  def archive(id), do: archive(id, [])
+
+  @doc "Archive only after the scoped record's write succeeds."
+  def archive(id, filters) do
+    case read_by_id(id, filters) do
       {:ok, memory} ->
-        write_file(Map.put(memory, :archived_at, DateTime.utc_now()))
-        safe_remove_from_index(id)
-        :ok
+        with :ok <- write_file(Map.put(memory, :archived_at, DateTime.utc_now())) do
+          safe_remove_from_index(id)
+          :ok
+        end
 
       _ ->
         {:error, :not_found}
@@ -206,14 +228,13 @@ defmodule Synapsis.Memory.FileAdapter do
   end
 
   defp file_path(memory) do
-    scope_id = if memory.scope_id == "", do: "_global", else: memory.scope_id
+    scope_id = directory_id(memory.scope_id)
     dir = Path.join([memory_dir(), memory.scope, scope_id])
     Path.join(dir, "#{memory.id}.md")
   end
 
   defp write_file(memory) do
     path = file_path(memory)
-    File.mkdir_p!(Path.dirname(path))
 
     frontmatter =
       %{
@@ -240,17 +261,54 @@ defmodule Synapsis.Memory.FileAdapter do
     yaml = frontmatter_to_yaml(frontmatter)
     content = "---\n#{yaml}---\n\n#{memory.summary}\n"
 
-    File.write(path, content)
+    with :ok <- File.mkdir_p(Path.dirname(path)), do: File.write(path, content)
   end
 
   # The file name is the id, so resolve it by direct wildcard (no ETS/GenServer).
-  defp read_by_id(id) do
-    case Path.wildcard(Path.join(memory_dir(), "**/#{id}.md")) do
-      [path | _] -> read_file(path)
-      [] -> {:error, :not_found}
+  defp read_by_id(id, filters \\ []) do
+    pattern =
+      case {Keyword.get(filters, :scope), Keyword.fetch(filters, :scope_id)} do
+        {scope, {:ok, scope_id}} when not is_nil(scope) ->
+          Path.join([memory_dir(), to_string(scope), directory_id(scope_id), "#{id}.md"])
+
+        _ ->
+          Path.join(memory_dir(), "**/#{id}.md")
+      end
+
+    case Path.wildcard(pattern) do
+      [path] ->
+        with {:ok, memory} <- read_file(path),
+             true <- memory.id == id and scope_match?(memory, filters) do
+          {:ok, memory}
+        else
+          false -> {:error, :ownership_mismatch}
+          error -> error
+        end
+
+      [] ->
+        {:error, :not_found}
+
+      _ ->
+        {:error, :ownership_mismatch}
     end
   rescue
     _ -> {:error, :not_found}
+  end
+
+  defp directory_id(""), do: "_global"
+  defp directory_id(id), do: id
+
+  defp scope_match?(memory, filters) do
+    (is_nil(Keyword.get(filters, :scope)) or memory.scope == to_string(filters[:scope])) and
+      (not Keyword.has_key?(filters, :scope_id) or memory.scope_id == filters[:scope_id]) and
+      (is_nil(filters[:scopes]) or {memory.scope, memory.scope_id} in filters[:scopes])
+  end
+
+  defp take_limit(records, filters) do
+    case Keyword.get(filters, :limit) do
+      limit when is_integer(limit) and limit >= 0 -> Enum.take(records, limit)
+      _ -> records
+    end
   end
 
   defp read_file(path) do
@@ -260,14 +318,14 @@ defmodule Synapsis.Memory.FileAdapter do
     end
   end
 
-  defp parse_memory_file(_path, content) do
+  defp parse_memory_file(path, content) do
     case String.split(content, "---\n", parts: 3) do
       ["", fm_str, body] ->
         case YamlElixir.read_from_string(fm_str) do
           {:ok, fm} ->
             {:ok,
              %{
-               id: fm["id"] || "",
+               id: stored_id(fm["id"], path, fm_str),
                scope: fm["scope"] || "shared",
                scope_id: fm["scope_id"] || "",
                kind: fm["kind"] || "fact",
@@ -346,6 +404,18 @@ defmodule Synapsis.Memory.FileAdapter do
     :crypto.strong_rand_bytes(8) |> Base.encode16(case: :lower)
   end
 
+  # Historical plain YAML IDs can decode as numbers, losing leading zeros.
+  # Recover only when the exact old scalar agrees with the record's filename.
+  defp stored_id(id, _path, _frontmatter) when is_binary(id), do: id
+
+  defp stored_id(id, path, frontmatter) do
+    filename_id = path |> Path.basename() |> Path.rootname(".md")
+
+    if "id: #{filename_id}" in String.split(frontmatter, "\n"),
+      do: filename_id,
+      else: id || ""
+  end
+
   defp to_str(v) when is_atom(v), do: Atom.to_string(v)
   defp to_str(v), do: to_string(v)
 
@@ -383,11 +453,11 @@ defmodule Synapsis.Memory.FileAdapter do
   defp yaml_value(n) when is_number(n), do: to_string(n)
 
   defp yaml_value(s) when is_binary(s) do
-    if String.contains?(s, ["\n", "\"", "'", ":", "#"]) do
-      encoded = String.replace(s, "\"", "\\\"")
-      "\"#{encoded}\""
-    else
+    if Regex.match?(~r/\A[A-Za-z_][A-Za-z0-9_ .\/-]*\z/, s) and String.trim(s) == s and
+         String.downcase(s) not in ~w(true false null yes no on off) do
       s
+    else
+      Jason.encode!(s)
     end
   end
 

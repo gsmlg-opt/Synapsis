@@ -20,11 +20,11 @@ defmodule Synapsis.LLMTest do
 
   describe "complete/2" do
     test "rejects a source-disabled model before an HTTP request" do
-      bypass = Bypass.open()
+      bypass = Gaoxy.Test.open()
       caller = self()
       provider_name = "llm-managed-#{System.unique_integer([:positive])}"
 
-      Bypass.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
         send(caller, :provider_http_called)
 
         conn
@@ -39,7 +39,7 @@ defmodule Synapsis.LLMTest do
                Providers.create(%{
                  name: provider_name,
                  type: "openai",
-                 base_url: "http://localhost:#{bypass.port}",
+                 base_url: String.trim_trailing(Gaoxy.Test.url(bypass), "/"),
                  config: %{
                    "managed_by" => "backplane",
                    "backplane_source_id" => "source-1",

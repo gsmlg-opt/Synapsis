@@ -5,6 +5,47 @@ defmodule Synapsis.MCP do
   alias Synapsis.MCP.Server
   alias Synapsis.{MCPConfig, MCPConfigs}
 
+  @doc "Read an already discovered native catalog by persisted source UUID."
+  def runtime_snapshot(id) when is_binary(id) do
+    with [{pid, _}] <- Registry.lookup(Synapsis.MCP.Registry, {:config_id, id}),
+         {:ok, %{source_id: ^id} = snapshot} <- Server.runtime_snapshot(pid) do
+      {:ok, snapshot}
+    else
+      _ -> {:error, :mcp_unavailable}
+    end
+  rescue
+    ArgumentError -> {:error, :mcp_unavailable}
+  end
+
+  def runtime_snapshot(_), do: {:error, :mcp_unavailable}
+
+  @doc "List one resource page from an explicit, unchanged native source snapshot."
+  defdelegate runtime_list_resources(snapshot, params, timeout), to: Server
+
+  @doc "List one resource-template page from an explicit native source snapshot."
+  defdelegate runtime_list_resource_templates(snapshot, params, timeout), to: Server
+
+  @doc "Read an exact resource URI from an explicit native source snapshot."
+  defdelegate runtime_read_resource(snapshot, params, timeout), to: Server
+
+  @doc "Start a tracked, caller-owned resource request from an exact native source snapshot."
+  defdelegate runtime_start_resource_request(snapshot, kind, params, reserved_options), to: Server
+
+  @doc "Read discovered display metadata without granting execution capability."
+  def source_catalog do
+    MCPConfigs.list()
+    |> Enum.flat_map(fn config ->
+      with [{pid, _}] <- Registry.lookup(Synapsis.MCP.Registry, {:config_id, config.id}),
+           {:ok, tools} <- Server.catalog(pid) do
+        tools
+      else
+        _ -> []
+      end
+    end)
+  rescue
+    ArgumentError -> []
+  end
+
   def start(%MCPConfig{} = config) do
     with {:ok, current} <- current_config(config) do
       start_resolved(current)
@@ -26,8 +67,21 @@ defmodule Synapsis.MCP do
 
   def stop(name) do
     case Registry.lookup(Synapsis.MCP.Registry, name) do
-      [{pid, _}] -> DynamicSupervisor.terminate_child(Synapsis.MCP.DynamicSupervisor, pid)
-      [] -> {:error, :not_found}
+      [{pid, _}] ->
+        result = DynamicSupervisor.terminate_child(Synapsis.MCP.DynamicSupervisor, pid)
+
+        if result == :ok do
+          Phoenix.PubSub.broadcast(
+            Synapsis.PubSub,
+            "tool_registry",
+            {:mcp_source_catalog_changed, %{source_name: name, status: :stopped}}
+          )
+        end
+
+        result
+
+      [] ->
+        {:error, :not_found}
     end
   end
 

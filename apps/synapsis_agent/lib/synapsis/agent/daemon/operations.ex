@@ -69,11 +69,21 @@ defmodule Synapsis.Agent.Daemon.Operations do
         context.deps,
         capacity,
         context.task_supervisor,
-        context.event_timeout
+        context.event_timeout,
+        recovery_observer(context)
       )
 
   def execute(%{type: :refill, excluded: excluded, limit: limit}, context),
-    do: Recovery.refill(context.deps, excluded, limit)
+    do: Recovery.refill(context.deps, excluded, limit, recovery_observer(context))
+
+  defp recovery_observer(context) do
+    fn runs ->
+      if owner = Map.get(context, :owner) do
+        identities = Enum.map(runs, &Map.take(&1, [:id, :routine_id, :metadata]))
+        send(owner, {:automation_recovery_observed, self(), identities})
+      end
+    end
+  end
 
   def pop_by_pid(pending, pid) do
     case Enum.find(pending, fn {_ref, op} -> op.pid == pid end) do

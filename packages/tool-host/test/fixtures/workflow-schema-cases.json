@@ -1,0 +1,892 @@
+{
+  "task": "/root/workflow190_schema_cases",
+  "purpose": "Independent ordinary-success literals authored before helper/driver implementation; source-derived expectations, no runtime result or parity claim.",
+  "profile": {
+    "ajv": "8.20.0",
+    "fast_uri": "4.2.2",
+    "entrypoint": "ajv default Draft-07",
+    "explicit_options": {
+      "allErrors": false,
+      "strict": false,
+      "addUsedSchema": false
+    },
+    "formats_plugin": false,
+    "coerceTypes": false,
+    "useDefaults": false,
+    "removeAdditional": false,
+    "multipleOfPrecision": null,
+    "unicodeRegExp": true
+  },
+  "sources": {
+    "lobster": "/tmp/synapsis-workflow183-70ivyzc0/upstream/package/dist/src",
+    "ajv_archive": "/tmp/synapsis-workflow186-fydsjreq/npm/ajv-8.20.0.tgz",
+    "investigation": "/tmp/workflow190-schema-source.md"
+  },
+  "fixture_rules": [
+    "Decode response_json directly using Workflow.Value.decode_json into tagged finite binary64 values and heap.",
+    "Every validation case expects successful compile, true validity, and an unchanged response value.",
+    "Expected results are literal source-grounded assertions; never derive them by running the implementation under test.",
+    "Boolean compile cases belong to the compiler API; ask --schema accepts object schemas.",
+    "These acceptance examples do not define a restricted schema language or establish full parity.",
+    "Codec fixtures remain deferred until the approved public codec API is frozen; they do not authorize a new API."
+  ],
+  "compile_cases": [
+    {
+      "id": "compile_boolean_true",
+      "schema": true,
+      "expected": "compiled",
+      "rationale": "Boolean true is a normal Draft-07 schema."
+    },
+    {
+      "id": "compile_boolean_false",
+      "schema": false,
+      "expected": "compiled",
+      "rationale": "Boolean false compiles normally. Submit no response to it in this positive-only assignment."
+    },
+    {
+      "id": "compile_empty_object",
+      "schema": {},
+      "expected": "compiled",
+      "rationale": "Unconstrained object schema."
+    },
+    {
+      "id": "compile_declared_draft07",
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "string"
+      },
+      "expected": "compiled",
+      "rationale": "The default Ajv entrypoint installs the Draft-07 meta-schema."
+    }
+  ],
+  "validation_cases": [
+    {
+      "id": "root_null",
+      "schema": {
+        "type": "null"
+      },
+      "response_json": "null",
+      "expected_valid": true,
+      "rationale": "Null data root."
+    },
+    {
+      "id": "root_boolean",
+      "schema": {
+        "type": "boolean"
+      },
+      "response_json": "true",
+      "expected_valid": true,
+      "rationale": "Boolean data root."
+    },
+    {
+      "id": "root_number",
+      "schema": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 2
+      },
+      "response_json": "1.5",
+      "expected_valid": true,
+      "rationale": "Finite binary64 number data root.",
+      "expected_number_bits": "3ff8000000000000"
+    },
+    {
+      "id": "root_string",
+      "schema": {
+        "type": "string",
+        "minLength": 2,
+        "maxLength": 2
+      },
+      "response_json": "\"一🚀\"",
+      "expected_valid": true,
+      "rationale": "Two Unicode code points."
+    },
+    {
+      "id": "root_array",
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "integer"
+        },
+        "minItems": 2,
+        "maxItems": 2
+      },
+      "response_json": "[2,4]",
+      "expected_valid": true,
+      "rationale": "Array data root."
+    },
+    {
+      "id": "root_object",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "continue",
+              "revise"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "extra": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "decision",
+          "label"
+        ],
+        "additionalProperties": false
+      },
+      "response_json": "{\"decision\":\"continue\",\"label\":\"Ready\"}",
+      "expected_valid": true,
+      "rationale": "Ordinary required object properties and enum."
+    },
+    {
+      "id": "integral_binary64",
+      "schema": {
+        "type": "integer"
+      },
+      "response_json": "42.0",
+      "expected_valid": true,
+      "rationale": "Ajv integer accepts integral binary64 Number.",
+      "expected_number_bits": "4045000000000000"
+    },
+    {
+      "id": "draft07_tuple_exact",
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "array",
+        "items": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          }
+        ],
+        "minItems": 2,
+        "additionalItems": false
+      },
+      "response_json": "[\"phase\",2]",
+      "expected_valid": true,
+      "rationale": "Draft-07 tuple items array and additionalItems."
+    },
+    {
+      "id": "draft07_tuple_additional_schema",
+      "schema": {
+        "type": "array",
+        "items": [
+          {
+            "type": "string"
+          }
+        ],
+        "additionalItems": {
+          "type": "number",
+          "minimum": 0
+        },
+        "minItems": 1
+      },
+      "response_json": "[\"samples\",0.5,1.5]",
+      "expected_valid": true,
+      "rationale": "Additional tuple positions use the additionalItems subschema."
+    },
+    {
+      "id": "local_definition_ref",
+      "schema": {
+        "definitions": {
+          "label": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "type": "object",
+        "properties": {
+          "label": {
+            "$ref": "#/definitions/label"
+          }
+        },
+        "required": [
+          "label"
+        ]
+      },
+      "response_json": "{\"label\":\"Ready\"}",
+      "expected_valid": true,
+      "rationale": "Local definitions resolve in the original schema document."
+    },
+    {
+      "id": "escaped_pointer_local_ref",
+      "schema": {
+        "definitions": {
+          "a/b~c": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "type": "array",
+        "items": {
+          "$ref": "#/definitions/a~1b~0c"
+        }
+      },
+      "response_json": "[1,2]",
+      "expected_valid": true,
+      "rationale": "JSON Pointer decodes ~1 and ~0."
+    },
+    {
+      "id": "nested_id_relative_ref",
+      "schema": {
+        "$id": "https://workflow.example/schema/root.json",
+        "definitions": {
+          "child": {
+            "$id": "nodes/child.json",
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "label"
+            ]
+          }
+        },
+        "type": "object",
+        "properties": {
+          "child": {
+            "$ref": "nodes/child.json"
+          }
+        },
+        "required": [
+          "child"
+        ]
+      },
+      "response_json": "{\"child\":{\"label\":\"Ready\"}}",
+      "expected_valid": true,
+      "rationale": "Relative IDs resolve within one schema through pinned fast-uri; no network operation."
+    },
+    {
+      "id": "recursive_local_ref",
+      "schema": {
+        "definitions": {
+          "node": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "child": {
+                "$ref": "#/definitions/node"
+              }
+            },
+            "required": [
+              "label"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "$ref": "#/definitions/node"
+      },
+      "response_json": "{\"label\":\"root\",\"child\":{\"label\":\"leaf\"}}",
+      "expected_valid": true,
+      "rationale": "Finite ordinary tree under recursive local schema ref."
+    },
+    {
+      "id": "legacy_property_dependency",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "locale": {
+            "type": "string"
+          }
+        },
+        "dependencies": {
+          "title": [
+            "locale"
+          ]
+        }
+      },
+      "response_json": "{\"title\":\"Draft\",\"locale\":\"en\"}",
+      "expected_valid": true,
+      "rationale": "Draft-07 property dependencies."
+    },
+    {
+      "id": "legacy_schema_dependency",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "dependencies": {
+          "mode": {
+            "required": [
+              "label"
+            ],
+            "properties": {
+              "label": {
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "response_json": "{\"mode\":\"named\",\"label\":\"Ready\"}",
+      "expected_valid": true,
+      "rationale": "Draft-07 schema dependency applies to containing object."
+    },
+    {
+      "id": "unicode_codepoint_pattern",
+      "schema": {
+        "type": "string",
+        "pattern": "^\\u{1F680}$"
+      },
+      "response_json": "\"🚀\"",
+      "expected_valid": true,
+      "rationale": "ECMAScript Unicode code point escape."
+    },
+    {
+      "id": "unicode_property_pattern",
+      "schema": {
+        "type": "string",
+        "pattern": "^\\p{Letter}+$"
+      },
+      "response_json": "\"Å漢\"",
+      "expected_valid": true,
+      "rationale": "ECMAScript Unicode property escape."
+    },
+    {
+      "id": "unicode_pattern_properties",
+      "schema": {
+        "type": "object",
+        "patternProperties": {
+          "^\\p{Letter}+$": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "response_json": "{\"標題\":\"draft\"}",
+      "expected_valid": true,
+      "rationale": "patternProperties uses ECMAScript Unicode regex."
+    },
+    {
+      "id": "multiple_of_quarter",
+      "schema": {
+        "type": "number",
+        "multipleOf": 0.25
+      },
+      "response_json": "1.5",
+      "expected_valid": true,
+      "rationale": "Exact binary64 operands: 1.5 / 0.25 = 6.",
+      "expected_number_bits": "3ff8000000000000"
+    },
+    {
+      "id": "multiple_of_eighth",
+      "schema": {
+        "type": "number",
+        "multipleOf": 0.125
+      },
+      "response_json": "0.375",
+      "expected_valid": true,
+      "rationale": "Exact binary64 operands: 0.375 / 0.125 = 3.",
+      "expected_number_bits": "3fd8000000000000"
+    },
+    {
+      "id": "nullable_null",
+      "schema": {
+        "type": "string",
+        "nullable": true,
+        "minLength": 1
+      },
+      "response_json": "null",
+      "expected_valid": true,
+      "rationale": "Actual Ajv nullable extends type to null."
+    },
+    {
+      "id": "nullable_string",
+      "schema": {
+        "type": "string",
+        "nullable": true,
+        "minLength": 1
+      },
+      "response_json": "\"ready\"",
+      "expected_valid": true,
+      "rationale": "Original type remains accepted with nullable."
+    },
+    {
+      "id": "conditional_then",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "if": {
+          "properties": {
+            "mode": {
+              "const": "named"
+            }
+          },
+          "required": [
+            "mode"
+          ]
+        },
+        "then": {
+          "required": [
+            "title"
+          ]
+        },
+        "else": {
+          "required": [
+            "count"
+          ]
+        }
+      },
+      "response_json": "{\"mode\":\"named\",\"title\":\"Draft\"}",
+      "expected_valid": true,
+      "rationale": "Successful if/then branch."
+    },
+    {
+      "id": "conditional_else",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "if": {
+          "properties": {
+            "mode": {
+              "const": "named"
+            }
+          },
+          "required": [
+            "mode"
+          ]
+        },
+        "then": {
+          "required": [
+            "title"
+          ]
+        },
+        "else": {
+          "required": [
+            "count"
+          ]
+        }
+      },
+      "response_json": "{\"mode\":\"counted\",\"count\":3}",
+      "expected_valid": true,
+      "rationale": "Successful else branch for ordinary alternate mode."
+    },
+    {
+      "id": "all_of",
+      "schema": {
+        "allOf": [
+          {
+            "type": "number",
+            "minimum": 1
+          },
+          {
+            "maximum": 3,
+            "multipleOf": 0.5
+          }
+        ]
+      },
+      "response_json": "2.5",
+      "expected_valid": true,
+      "rationale": "All component assertions hold with exact operands."
+    },
+    {
+      "id": "any_of",
+      "schema": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          }
+        ]
+      },
+      "response_json": "\"ready\"",
+      "expected_valid": true,
+      "rationale": "Ordinary string satisfies anyOf."
+    },
+    {
+      "id": "one_of_disjoint_types",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          }
+        ]
+      },
+      "response_json": "2",
+      "expected_valid": true,
+      "rationale": "Disjoint type alternatives give exactly one successful branch."
+    },
+    {
+      "id": "unique_items_objects",
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "integer"
+            },
+            "label": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "label"
+          ],
+          "additionalProperties": false
+        },
+        "uniqueItems": true
+      },
+      "response_json": "[{\"id\":1,\"label\":\"one\"},{\"label\":\"two\",\"id\":2}]",
+      "expected_valid": true,
+      "rationale": "Distinct ordinary objects exercise compound uniqueItems."
+    },
+    {
+      "id": "unique_items_strings",
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "uniqueItems": true
+      },
+      "response_json": "[\"one\",\"two\",\"三\"]",
+      "expected_valid": true,
+      "rationale": "Distinct strings exercise primitive uniqueItems."
+    },
+    {
+      "id": "const_object_semantics",
+      "schema": {
+        "const": {
+          "id": 1,
+          "label": "ready"
+        }
+      },
+      "response_json": "{\"label\":\"ready\",\"id\":1.0}",
+      "expected_valid": true,
+      "rationale": "Deep const ignores object insertion order and compares Number values."
+    },
+    {
+      "id": "enum_compound_value",
+      "schema": {
+        "enum": [
+          {
+            "kind": "text",
+            "value": "ready"
+          },
+          {
+            "kind": "count",
+            "value": 2
+          }
+        ]
+      },
+      "response_json": "{\"value\":\"ready\",\"kind\":\"text\"}",
+      "expected_valid": true,
+      "rationale": "Object-valued enum uses semantic deep equality."
+    },
+    {
+      "id": "contains_ordinary_integer",
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        },
+        "contains": {
+          "type": "integer",
+          "minimum": 2
+        }
+      },
+      "response_json": "[0.5,2,3.5]",
+      "expected_valid": true,
+      "rationale": "Draft-07 contains has an ordinary matching element."
+    },
+    {
+      "id": "ordinary_format_annotation",
+      "schema": {
+        "type": "string",
+        "format": "email"
+      },
+      "response_json": "\"operator@example.test\"",
+      "expected_valid": true,
+      "rationale": "Ordinary email-looking string in the no-formats-plugin profile; this alone does not prove annotation-only behavior."
+    },
+    {
+      "id": "validation_preserves_optional_default_and_additional_field",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "default": 2
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "additionalProperties": true
+      },
+      "response_json": "{\"label\":\"Ready\",\"note\":\"retained\"}",
+      "expected_valid": true,
+      "rationale": "Successful validation preserves omitted optional count and allowed note.",
+      "expected_unchanged_response_json": "{\"label\":\"Ready\",\"note\":\"retained\"}"
+    }
+  ],
+  "sequence_cases": [
+    {
+      "id": "same_id_distinct_compilations",
+      "shared_instance": true,
+      "steps": [
+        {
+          "operation": "compile",
+          "schema": {
+            "$id": "https://workflow.example/reused.json",
+            "type": "string"
+          },
+          "expected": "compiled"
+        },
+        {
+          "operation": "validate",
+          "schema": {
+            "$id": "https://workflow.example/reused.json",
+            "type": "string"
+          },
+          "response_json": "\"ready\"",
+          "expected_valid": true
+        },
+        {
+          "operation": "compile",
+          "schema": {
+            "$id": "https://workflow.example/reused.json",
+            "type": "number"
+          },
+          "expected": "compiled"
+        },
+        {
+          "operation": "validate",
+          "schema": {
+            "$id": "https://workflow.example/reused.json",
+            "type": "number"
+          },
+          "response_json": "2.5",
+          "expected_valid": true
+        },
+        {
+          "operation": "compile",
+          "schema": {
+            "type": "string",
+            "$id": "https://workflow.example/reused.json"
+          },
+          "expected": "compiled"
+        },
+        {
+          "operation": "validate",
+          "schema": {
+            "type": "string",
+            "$id": "https://workflow.example/reused.json"
+          },
+          "response_json": "\"again\"",
+          "expected_valid": true
+        }
+      ],
+      "rationale": "validation.js disables addUsedSchema for repeated user $id across runs/resumes; cache keys use stable schema content, not only $id. Last source object reorders schema keys."
+    }
+  ],
+  "machine_cases": [
+    {
+      "id": "ask_checkpoint_real_validation_head_pick",
+      "parsed_program": [
+        {
+          "name": "ask",
+          "args": {
+            "prompt": "Continue with metadata",
+            "schema": "{\"type\":\"object\",\"properties\":{\"decision\":{\"type\":\"string\",\"enum\":[\"continue\",\"revise\"]},\"label\":{\"type\":\"string\"},\"extra\":{\"type\":\"boolean\"}},\"required\":[\"decision\",\"label\"],\"additionalProperties\":false}",
+            "subject-from-stdin": true
+          }
+        },
+        {
+          "name": "head",
+          "args": {
+            "n": 1
+          }
+        },
+        {
+          "name": "pick",
+          "args": {
+            "_": [
+              "decision,label"
+            ]
+          }
+        }
+      ],
+      "input_json": "[{\"title\":\"Draft\"}]",
+      "input_kind": "array",
+      "options": {},
+      "expected_checkpoint_mode": "same_stage",
+      "expected_checkpoint_stage_index": 0,
+      "expected_checkpoint_subject": {
+        "text": "{\"title\":\"Draft\"}"
+      },
+      "expected_checkpoint_replay_items_json": "[{\"title\":\"Draft\"}]",
+      "response_json": "{\"decision\":\"continue\",\"label\":\"Ready\",\"extra\":true}",
+      "expected_result_items_json": "[{\"decision\":\"continue\",\"label\":\"Ready\"}]",
+      "expected_result_rendered": false,
+      "expected_result_rendered_items": [],
+      "expected_result_stdout": "",
+      "expected_request_boundaries_before_checkpoint": [
+        {
+          "kind": "compile_schema",
+          "boundary": "ask_constructor"
+        },
+        {
+          "kind": "compile_schema",
+          "boundary": "request_metadata"
+        }
+      ],
+      "expected_request_boundaries_after_resume": [
+        {
+          "kind": "compile_schema",
+          "boundary": "resume_metadata"
+        },
+        {
+          "kind": "compile_schema",
+          "boundary": "saved_response"
+        },
+        {
+          "kind": "validate_response",
+          "boundary": "saved_response"
+        },
+        {
+          "kind": "compile_schema",
+          "boundary": "ask_constructor"
+        },
+        {
+          "kind": "compile_schema",
+          "boundary": "request_metadata"
+        },
+        {
+          "kind": "compile_schema",
+          "boundary": "request_response"
+        },
+        {
+          "kind": "validate_response",
+          "boundary": "request_response"
+        }
+      ],
+      "rationale": "Upstream ask yields exactly the validated response; public Machine starts a fresh same-stage segment and existing head/pick retains projected fields. Fulfill every request via actual helper and exact pending ID, never blanket fixture acknowledgement."
+    }
+  ],
+  "codec_cases_deferred_until_api_frozen": [
+    {
+      "id": "tagged_graph_preserves_bits_alias_and_undefined",
+      "fixture": {
+        "root": {
+          "type": "reference",
+          "id": "2"
+        },
+        "heap": {
+          "version": 1,
+          "next_id": 3,
+          "nodes": {
+            "1": {
+              "type": "object",
+              "keys": [
+                "label"
+              ],
+              "fields": {
+                "label": {
+                  "type": "string",
+                  "value": "shared"
+                }
+              }
+            },
+            "2": {
+              "type": "object",
+              "keys": [
+                "negative_zero",
+                "positive_zero",
+                "amount",
+                "left",
+                "right",
+                "missing"
+              ],
+              "fields": {
+                "negative_zero": {
+                  "type": "number",
+                  "bits": "8000000000000000"
+                },
+                "positive_zero": {
+                  "type": "number",
+                  "bits": "0000000000000000"
+                },
+                "amount": {
+                  "type": "number",
+                  "bits": "3ff8000000000000"
+                },
+                "left": {
+                  "type": "reference",
+                  "id": "1"
+                },
+                "right": {
+                  "type": "reference",
+                  "id": "1"
+                },
+                "missing": {
+                  "type": "undefined"
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected_roundtrip": "Exact supplied tagged root/heap for a lossless tagged transport. If frozen public contract permits reference relabeling, preserve graph topology, own-key order, number bits and undefined tag rather than requiring IDs.",
+      "rationale": "Transport fidelity only. Shared acyclic references are ordinary heap aliases. Do not use public JSON stringify/snapshot, whose semantics differ."
+    }
+  ]
+}

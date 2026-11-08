@@ -63,6 +63,11 @@ defmodule Synapsis.Memory.Retriever do
     end
   end
 
+  @doc "Retrieve ranked memories without caching or updating access statistics."
+  @spec retrieve_uncached(retrieve_opts()) :: [map()]
+  def retrieve_uncached(opts),
+    do: do_retrieve(Map.get(opts, :query, ""), opts, Map.get(opts, :limit, @default_limit))
+
   defp do_retrieve(query, opts, limit) do
     scope_pairs = build_scope_pairs(opts)
     filters = build_filters(opts, scope_pairs)

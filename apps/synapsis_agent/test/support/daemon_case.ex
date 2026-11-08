@@ -859,22 +859,21 @@ defmodule Synapsis.Agent.DaemonCase do
   end
 
   def register_text_provider(tmp_dir, response_text) do
-    bypass = Bypass.open()
+    fixture = Gaoxy.Test.open()
 
-    Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect_once(fixture, "POST", "/v1/chat/completions", fn conn ->
       send_sse(conn, [text_chunk(response_text), finish_chunk("stop")])
     end)
 
-    register_provider_agent(tmp_dir, bypass)
+    register_provider_agent(tmp_dir, fixture)
   end
 
   def controlled_provider(tmp_dir) do
     owner = self()
-    bypass = Bypass.open()
+    fixture = Gaoxy.Test.open()
     {:ok, counter} = Agent.start_link(fn -> 0 end)
 
-    Bypass.expect(bypass, "POST", "/v1/chat/completions", fn conn ->
-      conn = Synapsis.Agent.TestSupport.AbortableHTTP.arm(conn)
+    Gaoxy.Test.expect(fixture, "POST", "/v1/chat/completions", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request_number = Agent.get_and_update(counter, &{&1 + 1, &1 + 1})
       send(owner, {:provider_request, request_number, body, self()})
@@ -883,25 +882,25 @@ defmodule Synapsis.Agent.DaemonCase do
         if request_number == 1 do
           Synapsis.Agent.TestSupport.AbortableHTTP.await(conn, :release_first_run, 5_000, owner)
         else
-          :released
+          {:released, conn}
         end
 
       case outcome do
-        :released ->
+        {:released, conn} ->
           send_sse(conn, [text_chunk("result #{request_number}"), finish_chunk("stop")])
 
-        :disconnected ->
-          Plug.Conn.resp(conn, 204, "")
+        {:disconnected, conn} ->
+          conn
 
-        :timeout ->
+        {:timeout, _conn} ->
           raise "first controlled run was not released"
       end
     end)
 
-    register_provider_agent(tmp_dir, bypass)
+    register_provider_agent(tmp_dir, fixture)
   end
 
-  def register_provider_agent(tmp_dir, bypass) do
+  def register_provider_agent(tmp_dir, fixture) do
     suffix = System.unique_integer([:positive, :monotonic])
     provider_name = "daemon_provider_#{suffix}"
     agent_name = "daemon_agent_#{suffix}"
@@ -910,7 +909,7 @@ defmodule Synapsis.Agent.DaemonCase do
       Synapsis.Provider.Registry.register(provider_name, %{
         type: "openai",
         api_key: "test-key",
-        base_url: "http://localhost:#{bypass.port}"
+        base_url: String.trim_trailing(Gaoxy.Test.url(fixture), "/")
       })
 
     assert {:ok, agent_config} =
@@ -995,9 +994,14 @@ defmodule Synapsis.Agent.DaemonCase do
       Enum.map_join(chunks, "\n\n", fn chunk -> "data: #{Jason.encode!(chunk)}" end) <>
         "\n\ndata: [DONE]\n\n"
 
-    conn
-    |> Plug.Conn.put_resp_content_type("text/event-stream")
-    |> Plug.Conn.send_resp(200, body)
+    if conn.state == :chunked do
+      {:ok, conn} = Plug.Conn.chunk(conn, body)
+      conn
+    else
+      conn
+      |> Plug.Conn.put_resp_content_type("text/event-stream")
+      |> Plug.Conn.send_resp(200, body)
+    end
   end
 
   def wait_for(fun, timeout \\ 5_000) do

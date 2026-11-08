@@ -99,6 +99,20 @@ defmodule Synapsis.Agent.Daemon do
 
   def cancel(_server, _run_id), do: {:error, :invalid_run_id}
 
+  @doc "Register a paused producer with this Daemon before allowing it to submit."
+  def register_automation_producer(daemon, scheduler, ref, producer, target)
+      when is_pid(daemon) and is_pid(scheduler) and is_reference(ref) and is_pid(producer) do
+    send(daemon, {:register_automation_producer, scheduler, ref, producer, target})
+    :ok
+  end
+
+  @doc "Request cancellation of work captured by this owner's ordered message boundary."
+  def request_automation_cancellation(daemon, scheduler, ref, target)
+      when is_pid(daemon) and is_pid(scheduler) and is_reference(ref) do
+    send(daemon, {:request_automation_cancellation, scheduler, ref, target})
+    :ok
+  end
+
   def reconcile(server \\ __MODULE__), do: GenServer.call(server, :reconcile, :infinity)
 
   def record_heartbeat_outcome(_routine_id, outcome, _opts \\ [])
@@ -127,6 +141,11 @@ defmodule Synapsis.Agent.Daemon do
         submit_task: nil,
         status_publisher: Keyword.get(opts, :status_publisher, StatusPublisher),
         cancelling_ids: MapSet.new(),
+        automation_producers: %{},
+        automation_cancel_ids: MapSet.new(),
+        automation_recovery_targets: MapSet.new(),
+        automation_retirement_observers: %{},
+        automation_recovery_runs: %{},
         pending: %{},
         recovery_backlog_count: 0,
         recovery_retry_ms: Keyword.get(opts, :recovery_retry_ms, 100),
@@ -166,27 +185,49 @@ defmodule Synapsis.Agent.Daemon do
   @impl true
   def handle_call(:status, _from, state), do: {:reply, Execution.status(state), state}
 
+  def handle_call({:delivery_snapshot, run_id}, _from, state) do
+    snapshot =
+      case state.active_run do
+        %{run: %{id: ^run_id} = run} -> {:ok, run}
+        _ -> :not_found
+      end
+
+    {:reply, snapshot, state}
+  end
+
   def handle_call(:reconcile, _from, state) do
     {:reply, {:ok, Execution.status(state)}, state}
   end
 
   def handle_call({:submit, attrs}, from, state) do
+    {producer, state} = take_automation_producer(state, elem(from, 0))
+
     cond do
       not state.ready ->
-        {:reply, {:error, :not_ready}, state}
+        {:reply, {:error, :not_ready}, finish_retirement_identities(state)}
 
       state.recovery_backlog_count > 0 ->
-        {:reply, {:error, :queue_full}, state}
+        {:reply, {:error, :queue_full}, finish_retirement_identities(state)}
 
       queue_load(state) >= state.queue_capacity ->
-        {:reply, {:error, :queue_full}, state}
+        {:reply, {:error, :queue_full}, finish_retirement_identities(state)}
 
       overlapping?(state, attrs) ->
-        {:reply, {:error, :overlap}, state}
+        {:reply, {:error, :overlap}, finish_retirement_identities(state)}
 
       true ->
         run_id = Ecto.UUID.generate()
-        entry = %{from: from, run_id: run_id, attrs: Map.put(attrs, :id, run_id), mode: :create}
+
+        entry = %{
+          from: from,
+          run_id: run_id,
+          attrs: Map.put(attrs, :id, run_id),
+          mode: :create,
+          automation_retired: (producer && producer.retired) == true,
+          retirement_refs: if(producer, do: producer.retirement_refs, else: MapSet.new()),
+          dispatched: false
+        }
+
         state = %{state | submit_queue: :queue.in(entry, state.submit_queue)}
         {:noreply, start_submit_head(state)}
     end
@@ -243,6 +284,131 @@ defmodule Synapsis.Agent.Daemon do
   def handle_cast(_message, state), do: {:noreply, state}
 
   @impl true
+  def handle_info({:register_automation_producer, scheduler, ref, producer, target}, state) do
+    {_previous, state} = take_automation_producer(state, producer)
+    monitor = Process.monitor(producer)
+
+    registration = %{
+      ref: ref,
+      monitor: monitor,
+      target: target,
+      retired: false,
+      retirement_refs: MapSet.new()
+    }
+
+    state = put_in(state.automation_producers[producer], registration)
+    send(producer, {:automation_producer_ready, ref, self()})
+    if scheduler != producer, do: send(scheduler, {:automation_producer_ready, ref, self()})
+    {:noreply, finish_retirement_identities(state)}
+  end
+
+  def handle_info({:request_automation_cancellation, scheduler, ref, target}, state) do
+    active =
+      if state.active_run && automation_identity(state.active_run.run) == target, do: 1, else: 0
+
+    queued = Enum.count(:queue.to_list(state.queue), &(automation_identity(&1) == target))
+
+    submissions =
+      Enum.count(:queue.to_list(state.submit_queue), &(automation_identity(&1.attrs) == target))
+
+    producers =
+      Enum.count(state.automation_producers, fn {_pid, item} -> item.target == target end)
+
+    recovery = if not state.ready or pending_type?(state, :recovery), do: 1, else: 0
+    refill = if state.recovery_backlog_count > 0 or pending_type?(state, :refill), do: 1, else: 0
+
+    known_ids = captured_retirement_ids(state, target)
+
+    state = %{
+      state
+      | automation_producers:
+          Map.new(state.automation_producers, fn {pid, item} ->
+            {pid,
+             if(item.target == target,
+               do: %{item | retired: true, retirement_refs: MapSet.put(item.retirement_refs, ref)},
+               else: item
+             )}
+          end),
+        submit_queue:
+          state.submit_queue
+          |> :queue.to_list()
+          |> Enum.map(fn entry ->
+            if automation_identity(entry.attrs) == target,
+              do: %{
+                entry
+                | automation_retired: true,
+                  retirement_refs: MapSet.put(entry.retirement_refs, ref)
+              },
+              else: entry
+          end)
+          |> :queue.from_list(),
+        automation_recovery_targets:
+          if(recovery + refill > 0,
+            do: MapSet.put(state.automation_recovery_targets, target),
+            else: state.automation_recovery_targets
+          )
+    }
+
+    observer = %{scheduler: scheduler, target: target, recovery: recovery + refill > 0}
+    state = put_in(state.automation_retirement_observers[ref], observer)
+    state = request_matching_cancellations(state, target)
+    identity_complete = retirement_identity_complete?(state, ref, observer)
+
+    observation = %{
+      status: :cancellation_requested,
+      target: target,
+      retired_run_ids: known_ids,
+      identity_complete: identity_complete,
+      active_count: active,
+      queued_count: queued,
+      submission_count: submissions,
+      producer_count: producers,
+      pending_recovery_count: recovery,
+      pending_refill_count: refill,
+      cleanup_pending: active + queued + submissions + producers + recovery + refill > 0
+    }
+
+    send(scheduler, {:automation_cancellation_requested, ref, observation})
+
+    state =
+      if identity_complete,
+        do: %{
+          state
+          | automation_retirement_observers:
+              Map.delete(state.automation_retirement_observers, ref)
+        },
+        else: state
+
+    {:noreply, state}
+  end
+
+  def handle_info({:automation_recovery_observed, task_pid, runs}, state) do
+    if Enum.any?(state.pending, fn {_ref, op} ->
+         op.pid == task_pid and op.type in [:recovery, :refill]
+       end) do
+      identities =
+        Enum.reduce(runs, state.automation_recovery_runs, fn run, found ->
+          case automation_identity(run) do
+            nil -> found
+            target -> Map.put(found, run.id, target)
+          end
+        end)
+
+      state = %{state | automation_recovery_runs: identities}
+
+      Enum.each(state.automation_retirement_observers, fn {ref, observer} ->
+        if observer.recovery do
+          ids = for run <- runs, automation_identity(run) == observer.target, do: run.id
+          notify_retirement_ids(ref, observer, ids)
+        end
+      end)
+
+      {:noreply, state}
+    else
+      {:noreply, state}
+    end
+  end
+
   def handle_info(:recover, state) do
     if pending_type?(state, :recovery) do
       {:noreply, state}
@@ -271,6 +437,9 @@ defmodule Synapsis.Agent.Daemon do
                 inner_pid: nil,
                 session_id: nil,
                 finalize_intent: nil,
+                delivery_intent: nil,
+                delivery_pid: nil,
+                daemon_pid: self(),
                 operation_timer_ref: nil,
                 phase: :starting,
                 cancelling: false,
@@ -357,6 +526,23 @@ defmodule Synapsis.Agent.Daemon do
     end
   end
 
+  def handle_info({:retry_automation_cancel, id}, state) do
+    if MapSet.member?(state.automation_cancel_ids, id) do
+      state = %{state | cancelling_ids: MapSet.delete(state.cancelling_ids, id)}
+
+      state =
+        case locate_run(state, id) do
+          {:active, active} -> request_active_cancellation(state, active)
+          {:queued, run} -> request_queued_cancellation(state, run)
+          :unknown -> state
+        end
+
+      {:noreply, state}
+    else
+      {:noreply, state}
+    end
+  end
+
   def handle_info({:submit_operation_timeout, ref, pid, run_id}, state) do
     case state.submit_task do
       %{ref: ^ref, pid: ^pid, run_id: ^run_id} ->
@@ -425,8 +611,104 @@ defmodule Synapsis.Agent.Daemon do
     do: {:noreply, state}
 
   def handle_info(
+        {:runner_delivering, task_pid, run_id, stage_ref, run, outcome, session_id, warnings},
+        %{active_run: %{task_pid: task_pid, run: %{id: run_id}, cancelling: false} = active} =
+          state
+      ) do
+    intent = %{
+      run: run,
+      outcome: outcome,
+      session_id: session_id,
+      warnings: warnings,
+      stage_ref: stage_ref
+    }
+
+    active = %{
+      active
+      | run: run,
+        session_id: session_id || active.session_id,
+        delivery_intent: intent,
+        phase: :delivering
+    }
+
+    send(task_pid, {:runner_delivery_ack, stage_ref, :ok})
+    state = %{state | active_run: active}
+    dispatch_status(state)
+    {:noreply, state}
+  end
+
+  def handle_info({:runner_delivering, pid, _id, ref, _run, _outcome, _session, _warnings}, state) do
+    send(pid, {:runner_delivery_ack, ref, :rejected})
+    {:noreply, state}
+  end
+
+  def handle_info(
+        {:runner_delivery_child, task_pid, run_id, stage_ref, child, acknowledgement},
+        %{
+          active_run:
+            %{
+              task_pid: task_pid,
+              run: %{id: run_id},
+              cancelling: false,
+              delivery_intent: %{stage_ref: stage_ref}
+            } = active
+        } = state
+      ) do
+    send(task_pid, {:runner_delivery_ack, acknowledgement, :ok})
+    {:noreply, %{state | active_run: %{active | delivery_pid: child}}}
+  end
+
+  def handle_info({:runner_delivery_child, pid, _id, _stage, _child, ref}, state) do
+    send(pid, {:runner_delivery_ack, ref, :rejected})
+    {:noreply, state}
+  end
+
+  def handle_info(
+        {:runner_delivery_progress, task_pid, run_id, stage_ref, child, acknowledgement, run},
+        %{
+          active_run:
+            %{
+              task_pid: task_pid,
+              run: %{id: run_id},
+              delivery_pid: child,
+              delivery_intent: %{stage_ref: stage_ref} = intent
+            } = active
+        } = state
+      ) do
+    # Retain a received response during cancellation, but never grant a new dispatch.
+    rejected? = active.cancelling and run.metadata["automation_delivery"]["status"] == "unknown"
+
+    run =
+      if rejected?,
+        do:
+          Synapsis.Agent.Automation.Execution.settle_webhook(run, intent.outcome, %{
+            "status" => "not-delivered",
+            "delivered" => false,
+            "attempted" => false,
+            "attempt_count" => 0,
+            "error" => "webhook_cancelled"
+          }),
+        else: run
+
+    active = %{active | run: run, delivery_intent: %{intent | run: run}}
+
+    send(
+      task_pid,
+      {:runner_delivery_ack, acknowledgement, if(rejected?, do: :rejected, else: :ok)}
+    )
+
+    {:noreply, %{state | active_run: active}}
+  end
+
+  def handle_info({:runner_delivery_progress, pid, _id, _stage, _child, ref, _run}, state) do
+    send(pid, {:runner_delivery_ack, ref, :rejected})
+    {:noreply, state}
+  end
+
+  def handle_info(
         {:runner_finalizing, task_pid, run_id, run, outcome, session_id, warnings},
-        %{active_run: %{task_pid: task_pid, run: %{id: run_id}} = active} = state
+        %{active_run: %{task_pid: task_pid, run: %{id: run_id}, cancelling: false} = active} =
+          state
       ) do
     cancel_timer(active.operation_timer_ref)
 
@@ -455,10 +737,12 @@ defmodule Synapsis.Agent.Daemon do
   end
 
   def handle_info(
-        {:runner_finalizing, _task_pid, _run_id, _run, _outcome, _session_id, _warnings},
+        {:runner_finalizing, task_pid, run_id, _run, _outcome, _session_id, _warnings},
         state
-      ),
-      do: {:noreply, state}
+      ) do
+    send(task_pid, {:runner_finalizing_rejected, run_id})
+    {:noreply, state}
+  end
 
   def handle_info({:runner_operation_timeout, ref, pid, run_id}, state) do
     case state.active_run do
@@ -505,6 +789,10 @@ defmodule Synapsis.Agent.Daemon do
 
   def handle_info({:DOWN, ref, :process, pid, reason}, state) do
     cond do
+      match?(%{monitor: ^ref}, Map.get(state.automation_producers, pid)) ->
+        {_producer, state} = take_automation_producer(state, pid)
+        {:noreply, finish_retirement_identities(state)}
+
       state.submit_task && state.submit_task.ref == ref ->
         handle_submit_down(reason, state)
 
@@ -518,17 +806,32 @@ defmodule Synapsis.Agent.Daemon do
 
   defp handle_submit_result({:ok, run, errors}, state) do
     {entry, state} = pop_submit_head(state)
+    state = notify_submission_retirement(state, entry, run.id)
     GenServer.reply(entry.from, {:ok, run})
-    state = %{state | queue: :queue.in(run, state.queue), last_error: join_errors(errors)}
+
+    retired = entry.automation_retired || MapSet.member?(state.automation_cancel_ids, run.id)
+
+    queue =
+      if run.status == "queued" and not Enum.any?(owned_runs(state), &(&1.id == run.id)),
+        do: :queue.in(run, state.queue),
+        else: state.queue
+
+    state = %{state | queue: queue, last_error: join_errors(errors)}
+
+    state =
+      if retired and run.status == "queued",
+        do: request_queued_cancellation(state, run),
+        else: state
+
     dispatch_status(state)
     send(self(), :drain)
-    {:noreply, start_submit_head(state)}
+    {:noreply, state |> finish_retirement_identities() |> start_submit_head()}
   end
 
   defp handle_submit_result({:error, reason}, state) do
     {entry, state} = pop_submit_head(state)
     GenServer.reply(entry.from, {:error, reason})
-    state = put_error(state, reason)
+    state = put_error(state, reason) |> finish_retirement_identities()
     dispatch_status(state)
     {:noreply, start_submit_head(state)}
   end
@@ -546,13 +849,14 @@ defmodule Synapsis.Agent.Daemon do
          {:ok, terminal, errors},
          state
        ) do
-    GenServer.reply(from, {:ok, terminal})
+    reply_cancel(from, {:ok, terminal})
 
     state =
       state
       |> clear_cancelled_owner(location, id)
       |> Map.update!(:cancelling_ids, &MapSet.delete(&1, id))
       |> Map.put(:last_error, join_errors(errors))
+      |> finish_automation_cancellation(id)
 
     dispatch_status(state)
     send(self(), :drain)
@@ -565,7 +869,7 @@ defmodule Synapsis.Agent.Daemon do
          {:degraded, reason, run, errors},
          state
        ) do
-    GenServer.reply(from, {:error, reason})
+    reply_cancel(from, {:error, reason})
     error = join_errors([reason | errors])
 
     state =
@@ -595,18 +899,22 @@ defmodule Synapsis.Agent.Daemon do
         last_error: error
     }
 
+    state = retry_managed_cancellation(state, id)
+
     dispatch_status(state)
     {:noreply, state}
   end
 
   defp handle_operation_result(%{type: :cancel, from: from} = op, {:error, reason}, state) do
-    GenServer.reply(from, {:error, reason})
+    reply_cancel(from, {:error, reason})
 
     state =
       state
       |> Map.update!(:cancelling_ids, &MapSet.delete(&1, op.run_id))
       |> maybe_reset_cancelling(op)
       |> put_error(reason)
+
+    state = retry_managed_cancellation(state, op.run_id)
 
     dispatch_status(state)
     {:noreply, state}
@@ -620,11 +928,13 @@ defmodule Synapsis.Agent.Daemon do
     state = %{
       state
       | ready: true,
-        queue: :queue.from_list(queued),
+        queue: merge_recovered_queue(state, queued),
         recovery_backlog_count: backlog,
         recovery_error: nil,
         last_error: join_errors(event_errors)
     }
+
+    state = apply_recovery_cancellations(state)
 
     dispatch_status(state)
     send(self(), :drain)
@@ -638,7 +948,7 @@ defmodule Synapsis.Agent.Daemon do
     do: {:noreply, schedule_recovery_retry(state, reason)}
 
   defp handle_operation_result(%{type: :refill}, {:ok, queued, backlog}, state) do
-    queue = Enum.reduce(queued, state.queue, &:queue.in/2)
+    queue = merge_recovered_queue(state, queued)
 
     state = %{
       state
@@ -648,6 +958,8 @@ defmodule Synapsis.Agent.Daemon do
         recovery_error: nil,
         last_error: nil
     }
+
+    state = apply_recovery_cancellations(state)
 
     dispatch_status(state)
     send(self(), :drain)
@@ -726,7 +1038,7 @@ defmodule Synapsis.Agent.Daemon do
     cancel_timer(active.operation_timer_ref)
 
     start_result =
-      case active.finalize_intent do
+      case active.finalize_intent || delivery_finalization_intent(active) do
         nil -> start_finalizer(state, active, reason)
         intent -> start_intent_finalizer(state, active, intent)
       end
@@ -771,6 +1083,13 @@ defmodule Synapsis.Agent.Daemon do
     end
   end
 
+  defp delivery_finalization_intent(%{delivery_intent: intent}) when is_map(intent) do
+    run = Synapsis.Agent.Automation.Execution.interrupted_webhook(intent.run)
+    %{intent | run: run}
+  end
+
+  defp delivery_finalization_intent(_active), do: nil
+
   defp handle_operation_down(ref, reason, state) do
     case Operations.pop_by_ref(state.pending, ref) do
       :error ->
@@ -803,6 +1122,13 @@ defmodule Synapsis.Agent.Daemon do
         state
 
       entry ->
+        # A first known submission may finish after retirement. Once dispatched,
+        # uncertainty is reconciled by reads only; retirement must never recreate it.
+        entry =
+          if entry.automation_retired and entry.dispatched,
+            do: %{entry | mode: :retired_reconcile},
+            else: entry
+
         case Operations.start_submit(
                self(),
                state.task_supervisor,
@@ -811,6 +1137,7 @@ defmodule Synapsis.Agent.Daemon do
                operation_context(state)
              ) do
           {:ok, submit_task} ->
+            state = update_submit_head(state, &Map.put(&1, :dispatched, true))
             %{state | submit_task: submit_task}
 
           {:error, reason} ->
@@ -888,6 +1215,8 @@ defmodule Synapsis.Agent.Daemon do
     Execution.start_monitored_task(state.task_supervisor, fn ->
       result =
         Execution.protect(fn ->
+          Execution.stop_delivery_child(Map.get(active, :delivery_pid))
+
           Execution.finalize_intent(
             state.deps,
             state.task_supervisor,
@@ -926,7 +1255,202 @@ defmodule Synapsis.Agent.Daemon do
 
     no_overlap and is_binary(routine_id) and
       not idempotency_exists?(state.deps.runs, attrs) and
-      Enum.any?(owned_runs(state), &(&1.routine_id == routine_id))
+      Enum.any?(owned_runs(state), fn run ->
+        run.routine_id == routine_id and same_automation?(run, attrs)
+      end)
+  end
+
+  defp same_automation?(left, right) do
+    case {automation_identity(left), automation_identity(right)} do
+      {nil, _identity} -> true
+      {_identity, nil} -> true
+      {left_identity, right_identity} -> left_identity == right_identity
+    end
+  end
+
+  defp automation_identity(%{routine_id: id, metadata: metadata}) when is_map(metadata) do
+    ref = Map.get(metadata, "automation_ref", Map.get(metadata, :automation_ref))
+
+    if is_map(ref) do
+      source = Map.get(ref, "source", Map.get(ref, :source))
+      ref_id = Map.get(ref, "id", Map.get(ref, :id))
+
+      if source in ["routine", "heartbeat"] and ref_id == id and
+           match?({:ok, ^id}, Ecto.UUID.cast(id)),
+         do: {source, id}
+    end
+  end
+
+  defp automation_identity(_run), do: nil
+
+  defp take_automation_producer(state, pid) do
+    case Map.pop(state.automation_producers, pid) do
+      {nil, _producers} ->
+        {nil, state}
+
+      {producer, producers} ->
+        Process.demonitor(producer.monitor, [:flush])
+        {producer, %{state | automation_producers: producers}}
+    end
+  end
+
+  defp captured_retirement_ids(state, target) do
+    owned = for run <- owned_runs(state), automation_identity(run) == target, do: run.id
+    recovered = for {id, ^target} <- state.automation_recovery_runs, do: id
+    Enum.uniq(owned ++ recovered)
+  end
+
+  defp notify_submission_retirement(state, entry, id) do
+    Enum.each(entry.retirement_refs, fn ref ->
+      if observer = state.automation_retirement_observers[ref],
+        do: notify_retirement_ids(ref, observer, [id])
+    end)
+
+    state
+  end
+
+  defp notify_retirement_ids(_ref, _observer, []), do: :ok
+
+  defp notify_retirement_ids(ref, observer, ids),
+    do: send(observer.scheduler, {:automation_retirement_runs, ref, self(), Enum.uniq(ids)})
+
+  defp retirement_identity_complete?(state, ref, observer) do
+    not (observer.recovery and recovery_chain?(state)) and
+      not Enum.any?(state.automation_producers, fn {_pid, producer} ->
+        MapSet.member?(producer.retirement_refs, ref)
+      end) and
+      not Enum.any?(:queue.to_list(state.submit_queue), fn entry ->
+        MapSet.member?(entry.retirement_refs, ref)
+      end)
+  end
+
+  defp finish_retirement_identities(state) do
+    observers =
+      Enum.reduce(state.automation_retirement_observers, %{}, fn {ref, observer}, pending ->
+        if retirement_identity_complete?(state, ref, observer) do
+          send(observer.scheduler, {:automation_retirement_identity_complete, ref, self()})
+          pending
+        else
+          Map.put(pending, ref, observer)
+        end
+      end)
+
+    %{state | automation_retirement_observers: observers}
+  end
+
+  defp request_matching_cancellations(state, target) do
+    state =
+      case state.active_run do
+        %{run: run} = active ->
+          if automation_identity(run) == target,
+            do: request_active_cancellation(state, active),
+            else: state
+
+        nil ->
+          state
+      end
+
+    Enum.reduce(:queue.to_list(state.queue), state, fn run, current ->
+      if automation_identity(run) == target,
+        do: request_queued_cancellation(current, run),
+        else: current
+    end)
+  end
+
+  defp request_active_cancellation(state, active) do
+    state = %{
+      state
+      | automation_cancel_ids: MapSet.put(state.automation_cancel_ids, active.run.id),
+        cancelling_ids: MapSet.put(state.cancelling_ids, active.run.id)
+    }
+
+    if active.cancelling do
+      state
+    else
+      op = %{type: :cancel, from: nil, run_id: active.run.id, location: :active, active: active}
+      state = %{state | active_run: %{active | cancelling: true, phase: :cancelling}}
+      start_managed_cancel(state, op)
+    end
+  end
+
+  defp request_queued_cancellation(state, run) do
+    state = %{state | automation_cancel_ids: MapSet.put(state.automation_cancel_ids, run.id)}
+
+    if MapSet.member?(state.cancelling_ids, run.id) do
+      state
+    else
+      op = %{type: :cancel, from: nil, run_id: run.id, location: :queued, run: run}
+      state = %{state | cancelling_ids: MapSet.put(state.cancelling_ids, run.id)}
+      start_managed_cancel(state, op)
+    end
+  end
+
+  defp start_managed_cancel(state, op) do
+    case start_operation(state, op) do
+      {:ok, state} ->
+        state
+
+      {:error, reason} ->
+        Process.send_after(self(), {:retry_operation, op}, @submit_retry_ms)
+        put_error(state, reason)
+    end
+  end
+
+  defp retry_managed_cancellation(state, id) do
+    if MapSet.member?(state.automation_cancel_ids, id) do
+      Process.send_after(self(), {:retry_automation_cancel, id}, @submit_retry_ms)
+      %{state | cancelling_ids: MapSet.put(state.cancelling_ids, id)}
+    else
+      state
+    end
+  end
+
+  defp reply_cancel(nil, _result), do: :ok
+  defp reply_cancel(from, result), do: GenServer.reply(from, result)
+
+  defp recovery_chain?(state) do
+    not state.ready or state.recovery_backlog_count > 0 or
+      pending_type?(state, :recovery) or pending_type?(state, :refill)
+  end
+
+  defp finish_automation_cancellation(state, id) do
+    if recovery_chain?(state),
+      do: state,
+      else: %{state | automation_cancel_ids: MapSet.delete(state.automation_cancel_ids, id)}
+  end
+
+  defp merge_recovered_queue(state, runs) do
+    owned = owned_run_ids(state)
+
+    Enum.reduce(runs, state.queue, fn run, queue ->
+      if MapSet.member?(owned, run.id), do: queue, else: :queue.in(run, queue)
+    end)
+  end
+
+  defp apply_recovery_cancellations(state) do
+    state =
+      Enum.reduce(:queue.to_list(state.queue), state, fn run, current ->
+        if MapSet.member?(current.automation_recovery_targets, automation_identity(run)) or
+             MapSet.member?(current.automation_cancel_ids, run.id),
+           do: request_queued_cancellation(current, run),
+           else: current
+      end)
+
+    if recovery_chain?(state) do
+      state
+    else
+      # Exact run intents outlive target guards while their existing cancel owns
+      # cleanup. Completed IDs are retained only while a query can return them.
+      outstanding = MapSet.intersection(state.automation_cancel_ids, state.cancelling_ids)
+
+      %{
+        state
+        | automation_recovery_targets: MapSet.new(),
+          automation_cancel_ids: outstanding,
+          automation_recovery_runs: %{}
+      }
+      |> finish_retirement_identities()
+    end
   end
 
   defp idempotency_exists?(runs, attrs) do
@@ -972,6 +1496,13 @@ defmodule Synapsis.Agent.Daemon do
 
       {:empty, _queue} ->
         state
+    end
+  end
+
+  defp update_submit_head(state, update) do
+    case :queue.out(state.submit_queue) do
+      {{:value, entry}, rest} -> %{state | submit_queue: :queue.in_r(update.(entry), rest)}
+      {:empty, _queue} -> state
     end
   end
 
@@ -1055,6 +1586,7 @@ defmodule Synapsis.Agent.Daemon do
 
   defp operation_context(state) do
     %{
+      owner: self(),
       deps: state.deps,
       task_supervisor: state.task_supervisor,
       cleanup_timeout: state.cleanup_timeout,
@@ -1091,7 +1623,10 @@ defmodule Synapsis.Agent.Daemon do
       {:ok, agent} ->
         opts
         |> Map.put(:assistant_name, agent)
-        |> Map.put(:tool_profile, "read_only")
+        |> Map.update(:tool_profile, "read_only", fn
+          "native_agent" -> "native_agent"
+          _ -> "read_only"
+        end)
 
       :error ->
         opts

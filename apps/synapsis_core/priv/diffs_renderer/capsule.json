@@ -1,0 +1,363 @@
+{
+  "version": 1,
+  "reference": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+  "languagePackAvailable": false,
+  "roots": {
+    "@pierre/diffs": "node_modules/@pierre/diffs",
+    "@shikijs/langs": "packages/tool-host/node_modules/@shikijs/langs",
+    "@shikijs/transformers": "packages/tool-host/node_modules/@shikijs/transformers",
+    "shiki": "packages/tool-host/node_modules/shiki",
+    "playwright-core": "node_modules/playwright-core",
+    "@shikijs/core": "node_modules/@shikijs/core",
+    "@shikijs/engine-javascript": "node_modules/@shikijs/engine-javascript",
+    "@shikijs/engine-oniguruma": "node_modules/@shikijs/engine-oniguruma"
+  },
+  "packages": {
+    "node_modules/@pierre/diffs": {
+      "name": "@pierre/diffs",
+      "version": "1.5.2"
+    },
+    "packages/tool-host/node_modules/@shikijs/langs": {
+      "name": "@shikijs/langs",
+      "version": "4.5.0"
+    },
+    "packages/tool-host/node_modules/@shikijs/transformers": {
+      "name": "@shikijs/transformers",
+      "version": "4.5.0"
+    },
+    "packages/tool-host/node_modules/shiki": {
+      "name": "shiki",
+      "version": "4.5.0"
+    },
+    "node_modules/playwright-core": {
+      "name": "playwright-core",
+      "version": "1.64.0"
+    },
+    "node_modules/@shikijs/core": {
+      "name": "@shikijs/core",
+      "version": "4.6.0"
+    },
+    "node_modules/@shikijs/engine-javascript": {
+      "name": "@shikijs/engine-javascript",
+      "version": "4.6.0"
+    },
+    "node_modules/@shikijs/engine-oniguruma": {
+      "name": "@shikijs/engine-oniguruma",
+      "version": "4.6.0"
+    },
+    "node_modules/@shikijs/transformers": {
+      "name": "@shikijs/transformers",
+      "version": "4.6.0"
+    },
+    "node_modules/diff": {
+      "name": "diff",
+      "version": "9.0.0"
+    },
+    "node_modules/hast-util-to-html": {
+      "name": "hast-util-to-html",
+      "version": "9.0.5"
+    },
+    "node_modules/lru_map": {
+      "name": "lru_map",
+      "version": "0.4.1"
+    },
+    "node_modules/shiki": {
+      "name": "shiki",
+      "version": "4.6.0"
+    },
+    "node_modules/@pierre/theme": {
+      "name": "@pierre/theme",
+      "version": "2.0.0"
+    },
+    "node_modules/@pierre/theming": {
+      "name": "@pierre/theming",
+      "version": "1.0.1"
+    },
+    "packages/tool-host/node_modules/@shikijs/langs/node_modules/@shikijs/types": {
+      "name": "@shikijs/types",
+      "version": "4.5.0"
+    },
+    "packages/tool-host/node_modules/@shikijs/transformers/node_modules/@shikijs/core": {
+      "name": "@shikijs/core",
+      "version": "4.5.0"
+    },
+    "packages/tool-host/node_modules/@shikijs/transformers/node_modules/@shikijs/types": {
+      "name": "@shikijs/types",
+      "version": "4.5.0"
+    },
+    "packages/tool-host/node_modules/shiki/node_modules/@shikijs/core": {
+      "name": "@shikijs/core",
+      "version": "4.5.0"
+    },
+    "packages/tool-host/node_modules/shiki/node_modules/@shikijs/engine-javascript": {
+      "name": "@shikijs/engine-javascript",
+      "version": "4.5.0"
+    },
+    "packages/tool-host/node_modules/shiki/node_modules/@shikijs/engine-oniguruma": {
+      "name": "@shikijs/engine-oniguruma",
+      "version": "4.5.0"
+    },
+    "packages/tool-host/node_modules/shiki/node_modules/@shikijs/themes": {
+      "name": "@shikijs/themes",
+      "version": "4.5.0"
+    },
+    "packages/tool-host/node_modules/shiki/node_modules/@shikijs/types": {
+      "name": "@shikijs/types",
+      "version": "4.5.0"
+    },
+    "node_modules/@shikijs/vscode-textmate": {
+      "name": "@shikijs/vscode-textmate",
+      "version": "10.1.0"
+    },
+    "node_modules/@types/hast": {
+      "name": "@types/hast",
+      "version": "3.0.5"
+    },
+    "node_modules/@shikijs/primitive": {
+      "name": "@shikijs/primitive",
+      "version": "4.6.0"
+    },
+    "node_modules/@shikijs/types": {
+      "name": "@shikijs/types",
+      "version": "4.6.0"
+    },
+    "node_modules/@shikijs/core/node_modules/hast-util-to-html": {
+      "name": "hast-util-to-html",
+      "version": "9.0.6"
+    },
+    "node_modules/oniguruma-to-es": {
+      "name": "oniguruma-to-es",
+      "version": "4.3.6"
+    },
+    "node_modules/hast-util-to-html/node_modules/@types/unist": {
+      "name": "@types/unist",
+      "version": "3.0.3"
+    },
+    "node_modules/ccount": {
+      "name": "ccount",
+      "version": "2.0.1"
+    },
+    "node_modules/comma-separated-tokens": {
+      "name": "comma-separated-tokens",
+      "version": "2.0.3"
+    },
+    "node_modules/hast-util-whitespace": {
+      "name": "hast-util-whitespace",
+      "version": "3.0.0"
+    },
+    "node_modules/html-void-elements": {
+      "name": "html-void-elements",
+      "version": "3.0.0"
+    },
+    "node_modules/mdast-util-to-hast": {
+      "name": "mdast-util-to-hast",
+      "version": "13.2.1"
+    },
+    "node_modules/property-information": {
+      "name": "property-information",
+      "version": "7.2.0"
+    },
+    "node_modules/space-separated-tokens": {
+      "name": "space-separated-tokens",
+      "version": "2.0.2"
+    },
+    "node_modules/stringify-entities": {
+      "name": "stringify-entities",
+      "version": "4.0.4"
+    },
+    "node_modules/zwitch": {
+      "name": "zwitch",
+      "version": "2.0.4"
+    },
+    "node_modules/@shikijs/langs": {
+      "name": "@shikijs/langs",
+      "version": "4.6.0"
+    },
+    "node_modules/@shikijs/themes": {
+      "name": "@shikijs/themes",
+      "version": "4.6.0"
+    },
+    "packages/tool-host/node_modules/@shikijs/transformers/node_modules/@shikijs/core/node_modules/@shikijs/primitive": {
+      "name": "@shikijs/primitive",
+      "version": "4.5.0"
+    },
+    "packages/tool-host/node_modules/@shikijs/transformers/node_modules/@shikijs/core/node_modules/@shikijs/types": {
+      "name": "@shikijs/types",
+      "version": "4.5.0"
+    },
+    "packages/tool-host/node_modules/shiki/node_modules/@shikijs/core/node_modules/@shikijs/primitive": {
+      "name": "@shikijs/primitive",
+      "version": "4.5.0"
+    },
+    "packages/tool-host/node_modules/shiki/node_modules/@shikijs/core/node_modules/@shikijs/types": {
+      "name": "@shikijs/types",
+      "version": "4.5.0"
+    },
+    "packages/tool-host/node_modules/shiki/node_modules/@shikijs/engine-javascript/node_modules/@shikijs/types": {
+      "name": "@shikijs/types",
+      "version": "4.5.0"
+    },
+    "packages/tool-host/node_modules/shiki/node_modules/@shikijs/engine-oniguruma/node_modules/@shikijs/types": {
+      "name": "@shikijs/types",
+      "version": "4.5.0"
+    },
+    "packages/tool-host/node_modules/shiki/node_modules/@shikijs/themes/node_modules/@shikijs/types": {
+      "name": "@shikijs/types",
+      "version": "4.5.0"
+    },
+    "node_modules/@types/hast/node_modules/@types/unist": {
+      "name": "@types/unist",
+      "version": "3.0.3"
+    },
+    "node_modules/@types/unist": {
+      "name": "@types/unist",
+      "version": "3.0.3"
+    },
+    "node_modules/oniguruma-parser": {
+      "name": "oniguruma-parser",
+      "version": "0.12.2"
+    },
+    "node_modules/regex": {
+      "name": "regex",
+      "version": "6.1.0"
+    },
+    "node_modules/regex-recursion": {
+      "name": "regex-recursion",
+      "version": "6.0.2"
+    },
+    "node_modules/@types/mdast": {
+      "name": "@types/mdast",
+      "version": "4.0.4"
+    },
+    "node_modules/@ungap/structured-clone": {
+      "name": "@ungap/structured-clone",
+      "version": "1.4.0"
+    },
+    "node_modules/devlop": {
+      "name": "devlop",
+      "version": "1.1.0"
+    },
+    "node_modules/micromark-util-sanitize-uri": {
+      "name": "micromark-util-sanitize-uri",
+      "version": "2.0.1"
+    },
+    "node_modules/trim-lines": {
+      "name": "trim-lines",
+      "version": "3.0.1"
+    },
+    "node_modules/unist-util-position": {
+      "name": "unist-util-position",
+      "version": "5.0.0"
+    },
+    "node_modules/unist-util-visit": {
+      "name": "unist-util-visit",
+      "version": "5.1.0"
+    },
+    "node_modules/vfile": {
+      "name": "vfile",
+      "version": "6.0.3"
+    },
+    "node_modules/character-entities-html4": {
+      "name": "character-entities-html4",
+      "version": "2.1.0"
+    },
+    "node_modules/character-entities-legacy": {
+      "name": "character-entities-legacy",
+      "version": "3.0.0"
+    },
+    "packages/tool-host/node_modules/@shikijs/transformers/node_modules/@shikijs/core/node_modules/@shikijs/primitive/node_modules/@shikijs/types": {
+      "name": "@shikijs/types",
+      "version": "4.5.0"
+    },
+    "packages/tool-host/node_modules/shiki/node_modules/@shikijs/core/node_modules/@shikijs/primitive/node_modules/@shikijs/types": {
+      "name": "@shikijs/types",
+      "version": "4.5.0"
+    },
+    "node_modules/regex-utilities": {
+      "name": "regex-utilities",
+      "version": "2.3.0"
+    },
+    "node_modules/@types/mdast/node_modules/@types/unist": {
+      "name": "@types/unist",
+      "version": "3.0.3"
+    },
+    "node_modules/dequal": {
+      "name": "dequal",
+      "version": "2.0.3"
+    },
+    "node_modules/micromark-util-character": {
+      "name": "micromark-util-character",
+      "version": "2.1.1"
+    },
+    "node_modules/micromark-util-encode": {
+      "name": "micromark-util-encode",
+      "version": "2.0.1"
+    },
+    "node_modules/micromark-util-symbol": {
+      "name": "micromark-util-symbol",
+      "version": "2.0.1"
+    },
+    "node_modules/unist-util-position/node_modules/@types/unist": {
+      "name": "@types/unist",
+      "version": "3.0.3"
+    },
+    "node_modules/unist-util-visit/node_modules/@types/unist": {
+      "name": "@types/unist",
+      "version": "3.0.3"
+    },
+    "node_modules/unist-util-is": {
+      "name": "unist-util-is",
+      "version": "6.0.1"
+    },
+    "node_modules/unist-util-visit-parents": {
+      "name": "unist-util-visit-parents",
+      "version": "6.0.2"
+    },
+    "node_modules/vfile/node_modules/@types/unist": {
+      "name": "@types/unist",
+      "version": "3.0.3"
+    },
+    "node_modules/vfile-message": {
+      "name": "vfile-message",
+      "version": "4.0.3"
+    },
+    "node_modules/micromark-util-types": {
+      "name": "micromark-util-types",
+      "version": "2.0.3"
+    },
+    "node_modules/unist-util-is/node_modules/@types/unist": {
+      "name": "@types/unist",
+      "version": "3.0.3"
+    },
+    "node_modules/unist-util-visit-parents/node_modules/@types/unist": {
+      "name": "@types/unist",
+      "version": "3.0.3"
+    },
+    "node_modules/vfile-message/node_modules/@types/unist": {
+      "name": "@types/unist",
+      "version": "3.0.3"
+    },
+    "node_modules/unist-util-stringify-position": {
+      "name": "unist-util-stringify-position",
+      "version": "4.0.0"
+    },
+    "node_modules/unist-util-stringify-position/node_modules/@types/unist": {
+      "name": "@types/unist",
+      "version": "3.0.3"
+    }
+  },
+  "assets": {
+    "manifest.json": {
+      "sha256": "8be831c353a926a3694b708fb2b765b1b5202b75a63f75d9e163cbf4076ac803",
+      "bytes": 178
+    },
+    "viewer-runtime.js": {
+      "sha256": "f561531503bd57841d25ca6b40fcb1f1501f3083b64aedb58d59798352835366",
+      "bytes": 6887416
+    },
+    "viewer.js": {
+      "sha256": "701f41787b5efa31db73eda63ecb9857c451c63e45b159291eb1a71420d22a5d",
+      "bytes": 45
+    }
+  }
+}

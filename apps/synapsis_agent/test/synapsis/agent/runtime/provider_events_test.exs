@@ -33,9 +33,18 @@ defmodule Synapsis.Agent.Runtime.ProviderEventsTest do
         {acc ++ output, next}
       end)
 
-    assert %{type: :usage_updated, usage: Map.from_struct(usage)} in mapped
+    refute Enum.any?(mapped, &(&1.type == :usage_updated))
 
-    assert {:ok, %{message: %{content: [reasoning, text, first, second]}}} =
+    assert {:ok,
+            %{
+              usage: %{
+                input_tokens: nil,
+                cached_tokens: nil,
+                output_tokens: 3,
+                reasoning_tokens: nil
+              },
+              message: %{content: [reasoning, text, first, second]}
+            }} =
              ProviderEvents.finish(state)
 
     assert reasoning == %{type: :reasoning, text: "thought", provider_states: [provider_state]}
@@ -51,7 +60,7 @@ defmodule Synapsis.Agent.Runtime.ProviderEventsTest do
     assert {:error, _} = ProviderEvents.push(state, {:tool_call_done, 0, "changed", "skill", %{}})
     assert {:ok, _, done} = ProviderEvents.push(state, {:tool_call_done, 0, "c", "skill", %{}})
     assert {:error, _} = ProviderEvents.push(done, {:tool_call_done, 1, "c", "skill", %{}})
-    assert {:error, _} = ProviderEvents.push(done, {:tool_call_done, 2, "d", "skill", "bad"})
+    assert {:error, _} = ProviderEvents.push(done, {:tool_call_done, 2, "d", "skill", ["bad"]})
     assert {:error, _} = ProviderEvents.push(done, :unknown)
   end
 
@@ -67,5 +76,27 @@ defmodule Synapsis.Agent.Runtime.ProviderEventsTest do
     assert {:ok,
             %{message: %{content: [%{text: "signed", provider_states: [_]}, %{text: "unsigned"}]}}} =
              ProviderEvents.finish(state)
+  end
+
+  test "custom input completion preserves bytes and enforces call identity and duplicate checks" do
+    for raw <- ["", " \t\n", "你好\n  raw\n"] do
+      assert {:ok, _, pending} =
+               ProviderEvents.push(
+                 ProviderEvents.new(),
+                 {:tool_call_delta, 0, "c", "raw_probe", raw}
+               )
+
+      assert {:error, _} =
+               ProviderEvents.push(pending, {:tool_call_done, 0, "other", "raw_probe", raw})
+
+      assert {:error, _} = ProviderEvents.push(pending, {:tool_call_done, 0, "c", "other", raw})
+
+      assert {:ok, [%{tool_call: %{arguments: ^raw}}], done} =
+               ProviderEvents.push(pending, {:tool_call_done, 0, "c", "raw_probe", raw})
+
+      assert {:error, _} = ProviderEvents.push(done, {:tool_call_done, 1, "c", "raw_probe", raw})
+      assert {:error, _} = ProviderEvents.push(done, {:tool_call_done, 0, "d", "raw_probe", raw})
+      assert {:ok, %{message: %{content: [%{arguments: ^raw}]}}} = ProviderEvents.finish(done)
+    end
   end
 end

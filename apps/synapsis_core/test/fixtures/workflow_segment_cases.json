@@ -1,0 +1,38 @@
+{
+  "schema": {"type":"object","properties":{"tag":{"type":"string"}},"required":["tag"],"additionalProperties":false},
+  "cases": [
+    {
+      "name": "same_stage",
+      "pipeline": "head --n 1 | ask --prompt 'Choose tag' --schema '{\"type\":\"object\",\"properties\":{\"tag\":{\"type\":\"string\"}},\"required\":[\"tag\"],\"additionalProperties\":false}' | pick tag",
+      "mode": "same_stage",
+      "stage_index": 1,
+      "program": ["head", "ask", "pick"],
+      "resumed_program": ["ask", "pick"],
+      "before_requests": [["compile_schema","ask_constructor"],["compile_schema","request_metadata"]],
+      "claim_requests": [["compile_schema","resume_metadata"],["compile_schema","saved_response"],["validate_response","saved_response"]],
+      "after_requests": [["compile_schema","ask_constructor"],["compile_schema","request_metadata"],["compile_schema","request_response"],["validate_response","request_response"]],
+      "response_json": "{\"tag\":\"ready\"}",
+      "output": [{"tag":"ready"}]
+    },
+    {
+      "name": "next_stage",
+      "pipeline": "head --n 1 | ask --emit --prompt 'Choose tag' --schema '{\"type\":\"object\",\"properties\":{\"tag\":{\"type\":\"string\"}},\"required\":[\"tag\"],\"additionalProperties\":false}' | pick tag",
+      "mode": "next_stage",
+      "stage_index": 1,
+      "program": ["head", "ask", "pick"],
+      "resumed_program": ["pick"],
+      "before_requests": [["compile_schema","ask_constructor"]],
+      "claim_requests": [["compile_schema","saved_response"],["validate_response","saved_response"]],
+      "after_requests": [],
+      "response_json": "{\"tag\":\"ready\"}",
+      "output": [{"tag":"ready"}]
+    },
+    {
+      "name": "complete",
+      "pipeline": "head --n 1 | json",
+      "program": ["head", "json"],
+      "before_requests": [],
+      "output": []
+    }
+  ]
+}

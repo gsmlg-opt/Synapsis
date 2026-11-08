@@ -2,12 +2,14 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapter do
   @moduledoc """
   Lazy Backplane conversation stream over the existing Synapsis HTTP adapter.
 
-  Trusted context requires `:provider_config`, `:request_options`, and `:tools`.
+  Trusted context requires `:provider_config` and `:request_options`. Each native
+  request supplies its current `:catalog_revision` and `:tools`, including an
+  empty catalog after revocation; frozen context tools are never reused.
   Atom-keyed request options carry model/system instructions. Provider-state
   affinity is derived from the same config used by the host stream decoder.
   Optional `:stream_timeout` (default 30s) is an absolute attempt deadline and
   `:output_limit` (default 1 MiB) bounds accumulated host event bytes. This adapter
-  is not yet wired into session or daemon dispatch.
+  is used by session and daemon dispatch.
 
   A dedicated supervised relay isolates untagged provider messages, monitors its
   consumer, and owns a linked provider task. Early halt, timeout, consumer death,
@@ -95,8 +97,10 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapter do
       |> Map.put(:account, config[:account] || config["account"])
       |> Map.put(:workspace, config[:workspace] || config["workspace"])
 
-    with {:ok, messages} <- ProviderMessages.to_host(request.messages),
-         {:ok, wire} <- Adapter.format_request(messages, Map.fetch!(context, :tools), options),
+    with :ok <- current_catalog(request, context),
+         {:ok, tools} <- request_tools(request),
+         {:ok, messages} <- ProviderMessages.to_host(request.messages),
+         {:ok, wire} <- Adapter.format_request(messages, tools, options),
          {:ok, handle} <- Adapter.stream(wire, config, link: true) do
       try do
         emit(
@@ -120,6 +124,76 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapter do
       {:error, error} -> emit(owner, token, failed(error))
     end
   end
+
+  defp current_catalog(request, %{tool_context_resolver: resolver, catalog_snapshot: catalog})
+       when is_function(resolver, 2) do
+    case resolver.(request, catalog) do
+      {:ok, _snapshot} -> :ok
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  defp current_catalog(request, %{tool_context_resolver: resolver})
+       when is_function(resolver, 1) do
+    case resolver.(request) do
+      {:ok, _snapshot} -> :ok
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  defp current_catalog(_request, context) when not is_map_key(context, :tool_context_resolver),
+    do: :ok
+
+  defp current_catalog(_, _),
+    do: {:error, Error.new(:validation, "Provider catalog resolver is invalid")}
+
+  defp request_tools(%{catalog_revision: revision, tools: tools})
+       when is_integer(revision) and revision > 0 and is_list(tools) do
+    cond do
+      Enum.any?(
+        tools,
+        &(is_map(&1) and Map.get(&1, :type) not in [nil, :function, "function", :custom, "custom"])
+      ) ->
+        {:error, Error.new(:unsupported_capability, "Provider tool declaration is unsupported")}
+
+      not Enum.all?(tools, &valid_tool?/1) ->
+        {:error, Error.new(:validation, "Provider catalog requires valid tool definitions")}
+
+      length(Enum.uniq_by(tools, & &1.name)) != length(tools) ->
+        {:error, Error.new(:validation, "Provider catalog tool names must be unique")}
+
+      true ->
+        {:ok, tools}
+    end
+  end
+
+  defp request_tools(_),
+    do: {:error, Error.new(:validation, "Provider request requires its current catalog")}
+
+  defp valid_tool?(%{type: type, name: name, description: description} = tool)
+       when type in [:custom, "custom"] do
+    is_binary(name) and String.valid?(name) and String.trim(name) != "" and
+      is_binary(description) and
+      match?(
+        {:ok, _},
+        Backplane.AiProtocol.ToolDefinition.new(%{
+          name: Synapsis.Provider.ToolName.encode(name),
+          description: description,
+          input_kind: :custom,
+          input_schema: Map.get(tool, :parameters),
+          format: Map.get(tool, :format)
+        })
+      )
+  end
+
+  defp valid_tool?(tool), do: function_tool?(tool)
+
+  defp function_tool?(%{name: name, description: description, parameters: parameters}) do
+    is_binary(name) and String.valid?(name) and String.trim(name) != "" and
+      is_binary(description) and is_map(parameters)
+  end
+
+  defp function_tool?(_), do: false
 
   defp forward(owner, owner_ref, token, handle, state, deadline, remaining) do
     if now() >= deadline do
@@ -156,8 +230,12 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapter do
 
       :provider_done ->
         case ProviderEvents.finish(state) do
-          {:ok, event} -> emit(owner, token, event)
-          {:error, error} -> emit(owner, token, failed(error))
+          {:ok, event} ->
+            if event[:usage], do: emit(owner, token, %{type: :usage_updated, usage: event.usage})
+            emit(owner, token, event)
+
+          {:error, error} ->
+            emit(owner, token, failed(error))
         end
 
       {:provider_error, error} ->

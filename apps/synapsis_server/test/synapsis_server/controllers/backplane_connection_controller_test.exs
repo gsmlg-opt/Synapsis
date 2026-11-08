@@ -73,14 +73,14 @@ defmodule SynapsisServer.BackplaneConnectionControllerTest do
   end
 
   test "test and refresh use the audited Backplane endpoints", %{conn: conn} do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     stub_backplane(bypass)
 
     assert %{"data" => connection} =
              conn
              |> post("/api/backplane/connections", %{
                "name" => "local",
-               "base_url" => "http://127.0.0.1:#{bypass.port}"
+               "base_url" => String.trim_trailing(Gaoxy.Test.url(bypass), "/")
              })
              |> json_response(201)
 
@@ -136,13 +136,13 @@ defmodule SynapsisServer.BackplaneConnectionControllerTest do
   end
 
   defp stub_backplane(bypass) do
-    Bypass.stub(bypass, "GET", "/v1/models", fn conn ->
+    Gaoxy.Test.stub(bypass, "GET", "/v1/models", fn conn ->
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
       |> Plug.Conn.resp(200, Jason.encode!(%{"data" => [%{"id" => "coding"}]}))
     end)
 
-    Bypass.stub(bypass, "GET", "/skill-protocol/v1/catalog", fn conn ->
+    Gaoxy.Test.stub(bypass, "GET", "/skill-protocol/v1/catalog", fn conn ->
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
       |> Plug.Conn.resp(
@@ -151,7 +151,7 @@ defmodule SynapsisServer.BackplaneConnectionControllerTest do
       )
     end)
 
-    Bypass.stub(bypass, "POST", "/mcp", fn conn ->
+    Gaoxy.Test.stub(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
 

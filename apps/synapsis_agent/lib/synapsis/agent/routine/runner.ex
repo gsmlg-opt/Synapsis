@@ -159,17 +159,30 @@ defmodule Synapsis.Agent.Routine.Runner do
       model: Keyword.get(opts, :model) || defn.model,
       deadline_at: deadline(defn, Keyword.get(opts, :now, DateTime.utc_now())),
       idempotency_key: claimed.occurrence_key,
-      metadata: %{
-        "routine_name" => defn.name,
-        "occurrence_key" => claimed.occurrence_key,
-        "type" => Atom.to_string(defn.kind)
-      }
+      metadata:
+        automation_metadata(defn, %{
+          "routine_name" => defn.name,
+          "occurrence_key" => claimed.occurrence_key,
+          "type" => Atom.to_string(defn.kind)
+        })
     }
+
+    trigger_opts =
+      if is_nil(defn.tool_profile),
+        do: trigger_opts,
+        else: Map.put(trigger_opts, :tool_profile, defn.tool_profile)
 
     case defn.kind do
       :heartbeat -> Daemon.trigger(:heartbeat, defn.id, trigger_opts)
       other -> {:error, {:kind_not_implemented, other}}
     end
+  end
+
+  defp automation_metadata(defn, metadata) do
+    if defn.source in ["routine", "heartbeat"] and
+         match?({:ok, id} when id == defn.id, Ecto.UUID.cast(defn.id)),
+       do: Map.put(metadata, "automation_ref", %{"source" => defn.source, "id" => defn.id}),
+       else: metadata
   end
 
   defp await_and_finalize(defn, occurrence, run_id, opts) do

@@ -67,20 +67,20 @@ defmodule Synapsis.Backplane.ProviderSourceTest do
   end
 
   test "skill-only source discovery contacts only the Skill Protocol catalog" do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
 
     {:ok, provider} =
       Providers.create(%{
         name: "skill-only",
         type: "openai",
-        base_url: "http://localhost:#{bypass.port}/v1",
+        base_url: Gaoxy.Test.url(bypass, "/v1"),
         api_key_encrypted: "shared",
         config: %{"preset" => "backplane"}
       })
 
     {:ok, source} = Synapsis.Backplane.select_provider(provider.id, "skills")
 
-    Bypass.expect_once(bypass, "GET", "/skill-protocol/v1/catalog", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skill-protocol/v1/catalog", fn conn ->
       assert Plug.Conn.get_req_header(conn, "authorization") == ["Bearer shared"]
 
       conn

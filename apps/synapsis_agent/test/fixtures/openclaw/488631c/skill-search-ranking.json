@@ -1,0 +1,1421 @@
+{
+  "schemaVersion": 1,
+  "referencePin": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+  "exporter": {
+    "path": "scripts/openclaw/capture-skill-search-ranking.mjs",
+    "sha256": "b626ab62f4562685094367c3ee3ef33736eb5ce0c6b897b73121669c3b68f0e2"
+  },
+  "runtime": {
+    "executable": "/tmp/synapsis-openclaw-capture-runtime/node_modules/node/bin/node",
+    "version": "24.22.1",
+    "sha256": "e32e2d16081cf644f88392934288086e7662529d0d43277c34f7aad2207cfafb"
+  },
+  "sourceTree": {
+    "before": {
+      "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+      "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+      "trackedClean": true,
+      "verifiedTrackedFiles": 58558,
+      "filesSha256": "fb299c6a234f52cfcf20e3618cd11582d07e47a7773cba1334064ebdaf9fddec"
+    },
+    "after": {
+      "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+      "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+      "trackedClean": true,
+      "verifiedTrackedFiles": 58558,
+      "filesSha256": "fb299c6a234f52cfcf20e3618cd11582d07e47a7773cba1334064ebdaf9fddec"
+    }
+  },
+  "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+  "sourceRecords": [
+    {
+      "path": "packages/normalization-core/src/record-coerce.ts",
+      "gitBlob": "78eba9cd0e4c75f94e71dfb3fcb7f4cf4eeeef16",
+      "sha256": "541c179840c2cad4edc5c8103f77cc7f8c6b1ee5ec3e52c7c9fe097b18917f1c",
+      "bytes": 3097,
+      "executed": true,
+      "originalSourceExecuted": true,
+      "wholeModule": true,
+      "provenanceOnly": false,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "4ca2e6e901c28a07ae5fc9b29719cce5c26c919c65ab235b4ae2d5eaf0ec338c"
+    },
+    {
+      "path": "src/agents/code-mode-skills.ts",
+      "gitBlob": "94fcc08025cc6679ccd9dfcce636d0fcb2c52832",
+      "sha256": "09e4852946d16d3a7adedd083b27a1c0c3cf811f448bec67c7618085c4d1f50f",
+      "bytes": 1791,
+      "executed": false,
+      "originalSourceExecuted": false,
+      "wholeModule": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/agents/installed-skill-catalog.ts",
+      "gitBlob": "0e940a712dcc67344cb9040510db1c3a2f64d42d",
+      "sha256": "32a53ad7a72e08bd7a4455dbad2ccb539c03be55569cf8d1f6c0bd38b7da500a",
+      "bytes": 10185,
+      "executed": true,
+      "originalSourceExecuted": true,
+      "wholeModule": true,
+      "provenanceOnly": false,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "f2b08d5741ea443aa9165250121f0367a4b6c89f03e71b9dcafa6e4b1fd8a8f6"
+    },
+    {
+      "path": "src/agents/tool-search-index.ts",
+      "gitBlob": "b3dd8b0e847a282516de2ca37690fb2d2e49818e",
+      "sha256": "04c8c2578e677b8aa705ef20502c94e4cd57fdcbcaf9ec2fb885802920e201b0",
+      "bytes": 4431,
+      "executed": true,
+      "originalSourceExecuted": true,
+      "wholeModule": true,
+      "provenanceOnly": false,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "246a0cfad625f798ec61e8172b59791afdf82a1f2ce353b0bb824c67ceeab911"
+    },
+    {
+      "path": "src/agents/tool-search-ranking.ts",
+      "gitBlob": "e6ceca14d41e734cfa783ae47eaa4f9aafeef4c7",
+      "sha256": "aed9772d22e1e05d5de768357a12250cd074950f16ada7d3fb4cc64834938385",
+      "bytes": 12235,
+      "executed": true,
+      "originalSourceExecuted": true,
+      "wholeModule": true,
+      "provenanceOnly": false,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "3f4e4775cad62783fcfa609e29767a333cdd59d51624ddeaa6feca553e79a95e"
+    },
+    {
+      "path": "src/agents/tools/common.ts",
+      "gitBlob": "42f20d2be792e665eecad21e0f4a01d7257c01b4",
+      "sha256": "a69d2c0915f658d621ccacc0e76b1f34417eb3a571a86b1ef32b87edeab74bb7",
+      "bytes": 13719,
+      "executed": false,
+      "originalSourceExecuted": false,
+      "wholeModule": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/infra/abort-signal.ts",
+      "gitBlob": "e19f1948e86007d8d27b9c05262621747ba0090d",
+      "sha256": "30cd6a9f4a5b1d61d0325b71b8dd9ed42c33096559c5530c73b4e9ed278a0dd2",
+      "bytes": 866,
+      "executed": false,
+      "originalSourceExecuted": false,
+      "wholeModule": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/infra/fs-safe.ts",
+      "gitBlob": "3ad107a5747538188a7cd11422f8246751afd98a",
+      "sha256": "acab39ab706c0807be4c20231a4999aef99f0d7efc269246c49f5c097a162789",
+      "bytes": 5896,
+      "executed": false,
+      "originalSourceExecuted": false,
+      "wholeModule": false,
+      "provenanceOnly": true
+    },
+    {
+      "path": "src/infra/lru-cache.ts",
+      "gitBlob": "d8108e0be2434d296f3ae2ffd21d74d3c9c16b4b",
+      "sha256": "8915c917e7580b9ad6614337cef68a447a7cdd44e838ba9acd2e7f64df9050f6",
+      "bytes": 2278,
+      "executed": true,
+      "originalSourceExecuted": true,
+      "wholeModule": true,
+      "provenanceOnly": false,
+      "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+      "executableSha256": "b1670c87ea144d9f2eead56ef5c12e52cf73eae2a0f1205406124f784df9195a"
+    }
+  ],
+  "importBindings": [
+    {
+      "importer": "src/agents/installed-skill-catalog.ts",
+      "specifier": "../infra/abort-signal.js",
+      "kind": "throwing-uncalled-import-edge",
+      "source": "src/infra/abort-signal.ts",
+      "exports": [
+        "racePromiseWithAbortSignal"
+      ],
+      "generatedCode": "export function racePromiseWithAbortSignal(){__deferredCalls.push({\"importer\":\"src/agents/installed-skill-catalog.ts\",\"specifier\":\"../infra/abort-signal.js\",\"export\":\"racePromiseWithAbortSignal\"});throw Error('Uncalled metadata-search import invoked');}",
+      "generatedSha256": "0ae911f57d30426b979d86fea3874b93bb1d79142f68694abb7b7c171f7357ec",
+      "originalSourceExecuted": false
+    },
+    {
+      "importer": "src/agents/installed-skill-catalog.ts",
+      "specifier": "../infra/fs-safe.js",
+      "kind": "throwing-uncalled-import-edge",
+      "source": "src/infra/fs-safe.ts",
+      "exports": [
+        "openLocalFileSafely",
+        "readLocalFileSafely"
+      ],
+      "generatedCode": "export function openLocalFileSafely(){__deferredCalls.push({\"importer\":\"src/agents/installed-skill-catalog.ts\",\"specifier\":\"../infra/fs-safe.js\",\"export\":\"openLocalFileSafely\"});throw Error('Uncalled metadata-search import invoked');}\nexport function readLocalFileSafely(){__deferredCalls.push({\"importer\":\"src/agents/installed-skill-catalog.ts\",\"specifier\":\"../infra/fs-safe.js\",\"export\":\"readLocalFileSafely\"});throw Error('Uncalled metadata-search import invoked');}",
+      "generatedSha256": "2db81a1b17df218cebab020f8acad1db8974c21fb3186bf13444c368c2428081",
+      "originalSourceExecuted": false
+    },
+    {
+      "importer": "src/agents/installed-skill-catalog.ts",
+      "specifier": "./code-mode-skills.js",
+      "kind": "throwing-uncalled-import-edge",
+      "source": "src/agents/code-mode-skills.ts",
+      "exports": [
+        "readCodeModeSkill"
+      ],
+      "generatedCode": "export function readCodeModeSkill(){__deferredCalls.push({\"importer\":\"src/agents/installed-skill-catalog.ts\",\"specifier\":\"./code-mode-skills.js\",\"export\":\"readCodeModeSkill\"});throw Error('Uncalled metadata-search import invoked');}",
+      "generatedSha256": "196994e93615be2d9ec0ff11ce40a11367f6e8841f51e8ec58eaf5e1eb3bdff6",
+      "originalSourceExecuted": false
+    },
+    {
+      "importer": "src/agents/installed-skill-catalog.ts",
+      "specifier": "./tool-search-index.js",
+      "kind": "whole-unchanged-source-module",
+      "target": "src/agents/tool-search-index.ts"
+    },
+    {
+      "importer": "src/agents/installed-skill-catalog.ts",
+      "specifier": "./tool-search-ranking.js",
+      "kind": "whole-unchanged-source-module",
+      "target": "src/agents/tool-search-ranking.ts"
+    },
+    {
+      "importer": "src/agents/installed-skill-catalog.ts",
+      "specifier": "./tools/common.js",
+      "kind": "throwing-uncalled-import-edge",
+      "source": "src/agents/tools/common.ts",
+      "exports": [
+        "ToolInputError"
+      ],
+      "generatedCode": "export function ToolInputError(){__deferredCalls.push({\"importer\":\"src/agents/installed-skill-catalog.ts\",\"specifier\":\"./tools/common.js\",\"export\":\"ToolInputError\"});throw Error('Uncalled metadata-search import invoked');}",
+      "generatedSha256": "37bc62051127cba8984b1513e7cf64afab474bd38bfd49d05235fa6f042d6a8a",
+      "originalSourceExecuted": false
+    },
+    {
+      "importer": "src/agents/tool-search-index.ts",
+      "specifier": "node:crypto",
+      "kind": "actual-platform-builtin",
+      "exports": [
+        "createHash"
+      ]
+    },
+    {
+      "importer": "src/agents/tool-search-index.ts",
+      "specifier": "../infra/lru-cache.js",
+      "kind": "whole-unchanged-source-module",
+      "target": "src/infra/lru-cache.ts"
+    },
+    {
+      "importer": "src/agents/tool-search-index.ts",
+      "specifier": "./tool-search-ranking.js",
+      "kind": "whole-unchanged-source-module",
+      "target": "src/agents/tool-search-ranking.ts"
+    },
+    {
+      "importer": "src/agents/tool-search-ranking.ts",
+      "specifier": "@openclaw/normalization-core/record-coerce",
+      "kind": "whole-unchanged-source-module",
+      "target": "packages/normalization-core/src/record-coerce.ts"
+    }
+  ],
+  "observations": [
+    {
+      "id": "multiword",
+      "query": "changes repository",
+      "entries": [
+        {
+          "name": "alpha",
+          "description": "Review repository reference",
+          "location": "supplied://skills/0",
+          "marker": "entry-0"
+        },
+        {
+          "name": "workflow",
+          "description": "Review repository changes",
+          "location": "supplied://skills/1",
+          "marker": "entry-1"
+        }
+      ],
+      "result": {
+        "skills": [
+          {
+            "name": "workflow",
+            "description": "Review repository changes",
+            "location": "supplied://skills/1"
+          },
+          {
+            "name": "alpha",
+            "description": "Review repository reference",
+            "location": "supplied://skills/0"
+          }
+        ],
+        "hasMore": false,
+        "coverage": {
+          "bodyIndexed": 0,
+          "metadataOnly": 2,
+          "truncatedBodies": 0
+        }
+      },
+      "argumentsAfter": {
+        "id": "multiword",
+        "query": "changes repository",
+        "entries": [
+          {
+            "name": "alpha",
+            "description": "Review repository reference",
+            "location": "supplied://skills/0",
+            "marker": "entry-0"
+          },
+          {
+            "name": "workflow",
+            "description": "Review repository changes",
+            "location": "supplied://skills/1",
+            "marker": "entry-1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "reordered",
+      "query": "repository changes",
+      "entries": [
+        {
+          "name": "alpha",
+          "description": "Review repository reference",
+          "location": "supplied://skills/0",
+          "marker": "entry-0"
+        },
+        {
+          "name": "workflow",
+          "description": "Review repository changes",
+          "location": "supplied://skills/1",
+          "marker": "entry-1"
+        }
+      ],
+      "result": {
+        "skills": [
+          {
+            "name": "workflow",
+            "description": "Review repository changes",
+            "location": "supplied://skills/1"
+          },
+          {
+            "name": "alpha",
+            "description": "Review repository reference",
+            "location": "supplied://skills/0"
+          }
+        ],
+        "hasMore": false,
+        "coverage": {
+          "bodyIndexed": 0,
+          "metadataOnly": 2,
+          "truncatedBodies": 0
+        }
+      },
+      "argumentsAfter": {
+        "id": "reordered",
+        "query": "repository changes",
+        "entries": [
+          {
+            "name": "alpha",
+            "description": "Review repository reference",
+            "location": "supplied://skills/0",
+            "marker": "entry-0"
+          },
+          {
+            "name": "workflow",
+            "description": "Review repository changes",
+            "location": "supplied://skills/1",
+            "marker": "entry-1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "doubled-stem",
+      "query": "running",
+      "entries": [
+        {
+          "name": "runner",
+          "description": "Running tasks",
+          "location": "supplied://skills/0",
+          "marker": "entry-0"
+        },
+        {
+          "name": "planner",
+          "description": "Plan schedules",
+          "location": "supplied://skills/1",
+          "marker": "entry-1"
+        }
+      ],
+      "result": {
+        "skills": [
+          {
+            "name": "runner",
+            "description": "Running tasks",
+            "location": "supplied://skills/0"
+          }
+        ],
+        "hasMore": false,
+        "coverage": {
+          "bodyIndexed": 0,
+          "metadataOnly": 2,
+          "truncatedBodies": 0
+        }
+      },
+      "argumentsAfter": {
+        "id": "doubled-stem",
+        "query": "running",
+        "entries": [
+          {
+            "name": "runner",
+            "description": "Running tasks",
+            "location": "supplied://skills/0",
+            "marker": "entry-0"
+          },
+          {
+            "name": "planner",
+            "description": "Plan schedules",
+            "location": "supplied://skills/1",
+            "marker": "entry-1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "repeated-suffix",
+      "query": "reminders",
+      "entries": [
+        {
+          "name": "calendar",
+          "description": "Remind",
+          "location": "supplied://skills/0",
+          "marker": "entry-0"
+        },
+        {
+          "name": "handbook",
+          "description": "Ordinary guidance",
+          "location": "supplied://skills/1",
+          "marker": "entry-1"
+        }
+      ],
+      "result": {
+        "skills": [
+          {
+            "name": "calendar",
+            "description": "Remind",
+            "location": "supplied://skills/0"
+          }
+        ],
+        "hasMore": false,
+        "coverage": {
+          "bodyIndexed": 0,
+          "metadataOnly": 2,
+          "truncatedBodies": 0
+        }
+      },
+      "argumentsAfter": {
+        "id": "repeated-suffix",
+        "query": "reminders",
+        "entries": [
+          {
+            "name": "calendar",
+            "description": "Remind",
+            "location": "supplied://skills/0",
+            "marker": "entry-0"
+          },
+          {
+            "name": "handbook",
+            "description": "Ordinary guidance",
+            "location": "supplied://skills/1",
+            "marker": "entry-1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ies-policy",
+      "query": "policies",
+      "entries": [
+        {
+          "name": "handbook",
+          "description": "policy",
+          "location": "supplied://skills/0",
+          "marker": "entry-0"
+        },
+        {
+          "name": "recipe",
+          "description": "cooking",
+          "location": "supplied://skills/1",
+          "marker": "entry-1"
+        }
+      ],
+      "result": {
+        "skills": [
+          {
+            "name": "handbook",
+            "description": "policy",
+            "location": "supplied://skills/0"
+          }
+        ],
+        "hasMore": false,
+        "coverage": {
+          "bodyIndexed": 0,
+          "metadataOnly": 2,
+          "truncatedBodies": 0
+        }
+      },
+      "argumentsAfter": {
+        "id": "ies-policy",
+        "query": "policies",
+        "entries": [
+          {
+            "name": "handbook",
+            "description": "policy",
+            "location": "supplied://skills/0",
+            "marker": "entry-0"
+          },
+          {
+            "name": "recipe",
+            "description": "cooking",
+            "location": "supplied://skills/1",
+            "marker": "entry-1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ies-cookie",
+      "query": "cookies",
+      "entries": [
+        {
+          "name": "recipe",
+          "description": "cookie",
+          "location": "supplied://skills/0",
+          "marker": "entry-0"
+        },
+        {
+          "name": "handbook",
+          "description": "policy",
+          "location": "supplied://skills/1",
+          "marker": "entry-1"
+        }
+      ],
+      "result": {
+        "skills": [
+          {
+            "name": "recipe",
+            "description": "cookie",
+            "location": "supplied://skills/0"
+          }
+        ],
+        "hasMore": false,
+        "coverage": {
+          "bodyIndexed": 0,
+          "metadataOnly": 2,
+          "truncatedBodies": 0
+        }
+      },
+      "argumentsAfter": {
+        "id": "ies-cookie",
+        "query": "cookies",
+        "entries": [
+          {
+            "name": "recipe",
+            "description": "cookie",
+            "location": "supplied://skills/0",
+            "marker": "entry-0"
+          },
+          {
+            "name": "handbook",
+            "description": "policy",
+            "location": "supplied://skills/1",
+            "marker": "entry-1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "identifier-parts",
+      "query": "server reader 42",
+      "entries": [
+        {
+          "name": "HTTPServer42_reader",
+          "description": "Parse responses",
+          "location": "supplied://skills/0",
+          "marker": "entry-0"
+        },
+        {
+          "name": "manual",
+          "description": "Ordinary guidance",
+          "location": "supplied://skills/1",
+          "marker": "entry-1"
+        }
+      ],
+      "result": {
+        "skills": [
+          {
+            "name": "HTTPServer42_reader",
+            "description": "Parse responses",
+            "location": "supplied://skills/0"
+          }
+        ],
+        "hasMore": false,
+        "coverage": {
+          "bodyIndexed": 0,
+          "metadataOnly": 2,
+          "truncatedBodies": 0
+        }
+      },
+      "argumentsAfter": {
+        "id": "identifier-parts",
+        "query": "server reader 42",
+        "entries": [
+          {
+            "name": "HTTPServer42_reader",
+            "description": "Parse responses",
+            "location": "supplied://skills/0",
+            "marker": "entry-0"
+          },
+          {
+            "name": "manual",
+            "description": "Ordinary guidance",
+            "location": "supplied://skills/1",
+            "marker": "entry-1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "non-latin",
+      "query": "整理 团队知识",
+      "entries": [
+        {
+          "name": "知识整理",
+          "description": "团队知识 整理",
+          "location": "supplied://skills/0",
+          "marker": "entry-0"
+        },
+        {
+          "name": "manual",
+          "description": "Ordinary guidance",
+          "location": "supplied://skills/1",
+          "marker": "entry-1"
+        }
+      ],
+      "result": {
+        "skills": [
+          {
+            "name": "知识整理",
+            "description": "团队知识 整理",
+            "location": "supplied://skills/0"
+          }
+        ],
+        "hasMore": false,
+        "coverage": {
+          "bodyIndexed": 0,
+          "metadataOnly": 2,
+          "truncatedBodies": 0
+        }
+      },
+      "argumentsAfter": {
+        "id": "non-latin",
+        "query": "整理 团队知识",
+        "entries": [
+          {
+            "name": "知识整理",
+            "description": "团队知识 整理",
+            "location": "supplied://skills/0",
+            "marker": "entry-0"
+          },
+          {
+            "name": "manual",
+            "description": "Ordinary guidance",
+            "location": "supplied://skills/1",
+            "marker": "entry-1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "exact-case",
+      "query": "review",
+      "entries": [
+        {
+          "name": "Review",
+          "description": "review review",
+          "location": "supplied://skills/0",
+          "marker": "entry-0"
+        },
+        {
+          "name": "review",
+          "description": "general guide",
+          "location": "supplied://skills/1",
+          "marker": "entry-1"
+        }
+      ],
+      "result": {
+        "skills": [
+          {
+            "name": "review",
+            "description": "general guide",
+            "location": "supplied://skills/1"
+          },
+          {
+            "name": "Review",
+            "description": "review review",
+            "location": "supplied://skills/0"
+          }
+        ],
+        "hasMore": false,
+        "coverage": {
+          "bodyIndexed": 0,
+          "metadataOnly": 2,
+          "truncatedBodies": 0
+        }
+      },
+      "argumentsAfter": {
+        "id": "exact-case",
+        "query": "review",
+        "entries": [
+          {
+            "name": "Review",
+            "description": "review review",
+            "location": "supplied://skills/0",
+            "marker": "entry-0"
+          },
+          {
+            "name": "review",
+            "description": "general guide",
+            "location": "supplied://skills/1",
+            "marker": "entry-1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "first-folded-name",
+      "query": "reView",
+      "entries": [
+        {
+          "name": "REVIEW",
+          "description": "general guide",
+          "location": "supplied://skills/0",
+          "marker": "entry-0"
+        },
+        {
+          "name": "Review",
+          "description": "review review",
+          "location": "supplied://skills/1",
+          "marker": "entry-1"
+        }
+      ],
+      "result": {
+        "skills": [
+          {
+            "name": "REVIEW",
+            "description": "general guide",
+            "location": "supplied://skills/0"
+          },
+          {
+            "name": "Review",
+            "description": "review review",
+            "location": "supplied://skills/1"
+          }
+        ],
+        "hasMore": false,
+        "coverage": {
+          "bodyIndexed": 0,
+          "metadataOnly": 2,
+          "truncatedBodies": 0
+        }
+      },
+      "argumentsAfter": {
+        "id": "first-folded-name",
+        "query": "reView",
+        "entries": [
+          {
+            "name": "REVIEW",
+            "description": "general guide",
+            "location": "supplied://skills/0",
+            "marker": "entry-0"
+          },
+          {
+            "name": "Review",
+            "description": "review review",
+            "location": "supplied://skills/1",
+            "marker": "entry-1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "padded-name",
+      "query": " \tReview \n",
+      "entries": [
+        {
+          "name": "Review",
+          "description": "general guide",
+          "location": "supplied://skills/0",
+          "marker": "entry-0"
+        },
+        {
+          "name": "review",
+          "description": "review review",
+          "location": "supplied://skills/1",
+          "marker": "entry-1"
+        }
+      ],
+      "result": {
+        "skills": [
+          {
+            "name": "Review",
+            "description": "general guide",
+            "location": "supplied://skills/0"
+          },
+          {
+            "name": "review",
+            "description": "review review",
+            "location": "supplied://skills/1"
+          }
+        ],
+        "hasMore": false,
+        "coverage": {
+          "bodyIndexed": 0,
+          "metadataOnly": 2,
+          "truncatedBodies": 0
+        }
+      },
+      "argumentsAfter": {
+        "id": "padded-name",
+        "query": " \tReview \n",
+        "entries": [
+          {
+            "name": "Review",
+            "description": "general guide",
+            "location": "supplied://skills/0",
+            "marker": "entry-0"
+          },
+          {
+            "name": "review",
+            "description": "review review",
+            "location": "supplied://skills/1",
+            "marker": "entry-1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "punctuation-name",
+      "query": ".",
+      "entries": [
+        {
+          "name": ".",
+          "description": "",
+          "location": "supplied://skills/0",
+          "marker": "entry-0"
+        },
+        {
+          "name": "manual",
+          "description": "Ordinary handbook",
+          "location": "supplied://skills/1",
+          "marker": "entry-1"
+        }
+      ],
+      "result": {
+        "skills": [
+          {
+            "name": ".",
+            "description": "",
+            "location": "supplied://skills/0"
+          }
+        ],
+        "hasMore": false,
+        "coverage": {
+          "bodyIndexed": 0,
+          "metadataOnly": 2,
+          "truncatedBodies": 0
+        }
+      },
+      "argumentsAfter": {
+        "id": "punctuation-name",
+        "query": ".",
+        "entries": [
+          {
+            "name": ".",
+            "description": "",
+            "location": "supplied://skills/0",
+            "marker": "entry-0"
+          },
+          {
+            "name": "manual",
+            "description": "Ordinary handbook",
+            "location": "supplied://skills/1",
+            "marker": "entry-1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "frequency",
+      "query": "signal",
+      "entries": [
+        {
+          "name": "alpha",
+          "description": "signal",
+          "location": "supplied://skills/0",
+          "marker": "entry-0"
+        },
+        {
+          "name": "beta",
+          "description": "signal signal signal",
+          "location": "supplied://skills/1",
+          "marker": "entry-1"
+        }
+      ],
+      "result": {
+        "skills": [
+          {
+            "name": "beta",
+            "description": "signal signal signal",
+            "location": "supplied://skills/1"
+          },
+          {
+            "name": "alpha",
+            "description": "signal",
+            "location": "supplied://skills/0"
+          }
+        ],
+        "hasMore": false,
+        "coverage": {
+          "bodyIndexed": 0,
+          "metadataOnly": 2,
+          "truncatedBodies": 0
+        }
+      },
+      "argumentsAfter": {
+        "id": "frequency",
+        "query": "signal",
+        "entries": [
+          {
+            "name": "alpha",
+            "description": "signal",
+            "location": "supplied://skills/0",
+            "marker": "entry-0"
+          },
+          {
+            "name": "beta",
+            "description": "signal signal signal",
+            "location": "supplied://skills/1",
+            "marker": "entry-1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "length",
+      "query": "signal",
+      "entries": [
+        {
+          "name": "alpha",
+          "description": "signal additional ordinary reference context",
+          "location": "supplied://skills/0",
+          "marker": "entry-0"
+        },
+        {
+          "name": "beta",
+          "description": "signal",
+          "location": "supplied://skills/1",
+          "marker": "entry-1"
+        }
+      ],
+      "result": {
+        "skills": [
+          {
+            "name": "beta",
+            "description": "signal",
+            "location": "supplied://skills/1"
+          },
+          {
+            "name": "alpha",
+            "description": "signal additional ordinary reference context",
+            "location": "supplied://skills/0"
+          }
+        ],
+        "hasMore": false,
+        "coverage": {
+          "bodyIndexed": 0,
+          "metadataOnly": 2,
+          "truncatedBodies": 0
+        }
+      },
+      "argumentsAfter": {
+        "id": "length",
+        "query": "signal",
+        "entries": [
+          {
+            "name": "alpha",
+            "description": "signal additional ordinary reference context",
+            "location": "supplied://skills/0",
+            "marker": "entry-0"
+          },
+          {
+            "name": "beta",
+            "description": "signal",
+            "location": "supplied://skills/1",
+            "marker": "entry-1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "name-tie",
+      "query": "signal",
+      "entries": [
+        {
+          "name": "zeta",
+          "description": "signal",
+          "location": "supplied://skills/0",
+          "marker": "entry-0"
+        },
+        {
+          "name": "alpha",
+          "description": "signal",
+          "location": "supplied://skills/1",
+          "marker": "entry-1"
+        }
+      ],
+      "result": {
+        "skills": [
+          {
+            "name": "alpha",
+            "description": "signal",
+            "location": "supplied://skills/1"
+          },
+          {
+            "name": "zeta",
+            "description": "signal",
+            "location": "supplied://skills/0"
+          }
+        ],
+        "hasMore": false,
+        "coverage": {
+          "bodyIndexed": 0,
+          "metadataOnly": 2,
+          "truncatedBodies": 0
+        }
+      },
+      "argumentsAfter": {
+        "id": "name-tie",
+        "query": "signal",
+        "entries": [
+          {
+            "name": "zeta",
+            "description": "signal",
+            "location": "supplied://skills/0",
+            "marker": "entry-0"
+          },
+          {
+            "name": "alpha",
+            "description": "signal",
+            "location": "supplied://skills/1",
+            "marker": "entry-1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "duplicate-query",
+      "query": "signal signal signal",
+      "entries": [
+        {
+          "name": "alpha",
+          "description": "signal",
+          "location": "supplied://skills/0",
+          "marker": "entry-0"
+        },
+        {
+          "name": "beta",
+          "description": "signal signal signal",
+          "location": "supplied://skills/1",
+          "marker": "entry-1"
+        }
+      ],
+      "result": {
+        "skills": [
+          {
+            "name": "beta",
+            "description": "signal signal signal",
+            "location": "supplied://skills/1"
+          },
+          {
+            "name": "alpha",
+            "description": "signal",
+            "location": "supplied://skills/0"
+          }
+        ],
+        "hasMore": false,
+        "coverage": {
+          "bodyIndexed": 0,
+          "metadataOnly": 2,
+          "truncatedBodies": 0
+        }
+      },
+      "argumentsAfter": {
+        "id": "duplicate-query",
+        "query": "signal signal signal",
+        "entries": [
+          {
+            "name": "alpha",
+            "description": "signal",
+            "location": "supplied://skills/0",
+            "marker": "entry-0"
+          },
+          {
+            "name": "beta",
+            "description": "signal signal signal",
+            "location": "supplied://skills/1",
+            "marker": "entry-1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "stable-duplicates",
+      "query": "signal",
+      "entries": [
+        {
+          "name": "same",
+          "description": "signal",
+          "location": "supplied://skills/first",
+          "marker": "first"
+        },
+        {
+          "name": "same",
+          "description": "signal",
+          "location": "supplied://skills/second",
+          "marker": "second"
+        }
+      ],
+      "result": {
+        "skills": [
+          {
+            "name": "same",
+            "description": "signal",
+            "location": "supplied://skills/first"
+          },
+          {
+            "name": "same",
+            "description": "signal",
+            "location": "supplied://skills/second"
+          }
+        ],
+        "hasMore": false,
+        "coverage": {
+          "bodyIndexed": 0,
+          "metadataOnly": 2,
+          "truncatedBodies": 0
+        }
+      },
+      "argumentsAfter": {
+        "id": "stable-duplicates",
+        "query": "signal",
+        "entries": [
+          {
+            "name": "same",
+            "description": "signal",
+            "location": "supplied://skills/first",
+            "marker": "first"
+          },
+          {
+            "name": "same",
+            "description": "signal",
+            "location": "supplied://skills/second",
+            "marker": "second"
+          }
+        ]
+      }
+    },
+    {
+      "id": "utf16-name-tie",
+      "query": "catalog",
+      "entries": [
+        {
+          "name": "",
+          "description": "catalog",
+          "location": "supplied://skills/0",
+          "marker": "entry-0"
+        },
+        {
+          "name": "😀",
+          "description": "catalog",
+          "location": "supplied://skills/1",
+          "marker": "entry-1"
+        }
+      ],
+      "result": {
+        "skills": [
+          {
+            "name": "😀",
+            "description": "catalog",
+            "location": "supplied://skills/1"
+          },
+          {
+            "name": "",
+            "description": "catalog",
+            "location": "supplied://skills/0"
+          }
+        ],
+        "hasMore": false,
+        "coverage": {
+          "bodyIndexed": 0,
+          "metadataOnly": 2,
+          "truncatedBodies": 0
+        }
+      },
+      "argumentsAfter": {
+        "id": "utf16-name-tie",
+        "query": "catalog",
+        "entries": [
+          {
+            "name": "",
+            "description": "catalog",
+            "location": "supplied://skills/0",
+            "marker": "entry-0"
+          },
+          {
+            "name": "😀",
+            "description": "catalog",
+            "location": "supplied://skills/1",
+            "marker": "entry-1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "greek-final-sigma",
+      "query": "ος",
+      "entries": [
+        {
+          "name": "greek-guide",
+          "description": "ΟΣ",
+          "location": "supplied://skills/0",
+          "marker": "entry-0"
+        },
+        {
+          "name": "manual",
+          "description": "Ordinary guidance",
+          "location": "supplied://skills/1",
+          "marker": "entry-1"
+        }
+      ],
+      "result": {
+        "skills": [
+          {
+            "name": "greek-guide",
+            "description": "ΟΣ",
+            "location": "supplied://skills/0"
+          }
+        ],
+        "hasMore": false,
+        "coverage": {
+          "bodyIndexed": 0,
+          "metadataOnly": 2,
+          "truncatedBodies": 0
+        }
+      },
+      "argumentsAfter": {
+        "id": "greek-final-sigma",
+        "query": "ος",
+        "entries": [
+          {
+            "name": "greek-guide",
+            "description": "ΟΣ",
+            "location": "supplied://skills/0",
+            "marker": "entry-0"
+          },
+          {
+            "name": "manual",
+            "description": "Ordinary guidance",
+            "location": "supplied://skills/1",
+            "marker": "entry-1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "dotted-i",
+      "query": "İstanbul",
+      "entries": [
+        {
+          "name": "İSTANBUL",
+          "description": "Travel notes",
+          "location": "supplied://skills/0",
+          "marker": "entry-0"
+        },
+        {
+          "name": "manual",
+          "description": "Ordinary guidance",
+          "location": "supplied://skills/1",
+          "marker": "entry-1"
+        }
+      ],
+      "result": {
+        "skills": [
+          {
+            "name": "İSTANBUL",
+            "description": "Travel notes",
+            "location": "supplied://skills/0"
+          }
+        ],
+        "hasMore": false,
+        "coverage": {
+          "bodyIndexed": 0,
+          "metadataOnly": 2,
+          "truncatedBodies": 0
+        }
+      },
+      "argumentsAfter": {
+        "id": "dotted-i",
+        "query": "İstanbul",
+        "entries": [
+          {
+            "name": "İSTANBUL",
+            "description": "Travel notes",
+            "location": "supplied://skills/0",
+            "marker": "entry-0"
+          },
+          {
+            "name": "manual",
+            "description": "Ordinary guidance",
+            "location": "supplied://skills/1",
+            "marker": "entry-1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "literal-skill-query",
+      "query": "lookup",
+      "entries": [
+        {
+          "name": "lookup",
+          "description": "literal catalog",
+          "location": "supplied://skills/0",
+          "marker": "entry-0"
+        },
+        {
+          "name": "web",
+          "description": "search find",
+          "location": "supplied://skills/1",
+          "marker": "entry-1"
+        }
+      ],
+      "result": {
+        "skills": [
+          {
+            "name": "lookup",
+            "description": "literal catalog",
+            "location": "supplied://skills/0"
+          }
+        ],
+        "hasMore": false,
+        "coverage": {
+          "bodyIndexed": 0,
+          "metadataOnly": 2,
+          "truncatedBodies": 0
+        }
+      },
+      "argumentsAfter": {
+        "id": "literal-skill-query",
+        "query": "lookup",
+        "entries": [
+          {
+            "name": "lookup",
+            "description": "literal catalog",
+            "location": "supplied://skills/0",
+            "marker": "entry-0"
+          },
+          {
+            "name": "web",
+            "description": "search find",
+            "location": "supplied://skills/1",
+            "marker": "entry-1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "kept-double-stem",
+      "query": "processing",
+      "entries": [
+        {
+          "name": "pipeline",
+          "description": "Process logs",
+          "location": "supplied://skills/0",
+          "marker": "entry-0"
+        },
+        {
+          "name": "manual",
+          "description": "Ordinary guidance",
+          "location": "supplied://skills/1",
+          "marker": "entry-1"
+        }
+      ],
+      "result": {
+        "skills": [
+          {
+            "name": "pipeline",
+            "description": "Process logs",
+            "location": "supplied://skills/0"
+          }
+        ],
+        "hasMore": false,
+        "coverage": {
+          "bodyIndexed": 0,
+          "metadataOnly": 2,
+          "truncatedBodies": 0
+        }
+      },
+      "argumentsAfter": {
+        "id": "kept-double-stem",
+        "query": "processing",
+        "entries": [
+          {
+            "name": "pipeline",
+            "description": "Process logs",
+            "location": "supplied://skills/0",
+            "marker": "entry-0"
+          },
+          {
+            "name": "manual",
+            "description": "Ordinary guidance",
+            "location": "supplied://skills/1",
+            "marker": "entry-1"
+          }
+        ]
+      }
+    }
+  ],
+  "deferredCalls": [],
+  "boundaries": {
+    "actualInstalledCatalog": true,
+    "actualRanking": true,
+    "actualIndex": true,
+    "actualLruCache": true,
+    "actualRecordCoerceModule": true,
+    "metadataOnly": true,
+    "bodyReadExecuted": false,
+    "assemblyExecuted": false,
+    "eligibilityExecuted": false,
+    "persistenceExecuted": false,
+    "networkExecuted": false
+  },
+  "limits": [
+    "Whole unchanged installed-skill-catalog, tool-search-ranking, tool-search-index, LruCache and record-coerce modules execute after TypeScript-only transformation; no ranking/search replacement or source-region extraction.",
+    "Inputs are explicit supplied already-eligible metadata catalogs. Installed discovery, assignment, eligibility, owner freshness, tool assembly, provider transport and persistence do not execute in this source oracle.",
+    "searchInstalledSkills uses its ordinary default metadata-only mode. Body/filesystem reads, abort-race helpers, Code Mode instruction reading and common input-error imports are exact uncalled throwing edges, each recorded against its original source.",
+    "All cases are ordinary positive searches below existing output/description limits. No budget, cache eviction, invalid input, negative/error, authority/permission, cancellation, failure or real-provider behavior is qualified.",
+    "Synapsis keeps its existing source-qualified metadata, limits, snapshots and reads. This reference proves metadata lexical ordering only, not wholesale upstream output-contract or body-search parity."
+  ]
+}

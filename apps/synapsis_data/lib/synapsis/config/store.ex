@@ -31,7 +31,9 @@ defmodule Synapsis.Config.Store do
     :toolset,
     :mcp,
     :lsp,
-    :skill
+    :skill,
+    :memory,
+    :diffs
   ]
 
   def types, do: @types
@@ -39,6 +41,18 @@ defmodule Synapsis.Config.Store do
   @doc "List all entries for a type."
   @spec list(atom()) :: [map()]
   def list(type) when type in @types, do: Server.list(type)
+
+  @doc """
+  Read projected Agent directory metadata from one healthy, bounded config
+  snapshot. The enabled requester is verified in that same snapshot. The
+  absolute monotonic deadline also bounds time queued behind config writes.
+  """
+  def agent_directory_snapshot(requester, deadline),
+    do: Server.agent_directory_snapshot(requester, deadline)
+
+  @doc "Read bounded public Routine metadata from one healthy source snapshot."
+  def routine_directory_snapshot(type, deadline, remaining_budget),
+    do: Server.routine_directory_snapshot(type, deadline, remaining_budget)
 
   @doc "Get a single entry by id."
   @spec get(atom(), String.t()) :: {:ok, map()} | {:error, :not_found}
@@ -65,6 +79,18 @@ defmodule Synapsis.Config.Store do
                :ok <- validate_references(type, merged),
                do: Server.merge_existing(type, id, attrs) |> notify_credential_change(type, [id])
         end)
+
+  @doc "Apply a scheduler outcome only while the persisted schedule generation still owns it."
+  def merge_routine_schedule(type, id, generation, attrs) when type in [:routine, :heartbeat] do
+    with_write_lock(fn ->
+      Server.routine_schedule_write(type, id, generation, {:merge, attrs})
+    end)
+  end
+
+  @doc "Retire a successful one-shot only while its schedule generation still owns it."
+  def delete_routine_schedule(type, id, generation) when type in [:routine, :heartbeat] do
+    with_write_lock(fn -> Server.routine_schedule_write(type, id, generation, :delete) end)
+  end
 
   @doc "Replace an existing entry completely, preserving its ID and rejecting missing entries."
   def replace_existing(type, id, attrs)
@@ -178,30 +204,90 @@ defmodule Synapsis.Config.Store do
       result =
         :global.trans(
           {{__MODULE__, :write}, self()},
-          fn ->
-            Process.put(key, true)
-
-            try do
-              result = fun.()
-              {result, Process.get({__MODULE__, :credential_changes}, [])}
-            after
-              Process.delete(key)
-              Process.delete({__MODULE__, :credential_changes})
-            end
-          end,
+          fn -> locked_write(fun) end,
           [node()],
           10
         )
 
-      case result do
-        :aborted ->
-          {:error, :config_write_lock_unavailable}
-
-        {value, ids} ->
-          dispatch_credential_changes(ids)
-          value
-      end
+      finish_write(result)
     end
+  end
+
+  @doc "Serialize writes, optionally bounding acquisition by an absolute monotonic deadline."
+  def with_write_lock(fun, opts) when is_function(fun, 0) and is_list(opts) do
+    cond do
+      opts == [] ->
+        with_write_lock(fun)
+
+      Keyword.keyword?(opts) and Keyword.keys(opts) == [:deadline] and
+          is_integer(opts[:deadline]) ->
+        bounded_write_lock(fun, opts[:deadline])
+
+      true ->
+        {:error, :invalid_write_lock_options}
+    end
+  end
+
+  def with_write_lock(_fun, _opts), do: {:error, :invalid_write_lock_options}
+
+  defp bounded_write_lock(fun, deadline) do
+    cond do
+      System.monotonic_time(:millisecond) >= deadline ->
+        {:error, :config_write_lock_unavailable}
+
+      Process.get({__MODULE__, :write_lock_held}, false) ->
+        fun.()
+
+      true ->
+        result =
+          :global.trans(
+            {{__MODULE__, :write}, self()},
+            fn ->
+              if System.monotonic_time(:millisecond) < deadline,
+                do: locked_write(fun),
+                else: :aborted
+            end,
+            [node()],
+            0
+          )
+
+        case result do
+          :aborted ->
+            remaining = deadline - System.monotonic_time(:millisecond)
+
+            if remaining > 0 do
+              receive do
+              after
+                min(5, remaining) -> bounded_write_lock(fun, deadline)
+              end
+            else
+              {:error, :config_write_lock_unavailable}
+            end
+
+          result ->
+            finish_write(result)
+        end
+    end
+  end
+
+  defp locked_write(fun) do
+    key = {__MODULE__, :write_lock_held}
+    Process.put(key, true)
+
+    try do
+      result = fun.()
+      {result, Process.get({__MODULE__, :credential_changes}, [])}
+    after
+      Process.delete(key)
+      Process.delete({__MODULE__, :credential_changes})
+    end
+  end
+
+  defp finish_write(:aborted), do: {:error, :config_write_lock_unavailable}
+
+  defp finish_write({value, ids}) do
+    dispatch_credential_changes(ids)
+    value
   end
 
   defp validate_references(type, attrs) do
@@ -288,6 +374,8 @@ defmodule Synapsis.Config.Store do
         :mcp -> "mcp.toml"
         :lsp -> "lsp.toml"
         :skill -> "skills.toml"
+        :memory -> "memory.toml"
+        :diffs -> "diffs.toml"
       end
 
     Path.join(config_dir(), name)

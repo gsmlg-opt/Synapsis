@@ -35,6 +35,7 @@ defmodule SynapsisWeb.AgentLive.Components do
         >
           Skills
         </.mobile_nav_link>
+        <.mobile_nav_link active={@active} item={:memory} path={~p"/agent/memory"} icon="brain">Memory</.mobile_nav_link>
       </nav>
 
       <aside class="hidden md:block w-64 shrink-0 border-r border-outline-variant bg-secondary text-secondary-content px-5 py-6">
@@ -58,6 +59,11 @@ defmodule SynapsisWeb.AgentLive.Components do
           <:menu>
             <.dm_link navigate={~p"/agent/skills"} class={nav_item_class(@active, :skills)}>
               <.dm_mdi name="lightning-bolt" class="w-5 h-5 shrink-0" /> Skills
+            </.dm_link>
+          </:menu>
+          <:menu>
+            <.dm_link navigate={~p"/agent/memory"} class={nav_item_class(@active, :memory)}>
+              <.dm_mdi name="brain" class="w-5 h-5 shrink-0" /> Memory
             </.dm_link>
           </:menu>
         </.dm_left_menu>
@@ -95,6 +101,7 @@ defmodule SynapsisWeb.AgentLive.Components do
   defp active_path(:daemon), do: "/agent/daemon"
   defp active_path(:agents), do: ~p"/agent/agents"
   defp active_path(:tools), do: ~p"/agent/tools"
+  defp active_path(:memory), do: ~p"/agent/memory"
   defp active_path(:skills), do: ~p"/agent/skills"
 
   defp nav_item_class(active, item) do

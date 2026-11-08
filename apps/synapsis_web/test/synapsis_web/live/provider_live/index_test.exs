@@ -196,9 +196,9 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
 
     test "creates a keyless Backplane provider and discovers models without authorization",
          %{conn: conn} do
-      bypass = Bypass.open()
+      bypass = Gaoxy.Test.open()
 
-      Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
         assert Plug.Conn.get_req_header(conn, "authorization") == []
 
         conn
@@ -215,7 +215,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       view
       |> react_form_submit("create-provider-form", %{
         "name" => "backplane-dev",
-        "base_url" => "http://localhost:#{bypass.port}/v1",
+        "base_url" => Gaoxy.Test.url(bypass, "/v1"),
         "credential_id" => ""
       })
 
@@ -227,7 +227,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       assert {:ok, provider} = Synapsis.Providers.get_by_name("backplane-dev")
       assert provider.type == "openai"
       assert provider.preset == "backplane"
-      assert provider.base_url == "http://localhost:#{bypass.port}/v1"
+      assert provider.base_url == Gaoxy.Test.url(bypass, "/v1")
       assert is_nil(provider.api_key_encrypted)
       assert [%{"id" => "backplane-model"}] = provider.config["available_models"]
     end
@@ -356,8 +356,8 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
     end
 
     test "custom provider creation with base_url", %{conn: conn} do
-      bypass = Bypass.open()
-      Bypass.down(bypass)
+      bypass = Gaoxy.Test.open()
+      Gaoxy.Test.verify_and_close!(bypass)
 
       {:ok, view, _html} = live(conn, ~p"/settings/providers/new")
 
@@ -368,7 +368,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       view
       |> react_form_submit("create-provider-form", %{
         "name" => "my-local-llm",
-        "base_url" => "http://localhost:#{bypass.port}",
+        "base_url" => String.trim_trailing(Gaoxy.Test.url(bypass), "/"),
         "credential_id" => credential_id!("none")
       })
 
@@ -376,16 +376,16 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       assert flash["info"] == "Provider created; model loading failed"
 
       assert {:ok, provider} = Synapsis.Providers.get_by_name("my-local-llm")
-      assert provider.base_url == "http://localhost:#{bypass.port}"
+      assert provider.base_url == String.trim_trailing(Gaoxy.Test.url(bypass), "/")
       assert provider.type == "openai"
       refute Map.has_key?(provider.config, "available_models")
       assert {:ok, _config} = Synapsis.Provider.Registry.get("my-local-llm")
     end
 
     test "custom compatible provider creation loads models", %{conn: conn} do
-      bypass = Bypass.open()
+      bypass = Gaoxy.Test.open()
 
-      Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "model-a"}]}))
@@ -400,7 +400,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       view
       |> react_form_submit("create-provider-form", %{
         "name" => "my-compatible-llm",
-        "base_url" => "http://localhost:#{bypass.port}/v1",
+        "base_url" => Gaoxy.Test.url(bypass, "/v1"),
         "credential_id" => credential_id!("sk-test")
       })
 

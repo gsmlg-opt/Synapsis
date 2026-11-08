@@ -1,9 +1,21 @@
+FROM node:24.22.1-bookworm-slim@sha256:be8204d4bd327363357f532187b752ff62759c31bedf98e9e18fc08c9cbd605c AS filesystem_runtime
+
+FROM rust:1.99.0-slim-bookworm@sha256:2c3a22f0a5533ea2dd5a16627bc841228151faa2d4de2644ac9987e4a2f1f2fa AS native_toolchain
+
 # Build stage
 FROM hexpm/elixir:1.18.4-erlang-28.3-debian-bookworm-20260316-slim AS build
 
 RUN apt-get update -y && \
-    apt-get install -y build-essential git curl ca-certificates && \
+    apt-get install -y build-essential git curl ca-certificates cmake pkg-config libclang-dev && \
     apt-get clean && rm -f /var/lib/apt/lists/*_*
+
+COPY --from=native_toolchain /usr/local/cargo /usr/local/cargo
+COPY --from=native_toolchain /usr/local/rustup /usr/local/rustup
+# Build Vize with its supported source selector for this image's glibc.
+ENV CARGO_HOME=/usr/local/cargo \
+    RUSTUP_HOME=/usr/local/rustup \
+    PATH="/usr/local/cargo/bin:${PATH}" \
+    VIZE_EX_BUILD=1
 
 WORKDIR /app
 
@@ -18,6 +30,7 @@ ENV SYNAPSIS_ENCRYPTION_KEY=build-only-encryption-key-32bytes
 
 # Install mix deps (layer-cached)
 COPY mix.exs mix.lock ./
+COPY rel/filesystem_runtime.exs rel/
 COPY apps/synapsis_agent/mix.exs apps/synapsis_agent/
 COPY apps/synapsis_cli/mix.exs apps/synapsis_cli/
 COPY apps/synapsis_core/mix.exs apps/synapsis_core/
@@ -36,12 +49,19 @@ RUN mix deps.compile
 COPY package.json package-lock.json ./
 COPY apps/synapsis_web/package.json apps/synapsis_web/
 COPY packages/hooks/package.json packages/hooks/
+COPY packages/tool-host/package.json packages/tool-host/
 RUN mix npm.ci
 
 # Copy application source
 COPY config config
 COPY apps apps
 COPY packages packages
+COPY rel rel
+
+# The release hook packages the same explicit distribution into its version directory.
+COPY --from=filesystem_runtime /usr/local/bin/node /opt/filesystem-runtime/bin/node
+COPY --from=filesystem_runtime /usr/local/LICENSE /opt/filesystem-runtime/LICENSE
+ENV SYNAPSIS_FILESYSTEM_RUNTIME_ROOT=/opt/filesystem-runtime
 
 ARG SYNAPSIS_GIT_REF
 ARG SYNAPSIS_RELEASE_TIME
@@ -61,7 +81,7 @@ RUN mix release synapsis
 FROM debian:bookworm-slim AS runtime
 
 RUN apt-get update -y && \
-    apt-get install -y libstdc++6 openssl libncurses5 locales ca-certificates ripgrep git && \
+    apt-get install -y libstdc++6 openssl libncurses5 locales ca-certificates ripgrep git inotify-tools && \
     apt-get clean && rm -f /var/lib/apt/lists/*_*
 
 # Set locale

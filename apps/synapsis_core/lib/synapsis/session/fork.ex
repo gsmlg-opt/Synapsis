@@ -2,7 +2,6 @@ defmodule Synapsis.Session.Fork do
   @moduledoc "Fork a session at a given message, creating a new branch."
 
   alias Synapsis.{Message, Session, Sessions}
-  alias Synapsis.Session.Store
 
   def fork(session_id, opts \\ []) do
     message_id = Keyword.get(opts, :at_message)
@@ -56,9 +55,9 @@ defmodule Synapsis.Session.Fork do
           }
         end)
 
-      Store.put_meta(new_session.id, Session.to_meta(new_session))
-      :ok = Message.persist_list(new_session.id, copied)
-      {:ok, new_session}
+      with :ok <- Message.persist_list(new_session.id, copied, Session.to_meta(new_session)) do
+        {:ok, new_session}
+      end
     end
   end
 

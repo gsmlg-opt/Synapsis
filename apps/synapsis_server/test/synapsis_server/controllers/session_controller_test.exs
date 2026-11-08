@@ -49,9 +49,112 @@ defmodule SynapsisServer.SessionControllerTest do
       assert %{"data" => %{"id" => ^id}} = json_response(conn, 200)
     end
 
+    test "preserves rich tool-result projections in message history", %{conn: conn} do
+      projection = rich_projection()
+
+      part = %Synapsis.Part.ToolResult{
+        tool_use_id: "rich-call",
+        content: "before\nafter",
+        is_error: false,
+        projection: projection
+      }
+
+      {session_id, message} = append_history(part)
+      response = conn |> get("/api/sessions/#{session_id}") |> json_response(200)
+
+      assert [%{"id" => id, "parts" => [serialized]}] = response["data"]["messages"]
+      assert id == message.id
+
+      assert serialized == %{
+               "type" => "tool_result",
+               "tool_use_id" => "rich-call",
+               "content" => "before\nafter",
+               "is_error" => false,
+               "projection" => projection
+             }
+    end
+
+    test "preserves projected errors and their legacy identity in message history", %{conn: conn} do
+      projection = %{
+        "version" => 1,
+        "result" => %{
+          "is_error" => true,
+          "error" => %{
+            "class" => "execution_failure",
+            "message" => "Public failure",
+            "details" => %{"retryable" => false, "completed" => 2}
+          }
+        }
+      }
+
+      part = %Synapsis.Part.ToolResult{
+        tool_use_id: "error-call",
+        content: "Public failure",
+        is_error: true,
+        projection: projection
+      }
+
+      {session_id, _message} = append_history(part)
+      response = conn |> get("/api/sessions/#{session_id}") |> json_response(200)
+
+      assert [%{"parts" => [serialized]}] = response["data"]["messages"]
+
+      assert serialized == %{
+               "type" => "tool_result",
+               "tool_use_id" => "error-call",
+               "content" => "Public failure",
+               "is_error" => true,
+               "projection" => projection
+             }
+    end
+
+    test "omits nil projections from legacy message history", %{conn: conn} do
+      part = %Synapsis.Part.ToolResult{
+        tool_use_id: "legacy-call",
+        content: "legacy output",
+        is_error: false,
+        projection: nil
+      }
+
+      {session_id, _message} = append_history(part)
+      response = conn |> get("/api/sessions/#{session_id}") |> json_response(200)
+
+      assert [%{"parts" => [serialized]}] = response["data"]["messages"]
+      refute Map.has_key?(serialized, "projection")
+
+      assert serialized == %{
+               "type" => "tool_result",
+               "tool_use_id" => "legacy-call",
+               "content" => "legacy output",
+               "is_error" => false
+             }
+    end
+
     test "returns 404 for missing session", %{conn: conn} do
       conn = get(conn, "/api/sessions/#{Ecto.UUID.generate()}")
       assert json_response(conn, 404)
+    end
+
+    test "shows the current runtime failure without exposing error internals", %{conn: conn} do
+      {:ok, session} = Synapsis.Sessions.create("main", %{provider: "anthropic", model: "test"})
+      assert :ok = Synapsis.Sessions.ensure_running(session.id)
+      [{pid, _}] = Registry.lookup(Synapsis.Session.Registry, session.id)
+      reason = "Selected tools unavailable or deferred: unavailable-session-tool"
+
+      :sys.replace_state(pid, fn {:idle, data} ->
+        {:idle,
+         %{
+           data
+           | runtime_history_error:
+               Backplane.AgentRuntime.Error.new(:unsupported_capability, reason,
+                 details: %{secret: "private diagnostic details"}
+               )
+         }}
+      end)
+
+      response = conn |> get("/api/sessions/#{session.id}") |> json_response(200)
+      assert %{"data" => %{"live_status" => "error", "error" => ^reason}} = response
+      refute Jason.encode!(response) =~ "private diagnostic details"
     end
   end
 
@@ -496,5 +599,45 @@ defmodule SynapsisServer.SessionControllerTest do
                "data" => "base64data"
              }
     end
+  end
+
+  defp append_history(part) do
+    session = %Synapsis.Session{
+      id: Ecto.UUID.generate(),
+      provider: "transport-test",
+      model: "test"
+    }
+
+    :ok = Store.put_meta(session.id, Synapsis.Session.to_meta(session))
+    on_exit(fn -> Store.delete_session(session.id) end)
+    {:ok, message} = Synapsis.Message.append(session.id, %{role: "assistant", parts: [part]})
+    {session.id, message}
+  end
+
+  defp rich_projection do
+    %{
+      "version" => 1,
+      "result" => %{
+        "content" => [
+          %{"type" => "text", "text" => "before"},
+          %{
+            "type" => "image",
+            "data" => %{
+              "source" => "base64",
+              "media_type" => "image/png",
+              "data" => "aW1hZ2U="
+            }
+          },
+          %{"type" => "text", "text" => "after"}
+        ],
+        "is_error" => false,
+        "structured" => %{"rows" => [%{"value" => 3}]},
+        "artifacts" => [%{"uri" => "workspace://report", "name" => "report"}],
+        "details" => %{"count" => 1},
+        "progress" => %{"status" => "completed", "completed" => 1},
+        "pagination" => %{"cursor" => "page-2", "truncated" => true},
+        "metadata" => %{"opaque" => [nil, false, 4]}
+      }
+    }
   end
 end

@@ -35,3 +35,13 @@ Thumbs.db
 # Local secrets / data
 .secrets.toml
 tmp/
+
+# Keep the complete generated helper closures, including packaged dependencies/licenses.
+!apps/synapsis_core/priv/filesystem_planner/
+!apps/synapsis_core/priv/filesystem_planner/**
+!apps/synapsis_core/priv/filesystem_read/
+!apps/synapsis_core/priv/filesystem_read/**
+!apps/synapsis_core/priv/workflow_schema/
+!apps/synapsis_core/priv/workflow_schema/**
+!apps/synapsis_core/priv/session_directory/
+!apps/synapsis_core/priv/session_directory/**

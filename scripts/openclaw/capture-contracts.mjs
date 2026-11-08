@@ -6,7 +6,12 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, realpathS
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
-import { FactoryHarness, captureRecipes } from './capture-recipes.mjs';
+import { FactoryHarness, captureRecipes, representativeContexts } from './capture-recipes.mjs';
+import { captureBrowserRegistrations } from './capture-browser-registration.mjs';
+import { captureSessionFactories } from './capture-session-factories.mjs';
+import { capturePdfFactories } from './capture-pdf-factories.mjs';
+import { captureTtsFactories } from './capture-tts-factories.mjs';
+import { captureCronSchemas } from './capture-cron-schemas.mjs';
 
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const inside = (root, path) => path === root || path.startsWith(root + sep);
@@ -54,18 +59,6 @@ function checkout(root, pin) {
   return { commit: pin, tree: git(root, ['rev-parse', `${pin}^{tree}`]), files: [...files.values()], verified: true };
 }
 
-function contexts() {
-  return ['primary', 'child', 'scheduled'].flatMap(role => ['minimal', 'coding', 'messaging', 'full'].flatMap(profile => [false, true].map(configured => ({
-    id: `${role}/${profile}/${configured ? 'configured' : 'unconfigured'}`,
-    role, profile, configured,
-    // Synthetic config signals are not credentials or live readiness evidence.
-    options: { config: { tools: { profile }, plugins: { enabled: configured }, browser: { enabled: configured } },
-      agentSessionKey: role === 'child' ? 'agent:reference:subagent:fixture' : role === 'scheduled' ? 'agent:reference:cron:fixture' : 'agent:reference:main',
-      sessionKey: 'agent:reference:main', agentId: 'reference', workspaceDir: '/reference/workspace',
-      isSubagent: role === 'child', sandboxed: role === 'child', isScheduled: role === 'scheduled',
-      modelSupportsVision: configured, hasConnectedClient: configured, allowDeviceTools: configured },
-  }))));
-}
 function actions(schema) {
   const found = [];
   function walk(value) {
@@ -90,9 +83,16 @@ async function capture(root, source) {
   }).filter(x => x.tools.length > 0);
   const pluginNames = unique(plugins.flatMap(x => x.tools));
   const union = unique([...core, ...pluginNames]);
-  const matrix = contexts();
+  const matrix = representativeContexts();
   const factories = [], registrations = [], dependencies = new Map();
-  const recipeRows = await captureRecipes(root, source.files);
+  const recipeRows = [
+    ...await captureRecipes(root, source.files),
+    ...await captureSessionFactories(root, source.files),
+    ...await capturePdfFactories(root, source.files),
+    ...await captureTtsFactories(root, source.files),
+  ];
+  const browserRegistrations = await captureBrowserRegistrations(root, source.files);
+  const schemaCaptures = await captureCronSchemas(root, source.files);
   const referencedSources = new Set(['package.json', ...catalog.loadedFiles.keys(), ...manifests.map(x => x.path)]);
   for (const file of source.files.filter(x => x.kind !== 'symlink' && /^(src|extensions)\/.+\.(ts|js)$/.test(x.path) && !/(?:^|\/)(?:tests?|fixtures?|__tests__|__fixtures__)(?:\/|$)|(?:^|[.\/-])(?:test|spec|test-helpers?|test-support|test-utils|test-harness)(?:[.\/-]|$)/.test(x.path))) {
     const code = readFileSync(join(root, file.path), 'utf8');
@@ -130,19 +130,22 @@ async function capture(root, source) {
     for (const path of harness.loadedFiles.keys()) referencedSources.add(path);
   }
   for (const item of [...factories, ...registrations]) referencedSources.add(item.source);
-  for (const row of recipeRows) {
+  for (const row of [...recipeRows, ...browserRegistrations, ...schemaCaptures]) {
     if (row.sourceSha256) referencedSources.add(row.source);
-    for (const item of row.loadedFiles) referencedSources.add(item.path);
-    for (const item of row.projections) if (item.sourceSha256) referencedSources.add(item.source);
-    for (const file of row.typebox.files) dependencies.set(file.path, file);
-    if (row.status === 'captured' && row.evidence === 'factory-return') factories.push({ source: row.source, sourceSha256: row.sourceSha256, export: row.export, context: row.context, status: 'executed', evidence: 'factory-invocation', recipe: row.id, eligibility: 'factory-returned-tool; runtime admission unresolved', tool: { name: row.descriptor.name, description: row.descriptor.description, ...row.schema } });
+    for (const evidence of [row, ...(row.definitionComparison ? [row.definitionComparison] : [])]) {
+      for (const item of evidence.loadedFiles) referencedSources.add(item.path);
+      for (const item of evidence.projections) if (item.sourceSha256) referencedSources.add(item.source);
+      for (const file of evidence.typebox.files) dependencies.set(file.path, file);
+    }
+    if (row.status === 'captured' && row.evidence === 'factory-return') factories.push({ source: row.source, sourceSha256: row.sourceSha256, export: row.export, context: row.context, status: 'executed', evidence: 'factory-invocation', recipe: row.id, eligibility: 'factory-returned-tool; runtime admission unresolved', tool: { name: row.descriptor.name, description: row.descriptor.description, ...row.schema, ...(row.descriptor.outputSchema ? { outputSchema: row.descriptor.outputSchema, outputSchemaJson: row.outputSchema.schemaJson, outputSchemaSha256: row.outputSchema.schemaSha256 } : {}) } });
   }
   const gaps = [];
+  for (const row of browserRegistrations) if (row.status !== 'captured') gaps.push({ kind: 'unresolved-browser-registration-callback', context: row.context, reason: row.reason });
   for (const row of recipeRows) if (row.status !== 'captured') gaps.push({kind:'unresolved-recipe',recipe:row.id,reason:row.reason});
   for (const name of union) if (!factories.some(x => x.status === 'executed' && x.tool.name === name)) gaps.push({ kind: 'missing-factory', tool: name });
   for (const row of factories.filter(x => x.status === 'unresolved')) gaps.push({ kind: 'unresolved-factory', source: row.source, export: row.export, context: row.context });
   const knownActions = new Map();
-  for (const row of recipeRows.filter(x => x.status === 'captured')) {
+  for (const row of [...recipeRows, ...schemaCaptures.filter(x => x.evidence === 'schema-builder')].filter(x => x.status === 'captured')) {
     const variants = knownActions.get(row.referenceTool) ?? new Set();
     for (const action of row.schema.actions) variants.add(action);
     if (row.schema.actionlessBranches) variants.add('$call');
@@ -152,16 +155,16 @@ async function capture(root, source) {
   // Direct construction does not prove policy/assembly eligibility or dynamic registration.
   gaps.push({ kind: 'assembly-contexts', reason: 'primary/child/scheduled profile and config assembly not executed; direct factory options alone do not establish eligibility' });
   for (const item of registrations) gaps.push({ kind: 'unresolved-registration', source: item.source, line: item.line });
-  const copiedPaths = ['src/agents/tool-catalog.ts', ...manifests.map(x => x.path), ...recipeRows.flatMap(x => x.loadedFiles.map(file => file.path))];
+  const copiedPaths = ['src/agents/tool-catalog.ts', ...manifests.map(x => x.path), ...[...recipeRows, ...browserRegistrations, ...schemaCaptures].flatMap(x => x.loadedFiles.map(file => file.path))];
   const licenses = source.files.filter(x => /^(?:LICEN[CS]E|NOTICE)(?:\.[^/]+)?$/i.test(x.path.split('/').at(-1)) && copiedPaths.some(path => dirname(x.path) === '.' || path.startsWith(dirname(x.path) + '/')));
   for (const item of licenses) referencedSources.add(item.path);
   source.verifiedTrackedFiles = source.files.length;
   source.hashScope = 'referenced capture evidence; full checkout blobs verified against pinned tree';
   source.files = source.files.filter(x => referencedSources.has(x.path));
   return { schemaVersion: 1, referenceRole: 'capability_reference', runtimeContractAuthority: 'backplane_agent_runtime',
-    source, captureRuntime: { node: process.version }, captureMethod: 'restricted direct factory invocation and bounded source-backed recipes; no execute calls; static registration discoveries explicitly unresolved',
+    source, captureRuntime: { node: process.version }, captureMethod: 'restricted direct factory invocation, bounded source-backed recipes including session, PDF and TTS factories, separate cron schema-only evidence, and projected Browser registerTool callbacks; no execute calls; full plugin registration and assembly unresolved',
     inventory: { core, plugins, scannedManifests: manifests, union, counts: { core: core.length, manifestsScanned: manifests.length, toolManifests: plugins.length, uniquePluginTools: pluginNames.length, corePluginOverlap: core.filter(x => pluginNames.includes(x)).length, pluginOnly: pluginNames.filter(x => !core.includes(x)).length, union: union.length } },
-    contexts: matrix, recipes: recipeRows, factories, registrations, licenses, dependencies: [...dependencies.values()].sort((a, b) => a.path.localeCompare(b.path)),
+    contexts: matrix, recipes: recipeRows, browserRegistrations, schemaCaptures, factories, registrations, licenses, dependencies: [...dependencies.values()].sort((a, b) => a.path.localeCompare(b.path)),
     completeness: { complete: gaps.length === 0, gaps },
   };
 }
@@ -178,7 +181,7 @@ async function main() {
   // Recheck the bytes after evaluation to catch concurrent source modifications.
   checkout(root, args['--pin']);
   mkdirSync(out, { recursive: true });
-  const snapshots = new Map([source.files.find(x => x.path === 'src/agents/tool-catalog.ts'), ...report.inventory.scannedManifests, ...report.recipes.flatMap(x => x.loadedFiles), ...report.licenses].map(x => [x.path, x]));
+  const snapshots = new Map([source.files.find(x => x.path === 'src/agents/tool-catalog.ts'), ...report.inventory.scannedManifests, ...[...report.recipes, ...report.browserRegistrations, ...report.schemaCaptures].flatMap(x => [x, ...(x.definitionComparison ? [x.definitionComparison] : [])].flatMap(item => item.loadedFiles)), ...report.licenses].map(x => [x.path, x]));
   for (const file of snapshots.values()) {
     const target = join(out, 'sources', file.path);
     mkdirSync(dirname(target), { recursive: true });

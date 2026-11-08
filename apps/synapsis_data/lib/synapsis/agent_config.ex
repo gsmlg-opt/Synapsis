@@ -26,11 +26,12 @@ defmodule Synapsis.AgentConfig do
     field(:model, :string)
     field(:system_prompt, :string)
     field(:tools, {:array, :string}, default: [])
+    field(:tool_contract_version, :integer, default: 0)
     field(:reasoning_effort, :string, default: "medium")
     field(:read_only, :boolean, default: false)
     field(:max_tokens, :integer, default: 8192)
     field(:model_tier, :string, default: "default")
-    field(:permission_mode, :string, default: "ask")
+    field(:permission_mode, :string, default: "yolo")
     field(:fallback_models, :string, default: "")
     field(:is_default, :boolean, default: false)
     field(:enabled, :boolean, default: true)
@@ -43,7 +44,7 @@ defmodule Synapsis.AgentConfig do
   end
 
   @required_fields ~w(name)a
-  @optional_fields ~w(id label icon description provider model system_prompt tools
+  @optional_fields ~w(id label icon description provider model system_prompt tools tool_contract_version
                        reasoning_effort read_only max_tokens model_tier
                        permission_mode fallback_models is_default enabled config toolset_id toolset_ids)a
 
@@ -51,6 +52,8 @@ defmodule Synapsis.AgentConfig do
     agent_config
     |> cast(attrs, @required_fields ++ @optional_fields)
     |> validate_required(@required_fields)
+    |> validate_required([:tool_contract_version])
+    |> validate_inclusion(:tool_contract_version, [0, 1])
     |> validate_format(:name, @name_format,
       message:
         "must start with a letter or digit and contain only lowercase letters, digits, hyphens, or underscores"
@@ -64,6 +67,8 @@ defmodule Synapsis.AgentConfig do
   def update_changeset(agent_config, attrs) do
     agent_config
     |> cast(attrs, @optional_fields)
+    |> validate_required([:tool_contract_version])
+    |> validate_inclusion(:tool_contract_version, [0, 1])
     |> validate_inclusion(:model_tier, @valid_model_tiers)
     |> validate_inclusion(:permission_mode, @valid_permission_modes)
     |> validate_inclusion(:reasoning_effort, @valid_reasoning_efforts)

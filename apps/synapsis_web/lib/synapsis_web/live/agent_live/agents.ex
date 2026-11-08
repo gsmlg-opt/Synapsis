@@ -6,6 +6,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
   import SynapsisWeb.AgentLive.Components
 
   alias Synapsis.{AgentConfig, AgentConfigs, AgentSkills, Providers, Skills, Toolsets}
+  alias SynapsisWeb.AgentLive.BrowserSettings
 
   @config_tabs ~w(overview workspace runtime tools skills prompt management)
   @wizard_steps ~w(overview workspace runtime tools skills prompt)
@@ -21,6 +22,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
      assign(socket,
        page_title: "Agents",
        agent: nil,
+       browser_config_baseline: %{},
        selected_skill_ids: [],
        agents: [],
        skills: [],
@@ -100,9 +102,10 @@ defmodule SynapsisWeb.AgentLive.Agents do
   end
 
   def handle_event("change_agent_form", %{"agent" => attrs} = params, socket) do
+    attrs = web_fetch_form_attrs(attrs, socket)
     agent = preview_agent(socket.assigns.agent, attrs, socket.assigns.providers)
     agent = mcp_preview(agent, params)
-    {:noreply, assign(socket, agent: agent)}
+    {:noreply, socket |> assign(agent: agent) |> assign_mcp_catalog()}
   end
 
   def handle_event("refresh_mcp_tools", _params, socket),
@@ -110,11 +113,18 @@ defmodule SynapsisWeb.AgentLive.Agents do
 
   def handle_event("save_agent", %{"agent" => attrs} = params, socket) do
     skill_ids = params |> Map.get("skill_ids", []) |> List.wrap()
-    attrs = normalize_agent_attrs(attrs, socket.assigns.agent)
+
+    attrs =
+      attrs
+      |> web_fetch_form_attrs(socket)
+      |> normalize_agent_attrs(socket.assigns.agent)
+      |> Map.put("tool_contract_version", socket.assigns.agent.tool_contract_version)
+      |> Map.put("tools", socket.assigns.agent.tools || [])
 
     policy =
       mcp_normalize_policy(
-        Map.get(params, "mcp_selection", (socket.assigns.agent.config || %{})["mcp_selection"])
+        Map.get(params, "mcp_selection", (socket.assigns.agent.config || %{})["mcp_selection"]),
+        (socket.assigns.agent.config || %{})["mcp_selection"]
       )
 
     attrs = Map.update!(attrs, "config", &Map.put(&1, "mcp_selection", policy))
@@ -122,12 +132,12 @@ defmodule SynapsisWeb.AgentLive.Agents do
     result =
       case socket.assigns.live_action do
         :new ->
-          AgentConfigs.create(attrs)
+          save_browser_agent(attrs, params, socket, nil)
 
         :config ->
           case AgentConfigs.get(socket.assigns.agent.id) do
             nil -> {:error, :not_found}
-            db_agent -> AgentConfigs.update(db_agent, attrs)
+            db_agent -> save_browser_agent(attrs, params, socket, db_agent)
           end
 
         _ ->
@@ -140,6 +150,9 @@ defmodule SynapsisWeb.AgentLive.Agents do
         Providers.notify_changed()
 
         {:noreply, after_agent_save(socket, agent)}
+
+      {:error, {:browser_settings, message}} ->
+        {:noreply, put_flash(socket, :error, message)}
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, save_error(reason))}
@@ -176,6 +189,9 @@ defmodule SynapsisWeb.AgentLive.Agents do
 
   @impl true
   def handle_info({:tool_registry_changed, _payload}, socket),
+    do: {:noreply, assign_mcp_catalog(socket)}
+
+  def handle_info({:mcp_source_catalog_changed, _payload}, socket),
     do: {:noreply, assign_mcp_catalog(socket)}
 
   def handle_info({:provider_catalog_changed}, socket) do
@@ -289,7 +305,8 @@ defmodule SynapsisWeb.AgentLive.Agents do
 
   defp agent_form(assigns) do
     selected_toolsets = selected_toolsets(assigns.agent, assigns.toolsets)
-    selected_toolset_ids = Enum.map(selected_toolsets, & &1.id)
+    selected_toolset_ids = selected_toolset_ids(assigns.agent)
+    missing_toolset_ids = selected_toolset_ids -- Enum.map(assigns.toolsets, & &1.id)
     tool_names = agent_tool_names(assigns.agent, selected_toolsets)
     fallback_tokens = fallback_tokens(assigns.agent.fallback_models)
     workspace_path = workspace_path(assigns.agent)
@@ -297,10 +314,14 @@ defmodule SynapsisWeb.AgentLive.Agents do
 
     mcp_policy =
       mcp_normalize_policy(
-        (assigns.draft || %{})["mcp_selection"] || (assigns.agent.config || %{})["mcp_selection"]
+        (assigns.draft || %{})["mcp_selection"] || (assigns.agent.config || %{})["mcp_selection"],
+        (assigns.agent.config || %{})["mcp_selection"]
       )
 
     mcp_groups = mcp_groups(assigns.mcp_sources, assigns.mcp_catalog, mcp_policy)
+
+    deferred_tools =
+      deferred_tool_choices(assigns.agent, assigns.toolsets, mcp_groups, mcp_policy)
 
     draft =
       if assigns.draft do
@@ -309,7 +330,8 @@ defmodule SynapsisWeb.AgentLive.Agents do
 
     form_structure = [
       mcp_policy,
-      Enum.map(mcp_groups, &{&1.id, &1.tools}),
+      Enum.map(mcp_groups, &{&1.id, &1.name, &1.enabled, &1.status, &1.tools}),
+      deferred_tools,
       assigns.active_tab,
       assigns.wizard_mode,
       Enum.map(assigns.toolsets, & &1.id),
@@ -322,10 +344,14 @@ defmodule SynapsisWeb.AgentLive.Agents do
       |> assign(:draft, draft)
       |> assign(:mcp_policy, mcp_policy)
       |> assign(:mcp_groups, mcp_groups)
+      |> assign(:deferred_tools, deferred_tools)
+      |> assign(:deferred_tool_names, deferred_tool_names(assigns.agent))
       |> assign(:form_structure, form_structure)
       |> assign(:selected_toolsets, selected_toolsets)
       |> assign(:selected_toolset_ids, selected_toolset_ids)
+      |> assign(:missing_toolset_ids, missing_toolset_ids)
       |> assign(:tool_names, tool_names)
+      |> assign(:native_tool_selection, native_tool_selection?(assigns.agent, assigns.toolsets))
       |> assign(:permission_mode, permission_mode)
       |> assign(:fallback_count, length(fallback_tokens))
       |> assign(:fallback_tokens, fallback_tokens)
@@ -340,6 +366,14 @@ defmodule SynapsisWeb.AgentLive.Agents do
 
     ~H"""
     <div class="space-y-5">
+      <p :if={!@native_tool_selection} class="text-sm text-warning">
+        Legacy selection or unavailable linked Toolset. Explicit migration required for legacy
+        selections before native runtime use. Ordinary edits preserve saved tools, links and versions.
+      </p>
+      <p :if={@native_tool_selection} class="text-sm text-on-surface-variant">
+        Native contract v1. Tool metadata and saved selections do not establish runtime readiness
+        or grant permission. Runtime checks still apply.
+      </p>
       <section class="rounded-lg border border-outline-variant bg-surface-container p-5">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div class="min-w-0">
@@ -679,6 +713,22 @@ defmodule SynapsisWeb.AgentLive.Agents do
                 />
               </div>
 
+              <.dm_textarea
+                id="agent-web-allowed-hosts"
+                name="agent[web_allowed_hosts]"
+                value={web_allowed_hosts_value(@agent)}
+                label="Web fetch allowed hosts"
+                helper="Required for web::fetch. Enter one hostname per line, without a URL scheme or path. Leave blank to make web::fetch unavailable. Tool selection is managed separately."
+                placeholder="docs.example.com"
+                rows={3}
+                class="mt-5"
+              />
+
+              <BrowserSettings.editor
+                config={@agent.config || %{}}
+                draft={(@draft || %{})["browser_settings"]}
+              />
+
               <div class="mt-5">
                 <div class="mb-2 flex items-center justify-between gap-3">
                   <div>
@@ -695,12 +745,13 @@ defmodule SynapsisWeb.AgentLive.Agents do
                 <input type="hidden" name="agent[toolset_ids][]" value="" />
 
                 <div
-                  :if={@toolsets != []}
+                  :if={@toolsets != [] or @missing_toolset_ids != []}
                   class="grid grid-cols-1 md:grid-cols-2 gap-2"
                   data-testid="agent-toolset-list"
                 >
                   <label
                     :for={toolset <- @toolsets}
+                    data-toolset-id={toolset.id}
                     class="flex items-start gap-2 rounded border border-outline-variant bg-surface-container-high p-3 text-sm"
                   >
                     <input
@@ -711,6 +762,17 @@ defmodule SynapsisWeb.AgentLive.Agents do
                     />
                     <span class="min-w-0">
                       <span class="font-medium">{toolset.name}</span>
+                      <span class="block text-xs text-on-surface-variant">
+                        {if toolset.tool_contract_version == 1,
+                          do: "Native contract v1",
+                          else: "Legacy contract v0"}
+                        <span
+                          :if={toolset.tool_contract_version != 1}
+                          class="text-warning"
+                        >
+                          · incompatible version; migration required
+                        </span>
+                      </span>
                       <span class="block text-xs text-on-surface-variant">
                         {toolset.description || "#{length(toolset.tool_names || [])} tools"}
                       </span>
@@ -728,6 +790,22 @@ defmodule SynapsisWeb.AgentLive.Agents do
                           +{length(toolset.tool_names || []) - 4}
                         </span>
                       </span>
+                    </span>
+                  </label>
+                  <label
+                    :for={id <- @missing_toolset_ids}
+                    data-unavailable-toolset={id}
+                    class="flex items-start gap-2 rounded border border-outline-variant bg-surface-container-high p-3 text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      name="agent[toolset_ids][]"
+                      value={id}
+                      checked
+                    />
+                    <span class="min-w-0">
+                      <span class="font-medium">Toolset unavailable</span>
+                      <span class="block break-all font-mono text-xs text-on-surface-variant">{id}</span>
                     </span>
                   </label>
                 </div>
@@ -773,10 +851,10 @@ defmodule SynapsisWeb.AgentLive.Agents do
                   class="rounded-lg border border-outline-variant p-3 space-y-3"
                 >
                   <div class="flex items-center justify-between gap-2">
-                    <span class="font-medium">{group.name}</span>
-                    <span class="text-xs text-on-surface-variant">{length(group.tools)} tools{if !group.enabled,
-                      do: " · disabled",
-                      else: ""}</span>
+                    <span class="font-medium"><span :if={group.unavailable}>MCP source unavailable · </span>{group.name}</span>
+                    <span class="text-xs text-on-surface-variant">
+                      {length(group.tools)} tools{if group.status, do: " · #{group.status}", else: ""}
+                    </span>
                   </div>
                   <.dm_select
                     name={"mcp_selection[sources][#{group.id}][mode]"}
@@ -818,6 +896,43 @@ defmodule SynapsisWeb.AgentLive.Agents do
                     value={name}
                   />
                 </div>
+              </div>
+
+              <div id="agent-deferred-tools" class="mt-6 space-y-3">
+                <div>
+                  <h4 class="font-medium">Deferred tools</h4>
+                  <p class="text-xs text-on-surface-variant">
+                    Selected tools listed here become available after tool search. Leave empty to show all selected tools immediately.
+                  </p>
+                </div>
+                <input type="hidden" name="agent[deferred_tool_names][]" value="" />
+                <label
+                  :for={tool <- @deferred_tools}
+                  data-unavailable-deferred-tool={if(!tool.available, do: tool.name)}
+                  class="flex items-start gap-2 text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    name="agent[deferred_tool_names][]"
+                    value={tool.name}
+                    checked={tool.name in @deferred_tool_names}
+                  />
+                  <span class="break-all font-mono">
+                    {tool.name}<span
+                      :if={!tool.available}
+                      class="ml-2 text-xs text-on-surface-variant"
+                    >unavailable or no longer selected</span>
+                  </span>
+                </label>
+                <p
+                  :if={Enum.any?(@deferred_tools, &(!&1.available))}
+                  class="text-xs text-warning"
+                >
+                  Saved unavailable entries are retained. Remove them to use the current selected catalog.
+                </p>
+                <p :if={@deferred_tools == []} class="text-xs text-on-surface-variant">
+                  Select tools above to make them available for deferral.
+                </p>
               </div>
 
               <div class="mt-5">
@@ -1047,7 +1162,10 @@ defmodule SynapsisWeb.AgentLive.Agents do
   defp apply_action(socket, :new, _params) do
     assign(socket,
       page_title: "New Agent",
+      browser_config_baseline: %{},
       agent: %AgentConfig{
+        tool_contract_version: 1,
+        tools: [],
         enabled: true,
         icon: "robot-outline",
         config: %{"mcp_selection" => %{"default" => "all", "sources" => %{}}}
@@ -1065,6 +1183,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
 
         assign(socket,
           page_title: "Agent Config",
+          browser_config_baseline: agent.config || %{},
           agent: agent,
           selected_skill_ids: AgentSkills.list_skill_ids(agent.id),
           active_config_tab: "overview",
@@ -1109,14 +1228,17 @@ defmodule SynapsisWeb.AgentLive.Agents do
       |> Map.put("model_tier", agent.model_tier || "default")
       |> Map.put("max_tokens", agent.max_tokens || 8192)
       |> Map.put("workspace_path", workspace_path(agent))
+      |> Map.put("web_allowed_hosts", web_allowed_hosts_value(agent))
       |> Map.put("permission_mode", permission_mode(agent))
       |> Map.put("toolset_ids", selected_toolset_ids(agent))
+      |> Map.put("deferred_tool_names", deferred_tool_names(agent))
       |> Map.put("provider_model_state", provider_model_state_value(agent))
       |> Map.put("fallback_model_state", fallback_model_state_value(agent))
 
     %{
       "agent" => values,
       "skill_ids" => skill_ids,
+      "browser_settings" => BrowserSettings.form_values(agent.config || %{}),
       "mcp_selection" => mcp_form_policy((agent.config || %{})["mcp_selection"])
     }
   end
@@ -1130,6 +1252,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
   defp after_agent_save(%{assigns: %{live_action: :config}} = socket, %AgentConfig{} = agent) do
     assign(socket,
       agent: agent,
+      browser_config_baseline: agent.config || %{},
       agents: AgentConfigs.list(),
       selected_skill_ids: AgentSkills.list_skill_ids(agent.id),
       form_revision: socket.assigns.form_revision + 1
@@ -1143,6 +1266,37 @@ defmodule SynapsisWeb.AgentLive.Agents do
 
   defp after_agent_save(socket, _agent), do: put_flash(socket, :info, "Agent saved")
 
+  defp save_browser_agent(attrs, params, socket, db_agent) do
+    config =
+      case db_agent do
+        nil ->
+          attrs["config"]
+
+        agent ->
+          case Map.fetch(agent.config || %{}, "browser") do
+            {:ok, browser} -> Map.put(attrs["config"], "browser", browser)
+            :error -> Map.delete(attrs["config"], "browser")
+          end
+      end
+
+    with :ok <- validate_deferred_tools(config, attrs, socket, db_agent),
+         {:ok, config} <-
+           BrowserSettings.apply_config(
+             config,
+             socket.assigns.browser_config_baseline,
+             params["browser_settings"]
+           ) do
+      attrs = Map.put(attrs, "config", config)
+      if db_agent, do: AgentConfigs.update(db_agent, attrs), else: AgentConfigs.create(attrs)
+    else
+      {:error, {:deferred_tools, _message}} = error ->
+        error
+
+      {:error, message} ->
+        {:error, {:browser_settings, message}}
+    end
+  end
+
   defp normalize_agent_attrs(attrs, agent) do
     {workspace_path, attrs} = Map.pop(attrs, "workspace_path")
 
@@ -1151,7 +1305,9 @@ defmodule SynapsisWeb.AgentLive.Agents do
     |> merge_fallback_model_state()
     |> Map.delete("provider_model_state")
     |> Map.delete("fallback_model_state")
-    |> normalize_toolset_attrs()
+    |> Map.delete("web_allowed_hosts")
+    |> Map.delete("deferred_tool_names")
+    |> normalize_toolset_attrs(agent)
     |> normalize_blank("provider")
     |> normalize_blank("model")
     |> normalize_blank("toolset_id")
@@ -1162,7 +1318,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
   end
 
   defp preview_agent(%AgentConfig{} = agent, attrs, providers) do
-    attrs = merge_fallback_model_state(attrs)
+    attrs = attrs |> merge_fallback_model_state() |> normalize_toolset_attrs(agent)
     provider = normalize_form_value(Map.get(attrs, "provider", agent.provider))
     models = models_for_provider(providers, provider)
     model = normalize_form_value(Map.get(attrs, "model", agent.model))
@@ -1208,22 +1364,31 @@ defmodule SynapsisWeb.AgentLive.Agents do
     end
   end
 
-  defp normalize_toolset_attrs(%{"toolset_ids" => raw_ids} = attrs) do
-    toolset_ids = normalize_toolset_ids(raw_ids)
+  defp normalize_toolset_attrs(%{"toolset_ids" => raw_ids} = attrs, agent) do
+    submitted = normalize_toolset_ids(raw_ids)
+    previous = selected_toolset_ids(agent)
+
+    {toolset_ids, toolset_id} =
+      if MapSet.new(submitted) == MapSet.new(previous) do
+        {agent.toolset_ids || [], agent.toolset_id}
+      else
+        ids = reconcile_selection(raw_toolset_ids(agent), submitted)
+        {ids, List.first(ids)}
+      end
 
     attrs
     |> Map.put("toolset_ids", toolset_ids)
-    |> Map.put("toolset_id", List.first(toolset_ids) || "")
+    |> Map.put("toolset_id", toolset_id || "")
   end
 
-  defp normalize_toolset_attrs(%{"toolset_id" => toolset_id} = attrs) do
+  defp normalize_toolset_attrs(%{"toolset_id" => toolset_id} = attrs, _agent) do
     case normalize_form_value(toolset_id) do
       nil -> Map.put(attrs, "toolset_ids", [])
       id -> Map.put(attrs, "toolset_ids", [id])
     end
   end
 
-  defp normalize_toolset_attrs(attrs), do: attrs
+  defp normalize_toolset_attrs(attrs, _agent), do: attrs
 
   defp normalize_toolset_ids(ids) do
     ids
@@ -1233,18 +1398,13 @@ defmodule SynapsisWeb.AgentLive.Agents do
   end
 
   defp preview_toolset_ids(%AgentConfig{}, %{"toolset_ids" => ids}) do
-    normalize_toolset_ids(ids)
-  end
-
-  defp preview_toolset_ids(%AgentConfig{toolset_ids: ids, toolset_id: legacy_id}, _attrs) do
-    selected_toolset_ids(%AgentConfig{toolset_ids: ids, toolset_id: legacy_id})
-  end
-
-  defp preview_legacy_toolset_id(%AgentConfig{}, %{"toolset_ids" => ids}) do
     ids
-    |> normalize_toolset_ids()
-    |> List.first()
   end
+
+  defp preview_toolset_ids(%AgentConfig{toolset_ids: ids}, _attrs), do: ids
+
+  defp preview_legacy_toolset_id(%AgentConfig{}, %{"toolset_id" => id}),
+    do: normalize_form_value(id)
 
   defp preview_legacy_toolset_id(%AgentConfig{} = agent, _attrs), do: agent.toolset_id
 
@@ -1397,6 +1557,158 @@ defmodule SynapsisWeb.AgentLive.Agents do
     agent
     |> agent_config_map()
     |> Map.put("workspace_path", normalize_workspace_path(submitted_path, agent, attrs))
+    |> web_fetch_config(attrs)
+    |> deferred_tools_config(attrs)
+  end
+
+  defp deferred_tools_config(config, %{"deferred_tool_names" => submitted})
+       when is_list(submitted) do
+    submitted = Enum.reject(submitted, &(&1 == ""))
+    previous = Map.get(config, "deferred_tool_names", [])
+
+    if is_list(previous) do
+      names =
+        Enum.filter(previous, &(&1 in submitted)) ++
+          Enum.reject(submitted, &(&1 in previous))
+
+      if names == [] and not Map.has_key?(config, "deferred_tool_names"),
+        do: config,
+        else: Map.put(config, "deferred_tool_names", names)
+    else
+      # An unrelated save must not reinterpret an unavailable saved value.
+      if submitted == [], do: config, else: Map.put(config, "deferred_tool_names", submitted)
+    end
+  end
+
+  defp deferred_tools_config(config, %{"deferred_tool_names" => value}),
+    do: Map.put(config, "deferred_tool_names", value)
+
+  defp deferred_tools_config(config, _attrs), do: config
+
+  defp deferred_tool_names(agent) do
+    case agent_config_map(agent)["deferred_tool_names"] do
+      names when is_list(names) -> Enum.filter(names, &(is_binary(&1) and &1 != ""))
+      _ -> []
+    end
+  end
+
+  defp deferred_tool_choices(agent, toolsets, groups, policy) do
+    names = selected_deferred_tool_names(agent, toolsets, groups, policy)
+    available = Enum.map(names, &%{name: &1, available: true})
+
+    unavailable =
+      agent
+      |> deferred_tool_names()
+      |> Enum.reject(&(&1 in names))
+      |> Enum.uniq()
+      |> Enum.map(&%{name: &1, available: false})
+
+    available ++ unavailable
+  end
+
+  defp selected_deferred_tool_names(agent, toolsets, groups, policy) do
+    if native_tool_selection?(agent, toolsets) do
+      known = MapSet.new(Synapsis.Agent.Tools.DisplayCatalog.list(), & &1.name)
+
+      builtins =
+        agent
+        |> agent_tool_names(selected_toolsets(agent, toolsets))
+        |> Enum.filter(&MapSet.member?(known, &1))
+
+      mcp =
+        Enum.flat_map(groups, fn group ->
+          mode = if group.mode == "inherit", do: policy["default"], else: group.mode
+
+          if group.enabled and group.status == :available do
+            group.tools
+            |> Enum.filter(
+              &(&1.available and
+                  (mode == "all" or
+                     (mode == "selected" and &1.name in group.selected)))
+            )
+            |> Enum.map(&"mcp::#{group.id}::#{&1.name}")
+          else
+            []
+          end
+        end)
+
+      Enum.uniq(builtins ++ mcp)
+    else
+      []
+    end
+  end
+
+  defp validate_deferred_tools(config, attrs, socket, db_agent) do
+    names = Map.get(config, "deferred_tool_names", [])
+    saved = if db_agent, do: Map.get(db_agent.config || %{}, "deferred_tool_names", []), else: []
+
+    if names === saved do
+      :ok
+    else
+      agent = %{
+        socket.assigns.agent
+        | toolset_ids: attrs["toolset_ids"] || socket.assigns.agent.toolset_ids,
+          toolset_id: normalize_form_value(attrs["toolset_id"]),
+          config: config
+      }
+
+      policy = mcp_normalize_policy(config["mcp_selection"])
+      groups = mcp_groups(socket.assigns.mcp_sources, socket.assigns.mcp_catalog, policy)
+      selected = selected_deferred_tool_names(agent, socket.assigns.toolsets, groups, policy)
+      retained = if is_list(saved), do: saved, else: []
+
+      if is_list(names) and Enum.all?(names, &(is_binary(&1) and &1 != "")) and
+           length(Enum.uniq(names)) == length(names) and
+           Enum.all?(names, &(&1 in selected or &1 in retained)) do
+        :ok
+      else
+        {:error,
+         {:deferred_tools, "Deferred tools must be unique names from the selected tools."}}
+      end
+    end
+  end
+
+  defp web_fetch_config(config, %{"web_allowed_hosts" => value}) when is_binary(value) do
+    if value == web_allowed_hosts_text(config) do
+      config
+    else
+      hosts =
+        value |> String.split(~r/\R/) |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == ""))
+
+      case hosts do
+        [] -> Map.delete(config, "web_allowed_hosts")
+        hosts -> Map.put(config, "web_allowed_hosts", hosts)
+      end
+    end
+  end
+
+  defp web_fetch_config(config, _attrs), do: config
+
+  # React keeps typed drafts, but its event adapter stringifies scalar values.
+  defp web_fetch_form_attrs(attrs, socket) do
+    case react_form_draft(socket.assigns, "agent-config-form") do
+      %{"agent" => %{"web_allowed_hosts" => value}}
+      when is_nil(value) or is_boolean(value) or is_number(value) ->
+        submitted = if is_nil(value), do: "", else: to_string(value)
+
+        if Map.get(attrs, "web_allowed_hosts") == submitted,
+          do: Map.put(attrs, "web_allowed_hosts", value),
+          else: attrs
+
+      _ ->
+        attrs
+    end
+  end
+
+  defp web_allowed_hosts_value(agent) do
+    agent |> agent_config_map() |> web_allowed_hosts_text()
+  end
+
+  defp web_allowed_hosts_text(config) do
+    case config["web_allowed_hosts"] do
+      hosts when is_list(hosts) -> hosts |> Enum.filter(&is_binary/1) |> Enum.join("\n")
+      _ -> ""
+    end
   end
 
   defp normalize_workspace_path(path, agent, attrs) when path in [nil, ""] do
@@ -1545,22 +1857,45 @@ defmodule SynapsisWeb.AgentLive.Agents do
     end)
   end
 
-  defp selected_toolset_ids(%AgentConfig{toolset_ids: ids}) when is_list(ids) and ids != [] do
-    normalize_toolset_ids(ids)
-  end
+  defp selected_toolset_ids(agent), do: agent |> raw_toolset_ids() |> normalize_toolset_ids()
 
-  defp selected_toolset_ids(%AgentConfig{toolset_id: id}) when not is_nil(id) and id != "",
+  defp raw_toolset_ids(%AgentConfig{toolset_ids: ids}) when is_list(ids) and ids != [], do: ids
+
+  defp raw_toolset_ids(%AgentConfig{toolset_id: id}) when not is_nil(id) and id != "",
     do: [id]
 
-  defp selected_toolset_ids(_agent), do: []
+  defp raw_toolset_ids(_agent), do: []
 
-  defp agent_tool_names(%AgentConfig{} = agent, []), do: agent.tools || []
-
-  defp agent_tool_names(_agent, toolsets) do
-    toolsets
-    |> Enum.flat_map(&(&1.tool_names || []))
-    |> Enum.uniq()
+  # Checkboxes express membership once per name. Retain the saved ordering and
+  # occurrences for names still selected, and append genuinely new choices.
+  defp reconcile_selection(previous, submitted) do
+    submitted = normalize_toolset_ids(submitted)
+    Enum.filter(previous, &(&1 in submitted)) ++ Enum.reject(submitted, &(&1 in previous))
   end
+
+  defp agent_tool_names(agent, toolsets) do
+    if selected_toolset_ids(agent) == [] do
+      agent.tools || []
+    else
+      toolsets |> Enum.flat_map(&(&1.tool_names || [])) |> Enum.uniq()
+    end
+  end
+
+  # Linked Toolsets replace direct tools. Their saved contracts determine the
+  # effective selection even when the Agent record itself is still version 0.
+  # This is display provenance only; runtime admission still checks raw records.
+  defp native_tool_selection?(%AgentConfig{} = agent, toolsets) do
+    case selected_toolset_ids(agent) do
+      [] ->
+        agent.tool_contract_version == 1
+
+      ids ->
+        selected = selected_toolsets(agent, toolsets)
+        length(selected) == length(ids) and Enum.all?(selected, &(&1.tool_contract_version == 1))
+    end
+  end
+
+  defp native_tool_selection?(_agent, _toolsets), do: false
 
   defp permission_mode_options do
     [
@@ -1572,6 +1907,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
 
   defp permission_mode(%AgentConfig{permission_mode: mode}), do: permission_mode(mode)
   defp permission_mode(mode) when mode in ["yolo", "ask", "restrict"], do: mode
+  defp permission_mode(mode) when mode in [nil, ""], do: "yolo"
   defp permission_mode(_mode), do: "ask"
 
   defp agent_label(%AgentConfig{name: nil, label: nil}), do: "Agent"
@@ -1603,29 +1939,62 @@ defmodule SynapsisWeb.AgentLive.Agents do
     "#{mode}, #{effort} reasoning"
   end
 
-  defp maybe_refresh_mcp(%{assigns: %{mcp_loading: true}} = socket), do: socket
-
   defp maybe_refresh_mcp(socket) do
-    if connected?(socket) and socket.assigns.live_action in [:new, :config] do
-      socket
-      |> assign(mcp_loading: true)
-      |> start_async(:agent_mcp_catalog, fn -> Synapsis.MCPSelection.refresh() end)
-    else
-      socket
+    cond do
+      native_tool_selection?(socket.assigns.agent, socket.assigns.toolsets) ->
+        assign_mcp_catalog(socket)
+
+      socket.assigns.mcp_loading ->
+        socket
+
+      connected?(socket) and socket.assigns.live_action in [:new, :config] ->
+        socket
+        |> assign(mcp_loading: true)
+        |> start_async(:agent_mcp_catalog, fn -> Synapsis.MCPSelection.refresh() end)
+
+      true ->
+        socket
     end
   end
 
   defp assign_mcp_catalog(socket) do
-    failures = socket.assigns.mcp_failures
+    if native_tool_selection?(socket.assigns.agent, socket.assigns.toolsets),
+      do: assign_native_mcp_catalog(socket),
+      else: assign_legacy_mcp_catalog(socket)
+  end
 
-    catalog =
-      if Map.has_key?(failures, "all"),
-        do: [],
-        else:
-          Synapsis.MCPSelection.catalog()
-          |> Enum.reject(&Map.has_key?(failures, &1.mcp_config_id))
+  defp assign_native_mcp_catalog(socket) do
+    {catalog, sources} =
+      Synapsis.MCPConfigs.list()
+      |> Enum.map(fn source ->
+        snapshot =
+          if Synapsis.MCPConfigs.runtime_available?(source),
+            do: Synapsis.MCP.runtime_snapshot(source.id),
+            else: {:error, :disabled}
 
-    assign(socket, mcp_catalog: catalog, mcp_sources: Synapsis.MCPConfigs.list())
+        {tools, status} =
+          case snapshot do
+            {:ok, %{source_id: id, tools: tools}} when id == source.id ->
+              {Enum.map(tools, fn tool ->
+                 %{mcp_config_id: source.id, mcp_tool_name: tool.raw_name}
+               end), :available}
+
+            _ ->
+              {[], if(source.enabled, do: :unavailable, else: :disabled)}
+          end
+
+        {tools, Map.put(source, :runtime_status, status)}
+      end)
+      |> Enum.unzip()
+
+    assign(socket, mcp_catalog: List.flatten(catalog), mcp_sources: sources)
+  end
+
+  defp assign_legacy_mcp_catalog(socket) do
+    assign(socket,
+      mcp_catalog: Synapsis.MCPSelection.display_catalog(),
+      mcp_sources: Synapsis.MCPConfigs.list()
+    )
   end
 
   defp mcp_initialize_policy(agent, sources) do
@@ -1634,10 +2003,45 @@ defmodule SynapsisWeb.AgentLive.Agents do
     if Map.has_key?(config, "mcp_selection") do
       agent
     else
-      names = Synapsis.Agent.Resolver.resolve(agent.name).tools
-      policy = Synapsis.MCPSelection.from_legacy(names, sources)
+      toolsets = Toolsets.list()
+
+      policy =
+        if native_tool_selection?(agent, toolsets) do
+          agent
+          |> agent_tool_names(selected_toolsets(agent, toolsets))
+          |> native_mcp_policy()
+        else
+          names = Synapsis.Agent.Resolver.resolve(agent.name).tools
+          Synapsis.MCPSelection.from_legacy(names, sources)
+        end
+
       %{agent | config: Map.put(config, "mcp_selection", policy)}
     end
+  end
+
+  defp native_mcp_policy(names) do
+    sources =
+      Enum.reduce(names, %{}, fn
+        "mcp::" <> qualified, sources ->
+          case String.split(qualified, "::", parts: 2) do
+            [id, raw] when raw != "" ->
+              if Ecto.UUID.cast(id) == {:ok, id} do
+                Map.update(sources, id, %{"mode" => "selected", "tools" => [raw]}, fn rule ->
+                  Map.update!(rule, "tools", &(&1 ++ [raw]))
+                end)
+              else
+                sources
+              end
+
+            _ ->
+              sources
+          end
+
+        _, sources ->
+          sources
+      end)
+
+    %{"default" => "selected", "sources" => sources}
   end
 
   defp mcp_preview(agent, params) do
@@ -1645,7 +2049,12 @@ defmodule SynapsisWeb.AgentLive.Agents do
       {:ok, policy} ->
         %{
           agent
-          | config: Map.put(agent.config || %{}, "mcp_selection", mcp_normalize_policy(policy))
+          | config:
+              Map.put(
+                agent.config || %{},
+                "mcp_selection",
+                mcp_normalize_policy(policy, (agent.config || %{})["mcp_selection"])
+              )
         }
 
       :error ->
@@ -1653,7 +2062,9 @@ defmodule SynapsisWeb.AgentLive.Agents do
     end
   end
 
-  defp mcp_normalize_policy(%{"default" => default} = policy)
+  defp mcp_normalize_policy(policy, previous \\ nil)
+
+  defp mcp_normalize_policy(%{"default" => default} = policy, previous)
        when default in ["all", "selected"] do
     sources =
       case policy["sources"] do
@@ -1661,11 +2072,19 @@ defmodule SynapsisWeb.AgentLive.Agents do
           Map.new(sources, fn {id, rule} ->
             mode = if is_map(rule), do: rule["mode"], else: "none"
             names = if is_map(rule), do: List.wrap(rule["tools"]), else: []
+            names = Enum.filter(names, &(is_binary(&1) and &1 != ""))
+
+            prior_rule = get_in(previous || %{}, ["sources", id])
+
+            names =
+              if is_map(prior_rule),
+                do: reconcile_selection(List.wrap(prior_rule["tools"]), names),
+                else: names
 
             {id,
              %{
                "mode" => mode,
-               "tools" => names |> Enum.filter(&(is_binary(&1) and &1 != "")) |> Enum.uniq()
+               "tools" => names
              }}
           end)
           |> Map.reject(fn {_id, rule} -> rule["mode"] in [nil, "", "inherit"] end)
@@ -1677,7 +2096,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
     %{"default" => default, "sources" => sources}
   end
 
-  defp mcp_normalize_policy(_), do: %{"default" => "selected", "sources" => %{}}
+  defp mcp_normalize_policy(_, _), do: %{"default" => "selected", "sources" => %{}}
 
   defp mcp_form_policy(policy) do
     policy = mcp_normalize_policy(policy)
@@ -1691,12 +2110,27 @@ defmodule SynapsisWeb.AgentLive.Agents do
   end
 
   defp mcp_groups(sources, catalog, policy) do
+    configured_ids = Enum.map(sources, & &1.id)
+
+    unavailable_sources =
+      policy["sources"]
+      |> Map.keys()
+      |> Enum.reject(&(&1 in configured_ids))
+      |> Enum.sort()
+      |> Enum.map(&%{id: &1, name: &1, enabled: false, unavailable: true})
+
+    sources = Enum.map(sources, &Map.put(&1, :unavailable, false)) ++ unavailable_sources
+
     Enum.map(sources, fn source ->
       rule = policy["sources"][source.id] || %{}
       selected = rule["tools"] || []
 
       available =
-        catalog |> Enum.filter(&(&1.mcp_config_id == source.id)) |> Enum.map(& &1.mcp_tool_name)
+        if source.unavailable do
+          []
+        else
+          catalog |> Enum.filter(&(&1.mcp_config_id == source.id)) |> Enum.map(& &1.mcp_tool_name)
+        end
 
       tools =
         Enum.sort(Enum.uniq(available ++ selected))
@@ -1706,6 +2140,13 @@ defmodule SynapsisWeb.AgentLive.Agents do
         id: source.id,
         name: source.name,
         enabled: source.enabled,
+        unavailable: source.unavailable,
+        status:
+          cond do
+            source.unavailable -> :unavailable
+            not source.enabled -> :disabled
+            true -> Map.get(source, :runtime_status)
+          end,
         mode: rule["mode"] || "inherit",
         selected: selected,
         tools: tools
@@ -1754,6 +2195,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
   defp fallback_tokens(_fallbacks), do: []
 
   defp save_error(%Ecto.Changeset{}), do: "Failed to save agent"
+  defp save_error({:deferred_tools, message}), do: message
   defp save_error(:unsupported_action), do: "Unsupported agent action"
   defp save_error(_reason), do: "Failed to save agent"
 end

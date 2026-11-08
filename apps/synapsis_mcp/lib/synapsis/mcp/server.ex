@@ -7,12 +7,9 @@ defmodule Synapsis.MCP.Server do
 
     * Start (and link to) a `Backplane.McpProtocol.Client` supervision tree
       built from a `Synapsis.MCPConfig` via `Synapsis.MCP.Transport.build/1`.
-    * Discover the server's tools and register each into
-      `Synapsis.Tool.Registry` as a process-dispatch tool pointing at this
-      GenServer.
-    * Route `{:execute, tool_name, input, ctx}` calls to the client.
-    * Unregister all tools on terminate (the registry also auto-purges when the
-      owner pid dies, but we unregister eagerly for promptness).
+    * Discover and retain source-owned tool metadata for native snapshots and UI.
+    * Dispatch native calls through caller-owned Backplane request handles.
+    * Invalidate source catalogs on refresh, failure, and termination.
 
   ## Process naming
 
@@ -34,17 +31,14 @@ defmodule Synapsis.MCP.Server do
   alias Synapsis.MCP.Transport
   alias Synapsis.MCPConfig
   alias Synapsis.MCPConfigs
-  alias Synapsis.Tool.Registry
 
   @client_info %{"name" => "synapsis", "version" => "0.1.0"}
   @capabilities %{"roots" => %{}}
   @await_timeout 15_000
   @discovery_timeout 30_000
   @ready_timeout @await_timeout + @discovery_timeout + 2_000
-  @tool_timeout 30_000
   @runtime_lookup_timeout 1_000
   @cancellation_timeout 1_000
-  @registry_retry_ms 100
 
   # --------------------------------------------------------------------------
   # Public API
@@ -61,7 +55,7 @@ defmodule Synapsis.MCP.Server do
     start(config, :reconciliation)
   end
 
-  @doc "Wait until initial discovery and tool registration have completed."
+  @doc "Wait until initial source discovery has completed."
   @spec await_ready(GenServer.server(), timeout()) :: :ok | {:error, term()}
   def await_ready(server, timeout \\ @ready_timeout)
       when is_integer(timeout) and timeout > 0 do
@@ -77,24 +71,22 @@ defmodule Synapsis.MCP.Server do
     :exit, reason -> {:error, ready_failure(reason)}
   end
 
-  @doc "Executes a native runtime tool call owned by the calling effect process."
-  @spec execute_runtime(GenServer.server(), String.t(), map(), map(), pos_integer()) ::
-          {:ok, String.t()} | {:error, term()}
-  def execute_runtime(server, tool_name, input, _context, timeout)
-      when is_integer(timeout) and timeout > 0 do
-    with {:ok, client, raw_name} <-
-           GenServer.call(
-             server,
-             {:runtime_tool, tool_name},
-             min(timeout, @runtime_lookup_timeout)
-           ),
-         {:ok, handle} <-
-           MCPClient.start_tool_call(client, raw_name, input,
-             registration_timeout: min(timeout, @runtime_lookup_timeout),
-             # Keep the handle live until its owner can cancel on await timeout.
-             timeout: timeout + @cancellation_timeout
-           ) do
-      case MCPClient.await_tool_call(handle, timeout) do
+  @doc "Capture a credential-free native source catalog, bound to this server incarnation."
+  def runtime_snapshot(server) do
+    GenServer.call(server, :runtime_snapshot, @runtime_lookup_timeout)
+  catch
+    :exit, _reason -> {:error, :mcp_unavailable}
+  end
+
+  @doc "Call an exact tool from an unchanged source snapshot, retaining the raw MCP result."
+  def runtime_call(%{server_pid: server} = snapshot, raw_name, input, timeout)
+      when is_pid(server) and is_binary(raw_name) and is_map(input) and
+             is_integer(timeout) and timeout > 0 do
+    deadline = System.monotonic_time(:millisecond) + timeout
+
+    with {:ok, ticket} <- lookup_source_tool(server, snapshot, raw_name, timeout),
+         {:ok, handle} <- register_source_call(ticket, raw_name, input, deadline) do
+      case MCPClient.await_tool_call(handle, remaining(deadline)) do
         {:error, %ProtocolError{reason: :request_timeout}} ->
           MCPClient.cancel_tool_call(handle, "tool_timeout",
             notification_timeout: @cancellation_timeout
@@ -103,13 +95,237 @@ defmodule Synapsis.MCP.Server do
           {:error, :timeout}
 
         result ->
-          runtime_result(result)
+          raw_runtime_result(result)
       end
     else
-      result -> runtime_result(result)
+      {:error, %ProtocolError{reason: reason}} -> {:rejected, {:mcp_error, reason}}
+      other -> other
     end
+  end
+
+  def runtime_call(_, _, _, _), do: {:rejected, :invalid_input}
+
+  @doc "List one resource page from an exact source snapshot, retaining the raw result."
+  def runtime_list_resources(snapshot, params, timeout),
+    do: runtime_resource_request(snapshot, :list, params, timeout)
+
+  @doc "List one resource-template page from an exact source snapshot."
+  def runtime_list_resource_templates(snapshot, params, timeout),
+    do: runtime_resource_request(snapshot, :templates, params, timeout)
+
+  @doc "Read a resource URI from an exact source snapshot, retaining ordered contents."
+  def runtime_read_resource(snapshot, params, timeout),
+    do: runtime_resource_request(snapshot, :read, params, timeout)
+
+  @doc """
+  Start a caller-owned resource request for a native resource scope.
+
+  Returns the public Backplane handle without awaiting it. The scope's finite
+  request and registration budgets include lookup and source-lock acquisition;
+  its absolute retirement deadline is forwarded unchanged.
+  """
+  def runtime_start_resource_request(
+        %{server_pid: server} = snapshot,
+        operation,
+        params,
+        reserved_options
+      )
+      when is_pid(server) and operation in [:list, :templates, :read] and is_map(params) and
+             not is_struct(params) and is_list(reserved_options) do
+    with true <- resource_params_valid?(operation, params),
+         true <- native_resource_options_valid?(reserved_options) do
+      now = System.monotonic_time(:millisecond)
+
+      deadline =
+        min(
+          reserved_options[:retirement_deadline],
+          now + reserved_options[:timeout]
+        )
+
+      registration_deadline = min(deadline, now + reserved_options[:registration_timeout])
+
+      with true <- remaining(registration_deadline) > 0,
+           {:ok, ticket} <-
+             lookup_source_resource(server, snapshot, remaining(registration_deadline)) do
+        register_source_request(
+          ticket,
+          deadline,
+          fn client, options -> start_resource_request(client, operation, params, options) end,
+          {reserved_options, registration_deadline}
+        )
+      else
+        false -> {:rejected, :timeout}
+        other -> other
+      end
+    else
+      false -> {:rejected, :invalid_input}
+    end
+  end
+
+  def runtime_start_resource_request(_, _, _, _), do: {:rejected, :invalid_input}
+
+  defp native_resource_options_valid?(options) do
+    Keyword.keyword?(options) and options[:track_retirement] == true and
+      is_integer(options[:timeout]) and options[:timeout] > 0 and
+      is_integer(options[:registration_timeout]) and options[:registration_timeout] > 0 and
+      is_integer(options[:retirement_deadline])
+  end
+
+  defp runtime_resource_request(%{server_pid: server} = snapshot, operation, params, timeout)
+       when is_pid(server) and is_map(params) and not is_struct(params) and
+              is_integer(timeout) and timeout > 0 do
+    deadline = System.monotonic_time(:millisecond) + timeout
+
+    with true <- resource_params_valid?(operation, params),
+         {:ok, ticket} <- lookup_source_resource(server, snapshot, timeout),
+         {:ok, handle} <-
+           register_source_request(ticket, deadline, fn client, options ->
+             start_resource_request(client, operation, params, options)
+           end) do
+      case MCPClient.await_resource_request(handle, remaining(deadline)) do
+        {:error, %ProtocolError{reason: :request_timeout}} ->
+          MCPClient.cancel_resource_request(handle, "resource_timeout",
+            notification_timeout: @cancellation_timeout
+          )
+
+          {:error, :timeout}
+
+        result ->
+          raw_runtime_result(result)
+      end
+    else
+      false -> {:rejected, :invalid_input}
+      {:error, %ProtocolError{reason: reason}} -> {:rejected, {:mcp_error, reason}}
+      other -> other
+    end
+  end
+
+  defp runtime_resource_request(_, _, _, _), do: {:rejected, :invalid_input}
+
+  defp resource_params_valid?(operation, params) do
+    meta = Map.get(params, "_meta", %{})
+
+    is_map(meta) and not is_struct(meta) and
+      case operation do
+        :read ->
+          Map.keys(params) -- ~w(uri _meta) == [] and is_binary(params["uri"]) and
+            params["uri"] != ""
+
+        operation when operation in [:list, :templates] ->
+          Map.keys(params) -- ~w(cursor _meta) == [] and
+            (not Map.has_key?(params, "cursor") or is_binary(params["cursor"]))
+      end
+  end
+
+  defp start_resource_request(client, operation, params, options) do
+    options = Keyword.put(options, :meta, Map.get(params, "_meta", %{}))
+
+    case operation do
+      :list ->
+        MCPClient.start_list_resources(client, Keyword.put(options, :cursor, params["cursor"]))
+
+      :templates ->
+        MCPClient.start_list_resource_templates(
+          client,
+          Keyword.put(options, :cursor, params["cursor"])
+        )
+
+      :read ->
+        MCPClient.start_read_resource(client, params["uri"], options)
+    end
+  end
+
+  defp lookup_source_resource(server, snapshot, timeout) do
+    GenServer.call(
+      server,
+      {:runtime_source_resource, snapshot},
+      min(timeout, @runtime_lookup_timeout)
+    )
   catch
-    :exit, {:timeout, _call} -> {:error, :timeout}
+    :exit, {:timeout, _call} -> {:rejected, :timeout}
+    :exit, _reason -> {:rejected, :stale_snapshot}
+  end
+
+  defp lookup_source_tool(server, snapshot, raw_name, timeout) do
+    GenServer.call(
+      server,
+      {:runtime_source_tool, snapshot, raw_name},
+      min(timeout, @runtime_lookup_timeout)
+    )
+  catch
+    :exit, {:timeout, _call} -> {:rejected, :timeout}
+    :exit, _reason -> {:rejected, :stale_snapshot}
+  end
+
+  defp register_source_call(ticket, raw_name, input, deadline) do
+    register_source_request(ticket, deadline, fn client, options ->
+      MCPClient.start_tool_call(client, raw_name, input, options)
+    end)
+  end
+
+  defp register_source_request(ticket, deadline, start_request, native_options \\ nil) do
+    # Refresh publication and persisted source changes use this same lock.
+    # Do not call Server while holding it: a refresh may be waiting on it.
+    # Registration still runs in the effect caller, retaining handle ownership.
+    registration_deadline =
+      case native_options do
+        nil -> deadline
+        {_options, registration_deadline} -> registration_deadline
+      end
+
+    result =
+      Synapsis.Config.Store.with_write_lock(
+        fn ->
+          cond do
+            not Process.alive?(ticket.server) or not is_pid(ticket.client) or
+              not Process.alive?(ticket.client) or :atomics.get(ticket.valid, 1) != 1 or
+              :atomics.get(ticket.valid, 2) != ticket.generation or
+              current_transport(ticket.config) != ticket.transport or
+                not current_runtime_available?(ticket.config, nil, ticket.trust_annotations) ->
+              {:rejected, :stale_snapshot}
+
+            remaining(registration_deadline) == 0 ->
+              {:rejected, :timeout}
+
+            true ->
+              remaining = remaining(deadline)
+
+              options =
+                if is_nil(native_options) do
+                  [
+                    registration_timeout: min(remaining, @runtime_lookup_timeout),
+                    timeout: remaining + @cancellation_timeout
+                  ]
+                else
+                  {reserved_options, _registration_deadline} = native_options
+
+                  reserved_options
+                  |> Keyword.put(
+                    :timeout,
+                    min(min(reserved_options[:timeout], 30_000), remaining)
+                  )
+                  |> Keyword.put(
+                    :registration_timeout,
+                    min(5_000, remaining(registration_deadline))
+                  )
+                end
+
+              start_request.(ticket.client, options)
+          end
+        end,
+        deadline: registration_deadline
+      )
+
+    case result do
+      {:error, :config_write_lock_unavailable} -> {:rejected, :timeout}
+      other -> other
+    end
+  end
+
+  @doc "Read display metadata without native call handles or legacy registrations."
+  def catalog(server) do
+    GenServer.call(server, :catalog, @runtime_lookup_timeout)
+  catch
     :exit, _reason -> {:error, :mcp_unavailable}
   end
 
@@ -143,10 +359,9 @@ defmodule Synapsis.MCP.Server do
               client: client_name,
               supervisor: supervisor,
               initial_availability: initial_availability,
-              tool_registry_ref: monitor_tool_registry(),
               tools: [],
-              tool_names: [],
-              catalog_valid: :atomics.new(1, []),
+              catalog_valid: :atomics.new(2, []),
+              catalog_generation: 0,
               refresh_task: nil,
               refresh_waiters: [],
               ready_waiters: [],
@@ -180,52 +395,66 @@ defmodule Synapsis.MCP.Server do
     {:noreply, if(state.refresh_task, do: state, else: begin_refresh(state))}
   end
 
-  def handle_call({:runtime_tool, full_tool_name}, _from, state) do
-    case discovered_tool(state.tools, full_tool_name) do
-      %{trust_annotations: trust_annotations} ->
-        if :atomics.get(state.catalog_valid, 1) == 1 and
-             current_transport(state.config) == state.transport and
-             current_runtime_available?(state.config, full_tool_name, trust_annotations) do
-          {:reply, {:ok, state.client, Response.raw_tool_name(full_tool_name)}, state}
-        else
-          {:reply, {:error, :mcp_unavailable}, state}
-        end
+  def handle_call(:runtime_snapshot, _from, state),
+    do: {:reply, source_snapshot(state), state}
 
-      nil ->
-        {:reply, {:error, :mcp_unavailable}, state}
-    end
+  def handle_call({:runtime_source_tool, snapshot, raw_name}, _from, state) do
+    result =
+      case source_snapshot(state) do
+        {:ok, ^snapshot} ->
+          case Enum.find(state.tools, &(&1.mcp_tool_name == raw_name)) do
+            nil ->
+              {:rejected, :tool_unavailable}
+
+            tool ->
+              {:ok, source_ticket(state, tool.trust_annotations)}
+          end
+
+        _ ->
+          {:rejected, :stale_snapshot}
+      end
+
+    {:reply, result, state}
   end
 
-  def handle_call({:execute, full_tool_name, input, _ctx}, _from, state) do
-    case discovered_tool(state.tools, full_tool_name) do
-      %{trust_annotations: trust_annotations} ->
-        if :atomics.get(state.catalog_valid, 1) == 1 and
-             current_transport(state.config) == state.transport and
-             current_runtime_available?(state.config, full_tool_name, trust_annotations) do
-          execute_tool(state.client, full_tool_name, input, state)
-        else
-          {:reply, {:error, :mcp_unavailable}, state}
-        end
+  def handle_call({:runtime_source_resource, snapshot}, _from, state) do
+    result =
+      case source_snapshot(state) do
+        {:ok, ^snapshot} -> {:ok, source_ticket(state, false)}
+        _ -> {:rejected, :stale_snapshot}
+      end
 
-      nil ->
-        {:reply, {:error, :mcp_unavailable}, state}
-    end
+    {:reply, result, state}
   end
 
-  defp execute_tool(client, full_tool_name, input, state) do
-    raw = Response.raw_tool_name(full_tool_name)
+  def handle_call(:catalog, _from, state) do
+    result =
+      if catalog_available?(state) do
+        {:ok,
+         Enum.map(state.tools, fn tool ->
+           Map.take(tool, [
+             :name,
+             :description,
+             :parameters,
+             :annotations,
+             :permission_level,
+             :mcp_config_id,
+             :mcp_tool_name
+           ])
+         end)}
+      else
+        {:error, :mcp_unavailable}
+      end
 
-    case MCPClient.call_tool(client, raw, input, timeout: @tool_timeout) do
-      {:ok, response} ->
-        {:reply, {:ok, Response.content(ProtocolResponse.unwrap(response))}, state}
-
-      {:error, error} ->
-        {:reply, {:error, inspect(error)}, state}
-    end
+    {:reply, result, state}
   end
 
-  defp runtime_result({:ok, response}),
-    do: {:ok, Response.content(ProtocolResponse.unwrap(response))}
+  # Old callers must not crash the source process or enter the native path.
+  def handle_call({:runtime_tool, _name}, _from, state),
+    do: {:reply, {:error, :legacy_mcp_execution_retired}, state}
+
+  def handle_call({:execute, _name, _input, _context}, _from, state),
+    do: {:reply, {:error, :legacy_mcp_execution_retired}, state}
 
   defp runtime_result({:error, %ProtocolError{reason: reason}})
        when reason in [:request_timeout, :registration_timeout],
@@ -235,6 +464,29 @@ defmodule Synapsis.MCP.Server do
     do: {:error, {:mcp_error, reason}}
 
   defp runtime_result({:error, reason}), do: {:error, reason}
+
+  defp raw_runtime_result({:ok, response}) do
+    case ProtocolResponse.unwrap(response) do
+      result when is_map(result) -> {:ok, result}
+      _ -> {:error, :invalid_mcp_result}
+    end
+  end
+
+  defp raw_runtime_result(error), do: runtime_result(error)
+
+  defp remaining(deadline), do: max(0, deadline - System.monotonic_time(:millisecond))
+
+  defp source_ticket(state, trust_annotations) do
+    %{
+      server: self(),
+      client: GenServer.whereis(state.client),
+      config: state.config,
+      transport: state.transport,
+      valid: state.catalog_valid,
+      generation: state.catalog_generation,
+      trust_annotations: trust_annotations
+    }
+  end
 
   @impl true
   def handle_info({ref, result}, %{refresh_task: %{ref: ref}} = state) do
@@ -256,35 +508,13 @@ defmodule Synapsis.MCP.Server do
     {:stop, {:shutdown, {:client_exited, reason}}, state}
   end
 
-  def handle_info({:DOWN, ref, :process, _pid, _reason}, %{tool_registry_ref: ref} = state) do
-    Process.send_after(self(), :reregister_tools, @registry_retry_ms)
-    {:noreply, %{state | tool_registry_ref: nil, tool_names: []}}
-  end
-
-  def handle_info(:reregister_tools, %{tools: tools} = state) do
-    with true <- current_transport(state.config) == state.transport,
-         true <- :atomics.get(state.catalog_valid, 1) == 1,
-         :ok <- tool_registry_ready(),
-         {:ok, names} <- register_tools(tools),
-         {:ok, ref} <- monitor_tool_registry_ready() do
-      Logger.info("mcp_tools_reregistered", server: state.config.name, count: length(names))
-      {:noreply, %{state | tool_registry_ref: ref, tool_names: names}}
-    else
-      false ->
-        {:noreply, state}
-
-      {:error, _reason} ->
-        Process.send_after(self(), :reregister_tools, @registry_retry_ms)
-        {:noreply, state}
-    end
-  end
-
   def handle_info(_msg, state), do: {:noreply, state}
 
   @impl true
-  def terminate(_reason, %{tool_names: names} = state) do
+  def terminate(_reason, %{catalog_valid: _valid} = state) do
+    :atomics.put(state.catalog_valid, 1, 0)
     if task = Map.get(state, :refresh_task), do: Task.shutdown(task, :brutal_kill)
-    Enum.each(names, &Registry.unregister(&1, self()))
+    notify_catalog_changed(state, :stopped)
     :ok
   end
 
@@ -298,14 +528,6 @@ defmodule Synapsis.MCP.Server do
     GenServer.start_link(__MODULE__, {config, initial_availability}, name: via(config.name))
   end
 
-  defp register_tools(tools) do
-    {:ok, Enum.map(tools, &register_tool/1)}
-  rescue
-    e in ArgumentError -> {:error, Exception.message(e)}
-  catch
-    :exit, reason -> {:error, reason}
-  end
-
   defp ready_result(:ok), do: :ok
   defp ready_result({:error, reason}), do: {:error, {:discover_failed, reason}}
 
@@ -313,53 +535,6 @@ defmodule Synapsis.MCP.Server do
   defp ready_failure({:noproc, {GenServer, :call, _details}}), do: :mcp_not_running
   defp ready_failure({reason, {GenServer, :call, _details}}), do: reason
   defp ready_failure(reason), do: reason
-
-  defp register_tool(%{
-         name: name,
-         description: description,
-         parameters: parameters,
-         annotations: annotations,
-         trust_annotations: trust_annotations,
-         availability_check: availability_check,
-         permission_level: permission_level,
-         mcp_config_id: config_id,
-         mcp_tool_name: raw_name
-       }) do
-    Registry.register_process(name, self(),
-      description: description,
-      parameters: parameters,
-      timeout: @tool_timeout,
-      runtime_dispatch: __MODULE__,
-      plugin: :mcp,
-      mcp_config_id: config_id,
-      mcp_tool_name: raw_name,
-      category: :mcp,
-      permission_level: permission_level,
-      trust_annotations: trust_annotations,
-      availability_check: availability_check,
-      annotations: annotations
-    )
-
-    name
-  end
-
-  defp monitor_tool_registry do
-    case Process.whereis(Registry) do
-      nil -> nil
-      pid -> Process.monitor(pid)
-    end
-  end
-
-  defp tool_registry_ready do
-    if Process.whereis(Registry), do: :ok, else: {:error, :registry_not_started}
-  end
-
-  defp monitor_tool_registry_ready do
-    case Process.whereis(Registry) do
-      nil -> {:error, :registry_not_started}
-      pid -> {:ok, Process.monitor(pid)}
-    end
-  end
 
   defp current_runtime_available?(
          %MCPConfig{id: nil} = config,
@@ -395,16 +570,11 @@ defmodule Synapsis.MCP.Server do
     end
   end
 
-  defp attach_availability_checks(tools, config, valid, transport) do
+  defp attach_source_identity(tools, config) do
     Enum.map(tools, fn tool ->
       tool
       |> Map.put(:mcp_config_id, config.id)
       |> Map.put(:mcp_tool_name, Response.raw_tool_name(tool.name))
-      |> Map.put(:availability_check, fn ->
-        :atomics.get(valid, 1) == 1 and
-          current_runtime_available?(config, tool.name, tool.trust_annotations) and
-          current_transport(config) == transport
-      end)
     end)
   end
 
@@ -442,8 +612,8 @@ defmodule Synapsis.MCP.Server do
       Task.Supervisor.async_nolink(Synapsis.MCP.TaskSupervisor, fn ->
         if current_transport(config) == transport do
           with :ok <- MCPClient.await_ready(client, timeout: @await_timeout),
-               {:ok, tools} <- discover_pages(client, nil, MapSet.new(), [], 0) do
-            {:ok, tools}
+               {:ok, tools, metadata} <- discover_source_tools(client, config.name) do
+            {:ok, tools, metadata}
           end
         else
           {:error, :connection_changed}
@@ -452,6 +622,40 @@ defmodule Synapsis.MCP.Server do
 
     Process.send_after(self(), {:refresh_timeout, task.ref}, @await_timeout + @discovery_timeout)
     %{state | refresh_task: task}
+  end
+
+  defp discover_source_tools(client, server_name) do
+    case MCPClient.get_protocol_info(client, timeout: @runtime_lookup_timeout) do
+      %{negotiation_status: :ready, server_capabilities: capabilities} = info
+      when is_map(capabilities) ->
+        result =
+          if Map.has_key?(capabilities, "resources") and not Map.has_key?(capabilities, "tools"),
+            do: {:ok, []},
+            else: discover_pages(client, nil, MapSet.new(), [], 0)
+
+        with {:ok, tools} <- result do
+          {:ok, tools, source_metadata(info, server_name)}
+        end
+
+      _ ->
+        {:error, :mcp_unavailable}
+    end
+  end
+
+  defp source_metadata(info, server_name) do
+    metadata = %{server_name: server_name}
+
+    case info do
+      %{era: :modern, discovery: %{"instructions" => instructions}}
+      when is_binary(instructions) ->
+        Map.merge(metadata, %{instructions_status: "available", instructions: instructions})
+
+      %{era: :modern} ->
+        Map.put(metadata, :instructions_status, "not_advertised")
+
+      _ ->
+        Map.put(metadata, :instructions_status, "not_retained_legacy")
+    end
   end
 
   defp discover_pages(_client, _cursor, _seen, _tools, 100), do: {:error, :mcp_page_limit}
@@ -485,47 +689,59 @@ defmodule Synapsis.MCP.Server do
   defp finish_refresh(state, result) do
     result =
       Synapsis.Config.Store.with_write_lock(fn ->
-        if current_transport(state.config) == state.transport do
-          register_refresh_result(state, result)
-        else
-          {:error, :connection_changed}
+        result =
+          if current_transport(state.config) == state.transport do
+            prepare_refresh_result(state, result)
+          else
+            {:error, :connection_changed}
+          end
+
+        case result do
+          {:ok, _tools} ->
+            :atomics.put(state.catalog_valid, 2, state.catalog_generation + 1)
+            :atomics.put(state.catalog_valid, 1, 1)
+
+          _ ->
+            :atomics.put(state.catalog_valid, 1, 0)
         end
+
+        result
       end)
 
     {reply, state} =
       case result do
-        {:ok, tools, names} ->
-          :atomics.put(state.catalog_valid, 1, 1)
-          {:ok, %{state | tools: tools, tool_names: names}}
+        {:ok, tools} ->
+          {:ok,
+           %{
+             state
+             | tools: tools,
+               catalog_generation: state.catalog_generation + 1
+           }}
 
         {:error, reason} ->
           :atomics.put(state.catalog_valid, 1, 0)
-          Enum.each(state.tool_names, &Registry.unregister(&1, self()))
-          {{:error, reason}, %{state | tools: [], tool_names: []}}
+          {{:error, reason}, %{state | tools: []}}
       end
 
+    notify_catalog_changed(state, if(reply == :ok, do: :ready, else: :unavailable))
     Enum.each(state.refresh_waiters, &GenServer.reply(&1, reply))
     Enum.each(state.ready_waiters, &GenServer.reply(&1, ready_result(reply)))
     %{state | refresh_task: nil, refresh_waiters: [], ready_waiters: [], discovery_result: reply}
   end
 
-  defp register_refresh_result(state, result) do
+  defp prepare_refresh_result(state, result) do
     case result do
-      {:ok, raw_tools} ->
+      {:ok, raw_tools, metadata} ->
         tools =
           %{"tools" => raw_tools}
           |> Response.tools(state.config.name,
             trust_annotations: MCPConfigs.trust_tool_annotations?(state.config)
           )
           |> runtime_available_tools(state.config, state.initial_availability)
-          |> attach_availability_checks(state.config, state.catalog_valid, state.transport)
+          |> attach_source_identity(state.config)
+          |> Enum.map(&Map.put(&1, :source_metadata, metadata))
 
-        Enum.each(state.tool_names, &Registry.unregister(&1, self()))
-
-        case register_tools(tools) do
-          {:ok, names} -> {:ok, tools, names}
-          {:error, reason} -> {:error, reason}
-        end
+        {:ok, tools}
 
       other ->
         other
@@ -537,8 +753,51 @@ defmodule Synapsis.MCP.Server do
 
   defp annotation_trust_available?(_config, false), do: true
 
-  defp discovered_tool(tools, full_tool_name),
-    do: Enum.find(tools, &(&1.name == full_tool_name))
+  defp notify_catalog_changed(state, status) do
+    Phoenix.PubSub.broadcast(
+      Synapsis.PubSub,
+      "tool_registry",
+      {:mcp_source_catalog_changed,
+       %{source_id: state.config.id, source_name: state.config.name, status: status}}
+    )
+  end
+
+  defp catalog_available?(state) do
+    :atomics.get(state.catalog_valid, 1) == 1 and
+      current_transport(state.config) == state.transport and
+      current_runtime_available?(state.config, nil, false) and
+      Enum.all?(state.tools, fn tool ->
+        current_runtime_available?(state.config, tool.name, tool.trust_annotations)
+      end)
+  end
+
+  defp source_snapshot(state) do
+    if is_binary(state.config.id) and catalog_available?(state) do
+      tools =
+        Enum.map(state.tools, fn tool ->
+          tool
+          |> Map.take([
+            :description,
+            :parameters,
+            :annotations,
+            :permission_level,
+            :output_schema,
+            :source_metadata
+          ])
+          |> Map.put(:raw_name, tool.mcp_tool_name)
+        end)
+
+      {:ok,
+       %{
+         source_id: state.config.id,
+         server_pid: self(),
+         generation: state.catalog_generation,
+         tools: tools
+       }}
+    else
+      {:error, :mcp_unavailable}
+    end
+  end
 
   defp initial_transport(config) do
     Synapsis.Config.Store.with_write_lock(fn ->

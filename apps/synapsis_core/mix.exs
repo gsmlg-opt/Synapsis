@@ -33,7 +33,8 @@ defmodule SynapsisCore.MixProject do
     [
       {:synapsis_data, in_umbrella: true},
       {:synapsis_provider, in_umbrella: true},
-      {:backplane_skill_protocol, "~> 1.10.31"},
+      {:backplane_agent_runtime, "~> 1.10.61"},
+      {:backplane_skill_protocol, "~> 1.10.57"},
       {:phoenix_pubsub, "~> 2.4.1"},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
@@ -42,8 +43,9 @@ defmodule SynapsisCore.MixProject do
       {:jason, "~> 1.4"},
       {:yaml_elixir, "~> 2.11"},
       {:toml, "~> 0.7"},
+      {:tzdata, "~> 1.2.2"},
       {:file_system, "~> 1.0"},
-      {:bypass, "~> 2.1", only: :test}
+      {:gaoxy_test, "~> 0.15.1", only: :test}
     ]
   end
 

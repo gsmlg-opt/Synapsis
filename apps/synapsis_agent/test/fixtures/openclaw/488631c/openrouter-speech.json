@@ -1,0 +1,4113 @@
+{
+  "schemaVersion": 1,
+  "referencePin": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+  "harness": {
+    "path": "scripts/openclaw/capture-openrouter-speech.mjs",
+    "sha256": "d9ef8255fd380a55e0cd04d63cc8844f8b95154349ced636f0f4fc0fc7ff20ec"
+  },
+  "checkout": {
+    "before": {
+      "verified": true,
+      "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+      "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+      "verifiedTrackedFiles": 58558,
+      "filesSha256": "fb299c6a234f52cfcf20e3618cd11582d07e47a7773cba1334064ebdaf9fddec"
+    },
+    "after": {
+      "verified": true,
+      "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+      "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+      "verifiedTrackedFiles": 58558,
+      "filesSha256": "fb299c6a234f52cfcf20e3618cd11582d07e47a7773cba1334064ebdaf9fddec"
+    }
+  },
+  "transformation": {
+    "api": "node:module.stripTypeScriptTypes",
+    "options": {
+      "mode": "transform",
+      "sourceMap": false
+    },
+    "sdkFacades": [
+      {
+        "module": "openclaw/plugin-sdk/speech-provider",
+        "source": "export { createOpenAiCompatibleSpeechProvider } from \"src/tts/openai-compatible-speech-provider.ts\";\n",
+        "sha256": "b54414e2299af7c9955822e73bce0e578b04acbf204428b02a3d5b9f39fbaed3"
+      },
+      {
+        "module": "openclaw/plugin-sdk/string-coerce-runtime",
+        "source": "export { asOptionalRecord } from \"packages/normalization-core/src/record-coerce.ts\";\n",
+        "sha256": "8f1f1112ae584681d9089d929261631f87133b344dc17259e93d5b30a3e6ac2c"
+      },
+      {
+        "module": "@openclaw/normalization-core/record-coerce",
+        "source": "export { asOptionalRecord, asOptionalObjectRecord } from \"packages/normalization-core/src/record-coerce.ts\";\n",
+        "sha256": "382f20f9ae967cddfc550ef7aad3647c513ff3c90052b4fe7832e2d0ad4f2a76"
+      },
+      {
+        "module": "@openclaw/normalization-core/string-coerce",
+        "source": "export { normalizeOptionalLowercaseString, normalizeOptionalString } from \"packages/normalization-core/src/string-coerce.ts\";\n",
+        "sha256": "00b21ddd66b6d6f529553b7e4dae1fa820b9d0ccb7fa0402710ddcaa49319134"
+      },
+      {
+        "module": "@openclaw/normalization-core/number-coercion",
+        "source": "export { asFiniteNumber, asFiniteNumberInRange, parseStrictFiniteNumber } from \"packages/normalization-core/src/number-coercion.ts\";\n",
+        "sha256": "ce3b471fc1a004c73cb036b292904592a41bdba542e5664c058861a9902d7ca3"
+      }
+    ],
+    "staticImports": [
+      {
+        "importer": "extensions/openrouter/speech-provider.ts",
+        "specifier": "openclaw/plugin-sdk/speech-provider",
+        "resolved": "openclaw/plugin-sdk/speech-provider"
+      },
+      {
+        "importer": "extensions/openrouter/speech-provider.ts",
+        "specifier": "openclaw/plugin-sdk/string-coerce-runtime",
+        "resolved": "openclaw/plugin-sdk/string-coerce-runtime"
+      },
+      {
+        "importer": "extensions/openrouter/speech-provider.ts",
+        "specifier": "./provider-defaults.js",
+        "resolved": "extensions/openrouter/provider-defaults.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/speech-provider",
+        "specifier": "src/tts/openai-compatible-speech-provider.ts",
+        "resolved": "src/tts/openai-compatible-speech-provider.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/string-coerce-runtime",
+        "specifier": "packages/normalization-core/src/record-coerce.ts",
+        "resolved": "packages/normalization-core/src/record-coerce.ts"
+      },
+      {
+        "importer": "src/tts/openai-compatible-speech-provider.ts",
+        "specifier": "@openclaw/normalization-core/number-coercion",
+        "resolved": "@openclaw/normalization-core/number-coercion"
+      },
+      {
+        "importer": "src/tts/openai-compatible-speech-provider.ts",
+        "specifier": "@openclaw/normalization-core/record-coerce",
+        "resolved": "@openclaw/normalization-core/record-coerce"
+      },
+      {
+        "importer": "src/tts/openai-compatible-speech-provider.ts",
+        "specifier": "@openclaw/normalization-core/string-coerce",
+        "resolved": "@openclaw/normalization-core/string-coerce"
+      },
+      {
+        "importer": "src/tts/openai-compatible-speech-provider.ts",
+        "specifier": "openclaw/plugin-sdk/secret-input",
+        "resolved": "openclaw/plugin-sdk/secret-input"
+      },
+      {
+        "importer": "src/tts/openai-compatible-speech-provider.ts",
+        "specifier": "../shared/dot-path.js",
+        "resolved": "src/shared/dot-path.ts"
+      },
+      {
+        "importer": "src/tts/openai-compatible-speech-provider.ts",
+        "specifier": "./directive-parser.js",
+        "resolved": "src/tts/directive-parser.ts"
+      },
+      {
+        "importer": "@openclaw/normalization-core/number-coercion",
+        "specifier": "packages/normalization-core/src/number-coercion.ts",
+        "resolved": "packages/normalization-core/src/number-coercion.ts"
+      },
+      {
+        "importer": "@openclaw/normalization-core/record-coerce",
+        "specifier": "packages/normalization-core/src/record-coerce.ts",
+        "resolved": "packages/normalization-core/src/record-coerce.ts"
+      },
+      {
+        "importer": "@openclaw/normalization-core/string-coerce",
+        "specifier": "packages/normalization-core/src/string-coerce.ts",
+        "resolved": "packages/normalization-core/src/string-coerce.ts"
+      },
+      {
+        "importer": "src/shared/dot-path.ts",
+        "specifier": "@openclaw/normalization-core/record-coerce",
+        "resolved": "@openclaw/normalization-core/record-coerce"
+      },
+      {
+        "importer": "src/shared/dot-path.ts",
+        "specifier": "../infra/prototype-keys.js",
+        "resolved": "src/infra/prototype-keys.ts"
+      },
+      {
+        "importer": "src/shared/dot-path.ts",
+        "specifier": "./path-array-index.js",
+        "resolved": "src/shared/path-array-index.ts"
+      },
+      {
+        "importer": "src/tts/directive-parser.ts",
+        "specifier": "./directive-number.js",
+        "resolved": "src/tts/directive-number.ts"
+      },
+      {
+        "importer": "packages/normalization-core/src/number-coercion.ts",
+        "specifier": "./string-coerce.ts",
+        "resolved": "packages/normalization-core/src/string-coerce.ts"
+      },
+      {
+        "importer": "src/tts/directive-number.ts",
+        "specifier": "@openclaw/normalization-core/number-coercion",
+        "resolved": "@openclaw/normalization-core/number-coercion"
+      },
+      {
+        "importer": "src/tts/tts-provider-resolution.ts",
+        "specifier": "../../packages/normalization-core/src/number-coercion.js",
+        "resolved": "packages/normalization-core/src/number-coercion.ts"
+      },
+      {
+        "importer": "src/tts/tts-provider-resolution.ts",
+        "specifier": "../../packages/normalization-core/src/record-coerce.js",
+        "resolved": "packages/normalization-core/src/record-coerce.ts"
+      },
+      {
+        "importer": "src/tts/tts-provider-resolution.ts",
+        "specifier": "../../packages/normalization-core/src/string-coerce.js",
+        "resolved": "packages/normalization-core/src/string-coerce.ts"
+      },
+      {
+        "importer": "src/tts/tts-provider-resolution.ts",
+        "specifier": "../plugins/sdk-deprecation.js",
+        "resolved": "src/plugins/sdk-deprecation.ts"
+      },
+      {
+        "importer": "src/tts/tts-provider-resolution.ts",
+        "specifier": "./provider-registry-core.js",
+        "resolved": "src/tts/provider-registry-core.ts"
+      },
+      {
+        "importer": "src/tts/tts-provider-resolution.ts",
+        "specifier": "./provider-registry.js",
+        "resolved": "src/tts/provider-registry.ts"
+      },
+      {
+        "importer": "src/tts/tts-provider-resolution.ts",
+        "specifier": "./speaker.js",
+        "resolved": "src/tts/speaker.ts"
+      },
+      {
+        "importer": "src/tts/tts-provider-resolution.ts",
+        "specifier": "./tts-settings.js",
+        "resolved": "src/tts/tts-settings.ts"
+      },
+      {
+        "importer": "src/tts/tts-provider-resolution.ts",
+        "specifier": "./voice-models.js",
+        "resolved": "src/tts/voice-models.ts"
+      }
+    ],
+    "dynamicImports": [
+      {
+        "importer": "src/tts/openai-compatible-speech-provider.ts",
+        "specifier": "../plugin-sdk/provider-http.js",
+        "resolved": "src/plugin-sdk/provider-http.ts"
+      }
+    ]
+  },
+  "sourceAudit": [
+    {
+      "path": "extensions/openrouter/speech-provider.ts",
+      "gitBlob": "192e790f8a66c10b166436c968451e9ecefa757b",
+      "sourceSha256": "86ddfcda48da581be3e59b904bebd57b198e0b55b118dbf90863b298aff3804c",
+      "executableSha256": "4dc0f53b190e861b361c56c2fb42a25660fe37b33d12b5d0cb23d11ea60a1b20",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "extensions/openrouter/provider-defaults.ts",
+      "gitBlob": "fac13c767ad989c9877f8c0c43b68848740e5058",
+      "sourceSha256": "4679f1d4c6856ed26ae072724f0638fac7c425bbb5859d3f15dc0716bc93b8b3",
+      "executableSha256": "4679f1d4c6856ed26ae072724f0638fac7c425bbb5859d3f15dc0716bc93b8b3",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "src/tts/openai-compatible-speech-provider.ts",
+      "gitBlob": "0bcd7628b558d42ac92e7be96f4ff8226ca5839f",
+      "sourceSha256": "4f93687fb3b8f7ff5fd9324f05681ee5a05c5d34dd965f352be1fe3c6fead2c1",
+      "executableSha256": "62594c30d8f8d4e703e2bd63d1c2fa3327248c6202691ae07e389d9ae4206e34",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "src/tts/directive-parser.ts",
+      "gitBlob": "5c532ddbb3543dce4c0d2008f27c8f6113f83589",
+      "sourceSha256": "5f629cc79bf82a2783885fbf97e87d87045c01b852298ba9e781c5b996c48329",
+      "executableSha256": "ce851780e5334aa7fa7df68425c1aa0d74eaa94e1aafc578e19bb294cf86943f",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "src/tts/directive-number.ts",
+      "gitBlob": "99f652f291ff6aa43dff23d3b79be1350fb80268",
+      "sourceSha256": "9d87677afe48ecc851ca209efdb820ef3c191b642a5e9c4f8b483cef57aaed4a",
+      "executableSha256": "1d50bc3491581e30f5bd95ac592f677ccd693ba5360ccbb36cd3bb2d702e0175",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "src/shared/dot-path.ts",
+      "gitBlob": "2ba3b8a9892ce07354886b2002efbf31f456edf3",
+      "sourceSha256": "96b660741309bc8a0ac25f23832dde94917f362355cbb34e4575c2348b4d33af",
+      "executableSha256": "3f4bd4b32d27309f432e860048d343c03a8acdf87328b070771240d1bfa28076",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "src/shared/path-array-index.ts",
+      "gitBlob": "65c545a6d4e80fe5f9c36c2ac7598bdfd786ca9f",
+      "sourceSha256": "64f62645a4a81f01874e0e1d0aae2607efcc8f1f94f62ecf0d4f1fd49695647c",
+      "executableSha256": "f8a4b970d3782381427656a96c2b663647c2ecb7ae69cd57df0b85c3cb5433b6",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "src/infra/prototype-keys.ts",
+      "gitBlob": "59eb0764f9127a07f4adbd9ccef53e79e455b355",
+      "sourceSha256": "edfede2ab3564d9d29675b7a4e8bd15e3fbe4dd9472174381fcd7ade67cde73f",
+      "executableSha256": "dbc32693f372f33d28dafb3b20f0ca2823112783ca88107b13ac3cb737890022",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "packages/normalization-core/src/string-coerce.ts",
+      "gitBlob": "445a9cc4f8daff07f033c3958baf2b798e240e9d",
+      "sourceSha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf",
+      "executableSha256": "9a2e05da77f15162560fe904c20ba9a49a6e6996e8b8c9bc16fd611f8456f504",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "packages/normalization-core/src/number-coercion.ts",
+      "gitBlob": "00ac5bda035cd8e854059a0198c2a9a7928e1bc9",
+      "sourceSha256": "8c40eca65a8fd1dc3aa40d90c22bff35c3710fcb03d2bc8227864a264d20ddc4",
+      "executableSha256": "2f2d58d34e9b77067ea265333fb06a807ce0cdcad83639d6c257095bb9f69a97",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "packages/normalization-core/src/record-coerce.ts",
+      "gitBlob": "78eba9cd0e4c75f94e71dfb3fcb7f4cf4eeeef16",
+      "sourceSha256": "541c179840c2cad4edc5c8103f77cc7f8c6b1ee5ec3e52c7c9fe097b18917f1c",
+      "executableSha256": "4ca2e6e901c28a07ae5fc9b29719cce5c26c919c65ab235b4ae2d5eaf0ec338c",
+      "wholeModule": true,
+      "executed": true
+    },
+    {
+      "path": "src/tts/tts-provider-resolution.ts",
+      "gitBlob": "e3920fd65863aae7c4f047c1aa1793eb221235cc",
+      "sourceSha256": "5a0f1b849fd67433401b19b5b56adbd62d1e4636fcd6220708e54412140673d7",
+      "executableSha256": "42161958345df48dc7005006a86fac1cc72b5e3ef41799f47618b8f01229e24e",
+      "wholeModule": true,
+      "executed": true
+    }
+  ],
+  "dataAudit": [
+    {
+      "path": "extensions/openrouter/openclaw.plugin.json",
+      "gitBlob": "901dc764300197ec80b58ae56965eb9bd4638ca4",
+      "sourceSha256": "27607ddf251e388bf91c8a6facac37b0acad3105a7a195810864785f1de004fd",
+      "usage": "complete original plugin manifest provenance; plugin registration unexecuted"
+    },
+    {
+      "path": "LICENSE",
+      "gitBlob": "ed064819ab537575d0cad902f7e5af4a3488b1d0",
+      "sourceSha256": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4",
+      "usage": "complete original source license provenance"
+    }
+  ],
+  "pluginManifest": {
+    "id": "openrouter",
+    "categories": [
+      "models"
+    ],
+    "capabilityCatalogEntry": "./capability-catalog.ts",
+    "activation": {
+      "onStartup": false
+    },
+    "enabledByDefault": true,
+    "managesOwnAvailability": true,
+    "providers": [
+      "openrouter"
+    ],
+    "modelCatalog": {
+      "discovery": {
+        "openrouter": "runtime"
+      },
+      "providers": {
+        "openrouter": {
+          "models": [
+            {
+              "id": "typesafe/jev-1.13",
+              "name": "TypeSafe: Jev 1.13",
+              "baseUrl": "https://openrouter.ai/api/v1",
+              "input": [
+                "text",
+                "image"
+              ],
+              "contextWindow": 262144,
+              "inference": {
+                "chat": false,
+                "decision": {
+                  "protocol": "openrouter-systemone",
+                  "input": [
+                    "text",
+                    "image"
+                  ],
+                  "questions": {
+                    "boolean": {
+                      "probabilities": "boolean",
+                      "abstention": false
+                    },
+                    "choice": {
+                      "probabilities": "categorical",
+                      "abstention": false,
+                      "minOptions": 2,
+                      "maxOptions": 255
+                    },
+                    "score": {
+                      "probabilities": "categorical",
+                      "abstention": false,
+                      "minOptions": 2,
+                      "maxOptions": 10
+                    }
+                  },
+                  "confidence": "provider-specific",
+                  "reasoning": {
+                    "modes": [
+                      "auto"
+                    ]
+                  },
+                  "limits": {
+                    "maxStateAndQuestionTokens": 262144,
+                    "image": {
+                      "maxBytes": 4194304,
+                      "mimeTypes": [
+                        "image/png",
+                        "image/jpeg"
+                      ],
+                      "remoteUrls": false
+                    }
+                  },
+                  "billing": {
+                    "unit": "tokens",
+                    "source": "provider-docs",
+                    "usdPerMillion": {
+                      "input": 0.042,
+                      "output": 0
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": "typesafe/jev-1.14",
+              "name": "TypeSafe: Jev 1.14",
+              "baseUrl": "https://openrouter.ai/api/v1",
+              "input": [
+                "text",
+                "image"
+              ],
+              "contextWindow": 262144,
+              "inference": {
+                "chat": false,
+                "decision": {
+                  "protocol": "openrouter-systemone",
+                  "input": [
+                    "text",
+                    "image"
+                  ],
+                  "questions": {
+                    "boolean": {
+                      "probabilities": "boolean",
+                      "abstention": false
+                    },
+                    "choice": {
+                      "probabilities": "categorical",
+                      "abstention": false,
+                      "minOptions": 2,
+                      "maxOptions": 255
+                    },
+                    "score": {
+                      "probabilities": "categorical",
+                      "abstention": false,
+                      "minOptions": 2,
+                      "maxOptions": 10
+                    },
+                    "box": {
+                      "probabilities": "none",
+                      "abstention": false
+                    }
+                  },
+                  "confidence": "provider-specific",
+                  "reasoning": {
+                    "modes": [
+                      "auto"
+                    ]
+                  },
+                  "limits": {
+                    "maxStateAndQuestionTokens": 262144,
+                    "image": {
+                      "maxBytes": 4194304,
+                      "mimeTypes": [
+                        "image/png",
+                        "image/jpeg"
+                      ],
+                      "remoteUrls": false
+                    }
+                  },
+                  "billing": {
+                    "unit": "tokens",
+                    "source": "provider-docs",
+                    "usdPerMillion": {
+                      "input": 0.042,
+                      "output": 0
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": "~typesafe/jev-latest",
+              "name": "TypeSafe: Jev (latest)",
+              "baseUrl": "https://openrouter.ai/api/v1",
+              "input": [
+                "text",
+                "image"
+              ],
+              "contextWindow": 262144,
+              "inference": {
+                "chat": false,
+                "decision": {
+                  "protocol": "openrouter-systemone",
+                  "input": [
+                    "text",
+                    "image"
+                  ],
+                  "questions": {
+                    "boolean": {
+                      "probabilities": "boolean",
+                      "abstention": false
+                    },
+                    "choice": {
+                      "probabilities": "categorical",
+                      "abstention": false,
+                      "minOptions": 2,
+                      "maxOptions": 255
+                    },
+                    "score": {
+                      "probabilities": "categorical",
+                      "abstention": false,
+                      "minOptions": 2,
+                      "maxOptions": 10
+                    },
+                    "box": {
+                      "probabilities": "none",
+                      "abstention": false
+                    }
+                  },
+                  "confidence": "provider-specific",
+                  "reasoning": {
+                    "modes": [
+                      "auto"
+                    ]
+                  },
+                  "limits": {
+                    "maxStateAndQuestionTokens": 262144,
+                    "image": {
+                      "maxBytes": 4194304,
+                      "mimeTypes": [
+                        "image/png",
+                        "image/jpeg"
+                      ],
+                      "remoteUrls": false
+                    }
+                  },
+                  "billing": {
+                    "unit": "tokens",
+                    "source": "provider-docs"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "modelIdNormalization": {
+      "providers": {
+        "openrouter": {
+          "prefixWhenBare": "openrouter"
+        }
+      }
+    },
+    "modelPricing": {
+      "providers": {
+        "openrouter": {
+          "openRouter": {
+            "provider": "openrouter"
+          },
+          "modelsDev": false,
+          "liteLLM": false
+        }
+      }
+    },
+    "providerEndpoints": [
+      {
+        "endpointClass": "openrouter",
+        "hostSuffixes": [
+          "openrouter.ai"
+        ]
+      }
+    ],
+    "providerRequest": {
+      "providers": {
+        "openrouter": {
+          "family": "openrouter"
+        }
+      }
+    },
+    "setup": {
+      "providers": [
+        {
+          "id": "openrouter",
+          "envVars": [
+            "OPENROUTER_API_KEY"
+          ]
+        }
+      ]
+    },
+    "providerAuthChoices": [
+      {
+        "provider": "openrouter",
+        "method": "api-key",
+        "choiceId": "openrouter-api-key",
+        "appGuidedSecret": true,
+        "choiceLabel": "OpenRouter API key",
+        "groupId": "openrouter",
+        "groupLabel": "OpenRouter",
+        "groupHint": "OAuth or API key",
+        "onboardingScopes": [
+          "text-inference",
+          "music-generation"
+        ],
+        "optionKey": "openrouterApiKey",
+        "cliFlag": "--openrouter-api-key",
+        "cliOption": "--openrouter-api-key <key>",
+        "cliDescription": "OpenRouter API key"
+      },
+      {
+        "provider": "openrouter",
+        "method": "oauth",
+        "choiceId": "openrouter-oauth",
+        "credentialOnly": true,
+        "appGuidedAuth": "oauth",
+        "channelLogin": {},
+        "choiceLabel": "OpenRouter OAuth",
+        "choiceHint": "Browser sign-in",
+        "groupId": "openrouter",
+        "groupLabel": "OpenRouter",
+        "groupHint": "OAuth or API key",
+        "onboardingScopes": [
+          "text-inference",
+          "music-generation"
+        ],
+        "onboardingFeatured": true
+      }
+    ],
+    "contracts": {
+      "mediaUnderstandingProviders": [
+        "openrouter"
+      ],
+      "imageGenerationProviders": [
+        "openrouter"
+      ],
+      "musicGenerationProviders": [
+        "openrouter"
+      ],
+      "videoGenerationProviders": [
+        "openrouter"
+      ],
+      "speechProviders": [
+        "openrouter"
+      ],
+      "usageProviders": [
+        "openrouter"
+      ],
+      "decisionProviders": [
+        "openrouter"
+      ]
+    },
+    "mediaUnderstandingProviderMetadata": {
+      "openrouter": {
+        "capabilities": [
+          "image",
+          "audio"
+        ],
+        "defaultModels": {
+          "image": "auto",
+          "audio": "openai/whisper-large-v3-turbo"
+        },
+        "autoPriority": {
+          "audio": 35
+        }
+      }
+    },
+    "configSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {}
+    }
+  },
+  "license": {
+    "path": "LICENSE",
+    "text": "MIT License\n\nCopyright (c) 2026 OpenClaw Foundation\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+  },
+  "platformBoundaries": [
+    {
+      "module": "openclaw/plugin-sdk/secret-input",
+      "originalSourceExecuted": false,
+      "exports": {
+        "normalizeResolvedSecretInputString": "returns explicit fixture string or undefined; production secret resolution unexecuted"
+      }
+    },
+    {
+      "module": "src/plugin-sdk/provider-http.ts",
+      "originalSourceExecuted": false,
+      "exports": {
+        "resolveProviderHttpRequestConfig": "records original arguments; returns Headers(defaultHeaders) and supplied policy fields without applying policy; original resolver unexecuted",
+        "postJsonRequest": "records complete declared URL, headers, body, timeout, policy fields and fetch binding presence; returns synthetic opaque successful response and counted release; original HTTP unexecuted",
+        "assertOkOrThrowHttpError": "records successful response status and label; original HTTP error handling unexecuted",
+        "readProviderBinaryResponse": "records successful response/reader arguments and cap/callback presence; returns exact opaque fixture bytes; original reader unexecuted"
+      }
+    },
+    {
+      "module": "src/plugins/sdk-deprecation.ts",
+      "originalSourceExecuted": false,
+      "exports": {
+        "warnPluginSdkDeprecation": "uninvoked throwing binding for unrelated complete timeout-resolver exports; original module unexecuted"
+      }
+    },
+    {
+      "module": "src/tts/provider-registry-core.ts",
+      "originalSourceExecuted": false,
+      "exports": {
+        "compareSpeechProviderOrder": "uninvoked throwing binding for unrelated complete timeout-resolver exports; original module unexecuted"
+      }
+    },
+    {
+      "module": "src/tts/provider-registry.ts",
+      "originalSourceExecuted": false,
+      "exports": {
+        "canonicalizeSpeechProviderId": "uninvoked throwing binding for unrelated complete timeout-resolver exports; original module unexecuted",
+        "getSpeechProvider": "uninvoked throwing binding for unrelated complete timeout-resolver exports; original module unexecuted",
+        "listSpeechProviders": "uninvoked throwing binding for unrelated complete timeout-resolver exports; original module unexecuted",
+        "normalizeSpeechProviderId": "uninvoked throwing binding for unrelated complete timeout-resolver exports; original module unexecuted"
+      }
+    },
+    {
+      "module": "src/tts/speaker.ts",
+      "originalSourceExecuted": false,
+      "exports": {
+        "withSpeakerSelectionCompat": "uninvoked throwing binding for unrelated complete timeout-resolver exports; original module unexecuted"
+      }
+    },
+    {
+      "module": "src/tts/tts-settings.ts",
+      "originalSourceExecuted": false,
+      "exports": {
+        "DEFAULT_TTS_TIMEOUT_MS": "undefined binding; fallback branch unused by all four positive timeout inputs; original constant module unexecuted",
+        "asProviderConfig": "uninvoked throwing binding for unrelated complete timeout-resolver exports; original module unexecuted",
+        "normalizeConfiguredSpeechProviderId": "uninvoked throwing binding for unrelated complete timeout-resolver exports; original module unexecuted",
+        "readTtsPrefs": "uninvoked throwing binding for unrelated complete timeout-resolver exports; original module unexecuted",
+        "resolveTtsPersonaFromPrefs": "uninvoked throwing binding for unrelated complete timeout-resolver exports; original module unexecuted",
+        "resolveTtsRuntimeConfig": "uninvoked throwing binding for unrelated complete timeout-resolver exports; original module unexecuted"
+      }
+    },
+    {
+      "module": "src/tts/voice-models.ts",
+      "originalSourceExecuted": false,
+      "exports": {
+        "resolvePrimaryVoiceProviderCandidate": "uninvoked throwing binding for unrelated complete timeout-resolver exports; original module unexecuted",
+        "resolveSupportedVoiceModelRefs": "uninvoked throwing binding for unrelated complete timeout-resolver exports; original module unexecuted",
+        "resolveVoiceModelRefs": "uninvoked throwing binding for unrelated complete timeout-resolver exports; original module unexecuted",
+        "resolveVoiceProviderCandidates": "uninvoked throwing binding for unrelated complete timeout-resolver exports; original module unexecuted",
+        "voiceProviderSupportsModel": "uninvoked throwing binding for unrelated complete timeout-resolver exports; original module unexecuted"
+      }
+    },
+    {
+      "module": "globalThis",
+      "originalSourceExecuted": false,
+      "exports": {
+        "fetch": "uninvoked throwing global binding passed through to synthetic postJsonRequest; no fetch executes"
+      }
+    }
+  ],
+  "environmentFixture": {
+    "env": {},
+    "cfg": {}
+  },
+  "hostAdaptation": {
+    "config": "Original raw nested/legacy config and overrides are oracle inputs; host implementation is unqualified.",
+    "response": "Eight opaque bytes with MP3/PCM source metadata; no audio decoding, codec validation, transcoding or native publication.",
+    "headers": "Original header and policy arguments are provenance only; authentication and transport/security parity are untested.",
+    "talk": "Ordinary provider resolveTalkConfig/resolveTalkOverrides callbacks only; actual Talk/channel pipeline unexecuted."
+  },
+  "counts": {
+    "observations": 16,
+    "synthesisCallbacks": 16,
+    "telephonyCallbacks": 0,
+    "httpRequests": 16,
+    "releases": 16,
+    "listVoicesCallbacks": 16,
+    "talkConfigObservations": 3,
+    "talkOverrideObservations": 4,
+    "timeoutObservations": 4,
+    "totalObservations": 27,
+    "wholeModules": 12,
+    "trackedFilesBefore": 58558,
+    "trackedFilesAfter": 58558
+  },
+  "limits": [
+    "All 58,558 pinned tracked blobs verified before and after; complete source modules, plugin manifest and LICENSE additionally checked against pinned Git bytes and hashes.",
+    "Whole-module execution means evaluation, not all exports; original factory, resolveConfig, listVoices, synthesize, resolveTalkConfig and resolveTalkOverrides execute.",
+    "Pure SDK facades contain export wiring only; actual normalization, config-path helper and directive-parser construction execute. Directive dispatch and isConfigured are unexecuted.",
+    "Original complete timeout resolver receives the actual provider object; resolvePositiveTimeoutMs and original clampTimerTimeoutMs execute for ordinary positive default/config/per-call inputs.",
+    "Unrelated timeout-resolver registry/settings/speaker/voice helpers are explicit uninvoked throwing bindings; DEFAULT_TTS_TIMEOUT_MS is undefined and its fallback branch is unused.",
+    "Fresh per-vector VM process.env={} and cfg={}; only explicit fixture keys cross a synthetic secret boundary. Production secrets, ambient credentials and plugin loading are unexecuted.",
+    "Original synthesis constructs URL, Headers inputs, JSON body and timeout; synthetic provider HTTP returns an opaque successful response and counted release. Global fetch is a passed-through uninvoked throwing binding.",
+    "Provider HTTP configuration, status handling and binary reader originals are unexecuted; policy flags, fetchFn, supplied cap and callback presence are provenance only, with no security or budget claim.",
+    "12345 ms is the synthesis request timeout; the separate original timeout resolver observes provider/config/per-call choices. 2000 ms bounds VM/capture execution only.",
+    "Talk configuration callbacks preserve ordinary inputs/results; actual Talk/channel pipeline and telephony are unexecuted. Voice-note target does not establish native publication.",
+    "No security/permission/authentication/TLS, negative/error/failure/cancel/crash/mixed/budget/truncation/eviction/threshold/race, real provider or remote MCP execution."
+  ],
+  "observations": [
+    {
+      "id": "default-file",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech"
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech"
+            }
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openrouter-speech",
+        "model": "hexgrad/kokoro-82m",
+        "voice": "af_alloy"
+      },
+      "providerMetadata": {
+        "id": "openrouter",
+        "label": "OpenRouter",
+        "autoSelectOrder": 35,
+        "defaultModel": "hexgrad/kokoro-82m",
+        "defaultTimeoutMs": 120000,
+        "models": [
+          "hexgrad/kokoro-82m",
+          "elevenlabs/eleven-turbo-v2",
+          "google/gemini-3.1-flash-tts-preview",
+          "mistralai/voxtral-mini-tts-2603"
+        ],
+        "voices": [
+          "af_alloy"
+        ]
+      },
+      "listVoices": [
+        {
+          "id": "af_alloy",
+          "name": "af_alloy"
+        }
+      ],
+      "synthesisRequest": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "hexgrad/kokoro-82m",
+          "voice": "af_alloy"
+        },
+        "cfg": {}
+      },
+      "synthesisRequestAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "hexgrad/kokoro-82m",
+          "voice": "af_alloy"
+        },
+        "cfg": {}
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/audio/speech",
+        "headers": {
+          "authorization": "Bearer fixture-openrouter-speech",
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "hexgrad/kokoro-82m",
+          "input": "Plain speech fixture.",
+          "voice": "af_alloy",
+          "response_format": "mp3"
+        },
+        "timeoutMs": 12345,
+        "fetchFnProvided": true,
+        "allowPrivateNetwork": false
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/octet-stream"
+        },
+        "audioBase64": "UklGRgABAv8="
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": true
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey",
+          "value": "fixture-openrouter-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "resolveProviderHttpRequestConfig",
+          "input": {
+            "baseUrl": "https://openrouter.ai/api/v1",
+            "defaultBaseUrl": "https://openrouter.ai/api/v1",
+            "allowPrivateNetwork": false,
+            "defaultHeaders": {
+              "Authorization": "Bearer fixture-openrouter-speech",
+              "Content-Type": "application/json"
+            },
+            "provider": "openrouter",
+            "capability": "audio",
+            "transport": "http"
+          }
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "postJsonRequest"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "assertOkOrThrowHttpError",
+          "status": 200,
+          "label": "OpenRouter TTS API error"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "readProviderBinaryResponse",
+          "status": 200,
+          "label": "OpenRouter TTS API error",
+          "kind": "audio",
+          "optionsProvided": false,
+          "maxBytesProvided": false,
+          "overflowCallbackProvided": false
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "configured",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech",
+              "baseUrl": "https://openrouter.ai/v1/",
+              "modelId": "google/gemini-3.1-flash-tts-preview",
+              "voiceId": "Kore",
+              "speed": 1.1,
+              "responseFormat": " MP3 ",
+              "provider": {
+                "options": {
+                  "openai": {
+                    "instructions": "Speak warmly."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech",
+              "baseUrl": "https://openrouter.ai/v1/",
+              "modelId": "google/gemini-3.1-flash-tts-preview",
+              "voiceId": "Kore",
+              "speed": 1.1,
+              "responseFormat": " MP3 ",
+              "provider": {
+                "options": {
+                  "openai": {
+                    "instructions": "Speak warmly."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openrouter-speech",
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "model": "google/gemini-3.1-flash-tts-preview",
+        "voice": "Kore",
+        "speed": 1.1,
+        "responseFormat": "mp3",
+        "provider": {
+          "options": {
+            "openai": {
+              "instructions": "Speak warmly."
+            }
+          }
+        }
+      },
+      "providerMetadata": {
+        "id": "openrouter",
+        "label": "OpenRouter",
+        "autoSelectOrder": 35,
+        "defaultModel": "hexgrad/kokoro-82m",
+        "defaultTimeoutMs": 120000,
+        "models": [
+          "hexgrad/kokoro-82m",
+          "elevenlabs/eleven-turbo-v2",
+          "google/gemini-3.1-flash-tts-preview",
+          "mistralai/voxtral-mini-tts-2603"
+        ],
+        "voices": [
+          "af_alloy"
+        ]
+      },
+      "listVoices": [
+        {
+          "id": "af_alloy",
+          "name": "af_alloy"
+        }
+      ],
+      "synthesisRequest": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "baseUrl": "https://openrouter.ai/api/v1",
+          "model": "google/gemini-3.1-flash-tts-preview",
+          "voice": "Kore",
+          "speed": 1.1,
+          "responseFormat": "mp3",
+          "provider": {
+            "options": {
+              "openai": {
+                "instructions": "Speak warmly."
+              }
+            }
+          }
+        },
+        "cfg": {}
+      },
+      "synthesisRequestAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "baseUrl": "https://openrouter.ai/api/v1",
+          "model": "google/gemini-3.1-flash-tts-preview",
+          "voice": "Kore",
+          "speed": 1.1,
+          "responseFormat": "mp3",
+          "provider": {
+            "options": {
+              "openai": {
+                "instructions": "Speak warmly."
+              }
+            }
+          }
+        },
+        "cfg": {}
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/audio/speech",
+        "headers": {
+          "authorization": "Bearer fixture-openrouter-speech",
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "google/gemini-3.1-flash-tts-preview",
+          "input": "Plain speech fixture.",
+          "voice": "Kore",
+          "response_format": "mp3",
+          "speed": 1.1,
+          "provider": {
+            "options": {
+              "openai": {
+                "instructions": "Speak warmly."
+              }
+            }
+          }
+        },
+        "timeoutMs": 12345,
+        "fetchFnProvided": true,
+        "allowPrivateNetwork": false
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/octet-stream"
+        },
+        "audioBase64": "UklGRgABAv8="
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": true
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey",
+          "value": "fixture-openrouter-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "resolveProviderHttpRequestConfig",
+          "input": {
+            "baseUrl": "https://openrouter.ai/api/v1",
+            "defaultBaseUrl": "https://openrouter.ai/api/v1",
+            "allowPrivateNetwork": false,
+            "defaultHeaders": {
+              "Authorization": "Bearer fixture-openrouter-speech",
+              "Content-Type": "application/json"
+            },
+            "provider": "openrouter",
+            "capability": "audio",
+            "transport": "http"
+          }
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "postJsonRequest"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "assertOkOrThrowHttpError",
+          "status": 200,
+          "label": "OpenRouter TTS API error"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "readProviderBinaryResponse",
+          "status": 200,
+          "label": "OpenRouter TTS API error",
+          "kind": "audio",
+          "optionsProvided": false,
+          "maxBytesProvided": false,
+          "overflowCallbackProvided": false
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "custom-prefix",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech",
+              "baseUrl": "https://speech.example/router/v7///",
+              "model": "mistralai/voxtral-mini-tts-2603",
+              "voice": "ordinary-voice",
+              "speed": 0.9,
+              "provider": {
+                "order": [
+                  "ordinary-route"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech",
+              "baseUrl": "https://speech.example/router/v7///",
+              "model": "mistralai/voxtral-mini-tts-2603",
+              "voice": "ordinary-voice",
+              "speed": 0.9,
+              "provider": {
+                "order": [
+                  "ordinary-route"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openrouter-speech",
+        "baseUrl": "https://speech.example/router/v7",
+        "model": "mistralai/voxtral-mini-tts-2603",
+        "voice": "ordinary-voice",
+        "speed": 0.9,
+        "provider": {
+          "order": [
+            "ordinary-route"
+          ]
+        }
+      },
+      "providerMetadata": {
+        "id": "openrouter",
+        "label": "OpenRouter",
+        "autoSelectOrder": 35,
+        "defaultModel": "hexgrad/kokoro-82m",
+        "defaultTimeoutMs": 120000,
+        "models": [
+          "hexgrad/kokoro-82m",
+          "elevenlabs/eleven-turbo-v2",
+          "google/gemini-3.1-flash-tts-preview",
+          "mistralai/voxtral-mini-tts-2603"
+        ],
+        "voices": [
+          "af_alloy"
+        ]
+      },
+      "listVoices": [
+        {
+          "id": "af_alloy",
+          "name": "af_alloy"
+        }
+      ],
+      "synthesisRequest": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "baseUrl": "https://speech.example/router/v7",
+          "model": "mistralai/voxtral-mini-tts-2603",
+          "voice": "ordinary-voice",
+          "speed": 0.9,
+          "provider": {
+            "order": [
+              "ordinary-route"
+            ]
+          }
+        },
+        "cfg": {}
+      },
+      "synthesisRequestAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "baseUrl": "https://speech.example/router/v7",
+          "model": "mistralai/voxtral-mini-tts-2603",
+          "voice": "ordinary-voice",
+          "speed": 0.9,
+          "provider": {
+            "order": [
+              "ordinary-route"
+            ]
+          }
+        },
+        "cfg": {}
+      },
+      "request": {
+        "url": "https://speech.example/router/v7/audio/speech",
+        "headers": {
+          "authorization": "Bearer fixture-openrouter-speech",
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "mistralai/voxtral-mini-tts-2603",
+          "input": "Plain speech fixture.",
+          "voice": "ordinary-voice",
+          "response_format": "mp3",
+          "speed": 0.9,
+          "provider": {
+            "order": [
+              "ordinary-route"
+            ]
+          }
+        },
+        "timeoutMs": 12345,
+        "fetchFnProvided": true,
+        "allowPrivateNetwork": false
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/octet-stream"
+        },
+        "audioBase64": "UklGRgABAv8="
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": true
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey",
+          "value": "fixture-openrouter-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "resolveProviderHttpRequestConfig",
+          "input": {
+            "baseUrl": "https://speech.example/router/v7",
+            "defaultBaseUrl": "https://openrouter.ai/api/v1",
+            "allowPrivateNetwork": false,
+            "defaultHeaders": {
+              "Authorization": "Bearer fixture-openrouter-speech",
+              "Content-Type": "application/json"
+            },
+            "provider": "openrouter",
+            "capability": "audio",
+            "transport": "http"
+          }
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "postJsonRequest"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "assertOkOrThrowHttpError",
+          "status": 200,
+          "label": "OpenRouter TTS API error"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "readProviderBinaryResponse",
+          "status": 200,
+          "label": "OpenRouter TTS API error",
+          "kind": "audio",
+          "optionsProvided": false,
+          "maxBytesProvided": false,
+          "overflowCallbackProvided": false
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "overrides",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech",
+              "modelId": "elevenlabs/eleven-turbo-v2",
+              "voiceId": "configured-voice",
+              "speed": 0.8
+            }
+          }
+        },
+        "providerOverrides": {
+          "model": " google/gemini-3.1-flash-tts-preview ",
+          "voice": " Kore ",
+          "speed": 1.2
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech",
+              "modelId": "elevenlabs/eleven-turbo-v2",
+              "voiceId": "configured-voice",
+              "speed": 0.8
+            }
+          }
+        },
+        "providerOverrides": {
+          "model": " google/gemini-3.1-flash-tts-preview ",
+          "voice": " Kore ",
+          "speed": 1.2
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openrouter-speech",
+        "model": "elevenlabs/eleven-turbo-v2",
+        "voice": "configured-voice",
+        "speed": 0.8
+      },
+      "providerMetadata": {
+        "id": "openrouter",
+        "label": "OpenRouter",
+        "autoSelectOrder": 35,
+        "defaultModel": "hexgrad/kokoro-82m",
+        "defaultTimeoutMs": 120000,
+        "models": [
+          "hexgrad/kokoro-82m",
+          "elevenlabs/eleven-turbo-v2",
+          "google/gemini-3.1-flash-tts-preview",
+          "mistralai/voxtral-mini-tts-2603"
+        ],
+        "voices": [
+          "af_alloy"
+        ]
+      },
+      "listVoices": [
+        {
+          "id": "af_alloy",
+          "name": "af_alloy"
+        }
+      ],
+      "synthesisRequest": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "elevenlabs/eleven-turbo-v2",
+          "voice": "configured-voice",
+          "speed": 0.8
+        },
+        "providerOverrides": {
+          "model": " google/gemini-3.1-flash-tts-preview ",
+          "voice": " Kore ",
+          "speed": 1.2
+        },
+        "cfg": {}
+      },
+      "synthesisRequestAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "elevenlabs/eleven-turbo-v2",
+          "voice": "configured-voice",
+          "speed": 0.8
+        },
+        "providerOverrides": {
+          "model": " google/gemini-3.1-flash-tts-preview ",
+          "voice": " Kore ",
+          "speed": 1.2
+        },
+        "cfg": {}
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/audio/speech",
+        "headers": {
+          "authorization": "Bearer fixture-openrouter-speech",
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "google/gemini-3.1-flash-tts-preview",
+          "input": "Plain speech fixture.",
+          "voice": "Kore",
+          "response_format": "mp3",
+          "speed": 1.2
+        },
+        "timeoutMs": 12345,
+        "fetchFnProvided": true,
+        "allowPrivateNetwork": false
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/octet-stream"
+        },
+        "audioBase64": "UklGRgABAv8="
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": true
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey",
+          "value": "fixture-openrouter-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "resolveProviderHttpRequestConfig",
+          "input": {
+            "baseUrl": "https://openrouter.ai/api/v1",
+            "defaultBaseUrl": "https://openrouter.ai/api/v1",
+            "allowPrivateNetwork": false,
+            "defaultHeaders": {
+              "Authorization": "Bearer fixture-openrouter-speech",
+              "Content-Type": "application/json"
+            },
+            "provider": "openrouter",
+            "capability": "audio",
+            "transport": "http"
+          }
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "postJsonRequest"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "assertOkOrThrowHttpError",
+          "status": 200,
+          "label": "OpenRouter TTS API error"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "readProviderBinaryResponse",
+          "status": 200,
+          "label": "OpenRouter TTS API error",
+          "kind": "audio",
+          "optionsProvided": false,
+          "maxBytesProvided": false,
+          "overflowCallbackProvided": false
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "id-alias-overrides",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "modelId": " mistralai/voxtral-mini-tts-2603 ",
+          "voiceId": " ordinary-id ",
+          "speed": 1.1
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "modelId": " mistralai/voxtral-mini-tts-2603 ",
+          "voiceId": " ordinary-id ",
+          "speed": 1.1
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openrouter-speech",
+        "model": "hexgrad/kokoro-82m",
+        "voice": "af_alloy"
+      },
+      "providerMetadata": {
+        "id": "openrouter",
+        "label": "OpenRouter",
+        "autoSelectOrder": 35,
+        "defaultModel": "hexgrad/kokoro-82m",
+        "defaultTimeoutMs": 120000,
+        "models": [
+          "hexgrad/kokoro-82m",
+          "elevenlabs/eleven-turbo-v2",
+          "google/gemini-3.1-flash-tts-preview",
+          "mistralai/voxtral-mini-tts-2603"
+        ],
+        "voices": [
+          "af_alloy"
+        ]
+      },
+      "listVoices": [
+        {
+          "id": "af_alloy",
+          "name": "af_alloy"
+        }
+      ],
+      "synthesisRequest": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "hexgrad/kokoro-82m",
+          "voice": "af_alloy"
+        },
+        "providerOverrides": {
+          "modelId": " mistralai/voxtral-mini-tts-2603 ",
+          "voiceId": " ordinary-id ",
+          "speed": 1.1
+        },
+        "cfg": {}
+      },
+      "synthesisRequestAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "hexgrad/kokoro-82m",
+          "voice": "af_alloy"
+        },
+        "providerOverrides": {
+          "modelId": " mistralai/voxtral-mini-tts-2603 ",
+          "voiceId": " ordinary-id ",
+          "speed": 1.1
+        },
+        "cfg": {}
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/audio/speech",
+        "headers": {
+          "authorization": "Bearer fixture-openrouter-speech",
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "mistralai/voxtral-mini-tts-2603",
+          "input": "Plain speech fixture.",
+          "voice": "ordinary-id",
+          "response_format": "mp3",
+          "speed": 1.1
+        },
+        "timeoutMs": 12345,
+        "fetchFnProvided": true,
+        "allowPrivateNetwork": false
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/octet-stream"
+        },
+        "audioBase64": "UklGRgABAv8="
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": true
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey",
+          "value": "fixture-openrouter-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "resolveProviderHttpRequestConfig",
+          "input": {
+            "baseUrl": "https://openrouter.ai/api/v1",
+            "defaultBaseUrl": "https://openrouter.ai/api/v1",
+            "allowPrivateNetwork": false,
+            "defaultHeaders": {
+              "Authorization": "Bearer fixture-openrouter-speech",
+              "Content-Type": "application/json"
+            },
+            "provider": "openrouter",
+            "capability": "audio",
+            "transport": "http"
+          }
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "postJsonRequest"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "assertOkOrThrowHttpError",
+          "status": 200,
+          "label": "OpenRouter TTS API error"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "readProviderBinaryResponse",
+          "status": 200,
+          "label": "OpenRouter TTS API error",
+          "kind": "audio",
+          "optionsProvided": false,
+          "maxBytesProvided": false,
+          "overflowCallbackProvided": false
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "override-key-precedence",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "model": " google/gemini-3.1-flash-tts-preview ",
+          "modelId": "ignored-model",
+          "voice": " Kore ",
+          "voiceId": "ignored-voice"
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech"
+            }
+          }
+        },
+        "providerOverrides": {
+          "model": " google/gemini-3.1-flash-tts-preview ",
+          "modelId": "ignored-model",
+          "voice": " Kore ",
+          "voiceId": "ignored-voice"
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openrouter-speech",
+        "model": "hexgrad/kokoro-82m",
+        "voice": "af_alloy"
+      },
+      "providerMetadata": {
+        "id": "openrouter",
+        "label": "OpenRouter",
+        "autoSelectOrder": 35,
+        "defaultModel": "hexgrad/kokoro-82m",
+        "defaultTimeoutMs": 120000,
+        "models": [
+          "hexgrad/kokoro-82m",
+          "elevenlabs/eleven-turbo-v2",
+          "google/gemini-3.1-flash-tts-preview",
+          "mistralai/voxtral-mini-tts-2603"
+        ],
+        "voices": [
+          "af_alloy"
+        ]
+      },
+      "listVoices": [
+        {
+          "id": "af_alloy",
+          "name": "af_alloy"
+        }
+      ],
+      "synthesisRequest": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "hexgrad/kokoro-82m",
+          "voice": "af_alloy"
+        },
+        "providerOverrides": {
+          "model": " google/gemini-3.1-flash-tts-preview ",
+          "modelId": "ignored-model",
+          "voice": " Kore ",
+          "voiceId": "ignored-voice"
+        },
+        "cfg": {}
+      },
+      "synthesisRequestAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "hexgrad/kokoro-82m",
+          "voice": "af_alloy"
+        },
+        "providerOverrides": {
+          "model": " google/gemini-3.1-flash-tts-preview ",
+          "modelId": "ignored-model",
+          "voice": " Kore ",
+          "voiceId": "ignored-voice"
+        },
+        "cfg": {}
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/audio/speech",
+        "headers": {
+          "authorization": "Bearer fixture-openrouter-speech",
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "google/gemini-3.1-flash-tts-preview",
+          "input": "Plain speech fixture.",
+          "voice": "Kore",
+          "response_format": "mp3"
+        },
+        "timeoutMs": 12345,
+        "fetchFnProvided": true,
+        "allowPrivateNetwork": false
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/octet-stream"
+        },
+        "audioBase64": "UklGRgABAv8="
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": true
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey",
+          "value": "fixture-openrouter-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "resolveProviderHttpRequestConfig",
+          "input": {
+            "baseUrl": "https://openrouter.ai/api/v1",
+            "defaultBaseUrl": "https://openrouter.ai/api/v1",
+            "allowPrivateNetwork": false,
+            "defaultHeaders": {
+              "Authorization": "Bearer fixture-openrouter-speech",
+              "Content-Type": "application/json"
+            },
+            "provider": "openrouter",
+            "capability": "audio",
+            "transport": "http"
+          }
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "postJsonRequest"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "assertOkOrThrowHttpError",
+          "status": 200,
+          "label": "OpenRouter TTS API error"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "readProviderBinaryResponse",
+          "status": 200,
+          "label": "OpenRouter TTS API error",
+          "kind": "audio",
+          "optionsProvided": false,
+          "maxBytesProvided": false,
+          "overflowCallbackProvided": false
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "blank-overrides",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech",
+              "model": "elevenlabs/eleven-turbo-v2",
+              "voice": "configured-voice",
+              "speed": 0.9
+            }
+          }
+        },
+        "providerOverrides": {
+          "model": " ",
+          "voice": " "
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech",
+              "model": "elevenlabs/eleven-turbo-v2",
+              "voice": "configured-voice",
+              "speed": 0.9
+            }
+          }
+        },
+        "providerOverrides": {
+          "model": " ",
+          "voice": " "
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openrouter-speech",
+        "model": "elevenlabs/eleven-turbo-v2",
+        "voice": "configured-voice",
+        "speed": 0.9
+      },
+      "providerMetadata": {
+        "id": "openrouter",
+        "label": "OpenRouter",
+        "autoSelectOrder": 35,
+        "defaultModel": "hexgrad/kokoro-82m",
+        "defaultTimeoutMs": 120000,
+        "models": [
+          "hexgrad/kokoro-82m",
+          "elevenlabs/eleven-turbo-v2",
+          "google/gemini-3.1-flash-tts-preview",
+          "mistralai/voxtral-mini-tts-2603"
+        ],
+        "voices": [
+          "af_alloy"
+        ]
+      },
+      "listVoices": [
+        {
+          "id": "af_alloy",
+          "name": "af_alloy"
+        }
+      ],
+      "synthesisRequest": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "elevenlabs/eleven-turbo-v2",
+          "voice": "configured-voice",
+          "speed": 0.9
+        },
+        "providerOverrides": {
+          "model": " ",
+          "voice": " "
+        },
+        "cfg": {}
+      },
+      "synthesisRequestAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "elevenlabs/eleven-turbo-v2",
+          "voice": "configured-voice",
+          "speed": 0.9
+        },
+        "providerOverrides": {
+          "model": " ",
+          "voice": " "
+        },
+        "cfg": {}
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/audio/speech",
+        "headers": {
+          "authorization": "Bearer fixture-openrouter-speech",
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "elevenlabs/eleven-turbo-v2",
+          "input": "Plain speech fixture.",
+          "voice": "configured-voice",
+          "response_format": "mp3",
+          "speed": 0.9
+        },
+        "timeoutMs": 12345,
+        "fetchFnProvided": true,
+        "allowPrivateNetwork": false
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/octet-stream"
+        },
+        "audioBase64": "UklGRgABAv8="
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": true
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey",
+          "value": "fixture-openrouter-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "resolveProviderHttpRequestConfig",
+          "input": {
+            "baseUrl": "https://openrouter.ai/api/v1",
+            "defaultBaseUrl": "https://openrouter.ai/api/v1",
+            "allowPrivateNetwork": false,
+            "defaultHeaders": {
+              "Authorization": "Bearer fixture-openrouter-speech",
+              "Content-Type": "application/json"
+            },
+            "provider": "openrouter",
+            "capability": "audio",
+            "transport": "http"
+          }
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "postJsonRequest"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "assertOkOrThrowHttpError",
+          "status": 200,
+          "label": "OpenRouter TTS API error"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "readProviderBinaryResponse",
+          "status": 200,
+          "label": "OpenRouter TTS API error",
+          "kind": "audio",
+          "optionsProvided": false,
+          "maxBytesProvided": false,
+          "overflowCallbackProvided": false
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "speaker-precedence",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech",
+              "speakerVoice": " speaker-v ",
+              "speakerVoiceId": "unused-id",
+              "voice": "unused-voice",
+              "voiceId": "unused"
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech",
+              "speakerVoice": " speaker-v ",
+              "speakerVoiceId": "unused-id",
+              "voice": "unused-voice",
+              "voiceId": "unused"
+            }
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openrouter-speech",
+        "model": "hexgrad/kokoro-82m",
+        "voice": "speaker-v"
+      },
+      "providerMetadata": {
+        "id": "openrouter",
+        "label": "OpenRouter",
+        "autoSelectOrder": 35,
+        "defaultModel": "hexgrad/kokoro-82m",
+        "defaultTimeoutMs": 120000,
+        "models": [
+          "hexgrad/kokoro-82m",
+          "elevenlabs/eleven-turbo-v2",
+          "google/gemini-3.1-flash-tts-preview",
+          "mistralai/voxtral-mini-tts-2603"
+        ],
+        "voices": [
+          "af_alloy"
+        ]
+      },
+      "listVoices": [
+        {
+          "id": "af_alloy",
+          "name": "af_alloy"
+        }
+      ],
+      "synthesisRequest": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "hexgrad/kokoro-82m",
+          "voice": "speaker-v"
+        },
+        "cfg": {}
+      },
+      "synthesisRequestAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "hexgrad/kokoro-82m",
+          "voice": "speaker-v"
+        },
+        "cfg": {}
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/audio/speech",
+        "headers": {
+          "authorization": "Bearer fixture-openrouter-speech",
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "hexgrad/kokoro-82m",
+          "input": "Plain speech fixture.",
+          "voice": "speaker-v",
+          "response_format": "mp3"
+        },
+        "timeoutMs": 12345,
+        "fetchFnProvided": true,
+        "allowPrivateNetwork": false
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/octet-stream"
+        },
+        "audioBase64": "UklGRgABAv8="
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": true
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey",
+          "value": "fixture-openrouter-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "resolveProviderHttpRequestConfig",
+          "input": {
+            "baseUrl": "https://openrouter.ai/api/v1",
+            "defaultBaseUrl": "https://openrouter.ai/api/v1",
+            "allowPrivateNetwork": false,
+            "defaultHeaders": {
+              "Authorization": "Bearer fixture-openrouter-speech",
+              "Content-Type": "application/json"
+            },
+            "provider": "openrouter",
+            "capability": "audio",
+            "transport": "http"
+          }
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "postJsonRequest"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "assertOkOrThrowHttpError",
+          "status": 200,
+          "label": "OpenRouter TTS API error"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "readProviderBinaryResponse",
+          "status": 200,
+          "label": "OpenRouter TTS API error",
+          "kind": "audio",
+          "optionsProvided": false,
+          "maxBytesProvided": false,
+          "overflowCallbackProvided": false
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "speaker-id",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech",
+              "speakerVoiceId": " speaker-id ",
+              "voice": "unused-voice"
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech",
+              "speakerVoiceId": " speaker-id ",
+              "voice": "unused-voice"
+            }
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openrouter-speech",
+        "model": "hexgrad/kokoro-82m",
+        "voice": "speaker-id"
+      },
+      "providerMetadata": {
+        "id": "openrouter",
+        "label": "OpenRouter",
+        "autoSelectOrder": 35,
+        "defaultModel": "hexgrad/kokoro-82m",
+        "defaultTimeoutMs": 120000,
+        "models": [
+          "hexgrad/kokoro-82m",
+          "elevenlabs/eleven-turbo-v2",
+          "google/gemini-3.1-flash-tts-preview",
+          "mistralai/voxtral-mini-tts-2603"
+        ],
+        "voices": [
+          "af_alloy"
+        ]
+      },
+      "listVoices": [
+        {
+          "id": "af_alloy",
+          "name": "af_alloy"
+        }
+      ],
+      "synthesisRequest": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "hexgrad/kokoro-82m",
+          "voice": "speaker-id"
+        },
+        "cfg": {}
+      },
+      "synthesisRequestAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "hexgrad/kokoro-82m",
+          "voice": "speaker-id"
+        },
+        "cfg": {}
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/audio/speech",
+        "headers": {
+          "authorization": "Bearer fixture-openrouter-speech",
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "hexgrad/kokoro-82m",
+          "input": "Plain speech fixture.",
+          "voice": "speaker-id",
+          "response_format": "mp3"
+        },
+        "timeoutMs": 12345,
+        "fetchFnProvided": true,
+        "allowPrivateNetwork": false
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/octet-stream"
+        },
+        "audioBase64": "UklGRgABAv8="
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": true
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey",
+          "value": "fixture-openrouter-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "resolveProviderHttpRequestConfig",
+          "input": {
+            "baseUrl": "https://openrouter.ai/api/v1",
+            "defaultBaseUrl": "https://openrouter.ai/api/v1",
+            "allowPrivateNetwork": false,
+            "defaultHeaders": {
+              "Authorization": "Bearer fixture-openrouter-speech",
+              "Content-Type": "application/json"
+            },
+            "provider": "openrouter",
+            "capability": "audio",
+            "transport": "http"
+          }
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "postJsonRequest"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "assertOkOrThrowHttpError",
+          "status": 200,
+          "label": "OpenRouter TTS API error"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "readProviderBinaryResponse",
+          "status": 200,
+          "label": "OpenRouter TTS API error",
+          "kind": "audio",
+          "optionsProvided": false,
+          "maxBytesProvided": false,
+          "overflowCallbackProvided": false
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "unicode-trim",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech",
+              "modelId": " ﻿ hexgrad/kokoro-82m ﻿ ",
+              "voiceId": " ﻿ af_alloy ﻿ ",
+              "speed": 1.25
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech",
+              "modelId": " ﻿ hexgrad/kokoro-82m ﻿ ",
+              "voiceId": " ﻿ af_alloy ﻿ ",
+              "speed": 1.25
+            }
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openrouter-speech",
+        "model": "hexgrad/kokoro-82m",
+        "voice": "af_alloy",
+        "speed": 1.25
+      },
+      "providerMetadata": {
+        "id": "openrouter",
+        "label": "OpenRouter",
+        "autoSelectOrder": 35,
+        "defaultModel": "hexgrad/kokoro-82m",
+        "defaultTimeoutMs": 120000,
+        "models": [
+          "hexgrad/kokoro-82m",
+          "elevenlabs/eleven-turbo-v2",
+          "google/gemini-3.1-flash-tts-preview",
+          "mistralai/voxtral-mini-tts-2603"
+        ],
+        "voices": [
+          "af_alloy"
+        ]
+      },
+      "listVoices": [
+        {
+          "id": "af_alloy",
+          "name": "af_alloy"
+        }
+      ],
+      "synthesisRequest": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "hexgrad/kokoro-82m",
+          "voice": "af_alloy",
+          "speed": 1.25
+        },
+        "cfg": {}
+      },
+      "synthesisRequestAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "hexgrad/kokoro-82m",
+          "voice": "af_alloy",
+          "speed": 1.25
+        },
+        "cfg": {}
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/audio/speech",
+        "headers": {
+          "authorization": "Bearer fixture-openrouter-speech",
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "hexgrad/kokoro-82m",
+          "input": "Plain speech fixture.",
+          "voice": "af_alloy",
+          "response_format": "mp3",
+          "speed": 1.25
+        },
+        "timeoutMs": 12345,
+        "fetchFnProvided": true,
+        "allowPrivateNetwork": false
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/octet-stream"
+        },
+        "audioBase64": "UklGRgABAv8="
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": true
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey",
+          "value": "fixture-openrouter-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "resolveProviderHttpRequestConfig",
+          "input": {
+            "baseUrl": "https://openrouter.ai/api/v1",
+            "defaultBaseUrl": "https://openrouter.ai/api/v1",
+            "allowPrivateNetwork": false,
+            "defaultHeaders": {
+              "Authorization": "Bearer fixture-openrouter-speech",
+              "Content-Type": "application/json"
+            },
+            "provider": "openrouter",
+            "capability": "audio",
+            "transport": "http"
+          }
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "postJsonRequest"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "assertOkOrThrowHttpError",
+          "status": 200,
+          "label": "OpenRouter TTS API error"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "readProviderBinaryResponse",
+          "status": 200,
+          "label": "OpenRouter TTS API error",
+          "kind": "audio",
+          "optionsProvided": false,
+          "maxBytesProvided": false,
+          "overflowCallbackProvided": false
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "pcm-file",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech",
+              "responseFormat": " PCM ",
+              "provider": {
+                "order": []
+              }
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech",
+              "responseFormat": " PCM ",
+              "provider": {
+                "order": []
+              }
+            }
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openrouter-speech",
+        "model": "hexgrad/kokoro-82m",
+        "voice": "af_alloy",
+        "responseFormat": "pcm",
+        "provider": {
+          "order": []
+        }
+      },
+      "providerMetadata": {
+        "id": "openrouter",
+        "label": "OpenRouter",
+        "autoSelectOrder": 35,
+        "defaultModel": "hexgrad/kokoro-82m",
+        "defaultTimeoutMs": 120000,
+        "models": [
+          "hexgrad/kokoro-82m",
+          "elevenlabs/eleven-turbo-v2",
+          "google/gemini-3.1-flash-tts-preview",
+          "mistralai/voxtral-mini-tts-2603"
+        ],
+        "voices": [
+          "af_alloy"
+        ]
+      },
+      "listVoices": [
+        {
+          "id": "af_alloy",
+          "name": "af_alloy"
+        }
+      ],
+      "synthesisRequest": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "hexgrad/kokoro-82m",
+          "voice": "af_alloy",
+          "responseFormat": "pcm",
+          "provider": {
+            "order": []
+          }
+        },
+        "cfg": {}
+      },
+      "synthesisRequestAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "hexgrad/kokoro-82m",
+          "voice": "af_alloy",
+          "responseFormat": "pcm",
+          "provider": {
+            "order": []
+          }
+        },
+        "cfg": {}
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/audio/speech",
+        "headers": {
+          "authorization": "Bearer fixture-openrouter-speech",
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "hexgrad/kokoro-82m",
+          "input": "Plain speech fixture.",
+          "voice": "af_alloy",
+          "response_format": "pcm",
+          "provider": {
+            "order": []
+          }
+        },
+        "timeoutMs": 12345,
+        "fetchFnProvided": true,
+        "allowPrivateNetwork": false
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/octet-stream"
+        },
+        "audioBase64": "UklGRgABAv8="
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "pcm",
+        "fileExtension": ".pcm",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey",
+          "value": "fixture-openrouter-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "resolveProviderHttpRequestConfig",
+          "input": {
+            "baseUrl": "https://openrouter.ai/api/v1",
+            "defaultBaseUrl": "https://openrouter.ai/api/v1",
+            "allowPrivateNetwork": false,
+            "defaultHeaders": {
+              "Authorization": "Bearer fixture-openrouter-speech",
+              "Content-Type": "application/json"
+            },
+            "provider": "openrouter",
+            "capability": "audio",
+            "transport": "http"
+          }
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "postJsonRequest"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "assertOkOrThrowHttpError",
+          "status": 200,
+          "label": "OpenRouter TTS API error"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "readProviderBinaryResponse",
+          "status": 200,
+          "label": "OpenRouter TTS API error",
+          "kind": "audio",
+          "optionsProvided": false,
+          "maxBytesProvided": false,
+          "overflowCallbackProvided": false
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "default-note",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "voice-note",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech"
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "voice-note",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech"
+            }
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openrouter-speech",
+        "model": "hexgrad/kokoro-82m",
+        "voice": "af_alloy"
+      },
+      "providerMetadata": {
+        "id": "openrouter",
+        "label": "OpenRouter",
+        "autoSelectOrder": 35,
+        "defaultModel": "hexgrad/kokoro-82m",
+        "defaultTimeoutMs": 120000,
+        "models": [
+          "hexgrad/kokoro-82m",
+          "elevenlabs/eleven-turbo-v2",
+          "google/gemini-3.1-flash-tts-preview",
+          "mistralai/voxtral-mini-tts-2603"
+        ],
+        "voices": [
+          "af_alloy"
+        ]
+      },
+      "listVoices": [
+        {
+          "id": "af_alloy",
+          "name": "af_alloy"
+        }
+      ],
+      "synthesisRequest": {
+        "text": "Plain speech fixture.",
+        "target": "voice-note",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "hexgrad/kokoro-82m",
+          "voice": "af_alloy"
+        },
+        "cfg": {}
+      },
+      "synthesisRequestAfter": {
+        "text": "Plain speech fixture.",
+        "target": "voice-note",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "hexgrad/kokoro-82m",
+          "voice": "af_alloy"
+        },
+        "cfg": {}
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/audio/speech",
+        "headers": {
+          "authorization": "Bearer fixture-openrouter-speech",
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "hexgrad/kokoro-82m",
+          "input": "Plain speech fixture.",
+          "voice": "af_alloy",
+          "response_format": "mp3"
+        },
+        "timeoutMs": 12345,
+        "fetchFnProvided": true,
+        "allowPrivateNetwork": false
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/octet-stream"
+        },
+        "audioBase64": "UklGRgABAv8="
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": true
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey",
+          "value": "fixture-openrouter-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "resolveProviderHttpRequestConfig",
+          "input": {
+            "baseUrl": "https://openrouter.ai/api/v1",
+            "defaultBaseUrl": "https://openrouter.ai/api/v1",
+            "allowPrivateNetwork": false,
+            "defaultHeaders": {
+              "Authorization": "Bearer fixture-openrouter-speech",
+              "Content-Type": "application/json"
+            },
+            "provider": "openrouter",
+            "capability": "audio",
+            "transport": "http"
+          }
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "postJsonRequest"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "assertOkOrThrowHttpError",
+          "status": 200,
+          "label": "OpenRouter TTS API error"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "readProviderBinaryResponse",
+          "status": 200,
+          "label": "OpenRouter TTS API error",
+          "kind": "audio",
+          "optionsProvided": false,
+          "maxBytesProvided": false,
+          "overflowCallbackProvided": false
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "pcm-note",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "voice-note",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech",
+              "responseFormat": "pcm"
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "voice-note",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech",
+              "responseFormat": "pcm"
+            }
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openrouter-speech",
+        "model": "hexgrad/kokoro-82m",
+        "voice": "af_alloy",
+        "responseFormat": "pcm"
+      },
+      "providerMetadata": {
+        "id": "openrouter",
+        "label": "OpenRouter",
+        "autoSelectOrder": 35,
+        "defaultModel": "hexgrad/kokoro-82m",
+        "defaultTimeoutMs": 120000,
+        "models": [
+          "hexgrad/kokoro-82m",
+          "elevenlabs/eleven-turbo-v2",
+          "google/gemini-3.1-flash-tts-preview",
+          "mistralai/voxtral-mini-tts-2603"
+        ],
+        "voices": [
+          "af_alloy"
+        ]
+      },
+      "listVoices": [
+        {
+          "id": "af_alloy",
+          "name": "af_alloy"
+        }
+      ],
+      "synthesisRequest": {
+        "text": "Plain speech fixture.",
+        "target": "voice-note",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "hexgrad/kokoro-82m",
+          "voice": "af_alloy",
+          "responseFormat": "pcm"
+        },
+        "cfg": {}
+      },
+      "synthesisRequestAfter": {
+        "text": "Plain speech fixture.",
+        "target": "voice-note",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "hexgrad/kokoro-82m",
+          "voice": "af_alloy",
+          "responseFormat": "pcm"
+        },
+        "cfg": {}
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/audio/speech",
+        "headers": {
+          "authorization": "Bearer fixture-openrouter-speech",
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "hexgrad/kokoro-82m",
+          "input": "Plain speech fixture.",
+          "voice": "af_alloy",
+          "response_format": "pcm"
+        },
+        "timeoutMs": 12345,
+        "fetchFnProvided": true,
+        "allowPrivateNetwork": false
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/octet-stream"
+        },
+        "audioBase64": "UklGRgABAv8="
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "pcm",
+        "fileExtension": ".pcm",
+        "voiceCompatible": false
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey",
+          "value": "fixture-openrouter-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "resolveProviderHttpRequestConfig",
+          "input": {
+            "baseUrl": "https://openrouter.ai/api/v1",
+            "defaultBaseUrl": "https://openrouter.ai/api/v1",
+            "allowPrivateNetwork": false,
+            "defaultHeaders": {
+              "Authorization": "Bearer fixture-openrouter-speech",
+              "Content-Type": "application/json"
+            },
+            "provider": "openrouter",
+            "capability": "audio",
+            "transport": "http"
+          }
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "postJsonRequest"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "assertOkOrThrowHttpError",
+          "status": 200,
+          "label": "OpenRouter TTS API error"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "readProviderBinaryResponse",
+          "status": 200,
+          "label": "OpenRouter TTS API error",
+          "kind": "audio",
+          "optionsProvided": false,
+          "maxBytesProvided": false,
+          "overflowCallbackProvided": false
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "authored-text",
+      "input": {
+        "text": "  Ordinary speech.\n你好 🌍 — café.\t ",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech"
+            }
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "  Ordinary speech.\n你好 🌍 — café.\t ",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech"
+            }
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openrouter-speech",
+        "model": "hexgrad/kokoro-82m",
+        "voice": "af_alloy"
+      },
+      "providerMetadata": {
+        "id": "openrouter",
+        "label": "OpenRouter",
+        "autoSelectOrder": 35,
+        "defaultModel": "hexgrad/kokoro-82m",
+        "defaultTimeoutMs": 120000,
+        "models": [
+          "hexgrad/kokoro-82m",
+          "elevenlabs/eleven-turbo-v2",
+          "google/gemini-3.1-flash-tts-preview",
+          "mistralai/voxtral-mini-tts-2603"
+        ],
+        "voices": [
+          "af_alloy"
+        ]
+      },
+      "listVoices": [
+        {
+          "id": "af_alloy",
+          "name": "af_alloy"
+        }
+      ],
+      "synthesisRequest": {
+        "text": "  Ordinary speech.\n你好 🌍 — café.\t ",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "hexgrad/kokoro-82m",
+          "voice": "af_alloy"
+        },
+        "cfg": {}
+      },
+      "synthesisRequestAfter": {
+        "text": "  Ordinary speech.\n你好 🌍 — café.\t ",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "hexgrad/kokoro-82m",
+          "voice": "af_alloy"
+        },
+        "cfg": {}
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/audio/speech",
+        "headers": {
+          "authorization": "Bearer fixture-openrouter-speech",
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "hexgrad/kokoro-82m",
+          "input": "  Ordinary speech.\n你好 🌍 — café.\t ",
+          "voice": "af_alloy",
+          "response_format": "mp3"
+        },
+        "timeoutMs": 12345,
+        "fetchFnProvided": true,
+        "allowPrivateNetwork": false
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/octet-stream"
+        },
+        "audioBase64": "UklGRgABAv8="
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": true
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey",
+          "value": "fixture-openrouter-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "resolveProviderHttpRequestConfig",
+          "input": {
+            "baseUrl": "https://openrouter.ai/api/v1",
+            "defaultBaseUrl": "https://openrouter.ai/api/v1",
+            "allowPrivateNetwork": false,
+            "defaultHeaders": {
+              "Authorization": "Bearer fixture-openrouter-speech",
+              "Content-Type": "application/json"
+            },
+            "provider": "openrouter",
+            "capability": "audio",
+            "transport": "http"
+          }
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "postJsonRequest"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "assertOkOrThrowHttpError",
+          "status": 200,
+          "label": "OpenRouter TTS API error"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "readProviderBinaryResponse",
+          "status": 200,
+          "label": "OpenRouter TTS API error",
+          "kind": "audio",
+          "optionsProvided": false,
+          "maxBytesProvided": false,
+          "overflowCallbackProvided": false
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "legacy-config",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "openrouter": {
+            "apiKey": "fixture-openrouter-speech",
+            "modelId": "elevenlabs/eleven-turbo-v2",
+            "voiceId": "legacy-voice"
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "openrouter": {
+            "apiKey": "fixture-openrouter-speech",
+            "modelId": "elevenlabs/eleven-turbo-v2",
+            "voiceId": "legacy-voice"
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openrouter-speech",
+        "model": "elevenlabs/eleven-turbo-v2",
+        "voice": "legacy-voice"
+      },
+      "providerMetadata": {
+        "id": "openrouter",
+        "label": "OpenRouter",
+        "autoSelectOrder": 35,
+        "defaultModel": "hexgrad/kokoro-82m",
+        "defaultTimeoutMs": 120000,
+        "models": [
+          "hexgrad/kokoro-82m",
+          "elevenlabs/eleven-turbo-v2",
+          "google/gemini-3.1-flash-tts-preview",
+          "mistralai/voxtral-mini-tts-2603"
+        ],
+        "voices": [
+          "af_alloy"
+        ]
+      },
+      "listVoices": [
+        {
+          "id": "af_alloy",
+          "name": "af_alloy"
+        }
+      ],
+      "synthesisRequest": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "elevenlabs/eleven-turbo-v2",
+          "voice": "legacy-voice"
+        },
+        "cfg": {}
+      },
+      "synthesisRequestAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "elevenlabs/eleven-turbo-v2",
+          "voice": "legacy-voice"
+        },
+        "cfg": {}
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/audio/speech",
+        "headers": {
+          "authorization": "Bearer fixture-openrouter-speech",
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "elevenlabs/eleven-turbo-v2",
+          "input": "Plain speech fixture.",
+          "voice": "legacy-voice",
+          "response_format": "mp3"
+        },
+        "timeoutMs": 12345,
+        "fetchFnProvided": true,
+        "allowPrivateNetwork": false
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/octet-stream"
+        },
+        "audioBase64": "UklGRgABAv8="
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": true
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey",
+          "value": "fixture-openrouter-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "resolveProviderHttpRequestConfig",
+          "input": {
+            "baseUrl": "https://openrouter.ai/api/v1",
+            "defaultBaseUrl": "https://openrouter.ai/api/v1",
+            "allowPrivateNetwork": false,
+            "defaultHeaders": {
+              "Authorization": "Bearer fixture-openrouter-speech",
+              "Content-Type": "application/json"
+            },
+            "provider": "openrouter",
+            "capability": "audio",
+            "transport": "http"
+          }
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "postJsonRequest"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "assertOkOrThrowHttpError",
+          "status": 200,
+          "label": "OpenRouter TTS API error"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "readProviderBinaryResponse",
+          "status": 200,
+          "label": "OpenRouter TTS API error",
+          "kind": "audio",
+          "optionsProvided": false,
+          "maxBytesProvided": false,
+          "overflowCallbackProvided": false
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "release"
+        }
+      ]
+    },
+    {
+      "id": "nested-precedence",
+      "input": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech",
+              "model": "google/gemini-3.1-flash-tts-preview",
+              "voice": "nested-voice"
+            }
+          },
+          "openrouter": {
+            "apiKey": "fixture-openrouter-speech",
+            "model": "elevenlabs/eleven-turbo-v2",
+            "voice": "legacy-voice"
+          }
+        }
+      },
+      "inputAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "cfg": {},
+        "rawConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech",
+              "model": "google/gemini-3.1-flash-tts-preview",
+              "voice": "nested-voice"
+            }
+          },
+          "openrouter": {
+            "apiKey": "fixture-openrouter-speech",
+            "model": "elevenlabs/eleven-turbo-v2",
+            "voice": "legacy-voice"
+          }
+        }
+      },
+      "resolvedConfig": {
+        "apiKey": "fixture-openrouter-speech",
+        "model": "google/gemini-3.1-flash-tts-preview",
+        "voice": "nested-voice"
+      },
+      "providerMetadata": {
+        "id": "openrouter",
+        "label": "OpenRouter",
+        "autoSelectOrder": 35,
+        "defaultModel": "hexgrad/kokoro-82m",
+        "defaultTimeoutMs": 120000,
+        "models": [
+          "hexgrad/kokoro-82m",
+          "elevenlabs/eleven-turbo-v2",
+          "google/gemini-3.1-flash-tts-preview",
+          "mistralai/voxtral-mini-tts-2603"
+        ],
+        "voices": [
+          "af_alloy"
+        ]
+      },
+      "listVoices": [
+        {
+          "id": "af_alloy",
+          "name": "af_alloy"
+        }
+      ],
+      "synthesisRequest": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "google/gemini-3.1-flash-tts-preview",
+          "voice": "nested-voice"
+        },
+        "cfg": {}
+      },
+      "synthesisRequestAfter": {
+        "text": "Plain speech fixture.",
+        "target": "audio-file",
+        "timeoutMs": 12345,
+        "providerConfig": {
+          "apiKey": "fixture-openrouter-speech",
+          "model": "google/gemini-3.1-flash-tts-preview",
+          "voice": "nested-voice"
+        },
+        "cfg": {}
+      },
+      "request": {
+        "url": "https://openrouter.ai/api/v1/audio/speech",
+        "headers": {
+          "authorization": "Bearer fixture-openrouter-speech",
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "google/gemini-3.1-flash-tts-preview",
+          "input": "Plain speech fixture.",
+          "voice": "nested-voice",
+          "response_format": "mp3"
+        },
+        "timeoutMs": 12345,
+        "fetchFnProvided": true,
+        "allowPrivateNetwork": false
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/octet-stream"
+        },
+        "audioBase64": "UklGRgABAv8="
+      },
+      "result": {
+        "audioBase64": "UklGRgABAv8=",
+        "outputFormat": "mp3",
+        "fileExtension": ".mp3",
+        "voiceCompatible": true
+      },
+      "releaseCount": 1,
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey",
+          "value": "fixture-openrouter-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "resolveProviderHttpRequestConfig",
+          "input": {
+            "baseUrl": "https://openrouter.ai/api/v1",
+            "defaultBaseUrl": "https://openrouter.ai/api/v1",
+            "allowPrivateNetwork": false,
+            "defaultHeaders": {
+              "Authorization": "Bearer fixture-openrouter-speech",
+              "Content-Type": "application/json"
+            },
+            "provider": "openrouter",
+            "capability": "audio",
+            "transport": "http"
+          }
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "postJsonRequest"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "assertOkOrThrowHttpError",
+          "status": 200,
+          "label": "OpenRouter TTS API error"
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "readProviderBinaryResponse",
+          "status": 200,
+          "label": "OpenRouter TTS API error",
+          "kind": "audio",
+          "optionsProvided": false,
+          "maxBytesProvided": false,
+          "overflowCallbackProvided": false
+        },
+        {
+          "module": "src/plugin-sdk/provider-http.ts",
+          "export": "release"
+        }
+      ]
+    }
+  ],
+  "talkConfigObservations": [
+    {
+      "id": "talk-defaults",
+      "input": {
+        "baseTtsConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech"
+            }
+          }
+        },
+        "talkProviderConfig": {}
+      },
+      "inputAfter": {
+        "baseTtsConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech"
+            }
+          }
+        },
+        "talkProviderConfig": {}
+      },
+      "result": {
+        "apiKey": "fixture-openrouter-speech",
+        "model": "hexgrad/kokoro-82m",
+        "voice": "af_alloy"
+      },
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey",
+          "value": "fixture-openrouter-speech"
+        }
+      ]
+    },
+    {
+      "id": "talk-configured",
+      "input": {
+        "baseTtsConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech",
+              "model": "hexgrad/kokoro-82m",
+              "voice": "af_alloy",
+              "speed": 0.9,
+              "provider": {
+                "order": [
+                  "ordinary-route"
+                ]
+              }
+            }
+          }
+        },
+        "talkProviderConfig": {
+          "apiKey": "fixture-talk-speech",
+          "baseUrl": "https://talk.example/router/v2///",
+          "modelId": "mistralai/voxtral-mini-tts-2603",
+          "voiceId": "talk-voice",
+          "speed": 1.2,
+          "responseFormat": " PCM ",
+          "provider": {
+            "ignored": true
+          }
+        }
+      },
+      "inputAfter": {
+        "baseTtsConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech",
+              "model": "hexgrad/kokoro-82m",
+              "voice": "af_alloy",
+              "speed": 0.9,
+              "provider": {
+                "order": [
+                  "ordinary-route"
+                ]
+              }
+            }
+          }
+        },
+        "talkProviderConfig": {
+          "apiKey": "fixture-talk-speech",
+          "baseUrl": "https://talk.example/router/v2///",
+          "modelId": "mistralai/voxtral-mini-tts-2603",
+          "voiceId": "talk-voice",
+          "speed": 1.2,
+          "responseFormat": " PCM ",
+          "provider": {
+            "ignored": true
+          }
+        }
+      },
+      "result": {
+        "apiKey": "fixture-talk-speech",
+        "baseUrl": "https://talk.example/router/v2",
+        "model": "mistralai/voxtral-mini-tts-2603",
+        "voice": "talk-voice",
+        "speed": 1.2,
+        "responseFormat": "pcm",
+        "provider": {
+          "order": [
+            "ordinary-route"
+          ]
+        }
+      },
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey",
+          "value": "fixture-openrouter-speech"
+        },
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "talk.providers.openrouter.apiKey",
+          "value": "fixture-talk-speech"
+        }
+      ]
+    },
+    {
+      "id": "talk-speaker",
+      "input": {
+        "baseTtsConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech",
+              "model": "elevenlabs/eleven-turbo-v2",
+              "voice": "baseline-voice"
+            }
+          }
+        },
+        "talkProviderConfig": {
+          "baseUrl": "https://openrouter.ai/v1/",
+          "speakerVoice": " talk-speaker ",
+          "speakerVoiceId": "unused",
+          "voice": "unused",
+          "voiceId": "unused",
+          "responseFormat": " MP3 "
+        }
+      },
+      "inputAfter": {
+        "baseTtsConfig": {
+          "providers": {
+            "openrouter": {
+              "apiKey": "fixture-openrouter-speech",
+              "model": "elevenlabs/eleven-turbo-v2",
+              "voice": "baseline-voice"
+            }
+          }
+        },
+        "talkProviderConfig": {
+          "baseUrl": "https://openrouter.ai/v1/",
+          "speakerVoice": " talk-speaker ",
+          "speakerVoiceId": "unused",
+          "voice": "unused",
+          "voiceId": "unused",
+          "responseFormat": " MP3 "
+        }
+      },
+      "result": {
+        "apiKey": "fixture-openrouter-speech",
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "model": "elevenlabs/eleven-turbo-v2",
+        "voice": "talk-speaker",
+        "responseFormat": "mp3"
+      },
+      "platformCalls": [
+        {
+          "module": "openclaw/plugin-sdk/secret-input",
+          "export": "normalizeResolvedSecretInputString",
+          "path": "tts.providers.openrouter.apiKey",
+          "value": "fixture-openrouter-speech"
+        }
+      ]
+    }
+  ],
+  "talkOverrideObservations": [
+    {
+      "id": "talk-id-overrides",
+      "input": {
+        "params": {
+          "voiceId": " vf ",
+          "voice": "ignored",
+          "modelId": " model-id ",
+          "model": "ignored",
+          "speed": 1.25
+        }
+      },
+      "inputAfter": {
+        "params": {
+          "voiceId": " vf ",
+          "voice": "ignored",
+          "modelId": " model-id ",
+          "model": "ignored",
+          "speed": 1.25
+        }
+      },
+      "result": {
+        "voice": "vf",
+        "model": "model-id",
+        "speed": 1.25
+      },
+      "platformCalls": []
+    },
+    {
+      "id": "talk-alias-overrides",
+      "input": {
+        "params": {
+          "voice": " v ",
+          "model": " m ",
+          "speed": 0.9
+        }
+      },
+      "inputAfter": {
+        "params": {
+          "voice": " v ",
+          "model": " m ",
+          "speed": 0.9
+        }
+      },
+      "result": {
+        "voice": "v",
+        "model": "m",
+        "speed": 0.9
+      },
+      "platformCalls": []
+    },
+    {
+      "id": "talk-blank-overrides",
+      "input": {
+        "params": {
+          "voice": " ",
+          "model": " "
+        }
+      },
+      "inputAfter": {
+        "params": {
+          "voice": " ",
+          "model": " "
+        }
+      },
+      "result": {},
+      "platformCalls": []
+    },
+    {
+      "id": "talk-blank-id-overrides",
+      "input": {
+        "params": {
+          "voiceId": " ",
+          "voice": "ignored-fallback",
+          "modelId": " ",
+          "model": "ignored-fallback",
+          "speed": 1.1
+        }
+      },
+      "inputAfter": {
+        "params": {
+          "voiceId": " ",
+          "voice": "ignored-fallback",
+          "modelId": " ",
+          "model": "ignored-fallback",
+          "speed": 1.1
+        }
+      },
+      "result": {
+        "speed": 1.1
+      },
+      "platformCalls": []
+    }
+  ],
+  "timeoutObservations": [
+    {
+      "id": "provider-default",
+      "input": {
+        "config": {
+          "timeoutMs": 30000,
+          "timeoutMsSource": "default"
+        },
+        "provider": {
+          "id": "openrouter",
+          "label": "OpenRouter",
+          "autoSelectOrder": 35,
+          "defaultModel": "hexgrad/kokoro-82m",
+          "defaultTimeoutMs": 120000,
+          "models": [
+            "hexgrad/kokoro-82m",
+            "elevenlabs/eleven-turbo-v2",
+            "google/gemini-3.1-flash-tts-preview",
+            "mistralai/voxtral-mini-tts-2603"
+          ],
+          "voices": [
+            "af_alloy"
+          ]
+        }
+      },
+      "inputAfter": {
+        "config": {
+          "timeoutMs": 30000,
+          "timeoutMsSource": "default"
+        },
+        "provider": {
+          "id": "openrouter",
+          "label": "OpenRouter",
+          "autoSelectOrder": 35,
+          "defaultModel": "hexgrad/kokoro-82m",
+          "defaultTimeoutMs": 120000,
+          "models": [
+            "hexgrad/kokoro-82m",
+            "elevenlabs/eleven-turbo-v2",
+            "google/gemini-3.1-flash-tts-preview",
+            "mistralai/voxtral-mini-tts-2603"
+          ],
+          "voices": [
+            "af_alloy"
+          ]
+        }
+      },
+      "result": 120000,
+      "platformCalls": []
+    },
+    {
+      "id": "configured-default",
+      "input": {
+        "config": {
+          "timeoutMs": 45000,
+          "timeoutMsSource": "config"
+        },
+        "provider": {
+          "id": "openrouter",
+          "label": "OpenRouter",
+          "autoSelectOrder": 35,
+          "defaultModel": "hexgrad/kokoro-82m",
+          "defaultTimeoutMs": 120000,
+          "models": [
+            "hexgrad/kokoro-82m",
+            "elevenlabs/eleven-turbo-v2",
+            "google/gemini-3.1-flash-tts-preview",
+            "mistralai/voxtral-mini-tts-2603"
+          ],
+          "voices": [
+            "af_alloy"
+          ]
+        }
+      },
+      "inputAfter": {
+        "config": {
+          "timeoutMs": 45000,
+          "timeoutMsSource": "config"
+        },
+        "provider": {
+          "id": "openrouter",
+          "label": "OpenRouter",
+          "autoSelectOrder": 35,
+          "defaultModel": "hexgrad/kokoro-82m",
+          "defaultTimeoutMs": 120000,
+          "models": [
+            "hexgrad/kokoro-82m",
+            "elevenlabs/eleven-turbo-v2",
+            "google/gemini-3.1-flash-tts-preview",
+            "mistralai/voxtral-mini-tts-2603"
+          ],
+          "voices": [
+            "af_alloy"
+          ]
+        }
+      },
+      "result": 45000,
+      "platformCalls": []
+    },
+    {
+      "id": "configured-standard",
+      "input": {
+        "config": {
+          "timeoutMs": 30000,
+          "timeoutMsSource": "config"
+        },
+        "provider": {
+          "id": "openrouter",
+          "label": "OpenRouter",
+          "autoSelectOrder": 35,
+          "defaultModel": "hexgrad/kokoro-82m",
+          "defaultTimeoutMs": 120000,
+          "models": [
+            "hexgrad/kokoro-82m",
+            "elevenlabs/eleven-turbo-v2",
+            "google/gemini-3.1-flash-tts-preview",
+            "mistralai/voxtral-mini-tts-2603"
+          ],
+          "voices": [
+            "af_alloy"
+          ]
+        }
+      },
+      "inputAfter": {
+        "config": {
+          "timeoutMs": 30000,
+          "timeoutMsSource": "config"
+        },
+        "provider": {
+          "id": "openrouter",
+          "label": "OpenRouter",
+          "autoSelectOrder": 35,
+          "defaultModel": "hexgrad/kokoro-82m",
+          "defaultTimeoutMs": 120000,
+          "models": [
+            "hexgrad/kokoro-82m",
+            "elevenlabs/eleven-turbo-v2",
+            "google/gemini-3.1-flash-tts-preview",
+            "mistralai/voxtral-mini-tts-2603"
+          ],
+          "voices": [
+            "af_alloy"
+          ]
+        }
+      },
+      "result": 30000,
+      "platformCalls": []
+    },
+    {
+      "id": "per-call",
+      "input": {
+        "config": {
+          "timeoutMs": 30000,
+          "timeoutMsSource": "default"
+        },
+        "timeoutMs": 75000,
+        "provider": {
+          "id": "openrouter",
+          "label": "OpenRouter",
+          "autoSelectOrder": 35,
+          "defaultModel": "hexgrad/kokoro-82m",
+          "defaultTimeoutMs": 120000,
+          "models": [
+            "hexgrad/kokoro-82m",
+            "elevenlabs/eleven-turbo-v2",
+            "google/gemini-3.1-flash-tts-preview",
+            "mistralai/voxtral-mini-tts-2603"
+          ],
+          "voices": [
+            "af_alloy"
+          ]
+        }
+      },
+      "inputAfter": {
+        "config": {
+          "timeoutMs": 30000,
+          "timeoutMsSource": "default"
+        },
+        "timeoutMs": 75000,
+        "provider": {
+          "id": "openrouter",
+          "label": "OpenRouter",
+          "autoSelectOrder": 35,
+          "defaultModel": "hexgrad/kokoro-82m",
+          "defaultTimeoutMs": 120000,
+          "models": [
+            "hexgrad/kokoro-82m",
+            "elevenlabs/eleven-turbo-v2",
+            "google/gemini-3.1-flash-tts-preview",
+            "mistralai/voxtral-mini-tts-2603"
+          ],
+          "voices": [
+            "af_alloy"
+          ]
+        }
+      },
+      "result": 75000,
+      "platformCalls": []
+    }
+  ]
+}

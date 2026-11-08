@@ -89,6 +89,101 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
   end
 
   describe "agent sessions page" do
+    test "approval remains visible until the runtime acknowledges its resolution", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, view, _} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      assert [{worker, _}] = Registry.lookup(Synapsis.Session.Registry, session.id)
+      owner = self()
+
+      sink =
+        spawn(fn ->
+          receive do
+            {:"$gen_cast", {:resolve, id, decision}} ->
+              send(owner, {:queued_approval, id, decision})
+
+              receive do
+                :stop -> :ok
+              end
+          end
+        end)
+
+      id = Ecto.UUID.generate()
+
+      pending = %{
+        interaction_id: id,
+        run_id: "native-run",
+        child: %{name: "/root"},
+        request: %{
+          tool_name: "synapsis::workspace_memory_get",
+          arguments: %{"path" => "MEMORY.md"}
+        }
+      }
+
+      {_phase, original} = :sys.get_state(worker)
+
+      try do
+        :sys.replace_state(worker, fn {phase, data} ->
+          {phase, %{data | runtime_pid: sink, runtime_permissions: [pending]}}
+        end)
+
+        SessionPersistence.broadcast(session.id, "runtime_permissions", [pending])
+        selector = "[data-runtime-permission='#{id}']"
+        assert has_element?(view, selector, "synapsis::workspace_memory_get")
+
+        render_click(view, "resolve_runtime_permission", %{
+          "interaction-id" => id,
+          "decision" => "allow"
+        })
+
+        assert_receive {:queued_approval, ^id, true}
+        assert has_element?(view, selector)
+        SessionPersistence.broadcast(session.id, "runtime_permissions", [])
+        refute has_element?(view, selector)
+      after
+        :sys.replace_state(worker, fn {phase, _data} -> {phase, original} end)
+        send(sink, :stop)
+      end
+    end
+
+    test "remount preserves an idle runtime failure and its reason without replaying the turn", %{
+      conn: conn
+    } do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, message} =
+        Synapsis.Message.append(session.id, %{
+          role: "user",
+          parts: [%Synapsis.Part.Text{content: "why did this fail?"}]
+        })
+
+      {:ok, _view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      reason = "Selected tools unavailable or deferred: unavailable-session-tool"
+      assert {:ok, _session} = SessionPersistence.update_session_status(session.id, "error")
+      assert [{pid, _}] = Registry.lookup(Synapsis.Session.Registry, session.id)
+
+      :sys.replace_state(pid, fn {:idle, data} ->
+        {:idle,
+         %{
+           data
+           | runtime_history_error:
+               Backplane.AgentRuntime.Error.new(:unsupported_capability, reason)
+         }}
+      end)
+
+      {:ok, remounted, html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      socket = chat_socket(remounted)
+      assert socket.assigns.session_status == "error"
+      assert socket.assigns.flash["error"] == reason
+      assert html =~ reason
+      assert chat_snapshot(remounted).runtime.phase == "error"
+      assert [%{id: message_id, role: "user"}] = chat_snapshot(remounted).messages
+      assert message_id == message.id
+      assert [%{id: ^message_id, role: "user"}] = Sessions.get_messages(session.id)
+    end
+
     test "session model selector groups configured choices by provider and switches independently from the agent default",
          %{conn: conn} do
       {:ok, provider} =
@@ -931,7 +1026,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
     @tag capture_log: true
     test "renders sent user message immediately before agent response", %{conn: conn} do
-      bypass = Bypass.open()
+      bypass = Gaoxy.Test.open()
       provider_name = "immediate_chat_#{System.unique_integer([:positive])}"
       test_pid = self()
 
@@ -939,12 +1034,12 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
         Synapsis.Provider.Registry.register(provider_name, %{
           type: "anthropic",
           api_key: "test-key",
-          base_url: "http://localhost:#{bypass.port}"
+          base_url: String.trim_trailing(Gaoxy.Test.url(bypass), "/")
         })
 
       on_exit(fn -> Synapsis.Provider.Registry.unregister(provider_name) end)
 
-      Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/messages", fn conn ->
         send(test_pid, {:provider_waiting, self()})
 
         receive do
@@ -1340,6 +1435,67 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
   end
 
   describe "ask_user questions" do
+    @tag :tmp_dir
+    test "native Conversation questions render and accept an answer through the chat action", %{
+      conn: conn,
+      tmp_dir: tmp_dir
+    } do
+      alias Synapsis.Agent.TestSupport.{DeterministicProvider, SessionHarness}
+      alias Synapsis.Provider.ToolName
+      alias Synapsis.Session.Store
+
+      harness =
+        SessionHarness.setup_session!(
+          tmp_dir: tmp_dir,
+          install_provider?: false,
+          session_config: %{"subagents" => false, "memory_context" => false}
+        )
+
+      on_exit(fn -> SessionHarness.cleanup!(harness) end)
+      {:ok, _} = AgentConfigs.update(harness.agent_config, %{tools: ["synapsis::ask_user"]})
+      raw = Store.get_value(harness.session.id, "permission")
+      :ok = Store.put_value(harness.session.id, "permission", %{raw | mode: :interactive})
+      SessionHarness.subscribe!(harness.session.id)
+
+      Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        request = Jason.decode!(body)
+
+        chunks =
+          if Enum.any?(request["messages"], &(&1["role"] == "tool")) do
+            [DeterministicProvider.text_chunk("Answer received"), DeterministicProvider.finish_chunk("stop")]
+          else
+            [
+              DeterministicProvider.tool_call_chunk(
+                ToolName.encode("synapsis::ask_user"),
+                "native-ui-question",
+                %{"question" => "Which native approach?", "options" => [%{"label" => "Focused", "description" => "Keep changes small"}]}
+              ),
+              DeterministicProvider.finish_chunk("tool_calls")
+            ]
+          end
+
+        DeterministicProvider.send_sse(conn, chunks)
+      end)
+
+      {:ok, view, _} = live(conn, ~p"/agent/agents/#{harness.agent_name}/sessions/#{harness.session.id}")
+      assert :ok = Worker.send_message(harness.session.id, "Ask a native question")
+      assert_receive {:ask_user, ref, _}, 5_000
+      assert_eventually(fn -> chat_snapshot(view).metadata.userQuestions != [] end)
+      assert [%{ref: ^ref, question: "Which native approach?"}] = chat_snapshot(view).metadata.userQuestions
+      assert %{phase: "waiting_for_user", active: true} = chat_snapshot(view).runtime
+
+      render_hook(view, "chat.action", answer_params(view, ref, "Focused", "native-ui-answer"))
+      assert_receive {:ask_user_closed, ^ref}, 5_000
+      assert_receive {:run_event, %{type: "session.completed"}}, 5_000
+      assert_eventually(fn -> chat_snapshot(view).metadata.userQuestions == [] end)
+
+      assert [%Synapsis.Part.ToolResult{content: "Focused", is_error: false}] =
+               for message <- Sessions.get_messages(harness.session.id),
+                   part = %Synapsis.Part.ToolResult{} <- message.parts,
+                   do: part
+    end
+
     test "projects registered questions and option descriptions while retaining Queue and Stop",
          %{conn: conn} do
       session = create_running_question_session()
@@ -1911,7 +2067,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
   end
 
   defp create_image_session do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     provider_name = "image_chat_#{System.unique_integer([:positive])}"
     test_pid = self()
 
@@ -1919,12 +2075,12 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
              Synapsis.Provider.Registry.register(provider_name, %{
                type: "anthropic",
                api_key: "test-key",
-               base_url: "http://localhost:#{bypass.port}"
+               base_url: String.trim_trailing(Gaoxy.Test.url(bypass), "/")
              })
 
     on_exit(fn -> Synapsis.Provider.Registry.unregister(provider_name) end)
 
-    Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "POST", "/v1/messages", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       send(test_pid, {:image_provider_request, Jason.decode!(body)})
 

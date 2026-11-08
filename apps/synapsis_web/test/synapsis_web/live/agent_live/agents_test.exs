@@ -7,6 +7,590 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
 
   def refresh_mcp, do: %{}
 
+  def notify_legacy_refresh do
+    send(
+      Application.fetch_env!(:synapsis_web, :native_refresh_owner),
+      :legacy_discovery_requested
+    )
+
+    %{}
+  end
+
+  defmodule SnapshotSource do
+    use GenServer
+
+    def start_link({id, owner, tools}) do
+      GenServer.start_link(__MODULE__, {id, owner, tools},
+        name: {:via, Registry, {Synapsis.MCP.Registry, {:config_id, id}}}
+      )
+    end
+
+    def init(state), do: {:ok, state}
+
+    def handle_call(:runtime_snapshot, _from, {id, owner, tools} = state) do
+      send(owner, {:agent_display_snapshot, id})
+      {:reply, {:ok, %{source_id: id, tools: tools}}, state}
+    end
+
+    def handle_call(request, _from, {_id, owner, _tools} = state) do
+      send(owner, {:unexpected_agent_mcp_request, request})
+      {:reply, {:error, :unexpected_request}, state}
+    end
+  end
+
+  defp native_snapshot_source(name, raw_name) do
+    {:ok, source} = Synapsis.MCPConfigs.create(%{name: name, command: "false"})
+    on_exit(fn -> Synapsis.MCPConfigs.delete(source) end)
+    tools = [%{raw_name: raw_name, description: "Native snapshot tool", permission_level: :read}]
+
+    start_supervised!(
+      Supervisor.child_spec({SnapshotSource, {source.id, self(), tools}}, id: source.id)
+    )
+
+    source
+  end
+
+  describe "effective selection source" do
+    for version <- [0, 1] do
+      @tag :native_catalog_provenance
+      test "Agent v#{version} native Toolset links override ignored direct MCP and use native guidance without legacy discovery",
+           %{conn: conn} do
+        Application.put_env(:synapsis_web, :native_refresh_owner, self())
+
+        Application.put_env(
+          :synapsis_core,
+          :mcp_refresh,
+          {__MODULE__, :notify_legacy_refresh, []}
+        )
+
+        on_exit(fn -> Application.delete_env(:synapsis_web, :native_refresh_owner) end)
+        raw_name = "linked::namespace::read"
+        source = native_snapshot_source("effective-native-source", raw_name)
+        ignored_source = Ecto.UUID.generate()
+
+        direct = [
+          "mcp::#{ignored_source}::ignored::raw",
+          "send_message",
+          "mcp::#{ignored_source}::ignored::raw"
+        ]
+
+        {:ok, linked} =
+          Toolsets.create(%{
+            name: "effective-native-v#{unquote(version)}",
+            tool_contract_version: 1,
+            tool_names: ["synapsis::file_read", "mcp::#{source.id}::#{raw_name}"]
+          })
+
+        {:ok, agent} =
+          AgentConfigs.create(%{
+            name: "effective-linked-v#{unquote(version)}",
+            tool_contract_version: unquote(version),
+            tools: direct,
+            toolset_ids: [linked.id, linked.id],
+            toolset_id: linked.id,
+            config: %{
+              "workspace_path" => "~/.synapsis/agents/effective-linked-v#{unquote(version)}",
+              "skill_ids" => []
+            }
+          })
+
+        {:ok, view, html} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+        render_async(view)
+        refute html =~ "Legacy selection"
+        assert html =~ "Native contract v1"
+        refute has_element?(view, "[data-toolset-id='#{linked.id}']", "incompatible")
+
+        assert has_element?(
+                 view,
+                 "[data-mcp-source='#{source.id}'] input[value='#{raw_name}'][checked]"
+               )
+
+        refute has_element?(view, "[data-mcp-source='#{ignored_source}']")
+        refute has_element?(view, "input[value='ignored::raw']")
+        view |> element("el-dm-button[phx-click='refresh_mcp_tools']") |> render_click()
+        render_async(view)
+        refute_receive :legacy_discovery_requested
+        assert_receive {:agent_display_snapshot, _}
+
+        native_agent_event(
+          view,
+          "save_agent",
+          &put_native_value(&1, "agent[label]", "Effective source retained")
+        )
+
+        saved = AgentConfigs.get(agent.id)
+        assert saved.tools === direct
+        assert saved.toolset_ids === agent.toolset_ids
+        assert saved.toolset_id === agent.toolset_id
+        assert saved.tool_contract_version === unquote(version)
+
+        expected =
+          Map.put(agent.config, "mcp_selection", %{
+            "default" => "selected",
+            "sources" => %{
+              source.id => %{"mode" => "selected", "tools" => [raw_name]}
+            }
+          })
+
+        assert saved.config === expected
+      end
+    end
+
+    @tag :native_catalog_provenance
+    test "Agent v0 with a legacy Toolset labels the effective selection as requiring migration",
+         %{conn: conn} do
+      {:ok, linked} = Toolsets.create(%{name: "effective-legacy", tool_names: ["send_message"]})
+
+      {:ok, agent} =
+        AgentConfigs.create(%{
+          name: "effective-legacy-agent",
+          tool_contract_version: 0,
+          toolset_ids: [linked.id]
+        })
+
+      {:ok, view, html} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+      assert html =~ "Legacy selection"
+      assert has_element?(view, "[data-toolset-id='#{linked.id}']", "migration required")
+
+      assert has_element?(
+               view,
+               "[data-toolset-id='#{linked.id}'] input[value='#{linked.id}'][checked]"
+             )
+    end
+  end
+
+  describe "native contract editor" do
+    test "new agents author v1 with explicit empty direct tools and retain user-facing defaults",
+         %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/agent/agents/new")
+      assert html =~ "Native contract v1"
+
+      native_agent_event(view, "change_agent_form", fn pairs ->
+        pairs
+        |> put_native_value("agent[name]", "native-empty")
+        |> put_native_value("agent[tool_contract_version]", "0")
+      end)
+
+      render_hook(view, "switch_config_tab", %{"tab" => "tools"})
+      view |> element("el-dm-button[phx-click='refresh_mcp_tools']") |> render_click()
+      render_async(view)
+
+      native_agent_event(
+        view,
+        "save_agent",
+        &put_native_value(&1, "agent[tool_contract_version]", "0")
+      )
+
+      saved = AgentConfigs.get_by_name("native-empty")
+      assert saved.tool_contract_version === 1
+      assert saved.tools === []
+      assert saved.toolset_ids === []
+      assert saved.toolset_id === nil
+      assert saved.enabled === true
+      assert saved.read_only === false
+      assert saved.permission_mode == "ask"
+      assert saved.reasoning_effort == "medium"
+      assert saved.max_tokens == 8192
+      assert saved.config["mcp_selection"] == %{"default" => "all", "sources" => %{}}
+    end
+
+    for version <- [0, 1] do
+      test "saved v#{version} keeps version and same-spelled send_message on forged ordinary save",
+           %{conn: conn} do
+        {:ok, agent} =
+          AgentConfigs.create(%{
+            name: "contract-save-v#{unquote(version)}",
+            tool_contract_version: unquote(version),
+            tools: ["send_message", "synapsis::swarm_message", "send_message", "file_read"],
+            config: %{
+              "mcp_selection" => %{"default" => "selected", "sources" => %{}},
+              "workspace_path" => "~/.synapsis/agents/contract-save-v#{unquote(version)}",
+              "skill_ids" => []
+            }
+          })
+
+        {:ok, view, html} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+
+        if unquote(version) == 0 do
+          assert html =~ "Legacy selection"
+          assert html =~ "migration"
+        else
+          assert html =~ "Native contract v1"
+        end
+
+        native_agent_event(view, "change_agent_form", fn pairs ->
+          pairs
+          |> put_native_value("agent[label]", "Version preserved")
+          |> put_native_value("agent[tool_contract_version]", to_string(1 - unquote(version)))
+        end)
+
+        render_hook(view, "switch_config_tab", %{"tab" => "tools"})
+        view |> element("el-dm-button[phx-click='refresh_mcp_tools']") |> render_click()
+        render_async(view)
+
+        native_agent_event(
+          view,
+          "save_agent",
+          &put_native_value(&1, "agent[tool_contract_version]", to_string(1 - unquote(version)))
+        )
+
+        saved = AgentConfigs.get(agent.id)
+        assert saved.tool_contract_version === unquote(version)
+        assert saved.tools === agent.tools
+        assert saved.toolset_ids === agent.toolset_ids
+        assert saved.toolset_id === agent.toolset_id
+        assert saved.config === agent.config
+        assert saved.label == "Version preserved"
+      end
+    end
+
+    @tag :native_catalog_provenance
+    test "native agents keep saved incompatible legacy toolsets visible and label their versions",
+         %{conn: conn} do
+      {:ok, legacy} = Toolsets.create(%{name: "legacy-saved-link", tool_names: ["send_message"]})
+
+      {:ok, native} =
+        Toolsets.create(%{
+          name: "native-saved-link",
+          tool_contract_version: 1,
+          tool_names: ["send_message"]
+        })
+
+      {:ok, agent} =
+        AgentConfigs.create(%{
+          name: "native-legacy-link",
+          tool_contract_version: 1,
+          tools: [],
+          toolset_ids: [legacy.id, native.id, legacy.id],
+          toolset_id: legacy.id,
+          config: %{"mcp_selection" => %{"default" => "selected", "sources" => %{}}}
+        })
+
+      {:ok, view, _} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+      assert has_element?(view, "[data-toolset-id='#{legacy.id}']", "Legacy contract v0")
+      assert has_element?(view, "[data-toolset-id='#{legacy.id}']", "migration required")
+
+      assert has_element?(
+               view,
+               "[data-toolset-id='#{legacy.id}'] input[value='#{legacy.id}'][checked]"
+             )
+
+      assert has_element?(view, "[data-toolset-id='#{native.id}']", "Native contract v1")
+
+      native_agent_event(
+        view,
+        "save_agent",
+        &put_native_value(&1, "agent[label]", "Link retained")
+      )
+
+      saved = AgentConfigs.get(agent.id)
+      assert saved.tools === []
+      assert saved.tool_contract_version === 1
+      assert saved.toolset_ids === agent.toolset_ids
+      assert saved.toolset_id === agent.toolset_id
+    end
+
+    test "native MCP choices use snapshot source UUID and entire nested raw name across rename and duplicate labels",
+         %{conn: conn} do
+      raw_name = "namespace::read::documents"
+      first = native_snapshot_source("same-agent-label", raw_name)
+      second = native_snapshot_source("same-agent-label", raw_name)
+
+      policy = %{
+        "default" => "selected",
+        "sources" => %{
+          first.id => %{"mode" => "selected", "tools" => [raw_name, raw_name]},
+          second.id => %{"mode" => "none", "tools" => []}
+        }
+      }
+
+      {:ok, agent} =
+        AgentConfigs.create(%{
+          name: "native-source-rules",
+          tool_contract_version: 1,
+          tools: [],
+          config: %{
+            "mcp_selection" => policy,
+            "workspace_path" => "~/.synapsis/agents/native-source-rules",
+            "skill_ids" => []
+          }
+        })
+
+      # A Registry record with the same label must never supply a native choice.
+      legacy_name = "mcp:same-agent-label:legacy-only"
+
+      assert :ok =
+               Synapsis.Tool.Registry.register_process(legacy_name, self(),
+                 mcp_config_id: first.id,
+                 mcp_tool_name: "legacy-only",
+                 description: "Legacy only"
+               )
+
+      on_exit(fn -> Synapsis.Tool.Registry.unregister(legacy_name) end)
+      {:ok, view, _} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+      render_async(view)
+
+      assert has_element?(
+               view,
+               "[data-mcp-source='#{first.id}'] input[value='#{raw_name}'][checked]"
+             )
+
+      refute has_element?(view, "[data-mcp-source='#{first.id}'] input[value='legacy-only']")
+      assert has_element?(view, "[data-mcp-source='#{second.id}']", "same-agent-label")
+
+      native_agent_event(
+        view,
+        "change_agent_form",
+        &put_native_value(&1, "agent[label]", "UUID draft")
+      )
+
+      {:ok, _} = Synapsis.MCPConfigs.update(first, %{name: "renamed-agent-label"})
+      view |> element("el-dm-button[phx-click='refresh_mcp_tools']") |> render_click()
+      render_async(view)
+      assert has_element?(view, "[data-mcp-source='#{first.id}']", "renamed-agent-label")
+      native_agent_event(view, "save_agent")
+      saved = AgentConfigs.get(agent.id)
+      assert saved.config === agent.config
+      assert saved.tools === []
+      assert saved.label == "UUID draft"
+      assert_receive {:agent_display_snapshot, _}
+      refute_receive {:unexpected_agent_mcp_request, _}
+    end
+
+    test "native direct MCP names initialize source rules by UUID while retaining nested raw suffix and orphan selections",
+         %{conn: conn} do
+      {:ok, source} =
+        Synapsis.MCPConfigs.create(%{
+          name: "native-direct-label",
+          command: "false",
+          enabled: false
+        })
+
+      on_exit(fn -> Synapsis.MCPConfigs.delete(source) end)
+      orphan = Ecto.UUID.generate()
+
+      names = [
+        "mcp::#{source.id}::namespace::raw",
+        "mcp::#{orphan}::gone::raw",
+        "mcp::#{source.id}::namespace::raw"
+      ]
+
+      {:ok, agent} =
+        AgentConfigs.create(%{
+          name: "native-direct-source",
+          tool_contract_version: 1,
+          tools: names
+        })
+
+      {:ok, view, _} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+
+      assert has_element?(
+               view,
+               "[data-mcp-source='#{source.id}'] input[value='namespace::raw'][checked]"
+             )
+
+      assert has_element?(view, "[data-mcp-source='#{orphan}'] input[value='gone::raw'][checked]")
+
+      native_agent_event(
+        view,
+        "save_agent",
+        &put_native_value(&1, "agent[label]", "Direct retained")
+      )
+
+      saved = AgentConfigs.get(agent.id)
+      assert saved.tools === names
+      assert saved.tool_contract_version === 1
+
+      assert saved.config["mcp_selection"] == %{
+               "default" => "selected",
+               "sources" => %{
+                 source.id => %{
+                   "mode" => "selected",
+                   "tools" => ["namespace::raw", "namespace::raw"]
+                 },
+                 orphan => %{"mode" => "selected", "tools" => ["gone::raw"]}
+               }
+             }
+    end
+
+    test "new native agent labels legacy toolset choices before any link is saved", %{conn: conn} do
+      {:ok, legacy} = Toolsets.create(%{name: "legacy-new-choice", tool_names: ["send_message"]})
+      {:ok, view, _} = live(conn, ~p"/agent/agents/new")
+      assert has_element?(view, "[data-toolset-id='#{legacy.id}']", "Legacy contract v0")
+      assert has_element?(view, "[data-toolset-id='#{legacy.id}']", "migration required")
+      refute has_element?(view, "input[value='#{legacy.id}'][checked]")
+    end
+  end
+
+  for version <- [0, 1] do
+    @saved_version version
+    test "native metadata saves preserve unavailable selections and raw v#{version} configuration",
+         %{
+           conn: conn
+         } do
+      {:ok, present} = Toolsets.create(%{name: "present-saved", tool_names: ["file_read"]})
+      missing = Ecto.UUID.generate()
+      selected_source = Ecto.UUID.generate()
+      denied_source = Ecto.UUID.generate()
+      all_source = Ecto.UUID.generate()
+
+      policy = %{
+        "default" => "all",
+        "sources" => %{
+          selected_source => %{"mode" => "selected", "tools" => ["z:raw", "a/raw", "z:raw"]},
+          denied_source => %{"mode" => "none", "tools" => ["denied/raw"]},
+          all_source => %{"mode" => "all", "tools" => ["remembered/raw"]}
+        }
+      }
+
+      {:ok, agent} =
+        AgentConfigs.create(%{
+          name: "raw-saved-v#{@saved_version}",
+          tool_contract_version: @saved_version,
+          tools: ["unknown/native", "file_read", "unknown/native"],
+          toolset_ids: [missing, present.id, missing],
+          toolset_id: present.id,
+          config: %{
+            "unknown" => %{"keep" => ["raw", "raw"]},
+            "mcp_selection" => policy,
+            "workspace_path" => "~/.synapsis/agents/raw-saved-v#{@saved_version}",
+            "skill_ids" => []
+          }
+        })
+
+      {:ok, view, _} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+      render_async(view)
+
+      assert has_element?(
+               view,
+               "input[type='checkbox'][name='agent[toolset_ids][]'][value='#{missing}'][checked]"
+             )
+
+      assert has_element?(view, "[data-unavailable-toolset='#{missing}']", "unavailable")
+      assert has_element?(view, "[data-unavailable-toolset='#{missing}']", missing)
+
+      for {id, rule} <- policy["sources"] do
+        assert has_element?(view, "[data-mcp-source='#{id}']", "unavailable")
+        assert has_element?(view, "[data-mcp-source='#{id}']", id)
+
+        assert has_element?(
+                 view,
+                 "select[name='mcp_selection[sources][#{id}][mode]'] option[value='#{rule["mode"]}'][selected]"
+               )
+      end
+
+      native_agent_event(
+        view,
+        "change_agent_form",
+        &put_native_value(&1, "agent[label]", "Draft label")
+      )
+
+      original_mount = agent_form_mount(view)
+      render_hook(view, "switch_config_tab", %{"tab" => "tools"})
+      assert agent_form_mount(view) != original_mount
+      view |> element("el-dm-button[phx-click='refresh_mcp_tools']") |> render_click()
+      render_async(view)
+      render_hook(view, "switch_config_tab", %{"tab" => "overview"})
+      assert agent_managed_values(view)["agent"]["label"] == "Draft label"
+      native_agent_event(view, "save_agent")
+
+      saved = AgentConfigs.get(agent.id)
+      assert saved.label == "Draft label"
+      assert saved.tool_contract_version == @saved_version
+      assert saved.tools == agent.tools
+      assert saved.toolset_ids == agent.toolset_ids
+      assert saved.toolset_id == agent.toolset_id
+      assert saved.config == agent.config
+    end
+  end
+
+  test "native unchecks and inherited orphan rules persist after reopening", %{conn: conn} do
+    {:ok, present} = Toolsets.create(%{name: "retained-saved", tool_names: ["file_read"]})
+    missing = Ecto.UUID.generate()
+    removed_source = Ecto.UUID.generate()
+    selected_source = Ecto.UUID.generate()
+
+    {:ok, agent} =
+      AgentConfigs.create(%{
+        name: "explicit-unavailable-removal",
+        toolset_ids: [missing, present.id, missing],
+        toolset_id: missing,
+        config: %{
+          "mcp_selection" => %{
+            "default" => "all",
+            "sources" => %{
+              removed_source => %{"mode" => "none", "tools" => []},
+              selected_source => %{
+                "mode" => "selected",
+                "tools" => ["keep/raw", "gone/raw", "keep/raw"]
+              }
+            }
+          }
+        }
+      })
+
+    {:ok, view, _} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+    render_async(view)
+
+    native_agent_event(view, "change_agent_form", fn pairs ->
+      pairs
+      |> Enum.reject(&(&1 == {"agent[toolset_ids][]", missing}))
+      |> Enum.reject(&(&1 == {"mcp_selection[sources][#{selected_source}][tools][]", "gone/raw"}))
+      |> put_native_value("mcp_selection[sources][#{removed_source}][mode]", "inherit")
+    end)
+
+    view |> element("el-dm-button[phx-click='refresh_mcp_tools']") |> render_click()
+    render_async(view)
+    render_hook(view, "switch_config_tab", %{"tab" => "runtime"})
+    native_agent_event(view, "save_agent")
+
+    saved = AgentConfigs.get(agent.id)
+    assert saved.toolset_ids == [present.id]
+    assert saved.toolset_id == present.id
+
+    assert saved.config["mcp_selection"] == %{
+             "default" => "all",
+             "sources" => %{
+               selected_source => %{"mode" => "selected", "tools" => ["keep/raw", "keep/raw"]}
+             }
+           }
+
+    {:ok, reopened, _} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+    render_async(reopened)
+    refute has_element?(reopened, "[data-unavailable-toolset='#{missing}']")
+    refute has_element?(reopened, "[data-mcp-source='#{removed_source}']")
+    refute has_element?(reopened, "input[value='gone/raw']")
+    assert has_element?(reopened, "input[value='keep/raw'][checked]")
+  end
+
+  test "native metadata save preserves a singular-only unavailable toolset", %{conn: conn} do
+    missing = Ecto.UUID.generate()
+    {:ok, agent} = AgentConfigs.create(%{name: "singular-missing", toolset_id: missing})
+    {:ok, view, _} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+    render_async(view)
+
+    native_agent_event(
+      view,
+      "save_agent",
+      &put_native_value(&1, "agent[label]", "Singular saved")
+    )
+
+    saved = AgentConfigs.get(agent.id)
+    assert saved.label == "Singular saved"
+    assert saved.toolset_ids == []
+    assert saved.toolset_id == missing
+
+    native_agent_event(
+      view,
+      "save_agent",
+      &Enum.reject(&1, fn pair -> pair == {"agent[toolset_ids][]", missing} end)
+    )
+
+    saved = AgentConfigs.get(agent.id)
+    assert saved.toolset_ids == []
+    assert saved.toolset_id == nil
+  end
+
   test "an open agent editor refreshes model options while retaining its selected model", %{
     conn: conn
   } do
@@ -1060,6 +1644,130 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       |> Providers.create()
 
     provider
+  end
+
+  # Serialize successful native controls as FormData does in the browser. Only
+  # React-managed markers obtain their mounted values from initial-values; never
+  # merge that map over native controls or restore a missing native selection.
+  defp native_agent_event(view, event, transform \\ &Function.identity/1) do
+    html =
+      view
+      |> element("[data-form-id='agent-config-form']")
+      |> render()
+      |> LazyHTML.from_fragment()
+
+    [id] = html |> LazyHTML.query("[data-form-id]") |> LazyHTML.attribute("id")
+
+    values =
+      html
+      |> LazyHTML.query("input[name], textarea[name], select[name]")
+      |> LazyHTML.to_tree()
+      |> Enum.flat_map(fn {tag, attrs, children} ->
+        attrs = Map.new(attrs)
+
+        cond do
+          Map.has_key?(attrs, "disabled") ->
+            []
+
+          attrs["type"] in ["checkbox", "radio"] and not Map.has_key?(attrs, "checked") ->
+            []
+
+          attrs["type"] in ["submit", "button", "reset", "file"] ->
+            []
+
+          tag == "textarea" ->
+            [{attrs["name"], children |> LazyHTML.from_tree() |> LazyHTML.text()}]
+
+          tag == "select" ->
+            options =
+              children |> LazyHTML.from_tree() |> LazyHTML.query("option") |> LazyHTML.to_tree()
+
+            selected = Enum.filter(options, fn {_, a, _} -> List.keymember?(a, "selected", 0) end)
+            selected = if selected == [], do: Enum.take(options, 1), else: selected
+
+            Enum.map(selected, fn {_, a, c} ->
+              {attrs["name"], Map.new(a)["value"] || c |> LazyHTML.from_tree() |> LazyHTML.text()}
+            end)
+
+          true ->
+            [{attrs["name"], attrs["value"] || ""}]
+        end
+      end)
+      |> Kernel.++(agent_managed_pairs(html))
+      |> transform.()
+      |> native_snapshot()
+
+    render_hook(view, event, %{
+      "id" => id,
+      "values" => values,
+      "revision" => System.unique_integer([:positive, :monotonic])
+    })
+  end
+
+  defp put_native_value(pairs, name, value) do
+    Enum.reject(pairs, fn {key, _} -> key == name end) ++ [{name, value}]
+  end
+
+  # The native hook initializes every rendered [] group, filters empty hidden
+  # sentinels, and collects each checked value once before sending its snapshot.
+  defp native_snapshot(pairs) do
+    values = pairs |> URI.encode_query() |> Plug.Conn.Query.decode()
+
+    pairs
+    |> Enum.map(&elem(&1, 0))
+    |> Enum.filter(&String.ends_with?(&1, "[]"))
+    |> Enum.uniq()
+    |> Enum.reduce(values, fn name, values ->
+      selected = for {^name, value} <- pairs, value != "", do: value
+
+      path =
+        name
+        |> String.trim_trailing("[]")
+        |> String.replace("]", "")
+        |> String.split("[")
+        |> Enum.map(&Access.key(&1, %{}))
+
+      put_in(values, path, Enum.uniq(selected))
+    end)
+  end
+
+  defp agent_form_mount(view) do
+    view
+    |> element("[data-form-id='agent-config-form']")
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("[data-form-id]")
+    |> LazyHTML.attribute("id")
+    |> hd()
+  end
+
+  defp agent_managed_values(view) do
+    view
+    |> element("[data-form-id='agent-config-form']")
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> agent_managed_pairs()
+    |> URI.encode_query()
+    |> Plug.Conn.Query.decode()
+  end
+
+  defp agent_managed_pairs(html) do
+    initial =
+      html
+      |> LazyHTML.query("[data-initial-values]")
+      |> LazyHTML.attribute("data-initial-values")
+      |> hd()
+      |> Jason.decode!()
+
+    html
+    |> LazyHTML.query("[data-dm-react-field]")
+    |> LazyHTML.attribute("data-dm-react-field")
+    |> Enum.map(&Jason.decode!/1)
+    |> Enum.reject(& &1["disabled"])
+    |> Enum.map(fn field ->
+      path = field["name"] |> String.replace("]", "") |> String.split("[")
+      {field["name"], get_in(initial, path) || ""}
+    end)
   end
 
   defp cascader_options(html) do

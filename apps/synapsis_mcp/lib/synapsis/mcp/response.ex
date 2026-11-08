@@ -1,7 +1,7 @@
 defmodule Synapsis.MCP.Response do
   @moduledoc "Normalizes MCP result maps into Synapsis tool shapes."
 
-  @doc "Map a tools/list result map to Synapsis.Tool.Registry tool definitions."
+  @doc "Map a tools/list result map to source-owned tool metadata."
   def tools(result, server_name, opts \\ []) when is_map(result) and is_list(opts) do
     trust_annotations? = Keyword.get(opts, :trust_annotations, false) == true
 
@@ -17,7 +17,15 @@ defmodule Synapsis.MCP.Response do
         trust_annotations: trust_annotations?,
         permission_level: permission_level(annotations, trust_annotations?)
       }
+      |> maybe_output_schema(t)
     end)
+  end
+
+  defp maybe_output_schema(tool, raw) do
+    case Map.fetch(raw, "outputSchema") do
+      {:ok, schema} -> Map.put(tool, :output_schema, schema)
+      :error -> tool
+    end
   end
 
   @doc "Extract text content from a tools/call result map."

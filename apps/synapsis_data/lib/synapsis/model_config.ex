@@ -10,11 +10,22 @@ defmodule Synapsis.ModelConfig do
     field(:name, :string)
     field(:context_window, :integer, default: 256_000)
     field(:enabled, :boolean, default: true)
+    field(:input, {:array, :string}, default: nil)
+    field(:selection_order, :integer)
   end
 
   def changeset(record, attrs) do
     record
-    |> cast(attrs, [:id, :provider_id, :model, :name, :context_window, :enabled])
+    |> cast(attrs, [
+      :id,
+      :provider_id,
+      :model,
+      :name,
+      :context_window,
+      :enabled,
+      :input,
+      :selection_order
+    ])
     |> validate_required([:provider_id, :model, :context_window, :enabled])
     |> validate_number(:context_window, greater_than: 0)
     |> validate_length(:model, max: 1024)

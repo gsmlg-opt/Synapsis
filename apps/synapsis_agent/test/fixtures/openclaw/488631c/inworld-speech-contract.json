@@ -1,0 +1,3971 @@
+{
+  "schemaVersion": 1,
+  "sourcePin": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+  "harness": {
+    "path": "scripts/openclaw/capture-inworld-speech-contract.mjs",
+    "sha256": "5cbc449088209d3efce8b99771cacd8a070c25669a95f04bbe5e6b7f9d9301e1"
+  },
+  "sourceAudit": [
+    {
+      "path": "extensions/inworld/speech-provider.ts",
+      "gitBlob": "2caf3326c227d9a46b5fecc8fecd9d398f7a75b7",
+      "sourceSha256": "c16d00887172618a79998d395061e59b885f3fcbfab642c3504c45dda4f6d106",
+      "sourceBytes": 6598,
+      "readRange": {
+        "start": 1,
+        "end": 186
+      },
+      "executableSha256": "399a98c78ea1c6331f9788e341465ef295d4018e7c4d7fa2b879f0f00b1c5db3",
+      "wholeModule": true,
+      "evaluated": true
+    },
+    {
+      "path": "extensions/inworld/tts.ts",
+      "gitBlob": "83818e1da1129a7abb7713548f16b9600c2a354d",
+      "sourceSha256": "23bba8fc60a65f8f3576f2ed96cdd6a453b588ae94f81aab02c89834926f6572",
+      "sourceBytes": 9135,
+      "readRange": {
+        "start": 1,
+        "end": 264
+      },
+      "executableSha256": "e1262e3c064246e4dc667d73a17afd43f5127bf2001dd57ff1828d7801047881",
+      "wholeModule": true,
+      "evaluated": true
+    },
+    {
+      "path": "src/tts/tts-provider-helpers.ts",
+      "gitBlob": "21347cace4ebcf7e3f5b8c276a9ac3a070390240",
+      "sourceSha256": "1f1425d541d933324b9cafc5135997487d26d9ff1638b2dd7b653498f5357747",
+      "sourceBytes": 2144,
+      "readRange": {
+        "start": 1,
+        "end": 73
+      },
+      "executableSha256": "02e64150c164d3a239f92129f5885ef5d141bc9b3e4beb13b9d75f6fc6fb5663",
+      "wholeModule": true,
+      "evaluated": true
+    },
+    {
+      "path": "src/tts/directive-parser.ts",
+      "gitBlob": "5c532ddbb3543dce4c0d2008f27c8f6113f83589",
+      "sourceSha256": "5f629cc79bf82a2783885fbf97e87d87045c01b852298ba9e781c5b996c48329",
+      "sourceBytes": 1887,
+      "readRange": {
+        "start": 1,
+        "end": 58
+      },
+      "executableSha256": "ce851780e5334aa7fa7df68425c1aa0d74eaa94e1aafc578e19bb294cf86943f",
+      "wholeModule": true,
+      "evaluated": true
+    },
+    {
+      "path": "src/tts/directive-number.ts",
+      "gitBlob": "99f652f291ff6aa43dff23d3b79be1350fb80268",
+      "sourceSha256": "9d87677afe48ecc851ca209efdb820ef3c191b642a5e9c4f8b483cef57aaed4a",
+      "sourceBytes": 1203,
+      "readRange": {
+        "start": 1,
+        "end": 35
+      },
+      "executableSha256": "1d50bc3491581e30f5bd95ac592f677ccd693ba5360ccbb36cd3bb2d702e0175",
+      "wholeModule": true,
+      "evaluated": true
+    },
+    {
+      "path": "packages/normalization-core/src/string-coerce.ts",
+      "gitBlob": "445a9cc4f8daff07f033c3958baf2b798e240e9d",
+      "sourceSha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf",
+      "sourceBytes": 5049,
+      "readRange": {
+        "start": 1,
+        "end": 132
+      },
+      "executableSha256": "9a2e05da77f15162560fe904c20ba9a49a6e6996e8b8c9bc16fd611f8456f504",
+      "wholeModule": true,
+      "evaluated": true
+    },
+    {
+      "path": "packages/normalization-core/src/number-coercion.ts",
+      "gitBlob": "00ac5bda035cd8e854059a0198c2a9a7928e1bc9",
+      "sourceSha256": "8c40eca65a8fd1dc3aa40d90c22bff35c3710fcb03d2bc8227864a264d20ddc4",
+      "sourceBytes": 13462,
+      "readRange": {
+        "start": 1,
+        "end": 372
+      },
+      "executableSha256": "2f2d58d34e9b77067ea265333fb06a807ce0cdcad83639d6c257095bb9f69a97",
+      "wholeModule": true,
+      "evaluated": true
+    },
+    {
+      "path": "packages/normalization-core/src/record-coerce.ts",
+      "gitBlob": "78eba9cd0e4c75f94e71dfb3fcb7f4cf4eeeef16",
+      "sourceSha256": "541c179840c2cad4edc5c8103f77cc7f8c6b1ee5ec3e52c7c9fe097b18917f1c",
+      "sourceBytes": 3097,
+      "readRange": {
+        "start": 1,
+        "end": 83
+      },
+      "executableSha256": "4ca2e6e901c28a07ae5fc9b29719cce5c26c919c65ab235b4ae2d5eaf0ec338c",
+      "wholeModule": true,
+      "evaluated": true
+    },
+    {
+      "path": "packages/normalization-core/src/utf16-slice.ts",
+      "gitBlob": "8dc757cc3bf6e8e17e853badf17ca0aa82611ad4",
+      "sourceSha256": "12fd3212b08522a1523263c92f654151ad01605ee48a0ff58a1256889fb7cb5f",
+      "sourceBytes": 2445,
+      "readRange": {
+        "start": 1,
+        "end": 77
+      },
+      "executableSha256": "8c36e4400e17c643598f7dd0134b80cb0dc324e63040fb9f02335a53ec4b1ec7",
+      "wholeModule": true,
+      "evaluated": true
+    },
+    {
+      "path": "packages/media-core/src/base64.ts",
+      "gitBlob": "31eead019c4aeecd081ba7836e7ec408a367ae1c",
+      "sourceSha256": "93e6ef481601a3bee0a6cbd304506a0b1ab4e1e05d363be78a00ebe7b63173ac",
+      "sourceBytes": 4599,
+      "readRange": {
+        "start": 1,
+        "end": 141
+      },
+      "executableSha256": "79873227363e5e57fa1cb6931618313441b1b7da5d7cc586a7d593c14582e13e",
+      "wholeModule": true,
+      "evaluated": true
+    },
+    {
+      "path": "packages/media-core/src/constants.ts",
+      "gitBlob": "03db8b857c1d69601903eda22f204b02ce640f6f",
+      "sourceSha256": "eaf6503c56b32bab745da862d150c76896805e7db2f5bb12283e2930b64cb184",
+      "sourceBytes": 1605,
+      "readRange": {
+        "start": 1,
+        "end": 45
+      },
+      "executableSha256": "270d96507dc42b7b2f509f182368362ad39f161af14c52828379845c596408cb",
+      "wholeModule": true,
+      "evaluated": true
+    }
+  ],
+  "sourceIntegrity": {
+    "before": {
+      "verified": true,
+      "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+      "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+      "verifiedTrackedFiles": 58558,
+      "filesSha256": "8bc3e47adbc99a7db036fb44fbae3c27cafdc22e5075fee2943414d575def7f5"
+    },
+    "after": {
+      "verified": true,
+      "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+      "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+      "verifiedTrackedFiles": 58558,
+      "filesSha256": "8bc3e47adbc99a7db036fb44fbae3c27cafdc22e5075fee2943414d575def7f5"
+    }
+  },
+  "dataAudit": [
+    {
+      "path": "extensions/inworld/openclaw.plugin.json",
+      "gitBlob": "56f22b23df0525f9696dfdb7efb29b453bdaf80a",
+      "sourceSha256": "ef9298a059446812a79f25cd27fdb833463d3e3fa077f1f75d96a901f304e03e",
+      "usage": "complete original plugin manifest provenance; plugin registration unexecuted"
+    }
+  ],
+  "pluginManifest": {
+    "id": "inworld",
+    "categories": [
+      "voice"
+    ],
+    "capabilityCatalogEntry": "./capability-catalog.ts",
+    "activation": {
+      "onStartup": false
+    },
+    "enabledByDefault": true,
+    "name": "Inworld",
+    "description": "Inworld streaming text-to-speech (MP3, OGG_OPUS, PCM telephony).",
+    "setup": {
+      "providers": [
+        {
+          "id": "inworld",
+          "envVars": [
+            "INWORLD_API_KEY"
+          ]
+        }
+      ]
+    },
+    "contracts": {
+      "speechProviders": [
+        "inworld"
+      ]
+    },
+    "configGroups": [
+      {
+        "id": "inworld-connection",
+        "title": "Inworld connection",
+        "order": 10,
+        "properties": [
+          "apiKey",
+          "baseUrl"
+        ]
+      },
+      {
+        "id": "voice-generation",
+        "title": "Voice generation",
+        "order": 20,
+        "properties": [
+          "voiceId",
+          "modelId",
+          "temperature"
+        ]
+      }
+    ],
+    "configSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "apiKey": {
+          "type": "string",
+          "description": "Inworld API key. Must be the Base64 credential string from the Inworld dashboard (used as Authorization: Basic <apiKey>). Falls back to INWORLD_API_KEY env var."
+        },
+        "baseUrl": {
+          "type": "string",
+          "description": "Override Inworld API base URL (default https://api.inworld.ai)."
+        },
+        "voiceId": {
+          "type": "string",
+          "description": "Voice identifier (default Sarah)."
+        },
+        "modelId": {
+          "type": "string",
+          "description": "TTS model id (default inworld-tts-1.5-max)."
+        },
+        "temperature": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Sampling temperature 0..2."
+        }
+      }
+    }
+  },
+  "transformation": {
+    "api": "node:module.stripTypeScriptTypes",
+    "options": {
+      "mode": "transform",
+      "sourceMap": false
+    },
+    "sdkFacades": [
+      {
+        "module": "openclaw/plugin-sdk/string-coerce-runtime",
+        "source": "export { asFiniteNumberInRange } from \"packages/normalization-core/src/number-coercion.ts\";\nexport { asOptionalRecord, filterStringRecord } from \"packages/normalization-core/src/record-coerce.ts\";\nexport { normalizeOptionalString } from \"packages/normalization-core/src/string-coerce.ts\";\n",
+        "sha256": "fba8ffdf3ac5393cfe5d0ccf26ca5c9c27512da6cf6aef8705582b3f0dd0a75f"
+      },
+      {
+        "module": "openclaw/plugin-sdk/speech-provider",
+        "source": "export { createSpeechDirectiveParser } from \"src/tts/directive-parser.ts\";\nexport { resolveSpeechProviderApiKey } from \"src/tts/tts-provider-helpers.ts\";\nexport { truncateUtf16Safe } from \"packages/normalization-core/src/utf16-slice.ts\";\n",
+        "sha256": "f1b68f6687fee5d059c71175737fd3869515fe11ddf58cb5c420f182b9c073c1"
+      },
+      {
+        "module": "@openclaw/normalization-core/string-coerce",
+        "source": "export { normalizeOptionalLowercaseString, normalizeOptionalString } from \"packages/normalization-core/src/string-coerce.ts\";\n",
+        "sha256": "00b21ddd66b6d6f529553b7e4dae1fa820b9d0ccb7fa0402710ddcaa49319134"
+      },
+      {
+        "module": "@openclaw/normalization-core/number-coercion",
+        "source": "export { asFiniteNumberInRange, parseStrictFiniteNumber } from \"packages/normalization-core/src/number-coercion.ts\";\n",
+        "sha256": "c77a062bbb09181f44fb560ac9523bd0d26d1904f9cd8c381e88954a3f2e35c0"
+      },
+      {
+        "module": "openclaw/plugin-sdk/media-runtime",
+        "source": "export { canonicalizeBase64 } from \"packages/media-core/src/base64.ts\";\nexport { MAX_AUDIO_BYTES } from \"packages/media-core/src/constants.ts\";\n",
+        "sha256": "17236ca0714c272d1facdd1391e519427abcc3e3ae99bb9f06e820d0cdd8f13d"
+      }
+    ],
+    "staticImports": [
+      {
+        "importer": "extensions/inworld/speech-provider.ts",
+        "specifier": "openclaw/plugin-sdk/secret-input",
+        "resolved": "openclaw/plugin-sdk/secret-input"
+      },
+      {
+        "importer": "extensions/inworld/speech-provider.ts",
+        "specifier": "openclaw/plugin-sdk/speech-provider",
+        "resolved": "openclaw/plugin-sdk/speech-provider"
+      },
+      {
+        "importer": "extensions/inworld/speech-provider.ts",
+        "specifier": "openclaw/plugin-sdk/string-coerce-runtime",
+        "resolved": "openclaw/plugin-sdk/string-coerce-runtime"
+      },
+      {
+        "importer": "extensions/inworld/speech-provider.ts",
+        "specifier": "./tts.js",
+        "resolved": "extensions/inworld/tts.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/speech-provider",
+        "specifier": "src/tts/directive-parser.ts",
+        "resolved": "src/tts/directive-parser.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/speech-provider",
+        "specifier": "src/tts/tts-provider-helpers.ts",
+        "resolved": "src/tts/tts-provider-helpers.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/speech-provider",
+        "specifier": "packages/normalization-core/src/utf16-slice.ts",
+        "resolved": "packages/normalization-core/src/utf16-slice.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/string-coerce-runtime",
+        "specifier": "packages/normalization-core/src/number-coercion.ts",
+        "resolved": "packages/normalization-core/src/number-coercion.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/string-coerce-runtime",
+        "specifier": "packages/normalization-core/src/record-coerce.ts",
+        "resolved": "packages/normalization-core/src/record-coerce.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/string-coerce-runtime",
+        "specifier": "packages/normalization-core/src/string-coerce.ts",
+        "resolved": "packages/normalization-core/src/string-coerce.ts"
+      },
+      {
+        "importer": "extensions/inworld/tts.ts",
+        "specifier": "openclaw/plugin-sdk/response-limit-runtime",
+        "resolved": "openclaw/plugin-sdk/response-limit-runtime"
+      },
+      {
+        "importer": "extensions/inworld/tts.ts",
+        "specifier": "openclaw/plugin-sdk/speech-provider",
+        "resolved": "openclaw/plugin-sdk/speech-provider"
+      },
+      {
+        "importer": "src/tts/directive-parser.ts",
+        "specifier": "./directive-number.js",
+        "resolved": "src/tts/directive-number.ts"
+      },
+      {
+        "importer": "src/tts/tts-provider-helpers.ts",
+        "specifier": "node:fs",
+        "resolved": "node:fs"
+      },
+      {
+        "importer": "src/tts/tts-provider-helpers.ts",
+        "specifier": "@openclaw/normalization-core/string-coerce",
+        "resolved": "@openclaw/normalization-core/string-coerce"
+      },
+      {
+        "importer": "packages/normalization-core/src/number-coercion.ts",
+        "specifier": "./string-coerce.ts",
+        "resolved": "packages/normalization-core/src/string-coerce.ts"
+      },
+      {
+        "importer": "src/tts/directive-number.ts",
+        "specifier": "@openclaw/normalization-core/number-coercion",
+        "resolved": "@openclaw/normalization-core/number-coercion"
+      },
+      {
+        "importer": "@openclaw/normalization-core/string-coerce",
+        "specifier": "packages/normalization-core/src/string-coerce.ts",
+        "resolved": "packages/normalization-core/src/string-coerce.ts"
+      },
+      {
+        "importer": "@openclaw/normalization-core/number-coercion",
+        "specifier": "packages/normalization-core/src/number-coercion.ts",
+        "resolved": "packages/normalization-core/src/number-coercion.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/media-runtime",
+        "specifier": "packages/media-core/src/base64.ts",
+        "resolved": "packages/media-core/src/base64.ts"
+      },
+      {
+        "importer": "openclaw/plugin-sdk/media-runtime",
+        "specifier": "packages/media-core/src/constants.ts",
+        "resolved": "packages/media-core/src/constants.ts"
+      }
+    ],
+    "dynamicImports": [
+      {
+        "importer": "extensions/inworld/tts.ts",
+        "specifier": "openclaw/plugin-sdk/media-runtime",
+        "resolved": "openclaw/plugin-sdk/media-runtime"
+      },
+      {
+        "importer": "extensions/inworld/tts.ts",
+        "specifier": "openclaw/plugin-sdk/ssrf-runtime",
+        "resolved": "openclaw/plugin-sdk/ssrf-runtime"
+      }
+    ]
+  },
+  "metadata": {
+    "id": "inworld",
+    "label": "Inworld",
+    "autoSelectOrder": 30,
+    "defaultModel": "inworld-tts-1.5-max",
+    "models": [
+      "inworld-tts-1.5-max",
+      "inworld-tts-1.5-mini",
+      "inworld-tts-1-max",
+      "inworld-tts-1"
+    ],
+    "callbacks": [
+      "resolveConfig",
+      "parseDirectiveToken",
+      "resolveTalkConfig",
+      "resolveTalkOverrides",
+      "listVoices",
+      "isConfigured",
+      "isConfiguredAsync",
+      "synthesize",
+      "synthesizeTelephony"
+    ]
+  },
+  "observations": {
+    "config": [
+      {
+        "id": "empty-defaults",
+        "input": {
+          "rawConfig": {}
+        },
+        "inputAfter": {
+          "rawConfig": {}
+        },
+        "result": {
+          "baseUrl": "https://api.inworld.ai",
+          "voiceId": "Sarah",
+          "modelId": "inworld-tts-1.5-max"
+        },
+        "requests": [],
+        "releaseCount": 0,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey"
+          }
+        ]
+      },
+      {
+        "id": "root-and-legacy-not-selected",
+        "input": {
+          "rawConfig": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "voiceId": "RootVoice",
+            "modelId": "RootModel",
+            "inworld": {
+              "voiceId": "LegacyVoice",
+              "modelId": "LegacyModel"
+            }
+          }
+        },
+        "inputAfter": {
+          "rawConfig": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "voiceId": "RootVoice",
+            "modelId": "RootModel",
+            "inworld": {
+              "voiceId": "LegacyVoice",
+              "modelId": "LegacyModel"
+            }
+          }
+        },
+        "result": {
+          "baseUrl": "https://api.inworld.ai",
+          "voiceId": "Sarah",
+          "modelId": "inworld-tts-1.5-max"
+        },
+        "requests": [],
+        "releaseCount": 0,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey"
+          }
+        ]
+      },
+      {
+        "id": "nested-all-fields",
+        "input": {
+          "rawConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "baseUrl": " https://speech.example.test/v2/// ",
+                "voiceId": " Ashley ",
+                "modelId": " inworld-tts-1.5-mini ",
+                "temperature": 0.75
+              }
+            }
+          }
+        },
+        "inputAfter": {
+          "rawConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "baseUrl": " https://speech.example.test/v2/// ",
+                "voiceId": " Ashley ",
+                "modelId": " inworld-tts-1.5-mini ",
+                "temperature": 0.75
+              }
+            }
+          }
+        },
+        "result": {
+          "apiKey": "fixture-inworld-speech-contract",
+          "baseUrl": "https://speech.example.test/v2",
+          "voiceId": "Ashley",
+          "modelId": "inworld-tts-1.5-mini",
+          "temperature": 0.75
+        },
+        "requests": [],
+        "releaseCount": 0,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          }
+        ]
+      },
+      {
+        "id": "empty-nested-masks-legacy",
+        "input": {
+          "rawConfig": {
+            "voiceId": "RootVoice",
+            "inworld": {
+              "voiceId": "LegacyVoice"
+            },
+            "providers": {
+              "inworld": {}
+            }
+          }
+        },
+        "inputAfter": {
+          "rawConfig": {
+            "voiceId": "RootVoice",
+            "inworld": {
+              "voiceId": "LegacyVoice"
+            },
+            "providers": {
+              "inworld": {}
+            }
+          }
+        },
+        "result": {
+          "baseUrl": "https://api.inworld.ai",
+          "voiceId": "Sarah",
+          "modelId": "inworld-tts-1.5-max"
+        },
+        "requests": [],
+        "releaseCount": 0,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey"
+          }
+        ]
+      },
+      {
+        "id": "blank-optionals-use-defaults",
+        "input": {
+          "rawConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "baseUrl": " \t ",
+                "voiceId": " ",
+                "modelId": "\n "
+              }
+            }
+          }
+        },
+        "inputAfter": {
+          "rawConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "baseUrl": " \t ",
+                "voiceId": " ",
+                "modelId": "\n "
+              }
+            }
+          }
+        },
+        "result": {
+          "apiKey": "fixture-inworld-speech-contract",
+          "baseUrl": "https://api.inworld.ai",
+          "voiceId": "Sarah",
+          "modelId": "inworld-tts-1.5-max"
+        },
+        "requests": [],
+        "releaseCount": 0,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          }
+        ]
+      },
+      {
+        "id": "ecmascript-trim",
+        "input": {
+          "rawConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": " fixture-inworld-speech-contract ",
+                "baseUrl": "﻿ https://trim.example.test/api/// ﻿",
+                "voiceId": "﻿  Olivia  ﻿",
+                "modelId": "﻿  inworld-tts-1  ﻿",
+                "temperature": 1.1
+              }
+            }
+          }
+        },
+        "inputAfter": {
+          "rawConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": " fixture-inworld-speech-contract ",
+                "baseUrl": "﻿ https://trim.example.test/api/// ﻿",
+                "voiceId": "﻿  Olivia  ﻿",
+                "modelId": "﻿  inworld-tts-1  ﻿",
+                "temperature": 1.1
+              }
+            }
+          }
+        },
+        "result": {
+          "apiKey": "fixture-inworld-speech-contract",
+          "baseUrl": "https://trim.example.test/api",
+          "voiceId": "Olivia",
+          "modelId": "inworld-tts-1",
+          "temperature": 1.1
+        },
+        "requests": [],
+        "releaseCount": 0,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": " fixture-inworld-speech-contract "
+          }
+        ]
+      },
+      {
+        "id": "custom-values-preserved",
+        "input": {
+          "rawConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "baseUrl": "https://studio.example.test/prefix/",
+                "voiceId": " Studio / Voice ",
+                "modelId": " custom-studio-model ",
+                "temperature": 1.25
+              }
+            }
+          }
+        },
+        "inputAfter": {
+          "rawConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "baseUrl": "https://studio.example.test/prefix/",
+                "voiceId": " Studio / Voice ",
+                "modelId": " custom-studio-model ",
+                "temperature": 1.25
+              }
+            }
+          }
+        },
+        "result": {
+          "apiKey": "fixture-inworld-speech-contract",
+          "baseUrl": "https://studio.example.test/prefix",
+          "voiceId": "Studio / Voice",
+          "modelId": "custom-studio-model",
+          "temperature": 1.25
+        },
+        "requests": [],
+        "releaseCount": 0,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          }
+        ]
+      }
+    ],
+    "talkConfig": [
+      {
+        "id": "defaults-from-empty-base",
+        "input": {
+          "baseTtsConfig": {},
+          "talkProviderConfig": {}
+        },
+        "inputAfter": {
+          "baseTtsConfig": {},
+          "talkProviderConfig": {}
+        },
+        "result": {
+          "baseUrl": "https://api.inworld.ai",
+          "voiceId": "Sarah",
+          "modelId": "inworld-tts-1.5-max"
+        },
+        "requests": [],
+        "releaseCount": 0,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey"
+          }
+        ]
+      },
+      {
+        "id": "inherit-normalized-base",
+        "input": {
+          "baseTtsConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "baseUrl": " https://base.example.test/api/// ",
+                "voiceId": " Dennis ",
+                "modelId": " inworld-tts-1.5-mini ",
+                "temperature": 0.8
+              }
+            }
+          },
+          "talkProviderConfig": {}
+        },
+        "inputAfter": {
+          "baseTtsConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "baseUrl": " https://base.example.test/api/// ",
+                "voiceId": " Dennis ",
+                "modelId": " inworld-tts-1.5-mini ",
+                "temperature": 0.8
+              }
+            }
+          },
+          "talkProviderConfig": {}
+        },
+        "result": {
+          "apiKey": "fixture-inworld-speech-contract",
+          "baseUrl": "https://base.example.test/api",
+          "voiceId": "Dennis",
+          "modelId": "inworld-tts-1.5-mini",
+          "temperature": 0.8
+        },
+        "requests": [],
+        "releaseCount": 0,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          }
+        ]
+      },
+      {
+        "id": "explicit-talk-fields",
+        "input": {
+          "baseTtsConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "baseUrl": "https://base.example.test/api",
+                "voiceId": "Dennis",
+                "modelId": "inworld-tts-1.5-mini",
+                "temperature": 0.8
+              }
+            }
+          },
+          "talkProviderConfig": {
+            "apiKey": " fixture-inworld-speech-contract ",
+            "baseUrl": " https://talk.example.test/v1/// ",
+            "voiceId": "﻿  Wendy  ﻿",
+            "modelId": " inworld-tts-1 ",
+            "temperature": 1.1
+          }
+        },
+        "inputAfter": {
+          "baseTtsConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "baseUrl": "https://base.example.test/api",
+                "voiceId": "Dennis",
+                "modelId": "inworld-tts-1.5-mini",
+                "temperature": 0.8
+              }
+            }
+          },
+          "talkProviderConfig": {
+            "apiKey": " fixture-inworld-speech-contract ",
+            "baseUrl": " https://talk.example.test/v1/// ",
+            "voiceId": "﻿  Wendy  ﻿",
+            "modelId": " inworld-tts-1 ",
+            "temperature": 1.1
+          }
+        },
+        "result": {
+          "apiKey": "fixture-inworld-speech-contract",
+          "baseUrl": "https://talk.example.test/v1",
+          "voiceId": "Wendy",
+          "modelId": "inworld-tts-1",
+          "temperature": 1.1
+        },
+        "requests": [],
+        "releaseCount": 0,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "talk.providers.inworld.apiKey",
+            "value": " fixture-inworld-speech-contract "
+          }
+        ]
+      },
+      {
+        "id": "partial-talk-composition",
+        "input": {
+          "baseTtsConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "baseUrl": "https://base.example.test/api",
+                "voiceId": "Dennis",
+                "modelId": "inworld-tts-1.5-mini",
+                "temperature": 0.8
+              }
+            }
+          },
+          "talkProviderConfig": {
+            "voiceId": " Ashley ",
+            "temperature": 0.9
+          }
+        },
+        "inputAfter": {
+          "baseTtsConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "baseUrl": "https://base.example.test/api",
+                "voiceId": "Dennis",
+                "modelId": "inworld-tts-1.5-mini",
+                "temperature": 0.8
+              }
+            }
+          },
+          "talkProviderConfig": {
+            "voiceId": " Ashley ",
+            "temperature": 0.9
+          }
+        },
+        "result": {
+          "apiKey": "fixture-inworld-speech-contract",
+          "baseUrl": "https://base.example.test/api",
+          "voiceId": "Ashley",
+          "modelId": "inworld-tts-1.5-mini",
+          "temperature": 0.9
+        },
+        "requests": [],
+        "releaseCount": 0,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          }
+        ]
+      },
+      {
+        "id": "blank-talk-optionals-inherit",
+        "input": {
+          "baseTtsConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "baseUrl": "https://base.example.test/api",
+                "voiceId": "Dennis",
+                "modelId": "inworld-tts-1.5-mini",
+                "temperature": 0.8
+              }
+            }
+          },
+          "talkProviderConfig": {
+            "baseUrl": " \t ",
+            "voiceId": "﻿ ",
+            "modelId": " "
+          }
+        },
+        "inputAfter": {
+          "baseTtsConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "baseUrl": "https://base.example.test/api",
+                "voiceId": "Dennis",
+                "modelId": "inworld-tts-1.5-mini",
+                "temperature": 0.8
+              }
+            }
+          },
+          "talkProviderConfig": {
+            "baseUrl": " \t ",
+            "voiceId": "﻿ ",
+            "modelId": " "
+          }
+        },
+        "result": {
+          "apiKey": "fixture-inworld-speech-contract",
+          "baseUrl": "https://base.example.test/api",
+          "voiceId": "Dennis",
+          "modelId": "inworld-tts-1.5-mini",
+          "temperature": 0.8
+        },
+        "requests": [],
+        "releaseCount": 0,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          }
+        ]
+      }
+    ],
+    "talkOverrides": [
+      {
+        "id": "empty-params",
+        "input": {
+          "params": {}
+        },
+        "inputAfter": {
+          "params": {}
+        },
+        "result": {},
+        "requests": [],
+        "releaseCount": 0,
+        "platformCalls": []
+      },
+      {
+        "id": "canonical-fields",
+        "input": {
+          "params": {
+            "voiceId": "﻿  Olivia  ﻿",
+            "modelId": " inworld-tts-1 ",
+            "temperature": 1.1
+          }
+        },
+        "inputAfter": {
+          "params": {
+            "voiceId": "﻿  Olivia  ﻿",
+            "modelId": " inworld-tts-1 ",
+            "temperature": 1.1
+          }
+        },
+        "result": {
+          "voiceId": "Olivia",
+          "modelId": "inworld-tts-1",
+          "temperature": 1.1
+        },
+        "requests": [],
+        "releaseCount": 0,
+        "platformCalls": []
+      },
+      {
+        "id": "partial-temperature",
+        "input": {
+          "params": {
+            "temperature": 0.6
+          }
+        },
+        "inputAfter": {
+          "params": {
+            "temperature": 0.6
+          }
+        },
+        "result": {
+          "temperature": 0.6
+        },
+        "requests": [],
+        "releaseCount": 0,
+        "platformCalls": []
+      },
+      {
+        "id": "aliases-not-projected",
+        "input": {
+          "params": {
+            "voice": "AliasVoice",
+            "model": "AliasModel",
+            "voice_id": "SnakeVoice",
+            "model_id": "SnakeModel",
+            "outputFormat": "mp3",
+            "language": "en-US"
+          }
+        },
+        "inputAfter": {
+          "params": {
+            "voice": "AliasVoice",
+            "model": "AliasModel",
+            "voice_id": "SnakeVoice",
+            "model_id": "SnakeModel",
+            "outputFormat": "mp3",
+            "language": "en-US"
+          }
+        },
+        "result": {},
+        "requests": [],
+        "releaseCount": 0,
+        "platformCalls": []
+      },
+      {
+        "id": "blank-canonical-optionals",
+        "input": {
+          "params": {
+            "voiceId": " \t ",
+            "modelId": "﻿ ",
+            "voice": "AliasVoice",
+            "model": "AliasModel"
+          }
+        },
+        "inputAfter": {
+          "params": {
+            "voiceId": " \t ",
+            "modelId": "﻿ ",
+            "voice": "AliasVoice",
+            "model": "AliasModel"
+          }
+        },
+        "result": {},
+        "requests": [],
+        "releaseCount": 0,
+        "platformCalls": []
+      }
+    ],
+    "synthesis": [
+      {
+        "id": "file-default-from-raw",
+        "input": {
+          "request": {
+            "text": "Ordinary Inworld speech.",
+            "target": "audio-file",
+            "timeoutMs": 12345
+          },
+          "rawConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract"
+              }
+            }
+          }
+        },
+        "inputAfter": {
+          "request": {
+            "text": "Ordinary Inworld speech.",
+            "target": "audio-file",
+            "timeoutMs": 12345
+          },
+          "rawConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract"
+              }
+            }
+          }
+        },
+        "resolvedConfig": {
+          "apiKey": "fixture-inworld-speech-contract",
+          "baseUrl": "https://api.inworld.ai",
+          "voiceId": "Sarah",
+          "modelId": "inworld-tts-1.5-max"
+        },
+        "result": {
+          "audioBase64": "UklGRgABAv8=",
+          "outputFormat": "mp3",
+          "fileExtension": ".mp3",
+          "voiceCompatible": false
+        },
+        "synthesisRequest": {
+          "cfg": {},
+          "text": "Ordinary Inworld speech.",
+          "target": "audio-file",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "baseUrl": "https://api.inworld.ai",
+            "voiceId": "Sarah",
+            "modelId": "inworld-tts-1.5-max"
+          }
+        },
+        "synthesisRequestAfter": {
+          "cfg": {},
+          "text": "Ordinary Inworld speech.",
+          "target": "audio-file",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "baseUrl": "https://api.inworld.ai",
+            "voiceId": "Sarah",
+            "modelId": "inworld-tts-1.5-max"
+          }
+        },
+        "requests": [
+          {
+            "url": "https://api.inworld.ai/tts/v1/voice:stream",
+            "method": "POST",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Basic fixture-inworld-speech-contract"
+            },
+            "body": {
+              "text": "Ordinary Inworld speech.",
+              "voiceId": "Sarah",
+              "modelId": "inworld-tts-1.5-max",
+              "audioConfig": {
+                "audioEncoding": "MP3"
+              }
+            },
+            "bodyText": "{\"text\":\"Ordinary Inworld speech.\",\"voiceId\":\"Sarah\",\"modelId\":\"inworld-tts-1.5-max\",\"audioConfig\":{\"audioEncoding\":\"MP3\"}}",
+            "timeoutMs": 12345,
+            "auditContext": "inworld-tts"
+          }
+        ],
+        "releaseCount": 1,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "fetchWithSsrFGuard",
+            "provenanceOnly": true,
+            "requestIndex": 0,
+            "args": {
+              "url": "https://api.inworld.ai/tts/v1/voice:stream",
+              "init": {
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json",
+                  "Authorization": "Basic fixture-inworld-speech-contract"
+                },
+                "body": "{\"text\":\"Ordinary Inworld speech.\",\"voiceId\":\"Sarah\",\"modelId\":\"inworld-tts-1.5-max\",\"audioConfig\":{\"audioEncoding\":\"MP3\"}}"
+              },
+              "timeoutMs": 12345,
+              "policy": {
+                "hostnameAllowlist": [
+                  "api.inworld.ai"
+                ]
+              },
+              "auditContext": "inworld-tts"
+            }
+          },
+          {
+            "module": "openclaw/plugin-sdk/response-limit-runtime",
+            "export": "readResponseWithLimit",
+            "provenanceOnly": true,
+            "responseIndex": 0,
+            "maxBytes": 33554432,
+            "chunkTimeoutMs": 30000,
+            "overflowCallbackProvided": true,
+            "idleCallbackProvided": true
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "release",
+            "requestIndex": 0
+          }
+        ]
+      },
+      {
+        "id": "file-configured-from-raw",
+        "input": {
+          "request": {
+            "text": "  Ordinary speech.\n你好 🌍 — café.\t ",
+            "target": "audio-file",
+            "timeoutMs": 12345
+          },
+          "rawConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "baseUrl": " https://speech.example.test/v2/// ",
+                "voiceId": " Ashley ",
+                "modelId": " inworld-tts-1.5-mini ",
+                "temperature": 0.75
+              }
+            }
+          }
+        },
+        "inputAfter": {
+          "request": {
+            "text": "  Ordinary speech.\n你好 🌍 — café.\t ",
+            "target": "audio-file",
+            "timeoutMs": 12345
+          },
+          "rawConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "baseUrl": " https://speech.example.test/v2/// ",
+                "voiceId": " Ashley ",
+                "modelId": " inworld-tts-1.5-mini ",
+                "temperature": 0.75
+              }
+            }
+          }
+        },
+        "resolvedConfig": {
+          "apiKey": "fixture-inworld-speech-contract",
+          "baseUrl": "https://speech.example.test/v2",
+          "voiceId": "Ashley",
+          "modelId": "inworld-tts-1.5-mini",
+          "temperature": 0.75
+        },
+        "result": {
+          "audioBase64": "UklGRgABAv8=",
+          "outputFormat": "mp3",
+          "fileExtension": ".mp3",
+          "voiceCompatible": false
+        },
+        "synthesisRequest": {
+          "cfg": {},
+          "text": "  Ordinary speech.\n你好 🌍 — café.\t ",
+          "target": "audio-file",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "baseUrl": "https://speech.example.test/v2",
+            "voiceId": "Ashley",
+            "modelId": "inworld-tts-1.5-mini",
+            "temperature": 0.75
+          }
+        },
+        "synthesisRequestAfter": {
+          "cfg": {},
+          "text": "  Ordinary speech.\n你好 🌍 — café.\t ",
+          "target": "audio-file",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "baseUrl": "https://speech.example.test/v2",
+            "voiceId": "Ashley",
+            "modelId": "inworld-tts-1.5-mini",
+            "temperature": 0.75
+          }
+        },
+        "requests": [
+          {
+            "url": "https://speech.example.test/v2/tts/v1/voice:stream",
+            "method": "POST",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Basic fixture-inworld-speech-contract"
+            },
+            "body": {
+              "text": "  Ordinary speech.\n你好 🌍 — café.\t ",
+              "voiceId": "Ashley",
+              "modelId": "inworld-tts-1.5-mini",
+              "audioConfig": {
+                "audioEncoding": "MP3"
+              },
+              "temperature": 0.75
+            },
+            "bodyText": "{\"text\":\"  Ordinary speech.\\n你好 🌍 — café.\\t \",\"voiceId\":\"Ashley\",\"modelId\":\"inworld-tts-1.5-mini\",\"audioConfig\":{\"audioEncoding\":\"MP3\"},\"temperature\":0.75}",
+            "timeoutMs": 12345,
+            "auditContext": "inworld-tts"
+          }
+        ],
+        "releaseCount": 1,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "fetchWithSsrFGuard",
+            "provenanceOnly": true,
+            "requestIndex": 0,
+            "args": {
+              "url": "https://speech.example.test/v2/tts/v1/voice:stream",
+              "init": {
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json",
+                  "Authorization": "Basic fixture-inworld-speech-contract"
+                },
+                "body": "{\"text\":\"  Ordinary speech.\\n你好 🌍 — café.\\t \",\"voiceId\":\"Ashley\",\"modelId\":\"inworld-tts-1.5-mini\",\"audioConfig\":{\"audioEncoding\":\"MP3\"},\"temperature\":0.75}"
+              },
+              "timeoutMs": 12345,
+              "policy": {
+                "hostnameAllowlist": [
+                  "speech.example.test"
+                ]
+              },
+              "auditContext": "inworld-tts"
+            }
+          },
+          {
+            "module": "openclaw/plugin-sdk/response-limit-runtime",
+            "export": "readResponseWithLimit",
+            "provenanceOnly": true,
+            "responseIndex": 0,
+            "maxBytes": 33554432,
+            "chunkTimeoutMs": 30000,
+            "overflowCallbackProvided": true,
+            "idleCallbackProvided": true
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "release",
+            "requestIndex": 0
+          }
+        ]
+      },
+      {
+        "id": "file-pre-resolved-config",
+        "input": {
+          "request": {
+            "text": "Ordinary Inworld speech.",
+            "target": "audio-file",
+            "timeoutMs": 12345,
+            "providerConfig": {
+              "apiKey": "fixture-inworld-speech-contract",
+              "baseUrl": "https://resolved.example.test/api",
+              "voiceId": "Dennis",
+              "modelId": "inworld-tts-1-max",
+              "temperature": 0.9
+            }
+          }
+        },
+        "inputAfter": {
+          "request": {
+            "text": "Ordinary Inworld speech.",
+            "target": "audio-file",
+            "timeoutMs": 12345,
+            "providerConfig": {
+              "apiKey": "fixture-inworld-speech-contract",
+              "baseUrl": "https://resolved.example.test/api",
+              "voiceId": "Dennis",
+              "modelId": "inworld-tts-1-max",
+              "temperature": 0.9
+            }
+          }
+        },
+        "result": {
+          "audioBase64": "UklGRgABAv8=",
+          "outputFormat": "mp3",
+          "fileExtension": ".mp3",
+          "voiceCompatible": false
+        },
+        "synthesisRequest": {
+          "cfg": {},
+          "text": "Ordinary Inworld speech.",
+          "target": "audio-file",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "baseUrl": "https://resolved.example.test/api",
+            "voiceId": "Dennis",
+            "modelId": "inworld-tts-1-max",
+            "temperature": 0.9
+          }
+        },
+        "synthesisRequestAfter": {
+          "cfg": {},
+          "text": "Ordinary Inworld speech.",
+          "target": "audio-file",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "baseUrl": "https://resolved.example.test/api",
+            "voiceId": "Dennis",
+            "modelId": "inworld-tts-1-max",
+            "temperature": 0.9
+          }
+        },
+        "requests": [
+          {
+            "url": "https://resolved.example.test/api/tts/v1/voice:stream",
+            "method": "POST",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Basic fixture-inworld-speech-contract"
+            },
+            "body": {
+              "text": "Ordinary Inworld speech.",
+              "voiceId": "Dennis",
+              "modelId": "inworld-tts-1-max",
+              "audioConfig": {
+                "audioEncoding": "MP3"
+              },
+              "temperature": 0.9
+            },
+            "bodyText": "{\"text\":\"Ordinary Inworld speech.\",\"voiceId\":\"Dennis\",\"modelId\":\"inworld-tts-1-max\",\"audioConfig\":{\"audioEncoding\":\"MP3\"},\"temperature\":0.9}",
+            "timeoutMs": 12345,
+            "auditContext": "inworld-tts"
+          }
+        ],
+        "releaseCount": 1,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "fetchWithSsrFGuard",
+            "provenanceOnly": true,
+            "requestIndex": 0,
+            "args": {
+              "url": "https://resolved.example.test/api/tts/v1/voice:stream",
+              "init": {
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json",
+                  "Authorization": "Basic fixture-inworld-speech-contract"
+                },
+                "body": "{\"text\":\"Ordinary Inworld speech.\",\"voiceId\":\"Dennis\",\"modelId\":\"inworld-tts-1-max\",\"audioConfig\":{\"audioEncoding\":\"MP3\"},\"temperature\":0.9}"
+              },
+              "timeoutMs": 12345,
+              "policy": {
+                "hostnameAllowlist": [
+                  "resolved.example.test"
+                ]
+              },
+              "auditContext": "inworld-tts"
+            }
+          },
+          {
+            "module": "openclaw/plugin-sdk/response-limit-runtime",
+            "export": "readResponseWithLimit",
+            "provenanceOnly": true,
+            "responseIndex": 0,
+            "maxBytes": 33554432,
+            "chunkTimeoutMs": 30000,
+            "overflowCallbackProvided": true,
+            "idleCallbackProvided": true
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "release",
+            "requestIndex": 0
+          }
+        ]
+      },
+      {
+        "id": "file-talk-config-and-overrides",
+        "input": {
+          "request": {
+            "text": "Ordinary Inworld speech.",
+            "target": "audio-file",
+            "timeoutMs": 12345
+          },
+          "baseTtsConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "baseUrl": "https://base.example.test/api",
+                "voiceId": "Dennis",
+                "modelId": "inworld-tts-1.5-mini",
+                "temperature": 0.8
+              }
+            }
+          },
+          "talkProviderConfig": {
+            "baseUrl": " https://talk.example.test/v1/// ",
+            "voiceId": "Ashley"
+          },
+          "talkParams": {
+            "voiceId": " Olivia ",
+            "modelId": " inworld-tts-1 ",
+            "temperature": 1.1
+          }
+        },
+        "inputAfter": {
+          "request": {
+            "text": "Ordinary Inworld speech.",
+            "target": "audio-file",
+            "timeoutMs": 12345
+          },
+          "baseTtsConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "baseUrl": "https://base.example.test/api",
+                "voiceId": "Dennis",
+                "modelId": "inworld-tts-1.5-mini",
+                "temperature": 0.8
+              }
+            }
+          },
+          "talkProviderConfig": {
+            "baseUrl": " https://talk.example.test/v1/// ",
+            "voiceId": "Ashley"
+          },
+          "talkParams": {
+            "voiceId": " Olivia ",
+            "modelId": " inworld-tts-1 ",
+            "temperature": 1.1
+          }
+        },
+        "resolvedConfig": {
+          "apiKey": "fixture-inworld-speech-contract",
+          "baseUrl": "https://talk.example.test/v1",
+          "voiceId": "Ashley",
+          "modelId": "inworld-tts-1.5-mini",
+          "temperature": 0.8
+        },
+        "result": {
+          "audioBase64": "UklGRgABAv8=",
+          "outputFormat": "mp3",
+          "fileExtension": ".mp3",
+          "voiceCompatible": false
+        },
+        "synthesisRequest": {
+          "cfg": {},
+          "text": "Ordinary Inworld speech.",
+          "target": "audio-file",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "baseUrl": "https://talk.example.test/v1",
+            "voiceId": "Ashley",
+            "modelId": "inworld-tts-1.5-mini",
+            "temperature": 0.8
+          },
+          "providerOverrides": {
+            "voiceId": "Olivia",
+            "modelId": "inworld-tts-1",
+            "temperature": 1.1
+          }
+        },
+        "synthesisRequestAfter": {
+          "cfg": {},
+          "text": "Ordinary Inworld speech.",
+          "target": "audio-file",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "baseUrl": "https://talk.example.test/v1",
+            "voiceId": "Ashley",
+            "modelId": "inworld-tts-1.5-mini",
+            "temperature": 0.8
+          },
+          "providerOverrides": {
+            "voiceId": "Olivia",
+            "modelId": "inworld-tts-1",
+            "temperature": 1.1
+          }
+        },
+        "requests": [
+          {
+            "url": "https://talk.example.test/v1/tts/v1/voice:stream",
+            "method": "POST",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Basic fixture-inworld-speech-contract"
+            },
+            "body": {
+              "text": "Ordinary Inworld speech.",
+              "voiceId": "Olivia",
+              "modelId": "inworld-tts-1",
+              "audioConfig": {
+                "audioEncoding": "MP3"
+              },
+              "temperature": 1.1
+            },
+            "bodyText": "{\"text\":\"Ordinary Inworld speech.\",\"voiceId\":\"Olivia\",\"modelId\":\"inworld-tts-1\",\"audioConfig\":{\"audioEncoding\":\"MP3\"},\"temperature\":1.1}",
+            "timeoutMs": 12345,
+            "auditContext": "inworld-tts"
+          }
+        ],
+        "releaseCount": 1,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "fetchWithSsrFGuard",
+            "provenanceOnly": true,
+            "requestIndex": 0,
+            "args": {
+              "url": "https://talk.example.test/v1/tts/v1/voice:stream",
+              "init": {
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json",
+                  "Authorization": "Basic fixture-inworld-speech-contract"
+                },
+                "body": "{\"text\":\"Ordinary Inworld speech.\",\"voiceId\":\"Olivia\",\"modelId\":\"inworld-tts-1\",\"audioConfig\":{\"audioEncoding\":\"MP3\"},\"temperature\":1.1}"
+              },
+              "timeoutMs": 12345,
+              "policy": {
+                "hostnameAllowlist": [
+                  "talk.example.test"
+                ]
+              },
+              "auditContext": "inworld-tts"
+            }
+          },
+          {
+            "module": "openclaw/plugin-sdk/response-limit-runtime",
+            "export": "readResponseWithLimit",
+            "provenanceOnly": true,
+            "responseIndex": 0,
+            "maxBytes": 33554432,
+            "chunkTimeoutMs": 30000,
+            "overflowCallbackProvided": true,
+            "idleCallbackProvided": true
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "release",
+            "requestIndex": 0
+          }
+        ]
+      },
+      {
+        "id": "note-default-from-raw",
+        "input": {
+          "request": {
+            "text": "Ordinary Inworld speech.",
+            "target": "voice-note",
+            "timeoutMs": 12345
+          },
+          "rawConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract"
+              }
+            }
+          }
+        },
+        "inputAfter": {
+          "request": {
+            "text": "Ordinary Inworld speech.",
+            "target": "voice-note",
+            "timeoutMs": 12345
+          },
+          "rawConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract"
+              }
+            }
+          }
+        },
+        "resolvedConfig": {
+          "apiKey": "fixture-inworld-speech-contract",
+          "baseUrl": "https://api.inworld.ai",
+          "voiceId": "Sarah",
+          "modelId": "inworld-tts-1.5-max"
+        },
+        "result": {
+          "audioBase64": "UklGRgABAv8=",
+          "outputFormat": "ogg_opus",
+          "fileExtension": ".ogg",
+          "voiceCompatible": true
+        },
+        "synthesisRequest": {
+          "cfg": {},
+          "text": "Ordinary Inworld speech.",
+          "target": "voice-note",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "baseUrl": "https://api.inworld.ai",
+            "voiceId": "Sarah",
+            "modelId": "inworld-tts-1.5-max"
+          }
+        },
+        "synthesisRequestAfter": {
+          "cfg": {},
+          "text": "Ordinary Inworld speech.",
+          "target": "voice-note",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "baseUrl": "https://api.inworld.ai",
+            "voiceId": "Sarah",
+            "modelId": "inworld-tts-1.5-max"
+          }
+        },
+        "requests": [
+          {
+            "url": "https://api.inworld.ai/tts/v1/voice:stream",
+            "method": "POST",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Basic fixture-inworld-speech-contract"
+            },
+            "body": {
+              "text": "Ordinary Inworld speech.",
+              "voiceId": "Sarah",
+              "modelId": "inworld-tts-1.5-max",
+              "audioConfig": {
+                "audioEncoding": "OGG_OPUS"
+              }
+            },
+            "bodyText": "{\"text\":\"Ordinary Inworld speech.\",\"voiceId\":\"Sarah\",\"modelId\":\"inworld-tts-1.5-max\",\"audioConfig\":{\"audioEncoding\":\"OGG_OPUS\"}}",
+            "timeoutMs": 12345,
+            "auditContext": "inworld-tts"
+          }
+        ],
+        "releaseCount": 1,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "fetchWithSsrFGuard",
+            "provenanceOnly": true,
+            "requestIndex": 0,
+            "args": {
+              "url": "https://api.inworld.ai/tts/v1/voice:stream",
+              "init": {
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json",
+                  "Authorization": "Basic fixture-inworld-speech-contract"
+                },
+                "body": "{\"text\":\"Ordinary Inworld speech.\",\"voiceId\":\"Sarah\",\"modelId\":\"inworld-tts-1.5-max\",\"audioConfig\":{\"audioEncoding\":\"OGG_OPUS\"}}"
+              },
+              "timeoutMs": 12345,
+              "policy": {
+                "hostnameAllowlist": [
+                  "api.inworld.ai"
+                ]
+              },
+              "auditContext": "inworld-tts"
+            }
+          },
+          {
+            "module": "openclaw/plugin-sdk/response-limit-runtime",
+            "export": "readResponseWithLimit",
+            "provenanceOnly": true,
+            "responseIndex": 0,
+            "maxBytes": 33554432,
+            "chunkTimeoutMs": 30000,
+            "overflowCallbackProvided": true,
+            "idleCallbackProvided": true
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "release",
+            "requestIndex": 0
+          }
+        ]
+      },
+      {
+        "id": "note-talk-config-and-overrides",
+        "input": {
+          "request": {
+            "text": "Ordinary Inworld speech.",
+            "target": "voice-note",
+            "timeoutMs": 12345
+          },
+          "baseTtsConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "voiceId": "Dennis",
+                "temperature": 0.8
+              }
+            }
+          },
+          "talkProviderConfig": {
+            "voiceId": " Ashley ",
+            "modelId": " inworld-tts-1-max "
+          },
+          "talkParams": {
+            "temperature": 0.7
+          }
+        },
+        "inputAfter": {
+          "request": {
+            "text": "Ordinary Inworld speech.",
+            "target": "voice-note",
+            "timeoutMs": 12345
+          },
+          "baseTtsConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "voiceId": "Dennis",
+                "temperature": 0.8
+              }
+            }
+          },
+          "talkProviderConfig": {
+            "voiceId": " Ashley ",
+            "modelId": " inworld-tts-1-max "
+          },
+          "talkParams": {
+            "temperature": 0.7
+          }
+        },
+        "resolvedConfig": {
+          "apiKey": "fixture-inworld-speech-contract",
+          "baseUrl": "https://api.inworld.ai",
+          "voiceId": "Ashley",
+          "modelId": "inworld-tts-1-max",
+          "temperature": 0.8
+        },
+        "result": {
+          "audioBase64": "UklGRgABAv8=",
+          "outputFormat": "ogg_opus",
+          "fileExtension": ".ogg",
+          "voiceCompatible": true
+        },
+        "synthesisRequest": {
+          "cfg": {},
+          "text": "Ordinary Inworld speech.",
+          "target": "voice-note",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "baseUrl": "https://api.inworld.ai",
+            "voiceId": "Ashley",
+            "modelId": "inworld-tts-1-max",
+            "temperature": 0.8
+          },
+          "providerOverrides": {
+            "temperature": 0.7
+          }
+        },
+        "synthesisRequestAfter": {
+          "cfg": {},
+          "text": "Ordinary Inworld speech.",
+          "target": "voice-note",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "baseUrl": "https://api.inworld.ai",
+            "voiceId": "Ashley",
+            "modelId": "inworld-tts-1-max",
+            "temperature": 0.8
+          },
+          "providerOverrides": {
+            "temperature": 0.7
+          }
+        },
+        "requests": [
+          {
+            "url": "https://api.inworld.ai/tts/v1/voice:stream",
+            "method": "POST",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Basic fixture-inworld-speech-contract"
+            },
+            "body": {
+              "text": "Ordinary Inworld speech.",
+              "voiceId": "Ashley",
+              "modelId": "inworld-tts-1-max",
+              "audioConfig": {
+                "audioEncoding": "OGG_OPUS"
+              },
+              "temperature": 0.7
+            },
+            "bodyText": "{\"text\":\"Ordinary Inworld speech.\",\"voiceId\":\"Ashley\",\"modelId\":\"inworld-tts-1-max\",\"audioConfig\":{\"audioEncoding\":\"OGG_OPUS\"},\"temperature\":0.7}",
+            "timeoutMs": 12345,
+            "auditContext": "inworld-tts"
+          }
+        ],
+        "releaseCount": 1,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "fetchWithSsrFGuard",
+            "provenanceOnly": true,
+            "requestIndex": 0,
+            "args": {
+              "url": "https://api.inworld.ai/tts/v1/voice:stream",
+              "init": {
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json",
+                  "Authorization": "Basic fixture-inworld-speech-contract"
+                },
+                "body": "{\"text\":\"Ordinary Inworld speech.\",\"voiceId\":\"Ashley\",\"modelId\":\"inworld-tts-1-max\",\"audioConfig\":{\"audioEncoding\":\"OGG_OPUS\"},\"temperature\":0.7}"
+              },
+              "timeoutMs": 12345,
+              "policy": {
+                "hostnameAllowlist": [
+                  "api.inworld.ai"
+                ]
+              },
+              "auditContext": "inworld-tts"
+            }
+          },
+          {
+            "module": "openclaw/plugin-sdk/response-limit-runtime",
+            "export": "readResponseWithLimit",
+            "provenanceOnly": true,
+            "responseIndex": 0,
+            "maxBytes": 33554432,
+            "chunkTimeoutMs": 30000,
+            "overflowCallbackProvided": true,
+            "idleCallbackProvided": true
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "release",
+            "requestIndex": 0
+          }
+        ]
+      },
+      {
+        "id": "file-direct-alias-overrides",
+        "input": {
+          "request": {
+            "text": "Ordinary Inworld speech.",
+            "target": "audio-file",
+            "timeoutMs": 12345,
+            "providerConfig": {
+              "apiKey": "fixture-inworld-speech-contract",
+              "voiceId": "Dennis",
+              "modelId": "inworld-tts-1.5-mini",
+              "temperature": 0.8
+            },
+            "providerOverrides": {
+              "voice": " Olivia ",
+              "model": " inworld-tts-1 ",
+              "temperature": 1.2
+            }
+          }
+        },
+        "inputAfter": {
+          "request": {
+            "text": "Ordinary Inworld speech.",
+            "target": "audio-file",
+            "timeoutMs": 12345,
+            "providerConfig": {
+              "apiKey": "fixture-inworld-speech-contract",
+              "voiceId": "Dennis",
+              "modelId": "inworld-tts-1.5-mini",
+              "temperature": 0.8
+            },
+            "providerOverrides": {
+              "voice": " Olivia ",
+              "model": " inworld-tts-1 ",
+              "temperature": 1.2
+            }
+          }
+        },
+        "result": {
+          "audioBase64": "UklGRgABAv8=",
+          "outputFormat": "mp3",
+          "fileExtension": ".mp3",
+          "voiceCompatible": false
+        },
+        "synthesisRequest": {
+          "cfg": {},
+          "text": "Ordinary Inworld speech.",
+          "target": "audio-file",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "voiceId": "Dennis",
+            "modelId": "inworld-tts-1.5-mini",
+            "temperature": 0.8
+          },
+          "providerOverrides": {
+            "voice": " Olivia ",
+            "model": " inworld-tts-1 ",
+            "temperature": 1.2
+          }
+        },
+        "synthesisRequestAfter": {
+          "cfg": {},
+          "text": "Ordinary Inworld speech.",
+          "target": "audio-file",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "voiceId": "Dennis",
+            "modelId": "inworld-tts-1.5-mini",
+            "temperature": 0.8
+          },
+          "providerOverrides": {
+            "voice": " Olivia ",
+            "model": " inworld-tts-1 ",
+            "temperature": 1.2
+          }
+        },
+        "requests": [
+          {
+            "url": "https://api.inworld.ai/tts/v1/voice:stream",
+            "method": "POST",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Basic fixture-inworld-speech-contract"
+            },
+            "body": {
+              "text": "Ordinary Inworld speech.",
+              "voiceId": "Olivia",
+              "modelId": "inworld-tts-1",
+              "audioConfig": {
+                "audioEncoding": "MP3"
+              },
+              "temperature": 1.2
+            },
+            "bodyText": "{\"text\":\"Ordinary Inworld speech.\",\"voiceId\":\"Olivia\",\"modelId\":\"inworld-tts-1\",\"audioConfig\":{\"audioEncoding\":\"MP3\"},\"temperature\":1.2}",
+            "timeoutMs": 12345,
+            "auditContext": "inworld-tts"
+          }
+        ],
+        "releaseCount": 1,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "fetchWithSsrFGuard",
+            "provenanceOnly": true,
+            "requestIndex": 0,
+            "args": {
+              "url": "https://api.inworld.ai/tts/v1/voice:stream",
+              "init": {
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json",
+                  "Authorization": "Basic fixture-inworld-speech-contract"
+                },
+                "body": "{\"text\":\"Ordinary Inworld speech.\",\"voiceId\":\"Olivia\",\"modelId\":\"inworld-tts-1\",\"audioConfig\":{\"audioEncoding\":\"MP3\"},\"temperature\":1.2}"
+              },
+              "timeoutMs": 12345,
+              "policy": {
+                "hostnameAllowlist": [
+                  "api.inworld.ai"
+                ]
+              },
+              "auditContext": "inworld-tts"
+            }
+          },
+          {
+            "module": "openclaw/plugin-sdk/response-limit-runtime",
+            "export": "readResponseWithLimit",
+            "provenanceOnly": true,
+            "responseIndex": 0,
+            "maxBytes": 33554432,
+            "chunkTimeoutMs": 30000,
+            "overflowCallbackProvided": true,
+            "idleCallbackProvided": true
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "release",
+            "requestIndex": 0
+          }
+        ]
+      },
+      {
+        "id": "file-primary-overrides",
+        "input": {
+          "request": {
+            "text": "Ordinary Inworld speech.",
+            "target": "audio-file",
+            "timeoutMs": 12345,
+            "providerConfig": {
+              "apiKey": "fixture-inworld-speech-contract"
+            },
+            "providerOverrides": {
+              "voiceId": " Ashley ",
+              "voice": "Olivia",
+              "modelId": " inworld-tts-1-max ",
+              "model": "inworld-tts-1",
+              "temperature": 0.9
+            }
+          }
+        },
+        "inputAfter": {
+          "request": {
+            "text": "Ordinary Inworld speech.",
+            "target": "audio-file",
+            "timeoutMs": 12345,
+            "providerConfig": {
+              "apiKey": "fixture-inworld-speech-contract"
+            },
+            "providerOverrides": {
+              "voiceId": " Ashley ",
+              "voice": "Olivia",
+              "modelId": " inworld-tts-1-max ",
+              "model": "inworld-tts-1",
+              "temperature": 0.9
+            }
+          }
+        },
+        "result": {
+          "audioBase64": "UklGRgABAv8=",
+          "outputFormat": "mp3",
+          "fileExtension": ".mp3",
+          "voiceCompatible": false
+        },
+        "synthesisRequest": {
+          "cfg": {},
+          "text": "Ordinary Inworld speech.",
+          "target": "audio-file",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract"
+          },
+          "providerOverrides": {
+            "voiceId": " Ashley ",
+            "voice": "Olivia",
+            "modelId": " inworld-tts-1-max ",
+            "model": "inworld-tts-1",
+            "temperature": 0.9
+          }
+        },
+        "synthesisRequestAfter": {
+          "cfg": {},
+          "text": "Ordinary Inworld speech.",
+          "target": "audio-file",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract"
+          },
+          "providerOverrides": {
+            "voiceId": " Ashley ",
+            "voice": "Olivia",
+            "modelId": " inworld-tts-1-max ",
+            "model": "inworld-tts-1",
+            "temperature": 0.9
+          }
+        },
+        "requests": [
+          {
+            "url": "https://api.inworld.ai/tts/v1/voice:stream",
+            "method": "POST",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Basic fixture-inworld-speech-contract"
+            },
+            "body": {
+              "text": "Ordinary Inworld speech.",
+              "voiceId": "Ashley",
+              "modelId": "inworld-tts-1-max",
+              "audioConfig": {
+                "audioEncoding": "MP3"
+              },
+              "temperature": 0.9
+            },
+            "bodyText": "{\"text\":\"Ordinary Inworld speech.\",\"voiceId\":\"Ashley\",\"modelId\":\"inworld-tts-1-max\",\"audioConfig\":{\"audioEncoding\":\"MP3\"},\"temperature\":0.9}",
+            "timeoutMs": 12345,
+            "auditContext": "inworld-tts"
+          }
+        ],
+        "releaseCount": 1,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "fetchWithSsrFGuard",
+            "provenanceOnly": true,
+            "requestIndex": 0,
+            "args": {
+              "url": "https://api.inworld.ai/tts/v1/voice:stream",
+              "init": {
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json",
+                  "Authorization": "Basic fixture-inworld-speech-contract"
+                },
+                "body": "{\"text\":\"Ordinary Inworld speech.\",\"voiceId\":\"Ashley\",\"modelId\":\"inworld-tts-1-max\",\"audioConfig\":{\"audioEncoding\":\"MP3\"},\"temperature\":0.9}"
+              },
+              "timeoutMs": 12345,
+              "policy": {
+                "hostnameAllowlist": [
+                  "api.inworld.ai"
+                ]
+              },
+              "auditContext": "inworld-tts"
+            }
+          },
+          {
+            "module": "openclaw/plugin-sdk/response-limit-runtime",
+            "export": "readResponseWithLimit",
+            "provenanceOnly": true,
+            "responseIndex": 0,
+            "maxBytes": 33554432,
+            "chunkTimeoutMs": 30000,
+            "overflowCallbackProvided": true,
+            "idleCallbackProvided": true
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "release",
+            "requestIndex": 0
+          }
+        ]
+      },
+      {
+        "id": "file-blank-primary-uses-config",
+        "input": {
+          "request": {
+            "text": "Ordinary Inworld speech.",
+            "target": "audio-file",
+            "timeoutMs": 12345,
+            "providerConfig": {
+              "apiKey": "fixture-inworld-speech-contract",
+              "voiceId": "Dennis",
+              "modelId": "inworld-tts-1.5-mini",
+              "temperature": 0.8
+            },
+            "providerOverrides": {
+              "voiceId": " ",
+              "voice": "Olivia",
+              "modelId": "\t",
+              "model": "inworld-tts-1"
+            }
+          }
+        },
+        "inputAfter": {
+          "request": {
+            "text": "Ordinary Inworld speech.",
+            "target": "audio-file",
+            "timeoutMs": 12345,
+            "providerConfig": {
+              "apiKey": "fixture-inworld-speech-contract",
+              "voiceId": "Dennis",
+              "modelId": "inworld-tts-1.5-mini",
+              "temperature": 0.8
+            },
+            "providerOverrides": {
+              "voiceId": " ",
+              "voice": "Olivia",
+              "modelId": "\t",
+              "model": "inworld-tts-1"
+            }
+          }
+        },
+        "result": {
+          "audioBase64": "UklGRgABAv8=",
+          "outputFormat": "mp3",
+          "fileExtension": ".mp3",
+          "voiceCompatible": false
+        },
+        "synthesisRequest": {
+          "cfg": {},
+          "text": "Ordinary Inworld speech.",
+          "target": "audio-file",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "voiceId": "Dennis",
+            "modelId": "inworld-tts-1.5-mini",
+            "temperature": 0.8
+          },
+          "providerOverrides": {
+            "voiceId": " ",
+            "voice": "Olivia",
+            "modelId": "\t",
+            "model": "inworld-tts-1"
+          }
+        },
+        "synthesisRequestAfter": {
+          "cfg": {},
+          "text": "Ordinary Inworld speech.",
+          "target": "audio-file",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "voiceId": "Dennis",
+            "modelId": "inworld-tts-1.5-mini",
+            "temperature": 0.8
+          },
+          "providerOverrides": {
+            "voiceId": " ",
+            "voice": "Olivia",
+            "modelId": "\t",
+            "model": "inworld-tts-1"
+          }
+        },
+        "requests": [
+          {
+            "url": "https://api.inworld.ai/tts/v1/voice:stream",
+            "method": "POST",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Basic fixture-inworld-speech-contract"
+            },
+            "body": {
+              "text": "Ordinary Inworld speech.",
+              "voiceId": "Dennis",
+              "modelId": "inworld-tts-1.5-mini",
+              "audioConfig": {
+                "audioEncoding": "MP3"
+              },
+              "temperature": 0.8
+            },
+            "bodyText": "{\"text\":\"Ordinary Inworld speech.\",\"voiceId\":\"Dennis\",\"modelId\":\"inworld-tts-1.5-mini\",\"audioConfig\":{\"audioEncoding\":\"MP3\"},\"temperature\":0.8}",
+            "timeoutMs": 12345,
+            "auditContext": "inworld-tts"
+          }
+        ],
+        "releaseCount": 1,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "fetchWithSsrFGuard",
+            "provenanceOnly": true,
+            "requestIndex": 0,
+            "args": {
+              "url": "https://api.inworld.ai/tts/v1/voice:stream",
+              "init": {
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json",
+                  "Authorization": "Basic fixture-inworld-speech-contract"
+                },
+                "body": "{\"text\":\"Ordinary Inworld speech.\",\"voiceId\":\"Dennis\",\"modelId\":\"inworld-tts-1.5-mini\",\"audioConfig\":{\"audioEncoding\":\"MP3\"},\"temperature\":0.8}"
+              },
+              "timeoutMs": 12345,
+              "policy": {
+                "hostnameAllowlist": [
+                  "api.inworld.ai"
+                ]
+              },
+              "auditContext": "inworld-tts"
+            }
+          },
+          {
+            "module": "openclaw/plugin-sdk/response-limit-runtime",
+            "export": "readResponseWithLimit",
+            "provenanceOnly": true,
+            "responseIndex": 0,
+            "maxBytes": 33554432,
+            "chunkTimeoutMs": 30000,
+            "overflowCallbackProvided": true,
+            "idleCallbackProvided": true
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "release",
+            "requestIndex": 0
+          }
+        ]
+      },
+      {
+        "id": "file-multiple-audio-lines",
+        "input": {
+          "request": {
+            "text": "Ordinary Inworld speech.",
+            "target": "audio-file",
+            "timeoutMs": 12345,
+            "providerConfig": {
+              "apiKey": "fixture-inworld-speech-contract"
+            }
+          },
+          "response": {
+            "ndjson": "{\"result\":{\"audioContent\":\"UklGRg==\"}}\n{\"result\":{\"audioContent\":\"AAE=\"}}\n{\"result\":{\"audioContent\":\"Av8=\"}}\n"
+          }
+        },
+        "inputAfter": {
+          "request": {
+            "text": "Ordinary Inworld speech.",
+            "target": "audio-file",
+            "timeoutMs": 12345,
+            "providerConfig": {
+              "apiKey": "fixture-inworld-speech-contract"
+            }
+          },
+          "response": {
+            "ndjson": "{\"result\":{\"audioContent\":\"UklGRg==\"}}\n{\"result\":{\"audioContent\":\"AAE=\"}}\n{\"result\":{\"audioContent\":\"Av8=\"}}\n"
+          }
+        },
+        "result": {
+          "audioBase64": "UklGRgABAv8=",
+          "outputFormat": "mp3",
+          "fileExtension": ".mp3",
+          "voiceCompatible": false
+        },
+        "synthesisRequest": {
+          "cfg": {},
+          "text": "Ordinary Inworld speech.",
+          "target": "audio-file",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract"
+          }
+        },
+        "synthesisRequestAfter": {
+          "cfg": {},
+          "text": "Ordinary Inworld speech.",
+          "target": "audio-file",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract"
+          }
+        },
+        "requests": [
+          {
+            "url": "https://api.inworld.ai/tts/v1/voice:stream",
+            "method": "POST",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Basic fixture-inworld-speech-contract"
+            },
+            "body": {
+              "text": "Ordinary Inworld speech.",
+              "voiceId": "Sarah",
+              "modelId": "inworld-tts-1.5-max",
+              "audioConfig": {
+                "audioEncoding": "MP3"
+              }
+            },
+            "bodyText": "{\"text\":\"Ordinary Inworld speech.\",\"voiceId\":\"Sarah\",\"modelId\":\"inworld-tts-1.5-max\",\"audioConfig\":{\"audioEncoding\":\"MP3\"}}",
+            "timeoutMs": 12345,
+            "auditContext": "inworld-tts"
+          }
+        ],
+        "releaseCount": 1,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "fetchWithSsrFGuard",
+            "provenanceOnly": true,
+            "requestIndex": 0,
+            "args": {
+              "url": "https://api.inworld.ai/tts/v1/voice:stream",
+              "init": {
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json",
+                  "Authorization": "Basic fixture-inworld-speech-contract"
+                },
+                "body": "{\"text\":\"Ordinary Inworld speech.\",\"voiceId\":\"Sarah\",\"modelId\":\"inworld-tts-1.5-max\",\"audioConfig\":{\"audioEncoding\":\"MP3\"}}"
+              },
+              "timeoutMs": 12345,
+              "policy": {
+                "hostnameAllowlist": [
+                  "api.inworld.ai"
+                ]
+              },
+              "auditContext": "inworld-tts"
+            }
+          },
+          {
+            "module": "openclaw/plugin-sdk/response-limit-runtime",
+            "export": "readResponseWithLimit",
+            "provenanceOnly": true,
+            "responseIndex": 0,
+            "maxBytes": 33554432,
+            "chunkTimeoutMs": 30000,
+            "overflowCallbackProvided": true,
+            "idleCallbackProvided": true
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "release",
+            "requestIndex": 0
+          }
+        ]
+      },
+      {
+        "id": "file-metadata-and-blank-lines",
+        "input": {
+          "request": {
+            "text": "Ordinary Inworld speech.",
+            "target": "audio-file",
+            "timeoutMs": 12345,
+            "providerConfig": {
+              "apiKey": "fixture-inworld-speech-contract"
+            }
+          },
+          "response": {
+            "ndjson": "\n \t\n{\"requestId\":\"ordinary-request\"}\n﻿  {\"result\":{\"audioContent\":\"UklGRg==\"}}  ﻿\n{\"result\":{\"requestId\":\"ordinary-progress\"}}\n{\"result\":{\"audioContent\":\"AAE=\"}}\n\n{\"result\":{\"audioContent\":\"Av8=\"}}\n"
+          }
+        },
+        "inputAfter": {
+          "request": {
+            "text": "Ordinary Inworld speech.",
+            "target": "audio-file",
+            "timeoutMs": 12345,
+            "providerConfig": {
+              "apiKey": "fixture-inworld-speech-contract"
+            }
+          },
+          "response": {
+            "ndjson": "\n \t\n{\"requestId\":\"ordinary-request\"}\n﻿  {\"result\":{\"audioContent\":\"UklGRg==\"}}  ﻿\n{\"result\":{\"requestId\":\"ordinary-progress\"}}\n{\"result\":{\"audioContent\":\"AAE=\"}}\n\n{\"result\":{\"audioContent\":\"Av8=\"}}\n"
+          }
+        },
+        "result": {
+          "audioBase64": "UklGRgABAv8=",
+          "outputFormat": "mp3",
+          "fileExtension": ".mp3",
+          "voiceCompatible": false
+        },
+        "synthesisRequest": {
+          "cfg": {},
+          "text": "Ordinary Inworld speech.",
+          "target": "audio-file",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract"
+          }
+        },
+        "synthesisRequestAfter": {
+          "cfg": {},
+          "text": "Ordinary Inworld speech.",
+          "target": "audio-file",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract"
+          }
+        },
+        "requests": [
+          {
+            "url": "https://api.inworld.ai/tts/v1/voice:stream",
+            "method": "POST",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Basic fixture-inworld-speech-contract"
+            },
+            "body": {
+              "text": "Ordinary Inworld speech.",
+              "voiceId": "Sarah",
+              "modelId": "inworld-tts-1.5-max",
+              "audioConfig": {
+                "audioEncoding": "MP3"
+              }
+            },
+            "bodyText": "{\"text\":\"Ordinary Inworld speech.\",\"voiceId\":\"Sarah\",\"modelId\":\"inworld-tts-1.5-max\",\"audioConfig\":{\"audioEncoding\":\"MP3\"}}",
+            "timeoutMs": 12345,
+            "auditContext": "inworld-tts"
+          }
+        ],
+        "releaseCount": 1,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "fetchWithSsrFGuard",
+            "provenanceOnly": true,
+            "requestIndex": 0,
+            "args": {
+              "url": "https://api.inworld.ai/tts/v1/voice:stream",
+              "init": {
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json",
+                  "Authorization": "Basic fixture-inworld-speech-contract"
+                },
+                "body": "{\"text\":\"Ordinary Inworld speech.\",\"voiceId\":\"Sarah\",\"modelId\":\"inworld-tts-1.5-max\",\"audioConfig\":{\"audioEncoding\":\"MP3\"}}"
+              },
+              "timeoutMs": 12345,
+              "policy": {
+                "hostnameAllowlist": [
+                  "api.inworld.ai"
+                ]
+              },
+              "auditContext": "inworld-tts"
+            }
+          },
+          {
+            "module": "openclaw/plugin-sdk/response-limit-runtime",
+            "export": "readResponseWithLimit",
+            "provenanceOnly": true,
+            "responseIndex": 0,
+            "maxBytes": 33554432,
+            "chunkTimeoutMs": 30000,
+            "overflowCallbackProvided": true,
+            "idleCallbackProvided": true
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "release",
+            "requestIndex": 0
+          }
+        ]
+      },
+      {
+        "id": "file-canonical-base64-variants",
+        "input": {
+          "request": {
+            "text": "Ordinary Inworld speech.",
+            "target": "audio-file",
+            "timeoutMs": 12345,
+            "providerConfig": {
+              "apiKey": "fixture-inworld-speech-contract"
+            }
+          },
+          "response": {
+            "ndjson": "{\"result\":{\"audioContent\":\" UklG Rg==\\t\"}}\n{\"result\":{\"audioContent\":\"AAE\"}}\n{\"result\":{\"audioContent\":\"Av8\"}}\n"
+          }
+        },
+        "inputAfter": {
+          "request": {
+            "text": "Ordinary Inworld speech.",
+            "target": "audio-file",
+            "timeoutMs": 12345,
+            "providerConfig": {
+              "apiKey": "fixture-inworld-speech-contract"
+            }
+          },
+          "response": {
+            "ndjson": "{\"result\":{\"audioContent\":\" UklG Rg==\\t\"}}\n{\"result\":{\"audioContent\":\"AAE\"}}\n{\"result\":{\"audioContent\":\"Av8\"}}\n"
+          }
+        },
+        "result": {
+          "audioBase64": "UklGRgABAv8=",
+          "outputFormat": "mp3",
+          "fileExtension": ".mp3",
+          "voiceCompatible": false
+        },
+        "synthesisRequest": {
+          "cfg": {},
+          "text": "Ordinary Inworld speech.",
+          "target": "audio-file",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract"
+          }
+        },
+        "synthesisRequestAfter": {
+          "cfg": {},
+          "text": "Ordinary Inworld speech.",
+          "target": "audio-file",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract"
+          }
+        },
+        "requests": [
+          {
+            "url": "https://api.inworld.ai/tts/v1/voice:stream",
+            "method": "POST",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Basic fixture-inworld-speech-contract"
+            },
+            "body": {
+              "text": "Ordinary Inworld speech.",
+              "voiceId": "Sarah",
+              "modelId": "inworld-tts-1.5-max",
+              "audioConfig": {
+                "audioEncoding": "MP3"
+              }
+            },
+            "bodyText": "{\"text\":\"Ordinary Inworld speech.\",\"voiceId\":\"Sarah\",\"modelId\":\"inworld-tts-1.5-max\",\"audioConfig\":{\"audioEncoding\":\"MP3\"}}",
+            "timeoutMs": 12345,
+            "auditContext": "inworld-tts"
+          }
+        ],
+        "releaseCount": 1,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "fetchWithSsrFGuard",
+            "provenanceOnly": true,
+            "requestIndex": 0,
+            "args": {
+              "url": "https://api.inworld.ai/tts/v1/voice:stream",
+              "init": {
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json",
+                  "Authorization": "Basic fixture-inworld-speech-contract"
+                },
+                "body": "{\"text\":\"Ordinary Inworld speech.\",\"voiceId\":\"Sarah\",\"modelId\":\"inworld-tts-1.5-max\",\"audioConfig\":{\"audioEncoding\":\"MP3\"}}"
+              },
+              "timeoutMs": 12345,
+              "policy": {
+                "hostnameAllowlist": [
+                  "api.inworld.ai"
+                ]
+              },
+              "auditContext": "inworld-tts"
+            }
+          },
+          {
+            "module": "openclaw/plugin-sdk/response-limit-runtime",
+            "export": "readResponseWithLimit",
+            "provenanceOnly": true,
+            "responseIndex": 0,
+            "maxBytes": 33554432,
+            "chunkTimeoutMs": 30000,
+            "overflowCallbackProvided": true,
+            "idleCallbackProvided": true
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "release",
+            "requestIndex": 0
+          }
+        ]
+      }
+    ],
+    "telephony": [
+      {
+        "id": "phone-from-raw",
+        "input": {
+          "request": {
+            "text": "Ordinary Inworld phone speech.",
+            "target": "telephony",
+            "timeoutMs": 12345
+          },
+          "rawConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "voiceId": "Dennis",
+                "modelId": "inworld-tts-1.5-mini",
+                "temperature": 0.8
+              }
+            }
+          }
+        },
+        "inputAfter": {
+          "request": {
+            "text": "Ordinary Inworld phone speech.",
+            "target": "telephony",
+            "timeoutMs": 12345
+          },
+          "rawConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "voiceId": "Dennis",
+                "modelId": "inworld-tts-1.5-mini",
+                "temperature": 0.8
+              }
+            }
+          }
+        },
+        "resolvedConfig": {
+          "apiKey": "fixture-inworld-speech-contract",
+          "baseUrl": "https://api.inworld.ai",
+          "voiceId": "Dennis",
+          "modelId": "inworld-tts-1.5-mini",
+          "temperature": 0.8
+        },
+        "result": {
+          "audioBase64": "UklGRgABAv8=",
+          "outputFormat": "pcm",
+          "sampleRate": 22050
+        },
+        "synthesisRequest": {
+          "cfg": {},
+          "text": "Ordinary Inworld phone speech.",
+          "target": "telephony",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "baseUrl": "https://api.inworld.ai",
+            "voiceId": "Dennis",
+            "modelId": "inworld-tts-1.5-mini",
+            "temperature": 0.8
+          }
+        },
+        "synthesisRequestAfter": {
+          "cfg": {},
+          "text": "Ordinary Inworld phone speech.",
+          "target": "telephony",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "baseUrl": "https://api.inworld.ai",
+            "voiceId": "Dennis",
+            "modelId": "inworld-tts-1.5-mini",
+            "temperature": 0.8
+          }
+        },
+        "requests": [
+          {
+            "url": "https://api.inworld.ai/tts/v1/voice:stream",
+            "method": "POST",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Basic fixture-inworld-speech-contract"
+            },
+            "body": {
+              "text": "Ordinary Inworld phone speech.",
+              "voiceId": "Dennis",
+              "modelId": "inworld-tts-1.5-mini",
+              "audioConfig": {
+                "audioEncoding": "PCM",
+                "sampleRateHertz": 22050
+              },
+              "temperature": 0.8
+            },
+            "bodyText": "{\"text\":\"Ordinary Inworld phone speech.\",\"voiceId\":\"Dennis\",\"modelId\":\"inworld-tts-1.5-mini\",\"audioConfig\":{\"audioEncoding\":\"PCM\",\"sampleRateHertz\":22050},\"temperature\":0.8}",
+            "timeoutMs": 12345,
+            "auditContext": "inworld-tts"
+          }
+        ],
+        "releaseCount": 1,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "fetchWithSsrFGuard",
+            "provenanceOnly": true,
+            "requestIndex": 0,
+            "args": {
+              "url": "https://api.inworld.ai/tts/v1/voice:stream",
+              "init": {
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json",
+                  "Authorization": "Basic fixture-inworld-speech-contract"
+                },
+                "body": "{\"text\":\"Ordinary Inworld phone speech.\",\"voiceId\":\"Dennis\",\"modelId\":\"inworld-tts-1.5-mini\",\"audioConfig\":{\"audioEncoding\":\"PCM\",\"sampleRateHertz\":22050},\"temperature\":0.8}"
+              },
+              "timeoutMs": 12345,
+              "policy": {
+                "hostnameAllowlist": [
+                  "api.inworld.ai"
+                ]
+              },
+              "auditContext": "inworld-tts"
+            }
+          },
+          {
+            "module": "openclaw/plugin-sdk/response-limit-runtime",
+            "export": "readResponseWithLimit",
+            "provenanceOnly": true,
+            "responseIndex": 0,
+            "maxBytes": 33554432,
+            "chunkTimeoutMs": 30000,
+            "overflowCallbackProvided": true,
+            "idleCallbackProvided": true
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "release",
+            "requestIndex": 0
+          }
+        ]
+      },
+      {
+        "id": "phone-pre-resolved-and-aliases",
+        "input": {
+          "request": {
+            "text": "  Phone speech.\n你好 📞\t ",
+            "target": "telephony",
+            "timeoutMs": 12345,
+            "providerConfig": {
+              "apiKey": "fixture-inworld-speech-contract",
+              "baseUrl": " https://phone.example.test/api/// ",
+              "voiceId": "Sarah",
+              "modelId": "inworld-tts-1.5-max"
+            },
+            "providerOverrides": {
+              "voice": " Wendy ",
+              "model": " inworld-tts-1 ",
+              "temperature": 1.1
+            }
+          }
+        },
+        "inputAfter": {
+          "request": {
+            "text": "  Phone speech.\n你好 📞\t ",
+            "target": "telephony",
+            "timeoutMs": 12345,
+            "providerConfig": {
+              "apiKey": "fixture-inworld-speech-contract",
+              "baseUrl": " https://phone.example.test/api/// ",
+              "voiceId": "Sarah",
+              "modelId": "inworld-tts-1.5-max"
+            },
+            "providerOverrides": {
+              "voice": " Wendy ",
+              "model": " inworld-tts-1 ",
+              "temperature": 1.1
+            }
+          }
+        },
+        "result": {
+          "audioBase64": "UklGRgABAv8=",
+          "outputFormat": "pcm",
+          "sampleRate": 22050
+        },
+        "synthesisRequest": {
+          "cfg": {},
+          "text": "  Phone speech.\n你好 📞\t ",
+          "target": "telephony",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "baseUrl": " https://phone.example.test/api/// ",
+            "voiceId": "Sarah",
+            "modelId": "inworld-tts-1.5-max"
+          },
+          "providerOverrides": {
+            "voice": " Wendy ",
+            "model": " inworld-tts-1 ",
+            "temperature": 1.1
+          }
+        },
+        "synthesisRequestAfter": {
+          "cfg": {},
+          "text": "  Phone speech.\n你好 📞\t ",
+          "target": "telephony",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "baseUrl": " https://phone.example.test/api/// ",
+            "voiceId": "Sarah",
+            "modelId": "inworld-tts-1.5-max"
+          },
+          "providerOverrides": {
+            "voice": " Wendy ",
+            "model": " inworld-tts-1 ",
+            "temperature": 1.1
+          }
+        },
+        "requests": [
+          {
+            "url": "https://phone.example.test/api/tts/v1/voice:stream",
+            "method": "POST",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Basic fixture-inworld-speech-contract"
+            },
+            "body": {
+              "text": "  Phone speech.\n你好 📞\t ",
+              "voiceId": "Wendy",
+              "modelId": "inworld-tts-1",
+              "audioConfig": {
+                "audioEncoding": "PCM",
+                "sampleRateHertz": 22050
+              },
+              "temperature": 1.1
+            },
+            "bodyText": "{\"text\":\"  Phone speech.\\n你好 📞\\t \",\"voiceId\":\"Wendy\",\"modelId\":\"inworld-tts-1\",\"audioConfig\":{\"audioEncoding\":\"PCM\",\"sampleRateHertz\":22050},\"temperature\":1.1}",
+            "timeoutMs": 12345,
+            "auditContext": "inworld-tts"
+          }
+        ],
+        "releaseCount": 1,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "fetchWithSsrFGuard",
+            "provenanceOnly": true,
+            "requestIndex": 0,
+            "args": {
+              "url": "https://phone.example.test/api/tts/v1/voice:stream",
+              "init": {
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json",
+                  "Authorization": "Basic fixture-inworld-speech-contract"
+                },
+                "body": "{\"text\":\"  Phone speech.\\n你好 📞\\t \",\"voiceId\":\"Wendy\",\"modelId\":\"inworld-tts-1\",\"audioConfig\":{\"audioEncoding\":\"PCM\",\"sampleRateHertz\":22050},\"temperature\":1.1}"
+              },
+              "timeoutMs": 12345,
+              "policy": {
+                "hostnameAllowlist": [
+                  "phone.example.test"
+                ]
+              },
+              "auditContext": "inworld-tts"
+            }
+          },
+          {
+            "module": "openclaw/plugin-sdk/response-limit-runtime",
+            "export": "readResponseWithLimit",
+            "provenanceOnly": true,
+            "responseIndex": 0,
+            "maxBytes": 33554432,
+            "chunkTimeoutMs": 30000,
+            "overflowCallbackProvided": true,
+            "idleCallbackProvided": true
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "release",
+            "requestIndex": 0
+          }
+        ]
+      },
+      {
+        "id": "phone-talk-composition",
+        "input": {
+          "request": {
+            "text": "Ordinary Inworld phone speech.",
+            "target": "telephony",
+            "timeoutMs": 12345
+          },
+          "baseTtsConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "baseUrl": "https://base.example.test/api",
+                "voiceId": "Dennis",
+                "modelId": "inworld-tts-1.5-mini",
+                "temperature": 0.8
+              }
+            }
+          },
+          "talkProviderConfig": {
+            "voiceId": " Ashley "
+          },
+          "talkParams": {
+            "modelId": " inworld-tts-1-max ",
+            "temperature": 0.7
+          }
+        },
+        "inputAfter": {
+          "request": {
+            "text": "Ordinary Inworld phone speech.",
+            "target": "telephony",
+            "timeoutMs": 12345
+          },
+          "baseTtsConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "baseUrl": "https://base.example.test/api",
+                "voiceId": "Dennis",
+                "modelId": "inworld-tts-1.5-mini",
+                "temperature": 0.8
+              }
+            }
+          },
+          "talkProviderConfig": {
+            "voiceId": " Ashley "
+          },
+          "talkParams": {
+            "modelId": " inworld-tts-1-max ",
+            "temperature": 0.7
+          }
+        },
+        "resolvedConfig": {
+          "apiKey": "fixture-inworld-speech-contract",
+          "baseUrl": "https://base.example.test/api",
+          "voiceId": "Ashley",
+          "modelId": "inworld-tts-1.5-mini",
+          "temperature": 0.8
+        },
+        "result": {
+          "audioBase64": "UklGRgABAv8=",
+          "outputFormat": "pcm",
+          "sampleRate": 22050
+        },
+        "synthesisRequest": {
+          "cfg": {},
+          "text": "Ordinary Inworld phone speech.",
+          "target": "telephony",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "baseUrl": "https://base.example.test/api",
+            "voiceId": "Ashley",
+            "modelId": "inworld-tts-1.5-mini",
+            "temperature": 0.8
+          },
+          "providerOverrides": {
+            "modelId": "inworld-tts-1-max",
+            "temperature": 0.7
+          }
+        },
+        "synthesisRequestAfter": {
+          "cfg": {},
+          "text": "Ordinary Inworld phone speech.",
+          "target": "telephony",
+          "timeoutMs": 12345,
+          "providerConfig": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "baseUrl": "https://base.example.test/api",
+            "voiceId": "Ashley",
+            "modelId": "inworld-tts-1.5-mini",
+            "temperature": 0.8
+          },
+          "providerOverrides": {
+            "modelId": "inworld-tts-1-max",
+            "temperature": 0.7
+          }
+        },
+        "requests": [
+          {
+            "url": "https://base.example.test/api/tts/v1/voice:stream",
+            "method": "POST",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Basic fixture-inworld-speech-contract"
+            },
+            "body": {
+              "text": "Ordinary Inworld phone speech.",
+              "voiceId": "Ashley",
+              "modelId": "inworld-tts-1-max",
+              "audioConfig": {
+                "audioEncoding": "PCM",
+                "sampleRateHertz": 22050
+              },
+              "temperature": 0.7
+            },
+            "bodyText": "{\"text\":\"Ordinary Inworld phone speech.\",\"voiceId\":\"Ashley\",\"modelId\":\"inworld-tts-1-max\",\"audioConfig\":{\"audioEncoding\":\"PCM\",\"sampleRateHertz\":22050},\"temperature\":0.7}",
+            "timeoutMs": 12345,
+            "auditContext": "inworld-tts"
+          }
+        ],
+        "releaseCount": 1,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "fetchWithSsrFGuard",
+            "provenanceOnly": true,
+            "requestIndex": 0,
+            "args": {
+              "url": "https://base.example.test/api/tts/v1/voice:stream",
+              "init": {
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json",
+                  "Authorization": "Basic fixture-inworld-speech-contract"
+                },
+                "body": "{\"text\":\"Ordinary Inworld phone speech.\",\"voiceId\":\"Ashley\",\"modelId\":\"inworld-tts-1-max\",\"audioConfig\":{\"audioEncoding\":\"PCM\",\"sampleRateHertz\":22050},\"temperature\":0.7}"
+              },
+              "timeoutMs": 12345,
+              "policy": {
+                "hostnameAllowlist": [
+                  "base.example.test"
+                ]
+              },
+              "auditContext": "inworld-tts"
+            }
+          },
+          {
+            "module": "openclaw/plugin-sdk/response-limit-runtime",
+            "export": "readResponseWithLimit",
+            "provenanceOnly": true,
+            "responseIndex": 0,
+            "maxBytes": 33554432,
+            "chunkTimeoutMs": 30000,
+            "overflowCallbackProvided": true,
+            "idleCallbackProvided": true
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "release",
+            "requestIndex": 0
+          }
+        ]
+      }
+    ],
+    "voices": [
+      {
+        "id": "explicit-get-projection",
+        "input": {
+          "request": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "baseUrl": " https://voices.example.test/api/// ",
+            "timeoutMs": 12345
+          },
+          "response": {
+            "voices": [
+              {
+                "voiceId": " Sarah ",
+                "displayName": " Sarah Voice ",
+                "description": " A calm narrator. ",
+                "langCode": " en-US ",
+                "tags": [
+                  "warm",
+                  "female",
+                  "male"
+                ],
+                "source": "curated"
+              },
+              {
+                "voiceId": "Dennis",
+                "displayName": " Dennis ",
+                "langCode": "en-GB",
+                "tags": [
+                  "male",
+                  "female"
+                ]
+              },
+              {
+                "voiceId": "Sarah",
+                "displayName": " Second Sarah ",
+                "description": "   ",
+                "langCode": "fr-CA",
+                "tags": [
+                  "neutral",
+                  "female"
+                ]
+              },
+              {
+                "voiceId": "Minimal",
+                "tags": [
+                  "Male",
+                  "FEMALE",
+                  "character"
+                ]
+              }
+            ]
+          }
+        },
+        "inputAfter": {
+          "request": {
+            "apiKey": "fixture-inworld-speech-contract",
+            "baseUrl": " https://voices.example.test/api/// ",
+            "timeoutMs": 12345
+          },
+          "response": {
+            "voices": [
+              {
+                "voiceId": " Sarah ",
+                "displayName": " Sarah Voice ",
+                "description": " A calm narrator. ",
+                "langCode": " en-US ",
+                "tags": [
+                  "warm",
+                  "female",
+                  "male"
+                ],
+                "source": "curated"
+              },
+              {
+                "voiceId": "Dennis",
+                "displayName": " Dennis ",
+                "langCode": "en-GB",
+                "tags": [
+                  "male",
+                  "female"
+                ]
+              },
+              {
+                "voiceId": "Sarah",
+                "displayName": " Second Sarah ",
+                "description": "   ",
+                "langCode": "fr-CA",
+                "tags": [
+                  "neutral",
+                  "female"
+                ]
+              },
+              {
+                "voiceId": "Minimal",
+                "tags": [
+                  "Male",
+                  "FEMALE",
+                  "character"
+                ]
+              }
+            ]
+          }
+        },
+        "result": [
+          {
+            "id": "Sarah",
+            "name": "Sarah Voice",
+            "description": "A calm narrator.",
+            "locale": " en-US ",
+            "gender": "female"
+          },
+          {
+            "id": "Dennis",
+            "name": "Dennis",
+            "locale": "en-GB",
+            "gender": "male"
+          },
+          {
+            "id": "Sarah",
+            "name": "Second Sarah",
+            "locale": "fr-CA",
+            "gender": "female"
+          },
+          {
+            "id": "Minimal"
+          }
+        ],
+        "requests": [
+          {
+            "url": "https://voices.example.test/api/voices/v1/voices",
+            "method": "GET",
+            "headers": {
+              "Authorization": "Basic fixture-inworld-speech-contract"
+            },
+            "timeoutMs": 12345,
+            "auditContext": "inworld-voices"
+          }
+        ],
+        "releaseCount": 1,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "fetchWithSsrFGuard",
+            "provenanceOnly": true,
+            "requestIndex": 0,
+            "args": {
+              "url": "https://voices.example.test/api/voices/v1/voices",
+              "init": {
+                "method": "GET",
+                "headers": {
+                  "Authorization": "Basic fixture-inworld-speech-contract"
+                }
+              },
+              "timeoutMs": 12345,
+              "policy": {
+                "hostnameAllowlist": [
+                  "voices.example.test"
+                ]
+              },
+              "auditContext": "inworld-voices"
+            }
+          },
+          {
+            "module": "openclaw/plugin-sdk/response-limit-runtime",
+            "export": "readResponseWithLimit",
+            "provenanceOnly": true,
+            "responseIndex": 0,
+            "maxBytes": 16777216,
+            "chunkTimeoutMs": 30000,
+            "overflowCallbackProvided": true,
+            "idleCallbackProvided": true
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "release",
+            "requestIndex": 0
+          }
+        ]
+      },
+      {
+        "id": "provider-config-default-timeout",
+        "input": {
+          "request": {
+            "providerConfig": {
+              "apiKey": "fixture-inworld-speech-contract",
+              "baseUrl": " https://catalog.example.test/v2/// "
+            }
+          },
+          "response": {
+            "voices": [
+              {
+                "voiceId": "Locale",
+                "displayName": " Locale Voice ",
+                "description": " Description ",
+                "langCode": "\tpt-BR ",
+                "tags": [
+                  "other",
+                  "male"
+                ]
+              },
+              {
+                "voiceId": "Optional",
+                "displayName": "  ",
+                "description": "\t",
+                "langCode": "",
+                "tags": []
+              }
+            ]
+          }
+        },
+        "inputAfter": {
+          "request": {
+            "providerConfig": {
+              "apiKey": "fixture-inworld-speech-contract",
+              "baseUrl": " https://catalog.example.test/v2/// "
+            }
+          },
+          "response": {
+            "voices": [
+              {
+                "voiceId": "Locale",
+                "displayName": " Locale Voice ",
+                "description": " Description ",
+                "langCode": "\tpt-BR ",
+                "tags": [
+                  "other",
+                  "male"
+                ]
+              },
+              {
+                "voiceId": "Optional",
+                "displayName": "  ",
+                "description": "\t",
+                "langCode": "",
+                "tags": []
+              }
+            ]
+          }
+        },
+        "result": [
+          {
+            "id": "Locale",
+            "name": "Locale Voice",
+            "description": "Description",
+            "locale": "\tpt-BR ",
+            "gender": "male"
+          },
+          {
+            "id": "Optional"
+          }
+        ],
+        "requests": [
+          {
+            "url": "https://catalog.example.test/v2/voices/v1/voices",
+            "method": "GET",
+            "headers": {
+              "Authorization": "Basic fixture-inworld-speech-contract"
+            },
+            "timeoutMs": 30000,
+            "auditContext": "inworld-voices"
+          }
+        ],
+        "releaseCount": 1,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "fetchWithSsrFGuard",
+            "provenanceOnly": true,
+            "requestIndex": 0,
+            "args": {
+              "url": "https://catalog.example.test/v2/voices/v1/voices",
+              "init": {
+                "method": "GET",
+                "headers": {
+                  "Authorization": "Basic fixture-inworld-speech-contract"
+                }
+              },
+              "timeoutMs": 30000,
+              "policy": {
+                "hostnameAllowlist": [
+                  "catalog.example.test"
+                ]
+              },
+              "auditContext": "inworld-voices"
+            }
+          },
+          {
+            "module": "openclaw/plugin-sdk/response-limit-runtime",
+            "export": "readResponseWithLimit",
+            "provenanceOnly": true,
+            "responseIndex": 0,
+            "maxBytes": 16777216,
+            "chunkTimeoutMs": 30000,
+            "overflowCallbackProvided": true,
+            "idleCallbackProvided": true
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "release",
+            "requestIndex": 0
+          }
+        ]
+      },
+      {
+        "id": "raw-config-voice-list",
+        "input": {
+          "request": {
+            "timeoutMs": 12345
+          },
+          "rawConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "baseUrl": " https://rawvoices.example.test/api/// "
+              }
+            }
+          },
+          "response": {
+            "voices": [
+              {
+                "voiceId": " RawVoice "
+              }
+            ]
+          }
+        },
+        "inputAfter": {
+          "request": {
+            "timeoutMs": 12345
+          },
+          "rawConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "baseUrl": " https://rawvoices.example.test/api/// "
+              }
+            }
+          },
+          "response": {
+            "voices": [
+              {
+                "voiceId": " RawVoice "
+              }
+            ]
+          }
+        },
+        "resolvedConfig": {
+          "apiKey": "fixture-inworld-speech-contract",
+          "baseUrl": "https://rawvoices.example.test/api",
+          "voiceId": "Sarah",
+          "modelId": "inworld-tts-1.5-max"
+        },
+        "result": [
+          {
+            "id": "RawVoice"
+          }
+        ],
+        "requests": [
+          {
+            "url": "https://rawvoices.example.test/api/voices/v1/voices",
+            "method": "GET",
+            "headers": {
+              "Authorization": "Basic fixture-inworld-speech-contract"
+            },
+            "timeoutMs": 12345,
+            "auditContext": "inworld-voices"
+          }
+        ],
+        "releaseCount": 1,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "fetchWithSsrFGuard",
+            "provenanceOnly": true,
+            "requestIndex": 0,
+            "args": {
+              "url": "https://rawvoices.example.test/api/voices/v1/voices",
+              "init": {
+                "method": "GET",
+                "headers": {
+                  "Authorization": "Basic fixture-inworld-speech-contract"
+                }
+              },
+              "timeoutMs": 12345,
+              "policy": {
+                "hostnameAllowlist": [
+                  "rawvoices.example.test"
+                ]
+              },
+              "auditContext": "inworld-voices"
+            }
+          },
+          {
+            "module": "openclaw/plugin-sdk/response-limit-runtime",
+            "export": "readResponseWithLimit",
+            "provenanceOnly": true,
+            "responseIndex": 0,
+            "maxBytes": 16777216,
+            "chunkTimeoutMs": 30000,
+            "overflowCallbackProvided": true,
+            "idleCallbackProvided": true
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "release",
+            "requestIndex": 0
+          }
+        ]
+      },
+      {
+        "id": "talk-config-explicit-url",
+        "input": {
+          "request": {
+            "baseUrl": " https://explicit.example.test/list/// ",
+            "timeoutMs": 4567
+          },
+          "baseTtsConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "baseUrl": "https://base.example.test/api",
+                "voiceId": "Dennis",
+                "temperature": 0.8
+              }
+            }
+          },
+          "talkProviderConfig": {
+            "baseUrl": " https://talk.example.test/v1/// ",
+            "modelId": " inworld-tts-1 "
+          },
+          "response": {
+            "voices": [
+              {
+                "voiceId": "TalkVoice",
+                "displayName": " Talk Voice ",
+                "description": " Talk catalog ",
+                "langCode": "ja-JP",
+                "tags": [
+                  "female",
+                  "male"
+                ]
+              }
+            ]
+          }
+        },
+        "inputAfter": {
+          "request": {
+            "baseUrl": " https://explicit.example.test/list/// ",
+            "timeoutMs": 4567
+          },
+          "baseTtsConfig": {
+            "providers": {
+              "inworld": {
+                "apiKey": "fixture-inworld-speech-contract",
+                "baseUrl": "https://base.example.test/api",
+                "voiceId": "Dennis",
+                "temperature": 0.8
+              }
+            }
+          },
+          "talkProviderConfig": {
+            "baseUrl": " https://talk.example.test/v1/// ",
+            "modelId": " inworld-tts-1 "
+          },
+          "response": {
+            "voices": [
+              {
+                "voiceId": "TalkVoice",
+                "displayName": " Talk Voice ",
+                "description": " Talk catalog ",
+                "langCode": "ja-JP",
+                "tags": [
+                  "female",
+                  "male"
+                ]
+              }
+            ]
+          }
+        },
+        "resolvedConfig": {
+          "apiKey": "fixture-inworld-speech-contract",
+          "baseUrl": "https://talk.example.test/v1",
+          "voiceId": "Dennis",
+          "modelId": "inworld-tts-1",
+          "temperature": 0.8
+        },
+        "result": [
+          {
+            "id": "TalkVoice",
+            "name": "Talk Voice",
+            "description": "Talk catalog",
+            "locale": "ja-JP",
+            "gender": "female"
+          }
+        ],
+        "requests": [
+          {
+            "url": "https://explicit.example.test/list/voices/v1/voices",
+            "method": "GET",
+            "headers": {
+              "Authorization": "Basic fixture-inworld-speech-contract"
+            },
+            "timeoutMs": 4567,
+            "auditContext": "inworld-voices"
+          }
+        ],
+        "releaseCount": 1,
+        "platformCalls": [
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/secret-input",
+            "export": "normalizeResolvedSecretInputString",
+            "provenanceOnly": true,
+            "path": "tts.providers.inworld.apiKey",
+            "value": "fixture-inworld-speech-contract"
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "fetchWithSsrFGuard",
+            "provenanceOnly": true,
+            "requestIndex": 0,
+            "args": {
+              "url": "https://explicit.example.test/list/voices/v1/voices",
+              "init": {
+                "method": "GET",
+                "headers": {
+                  "Authorization": "Basic fixture-inworld-speech-contract"
+                }
+              },
+              "timeoutMs": 4567,
+              "policy": {
+                "hostnameAllowlist": [
+                  "explicit.example.test"
+                ]
+              },
+              "auditContext": "inworld-voices"
+            }
+          },
+          {
+            "module": "openclaw/plugin-sdk/response-limit-runtime",
+            "export": "readResponseWithLimit",
+            "provenanceOnly": true,
+            "responseIndex": 0,
+            "maxBytes": 16777216,
+            "chunkTimeoutMs": 30000,
+            "overflowCallbackProvided": true,
+            "idleCallbackProvided": true
+          },
+          {
+            "module": "openclaw/plugin-sdk/ssrf-runtime",
+            "export": "release",
+            "requestIndex": 0
+          }
+        ]
+      }
+    ]
+  },
+  "counts": {
+    "config": 7,
+    "talkConfig": 5,
+    "talkOverrides": 5,
+    "synthesis": 12,
+    "telephony": 3,
+    "voices": 4,
+    "observations": 36,
+    "totalObservations": 36,
+    "wholeModules": 11,
+    "trackedFilesBefore": 58558,
+    "trackedFilesAfter": 58558,
+    "httpRequests": 19,
+    "releases": 19
+  },
+  "platformBoundaries": [
+    {
+      "module": "openclaw/plugin-sdk/secret-input",
+      "originalSourceExecuted": false,
+      "exports": {
+        "normalizeResolvedSecretInputString": "supports undefined or explicit dummy fixture only; production secret resolution unexecuted"
+      }
+    },
+    {
+      "module": "node:fs",
+      "originalSourceExecuted": false,
+      "exports": {
+        "rmSync": "uninvoked throwing binding required by complete tts-provider-helpers; no cleanup callback executes"
+      }
+    },
+    {
+      "module": "openclaw/plugin-sdk/response-limit-runtime",
+      "originalSourceExecuted": false,
+      "exports": {
+        "readResponseWithLimit": "records supplied limits and callback presence, returns successful synthetic Response bytes; production bounded/idle reader unexecuted"
+      }
+    },
+    {
+      "module": "openclaw/plugin-sdk/ssrf-runtime",
+      "originalSourceExecuted": false,
+      "exports": {
+        "fetchWithSsrFGuard": "records complete original URL/init/body/timeout/policy/audit inputs; returns successful synthetic Response and counted release; original fetch/guard unexecuted"
+      }
+    }
+  ],
+  "globalBoundaries": {
+    "process": "Fresh VM process.env={} only. No ambient environment, credential/profile/auth-store lookup or source readiness execution.",
+    "fetch": "Throwing ambient binding. Only named synthetic successful HTTP facade executes.",
+    "Buffer": "Native Buffer carries eight opaque fixture bytes; no codec, valid audio or playback evidence.",
+    "clock": "Raw source timeouts pass to synthetic HTTP only; 2000ms VM/asynchronous harness deadlines are execution bounds, not source timeout acceptance."
+  },
+  "limits": [
+    "All58558 pinned tracked blobs/modes/symlinks verified before/after; eleven complete original modules equal pinned Git bytes before TypeScript erasure.",
+    "Whole module evaluation is not every export or branch. Factory metadata/raw/Talk config/overrides, successful buffered NDJSON, fixed PCM22050 phone and GET voices callbacks execute.",
+    "Original NDJSON/Base64/normalization/voice mapping algorithms execute. Source buffers its NDJSON response; no streamSynthesize callback or incremental delivery is invented.",
+    "Secret input, HTTP/guard, bounded/idle response reader and cleanup bindings are explicit synthetic or uninvoked boundaries. Exact reader/policy/header arguments are provenance only.",
+    "Directive parser constructs only; no dispatch/isConfigured/isConfiguredAsync/readiness or automatic Talk/channel/phone consumer.",
+    "Opaque eight-byte audio is result assembly evidence only, not valid audio, codec, publication or player evidence.",
+    "Existing14 source qualification remains frozen and is not rerun. No host production, dependency, configuration or Git changes in this source phase.",
+    "No security/permission/authTLS, negative/error/failure/cancel/crash, mixed/directory suites, budget/truncation/threshold/eviction/race, realprovider or remoteMCP verification."
+  ]
+}

@@ -4,8 +4,12 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   require Logger
 
   alias Synapsis.{ContextWindow, Image, Providers, Sessions}
-  alias Synapsis.Session.{PendingInputStore, Worker}
-  alias SynapsisWeb.{ChatBridge, AgentLive.SessionChat}
+  alias Synapsis.Agent.Tools.Approval
+  alias Synapsis.Session.{InputContext, PendingInputStore, Worker}
+  alias SynapsisWeb.{ChatBridge, AgentLive.SessionChat, ToolResultView}
+
+  alias Synapsis.TaskSuggestions
+  alias SynapsisWeb.AgentLive.TaskSuggestions, as: TaskSuggestionComponents
 
   @running_statuses ~w(streaming tool_executing)
 
@@ -28,9 +32,13 @@ defmodule SynapsisWeb.AgentLive.Sessions do
        provider_configured: provider_configured?,
        sessions: [],
        current_session: nil,
+       task_suggestions: [],
+       task_suggestions_error: nil,
+       task_suggestions_notice: nil,
        messages: [],
        queued_inputs: [],
        streaming_text: "",
+       reply_presentation: nil,
        streaming_reasoning: "",
        tool_calls: %{},
        permission_requests: [],
@@ -56,16 +64,25 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     # Unsubscribe from previous session
     if old = socket.assigns.current_session do
       Phoenix.PubSub.unsubscribe(Synapsis.PubSub, "session:#{old.id}")
+      Phoenix.PubSub.unsubscribe(Synapsis.PubSub, "task_suggestions:#{old.id}")
     end
+
+    socket = clear_task_suggestions(socket)
 
     case Sessions.get(session_id) do
       {:ok, session} ->
         Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}")
+
+        if connected?(socket) do
+          Phoenix.PubSub.subscribe(Synapsis.PubSub, "task_suggestions:#{session.id}")
+        end
+
         messages = Sessions.get_messages(session.id)
         # ADR-006 B2: the live process is the read authority for current state,
         # so a fresh mount mid-turn shows the in-flight status/text; fall back to
         # the durable/DB status when the process is down.
-        {status, in_flight, user_questions, roster, permissions} = live_session_state(session)
+        {status, in_flight, user_questions, roster, permissions, error, presentation} =
+          live_session_state(session)
 
         {:noreply,
          assign(socket,
@@ -76,6 +93,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
            messages: messages,
            queued_inputs: PendingInputStore.queued_prompts(session.id),
            streaming_text: in_flight,
+           reply_presentation: presentation,
            streaming_reasoning: "",
            tool_calls: %{},
            permission_requests: [],
@@ -86,11 +104,16 @@ defmodule SynapsisWeb.AgentLive.Sessions do
            session_status: status,
            current_mode: session.agent || agent_id
          )
-         |> start_chat()}
+         |> refresh_task_suggestions()
+         |> start_chat()
+         |> then(fn socket ->
+           if is_binary(error), do: put_flash(socket, :error, error), else: socket
+         end)}
 
       {:error, :not_found} ->
         {:noreply,
          socket
+         |> assign(:current_session, nil)
          |> put_flash(:error, "Session not found")
          |> push_navigate(to: ~p"/agent/agents/#{agent_id}/sessions")}
 
@@ -121,7 +144,10 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
     if old = socket.assigns.current_session do
       Phoenix.PubSub.unsubscribe(Synapsis.PubSub, "session:#{old.id}")
+      Phoenix.PubSub.unsubscribe(Synapsis.PubSub, "task_suggestions:#{old.id}")
     end
+
+    socket = clear_task_suggestions(socket)
 
     {:noreply,
      assign(socket,
@@ -131,6 +157,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
        messages: [],
        queued_inputs: [],
        streaming_text: "",
+       reply_presentation: nil,
        streaming_reasoning: "",
        tool_calls: %{},
        permission_requests: [],
@@ -173,13 +200,14 @@ defmodule SynapsisWeb.AgentLive.Sessions do
       {:live, %{status: status, in_flight_text: text} = snapshot} ->
         {live_status_string(status), text || "", public_user_questions(snapshot),
          Map.get(snapshot, :subagents, %{agents: []}),
-         Map.get(snapshot, :runtime_permissions, [])}
+         Map.get(snapshot, :runtime_permissions, []), Map.get(snapshot, :error),
+         Map.get(snapshot, :reply_presentation)}
 
       {:durable, %{meta: %{status: status}}} when is_binary(status) ->
-        {status, "", [], %{agents: []}, []}
+        {status, "", [], %{agents: []}, [], nil, nil}
 
       _ ->
-        {session.status || "idle", "", [], %{agents: []}, []}
+        {session.status || "idle", "", [], %{agents: []}, [], nil, nil}
     end
   end
 
@@ -377,6 +405,78 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   defp operation_reply(_result, socket),
     do: {%{status: "error", message: "Session action failed"}, socket}
 
+  defp handle_session_event("refresh_task_suggestions", _params, socket) do
+    {:noreply, socket |> assign(:task_suggestions_notice, nil) |> refresh_task_suggestions()}
+  end
+
+  defp handle_session_event("accept_task_suggestion", params, socket) do
+    suggestion = Enum.find(socket.assigns.task_suggestions, &(&1.id == params["task-id"]))
+
+    notice =
+      if suggestion && socket.assigns.current_session do
+        context = %{
+          session_id: socket.assigns.current_session.id,
+          requester_id: Approval.operator_id()
+        }
+
+        case TaskSuggestions.accept(suggestion.id, context, deadline: task_suggestions_deadline()) do
+          {:ok, %{status: status}} when status in ["accepting", "accepted"] ->
+            nil
+
+          {:ok, %{status: "unknown_outcome"}} ->
+            "Launch is unconfirmed. Check the associated session before taking further action."
+
+          {:error, :unknown_outcome} ->
+            "Could not confirm the launch. Refresh to check the suggestion before taking further action."
+
+          {:error, _} ->
+            "Could not start this suggestion. Refresh to check its current status."
+        end
+      else
+        "This suggestion is no longer available."
+      end
+
+    {:noreply,
+     socket
+     |> assign(:task_suggestions_notice, notice)
+     |> refresh_task_suggestions()}
+  end
+
+  defp handle_session_event("dismiss_task_suggestion", params, socket) do
+    suggestion = Enum.find(socket.assigns.task_suggestions, &(&1.id == params["task-id"]))
+
+    notice =
+      if suggestion && socket.assigns.current_session do
+        context = %{
+          session_id: socket.assigns.current_session.id,
+          agent_id: suggestion.agent_id
+        }
+
+        case TaskSuggestions.dismiss(%{"task_id" => suggestion.id}, context,
+               deadline: task_suggestions_deadline()
+             ) do
+          {:ok, %{dismissed: true}} ->
+            nil
+
+          {:ok, %{dismissed: false}} ->
+            "This suggestion is no longer pending."
+
+          {:error, :unknown_outcome} ->
+            "Could not confirm dismissal. Refresh to check whether the suggestion is still pending."
+
+          {:error, _} ->
+            "Could not dismiss this suggestion. Refresh and try again when suggestions are available."
+        end
+      else
+        "This suggestion is no longer pending."
+      end
+
+    {:noreply,
+     socket
+     |> assign(:task_suggestions_notice, notice)
+     |> refresh_task_suggestions()}
+  end
+
   defp handle_session_event("switch_model", params, socket) do
     id = Map.get(params, "model_id")
     models = Providers.configured_models()
@@ -457,12 +557,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     if socket.assigns.current_session && pending? do
       case Worker.resolve_runtime(socket.assigns.current_session.id, id, decision == "allow") do
         :ok ->
-          {:noreply,
-           update(
-             socket,
-             :runtime_permissions,
-             &Enum.reject(&1, fn pending -> pending.interaction_id == id end)
-           )}
+          {:noreply, socket}
 
         {:error, _} ->
           {:noreply, put_flash(socket, :error, "This approval is no longer available")}
@@ -723,7 +818,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
             |> assign(:tool_calls, %{})
           end
 
-        case Sessions.send_message(session_id, content, image_parts) do
+        case send_operator_message(session_id, content, image_parts) do
           :ok ->
             socket =
               if running? or subagents_enabled?(socket.assigns.current_session) do
@@ -754,6 +849,16 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
   defp submit_message(_content, _image_parts, socket),
     do: {%{status: "error", message: "Invalid message"}, socket}
+
+  defp send_operator_message(session_id, content, image_parts) do
+    with {:ok, input_context} <-
+           InputContext.capture_operator(session_id, %{
+             requester_id: Approval.operator_id(),
+             origin: "liveview"
+           }) do
+      Sessions.send_message(session_id, content, image_parts, input_context)
+    end
+  end
 
   defp optimistic_user_parts("", [_image | _] = image_parts), do: image_parts
 
@@ -797,9 +902,27 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   # --- PubSub handle_info ---
 
   @impl true
+  def handle_info({"text_delta", %{reply_presentation: presentation, text: text}}, socket)
+      when is_map(presentation) and is_binary(text) do
+    case accept_reply_presentation(socket, presentation) do
+      {:ok, socket} ->
+        {:noreply, socket |> update(:streaming_text, &(&1 <> text)) |> sync_chat()}
+
+      :stale ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_info({"reply_presentation", presentation}, socket) when is_map(presentation) do
+    case accept_reply_presentation(socket, presentation) do
+      {:ok, socket} -> {:noreply, sync_chat(socket)}
+      :stale -> {:noreply, socket}
+    end
+  end
+
   def handle_info({"text_delta", %{text: text}}, socket) when is_binary(text) do
     if socket.assigns.current_session do
-      socket = sync_chat(socket)
+      socket = socket |> assign(:reply_presentation, nil) |> sync_chat()
       id = SessionChat.live_id(socket.assigns.current_session.id)
 
       socket =
@@ -816,6 +939,15 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     else
       {:noreply, socket}
     end
+  end
+
+  def handle_info({event, _payload}, socket)
+      when event in [
+             :task_suggestion_created,
+             :task_suggestion_resolved,
+             :task_suggestion_changed
+           ] do
+    {:noreply, refresh_task_suggestions(socket)}
   end
 
   def handle_info({:provider_catalog_changed}, socket) do
@@ -858,13 +990,14 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
   defp handle_session_info({"tool_result", %{tool_use_id: id} = payload}, socket) do
     status = if payload[:is_error], do: "error", else: "complete"
+    result = %{status: status, result: payload[:content], display: tool_result_display(payload)}
 
     tool_calls =
       Map.update(
         socket.assigns.tool_calls,
         id,
-        %{status: status, result: payload[:content]},
-        fn tc -> Map.merge(tc, %{status: status, result: payload[:content]}) end
+        result,
+        fn tc -> Map.merge(tc, result) end
       )
 
     {:noreply, assign(socket, :tool_calls, tool_calls)}
@@ -903,6 +1036,18 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
   defp handle_session_info({"input_started", %{id: id}}, socket) do
     {:noreply, update(socket, :queued_inputs, &Enum.reject(&1, fn input -> input.id == id end))}
+  end
+
+  defp handle_session_info({"music_completion_applied", %{session_id: id}}, socket) do
+    case socket.assigns.current_session do
+      %{id: ^id} ->
+        # Both messages and the occurrence receipt have committed. Refresh only
+        # durable history; the follow-up owns the existing live streaming state.
+        {:noreply, assign(socket, :messages, Sessions.get_messages(id))}
+
+      _ ->
+        {:noreply, socket}
+    end
   end
 
   defp handle_session_info({"done", _}, socket) do
@@ -1187,6 +1332,12 @@ defmodule SynapsisWeb.AgentLive.Sessions do
             permissions={@runtime_permissions}
           />
 
+          <TaskSuggestionComponents.panel
+            suggestions={@task_suggestions}
+            error={@task_suggestions_error}
+            notice={@task_suggestions_notice}
+          />
+
           <.dm_react_chat
             id={@react_chat_initial.id}
             conversation_id={@react_chat_initial.conversation_id}
@@ -1283,6 +1434,44 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
   # --- Helpers ---
 
+  defp clear_task_suggestions(socket) do
+    assign(socket,
+      task_suggestions: [],
+      task_suggestions_error: nil,
+      task_suggestions_notice: nil
+    )
+  end
+
+  defp refresh_task_suggestions(%{assigns: %{current_session: nil}} = socket),
+    do: clear_task_suggestions(socket)
+
+  defp refresh_task_suggestions(socket) do
+    case TaskSuggestions.list_for_host(%{session_id: socket.assigns.current_session.id},
+           deadline: task_suggestions_deadline()
+         ) do
+      {:ok, rows} ->
+        suggestions =
+          Enum.map(rows, fn row ->
+            Map.merge(row.suggestion, %{
+              status: row.status,
+              receipt: row.receipt,
+              destination_session_id: row.session_id
+            })
+          end)
+
+        assign(socket, task_suggestions: suggestions, task_suggestions_error: nil)
+
+      {:error, _} ->
+        assign(socket,
+          task_suggestions: [],
+          task_suggestions_error:
+            "Could not load suggested follow-ups. Retry to refresh when suggestions are available."
+        )
+    end
+  end
+
+  defp task_suggestions_deadline, do: System.monotonic_time(:millisecond) + 5_000
+
   defp start_chat(socket) do
     session_id = socket.assigns.current_session.id
 
@@ -1349,6 +1538,26 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   end
 
   defp assign_session_status(socket, status) when status in ~w(streaming tool_executing) do
+    socket =
+      case socket.assigns[:reply_presentation] do
+        %{phase: phase, occurrence_id: previous_occurrence}
+        when phase in ["committed", "closed"] ->
+          case Synapsis.Session.Read.live_snapshot(socket.assigns.current_session.id) do
+            {:live, %{reply_presentation: nil}} ->
+              assign(socket, :reply_presentation, nil)
+
+            {:live, %{reply_presentation: %{occurrence_id: occurrence} = live}}
+            when occurrence != previous_occurrence ->
+              assign(socket, :reply_presentation, live)
+
+            _ ->
+              socket
+          end
+
+        _ ->
+          socket
+      end
+
     case fetch_current_session(socket) do
       {:ok, %{status: terminal_status} = session} when terminal_status in ~w(idle error) ->
         socket
@@ -1391,9 +1600,9 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
   defp fetch_current_session(_socket), do: {:error, :not_found}
 
-  attr :session, :map, required: true
-  attr :models, :list, required: true
-  attr :busy, :boolean, required: true
+  attr(:session, :map, required: true)
+  attr(:models, :list, required: true)
+  attr(:busy, :boolean, required: true)
 
   defp session_model_selector(assigns) do
     saved_id = (assigns.session.config || %{})["model_id"]
@@ -1449,8 +1658,8 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
   defp session_context_size_label(_messages), do: "0 tokens"
 
-  attr :roster, :map, required: true
-  attr :permissions, :list, required: true
+  attr(:roster, :map, required: true)
+  attr(:permissions, :list, required: true)
 
   defp subagents_panel(assigns) do
     ~H"""
@@ -1598,30 +1807,82 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     )
   end
 
+  defp accept_reply_presentation(socket, presentation) do
+    current = socket.assigns[:reply_presentation]
+    session = socket.assigns.current_session
+
+    valid? =
+      is_map(session) and presentation[:session_id] == session.id and
+        presentation[:version] == 1 and presentation[:policy] == "manual_event_message" and
+        is_integer(presentation[:revision])
+
+    same? = is_map(current) and current[:occurrence_id] == presentation[:occurrence_id]
+
+    fresh? =
+      cond do
+        not valid? ->
+          false
+
+        same? ->
+          current[:phase] != "closed" and presentation.revision > current.revision
+
+        true ->
+          case Synapsis.Session.Read.live_snapshot(session.id) do
+            {:live, %{reply_presentation: live}} when is_map(live) ->
+              live.occurrence_id == presentation[:occurrence_id] and
+                live.revision >= presentation.revision
+
+            _ ->
+              false
+          end
+      end
+
+    if fresh? do
+      socket = assign(socket, :reply_presentation, presentation)
+
+      socket =
+        if presentation[:phase] in ["committed", "closed"] do
+          assign(socket, :messages, Sessions.get_messages(session.id))
+        else
+          assign(socket, :session_status, "streaming")
+        end
+
+      {:ok, socket}
+    else
+      :stale
+    end
+  end
+
   defp append_unique_input(inputs, queued) do
     if Enum.any?(inputs, &(&1.id == queued.id)), do: inputs, else: inputs ++ [queued]
   end
 
-  defp update_code_agent(socket, sub_id, "tool_use", %{tool: name}) do
+  defp update_code_agent(socket, sub_id, "tool_use", %{tool: name} = payload) do
     update(socket, :code_agent_sessions, fn sessions ->
       Map.update(sessions, sub_id, %{}, fn entry ->
-        tc = %{name: name, status: "running"}
+        tc = %{
+          id: payload[:tool_use_id],
+          name: name,
+          input: payload[:input] || %{},
+          status: "running",
+          result: nil
+        }
+
         %{entry | tool_calls: entry.tool_calls ++ [tc]}
       end)
     end)
   end
 
-  defp update_code_agent(socket, sub_id, "tool_result", %{tool_use_id: _id} = payload) do
+  defp update_code_agent(socket, sub_id, "tool_result", %{tool_use_id: id} = payload) do
     status = if payload[:is_error], do: "error", else: "complete"
+    result = %{status: status, result: payload[:content], display: tool_result_display(payload)}
 
     update(socket, :code_agent_sessions, fn sessions ->
       Map.update(sessions, sub_id, %{}, fn entry ->
-        # Mark last tool_call as complete
         calls =
-          case Enum.reverse(entry.tool_calls) do
-            [last | rest] -> Enum.reverse([%{last | status: status} | rest])
-            [] -> []
-          end
+          Enum.map(entry.tool_calls, fn call ->
+            if call[:id] == id, do: Map.merge(call, result), else: call
+          end)
 
         %{entry | tool_calls: calls}
       end)
@@ -1641,4 +1902,10 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   end
 
   defp update_code_agent(socket, _sub_id, _event, _payload), do: socket
+
+  defp tool_result_display(payload) do
+    Synapsis.Part.ToolResult
+    |> struct(Map.take(payload, [:tool_use_id, :content, :is_error, :projection]))
+    |> ToolResultView.present()
+  end
 end

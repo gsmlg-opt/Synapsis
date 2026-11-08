@@ -44,8 +44,9 @@ defmodule Synapsis.Agent.Runtime.SessionAdapterTest do
   end
 
   defmodule FailProjection do
-    defdelegate get(key, opts), to: Concord.Turso
+    def get(key, opts), do: Concord.KV.get(key, Keyword.put(opts, :engine, :turso))
     defdelegate prefix_scan(key, opts), to: Concord.Turso
+    defdelegate compare_and_swap(key, value, opts), to: Concord.Turso
 
     def txn(spec, opts) do
       if Enum.any?(spec.success, fn {:put, key, _, _} -> String.contains?(key, "projections/") end),
@@ -57,9 +58,10 @@ defmodule Synapsis.Agent.Runtime.SessionAdapterTest do
   defmodule FailRuntimeRead do
     defdelegate prefix_scan(key, opts), to: Concord.Turso
     defdelegate txn(spec, opts), to: Concord.Turso
+    defdelegate compare_and_swap(key, value, opts), to: Concord.Turso
 
     def get("coord/runtime/runs/" <> _, _opts), do: {:error, :runtime_read_failed}
-    def get(key, opts), do: Concord.Turso.get(key, opts)
+    def get(key, opts), do: Concord.KV.get(key, Keyword.put(opts, :engine, :turso))
   end
 
   setup do

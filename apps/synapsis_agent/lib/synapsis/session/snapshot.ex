@@ -4,8 +4,8 @@ defmodule Synapsis.Session.Snapshot do
 
   The live process holds truth during a turn. At the turn boundary the session
   is written to Concord — `meta` plus one `turns/<n>` entry per message — via
-  `Session.Store`, whose `commit_turn/4` applies each turn as a single atomic
-  Raft command (turn + meta together, never a half turn). `snapshot_async/1`
+  `Session.Store`, whose `replace_turns/3` publishes the full turn list and
+  metadata in one atomic node-local prefix replacement. `snapshot_async/1`
   does this **fire-and-forget** so the worker never blocks on durability.
 
   Rehydrate reads `meta` + ordered `turns/*` back; an absent snapshot means the
@@ -104,11 +104,6 @@ defmodule Synapsis.Session.Snapshot do
 
   # ── internals ────────────────────────────────────────────────────────────
 
-  defp write_turns(session_id, [], meta), do: Store.put_meta(session_id, meta)
-
-  defp write_turns(session_id, messages, meta) do
-    with :ok <- Store.replace_turns(session_id, Enum.map(messages, &Message.encode/1)) do
-      Store.put_meta(session_id, meta)
-    end
-  end
+  defp write_turns(session_id, messages, meta),
+    do: Message.persist_list(session_id, messages, meta)
 end

@@ -3,6 +3,15 @@ defmodule Synapsis.Agent.SessionBridgeTest do
 
   alias Synapsis.Agent.Events.Emitter
 
+  @tag :tmp_dir
+  test "spawn context does not preload private workspace memory", %{tmp_dir: root} do
+    File.write!(Path.join(root, "MEMORY.md"), "Private root decision")
+    context = Synapsis.Agent.SessionBridge.build_spawn_context(root, %{agent_id: "main"})
+    assert context =~ "MEMORY.md"
+    refute context =~ "Private root decision"
+    refute context =~ "Relevant Memory"
+  end
+
   test "UI projections still accompany typed completion" do
     session_id = "bridge-ui-#{System.unique_integer([:positive])}"
     :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session_id}")

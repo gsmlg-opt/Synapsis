@@ -1,0 +1,487 @@
+{
+  "version": 1,
+  "reference": {
+    "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+    "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+    "trackedClean": true
+  },
+  "scope": "ordinary-raw-event-window-helper",
+  "limits": {
+    "sourcePageMaxBytes": 8388608,
+    "historyPageMaxBytes": 1048576
+  },
+  "runtime": {
+    "executable": "/nix/store/hi7j7adiizy4cfprlj7xnx9ag3mrzmam-nodejs-slim-24.21.0/bin/node",
+    "version": "24.21.0",
+    "sha256": "483bfd90bbecfa5ff780d5307bef2e53aa62c7d1097411edb9452fb056c67b9c",
+    "platform": "linux"
+  },
+  "exporter": {
+    "path": "scripts/openclaw/capture-session-reader-window.mjs",
+    "sha256": "a8a02f258ae11df15d95b7b44a034f4fe98204a87b6cff27fda8a68e48dd7aee"
+  },
+  "license": {
+    "path": "LICENSE",
+    "sha256": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4",
+    "text": "MIT License\n\nCopyright (c) 2026 OpenClaw Foundation\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+  },
+  "evidence": {
+    "sourceTree": {
+      "before": {
+        "verified": true,
+        "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+        "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+        "verifiedTrackedFiles": 58558,
+        "filesSha256": "5ebe7b42d25660115d8ae716471be49fb2e5ab887d6b47d58c47e787b960ce59"
+      },
+      "after": {
+        "verified": true,
+        "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+        "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+        "verifiedTrackedFiles": 58558,
+        "filesSha256": "5ebe7b42d25660115d8ae716471be49fb2e5ab887d6b47d58c47e787b960ce59"
+      }
+    },
+    "sources": [
+      {
+        "path": "LICENSE",
+        "gitBlob": "ed064819ab537575d0cad902f7e5af4a3488b1d0",
+        "bytes": 1076,
+        "sha256": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4"
+      },
+      {
+        "path": "src/config/sessions/session-actor-memory-history-navigation.ts",
+        "gitBlob": "31b441b10f3f264f510a15c0d461463d54ff3575",
+        "bytes": 5143,
+        "sha256": "cbed1442b7cfbe95eaba09126ed8f9c86f598b24d2925da31e56ca8636a77d38"
+      },
+      {
+        "path": "src/gateway/session-history-tail.ts",
+        "gitBlob": "c554c11af56ce37b5a0bab45b65b131c746a66b1",
+        "bytes": 21154,
+        "sha256": "b7cb1a95c72897ec5ddfc3a9ac9e45c31c676ca757556990397a610c1b3170d9"
+      },
+      {
+        "path": "src/gateway/session-transcript-source-pages.ts",
+        "gitBlob": "2f1b9585c24727cae5efd72715a7929b1463fb37",
+        "bytes": 1980,
+        "sha256": "652240d9d09e810d1a47ca1635e0fd3a6f895fe4e19021973b5caf49a9893490"
+      }
+    ],
+    "transforms": [
+      {
+        "path": "src/config/sessions/session-actor-memory-history-navigation.ts",
+        "mode": "whole-module",
+        "sourceSha256": "cbed1442b7cfbe95eaba09126ed8f9c86f598b24d2925da31e56ca8636a77d38",
+        "generatedSource": "import { isRecord } from \"@openclaw/normalization-core/record-coerce\";\nimport { selectResetKeptEntries } from \"../../../packages/agent-core/src/harness/session/tool-result-pairing.js\";\nimport { SOURCE_PAGE_MAX_BYTES } from \"../../gateway/session-transcript-source-pages.js\";\n                                                                                \nimport { isIndexedSessionEntry } from \"./session-entry-codec.js\";\nimport { isVisibleHistoryNonMessageEvent } from \"./session-history-visibility.js\";\nimport {\n  hasTranscriptMessage,\n  shouldProjectActiveEvent,\n} from \"./session-transcript-projection-append.js\";\nimport {\n  scanSessionTranscriptTree,\n  selectSessionTranscriptActiveEntries,\n                                 \n} from \"./transcript-tree.js\";\n\n                                                                                         \n                                                       \n                         \n                                 \n                          \n  \n\n/** Derived selections borrow immutable event payloads from the actor's current command. */\nexport function createSessionActorMemoryHistoryNavigation(window                          ) {\n  const tree = scanSessionTranscriptTree(window.events.map((row) => row.event));\n  const nodes = new Map(tree.nodes.map((node) => [window.events[node.index], node]));\n  let messagePosition = 0;\n  const active = selectSessionTranscriptActiveEntries({\n    entries: window.events,\n    recordOf: (row) => row.event,\n    tree,\n    failClosedOnInvalidLeafControl: true,\n  })\n    .filter((row) => shouldProjectActiveEvent(row.event))\n    .map((row, activePosition)                               => ({\n      rawSeq: row.rawSeq,\n      event: row.event,\n      eventJson: row.eventJson,\n      createdAt: row.createdAt,\n      searchOrder: row.searchOrder,\n      node: nodes.get(row),\n      activePosition,\n      messagePosition: hasTranscriptMessage(row.event) ? messagePosition++ : null,\n      serializedBytes: Buffer.byteLength(row.eventJson) + 1,\n    }));\n  const reset = active.findLast((row) => isRecord(row.event) && row.event.type === \"reset\");\n  const firstKeptId = reset && isRecord(reset.event) ? reset.event.firstKeptEntryId : undefined;\n  const firstKept =\n    typeof firstKeptId === \"string\"\n      ? active.find((row) => isRecord(row.event) && row.event.id === firstKeptId)\n      : undefined;\n  const candidates =\n    reset && firstKept && firstKept.activePosition < reset.activePosition\n      ? active\n          .slice(firstKept.activePosition, reset.activePosition)\n          .flatMap((row) =>\n            isIndexedSessionEntry(row.event) && row.event.type === \"message\"\n              ? [{ row, event: row.event }]\n              : [],\n          )\n      : [];\n  const retained = new Set(selectResetKeptEntries(candidates.map(({ event }) => event)));\n  const keptMessages = candidates.flatMap(({ row, event }) =>\n    retained.has(event) && (event.message.role === \"user\" || event.message.role === \"assistant\")\n      ? [row]\n      : [],\n  );\n  // Reset-window reads keep every retained role, so tool calls arrive with their results.\n  const retainedMessages = candidates.flatMap(({ row, event }) =>\n    retained.has(event) && row.messagePosition !== null ? [row] : [],\n  );\n  const afterReset = reset ? active.slice(reset.activePosition + 1) : active;\n  const visibleMessages = [\n    ...keptMessages,\n    ...afterReset.filter((row) => row.messagePosition !== null),\n  ];\n  const visibleHistory = [\n    ...keptMessages,\n    ...(reset ? [reset] : []),\n    ...afterReset.filter(\n      (row) =>\n        row.messagePosition !== null ||\n        (isRecord(row.event) && isVisibleHistoryNonMessageEvent(row.event)),\n    ),\n  ];\n  return {\n    tree,\n    active,\n    visibleMessages,\n    visibleHistory,\n    latestResetRawSeq: reset?.rawSeq ?? null,\n    latestResetId:\n      reset && isRecord(reset.event) && typeof reset.event.id === \"string\"\n        ? reset.event.id\n        : undefined,\n    keptMessages,\n    retainedMessages,\n    boundaryActivePosition: reset?.activePosition,\n  };\n}\n\n/** Admit raw history sizes before projecting or detaching the selected response. */\nexport function resolveSessionActorMemoryHistoryStart(\n  rows                                ,\n  start        ,\n  end        ,\n  maxBytes        ,\n  maxMessages        ,\n  allowOversized         ,\n  initialBytes = 0,\n  requireComplete = false,\n)         {\n  let selected = end;\n  let bytes = initialBytes;\n  while (selected > start && end - selected < maxMessages) {\n    const row = rows[selected - 1] ;\n    if (allowOversized && selected === end && row.serializedBytes > SOURCE_PAGE_MAX_BYTES) {\n      throw new Error(\n        `Transcript history message exceeds the ${SOURCE_PAGE_MAX_BYTES}-byte page limit`,\n      );\n    }\n    if ((!allowOversized || selected < end) && bytes + row.serializedBytes > maxBytes) {\n      break;\n    }\n    bytes += row.serializedBytes;\n    selected--;\n  }\n  if (requireComplete && selected !== start) {\n    throw new Error(\n      `Transcript history page exceeds the ${SOURCE_PAGE_MAX_BYTES}-byte limit; request a smaller limit`,\n    );\n  }\n  return selected;\n}\n",
+        "generatedSha256": "55b11314dbff38d8bffd6d8749b7eb4dc81d9f646b02d8aa0d92230a845dfab7",
+        "transformation": "node:module.stripTypeScriptTypes(mode=strip,sourceMap=false)"
+      },
+      {
+        "path": "src/gateway/session-transcript-source-pages.ts",
+        "mode": "whole-module",
+        "sourceSha256": "652240d9d09e810d1a47ca1635e0fd3a6f895fe4e19021973b5caf49a9893490",
+        "generatedSource": "             \n                                  \n                            \n                          \n                               \n                             \n                                \n                                     \n                                            \n\nexport const SOURCE_PAGE_MAX_MESSAGES = 128;\nexport const SOURCE_PAGE_MAX_BYTES = 8 * 1024 * 1024;\n\nexport class SessionTranscriptSourceMessageTooLargeError extends Error {\n           code = \"TRANSCRIPT_SOURCE_MESSAGE_TOO_LARGE\";\n\n  constructor() {\n    super(`Transcript source message exceeds the ${SOURCE_PAGE_MAX_BYTES}-byte page limit`);\n    this.name = \"SessionTranscriptSourceMessageTooLargeError\";\n  }\n}\n\n                                                                                  \n\n/** Each pull releases its snapshot before the consumer or the next worker request runs. */\nexport async function* iterateSessionTranscriptSourcePages(\n  read              ,\n  scope                            ,\n  options                                                              = {},\n  signal              ,\n)                                            {\n  let cursor                                           ;\n  do {\n    signal?.throwIfAborted();\n    const page = await read(scope, { ...options, mode: \"page\", cursor }, signal);\n    signal?.throwIfAborted();\n    yield page;\n    cursor = page.nextCursor;\n  } while (cursor);\n}\n\n/** Array contracts (plugin hooks and model context) collect the same bounded source pages. */\nexport async function collectSessionTranscriptMessages(\n  read              ,\n  scope                            ,\n  options                                                              \n                                ,\n)                     {\n  const messages            = [];\n  for await (const page of iterateSessionTranscriptSourcePages(read, scope, options)) {\n    for (const message of page.messages) {\n      messages.push(message);\n    }\n  }\n  return messages;\n}\n",
+        "generatedSha256": "41c95741612abc7411d71cbbf758c408c2126003814a713292166895327fe7e8",
+        "transformation": "node:module.stripTypeScriptTypes(mode=strip,sourceMap=false)"
+      }
+    ],
+    "imports": [
+      {
+        "importer": "src/config/sessions/session-actor-memory-history-navigation.ts",
+        "specifier": "../../gateway/session-transcript-source-pages.js",
+        "target": "src/gateway/session-transcript-source-pages.ts",
+        "rewritten": false
+      }
+    ],
+    "constantProofs": [
+      {
+        "path": "src/gateway/session-history-tail.ts",
+        "name": "HISTORY_PAGE_MAX_BYTES",
+        "sourceSha256": "b7cb1a95c72897ec5ddfc3a9ac9e45c31c676ca757556990397a610c1b3170d9",
+        "declaration": "const HISTORY_PAGE_MAX_BYTES = 1024 * 1024;",
+        "startByte": 1443,
+        "endByte": 1486,
+        "sha256": "1220f6a6f3bc3bab5473024c6650b3cbdf12c5f9f0b76224ebcb1684ba6960d7",
+        "value": 1048576,
+        "execution": "exact constant declaration only; caller not executed"
+      }
+    ],
+    "facadeEdges": [
+      {
+        "importer": "src/config/sessions/session-actor-memory-history-navigation.ts",
+        "specifier": "@openclaw/normalization-core/record-coerce",
+        "exports": [
+          "isRecord"
+        ],
+        "kind": "throwing-uncalled-import-edge",
+        "generatedSource": "export function isRecord(){__facadeCalls.push({\"importer\":\"src/config/sessions/session-actor-memory-history-navigation.ts\",\"specifier\":\"@openclaw/normalization-core/record-coerce\",\"export\":\"isRecord\"});throw Error(\"Unused reference facade invoked\");}",
+        "generatedSha256": "555b1b5f1b6ac5a6e1cfcccde1f1f12dd9307147156d657e6e2d45687da86d3e"
+      },
+      {
+        "importer": "src/config/sessions/session-actor-memory-history-navigation.ts",
+        "specifier": "../../../packages/agent-core/src/harness/session/tool-result-pairing.js",
+        "exports": [
+          "selectResetKeptEntries"
+        ],
+        "kind": "throwing-uncalled-import-edge",
+        "generatedSource": "export function selectResetKeptEntries(){__facadeCalls.push({\"importer\":\"src/config/sessions/session-actor-memory-history-navigation.ts\",\"specifier\":\"../../../packages/agent-core/src/harness/session/tool-result-pairing.js\",\"export\":\"selectResetKeptEntries\"});throw Error(\"Unused reference facade invoked\");}",
+        "generatedSha256": "36f8ddde1eafcecd51a5d98271abe3406c3ab598a1dae53d91b41fef418a9ed1"
+      },
+      {
+        "importer": "src/config/sessions/session-actor-memory-history-navigation.ts",
+        "specifier": "./session-entry-codec.js",
+        "exports": [
+          "isIndexedSessionEntry"
+        ],
+        "kind": "throwing-uncalled-import-edge",
+        "generatedSource": "export function isIndexedSessionEntry(){__facadeCalls.push({\"importer\":\"src/config/sessions/session-actor-memory-history-navigation.ts\",\"specifier\":\"./session-entry-codec.js\",\"export\":\"isIndexedSessionEntry\"});throw Error(\"Unused reference facade invoked\");}",
+        "generatedSha256": "56ef777d3751b87e48a4aad1c18665a5307c63b26d94e795f45a570cf6a8eec6"
+      },
+      {
+        "importer": "src/config/sessions/session-actor-memory-history-navigation.ts",
+        "specifier": "./session-history-visibility.js",
+        "exports": [
+          "isVisibleHistoryNonMessageEvent"
+        ],
+        "kind": "throwing-uncalled-import-edge",
+        "generatedSource": "export function isVisibleHistoryNonMessageEvent(){__facadeCalls.push({\"importer\":\"src/config/sessions/session-actor-memory-history-navigation.ts\",\"specifier\":\"./session-history-visibility.js\",\"export\":\"isVisibleHistoryNonMessageEvent\"});throw Error(\"Unused reference facade invoked\");}",
+        "generatedSha256": "ed0b6c3afe400cc8623239d520ae360a003c7f6e147c665d79e9872ea35ffbaf"
+      },
+      {
+        "importer": "src/config/sessions/session-actor-memory-history-navigation.ts",
+        "specifier": "./session-transcript-projection-append.js",
+        "exports": [
+          "hasTranscriptMessage",
+          "shouldProjectActiveEvent"
+        ],
+        "kind": "throwing-uncalled-import-edge",
+        "generatedSource": "export function hasTranscriptMessage(){__facadeCalls.push({\"importer\":\"src/config/sessions/session-actor-memory-history-navigation.ts\",\"specifier\":\"./session-transcript-projection-append.js\",\"export\":\"hasTranscriptMessage\"});throw Error(\"Unused reference facade invoked\");}\nexport function shouldProjectActiveEvent(){__facadeCalls.push({\"importer\":\"src/config/sessions/session-actor-memory-history-navigation.ts\",\"specifier\":\"./session-transcript-projection-append.js\",\"export\":\"shouldProjectActiveEvent\"});throw Error(\"Unused reference facade invoked\");}",
+        "generatedSha256": "60337ea33b2c09d5c7c005259360e60aa9043fbf7200454e75f32fda8385edf4"
+      },
+      {
+        "importer": "src/config/sessions/session-actor-memory-history-navigation.ts",
+        "specifier": "./transcript-tree.js",
+        "exports": [
+          "scanSessionTranscriptTree",
+          "selectSessionTranscriptActiveEntries"
+        ],
+        "kind": "throwing-uncalled-import-edge",
+        "generatedSource": "export function scanSessionTranscriptTree(){__facadeCalls.push({\"importer\":\"src/config/sessions/session-actor-memory-history-navigation.ts\",\"specifier\":\"./transcript-tree.js\",\"export\":\"scanSessionTranscriptTree\"});throw Error(\"Unused reference facade invoked\");}\nexport function selectSessionTranscriptActiveEntries(){__facadeCalls.push({\"importer\":\"src/config/sessions/session-actor-memory-history-navigation.ts\",\"specifier\":\"./transcript-tree.js\",\"export\":\"selectSessionTranscriptActiveEntries\"});throw Error(\"Unused reference facade invoked\");}",
+        "generatedSha256": "28680c47a2f7e0cfdac2ab3bd89e89ca5a41036ee54da33e3f171c5e0d4e7cd5"
+      }
+    ],
+    "facadeCalls": [],
+    "calls": [
+      {
+        "path": "src/config/sessions/session-actor-memory-history-navigation.ts",
+        "export": "resolveSessionActorMemoryHistoryStart",
+        "result": 1
+      },
+      {
+        "path": "src/config/sessions/session-actor-memory-history-navigation.ts",
+        "export": "resolveSessionActorMemoryHistoryStart",
+        "result": 0
+      },
+      {
+        "path": "src/config/sessions/session-actor-memory-history-navigation.ts",
+        "export": "resolveSessionActorMemoryHistoryStart",
+        "result": 2
+      },
+      {
+        "path": "src/config/sessions/session-actor-memory-history-navigation.ts",
+        "export": "resolveSessionActorMemoryHistoryStart",
+        "result": 2
+      },
+      {
+        "path": "src/config/sessions/session-actor-memory-history-navigation.ts",
+        "export": "resolveSessionActorMemoryHistoryStart",
+        "result": 1
+      },
+      {
+        "path": "src/config/sessions/session-actor-memory-history-navigation.ts",
+        "export": "resolveSessionActorMemoryHistoryStart",
+        "result": 1
+      },
+      {
+        "path": "src/config/sessions/session-actor-memory-history-navigation.ts",
+        "export": "resolveSessionActorMemoryHistoryStart",
+        "result": 2
+      },
+      {
+        "path": "src/config/sessions/session-actor-memory-history-navigation.ts",
+        "export": "resolveSessionActorMemoryHistoryStart",
+        "result": 2
+      }
+    ],
+    "byteAccounting": {
+      "path": "src/config/sessions/session-actor-memory-history-navigation.ts",
+      "expression": "Buffer.byteLength(row.eventJson) + 1",
+      "input": "authored original event JSON text encoded as UTF-8 plus one LF byte",
+      "sourceSha256": "cbed1442b7cfbe95eaba09126ed8f9c86f598b24d2925da31e56ca8636a77d38"
+    }
+  },
+  "exclusions": [
+    "Inputs are authored source events with explicit fictional identities, parents and timestamps; no native host producer or stored-event parity is asserted.",
+    "Only the pure byte-window export executes; complete module evaluation does not execute actor navigation, source-page iteration or the history-tail caller.",
+    "No active/archive storage reader, recent/page normalization, maxLines, source tree/reset projection, factory, gateway, provider, browser or native runtime executes.",
+    "No security, permission, error, cancellation, crash, hard-limit exhaustion or extended-budget qualification is included."
+  ],
+  "vectors": [
+    {
+      "id": "raw-utf8-equality-suffix",
+      "eventJson": [
+        "{\"type\":\"message\",\"id\":\"event-a\",\"parentId\":null,\"timestamp\":\"2026-11-06T00:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"First\"}}",
+        "{\"type\":\"message\",\"id\":\"event-b\",\"parentId\":\"event-a\",\"timestamp\":\"2026-11-06T00:00:01.000Z\",\"message\":{\"role\":\"assistant\",\"content\":\"你好😀\"}}",
+        "{\n  \"message\": { \"content\": \"Line one\\nLine two\", \"role\": \"user\" },\n  \"timestamp\": \"2026-11-06T00:00:02.000Z\", \"parentId\": \"event-b\", \"id\": \"event-c\", \"type\": \"message\"\n}"
+      ],
+      "serializedBytes": [
+        133,
+        148,
+        171
+      ],
+      "options": {
+        "start": 0,
+        "end": 3,
+        "maxBytes": 319,
+        "maxMessages": 3,
+        "allowOversized": false
+      },
+      "result": {
+        "start": 1,
+        "selectedIds": [
+          "event-b",
+          "event-c"
+        ],
+        "selectedEventJson": [
+          "{\"type\":\"message\",\"id\":\"event-b\",\"parentId\":\"event-a\",\"timestamp\":\"2026-11-06T00:00:01.000Z\",\"message\":{\"role\":\"assistant\",\"content\":\"你好😀\"}}",
+          "{\n  \"message\": { \"content\": \"Line one\\nLine two\", \"role\": \"user\" },\n  \"timestamp\": \"2026-11-06T00:00:02.000Z\", \"parentId\": \"event-b\", \"id\": \"event-c\", \"type\": \"message\"\n}"
+        ]
+      }
+    },
+    {
+      "id": "preserve-json-text-and-order",
+      "eventJson": [
+        "{\"type\":\"message\",\"id\":\"event-a\",\"parentId\":null,\"timestamp\":\"2026-11-06T00:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"First\"}}",
+        "{\"type\":\"message\",\"id\":\"event-b\",\"parentId\":\"event-a\",\"timestamp\":\"2026-11-06T00:00:01.000Z\",\"message\":{\"role\":\"assistant\",\"content\":\"你好😀\"}}",
+        "{\n  \"message\": { \"content\": \"Line one\\nLine two\", \"role\": \"user\" },\n  \"timestamp\": \"2026-11-06T00:00:02.000Z\", \"parentId\": \"event-b\", \"id\": \"event-c\", \"type\": \"message\"\n}"
+      ],
+      "serializedBytes": [
+        133,
+        148,
+        171
+      ],
+      "options": {
+        "start": 0,
+        "end": 3,
+        "maxBytes": 4096,
+        "maxMessages": 3,
+        "allowOversized": false
+      },
+      "result": {
+        "start": 0,
+        "selectedIds": [
+          "event-a",
+          "event-b",
+          "event-c"
+        ],
+        "selectedEventJson": [
+          "{\"type\":\"message\",\"id\":\"event-a\",\"parentId\":null,\"timestamp\":\"2026-11-06T00:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"First\"}}",
+          "{\"type\":\"message\",\"id\":\"event-b\",\"parentId\":\"event-a\",\"timestamp\":\"2026-11-06T00:00:01.000Z\",\"message\":{\"role\":\"assistant\",\"content\":\"你好😀\"}}",
+          "{\n  \"message\": { \"content\": \"Line one\\nLine two\", \"role\": \"user\" },\n  \"timestamp\": \"2026-11-06T00:00:02.000Z\", \"parentId\": \"event-b\", \"id\": \"event-c\", \"type\": \"message\"\n}"
+        ]
+      }
+    },
+    {
+      "id": "contiguous-newest-suffix",
+      "eventJson": [
+        "{\"type\":\"message\",\"id\":\"event-a\",\"parentId\":null,\"timestamp\":\"2026-11-06T00:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"First\"}}",
+        "{\"type\":\"message\",\"id\":\"middle\",\"parentId\":\"event-a\",\"timestamp\":\"2026-11-06T00:00:01.000Z\",\"message\":{\"role\":\"assistant\",\"content\":\"Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. Long ordinary text. \"}}",
+        "{\"type\":\"message\",\"id\":\"last\",\"parentId\":\"middle\",\"timestamp\":\"2026-11-06T00:00:02.000Z\",\"message\":{\"role\":\"user\",\"content\":\"Latest\"}}"
+      ],
+      "serializedBytes": [
+        133,
+        1737,
+        135
+      ],
+      "options": {
+        "start": 0,
+        "end": 3,
+        "maxBytes": 268,
+        "maxMessages": 3,
+        "allowOversized": false
+      },
+      "result": {
+        "start": 2,
+        "selectedIds": [
+          "last"
+        ],
+        "selectedEventJson": [
+          "{\"type\":\"message\",\"id\":\"last\",\"parentId\":\"middle\",\"timestamp\":\"2026-11-06T00:00:02.000Z\",\"message\":{\"role\":\"user\",\"content\":\"Latest\"}}"
+        ]
+      }
+    },
+    {
+      "id": "max-messages-bound",
+      "eventJson": [
+        "{\"type\":\"message\",\"id\":\"event-a\",\"parentId\":null,\"timestamp\":\"2026-11-06T00:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"First\"}}",
+        "{\"type\":\"message\",\"id\":\"event-b\",\"parentId\":\"event-a\",\"timestamp\":\"2026-11-06T00:00:01.000Z\",\"message\":{\"role\":\"assistant\",\"content\":\"你好😀\"}}",
+        "{\n  \"message\": { \"content\": \"Line one\\nLine two\", \"role\": \"user\" },\n  \"timestamp\": \"2026-11-06T00:00:02.000Z\", \"parentId\": \"event-b\", \"id\": \"event-c\", \"type\": \"message\"\n}",
+        "{\"type\":\"message\",\"id\":\"event-d\",\"parentId\":\"event-c\",\"timestamp\":\"2026-11-06T00:00:03.000Z\",\"message\":{\"role\":\"assistant\",\"content\":\"Done\"}}"
+      ],
+      "serializedBytes": [
+        133,
+        148,
+        171,
+        142
+      ],
+      "options": {
+        "start": 0,
+        "end": 4,
+        "maxBytes": 4096,
+        "maxMessages": 2,
+        "allowOversized": false
+      },
+      "result": {
+        "start": 2,
+        "selectedIds": [
+          "event-c",
+          "event-d"
+        ],
+        "selectedEventJson": [
+          "{\n  \"message\": { \"content\": \"Line one\\nLine two\", \"role\": \"user\" },\n  \"timestamp\": \"2026-11-06T00:00:02.000Z\", \"parentId\": \"event-b\", \"id\": \"event-c\", \"type\": \"message\"\n}",
+          "{\"type\":\"message\",\"id\":\"event-d\",\"parentId\":\"event-c\",\"timestamp\":\"2026-11-06T00:00:03.000Z\",\"message\":{\"role\":\"assistant\",\"content\":\"Done\"}}"
+        ]
+      }
+    },
+    {
+      "id": "initial-bytes-inclusive-boundary",
+      "eventJson": [
+        "{\"type\":\"message\",\"id\":\"event-a\",\"parentId\":null,\"timestamp\":\"2026-11-06T00:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"First\"}}",
+        "{\"type\":\"message\",\"id\":\"event-b\",\"parentId\":\"event-a\",\"timestamp\":\"2026-11-06T00:00:01.000Z\",\"message\":{\"role\":\"assistant\",\"content\":\"你好😀\"}}",
+        "{\n  \"message\": { \"content\": \"Line one\\nLine two\", \"role\": \"user\" },\n  \"timestamp\": \"2026-11-06T00:00:02.000Z\", \"parentId\": \"event-b\", \"id\": \"event-c\", \"type\": \"message\"\n}"
+      ],
+      "serializedBytes": [
+        133,
+        148,
+        171
+      ],
+      "options": {
+        "start": 0,
+        "end": 3,
+        "maxBytes": 356,
+        "maxMessages": 3,
+        "allowOversized": false,
+        "initialBytes": 37
+      },
+      "result": {
+        "start": 1,
+        "selectedIds": [
+          "event-b",
+          "event-c"
+        ],
+        "selectedEventJson": [
+          "{\"type\":\"message\",\"id\":\"event-b\",\"parentId\":\"event-a\",\"timestamp\":\"2026-11-06T00:00:01.000Z\",\"message\":{\"role\":\"assistant\",\"content\":\"你好😀\"}}",
+          "{\n  \"message\": { \"content\": \"Line one\\nLine two\", \"role\": \"user\" },\n  \"timestamp\": \"2026-11-06T00:00:02.000Z\", \"parentId\": \"event-b\", \"id\": \"event-c\", \"type\": \"message\"\n}"
+        ]
+      }
+    },
+    {
+      "id": "complete-requested-subwindow",
+      "eventJson": [
+        "{\"type\":\"message\",\"id\":\"event-a\",\"parentId\":null,\"timestamp\":\"2026-11-06T00:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"First\"}}",
+        "{\"type\":\"message\",\"id\":\"event-b\",\"parentId\":\"event-a\",\"timestamp\":\"2026-11-06T00:00:01.000Z\",\"message\":{\"role\":\"assistant\",\"content\":\"你好😀\"}}",
+        "{\n  \"message\": { \"content\": \"Line one\\nLine two\", \"role\": \"user\" },\n  \"timestamp\": \"2026-11-06T00:00:02.000Z\", \"parentId\": \"event-b\", \"id\": \"event-c\", \"type\": \"message\"\n}",
+        "{\"type\":\"message\",\"id\":\"event-d\",\"parentId\":\"event-c\",\"timestamp\":\"2026-11-06T00:00:03.000Z\",\"message\":{\"role\":\"assistant\",\"content\":\"Done\"}}"
+      ],
+      "serializedBytes": [
+        133,
+        148,
+        171,
+        142
+      ],
+      "options": {
+        "start": 1,
+        "end": 3,
+        "maxBytes": 319,
+        "maxMessages": 2,
+        "allowOversized": false,
+        "initialBytes": 0,
+        "requireComplete": true
+      },
+      "result": {
+        "start": 1,
+        "selectedIds": [
+          "event-b",
+          "event-c"
+        ],
+        "selectedEventJson": [
+          "{\"type\":\"message\",\"id\":\"event-b\",\"parentId\":\"event-a\",\"timestamp\":\"2026-11-06T00:00:01.000Z\",\"message\":{\"role\":\"assistant\",\"content\":\"你好😀\"}}",
+          "{\n  \"message\": { \"content\": \"Line one\\nLine two\", \"role\": \"user\" },\n  \"timestamp\": \"2026-11-06T00:00:02.000Z\", \"parentId\": \"event-b\", \"id\": \"event-c\", \"type\": \"message\"\n}"
+        ]
+      }
+    },
+    {
+      "id": "eligible-window-start",
+      "eventJson": [
+        "{\"type\":\"message\",\"id\":\"event-a\",\"parentId\":null,\"timestamp\":\"2026-11-06T00:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"First\"}}",
+        "{\"type\":\"message\",\"id\":\"event-b\",\"parentId\":\"event-a\",\"timestamp\":\"2026-11-06T00:00:01.000Z\",\"message\":{\"role\":\"assistant\",\"content\":\"你好😀\"}}",
+        "{\n  \"message\": { \"content\": \"Line one\\nLine two\", \"role\": \"user\" },\n  \"timestamp\": \"2026-11-06T00:00:02.000Z\", \"parentId\": \"event-b\", \"id\": \"event-c\", \"type\": \"message\"\n}",
+        "{\"type\":\"message\",\"id\":\"event-d\",\"parentId\":\"event-c\",\"timestamp\":\"2026-11-06T00:00:03.000Z\",\"message\":{\"role\":\"assistant\",\"content\":\"Done\"}}"
+      ],
+      "serializedBytes": [
+        133,
+        148,
+        171,
+        142
+      ],
+      "options": {
+        "start": 2,
+        "end": 4,
+        "maxBytes": 4096,
+        "maxMessages": 4,
+        "allowOversized": false
+      },
+      "result": {
+        "start": 2,
+        "selectedIds": [
+          "event-c",
+          "event-d"
+        ],
+        "selectedEventJson": [
+          "{\n  \"message\": { \"content\": \"Line one\\nLine two\", \"role\": \"user\" },\n  \"timestamp\": \"2026-11-06T00:00:02.000Z\", \"parentId\": \"event-b\", \"id\": \"event-c\", \"type\": \"message\"\n}",
+          "{\"type\":\"message\",\"id\":\"event-d\",\"parentId\":\"event-c\",\"timestamp\":\"2026-11-06T00:00:03.000Z\",\"message\":{\"role\":\"assistant\",\"content\":\"Done\"}}"
+        ]
+      }
+    },
+    {
+      "id": "indivisible-newest-above-soft-request",
+      "eventJson": [
+        "{\"type\":\"message\",\"id\":\"event-a\",\"parentId\":null,\"timestamp\":\"2026-11-06T00:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"First\"}}",
+        "{\"type\":\"message\",\"id\":\"event-b\",\"parentId\":\"event-a\",\"timestamp\":\"2026-11-06T00:00:01.000Z\",\"message\":{\"role\":\"assistant\",\"content\":\"你好😀\"}}",
+        "{\"type\":\"message\",\"id\":\"large-soft\",\"parentId\":\"event-b\",\"timestamp\":\"2026-11-06T00:00:02.000Z\",\"message\":{\"role\":\"assistant\",\"content\":\"文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀\"}}"
+      ],
+      "serializedBytes": [
+        133,
+        148,
+        2591
+      ],
+      "options": {
+        "start": 0,
+        "end": 3,
+        "maxBytes": 1024,
+        "maxMessages": 3,
+        "allowOversized": true
+      },
+      "result": {
+        "start": 2,
+        "selectedIds": [
+          "large-soft"
+        ],
+        "selectedEventJson": [
+          "{\"type\":\"message\",\"id\":\"large-soft\",\"parentId\":\"event-b\",\"timestamp\":\"2026-11-06T00:00:02.000Z\",\"message\":{\"role\":\"assistant\",\"content\":\"文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀文😀\"}}"
+        ]
+      }
+    }
+  ]
+}

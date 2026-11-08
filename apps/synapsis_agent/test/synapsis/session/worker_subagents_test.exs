@@ -13,7 +13,12 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
   @moduletag :tmp_dir
 
   setup %{tmp_dir: tmp_dir} = ctx do
-    opts = [tmp_dir: tmp_dir, text: "runtime answer", session_config: %{}]
+    opts = [
+      tmp_dir: tmp_dir,
+      text: "runtime answer",
+      session_config: %{},
+      install_provider?: false
+    ]
 
     opts =
       if ctx[:approval_tool],
@@ -34,12 +39,14 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
       :ok = Synapsis.Session.Store.put_meta(harness.session.id, Map.delete(meta, :config))
     end
 
-    Bypass.stub(harness.provider.bypass, "POST", "/v1/chat/completions", fn conn ->
-      DeterministicProvider.send_sse(conn, [
-        DeterministicProvider.text_chunk("runtime answer"),
-        DeterministicProvider.finish_chunk("stop")
-      ])
-    end)
+    unless ctx[:custom_provider] do
+      Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+        DeterministicProvider.send_sse(conn, [
+          DeterministicProvider.text_chunk("runtime answer"),
+          DeterministicProvider.finish_chunk("stop")
+        ])
+      end)
+    end
 
     on_exit(fn -> SessionHarness.cleanup!(harness) end)
     SessionHarness.subscribe!(harness.session.id)
@@ -79,19 +86,95 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
     assert {:error, :checkpoint_unavailable_with_subagents} = Worker.rollback_checkpoint(id)
   end
 
-  @tag omitted_session_config: true
-  test "omitted session config drives real HTTP root, child and canonical tool history", %{
+  @tag custom_provider: true
+  test "correcting a disabled toolset selection admits the builtin catalog after restart", %{
     id: id,
     harness: harness
   } do
     owner = self()
 
     install_provider(harness, fn conn, request ->
+      send(owner, {:catalog_request, request})
+      answer(conn, "corrected toolset answer")
+    end)
+
+    available_names =
+      Synapsis.Tool.Registry.list()
+      |> Enum.reject(&String.starts_with?(&1.name, "mcp:"))
+      |> Enum.filter(&Synapsis.Tool.Registry.runtime_available?(&1.name))
+      |> Enum.map(& &1.name)
+
+    refute "computer" in available_names
+
+    {:ok, toolset} =
+      Synapsis.Toolsets.create(%{
+        name: "session-catalog-#{id}",
+        tool_names: available_names ++ ["computer"]
+      })
+
+    on_exit(fn -> Synapsis.Toolsets.delete(toolset) end)
+    {:ok, _} = Synapsis.AgentConfigs.update(harness.agent_config, %{toolset_id: toolset.id})
+
+    assert :ok = Synapsis.Sessions.send_message(id, "before correction")
+
+    assert_receive {:run_event,
+                    %{
+                      type: "session.failed",
+                      payload: %{
+                        "message" => "Selected tools unavailable or deferred: computer"
+                      }
+                    }},
+                   5_000
+
+    refute_receive {:catalog_request, _}, 50
+
+    assert %{status: :error, error: "Selected tools unavailable or deferred: computer"} =
+             Worker.snapshot(id)
+
+    {:ok, _} = Synapsis.Toolsets.update(toolset, %{tool_names: available_names})
+    :ok = Synapsis.Session.DynamicSupervisor.stop_session(id)
+    SessionHarness.ensure_running!(id)
+
+    assert :ok = Synapsis.Sessions.send_message(id, "after correction")
+    assert_receive {:catalog_request, %{"tools" => tools}}, 5_000
+    tool_names = Enum.map(tools, & &1["function"]["name"])
+    assert "file_read" in tool_names
+    assert "skill" in tool_names
+    assert "spawn_agent" in tool_names
+    refute "computer" in tool_names
+    assert_receive {:run_event, %{type: "session.completed"}}, 10_000
+    assert %{status: :waiting, error: nil} = Worker.snapshot(id)
+
+    assert [%{role: "user"}, %{role: "user"}, %{role: "assistant"}] =
+             Synapsis.Sessions.get_messages(id)
+  end
+
+  @tag omitted_session_config: true
+  @tag custom_provider: true
+  test "omitted session config drives real HTTP root, child and canonical tool history", %{
+    id: id,
+    harness: harness
+  } do
+    owner = self()
+    {_state, worker_data} = :sys.get_state(worker_pid(id))
+    assert worker_data.project_path == Path.expand(harness.tmp_dir)
+    memory_marker = "Private root memory #{System.unique_integer([:positive])}"
+    File.write!(Path.join(worker_data.project_path, "MEMORY.md"), memory_marker)
+
+    base_prompt =
+      Synapsis.Agent.ContextBuilder.load_base_prompt(
+        :coding,
+        Synapsis.Agent.Resolver.resolve(harness.agent_name)
+      )
+
+    install_provider(harness, fn conn, request ->
       send(owner, {:http_request, request})
       messages = request["messages"]
+      child? = Enum.any?(messages, &(user_text(&1) == "child marker"))
+      send(owner, {:memory_prompt, child?, system_text(request)})
 
       cond do
-        Enum.any?(messages, &(user_text(&1) == "child marker")) ->
+        child? ->
           answer(conn, "child evidence")
 
         not tool_result?(messages, "spawn-child") ->
@@ -116,6 +199,12 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
     assert {:error, :checkpoint_unavailable_with_subagents} = Worker.rollback_checkpoint(id)
     assert :ok = Worker.send_message(id, "coordinate child")
     assert_receive {:run_event, %{type: "session.completed"}}, 15_000
+    assert_receive {:memory_prompt, false, root_prompt}, 1_000
+    assert root_prompt =~ memory_marker
+    assert_receive {:memory_prompt, true, child_prompt}, 1_000
+    refute child_prompt =~ memory_marker
+    refute child_prompt =~ "<workspace_memory>"
+    assert child_prompt =~ base_prompt
 
     assert %{subagents: %{agents: [%{name: "/root/researcher", status: :completed}]}} =
              Worker.snapshot(id)
@@ -158,6 +247,7 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
     assert :sys.get_state(native.runtime_pid).error == nil
   end
 
+  @tag custom_provider: true
   test "assistant-mode input queues behind one active runtime", %{id: id, harness: harness} do
     owner = self()
 
@@ -200,6 +290,7 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
   end
 
   @tag approval_tool: true
+  @tag custom_provider: true
   test "child approval remains actionable after its root completes", %{id: id, harness: harness} do
     install_provider(harness, fn conn, request ->
       messages = request["messages"]
@@ -238,6 +329,7 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
     assert %{runtime_permissions: []} = Worker.snapshot(id)
   end
 
+  @tag custom_provider: true
   test "confirmed cancellation retires a generation and the next prompt succeeds", %{
     id: id,
     harness: harness
@@ -246,12 +338,11 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
 
     install_provider(harness, fn conn, request ->
       if List.last(request["messages"]) |> user_text() == "cancel this" do
-        conn = AbortableHTTP.arm(conn)
         send(owner, {:provider_waiting, self()})
 
         case AbortableHTTP.await(conn, :release, 5_000, owner) do
-          :disconnected -> Plug.Conn.resp(conn, 204, "")
-          _ -> answer(conn, "late answer")
+          {:disconnected, conn} -> conn
+          {_outcome, conn} -> answer(conn, "late answer")
         end
       else
         answer(conn, "after cancellation")
@@ -282,7 +373,7 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
   end
 
   defp install_provider(harness, fun) do
-    Bypass.stub(harness.provider.bypass, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       fun.(conn, Jason.decode!(body))
     end)
@@ -304,6 +395,17 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
 
   defp tool_result?(messages, id),
     do: Enum.any?(messages, &(&1["role"] == "tool" and &1["tool_call_id"] == id))
+
+  defp system_text(request) do
+    request["messages"]
+    |> Enum.filter(&(&1["role"] in ["system", "developer"]))
+    |> Enum.map_join("\n", fn message ->
+      case message["content"] do
+        text when is_binary(text) -> text
+        parts when is_list(parts) -> Enum.map_join(parts, &(&1["text"] || ""))
+      end
+    end)
+  end
 
   defp user_text(%{"role" => "user", "content" => text}) when is_binary(text), do: text
 

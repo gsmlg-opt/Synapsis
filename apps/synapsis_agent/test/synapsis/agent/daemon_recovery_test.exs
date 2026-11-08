@@ -4,22 +4,27 @@ defmodule Synapsis.Agent.DaemonRecoveryTest do
   @tag :tmp_dir
   test "restart interrupts an executing run without replaying its prompt", %{tmp_dir: tmp_dir} do
     owner = self()
-    bypass = Bypass.open()
+    fixture = Gaoxy.Test.open()
     {:ok, counter} = Agent.start_link(fn -> 0 end)
 
-    Bypass.expect(bypass, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect(fixture, "POST", "/v1/chat/completions", fn conn ->
+      {:ok, _body, conn} = Plug.Conn.read_body(conn)
       request_number = Agent.get_and_update(counter, &{&1 + 1, &1 + 1})
       send(owner, {:provider_request, request_number, self()})
 
-      receive do
-        :release_restart_run ->
-          send_sse(conn, [text_chunk("late result"), finish_chunk("stop")])
-      after
-        5_000 -> Plug.Conn.send_resp(conn, 500, "timed out")
+      case Synapsis.Agent.TestSupport.AbortableHTTP.await(
+             conn,
+             :release_restart_run,
+             5_000,
+             owner
+           ) do
+        {:disconnected, conn} -> conn
+        {:released, conn} -> send_sse(conn, [text_chunk("late result"), finish_chunk("stop")])
+        {:timeout, _conn} -> raise "restart run was not released or cancelled"
       end
     end)
 
-    {provider_name, agent_name} = register_provider_agent(tmp_dir, bypass)
+    {provider_name, agent_name} = register_provider_agent(tmp_dir, fixture)
     opts = daemon_opts(agent_name, provider_name)
 
     assert {:ok, run} = Daemon.submit("possibly executing", opts)
@@ -177,15 +182,15 @@ defmodule Synapsis.Agent.DaemonRecoveryTest do
   @tag :tmp_dir
   test "recovery resumes never-started queued runs oldest first", %{tmp_dir: tmp_dir} do
     owner = self()
-    bypass = Bypass.open()
+    fixture = Gaoxy.Test.open()
 
-    Bypass.expect(bypass, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect(fixture, "POST", "/v1/chat/completions", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       send(owner, {:recovered_provider_request, body})
       send_sse(conn, [text_chunk("recovered"), finish_chunk("stop")])
     end)
 
-    {provider_name, agent_name} = register_provider_agent(tmp_dir, bypass)
+    {provider_name, agent_name} = register_provider_agent(tmp_dir, fixture)
 
     attrs = %{
       kind: "manual",

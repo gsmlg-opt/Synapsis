@@ -14,6 +14,21 @@ defmodule Synapsis.Models do
     {:ok, records}
   end
 
+  @doc """
+  Selection order within each provider, without changing public picker order.
+  Legacy rows without an authored order retain the deterministic model-ID order
+  returned by list/1; no historical source-array order is reconstructed.
+  """
+  def ordered(opts \\ []) do
+    with {:ok, records} <- list(opts) do
+      {:ok,
+       Enum.sort_by(records, fn record ->
+         {record.provider_id, is_nil(record.selection_order), record.selection_order || 0,
+          record.model, record.id}
+       end)}
+    end
+  end
+
   def get(id) do
     case Store.get(:model, id) do
       {:ok, attrs} -> {:ok, to_struct(attrs)}
@@ -46,7 +61,9 @@ defmodule Synapsis.Models do
 
   @doc "Import suggestions without changing an existing model's choices or stable ID."
   def import(provider_id, candidates) when is_list(candidates) do
-    Enum.reduce_while(candidates, {:ok, []}, fn candidate, {:ok, records} ->
+    candidates
+    |> Enum.with_index()
+    |> Enum.reduce_while({:ok, []}, fn {candidate, index}, {:ok, records} ->
       model = value(candidate, :model) || value(candidate, :id)
 
       result =
@@ -60,7 +77,9 @@ defmodule Synapsis.Models do
               model: model,
               name: value(candidate, :name),
               context_window: value(candidate, :context_window) || %ModelConfig{}.context_window,
-              enabled: value(candidate, :enabled, true)
+              enabled: value(candidate, :enabled, true),
+              input: value(candidate, :input),
+              selection_order: value(candidate, :selection_order) || index
             })
         end
 

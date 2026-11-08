@@ -1,0 +1,343 @@
+{
+  "schemaVersion": 1,
+  "referencePin": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+  "exporter": {
+    "path": "scripts/openclaw/capture-schedule-computation.mjs",
+    "sha256": "7ed50a520e5a8f808832d30f9db5b8cd54ab71741553a2da78ac618587023ebe"
+  },
+  "runtime": {
+    "executable": "/tmp/synapsis-openclaw-capture-runtime/node_modules/node/bin/node",
+    "version": "24.22.1",
+    "sha256": "e32e2d16081cf644f88392934288086e7662529d0d43277c34f7aad2207cfafb",
+    "platform": "linux"
+  },
+  "sourceTree": {
+    "before": {
+      "verified": true,
+      "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+      "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+      "verifiedTrackedFiles": 58558,
+      "filesSha256": "fb299c6a234f52cfcf20e3618cd11582d07e47a7773cba1334064ebdaf9fddec"
+    },
+    "after": {
+      "verified": true,
+      "commit": "488631c18fae7cc541ba8fc8beff6cbb0438787b",
+      "tree": "47509a47273231ab15f57252960fe716d7379ffb",
+      "verifiedTrackedFiles": 58558,
+      "filesSha256": "fb299c6a234f52cfcf20e3618cd11582d07e47a7773cba1334064ebdaf9fddec"
+    }
+  },
+  "transformation": "node:module.stripTypeScriptTypes(mode=transform,sourceMap=false)",
+  "entry": {
+    "path": "src/cron/schedule.ts",
+    "export": "computeNextRunAtMs",
+    "calls": 24
+  },
+  "sourceRecords": [
+    {
+      "path": "src/cron/schedule.ts",
+      "sha256": "e3ba3f6e080488430cbeef5b0c9e25d3eaad8eba3afabbfbce970e972895ecd6",
+      "executableSha256": "83b605c60a49fdf43521ea92af5ff089489774313eba672adf4eae3811855f78",
+      "executed": true,
+      "wholeModule": true
+    },
+    {
+      "path": "packages/normalization-core/src/number-coercion.ts",
+      "sha256": "8c40eca65a8fd1dc3aa40d90c22bff35c3710fcb03d2bc8227864a264d20ddc4",
+      "executableSha256": "2f2d58d34e9b77067ea265333fb06a807ce0cdcad83639d6c257095bb9f69a97",
+      "executed": true,
+      "wholeModule": true
+    },
+    {
+      "path": "packages/normalization-core/src/string-coerce.ts",
+      "sha256": "0f62efe900e43b23b12025da27f5e65aa6e7fee369191cbbdcf4200f0de70cdf",
+      "executableSha256": "9a2e05da77f15162560fe904c20ba9a49a6e6996e8b8c9bc16fd611f8456f504",
+      "executed": true,
+      "wholeModule": true
+    },
+    {
+      "path": "src/infra/format-time/parse-offsetless-zoned-datetime.ts",
+      "sha256": "f58e07c1849997a131e8cac042a571ff41d8714f6074e2a5dd290cd7391f0a56",
+      "executableSha256": "695c5bbec94cce6a9f1267159865c5e50d31bbd3a080736d1dc305f5db9ac300",
+      "executed": true,
+      "wholeModule": true
+    },
+    {
+      "path": "src/infra/map-size.ts",
+      "sha256": "36f06592cf1ae20d291e921da7cb42e8d7814372ca2d0745bec7a54a2a8a4409",
+      "executableSha256": "fdae9cac37e2a06718e8798cd52469295c2dff8bab3c671c62fee14af324c0f4",
+      "executed": true,
+      "wholeModule": true
+    },
+    {
+      "path": "src/cron/parse.ts",
+      "sha256": "4bffa54d9d545928fe5aaf7c111c1d9db0923d61bd3d2ea3a06bb72aa112180a",
+      "executableSha256": "fb75fcb4a3bca4624ed2c995484a73aa5ebd2d28435d7eada2de5a2505109c58",
+      "executed": true,
+      "wholeModule": true
+    },
+    {
+      "path": "src/cron/schedule-number.ts",
+      "sha256": "832c2837631dce4065d03696c2bd062c7b91e029cca0aac2496bed053a71e5cc",
+      "executableSha256": "f1d9cd8e11ef5f535f2c2f91c260fe4136ff3953efac49db496dd4655affa897",
+      "executed": true,
+      "wholeModule": true
+    },
+    {
+      "path": "src/shared/iso-time.ts",
+      "sha256": "79699b601ce5f17bb85ec4838c1bca8fdd5560895406b42ecf6cfa4fd332e871",
+      "executableSha256": "cf4f780c12160908cf6866d91cc2a296ef4888f7af7665158526cbc842742630",
+      "executed": true,
+      "wholeModule": true
+    }
+  ],
+  "importBindings": [
+    {
+      "importer": "src/cron/schedule.ts",
+      "specifier": "croner",
+      "exports": [
+        "Cron",
+        "CronDate"
+      ],
+      "kind": "uninvoked-throwing-binding",
+      "sourceImplementationExecuted": false,
+      "generatedCode": "export class Cron { constructor() { globalThis.__bindingCalls.push(\"Cron\"); throw Error(\"uninvoked croner binding: Cron\"); } }\nexport class CronDate { constructor() { globalThis.__bindingCalls.push(\"CronDate\"); throw Error(\"uninvoked croner binding: CronDate\"); } }",
+      "generatedSha256": "1cbe39ab0da7c305479db0b698ca7617dda6f000b7bfa1b02eed595001c47fa5",
+      "invocationCount": 0
+    }
+  ],
+  "bindingCalls": [],
+  "scope": {
+    "pureTimestampComputationExecuted": true,
+    "cronerExecuted": false,
+    "cronBranchExecuted": false,
+    "jobServiceExecuted": false,
+    "oneShotLifecycleExecuted": false,
+    "toolFactoryExecuted": false,
+    "eligibilityExecuted": false,
+    "runtimeAssemblyExecuted": false
+  },
+  "limits": [
+    "Only actual pure computeNextRunAtMs timestamp computation for at/every executes, from eight complete unchanged pinned TypeScript modules. Module evaluation does not claim every exported function or function body executes.",
+    "All tracked reference blobs are verified before and after; source, transformed executable, exporter, runtime and generated uninvoked binding hashes are recorded. No source or installed package is patched.",
+    "Cron and CronDate are throwing bindings with zero audited invocations; Croner implementation and cron-expression branches are unexecuted.",
+    "The second at call advances now while still before the same future target. The second every call advances now to its first due boundary and computes the following interval.",
+    "Date-only and offsetless 24:00 inputs resolve to UTC midnight; fractional ISO seconds retain only milliseconds through the actual pinned parser and native Date.parse.",
+    "The omitted-anchor vector proves helper behavior only: its anchor defaults to each supplied now. No job creation or persisted service anchor behavior executes.",
+    "Job service, one-shot lifecycle, tool factory, eligibility, runtime assembly and Synapsis integration are unexecuted and require separate evidence."
+  ],
+  "observations": [
+    {
+      "id": "absolute-z",
+      "schedule": {
+        "kind": "at",
+        "at": "2026-10-27T10:01:00Z"
+      },
+      "nowMs": 1793095200000,
+      "nextRunAtMs": 1793095260000,
+      "subsequent": {
+        "nowMs": 1793095230000,
+        "nextRunAtMs": 1793095260000
+      },
+      "scheduleAfter": {
+        "kind": "at",
+        "at": "2026-10-27T10:01:00Z"
+      }
+    },
+    {
+      "id": "absolute-offset",
+      "schedule": {
+        "kind": "at",
+        "at": "2026-10-27T15:46:00+05:45"
+      },
+      "nowMs": 1793095200000,
+      "nextRunAtMs": 1793095260000,
+      "subsequent": {
+        "nowMs": 1793095230000,
+        "nextRunAtMs": 1793095260000
+      },
+      "scheduleAfter": {
+        "kind": "at",
+        "at": "2026-10-27T15:46:00+05:45"
+      }
+    },
+    {
+      "id": "offsetless-default-utc",
+      "schedule": {
+        "kind": "at",
+        "at": "2026-10-27T10:01:00"
+      },
+      "nowMs": 1793095200000,
+      "nextRunAtMs": 1793095260000,
+      "subsequent": {
+        "nowMs": 1793095230000,
+        "nextRunAtMs": 1793095260000
+      },
+      "scheduleAfter": {
+        "kind": "at",
+        "at": "2026-10-27T10:01:00"
+      }
+    },
+    {
+      "id": "epoch-milliseconds-string",
+      "schedule": {
+        "kind": "at",
+        "at": "1793095260000"
+      },
+      "nowMs": 1793095200000,
+      "nextRunAtMs": 1793095260000,
+      "subsequent": {
+        "nowMs": 1793095230000,
+        "nextRunAtMs": 1793095260000
+      },
+      "scheduleAfter": {
+        "kind": "at",
+        "at": "1793095260000"
+      }
+    },
+    {
+      "id": "date-only-default-utc",
+      "schedule": {
+        "kind": "at",
+        "at": "2026-10-28"
+      },
+      "nowMs": 1793095200000,
+      "nextRunAtMs": 1793145600000,
+      "subsequent": {
+        "nowMs": 1793095230000,
+        "nextRunAtMs": 1793145600000
+      },
+      "scheduleAfter": {
+        "kind": "at",
+        "at": "2026-10-28"
+      }
+    },
+    {
+      "id": "fractional-iso-millisecond-truncation",
+      "schedule": {
+        "kind": "at",
+        "at": "2026-10-27T10:01:00.123456Z"
+      },
+      "nowMs": 1793095200000,
+      "nextRunAtMs": 1793095260123,
+      "subsequent": {
+        "nowMs": 1793095230000,
+        "nextRunAtMs": 1793095260123
+      },
+      "scheduleAfter": {
+        "kind": "at",
+        "at": "2026-10-27T10:01:00.123456Z"
+      }
+    },
+    {
+      "id": "offsetless-end-of-day-utc",
+      "schedule": {
+        "kind": "at",
+        "at": "2026-10-27T24:00:00"
+      },
+      "nowMs": 1793095200000,
+      "nextRunAtMs": 1793145600000,
+      "subsequent": {
+        "nowMs": 1793095230000,
+        "nextRunAtMs": 1793145600000
+      },
+      "scheduleAfter": {
+        "kind": "at",
+        "at": "2026-10-27T24:00:00"
+      }
+    },
+    {
+      "id": "interval-before-anchor",
+      "schedule": {
+        "kind": "every",
+        "everyMs": 1500,
+        "anchorMs": 1793095205000
+      },
+      "nowMs": 1793095200000,
+      "nextRunAtMs": 1793095205000,
+      "subsequent": {
+        "nowMs": 1793095205000,
+        "nextRunAtMs": 1793095206500
+      },
+      "scheduleAfter": {
+        "kind": "every",
+        "everyMs": 1500,
+        "anchorMs": 1793095205000
+      }
+    },
+    {
+      "id": "interval-exact-anchor",
+      "schedule": {
+        "kind": "every",
+        "everyMs": 1500,
+        "anchorMs": 1793095200000
+      },
+      "nowMs": 1793095200000,
+      "nextRunAtMs": 1793095201500,
+      "subsequent": {
+        "nowMs": 1793095201500,
+        "nextRunAtMs": 1793095203000
+      },
+      "scheduleAfter": {
+        "kind": "every",
+        "everyMs": 1500,
+        "anchorMs": 1793095200000
+      }
+    },
+    {
+      "id": "interval-fractional-step-elapsed",
+      "schedule": {
+        "kind": "every",
+        "everyMs": 1500,
+        "anchorMs": 1793095199500
+      },
+      "nowMs": 1793095200000,
+      "nextRunAtMs": 1793095201000,
+      "subsequent": {
+        "nowMs": 1793095201000,
+        "nextRunAtMs": 1793095202500
+      },
+      "scheduleAfter": {
+        "kind": "every",
+        "everyMs": 1500,
+        "anchorMs": 1793095199500
+      }
+    },
+    {
+      "id": "interval-exact-later-boundary",
+      "schedule": {
+        "kind": "every",
+        "everyMs": 1500,
+        "anchorMs": 1793095197000
+      },
+      "nowMs": 1793095200000,
+      "nextRunAtMs": 1793095201500,
+      "subsequent": {
+        "nowMs": 1793095201500,
+        "nextRunAtMs": 1793095203000
+      },
+      "scheduleAfter": {
+        "kind": "every",
+        "everyMs": 1500,
+        "anchorMs": 1793095197000
+      }
+    },
+    {
+      "id": "interval-omitted-anchor-helper",
+      "schedule": {
+        "kind": "every",
+        "everyMs": 1500
+      },
+      "nowMs": 1793095200000,
+      "nextRunAtMs": 1793095201500,
+      "subsequent": {
+        "nowMs": 1793095201500,
+        "nextRunAtMs": 1793095203000
+      },
+      "scheduleAfter": {
+        "kind": "every",
+        "everyMs": 1500
+      }
+    }
+  ]
+}

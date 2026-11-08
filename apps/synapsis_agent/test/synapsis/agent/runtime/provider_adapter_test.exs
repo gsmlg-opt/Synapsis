@@ -6,12 +6,12 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
   alias Synapsis.Agent.TestSupport.BackplaneRuntimeProof, as: Proof
 
   setup do
-    bypass = Bypass.open()
+    fixture = Gaoxy.Test.open()
 
     context = %{
       provider_config: %{
         type: "openai",
-        base_url: "http://localhost:#{bypass.port}",
+        base_url: String.trim_trailing(Gaoxy.Test.url(fixture), "/"),
         api_key: "fixture"
       },
       request_options: %{model: "gpt-test", system_prompt: "Host instruction"},
@@ -25,16 +25,18 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
       turn_id: "t",
       step_id: "s",
       attempt_id: "a",
+      catalog_revision: 1,
+      tools: [],
       messages: [%{role: :user, content: "Hello"}]
     }
 
-    %{bypass: bypass, context: context, request: request}
+    %{fixture: fixture, context: context, request: request}
   end
 
   test "is lazy and uses the host transport for text, usage and canonical terminal", ctx do
     owner = self()
 
-    Bypass.expect_once(ctx.bypass, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/chat/completions", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       send(owner, {:wire_request, Jason.decode!(body)})
 
@@ -65,15 +67,33 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
 
     assert List.last(events) == %{
              type: :response_completed,
-             message: %{role: :assistant, content: [%{type: :text, text: "Hello"}]}
+             message: %{role: :assistant, content: [%{type: :text, text: "Hello"}]},
+             usage: %{
+               input_tokens: 3,
+               cached_tokens: nil,
+               output_tokens: 1,
+               reasoning_tokens: nil
+             }
            }
+
+    assert Enum.filter(events, &(&1.type == :usage_updated)) == [
+             %{
+               type: :usage_updated,
+               usage: %{
+                 input_tokens: 3,
+                 cached_tokens: nil,
+                 output_tokens: 1,
+                 reasoning_tokens: nil
+               }
+             }
+           ]
 
     refute_receive {:provider_chunk, _}
     refute_receive :provider_done
   end
 
   test "a real HTTP stream completes a Backplane conversation", ctx do
-    Bypass.expect_once(ctx.bypass, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/chat/completions", fn conn ->
       sse(conn, [chunk(%{"content" => "From HTTP"}), chunk(%{}, "stop")])
     end)
 
@@ -95,8 +115,8 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
            ]
   end
 
-  test "maps indexed tool calls and trusts host tool definitions", ctx do
-    Bypass.expect_once(ctx.bypass, "POST", "/v1/chat/completions", fn conn ->
+  test "maps indexed tool calls using the request catalog", ctx do
+    Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/chat/completions", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       assert [%{"function" => %{"name" => "skill"}}] = Jason.decode!(body)["tools"]
 
@@ -115,8 +135,8 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
       ])
     end)
 
-    context = %{
-      ctx.context
+    request = %{
+      ctx.request
       | tools: [
           %{
             name: "skill",
@@ -126,7 +146,7 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
         ]
     }
 
-    events = Enum.to_list(ProviderAdapter.stream(ctx.request, context))
+    events = Enum.to_list(ProviderAdapter.stream(request, ctx.context))
 
     assert %{
              type: :tool_call_completed,
@@ -136,8 +156,140 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
     assert [%{type: :tool_call, id: "c"}] = List.last(events).message.content
   end
 
+  test "replaced and revoked catalogs never fall back to a frozen context", ctx do
+    owner = self()
+
+    definition = fn name ->
+      %{name: name, description: "Catalog probe", parameters: Proof.EchoTool.parameters()}
+    end
+
+    context = %{ctx.context | tools: [definition.("stale")]}
+
+    Gaoxy.Test.expect(
+      ctx.fixture,
+      "POST",
+      "/v1/chat/completions",
+      fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        send(owner, {:catalog_wire, Jason.decode!(body)})
+        sse(conn, [chunk(%{"content" => "ok"}), chunk(%{}, "stop")])
+      end,
+      times: 2
+    )
+
+    for {revision, tools, names} <- [{2, [definition.("current")], ["current"]}, {3, [], []}] do
+      request = %{ctx.request | catalog_revision: revision, tools: tools}
+
+      assert %{type: :response_completed} =
+               ProviderAdapter.stream(request, context) |> Enum.to_list() |> List.last()
+
+      assert_receive {:catalog_wire, wire}
+      assert Enum.map(wire["tools"] || [], & &1["function"]["name"]) == names
+    end
+  end
+
+  test "malformed or unsupported request catalogs fail before HTTP", ctx do
+    owner = self()
+
+    Gaoxy.Test.stub(ctx.fixture, "POST", "/v1/chat/completions", fn conn ->
+      send(owner, :invalid_catalog_http)
+      Plug.Conn.resp(conn, 500, "Unexpected HTTP")
+    end)
+
+    tool = %{name: "probe", description: "Probe", parameters: Proof.EchoTool.parameters()}
+
+    for changes <- [
+          %{catalog_revision: 0},
+          %{catalog_revision: "1"},
+          %{tools: nil},
+          %{tools: [tool, tool]},
+          %{tools: [%{tool | name: ""}]},
+          %{tools: [%{tool | parameters: nil}]},
+          %{tools: [%{type: "hosted", name: "hosted", description: "Hosted", format: %{}}]}
+        ] do
+      request = Map.merge(ctx.request, changes)
+
+      assert [%{type: :response_failed, error: %{class: class}}] =
+               Enum.to_list(ProviderAdapter.stream(request, ctx.context))
+
+      assert class in [:validation, :unsupported_capability]
+    end
+
+    assert [%{type: :response_failed, error: %{class: :validation}}] =
+             ProviderAdapter.stream(Map.delete(ctx.request, :tools), ctx.context)
+             |> Enum.to_list()
+
+    refute_receive :invalid_catalog_http, 20
+  end
+
+  test "host catalog resolution receives the original request before any HTTP", ctx do
+    owner = self()
+    error = Backplane.AgentRuntime.Error.new(:forbidden, "Catalog context is stale")
+
+    Gaoxy.Test.stub(ctx.fixture, "POST", "/v1/chat/completions", fn conn ->
+      send(owner, :unresolved_catalog_http)
+      Plug.Conn.resp(conn, 500, "unexpected")
+    end)
+
+    for changes <- [
+          %{catalog_revision: 2},
+          %{incarnation: 2},
+          %{
+            tools: [
+              %{
+                name: "unregistered",
+                description: "Unknown",
+                parameters: Proof.EchoTool.parameters()
+              }
+            ]
+          }
+        ] do
+      request = Map.merge(ctx.request, changes)
+
+      context =
+        Map.put(ctx.context, :tool_context_resolver, fn seen ->
+          send(owner, {:catalog_resolution, seen})
+          {:error, error}
+        end)
+
+      assert [%{type: :response_failed, error: ^error}] =
+               Enum.to_list(ProviderAdapter.stream(request, context))
+
+      assert_receive {:catalog_resolution, ^request}
+    end
+
+    refute_receive :unresolved_catalog_http, 20
+  end
+
+  test "trusted current catalog resolution allows the empty request catalog", ctx do
+    owner = self()
+
+    context =
+      Map.put(ctx.context, :tool_context_resolver, fn request ->
+        send(owner, {:catalog_resolution, request})
+        {:ok, %{}}
+      end)
+
+    Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/chat/completions", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      send(owner, {:resolved_catalog_http, Jason.decode!(body)})
+      sse(conn, [chunk(%{"content" => "Current catalog"}), chunk(%{}, "stop")])
+    end)
+
+    assert %{type: :response_completed} =
+             ProviderAdapter.stream(ctx.request, context) |> Enum.to_list() |> List.last()
+
+    assert_receive {:catalog_resolution, request}
+    assert request === ctx.request
+    assert_receive {:resolved_catalog_http, wire}
+    assert wire["tools"] in [nil, []]
+  end
+
   test "HTTP failure emits exactly one terminal error", ctx do
-    Bypass.expect_once(ctx.bypass, fn conn -> Plug.Conn.resp(conn, 500, "fixture failure") end)
+    Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/chat/completions", fn conn ->
+      Plug.Conn.resp(conn, 500, "fixture failure")
+    end)
+
     events = Enum.to_list(ProviderAdapter.stream(ctx.request, ctx.context))
 
     assert [%{type: :response_failed}] =
@@ -167,36 +319,63 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
         ]
     }
 
-    Bypass.expect_once(ctx.bypass, "POST", "/v1/messages", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
+    counter = start_supervised!({Agent, fn -> 0 end})
 
-      assert [%{"type" => "text"}, %{"type" => "image", "source" => %{"data" => "AA=="}}] =
-               Jason.decode!(body)["messages"] |> hd() |> Map.fetch!("content")
+    Gaoxy.Test.expect(
+      ctx.fixture,
+      "POST",
+      "/v1/messages",
+      fn conn ->
+        case Agent.get_and_update(counter, &{&1 + 1, &1 + 1}) do
+          1 ->
+            {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      events = [
-        %{"type" => "message_start", "message" => %{"id" => "m"}},
-        %{
-          "type" => "content_block_start",
-          "index" => 0,
-          "content_block" => %{"type" => "thinking", "thinking" => ""}
-        },
-        %{
-          "type" => "content_block_delta",
-          "index" => 0,
-          "delta" => %{"type" => "thinking_delta", "thinking" => "private"}
-        },
-        %{
-          "type" => "content_block_delta",
-          "index" => 0,
-          "delta" => %{"type" => "signature_delta", "signature" => "signed"}
-        },
-        %{"type" => "content_block_stop", "index" => 0},
-        %{"type" => "message_stop"}
-      ]
+            assert [%{"type" => "text"}, %{"type" => "image", "source" => %{"data" => "AA=="}}] =
+                     Jason.decode!(body)["messages"] |> hd() |> Map.fetch!("content")
 
-      body = Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n"))
-      conn |> Plug.Conn.put_resp_content_type("text/event-stream") |> Plug.Conn.resp(200, body)
-    end)
+            events = [
+              %{"type" => "message_start", "message" => %{"id" => "m"}},
+              %{
+                "type" => "content_block_start",
+                "index" => 0,
+                "content_block" => %{"type" => "thinking", "thinking" => ""}
+              },
+              %{
+                "type" => "content_block_delta",
+                "index" => 0,
+                "delta" => %{"type" => "thinking_delta", "thinking" => "private"}
+              },
+              %{
+                "type" => "content_block_delta",
+                "index" => 0,
+                "delta" => %{"type" => "signature_delta", "signature" => "signed"}
+              },
+              %{"type" => "content_block_stop", "index" => 0},
+              %{"type" => "message_stop"}
+            ]
+
+            body = Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n"))
+
+            conn
+            |> Plug.Conn.put_resp_content_type("text/event-stream")
+            |> Plug.Conn.resp(200, body)
+
+          2 ->
+            {:ok, body, conn} = Plug.Conn.read_body(conn)
+            assistant = Enum.find(Jason.decode!(body)["messages"], &(&1["role"] == "assistant"))
+
+            assert [%{"type" => "thinking", "thinking" => "private", "signature" => "signed"}] =
+                     assistant["content"]
+
+            Plug.Conn.resp(
+              conn,
+              200,
+              "data: {\"type\":\"message_start\",\"message\":{\"id\":\"m2\"}}\n\ndata: {\"type\":\"message_stop\"}\n\n"
+            )
+        end
+      end,
+      times: 2
+    )
 
     events = Enum.to_list(ProviderAdapter.stream(request, context))
     assert %{type: :response_completed, message: message} = List.last(events)
@@ -204,20 +383,6 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
     assert state["affinity"]["profile"] == "primary"
     assert state["affinity"]["account"] == "account-a"
     assert state["payload"]["signature"] == "signed"
-
-    Bypass.expect_once(ctx.bypass, "POST", "/v1/messages", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assistant = Enum.find(Jason.decode!(body)["messages"], &(&1["role"] == "assistant"))
-
-      assert [%{"type" => "thinking", "thinking" => "private", "signature" => "signed"}] =
-               assistant["content"]
-
-      Plug.Conn.resp(
-        conn,
-        200,
-        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"m2\"}}\n\ndata: {\"type\":\"message_stop\"}\n\n"
-      )
-    end)
 
     request = %{
       request
@@ -278,7 +443,7 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
 
     owner = self()
 
-    Bypass.expect(ctx.bypass, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect(ctx.fixture, "POST", "/v1/chat/completions", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       messages = Jason.decode!(body)["messages"]
 
@@ -334,7 +499,7 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
   end
 
   test "a missing HTTP terminal never becomes a successful response", ctx do
-    Bypass.expect_once(ctx.bypass, fn conn ->
+    Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/chat/completions", fn conn ->
       Plug.Conn.resp(
         conn,
         200,
@@ -365,7 +530,7 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
   end
 
   test "output limit fails explicitly", ctx do
-    Bypass.expect_once(ctx.bypass, fn conn ->
+    Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/chat/completions", fn conn ->
       sse(conn, [chunk(%{"content" => String.duplicate("x", 100)})])
     end)
 
@@ -379,17 +544,14 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
     test "#{mode} cleans up the relay and its linked provider task", ctx do
       owner = self()
 
-      Bypass.expect_once(ctx.bypass, fn conn ->
-        # Let the fixture report its expectation after the client disconnects,
-        # instead of racing Cowboy's shutdown with Bypass's handler monitor.
-        Process.flag(:trap_exit, true)
+      Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/chat/completions", fn conn ->
+        {:ok, _body, conn} = Plug.Conn.read_body(conn)
         conn = Plug.Conn.send_chunked(conn, 200)
         send(owner, {:http_waiting, self()})
 
-        receive do
-          :release -> conn
-        after
-          4_000 -> conn
+        case Synapsis.Agent.TestSupport.AbortableHTTP.await(conn, :release, 4_000, owner) do
+          {:timeout, _conn} -> raise "provider stream was not released or cancelled"
+          {_outcome, conn} -> conn
         end
       end)
 

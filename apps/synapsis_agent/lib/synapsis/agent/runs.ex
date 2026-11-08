@@ -55,6 +55,9 @@ defmodule Synapsis.Agent.Runs do
     end
   end
 
+  @doc "Tagged occurrence lookup; an unavailable store must never imply a fresh admission."
+  def fetch_by_idempotency_key(key) when is_binary(key), do: Store.fetch_by_idempotency(key)
+
   @spec get_by_idempotency_key(String.t()) :: AgentRun.t() | nil
   def get_by_idempotency_key(key) when is_binary(key) do
     case Store.fetch_by_idempotency(key) do
@@ -176,7 +179,10 @@ defmodule Synapsis.Agent.Runs do
   @spec mark_interrupted(AgentRun.t(), String.t() | map()) ::
           {:ok, AgentRun.t()} | {:error, term()}
   def mark_interrupted(%AgentRun{} = run, reason) when is_binary(reason) do
-    mark_interrupted(run, %{error: reason, metadata: %{"interruption_reason" => reason}})
+    mark_interrupted(run, %{
+      error: reason,
+      metadata: Map.put(run.metadata || %{}, "interruption_reason", reason)
+    })
   end
 
   def mark_interrupted(%AgentRun{} = run, attrs) when is_map(attrs) do

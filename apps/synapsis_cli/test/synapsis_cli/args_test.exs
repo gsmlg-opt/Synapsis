@@ -8,18 +8,18 @@ defmodule SynapsisCli.ArgsTest do
 
   describe "short aliases" do
     test "-p alias routes to oneshot mode" do
-      # Use Bypass to provide a server so we can verify -p triggers oneshot.
-      bypass = Bypass.open()
-      host = "http://localhost:#{bypass.port}"
+      # Use Gaoxy.Test to provide a server so we can verify -p triggers oneshot.
+      bypass = Gaoxy.Test.open()
+      host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
       session_id = "alias-p-#{System.unique_integer([:positive])}"
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => session_id}}))
       end)
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         decoded = Jason.decode!(body)
         # Verify -p value was captured as the prompt
@@ -30,7 +30,7 @@ defmodule SynapsisCli.ArgsTest do
         |> Plug.Conn.resp(200, Jason.encode!(%{"ok" => true}))
       end)
 
-      Bypass.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.resp(200, "event: done\ndata: \n\n")
@@ -137,18 +137,18 @@ defmodule SynapsisCli.ArgsTest do
     end
 
     test "bare positional args route to oneshot mode" do
-      # Use Bypass so we don't hit System.halt(1) on connection failure
-      bypass = Bypass.open()
-      host = "http://localhost:#{bypass.port}"
+      # Use Gaoxy.Test so we don't hit System.halt(1) on connection failure
+      bypass = Gaoxy.Test.open()
+      host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
       session_id = "positional-#{System.unique_integer([:positive])}"
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => session_id}}))
       end)
 
-      Bypass.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         decoded = Jason.decode!(body)
         # Positional args should be joined with spaces
@@ -159,7 +159,7 @@ defmodule SynapsisCli.ArgsTest do
         |> Plug.Conn.resp(200, Jason.encode!(%{"ok" => true}))
       end)
 
-      Bypass.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.resp(200, "event: done\ndata: \n\n")

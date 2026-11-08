@@ -5,10 +5,10 @@ defmodule Synapsis.Agent.DaemonSubmissionCancelTest do
   test "runs manual prompts in stable FIFO order without overlap", %{tmp_dir: tmp_dir} do
     {daemon, _task_supervisor} = start_test_daemon()
     owner = self()
-    bypass = Bypass.open()
+    fixture = Gaoxy.Test.open()
     {:ok, counter} = Agent.start_link(fn -> 0 end)
 
-    Bypass.expect(bypass, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect(fixture, "POST", "/v1/chat/completions", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request_number = Agent.get_and_update(counter, &{&1 + 1, &1 + 1})
       send(owner, {:provider_request, request_number, body, self()})
@@ -24,7 +24,7 @@ defmodule Synapsis.Agent.DaemonSubmissionCancelTest do
       send_sse(conn, [text_chunk("result #{request_number}"), finish_chunk("stop")])
     end)
 
-    {provider_name, agent_name} = register_provider_agent(tmp_dir, bypass)
+    {provider_name, agent_name} = register_provider_agent(tmp_dir, fixture)
     opts = daemon_opts(agent_name, provider_name)
 
     assert {:ok, first} = Daemon.submit(daemon, "first prompt", opts)

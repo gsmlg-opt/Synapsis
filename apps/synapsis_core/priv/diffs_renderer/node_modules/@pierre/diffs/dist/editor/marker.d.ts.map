@@ -1,0 +1,1 @@
+{"version":3,"file":"marker.d.ts","names":[],"sources":["../../src/editor/marker.ts"],"mappings":";;;;KAeY;UAEK,eAAe;EAC9B,UAAU;EACV;IAAoB;MAAiB;EACrC;EACA,WAAW;;UAGI;EACf,gBAAgB;EAChB;EACA,yBAAyB;EACzB;EACA,WAAW,cAAc;EACzB,WAAW;EACX;;cAGW;;EAcX,YAAY,QAAQ;MAIhB,oBAAoB;EAIxB;EAIA;EAkBA,WAAW,SAAS,UAAU,cAAc;EAU5C,YAAY,WAAW;EAgCvB;EAMA;;iBAyQc,yBAAyB,UAAU"}

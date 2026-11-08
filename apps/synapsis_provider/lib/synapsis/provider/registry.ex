@@ -45,7 +45,7 @@ defmodule Synapsis.Provider.Registry do
     resolve_module(type || to_string(provider_name))
   end
 
-  @known_types ~w(anthropic openai openai_compat google local openrouter groq deepseek)
+  @known_types ~w(anthropic openai openai_responses openai_compat google local openrouter groq deepseek)
 
   defp resolve_module(type) when type in @known_types do
     {:ok, Synapsis.Provider.Adapter}

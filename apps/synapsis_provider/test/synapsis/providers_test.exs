@@ -446,9 +446,9 @@ defmodule Synapsis.ProvidersTest do
 
   describe "refresh_models/1" do
     test "loads compatible provider models and stores them in config" do
-      bypass = Bypass.open()
+      bypass = Gaoxy.Test.open()
 
-      Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "model-a"}]}))
@@ -458,7 +458,7 @@ defmodule Synapsis.ProvidersTest do
         Providers.create(%{
           name: "compatible-provider",
           type: "openai",
-          base_url: "http://localhost:#{bypass.port}",
+          base_url: String.trim_trailing(Gaoxy.Test.url(bypass), "/"),
           api_key_encrypted: "sk-test"
         })
 
@@ -579,9 +579,9 @@ defmodule Synapsis.ProvidersTest do
 
   describe "models/1" do
     test "filters discovered Backplane models through source and local availability" do
-      bypass = Bypass.open()
+      bypass = Gaoxy.Test.open()
 
-      Bypass.stub(bypass, "GET", "/v1/models", fn conn ->
+      Gaoxy.Test.stub(bypass, "GET", "/v1/models", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
@@ -596,7 +596,7 @@ defmodule Synapsis.ProvidersTest do
                Providers.create(%{
                  name: "mixed-discovery-provider",
                  type: "openai",
-                 base_url: "http://localhost:#{bypass.port}",
+                 base_url: String.trim_trailing(Gaoxy.Test.url(bypass), "/"),
                  enabled: true,
                  config: %{
                    "managed_by" => "backplane",
@@ -629,9 +629,9 @@ defmodule Synapsis.ProvidersTest do
     end
 
     test "keeps locally unchecked source models in the admin catalog and refreshed cache" do
-      bypass = Bypass.open()
+      bypass = Gaoxy.Test.open()
 
-      Bypass.stub(bypass, "GET", "/v1/models", fn conn ->
+      Gaoxy.Test.stub(bypass, "GET", "/v1/models", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
@@ -646,7 +646,7 @@ defmodule Synapsis.ProvidersTest do
                Providers.create(%{
                  name: "mixed-local-catalog-provider",
                  type: "openai",
-                 base_url: "http://localhost:#{bypass.port}",
+                 base_url: String.trim_trailing(Gaoxy.Test.url(bypass), "/"),
                  enabled: true,
                  config: %{
                    "managed_by" => "backplane",
@@ -717,9 +717,9 @@ defmodule Synapsis.ProvidersTest do
     end
 
     test "loads keyless Backplane models without authorization" do
-      bypass = Bypass.open()
+      bypass = Gaoxy.Test.open()
 
-      Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
         headers = Map.new(conn.req_headers)
         refute Map.has_key?(headers, "authorization")
 
@@ -734,7 +734,7 @@ defmodule Synapsis.ProvidersTest do
       attrs =
         preset
         |> Map.take([:name, :type])
-        |> Map.put(:base_url, "http://localhost:#{bypass.port}")
+        |> Map.put(:base_url, String.trim_trailing(Gaoxy.Test.url(bypass), "/"))
 
       assert {:ok, provider} = Providers.create(attrs)
       assert {:ok, [%{id: "backplane-model"}]} = Providers.models(provider.id)

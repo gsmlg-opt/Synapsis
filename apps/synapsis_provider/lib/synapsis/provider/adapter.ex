@@ -1,7 +1,7 @@
 defmodule Synapsis.Provider.Adapter do
   @moduledoc """
-  Host-owned HTTP adapter for Anthropic Messages, OpenAI Chat Completions, and
-  Google Gemini GenerateContent.
+  Host-owned HTTP adapter for Anthropic Messages, OpenAI Chat Completions and
+  Responses, and Google Gemini GenerateContent.
 
   Request and response wire semantics are delegated to
   `Backplane.AiProtocol.Codec`. This module owns endpoint selection,
@@ -15,7 +15,7 @@ defmodule Synapsis.Provider.Adapter do
   - `models/1` - returns available models
   - `format_request/3` - returns a tagged provider wire-map result
 
-  OpenAI Responses is not a supported client protocol here.
+  Responses uses explicit `openai_responses` selection and bearer authentication.
   """
 
   alias Synapsis.Provider.{EventMapper, MessageMapper, ModelRegistry, StreamGuard, ToolName}
@@ -86,7 +86,8 @@ defmodule Synapsis.Provider.Adapter do
 
   @doc "List available models for the given provider config."
   def models(config) do
-    with {:ok, config} <- Synapsis.Providers.refresh_runtime_auth(config),
+    with :ok <- Synapsis.Providers.ensure_llm_provider(config),
+         {:ok, config} <- Synapsis.Providers.refresh_runtime_auth(config),
          do: discover_models(config)
   end
 
@@ -95,7 +96,7 @@ defmodule Synapsis.Provider.Adapter do
     base_url = config[:base_url] || config["base_url"] || ""
 
     case transport_type do
-      :openai ->
+      type when type in [:openai, :openai_responses] ->
         Transport.OpenAI.fetch_models(config)
 
       :anthropic ->
@@ -133,8 +134,13 @@ defmodule Synapsis.Provider.Adapter do
   `MessageMapper.build_request/4`.
   """
   def format_request(messages, tools, opts) do
-    provider_type = resolve_transport_type(opts[:provider_type] || opts[:type] || "anthropic")
-    MessageMapper.build_request(provider_type, messages, tools, opts)
+    type = opts[:provider_type] || opts[:type] || "anthropic"
+
+    if Synapsis.Providers.speech_only?(%{type: type}) do
+      Backplane.AiProtocol.Error.incompatible("A speech provider cannot format an LLM request")
+    else
+      MessageMapper.build_request(resolve_transport_type(type), messages, tools, opts)
+    end
   end
 
   @doc """
@@ -365,11 +371,6 @@ defmodule Synapsis.Provider.Adapter do
     {:violation, stream_guard}
   end
 
-  defp emit_provider_event(caller, event, nil) do
-    if event != :ignore, do: send_provider_event(caller, event)
-    {:ok, nil}
-  end
-
   defp emit_provider_event(caller, {:events, events}, stream_guard) do
     Enum.reduce_while(events, {:ok, stream_guard}, fn event, {:ok, stream_guard} ->
       case emit_provider_event(caller, event, stream_guard) do
@@ -377,6 +378,31 @@ defmodule Synapsis.Provider.Adapter do
         {:violation, stream_guard} -> {:halt, {:violation, stream_guard}}
       end
     end)
+  end
+
+  defp emit_provider_event(caller, event, nil) do
+    if event != :ignore, do: send_provider_event(caller, event)
+    {:ok, nil}
+  end
+
+  defp emit_provider_event(caller, {:tool_call_done, _, _, _, input} = event, stream_guard)
+       when is_binary(input) do
+    # Responses may supply initial or completed input without argument deltas.
+    # Validate the whole value independently: the streaming scanner may still
+    # hold a prefix of this same input, which must not be appended a second time.
+    scanner = %{stream_guard.scanner | held: <<>>}
+
+    case StreamGuard.scan(scanner, input) do
+      {:ok, _emit, _scanner} ->
+        with {:ok, stream_guard} <- flush_stream_guard(caller, stream_guard) do
+          send_provider_event(caller, event)
+          {:ok, stream_guard}
+        end
+
+      {:violation, rule} ->
+        send(caller, {:provider_error, {:stream_violation, StreamGuard.redact(rule)}})
+        {:violation, stream_guard}
+    end
   end
 
   defp emit_provider_event(caller, event, stream_guard) do
@@ -433,6 +459,10 @@ defmodule Synapsis.Provider.Adapter do
   end
 
   defp maybe_flush_guard_before_event(_caller, stream_guard, :ignore), do: {:ok, stream_guard}
+
+  # Model observations do not interrupt a held content or tool-input prefix.
+  defp maybe_flush_guard_before_event(_caller, stream_guard, {:resolved_model, _model}),
+    do: {:ok, stream_guard}
 
   defp maybe_flush_guard_before_event(caller, stream_guard, _event) do
     flush_stream_guard(caller, stream_guard)
@@ -625,12 +655,25 @@ defmodule Synapsis.Provider.Adapter do
     {"#{base_url}/v1beta/models/#{model}:#{method}", headers, body}
   end
 
+  defp request_parts(:openai_responses, request, config, stream?) do
+    base_url = config[:base_url] || config["base_url"] || Transport.OpenAI.default_base_url()
+    base_url = base_url |> to_string() |> String.trim_trailing("/")
+
+    url =
+      if String.ends_with?(base_url, "/v1"),
+        do: "#{base_url}/responses",
+        else: "#{base_url}/v1/responses"
+
+    headers = [{"content-type", "application/json"}] ++ openai_auth_headers(config)
+    {url, headers, Map.put(request, "stream", stream?)}
+  end
+
   defp codec_opts(protocol, request, config) do
     base_url =
       config[:base_url] || config["base_url"] ||
         case protocol do
           :anthropic -> Transport.Anthropic.default_base_url()
-          :openai -> Transport.OpenAI.default_base_url()
+          type when type in [:openai, :openai_responses] -> Transport.OpenAI.default_base_url()
           :google -> Transport.Google.default_base_url()
         end
 
@@ -784,6 +827,7 @@ defmodule Synapsis.Provider.Adapter do
     case type do
       "anthropic" -> :anthropic
       "openai" -> :openai
+      "openai_responses" -> :openai_responses
       "openai_compat" -> :openai
       "local" -> :openai
       "openrouter" -> :openai
@@ -795,6 +839,9 @@ defmodule Synapsis.Provider.Adapter do
   end
 
   def resolve_transport_type(nil), do: :openai
-  def resolve_transport_type(type) when type in [:anthropic, :openai, :google], do: type
+
+  def resolve_transport_type(type) when type in [:anthropic, :openai, :openai_responses, :google],
+    do: type
+
   def resolve_transport_type(_), do: :openai
 end

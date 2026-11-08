@@ -9,7 +9,8 @@ defmodule Synapsis.Agent.Tools.Approval do
   not simply return a cached permission snapshot. No functions or process handles
   enter the native persisted interaction request.
 
-  `resolve/4` is called only after the host authenticates its requester. Its final
+  Synapsis treats access to its UI/API as trusted operator access and supplies the
+  server-owned `synapsis:operator` identity. `resolve/4` receives that host decision. Its final
   argument contains trusted `scope` and the original server-held `operation`;
   neither identity may come from model fields. Native Approval validates the
   operation decision, not user authentication. Conversation owns interaction IDs,
@@ -24,12 +25,15 @@ defmodule Synapsis.Agent.Tools.Approval do
   and can require a second consent; safe host integration with that later gate is
   not supported here. The host must restrict its input edits and revalidate dynamic
   policy and expiry after its wait. Passing the dynamic gate does not establish
-  host freshness or TTL across both approvals. No production wiring.
+  host freshness or TTL across both approvals.
   """
 
   alias Backplane.AgentRuntime.{Conversation, Error}
   alias Backplane.AgentRuntime.Approval, as: NativeApproval
+  alias Backplane.AgentRuntime.Codex.MultiAgent
   alias Synapsis.Agent.Tools.Policy
+
+  def operator_id, do: "synapsis:operator"
 
   @spec request(map(), map(), map()) :: :allow | {:deny, term()}
   def request(invocation, context, evaluation) do
@@ -60,8 +64,6 @@ defmodule Synapsis.Agent.Tools.Approval do
 
     with %{id: ^id, request: %{kind: :permission, operation: ^operation, scope: ^scope} = request} <-
            status.conversation.pending_interaction,
-         # WORKAROUND(upstream): gsmlg-opt/backplane#80
-         # Native decision validation does not require a nonempty binary resolver.
          true <- valid_scope?(scope),
          true <- current_operation?(operation, status),
          :ok <- unexpired(request.expires_at),
@@ -80,9 +82,41 @@ defmodule Synapsis.Agent.Tools.Approval do
   end
 
   def resolve(_, _, _, _),
-    do:
-      {:error,
-       Error.new(:validation, "an authenticated host decision and exact scope are required")}
+    do: {:error, Error.new(:validation, "a trusted host decision and exact scope are required")}
+
+  @doc "Resolves a manager-observed child request using its exact native correlation."
+  def resolve_managed(manager, correlation, decision, %{scope: scope, operation: operation})
+      when is_pid(manager) and is_map(correlation) and is_map(scope) and is_map(operation) and
+             decision in [:approved, :denied] do
+    with {:ok, snapshot} <- MultiAgent.snapshot(manager),
+         %{pending_interaction: %{correlation: ^correlation, request: request}} <-
+           Enum.find(snapshot.agents, &(&1.agent_id == correlation.agent_id)),
+         true <- field(request, :kind) == "permission",
+         true <- field(request, :scope) === scope and field(request, :operation) === operation,
+         true <- valid_scope?(scope),
+         true <-
+           field(operation, :run_id) === correlation.run_id and
+             field(operation, :incarnation) === correlation.incarnation and
+             field(operation, :catalog_revision) === field(scope, :catalog_revision),
+         :ok <- unexpired(field(request, :expires_at)),
+         {:ok, ^decision} <-
+           native_decision(
+             correlation.interaction_id,
+             request,
+             decision,
+             field(scope, :requester_id)
+           ) do
+      MultiAgent.resolve_interaction(manager, correlation, decision)
+    else
+      {:error, %Error{}} = error ->
+        error
+
+      _ ->
+        {:error, Error.new(:forbidden, "child approval is stale or outside trusted host scope")}
+    end
+  catch
+    :exit, _ -> {:error, Error.new(:resource_conflict, "approval manager is unavailable")}
+  end
 
   defp approval_context(%{tool_approval: approval, tool_scope: scope, interact: interact})
        when is_map(approval) and is_map(scope) and is_function(interact, 1) do
@@ -143,10 +177,10 @@ defmodule Synapsis.Agent.Tools.Approval do
 
   defp valid_scope?(scope) when is_map(scope) do
     Enum.all?([:caller, :run_id, :session_id, :requester_id], fn key ->
-      is_binary(scope[key]) and String.trim(scope[key]) != ""
+      is_binary(field(scope, key)) and String.trim(field(scope, key)) != ""
     end) and
       Enum.all?([:incarnation, :catalog_revision], fn key ->
-        is_integer(scope[key]) and scope[key] > 0
+        is_integer(field(scope, key)) and field(scope, key) > 0
       end)
   end
 
@@ -158,19 +192,21 @@ defmodule Synapsis.Agent.Tools.Approval do
   end
 
   defp native_decision(id, request, decision, requester) do
+    operation = field(request, :operation)
+
     approval =
       %{
         approval_id: id,
-        run_id: request.operation.run_id,
-        tool_name: request.operation.tool_name,
-        tool_revision: request.operation.tool_revision,
+        run_id: field(operation, :run_id),
+        tool_name: field(operation, :tool_name),
+        tool_revision: field(operation, :tool_revision),
         arguments_digest:
-          :crypto.hash(:sha256, :erlang.term_to_binary(request.operation.arguments))
+          :crypto.hash(:sha256, :erlang.term_to_binary(field(operation, :arguments)))
           |> Base.encode16(case: :lower),
         current_time: System.system_time(:millisecond),
-        expires_at: request.expires_at
+        expires_at: field(request, :expires_at)
       }
-      |> Map.merge(Map.take(request.operation, [:collaboration_binding]))
+      |> Map.put(:collaboration_binding, field(operation, :collaboration_binding))
 
     answer =
       approval
@@ -179,6 +215,8 @@ defmodule Synapsis.Agent.Tools.Approval do
 
     NativeApproval.decide(approval, answer)
   end
+
+  defp field(map, key), do: Map.get(map, key, Map.get(map, Atom.to_string(key)))
 
   defp unexpired(expiry) do
     if is_integer(expiry) and System.system_time(:millisecond) <= expiry,

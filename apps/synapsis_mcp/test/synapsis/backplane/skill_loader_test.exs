@@ -30,12 +30,12 @@ defmodule Synapsis.Backplane.SkillLoaderTest do
   end
 
   test "resolves and prepares the exact frozen revision", %{bundle: bundle, artifact: artifact} do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     source_id = Ecto.UUID.generate()
     connection = connection!(source_id, bypass)
     manifest = %{bundle.manifest | ref: %{bundle.manifest.ref | source_id: source_id}}
 
-    Bypass.expect_once(bypass, "GET", "/skill-protocol/v1/resolve", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skill-protocol/v1/resolve", fn conn ->
       assert URI.decode_query(conn.query_string) == %{
                "revision" => "release/7",
                "skill_id" => "review"
@@ -44,7 +44,7 @@ defmodule Synapsis.Backplane.SkillLoaderTest do
       json(conn, Wire.manifest_map(manifest))
     end)
 
-    Bypass.expect_once(bypass, "GET", "/skill-protocol/v1/artifact", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skill-protocol/v1/artifact", fn conn ->
       assert URI.decode_query(conn.query_string)["revision"] == "release/7"
       Plug.Conn.send_resp(conn, 200, artifact)
     end)
@@ -61,16 +61,16 @@ defmodule Synapsis.Backplane.SkillLoaderTest do
   end
 
   test "fails closed when the artifact does not match the exact manifest", %{bundle: bundle} do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
     source_id = Ecto.UUID.generate()
     _connection = connection!(source_id, bypass)
     manifest = %{bundle.manifest | ref: %{bundle.manifest.ref | source_id: source_id}}
 
-    Bypass.expect_once(bypass, "GET", "/skill-protocol/v1/resolve", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skill-protocol/v1/resolve", fn conn ->
       json(conn, Wire.manifest_map(manifest))
     end)
 
-    Bypass.expect_once(bypass, "GET", "/skill-protocol/v1/artifact", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skill-protocol/v1/artifact", fn conn ->
       Plug.Conn.send_resp(conn, 200, "not-the-artifact")
     end)
 
@@ -84,13 +84,13 @@ defmodule Synapsis.Backplane.SkillLoaderTest do
 
   test "linked skill reads use provider credentials per request and reject a disabled provider",
        %{bundle: bundle, artifact: artifact} do
-    bypass = Bypass.open()
+    bypass = Gaoxy.Test.open()
 
     {:ok, provider} =
       Synapsis.Providers.create(%{
         name: "skill-linked-#{System.unique_integer([:positive])}",
         type: "openai",
-        base_url: "http://localhost:#{bypass.port}/v1",
+        base_url: Gaoxy.Test.url(bypass, "/v1"),
         api_key_encrypted: "first"
       })
 
@@ -108,13 +108,13 @@ defmodule Synapsis.Backplane.SkillLoaderTest do
     source_id = connection.id
     manifest = %{bundle.manifest | ref: %{bundle.manifest.ref | source_id: source_id}}
 
-    Bypass.expect_once(bypass, "GET", "/skill-protocol/v1/resolve", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skill-protocol/v1/resolve", fn conn ->
       assert Plug.Conn.get_req_header(conn, "authorization") == ["Bearer first"]
       {:ok, _} = Synapsis.Providers.update(provider.id, %{api_key_encrypted: "rotated"})
       json(conn, Wire.manifest_map(manifest))
     end)
 
-    Bypass.expect_once(bypass, "GET", "/skill-protocol/v1/artifact", fn conn ->
+    Gaoxy.Test.expect_once(bypass, "GET", "/skill-protocol/v1/artifact", fn conn ->
       assert Plug.Conn.get_req_header(conn, "authorization") == ["Bearer rotated"]
       Plug.Conn.send_resp(conn, 200, artifact)
     end)
@@ -126,12 +126,91 @@ defmodule Synapsis.Backplane.SkillLoaderTest do
     assert message =~ "provider_unavailable"
   end
 
+  test "frozen SkillReader reads accept credential rotation between resolve and artifact",
+       %{bundle: bundle, artifact: artifact} do
+    bypass = Gaoxy.Test.open()
+
+    {:ok, provider} =
+      Synapsis.Providers.create(%{
+        name: "skill-reader-rotation-#{System.unique_integer([:positive])}",
+        type: "openai",
+        base_url: Gaoxy.Test.url(bypass, "/v1"),
+        api_key_encrypted: "first"
+      })
+
+    {:ok, connection} =
+      Connection.create(%{
+        name: "reader-rotation-#{System.unique_integer([:positive])}",
+        provider_id: provider.id
+      })
+
+    source_id = connection.id
+    manifest = %{bundle.manifest | ref: %{bundle.manifest.ref | source_id: source_id}}
+
+    {:ok, skill} =
+      Synapsis.Skills.create(%{
+        scope: "global",
+        name: "reader-rotation-review",
+        config_overrides: %{
+          "source" => "backplane",
+          "managed_by" => "backplane",
+          "backplane_source_id" => source_id,
+          "external_id" => "review",
+          "external_revision" => "release/7",
+          "artifact_digest" => manifest.artifact_digest
+        }
+      })
+
+    {:ok, agent} =
+      Synapsis.AgentConfigs.create(%{
+        name: "skill-reader-rotation-#{System.unique_integer([:positive])}"
+      })
+
+    {:ok, _} = Synapsis.Skills.assign_skills(agent, [skill.id])
+    previous_loader = Application.get_env(:synapsis_core, :skill_loader)
+    Application.put_env(:synapsis_core, :skill_loader, &SkillLoader.load/2)
+
+    on_exit(fn ->
+      if previous_loader,
+        do: Application.put_env(:synapsis_core, :skill_loader, previous_loader),
+        else: Application.delete_env(:synapsis_core, :skill_loader)
+
+      Synapsis.Config.Store.delete(:agent, agent.id)
+      Synapsis.Config.Store.delete(:skill, skill.id)
+      Connection.delete(connection)
+      Synapsis.Providers.delete(provider.id)
+      Synapsis.Credentials.delete(provider.credential_id)
+    end)
+
+    {:ok, snapshot} = Synapsis.SkillReader.snapshot(agent.id)
+    {:ok, %{results: [hit]}} = Synapsis.SkillReader.search(snapshot, "reader-rotation")
+
+    Gaoxy.Test.expect_once(bypass, "GET", "/skill-protocol/v1/resolve", fn conn ->
+      assert Plug.Conn.get_req_header(conn, "authorization") == ["Bearer first"]
+      {:ok, rotated} = Synapsis.Providers.update(provider.id, %{api_key_encrypted: "rotated"})
+      assert rotated.credential_id == provider.credential_id
+      json(conn, Wire.manifest_map(manifest))
+    end)
+
+    Gaoxy.Test.expect_once(bypass, "GET", "/skill-protocol/v1/artifact", fn conn ->
+      assert Plug.Conn.get_req_header(conn, "authorization") == ["Bearer rotated"]
+      Plug.Conn.send_resp(conn, 200, artifact)
+    end)
+
+    assert {:ok, %{content: body, artifact_digest: digest}} =
+             Synapsis.SkillReader.read(snapshot, hit.locator)
+
+    assert body =~ "Full remote body"
+    assert digest == manifest.artifact_digest
+    assert {:ok, %{results: [_]}} = Synapsis.SkillReader.search(snapshot, "reader-rotation")
+  end
+
   defp connection!(source_id, bypass) do
     {:ok, connection} =
       Connection.create(%{
         id: source_id,
         name: "skill-loader-#{String.slice(source_id, 0, 8)}",
-        endpoint: "http://localhost:#{bypass.port}",
+        endpoint: String.trim_trailing(Gaoxy.Test.url(bypass), "/"),
         sync_on_start: false
       })
 

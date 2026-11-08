@@ -8,8 +8,8 @@ defmodule Synapsis.Provider.AdapterTest do
   end
 
   setup do
-    bypass = Bypass.open()
-    %{bypass: bypass, port: bypass.port}
+    bypass = Gaoxy.Test.open()
+    %{bypass: bypass, port: URI.parse(Gaoxy.Test.url(bypass)).port}
   end
 
   for linked? <- [false, true] do
@@ -19,7 +19,7 @@ defmodule Synapsis.Provider.AdapterTest do
     } do
       owner = self()
 
-      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
         Process.flag(:trap_exit, true)
         conn = Plug.Conn.send_chunked(conn, 200)
         send(owner, {:http_started, self()})
@@ -74,7 +74,7 @@ defmodule Synapsis.Provider.AdapterTest do
 
   describe "stream/2 Anthropic" do
     test "empty successful response reports an incomplete stream", %{bypass: bypass, port: port} do
-      Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/messages", fn conn ->
         Plug.Conn.send_resp(conn, 200, "")
       end)
 
@@ -89,7 +89,7 @@ defmodule Synapsis.Provider.AdapterTest do
     end
 
     test "receives streaming chunks", %{bypass: bypass, port: port} do
-      Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.send_resp(200, """
@@ -124,7 +124,7 @@ defmodule Synapsis.Provider.AdapterTest do
     end
 
     test "handles error response", %{bypass: bypass, port: port} do
-      Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
@@ -165,7 +165,7 @@ defmodule Synapsis.Provider.AdapterTest do
 
       alias_name = get_in(request, ["tools", Access.at(0), "function", "name"])
 
-      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         decoded = Jason.decode!(body)
         refute Map.has_key?(decoded, "__synapsis_tool_name_aliases__")
@@ -195,7 +195,7 @@ defmodule Synapsis.Provider.AdapterTest do
       on_exit(fn -> Synapsis.DataCase.clear_config_store(:provider) end)
       caller = self()
 
-      Bypass.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
         send(caller, :http_called)
 
         conn
@@ -218,7 +218,7 @@ defmodule Synapsis.Provider.AdapterTest do
       on_exit(fn -> Synapsis.DataCase.clear_config_store(:provider) end)
       caller = self()
 
-      Bypass.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
         send(caller, :http_called)
 
         conn
@@ -242,7 +242,7 @@ defmodule Synapsis.Provider.AdapterTest do
       caller = self()
       provider_name = "managed-stream-unchecked-model"
 
-      Bypass.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
         send(caller, :http_called)
 
         conn
@@ -282,7 +282,7 @@ defmodule Synapsis.Provider.AdapterTest do
       bypass: bypass,
       port: port
     } do
-      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
         headers = Map.new(conn.req_headers)
         assert headers["authorization"] == "Bearer string-key"
 
@@ -307,7 +307,7 @@ defmodule Synapsis.Provider.AdapterTest do
       bypass: bypass,
       port: port
     } do
-      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
         headers = Map.new(conn.req_headers)
         refute Map.has_key?(headers, "authorization")
 
@@ -329,7 +329,7 @@ defmodule Synapsis.Provider.AdapterTest do
     end
 
     test "receives streaming chunks", %{bypass: bypass, port: port} do
-      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
         headers = Map.new(conn.req_headers)
         assert headers["authorization"] == "Bearer test-key"
 
@@ -366,7 +366,7 @@ defmodule Synapsis.Provider.AdapterTest do
     end
 
     test "Azure OpenAI uses deployment URL and api-key header", %{bypass: bypass, port: port} do
-      Bypass.expect_once(
+      Gaoxy.Test.expect_once(
         bypass,
         "POST",
         "/openai/deployments/gpt-4o/chat/completions",
@@ -405,7 +405,7 @@ defmodule Synapsis.Provider.AdapterTest do
     end
 
     test "works without api_key for local models", %{bypass: bypass, port: port} do
-      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.send_resp(200, """
@@ -436,7 +436,7 @@ defmodule Synapsis.Provider.AdapterTest do
       bypass: bypass,
       port: port
     } do
-      Bypass.expect_once(bypass, "POST", "/api/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/v1/chat/completions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.send_resp(200, """
@@ -463,7 +463,7 @@ defmodule Synapsis.Provider.AdapterTest do
       bypass: bypass,
       port: port
     } do
-      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.send_resp(200, """
@@ -506,7 +506,7 @@ defmodule Synapsis.Provider.AdapterTest do
       bypass: bypass,
       port: port
     } do
-      Bypass.expect_once(
+      Gaoxy.Test.expect_once(
         bypass,
         "POST",
         "/v1beta/models/gemini-test:streamGenerateContent",
@@ -531,7 +531,7 @@ defmodule Synapsis.Provider.AdapterTest do
     end
 
     test "receives streaming chunks", %{bypass: bypass, port: port} do
-      Bypass.expect_once(
+      Gaoxy.Test.expect_once(
         bypass,
         "POST",
         "/v1beta/models/gemini-2.0-flash:streamGenerateContent",
@@ -566,7 +566,7 @@ defmodule Synapsis.Provider.AdapterTest do
     end
 
     test "sends API key in header, not URL query string", %{bypass: bypass, port: port} do
-      Bypass.expect_once(
+      Gaoxy.Test.expect_once(
         bypass,
         "POST",
         "/v1beta/models/gemini-2.0-flash:streamGenerateContent",
@@ -607,7 +607,7 @@ defmodule Synapsis.Provider.AdapterTest do
       on_exit(fn -> Synapsis.DataCase.clear_config_store(:provider) end)
       caller = self()
 
-      Bypass.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
         send(caller, :http_called)
 
         conn
@@ -635,7 +635,7 @@ defmodule Synapsis.Provider.AdapterTest do
       on_exit(fn -> Synapsis.DataCase.clear_config_store(:provider) end)
       caller = self()
 
-      Bypass.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
         send(caller, :http_called)
 
         conn
@@ -658,7 +658,7 @@ defmodule Synapsis.Provider.AdapterTest do
     end
 
     test "Anthropic synchronous completion returns text", %{bypass: bypass, port: port} do
-      Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
@@ -688,7 +688,7 @@ defmodule Synapsis.Provider.AdapterTest do
     end
 
     test "OpenAI synchronous completion returns text", %{bypass: bypass, port: port} do
-      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
         headers = Map.new(conn.req_headers)
         assert headers["authorization"] == "Bearer test-key"
 
@@ -720,7 +720,7 @@ defmodule Synapsis.Provider.AdapterTest do
     end
 
     test "OpenAI complete accepts an all-string config", %{bypass: bypass, port: port} do
-      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
         headers = Map.new(conn.req_headers)
         assert headers["authorization"] == "Bearer string-key"
 
@@ -754,7 +754,7 @@ defmodule Synapsis.Provider.AdapterTest do
       bypass: bypass,
       port: port
     } do
-      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
         headers = Map.new(conn.req_headers)
         refute Map.has_key?(headers, "authorization")
 
@@ -783,7 +783,7 @@ defmodule Synapsis.Provider.AdapterTest do
       bypass: bypass,
       port: port
     } do
-      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
         headers = Map.new(conn.req_headers)
         refute Map.has_key?(headers, "authorization")
 
@@ -812,7 +812,7 @@ defmodule Synapsis.Provider.AdapterTest do
       bypass: bypass,
       port: port
     } do
-      Bypass.expect_once(bypass, "POST", "/api/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/v1/chat/completions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
@@ -835,7 +835,7 @@ defmodule Synapsis.Provider.AdapterTest do
     end
 
     test "returns error on 401 unauthorized", %{bypass: bypass, port: port} do
-      Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
@@ -857,7 +857,7 @@ defmodule Synapsis.Provider.AdapterTest do
     end
 
     test "Google complete sends API key in header not URL", %{bypass: bypass, port: port} do
-      Bypass.expect_once(
+      Gaoxy.Test.expect_once(
         bypass,
         "POST",
         "/v1beta/models/gemini-2.0-flash:generateContent",
@@ -896,7 +896,7 @@ defmodule Synapsis.Provider.AdapterTest do
       bypass: bypass,
       port: port
     } do
-      Bypass.expect_once(bypass, "POST", "/v1/messages", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(200, Jason.encode!(%{"unexpected" => "format"}))
@@ -918,7 +918,7 @@ defmodule Synapsis.Provider.AdapterTest do
       bypass: bypass,
       port: port
     } do
-      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(200, Jason.encode!(%{"unexpected" => "format"}))
@@ -937,7 +937,7 @@ defmodule Synapsis.Provider.AdapterTest do
       bypass: bypass,
       port: port
     } do
-      Bypass.expect_once(
+      Gaoxy.Test.expect_once(
         bypass,
         "POST",
         "/v1beta/models/gemini-2.0-flash:generateContent",
@@ -963,7 +963,7 @@ defmodule Synapsis.Provider.AdapterTest do
       bypass: bypass,
       port: port
     } do
-      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
         headers = Map.new(conn.req_headers)
         refute Map.has_key?(headers, "authorization")
 
@@ -993,7 +993,7 @@ defmodule Synapsis.Provider.AdapterTest do
       bypass: bypass,
       port: port
     } do
-      Bypass.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
@@ -1087,7 +1087,7 @@ defmodule Synapsis.Provider.AdapterTest do
     end
 
     test "fetches openai models from API", %{bypass: bypass, port: port} do
-      Bypass.expect_once(bypass, "GET", "/v1/models", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
@@ -1164,7 +1164,7 @@ defmodule Synapsis.Provider.AdapterTest do
 
   describe "stream/2 error handling" do
     test "sends provider_error when connection refused", %{bypass: bypass, port: port} do
-      Bypass.down(bypass)
+      Gaoxy.Test.verify_and_close!(bypass)
 
       config = %{api_key: "test-key", base_url: "http://localhost:#{port}", type: "anthropic"}
 

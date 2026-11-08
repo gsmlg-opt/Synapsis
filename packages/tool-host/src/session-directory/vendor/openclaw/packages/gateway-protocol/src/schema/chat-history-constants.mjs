@@ -1,0 +1,1 @@
+export const CHAT_PENDING_INPUT_MESSAGE_PREFIX = "pending:";

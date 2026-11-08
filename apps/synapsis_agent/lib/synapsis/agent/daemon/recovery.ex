@@ -3,11 +3,12 @@ defmodule Synapsis.Agent.Daemon.Recovery do
 
   alias Synapsis.Agent.Daemon.Execution
 
-  def run(deps, capacity, task_supervisor, event_timeout) do
+  def run(deps, capacity, task_supervisor, event_timeout, observed \\ fn _runs -> :ok end) do
     {running, running_errors} = load_status(deps.runs, "running")
     {waiting, waiting_errors} = load_status(deps.runs, "waiting_approval")
     {queued, queued_errors} = load_status(deps.runs, "queued")
     scan_errors = running_errors ++ waiting_errors ++ queued_errors
+    observed.(running ++ waiting ++ queued)
 
     {interrupt_errors, event_errors, _interrupted} =
       interrupt(deps, task_supervisor, event_timeout, running ++ waiting)
@@ -22,9 +23,10 @@ defmodule Synapsis.Agent.Daemon.Recovery do
     end
   end
 
-  def refill(deps, excluded_ids, limit) do
+  def refill(deps, excluded_ids, limit, observed \\ fn _runs -> :ok end) do
     case deps.runs.list_by_status_result("queued", limit: :all) do
       {:ok, queued} ->
+        observed.(queued)
         {selected, backlog} = select(queued, excluded_ids, limit)
         {:ok, selected, backlog}
 
@@ -35,7 +37,19 @@ defmodule Synapsis.Agent.Daemon.Recovery do
 
   defp interrupt(deps, task_supervisor, event_timeout, runs) do
     Enum.reduce(runs, {[], [], []}, fn run, {errors, event_errors, interrupted} ->
-      case deps.runs.mark_interrupted(run, "daemon_restarted") do
+      attrs =
+        if Synapsis.Agent.Automation.Execution.webhook?(run) do
+          recovered = Synapsis.Agent.Automation.Execution.interrupted_webhook(run)
+
+          %{
+            error: "daemon_restarted",
+            metadata: Map.put(recovered.metadata, "interruption_reason", "daemon_restarted")
+          }
+        else
+          "daemon_restarted"
+        end
+
+      case deps.runs.mark_interrupted(run, attrs) do
         {:ok, terminal} ->
           warnings =
             Execution.emit_run_event(

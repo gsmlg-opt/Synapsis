@@ -3,7 +3,6 @@ defmodule Synapsis.Session.Worker.Config do
 
   alias Synapsis.Session
   alias Synapsis.Session.Store
-  alias Synapsis.Agent.Daemon.Toolsets
 
   @valid_modes ~w(bypass_permissions ask_before_edits edit_automatically plan_mode assistant_mode)
   @mode_configs %{
@@ -68,83 +67,120 @@ defmodule Synapsis.Session.Worker.Config do
     agent =
       session.agent
       |> Synapsis.Agent.Resolver.resolve(session.config)
-      |> apply_daemon_run_tools(session.config)
+      |> apply_daemon_run_tools(session)
+      |> apply_suggested_workspace(session)
 
-    ensure_agent_model(agent, session)
+    agent
+    |> Map.put(:configured_default_model, configured_identity(agent))
+    |> ensure_agent_model(session)
   end
 
-  defp apply_daemon_run_tools(
-         agent,
-         %{
-           "daemon_run_tool_names" => tool_names,
-           "daemon_run_tool_profile" => tool_profile
-         }
-       )
-       when is_list(tool_names) and is_binary(tool_profile) do
-    case Toolsets.resolve_for_query_loop(tool_profile) do
-      {:ok, tools} ->
-        agent
-        |> Map.put(:daemon_tool_profile, tool_profile)
-        |> bind_daemon_tools(tools)
+  @doc """
+  Minimal read-only configured-default projection, before session selection.
+  Mirrors Resolver's saved-Agent/project fill-blank rules without resolving tools
+  or loading skills. Project configuration is the session's existing projection.
+  """
+  def configured_default_model(name, project_config \\ %{}) do
+    saved = Synapsis.AgentConfigs.get_by_name(to_string(name))
+    saved = saved || Synapsis.AgentConfigs.default_attrs(to_string(name)) || %{}
+    agents = Map.get(project_config || %{}, "agents", %{})
+    base = if to_string(name) == "main", do: Map.get(agents, "default", %{}), else: %{}
+    exact = Map.get(agents, to_string(name), %{})
 
-      {:error, _reason} ->
+    project =
+      Map.merge(base, exact, fn _key, left, right ->
+        if right in [nil, ""], do: left, else: right
+      end)
+
+    saved
+    |> Map.put(:provider, nonblank(Map.get(saved, :provider), project["provider"]))
+    |> Map.put(:model, nonblank(Map.get(saved, :model), project["model"]))
+    |> configured_identity()
+  end
+
+  defp configured_identity(agent) do
+    provider = Map.get(agent, :provider)
+
+    tier =
+      case Map.get(agent, :model_tier) do
+        value when value in [:fast, "fast"] -> :fast
+        value when value in [:expert, "expert"] -> :expert
+        _ -> :default
+      end
+
+    model =
+      case Map.get(agent, :model) do
+        value when value in [nil, ""] ->
+          if provider not in [nil, ""], do: Synapsis.Providers.model_for_tier(provider, tier)
+
+        selected ->
+          selected
+      end
+
+    if is_binary(provider) and provider != "" and is_binary(model) and model != "",
+      do: %{provider: provider, model: model},
+      else: nil
+  end
+
+  defp nonblank(value, fallback) when value in [nil, ""], do: fallback
+  defp nonblank(value, _fallback), do: value
+
+  defp apply_suggested_workspace(agent, %Session{config: %{"creation_context" => context}})
+       when is_map(context) do
+    case context do
+      %{
+        "version" => 1,
+        "kind" => "task_suggestion",
+        "cwd" => cwd,
+        "task_id" => task_id,
+        "source_session_id" => source_id
+      }
+      when is_binary(cwd) and is_binary(task_id) and is_binary(source_id) ->
+        if String.valid?(cwd) and Path.type(cwd) == :absolute and
+             not String.contains?(cwd, "\0") and String.trim(task_id) != "" and
+             match?({:ok, ^source_id}, Ecto.UUID.cast(source_id)),
+           do: Map.put(agent, :workspace_path, cwd),
+           else: agent
+
+      _ ->
         agent
-        |> Map.put(:tools, [])
-        |> Map.put(:resolved_tools, [])
-        |> Map.put(:tool_modules, %{})
-        |> Map.put(:daemon_tool_profile, tool_profile)
     end
   end
 
-  defp apply_daemon_run_tools(agent, %{"daemon_run_tool_names" => tool_names})
-       when is_list(tool_names),
-       do: Map.put(agent, :tools, tool_names)
+  defp apply_suggested_workspace(agent, _session), do: agent
+
+  defp apply_daemon_run_tools(agent, %Session{config: %{"daemon_run_id" => _}} = session) do
+    Synapsis.Agent.Daemon.NativeSelection.overlay(agent, session)
+  end
+
+  defp apply_daemon_run_tools(agent, %Session{config: config}) when is_map(config) do
+    keys = [
+      "daemon_run_id",
+      :daemon_run_id,
+      "daemon_run_tool_names",
+      "daemon_run_tool_profile",
+      "daemon_run_tool_contract_version",
+      :daemon_run_tool_names,
+      :daemon_run_tool_profile,
+      :daemon_run_tool_contract_version
+    ]
+
+    if Enum.any?(keys, &Map.has_key?(config, &1)),
+      do: reject_daemon_tools(agent),
+      else: agent
+  end
 
   defp apply_daemon_run_tools(agent, _config), do: agent
 
-  defp bind_daemon_tools(agent, tools) do
-    policy_names =
-      if Map.has_key?(agent, :mcp_selection),
-        do: Synapsis.MCPSelection.names(agent.mcp_selection, Synapsis.MCPSelection.catalog()),
-        else: Enum.map(tools, & &1.name)
-
-    tools =
-      Enum.filter(
-        tools,
-        &(not Synapsis.MCPSelection.mcp_name?(&1.name) or &1.name in policy_names)
-      )
-
+  defp reject_daemon_tools(agent) do
+    # Current daemon profiles bind legacy Registrations. Neither the selected
+    # agent nor a session version label can establish native provenance for them.
     agent
-    |> Map.put(:tools, Enum.map(tools, & &1.name))
-    |> Map.put(:resolved_tools, tools)
-    |> Map.put(:tool_modules, Map.new(tools, &{&1.name, &1.registration}))
-  end
-
-  @doc "Refresh remote tools only from a supervised turn-preparation task."
-  def refresh_turn_tools(agent) do
-    refreshed = Synapsis.MCPSelection.refresh_agent(agent)
-
-    case agent[:daemon_tool_profile] do
-      nil ->
-        refreshed
-
-      profile ->
-        case Toolsets.resolve_for_query_loop(profile) do
-          {:ok, tools} ->
-            allowed = refreshed.tools
-
-            tools =
-              Enum.filter(
-                tools,
-                &(not Synapsis.MCPSelection.mcp_name?(&1.name) or &1.name in allowed)
-              )
-
-            bind_daemon_tools(refreshed, tools)
-
-          {:error, _reason} ->
-            bind_daemon_tools(refreshed, [])
-        end
-    end
+    |> Map.put(:tools, [])
+    |> Map.put(:resolved_tools, [])
+    |> Map.put(:tool_modules, %{})
+    |> Map.put(:tool_contract_version, 0)
+    |> Map.put_new(:tool_selection_error, :legacy_daemon_tool_selection)
   end
 
   def resolve_session_defaults(%Session{} = session) do
@@ -181,9 +217,12 @@ defmodule Synapsis.Session.Worker.Config do
   end
 
   defp preserve_skill_catalog(agent, previous) when is_map(previous) do
-    case Map.fetch(previous, :skill_catalog) do
-      {:ok, catalog} -> Map.put(agent, :skill_catalog, catalog)
-      :error -> agent
+    case previous do
+      %{skill_catalog: catalog, skill_snapshot: snapshot} ->
+        agent |> Map.put(:skill_catalog, catalog) |> Map.put(:skill_snapshot, snapshot)
+
+      _ ->
+        agent
     end
   end
 
@@ -343,6 +382,8 @@ defmodule Synapsis.Session.Worker.Config do
 
   defp refresh_engine_state(engine_state, _agent, _provider_config), do: engine_state
 
+  # TODO(upstream): gsmlg-dev/concord#107 — bounded revision-fenced model selection;
+  # independent metadata writers must preserve concurrent selection changes.
   def do_switch_model(provider_name, model, state) do
     with {:ok, provider_config} <- resolve_provider_config(provider_name),
          :ok <- ensure_model_runtime_available(provider_name, model),
@@ -398,7 +439,11 @@ defmodule Synapsis.Session.Worker.Config do
   def apply_mode(mode_name, state) when mode_name in @valid_modes do
     config = @mode_configs[mode_name]
     agent = Synapsis.Agent.Resolver.resolve(config.agent, state.session.config)
-    agent = ensure_agent_model(agent, state.session)
+
+    agent =
+      agent
+      |> Map.put(:configured_default_model, configured_identity(agent))
+      |> ensure_agent_model(state.session)
 
     execution_mode =
       case config.agent do
@@ -406,7 +451,10 @@ defmodule Synapsis.Session.Worker.Config do
         _ -> state.execution_mode
       end
 
-    with {:ok, updated_session} <- persist_session(state.session, %{agent: config.agent}),
+    session_config = Map.put(state.session.config || %{}, "user_mode", mode_name)
+
+    with {:ok, updated_session} <-
+           persist_session(state.session, %{agent: config.agent, config: session_config}),
          {:ok, _} <-
            Synapsis.Tool.Permission.update_config(state.session_id, config.permission) do
       Phoenix.PubSub.broadcast(
@@ -422,6 +470,25 @@ defmodule Synapsis.Session.Worker.Config do
   end
 
   def apply_mode(_mode_name, _state), do: {:error, :invalid_mode}
+
+  def mode_provenance(%Session{} = session) do
+    case Map.fetch(session.config || %{}, "user_mode") do
+      {:ok, selected_mode} when selected_mode in @valid_modes ->
+        {:ok,
+         %{
+           version: 1,
+           mode: if(selected_mode == "plan_mode", do: :plan, else: :execution),
+           source: :user_mode,
+           selected_mode: selected_mode
+         }}
+
+      :error ->
+        {:ok, %{version: 1, mode: :execution, source: :default, selected_mode: nil}}
+
+      {:ok, _} ->
+        {:error, :invalid_mode}
+    end
+  end
 
   defp env_key(provider_name) do
     Synapsis.Providers.env_api_key(provider_name)

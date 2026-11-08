@@ -12,6 +12,24 @@ defmodule Synapsis.Agent.Tools.PermissionSnapshot do
   are retained unchanged and never executed by this compiler. Neither model
   input nor native safety annotations establish a permission level.
 
+  `compile_invocation/4` validates overrides against the complete known catalog,
+  then compiles only the current trusted target. That target adds `binding` to
+  the target shape above and must retain the exact known binding. Its Policy
+  contains only that tool and action/resource decision; future resources need
+  their own invocation compilation. Unselected known overrides remain part of
+  the complete raw fingerprint and are never discarded before validation.
+  Invocation targets may explicitly use `:none` for trusted orchestration;
+  its default is `:allow`, with exact tool overrides still taking precedence.
+  `compile/4` retains its four explicit permission levels.
+
+  Host-only compound invocation targets replace `permission_level` with
+  `permission_levels`, a nonempty unique canonical subset of `[:write,
+  :destructive]`. Both keys together are invalid. Each requirement uses the same
+  effective setting and whole-tool override precedence as a scalar target.
+  Decisions fold deny over ask over allow into one action/resource decision;
+  Policy and Approval retain their existing single-decision contract. This
+  extension does not change the general scalar `compile/4` API.
+
   The four allow settings apply equally in interactive and autonomous modes.
   Whole-tool overrides retain the full exact tool name. Legacy `name(*)` syntax
   is accepted only for word-character names, matching the legacy parser; bare
@@ -39,6 +57,7 @@ defmodule Synapsis.Agent.Tools.PermissionSnapshot do
   }
   @raw_fields [
     :session_id,
+    :tool_contract_version,
     :mode,
     :allow_read,
     :allow_write,
@@ -68,7 +87,8 @@ defmodule Synapsis.Agent.Tools.PermissionSnapshot do
   Validates persisted structure, session identity and supported override syntax.
 
   This does not establish tool binding/target coverage or grant a permission;
-  callers still need `compile/4` with their exact trusted bindings and targets.
+  callers still need `compile/4` or `compile_invocation/4` with trusted bindings
+  and targets.
   """
   @spec validate(term(), String.t()) :: :ok | {:needs_review, term()}
   def validate(raw, session_id) when is_map(raw) do
@@ -102,6 +122,59 @@ defmodule Synapsis.Agent.Tools.PermissionSnapshot do
 
   def compile(_, _, _, _), do: {:needs_review, :invalid_snapshot_inputs}
 
+  @spec compile_invocation(map(), map(), map(), map()) ::
+          {:ok, map()} | {:needs_review, term()}
+  def compile_invocation(raw, scope, known_bindings, %{tool: name, binding: binding} = target)
+      when is_map(raw) and is_map(scope) and is_map(known_bindings) do
+    raw = persisted_map(raw)
+
+    with :ok <- validate_raw(raw),
+         :ok <- validate_scope(raw, scope),
+         :ok <- validate_bindings(known_bindings),
+         {:ok, overrides} <- compile_overrides(raw.tool_overrides, known_bindings),
+         :ok <- validate_invocation_target(target, known_bindings),
+         bindings = %{name => binding},
+         {:ok, decisions} <-
+           compile_invocation_target(target, bindings, raw, overrides) do
+      {:ok, %{scope: scope, tools: bindings, decisions: decisions}}
+    end
+  end
+
+  def compile_invocation(_, _, _, _), do: {:needs_review, :invalid_snapshot_inputs}
+
+  defp compile_invocation_target(
+         %{permission_levels: levels, tool: name, action: action, resource: resource},
+         _bindings,
+         raw,
+         overrides
+       ) do
+    if nonempty?(action) and nonempty?(resource) do
+      decisions =
+        Enum.map(levels, fn level ->
+          Map.get(overrides, name, Map.fetch!(raw, Map.fetch!(@settings, level)))
+        end)
+
+      decision = Enum.find([:deny, :ask, :allow], &(&1 in decisions))
+      {:ok, %{{name, action, resource} => decision}}
+    else
+      {:needs_review, :invalid_or_ambiguous_target}
+    end
+  end
+
+  defp compile_invocation_target(
+         %{permission_level: :none, tool: name, action: action, resource: resource},
+         _bindings,
+         _raw,
+         overrides
+       ) do
+    if nonempty?(action) and nonempty?(resource),
+      do: {:ok, %{{name, action, resource} => Map.get(overrides, name, :allow)}},
+      else: {:needs_review, :invalid_or_ambiguous_target}
+  end
+
+  defp compile_invocation_target(target, bindings, raw, overrides),
+    do: compile_targets([Map.delete(target, :binding)], bindings, raw, overrides)
+
   defp persisted_map(%Synapsis.SessionPermission{} = raw), do: Map.from_struct(raw)
   defp persisted_map(raw), do: raw
 
@@ -109,6 +182,7 @@ defmodule Synapsis.Agent.Tools.PermissionSnapshot do
     valid =
       not is_struct(raw) and Enum.all?(@raw_fields, &Map.has_key?(raw, &1)) and
         no_string_fields?(raw, @raw_fields ++ [:id, :inserted_at, :updated_at]) and
+        raw[:tool_contract_version] === 1 and
         nonempty?(raw[:session_id]) and raw[:mode] in [:interactive, :autonomous] and
         Enum.all?(Map.values(@settings), &(raw[&1] in [:allow, :deny, :ask])) and
         is_map(raw[:tool_overrides]) and not is_struct(raw[:tool_overrides])
@@ -152,6 +226,23 @@ defmodule Synapsis.Agent.Tools.PermissionSnapshot do
 
     if valid, do: :ok, else: {:needs_review, :invalid_tool_bindings}
   end
+
+  defp validate_invocation_target(%{tool: name, binding: binding} = target, known_bindings) do
+    valid =
+      invocation_target_shape?(target) and
+        Map.has_key?(known_bindings, name) and Map.fetch!(known_bindings, name) === binding
+
+    if valid, do: :ok, else: {:needs_review, :invalid_or_ambiguous_target}
+  end
+
+  defp invocation_target_shape?(%{permission_levels: levels} = target) do
+    Enum.sort(Map.keys(target)) == [:action, :binding, :permission_levels, :resource, :tool] and
+      is_list(levels) and levels != [] and
+      Enum.filter([:write, :destructive], &(&1 in levels)) == levels
+  end
+
+  defp invocation_target_shape?(target),
+    do: Enum.sort(Map.keys(target)) == [:action, :binding, :permission_level, :resource, :tool]
 
   defp compile_overrides(raw, bindings) do
     Enum.reduce_while(raw, {:ok, %{}}, fn {spec, decision}, {:ok, overrides} ->

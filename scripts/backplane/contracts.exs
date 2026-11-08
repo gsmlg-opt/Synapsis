@@ -14,9 +14,9 @@ defmodule Synapsis.BackplaneContractCapture do
     Tools
   }
 
-  @version "1.10.31"
+  @version "1.10.61"
   @root Path.expand("../..", __DIR__)
-  @default_out "apps/synapsis_agent/test/fixtures/backplane/1.10.31/contracts.json"
+  @default_out "apps/synapsis_agent/test/fixtures/backplane/1.10.61/contracts.json"
   @families [
     :local,
     :interactive,
@@ -33,17 +33,31 @@ defmodule Synapsis.BackplaneContractCapture do
     Tools,
     Control,
     MultiAgent,
+    Backplane.AgentRuntime.Codex.Session,
     Services,
+    Codex.Web,
+    Codex.Web.ReadableFetch,
     DynamicRuntime,
     ExtensionRuntime,
     CodeMode,
     ResourceRegistry,
+    Backplane.AgentRuntime.Codex.Reconciliation,
+    Backplane.AgentRuntime.Codex.Reconciliation.Adapter,
+    Backplane.AgentRuntime.Approval,
     Backplane.AgentRuntime.ToolCatalog,
     Backplane.AgentRuntime.Execution,
+    Backplane.AgentRuntime.ToolResultContract,
     Backplane.AgentRuntime.Conversation,
     Backplane.AgentRuntime.ConversationAdapter,
-    Backplane.AgentRuntime.ToolEffects
+    Backplane.AgentRuntime.ToolEffects,
+    Backplane.AgentRuntime.Plugins.Session
   ]
+
+  # Inert Events declaration binding; no request is started during capture.
+  def list_events(_arguments, _operation), do: raise("offline capture cannot list events")
+
+  # Inert readable-fetch declaration binding; no document is acquired during capture.
+  def fetch(_arguments, _options), do: raise("offline capture cannot fetch")
 
   def main(args) do
     {opts, rest, invalid} =
@@ -148,6 +162,8 @@ defmodule Synapsis.BackplaneContractCapture do
           code_mode_lifecycle: json(CodeMode.lifecycle_capability(context))
         },
         profiles: Map.new(@families, fn family -> {family, capture_profile(family, context)} end),
+        readable_fetch:
+          capture_profile(:services, Map.put(context, :web_fetch_adapter, __MODULE__)),
         unconfigured: Map.new(@families, fn family -> {family, capture_profile(family, %{})} end)
       }
       |> json()
@@ -164,7 +180,19 @@ defmodule Synapsis.BackplaneContractCapture do
         Contract.canonical_name(Map.get(attrs, :namespace), attrs.name)
       end)
 
-    case Codex.profile(:configured, context, authority(names), families: [family]) do
+    revisions =
+      for attrs <- contracts,
+          Map.get(attrs, :tool_revision, 1) != 1,
+          into: %{},
+          do:
+            {Contract.canonical_name(Map.get(attrs, :namespace), attrs.name), attrs.tool_revision}
+
+    authority =
+      if map_size(revisions) == 0,
+        do: authority(names),
+        else: Map.put(authority(names), :tool_revisions, revisions)
+
+    case Codex.profile(:configured, context, authority, families: [family]) do
       {:ok, bundle} ->
         %{
           status: :admitted,
@@ -227,6 +255,16 @@ defmodule Synapsis.BackplaneContractCapture do
       repository: "hexpm",
       package_checksum: checksum,
       outer_checksum: outer_checksum,
+      dependency_packages:
+        Map.new(
+          ~w(backplane_ai_protocol backplane_mcp_protocol backplane_skill_protocol backplane_plugin_protocol backplane_json_schema ex_json_pointer)a,
+          fn package ->
+            {:hex, ^package, version, inner, _, _, "hexpm", outer} = lock[package]
+            Application.load(package)
+            ^version = to_string(Application.spec(package, :vsn))
+            {package, %{version: version, package_checksum: inner, outer_checksum: outer}}
+          end
+        ),
       public_apis:
         Enum.map(@apis, fn module ->
           Code.ensure_loaded!(module)

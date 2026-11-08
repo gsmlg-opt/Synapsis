@@ -1,6 +1,7 @@
 defmodule SynapsisWeb.MemoryLive.Show do
   use SynapsisWeb, :live_view
   use SynapsisWeb.ReactFormEvents
+  import SynapsisWeb.AgentLive.Components
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
@@ -31,7 +32,7 @@ defmodule SynapsisWeb.MemoryLive.Show do
         {:ok,
          socket
          |> put_flash(:error, "Memory not found")
-         |> redirect(to: ~p"/settings/memory")}
+         |> redirect(to: ~p"/agent/memory")}
     end
   end
 
@@ -106,7 +107,7 @@ defmodule SynapsisWeb.MemoryLive.Show do
         {:noreply,
          socket
          |> put_flash(:info, "Memory archived")
-         |> redirect(to: ~p"/settings/memory")}
+         |> redirect(to: ~p"/agent/memory")}
 
       {:error, _} ->
         {:noreply, put_flash(socket, :error, "Failed to archive")}
@@ -159,10 +160,10 @@ defmodule SynapsisWeb.MemoryLive.Show do
   @impl true
   def render(assigns) do
     ~H"""
-    <.settings_layout current_path="/settings/memory" content_class="max-w-4xl">
+    <.agent_shell active={:memory}>
       <.breadcrumb class="mb-4">
-        <:crumb to={~p"/settings"}>Settings</:crumb>
-        <:crumb to={~p"/settings/memory"}>Memory</:crumb>
+        <:crumb to={~p"/agent/agents"}>Agent</:crumb>
+        <:crumb to={~p"/agent/memory"}>Memory</:crumb>
         <:crumb>{@memory.title}</:crumb>
       </.breadcrumb>
 
@@ -329,7 +330,7 @@ defmodule SynapsisWeb.MemoryLive.Show do
           </div>
         </.dm_card>
       <% end %>
-    </.settings_layout>
+    </.agent_shell>
     """
   end
 

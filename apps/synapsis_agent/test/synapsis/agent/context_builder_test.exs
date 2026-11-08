@@ -4,6 +4,19 @@ defmodule Synapsis.Agent.ContextBuilderTest do
   alias Synapsis.Agent.ContextBuilder
 
   describe "build_system_prompt/2" do
+    @tag :tmp_dir
+    test "uses the supplied workspace and can omit private memory for children", %{tmp_dir: root} do
+      File.write!(Path.join(root, "MEMORY.md"), "Private workspace decision")
+      opts = [workspace_path: root, agent_config: %{tools: [], skill_catalog: []}]
+      assert ContextBuilder.build_system_prompt(:coding, opts) =~ "Private workspace decision"
+
+      prompt =
+        ContextBuilder.build_system_prompt(:coding, Keyword.put(opts, :memory_context, false))
+
+      refute prompt =~ "Private workspace decision"
+      refute prompt =~ "<workspace_memory>"
+    end
+
     test "returns a non-empty string" do
       prompt = ContextBuilder.build_system_prompt(:coding)
       assert is_binary(prompt)
@@ -69,34 +82,18 @@ defmodule Synapsis.Agent.ContextBuilderTest do
     end
 
     test "returns nil when agent has an explicit empty tools list" do
-      Synapsis.Tool.Registry.register_module("context_test_tool", Synapsis.Tool.Glob,
-        description: "Context test tool",
-        parameters: %{
-          type: "object",
-          properties: %{pattern: %{type: "string"}},
-          required: ["pattern"]
-        }
-      )
-
-      on_exit(fn -> Synapsis.Tool.Registry.unregister("context_test_tool") end)
-
       assert ContextBuilder.build_skills_manifest(nil, %{tools: []}) == nil
     end
 
     test "lists only tools assigned to the agent" do
-      Synapsis.Tool.Registry.register_module("context_test_tool", Synapsis.Tool.Glob,
-        description: "Context test tool",
-        parameters: %{
-          type: "object",
-          properties: %{pattern: %{type: "string"}},
-          required: ["pattern"]
-        }
-      )
+      manifest =
+        ContextBuilder.build_skills_manifest(nil, %{
+          tool_contract_version: 1,
+          tools: ["synapsis::read"]
+        })
 
-      on_exit(fn -> Synapsis.Tool.Registry.unregister("context_test_tool") end)
-
-      manifest = ContextBuilder.build_skills_manifest(nil, %{tools: ["context_test_tool"]})
-      assert manifest =~ "context_test_tool"
+      assert manifest =~ "synapsis::read"
+      refute manifest =~ "synapsis::write"
     end
   end
 

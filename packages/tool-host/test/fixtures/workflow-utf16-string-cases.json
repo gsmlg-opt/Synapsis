@@ -1,0 +1,249 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "name": "empty",
+      "units": [],
+      "base64": "",
+      "utf8": "",
+      "json": "\"\""
+    },
+    {
+      "name": "ascii",
+      "units": [
+        65,
+        66
+      ],
+      "base64": "QQBCAA==",
+      "utf8": "AB",
+      "json": "\"AB\""
+    },
+    {
+      "name": "bmp",
+      "units": [
+        38634
+      ],
+      "base64": "6pY=",
+      "utf8": "雪",
+      "json": "\"雪\""
+    },
+    {
+      "name": "astral",
+      "units": [
+        55357,
+        56832
+      ],
+      "base64": "PdgA3g==",
+      "utf8": "😀",
+      "json": "\"😀\""
+    },
+    {
+      "name": "first_astral",
+      "units": [
+        55296,
+        56320
+      ],
+      "base64": "ANgA3A==",
+      "utf8": "𐀀",
+      "json": "\"𐀀\""
+    },
+    {
+      "name": "last_astral",
+      "units": [
+        56319,
+        57343
+      ],
+      "base64": "/9v/3w==",
+      "utf8": "􏿿",
+      "json": "\"􏿿\""
+    },
+    {
+      "name": "replacement",
+      "units": [
+        65533
+      ],
+      "base64": "/f8=",
+      "utf8": "�",
+      "json": "\"�\""
+    },
+    {
+      "name": "high_first",
+      "units": [
+        55296
+      ],
+      "base64": "ANg=",
+      "utf8": null,
+      "json": "\"\\ud800\""
+    },
+    {
+      "name": "high_last",
+      "units": [
+        56319
+      ],
+      "base64": "/9s=",
+      "utf8": null,
+      "json": "\"\\udbff\""
+    },
+    {
+      "name": "low_first",
+      "units": [
+        56320
+      ],
+      "base64": "ANw=",
+      "utf8": null,
+      "json": "\"\\udc00\""
+    },
+    {
+      "name": "low_last",
+      "units": [
+        57343
+      ],
+      "base64": "/98=",
+      "utf8": null,
+      "json": "\"\\udfff\""
+    },
+    {
+      "name": "truncate_emoji",
+      "units": [
+        55357,
+        46,
+        46,
+        46
+      ],
+      "base64": "PdguAC4ALgA=",
+      "utf8": null,
+      "json": "\"\\ud83d...\""
+    },
+    {
+      "name": "split_first",
+      "units": [
+        55357
+      ],
+      "base64": "Pdg=",
+      "utf8": null,
+      "json": "\"\\ud83d\""
+    },
+    {
+      "name": "split_last",
+      "units": [
+        56832
+      ],
+      "base64": "AN4=",
+      "utf8": null,
+      "json": "\"\\ude00\""
+    },
+    {
+      "name": "replace_empty",
+      "units": [
+        45,
+        55357,
+        45,
+        56832,
+        45
+      ],
+      "base64": "LQA92C0AAN4tAA==",
+      "utf8": null,
+      "json": "\"-\\ud83d-\\ude00-\""
+    },
+    {
+      "name": "high_then_pair",
+      "units": [
+        55357,
+        55357,
+        56832
+      ],
+      "base64": "Pdg92ADe",
+      "utf8": null,
+      "json": "\"\\ud83d😀\""
+    },
+    {
+      "name": "pair_then_low",
+      "units": [
+        55357,
+        56832,
+        56832
+      ],
+      "base64": "PdgA3gDe",
+      "utf8": null,
+      "json": "\"😀\\ude00\""
+    },
+    {
+      "name": "low_then_high",
+      "units": [
+        56832,
+        55357
+      ],
+      "base64": "AN492A==",
+      "utf8": null,
+      "json": "\"\\ude00\\ud83d\""
+    },
+    {
+      "name": "high_bmp_low",
+      "units": [
+        55357,
+        38634,
+        56832
+      ],
+      "base64": "PdjqlgDe",
+      "utf8": null,
+      "json": "\"\\ud83d雪\\ude00\""
+    },
+    {
+      "name": "escapes",
+      "units": [
+        0,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        31,
+        34,
+        92,
+        47
+      ],
+      "base64": "AAAIAAkACgALAAwADQAfACIAXAAvAA==",
+      "utf8": "\u0000\b\t\n\u000b\f\r\u001f\"\\/",
+      "json": "\"\\u0000\\b\\t\\n\\u000b\\f\\r\\u001f\\\"\\\\/\""
+    },
+    {
+      "name": "literal_escape",
+      "units": [
+        92,
+        117,
+        100,
+        56,
+        51,
+        100
+      ],
+      "base64": "XAB1AGQAOAAzAGQA",
+      "utf8": "\\ud83d",
+      "json": "\"\\\\ud83d\""
+    },
+    {
+      "name": "lone_and_escapes",
+      "units": [
+        55357,
+        0,
+        34,
+        92,
+        10,
+        56832
+      ],
+      "base64": "PdgAACIAXAAKAADe",
+      "utf8": null,
+      "json": "\"\\ud83d\\u0000\\\"\\\\\\n\\ude00\""
+    },
+    {
+      "name": "unicode_separators",
+      "units": [
+        8232,
+        8233
+      ],
+      "base64": "KCApIA==",
+      "utf8": "  ",
+      "json": "\"  \""
+    }
+  ]
+}
