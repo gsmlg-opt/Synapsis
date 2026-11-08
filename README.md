@@ -52,8 +52,8 @@ TypeScript lives under `packages/*` as Bun workspaces — currently only `@synap
 | Layer | Technology |
 |-------|-----------|
 | Language / Runtime | Elixir 1.18+ / OTP 28+ |
-| Web framework | Phoenix 1.8+ (Bandit), Phoenix LiveView 1.0+ |
-| UI components | `phoenix_duskmoon` 9.x, `@duskmoon-dev/core` |
+| Web framework | Phoenix 1.8+ (Gaoxy), Phoenix LiveView 1.0+ |
+| UI components | `phoenix_duskmoon` 10.x, `@duskmoon-dev/core` |
 | Storage | Embedded Concord 3.x (Turso KV) + TOML/Markdown files (UUID IDs) |
 | HTTP client | Req + Finch (SSE streaming) |
 | Background work | Supervised Tasks + node-local cron scheduler |
@@ -69,6 +69,14 @@ mix npm.install
 # Start server (http://localhost:4657)
 mix phx.server
 ```
+
+On Linux, `mix compile` builds Backplane's first-party PTY helper with the
+packaged `mix backplane.pty.build` task. A C11 compiler and Linux headers are
+required; Devenv provides the compiler. Selected `exec_command` calls with
+`tty: true` use this native terminal with its default 24 rows and 80 columns,
+and `write_stdin` continues the same session. Calls with `tty: false` retain
+pipe output. This does not provide the separate operator shared-terminal UI
+or terminal resize/attach controls.
 
 Configs default to `~/.config/synapsis/` (override with `SYNAPSIS_CONFIG_DIR`). Concord data defaults under the system temp dir.
 

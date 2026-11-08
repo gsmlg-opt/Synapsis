@@ -1538,16 +1538,16 @@
     "synapsisWorkingTree": "includes existing uncommitted dependency and transport changes",
     "status": "implementation authorized; reference inventory verified and initial capability mapping recorded; mapped capability implementation and parity not claimed",
     "scope": "core catalog union bundled manifest tools; excludes open-ended third-party MCP/client catalogs",
-    "schemaCaptureStatus": "P0 native Backplane 1.10.31 baseline captured; historical 1.10.28 and 1.10.30 fixtures retained; five bounded OpenClaw schema/factory recipes captured; full factory/action/registration/runtime assembly evidence remains incomplete",
+    "schemaCaptureStatus": "P0 native Backplane 1.10.60 baseline captured; historical 1.10.28, 1.10.30, 1.10.31, 1.10.32, 1.10.34, 1.10.35, 1.10.36, 1.10.37, 1.10.38, 1.10.40, 1.10.42, 1.10.43, 1.10.44, 1.10.45, 1.10.46 1.10.48 1.10.49, 1.10.50 1.10.51, 1.10.52, 1.10.53 and 1.10.57 fixtures retained; five bounded OpenClaw schema/factory recipes captured; full factory/action/registration/runtime assembly evidence remains incomplete",
     "sourceUrl": "https://github.com/openclaw/openclaw/tree/488631c18fae7cc541ba8fc8beff6cbb0438787b",
     "upstreamBlockers": [],
     "referenceRole": "capability_reference",
     "runtimeContractAuthority": "backplane_agent_runtime",
     "runtimeContractBaseline": {
-      "version": "1.10.31",
+      "version": "1.10.61",
       "lockfile": "mix.lock",
-      "hexInnerChecksum": "e6d1a629a514950b05ffee30eb8c2932ebd4952916a44f70abf9645e336fabc7",
-      "hexOuterChecksum": "5df275f90cffe1cd85127fc2c32b10d4c4c7b2ac9c8d70c0eb088620262ba29c",
+      "hexInnerChecksum": "7310e371bda54fade4a7b627c8bff93cd11fa295026673d2883ed5cde46e3701",
+      "hexOuterChecksum": "504a91bd245920877ac1893a522dd882833c43fcd2ae560e9ede00e7cd7bf8bb",
       "scope": "descriptors, admission and authority, operations, backend results, lifecycle and catalog publication"
     },
     "alignmentPolicy": {

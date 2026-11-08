@@ -1,5 +1,7 @@
 # Codex Tool Runtime Migration Implementation Plan
 
+> **后续目标澄清（2026-10-23）：** 用户已选择保留 Synapsis/Backplane 运行时，并明确以 `backplane_agent_runtime` 的契约为准、参考 OpenClaw 补齐工具能力。原生 profile/bundle 可继续复用，不要求工具名/schema 与 OpenClaw 相同。本文保留为历史研究，不作为新开发入口；执行时使用 [OpenClaw 能力对齐计划](2026-10-23-openclaw-tool-alignment.md)。本文关于尚未引入 Runtime、Concord journal 等基线描述也已过期，不能重新当作未完成任务。
+
 > **For agentic workers:** 使用 `subagent-driven-development` 或 `executing-plans` 按任务执行；独立任务并行，存在依赖的任务串行。任务使用 `- [ ]` 跟踪。所有开发 worktree 放在 `.trees/<branch-name>`。
 
 **Goal:** 删除 Synapsis 现有全部内置工具及旧执行内核，以 `backplane_agent_runtime` 的 Codex profiles 作为唯一工具定义、准入与执行机制。

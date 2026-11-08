@@ -2,15 +2,15 @@
 
 ## Ownership
 
-Synapsis supports three provider wire protocols:
+Synapsis supports four explicitly selected provider wire protocols:
 
 - Anthropic Messages (`:anthropic`)
 - OpenAI Chat Completions and compatible endpoints (`:openai`)
+- OpenAI Responses (`:openai_responses`)
 - Google Gemini GenerateContent (`:google`)
 
-OpenAI Responses is not a supported Synapsis client protocol. The Backplane
-Responses observer is an independent host-side observation surface, not a
-request/stream codec used here.
+The Backplane Responses observer is a separate host-side observation surface.
+Client requests and streams use `Backplane.AiProtocol.Codec`.
 
 Provider responsibilities are split as follows:
 
@@ -26,12 +26,43 @@ There is no `Transport.stream/3` callback and no Synapsis-owned shared SSE
 parser. `Adapter` feeds response bytes directly to the protocol codec. The
 transport modules do not own request, response, error, or stream wire handling.
 
+## Inworld Speech
+
+Inworld Speech is an explicitly configured speech provider. It reuses saved
+Provider UUIDs and credentials, with no LLM discovery or automatic selection.
+Providers.inworld_speech_config/2 prepares current connection/key settings and
+normalizes saved voice/model/temperature before applying partial Agent options.
+Known aliases prefer snake string, snake atom, camel string, then camel atom by
+presence. The connection root comes directly from the current Provider record;
+saved config roots and timeout aliases remain raw options without becoming
+connection or timing authority.
+
+Speech.Inworld exposes metadata/models, nested-only source config, Talk
+config/overrides, buffered file/note synthesis, dedicated PCM22050 telephony and
+explicit list_voices/2. Requests use the current explicit dashboard key verbatim.
+POST appends /tts/v1/voice:stream; GET appends /voices/v1/voices. The source's
+stream-named endpoint returns one concatenated NDJSON audio buffer, with no
+incremental API. Catalog projection retains source order, repeated IDs, optional
+trimmed names/descriptions, original locale and the first exact gender tag.
+
+Each service operation retains original T and D separately and clips its
+transport deadline to min(now + T, D), with a 30-second idle ceiling. Successful
+return joins the actual linked HTTP task. Native MP3 delivery stays in the
+existing Backplane effect and Media/MediaDelivery flow. Note/phone have no
+automatic host consumer. ProviderLive.Show uses an explicit asynchronous catalog
+action and baseline-based field patches; it performs no automatic HTTP on
+mount/change/save/reopen.
+
+The ordinary local fixture checks cover normal completion and completed Worker
+reconstruction. Real providers, interrupted operations and excluded verification
+domains remain separate acceptance work.
+
 ## Dependency Boundary
 
 `synapsis_provider` consumes the published Hex package:
 
 ```elixir
-{:backplane_ai_protocol, "~> 1.5.0"}
+{:backplane_ai_protocol, "~> 1.10.42"}
 ```
 
 The resolved release and package checksum are locked in `mix.lock`. Builds no
@@ -58,6 +89,53 @@ and historical tool call with `Synapsis.Provider.ToolName`, and supplies the
 codec with provider affinity (`profile`, `protocol`, `endpoint`, optional
 `account` and `workspace`, and `model`). The codecs reject unsupported or
 lossy conversions instead of silently dropping content.
+
+## Responses Providers And Custom Tools
+
+Choose **OpenAI Responses** when creating a custom provider to save type
+`openai_responses`. Both the root endpoint and a URL ending in `/v1` resolve to
+`/v1/responses`; trailing slashes are accepted. Requests use the existing bearer
+credential resolution, supervised HTTP tasks, stream deadlines and cancellation.
+Model discovery uses `/v1/models`. Discovered models remain suggestions until
+explicitly imported or configured; discovery does not authorize a model for use.
+The provider test chat uses the canonical request mapper and excludes local UI
+error messages from provider history. Saving connection settings preserves
+provider, credential-reference and model identities.
+
+The runtime adapter accepts validated native custom declarations as well as
+function declarations from the current catalog. The mapper preserves custom
+`format` and carries raw UTF-8 input as `{:custom, binary}`. Empty strings,
+whitespace and multiline input remain unchanged through completion events,
+`Part.ToolUse.input`, Concord persistence and replay. The Responses codec emits
+`custom_tool_call` and the matching `custom_tool_call_output`; map arguments
+continue to use JSON function calls. Typed completions are validated before
+conversion, including their call identity and argument kind.
+
+Responses tool results can contain ordered text and image content through the
+published Backplane 1.10.40 codec. The mapper converts validated legacy and MCP
+image projections to that codec's `data`/`mime_type` representation only for
+Responses tool-role messages, after request-history projection. Stored history,
+public projections, image bytes and existing media budgets stay intact.
+Anthropic and user attachments retain their existing representation. Function
+and custom tool outputs use `input_text`/`input_image` blocks with canonical data
+URIs and the codec's explicit `detail: auto` default; display metadata such as
+native `view_image.detail` is not implicitly promoted into provider options.
+Ordinary local HTTP and real Worker persistence/replay checks establish this
+transport path. General provider/model image readiness, larger media, user-image
+Responses support and real-provider acceptance remain separate work.
+
+Configured stream-guard rules also check the complete raw custom input when a
+provider supplies it only in the initial item or completion event. The complete
+value is scanned independently of buffered deltas; safe input is emitted once
+unchanged, and violations use the existing redacted error and stop the stream.
+
+Chat Completions, Anthropic and Google reject custom declarations and custom
+history before HTTP, including when the current catalog is empty. Selecting
+Responses does not add tools to a catalog or enable `apply_patch`. Native patch
+uses the published preflight and containment fixes consumed from Backplane
+1.10.37; its tool selection and runtime admission remain independent of the
+provider choice. Local fixture verification does not establish compatibility
+with Azure, ChatGPT OAuth or a real provider/model.
 
 ## Streaming And Cancellation
 
@@ -209,8 +287,8 @@ Open model settings reconcile the selected provider after connection changes.
 Model editor and bulk context forms use native submit buttons to avoid duplicate
 submissions when custom elements reconnect (duskmoon-dev/duskmoon-elements#88).
 
-These preset details do not create a fourth wire protocol and do not enable the
-OpenAI Responses client API.
+The Backplane, OpenAI and OpenAI subscription presets retain their existing Chat
+Completions protocol. Responses requires the separate custom provider selection.
 
 MCP and remote skill setup may explicitly select a Backplane provider. Linked
 sources resolve current provider credentials when used, preserve existing source

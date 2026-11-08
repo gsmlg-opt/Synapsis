@@ -22,8 +22,8 @@
 
 | 项目 | 固定事实 |
 | --- | --- |
-| Synapsis | `main`，`94c54ecfeda0725d0ba0771c1877f6cc13084da8`，加调查时未提交的依赖、HTTP/SSE、测试和文档修改；这些修改不属于本计划文档交付 |
-| 运行时依赖 | alignment 工作树的 `backplane_agent_runtime`、`backplane_ai_protocol`、`backplane_mcp_protocol`、`backplane_skill_protocol` 已一起更新到 1.10.31；历史夹具保留 1.10.28、1.10.30，原始工作区保持原样。版本锁定不代表线上进程已升级 |
+| Synapsis | 调查基线为 `main` 的 `94c54ecfeda0725d0ba0771c1877f6cc13084da8`；对齐基础实现现已以 `f97ea32` 合入 root checkout `/home/gao/Workspace/gsmlg-opt/Synapsis` 的 `main`。调查时已有的依赖、HTTP/SSE、测试和文档修改继续按各自范围保留 |
+| 运行时依赖 | `f97ea32` 合入 root `main` 时，`backplane_agent_runtime`、`backplane_ai_protocol`、`backplane_mcp_protocol`、`backplane_skill_protocol` 已一起更新到 1.10.31；当前未提交批次的 runtime/AI/MCP/skill/plugin 五包统一使用正式 Hex 1.10.35；历史夹具保留 1.10.28、1.10.30、1.10.31、1.10.32、1.10.34。版本锁定和代码合入不代表线上进程已升级 |
 | OpenClaw | [`488631c18fae7cc541ba8fc8beff6cbb0438787b`](https://github.com/openclaw/openclaw/tree/488631c18fae7cc541ba8fc8beff6cbb0438787b)，本次重新固定，后续不跟随滚动 HEAD |
 | 核心目录 | `src/agents/tool-catalog.ts` 的 67 个唯一 canonical 名，11 组 |
 | 插件目录 | 扫描 174 个 `extensions/*/openclaw.plugin.json`；34 个声明 `contracts.tools`，共 109 个唯一插件工具名，其中 6 个与核心目录重叠 |
@@ -97,7 +97,7 @@ flowchart TD
 
 ### 4.4 Backplane 契约与现成能力
 
-以下核对基于 alignment 工作树的 `backplane_agent_runtime 1.10.31`；P0 固定版本、artifact checksum 与对应来源，并保留 1.10.28、1.10.30 历史夹具。`Codex.Contract`/profiles 是可复用的 descriptor/bundle 构造器，不是所有宿主工具必须采用的命名空间。
+以下核对以当前 root `main` 未提交批次的 `backplane_agent_runtime 1.10.35` 正式 Hex 契约为准；1.10.28、1.10.30、已合入 `f97ea32` 的 1.10.31 和后续 1.10.32、1.10.34 夹具保留为历史。P0 固定版本、artifact checksum 与对应来源，新快照包含 `Approval.decide/2`、child interaction resolution/cancellation 和可选 `Plugins.Session` API；7 类/60 个 descriptors 与 1.10.32 相同不代表全部行为不变。新包提供的 `append_feedback` 宿主 callback、子代理交互和插件会话仍需各自的生产接线，不能由导出 API 推断已启用。`Codex.Contract`/profiles 是可复用的 descriptor/bundle 构造器，不是所有宿主工具必须采用的命名空间。
 
 | 边界 | 必须遵守的公开契约 | 本地依据 |
 | --- | --- | --- |
@@ -178,7 +178,7 @@ P1b 首先实现独立的 `prepare_tool/2` 宿主检查：可信 context 提供 
 
 P1c 在隔离范围加入原始权限快照与动态审批。`PermissionSnapshot.compile/4` 只接受显式 raw SessionPermission、可信 scope/bindings 和有限 exact targets；scope 增加 session_id 与完整记录 fingerprint。编译保留工具 qualifier，四级 allow 设置在两种 mode 下都有效；未知工具 override、窄模式、重叠及畸形数据返回 needs_review，不自动重命名或按基础设置放行。fingerprint 不是实时撤销或 ABA fence，配置迁移与生产 freshness 接线仍待宿主实现。
 
-`Policy.evaluate/2` 保持无交互求值；只有 ask 才经 `Approval` 调用原生 interact。可信宿主解答精确的 interaction/operation/scope，原生 runtime 保有取消、单次使用与持久化；批准后刷新当前身份、policy/readiness、action/resource 和期限。动态请求禁止 input 编辑；没有第二套 Grant/审批账本，host TTL 只在请求/解答/复查时校验，没有自动 timer。这个 resolver 仅支持本模块动态请求；原生 descriptor 审批仍是独立 gate，双审批的宿主接线尚未支持，后续须禁止静态编辑绕过分类并在其等待后重查动态 policy/expiry。当前不宣称跨两次等待的持续 freshness。原生 resolver identity 的结构校验缺口见 [backplane#80](https://github.com/gsmlg-opt/backplane/issues/80)；上游提交 `1e9b0366` 已修复并关闭 issue，但当前 1.10.31 发布包尚不含此修复，宿主验证继续保留。结构校验不能替代认证；尚未接入真实 UI、Worker 或 SessionAdapter。
+`Policy.evaluate/2` 保持无交互求值；只有 ask 才经 `Approval` 调用原生 interact。可信宿主解答精确的 interaction/operation/scope，原生 runtime 保有取消、单次使用与持久化；批准后刷新当前身份、policy/readiness、action/resource 和期限。动态请求禁止 input 编辑；没有第二套 Grant/审批账本，host TTL 只在请求/解答/复查时校验，没有自动 timer。这个 resolver 仅支持本模块动态请求；原生 descriptor 审批仍是独立 gate，双审批的宿主接线尚未支持，后续须禁止静态编辑绕过分类并在其等待后重查动态 policy/expiry。当前不宣称跨两次等待的持续 freshness。[backplane#80](https://github.com/gsmlg-opt/backplane/issues/80) 的 resolver identity 结构校验已进入本轮更新的正式 1.10.32。直接调用原生 `Approval.decide/2` 的消费回归覆盖 approve/deny 的缺失、空白、非 binary、模型自批拒绝及合法 opaque identity；宿主仍执行自己的 exact scope/operation/expiry 检查，结构校验不能替代认证。动态宿主审批尚未接入真实 UI、Worker 或 SessionAdapter。
 
 P1d 增加独立 `Freshness.capture/3` 与 `check/2`：显式 raw permission、当前 provider 可用性/认证 generation、可解析 credential 的内容版本生成不含秘密的证据。默认 reader 复用公开存储 API，并拒绝缺失/畸形/不可用数据；`PermissionSnapshot.validate/2` 只复用结构/语法/session 校验，授权仍须 exact compiler 与原生准入。隔离 hooks 在 Policy 前和 Approval.refresh 中重新采样比较，变化时不提交工具意图、不 dispatch。该检查未自动接入普通 allow 或生产链。跨 store 读取不原子、内容指纹没有 ABA 防护；provider generation 未涵盖的配置/OAuth 状态和 MCP live discovery 不属于当前证据，不能据此标 readiness 或远端授权成功。
 
@@ -214,11 +214,53 @@ P4a 的 core `Memory.ScopedReader` 直接读取现有 FileAdapter Markdown/YAML 
 
 用户指定本机 host agent 的 `4222` Memory 服务作为可接入的记忆来源。目标为复用 Backplane 的公共 `memory::recall` 及 host 既有 canonical/mirror/provisional authority：core 负责有界 HTTP 领域调用，agent 只声明原生 ToolEffects descriptor、精确 `memory.read` 权限和结果展示。现有项目文件记忆继续保持独立来源；旧 `ServiceAdapter` 的占位回退不能代表 host 接入。
 
-宿主可信绑定明确的 source ID、literal-loopback endpoint、逻辑 agent ID 与 run/incarnation/catalog。模型只能提供 query/limit；不接受 scope、project、session、namespace、partition 或 shared-access 选择。host 本地 HTTP 没有独立 bearer-auth plug，gateway 凭据由 host 持有，因此本切片仅连接 loopback，不复制 LLM/provider 凭据或发明另一种认证。source ID 与 endpoint 进入资源身份，授权范围明确为 host 的默认分区；路径中的 agent ID 是调用上下文，不是项目或会话隔离证明。生产 source/config 的绑定和目录安装仍待统一接线。
+宿主可信绑定明确的 source ID、literal-loopback endpoint、逻辑 agent ID 与 run/incarnation/catalog。模型只能提供 query/limit；不接受 scope、project、session、namespace、partition 或 shared-access 选择。host 本地 HTTP 没有独立 bearer-auth plug，gateway 凭据由 host 持有，因此本切片仅连接 loopback，不复制 LLM/provider 凭据或发明另一种认证。source ID 与 endpoint 进入资源身份，授权范围明确为 host 的默认分区；路径中的 agent ID 是调用上下文，不是项目或会话隔离证明。source/config 已由下述 P4c 显式设置绑定，原生目录安装仍待统一接线。
 
 调用使用 `/memory/:agent_id/call/recall`；只保留受检公共结果、真实记录 ID 引用和 online/offline、canonical/provisional、stale 等状态。mirror 的 `canonical_id`-only 记录可直接引用；provisional 的本地 ID 与 canonical ID 可能合法不同，不能强行等同。不可用、畸形结果、超限和期限分别返回显式错误，不回退到项目文件、不把失败当作空结果。从干净的 Req.Request 安装标准 steps 并仅合并本调用的明确选项，避免继承全局认证头、Cookie 或 transport hooks。HTTP 接收阶段即限制字节，禁用重试/跳转，调用方退出或期限到达时清理本地工作；本地取消不能证明远端 recall/trace 已取消。read-only 只表示不修改记忆内容：host 仍可能写 trace、receipt、访问统计或 audit，并可能调用 embedding/reranker，故不声明 retry-safe。
 
-当前上游契约没有 canonical 记录的精确 get/read-by-ID；`recall_explain` 是 trace，`slot_read` 是设备本地槽位，不能替代。另有项目过滤在离线 mirror 回退中丢失的缺口。按 ID 读取和项目/会话隔离分别等待 [backplane#84](https://github.com/gsmlg-opt/backplane/issues/84)、[backplane#83](https://github.com/gsmlg-opt/backplane/issues/83)，不扫描 list 或在本地过滤后宣称具备上游缺失的契约。host-default-partition recall 可以独立推进。
+[backplane#84](https://github.com/gsmlg-opt/backplane/issues/84) 与 [#83](https://github.com/gsmlg-opt/backplane/issues/83) 已在 `7b90b6e` 修复，并进入正式 1.10.34 发布源码。P4e 已按公共 canonical get 契约提供 `Memory.get_host`、`HostAgent.get` 与原生 `memory::get`，仅接受 exact lowercase UUID 和受检 online/canonical 单记录，保留来源、Settings、权限及输出边界，无 list/recall/mirror fallback。客户端项目/source/access 授权和过滤尚未实现，仍只声明 host 默认分区。2026-10-24 本批只对 4222 执行 MCP initialize/tools/list，服务仍自报 1.10.32 且没有 get；源码/Hex 升级与 host/canonical 服务部署是独立证据。未来即使静态目录出现 get，仍需真实授权调用证明端到端支持。
+
+### 6.6 默认 workspace Markdown 与可选 host 配置
+
+用户确认默认记忆采用 Agent workspace 内的 `MEMORY.md` 与 `memory/**/*.md`，host agent 是显式启用的额外来源。固定 OpenClaw `488631c` 的 canonical root memory 与按行读取规则作为参考；小写根 `memory.md` 是 legacy 文件，不自动读取。无记忆文件时返回正常空列表，不创建文件；workspace 不存在或不可读则显示未初始化/不可用。文件内容通过现有文件工具维护，不把旧 semantic record ID 当作 Markdown 文件引用。
+
+core `Memory.WorkspaceReader` 提供有界 list/read/search：最多扫描 128 项、单文件 64 KiB、结果 64 KiB、一秒期限和受限 worker heap。读取默认 120 行与 12,000 UTF-16 units；优先保留完整行并返回真实 `from/to/next_from`。单行超预算明确 `partial_line`、notice 与原文件读取提示，不以下一行续读跳过余下内容。搜索为词面匹配，返回真实 path/line 和匹配附近片段；不声称 embedding 或混合检索。路径、symlink/hardlink 和可观察替换拒绝不等于原子 openat 隔离。
+
+生产 `memory_search` 默认使用可信执行 context 的 workspace，显式 `source=records` 保留旧检索，`source=host_agent` 经 `Memory.recall_host` 读取当前配置。scope/kinds/tags 只用于 records，其他来源明确拒绝这些字段。主会话只预载有界 `MEMORY.md`，更早日记按需搜索；Backplane 子代理使用预建且不含 memory 的提示词，QueryLoop child 与 legacy spawn/session 也排除自动注入。不在系统提示词构建中自动访问 host，旧 records 不再自动注入。
+
+配置通过 `Config.Store` 的 singleton `memory.toml` 保存：`backend="workspace"`，`host_agent.enabled=false`，默认 endpoint `http://127.0.0.1:4222`、agent_id `synapsis`。配置缺失不写文件，畸形或不可用配置关闭 host 访问。固定 source ID 为 `backplane-host`；原生 descriptor 准入前与实际执行时都重新核对启用状态和完整 source，已准入工具不能跨禁用或 endpoint/agent_id 修改继续读取。开关控制后续请求，不承诺撤回已发出的 HTTP 或远端 trace。
+
+`/settings/memory` 仅展示默认方式及可选 host 连接/开关；`/agent/memory` 展示 Agent workspace 内容，保留旧 Knowledge/Events/Checkpoints，可选 host 页签只在用户提交查询后调用。选择 Agent 后从其受信配置解析 workspace，不接受客户端传任意目录。保存配置和挂载页面不请求 host；异步读取错误与零命中分别展示。host 的记录引用与 workspace 文件行号分开，agent_id 不表示项目隔离。
+
+原生 `Tools.WorkspaceMemory` 则提供独立的 `synapsis::workspace_memory_search` 和 `synapsis::workspace_memory_get`：复用相同领域接口与有界 reader，固定 canonical absolute workspace/run/incarnation/catalog，模型仅可选择 query/limit 或 canonical relative path/from/lines。分类先于文件 I/O，授权资源为 workspace 或精确文件；执行重新校验完整 backend context，原生 Catalog/Execution 独立检查 grants/revisions。结构化结果与文本共用 64 KiB 输出预算，真实文件/行号、截断、无安全续页的 partial-line 及空页分别表达。旧 `Tools.Memory` 仍表示项目 semantic records；HostMemory 提供 host 默认分区 recall 与 canonical exact get，各来源不会被同名替换。
+
+这是默认记忆行为/UI 和原生 workspace descriptor 的增量接线；原生 Catalog/Policy 的整体生产安装、memory-core intent、向量/session corpus 及旧工具退出仍按后续关卡推进。
+
+### 6.7 原生已分配 Skills 搜索与读取
+
+P4f 的 core `SkillReader` 从持久 Agent 的 `skill_ids` 建立快照，单独绑定持久 Skill UUID 与 `SkillCatalog.Entry` 的 source/external ID，不能用外部 ID 查询分配。仅开放 installed、enabled、runtime-available 且允许模型自动调用的条目；manual-only 仍可通过既有显式工具使用，旧调用行为不变。每次搜索或读取重新核对完整分配、Skill 内容/配置、来源/Provider 可用性与配置指纹。凭据由既有 loader 按请求解析，正常轮换不因 credential version 改变被人为拒绝。
+
+`Tools.Skills` 声明 `synapsis::skills_search` 与 `synapsis::skills_read` revision 1，生产 Profiles 按显式选择装配，严格 Backplane admission/Execution 继续拥有 grants、revision 和 effect 意图。可信 context 固定 Agent 快照与 run/incarnation/catalog，模型只给 query/limit 或 exact locator；完整 backend context 必须一致。`skill.read` 权限资源区分 Agent 分配集合或具体 source/持久记录。读取返回文本、真实 source-qualified citation、revision、可选 artifact_digest 与实际 document_digest，不执行其中命令或注册工具。
+
+原生正文搜索核对实际 admitted catalog 中同批 issued 的精确配对 `skills_read`，并复用真实读取分类的纯 read-target 权限编译；不伪造读取 invocation、不探测审批、不嵌套派发读取。显式延迟的 reader 只有原生 tool_search 正常 publication 后才参与。原生 ResourceRegistry 拥有每个固定 catalog 的派生 SkillBodyCache；实际搜索 effect 拥有构建读取，其他调用 join 同一构建，成功后复用纯数据 view，不保留 effect callback。SessionAdapter 在正常释放和构建失败路径释放自己申请的资源。
+
+正文候选按 UTF16 名称及原位置排序，最多四个有界读取并行且每批全部 join。单个前缀最多 16 KiB，共享参考 4 MiB allowance，既有 128 个 assignment 上限保持。inline 与真实 local 前缀可索引；有 whole-document digest 的 local 必须在 allowance 内读全并验证，否则仅保留元数据。没有有界读取能力的 opaque 远端 loader 不为搜索加载全文。元数据与正文分别建立 BM25 语料，合分为 `2*metadata + body`，保留精确名称优先及既有分词/平分规则。结果仍只返回元数据；非完整正文覆盖时，`bodyIndexed/metadataOnly/truncatedBodies` 同时投影为 structured 与模型可见 text。独立 core 调用未传 body_view 时仍为元数据搜索。
+
+固定 488631c 的完整未改写 factory、availability、catalog、ranking/index/cache、CodeMode read、formatter 与真实 local 文件读取形成来源对照；本地普通测试覆盖 inline/local、重复查询、实际延迟 publication、opaque coverage、下一模型请求、Parts/Concord 与正常重建回放。来源执行未覆盖完整安装资格/装配，fs-safe 的 native addon 未加载。前缀 UTF8 replacement 按 Node/V8 最大有效子序列消费规则实现；malformed/截断分支仅源码核对，没有执行资格。不据此宣称完整参考 read/schema/output、workshop 或 P4 对齐。
+
+最多 128 个分配候选，单次最多 20 条结果，文件及领域公开结果 64 KiB，原生 text+structured 合计另受 64 KiB 限制。local 只从可信根与 Skill ID 选择 `SKILL.md`，拒绝静态 symlink/hardlink、越界及可观察替换；不声称原子 no-follow 隔离。存在 local digest 时验证实际文档摘要，历史 nil 保持 nil：读取时的 document_digest 不等于内容已冻结。远端复用现有 Skill Protocol 的 exact revision 与可选 artifact digest 校验；原始 loader 错误不透出路径或凭据。
+
+领域 guardian 固定一秒绝对期限并监控调用方，远端 loader 获得同一 deadline 和合作式取消 predicate。调用方退出/期限到达后给既有十秒 protocol 请求最多十一秒退出窗口，超时强杀；正常合作式退出执行 loader 的清理，强杀不能保证 `after` 临时目录清理。上述 descriptor 已按显式选择安装到生产 Catalog；完整参考读取上限、workshop、归档/恢复和完整工具迁移仍未完成。
+
+### 6.8 独立持久历史窗口与待处理上下文
+
+原生 `synapsis::sessions_history` revision 2 只调用 `SessionHistory.read_rendered/3`，不回退旧 forward cursor API；原 Core `read/3` 为已有内部调用保持原样。模型用可选 exact persisted `session_id`，默认可信当前会话；`limit` 默认 200、最大 1000，`offset` 从尾部按 captured dense ordinal 逆向计数，`message_id` 是实际 durable UUID 并覆盖 offset。`pending_before` 独立续读待处理上下文，`include_tools` 默认 false。`MCPSources.revisions/2` 也是内建工具 revision 的生产权威来源，因此显式委托 `SessionHistory.revision/0`，与 descriptor 保持一致。
+
+Data `ReadSnapshot.ordinal_window/2` 在原 owner/revision/绝对 deadline 上按最多 100 个 key 扫描，只保留选定稀疏索引与精确总数；anchor 可顺序寻找旧 UUID，不限制在最新 10000 条。Reader 将真实 turn 映成 dense ordinal，不新增索引或转录 producer。一次 invocation-owned PortSession 执行原 source kernel、prepare、tool filter、sanitize、预算、分页和 `jsonResult`；精确 JavaScript pretty text 与同一 decoded page 一起返回。实际 worker closed 和 Node exit 0 后才对原 handle 做一次 common V，V 后只纯发布，不读存储或 helper。
+
+待处理列表在相同 captured revision 读取，沿用现有 producer/custody：排除 consumed，以及已有真实 `event.run_id` adoption witness 的 system event；原列表 position+1 在过滤前决定游标。保留实际 UUID、state、kind 与 ISO acceptedAt，最新 eligible 最多 min(limit,20)，仅确有更多时给 nextBefore。真实 `%Part.Image{}` 经字段适配后进入原 display projector；先运行 source pending bounding，再加宿主 kind 并重算实际 bytes。没有制造 source 排队状态、时间或来源身份。
+
+公开 identity 为 `session_id`，其余 source camel 字段及 optional pagination 保持；source 80 KiB transcript+pending、4000 UTF16 sanitize 与其他计算预算已接入。Data external-term、projected message JSON、Port wire/transfer、公开 text 和 native envelope 是不同计量；原 Backplane/AiProtocol 限额保持。原始 event JSON+LF、parents/tree、reset archive 与 source producer 等价仍按 Raw event 边界开放，不能由投影重新序列化推导。普通来源/存储/Core/native/图片及正常 close/reopen 已验证；真实 provider、完整 factory/action/assembly 及排除域不据此验收。
 
 ## 7. Tool Search 与 Code Mode
 
@@ -230,7 +272,7 @@ Code Mode 优先复用 Backplane 原生 CodeMode profile/bundle、工具名、�
 
 ## 8. 旧体系退出与兼容
 
-所有开发在明确的迁移分支/worktree 进行。新 backend 在独立契约测试中完成后再切换部署；发布物不提供“新工具失败就调用旧工具”的 fallback。
+后续开发直接在 root checkout 的 `main` 进行，不得新建 worktree；并行 worker 按文件独占责任，Mix/Devenv builds 串行。每批修改结束后从 root 执行 `devenv processes restart synapsis`，无 process manager 时先执行 `devenv up -d synapsis`，并检查 process status 和 `/api/health` readiness。新 backend 在独立契约测试中完成后再切换部署；代码合入 `main` 不代表生产执行链已经切换，发布物不提供“新工具失败就调用旧工具”的 fallback。
 
 1. 配置迁移生成受保护备份和 dry-run 报告；经 Config.Store 原子、幂等更新工具选择、toolsets、daemon profiles、审批策略及 session capability flags。
 2. 旧窄工具集不能直接迁成 `full` 或 unrestricted `exec`；一对多映射保留 action 上限。无法无损映射的项目标记 `needs_review` 并阻止该配置启用，不静默删除 deny 或把 `none` 变为全部。
@@ -264,6 +306,6 @@ Code Mode 优先复用 Backplane 原生 CodeMode profile/bundle、工具名、�
 - **产品证明：** 实际浏览器验证进程流、审批/取消、读图/PDF、消息与widget；检查served assets、DOM与console。单元/DOM测试与真实浏览器证据分开记录。
 - **外部证明：** 每个渠道/provider/设备单列真实账号授权和 E2E；mock契约测试不能替代。缺用户账号不阻止写完实现，但该项不能标live_verified。
 - **退役证明：** 源码caller audit无旧执行链；原有业务数据、历史和显式工具选择仍可读，权限无静默扩大。
-- **运行边界：** 已进入 P0/P1 基础实施；参考 schema 采集与原生准入测试不等于真实工具执行或产品切换。没有提交/推送、发布、部署或服务重启。
+- **运行边界：** 对齐基础实现已以 `f97ea32` 合入 root `main`；合入前批次的测试、未提交状态和未重启说明属于历史证据。参考 schema 采集与原生准入测试不等于真实工具执行或产品切换，代码合入不证明发布、部署、服务 readiness 或生产执行链切换。
 
 用户已确认保留现有架构并以 Backplane 契约为准。未完成的宿主扩展、权限、结果和生命周期工作仍是实施目标；不得因计划已授权或基础测试通过而表述为已经实现。

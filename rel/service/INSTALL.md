@@ -29,9 +29,25 @@ synapsis-<version>-macos-arm64.tar.gz
 ```
 
 Linux archives require glibc plus the runtime libraries that provide
-`libtinfo.so.6` and `libz.so.1` (commonly the ncurses/tinfo and zlib packages).
-On NixOS, expose those libraries through `nix-ld` or an equivalent explicit
-library path before starting the release.
+`libtinfo.so.6`, `libz.so.1`, `libstdc++.so.6` and `libgcc_s.so.1` (commonly
+the ncurses/tinfo, zlib, libstdc++ and GCC runtime packages). The bundled
+official Node also uses the C++ and GCC runtime libraries. On NixOS, expose
+all of these libraries through `nix-ld` or an equivalent explicit library
+path before starting the release.
+
+The release packages its filesystem Node executable and complete upstream
+license under `releases/<version>/filesystem-node/`. Its `env.sh` selects that
+version's absolute executable path after extraction, including when the release
+directory moves. No Node installation or PATH lookup is needed for these file
+helpers. An explicitly configured `SYNAPSIS_FILESYSTEM_NODE` takes precedence.
+This runtime does not supply every browser, media codec or platform dependency.
+
+For source builds, set `SYNAPSIS_FILESYSTEM_RUNTIME_ROOT` to the root of the
+trusted official Node 24.22.1 distribution for the build target before running
+`mix release synapsis`. The release step copies its `bin/node` and complete
+`LICENSE`; it does not download or choose a host runtime. Build for each target
+on that target and verify the resulting archive independently. Existing
+Linux x64 checks do not establish macOS or ARM execution.
 
 Create the user service environment:
 

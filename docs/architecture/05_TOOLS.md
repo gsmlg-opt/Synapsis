@@ -1,5 +1,10 @@
 # 05 — Tool System
 
+> Historical architecture: this document records the retired Registry, Builtin
+> and Executor design. Current native tool contracts and ownership are documented
+> in [04 — Boundaries](04_BOUNDARIES.md#tool-behaviour). The legacy `Synapsis.Tool`
+> declaration is retained exclusively in core's test support for historical fixtures.
+
 ## Overview
 
 The tool system is the agent's interface to the real world — every file read, shell command, web request, and user interaction is a tool call. All tool infrastructure lives in `apps/synapsis_core/lib/synapsis/tool/` as part of the `synapsis_core` application.
@@ -421,3 +426,33 @@ end
 Tool calls are persisted in the `tool_calls` table for audit and replay. See [02_DATA_LAYER.md](02_DATA_LAYER.md) for schema details.
 
 Session permissions and todo lists are also persisted — see `session_permissions` and `session_todos` tables.
+
+
+### Public Diffs delivery boundary (batch359)
+
+The optional, explicitly selected native `synapsis::diffs` tool is direct-model-only.
+`Synapsis.Diffs.Config` resolves the singleton `diffs.toml`; SessionAdapter freezes
+its resolved fingerprint for native admission. One registered PortSession serves
+an invocation. In `both`, acknowledged viewer publication precedes file reservation
+and rendering, using the same normalized input, options and deadline. The existing
+renderer/capsule is reused without dependency changes.
+
+Data owns durable artifact registrations, expiry and cleanup state; Workspace owns
+bounded hash-checked gzip HTML/PNG/PDF bytes. Agent DiffsDelivery joins the owners,
+records immutable file-delivery facts and original roots, and DiffsCleanup removes
+expired registered artifacts and later orphans. Live registrations govern current
+availability independently of historical facts. Server owns viewer/assets/download
+GET and HEAD routes; Web projects viewer/download links into the existing React
+chat renderer. Endpoint origin composition stays in runtime config, outside Agent.
+Native invocation IDs retain their actual prefixed string form; session/agent and
+public delivery IDs remain UUIDs. Timeouts/uncertain fact writes remain unknown
+outcomes; only a known quota rejection permits cleanup then the same metadata
+completion retry, with no rendering or byte/fact replay.
+
+Ordinary local acceptance and exact evidence are documented in the alignment plan
+and `/tmp/synapsis-diffs359-evidence/summary.json`. This implements public delivery,
+not full source-factory equivalence. Pinned OpenClaw488631c partial patches with
+`expandUnchanged=true` remain blocked by Pierre1.5.2's missing `loadDiffFiles` path;
+explicit false and before/after inputs are separate accepted paths. Security,
+permissions and the established excluded failure/budget/lifecycle families remain
+unqualified; no dependency workaround or automatic tool grant is introduced.

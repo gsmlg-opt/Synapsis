@@ -46,7 +46,7 @@
 
 5. **Always use structured logging** — `Logger.info("session_started", session_id: id, project: path)`. Never string interpolation in logs.
 
-6. **Always test provider integration with Bypass** — Never hit real APIs in tests.
+6. **Always test provider integration with Gaoxy.Test** — Never hit real APIs in tests.
 
 7. **Always handle `:DOWN` messages from monitored processes** — Stream process, tool tasks, LSP servers can all crash.
 

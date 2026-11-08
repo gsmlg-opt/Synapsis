@@ -1,22 +1,24 @@
 # OpenClaw 能力参考：基于 Backplane 契约的覆盖矩阵
 
-固定来源：`openclaw/openclaw@488631c18fae7cc541ba8fc8beff6cbb0438787b`。最后静态核对：2026-10-23。
+固定来源：`openclaw/openclaw@488631c18fae7cc541ba8fc8beff6cbb0438787b`。最后静态核对：2026-10-23；目录只读、调度器状态及图像结果展示切片证据补充：2026-10-25。
 
 本附件是上游能力参考清单，不是本地可执行工具目录或完成报告。扫描174份插件manifest，其中34份声明工具；67个核心目录名字与109个唯一插件工具名合并去重后为170项。名称、schema、alias和默认值属于来源事实，不能直接决定Synapsis接口；实际工具以 `backplane_agent_runtime` 的原生契约为准。已有逐工具初步映射，逐 action 参考行为与验收仍待 P0 补齐；允许多对一和一对多，不要求新增170个同名工具。没有运行全部factory或验证全部backend。
 
 [设计](2026-10-23-openclaw-tool-alignment-design.md) · [实施计划](../plans/2026-10-23-openclaw-tool-alignment.md) · [机器可读来源、hash与条件](2026-10-23-openclaw-tool-alignment-baseline.json) · [逐工具能力映射](../../../apps/synapsis_agent/test/fixtures/openclaw/488631c/capability-map.json)
 
-当前 [参考采集夹具](../../../apps/synapsis_agent/test/fixtures/openclaw/488631c/capture.json) 已保存 voice-call、Canvas、llm-task 的 5 个 schema/factory recipe，并将来源及 schema hash 链接到能力映射；Canvas 与 llm-task 的实际 factory 返回元数据与 schema 定义一致。所有目标能力的实现、行为与外部验证状态仍未完成；这些样本不改变下表的完成状态。
+当前 [参考采集夹具](../../../apps/synapsis_agent/test/fixtures/openclaw/488631c/capture.json) 已保存 voice-call、Canvas、llm-task 的 5 个 schema/factory recipe，并将来源及 schema hash 链接到能力映射；Canvas 与 llm-task 的实际 factory 返回元数据与 schema 定义一致。完整目标能力、参考行为等价与外部验证仍未完成；这些采集样本不改变交付状态。机器映射中的`evidence`继续表示整项参考能力的未完成状态，`partialImplementation`单独记录已接入的有界本地切片，不能据此让整项coverage gate通过。
+
+P2共享结果链另已在正式Backplane1.10.38上通过canonical HTTPS PDF resource/resource_link的ToolResult投影、Part/Concord重载及Anthropic本机fixture HTTP正向验收（成功/错误各一项）；没有生产PDF工具安装、真实provider或其他媒体覆盖，不改变170项参考证据状态。详见实施计划，未运行安全/权限测试。
 
 ## 1. 按任务分配的170个上游参考项
 
 | # | OpenClaw 来源键 | Core 分组 | 声明插件 | 任务 | 评估状态 |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `agents_list` | agents | — | P5 | 宿主扩展；待实现 |
+| 1 | `agents_list` | agents | — | P5 | `synapsis::agents_list`公共配置目录已接Worker并限定验证；spawn-target policy/model/runtime等价未完成 |
 | 2 | `agents_wait` | sessions | — | P5 | 原生复用候选；action 待证 |
-| 3 | `apply_patch` | fs | — | P3 | 原生复用候选；action 待证 |
+| 3 | `apply_patch` | fs | — | P3 | 正式1.10.37原始custom descriptor/native Backend与公开全目标preflight已接selected-only Worker；2项正常功能+独立目录1项验证增删改移、重复路径顺序、Responses下一请求/Concord及下一回合回放，静态51项；compound要求仅源码审查，未运行安全/权限测试；完整参考factory/action、失败恢复与现场选择执行未完成 |
 | 4 | `ask_user` | agents | — | P6 | 原生复用候选；action 待证 |
-| 5 | `automations` | automation | — | P6 | 宿主扩展；待实现 |
+| 5 | `automations` | automation | — | P6 | `synapsis::automations`只读status/list/get已接Worker并限定验证；status仅观察调度进程及上次加载，任务运行、写入与全部action等价未完成 |
 | 6 | `autoreview` | — | autoreview | P13 | 宿主扩展；待实现 |
 | 7 | `browser` | ui | browser | P8 | 宿主扩展；待实现 |
 | 8 | `canvas` | ui | canvas | P12 | 宿主适配；待实现 |
@@ -40,7 +42,7 @@
 | 26 | `dir_fetch` | — | file-transfer | P12 | 宿主扩展；待实现 |
 | 27 | `dir_list` | — | file-transfer | P12 | 宿主扩展；待实现 |
 | 28 | `discussion` | — | clickclack | P13 | 宿主扩展；待实现 |
-| 29 | `dismiss_task` | sessions | — | P5 | 宿主扩展；待实现 |
+| 29 | `dismiss_task` | sessions | — | P5 | `synapsis::dismiss_task`：只撤回pending内存建议，重复/缺失返回false；与suggest共用9项正常功能及独立目录枚举通过；pending卡片/实时撤回另7项UI功能与warm浏览器通过，冷加载受Duskmoon#10限制；accept/start受Concord#107阻塞，完整参考等价未完成 |
 | 30 | `edit` | fs | — | P3 | 宿主扩展；待实现 |
 | 31 | `exec` | runtime | — | P3 | 原生复用候选；action 待证 |
 | 32 | `facetime_call` | — | facetime | P11 | 宿主扩展；待实现 |
@@ -100,11 +102,11 @@
 | 86 | `read` | fs | — | P3 | 宿主扩展；待实现 |
 | 87 | `screen` | ui | — | P12 | 宿主适配；待实现 |
 | 88 | `secrets` | runtime | — | P7 | 宿主扩展；待实现 |
-| 89 | `session_status` | sessions | — | P5 | 宿主扩展；待实现 |
+| 89 | `session_status` | sessions | — | P5 | `synapsis::session_status`：有界live Worker/durable来源与auto路由，活动回合自身观察、下一fixture请求及timeout限定验证；12项正常功能+独立目录1项通过，静态48项；model/reset受[concord#107](https://github.com/gsmlg-dev/concord/issues/107)阻塞，pending selection与active attempt需分开；usage/events/capabilities及完整参考等价未完成 |
 | 90 | `sessions` | sessions | — | P5 | 宿主扩展；待实现 |
 | 91 | `sessions_create` | sessions | — | P5 | 宿主扩展；待实现 |
-| 92 | `sessions_history` | sessions | — | P5 | 宿主扩展；待实现 |
-| 93 | `sessions_list` | sessions | — | P5 | 宿主扩展；待实现 |
+| 92 | `sessions_history` | sessions | — | P5 | `synapsis::sessions_history`：durable升序稀疏页、公共省略投影与Worker下一fixture请求限定验证；8项正常功能+独立目录1项通过，静态目录46项；offset/anchor/pending及完整参考等价未验证 |
+| 93 | `sessions_list` | sessions | — | P5 | `synapsis::sessions_list`：durable元数据过滤/最近排序/offset与Worker下一fixture请求限定验证；7项正常功能+独立目录1项通过，静态目录47项；最新消息/历史预览受[concord#108](https://github.com/gsmlg-dev/concord/issues/108)阻塞，归档/置顶/live与完整参考等价未完成 |
 | 94 | `sessions_search` | sessions | — | P5 | 宿主扩展；待实现 |
 | 95 | `sessions_send` | sessions | — | P5 | 宿主扩展；待实现 |
 | 96 | `sessions_spawn` | sessions | — | P5 | 原生复用候选；action 待证 |
@@ -115,7 +117,7 @@
 | 101 | `skills_search` | agents | — | P4 | 宿主扩展；待实现 |
 | 102 | `slack_huddles` | — | slack-huddles | P11 | 宿主扩展；待实现 |
 | 103 | `subagents` | sessions | — | P5 | 原生复用候选；action 待证 |
-| 104 | `suggest_task` | sessions | — | P5 | 宿主扩展；待实现 |
+| 104 | `suggest_task` | sessions | — | P5 | `synapsis::suggest_task`：有界进程内建议，不创建会话或启动任务，重启清空；Worker下一fixture请求/持久工具结果限定验证，静态目录50项；pending卡片/实时新增/撤回另7项UI功能与warm浏览器通过，冷加载受Duskmoon#10限制；accept/start受Concord#107阻塞，完整参考等价未完成 |
 | 105 | `talk_voice` | — | talk-voice | P11 | 宿主扩展；待实现 |
 | 106 | `tavily_extract` | — | tavily | P8 | 宿主扩展；待实现 |
 | 107 | `tavily_search` | — | tavily | P8 | 宿主扩展；待实现 |
@@ -126,7 +128,7 @@
 | 112 | `tts` | media | — | P10 | 宿主扩展；待实现 |
 | 113 | `update_goal` | agents | — | P6 | 宿主扩展；待实现 |
 | 114 | `video_generate` | media | — | P10 | 宿主扩展；待实现 |
-| 115 | `view_image` | media | — | P10 | 原生复用候选；action 待证 |
+| 115 | `view_image` | media | — | P10 | selected-only原生工具已安装，Worker→Anthropic与Responses本机HTTP、Part/Concord及Worker重启后下一回合PNG字节保真通过；Responses消费正式Backplane1.10.40与provider层工具图像表示适配，function/custom及legacy/MCP形式4项HTTP用例和完整Worker用例通过；未运行安全/权限测试；provider/model图像readiness、Workspace/大媒体与全部action等价未完成 |
 | 116 | `visitor_invite` | — | visitor-access | P13 | 宿主扩展；待实现 |
 | 117 | `visitor_list` | — | visitor-access | P13 | 宿主扩展；待实现 |
 | 118 | `visitor_revoke` | — | visitor-access | P13 | 宿主扩展；待实现 |
