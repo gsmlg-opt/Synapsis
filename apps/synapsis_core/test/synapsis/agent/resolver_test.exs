@@ -22,7 +22,7 @@ defmodule Synapsis.Agent.ResolverTest do
       assert agent.name == "main"
       assert agent.read_only == false
       assert agent.reasoning_effort == "medium"
-      assert agent.permission_mode == "ask"
+      assert agent.permission_mode == "yolo"
       assert agent.max_tokens == 8192
       assert agent.model == nil
       assert agent.provider == nil
@@ -50,14 +50,12 @@ defmodule Synapsis.Agent.ResolverTest do
     test "default main agent includes all expected tools" do
       agent = Resolver.resolve("main")
 
-      # Filesystem + Search + Execution + Web + Planning + Orchestration +
-      # Interaction + Session + Memory + Workflow
       for tool <- ~w(
-        file_read file_edit file_write multi_edit file_delete file_move list_dir
-        grep glob bash
-        todo_read todo_write enter_plan_mode exit_plan_mode
-        task skill tool_search ask_user sleep
-        memory_save memory_search memory_update session_summarize
+        synapsis::read synapsis::write synapsis::edit synapsis::ls
+        apply_patch exec_command write_stdin
+        synapsis::todo_read synapsis::todo_write
+        spawn_agent wait_agent synapsis::skill synapsis::ask_user
+        synapsis::memory_save synapsis::memory_source_search synapsis::session_summarize
       ) do
         assert tool in agent.tools, "expected #{tool} in main agent tools"
       end
@@ -332,6 +330,8 @@ defmodule Synapsis.Agent.ResolverTest do
           system_prompt_fragment: "Always review tradeoffs."
         })
 
+      assert {:ok, _} = Store.put(:backplane, %{"id" => "source-1", "enabled" => true})
+
       {:ok, unavailable} =
         Skills.create(%{
           name: "unavailable-review-style",
@@ -515,12 +515,6 @@ defmodule Synapsis.Agent.ResolverTest do
           assert {:ok, ^agent_raw} = Store.get(:agent, saved.id)
         end
       end
-    end
-
-    test "hardcoded defaults without an explicit native version fail closed" do
-      resolved = Resolver.resolve("unknown-version-agent")
-      assert Map.has_key?(resolved, :tool_selection_error)
-      refute resolved[:tool_contract_version] === 1
     end
 
     test "invalid direct versions do not apply saved MCP expansion" do

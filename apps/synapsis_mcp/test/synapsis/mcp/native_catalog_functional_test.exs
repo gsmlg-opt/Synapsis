@@ -87,20 +87,6 @@ defmodule Synapsis.MCP.NativeCatalogFunctionalTest do
     %{config: config, pid: pid, state: state}
   end
 
-  test "discovery retains source metadata without publishing legacy tools", ctx do
-    name = "mcp:#{ctx.config.name}:echo"
-    assert {:error, :not_found} = Synapsis.Tool.Registry.lookup(name)
-
-    assert [%{name: ^name, description: "Original", mcp_tool_name: "echo"} = metadata] =
-             Enum.filter(MCP.source_catalog(), &(&1.mcp_config_id == ctx.config.id))
-
-    refute Map.has_key?(metadata, :registration)
-    refute Map.has_key?(metadata, :availability_check)
-    refute Map.has_key?(metadata, :server_pid)
-    assert_receive {:mcp_source_catalog_changed, %{source_id: id, status: :ready}}
-    assert id == ctx.config.id
-  end
-
   test "same names and empty discoveries still publish source invalidation", ctx do
     id = ctx.config.id
     assert_receive {:mcp_source_catalog_changed, %{source_id: ^id, status: :ready}}

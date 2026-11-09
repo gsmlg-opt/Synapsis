@@ -23,8 +23,7 @@ defmodule Synapsis.Session.Worker do
     Config,
     GoalHost,
     PendingInputs,
-    Persistence,
-    SuggestedTurn
+    Persistence
   }
 
   alias Synapsis.Session.Worker.Runtime, as: RuntimeSession
@@ -79,7 +78,6 @@ defmodule Synapsis.Session.Worker do
     automation_task: nil,
     automation_uncertain: false,
     pending_inputs: nil,
-    suggested_turn: nil,
     runtime_roster: %{agents: []},
     runtime_permissions: [],
     runtime_questions: [],
@@ -115,10 +113,6 @@ defmodule Synapsis.Session.Worker do
         {:send_message, content, image_parts, input_context},
         30_000
       )
-
-  @doc "Start one fresh suggested turn and acknowledge checkpointed native consumption."
-  def start_suggested_turn(session_id, request, opts \\ []),
-    do: SuggestedTurn.request(session_id, request, opts)
 
   def steer_message(session_id, content),
     do: :gen_statem.call(via(session_id), {:steer_message, content}, 30_000)
@@ -201,29 +195,6 @@ defmodule Synapsis.Session.Worker do
 
     if remaining > 0,
       do: :gen_statem.call(via(session_id), {:wake, text, opts}, remaining),
-      else: {:error, :timeout}
-  catch
-    :exit, _ -> {:error, :unknown_outcome}
-  end
-
-  @doc false
-  def stage_music_completion(session_id, attrs, opts) do
-    remaining = Keyword.fetch!(opts, :deadline) - public_status_now()
-
-    if remaining > 0,
-      do: :gen_statem.call(via(session_id), {:music_completion, attrs, opts}, remaining),
-      else: {:error, :timeout}
-  catch
-    :exit, _ -> {:error, :unknown_outcome}
-  end
-
-  @doc false
-  def apply_music_completion(session_id, event_id, payload) do
-    remaining = payload.deadline - public_status_now()
-
-    if remaining > 0,
-      do:
-        :gen_statem.call(via(session_id), {:apply_music_completion, event_id, payload}, remaining),
       else: {:error, :timeout}
   catch
     :exit, _ -> {:error, :unknown_outcome}
@@ -358,19 +329,6 @@ defmodule Synapsis.Session.Worker do
     advance(data, actions)
   end
 
-  def handle_event(
-        {:call, _from},
-        {:start_suggested_turn, _request, _deadline},
-        _state,
-        %{pending_inputs: %{booted: false, blocked: false}}
-      ),
-      do: {:keep_state_and_data, [:postpone]}
-
-  def handle_event({:call, from}, {:start_suggested_turn, request, deadline}, _state, data) do
-    {data, actions} = SuggestedTurn.start(data, request, from, deadline)
-    advance(data, actions)
-  end
-
   def handle_event({:call, from}, {:automation_context, deadline}, _state, data),
     do: advance(Automation.start_context(data, from, deadline))
 
@@ -386,16 +344,6 @@ defmodule Synapsis.Session.Worker do
 
   def handle_event({:call, from}, {:append_automation_result, text}, _state, data) do
     {data, actions} = Automation.enqueue(data, text, from)
-    advance(data, actions)
-  end
-
-  def handle_event({:call, from}, {:music_completion, attrs, opts}, _state, data) do
-    {data, actions} = PendingInputs.music_completion(data, attrs, opts, from)
-    advance(data, actions)
-  end
-
-  def handle_event({:call, from}, {:apply_music_completion, event_id, payload}, _state, data) do
-    {data, actions} = PendingInputs.apply_music_completion(data, event_id, payload, from)
     advance(data, actions)
   end
 
@@ -763,18 +711,6 @@ defmodule Synapsis.Session.Worker do
     advance(data, actions)
   end
 
-  def handle_event(:info, {:suggested_turn_timeout, claim_id}, _state, data),
-    do: advance(SuggestedTurn.timeout(data, claim_id))
-
-  def handle_event(
-        :info,
-        {:DOWN, ref, :process, _pid, _reason},
-        _state,
-        %{suggested_turn: %{monitor: ref, status: :preparing}} = data
-      )
-      when is_reference(ref),
-      do: advance(SuggestedTurn.caller_down(data, ref))
-
   def handle_event(:info, {:pending_input_timeout, _ref}, _state, data), do: keep(data)
 
   def handle_event(:info, {ref, result}, _state, %{runtime_task: %Task{ref: ref}} = data) do
@@ -980,17 +916,6 @@ defmodule Synapsis.Session.Worker do
       session_id: data.session_id,
       reason: inspect(reason)
     )
-
-    case Synapsis.Swarm.delete_team(data.session_id) do
-      {:ok, _} ->
-        :ok
-
-      {:error, reason} ->
-        Logger.warning("session_swarm_cleanup_failed",
-          session_id: data.session_id,
-          reason: reason
-        )
-    end
 
     :ok
   end

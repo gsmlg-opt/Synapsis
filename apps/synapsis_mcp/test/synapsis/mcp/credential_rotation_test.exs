@@ -4,7 +4,6 @@ defmodule Synapsis.MCP.CredentialRotationTest do
   alias Synapsis.Backplane.{Connection, ProviderSource, Snapshot, Sync}
   alias Synapsis.{Config.Store, Credentials, MCP, MCPConfigs, Providers}
   alias Synapsis.MCP.Server
-  alias Synapsis.Tool.Registry
 
   defmodule Runtime do
     def restart(_), do: :ok
@@ -58,95 +57,6 @@ defmodule Synapsis.MCP.CredentialRotationTest do
     assert {:error, :provider_unavailable} = ProviderSource.get(provider.id, allow_disabled: true)
     assert {:error, :provider_unavailable} = Connection.credential(connection)
     assert {:error, :credential_unavailable} = Credentials.resolve(credential.id)
-  end
-
-  test "encrypted content changes fence an existing client even when secret and timestamp match",
-       %{bypass: bypass} do
-    {credential, _provider, config} = linked_config(bypass, "fingerprint")
-    rpc_stub(bypass, config.name)
-    assert {:ok, server} = MCP.start(config)
-    assert :ok = Server.await_ready(server)
-    tool = "mcp:#{config.name}:echo"
-    assert Registry.runtime_available?(tool)
-    reencrypt_same_key(credential.id)
-    refute Registry.runtime_available?(tool)
-    assert {:error, :mcp_unavailable} = Server.execute_runtime(server, tool, %{}, %{}, 1_000)
-  end
-
-  test "late discovery cannot register tools from an obsolete credential generation", %{
-    bypass: bypass
-  } do
-    {credential, _provider, config} = linked_config(bypass, "late")
-    observer = self()
-
-    rpc_stub(bypass, config.name, fn conn, request ->
-      if request["method"] == "tools/list" do
-        send(observer, {:discovery_waiting, self()})
-
-        receive do
-          :release -> :ok
-        after
-          5_000 -> flunk("discovery test was not released")
-        end
-      end
-
-      conn
-    end)
-
-    assert {:ok, server} = MCP.start(config)
-    assert_receive {:discovery_waiting, request}, 3_000
-    reencrypt_same_key(credential.id)
-    send(request, :release)
-    assert {:error, {:discover_failed, :connection_changed}} = Server.await_ready(server)
-    assert {:error, :not_found} = Registry.lookup("mcp:#{config.name}:echo")
-  end
-
-  test "shared rotation removes old clients and reconnects both sources with current authentication",
-       %{bypass: bypass} do
-    {credential, provider, config} = linked_config(bypass, "shared-one")
-
-    {:ok, second_provider} =
-      Providers.create(%{
-        name: "shared-two",
-        type: "openai",
-        base_url: provider.base_url,
-        credential_id: credential.id
-      })
-
-    {:ok, second_config} =
-      MCPConfigs.create(%{
-        name: "shared-two",
-        provider_id: second_provider.id,
-        transport: "streamable_http",
-        url: config.url
-      })
-
-    observer = self()
-
-    rpc_stub(bypass, "shared", fn conn, request ->
-      if request["method"] == "initialize",
-        do: send(observer, {:initialized, Plug.Conn.get_req_header(conn, "authorization")})
-
-      conn
-    end)
-
-    {:ok, first} = MCP.start(config)
-    {:ok, second} = MCP.start(second_config)
-    assert :ok = Server.await_ready(first)
-    assert :ok = Server.await_ready(second)
-    assert_receive {:initialized, ["Bearer shared-credential-1234"]}
-    assert_receive {:initialized, ["Bearer shared-credential-1234"]}
-    Application.put_env(:synapsis_provider, :credential_invalidation, &MCP.credentials_changed/1)
-    assert {:ok, _} = Credentials.update(credential.id, %{key: "rotated-credential-5678"})
-    refute Process.alive?(first)
-    refute Process.alive?(second)
-    assert_receive {:initialized, ["Bearer rotated-credential-5678"]}, 3_000
-    assert_receive {:initialized, ["Bearer rotated-credential-5678"]}, 3_000
-
-    assert wait_until(fn ->
-             Registry.runtime_available?("mcp:#{config.name}:echo") and
-               Registry.runtime_available?("mcp:#{second_config.name}:echo")
-           end)
   end
 
   test "a snapshot fetched before rotation cannot reconcile obsolete capabilities", %{
@@ -238,16 +148,7 @@ defmodule Synapsis.MCP.CredentialRotationTest do
     {credential, provider, config}
   end
 
-  defp reencrypt_same_key(id) do
-    {:ok, encrypted} = Synapsis.Encrypted.Binary.dump("shared-credential-1234")
-
-    {:ok, _} =
-      Store.merge_existing(:credential, id, %{
-        "key_encrypted" => "enc:v1:" <> Base.encode64(encrypted)
-      })
-  end
-
-  defp rpc_stub(bypass, name, before_response \\ fn conn, _ -> conn end) do
+  defp rpc_stub(bypass, name, before_response) do
     Gaoxy.Test.stub(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)

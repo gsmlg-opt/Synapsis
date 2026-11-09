@@ -32,8 +32,7 @@ defmodule Synapsis.Config.Store do
     :mcp,
     :lsp,
     :skill,
-    :memory,
-    :diffs
+    :memory
   ]
 
   def types, do: @types
@@ -375,7 +374,6 @@ defmodule Synapsis.Config.Store do
         :lsp -> "lsp.toml"
         :skill -> "skills.toml"
         :memory -> "memory.toml"
-        :diffs -> "diffs.toml"
       end
 
     Path.join(config_dir(), name)

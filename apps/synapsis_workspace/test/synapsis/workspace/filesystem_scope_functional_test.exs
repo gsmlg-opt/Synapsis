@@ -1,11 +1,10 @@
 defmodule Synapsis.Workspace.FilesystemScopeFunctionalTest do
   use ExUnit.Case, async: false
 
-  alias Synapsis.AgentMessages
   alias Synapsis.Filesystem.Access
   alias Synapsis.Session.Store
   alias Synapsis.Workspace
-  alias Synapsis.Workspace.{FileDocuments, Handoffs, Resources, ToolFiles}
+  alias Synapsis.Workspace.{FileDocuments, Resources, ToolFiles}
   alias Synapsis.WorkspaceDocuments
 
   @moduletag :tmp_dir
@@ -533,152 +532,6 @@ defmodule Synapsis.Workspace.FilesystemScopeFunctionalTest do
     assert {:ok, %{details: %{changed: true, created: true}}} = Task.await(writer)
     assert_receive {:DOWN, ^monitor, :process, ^publisher, :normal}, 1_000
     assert {:ok, %{id: ^id, version: 1, content_body: "new\n"}} = Task.await(reader)
-  end
-
-  test "real handoff mail artifact receipts and ordered publications retain the same-key lease",
-       ctx do
-    :ok = Store.ensure_started()
-    session = Ecto.UUID.generate()
-    :ok = Store.put_meta(session, %{id: session, agent: "agent-a"})
-    on_exit(fn -> Store.delete_session(session) end)
-    recipient = "workspace-recipient-#{Ecto.UUID.generate()}"
-    :ok = Phoenix.PubSub.unsubscribe(Synapsis.PubSub, "workspace:agent:agent-a")
-
-    :ok =
-      Phoenix.PubSub.subscribe(Synapsis.PubSub, "workspace:agent:agent-a",
-        sender: {GateSender, {self(), :handoff}}
-      )
-
-    for {topic, stage} <- [
-          {"agent:#{recipient}", :mailbox},
-          {"tool_effects:#{session}", :session},
-          {"tool_effects:global", :global}
-        ] do
-      metadata = if stage == :global, do: {:global, self()}, else: stage
-      :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, topic, sender: {StageSender, metadata})
-    end
-
-    access = trace_access()
-    owner = self()
-
-    input = %{
-      "to" => recipient,
-      "summary" => "Finished analysis",
-      "instructions" => "Review findings"
-    }
-
-    context = %{agent_id: "agent-a", session_id: session, primary: false}
-    handoff = Task.async(fn -> Handoffs.handoff(input, context) end)
-    assert_receive {:publication_held, publisher, path}, 1_000
-
-    on_exit(fn ->
-      send(publisher, :release_publication)
-      send(publisher, :release_global_publication)
-    end)
-
-    monitor = Process.monitor(publisher)
-    assert_receive {:workspace_changed, %{path: ^path, action: :created, resource_id: id}}
-    ref = path |> Path.basename(".json")
-    assert path == "/agents/agent-a/handoffs/#{ref}.json"
-    assert {:ok, message} = AgentMessages.fetch_by_ref(ref)
-    assert message.from_agent_id == "agent-a" and message.to_agent_id == recipient
-    assert message.type == "handoff"
-    body = Jason.decode!(File.read!(physical(ctx.root, path)))
-
-    assert body == %{
-             "ref" => ref,
-             "from" => "agent-a",
-             "to" => recipient,
-             "payload" => message.payload,
-             "created_at" => DateTime.to_iso8601(message.inserted_at)
-           }
-
-    metadata = Jason.decode!(File.read!(metadata_path(ctx.root, path)))
-    assert metadata["id"] == id and metadata["version"] == 1
-    assert metadata["kind"] == "handoff" and metadata["content_format"] == "json"
-    assert metadata["agent_id"] == "agent-a" and metadata["updated_by"] == "agent-a"
-    refute_receive {:handoff_stage, _, _}, 0
-
-    keys =
-      Enum.sort([
-        Path.join(ctx.root, "agents/agent-a/handoffs/#{ref}.json"),
-        Path.join(ctx.root, ".synapsis/meta/agents__agent-a__handoffs__#{ref}.json.json")
-      ])
-
-    assert_receive {:trace, ^access, :receive,
-                    {:"$gen_call", {^publisher, _}, {:acquire, _, ^keys}}},
-                   1_000
-
-    waiter =
-      Task.async(fn ->
-        result = FileDocuments.get(ctx.root, path)
-        send(owner, {:handoff_waiter_done, result})
-        result
-      end)
-
-    assert_receive {:trace, ^access, :receive,
-                    {:"$gen_call", {waiter_worker, _}, {:acquire, _, ^keys}}},
-                   1_000
-
-    assert waiter_worker != publisher
-
-    assert {:ok, _} =
-             FileDocuments.put(ctx.root, %{path: "/shared/handoff-free.txt", content_body: "free"})
-
-    refute_receive {:handoff_waiter_done, _}, 0
-    send(publisher, :release_publication)
-    assert_receive {:handoff_stage, stage1, {:agent_envelope, envelope}}, 1_000
-    assert stage1 == :mailbox
-
-    assert envelope == %{
-             from: "agent-a",
-             to: recipient,
-             ref: ref,
-             type: :handoff,
-             payload: message.payload,
-             timestamp: message.inserted_at
-           }
-
-    assert_receive {:handoff_stage, stage2, effect}, 1_000
-    assert stage2 == :session
-    assert effect == {:tool_effect, :workspace_changed, %{ref: ref, type: "handoff"}}
-    assert_receive {:handoff_stage, stage3, ^effect}, 1_000
-    assert stage3 == :global
-    assert_receive {:handoff_global_held, ^publisher}, 1_000
-    refute_receive {:handoff_waiter_done, _}, 0
-    send(publisher, :release_global_publication)
-    assert {:ok, receipt} = Task.await(handoff)
-
-    assert receipt == %{
-             to: recipient,
-             status: "persisted",
-             message_status: "persisted",
-             message_id: message.id,
-             ref: ref,
-             artifact_path: path,
-             artifact_status: "persisted",
-             artifact_content_status: "persisted",
-             artifact_metadata_status: "persisted",
-             mailbox_publication: "published",
-             workspace_publication: "published",
-             session_publication: "published",
-             global_publication: "published"
-           }
-
-    assert_receive {:DOWN, ^monitor, :process, ^publisher, :normal}, 1_000
-    assert {:ok, %{id: ^id, version: 1} = artifact} = Task.await(waiter)
-
-    assert artifact.content_body ==
-             Jason.encode!(%{
-               ref: ref,
-               from: "agent-a",
-               to: recipient,
-               payload: message.payload,
-               created_at: message.inserted_at
-             })
-
-    assert {:ok, persisted_message} = AgentMessages.fetch(receipt.message_id)
-    assert persisted_message.ref == ref
   end
 
   defp planner, do: [node_executable: System.fetch_env!("SYNAPSIS_FILESYSTEM_NODE")]

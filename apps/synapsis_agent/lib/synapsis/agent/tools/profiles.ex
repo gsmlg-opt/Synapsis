@@ -15,9 +15,7 @@ defmodule Synapsis.Agent.Tools.Profiles do
   alias Backplane.AgentRuntime.Codex.Backend
 
   alias Synapsis.Agent.Tools.{
-    AgentCommunication,
     AgentDirectory,
-    AgentHandoff,
     AutomationConfiguration,
     AutomationManagement,
     AutomationMutation,
@@ -27,8 +25,6 @@ defmodule Synapsis.Agent.Tools.Profiles do
     Catalog,
     CatalogBinding,
     CodeMode,
-    Decisions,
-    Diffs,
     Discovery,
     ExplicitSkill,
     Filesystem,
@@ -38,7 +34,6 @@ defmodule Synapsis.Agent.Tools.Profiles do
     MCPResources,
     MemoryDomain,
     NativeLocal,
-    PDF,
     PermissionSnapshot,
     ProcessInspection,
     Questions,
@@ -46,22 +41,16 @@ defmodule Synapsis.Agent.Tools.Profiles do
     SessionDirectory,
     SessionStatus,
     SessionHistory,
-    SessionPresence,
     SessionState,
     SessionSummary,
     Skills,
     SkillBodyCache,
     SkillWorkshop,
-    Swarm,
-    TaskSuggestions,
-    TTS,
     ToolInspection,
-    WorkspaceMemory,
-    Workflows
+    WorkspaceMemory
   }
 
-  alias Synapsis.Agent.Tools.Media.CodeExecution
-  alias Synapsis.Agent.Tools.Web.{Extract, Fetch, Scrape, Search, XSearch}
+  alias Synapsis.Agent.Tools.Web.{Fetch, Search}
   alias Synapsis.{AgentConfigs, Session, SkillReader, SkillDiscovery}
   alias Synapsis.Session.Store
 
@@ -75,12 +64,9 @@ defmodule Synapsis.Agent.Tools.Profiles do
   @skills ~w(synapsis::skills_search synapsis::skills_read)
   @explicit_skill ExplicitSkill.names()
   @skill_workshop SkillWorkshop.names()
-  @mail AgentCommunication.names()
-  @swarm Swarm.names()
   @session_directory SessionDirectory.names()
   @session_status SessionStatus.names()
   @history SessionHistory.names()
-  @presence SessionPresence.names()
   @directory AgentDirectory.names()
   @inspection ToolInspection.names()
   @automations Automations.names()
@@ -88,26 +74,15 @@ defmodule Synapsis.Agent.Tools.Profiles do
   @automation_management AutomationManagement.names()
   @automation_mutation AutomationMutation.names()
   @automation_wake AutomationWake.names()
-  @handoff AgentHandoff.names()
-  @task_suggestions TaskSuggestions.names()
   @collaboration ~w(spawn_agent send_message followup_task interrupt_agent list_agents wait_agent)
   @code_mode CodeMode.names()
   @local NativeLocal.names()
   @process_inspection ProcessInspection.names()
   @browser Browser.names()
   @mcp_resources MCPResources.names()
-  @diffs Diffs.names()
-  @pdf PDF.names()
-  @workflows Workflows.names()
-  @tts TTS.names()
-  @decisions Decisions.names()
   @web_fetch Fetch.names()
   @web_search Search.names()
-  @web_extract Extract.names()
-  @web_scrape Scrape.names()
-  @x_search XSearch.names()
-  @remote_analysis CodeExecution.names()
-  @web @web_fetch ++ @web_search ++ @web_extract ++ @web_scrape ++ @x_search
+  @web @web_fetch ++ @web_search
   @collaboration_actions %{
     "spawn_agent" => "collaboration.spawn",
     "send_message" => "collaboration.message",
@@ -122,12 +97,6 @@ defmodule Synapsis.Agent.Tools.Profiles do
   @doc "Pure names of the implemented static native families; availability is checked per run."
   def supported_names do
     @inspection ++
-      @remote_analysis ++
-      @decisions ++
-      @tts ++
-      @diffs ++
-      @pdf ++
-      @workflows ++
       @browser ++
       @mcp_resources ++
       @web ++
@@ -145,20 +114,15 @@ defmodule Synapsis.Agent.Tools.Profiles do
       @questions ++
       @session_state ++
       @summary ++
-      @mail ++
-      @swarm ++
       @session_status ++
       @session_directory ++
       @history ++
-      @presence ++
       @directory ++
       @automations ++
       @automation_management ++
       @automation_configuration ++
       @automation_mutation ++
-      @automation_wake ++
-      @handoff ++
-      @task_suggestions
+      @automation_wake
   end
 
   def selection(%{agent: %{tool_selection_error: _}}),
@@ -277,28 +241,21 @@ defmodule Synapsis.Agent.Tools.Profiles do
             @skills ++
             @explicit_skill ++
             @skill_workshop ++
-            @mail ++
-            @swarm ++
             @session_status ++
             @session_directory ++
             @history ++
-            @presence ++
             @directory ++
             @automations ++
             @automation_management ++
             @automation_configuration ++
             @automation_mutation ++
             @automation_wake ++
-            @handoff ++
-            @task_suggestions ++
             @collaboration ++
             @local ++
             @web ++
             @browser ++
             @mcp_resources ++
-            @diffs ++
-            @pdf ++
-            @workflows ++ @tts ++ @decisions ++ @remote_analysis ++ @code_mode ++ @inspection,
+            @code_mode ++ @inspection,
           fn name ->
             {name,
              Map.get(selected, name, %{tool_revision: 1, classify: &unavailable_classification/1})}
@@ -539,9 +496,7 @@ defmodule Synapsis.Agent.Tools.Profiles do
         %{registry: %{tools: tools}} when is_map(tools) ->
           Map.keys(tools)
           |> Enum.filter(
-            &(&1 in @collaboration or &1 in @local or &1 in @web or &1 in @browser or &1 in @diffs or
-                &1 in @pdf or
-                &1 in @workflows or &1 in @tts or &1 in @decisions or &1 in @remote_analysis or
+            &(&1 in @collaboration or &1 in @local or &1 in @web or &1 in @browser or
                 &1 in @code_mode or &1 in @mcp_resources or &1 in @process_inspection)
           )
 
@@ -560,20 +515,16 @@ defmodule Synapsis.Agent.Tools.Profiles do
               @skills ++
               @explicit_skill ++
               @skill_workshop ++
-              @mail ++
-              @swarm ++
               @session_status ++
               @session_directory ++
               @history ++
-              @presence ++
               @directory ++
               @automations ++
               @automation_management ++
               @automation_configuration ++
               @automation_mutation ++
               @automation_wake ++
-              @handoff ++
-              @task_suggestions ++ @inspection ++ native_names ++ Enum.map(mcp, & &1.tool_name)) do
+              @inspection ++ native_names ++ Enum.map(mcp, & &1.tool_name)) do
       [] ->
         :ok
 
@@ -628,9 +579,6 @@ defmodule Synapsis.Agent.Tools.Profiles do
          {:ok, questions} <- question_descriptors(context, scope, names, raw),
          {:ok, session} <- session_descriptors(context, scope, names),
          {:ok, summary} <- summary_descriptors(context, scope, names),
-         {:ok, mail} <- mail_descriptors(context, scope, names, agent),
-         {:ok, swarm} <- swarm_descriptors(context, scope, names, agent),
-         {:ok, presence} <- presence_descriptors(context, scope, names, agent),
          {:ok, sessions} <- session_directory_descriptors(context, scope, names, agent),
          {:ok, status} <- status_descriptors(context, scope, names, agent),
          {:ok, history} <- history_descriptors(context, scope, names, agent),
@@ -641,8 +589,6 @@ defmodule Synapsis.Agent.Tools.Profiles do
            automation_configuration_descriptors(context, scope, names),
          {:ok, automation_mutation} <- automation_mutation_descriptors(context, scope, names),
          {:ok, automation_wake} <- automation_wake_descriptors(context, scope, names),
-         {:ok, handoff} <- handoff_descriptors(context, scope, names, agent),
-         {:ok, suggestions} <- task_suggestion_descriptors(context, scope, names, agent),
          {:ok, memory} <- memory_descriptors(context, scope, names),
          {:ok, host_memory} <- host_memory_descriptors(scope, names),
          {:ok, inspection} <- inspection_descriptors(context, identity, names),
@@ -654,19 +600,16 @@ defmodule Synapsis.Agent.Tools.Profiles do
            questions ++
            session ++
            summary ++
-           mail ++
-           swarm ++
            status ++
            sessions ++
            history ++
-           presence ++
            directory ++
            automations ++
            automation_management ++
            automation_configuration ++
            automation_mutation ++
            automation_wake ++
-           handoff ++ suggestions ++ memory ++ host_memory ++ skills ++ inspection,
+           memory ++ host_memory ++ skills ++ inspection,
          &(&1.tool_name in names)
        ), snapshot, skill_cache}
     end
@@ -790,9 +733,8 @@ defmodule Synapsis.Agent.Tools.Profiles do
   defp domain_agent(context, names) do
     if Enum.any?(
          names,
-         &(&1 in @filesystem or &1 in @semantic or &1 in @mail or &1 in @swarm or &1 in @presence or
-             &1 in @handoff or &1 in @history or &1 in @session_directory or &1 in @session_status or
-             &1 in @task_suggestions)
+         &(&1 in @filesystem or &1 in @semantic or &1 in @history or &1 in @session_directory or
+             &1 in @session_status)
        ) do
       with name when is_binary(name) <- context.agent[:name],
            %Synapsis.AgentConfig{enabled: true} = agent <- AgentConfigs.get_by_name(name) do
@@ -810,19 +752,6 @@ defmodule Synapsis.Agent.Tools.Profiles do
       do:
         SessionDirectory.descriptors(
           Map.merge(scope, %{session_id: context.session.id, agent_id: agent.name})
-        ),
-      else: {:ok, []}
-  end
-
-  defp task_suggestion_descriptors(context, scope, names, agent) do
-    if Enum.any?(names, &(&1 in @task_suggestions)),
-      do:
-        TaskSuggestions.descriptors(
-          Map.merge(scope, %{
-            session_id: context.session.id,
-            agent_id: agent.name,
-            cwd: context[:project_path]
-          })
         ),
       else: {:ok, []}
   end
@@ -845,44 +774,6 @@ defmodule Synapsis.Agent.Tools.Profiles do
       else: {:ok, []}
   end
 
-  defp mail_descriptors(context, scope, names, agent) do
-    if Enum.any?(names, &(&1 in @mail)),
-      do:
-        AgentCommunication.descriptors(
-          Map.merge(scope, %{
-            session_id: context.session.id,
-            agent_id: agent.name,
-            primary: Map.get(context, :tool_primary?, true)
-          })
-        ),
-      else: {:ok, []}
-  end
-
-  defp swarm_descriptors(context, scope, names, agent) do
-    if Enum.any?(names, &(&1 in @swarm)),
-      do:
-        Swarm.descriptors(
-          Map.merge(scope, %{
-            session_id: context.session.id,
-            sender: agent.name
-          })
-        ),
-      else: {:ok, []}
-  end
-
-  defp handoff_descriptors(context, scope, names, agent) do
-    if Enum.any?(names, &(&1 in @handoff)),
-      do:
-        AgentHandoff.descriptors(
-          Map.merge(scope, %{
-            session_id: context.session.id,
-            agent_id: agent.name,
-            primary: Map.get(context, :tool_primary?, true)
-          })
-        ),
-      else: {:ok, []}
-  end
-
   defp filesystem_descriptors(context, scope, names, agent) do
     if Enum.any?(names, &(&1 in @filesystem)) do
       Filesystem.descriptors(
@@ -898,15 +789,6 @@ defmodule Synapsis.Agent.Tools.Profiles do
     else
       {:ok, []}
     end
-  end
-
-  defp presence_descriptors(context, scope, names, agent) do
-    if Enum.any?(names, &(&1 in @presence)),
-      do:
-        SessionPresence.descriptors(
-          Map.merge(scope, %{session_id: context.session.id, agent_id: agent.name})
-        ),
-      else: {:ok, []}
   end
 
   defp semantic_descriptors(context, scope, names, agent) do
@@ -1110,104 +992,11 @@ defmodule Synapsis.Agent.Tools.Profiles do
   defp descriptor_binding(descriptor, identity, catalog \\ nil)
 
   defp descriptor_binding(%{tool_name: name} = descriptor, identity, catalog)
-       when name in @decisions do
-    %{
-      tool_revision: descriptor.tool_revision,
-      classify:
-        &Decisions.classify(
-          descriptor,
-          identity,
-          classification_operation(&1, descriptor, catalog)
-        )
-    }
-  end
-
-  defp descriptor_binding(%{tool_name: name} = descriptor, identity, catalog)
-       when name in @tts do
-    %{
-      tool_revision: descriptor.tool_revision,
-      classify:
-        &TTS.classify(descriptor, identity, classification_operation(&1, descriptor, catalog))
-    }
-  end
-
-  defp descriptor_binding(%{tool_name: name} = descriptor, identity, catalog)
-       when name in @workflows do
-    %{
-      tool_revision: descriptor.tool_revision,
-      classify:
-        &Workflows.classify(
-          descriptor,
-          identity,
-          classification_operation(&1, descriptor, catalog)
-        )
-    }
-  end
-
-  defp descriptor_binding(%{tool_name: name} = descriptor, identity, catalog)
-       when name in @diffs do
-    %{
-      tool_revision: descriptor.tool_revision,
-      classify:
-        &Diffs.classify(descriptor, identity, classification_operation(&1, descriptor, catalog))
-    }
-  end
-
-  defp descriptor_binding(%{tool_name: name} = descriptor, identity, catalog)
-       when name in @pdf do
-    %{
-      tool_revision: descriptor.tool_revision,
-      classify:
-        &PDF.classify(descriptor, identity, classification_operation(&1, descriptor, catalog))
-    }
-  end
-
-  defp descriptor_binding(%{tool_name: name} = descriptor, identity, catalog)
        when name in @browser do
     %{
       tool_revision: descriptor.tool_revision,
       classify:
         &Browser.classify(descriptor, identity, classification_operation(&1, descriptor, catalog))
-    }
-  end
-
-  defp descriptor_binding(%{tool_name: name} = descriptor, identity, catalog)
-       when name in @remote_analysis do
-    %{
-      tool_revision: descriptor.tool_revision,
-      classify:
-        &CodeExecution.classify(
-          descriptor,
-          identity,
-          classification_operation(&1, descriptor, catalog)
-        )
-    }
-  end
-
-  defp descriptor_binding(%{tool_name: name} = descriptor, identity, catalog)
-       when name in @x_search do
-    %{
-      tool_revision: descriptor.tool_revision,
-      classify:
-        &XSearch.classify(descriptor, identity, classification_operation(&1, descriptor, catalog))
-    }
-  end
-
-  defp descriptor_binding(%{tool_name: name} = descriptor, identity, catalog)
-       when name in @web_scrape do
-    %{
-      tool_revision: descriptor.tool_revision,
-      classify:
-        &Scrape.classify(descriptor, identity, classification_operation(&1, descriptor, catalog))
-    }
-  end
-
-  defp descriptor_binding(%{tool_name: name} = descriptor, identity, catalog)
-       when name in @web_extract do
-    %{
-      tool_revision: descriptor.tool_revision,
-      classify:
-        &Extract.classify(descriptor, identity, classification_operation(&1, descriptor, catalog))
     }
   end
 
@@ -1359,23 +1148,10 @@ defmodule Synapsis.Agent.Tools.Profiles do
   defp unavailable_classification(_), do: {:error, :tool_unavailable}
 
   defp permission_level(name) when name in @inspection, do: ToolInspection.permission_level(name)
-  defp permission_level(name) when name in @diffs, do: Diffs.permission_level(name)
-
-  defp permission_level(name) when name in @pdf, do: PDF.permission_level(name)
-  defp permission_level(name) when name in @workflows, do: Workflows.permission_level(name)
-  defp permission_level(name) when name in @tts, do: TTS.permission_level(name)
-  defp permission_level(name) when name in @decisions, do: Decisions.permission_level(name)
   defp permission_level(name) when name in @browser, do: Browser.permission_level(name)
 
   defp permission_level(name) when name in @web_fetch, do: Fetch.permission_level(name)
   defp permission_level(name) when name in @web_search, do: Search.permission_level(name)
-  defp permission_level(name) when name in @web_extract, do: Extract.permission_level(name)
-  defp permission_level(name) when name in @web_scrape, do: Scrape.permission_level(name)
-  defp permission_level(name) when name in @x_search, do: XSearch.permission_level(name)
-
-  defp permission_level(name) when name in @remote_analysis,
-    do: CodeExecution.permission_level(name)
-
   defp permission_level(name) when name in @code_mode, do: CodeMode.permission_level(name)
 
   defp permission_level(name) when name in @local, do: NativeLocal.permission_level(name)
@@ -1391,19 +1167,12 @@ defmodule Synapsis.Agent.Tools.Profiles do
 
   defp permission_level(name) when name in @history, do: SessionHistory.permission_level(name)
 
-  defp permission_level(name) when name in @task_suggestions,
-    do: TaskSuggestions.permission_level(name)
-
   defp permission_level(name) when name in @filesystem, do: Filesystem.permission_level(name)
 
   defp permission_level(name) when name in ~w(synapsis::memory_save synapsis::memory_update),
     do: :write
 
   defp permission_level(name) when name in @collaboration, do: :none
-
-  defp permission_level(name)
-       when name in @mail or name in @swarm or name in @presence or name in @handoff,
-       do: :none
 
   defp permission_level(name) when name in @questions or name in @session_state, do: :none
   defp permission_level(name) when name in @explicit_skill, do: :none

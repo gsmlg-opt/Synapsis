@@ -21,26 +21,20 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     Approval,
     Browser,
     CodeMode,
-    Decisions,
-    Diffs,
     Discovery,
     Filesystem,
     FilesystemResultContract,
     MCPResources,
     NativeLocal,
-    PDF,
     Policy,
     Profiles,
     ProcessInspection,
     SkillBodyCache,
     SkillResultContract,
-    Questions,
-    TTS,
-    Workflows
+    Questions
   }
 
-  alias Synapsis.Agent.Tools.Media.CodeExecution
-  alias Synapsis.Agent.Tools.Web.{Extract, Fetch, Scrape, Search, XSearch}
+  alias Synapsis.Agent.Tools.Web.{Fetch, Search}
 
   @collaboration ~w(spawn_agent send_message followup_task interrupt_agent list_agents wait_agent)
   @terminal [:run_completed, :run_failed, :run_cancelled]
@@ -49,7 +43,6 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
   @filesystem_identity_fields ~w(run_id incarnation catalog_revision invocation_id tool_name tool_revision turn_id step_id attempt_id tool_call_id)a
   @filesystem_correlation_fields ~w(turn_id step_id attempt_id tool_call_id)a
   @filesystem_candidate_fields ~w(original_path public_path source_path requested_absolute target source_prefix)a
-  @workflow_identity_fields [:caller | @filesystem_identity_fields]
   @prepared_target_limit 1_024
   @prepared_target_bytes_limit 16 * 1_024 * 1_024
   @prepared_target_record_limit 64 * 1_024
@@ -68,26 +61,6 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
   @doc "Read the current native root identity without reading or mutating its history."
   def automation_snapshot(pid, timeout \\ 5_000),
     do: GenServer.call(pid, :automation_snapshot, timeout)
-
-  @doc false
-  def workflow_effect_registration(adapter, run_id, incarnation) do
-    parent_key = {run_id, incarnation}
-
-    fn proof, identity, binding, target ->
-      case proof do
-        %{deadline_ms: deadline, call_timeout_ms: timeout}
-        when is_integer(deadline) and is_integer(timeout) and timeout in 1..5_000 ->
-          workflow_call(
-            adapter,
-            {:workflow_effect_register, parent_key, proof, identity, binding, target},
-            {deadline, timeout}
-          )
-
-        _ ->
-          {:error, :invalid_workflow_proof}
-      end
-    end
-  end
 
   @impl true
   def init(opts) do
@@ -157,14 +130,6 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
 
     result =
       case Map.get(state.tool_contexts, key) do
-        %{workflow: %{phase: :pending}} ->
-          failure(:forbidden, "Workflow tool catalog context is not active")
-
-        %{workflow: %{budget: budget}, snapshot: snapshot} ->
-          if workflow_budget_active?(budget),
-            do: Profiles.project_catalog(identity, snapshot, catalog),
-            else: failure(:forbidden, "Workflow tool catalog context has expired")
-
         %{snapshot: _} = entry ->
           project_skill_catalog(entry, identity, catalog)
 
@@ -233,116 +198,6 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
       _ ->
         {:reply, failure(:forbidden, "Skill successor evidence does not match its producer"),
          state}
-    end
-  end
-
-  def handle_call(
-        {:workflow_effect_register, parent_key, proof, identity, binding, target},
-        {owner, _},
-        state
-      ) do
-    with {:ok, parent, authority, descriptors} <-
-           workflow_parent(state, parent_key, proof, identity, binding, target),
-         key = {identity.run_id, identity.incarnation},
-         false <- Map.has_key?(state.tool_contexts, key) do
-      ref = make_ref()
-      adapter = self()
-      budget = {proof.deadline_ms, proof.call_timeout_ms}
-      preparation = filesystem_preparation(adapter, identity.run_id, identity.incarnation, budget)
-      resolver = workflow_tool_context_resolver(adapter, key, budget)
-      registration = workflow_effect_registration(adapter, identity.run_id, identity.incarnation)
-
-      ticket = %{
-        preparation: preparation,
-        tool_context_resolver: resolver,
-        tool_filesystem: %{
-          path_environment: descriptors[target.tool_name].backend_context.path_environment,
-          prepared_target_resolver: preparation.fetch,
-          execution_options: descriptors[target.tool_name].backend_context.execution_options
-        },
-        authority: authority,
-        activate: fn bundle, snapshot ->
-          workflow_call(adapter, {:workflow_effect_activate, key, ref, bundle, snapshot}, budget)
-        end,
-        release: fn cleanup_deadline ->
-          workflow_call(
-            adapter,
-            {:workflow_effect_release, key, ref},
-            {cleanup_deadline, proof.call_timeout_ms}
-          )
-        end
-      }
-
-      # Profiles construction stays in the Effect task. This closed entry owns
-      # only its exact catalog inputs and the new preparation callbacks.
-      entry = %{
-        snapshot: nil,
-        discovery: nil,
-        prepared_targets: %{},
-        prepared_target_bytes: 0,
-        prepared_targets_closed?: true,
-        workflow: %{
-          phase: :pending,
-          ref: ref,
-          parent_key: parent_key,
-          parent_identity: proof.identity,
-          parent_catalog: proof.catalog,
-          owner: owner,
-          monitor: Process.monitor(owner),
-          identity: identity,
-          binding: binding,
-          authority: authority,
-          descriptors: workflow_child_descriptors(descriptors, identity, binding, preparation),
-          permission: parent.permission,
-          evidence: parent.evidence,
-          permission_levels: Map.take(parent.permission_levels, Map.keys(descriptors)),
-          budget: budget,
-          host_context: %{
-            tool_operator_id: Approval.operator_id(),
-            filesystem_preparation: preparation,
-            tool_context_resolver: resolver,
-            workflow_effect_registration: registration
-          }
-        }
-      }
-
-      {:reply, {:ok, ticket}, put_in(state, [:tool_contexts, key], entry)}
-    else
-      _ -> {:reply, {:error, :workflow_registration_unavailable}, state}
-    end
-  end
-
-  def handle_call({:workflow_effect_activate, key, ref, bundle, snapshot}, {owner, _}, state) do
-    with %{workflow: %{ref: ^ref, owner: ^owner, phase: :pending} = workflow} = entry <-
-           state.tool_contexts[key],
-         true <- workflow_parent_active?(state, workflow),
-         true <- workflow_budget_active?(workflow.budget),
-         :ok <- workflow_activation(bundle, snapshot, workflow) do
-      entry = %{
-        entry
-        | snapshot: snapshot,
-          prepared_targets_closed?: false,
-          workflow: %{workflow | phase: :active}
-      }
-
-      {:reply, {:ok, workflow.host_context}, put_in(state, [:tool_contexts, key], entry)}
-    else
-      _ -> {:reply, {:error, :workflow_activation_unavailable}, state}
-    end
-  end
-
-  def handle_call({:workflow_effect_release, key, ref}, _from, state) do
-    # Native ResourceRegistry cleanup runs in a different process from the
-    # reserving owner; the opaque ticket, rather than that PID, bears release.
-    case state.tool_contexts[key] do
-      %{workflow: %{ref: ^ref}} when is_reference(ref) ->
-        {:reply, :ok, close_prepared_targets(state, key)}
-
-      nil when is_reference(ref) ->
-        {:reply, :ok, state}
-
-      _ ->
-        {:reply, {:error, :workflow_ticket_mismatch}, state}
     end
   end
 
@@ -776,7 +631,7 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     do: {:stop, :normal, close_prepared_targets(%{state | error: {:owner_down, reason}}, :all)}
 
   def handle_info({:DOWN, ref, :process, pid, reason}, state) do
-    state = state |> close_workflow_owner(ref, pid) |> settle_prepared_target_producer(ref, pid)
+    state = settle_prepared_target_producer(state, ref, pid)
 
     case Enum.find(state.jobs, fn {_key, {_pid, monitor, _tag}} -> monitor == ref end) do
       {key, {_pid, _monitor, tag}} ->
@@ -1707,48 +1562,6 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     |> Map.put(:run_id, run_id)
   end
 
-  defp pdf_model_context(context, provider_context) do
-    runtime = provider_context.provider_config
-    model = provider_context.request_options[:model]
-
-    provider =
-      case runtime[:provider_id] do
-        id when is_binary(id) ->
-          case Synapsis.Providers.get(id) do
-            {:ok, saved} -> saved.name
-            _ -> nil
-          end
-
-        _ ->
-          runtime[:provider_name]
-      end
-
-    active =
-      if is_binary(provider) and is_binary(model) do
-        supports_images =
-          with {:ok, saved} <- Synapsis.Providers.get_by_name(provider),
-               {:ok, record} <- Synapsis.Models.get_by_identity(saved.id, model),
-               input when is_list(input) <- record.input do
-            "image" in input
-          else
-            _ ->
-              case Synapsis.Provider.ModelRegistry.get(model) do
-                {:ok, metadata} -> metadata.supports_images
-                _ -> false
-              end
-          end
-
-        %{provider: provider, model: model, supports_images: supports_images}
-      end
-
-    %{
-      configured_default:
-        context.agent[:configured_default_model] ||
-          Config.configured_default_model(context.agent[:name], context.session.config || %{}),
-      active_model: active
-    }
-  end
-
   defp options(state, context, run_id, incarnation, messages, parent_authority, child?) do
     identity = %{
       caller: "synapsis:" <> state.session_id,
@@ -1794,12 +1607,6 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
              }
            }
            |> Map.merge(state.fixture_context),
-         context =
-           if("synapsis::pdf" in selection,
-             do:
-               Map.put(context, :pdf_model_context, pdf_model_context(context, provider_context)),
-             else: context
-           ),
          {:ok, native} <- native_bundles(state, ceiling, selection, child?),
          {:ok, local} <-
            NativeLocal.bundles(local_context(state, context, run_id, child?), ceiling, selection),
@@ -1815,21 +1622,6 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
          {:ok, web} <- Fetch.bundles(context, identity, ceiling, selection, state.binding),
          {:ok, web_search} <-
            Search.bundles(context, identity, ceiling, selection, state.binding),
-         {:ok, web_extract} <-
-           Extract.bundles(context, identity, ceiling, selection, state.binding),
-         {:ok, web_scrape} <-
-           Scrape.bundles(context, identity, ceiling, selection, state.binding),
-         {:ok, x_search} <-
-           XSearch.bundles(context, identity, ceiling, selection, state.binding),
-         {:ok, remote_analysis} <-
-           CodeExecution.bundles(context, identity, ceiling, selection, state.binding),
-         {:ok, diffs} <- Diffs.bundles(context, identity, ceiling, selection, state.binding),
-         {:ok, pdf} <- PDF.bundles(context, identity, ceiling, selection, state.binding),
-         {:ok, workflows} <-
-           Workflows.bundles(context, identity, ceiling, selection, state.binding),
-         {:ok, tts} <- TTS.bundles(context, identity, ceiling, selection, state.binding),
-         {:ok, decisions} <-
-           Decisions.bundles(context, identity, ceiling, selection, state.binding),
          {:ok, browser, browser_resources} <-
            Browser.bundles(
              context,
@@ -1868,11 +1660,7 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
                code_mode ++
                web ++
                web_search ++
-               web_extract ++
-               web_scrape ++
-               x_search ++
-               remote_analysis ++
-               browser ++ diffs ++ pdf ++ workflows ++ tts ++ decisions ++ resources,
+               browser ++ resources,
              ceiling
            ) do
       tool_context_resolver = fn invocation, catalog ->
@@ -1886,9 +1674,7 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
         input_context: context[:input_context],
         tool_operator_id: Approval.operator_id(),
         tool_context_resolver: tool_context_resolver,
-        filesystem_preparation: filesystem_preparation,
-        workflow_effect_registration:
-          workflow_effect_registration(self_host(state), run_id, incarnation)
+        filesystem_preparation: filesystem_preparation
       }
 
       metadata = %{
@@ -2104,228 +1890,7 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
 
   defp filesystem_model_budget(_), do: nil
 
-  defp workflow_tool_context_resolver(adapter, {run_id, incarnation}, budget) do
-    fn identity, catalog ->
-      if is_map(identity) and identity[:run_id] === run_id and
-           identity[:incarnation] === incarnation,
-         do: workflow_call(adapter, {:tool_context, identity, catalog}, budget),
-         else: {:error, :scope_mismatch}
-    end
-  end
-
-  defp workflow_call(adapter, message, nil), do: GenServer.call(adapter, message, 5_000)
-
-  defp workflow_call(adapter, message, {deadline, timeout}) do
-    remaining = deadline - System.monotonic_time(:millisecond)
-
-    if remaining > 0,
-      do: GenServer.call(adapter, message, min(remaining, timeout)),
-      else: {:error, :workflow_deadline_expired}
-  end
-
-  defp workflow_budget_active?({deadline, timeout}),
-    do:
-      is_integer(deadline) and is_integer(timeout) and timeout in 1..5_000 and
-        deadline > System.monotonic_time(:millisecond)
-
-  defp workflow_parent(state, parent_key, proof, identity, binding, target) do
-    with true <- not state.closing and is_nil(state.error),
-         true <- is_map(proof) and not is_struct(proof),
-         true <-
-           Enum.sort(Map.keys(proof)) ===
-             Enum.sort([:identity, :catalog, :authority, :deadline_ms, :call_timeout_ms]),
-         true <- workflow_budget_active?({proof.deadline_ms, proof.call_timeout_ms}),
-         true <- workflow_parent_identity?(proof.identity, parent_key),
-         %{prepared_targets_closed?: false, snapshot: snapshot} <-
-           state.tool_contexts[parent_key],
-         {:ok, parent} <- Profiles.project_catalog(proof.identity, snapshot, proof.catalog),
-         true <- proof.authority === proof.catalog.authority,
-         true <- workflow_child_identity?(identity, parent.scope, state.tool_contexts),
-         true <- workflow_child_binding?(binding, identity),
-         %{tool_name: name, tool_revision: revision} <- target,
-         true <- map_size(target) == 2 and name in @filesystem_names and revision === 1,
-         names = ["exec", "wait", name],
-         descriptors = Map.take(proof.catalog.registry.tools, names),
-         true <- Enum.sort(Map.keys(descriptors)) === Enum.sort(names),
-         true <- workflow_parent_descriptors?(descriptors, names, proof, target),
-         %{tool_revision: invocation_revision} <-
-           proof.catalog.registry.tools[proof.identity.tool_name],
-         true <- invocation_revision === proof.identity.tool_revision,
-         {:ok, admitted} <-
-           ToolCatalog.admit_batch(proof.catalog,
-             mode: :strict,
-             run_id: proof.identity.run_id
-           ),
-         true <- workflow_admitted_authority?(admitted.authority, proof.authority) do
-      {:ok, parent, workflow_authority(proof.authority, names, identity.run_id), descriptors}
-    else
-      _ -> {:error, :invalid_workflow_proof}
-    end
-  end
-
-  defp workflow_parent_identity?(identity, {run_id, incarnation})
-       when is_map(identity) and not is_struct(identity) do
-    Enum.sort(Map.keys(identity)) === Enum.sort(@workflow_identity_fields) and
-      identity[:run_id] === run_id and identity[:incarnation] === incarnation and
-      filesystem_identity_string?(identity[:caller]) and
-      filesystem_target_identity?(Map.delete(identity, :caller))
-  end
-
-  defp workflow_parent_identity?(_, _), do: false
-
-  defp workflow_child_identity?(identity, scope, contexts)
-       when is_map(identity) and not is_struct(identity) do
-    Enum.sort(Map.keys(identity)) ===
-      Enum.sort([:caller, :session_id, :run_id, :incarnation, :catalog_revision]) and
-      identity[:caller] === scope.caller and identity[:session_id] === scope.session_id and
-      filesystem_identity_string?(identity[:run_id]) and is_integer(identity[:incarnation]) and
-      identity.incarnation > 0 and
-      identity[:catalog_revision] === 1 and
-      not Enum.any?(contexts, fn {{run_id, _}, _} -> run_id === identity.run_id end)
-  end
-
-  defp workflow_child_identity?(_, _, _), do: false
-
-  defp workflow_child_binding?(binding, identity) when is_map(binding) do
-    binding[:run_id] === identity.run_id and binding[:run_incarnation] === identity.incarnation and
-      is_pid(binding[:session]) and is_pid(binding[:resource_registry]) and
-      is_reference(binding[:token]) and is_pid(binding[:owner_pid]) and
-      filesystem_identity_string?(binding[:owner_id]) and is_integer(binding[:incarnation]) and
-      binding.incarnation > 0
-  end
-
-  defp workflow_child_binding?(_, _), do: false
-
-  defp workflow_parent_descriptors?(descriptors, names, proof, target) do
-    authority = proof.authority
-
-    is_map(authority) and is_list(authority[:grants]) and
-      Enum.all?(names, fn name ->
-        descriptor = descriptors[name]
-
-        name in authority.grants and
-          descriptor[:tool_name] === name and
-          descriptor[:tool_revision] ===
-            Map.get(Map.get(authority, :tool_revisions, %{}), name, authority[:tool_revision]) and
-          not Map.has_key?(Map.get(authority, :tool_bindings, %{}), name)
-      end) and
-      Enum.all?(["exec", "wait"], fn name ->
-        descriptor = descriptors[name]
-
-        descriptor[:backend] === Backplane.AgentRuntime.Codex.Backend and
-          is_map(descriptor[:backend_context]) and
-          descriptor.backend_context[:family] === :code_mode and
-          is_map(descriptor.backend_context[:context]) and
-          is_map(descriptor.backend_context[:session_binding]) and
-          descriptor.backend_context.session_binding[:run_id] === proof.identity.run_id and
-          descriptor.backend_context.session_binding[:run_incarnation] ===
-            proof.identity.incarnation
-      end) and
-      descriptors["exec"].backend_context.session_binding ===
-        descriptors["wait"].backend_context.session_binding and
-      descriptors[target.tool_name][:backend] === Filesystem and
-      descriptors[target.tool_name][:tool_revision] === target.tool_revision and
-      filesystem_descriptor_context?(
-        descriptors[target.tool_name][:backend_context],
-        proof.identity
-      ) and
-      Enum.all?([:run_id, :incarnation, :catalog_revision], fn field ->
-        descriptors[target.tool_name].backend_context[field] === proof.identity[field]
-      end) and
-      is_map(descriptors[target.tool_name].backend_context[:path_environment]) and
-      is_list(descriptors[target.tool_name].backend_context[:execution_options]) and
-      is_function(descriptors[target.tool_name].backend_context[:prepared_target_resolver], 3)
-  end
-
-  defp workflow_authority(authority, names, run_id) do
-    authority
-    |> Map.put(:run_id, run_id)
-    |> Map.put(:grants, names)
-    |> Map.update(:tool_revisions, %{}, &Map.take(&1, names))
-    |> then(fn narrowed ->
-      if Map.has_key?(narrowed, :tool_bindings),
-        do: Map.update!(narrowed, :tool_bindings, &Map.take(&1, names)),
-        else: narrowed
-    end)
-  end
-
-  defp workflow_admitted_authority?(admitted, expected) do
-    # Re-admitting a registry map sorts descriptors; grant order is preserved
-    # in the actual child authority checked separately during activation.
-    Map.drop(admitted, [:grants]) === Map.drop(expected, [:grants]) and
-      Enum.sort(admitted.grants) === Enum.sort(expected.grants)
-  end
-
-  defp workflow_child_descriptors(descriptors, identity, binding, preparation) do
-    Map.new(descriptors, fn {name, descriptor} ->
-      backend = descriptor.backend_context
-
-      backend =
-        if name in ["exec", "wait"] do
-          context =
-            Map.merge(backend.context, %{
-              session_binding: binding,
-              resource_registry: binding.resource_registry,
-              session_registry: binding.resource_registry
-            })
-
-          Map.merge(backend, %{session_binding: binding, context: context})
-        else
-          backend
-          |> Map.merge(Map.take(identity, [:run_id, :incarnation, :catalog_revision]))
-          |> Map.put(:prepared_target_resolver, preparation.fetch)
-        end
-
-      {name, Map.put(descriptor, :backend_context, backend)}
-    end)
-  end
-
-  defp workflow_parent_active?(state, workflow) do
-    with true <- not state.closing and is_nil(state.error),
-         %{prepared_targets_closed?: false, snapshot: snapshot} <-
-           state.tool_contexts[workflow.parent_key],
-         {:ok, _} <-
-           Profiles.project_catalog(workflow.parent_identity, snapshot, workflow.parent_catalog) do
-      true
-    else
-      _ -> false
-    end
-  end
-
-  defp workflow_activation(bundle, snapshot, workflow) when is_map(bundle) and is_map(snapshot) do
-    names = Map.keys(workflow.descriptors) |> Enum.sort()
-
-    expected_scope =
-      Map.put(
-        workflow.identity,
-        :permission_fingerprint,
-        workflow.evidence.permission_fingerprint
-      )
-
-    with %{registry: %{tools: descriptors}, authority: authority, tools: tools} <- bundle,
-         true <- descriptors === workflow.descriptors and authority === workflow.authority,
-         true <- snapshot[:scope] === expected_scope,
-         true <- snapshot[:issued_descriptors] === descriptors,
-         true <- snapshot[:permission] === workflow.permission,
-         true <- snapshot[:evidence] === workflow.evidence,
-         true <- is_map(snapshot[:selected]) and Enum.sort(Map.keys(snapshot.selected)) === names,
-         true <- snapshot[:permission_levels] === workflow.permission_levels,
-         true <- is_map(snapshot[:known_bindings]),
-         catalog = %{revision: 1, registry: bundle.registry, tools: tools, authority: authority},
-         {:ok, _} <- Profiles.project_catalog(workflow.identity, snapshot, catalog),
-         {:ok, admitted} <-
-           ToolCatalog.admit_batch(bundle, mode: :strict, run_id: workflow.identity.run_id),
-         true <- admitted.registry === bundle.registry,
-         true <- workflow_admitted_authority?(admitted.authority, authority) do
-      :ok
-    else
-      _ -> {:error, :invalid_workflow_catalog}
-    end
-  end
-
-  defp workflow_activation(_, _, _), do: {:error, :invalid_workflow_catalog}
-
-  defp filesystem_preparation(adapter, run_id, incarnation, budget \\ nil) do
+  defp filesystem_preparation(adapter, run_id, incarnation) do
     binding = {run_id, incarnation}
 
     %{
@@ -2334,8 +1899,7 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
           adapter,
           binding,
           identity,
-          {:filesystem_target_reserve, identity, catalog, digest},
-          budget
+          {:filesystem_target_reserve, identity, catalog, digest}
         )
       end,
       seal: fn identity, catalog, token, candidate, digest ->
@@ -2343,8 +1907,7 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
           adapter,
           binding,
           identity,
-          {:filesystem_target_seal, identity, catalog, token, candidate, digest},
-          budget
+          {:filesystem_target_seal, identity, catalog, token, candidate, digest}
         )
       end,
       fetch: fn identity, catalog, digest ->
@@ -2352,8 +1915,7 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
           adapter,
           binding,
           identity,
-          {:filesystem_target_fetch, identity, catalog, digest},
-          budget
+          {:filesystem_target_fetch, identity, catalog, digest}
         )
       end,
       abandon: fn identity, catalog, token ->
@@ -2361,21 +1923,20 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
           adapter,
           binding,
           identity,
-          {:filesystem_target_abandon, identity, catalog, token},
-          budget
+          {:filesystem_target_abandon, identity, catalog, token}
         )
       end
     }
   end
 
-  defp filesystem_preparation_call(adapter, {run_id, incarnation}, identity, message, budget)
+  defp filesystem_preparation_call(adapter, {run_id, incarnation}, identity, message)
        when is_map(identity) do
     if identity[:run_id] === run_id and identity[:incarnation] === incarnation,
-      do: workflow_call(adapter, message, budget),
+      do: GenServer.call(adapter, message, 5_000),
       else: {:error, :scope_mismatch}
   end
 
-  defp filesystem_preparation_call(_, _, _, _, _), do: {:error, :invalid_prepared_target}
+  defp filesystem_preparation_call(_, _, _, _), do: {:error, :invalid_prepared_target}
 
   defp filesystem_target_context(state, identity, catalog) do
     with true <- not state.closing and is_nil(state.error),
@@ -2384,7 +1945,6 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
          %{prepared_targets_closed?: false, prepared_targets: targets} = entry <-
            state.tool_contexts[context_key],
          true <- is_map(targets),
-         true <- workflow_preparation_active?(entry),
          {:ok, projected} <- Profiles.project_catalog(identity, entry.snapshot, catalog),
          {:ok, descriptor} <- Map.fetch(projected.issued_descriptors, identity.tool_name),
          true <-
@@ -2596,22 +2156,6 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     end)
   end
 
-  defp workflow_preparation_active?(%{workflow: %{phase: :active, budget: budget}}),
-    do: workflow_budget_active?(budget)
-
-  defp workflow_preparation_active?(%{workflow: _}), do: false
-  defp workflow_preparation_active?(_), do: true
-
-  defp close_workflow_owner(state, monitor, owner) do
-    Enum.reduce(state.tool_contexts, state, fn
-      {key, %{workflow: %{monitor: ^monitor, owner: ^owner}}}, state ->
-        close_prepared_targets(state, key)
-
-      _, state ->
-        state
-    end)
-  end
-
   defp close_prepared_targets(state, scope) do
     keys =
       for {{run_id, _} = key, _entry} <- state.tool_contexts,
@@ -2619,19 +2163,12 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
           into: MapSet.new(),
           do: key
 
-    keys = workflow_descendants(state.tool_contexts, keys)
-
     contexts =
       Enum.reduce(state.tool_contexts, state.tool_contexts, fn {key, entry}, acc ->
         if MapSet.member?(keys, key) do
           Enum.each(Map.get(entry, :prepared_targets, %{}), fn {_, envelope} ->
             demonitor_prepared_target(envelope)
           end)
-
-          case entry do
-            %{workflow: %{monitor: monitor}} -> Process.demonitor(monitor, [:flush])
-            _ -> :ok
-          end
 
           if not skill_resources?(entry) do
             Map.delete(acc, key)
@@ -2652,21 +2189,6 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
       end)
 
     %{state | tool_contexts: contexts}
-  end
-
-  defp workflow_descendants(contexts, keys) do
-    descendants =
-      Enum.reduce(contexts, keys, fn
-        {key, %{workflow: %{parent_key: parent_key}}}, acc ->
-          if MapSet.member?(acc, parent_key), do: MapSet.put(acc, key), else: acc
-
-        _, acc ->
-          acc
-      end)
-
-    if MapSet.equal?(keys, descendants),
-      do: descendants,
-      else: workflow_descendants(contexts, descendants)
   end
 
   defp local_context(state, context, run_id, _child?) do

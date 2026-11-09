@@ -11,8 +11,7 @@ defmodule SynapsisAgent.Application do
       {Registry, keys: :unique, name: Synapsis.Session.TaskSupervisorRegistry},
       {Registry, keys: :unique, name: Synapsis.Agent.Registry},
       Synapsis.Session.DynamicSupervisor,
-      Synapsis.Agent.Supervisor,
-      Synapsis.Agent.DiffsCleanup
+      Synapsis.Agent.Supervisor
     ]
 
     opts = [strategy: :rest_for_one, name: SynapsisAgent.Supervisor]

@@ -76,18 +76,6 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
 
     @impl true
     def init(state), do: {:ok, state}
-
-    @impl true
-    def handle_call({:register_tool, tool_name}, _from, state) do
-      :ok =
-        Synapsis.Tool.Registry.register_process(tool_name, self(),
-          description: "Fake tool",
-          parameters: %{},
-          plugin: :mcp
-        )
-
-      {:reply, :ok, state}
-    end
   end
 
   defp create_mcp_config(attrs) do
@@ -524,46 +512,6 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
       assert updated.enabled == true
     end
 
-    test "disabling a running MCP stops it and unregisters its tools", %{conn: conn} do
-      config = create_mcp_config(%{name: "disable-running", command: "test", enabled: true})
-
-      {:ok, pid} =
-        DynamicSupervisor.start_child(
-          Synapsis.MCP.DynamicSupervisor,
-          %{
-            id: {:fake, config.name},
-            start: {FakeMCPServer, :start_link, [[name: config.name]]},
-            restart: :temporary
-          }
-        )
-
-      on_exit(fn ->
-        if Process.alive?(pid) do
-          DynamicSupervisor.terminate_child(Synapsis.MCP.DynamicSupervisor, pid)
-        end
-      end)
-
-      tool_name = "mcp:#{config.name}:fake"
-      assert :ok = GenServer.call(pid, {:register_tool, tool_name})
-      assert {:ok, {:process, ^pid, _opts}} = Synapsis.Tool.Registry.lookup(tool_name)
-
-      {:ok, view, html} = live(conn, ~p"/settings/mcp")
-      assert html =~ "Running"
-
-      view
-      |> element(~s(input[phx-click="toggle_enabled"][phx-value-id="#{config.id}"]))
-      |> render_click()
-
-      refute MCPConfigs.get(config.id).enabled
-      assert wait_until(fn -> not Process.alive?(pid) end)
-
-      assert wait_until(fn ->
-               Synapsis.Tool.Registry.lookup(tool_name) == {:error, :not_found}
-             end)
-
-      refute config.name in Synapsis.MCP.list()
-    end
-
     test "displays env var count for config with env", %{conn: conn} do
       create_mcp_config(%{
         name: "env-server",
@@ -584,74 +532,6 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
 
       {:ok, _view, html} = live(conn, ~p"/settings/mcp")
       assert html =~ "-y @test/server"
-    end
-
-    test "running server shows tools modal trigger from registry", %{conn: conn} do
-      config = create_mcp_config(%{name: "tools-server", command: "test"})
-
-      {:ok, _pid} =
-        DynamicSupervisor.start_child(
-          Synapsis.MCP.DynamicSupervisor,
-          %{
-            id: {:fake, config.name},
-            start: {FakeMCPServer, :start_link, [[name: config.name]]},
-            restart: :temporary
-          }
-        )
-
-      tool_name = "mcp:#{config.name}:search_docs"
-
-      Synapsis.Tool.Registry.register_process(tool_name, self(),
-        description: "Search docs",
-        parameters: %{},
-        plugin: :mcp
-      )
-
-      on_exit(fn -> Synapsis.Tool.Registry.unregister(tool_name) end)
-
-      {:ok, view, html} = live(conn, ~p"/settings/mcp")
-
-      assert html =~ "Running"
-      assert html =~ "1 tool(s)"
-
-      assert has_element?(
-               view,
-               ~s(button[command="show-modal"][commandfor="tools-modal-#{config.id}"]),
-               "1 tool(s)"
-             )
-
-      refute html =~ ".show()"
-    end
-
-    test "running server refreshes tools after registry change", %{conn: conn} do
-      config = create_mcp_config(%{name: "refresh-tools-server", command: "test"})
-
-      {:ok, _pid} =
-        DynamicSupervisor.start_child(
-          Synapsis.MCP.DynamicSupervisor,
-          %{
-            id: {:fake, config.name},
-            start: {FakeMCPServer, :start_link, [[name: config.name]]},
-            restart: :temporary
-          }
-        )
-
-      {:ok, view, html} = live(conn, ~p"/settings/mcp")
-
-      assert html =~ "Running"
-      refute html =~ "1 tool(s)"
-
-      tool_name = "mcp:#{config.name}:search_docs"
-
-      Synapsis.Tool.Registry.register_process(tool_name, self(),
-        description: "Search docs",
-        parameters: %{},
-        plugin: :mcp
-      )
-
-      on_exit(fn -> Synapsis.Tool.Registry.unregister(tool_name) end)
-
-      assert wait_until(fn -> render(view) =~ "1 tool(s)" end)
     end
 
     test "lists multiple MCP configs", %{conn: conn} do
@@ -708,19 +588,5 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
     end)
 
     provider
-  end
-
-  defp wait_until(fun, tries \\ 100) do
-    cond do
-      tries <= 0 ->
-        false
-
-      fun.() ->
-        true
-
-      true ->
-        Process.sleep(20)
-        wait_until(fun, tries - 1)
-    end
   end
 end

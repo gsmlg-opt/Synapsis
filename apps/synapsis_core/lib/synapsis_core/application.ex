@@ -9,17 +9,12 @@ defmodule SynapsisCore.Application do
       [
         # ADR-006 C4: Synapsis.Repo removed; storage is Concord + files + memory port.
         {Phoenix.PubSub, name: Synapsis.PubSub},
-        Synapsis.TaskSuggestions,
         Synapsis.Web.Search.Cache,
-        Synapsis.Web.Extract.Cache,
         Synapsis.Web.Fetch.Cache,
-        Synapsis.Web.XSearch.Cache,
         {Task.Supervisor, name: Synapsis.Provider.TaskSupervisor},
         Synapsis.Provider.Registry,
         {Task.Supervisor, name: Synapsis.Tool.TaskSupervisor},
         Synapsis.Filesystem.Access,
-        Synapsis.Workflow.Provenance.Owner,
-        Synapsis.Swarm.Store,
         {Registry, keys: :unique, name: Synapsis.FileWatcher.Registry},
         Synapsis.Session.Quarantine,
         # Config.Store now boots in SynapsisData.Application (data/storage layer)

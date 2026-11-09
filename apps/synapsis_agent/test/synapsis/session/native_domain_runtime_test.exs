@@ -3,15 +3,7 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
 
   alias Synapsis.Agent.TestSupport.{AbortableHTTP, DeterministicProvider, SessionHarness}
 
-  alias Synapsis.Agent.Tools.{
-    AgentCommunication,
-    AgentHandoff,
-    Filesystem,
-    MemoryDomain,
-    SessionState,
-    SessionSummary,
-    Swarm
-  }
+  alias Synapsis.Agent.Tools.{Filesystem, MemoryDomain, SessionState, SessionSummary}
 
   alias Synapsis.Part.ToolResult
   alias Synapsis.Provider.ToolName
@@ -288,127 +280,6 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
     assert intents(runtime) == []
   end
 
-  @tag :model_visible_result
-  test "persistent mailbox tools run through Worker with configured identities and durable receipts",
-       ctx do
-    select(ctx, AgentCommunication.names())
-    target = "mail-target-#{ctx.id}"
-    owner = self()
-    supervisor = start_supervised!(Task.Supervisor)
-
-    {:ok, _} =
-      Task.Supervisor.start_child(supervisor, fn ->
-        :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, "agent:#{target}")
-        send(owner, :mail_responder_ready)
-
-        receive do
-          {:agent_envelope, %{type: :notification}} -> :ok
-        after
-          5_000 -> exit(:missing_notification)
-        end
-
-        receive do
-          {:agent_envelope, %{type: :request, ref: ref}} ->
-            response =
-              Synapsis.AgentCommunication.reply(%{"ref" => ref, "content" => "Confirmed"}, %{
-                agent_id: target,
-                session_id: ctx.id,
-                primary: false
-              })
-
-            send(owner, {:mail_response, response})
-        after
-          5_000 -> exit(:missing_request)
-        end
-      end)
-
-    assert_receive :mail_responder_ready, 1_000
-
-    assert {:ok, request} =
-             Synapsis.AgentMessages.create(%{
-               ref: Ecto.UUID.generate(),
-               from_agent_id: target,
-               to_agent_id: ctx.harness.agent_name,
-               type: "request",
-               payload: %{"question" => "Review"},
-               session_id: ctx.id
-             })
-
-    runtime =
-      run(ctx, [
-        {"synapsis::agent_send", %{"to" => target, "content" => "Notice"}},
-        {"synapsis::agent_ask",
-         %{"to" => target, "question" => "Confirm", "timeout_ms" => 2_000}},
-        {"synapsis::agent_inbox", %{"action" => "unread", "type" => "request"}},
-        {"synapsis::agent_reply", %{"ref" => request.ref, "content" => "Reviewed"}}
-      ])
-
-    assert_receive {:mail_response, {:ok, _}}, 1_000
-    assert [sent, asked, inbox, replied] = results(ctx.id)
-    assert Enum.all?([sent, asked, inbox, replied], &(&1.is_error == false))
-    assert sent.projection["result"]["structured"]["status"] == "persisted"
-    assert asked.projection["result"]["structured"]["response"]["content"] == "Confirmed"
-    assert inbox.projection["result"]["structured"]["count"] == 1
-    for result <- [sent, asked, inbox, replied], do: assert_public_replay(ctx, result)
-    assert {:ok, %{status: "acknowledged"}} = Synapsis.AgentMessages.fetch(request.id)
-    assert length(intents(runtime)) == 4
-
-    for {_, descriptor} <- runtime.descriptors do
-      assert descriptor.backend == AgentCommunication
-      assert descriptor.backend_context.agent_id == ctx.harness.agent_name
-      assert descriptor.backend_context.session_id == ctx.id
-      assert descriptor.backend_context.primary
-    end
-
-    assert {:ok, turns} = Store.list_turns(ctx.id)
-    assert Enum.count(for turn <- turns, part <- turn.parts, part[:projection], do: part) == 4
-  end
-
-  @tag :model_visible_result
-  test "swarm metadata and publication run independently of native child collaboration", ctx do
-    select(ctx, Swarm.names())
-    :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, "swarm:#{ctx.id}:saved")
-    on_exit(fn -> :ets.delete(:synapsis_swarm_teammates, ctx.id) end)
-
-    runtime =
-      run(ctx, [
-        {"synapsis::teammate",
-         %{"action" => "create", "name" => "saved", "prompt" => "Review scoped code"}},
-        {"synapsis::swarm_message", %{"to" => "saved", "content" => "Notification"}},
-        {"synapsis::teammate", %{"action" => "get", "name" => "saved"}},
-        {"synapsis::teammate",
-         %{"action" => "update", "name" => "saved", "prompt" => "Updated review instructions"}},
-        {"synapsis::teammate", %{"action" => "list"}},
-        {"synapsis::team_delete", %{}}
-      ])
-
-    assert [created, published, saved, updated, listed, deleted] = results(ctx.id)
-
-    assert Enum.all?(
-             [created, published, saved, updated, listed, deleted],
-             &(&1.is_error == false)
-           )
-
-    assert created.projection["result"]["structured"]["status"] == "configured"
-    assert published.projection["result"]["structured"]["status"] == "published"
-    assert saved.projection["result"]["structured"]["name"] == "saved"
-    assert saved.projection["result"]["structured"]["prompt"] == "Review scoped code"
-    assert updated.projection["result"]["structured"]["prompt"] == "Updated review instructions"
-
-    assert listed.projection["result"]["structured"] == [
-             updated.projection["result"]["structured"]
-           ]
-
-    for result <- [created, saved, updated, listed], do: assert_public_replay(ctx, result)
-    assert deleted.projection["result"]["structured"]["count"] == 1
-    assert_receive {:swarm_message, %{from: sender, content: "Notification"}}
-    assert sender == ctx.harness.agent_name
-    assert :ets.lookup(:synapsis_swarm_teammates, ctx.id) == []
-    assert length(intents(runtime)) == 6
-    assert Enum.all?(runtime.descriptors, fn {_, descriptor} -> descriptor.backend == Swarm end)
-    refute Map.has_key?(runtime.descriptors, "send_message")
-  end
-
   test "exact mail and swarm denies prevent native intent and domain effects", ctx do
     select(ctx, ["synapsis::agent_send", "synapsis::teammate"])
 
@@ -431,15 +302,6 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
     assert {:ok, []} = Synapsis.AgentMessages.query("history", target)
     assert :ets.lookup(:synapsis_swarm_teammates, ctx.id) == []
     refute_receive {:agent_envelope, _}
-  end
-
-  test "Worker shutdown removes its saved swarm metadata through the core owner", ctx do
-    select(ctx, [])
-    owner = Process.whereis(Synapsis.Swarm.Store)
-    assert {:ok, _} = Synapsis.Swarm.teammate(ctx.id, %{"action" => "create", "name" => "saved"})
-    assert :ok = Synapsis.Session.DynamicSupervisor.stop_session(ctx.id)
-    assert Process.whereis(Synapsis.Swarm.Store) == owner
-    assert :ets.lookup(:synapsis_swarm_teammates, ctx.id) == []
   end
 
   @tag :model_visible_result
@@ -537,90 +399,6 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
     assert results(ctx.id) == []
   end
 
-  @tag :model_visible_result
-  test "handoff persists matching mail and artifact through Worker without starting a session",
-       ctx do
-    handoff_workspace(ctx)
-    select(ctx, AgentHandoff.names())
-    target = "handoff-recipient-#{ctx.id}"
-    :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, "agent:#{target}")
-    {:ok, before_sessions} = Store.list_metas()
-    before_ids = MapSet.new(before_sessions, & &1.id)
-    reference = "@synapsis/agents/#{ctx.harness.agent_name}/findings.md"
-
-    input = %{
-      "to" => target,
-      "summary" => "Findings",
-      "instructions" => "Review independently",
-      "artifacts" => [reference],
-      "priority" => "high",
-      "constraints" => %{"read_only" => true}
-    }
-
-    runtime = run(ctx, [{"synapsis::agent_handoff", input}])
-    assert [%ToolResult{is_error: false} = result] = results(ctx.id)
-    receipt = result.projection["result"]["structured"]
-    assert receipt["status"] == "persisted"
-    assert receipt["artifact_status"] == "persisted"
-    assert receipt["mailbox_publication"] == "published"
-    assert_public_replay(ctx, result)
-
-    assert receipt["artifact_path"] ==
-             "/agents/#{ctx.harness.agent_name}/handoffs/#{receipt["ref"]}.json"
-
-    assert {:ok, message} = Synapsis.AgentMessages.fetch(receipt["message_id"])
-    assert message.from_agent_id == ctx.harness.agent_name
-    assert message.session_id == ctx.id
-    assert message.to_agent_id == target
-    assert message.type == "handoff"
-    assert message.payload == Map.delete(input, "to")
-    assert {:ok, %{content: content}} = Synapsis.Workspace.read(receipt["artifact_path"])
-    artifact = Jason.decode!(content)
-    assert artifact["ref"] == message.ref
-    assert artifact["from"] == message.from_agent_id
-    assert artifact["to"] == target
-    assert artifact["payload"] == message.payload
-    assert_receive {:agent_envelope, %{type: :handoff, ref: ref}}
-    assert ref == receipt["ref"]
-
-    refute File.exists?(
-             Path.join(ctx.harness.tmp_dir, "agents/#{ctx.harness.agent_name}/findings.md")
-           )
-
-    assert length(intents(runtime)) == 1
-    assert Map.keys(runtime.descriptors) == AgentHandoff.names()
-    assert runtime.descriptors["synapsis::agent_handoff"].backend == AgentHandoff
-    {:ok, after_sessions} = Store.list_metas()
-    assert MapSet.new(after_sessions, & &1.id) == before_ids
-    assert {:ok, turns} = Store.list_turns(ctx.id)
-    durable = for turn <- turns, part <- turn.parts, part[:type] == "tool_result", do: part
-    assert Enum.map(durable, & &1[:projection]) == [result.projection]
-  end
-
-  test "exact handoff denial prevents native intent mail artifact and notifications", ctx do
-    handoff_workspace(ctx)
-    select(ctx, AgentHandoff.names())
-    permission(ctx, tool_overrides: %{"synapsis::agent_handoff" => :deny})
-    target = "denied-handoff-#{ctx.id}"
-    :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, "agent:#{target}")
-
-    runtime =
-      run(ctx, [
-        {"synapsis::agent_handoff",
-         %{
-           "to" => target,
-           "summary" => "Denied",
-           "instructions" => "No effects"
-         }}
-      ])
-
-    assert [%ToolResult{is_error: true}] = results(ctx.id)
-    assert intents(runtime) == []
-    assert {:ok, []} = Synapsis.AgentMessages.query("history", target)
-    assert Path.wildcard(Path.join(ctx.harness.tmp_dir, "agents/**/handoffs/*.json")) == []
-    refute_receive {:agent_envelope, _}, 0
-  end
-
   test "Worker preserves automatic and explicit manual Skills with durable source identity",
        ctx do
     select(ctx, ~w(synapsis::skills_search synapsis::skills_read synapsis::skill))
@@ -686,17 +464,6 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
     {:ok, _} = Synapsis.Skills.assign_skills(agent, Enum.map(skills, & &1.id))
     on_exit(fn -> Enum.each(skills, &Synapsis.Config.Store.delete(:skill, &1.id)) end)
     List.to_tuple(skills)
-  end
-
-  defp handoff_workspace(ctx) do
-    previous = System.get_env("SYNAPSIS_WORKSPACE_ROOT")
-    System.put_env("SYNAPSIS_WORKSPACE_ROOT", ctx.harness.tmp_dir)
-
-    on_exit(fn ->
-      if previous,
-        do: System.put_env("SYNAPSIS_WORKSPACE_ROOT", previous),
-        else: System.delete_env("SYNAPSIS_WORKSPACE_ROOT")
-    end)
   end
 
   @tag :agent_directory_production

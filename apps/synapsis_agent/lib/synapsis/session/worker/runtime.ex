@@ -4,7 +4,7 @@ defmodule Synapsis.Session.Worker.Runtime do
   alias Synapsis.Agent.Runtime.{ProviderMessages, SessionAdapter}
   alias Synapsis.Agent.Tools.{MCPSources, Questions}
   alias Synapsis.Agent.Events.Emitter
-  alias Synapsis.Session.Worker.{Config, PendingInputs, Persistence, SuggestedTurn}
+  alias Synapsis.Session.Worker.{Config, PendingInputs, Persistence}
   alias Synapsis.Session.{EventReply, Store}
   alias Synapsis.{Message, Part, Session}
 
@@ -152,15 +152,12 @@ defmodule Synapsis.Session.Worker.Runtime do
           user
       end
 
-    artifacts = completion_artifacts(data.session_id, pending_input)
-    messages = messages ++ artifacts
-
     with {:ok, history} <- ProviderMessages.from_host(messages),
          {:ok, [input]} <- ProviderMessages.from_host([user]),
          {:ok, offset} <- Store.count_turns(data.session_id),
          {:ok, meta} <- Store.get_meta(data.session_id),
          :ok <-
-           commit_input(data.session_id, pending_input, offset, artifacts ++ [user], meta) do
+           commit_input(data.session_id, offset, [user], meta) do
       context = %{
         session: data.session,
         agent: agent,
@@ -173,47 +170,11 @@ defmodule Synapsis.Session.Worker.Runtime do
           if(user.internal_turn_source == "event", do: nil, else: user.input_provenance)
       }
 
-      {:ok, context, input.content, length(history) + 1, offset + length(artifacts) + 1}
+      {:ok, context, input.content, length(history) + 1, offset + 1}
     end
   end
 
-  defp completion_artifacts(session_id, %{
-         event: %{"completion" => c},
-         input_provenance: provenance
-       }) do
-    audios =
-      Enum.map(c["audio_parts"], fn portable ->
-        {:ok, audio} = Part.load(portable)
-        audio
-      end)
-
-    [
-      %Message{
-        id: c["artifact_message_id"],
-        session_id: session_id,
-        role: "assistant",
-        inserted_at: DateTime.utc_now(),
-        input_provenance: provenance,
-        parts: [%Part.Text{content: c["result"]} | audios]
-      }
-    ]
-  end
-
-  defp completion_artifacts(_, _), do: []
-
-  defp commit_input(session_id, %{id: id, event: %{"completion" => _}}, offset, messages, meta) do
-    # The supervised preparation task waits on the existing serialized persistence
-    # lane; the Worker itself remains responsive. Native start follows this commit.
-    Synapsis.Session.Worker.apply_music_completion(session_id, id, %{
-      start_n: offset,
-      turns: Enum.map(messages, &Message.encode/1),
-      expected_meta: meta,
-      meta: Map.merge(meta, %{status: "streaming", updated_at: DateTime.utc_now()}),
-      deadline: System.monotonic_time(:millisecond) + 5_000
-    })
-  end
-
-  defp commit_input(session_id, _, offset, messages, meta) do
+  defp commit_input(session_id, offset, messages, meta) do
     Store.commit_turns(
       session_id,
       offset,
@@ -261,7 +222,7 @@ defmodule Synapsis.Session.Worker.Runtime do
         do: %{data | reply_presentation: %{data.reply_presentation | run_id: run_id}},
         else: data
 
-    data |> PendingInputs.started(run_id) |> SuggestedTurn.started(run_id)
+    PendingInputs.started(data, run_id)
   end
 
   # The terminal event owns the one transcript write. Repeated history events
@@ -380,7 +341,7 @@ defmodule Synapsis.Session.Worker.Runtime do
       do: data
 
   def event(data, %{type: :prompt_consumed, mode: :new} = event),
-    do: data |> PendingInputs.adopt(event) |> SuggestedTurn.consumed(event)
+    do: PendingInputs.adopt(data, event)
 
   def event(data, %{type: :content_text_delta, delta: text}) do
     data = preview_reply(data, text)
@@ -551,7 +512,6 @@ defmodule Synapsis.Session.Worker.Runtime do
 
   # This cache has no execution ownership. It derives a replaceable view from
   # already fenced native events, while the authored transcript remains raw.
-  defp new_reply_presentation(_session_id, %{event: %{"completion" => _}}), do: nil
 
   defp new_reply_presentation(session_id, %{kind: "system_event", id: occurrence_id}) do
     %{
@@ -763,7 +723,7 @@ defmodule Synapsis.Session.Worker.Runtime do
   end
 
   def fail(data, reason) do
-    data = data |> SuggestedTurn.failed() |> PendingInputs.failed() |> clear_questions(:all)
+    data = data |> PendingInputs.failed() |> clear_questions(:all)
     if data.runtime_task, do: Task.shutdown(data.runtime_task, :brutal_kill)
     if is_pid(data.runtime_pid), do: SessionAdapter.cancel(data.runtime_pid)
     Persistence.broadcast(data.session_id, "runtime_permissions", [])

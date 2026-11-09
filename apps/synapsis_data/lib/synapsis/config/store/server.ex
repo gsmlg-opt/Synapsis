@@ -652,7 +652,7 @@ defmodule Synapsis.Config.Store.Server do
         case Toml.decode(content) do
           {:ok, map} ->
             entries =
-              if type in [:memory, :diffs],
+              if type == :memory,
                 do: if(map == %{}, do: [], else: [Map.put(map, "id", "default")]),
                 else: Map.get(map, Atom.to_string(type) <> "s", [])
 
@@ -734,7 +734,7 @@ defmodule Synapsis.Config.Store.Server do
     path = Store.file_path(type)
 
     content =
-      if type in [:memory, :diffs] do
+      if type == :memory do
         case entries do
           [] ->
             ""
@@ -933,7 +933,6 @@ defmodule Synapsis.Config.Store.Server do
     end
   end
 
-  defp validate_entry(:diffs, attrs), do: Synapsis.Diffs.Config.resolve(attrs)
 
   defp validate_entry(:memory, attrs) when is_map(attrs) do
     attrs = stringify_keys(attrs)

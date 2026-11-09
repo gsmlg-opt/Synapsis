@@ -86,8 +86,7 @@ defmodule Synapsis.Provider.Adapter do
 
   @doc "List available models for the given provider config."
   def models(config) do
-    with :ok <- Synapsis.Providers.ensure_llm_provider(config),
-         {:ok, config} <- Synapsis.Providers.refresh_runtime_auth(config),
+    with {:ok, config} <- Synapsis.Providers.refresh_runtime_auth(config),
          do: discover_models(config)
   end
 
@@ -136,11 +135,7 @@ defmodule Synapsis.Provider.Adapter do
   def format_request(messages, tools, opts) do
     type = opts[:provider_type] || opts[:type] || "anthropic"
 
-    if Synapsis.Providers.speech_only?(%{type: type}) do
-      Backplane.AiProtocol.Error.incompatible("A speech provider cannot format an LLM request")
-    else
-      MessageMapper.build_request(resolve_transport_type(type), messages, tools, opts)
-    end
+    MessageMapper.build_request(resolve_transport_type(type), messages, tools, opts)
   end
 
   @doc """

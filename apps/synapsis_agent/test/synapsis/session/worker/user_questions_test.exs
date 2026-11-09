@@ -2,7 +2,6 @@ defmodule Synapsis.Session.Worker.UserQuestionsTest do
   use Synapsis.Agent.DataCase, async: false
 
   alias Synapsis.Session.Worker
-  alias Synapsis.Agent.Graphs.CodingLoop
 
   setup do
     session_id = Ecto.UUID.generate()
@@ -94,33 +93,6 @@ defmodule Synapsis.Session.Worker.UserQuestionsTest do
     assert [] == snapshot(data)
     assert_receive {:ask_user_cancelled, ^ref}
     assert_receive {:ask_user_closed, ^ref}
-  end
-
-  test "late questions from a cancelled graph turn are rejected and release their owner", ctx do
-    session = %Synapsis.Session{id: ctx.data.session_id, status: "streaming"}
-    :ok = Synapsis.Session.Store.put_meta(session.id, Synapsis.Session.to_meta(session))
-    {:ok, graph} = CodingLoop.build()
-
-    data = %{
-      ctx.data
-      | session: session,
-        graph: graph,
-        engine_node: :llm_stream,
-        engine_state: CodingLoop.initial_state(%{session_id: session.id}),
-        engine_ctx: %{},
-        execution_mode: :graph
-    }
-
-    assert {:next_state, :idle, data, _} =
-             Worker.handle_event(:cast, :cancel, :generating, data)
-
-    assert data.epoch != ctx.data.epoch
-    {ref, data} = register(data, self(), 10_000, ctx.data.epoch)
-    assert [] == snapshot(data)
-    assert_receive {:ask_user_cancelled, ^ref}
-    assert_receive {:ask_user_closed, ^ref}
-    refute_receive {:ask_user, ^ref, _}
-    assert {{:error, :question_not_pending}, _} = answer(data, ref, "Too late")
   end
 
   test "legacy questions without an epoch remain answerable", ctx do

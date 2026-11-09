@@ -5,14 +5,14 @@ defmodule Synapsis.Tool.PermissionTest do
   alias Synapsis.Tool.Permission.SessionConfig
 
   describe "SessionConfig struct" do
-    test "default/0 returns interactive mode with expected defaults" do
+    test "default/0 returns autonomous (yolo) mode with expected defaults" do
       config = SessionConfig.default()
       assert config.session_id == nil
-      assert config.mode == :interactive
+      assert config.mode == :autonomous
       assert config.allow_read == :allow
       assert config.allow_write == :allow
-      assert config.allow_execute == :ask
-      assert config.allow_destructive == :ask
+      assert config.allow_execute == :allow
+      assert config.allow_destructive == :allow
       assert config.overrides == []
     end
 

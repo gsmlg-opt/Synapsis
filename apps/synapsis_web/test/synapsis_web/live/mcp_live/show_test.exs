@@ -14,18 +14,6 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
 
     @impl true
     def init(state), do: {:ok, state}
-
-    @impl true
-    def handle_call({:register_tool, tool_name}, _from, state) do
-      :ok =
-        Synapsis.Tool.Registry.register_process(tool_name, self(),
-          description: "Fake tool",
-          parameters: %{},
-          plugin: :mcp
-        )
-
-      {:reply, :ok, state}
-    end
   end
 
   defmodule NoopRefresh do
@@ -391,58 +379,5 @@ defmodule SynapsisWeb.MCPLive.ShowTest do
     |> react_form_submit("mcp-config-form", %{"command" => "test", "enabled" => "false"})
 
     assert render(view) =~ "MCP server updated"
-  end
-
-  test "disabling a running server stops it and unregisters its tools", %{
-    conn: conn,
-    config: config
-  } do
-    {:ok, pid} =
-      DynamicSupervisor.start_child(
-        Synapsis.MCP.DynamicSupervisor,
-        %{
-          id: {:show_fake, config.name},
-          start: {FakeMCPServer, :start_link, [config.name]},
-          restart: :temporary
-        }
-      )
-
-    on_exit(fn ->
-      if Process.alive?(pid) do
-        DynamicSupervisor.terminate_child(Synapsis.MCP.DynamicSupervisor, pid)
-      end
-    end)
-
-    tool_name = "mcp:#{config.name}:fake"
-    assert :ok = GenServer.call(pid, {:register_tool, tool_name})
-    assert {:ok, {:process, ^pid, _opts}} = Synapsis.Tool.Registry.lookup(tool_name)
-
-    {:ok, view, _html} = live(conn, ~p"/settings/mcp/#{config.id}")
-
-    view
-    |> react_form_submit("mcp-config-form", %{"command" => config.command, "enabled" => "false"})
-
-    refute MCPConfigs.get(config.id).enabled
-    assert wait_until(fn -> not Process.alive?(pid) end)
-
-    assert wait_until(fn ->
-             Synapsis.Tool.Registry.lookup(tool_name) == {:error, :not_found}
-           end)
-
-    refute config.name in Synapsis.MCP.list()
-  end
-
-  defp wait_until(fun, tries \\ 100) do
-    cond do
-      tries <= 0 ->
-        false
-
-      fun.() ->
-        true
-
-      true ->
-        Process.sleep(20)
-        wait_until(fun, tries - 1)
-    end
   end
 end

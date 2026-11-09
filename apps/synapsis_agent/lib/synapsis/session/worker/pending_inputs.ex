@@ -80,27 +80,6 @@ defmodule Synapsis.Session.Worker.PendingInputs do
     end
   end
 
-  def music_completion(data, attrs, opts, from) do
-    if attrs[:agent_id] == data.agent[:id] do
-      attrs = Map.put(attrs, :owner_id, data.pending_inputs.owner_id)
-      op = operation(:music_completion, from, %{attrs: attrs})
-      enqueue(data, %{op | deadline: min(op.deadline, Keyword.fetch!(opts, :deadline))})
-    else
-      {data, [{:reply, from, {:error, :agent_mismatch}}]}
-    end
-  end
-
-  def apply_music_completion(data, event_id, payload, from) do
-    case data.pending_inputs.current do
-      %{phase: :preparing, input: %{id: ^event_id, event: %{"completion" => _}}} ->
-        op = operation(:apply_completion, from, Map.put(payload, :event_id, event_id))
-        enqueue(data, %{op | deadline: min(op.deadline, payload.deadline)})
-
-      _ ->
-        {data, [{:reply, from, {:error, :invalid_completion_state}}]}
-    end
-  end
-
   def busy?(%{pending_inputs: nil}), do: false
 
   def busy?(%{pending_inputs: lane}) do
@@ -379,22 +358,6 @@ defmodule Synapsis.Session.Worker.PendingInputs do
   defp execute(id, _owner_id, %{kind: :wake, payload: payload, deadline: deadline}),
     do: PendingInputStore.append_event(id, payload.attrs, deadline: deadline)
 
-  defp execute(id, _owner_id, %{kind: :music_completion, payload: payload, deadline: deadline}),
-    do: PendingInputStore.append_music_completion(id, payload.attrs, deadline: deadline)
-
-  defp execute(id, owner_id, %{kind: :apply_completion, payload: p, deadline: deadline}),
-    do:
-      PendingInputStore.apply_music_completion(
-        id,
-        p.event_id,
-        owner_id,
-        p.start_n,
-        p.turns,
-        p.expected_meta,
-        p.meta,
-        deadline: deadline
-      )
-
   defp execute(id, owner_id, %{kind: :take, deadline: deadline}),
     do: PendingInputStore.take_next_turn(id, owner_id, deadline: deadline)
 
@@ -460,38 +423,6 @@ defmodule Synapsis.Session.Worker.PendingInputs do
     end
   end
 
-  defp apply_result(
-         data,
-         %{kind: :music_completion} = op,
-         {:ok, %{input: input, inserted: inserted}}
-       ) do
-    lane = data.pending_inputs
-
-    lane =
-      if inserted,
-        do: %{lane | events: MapSet.put(lane.events, input.id), drain: true},
-        else: lane
-
-    receipt = %{
-      event_id: input.id,
-      duplicate: not inserted,
-      phase: input.event["phase"],
-      status: input.status,
-      application: input.event["application"]
-    }
-
-    {%{data | pending_inputs: lane}, reply(op, {:ok, receipt})}
-  end
-
-  defp apply_result(data, %{kind: :apply_completion} = op, :ok) do
-    Persistence.broadcast(data.session_id, "music_completion_applied", %{
-      session_id: data.session_id,
-      event_id: op.payload.event_id
-    })
-
-    {data, reply(op, :ok)}
-  end
-
   defp apply_result(data, %{kind: :take}, {:ok, input}) do
     lane = data.pending_inputs
 
@@ -524,7 +455,7 @@ defmodule Synapsis.Session.Worker.PendingInputs do
 
   defp apply_result(data, op, {:error, reason}) do
     if reason in [:unknown_outcome, :timeout] or
-         op.kind in [:recover, :take, :start, :consume, :finish, :apply_completion] do
+         op.kind in [:recover, :take, :start, :consume, :finish] do
       barrier(data, op, reason)
     else
       {data, reply(op, {:error, reason})}

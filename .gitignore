@@ -54,6 +54,7 @@ erl_crash.dump
 test.log
 **/test/**/*.log
 **/test/**/tmp/
+/apps/*/tmp/
 
 # Mnesia database directories and files
 priv/mnesia/

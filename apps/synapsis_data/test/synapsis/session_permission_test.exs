@@ -34,11 +34,11 @@ defmodule Synapsis.SessionPermissionTest do
     test "defaults are correct" do
       attrs = %{session_id: Ecto.UUID.generate()}
       changeset = SessionPermission.changeset(%SessionPermission{}, attrs)
-      assert Ecto.Changeset.get_field(changeset, :mode) == :interactive
+      assert Ecto.Changeset.get_field(changeset, :mode) == :autonomous
       assert Ecto.Changeset.get_field(changeset, :allow_read) == :allow
       assert Ecto.Changeset.get_field(changeset, :allow_write) == :allow
       assert Ecto.Changeset.get_field(changeset, :allow_execute) == :allow
-      assert Ecto.Changeset.get_field(changeset, :allow_destructive) == :ask
+      assert Ecto.Changeset.get_field(changeset, :allow_destructive) == :allow
       assert Ecto.Changeset.get_field(changeset, :tool_overrides) == %{}
     end
 

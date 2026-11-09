@@ -33,22 +33,7 @@ defmodule Synapsis.Agent.Tools.Policy do
   @approval_timeout 300_000
 
   def tool_effect_timeout(invocation, context) do
-    case Synapsis.Agent.Tools.Browser.tool_effect_timeout(invocation, context) do
-      :default ->
-        case Synapsis.Agent.Tools.Workflows.tool_effect_timeout(invocation, context) do
-          :default ->
-            case Synapsis.Agent.Tools.TTS.tool_effect_timeout(invocation, context) do
-              :default -> Synapsis.Agent.Tools.Diffs.tool_effect_timeout(invocation, context)
-              result -> result
-            end
-
-          result ->
-            result
-        end
-
-      result ->
-        result
-    end
+    Synapsis.Agent.Tools.Browser.tool_effect_timeout(invocation, context)
   end
 
   @spec prepare_tool(map(), map()) :: :allow | {:allow, map()} | {:deny, term()}

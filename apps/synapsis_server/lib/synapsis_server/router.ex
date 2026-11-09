@@ -42,18 +42,6 @@ defmodule SynapsisServer.Router do
   scope "/api", SynapsisServer do
     get "/agent/events", SSEController, :agent_events
     get "/sessions/:id/events", SSEController, :events
-    get "/media/audio/:session_id/:delivery_id", MediaController, :audio
-    get "/media/image/:session_id/:delivery_id", MediaController, :image
-    get "/media/video/:session_id/:delivery_id", MediaController, :video
-    get "/diffs/files/:session_id/:delivery_id", DiffsController, :file
-    head "/diffs/files/:session_id/:delivery_id", DiffsController, :file
-  end
-
-  scope "/plugins/diffs", SynapsisServer do
-    get "/view/:artifact_id/:token", DiffsController, :viewer
-    head "/view/:artifact_id/:token", DiffsController, :viewer
-    get "/assets/:asset", DiffsController, :asset
-    head "/assets/:asset", DiffsController, :asset
   end
 
   scope "/api", SynapsisServer do

@@ -10,7 +10,7 @@ defmodule Synapsis.ProviderConfig do
 
   @primary_key {:id, :binary_id, autogenerate: false}
 
-  @valid_types ~w(anthropic openai openai_responses openai_compat google local openrouter groq deepseek elevenlabs openai_speech xai_speech inworld_speech gradium_speech openrouter_speech deepinfra_speech vydra_speech fish_audio_speech google_speech azure_speech xiaomi_speech clawrouter_speech)
+  @valid_types ~w(anthropic openai openai_responses openai_compat google local openrouter groq deepseek)
   @name_format ~r/^[a-z0-9][a-z0-9_-]*$/
 
   embedded_schema do

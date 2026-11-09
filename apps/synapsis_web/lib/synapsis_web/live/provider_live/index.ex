@@ -231,11 +231,6 @@ defmodule SynapsisWeb.ProviderLive.Index do
                 required
               />
               <.readonly_field label="Type" value={@selected_preset.type} />
-              <.readonly_field
-                :if={Synapsis.Providers.speech_only?(@selected_preset)}
-                label="Capability"
-                value={speech_capability_label(@selected_preset)}
-              />
               <%= if @selected_preset.custom or Map.get(@selected_preset, :base_url_editable, false) do %>
                 <.dm_input
                   id="provider-base-url"
@@ -307,12 +302,6 @@ defmodule SynapsisWeb.ProviderLive.Index do
                 >
                   <div class="font-medium">{Map.get(preset, :label, preset.name)}</div>
                   <div class="text-xs text-on-surface-variant mt-1">{preset.type}</div>
-                  <div
-                    :if={Synapsis.Providers.speech_only?(preset)}
-                    class="text-xs text-on-surface-variant mt-1"
-                  >
-                    {speech_capability_label(preset)}
-                  </div>
                 </.dm_card>
               </button>
             </div>
@@ -365,12 +354,6 @@ defmodule SynapsisWeb.ProviderLive.Index do
             </div>
           </:title>
           <div class="text-xs text-on-surface-variant">{provider.type}</div>
-          <div
-            :if={Synapsis.Providers.speech_only?(provider)}
-            class="text-xs text-on-surface-variant mt-1"
-          >
-            {speech_capability_label(provider)}
-          </div>
           <div :if={provider.base_url} class="text-xs text-on-surface-variant mt-1 truncate">
             {provider.base_url}
           </div>
@@ -390,14 +373,5 @@ defmodule SynapsisWeb.ProviderLive.Index do
       </div>
     </.settings_layout>
     """
-  end
-
-  defp speech_capability_label(provider) do
-    provider
-    |> Synapsis.Providers.speech_capabilities()
-    |> Enum.map_join(", ", fn
-      :tts -> "Text to speech"
-      :stt -> "Speech to text"
-    end)
   end
 end

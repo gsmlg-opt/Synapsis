@@ -86,69 +86,6 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
     assert {:error, :checkpoint_unavailable_with_subagents} = Worker.rollback_checkpoint(id)
   end
 
-  @tag custom_provider: true
-  test "correcting a disabled toolset selection admits the builtin catalog after restart", %{
-    id: id,
-    harness: harness
-  } do
-    owner = self()
-
-    install_provider(harness, fn conn, request ->
-      send(owner, {:catalog_request, request})
-      answer(conn, "corrected toolset answer")
-    end)
-
-    available_names =
-      Synapsis.Tool.Registry.list()
-      |> Enum.reject(&String.starts_with?(&1.name, "mcp:"))
-      |> Enum.filter(&Synapsis.Tool.Registry.runtime_available?(&1.name))
-      |> Enum.map(& &1.name)
-
-    refute "computer" in available_names
-
-    {:ok, toolset} =
-      Synapsis.Toolsets.create(%{
-        name: "session-catalog-#{id}",
-        tool_names: available_names ++ ["computer"]
-      })
-
-    on_exit(fn -> Synapsis.Toolsets.delete(toolset) end)
-    {:ok, _} = Synapsis.AgentConfigs.update(harness.agent_config, %{toolset_id: toolset.id})
-
-    assert :ok = Synapsis.Sessions.send_message(id, "before correction")
-
-    assert_receive {:run_event,
-                    %{
-                      type: "session.failed",
-                      payload: %{
-                        "message" => "Selected tools unavailable or deferred: computer"
-                      }
-                    }},
-                   5_000
-
-    refute_receive {:catalog_request, _}, 50
-
-    assert %{status: :error, error: "Selected tools unavailable or deferred: computer"} =
-             Worker.snapshot(id)
-
-    {:ok, _} = Synapsis.Toolsets.update(toolset, %{tool_names: available_names})
-    :ok = Synapsis.Session.DynamicSupervisor.stop_session(id)
-    SessionHarness.ensure_running!(id)
-
-    assert :ok = Synapsis.Sessions.send_message(id, "after correction")
-    assert_receive {:catalog_request, %{"tools" => tools}}, 5_000
-    tool_names = Enum.map(tools, & &1["function"]["name"])
-    assert "file_read" in tool_names
-    assert "skill" in tool_names
-    assert "spawn_agent" in tool_names
-    refute "computer" in tool_names
-    assert_receive {:run_event, %{type: "session.completed"}}, 10_000
-    assert %{status: :waiting, error: nil} = Worker.snapshot(id)
-
-    assert [%{role: "user"}, %{role: "user"}, %{role: "assistant"}] =
-             Synapsis.Sessions.get_messages(id)
-  end
-
   @tag omitted_session_config: true
   @tag custom_provider: true
   test "omitted session config drives real HTTP root, child and canonical tool history", %{

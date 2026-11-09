@@ -1,23 +1,10 @@
 defmodule SynapsisWeb.ToolResultView do
   @moduledoc "Display-only presentation of checked native tool-result projections."
 
-  alias Synapsis.Agent.{DiffsDelivery, MediaDelivery}
   alias Synapsis.Agent.Tools.ResultProjection
   alias Synapsis.Part.ToolResult
 
   @image_mimes ~w(image/png image/jpeg image/gif image/webp)
-  @audio_mimes %{
-    "mp3" => "audio/mpeg",
-    "aac" => "audio/aac",
-    "opus" => "audio/ogg",
-    "wav" => "audio/wav",
-    "flac" => "audio/flac",
-    "pcm" => "application/octet-stream",
-    "ogg" => "audio/ogg",
-    "webm" => "audio/webm",
-    "amr" => "audio/amr",
-    "audio" => "application/octet-stream"
-  }
   @sidecars ~w(structured artifacts details progress pagination)
 
   @spec present(ToolResult.t()) :: map()
@@ -37,9 +24,7 @@ defmodule SynapsisWeb.ToolResultView do
     case public_error(result["error"]) do
       {:ok, error} ->
         %{
-          blocks:
-            content_blocks(result) ++
-              audio_delivery_blocks(result) ++ diffs_delivery_blocks(result),
+          blocks: content_blocks(result),
           sidecars: sidecars(result),
           error: error,
           isError: result["is_error"]
@@ -79,136 +64,6 @@ defmodule SynapsisWeb.ToolResultView do
     do: [%{type: "json", label: "Content", value: content}]
 
   defp content_blocks(_), do: []
-
-  # Delivery URLs are derived from the public reference only. Presentation never
-  # reads media, resolves storage roots or changes the persisted/provider result.
-  defp audio_delivery_blocks(%{"details" => %{"mediaDescriptor" => descriptor} = details})
-       when is_map(descriptor) do
-    case audio_delivery(descriptor, details["mediaDelivery"]) do
-      {:ok, block} ->
-        [block]
-
-      :error ->
-        [
-          %{
-            type: "reference",
-            kind: "audio-delivery-unavailable",
-            label: "Audio delivery unavailable",
-            value: media_metadata(descriptor)
-          }
-        ]
-    end
-  end
-
-  defp audio_delivery_blocks(_), do: []
-
-  # Diffs history carries receipts, not a request to resolve or regenerate bytes.
-  # Keep links display-only and derive downloads from the exact public reference.
-  defp diffs_delivery_blocks(%{"details" => %{"changed" => true, "mode" => mode} = details})
-       when mode in ~w(view file image both) do
-    viewer = if mode in ~w(view both), do: diffs_viewer_link(details), else: []
-    file = if mode in ~w(file image both), do: diffs_file_link(details), else: []
-    viewer ++ file
-  end
-
-  defp diffs_delivery_blocks(_), do: []
-
-  defp diffs_viewer_link(%{
-         "artifactId" => id,
-         "viewerPath" => path,
-         "viewerUrl" => url,
-         "expiresAt" => expiry
-       })
-       when is_binary(id) and is_binary(path) and is_binary(url) do
-    uri = URI.parse(url)
-
-    if String.match?(id, ~r/\A[a-f0-9]{20}\z/) and
-         String.match?(path, ~r/\A\/plugins\/diffs\/view\/[a-f0-9]{20}\/[a-f0-9]{48}\z/) and
-         String.starts_with?(path, "/plugins/diffs/view/" <> id <> "/") and
-         uri.scheme in ~w(http https) and is_binary(uri.host) and uri.host != "" and
-         is_nil(uri.userinfo) and is_nil(uri.query) and is_nil(uri.fragment) and
-         is_binary(uri.path) and String.ends_with?(uri.path, path) and iso_expiry?(expiry) do
-      [
-        %{
-          type: "link",
-          kind: "diffs-viewer",
-          label: "Open diff viewer",
-          href: url,
-          expiresAt: expiry
-        }
-      ]
-    else
-      []
-    end
-  end
-
-  defp diffs_viewer_link(_), do: []
-
-  defp diffs_file_link(%{
-         "fileDelivery" => reference,
-         "fileFormat" => format,
-         "fileBytes" => bytes,
-         "fileExpiresAt" => expiry
-       })
-       when format in ~w(png pdf) and is_integer(bytes) and bytes >= 0 do
-    with true <- iso_expiry?(expiry),
-         {:ok, href} <- DiffsDelivery.file_url(reference) do
-      [
-        %{
-          type: "link",
-          kind: "diffs-file",
-          label: "Download " <> String.upcase(format),
-          href: href,
-          filename: "preview." <> format,
-          mediaType: if(format == "pdf", do: "application/pdf", else: "image/png"),
-          bytes: bytes,
-          expiresAt: expiry
-        }
-      ]
-    else
-      _ -> []
-    end
-  end
-
-  defp diffs_file_link(_), do: []
-
-  defp iso_expiry?(value) when is_binary(value) do
-    case DateTime.from_iso8601(value) do
-      {:ok, _, _} -> true
-      {:error, _} -> false
-    end
-  end
-
-  defp iso_expiry?(_), do: false
-
-  @doc "Builds the checked public audio display shared by messages and tool results."
-  def audio_delivery(descriptor, reference) do
-    with {:ok, format, mime} <- audio_descriptor(descriptor),
-         {:ok, src} <- MediaDelivery.url(reference) do
-      {:ok, %{type: "audio", src: src, mediaType: mime, filename: "audio." <> format}}
-    else
-      _ -> :error
-    end
-  end
-
-  defp audio_descriptor(
-         %{
-           "uri" => uri,
-           "sha256" => sha256,
-           "byte_size" => size,
-           "mime_type" => mime,
-           "format" => format
-         } = descriptor
-       )
-       when map_size(descriptor) == 5 and is_binary(sha256) and is_integer(size) and size >= 0 and
-              is_map_key(@audio_mimes, format) do
-    if mime == @audio_mimes[format] and String.match?(sha256, ~r/\A[a-f0-9]{64}\z/) and
-         uri == "synapsis-media://audio/" <> sha256 <> "." <> format,
-       do: {:ok, format, mime},
-       else: :error
-  end
-
-  defp audio_descriptor(_), do: :error
 
   defp content_block(%{"type" => "text", "text" => text}) when is_binary(text),
     do: %{type: "text", text: text}

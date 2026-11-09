@@ -102,44 +102,6 @@ defmodule Synapsis.Session.InteractiveCharacterizationTest do
   end
 
   @tag :tmp_dir
-  test "destructive tool under restrict projects permission_requests", %{tmp_dir: tmp_dir} do
-    harness =
-      SessionHarness.setup_session!(
-        tmp_dir: tmp_dir,
-        scenario: :multi_turn_tool_result,
-        tool_behavior: :deny,
-        permission_mode: "restrict",
-        tool_args: %{"value" => "need-approval"}
-      )
-
-    on_exit(fn -> SessionHarness.cleanup!(harness) end)
-
-    SessionHarness.subscribe!(harness.session.id)
-    SessionHarness.ensure_running!(harness.session.id)
-
-    tool_name = harness.tool_name
-    tool_call_id = harness.provider.tool_call_id
-
-    assert :requires_approval =
-             Synapsis.Tool.Permission.check(tool_name, %{"value" => "need-approval"}, %{
-               session_id: harness.session.id
-             })
-
-    assert :ok = Synapsis.Sessions.send_message(harness.session.id, "run destructive tool")
-
-    assert_receive {"permission_requests",
-                    %{
-                      tools: [
-                        %{
-                          tool: ^tool_name,
-                          tool_use_id: ^tool_call_id
-                        }
-                      ]
-                    }},
-                   15_000
-  end
-
-  @tag :tmp_dir
   test "tool crash projects tool_result error then continues to terminal projection", %{
     tmp_dir: tmp_dir
   } do

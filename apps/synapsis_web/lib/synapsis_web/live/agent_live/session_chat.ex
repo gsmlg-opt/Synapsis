@@ -2,7 +2,6 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
   @moduledoc "Presentation projection for the Agent session React Chat island."
 
   alias Synapsis.Part
-  alias Synapsis.Agent.MediaDelivery
   alias Synapsis.Session.EventReply
   alias SynapsisWeb.{MessageHelpers, ToolResultView}
 
@@ -224,40 +223,12 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
   defp part(%Part.Image{} = image, _role),
     do: image |> Map.from_struct() |> Map.put(:type, "image")
 
-  defp part(%Part.DeliveredImage{} = image, _role) do
-    case MediaDelivery.image_url(image.delivery) do
-      {:ok, src} ->
-        %{
-          type: "delivered_image",
-          src: src,
-          filename: delivered_image_name(image.name || "image")
-        }
+  defp part(%Part.DeliveredImage{} = image, _role),
+    do: %{type: "text", content: Part.DeliveredImage.summary(image)}
 
-      _ ->
-        %{type: "text", content: Part.DeliveredImage.summary(image)}
-    end
-  end
+  defp part(%Part.Audio{} = audio, _role), do: %{type: "text", content: Part.Audio.summary(audio)}
 
-  defp part(%Part.Audio{} = audio, _role) do
-    case ToolResultView.audio_delivery(audio.descriptor, audio.delivery) do
-      {:ok, block} -> %{block | filename: audio.name || block.filename}
-      :error -> %{type: "text", content: Part.Audio.summary(audio)}
-    end
-  end
-
-  defp part(%Part.Video{} = video, _role) do
-    with :ok <- Synapsis.Workspace.Media.validate_video_descriptor(video.descriptor),
-         {:ok, src} <- MediaDelivery.video_url(video.delivery) do
-      %{
-        type: "video",
-        src: src,
-        mediaType: video.descriptor["mime_type"],
-        filename: video.name || "video.#{video.descriptor["format"]}"
-      }
-    else
-      _ -> %{type: "text", content: Part.Video.summary(video)}
-    end
-  end
+  defp part(%Part.Video{} = video, _role), do: %{type: "text", content: Part.Video.summary(video)}
 
   defp part(%Part.File{} = file, _role), do: file |> Map.from_struct() |> Map.put(:type, "file")
 
@@ -298,15 +269,4 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
   end
 
   defp assistant_avatar(_config), do: nil
-
-  defp delivered_image_name(name) when byte_size(name) <= 320, do: name
-
-  defp delivered_image_name(name),
-    do: name |> binary_part(0, 317) |> complete_image_name() |> Kernel.<>("...")
-
-  defp complete_image_name(name) do
-    if String.valid?(name),
-      do: name,
-      else: name |> binary_part(0, byte_size(name) - 1) |> complete_image_name()
-  end
 end

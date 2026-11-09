@@ -8,9 +8,6 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   alias Synapsis.Session.{InputContext, PendingInputStore, Worker}
   alias SynapsisWeb.{ChatBridge, AgentLive.SessionChat, ToolResultView}
 
-  alias Synapsis.TaskSuggestions
-  alias SynapsisWeb.AgentLive.TaskSuggestions, as: TaskSuggestionComponents
-
   @running_statuses ~w(streaming tool_executing)
 
   @impl true
@@ -32,9 +29,6 @@ defmodule SynapsisWeb.AgentLive.Sessions do
        provider_configured: provider_configured?,
        sessions: [],
        current_session: nil,
-       task_suggestions: [],
-       task_suggestions_error: nil,
-       task_suggestions_notice: nil,
        messages: [],
        queued_inputs: [],
        streaming_text: "",
@@ -64,18 +58,11 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     # Unsubscribe from previous session
     if old = socket.assigns.current_session do
       Phoenix.PubSub.unsubscribe(Synapsis.PubSub, "session:#{old.id}")
-      Phoenix.PubSub.unsubscribe(Synapsis.PubSub, "task_suggestions:#{old.id}")
     end
-
-    socket = clear_task_suggestions(socket)
 
     case Sessions.get(session_id) do
       {:ok, session} ->
         Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}")
-
-        if connected?(socket) do
-          Phoenix.PubSub.subscribe(Synapsis.PubSub, "task_suggestions:#{session.id}")
-        end
 
         messages = Sessions.get_messages(session.id)
         # ADR-006 B2: the live process is the read authority for current state,
@@ -104,7 +91,6 @@ defmodule SynapsisWeb.AgentLive.Sessions do
            session_status: status,
            current_mode: session.agent || agent_id
          )
-         |> refresh_task_suggestions()
          |> start_chat()
          |> then(fn socket ->
            if is_binary(error), do: put_flash(socket, :error, error), else: socket
@@ -144,10 +130,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
     if old = socket.assigns.current_session do
       Phoenix.PubSub.unsubscribe(Synapsis.PubSub, "session:#{old.id}")
-      Phoenix.PubSub.unsubscribe(Synapsis.PubSub, "task_suggestions:#{old.id}")
     end
-
-    socket = clear_task_suggestions(socket)
 
     {:noreply,
      assign(socket,
@@ -404,78 +387,6 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
   defp operation_reply(_result, socket),
     do: {%{status: "error", message: "Session action failed"}, socket}
-
-  defp handle_session_event("refresh_task_suggestions", _params, socket) do
-    {:noreply, socket |> assign(:task_suggestions_notice, nil) |> refresh_task_suggestions()}
-  end
-
-  defp handle_session_event("accept_task_suggestion", params, socket) do
-    suggestion = Enum.find(socket.assigns.task_suggestions, &(&1.id == params["task-id"]))
-
-    notice =
-      if suggestion && socket.assigns.current_session do
-        context = %{
-          session_id: socket.assigns.current_session.id,
-          requester_id: Approval.operator_id()
-        }
-
-        case TaskSuggestions.accept(suggestion.id, context, deadline: task_suggestions_deadline()) do
-          {:ok, %{status: status}} when status in ["accepting", "accepted"] ->
-            nil
-
-          {:ok, %{status: "unknown_outcome"}} ->
-            "Launch is unconfirmed. Check the associated session before taking further action."
-
-          {:error, :unknown_outcome} ->
-            "Could not confirm the launch. Refresh to check the suggestion before taking further action."
-
-          {:error, _} ->
-            "Could not start this suggestion. Refresh to check its current status."
-        end
-      else
-        "This suggestion is no longer available."
-      end
-
-    {:noreply,
-     socket
-     |> assign(:task_suggestions_notice, notice)
-     |> refresh_task_suggestions()}
-  end
-
-  defp handle_session_event("dismiss_task_suggestion", params, socket) do
-    suggestion = Enum.find(socket.assigns.task_suggestions, &(&1.id == params["task-id"]))
-
-    notice =
-      if suggestion && socket.assigns.current_session do
-        context = %{
-          session_id: socket.assigns.current_session.id,
-          agent_id: suggestion.agent_id
-        }
-
-        case TaskSuggestions.dismiss(%{"task_id" => suggestion.id}, context,
-               deadline: task_suggestions_deadline()
-             ) do
-          {:ok, %{dismissed: true}} ->
-            nil
-
-          {:ok, %{dismissed: false}} ->
-            "This suggestion is no longer pending."
-
-          {:error, :unknown_outcome} ->
-            "Could not confirm dismissal. Refresh to check whether the suggestion is still pending."
-
-          {:error, _} ->
-            "Could not dismiss this suggestion. Refresh and try again when suggestions are available."
-        end
-      else
-        "This suggestion is no longer pending."
-      end
-
-    {:noreply,
-     socket
-     |> assign(:task_suggestions_notice, notice)
-     |> refresh_task_suggestions()}
-  end
 
   defp handle_session_event("switch_model", params, socket) do
     id = Map.get(params, "model_id")
@@ -941,15 +852,6 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     end
   end
 
-  def handle_info({event, _payload}, socket)
-      when event in [
-             :task_suggestion_created,
-             :task_suggestion_resolved,
-             :task_suggestion_changed
-           ] do
-    {:noreply, refresh_task_suggestions(socket)}
-  end
-
   def handle_info({:provider_catalog_changed}, socket) do
     {:noreply, socket |> refresh_model_catalog() |> sync_chat()}
   end
@@ -1332,12 +1234,6 @@ defmodule SynapsisWeb.AgentLive.Sessions do
             permissions={@runtime_permissions}
           />
 
-          <TaskSuggestionComponents.panel
-            suggestions={@task_suggestions}
-            error={@task_suggestions_error}
-            notice={@task_suggestions_notice}
-          />
-
           <.dm_react_chat
             id={@react_chat_initial.id}
             conversation_id={@react_chat_initial.conversation_id}
@@ -1433,44 +1329,6 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   end
 
   # --- Helpers ---
-
-  defp clear_task_suggestions(socket) do
-    assign(socket,
-      task_suggestions: [],
-      task_suggestions_error: nil,
-      task_suggestions_notice: nil
-    )
-  end
-
-  defp refresh_task_suggestions(%{assigns: %{current_session: nil}} = socket),
-    do: clear_task_suggestions(socket)
-
-  defp refresh_task_suggestions(socket) do
-    case TaskSuggestions.list_for_host(%{session_id: socket.assigns.current_session.id},
-           deadline: task_suggestions_deadline()
-         ) do
-      {:ok, rows} ->
-        suggestions =
-          Enum.map(rows, fn row ->
-            Map.merge(row.suggestion, %{
-              status: row.status,
-              receipt: row.receipt,
-              destination_session_id: row.session_id
-            })
-          end)
-
-        assign(socket, task_suggestions: suggestions, task_suggestions_error: nil)
-
-      {:error, _} ->
-        assign(socket,
-          task_suggestions: [],
-          task_suggestions_error:
-            "Could not load suggested follow-ups. Retry to refresh when suggestions are available."
-        )
-    end
-  end
-
-  defp task_suggestions_deadline, do: System.monotonic_time(:millisecond) + 5_000
 
   defp start_chat(socket) do
     session_id = socket.assigns.current_session.id

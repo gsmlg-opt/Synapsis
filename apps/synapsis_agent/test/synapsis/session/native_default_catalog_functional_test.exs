@@ -8,7 +8,7 @@ defmodule Synapsis.Session.NativeDefaultCatalogFunctionalTest do
   alias Synapsis.Part.{ToolResult, ToolUse}
   alias Synapsis.Provider.ToolName
   alias Synapsis.Session.{Store, Worker}
-  alias Synapsis.{AgentConfigs, Config, Swarm}
+  alias Synapsis.{AgentConfigs, Config}
 
   @moduletag :tmp_dir
   @names ~w(
@@ -89,33 +89,6 @@ defmodule Synapsis.Session.NativeDefaultCatalogFunctionalTest do
 
     assert {:ok, @coding} =
              Profiles.selection(%{agent: resolved, session: %{config: %{}}})
-  end
-
-  test "new teammate metadata round trips native default and explicit tool declarations" do
-    session_id = Ecto.UUID.generate()
-    on_exit(fn -> Swarm.delete_team(session_id) end)
-
-    assert {:ok, created} =
-             Swarm.teammate(session_id, %{"action" => "create", "name" => "reader"})
-
-    assert created.tools == ~w(synapsis::read synapsis::ls)
-
-    assert {:ok, ^created} =
-             Swarm.teammate(session_id, %{"action" => "get", "name" => "reader"})
-
-    assert {:ok, [^created]} = Swarm.teammate(session_id, %{"action" => "list"})
-
-    assert {:ok, explicit} =
-             Swarm.teammate(session_id, %{
-               "action" => "create",
-               "name" => "selected-reader",
-               "tools" => ["synapsis::read"]
-             })
-
-    assert explicit.tools == ["synapsis::read"]
-
-    assert {:ok, ^explicit} =
-             Swarm.teammate(session_id, %{"action" => "get", "name" => "selected-reader"})
   end
 
   test "a newly persisted default assembles the full Worker catalog and reads through Concord", %{

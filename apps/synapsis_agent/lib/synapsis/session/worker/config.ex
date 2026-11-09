@@ -68,7 +68,6 @@ defmodule Synapsis.Session.Worker.Config do
       session.agent
       |> Synapsis.Agent.Resolver.resolve(session.config)
       |> apply_daemon_run_tools(session)
-      |> apply_suggested_workspace(session)
 
     agent
     |> Map.put(:configured_default_model, configured_identity(agent))
@@ -124,30 +123,6 @@ defmodule Synapsis.Session.Worker.Config do
 
   defp nonblank(value, fallback) when value in [nil, ""], do: fallback
   defp nonblank(value, _fallback), do: value
-
-  defp apply_suggested_workspace(agent, %Session{config: %{"creation_context" => context}})
-       when is_map(context) do
-    case context do
-      %{
-        "version" => 1,
-        "kind" => "task_suggestion",
-        "cwd" => cwd,
-        "task_id" => task_id,
-        "source_session_id" => source_id
-      }
-      when is_binary(cwd) and is_binary(task_id) and is_binary(source_id) ->
-        if String.valid?(cwd) and Path.type(cwd) == :absolute and
-             not String.contains?(cwd, "\0") and String.trim(task_id) != "" and
-             match?({:ok, ^source_id}, Ecto.UUID.cast(source_id)),
-           do: Map.put(agent, :workspace_path, cwd),
-           else: agent
-
-      _ ->
-        agent
-    end
-  end
-
-  defp apply_suggested_workspace(agent, _session), do: agent
 
   defp apply_daemon_run_tools(agent, %Session{config: %{"daemon_run_id" => _}} = session) do
     Synapsis.Agent.Daemon.NativeSelection.overlay(agent, session)
