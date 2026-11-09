@@ -38,12 +38,14 @@ This is an Elixir umbrella project with a Phoenix server/web surface, OTP-backed
 - Give Port, task, HTTP, provider, and MCP operations explicit timeouts.
 - Handle monitored process exits and `:DOWN` messages for stream processes, tool tasks, MCP processes, and agent work.
 - Use structured logging such as `Logger.info("session_started", session_id: id)`. Do not interpolate secrets or API keys into logs.
-- Test provider HTTP behavior with `Bypass`; never hit real provider APIs in tests.
+- Test provider HTTP behavior with `Gaoxy.Test`; never hit real provider APIs in tests.
 - Keep `.opencode.json` compatibility for agents and providers. MCP server config now uses the dedicated `mcp.toml` schema (`Synapsis.MCPConfigs`, anubis_mcp transports) and is no longer bound to the `.opencode.json` contract.
 
 ## Build, Test, And Development Commands
 
 Run commands from the repository root unless noted.
+
+Develop directly on `main` in the root checkout; do not create new worktrees. Keep Mix/Devenv builds serialized. After each batch of changes, run `devenv processes restart synapsis` from the root; if no process manager is running, first start it with `devenv up -d synapsis`. Check process status and `/api/health` readiness before reporting the batch complete.
 
 - `mix deps.get`: fetch Elixir dependencies.
 - `mix phx.server`: start the Phoenix endpoint on the configured dev port (`4657` by default). No database setup is needed; the embedded Concord store writes under `tmp/`.
@@ -83,7 +85,7 @@ Use scoped tests for scoped changes. For PRD work, modify only files in the stat
 - Session and agent workers must not block on provider streams, tool execution, store writes that can be slow, or external processes.
 - Agent graph changes should include focused tests in `apps/synapsis_agent/test`.
 - Tool changes should include focused tests in `apps/synapsis_core/test/synapsis/tool`.
-- Provider changes should include parser/transport tests in `apps/synapsis_provider/test` with `Bypass` for HTTP.
+- Provider changes should include parser/transport tests in `apps/synapsis_provider/test` with `Gaoxy.Test` for HTTP.
 
 ## Web And UI Rules
 
@@ -128,7 +130,7 @@ If a dependency from the `gsmlg*`, `duskmoon-dev`, `Gao-OS`, or related internal
 
 ## Git, Commits, And PRs
 
-- Put repo-local worktrees under `.trees/<branch-name>`.
+- Develop directly on root `main`; do not create new worktrees.
 - Do not revert user changes or unrelated dirty worktree files.
 - Use Conventional Commit style such as `feat(scope): add model selector`, `fix(streaming): handle disconnect`, or `test(provider): cover retry`.
 - Do not include `Generated with Claude Code` or `Co-Authored-By: Claude` in commit messages.
