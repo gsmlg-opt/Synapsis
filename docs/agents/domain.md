@@ -4,12 +4,9 @@ This is a single-context repo.
 
 ## Before exploring, read relevant repo docs
 
-- `docs/architecture/*`
+- `docs/design.md` (product scope, phases, delegation and permissions policy)
 - `docs/decisions/*`
 - `docs/guardrails/GUARDRAILS.md`
-- `docs/prd/*`
-- `docs/designs/*`
-- `docs/superpowers/plans/*` when continuing planned work
 
 There is no root `CONTEXT.md` or `CONTEXT-MAP.md` currently. If either is added later, read it before the docs above.
 
@@ -19,7 +16,7 @@ Architecture decisions live under `docs/decisions/`.
 
 ## Vocabulary
 
-Use the repo's established names from architecture docs, PRDs, and existing modules. Do not invent parallel names for the same concept.
+Use the repo's established names from `docs/design.md`, ADRs, and existing modules. Do not invent parallel names for the same concept.
 
 ## Conflicts
 

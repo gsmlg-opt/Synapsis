@@ -1,6 +1,6 @@
 # Synapsis
 
-An open-source AI coding agent built with Elixir/Phoenix. Inspired by [OpenCode](https://opencode.ai), reimagined with OTP's process model for concurrency, fault tolerance, and real-time streaming.
+A resident personal agent built with Elixir/Phoenix and the Backplane agent runtime. Each machine runs one instance with a Web UI; it manages local devices, data, software upgrades and code projects, and delegates development work to Codex and Sigma, under [Samgita](https://github.com/gsmlg-opt/Samgita) for project-level management. See [the design](docs/design.md).
 
 ## Architecture
 
@@ -12,8 +12,8 @@ apps/
 |-- synapsis_provider/   # Anthropic / OpenAI-compatible / Google transports
 |-- synapsis_core/       # tools, PubSub, memory, git/worktree, file watching
 |-- synapsis_workspace/  # workspace resources, blob store, projections, search
-|-- synapsis_agent/      # agent graph runtime, session workers, heartbeats
-|-- synapsis_mcp/        # MCP client (backplane_mcp_protocol) → Tool.Registry
+|-- synapsis_agent/      # Backplane runtime, tool catalog, session workers, heartbeats
+|-- synapsis_mcp/        # MCP client (backplane_mcp_protocol)
 |-- synapsis_sandbox/    # JSON-RPC stdio bridge for sandbox runtimes
 |-- synapsis_server/     # Phoenix endpoint, channels, REST/SSE
 |-- synapsis_web/        # Phoenix LiveView UI (phoenix_duskmoon)
@@ -39,9 +39,9 @@ TypeScript lives under `packages/*` as Bun workspaces — currently only `@synap
 ### Key Design Decisions
 
 - **Process-per-session**: each session is a supervised tree under `Synapsis.Session.DynamicSupervisor`. `Synapsis.Session.Worker` is a `:gen_statem` (ADR-008) that owns the graph engine inline.
-- **Graph-based agent execution**: `coding_loop` (build mode) and `conversational_loop` (chat mode), with composable nodes (build_prompt, llm_stream, process_response, tool_dispatch, act, respond).
+- **Backplane execution**: each turn is executed by a Backplane `Conversation`; the tool catalog is assembled from Backplane native bundles plus Synapsis host descriptors.
 - **Provider-agnostic streaming**: SSE transports for Anthropic, OpenAI-compatible APIs, and Google, unified via `EventMapper` / `MessageMapper`.
-- **Tool system**: 30+ built-in tools (filesystem, search, bash, planning, orchestration, memory, agent communication) implementing `Synapsis.Tool.Behaviour`, with a 5-level permission model and parallel batch execution. MCP tools are discovered at runtime and bridged into `Synapsis.Tool.Registry`.
+- **Tools**: local commands and patches, filesystem, web fetch/search, memory, skills, MCP, subagents, questions and automations (scope in `docs/design.md`). Permissions default to yolo.
 - **Storage without a database** (ADR-006): session transcripts as per-turn snapshots in an embedded Concord 3.x (node-local Turso) KV store, configs as TOML files with watchers, memory as Markdown files — no PostgreSQL, no migrations.
 - **Heartbeat agents**: node-local cron-scheduled recurring agent runs for autonomous background work.
 - **MCP**: dedicated `synapsis_mcp` app over stdio, Streamable HTTP, or SSE. MCP server config uses `mcp.toml` (`Synapsis.MCPConfigs`), not the `.opencode.json` MCP contract. Agents and providers remain `.opencode.json`-compatible.
@@ -117,9 +117,6 @@ cd apps/synapsis_web && mix assets.build
 
 ## Architecture Docs
 
-See `docs/` for detailed design documents:
-
-- `docs/architecture/` — system overview, domain model, data layer, tool system, providers
+- `docs/design.md` — product scope, tool scope, delegation, permissions and phases
 - `docs/decisions/` — ADRs (notably ADR-006 storage, ADR-007 LiveView UI, ADR-008 session shell)
 - `docs/guardrails/GUARDRAILS.md` — invariants (never violate)
-- `docs/prd/`, `docs/designs/`, `docs/superpowers/plans/` — plans and implementation notes

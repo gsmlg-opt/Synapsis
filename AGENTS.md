@@ -6,24 +6,24 @@ This is an Elixir umbrella project with a Phoenix server/web surface, OTP-backed
 
 - `apps/synapsis_data`: `Synapsis.Session.Store` (embedded Concord KV), `Synapsis.Config.Store` (TOML + file watchers), embedded Ecto types and encrypted fields. `ecto` is a modeling dependency only — there is no `ecto_sql`/`postgrex` and no `Synapsis.Repo`.
 - `apps/synapsis_provider`: provider adapters and streaming transport for Anthropic, OpenAI-compatible, Google, model registry, retry, sanitization, and provider event/message mapping.
-- `apps/synapsis_core`: shared domain services, session orchestration helpers, tool registry/executor, permissions, config, PubSub, memory, git/worktree helpers, and file watching.
-- `apps/synapsis_agent`: supervised agent/session runtime, agent graphs, query loop, runtime checkpoints, work items, heartbeats, messaging, and session worker implementation.
+- `apps/synapsis_core`: shared domain services, session orchestration helpers, path validation, config, PubSub, memory, git/worktree helpers, and file watching.
+- `apps/synapsis_agent`: supervised agent/session runtime on Backplane `Conversation`, the tool catalog (`Synapsis.Agent.Tools.*`), runtime checkpoints, heartbeats, automations, and session worker implementation.
 - `apps/synapsis_server`: Phoenix endpoint, router, channels, REST/SSE controllers, telemetry, and debug store.
 - `apps/synapsis_web`: Phoenix LiveView UI, HEEx layouts, DuskMoon-based components, TypeScript hooks, and asset entrypoints.
-- `apps/synapsis_mcp`: MCP client built on `anubis_mcp` — one `Anubis.Client` per configured server (`Synapsis.MCP` facade), bridging discovered tools into `Synapsis.Tool.Registry`.
-- `apps/synapsis_sandbox`: JSON-RPC stdio bridge for sandbox runtimes, routing sandbox-initiated calls through `Synapsis.Tool.Executor`.
+- `apps/synapsis_mcp`: MCP client — one client per configured server (`Synapsis.MCP` facade); discovered tools are consumed by the agent tool catalog.
+- `apps/synapsis_sandbox`: JSON-RPC stdio bridge for sandbox runtimes; sandbox-initiated calls go through a host-injected dispatcher.
 - `apps/synapsis_workspace`: workspace resource model, local blob store, projections, path resolution, search, permissions, and workspace tools.
 - `apps/synapsis_cli`: escript CLI and HTTP/SSE client code.
 - `packages/*`: npm workspaces (via `duskmoon_npm`) for TypeScript packages — only `@synapsis/hooks` (LiveView DOM hooks; the UI is pure LiveView per ADR-007).
-- `docs/`: architecture docs, ADRs, guardrails, PRDs, designs, and implementation plans. Read the relevant docs before changing behavior.
+- `docs/`: `design.md` (product scope and phases), ADRs, and guardrails. Read them before changing behavior.
 
 ## Architecture Boundaries
 
 - Storage follows ADR-006: the live session process is the read authority for the in-flight turn; Concord holds durable per-turn session snapshots and agent events/summaries; configs are TOML files; workspace documents and memory are files. There is no database.
 - `synapsis_data` owns the Concord session store and the TOML config store. Other apps go through its store APIs instead of touching Concord keys or config files directly.
 - `synapsis_provider` owns provider-specific request/response formats. Core and agent code should operate on domain structs/events, not hardcoded provider payload shapes.
-- `synapsis_core` owns shared tool, config, PubSub, memory, git, and session-domain services. Keep Phoenix endpoint/router/controller concerns out of core.
-- `synapsis_agent` owns the agent runtime and supervised session/agent processes. Tool registration happens there at startup.
+- `synapsis_core` owns shared config, PubSub, memory, git, and session-domain services. Keep Phoenix endpoint/router/controller concerns out of core.
+- `synapsis_agent` owns the agent runtime, supervised session/agent processes, and the tool catalog.
 - `synapsis_server` and `synapsis_web` are presentation layers. They depend inward on core/agent/provider/mcp/sandbox/workspace APIs.
 - `synapsis_mcp`, `synapsis_sandbox`, and `synapsis_workspace` are support layers. Keep MCP client concerns in `synapsis_mcp`, sandbox bridging in `synapsis_sandbox`, and virtual workspace concerns in workspace modules.
 - Preserve dependency direction shown by `mix.exs` files. Do not introduce cycles or broad cross-app calls just for convenience.
@@ -34,7 +34,7 @@ This is an Elixir umbrella project with a Phoenix server/web surface, OTP-backed
 - Never make synchronous LLM calls in request or worker paths; stream asynchronously and delegate slow work to supervised tasks.
 - Use `Port` for shell/tool execution, not `System.cmd`, so output streaming, timeouts, and cancellation remain possible.
 - Validate every tool path against the project root and reject path traversal.
-- Always run permission checks, even when dev config auto-approves a risk level.
+- Permissions default to yolo with no approval flow this phase (see `docs/design.md` §5). Do not add approval UI or permission gates without an explicit request.
 - Give Port, task, HTTP, provider, and MCP operations explicit timeouts.
 - Handle monitored process exits and `:DOWN` messages for stream processes, tool tasks, MCP processes, and agent work.
 - Use structured logging such as `Logger.info("session_started", session_id: id)`. Do not interpolate secrets or API keys into logs.
@@ -80,11 +80,11 @@ Use scoped tests for scoped changes. For PRD work, modify only files in the stat
 
 ## Tool, Agent, And Process Rules
 
-- Every tool implements `Synapsis.Tool.Behaviour`; every provider adapter follows the provider behavior/transport patterns already in `synapsis_provider`.
-- Tools must include project context, validate inputs, honor permissions, persist auditable calls where required, and broadcast side effects only after persistence.
+- Tools are Backplane descriptors assembled by `Synapsis.Agent.Tools.Profiles`; keep to the tool scope in `docs/design.md` §3. Provider adapters follow the patterns in `synapsis_provider`.
+- Tools must include project context, validate inputs, and broadcast side effects only after persistence.
 - Session and agent workers must not block on provider streams, tool execution, store writes that can be slow, or external processes.
 - Agent graph changes should include focused tests in `apps/synapsis_agent/test`.
-- Tool changes should include focused tests in `apps/synapsis_core/test/synapsis/tool`.
+- Tool changes should include focused tests in `apps/synapsis_agent/test`.
 - Provider changes should include parser/transport tests in `apps/synapsis_provider/test` with `Gaoxy.Test` for HTTP.
 
 ## Web And UI Rules
@@ -99,8 +99,8 @@ Use scoped tests for scoped changes. For PRD work, modify only files in the stat
 
 ## Documentation And Planning
 
-- Architecture source of truth lives in `docs/architecture/*` and `docs/guardrails/GUARDRAILS.md`.
-- PRDs and implementation plans live under `docs/prd`, `docs/designs`, and `docs/superpowers/plans`.
+- Product scope, phases and policy live in `docs/design.md`; invariants in `docs/guardrails/GUARDRAILS.md`; decisions in `docs/decisions/`.
+- Record current facts and decisions only; do not append per-batch evidence logs to docs.
 - Update docs only when the behavior or public contract changes, or when the task explicitly asks for docs.
 - Keep generated planning/checklist content out of `AGENTS.md`; this file should stay concise and operational.
 
@@ -116,7 +116,7 @@ Use the default five-label triage vocabulary. See `docs/agents/triage-labels.md`
 
 ### Domain Docs
 
-This is a single-context repo. Use repo-wide architecture, decision, guardrail, PRD, and design docs. See `docs/agents/domain.md`.
+This is a single-context repo. Use `docs/design.md`, ADRs and guardrails. See `docs/agents/domain.md`.
 
 ## Dependency Issue Routing
 
