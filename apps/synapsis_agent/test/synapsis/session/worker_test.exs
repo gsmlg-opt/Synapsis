@@ -146,6 +146,8 @@ defmodule Synapsis.Session.WorkerTest do
       assert :ok = Synapsis.Sessions.ensure_running(session.id)
       assert [{pid, _}] = Registry.lookup(Synapsis.Session.Registry, session.id)
 
+      :ok = await_worker_idle(pid)
+
       :sys.replace_state(pid, fn {:idle, data} ->
         {:generating, %{data | stream_ref: make_ref(), engine_node: :llm_stream}}
       end)
@@ -227,5 +229,20 @@ defmodule Synapsis.Session.WorkerTest do
 
   defp text_message(role, content) do
     %Message{role: role, parts: [%Part.Text{content: content}], token_count: 1}
+  end
+
+  # The Worker briefly reconciles its durable input queue after boot.
+  defp await_worker_idle(pid, attempts \\ 200) do
+    case :sys.get_state(pid) do
+      {:idle, _data} ->
+        :ok
+
+      _busy when attempts > 0 ->
+        Process.sleep(10)
+        await_worker_idle(pid, attempts - 1)
+
+      {state, _data} ->
+        flunk("session worker stayed #{inspect(state)}")
+    end
   end
 end

@@ -141,6 +141,8 @@ defmodule SynapsisServer.SessionControllerTest do
       [{pid, _}] = Registry.lookup(Synapsis.Session.Registry, session.id)
       reason = "Selected tools unavailable or deferred: unavailable-session-tool"
 
+      :ok = await_worker_idle(pid)
+
       :sys.replace_state(pid, fn {:idle, data} ->
         {:idle,
          %{
@@ -639,5 +641,20 @@ defmodule SynapsisServer.SessionControllerTest do
         "metadata" => %{"opaque" => [nil, false, 4]}
       }
     }
+  end
+
+  # The Worker briefly reconciles its durable input queue after boot.
+  defp await_worker_idle(pid, attempts \\ 200) do
+    case :sys.get_state(pid) do
+      {:idle, _data} ->
+        :ok
+
+      _busy when attempts > 0 ->
+        Process.sleep(10)
+        await_worker_idle(pid, attempts - 1)
+
+      {state, _data} ->
+        flunk("session worker stayed #{inspect(state)}")
+    end
   end
 end

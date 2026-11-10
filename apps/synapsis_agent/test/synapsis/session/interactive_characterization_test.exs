@@ -9,7 +9,6 @@ defmodule Synapsis.Session.InteractiveCharacterizationTest do
   use ExUnit.Case, async: false
 
   alias Synapsis.Agent.TestSupport.SessionHarness
-  alias Synapsis.Session.Worker
 
   @moduletag :tmp_dir
 
@@ -33,7 +32,7 @@ defmodule Synapsis.Session.InteractiveCharacterizationTest do
     assert session_id == harness.session.id
     assert_receive {"done", %{}}, 15_000
     assert_receive {"session_status", %{status: "idle"}}, 15_000
-    assert :waiting = Worker.get_status(harness.session.id)
+    assert :ok = SessionHarness.await_waiting!(harness.session.id)
 
     messages = Synapsis.Sessions.get_messages(harness.session.id)
 

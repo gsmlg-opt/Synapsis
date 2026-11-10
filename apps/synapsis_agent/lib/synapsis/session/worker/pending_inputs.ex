@@ -87,6 +87,17 @@ defmodule Synapsis.Session.Worker.PendingInputs do
       not is_nil(lane.current) or (lane.drain and not lane.suspended)
   end
 
+  @doc """
+  True while the lane only reconciles its durable queue (boot or post-run drain)
+  with no input queued or running. Control calls wait for this to settle.
+  """
+  def settling?(%{pending_inputs: nil}), do: false
+
+  def settling?(%{pending_inputs: lane} = data) do
+    not data.runtime_active and is_nil(lane.current) and lane.queue == [] and not lane.blocked and
+      (not lane.booted or not is_nil(lane.task))
+  end
+
   def changing_agent?(%{pending_inputs: nil}), do: false
   def changing_agent?(data), do: busy?(data) or MapSet.size(data.pending_inputs.events) > 0
 

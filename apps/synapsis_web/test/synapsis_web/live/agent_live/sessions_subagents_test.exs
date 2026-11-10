@@ -118,6 +118,8 @@ defmodule SynapsisWeb.AgentLive.SessionsSubagentsTest do
     session = create_session()
     [{pid, _}] = Registry.lookup(Synapsis.Session.Registry, session.id)
 
+    :ok = await_worker_idle(pid)
+
     :sys.replace_state(pid, fn {:idle, data} ->
       {:generating, %{data | stream_ref: make_ref(), engine_node: :llm_stream}}
     end)
@@ -286,6 +288,21 @@ defmodule SynapsisWeb.AgentLive.SessionsSubagentsTest do
 
       :stop ->
         :ok
+    end
+  end
+
+  # The Worker briefly reconciles its durable input queue after boot.
+  defp await_worker_idle(pid, attempts \\ 200) do
+    case :sys.get_state(pid) do
+      {:idle, _data} ->
+        :ok
+
+      _busy when attempts > 0 ->
+        Process.sleep(10)
+        await_worker_idle(pid, attempts - 1)
+
+      {state, _data} ->
+        flunk("session worker stayed #{inspect(state)}")
     end
   end
 end

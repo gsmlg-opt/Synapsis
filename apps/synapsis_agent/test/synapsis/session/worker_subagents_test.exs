@@ -57,7 +57,7 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
     refute Map.has_key?(config, "subagents")
     assert :ok = Synapsis.Sessions.send_message(id, "hello runtime")
     assert_receive {:run_event, %{type: "session.completed"}}, 10_000
-    assert :waiting = Worker.get_status(id)
+    assert :ok = SessionHarness.await_waiting!(id)
 
     assert [
              %{role: "user", parts: [%Synapsis.Part.Text{content: "hello runtime"}]},
@@ -239,7 +239,7 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
     {_state, before} = :sys.get_state(worker_pid(id))
     assert :ok = Worker.cancel(id)
     assert_receive {"done", _}, 10_000
-    assert :waiting = Worker.get_status(id)
+    assert :ok = SessionHarness.await_waiting!(id)
     refute_receive {:run_event, %{type: "session.completed"}}, 50
     send(handler, :release)
     assert :ok = Worker.send_message(id, "continue")

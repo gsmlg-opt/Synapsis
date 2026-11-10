@@ -88,6 +88,31 @@ defmodule Synapsis.Agent.TestSupport.SessionHarness do
 
   def ensure_running!(session_id) do
     :ok = Synapsis.Sessions.ensure_running(session_id)
+    await_waiting!(session_id)
+  end
+
+  @doc """
+  Waits for the Worker to settle at `:waiting`. After boot and after each run the
+  Worker reads its durable pending-input queue asynchronously, so it is briefly
+  busy before it accepts control calls again.
+  """
+  def await_waiting!(session_id, timeout \\ 5_000) do
+    await_waiting(session_id, System.monotonic_time(:millisecond) + timeout)
+  end
+
+  defp await_waiting(session_id, deadline) do
+    case Synapsis.Session.Worker.get_status(session_id) do
+      :waiting ->
+        :ok
+
+      status ->
+        if System.monotonic_time(:millisecond) >= deadline do
+          raise ExUnit.AssertionError, "session #{session_id} stayed #{inspect(status)}"
+        else
+          Process.sleep(10)
+          await_waiting(session_id, deadline)
+        end
+    end
   end
 
   defp maybe_put(opts, _key, nil), do: opts

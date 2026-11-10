@@ -67,6 +67,8 @@ defmodule Synapsis.Session.Worker do
     runtime_task: nil,
     runtime_phase: nil,
     runtime_cancelled: false,
+    # Set at a run terminal; `session_status: idle` is published once the state is :idle.
+    idle_announcement: false,
     runtime_pending_terminal: nil,
     runtime_history: nil,
     runtime_history_offset: 0,
@@ -422,7 +424,7 @@ defmodule Synapsis.Session.Worker do
       do: keep(data, [{:reply, from, {:error, :checkpoint_unavailable_with_subagents}}])
 
   def handle_event({:call, from}, :get_status, state, data) do
-    keep(data, [{:reply, from, external_status(state)}])
+    keep(data, [{:reply, from, external_status(state, data)}])
   end
 
   def handle_event({:call, from}, {:public_status, deadline}, state, data) do
@@ -440,9 +442,10 @@ defmodule Synapsis.Session.Worker do
                status:
                  if(state == :idle and not is_nil(data.runtime_history_error),
                    do: "error",
-                   else: Atom.to_string(external_status(state))
+                   else: Atom.to_string(external_status(state, data))
                  ),
-               phase: Atom.to_string(state),
+               phase:
+                 Atom.to_string(if(state == :busy and settling?(data), do: :idle, else: state)),
                active: data.runtime_active
              }
            },
@@ -467,7 +470,7 @@ defmodule Synapsis.Session.Worker do
       status:
         if(state == :idle and not is_nil(data.runtime_history_error),
           do: :error,
-          else: external_status(state)
+          else: external_status(state, data)
         ),
       error: RuntimeSession.error_message(data),
       session: data.session,
@@ -484,6 +487,22 @@ defmodule Synapsis.Session.Worker do
     }
 
     {:keep_state, data, [{:reply, from, snapshot}, timeout_action()]}
+  end
+
+  # Boot and post-run queue reconciliation are brief; serve settings changes after
+  # them instead of rejecting a session that is about to be idle.
+  def handle_event({:call, from}, request, :busy, data)
+      when is_tuple(request) and elem(request, 0) in [:set_subagents, :switch_model] do
+    cond do
+      settling?(data) ->
+        {:keep_state_and_data, [:postpone]}
+
+      match?({:set_subagents, enabled} when not is_boolean(enabled), request) ->
+        keep(data, [{:reply, from, {:error, :invalid_setting}}])
+
+      true ->
+        keep(data, [{:reply, from, {:error, :session_busy}}])
+    end
   end
 
   def handle_event({:call, from}, {:set_subagents, enabled}, :idle, data)
@@ -966,8 +985,17 @@ defmodule Synapsis.Session.Worker do
   defp advance(%__MODULE__{} = data, actions \\ []) do
     data = Automation.start_next(data)
     {data, pending_actions} = PendingInputs.advance(data)
-    {:next_state, derive_state(data), data, actions ++ pending_actions ++ [timeout_action()]}
+    state = derive_state(data)
+    data = announce_idle(data, state)
+    {:next_state, state, data, actions ++ pending_actions ++ [timeout_action()]}
   end
+
+  defp announce_idle(%{idle_announcement: true} = data, :idle) do
+    Persistence.broadcast(data.session_id, "session_status", %{status: "idle"})
+    %{data | idle_announcement: false}
+  end
+
+  defp announce_idle(data, _state), do: data
 
   defp keep(%__MODULE__{} = _data, actions \\ []) do
     {:keep_state_and_data, actions ++ [timeout_action()]}
@@ -975,8 +1003,20 @@ defmodule Synapsis.Session.Worker do
 
   defp timeout_action, do: {:timeout, @timeout, :inactivity}
 
-  defp external_status(:idle), do: :waiting
-  defp external_status(_state), do: :running
+  defp external_status(:idle, _data), do: :waiting
+
+  # Queue reconciliation after boot or a run is not user-visible work; settings
+  # calls made meanwhile are served once it finishes.
+  defp external_status(:busy, data) do
+    if settling?(data), do: :waiting, else: :running
+  end
+
+  defp external_status(_state, _data), do: :running
+
+  defp settling?(data) do
+    PendingInputs.settling?(data) and is_nil(data.automation_task) and
+      not data.automation_uncertain
+  end
 
   @doc "True when compatibility metadata is parked at :receive waiting for user input."
   def engine_ready?(%__MODULE__{engine_node: node, engine_state: es}) do

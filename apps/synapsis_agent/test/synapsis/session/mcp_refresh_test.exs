@@ -215,7 +215,7 @@ defmodule Synapsis.Session.MCPRefreshTest do
     assert :ok = Worker.cancel(ctx.id)
     assert_receive {:DOWN, ^ref, :process, _, _}, 1_000
     send(discovery, :release_source)
-    assert :waiting = Worker.get_status(ctx.id)
+    assert :ok = SessionHarness.await_waiting!(ctx.id)
     refute_receive {:mcp_worker_provider, _, _}
   end
 

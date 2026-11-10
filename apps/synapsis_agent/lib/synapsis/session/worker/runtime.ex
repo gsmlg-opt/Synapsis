@@ -55,6 +55,7 @@ defmodule Synapsis.Session.Worker.Runtime do
         end)
 
       Persistence.broadcast(data.session_id, "session_status", %{status: "streaming"})
+      data = %{data | idle_announcement: false}
 
       {:ok,
        %{
@@ -301,13 +302,12 @@ defmodule Synapsis.Session.Worker.Runtime do
             {:error, fail(data, error_text(terminal[:error] || :unknown_outcome))}
           else
             Persistence.broadcast(data.session_id, "done", %{})
-            Persistence.broadcast(data.session_id, "session_status", %{status: "idle"})
-            {:ok, data}
+            {:ok, %{data | idle_announcement: true}}
           end
 
         :run_completed ->
-          Emitter.emit_session_completed(data.session_id)
-          {:ok, data}
+          Emitter.emit_session_completed(data.session_id, announce_idle: false)
+          {:ok, %{data | idle_announcement: true}}
       end
     end
   end

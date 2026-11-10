@@ -25,7 +25,11 @@ defmodule Synapsis.Agent.Events.Emitter do
 
     broadcast_typed(session_id, event)
     broadcast_ui(session_id, "done", %{})
-    broadcast_ui(session_id, "session_status", %{status: "idle"})
+
+    # The session Worker defers the idle status until its own state is idle.
+    if Keyword.get(opts, :announce_idle, true),
+      do: broadcast_ui(session_id, "session_status", %{status: "idle"})
+
     event
   end
 
