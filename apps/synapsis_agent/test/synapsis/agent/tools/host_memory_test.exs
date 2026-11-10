@@ -46,8 +46,7 @@ defmodule Synapsis.Agent.Tools.HostMemoryTest do
     enriched =
       Map.merge(context, %{
         interact: fn _ -> flunk("must not invoke native callback") end,
-        resource_owner_pid: self(),
-        catalog_snapshot: fn -> flunk("must not invoke native callback") end
+        resource_owner_pid: self()
       })
 
     assert {:ok, %{structured: %{hits: []}}} =

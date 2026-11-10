@@ -430,7 +430,6 @@ defmodule Synapsis.Agent.Tools.WorkspaceMemoryTest do
         interact: fn _ -> :unused end,
         append_feedback: fn _ -> :unused end,
         emit: fn _ -> :unused end,
-        catalog_snapshot: %{},
         stage_catalog: fn _ -> :unused end,
         request_new_context: fn -> :unused end,
         nested_dispatch: fn _ -> :unused end,

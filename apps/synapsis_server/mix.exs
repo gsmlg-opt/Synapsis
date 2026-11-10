@@ -43,6 +43,7 @@ defmodule SynapsisServer.MixProject do
       {:telemetry_poller, "~> 1.0"},
       {:jason, "~> 1.4"},
       {:gaoxy_test, "~> 0.15.1", only: :test},
+      {:mint_web_socket, "~> 1.0", only: :test},
       {:dns_cluster, "~> 0.3.1"},
       {:gaoxy_http, "~> 0.15.1"},
       {:websock_adapter, "~> 0.15.1", hex: :gaoxy_websock_adapter, override: true},

@@ -315,7 +315,6 @@ defmodule Synapsis.Agent.Tools.SessionStateTest do
       Map.merge(ctx.context, %{
         interact: fn _ -> :unused end,
         emit: fn _ -> :unused end,
-        catalog_snapshot: %{},
         resource_owner_pid: self(),
         goal: nil,
         goal_binding: nil

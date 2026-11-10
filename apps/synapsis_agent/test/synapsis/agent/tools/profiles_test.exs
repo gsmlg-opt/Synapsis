@@ -305,11 +305,17 @@ defmodule Synapsis.Agent.Tools.ProfilesTest do
       Synapsis.AgentConfigs.delete(agent)
     end)
 
+    # Sessions carry the skill snapshot frozen at boot by the Resolver.
+    {:ok, %{skill_snapshot: skill_snapshot, skill_catalog: skill_catalog}} =
+      Synapsis.Agent.Resolver.refresh_skills(%{id: agent.id})
+
     context =
       put_in(ctx.context, [:agent], %{
         name: agent.name,
         tool_contract_version: 1,
-        tools: [@explicit_skill]
+        tools: [@explicit_skill],
+        skill_snapshot: skill_snapshot,
+        skill_catalog: skill_catalog
       })
 
     context = Map.put(context, :tool_primary?, false)
@@ -323,7 +329,7 @@ defmodule Synapsis.Agent.Tools.ProfilesTest do
     assert Map.keys(bundle.registry.tools) == [@explicit_skill]
     descriptor = bundle.registry.tools[@explicit_skill]
     assert descriptor.backend == Synapsis.Agent.Tools.ExplicitSkill
-    assert descriptor.backend_context.snapshot.agent_id == agent.id
+    assert Synapsis.SkillReader.agent_id(descriptor.backend_context.snapshot) == agent.id
     assert snapshot.skill_snapshot == descriptor.backend_context.snapshot
     assert snapshot.permission_levels[@explicit_skill] == :none
 
@@ -333,6 +339,7 @@ defmodule Synapsis.Agent.Tools.ProfilesTest do
     invocation = %{
       ctx.invocation
       | tool_name: @explicit_skill,
+        tool_revision: 2,
         arguments: %{"name" => skill.name}
     }
 
@@ -490,6 +497,7 @@ defmodule Synapsis.Agent.Tools.ProfilesTest do
     invocation = %{
       ctx.invocation
       | tool_name: "synapsis::automations",
+        tool_revision: Synapsis.Agent.Tools.Automations.revision(),
         arguments: %{"action" => "list"}
     }
 

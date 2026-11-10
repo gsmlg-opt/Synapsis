@@ -365,8 +365,7 @@ defmodule Synapsis.Agent.Tools.MemoryDomainTest do
     enriched =
       Map.merge(ctx.context, %{
         interact: fn _ -> flunk("must not invoke interact") end,
-        resource_owner_pid: self(),
-        catalog_snapshot: fn -> flunk("must not invoke catalog") end
+        resource_owner_pid: self()
       })
 
     assert {:ok, _} = MemoryDomain.execute(%{op | backend_context: enriched})

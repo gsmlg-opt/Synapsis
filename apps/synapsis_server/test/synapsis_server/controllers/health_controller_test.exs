@@ -14,7 +14,6 @@ defmodule SynapsisServer.HealthControllerTest do
                "store" => "ok",
                "pubsub" => "ok",
                "scheduler" => _,
-               "tool_registry" => _,
                "provider_registry" => _,
                "session_supervisor" => _,
                "agent_supervisor" => _,

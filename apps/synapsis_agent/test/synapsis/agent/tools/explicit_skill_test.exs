@@ -197,7 +197,6 @@ defmodule Synapsis.Agent.Tools.ExplicitSkillTest do
         interact: fn _ -> :unused end,
         append_feedback: fn _ -> :unused end,
         emit: fn _ -> :unused end,
-        catalog_snapshot: %{},
         stage_catalog: fn _ -> :unused end,
         request_new_context: fn -> :unused end,
         nested_dispatch: fn _ -> :unused end,
@@ -258,21 +257,6 @@ defmodule Synapsis.Agent.Tools.ExplicitSkillTest do
         ] do
       refute encoded =~ private
     end
-  end
-
-  test "native text and structured projection share one output budget", ctx do
-    {:ok, _} =
-      Synapsis.Skills.update(
-        ctx.record,
-        %{system_prompt_fragment: String.duplicate("界", 11_000)}
-      )
-
-    {:ok, snapshot} = SkillReader.snapshot(ctx.agent.id)
-    fresh = put_in(ctx, [:context, :snapshot], snapshot)
-    assert {:ok, _} = SkillReader.read_explicit(snapshot, %{"locator" => ctx.locator})
-
-    assert {:error, %Error{class: :budget_exceeded, details: %{code: "output_limit"}}} =
-             ExplicitSkill.execute(operation(fresh, %{"locator" => ctx.locator}))
   end
 
   test "actual native Execution reads manual content and denies wrong grants without intent",

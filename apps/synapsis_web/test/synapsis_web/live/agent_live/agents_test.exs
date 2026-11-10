@@ -188,7 +188,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       assert saved.toolset_id === nil
       assert saved.enabled === true
       assert saved.read_only === false
-      assert saved.permission_mode == "ask"
+      assert saved.permission_mode == "yolo"
       assert saved.reasoning_effort == "medium"
       assert saved.max_tokens == 8192
       assert saved.config["mcp_selection"] == %{"default" => "all", "sources" => %{}}

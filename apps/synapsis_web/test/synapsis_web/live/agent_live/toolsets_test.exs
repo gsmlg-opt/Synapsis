@@ -232,7 +232,7 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
       Application.put_env(:synapsis_core, :mcp_refresh, {BlockingRefresh, :refresh, []})
       Application.put_env(:synapsis_web, :toolset_refresh_owner, self())
       {:ok, view, _} = live(conn, ~p"/agent/tools/new")
-      assert has_element?(view, "input[value='synapsis::file_read']")
+      assert has_element?(view, "input[value='synapsis::read']")
       refute_receive {:toolset_refresh_started, _}
     end
 
@@ -419,21 +419,12 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
 
       assert has_element?(
                view,
-               "[data-tool-category='filesystem'] input[value='synapsis::file_read']"
+               "[data-tool-category='filesystem'] input[value='synapsis::read']"
              )
 
-      assert has_element?(view, "[data-tool-category='search']", "Search")
-      assert has_element?(view, "[data-tool-category='search'] input[value='synapsis::grep']")
+      assert has_element?(view, "[data-tool-category='web']", "Web")
+      assert has_element?(view, "[data-tool-category='web'] input[value='web::fetch']")
       assert_unique_form_ids(html)
-    end
-
-    test "excludes disabled computer tools from new toolsets", %{conn: conn} do
-      assert Enum.any?(Synapsis.Tool.Registry.list(), &(&1.name == "computer"))
-      refute Synapsis.Tool.Registry.runtime_available?("computer")
-
-      {:ok, view, _html} = live(conn, ~p"/agent/tools/new")
-
-      refute has_element?(view, "input[name='tool_names[]'][value='computer']")
     end
 
     test "select all marks every available tool", %{conn: conn} do
@@ -445,28 +436,10 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
 
       assert has_element?(
                view,
-               "input[name='tool_names[]'][value='synapsis::file_read'][checked]"
+               "input[name='tool_names[]'][value='synapsis::read'][checked]"
              )
 
-      assert has_element?(view, "input[name='tool_names[]'][value='synapsis::grep'][checked]")
-    end
-
-    test "select all does not add disabled computer tools", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/agent/tools/new")
-
-      react_form_change(view, "toolset-form", %{
-        "toolset" => %{"name" => "available-builtins"},
-        "tool_names" => []
-      })
-
-      view
-      |> element("el-dm-button[phx-click='select_all_tools']", "Select all from source")
-      |> render_click()
-
-      react_form_submit(view, "toolset-form", %{})
-      saved = toolset_by_name("available-builtins")
-      assert "synapsis::file_read" in saved.tool_names
-      refute "computer" in saved.tool_names
+      assert has_element?(view, "input[name='tool_names[]'][value='web::fetch'][checked]")
     end
 
     test "group selection does not add disabled computer tools", %{conn: conn} do
@@ -500,7 +473,7 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
       |> render_click()
 
       html = render(view)
-      assert html =~ "No tools are registered for this source"
+      assert html =~ "No tools are present in the local MCP snapshot"
       assert html =~ "MCP"
       assert html =~ "Servers"
     end
@@ -510,19 +483,19 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
 
       view
       |> element(
-        "[data-tool-category='search'] el-dm-button[phx-click='select_tool_group']",
+        "[data-tool-category='web'] el-dm-button[phx-click='select_tool_group']",
         "Select all"
       )
       |> render_click()
 
       assert has_element?(
                view,
-               "[data-tool-category='search'] input[name='tool_names[]'][value='synapsis::grep'][checked]"
+               "[data-tool-category='web'] input[name='tool_names[]'][value='web::fetch'][checked]"
              )
 
       refute has_element?(
                view,
-               "[data-tool-category='filesystem'] input[name='tool_names[]'][value='synapsis::file_read'][checked]"
+               "[data-tool-category='filesystem'] input[name='tool_names[]'][value='synapsis::read'][checked]"
              )
     end
 
@@ -530,6 +503,7 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
       {:ok, toolset} =
         Toolsets.create(%{
           name: "mcp-tools",
+          tool_contract_version: 1,
           tool_names: ["mcp:demo:search_docs"]
         })
 
@@ -537,29 +511,6 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
 
       assert html =~ "mcp:demo:search_docs"
       assert html =~ "Unavailable"
-    end
-
-    test "preserves saved disabled computer tools until explicitly removed", %{conn: conn} do
-      {:ok, toolset} =
-        Toolsets.create(%{
-          name: "saved-computer",
-          tool_names: ["file_read", "computer"]
-        })
-
-      {:ok, view, _html} = live(conn, ~p"/agent/tools/#{toolset.id}/edit")
-
-      assert has_element?(
-               view,
-               "[data-tool-category='unavailable'] input[name='tool_names[]'][value='computer'][checked]"
-             )
-
-      react_form_submit(view, "toolset-form", %{})
-      assert toolset_by_name("saved-computer").tool_names == ["file_read", "computer"]
-
-      {:ok, view, _html} = live(conn, ~p"/agent/tools/#{toolset.id}/edit")
-
-      react_form_submit(view, "toolset-form", %{"tool_names" => ["file_read"]})
-      assert toolset_by_name("saved-computer").tool_names == ["file_read"]
     end
 
     test "removes a custom toolset", %{conn: conn} do

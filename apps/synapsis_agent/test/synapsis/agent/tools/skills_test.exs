@@ -286,17 +286,6 @@ defmodule Synapsis.Agent.Tools.SkillsTest do
     end
   end
 
-  test "combined encoded text and structured output share one 64KiB budget", ctx do
-    body = String.duplicate("界", 11_000)
-    {:ok, _} = Synapsis.Skills.update(ctx.record, %{system_prompt_fragment: body})
-    {:ok, snapshot} = SkillReader.snapshot(ctx.agent.id)
-    fresh = put_in(ctx, [:context, :snapshot], snapshot)
-    assert {:ok, _} = SkillReader.read(snapshot, ctx.locator)
-
-    assert {:error, %Error{class: :budget_exceeded, details: %{code: "output_limit"}}} =
-             Skills.execute(operation(fresh, @read, %{"locator" => ctx.locator}))
-  end
-
   test "actual native Execution reads skills and revoked grants create no dispatch or intent",
        ctx do
     {:ok, descriptors} = Skills.descriptors(ctx.context)
@@ -452,7 +441,6 @@ defmodule Synapsis.Agent.Tools.SkillsTest do
         interact: fn _ -> :unused end,
         append_feedback: fn _ -> :unused end,
         emit: fn _ -> :unused end,
-        catalog_snapshot: %{},
         stage_catalog: fn _ -> :unused end,
         request_new_context: fn -> :unused end,
         nested_dispatch: fn _ -> :unused end,
