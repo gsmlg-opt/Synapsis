@@ -1,5 +1,6 @@
 defmodule Synapsis.Session.NativeReadableWebFetchFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.Codex
   alias Backplane.AgentRuntime.Codex.{Backend, Web.ReadableFetch}

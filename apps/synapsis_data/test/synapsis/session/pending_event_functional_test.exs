@@ -1,5 +1,6 @@
 defmodule Synapsis.Session.PendingEventFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Session.{PendingInputStore, Store}
 

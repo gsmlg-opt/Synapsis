@@ -12,7 +12,9 @@ defmodule Synapsis.Session.StoreTest do
   setup do
     assert Store.ensure_started() == :ok
     # Unique id per test keeps the shared node-local store isolated.
-    {:ok, id: "sess-" <> Ecto.UUID.generate()}
+    id = "sess-" <> Ecto.UUID.generate()
+    on_exit(fn -> Store.delete_session(id) end)
+    {:ok, id: id}
   end
 
   describe "meta round-trip" do

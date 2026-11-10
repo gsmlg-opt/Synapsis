@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.NativeToolManifestFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.ContextBuilder
   alias Synapsis.Agent.TestSupport.SessionHarness

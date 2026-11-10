@@ -1,5 +1,6 @@
 defmodule SynapsisServer.VideoHistoryFunctionalTest do
   use SynapsisServer.ChannelCase
+  @moduletag :functional
   import Phoenix.ConnTest, only: [build_conn: 0, get: 2, json_response: 2]
   alias Synapsis.{Message, Part, Session}
   alias Synapsis.Session.Store

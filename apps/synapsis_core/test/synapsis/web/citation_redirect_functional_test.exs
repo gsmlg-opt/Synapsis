@@ -1,5 +1,6 @@
 defmodule Synapsis.Web.CitationRedirectFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Web.{CitationRedirect, Transport}
 

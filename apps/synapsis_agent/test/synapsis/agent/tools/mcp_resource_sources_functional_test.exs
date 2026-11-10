@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Tools.MCPResourceSourcesFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.Tools.MCPSources
   alias Synapsis.{MCP, MCPConfigs}

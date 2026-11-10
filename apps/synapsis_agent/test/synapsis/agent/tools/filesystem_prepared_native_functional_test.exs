@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Tools.FilesystemPreparedNativeFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.{Conversation, EphemeralStore, ToolCatalog}
   alias Backplane.AgentRuntime.Codex.Session

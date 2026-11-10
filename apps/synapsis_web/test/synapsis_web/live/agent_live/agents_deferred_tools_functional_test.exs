@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.AgentLive.AgentsDeferredToolsFunctionalTest do
   use SynapsisWeb.ConnCase
+  @moduletag :functional
 
   import SynapsisWeb.ReactFormHelpers
 

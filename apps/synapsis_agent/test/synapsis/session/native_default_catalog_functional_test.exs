@@ -1,5 +1,6 @@
 defmodule Synapsis.Session.NativeDefaultCatalogFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.Codex.Backend
   alias Synapsis.Agent.Resolver

@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Heartbeat.AutomationRetirementFunctionalTest do
   use Synapsis.Agent.DaemonCase, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.Heartbeat.{LocalScheduler, Worker}
 

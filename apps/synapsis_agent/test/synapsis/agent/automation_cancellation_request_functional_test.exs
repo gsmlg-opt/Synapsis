@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.AutomationCancellationRequestFunctionalTest do
   use Synapsis.Agent.DaemonCase, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.RunEvents
   alias Synapsis.AgentRun.Store, as: RunStore

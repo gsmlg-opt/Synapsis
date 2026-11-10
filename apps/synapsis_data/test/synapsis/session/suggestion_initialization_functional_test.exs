@@ -1,5 +1,6 @@
 defmodule Synapsis.Session.SuggestionInitializationFunctionalTest do
   use Synapsis.DataCase, async: false
+  @moduletag :functional
 
   alias Synapsis.Session
   alias Synapsis.Session.Store

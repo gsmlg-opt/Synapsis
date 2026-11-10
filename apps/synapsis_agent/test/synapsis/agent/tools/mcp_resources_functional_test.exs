@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Tools.MCPResourcesFunctionalTest do
   use ExUnit.Case, async: true
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.Codex
   alias Backplane.AgentRuntime.Codex.{Backend, ResourceRegistry, Session}

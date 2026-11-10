@@ -1,5 +1,6 @@
 defmodule Synapsis.Workspace.DirectoryListFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Filesystem.{Access, Local}
   alias Synapsis.Session.Store

@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.AgentLive.BrowserSettingsFunctionalTest do
   use SynapsisWeb.ConnCase
+  @moduletag :functional
 
   import SynapsisWeb.ReactFormHelpers
 

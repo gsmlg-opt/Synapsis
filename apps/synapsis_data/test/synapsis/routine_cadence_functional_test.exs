@@ -1,5 +1,6 @@
 defmodule Synapsis.RoutineCadenceFunctionalTest do
   use Synapsis.DataCase, async: false
+  @moduletag :functional
 
   alias Synapsis.Config.Store
   alias Synapsis.RoutineSchedule

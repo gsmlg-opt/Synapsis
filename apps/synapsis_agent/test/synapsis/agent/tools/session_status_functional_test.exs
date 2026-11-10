@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Tools.SessionStatusFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
   alias Synapsis.Agent.Tools.SessionStatus
   alias Synapsis.Session.Store
 

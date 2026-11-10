@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.NativeMCPCatalogFunctionalTest do
   use SynapsisWeb.ConnCase
+  @moduletag :functional
 
   alias Synapsis.{AgentConfigs, MCPConfigs, Toolsets}
 

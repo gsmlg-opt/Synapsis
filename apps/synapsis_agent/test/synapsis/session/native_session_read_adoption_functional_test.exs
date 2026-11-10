@@ -1,5 +1,6 @@
 defmodule Synapsis.Session.NativeSessionReadAdoptionFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.TestSupport.SessionHarness
   alias Synapsis.Agent.Tools.{SessionDirectory, SessionHistory, SessionStatus}

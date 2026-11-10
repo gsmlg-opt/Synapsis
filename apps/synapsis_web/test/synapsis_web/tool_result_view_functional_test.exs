@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.ToolResultViewFunctionalTest do
   use ExUnit.Case, async: true
+  @moduletag :functional
 
   alias Synapsis.Agent.Tools.ResultProjection
   alias Synapsis.Part.ToolResult

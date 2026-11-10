@@ -1,5 +1,6 @@
 defmodule Synapsis.Session.NativeSessionDirectoryEnrichmentFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.Runtime.{ProviderEvents, ProviderMessages}
   alias Synapsis.Agent.TestSupport.{DeterministicProvider, SessionHarness}

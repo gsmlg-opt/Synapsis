@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.DaemonProfilesFunctionalTest do
   use Synapsis.Agent.DaemonCase, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.Daemon.{NativeSelection, Toolsets}
   alias Synapsis.Part.{ToolResult, ToolUse}

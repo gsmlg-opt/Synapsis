@@ -34,6 +34,8 @@ defmodule Synapsis.AgentDirectoryTest do
         do: System.put_env("SYNAPSIS_CONFIG_DIR", previous),
         else: System.delete_env("SYNAPSIS_CONFIG_DIR")
 
+      # Reload treats a missing file as an error; an absent shared file means no agents.
+      unless File.exists?(Store.file_path(:agent)), do: File.write!(Store.file_path(:agent), "")
       assert :ok = Store.reload(:agent)
     end)
 

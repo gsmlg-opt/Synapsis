@@ -1,5 +1,6 @@
 defmodule Synapsis.MCP.Backplane151EventsFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.McpProtocol.Client
 

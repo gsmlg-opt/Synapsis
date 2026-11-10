@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Daemon.ResourceSelectionFunctionalTest do
   use Synapsis.Agent.DataCase, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.Daemon.NativeSelection
   alias Synapsis.Agent.{Resolver, Runs}

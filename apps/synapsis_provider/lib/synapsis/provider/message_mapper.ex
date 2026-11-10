@@ -30,7 +30,7 @@ defmodule Synapsis.Provider.MessageMapper do
            Request.new(
              %{
                model: model,
-               input: system_message(opts) ++ protocol_tool_images(input, protocol),
+               input: system_message(opts) ++ protocol_tool_results(input, protocol),
                tools: Enum.map(tools, &canonical_tool(&1, protocol)),
                settings: settings(protocol, opts),
                extensions: extensions(protocol, opts)
@@ -51,17 +51,20 @@ defmodule Synapsis.Provider.MessageMapper do
     end
   end
 
-  defp protocol_tool_images(input, :openai_responses) do
+  # Responses `function_call_output` has no error flag, so failed tool results
+  # are sent as plain output (as Codex does); the error text stays in content.
+  defp protocol_tool_results(input, :openai_responses) do
     Enum.map(input, fn
       %{role: :tool, content: content} = message ->
         %{message | content: Enum.map(content, &responses_tool_image/1)}
+        |> Map.put(:status, :success)
 
       message ->
         message
     end)
   end
 
-  defp protocol_tool_images(input, _protocol), do: input
+  defp protocol_tool_results(input, _protocol), do: input
 
   # Adapt validated tool projections to the Responses native image contract.
   # Other protocols and user attachments retain their existing representation.

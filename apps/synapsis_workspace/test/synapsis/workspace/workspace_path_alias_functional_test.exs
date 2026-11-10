@@ -1,5 +1,6 @@
 defmodule Synapsis.Workspace.WorkspacePathAliasFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Workspace
   alias Synapsis.Workspace.FileDocuments

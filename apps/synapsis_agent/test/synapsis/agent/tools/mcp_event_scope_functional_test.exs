@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Tools.MCPEventScopeFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.{Codex, Conversation, ToolCatalog}
 

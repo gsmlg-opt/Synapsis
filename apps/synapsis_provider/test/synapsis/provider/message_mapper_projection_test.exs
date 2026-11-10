@@ -179,12 +179,21 @@ defmodule Synapsis.Provider.MessageMapperProjectionTest do
           [],
           %{"answer" => 42},
           [%{"type" => "audio", "data" => "AA=="}],
-          [%{"type" => "resource_link", "uri" => "workspace://report"}],
           [text("before"), %{"type" => "future_media"}, text("after")]
         ] do
       assert {:error, %Error{kind: :incompatible, message: @unsupported}} =
                build(:anthropic, projected(content))
     end
+
+    assert {:error,
+            %Error{
+              kind: :invalid_request,
+              message: "Resource link name must be a non-empty string"
+            }} =
+             build(
+               :anthropic,
+               projected([%{"type" => "resource_link", "uri" => "workspace://report"}])
+             )
 
     part = projected("public")
     result = %{"is_error" => false, "structured" => %{"answer" => 42}}

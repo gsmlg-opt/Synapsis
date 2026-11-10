@@ -1,5 +1,6 @@
 defmodule Synapsis.Session.NativeManagedChildFilesystemFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.Codex.Backend
   alias Synapsis.Agent.Runtime.ProviderMessages

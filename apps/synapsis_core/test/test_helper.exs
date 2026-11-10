@@ -1,4 +1,4 @@
-ExUnit.start()
+ExUnit.start(exclude: [:functional])
 
 # Start registries that were moved to SynapsisAgent.Application.
 # These are needed for Worker/Session tests in synapsis_core.

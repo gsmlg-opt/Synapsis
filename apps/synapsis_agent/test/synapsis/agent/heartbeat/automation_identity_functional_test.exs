@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Heartbeat.AutomationIdentityFunctionalTest do
   use Synapsis.Agent.DaemonCase, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.{Routines, RunEvents}
   alias Synapsis.Agent.Heartbeat.LocalScheduler

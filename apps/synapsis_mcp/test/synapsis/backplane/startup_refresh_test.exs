@@ -197,8 +197,16 @@ defmodule Synapsis.Backplane.StartupRefreshTest do
          end}
       )
 
+    # Sync.run records its own degraded failure before the raise; wait for the
+    # exception handler's write rather than that intermediate state.
     eventually(fn ->
-      match?({:ok, %{status: "degraded", stale: true}}, Connection.get(connection.id))
+      case Connection.get(connection.id) do
+        {:ok, %{status: "degraded", stale: true, last_error: error}} when is_binary(error) ->
+          error =~ "startup_refresh_exception"
+
+        _ ->
+          false
+      end
     end)
 
     assert {:ok, degraded} = Connection.get(connection.id)

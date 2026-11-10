@@ -1,5 +1,6 @@
 defmodule Synapsis.Filesystem.TextReadFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Filesystem.Local
   alias Synapsis.Filesystem.TextRead

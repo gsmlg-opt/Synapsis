@@ -1,5 +1,6 @@
 defmodule Synapsis.Session.NativeSkillSearchFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.Codex.Session, as: NativeSession
   alias Synapsis.Agent.Runtime.Store, as: NativeStore

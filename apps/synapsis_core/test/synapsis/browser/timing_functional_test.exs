@@ -1,5 +1,6 @@
 defmodule Synapsis.Browser.TimingFunctionalTest do
   use ExUnit.Case, async: true
+  @moduletag :functional
 
   alias Synapsis.Browser.Timing
 

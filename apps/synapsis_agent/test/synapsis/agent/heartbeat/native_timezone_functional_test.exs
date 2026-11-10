@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Heartbeat.NativeTimezoneFunctionalTest do
   use Synapsis.Agent.DaemonCase, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.Routines
   alias Synapsis.Agent.Heartbeat.LocalScheduler

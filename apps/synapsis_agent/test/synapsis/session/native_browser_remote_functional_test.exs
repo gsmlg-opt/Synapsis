@@ -1,5 +1,6 @@
 defmodule Synapsis.Session.NativeBrowserRemoteFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.Codex.{ResourceRegistry, Session}
   alias Synapsis.Agent.TestSupport.SessionHarness

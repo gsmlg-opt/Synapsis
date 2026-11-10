@@ -1,5 +1,6 @@
 defmodule Synapsis.Session.StoreRecentTurnsFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Concord.Turso, as: KV
   alias Synapsis.Session.Store

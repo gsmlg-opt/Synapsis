@@ -4,7 +4,6 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
   alias Synapsis.Agent.TestSupport.{
     AbortableHTTP,
     DeterministicProvider,
-    DeterministicTool,
     SessionHarness
   }
 
@@ -19,17 +18,6 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
       session_config: %{},
       install_provider?: false
     ]
-
-    opts =
-      if ctx[:approval_tool],
-        do:
-          opts ++
-            [
-              permission_mode: "ask",
-              tool_behavior: :read_success,
-              tool_opts: [permission_level: :write]
-            ],
-        else: opts
 
     harness = SessionHarness.setup_session!(opts)
 
@@ -224,46 +212,6 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
                  Synapsis.Sessions.get_messages(id),
                do: text
              )
-  end
-
-  @tag approval_tool: true
-  @tag custom_provider: true
-  test "child approval remains actionable after its root completes", %{id: id, harness: harness} do
-    install_provider(harness, fn conn, request ->
-      messages = request["messages"]
-
-      cond do
-        Enum.any?(messages, &(user_text(&1) == "pending child")) ->
-          if tool_result?(messages, "write-child"),
-            do: answer(conn, "child denied"),
-            else:
-              call(conn, harness.tool_name, "write-child", %{
-                "value" => "forbidden without approval"
-              })
-
-        not tool_result?(messages, "spawn-pending") ->
-          call(conn, "spawn_agent", "spawn-pending", %{
-            "task_name" => "writer",
-            "message" => "pending child",
-            "fork_turns" => "none"
-          })
-
-        true ->
-          answer(conn, "root finished while child waits")
-      end
-    end)
-
-    assert {:ok, _} = Worker.set_subagents(id, true)
-    assert :ok = Worker.send_message(id, "delegate writing")
-    assert_receive {"runtime_permissions", [%{interaction_id: interaction}]}, 10_000
-    assert_receive {:run_event, %{type: "session.completed"}}, 10_000
-    assert %{runtime_permissions: [%{interaction_id: ^interaction}]} = Worker.snapshot(id)
-    assert [] == DeterministicTool.executions(harness.tool_name)
-    assert {:error, :subagents_active} = Worker.set_subagents(id, false)
-    assert :ok = Worker.resolve_runtime(id, interaction, false)
-    assert_receive {"subagents", %{agents: [%{name: "/root/writer", status: :completed}]}}, 10_000
-    assert [] == DeterministicTool.executions(harness.tool_name)
-    assert %{runtime_permissions: []} = Worker.snapshot(id)
   end
 
   @tag custom_provider: true

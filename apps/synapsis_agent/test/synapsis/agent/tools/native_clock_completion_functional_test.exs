@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Tools.NativeClockCompletionFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.{Codex, Conversation}
   alias Backplane.AgentRuntime.Codex.{CodeMode, Headless, ResourceRegistry, Session}

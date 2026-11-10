@@ -6,4 +6,4 @@ for name <- [Synapsis.Agent.Runtime.RunRegistry, Synapsis.Agent.RunRegistry] do
   end
 end
 
-ExUnit.start()
+ExUnit.start(exclude: [:functional])

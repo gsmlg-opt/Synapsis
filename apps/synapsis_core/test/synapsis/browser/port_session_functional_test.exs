@@ -1,5 +1,6 @@
 defmodule Synapsis.Browser.PortSessionFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Browser.PortSession
 

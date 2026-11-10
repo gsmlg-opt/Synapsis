@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Runtime.ToolResultContractFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   # These fixtures qualify the public native package. Production Skills/workshop
   # selector wiring and their host persistence/UI remain separate consumers.

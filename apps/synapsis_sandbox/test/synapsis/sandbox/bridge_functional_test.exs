@@ -1,5 +1,6 @@
 defmodule Synapsis.Sandbox.BridgeFunctionalTest do
   use ExUnit.Case, async: true
+  @moduletag :functional
 
   alias Synapsis.Sandbox.Bridge
 

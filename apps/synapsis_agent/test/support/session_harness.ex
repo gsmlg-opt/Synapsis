@@ -3,7 +3,7 @@ defmodule Synapsis.Agent.TestSupport.SessionHarness do
   Shared helpers for interactive session characterization tests.
   """
 
-  alias Synapsis.Agent.TestSupport.{DeterministicProvider, DeterministicTool}
+  alias Synapsis.Agent.TestSupport.DeterministicProvider
   alias Synapsis.Session.DynamicSupervisor
 
   @doc "Build an agent + session wired to a deterministic provider (and optional tool)."
@@ -13,18 +13,12 @@ defmodule Synapsis.Agent.TestSupport.SessionHarness do
     agent_name = Keyword.get(opts, :agent_name, "char_agent_#{suffix}")
     permission_mode = Keyword.get(opts, :permission_mode, "yolo")
     scenario = Keyword.get(opts, :scenario, :success)
-    tool_behavior = Keyword.get(opts, :tool_behavior)
     text = Keyword.get(opts, :text, "characterization complete")
 
     {:ok, counter} =
       Agent.start_link(fn -> %{provider_requests: [], tool_executions: 0} end)
 
-    tool_name =
-      if tool_behavior do
-        name = Keyword.get(opts, :tool_name, "char_tool_#{suffix}")
-        DeterministicTool.register(name, tool_behavior, Keyword.get(opts, :tool_opts, []))
-        name
-      end
+    tool_name = Keyword.get(opts, :tool_name)
 
     provider_opts =
       [
@@ -80,10 +74,6 @@ defmodule Synapsis.Agent.TestSupport.SessionHarness do
     _ = Synapsis.Sessions.delete(harness.session.id)
     _ = Synapsis.AgentConfigs.delete(harness.agent_config)
     _ = DeterministicProvider.stop(harness.provider)
-
-    if harness.tool_name do
-      DeterministicTool.unregister(harness.tool_name)
-    end
 
     if Process.alive?(harness.counter) do
       Agent.stop(harness.counter)

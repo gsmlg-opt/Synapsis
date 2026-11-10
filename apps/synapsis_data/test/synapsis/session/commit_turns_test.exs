@@ -5,7 +5,9 @@ defmodule Synapsis.Session.CommitTurnsTest do
 
   setup do
     :ok = Store.ensure_started()
-    %{id: Ecto.UUID.generate()}
+    id = Ecto.UUID.generate()
+    on_exit(fn -> Store.delete_session(id) end)
+    %{id: id}
   end
 
   test "appends a complete turn and metadata without touching the transcript prefix", %{id: id} do

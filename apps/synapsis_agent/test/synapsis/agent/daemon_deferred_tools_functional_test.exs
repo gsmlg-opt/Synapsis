@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.DaemonDeferredToolsFunctionalTest do
   use Synapsis.Agent.DaemonCase, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.Daemon.NativeSelection
   alias Synapsis.Agent.TestSupport.DeterministicProvider, as: Provider

@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Tools.SandboxNativeFunctionalTest do
   use ExUnit.Case, async: true
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.{Conversation, EphemeralStore, ToolCatalog}
   alias Synapsis.Agent.TestSupport.BackplaneRuntimeProof, as: Proof

@@ -1,5 +1,6 @@
 defmodule Synapsis.Session.NativeSessionUsageFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   import Synapsis.Agent.DaemonCase, only: [wait_for: 1]
 

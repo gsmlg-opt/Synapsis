@@ -1,5 +1,6 @@
 defmodule Synapsis.Session.PromptProvenanceFunctionalTest do
   use Synapsis.DataCase, async: false
+  @moduletag :functional
 
   alias Synapsis.Session.{PendingInputStore, Store}
 

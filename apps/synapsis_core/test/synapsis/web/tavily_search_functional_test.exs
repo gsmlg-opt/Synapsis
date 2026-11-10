@@ -1,5 +1,6 @@
 defmodule Synapsis.Web.TavilySearchFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
   alias Backplane.AgentRuntime.Codex.Web
 
   setup do

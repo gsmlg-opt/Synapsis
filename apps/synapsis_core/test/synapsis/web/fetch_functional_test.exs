@@ -1,5 +1,6 @@
 defmodule Synapsis.Web.FetchFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Web.Fetch
   alias Synapsis.Web.Fetch.Document

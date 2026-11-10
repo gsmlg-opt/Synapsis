@@ -1,5 +1,6 @@
 defmodule SynapsisCli.EventReplyFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias SynapsisCli.Main
 

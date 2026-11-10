@@ -1,5 +1,6 @@
 defmodule Synapsis.Provider.MiniMaxSearchFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Provider.WebSearch
 

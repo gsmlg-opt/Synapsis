@@ -1,5 +1,6 @@
 defmodule Synapsis.Session.NativeSessionDirectoryHistoryFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.Runtime.ProviderMessages
   alias Synapsis.Agent.TestSupport.{DeterministicProvider, SessionHarness}

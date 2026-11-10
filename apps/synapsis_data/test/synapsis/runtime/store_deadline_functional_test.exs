@@ -1,5 +1,6 @@
 defmodule Synapsis.Runtime.StoreDeadlineFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Concord.KV
   alias Concord.KV.Record

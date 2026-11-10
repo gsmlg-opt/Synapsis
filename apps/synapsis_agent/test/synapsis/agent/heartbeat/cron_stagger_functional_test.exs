@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Heartbeat.CronStaggerFunctionalTest do
   use ExUnit.Case, async: true
+  @moduletag :functional
 
   alias Synapsis.Agent.Heartbeat.Schedule
 

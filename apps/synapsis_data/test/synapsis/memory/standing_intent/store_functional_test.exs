@@ -1,5 +1,6 @@
 defmodule Synapsis.Memory.StandingIntent.StoreFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Memory.StandingIntent.Store
 

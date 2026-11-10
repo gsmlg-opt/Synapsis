@@ -1,5 +1,6 @@
 defmodule Synapsis.Filesystem.StateOperationFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.Codex.ResourceRegistry
   alias Synapsis.Filesystem.Local

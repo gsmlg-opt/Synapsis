@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Tools.HeadlessCodeModeFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.Codex
 

@@ -1,5 +1,6 @@
 defmodule Synapsis.VideoPartFunctionalTest do
   use Synapsis.DataCase
+  @moduletag :functional
 
   alias Synapsis.{Message, Part}
   alias Synapsis.Part.Video

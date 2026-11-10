@@ -60,7 +60,7 @@ defmodule Synapsis.SessionsTest do
   end
 
   @tag :contract_version
-  test "new sessions author native permissions while the existing shared writer stays legacy" do
+  test "new sessions author native permissions and config updates preserve the contract" do
     assert {:ok, session} =
              Sessions.create("main", %{
                provider: "contract-version-fixture",
@@ -80,10 +80,10 @@ defmodule Synapsis.SessionsTest do
 
     assert %{tool_contract_version: 0} = Store.get_value(legacy_id, "permission")
 
-    assert {:ok, %{tool_contract_version: 0}} =
+    assert {:ok, %{tool_contract_version: 1}} =
              Synapsis.Tool.Permission.update_config(session.id, attrs)
 
-    assert %{tool_contract_version: 0} = Store.get_value(session.id, "permission")
+    assert %{tool_contract_version: 1} = Store.get_value(session.id, "permission")
   end
 
   test "retains an unavailable saved model until an explicit choice is made" do

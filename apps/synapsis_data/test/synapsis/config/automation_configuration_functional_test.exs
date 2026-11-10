@@ -1,5 +1,6 @@
 defmodule Synapsis.Config.AutomationConfigurationFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Config.Store
   alias Synapsis.Config.Store.Server

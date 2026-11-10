@@ -1,5 +1,6 @@
 defmodule Synapsis.Session.NativeAgentSwitchFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.TestSupport.SessionHarness
   alias Synapsis.Part.Text

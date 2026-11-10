@@ -2,4 +2,4 @@
 # :concord application; ensure it is ready before tests touch Session.Store.
 Synapsis.Session.Store.ensure_started()
 
-ExUnit.start()
+ExUnit.start(exclude: [:functional])

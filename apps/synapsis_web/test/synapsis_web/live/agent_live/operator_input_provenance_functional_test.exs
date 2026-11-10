@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.AgentLive.OperatorInputProvenanceFunctionalTest do
   use SynapsisWeb.ConnCase, async: false
+  @moduletag :functional
 
   import Synapsis.Agent.DaemonCase, only: [wait_for: 1]
 

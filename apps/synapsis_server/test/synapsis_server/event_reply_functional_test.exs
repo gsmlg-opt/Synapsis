@@ -1,5 +1,6 @@
 defmodule SynapsisServer.EventReplyFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   import Phoenix.ChannelTest
   import Synapsis.Agent.DaemonCase, only: [wait_for: 1]

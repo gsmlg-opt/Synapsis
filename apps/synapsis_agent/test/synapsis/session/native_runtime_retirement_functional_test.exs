@@ -1,5 +1,6 @@
 defmodule Synapsis.Session.NativeRuntimeRetirementFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.TestSupport.{AbortableHTTP, DeterministicProvider, SessionHarness}
   alias Synapsis.Session.Worker

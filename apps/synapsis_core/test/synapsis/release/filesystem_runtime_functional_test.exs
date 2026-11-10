@@ -1,5 +1,6 @@
 defmodule Synapsis.Release.FilesystemRuntimeFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Filesystem.Planner.PortSession
 

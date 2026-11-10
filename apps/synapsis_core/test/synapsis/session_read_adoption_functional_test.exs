@@ -1,5 +1,6 @@
 defmodule Synapsis.SessionReadAdoptionFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Concord.Turso
   alias Synapsis.Session.Store

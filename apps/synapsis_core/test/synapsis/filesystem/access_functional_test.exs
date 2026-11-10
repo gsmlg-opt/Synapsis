@@ -1,5 +1,6 @@
 defmodule Synapsis.Filesystem.AccessFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Filesystem.Access
   alias Synapsis.Filesystem.Local

@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.AgentLive.EventReplyFunctionalTest do
   use SynapsisWeb.ConnCase, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.TestSupport.SessionHarness
   alias Synapsis.Session.{DynamicSupervisor, Store, Worker}

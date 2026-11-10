@@ -1,5 +1,6 @@
 defmodule Synapsis.Web.SearchCachePolicyFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Web.Search
   alias Synapsis.Web.Search.Cache

@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.AutomationWebhookFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.InputSchema
   alias Synapsis.Agent.Automation.Execution

@@ -1,5 +1,6 @@
 defmodule Synapsis.SkillBodySearchFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.{AgentConfigs, SkillReader, SkillSearch, Skills}
   alias Synapsis.Config.Store

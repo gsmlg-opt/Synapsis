@@ -1,5 +1,6 @@
 defmodule Synapsis.FLACAudioPartFunctionalTest do
   use Synapsis.DataCase
+  @moduletag :functional
 
   alias Synapsis.{Message, Part}
   alias Synapsis.Session.Store

@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.DaemonNativeMCPFunctionalTest do
   use Synapsis.Agent.DaemonCase, async: false
+  @moduletag :functional
   alias Synapsis.Agent.DaemonNativeFunctionalTest, as: Native
   alias Synapsis.MCP.Server
   alias Synapsis.Part.ToolResult

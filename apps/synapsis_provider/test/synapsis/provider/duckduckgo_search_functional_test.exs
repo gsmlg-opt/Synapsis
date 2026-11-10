@@ -1,5 +1,6 @@
 defmodule Synapsis.Provider.DuckDuckGoSearchFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Provider.WebSearch
   alias Synapsis.Provider.WebSearch.DuckDuckGo

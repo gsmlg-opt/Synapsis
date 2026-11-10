@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Tools.AutomationMutationFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   import Synapsis.Agent.DaemonCase, only: [wait_for_ready: 0]
 

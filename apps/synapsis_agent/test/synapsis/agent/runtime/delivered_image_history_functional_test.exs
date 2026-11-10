@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Runtime.DeliveredImageHistoryFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.Runtime.{ProviderAdapter, ProviderMessages}
   alias Synapsis.Session.{Snapshot, Store}

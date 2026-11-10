@@ -1,5 +1,6 @@
 defmodule SynapsisServer.SessionIngressProvenanceFunctionalTest do
   use SynapsisServer.ConnCase, async: false
+  @moduletag :functional
 
   require Phoenix.ChannelTest
   import Synapsis.Agent.DaemonCase, only: [wait_for: 1]

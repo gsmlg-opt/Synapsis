@@ -1,5 +1,6 @@
 defmodule Synapsis.MessageEventReplyFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.{Message, Part.Text, Session.Store}
 

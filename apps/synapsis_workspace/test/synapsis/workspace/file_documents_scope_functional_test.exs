@@ -1,5 +1,6 @@
 defmodule Synapsis.Workspace.FileDocumentsScopeFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Filesystem.{Access, Local}
   alias Synapsis.Workspace.{FileDocuments, Resources}

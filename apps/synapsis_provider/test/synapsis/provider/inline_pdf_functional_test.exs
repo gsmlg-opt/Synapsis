@@ -1,5 +1,6 @@
 defmodule Synapsis.Provider.InlinePDFFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AiProtocol.ContentBlock
   alias Synapsis.Part.Text

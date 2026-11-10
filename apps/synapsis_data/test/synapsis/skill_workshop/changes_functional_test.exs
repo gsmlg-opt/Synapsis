@@ -1,5 +1,6 @@
 defmodule Synapsis.SkillWorkshop.ChangesFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.SkillWorkshop.Changes
 

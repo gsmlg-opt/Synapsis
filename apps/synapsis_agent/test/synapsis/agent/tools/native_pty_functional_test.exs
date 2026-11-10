@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Tools.NativePtyFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.Command
   alias Backplane.AgentRuntime.Tools.LocalCommand

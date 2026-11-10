@@ -287,7 +287,7 @@ defmodule Synapsis.MessageTest do
     end
 
     test "list_recent_by_session decodes only the latest messages", %{session: session} do
-      assert :ok = Synapsis.Session.Store.put_meta(session.id, %{turn_count: 0})
+      assert :ok = Synapsis.Session.Store.put_meta(session.id, %{id: session.id, turn_count: 0})
 
       messages =
         for n <- 1..30 do

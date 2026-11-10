@@ -1,5 +1,6 @@
 defmodule Synapsis.MCP.ResourceStartFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.McpProtocol.Client
   alias Backplane.McpProtocol.Client.ResourceRequest

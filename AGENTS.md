@@ -49,7 +49,8 @@ Develop directly on `main` in the root checkout; do not create new worktrees. Ke
 
 - `mix deps.get`: fetch Elixir dependencies.
 - `mix phx.server`: start the Phoenix endpoint on the configured dev port (`4657` by default). No database setup is needed; the embedded Concord store writes under `tmp/`.
-- `mix test`: run the full umbrella test suite.
+- `mix test`: run the default umbrella test suite. Slow end-to-end tests are tagged `@moduletag :functional` and excluded by default.
+- `mix test --include functional`: also run the functional tier (real Worker/Concord/Node runtimes; much slower).
 - `mix test apps/synapsis_core/test`: run one app's tests by path.
 - `mix test apps/synapsis_web/test/synapsis_web/live/agent_live/sessions_test.exs`: run a focused test file.
 - `mix format --check-formatted`: verify Elixir formatting.

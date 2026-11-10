@@ -1,5 +1,6 @@
 defmodule Synapsis.Session.NativeGoalLifecycleFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.{Conversation, Goal, GoalBridge}
   alias Backplane.AgentRuntime.Goal.State

@@ -1,5 +1,6 @@
 defmodule Synapsis.Provider.VideoHistoryFunctionalTest do
   use ExUnit.Case, async: true
+  @moduletag :functional
 
   alias Synapsis.Part.Video
   alias Synapsis.Provider.MessageMapper

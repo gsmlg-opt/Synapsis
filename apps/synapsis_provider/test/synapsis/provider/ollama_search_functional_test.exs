@@ -1,5 +1,6 @@
 defmodule Synapsis.Provider.OllamaSearchFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Provider.WebSearch
   alias Synapsis.Provider.WebSearch.Ollama

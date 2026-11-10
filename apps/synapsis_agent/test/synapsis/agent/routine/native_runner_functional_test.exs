@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Routine.NativeRunnerFunctionalTest do
   use Synapsis.Agent.DaemonCase, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.Routine.{Definition, Occurrence, Runner, State}
   alias Synapsis.Agent.TestSupport.DeterministicProvider, as: Provider

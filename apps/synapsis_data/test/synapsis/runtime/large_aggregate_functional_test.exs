@@ -1,5 +1,6 @@
 defmodule Synapsis.Runtime.LargeAggregateFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Runtime.Store
 

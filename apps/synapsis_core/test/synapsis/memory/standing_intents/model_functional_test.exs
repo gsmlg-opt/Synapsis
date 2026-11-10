@@ -1,5 +1,6 @@
 defmodule Synapsis.Memory.StandingIntents.ModelFunctionalTest do
   use ExUnit.Case, async: true
+  @moduletag :functional
 
   alias Synapsis.Memory.StandingIntents.Model
 

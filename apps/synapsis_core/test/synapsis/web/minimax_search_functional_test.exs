@@ -1,5 +1,6 @@
 defmodule Synapsis.Web.MiniMaxSearchFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.Codex.Web
   alias Synapsis.Web.Search.Cache

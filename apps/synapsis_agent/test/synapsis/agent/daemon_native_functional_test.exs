@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.DaemonNativeFunctionalTest do
   use Synapsis.Agent.DaemonCase, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.TestSupport.DeterministicProvider, as: Provider
   alias Synapsis.Part.{ToolResult, ToolUse}

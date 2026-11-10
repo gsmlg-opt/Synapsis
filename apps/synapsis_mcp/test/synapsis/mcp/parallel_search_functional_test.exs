@@ -1,5 +1,6 @@
 defmodule Synapsis.MCP.ParallelSearchFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.MCP.ParallelSearch
   alias Synapsis.Provider.WebSearch

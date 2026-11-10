@@ -1,5 +1,6 @@
 defmodule Synapsis.Automation.WebhookFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Automation.Webhook
 

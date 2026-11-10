@@ -1,5 +1,6 @@
 defmodule Synapsis.Session.NativeMCPPDFLinkFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.TestSupport.SessionHarness
   alias Synapsis.Config.Store, as: ConfigStore

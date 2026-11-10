@@ -1,5 +1,6 @@
 defmodule Synapsis.MCP.ResourceFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.McpProtocol.Client
   alias Synapsis.MCP

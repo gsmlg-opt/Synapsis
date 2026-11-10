@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Tools.AutomationsRunsFunctionalTest do
   use Synapsis.Agent.DaemonCase, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.Heartbeat.LocalScheduler
   alias Synapsis.Agent.TestSupport.DeterministicProvider, as: Provider

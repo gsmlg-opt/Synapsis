@@ -1,5 +1,6 @@
 defmodule Synapsis.Session.NativePatchFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.Codex.{ApplyPatch, Backend}
   alias Synapsis.Agent.TestSupport.SessionHarness

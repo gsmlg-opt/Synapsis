@@ -119,6 +119,7 @@ end
 
 defmodule Synapsis.SessionHistoryWindowLifecycleFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Message
   alias Synapsis.Part.Text

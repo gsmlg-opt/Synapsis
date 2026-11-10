@@ -1,5 +1,6 @@
 defmodule Synapsis.MCP.NativeCatalogFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.MCP
   alias Synapsis.MCP.Server

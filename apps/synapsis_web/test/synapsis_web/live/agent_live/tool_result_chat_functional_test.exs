@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.AgentLive.ToolResultChatFunctionalTest do
   use SynapsisWeb.ConnCase, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.TestSupport.SessionHarness
   alias Synapsis.Agent.Tools.ResultProjection

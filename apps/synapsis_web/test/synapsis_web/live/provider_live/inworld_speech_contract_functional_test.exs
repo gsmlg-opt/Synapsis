@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.ProviderLive.InworldSpeechContractFunctionalTest do
   use SynapsisWeb.ConnCase, async: false
+  @moduletag :functional
 
   alias Synapsis.{Config.Store, Credentials, Models, Providers}
 

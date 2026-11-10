@@ -1,5 +1,6 @@
 defmodule Synapsis.SessionDirectoryHistoryReaderFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Message
   alias Synapsis.Part.{Reasoning, Text, ToolResult, ToolUse}

@@ -1,5 +1,6 @@
 defmodule Synapsis.Session.SnapshotPublicationFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Concord.{KV, Turso}
   alias Concord.KV.Record

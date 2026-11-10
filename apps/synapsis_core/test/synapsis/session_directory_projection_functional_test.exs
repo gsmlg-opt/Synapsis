@@ -1,5 +1,6 @@
 defmodule Synapsis.SessionDirectoryProjectionFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.{Message, SessionDirectory}
   alias Synapsis.Part.Text

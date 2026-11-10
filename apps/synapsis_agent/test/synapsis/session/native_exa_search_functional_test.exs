@@ -1,5 +1,6 @@
 defmodule Synapsis.Session.NativeExaSearchFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
   alias Synapsis.Agent.TestSupport.{DeterministicProvider, SessionHarness}
   alias Synapsis.Agent.Tools.Web.Search
   alias Synapsis.Part.{Text, ToolResult, ToolUse}

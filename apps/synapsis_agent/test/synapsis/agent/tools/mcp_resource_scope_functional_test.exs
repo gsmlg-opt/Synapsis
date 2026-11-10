@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Tools.MCPResourceScopeFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.{Codex, Conversation, EphemeralStore, ToolCatalog}
   alias Backplane.AgentRuntime.Codex.{DynamicRuntime, Session}

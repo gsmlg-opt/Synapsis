@@ -1,5 +1,6 @@
 defmodule Synapsis.Provider.CanonicalMetadataFunctionalTest do
   use ExUnit.Case, async: true
+  @moduletag :functional
 
   alias Backplane.AiProtocol.{Codec, Request, StreamEvent, ToolCall}
   alias Synapsis.Provider.{EventMapper, MessageMapper, ToolName}

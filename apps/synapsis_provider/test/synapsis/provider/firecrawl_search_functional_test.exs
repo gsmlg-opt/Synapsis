@@ -1,5 +1,6 @@
 defmodule Synapsis.Provider.FirecrawlSearchFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Provider.WebSearch
 

@@ -76,6 +76,9 @@ defmodule Synapsis.LLMTest do
 
       System.put_env("ANTHROPIC_API_KEY", "env-key-that-must-not-be-used")
 
+      assert {:ok, _connection} =
+               Synapsis.Config.Store.put(:backplane, %{"id" => "source-1", "enabled" => true})
+
       assert {:ok, _provider} =
                Providers.create(%{
                  name: "anthropic",

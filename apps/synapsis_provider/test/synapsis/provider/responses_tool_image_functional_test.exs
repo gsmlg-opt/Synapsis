@@ -1,5 +1,6 @@
 defmodule Synapsis.Provider.ResponsesToolImageFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Part.{ToolResult, ToolUse}
   alias Synapsis.Provider.Adapter

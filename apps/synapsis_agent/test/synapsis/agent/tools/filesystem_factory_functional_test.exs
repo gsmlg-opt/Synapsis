@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Tools.FilesystemFactoryFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.ToolCatalog
   alias Synapsis.Agent.Tools.{DisplayCatalog, Filesystem, Profiles}

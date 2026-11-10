@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Runtime.ProviderUsageFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.Conversation
   alias Backplane.AgentRuntime.Goal.State, as: GoalState

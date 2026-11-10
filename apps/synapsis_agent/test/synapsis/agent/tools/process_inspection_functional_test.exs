@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Tools.ProcessInspectionFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.{Command, ToolCatalog}
   alias Backplane.AgentRuntime.Codex.{Commands, Session}

@@ -1,5 +1,6 @@
 defmodule Synapsis.Session.NativeResolverMCPFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.TestSupport.{AbortableHTTP, DeterministicProvider, SessionHarness}
   alias Synapsis.Config.Store, as: ConfigStore

@@ -1,5 +1,6 @@
 defmodule Synapsis.Session.NativeDynamicDiscoveryFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
   alias Backplane.AgentRuntime.Conversation
   alias Backplane.AgentRuntime.Codex.{ResourceRegistry, Session}
   alias Backplane.AgentRuntime.Codex.CodeMode, as: NativeCodeMode

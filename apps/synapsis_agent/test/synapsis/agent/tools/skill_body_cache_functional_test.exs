@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Tools.SkillBodyCacheFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.Codex.Session
   alias Synapsis.Agent.Tools.SkillBodyCache

@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Tools.SessionDirectoryDeadlineFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.Tools.SessionDirectory
   alias Synapsis.Session.Store

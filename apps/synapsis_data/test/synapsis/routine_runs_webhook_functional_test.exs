@@ -1,5 +1,6 @@
 defmodule Synapsis.RoutineRunsWebhookFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.{AgentRun, RoutineRuns}
   alias Synapsis.Config.Store

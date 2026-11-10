@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Runtime.FilesystemTargetRecordFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.ToolCatalog
   alias Synapsis.Agent.Runtime.SessionAdapter

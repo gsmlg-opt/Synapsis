@@ -1,5 +1,6 @@
 defmodule Synapsis.Session.NativeBrowserTimingFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.{Conversation, EphemeralStore, ToolCatalog, ToolRegistry}
   alias Synapsis.Agent.TestSupport.SessionHarness

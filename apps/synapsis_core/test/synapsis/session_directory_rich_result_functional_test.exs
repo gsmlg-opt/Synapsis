@@ -1,5 +1,6 @@
 defmodule Synapsis.SessionDirectoryRichResultFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.SessionDirectory.Result
 

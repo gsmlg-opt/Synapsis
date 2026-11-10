@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.AutomationExecutionFunctionalTest do
   use Synapsis.Agent.DataCase, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.Automation.Execution, as: AutomationExecution
   alias Synapsis.Agent.Daemon.Execution, as: DaemonExecution

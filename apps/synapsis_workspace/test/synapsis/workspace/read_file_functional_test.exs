@@ -1,5 +1,6 @@
 defmodule Synapsis.Workspace.ReadFileFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Session.Store
   alias Synapsis.Workspace

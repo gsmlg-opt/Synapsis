@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Tools.ReadableFetchNativeFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.{Codex, Conversation, EphemeralStore}
   alias Backplane.AgentRuntime.Codex.{Backend, Services}

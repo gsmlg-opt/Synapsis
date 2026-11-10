@@ -146,7 +146,7 @@ defmodule Synapsis.SkillReaderTest do
     assert {:ok, %{content: ^content}} = SkillReader.read(snapshot, "local://project/review")
     File.write!(path, canonical("review", "Changed"))
     assert {:error, :digest_mismatch} = SkillReader.read(snapshot, "local://project/review")
-    File.write!(path, String.duplicate("x", 65_537))
+    File.write!(path, String.duplicate("x", 2 * 1_024 * 1_024 + 1))
     assert {:error, :file_limit} = SkillReader.read(snapshot, "local://project/review")
     File.rm!(path)
     outside = Path.join(ctx.tmp_dir, "outside.md")

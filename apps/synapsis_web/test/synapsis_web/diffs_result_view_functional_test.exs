@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.DiffsResultViewFunctionalTest do
   use ExUnit.Case, async: true
+  @moduletag :functional
 
   alias Synapsis.Part.ToolResult
   alias SynapsisWeb.ToolResultView

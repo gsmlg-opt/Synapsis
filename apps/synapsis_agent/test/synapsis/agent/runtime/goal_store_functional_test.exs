@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Runtime.GoalStoreFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.Goal.State
   alias Backplane.AgentRuntime.Goal.Store, as: NativeStore

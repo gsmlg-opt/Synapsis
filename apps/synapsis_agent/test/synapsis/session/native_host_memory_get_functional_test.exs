@@ -1,5 +1,6 @@
 defmodule Synapsis.Session.NativeHostMemoryGetFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.Conversation
   alias Synapsis.Agent.TestSupport.SessionHarness

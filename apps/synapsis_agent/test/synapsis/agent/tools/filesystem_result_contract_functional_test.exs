@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Tools.FilesystemResultContractFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.{Budget, Execution, ToolRegistry}
   alias Synapsis.Agent.Runtime.Store

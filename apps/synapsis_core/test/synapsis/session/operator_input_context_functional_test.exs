@@ -1,5 +1,6 @@
 defmodule Synapsis.Session.OperatorInputContextFunctionalTest do
   use ExUnit.Case, async: true
+  @moduletag :functional
 
   alias Synapsis.Session.InputContext
 

@@ -1,5 +1,6 @@
 defmodule SynapsisServer.NativeRuntimeHealthFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   @timeout 5_000
 

@@ -1,5 +1,6 @@
 defmodule Synapsis.Config.AutomationWebhookFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Config.Store
 

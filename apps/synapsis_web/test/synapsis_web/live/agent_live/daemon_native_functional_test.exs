@@ -1,5 +1,6 @@
 defmodule SynapsisWeb.AgentLive.DaemonNativeFunctionalTest do
   use SynapsisWeb.ConnCase, async: false
+  @moduletag :functional
 
   import SynapsisWeb.ReactFormHelpers
 

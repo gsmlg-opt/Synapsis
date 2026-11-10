@@ -1,5 +1,6 @@
 defmodule Synapsis.SkillWorkshop.ContractFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.SkillWorkshop.Contract
 

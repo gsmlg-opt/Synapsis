@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.ResolverResourcesFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.Resolver
   alias Synapsis.{AgentConfigs, Config.Store}

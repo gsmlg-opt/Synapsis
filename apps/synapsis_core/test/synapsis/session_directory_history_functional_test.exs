@@ -217,6 +217,7 @@ end
 
 defmodule Synapsis.SessionDirectoryHistoryFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Concord.KV
   alias Synapsis.Session.{EventReply, ReadSnapshot, Store}

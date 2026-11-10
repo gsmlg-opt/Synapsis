@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Tools.DiscoveryFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Backplane.AgentRuntime.{Codex, ToolCatalog}
   alias Backplane.AgentRuntime.Codex.{Contract, ResourceRegistry, Session}

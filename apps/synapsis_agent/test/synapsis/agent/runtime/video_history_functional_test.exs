@@ -1,5 +1,6 @@
 defmodule Synapsis.Agent.Runtime.VideoHistoryFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Agent.Runtime.ProviderMessages
   alias Synapsis.Session.{Snapshot, Store}

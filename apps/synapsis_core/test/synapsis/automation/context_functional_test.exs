@@ -1,5 +1,6 @@
 defmodule Synapsis.Automation.ContextFunctionalTest do
   use ExUnit.Case, async: true
+  @moduletag :functional
 
   alias Synapsis.Automation.Context
   alias Synapsis.{Message, Part}

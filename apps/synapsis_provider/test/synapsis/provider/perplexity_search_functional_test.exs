@@ -1,5 +1,6 @@
 defmodule Synapsis.Provider.PerplexitySearchFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
   alias Synapsis.Provider.WebSearch
 
   setup do

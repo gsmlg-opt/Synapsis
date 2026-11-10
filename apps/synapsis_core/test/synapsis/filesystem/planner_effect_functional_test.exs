@@ -1,5 +1,6 @@
 defmodule Synapsis.Filesystem.PlannerEffectFunctionalTest do
   use ExUnit.Case, async: false
+  @moduletag :functional
 
   alias Synapsis.Filesystem.Local
   alias Synapsis.Filesystem.Planner.PortSession
