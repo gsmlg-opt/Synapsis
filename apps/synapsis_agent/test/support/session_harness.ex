@@ -92,7 +92,7 @@ defmodule Synapsis.Agent.TestSupport.SessionHarness do
   end
 
   @doc """
-  Waits for the Worker to settle at `:waiting`. After boot and after each run the
+  Waits for the Worker to settle at its internal `:idle` state. After boot and after each run the
   Worker reads its durable pending-input queue asynchronously, so it is briefly
   busy before it accepts control calls again.
   """
@@ -100,12 +100,16 @@ defmodule Synapsis.Agent.TestSupport.SessionHarness do
     await_waiting(session_id, System.monotonic_time(:millisecond) + timeout)
   end
 
+  # Waits for the internal :idle state, which is stricter than the public
+  # :waiting status (that one also covers a Worker that is still settling).
   defp await_waiting(session_id, deadline) do
-    case Synapsis.Session.Worker.get_status(session_id) do
-      :waiting ->
+    [{pid, _}] = Registry.lookup(Synapsis.Session.Registry, session_id)
+
+    case :sys.get_state(pid) do
+      {:idle, _data} ->
         :ok
 
-      status ->
+      {status, _data} ->
         if System.monotonic_time(:millisecond) >= deadline do
           raise ExUnit.AssertionError, "session #{session_id} stayed #{inspect(status)}"
         else

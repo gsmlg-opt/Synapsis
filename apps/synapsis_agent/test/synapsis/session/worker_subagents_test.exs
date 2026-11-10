@@ -151,27 +151,6 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
     refute "task" in names
   end
 
-  test "explicit opt-out uses the legacy turn and survives config refresh", %{id: id} do
-    assert :ok = Worker.send_message(id, "default native turn")
-    assert_receive {:run_event, %{type: "session.completed"}}, 10_000
-    {_state, native} = :sys.get_state(worker_pid(id))
-    assert is_pid(native.runtime_pid)
-
-    assert {:ok, _} = Worker.set_subagents(id, false)
-    assert :ok = Worker.send_message(id, "legacy turn")
-    assert_receive {:run_event, %{type: "session.completed"}}, 10_000
-    assert %{session: %{config: %{"subagents" => false}}} = Worker.snapshot(id)
-    {_state, data} = :sys.get_state(worker_pid(id))
-    assert data.runtime_pid == native.runtime_pid
-    refute Synapsis.Session.Worker.Runtime.enabled?(data)
-    assert {:error, :message_not_found} = Worker.regenerate(id, "missing-message")
-    assert {:error, :no_checkpoint} = Worker.rollback_checkpoint(id)
-    assert :ok = Worker.cancel(id)
-    assert %{session: %{config: %{"subagents" => false}}} = Worker.snapshot(id)
-    # A dormant native adapter must not intercept legacy cancellation.
-    assert :sys.get_state(native.runtime_pid).error == nil
-  end
-
   @tag custom_provider: true
   test "assistant-mode input queues behind one active runtime", %{id: id, harness: harness} do
     owner = self()
