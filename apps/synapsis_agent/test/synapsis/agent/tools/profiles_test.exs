@@ -10,10 +10,6 @@ defmodule Synapsis.Agent.Tools.ProfilesTest do
   @search "synapsis::workspace_memory_search"
   @skills "synapsis::skills_read"
   @explicit_skill "synapsis::skill"
-  @mail ~w(synapsis::agent_send synapsis::agent_ask synapsis::agent_reply synapsis::agent_inbox)
-  @swarm ~w(synapsis::swarm_message synapsis::teammate synapsis::team_delete)
-  @presence ~w(synapsis::agent_discover synapsis::agent_status)
-  @handoff "synapsis::agent_handoff"
   @directory "synapsis::agents_list"
   @collaboration ~w(spawn_agent send_message followup_task interrupt_agent list_agents wait_agent)
 
@@ -50,7 +46,7 @@ defmodule Synapsis.Agent.Tools.ProfilesTest do
       caller: identity.caller,
       run_id: identity.run_id,
       grants: [@get, @search, @skills],
-      tool_revisions: %{@get => 1, @search => 1, @skills => 1}
+      tool_revisions: %{@get => 1, @search => 1, @skills => 2}
     }
 
     invocation =
@@ -290,191 +286,6 @@ defmodule Synapsis.Agent.Tools.ProfilesTest do
     assert native.registry.tools["spawn_agent"].tool_revision == 1
   end
 
-  test "mail and swarm profiles bind configured mailbox and session without child tool expansion",
-       ctx do
-    {:ok, agent} =
-      Synapsis.AgentConfigs.create(%{name: "profile-mail-#{ctx.identity.session_id}"})
-
-    on_exit(fn -> Synapsis.AgentConfigs.delete(agent) end)
-
-    :ok =
-      Store.put_meta(ctx.identity.session_id, %{id: ctx.identity.session_id, agent: agent.name})
-
-    names = @mail ++ @swarm
-
-    context =
-      put_in(ctx.context, [:agent], %{name: agent.name, tool_contract_version: 1, tools: names})
-
-    ceiling = %{ctx.ceiling | grants: names, tool_revisions: Map.new(names, &{&1, 1})}
-
-    assert {:ok, %{bundle: bundle, snapshot: snapshot}} =
-             Profiles.build(context, ctx.identity, [], ceiling)
-
-    assert Enum.sort(Map.keys(bundle.registry.tools)) == Enum.sort(names)
-    refute Map.has_key?(bundle.registry.tools, "send_message")
-    assert Enum.all?(snapshot.permission_levels, fn {_, level} -> level == :none end)
-
-    for name <- @mail do
-      descriptor = bundle.registry.tools[name]
-      assert descriptor.backend == Synapsis.Agent.Tools.AgentCommunication
-      assert descriptor.backend_context.agent_id == agent.name
-      assert descriptor.backend_context.session_id == ctx.identity.session_id
-      assert descriptor.backend_context.primary
-    end
-
-    for name <- @swarm do
-      descriptor = bundle.registry.tools[name]
-      assert descriptor.backend == Synapsis.Agent.Tools.Swarm
-      assert descriptor.backend_context.sender == agent.name
-      assert descriptor.backend_context.session_id == ctx.identity.session_id
-    end
-
-    child = Map.put(context, :tool_primary?, false)
-    assert {:ok, %{bundle: child_bundle}} = Profiles.build(child, ctx.identity, [], ceiling)
-    refute child_bundle.registry.tools["synapsis::agent_ask"].backend_context.primary
-  end
-
-  test "mail and swarm exact restrictions stay known when unselected and deny none-level calls",
-       ctx do
-    {:ok, agent} =
-      Synapsis.AgentConfigs.create(%{name: "profile-swarm-#{ctx.identity.session_id}"})
-
-    on_exit(fn -> Synapsis.AgentConfigs.delete(agent) end)
-    names = ["synapsis::teammate"]
-
-    context =
-      put_in(ctx.context, [:agent], %{name: agent.name, tool_contract_version: 1, tools: names})
-
-    ceiling = %{ctx.ceiling | grants: names, tool_revisions: Map.new(names, &{&1, 1})}
-
-    raw = %{
-      ctx.raw
-      | tool_overrides: %{"synapsis::teammate" => :deny, "synapsis::agent_ask" => :deny}
-    }
-
-    :ok = Store.put_value(ctx.identity.session_id, "permission", raw)
-    assert {:ok, %{snapshot: snapshot}} = Profiles.build(context, ctx.identity, [], ceiling)
-    assert Map.has_key?(snapshot.known_bindings, "synapsis::agent_ask")
-    assert Map.has_key?(snapshot.known_bindings, "synapsis::swarm_message")
-
-    invocation = %{
-      ctx.invocation
-      | tool_name: "synapsis::teammate",
-        arguments: %{"action" => "list"}
-    }
-
-    assert {:ok, sidecars} = Profiles.prepare_context(invocation, snapshot)
-
-    assert {:deny, :policy_denied} =
-             Policy.prepare_tool(invocation, Map.put(sidecars, :input_kind, :function))
-  end
-
-  test "presence profiles retain configured owner and exact none-level restrictions", ctx do
-    {:ok, agent} =
-      Synapsis.AgentConfigs.create(%{name: "profile-presence-#{ctx.identity.session_id}"})
-
-    on_exit(fn -> Synapsis.AgentConfigs.delete(agent) end)
-
-    context =
-      put_in(ctx.context, [:agent], %{
-        name: agent.name,
-        tool_contract_version: 1,
-        tools: @presence
-      })
-
-    ceiling = %{ctx.ceiling | grants: @presence, tool_revisions: Map.new(@presence, &{&1, 1})}
-    raw = %{ctx.raw | allow_read: :deny, tool_overrides: %{"synapsis::agent_status" => :deny}}
-    :ok = Store.put_value(ctx.identity.session_id, "permission", raw)
-
-    assert {:ok, %{bundle: bundle, snapshot: snapshot}} =
-             Profiles.build(context, ctx.identity, [], ceiling)
-
-    assert Enum.sort(Map.keys(bundle.registry.tools)) == Enum.sort(@presence)
-
-    for name <- @presence do
-      descriptor = bundle.registry.tools[name]
-      assert descriptor.backend == Synapsis.Agent.Tools.SessionPresence
-      assert descriptor.backend_context.agent_id == agent.name
-      assert descriptor.backend_context.session_id == ctx.identity.session_id
-      assert snapshot.permission_levels[name] == :none
-    end
-
-    invocation = %{ctx.invocation | tool_name: "synapsis::agent_status", arguments: %{}}
-    assert {:ok, sidecars} = Profiles.prepare_context(invocation, snapshot)
-
-    assert {:deny, :policy_denied} =
-             Policy.prepare_tool(invocation, Map.put(sidecars, :input_kind, :function))
-
-    invocation = %{
-      invocation
-      | tool_name: "synapsis::agent_discover",
-        arguments: %{"action" => "get", "agent_id" => ctx.identity.session_id}
-    }
-
-    assert {:ok, sidecars} = Profiles.prepare_context(invocation, snapshot)
-    assert :allow = Policy.prepare_tool(invocation, Map.put(sidecars, :input_kind, :function))
-  end
-
-  test "unselected presence restrictions stay known without expanding the catalog", ctx do
-    raw = %{ctx.raw | tool_overrides: Map.new(@presence, &{&1, :deny})}
-    :ok = Store.put_value(ctx.identity.session_id, "permission", raw)
-    assert {:ok, %{bundle: bundle, snapshot: snapshot}} = build(ctx)
-    assert Map.keys(bundle.registry.tools) == [@get]
-    assert Enum.all?(@presence, &Map.has_key?(snapshot.known_bindings, &1))
-    assert {:ok, _} = Profiles.prepare_context(ctx.invocation, snapshot)
-  end
-
-  test "handoff binds configured sender and exact none-level policy without child grants", ctx do
-    {:ok, agent} =
-      Synapsis.AgentConfigs.create(%{name: "profile-handoff-#{ctx.identity.session_id}"})
-
-    on_exit(fn -> Synapsis.AgentConfigs.delete(agent) end)
-
-    context =
-      put_in(ctx.context, [:agent], %{
-        name: agent.name,
-        tool_contract_version: 1,
-        tools: [@handoff]
-      })
-
-    context = Map.put(context, :tool_primary?, false)
-    ceiling = %{ctx.ceiling | grants: [@handoff], tool_revisions: %{@handoff => 1}}
-    raw = %{ctx.raw | allow_read: :deny, allow_write: :deny, tool_overrides: %{@handoff => :deny}}
-    :ok = Store.put_value(ctx.identity.session_id, "permission", raw)
-
-    assert {:ok, %{bundle: bundle, snapshot: snapshot}} =
-             Profiles.build(context, ctx.identity, [], ceiling)
-
-    assert Map.keys(bundle.registry.tools) == [@handoff]
-    descriptor = bundle.registry.tools[@handoff]
-    assert descriptor.backend == Synapsis.Agent.Tools.AgentHandoff
-    assert descriptor.backend_context.agent_id == agent.name
-    assert descriptor.backend_context.session_id == ctx.identity.session_id
-    refute descriptor.backend_context.agent_id == agent.id
-    refute descriptor.backend_context.primary
-    assert snapshot.permission_levels[@handoff] == :none
-
-    invocation = %{
-      ctx.invocation
-      | tool_name: @handoff,
-        arguments: %{"to" => "reviewer", "summary" => "Findings", "instructions" => "Review"}
-    }
-
-    assert {:ok, sidecars} = Profiles.prepare_context(invocation, snapshot)
-
-    assert {:deny, :policy_denied} =
-             Policy.prepare_tool(invocation, Map.put(sidecars, :input_kind, :function))
-  end
-
-  test "unselected handoff restrictions remain known without admitting handoff", ctx do
-    raw = %{ctx.raw | tool_overrides: %{@handoff => :deny}}
-    :ok = Store.put_value(ctx.identity.session_id, "permission", raw)
-    assert {:ok, %{bundle: bundle, snapshot: snapshot}} = build(ctx)
-    assert Map.keys(bundle.registry.tools) == [@get]
-    assert Map.has_key?(snapshot.known_bindings, @handoff)
-    assert {:ok, _} = Profiles.prepare_context(ctx.invocation, snapshot)
-  end
-
   test "explicit skill retains assigned manual entries and exact none-level restrictions", ctx do
     {:ok, agent} =
       Synapsis.AgentConfigs.create(%{name: "profile-explicit-#{ctx.identity.session_id}"})
@@ -502,7 +313,7 @@ defmodule Synapsis.Agent.Tools.ProfilesTest do
       })
 
     context = Map.put(context, :tool_primary?, false)
-    ceiling = %{ctx.ceiling | grants: [@explicit_skill], tool_revisions: %{@explicit_skill => 1}}
+    ceiling = %{ctx.ceiling | grants: [@explicit_skill], tool_revisions: %{@explicit_skill => 2}}
     raw = %{ctx.raw | allow_read: :deny, tool_overrides: %{@explicit_skill => :deny}}
     :ok = Store.put_value(ctx.identity.session_id, "permission", raw)
 
@@ -630,7 +441,7 @@ defmodule Synapsis.Agent.Tools.ProfilesTest do
     ceiling = %{
       ctx.ceiling
       | grants: ["synapsis::automations"],
-        tool_revisions: %{"synapsis::automations" => 1}
+        tool_revisions: %{"synapsis::automations" => Synapsis.Agent.Tools.Automations.revision()}
     }
 
     function = {Synapsis.AgentConfigs, :get_by_name, 1}
@@ -673,7 +484,7 @@ defmodule Synapsis.Agent.Tools.ProfilesTest do
     ceiling = %{
       ctx.ceiling
       | grants: ["synapsis::automations"],
-        tool_revisions: %{"synapsis::automations" => 1}
+        tool_revisions: %{"synapsis::automations" => Synapsis.Agent.Tools.Automations.revision()}
     }
 
     invocation = %{

@@ -3,8 +3,7 @@ defmodule Synapsis.Agent.Daemon.Toolsets do
 
   @basic ~w(
     synapsis::read synapsis::ls synapsis::memory_source_search synapsis::todo_read
-    synapsis::session_summarize synapsis::skill synapsis::agent_status
-    synapsis::agent_discover synapsis::agent_inbox
+    synapsis::session_summarize synapsis::skill
   )
   @workspace @basic ++
                ~w(synapsis::memory_save synapsis::memory_update synapsis::todo_write

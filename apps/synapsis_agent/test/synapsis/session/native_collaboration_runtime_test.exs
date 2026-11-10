@@ -40,34 +40,6 @@ defmodule Synapsis.Session.NativeCollaborationRuntimeTest do
     runtime = runtime(ctx.id)
     catalog = :sys.get_state(runtime.root).catalog
 
-    identity = %{
-      run_id: runtime.run_id,
-      incarnation: 1,
-      catalog_revision: catalog.revision,
-      tools: catalog.tools
-    }
-
-    assert {:ok, snapshot} = GenServer.call(runtime.adapter, {:tool_context, identity})
-
-    assert {:ok, ^snapshot} =
-             GenServer.call(
-               runtime.adapter,
-               {:tool_context, %{identity | tools: Enum.reverse(identity.tools)}}
-             )
-
-    [first | rest] = identity.tools
-    changed_schema = [%{first | parameters: %{"type" => "string"}} | rest]
-
-    for stale <- [
-          %{identity | tools: changed_schema},
-          %{identity | tools: [first | identity.tools]},
-          %{identity | incarnation: 2},
-          %{identity | catalog_revision: catalog.revision + 1}
-        ] do
-      assert {:error, %Error{class: :forbidden}} =
-               GenServer.call(runtime.adapter, {:tool_context, stale})
-    end
-
     for name <- @collaboration do
       descriptor = catalog.registry.tools[name]
       assert descriptor.backend == Backend

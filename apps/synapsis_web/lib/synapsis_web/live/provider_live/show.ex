@@ -655,6 +655,24 @@ defmodule SynapsisWeb.ProviderLive.Show do
   defp default_chat_model(models, current),
     do: if(Enum.any?(models, &(&1.id == current)), do: current, else: hd(models).id)
 
+  defp build_chat_request(%{type: type} = config, model, messages)
+       when type in ["openai_responses", :openai_responses] do
+    messages =
+      messages
+      |> Enum.reject(&(&1.role == "error"))
+      |> Enum.map(fn %{role: role, content: content} ->
+        %{role: role, parts: [%Synapsis.Part.Text{content: content}]}
+      end)
+
+    Synapsis.Provider.Adapter.format_request(messages, [], %{
+      provider_type: type,
+      model: model,
+      max_tokens: 1024,
+      stream: true,
+      base_url: config[:base_url]
+    })
+  end
+
   defp build_chat_request(config, model, messages) do
     transport = Synapsis.Provider.Adapter.resolve_transport_type(config[:type])
     formatted_messages = Enum.map(messages, &format_chat_message(transport, &1))

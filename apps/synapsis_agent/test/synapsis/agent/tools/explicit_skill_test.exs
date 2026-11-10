@@ -59,7 +59,7 @@ defmodule Synapsis.Agent.Tools.ExplicitSkillTest do
     assert ExplicitSkill.permission_level(@name) == :none
     assert {:ok, [descriptor]} = ExplicitSkill.descriptors(ctx.context)
     assert descriptor.tool_name == @name
-    assert descriptor.tool_revision === 1
+    assert descriptor.tool_revision === 2
     assert descriptor.backend == ExplicitSkill
     assert descriptor.backend_context === ctx.context
     assert descriptor.safety == %{read_only: true, retry_safe: true, parallel_safe: true}
@@ -85,7 +85,7 @@ defmodule Synapsis.Agent.Tools.ExplicitSkillTest do
           %{authority(ctx) | grants: []},
           %{authority(ctx) | grants: ["*"]},
           %{authority(ctx) | grants: ["skill"]},
-          %{authority(ctx) | tool_revisions: %{@name => 2}}
+          %{authority(ctx) | tool_revisions: %{@name => 3}}
         ] do
       assert {:error, %Error{}} = ToolCatalog.admit_batch([descriptor], authority: changed)
     end
@@ -388,13 +388,13 @@ defmodule Synapsis.Agent.Tools.ExplicitSkillTest do
       caller: "caller",
       run_id: ctx.context.run_id,
       grants: [@name],
-      tool_revisions: %{@name => 1}
+      tool_revisions: %{@name => 2}
     }
 
   defp operation(ctx, arguments),
     do: %{
       tool_name: @name,
-      tool_revision: 1,
+      tool_revision: 2,
       arguments: arguments,
       run_id: ctx.context.run_id,
       incarnation: 1,

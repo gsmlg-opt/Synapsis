@@ -62,7 +62,7 @@ defmodule Synapsis.Agent.Tools.SkillsTest do
     for descriptor <- descriptors do
       assert descriptor.backend == Skills
       assert descriptor.backend_context === ctx.context
-      assert descriptor.tool_revision === 1
+      assert descriptor.tool_revision === 2
       assert descriptor.schema["additionalProperties"] == false
       assert descriptor.safety == %{read_only: true, retry_safe: true, parallel_safe: true}
     end
@@ -80,7 +80,7 @@ defmodule Synapsis.Agent.Tools.SkillsTest do
     for changed <- [
           %{authority() | grants: ["*"]},
           %{authority() | grants: []},
-          %{authority() | tool_revisions: %{@search => 1, @read => 2}}
+          %{authority() | tool_revisions: %{@search => 2, @read => 3}}
         ] do
       assert {:error, %Error{}} = ToolCatalog.admit_batch(descriptors, authority: changed)
     end
@@ -476,13 +476,13 @@ defmodule Synapsis.Agent.Tools.SkillsTest do
       caller: "caller",
       run_id: "run-a",
       grants: [@search, @read],
-      tool_revisions: %{@search => 1, @read => 1}
+      tool_revisions: %{@search => 2, @read => 2}
     }
 
   defp operation(ctx, name, args),
     do: %{
       tool_name: name,
-      tool_revision: 1,
+      tool_revision: 2,
       arguments: args,
       run_id: "run-a",
       incarnation: 1,
