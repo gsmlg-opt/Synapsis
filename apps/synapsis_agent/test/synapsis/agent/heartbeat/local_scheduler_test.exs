@@ -32,8 +32,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
     scheduler = start_scheduler(configs, daemon, task_supervisor)
     assert [%{name: "enabled", next_run_at: %DateTime{}}] = LocalScheduler.status(scheduler)
 
-    %{timers: %{^heartbeat_id => %{token: token}}} = :sys.get_state(scheduler)
-    send(scheduler, {:fire, heartbeat_id, token})
+    fire_due(scheduler, heartbeat_id)
 
     assert_receive {:waiting_session, _session_id}, 1_000
 
@@ -198,8 +197,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
              )
 
     key = {"routine", id}
-    %{timers: %{^key => %{token: token}}} = :sys.get_state(scheduler)
-    send(scheduler, {:fire, key, token})
+    fire_due(scheduler, key)
 
     assert_receive {:agent_daemon_event,
                     %{event: "agent.routine.updated", routine_id: ^id, kind: "schedule"}},
@@ -260,8 +258,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
         trigger_fun: fn _config, _daemon -> {:ok, run} end
       )
 
-    %{timers: %{^id => %{token: token}}} = :sys.get_state(scheduler)
-    send(scheduler, {:fire, id, token})
+    fire_due(scheduler, id)
 
     assert_receive {:agent_daemon_event,
                     %{
@@ -641,8 +638,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
     assert schedule.kind == "schedule"
     assert_receive {:waiting_session, _session_id}, 1_000
 
-    %{timers: %{^reflection_id => %{token: dream_token}}} = :sys.get_state(scheduler)
-    send(scheduler, {:fire, reflection_id, dream_token})
+    fire_due(scheduler, reflection_id)
 
     assert {:ok, _queued_dream} =
              wait_for(fn ->
@@ -671,8 +667,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
       )
 
     config_id = config.id
-    %{timers: %{^config_id => %{token: token}}} = :sys.get_state(scheduler)
-    send(scheduler, {:fire, config_id, token})
+    fire_due(scheduler, config_id)
 
     assert_receive {:routine_trigger_started, trigger_pid}, 1_000
 
@@ -820,5 +815,17 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
 
   defp merge_owned_config(type, %{"id" => id} = attrs) do
     ConfigStore.merge_existing(type, id, Map.delete(attrs, "id"))
+  end
+
+  # The scheduler ignores a fire whose next_run_at is still in the future, so
+  # make the timer due before delivering its fire message.
+  defp fire_due(scheduler, key) do
+    :sys.replace_state(scheduler, fn state ->
+      past = DateTime.add(DateTime.utc_now(), -1, :second)
+      put_in(state, [Access.key(:timers), key, :next_run_at], past)
+    end)
+
+    %{timers: %{^key => %{token: token}}} = :sys.get_state(scheduler)
+    send(scheduler, {:fire, key, token})
   end
 end
