@@ -7,10 +7,14 @@ defmodule SynapsisWeb.WorkspaceLive.ExplorerTest do
   setup do
     root = Path.join(System.tmp_dir!(), "synapsis_ws_#{System.unique_integer([:positive])}")
     File.mkdir_p!(root)
+    previous = System.get_env("SYNAPSIS_WORKSPACE_ROOT")
     System.put_env("SYNAPSIS_WORKSPACE_ROOT", root)
 
     on_exit(fn ->
-      System.delete_env("SYNAPSIS_WORKSPACE_ROOT")
+      if previous,
+        do: System.put_env("SYNAPSIS_WORKSPACE_ROOT", previous),
+        else: System.delete_env("SYNAPSIS_WORKSPACE_ROOT")
+
       File.rm_rf(root)
     end)
 

@@ -42,17 +42,11 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
     select(ctx, Filesystem.names())
 
     calls = [
-      {"synapsis::file_write", %{"path" => "first.txt", "content" => "one\n"}},
-      {"synapsis::file_edit",
-       %{"path" => "first.txt", "old_string" => "one", "new_string" => "two"}},
-      {"synapsis::multi_edit",
-       %{"edits" => [%{"path" => "first.txt", "old_string" => "two", "new_string" => "three"}]}},
-      {"synapsis::file_move", %{"source" => "first.txt", "destination" => "final.txt"}},
-      {"synapsis::file_read", %{"path" => "final.txt"}},
-      {"synapsis::grep", %{"pattern" => "three"}},
-      {"synapsis::glob", %{"pattern" => "*.{txt,md}"}},
-      {"synapsis::list_dir", %{"path" => "."}},
-      {"synapsis::file_delete", %{"path" => "final.txt"}}
+      {"synapsis::write", %{"path" => "first.txt", "content" => "one\n"}},
+      {"synapsis::edit",
+       %{"path" => "first.txt", "edits" => [%{"oldText" => "one", "newText" => "two"}]}},
+      {"synapsis::read", %{"path" => "first.txt"}},
+      {"synapsis::ls", %{"path" => "."}}
     ]
 
     runtime = run(ctx, calls)
@@ -60,14 +54,12 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
     assert Enum.sort(Map.keys(descriptors)) == Enum.sort(Filesystem.names())
     assert Enum.all?(descriptors, fn {_, descriptor} -> descriptor.backend == Filesystem end)
     results = results(ctx.id)
-    assert length(results) == 9
+    assert length(results) == 4
     assert Enum.all?(results, &(&1.is_error == false and is_map(&1.projection)))
-    assert Enum.at(results, 4).content =~ "three"
-    assert Enum.at(results, 5).content =~ "final.txt"
-    assert Enum.at(results, 6).content =~ "final.txt"
-    assert length(intents(runtime)) == 9
-    refute File.exists?(Path.join(ctx.harness.tmp_dir, "first.txt"))
-    refute File.exists?(Path.join(ctx.harness.tmp_dir, "final.txt"))
+    assert Enum.at(results, 2).content =~ "two"
+    assert Enum.at(results, 3).content =~ "first.txt"
+    assert length(intents(runtime)) == 4
+    assert File.read!(Path.join(ctx.harness.tmp_dir, "first.txt")) == "two\n"
 
     assert {:ok, turns} = Store.list_turns(ctx.id)
     durable = for turn <- turns, part <- turn.parts, part[:type] == "tool_result", do: part
@@ -75,14 +67,14 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
   end
 
   test "native file read and search do not require shell execution authority", ctx do
-    select(ctx, ~w(synapsis::file_read synapsis::grep))
+    select(ctx, ~w(synapsis::read synapsis::ls))
     permission(ctx, allow_execute: :deny)
     File.write!(Path.join(ctx.harness.tmp_dir, "read.txt"), "bounded native content\n")
 
     runtime =
       run(ctx, [
-        {"synapsis::file_read", %{"path" => "read.txt"}},
-        {"synapsis::grep", %{"pattern" => "native"}}
+        {"synapsis::read", %{"path" => "read.txt"}},
+        {"synapsis::ls", %{"path" => "."}}
       ])
 
     assert [%ToolResult{is_error: false, content: text}, %ToolResult{is_error: false}] =
@@ -93,23 +85,23 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
   end
 
   test "write denial blocks the native intent and filesystem effect", ctx do
-    select(ctx, ["synapsis::file_write"])
+    select(ctx, ["synapsis::write"])
     permission(ctx, allow_write: :deny)
-    runtime = run(ctx, [{"synapsis::file_write", %{"path" => "denied.txt", "content" => "no"}}])
+    runtime = run(ctx, [{"synapsis::write", %{"path" => "denied.txt", "content" => "no"}}])
     assert [%ToolResult{is_error: true}] = results(ctx.id)
     assert intents(runtime) == []
     refute File.exists?(Path.join(ctx.harness.tmp_dir, "denied.txt"))
   end
 
   test "Workspace files use persisted agent name and session ownership", ctx do
-    select(ctx, ~w(synapsis::file_write synapsis::file_read))
+    select(ctx, ~w(synapsis::write synapsis::read))
     logical = "/agents/#{ctx.harness.agent_name}/sessions/#{ctx.id}/native-note.md"
     path = "@synapsis" <> logical
 
     runtime =
       run(ctx, [
-        {"synapsis::file_write", %{"path" => path, "content" => "owned Workspace content"}},
-        {"synapsis::file_read", %{"path" => path}}
+        {"synapsis::write", %{"path" => path, "content" => "owned Workspace content"}},
+        {"synapsis::read", %{"path" => path}}
       ])
 
     assert {:ok, %{content: "owned Workspace content"}} = Synapsis.Workspace.read(logical)
@@ -119,7 +111,7 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
 
     assert text =~ "owned Workspace content"
 
-    context = runtime.descriptors["synapsis::file_write"].backend_context
+    context = runtime.descriptors["synapsis::write"].backend_context
 
     assert context.workspace == %{
              role: :session,
@@ -132,12 +124,11 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
   end
 
   test "foreign Workspace ownership is rejected before native intent", ctx do
-    select(ctx, ["synapsis::file_write"])
+    select(ctx, ["synapsis::write"])
 
     runtime =
       run(ctx, [
-        {"synapsis::file_write",
-         %{"path" => "@synapsis/agents/foreign/private.md", "content" => "no"}}
+        {"synapsis::write", %{"path" => "@synapsis/agents/foreign/private.md", "content" => "no"}}
       ])
 
     assert [%ToolResult{is_error: true}] = results(ctx.id)
@@ -280,107 +271,12 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
     assert intents(runtime) == []
   end
 
-  test "exact mail and swarm denies prevent native intent and domain effects", ctx do
-    select(ctx, ["synapsis::agent_send", "synapsis::teammate"])
-
-    permission(ctx,
-      tool_overrides: %{"synapsis::agent_send" => :deny, "synapsis::teammate" => :deny}
-    )
-
-    target = "denied-mail-#{ctx.id}"
-    :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, "agent:#{target}")
-
-    runtime =
-      run(ctx, [
-        {"synapsis::agent_send", %{"to" => target, "content" => "Denied"}},
-        {"synapsis::teammate", %{"action" => "create", "name" => "denied"}}
-      ])
-
-    assert Enum.all?(results(ctx.id), & &1.is_error)
-    assert length(results(ctx.id)) == 2
-    assert intents(runtime) == []
-    assert {:ok, []} = Synapsis.AgentMessages.query("history", target)
-    assert :ets.lookup(:synapsis_swarm_teammates, ctx.id) == []
-    refute_receive {:agent_envelope, _}
-  end
-
-  @tag :model_visible_result
-  test "presence lists and finds the actual Worker with durable registration observations",
-       ctx do
-    select(ctx, ~w(synapsis::agent_discover synapsis::agent_status))
-    permission(ctx, allow_read: :deny)
-
-    runtime =
-      run(ctx, [
-        {"synapsis::agent_discover", %{"action" => "get", "agent_id" => ctx.id}},
-        {"synapsis::agent_status", %{"session_id" => ctx.id}},
-        {"synapsis::agent_discover", %{"action" => "list"}},
-        {"synapsis::agent_discover",
-         %{"action" => "find_by_agent", "owner_agent_id" => ctx.harness.agent_name}}
-      ])
-
-    assert [get, status, listed, found] = results(ctx.id)
-    assert Enum.all?([get, status, listed, found], &(&1.is_error == false))
-    observed = get.projection["result"]["structured"]["session"]
-    assert observed["session_id"] == ctx.id
-    assert observed["owner_agent_id"] == ctx.harness.agent_name
-    assert observed["registered"]
-    assert observed["alive"]
-    refute Map.has_key?(observed, "pid")
-    assert status.projection["result"]["structured"]["build_agents_supported"] == false
-
-    for result <- [listed, found] do
-      page = result.projection["result"]["structured"]
-      assert page["count"] == length(page["sessions"])
-      assert is_boolean(page["has_more"])
-      assert is_boolean(page["truncated"])
-      assert Map.has_key?(page, "next_cursor")
-      assert observed in page["sessions"]
-
-      for session <- page["sessions"] do
-        assert Enum.sort(Map.keys(session)) ==
-                 ~w(alive kind owner_agent_id owner_known registered session_id)
-      end
-    end
-
-    assert found.projection["result"]["structured"]["sessions"] == [observed]
-    for result <- [get, status, listed, found], do: assert_public_replay(ctx, result)
-    assert length(intents(runtime)) == 4
-
-    for {_, descriptor} <- runtime.descriptors do
-      assert descriptor.backend == Synapsis.Agent.Tools.SessionPresence
-      assert descriptor.backend_context.agent_id == ctx.harness.agent_name
-      assert descriptor.backend_context.session_id == ctx.id
-    end
-
-    assert {:ok, turns} = Store.list_turns(ctx.id)
-    durable = for turn <- turns, part <- turn.parts, part[:type] == "tool_result", do: part
-    assert Enum.map(durable, & &1[:projection]) == Enum.map(results(ctx.id), & &1.projection)
-  end
-
-  test "presence exact denial prevents native observation intent", ctx do
-    select(ctx, ~w(synapsis::agent_status synapsis::agent_discover))
-
-    permission(ctx,
-      tool_overrides: %{"synapsis::agent_status" => :deny, "synapsis::agent_discover" => :deny}
-    )
-
-    runtime =
-      run(ctx, [
-        {"synapsis::agent_status", %{"session_id" => ctx.id}},
-        {"synapsis::agent_discover", %{"action" => "list"}}
-      ])
-
-    assert [%ToolResult{is_error: true}, %ToolResult{is_error: true}] = results(ctx.id)
-    assert intents(runtime) == []
-  end
-
   test "missing selected Toolset stops Worker before the provider or native effects", ctx do
     missing = Ecto.UUID.generate()
 
     assert {:ok, _} =
              Synapsis.AgentConfigs.update(ctx.harness.agent_config, %{
-               tools: ["synapsis::file_write"],
+               tools: ["synapsis::write"],
                toolset_ids: [missing]
              })
 

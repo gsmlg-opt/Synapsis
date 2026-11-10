@@ -33,6 +33,12 @@ config_store_dir = Path.join(test_run_dir, "config_store_test")
 File.mkdir_p!(config_store_dir)
 System.put_env("SYNAPSIS_CONFIG_DIR", config_store_dir)
 
+# Workspace documents default to the current directory; keep tests out of the
+# source tree.
+workspace_root = Path.join(test_run_dir, "workspace")
+File.mkdir_p!(workspace_root)
+System.put_env("SYNAPSIS_WORKSPACE_ROOT", workspace_root)
+
 config :phoenix, :plug_init_mode, :runtime
 config :phoenix, sort_verified_routes_query_params: true
 
