@@ -20,6 +20,8 @@ defmodule Synapsis.Provider.MessageMapper do
 
   @spec build_request(atom(), list(), list(), map()) :: {:ok, map()} | {:error, Error.t()}
   def build_request(protocol, messages, tools, opts) do
+    tools = protocol_tools(tools, protocol)
+
     model =
       option(opts, :model) ||
         Synapsis.Providers.default_model(option(opts, :provider_name) || Atom.to_string(protocol))
@@ -42,6 +44,14 @@ defmodule Synapsis.Provider.MessageMapper do
       {:ok, ToolName.put_aliases(wire_request, Enum.map(tools, & &1.name))}
     end
   end
+
+  # Only Responses carries freeform (custom grammar) tools. Other codecs reject
+  # the whole request, so those tools are not advertised there; the model keeps
+  # its JSON function tools (for example synapsis::edit instead of apply_patch).
+  defp protocol_tools(tools, :openai_responses), do: tools
+
+  defp protocol_tools(tools, _protocol),
+    do: Enum.reject(tools, &(Map.get(&1, :type) in [:custom, "custom"]))
 
   defp project_history(input, protocol, model, opts) do
     if option(opts, :history_projection) == :portable do

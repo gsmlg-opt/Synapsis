@@ -81,4 +81,38 @@ defmodule Synapsis.Provider.ResponsesCustomMapperTest do
                })
     end
   end
+
+  test "protocols without custom tools omit them instead of failing the request" do
+    patch = %{
+      type: :custom,
+      name: "apply_patch",
+      description: "Freeform patch",
+      format: %{"type" => "grammar", "syntax" => "lark", "definition" => "start: /.+/"}
+    }
+
+    read = %{
+      name: "synapsis::read",
+      description: "Read a file",
+      parameters: %{"type" => "object", "properties" => %{}}
+    }
+
+    message = %{role: :user, parts: [%Synapsis.Part.Text{content: "hi"}]}
+
+    for protocol <- [:anthropic, :openai, :google] do
+      assert {:ok, wire} =
+               MessageMapper.build_request(protocol, [message], [patch, read], %{model: "m"})
+
+      encoded = Jason.encode!(wire)
+      refute encoded =~ "apply_patch"
+      assert encoded =~ Synapsis.Provider.ToolName.encode("synapsis::read")
+    end
+
+    assert {:ok, wire} =
+             MessageMapper.build_request(:openai_responses, [message], [patch, read], %{
+               model: "m"
+             })
+
+    assert Jason.encode!(wire) =~ "apply_patch"
+  end
+
 end
