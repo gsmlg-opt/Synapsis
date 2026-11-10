@@ -8,7 +8,11 @@ defmodule Synapsis.ConfigDeleteContractTest do
 
   setup do
     Enum.each(@types, &clear_config_store/1)
-    on_exit(fn -> Enum.each(@types, &clear_config_store/1) end)
+    on_exit(fn ->
+      Enum.each(@types, &clear_config_store/1)
+      # Later suites rely on the default agents seeded at boot.
+      Synapsis.AgentConfigs.seed_defaults()
+    end)
     :ok
   end
 
