@@ -108,6 +108,9 @@ defmodule Synapsis.Session.StreamTest do
     test "rejects before a stale runtime registration can stream" do
       provider_name = unique_provider_name()
 
+      assert {:ok, _connection} =
+               Synapsis.Config.Store.put(:backplane, %{"id" => "source-1", "enabled" => true})
+
       assert {:ok, provider} =
                Synapsis.Providers.create(%{
                  name: provider_name,

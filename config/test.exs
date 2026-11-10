@@ -12,10 +12,24 @@ config :synapsis_data, encryption_key: "test-encryption-key-32bytes!!!!!"
 
 config :logger, level: :warning
 
-config_store_dir =
-  Path.expand("../tmp/config_store_test#{System.get_env("MIX_TEST_PARTITION")}", __DIR__)
+# Every BEAM that loads test config (a test run, or an editor language server
+# compiling with MIX_ENV=test) gets its own data root, so loading config can
+# never wipe the stores of a suite that is already running. Roots left by
+# processes that no longer exist are removed here.
+test_partition = System.get_env("MIX_TEST_PARTITION") || "default"
+test_runs_dir = Path.expand("../tmp/test_runs", __DIR__)
+test_run_dir = Path.join(test_runs_dir, "#{test_partition}-#{System.pid()}")
 
-File.rm_rf!(config_store_dir)
+for stale <- Path.wildcard(Path.join(test_runs_dir, "*-*")),
+    pid = stale |> Path.basename() |> String.split("-") |> List.last(),
+    pid != System.pid(),
+    match?({_, status} when status != 0, System.cmd("kill", ["-0", pid], stderr_to_stdout: true)) do
+  File.rm_rf!(stale)
+end
+
+File.rm_rf!(test_run_dir)
+
+config_store_dir = Path.join(test_run_dir, "config_store_test")
 File.mkdir_p!(config_store_dir)
 System.put_env("SYNAPSIS_CONFIG_DIR", config_store_dir)
 
@@ -26,18 +40,11 @@ config :phoenix_live_view, :test_warnings, missing_form_id: :raise
 
 config :synapsis_core, :file_system_enabled, false
 
-# Memory port: isolated per-partition file store for tests.
-config :synapsis_core,
-  memory_dir: Path.expand("../tmp/memory_test#{System.get_env("MIX_TEST_PARTITION")}", __DIR__)
+# Memory port: isolated per-run file store for tests.
+config :synapsis_core, memory_dir: Path.join(test_run_dir, "memory_test")
 
-# Concord: isolated per-partition data dir, node-local Turso engine.
-concord_test_partition = System.get_env("MIX_TEST_PARTITION") || "default"
-concord_test_generation = "concord-3.0"
-
-concord_test_data_dir =
-  Path.expand("../tmp/concord_test/#{concord_test_generation}/#{concord_test_partition}", __DIR__)
-
-File.rm_rf!(concord_test_data_dir)
+# Concord: isolated per-run data dir, node-local Turso engine.
+concord_test_data_dir = Path.join([test_run_dir, "concord_test", "concord-3.0"])
 
 config :concord,
   cluster_enabled: false,
