@@ -112,7 +112,9 @@ defmodule SynapsisWeb.AgentLive.Agents do
     do: {:noreply, maybe_refresh_mcp(socket)}
 
   def handle_event("save_agent", %{"agent" => attrs} = params, socket) do
-    skill_ids = params |> Map.get("skill_ids", []) |> List.wrap()
+    # The form's hidden "" sentinel lets an empty selection clear assignments;
+    # it is not a skill ID, and persisting it breaks every turn's skill capture.
+    skill_ids = params |> Map.get("skill_ids", []) |> List.wrap() |> Enum.reject(&(&1 == ""))
 
     attrs =
       attrs

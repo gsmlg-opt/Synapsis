@@ -892,6 +892,19 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       assert AgentSkills.list_skill_ids(agent.id) == [skill.id]
     end
 
+    test "the empty skill sentinel is never persisted as a skill ID", %{conn: conn} do
+      {:ok, agent} = AgentConfigs.create(%{name: "sentinel-agent", label: "Sentinel"})
+      {:ok, skill} = Skills.create(%{name: "sentinel-style", scope: "global"})
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+
+      react_form_submit(view, "agent-config-form", %{"skill_ids" => ["", skill.id]})
+      assert AgentSkills.list_skill_ids(agent.id) == [skill.id]
+
+      react_form_submit(view, "agent-config-form", %{"skill_ids" => [""]})
+      assert AgentSkills.list_skill_ids(agent.id) == []
+      assert AgentConfigs.get(agent.id).config["skill_ids"] == []
+    end
+
     test "availability changes preserve pending skill and configuration drafts", %{conn: conn} do
       {:ok, agent} = AgentConfigs.create(%{name: "availability-draft", label: "Original"})
       {:ok, toolset} = Toolsets.create(%{name: "availability-readers", tool_names: ["file_read"]})
