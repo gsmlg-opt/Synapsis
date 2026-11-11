@@ -1450,22 +1450,6 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     end
   end
 
-  defp refresh_reply_presentation(socket, live) do
-    case {socket.assigns[:reply_presentation], live} do
-      {%{phase: phase}, {:live, %{reply_presentation: nil}}}
-      when phase in ["committed", "closed"] ->
-        assign(socket, :reply_presentation, nil)
-
-      {%{phase: phase, occurrence_id: previous},
-       {:live, %{reply_presentation: %{occurrence_id: occurrence} = presentation}}}
-      when phase in ["committed", "closed"] and occurrence != previous ->
-        assign(socket, :reply_presentation, presentation)
-
-      _ ->
-        socket
-    end
-  end
-
   defp assign_session_status(socket, status) when status in ~w(idle error) do
     messages =
       if session = socket.assigns.current_session do
@@ -1482,6 +1466,22 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   end
 
   defp assign_session_status(socket, status), do: assign(socket, :session_status, status)
+
+  defp refresh_reply_presentation(socket, live) do
+    case {socket.assigns[:reply_presentation], live} do
+      {%{phase: phase}, {:live, %{reply_presentation: nil}}}
+      when phase in ["committed", "closed"] ->
+        assign(socket, :reply_presentation, nil)
+
+      {%{phase: phase, occurrence_id: previous},
+       {:live, %{reply_presentation: %{occurrence_id: occurrence} = presentation}}}
+      when phase in ["committed", "closed"] and occurrence != previous ->
+        assign(socket, :reply_presentation, presentation)
+
+      _ ->
+        socket
+    end
+  end
 
   defp maybe_refresh_current_session(socket) do
     case fetch_current_session(socket) do
