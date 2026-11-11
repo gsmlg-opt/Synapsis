@@ -10,15 +10,21 @@ defmodule Synapsis.AgentConfigs do
 
   @store_type :agent
 
+  # MVP defaults (docs/design.md §3). web::fetch and synapsis::web_search are
+  # omitted because they require per-agent host/provider configuration.
   @build_tools ~w(
     synapsis::read synapsis::write synapsis::edit synapsis::ls
-    apply_patch exec_command write_stdin
+    apply_patch exec_command write_stdin view_image synapsis::process
     synapsis::todo_read synapsis::todo_write
     synapsis::enter_plan_mode synapsis::exit_plan_mode
     spawn_agent send_message followup_task interrupt_agent list_agents wait_agent
-    synapsis::skill synapsis::ask_user clock::sleep
+    synapsis::skill synapsis::skills_search synapsis::skills_read
+    synapsis::ask_user clock::sleep
     synapsis::memory_save synapsis::memory_source_search synapsis::memory_update
+    synapsis::workspace_memory_search synapsis::workspace_memory_get
     synapsis::session_summarize
+    synapsis::automations synapsis::automations_create synapsis::automations_update
+    synapsis::automations_remove synapsis::automations_manage synapsis::automations_wake
   )
 
   @doc "List all agent configs, ordered by name."
