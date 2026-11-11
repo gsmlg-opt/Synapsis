@@ -122,7 +122,10 @@ config :duskmoon_bundler, :synapsis_web,
     watch_dirs: [
       Path.expand("../apps/synapsis_web/lib", __DIR__),
       Path.expand("../apps/synapsis_web/assets", __DIR__),
-      Path.expand("../deps/phoenix_duskmoon/lib", __DIR__)
+      Path.expand("../deps/phoenix_duskmoon/lib", __DIR__),
+      # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#215 — pairs the
+      # React Chat island Tailwind source above.
+      Path.expand("../deps/phoenix_duskmoon/assets/js/react_chat", __DIR__)
     ]
   ]
 
