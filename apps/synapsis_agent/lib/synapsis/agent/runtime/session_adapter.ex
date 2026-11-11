@@ -2439,6 +2439,8 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
         job(%{state | closing: true}, :close, fn ->
           # The root can already be retired by an in-flight terminal status job.
           # A vanished root must not prevent closing its session-owned children.
+          # TODO(upstream): gsmlg-opt/backplane#164 — cancelling during a provider
+          # attempt settles unknown_outcome, so the next turn requires recovery.
           if is_pid(state.root), do: safe(fn -> Conversation.cancel(state.root) end)
           cleanup = close_sessions(state)
           history = closed_history(state)
