@@ -165,6 +165,70 @@ defmodule Synapsis.Session.WorkerTest do
     end
   end
 
+  describe "queued input withdrawal" do
+    defp queue_two_prompts do
+      session = persist_session(%{status: "idle"})
+      assert :ok = Synapsis.Sessions.ensure_running(session.id)
+      assert [{pid, _}] = Registry.lookup(Synapsis.Session.Registry, session.id)
+      :ok = await_worker_idle(pid)
+
+      :sys.replace_state(pid, fn {:idle, data} ->
+        {:generating, %{data | stream_ref: make_ref(), engine_node: :llm_stream}}
+      end)
+
+      image = %Part.Image{media_type: "image/png", data: "base64data", path: nil}
+      assert :ok = Synapsis.Sessions.send_message(session.id, "text follow-up", [])
+      assert :ok = Synapsis.Sessions.send_message(session.id, "image follow-up", [image])
+      Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}")
+      {session, PendingInputStore.queued_prompts(session.id)}
+    end
+
+    test "removing a queued prompt cancels it and broadcasts the withdrawal" do
+      {session, [text, image]} = queue_two_prompts()
+
+      assert :ok = Synapsis.Sessions.remove_queued_input(session.id, text.id)
+      text_id = text.id
+      assert_receive {"input_withdrawn", %{id: ^text_id}}
+      assert Enum.map(PendingInputStore.queued_prompts(session.id), & &1.id) == [image.id]
+
+      assert {:error, :input_not_queued} =
+               Synapsis.Sessions.remove_queued_input(session.id, text.id)
+    end
+
+    test "steering rejects image prompts and keeps them queued" do
+      {session, [_text, image]} = queue_two_prompts()
+
+      assert {:error, :not_steerable} = Synapsis.Sessions.steer_queued_input(session.id, image.id)
+      assert image.id in Enum.map(PendingInputStore.queued_prompts(session.id), & &1.id)
+    end
+
+    test "steering hands a queued text prompt to the running turn" do
+      {session, [text, image]} = queue_two_prompts()
+      [{pid, _}] = Registry.lookup(Synapsis.Session.Registry, session.id)
+      runtime = self()
+
+      :sys.replace_state(pid, fn {state, data} ->
+        {state, %{data | runtime_active: true, runtime_phase: :running, runtime_pid: runtime}}
+      end)
+
+      assert :ok = Synapsis.Sessions.steer_queued_input(session.id, text.id)
+      assert_receive {:"$gen_cast", {:input, "text follow-up"}}
+      assert Enum.map(PendingInputStore.queued_prompts(session.id), & &1.id) == [image.id]
+    end
+
+    test "steering without a running turn re-queues the text instead of dropping it" do
+      {session, [text, image]} = queue_two_prompts()
+
+      assert :ok = Synapsis.Sessions.steer_queued_input(session.id, text.id)
+
+      assert [%{id: image_id}, %{id: requeued_id, content: "text follow-up"}] =
+               PendingInputStore.queued_prompts(session.id)
+
+      assert image_id == image.id
+      refute requeued_id == text.id
+    end
+  end
+
   describe "regenerate" do
     test "truncates the transcript to before the target assistant message" do
       session = persist_session(%{status: "idle"})

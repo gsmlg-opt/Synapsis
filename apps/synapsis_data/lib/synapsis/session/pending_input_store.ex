@@ -177,6 +177,22 @@ defmodule Synapsis.Session.PendingInputStore do
     )
   end
 
+  @doc """
+  Cancel one still-queued prompt and return its queued record.
+
+  `text_only: true` rejects prompts with images, which cannot become steers.
+  """
+  def withdraw_prompt(session_id, input_id, opts \\ [])
+      when is_binary(session_id) and is_binary(input_id) do
+    withdraw(
+      session_id,
+      input_id,
+      Keyword.get(opts, :text_only, false),
+      @attempts,
+      deadline(opts)
+    )
+  end
+
   @doc "Recover inflight ordinary prompts and steers after a worker restart."
   def recover_inflight(session_id, opts \\ []) when is_binary(session_id) do
     update_status(
@@ -295,6 +311,34 @@ defmodule Synapsis.Session.PendingInputStore do
           {:error, :conflict} when attempts > 1 -> take_steers(session_id, attempts - 1, deadline)
           error -> error
         end
+      end
+    end
+  end
+
+  defp withdraw(session_id, input_id, text_only?, attempts, deadline) do
+    with {:ok, snapshot, entries} <- load_entries(session_id, deadline) do
+      input = entries |> entries_to_inputs() |> Enum.find(&(&1.id == input_id))
+
+      cond do
+        not match?(%__MODULE__{kind: "prompt", status: "queued"}, input) ->
+          {:error, :input_not_queued}
+
+        text_only? and input.image_parts != [] ->
+          {:error, :not_steerable}
+
+        true ->
+          updated = status_entries(entries, &(&1.id == input_id), "cancelled")
+
+          case persist(session_id, snapshot, updated, deadline) do
+            :ok ->
+              {:ok, input}
+
+            {:error, :conflict} when attempts > 1 ->
+              withdraw(session_id, input_id, text_only?, attempts - 1, deadline)
+
+            error ->
+              error
+          end
       end
     end
   end

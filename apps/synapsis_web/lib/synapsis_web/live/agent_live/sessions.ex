@@ -279,6 +279,26 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     end
   end
 
+  defp chat_event("chat.action", %{"action" => action, "input_id" => id}, socket)
+       when action in ~w(remove_queued steer_queued) and is_binary(id) do
+    session_id = socket.assigns.current_session.id
+    item = Enum.find(socket.assigns.react_chat.metadata.queue, &(&1.id == id))
+
+    cond do
+      is_nil(item) ->
+        {%{status: "error", message: "Message is no longer queued"}, socket}
+
+      action == "remove_queued" ->
+        queued_input_reply(Sessions.remove_queued_input(session_id, id), id, socket)
+
+      item.steerable and socket.assigns.react_chat.admission.canSteer ->
+        queued_input_reply(Sessions.steer_queued_input(session_id, id), id, socket)
+
+      true ->
+        {%{status: "error", message: "Message cannot be steered"}, socket}
+    end
+  end
+
   defp chat_event(
          "chat.action",
          %{"action" => "answer_question", "ref" => ref, "response" => response} = params,
@@ -385,6 +405,27 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
   defp operation_reply(_result, socket),
     do: {%{status: "error", message: "Session action failed"}, socket}
+
+  defp queued_input_reply(result, id, socket) do
+    drop = fn socket ->
+      update(socket, :queued_inputs, &Enum.reject(&1, fn i -> i.id == id end))
+    end
+
+    case result do
+      :ok ->
+        {%{status: "ok"}, drop.(socket)}
+
+      # Started or withdrawn elsewhere; the started turn or broadcast owns it now.
+      {:error, :input_not_queued} ->
+        {%{status: "error", message: "Message is no longer queued"}, drop.(socket)}
+
+      {:error, :not_steerable} ->
+        {%{status: "error", message: "Messages with images cannot steer"}, socket}
+
+      _ ->
+        {%{status: "error", message: "Queued message action failed"}, socket}
+    end
+  end
 
   defp handle_session_event("switch_model", params, socket) do
     id = Map.get(params, "model_id")
@@ -924,6 +965,10 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
   defp handle_session_info({"input_queued", %{kind: "steer"}}, socket) do
     {:noreply, socket}
+  end
+
+  defp handle_session_info({"input_withdrawn", %{id: id}}, socket) do
+    {:noreply, update(socket, :queued_inputs, &Enum.reject(&1, fn input -> input.id == id end))}
   end
 
   defp handle_session_info({"input_started", %{id: id}}, socket) do

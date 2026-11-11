@@ -331,6 +331,22 @@ defmodule Synapsis.Sessions do
     :exit, reason -> {:error, exit_reason(reason)}
   end
 
+  @doc "Drop one queued prompt before it starts."
+  def remove_queued_input(session_id, input_id) when is_binary(input_id) do
+    ensure_session_running(session_id)
+    Synapsis.Session.Worker.remove_queued_input(session_id, input_id)
+  catch
+    :exit, reason -> {:error, exit_reason(reason)}
+  end
+
+  @doc "Move one queued text prompt into the running turn as a steer."
+  def steer_queued_input(session_id, input_id) when is_binary(input_id) do
+    ensure_session_running(session_id)
+    Synapsis.Session.Worker.steer_queued_input(session_id, input_id)
+  catch
+    :exit, reason -> {:error, exit_reason(reason)}
+  end
+
   def cancel(session_id) do
     Synapsis.Session.Worker.cancel(session_id)
   end

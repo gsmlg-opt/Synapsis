@@ -88,7 +88,6 @@ function Message(props: ChatProps) {
     finally { setPending(false) }
   }
   const disabled = !connected || synchronizing || pending
-  const queued = meta.queued
   const heartbeat = meta.heartbeat
   const codeAgent = meta.codeAgent
   const timestampValue = meta.timestamp || heartbeat?.timestamp
@@ -102,7 +101,6 @@ function Message(props: ChatProps) {
       <span className="font-medium">{message.author || (user ? 'You' : 'Assistant')}</span>
       {time && <time dateTime={timestampValue} className="text-xs text-on-surface-variant">{time}</time>}
       {meta.tokenCount > 0 && <span className="text-xs text-on-surface-variant">{user ? 'in' : 'out'}: {meta.tokenCount}</span>}
-      {queued && <span className="text-xs text-on-surface-variant">Queued</span>}
     </Chat.Header>
     <Content {...(user ? { color: 'primary' as const, filled: true, size: 'sm' as const, collapsible: true } : {})} streaming={message.status === 'streaming'}>
       {meta.reasoning && <Chat.Work><Chat.WorkSummary>Thinking</Chat.WorkSummary><Chat.WorkBody><Markdown markdown={meta.reasoning} /></Chat.WorkBody></Chat.Work>}
@@ -193,11 +191,63 @@ function UserQuestion({ question, bridge, connected, synchronizing }: {
   </Form>
 }
 
+type QueueItem = { id: string, text: string, attachment?: { src: string, alt: string } | null, steerable: boolean }
+
+const steerIcon = <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" focusable="false"><path d="m15 4 5 5-5 5M20 9h-9a6 6 0 0 0-6 6v4" /></svg>
+const removeIcon = <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12" /></svg>
+
+// Queued prompts are server-owned; items leave once the server starts or withdraws them.
+function Queue({ items, canSteer, bridge, connected, synchronizing }: {
+  items: QueueItem[]
+  canSteer: boolean
+  bridge: ChatProps['bridge']
+  connected: boolean
+  synchronizing: boolean
+}) {
+  const [pendingIds, setPendingIds] = useState<string[]>([])
+  const [notice, setNotice] = useState('')
+  async function act(action: 'steer_queued' | 'remove_queued', id: string) {
+    setPendingIds(ids => [...ids, id])
+    setNotice('')
+    try { await bridge.send('action', { action, input_id: id }) }
+    catch (error) { setNotice(error instanceof Error ? error.message : 'Queued message action failed') }
+    finally { setPendingIds(ids => ids.filter(pending => pending !== id)) }
+  }
+  const offline = !connected || synchronizing
+  return <>
+    <Chat.Queue
+      className="synapsis-chat-queue"
+      items={items.map(({ id, text, attachment }) => ({ id, text, ...(attachment ? { attachment } : {}) }))}
+      pendingIds={pendingIds}
+      onSteer={id => act('steer_queued', id)}
+      onRemove={id => act('remove_queued', id)}
+      renderItemActions={(item, index, pending) => {
+        const textOnly = items[index]?.steerable === true
+        const steerable = canSteer && textOnly
+        const steerTitle = steerable ? `Steer waiting message ${index + 1}` :
+          textOnly ? 'Steering needs a running turn' : 'Only text messages can steer the running turn'
+        return <>
+          <Button size="sm" appearance="ghost" shape="circle" disabled={pending || offline || !steerable}
+            aria-label={`Steer waiting message ${index + 1}`}
+            title={steerTitle}
+            onClick={() => act('steer_queued', item.id)}>{steerIcon}</Button>
+          <Button size="sm" appearance="ghost" shape="circle" disabled={pending || offline}
+            aria-label={`Remove waiting message ${index + 1}`} title={`Remove waiting message ${index + 1}`}
+            onClick={() => act('remove_queued', item.id)}>{removeIcon}</Button>
+        </>
+      }}
+    />
+    {notice && <p role="alert" className="text-error synapsis-chat-status">{notice}</p>}
+  </>
+}
+
 function Status({ runtime, metadata, admission, active, bridge, connected, synchronizing }: ChatProps) {
   const [notice, setNotice] = useState('')
   const questions = metadata.userQuestions || []
   const waitingForUser = questions.length > 0
+  const queue: QueueItem[] = metadata.queue || []
   return <>
+    {queue.length > 0 && <Queue items={queue} canSteer={admission.canSteer === true} bridge={bridge} connected={connected} synchronizing={synchronizing} />}
     {active && <Chat.Status role="status" className="synapsis-chat-status">
       <Chat.StatusItem className="items-center gap-2 whitespace-nowrap">
         {!waitingForUser && <Chat.Typing className="min-w-0" role="presentation" aria-hidden="true" />}
@@ -212,7 +262,7 @@ function Status({ runtime, metadata, admission, active, bridge, connected, synch
 
 export function createSynapsisReactChat(factory: any) {
   function Composer(props: ChatProps) {
-    const { bridge, connected, synchronizing, active, canSubmit, metadata, admission } = props
+    const { state, bridge, connected, synchronizing, active, canSubmit, metadata, admission } = props
     const [value, setValue] = useState('')
     const [files, setFiles] = useState<File[]>([])
     const [localNotice, setLocalNotice] = useState('')
@@ -230,6 +280,7 @@ export function createSynapsisReactChat(factory: any) {
     }
     return <Chat.Composer
       className="synapsis-chat-composer"
+      scope={{ contextKey: 'synapsis-agent-session', conversationId: state.conversationId }}
       value={value}
       onValueChange={setValue}
       attachments={files}

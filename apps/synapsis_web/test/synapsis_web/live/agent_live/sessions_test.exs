@@ -796,7 +796,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       end
     end
 
-    test "renders queued prompts as transient pending input and removes them when started", %{
+    test "projects queued prompts into the chat queue and removes them when started", %{
       conn: conn
     } do
       {:ok, session} =
@@ -814,8 +814,11 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
       html = chat_json(view)
 
+      assert [%{id: "queued-prompt-1", text: "queued follow-up", steerable: true}] =
+               chat_snapshot(view).metadata.queue
+
+      refute Enum.any?(chat_snapshot(view).messages, &(&1.content == "queued follow-up"))
       assert html =~ "queued follow-up"
-      assert html =~ ~s("queued":true)
       assert Sessions.get_messages(session.id) == []
 
       send(view.pid, {"input_started", %{id: "queued-prompt-1", kind: "prompt"}})
@@ -824,6 +827,68 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
       refute html =~ "queued follow-up"
       assert Sessions.get_messages(session.id) == []
+    end
+
+    test "queue actions remove and steer queued prompts through the worker", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      set_worker_running(session)
+      assert {:ok, first} = PendingInputStore.append_prompt(session.id, "drop me", [])
+      assert {:ok, second} = PendingInputStore.append_prompt(session.id, "steer me", [])
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      assert [first.id, second.id] == Enum.map(chat_snapshot(view).metadata.queue, & &1.id)
+
+      remove = %{"action" => "remove_queued", "input_id" => first.id}
+
+      assert {:reply, %{status: "ok"}, socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.action",
+                 Map.merge(chat_scope(view), remove),
+                 chat_socket(view)
+               )
+
+      refute Enum.any?(socket.assigns.queued_inputs, &(&1.id == first.id))
+      assert [%{id: id}] = PendingInputStore.queued_prompts(session.id)
+      assert id == second.id
+
+      steer = %{"action" => "steer_queued", "input_id" => second.id}
+
+      assert {:reply, %{status: "ok"}, _socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.action",
+                 Map.merge(chat_scope(view), steer),
+                 chat_socket(view)
+               )
+
+      # No live runtime in this fixture, so the worker keeps the text as a prompt.
+      assert [%{content: "steer me"}] = PendingInputStore.queued_prompts(session.id)
+
+      stale = %{"action" => "remove_queued", "input_id" => Ecto.UUID.generate()}
+
+      assert {:reply, %{status: "error", message: "Message is no longer queued"}, _socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.action",
+                 Map.merge(chat_scope(view), stale),
+                 chat_socket(view)
+               )
+    end
+
+    test "withdrawn queued prompts leave the chat queue", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      send(
+        view.pid,
+        {"input_queued", %{id: "queued-prompt-1", kind: "prompt", content: "withdraw me"}}
+      )
+
+      assert [%{id: "queued-prompt-1"}] = chat_snapshot(view).metadata.queue
+      send(view.pid, {"input_withdrawn", %{id: "queued-prompt-1"}})
+      assert chat_snapshot(view).metadata.queue == []
     end
 
     test "queued prompts survive done until each matching input starts", %{conn: conn} do
@@ -914,9 +979,11 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
       html = chat_json(view)
 
-      assert html =~ ~s("id":"queued-input-queued-prompt-1")
-      assert html =~ ~s("id":"queued-input-queued-prompt-2")
-      assert Enum.count(chat_snapshot(view).messages, &(&1.content == "same prompt")) == 2
+      assert html =~ "same prompt"
+
+      assert ["queued-prompt-1", "queued-prompt-2"] =
+               Enum.map(chat_snapshot(view).metadata.queue, & &1.id)
+
       assert Sessions.get_messages(session.id) == []
     end
 
@@ -1302,8 +1369,14 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
       {:ok, remounted, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
 
-      assert [%{metadata: %{queued: true, parts: [%{type: "text"}, %{type: "image"}]}}] =
-               Enum.filter(chat_snapshot(remounted).messages, & &1.metadata[:queued])
+      assert [
+               %{
+                 text: "look",
+                 steerable: false,
+                 attachment: %{src: "data:image/png;base64," <> _}
+               }
+             ] =
+               chat_snapshot(remounted).metadata.queue
     end
 
     test "invalid attachments and stale scope return errors without persistence", %{conn: conn} do

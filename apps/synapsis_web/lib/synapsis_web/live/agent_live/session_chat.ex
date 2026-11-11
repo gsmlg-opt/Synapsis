@@ -28,7 +28,6 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
       messages:
         Enum.flat_map(displayed, &message(&1, label, can_regenerate?, results)) ++
           live_messages(assigns, label, active?) ++
-          Enum.map(assigns.queued_inputs, &queued_message/1) ++
           Enum.map(assigns.heartbeat_notifications, &heartbeat_message/1) ++
           Enum.map(Enum.sort(assigns.code_agent_sessions), &code_agent_message/1),
       metadata: %{
@@ -37,7 +36,8 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
         assistantAvatar: assistant_avatar(assigns.agent_config),
         attachmentsAllowed: true,
         canStop: true,
-        userQuestions: user_questions
+        userQuestions: user_questions,
+        queue: Enum.map(assigns.queued_inputs, &queue_item/1)
       },
       runtime: %{
         phase: if(waiting?, do: "waiting_for_user", else: assigns.session_status),
@@ -183,23 +183,21 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
 
   defp settle(part, _results), do: part
 
-  defp queued_message(input) do
-    %{
-      id: "queued-input-#{input.id}",
-      role: "user",
-      content: input.content,
-      status: "pending",
-      author: "You",
-      metadata: %{
-        queued: true,
-        parts: [
-          %{type: "text", content: input.content}
-          | Enum.map(Map.get(input, :image_parts, []) || [], &part(&1, "user"))
-        ]
-      },
-      tools: [],
-      actions: []
-    }
+  # Queued prompts are not transcript turns yet; Chat.Queue renders them above
+  # the composer until each one starts or is withdrawn.
+  defp queue_item(input) do
+    images = Enum.map(Map.get(input, :image_parts, []) || [], &part(&1, "user"))
+
+    attachment =
+      case images do
+        [%{type: "image", media_type: type, data: data} | _] ->
+          %{src: "data:#{type};base64,#{data}", alt: "Attached image"}
+
+        _ ->
+          nil
+      end
+
+    %{id: input.id, text: input.content, attachment: attachment, steerable: images == []}
   end
 
   defp heartbeat_message(notification) do

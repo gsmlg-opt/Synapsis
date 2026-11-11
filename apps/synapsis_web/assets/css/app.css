@@ -93,6 +93,11 @@ code, pre, kbd, samp {
     margin: 0 0.75rem 0.5rem;
   }
 
+  .synapsis-react-chat .synapsis-chat-queue {
+    flex-shrink: 0;
+    margin: 0 0.75rem 0.5rem;
+  }
+
   .synapsis-chat-question {
     flex-shrink: 0;
     margin: 0 0.75rem 0.75rem;

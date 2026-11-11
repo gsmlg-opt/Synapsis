@@ -43,6 +43,13 @@ defmodule Synapsis.Session.Worker.PendingInputs do
 
   def cancel_steers(data), do: enqueue(data, operation(:cancel_steers))
 
+  @doc """
+  Withdraw one queued prompt. `:remove` drops it; `:steer` hands its text to the
+  running turn, or re-submits it as an ordinary prompt when no turn can take it.
+  """
+  def withdraw(data, input_id, intent, from) when intent in [:remove, :steer],
+    do: enqueue(data, operation(:withdraw, from, %{id: input_id, intent: intent}))
+
   def wake(data, text, opts, from) do
     lane = data.pending_inputs
 
@@ -387,6 +394,13 @@ defmodule Synapsis.Session.Worker.PendingInputs do
         deadline: deadline
       )
 
+  defp execute(id, _owner_id, %{kind: :withdraw, payload: payload, deadline: deadline}),
+    do:
+      PendingInputStore.withdraw_prompt(id, payload.id,
+        deadline: deadline,
+        text_only: payload.intent == :steer
+      )
+
   defp execute(id, _owner_id, %{kind: :cancel_steers, deadline: deadline}),
     do: PendingInputStore.cancel_steers(id, deadline: deadline)
 
@@ -463,6 +477,24 @@ defmodule Synapsis.Session.Worker.PendingInputs do
     do: {%{data | pending_inputs: %{data.pending_inputs | current: nil}}, []}
 
   defp apply_result(data, %{kind: :cancel_steers}, :ok), do: {data, []}
+
+  defp apply_result(data, %{kind: :withdraw, payload: payload} = op, {:ok, input}) do
+    Persistence.broadcast(data.session_id, "input_withdrawn", %{id: input.id})
+
+    case payload.intent do
+      :remove ->
+        {data, reply(op, :ok)}
+
+      :steer ->
+        if data.runtime_active and data.runtime_phase == :running and is_pid(data.runtime_pid) do
+          :ok = Synapsis.Agent.Runtime.SessionAdapter.input(data.runtime_pid, input.content)
+          {data, reply(op, :ok)}
+        else
+          # The turn ended before the steer landed; keep the user's input.
+          prompt(data, input.content, input.image_parts, op.from)
+        end
+    end
+  end
 
   defp apply_result(data, op, {:error, reason}) do
     if reason in [:unknown_outcome, :timeout] or

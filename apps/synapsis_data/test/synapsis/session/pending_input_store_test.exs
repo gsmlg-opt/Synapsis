@@ -45,6 +45,35 @@ defmodule Synapsis.Session.PendingInputStoreTest do
     refute Map.has_key?(stored, :attachments)
   end
 
+  test "withdraws only a still-queued prompt", %{session_id: session_id} do
+    assert {:ok, first} = PendingInputStore.append_prompt(session_id, "first", [])
+    assert {:ok, second} = PendingInputStore.append_prompt(session_id, "second", [])
+
+    assert {:ok, %{id: id, content: "first"}} =
+             PendingInputStore.withdraw_prompt(session_id, first.id)
+
+    assert id == first.id
+    assert Enum.map(PendingInputStore.queued_prompts(session_id), & &1.id) == [second.id]
+
+    assert {:error, :input_not_queued} = PendingInputStore.withdraw_prompt(session_id, first.id)
+
+    # Once the worker takes it, the prompt belongs to its turn.
+    assert {:ok, %{id: taken}} = PendingInputStore.take_next_prompt(session_id)
+    assert taken == second.id
+    assert {:error, :input_not_queued} = PendingInputStore.withdraw_prompt(session_id, second.id)
+  end
+
+  test "text-only withdrawal rejects prompts with images", %{session_id: session_id} do
+    image = [%{"type" => "image", "media_type" => "image/png", "data" => "base64-data"}]
+    assert {:ok, input} = PendingInputStore.append_prompt(session_id, "see image", image)
+
+    assert {:error, :not_steerable} =
+             PendingInputStore.withdraw_prompt(session_id, input.id, text_only: true)
+
+    assert [%{id: id}] = PendingInputStore.queued_prompts(session_id)
+    assert id == input.id
+  end
+
   test "stores steers separately from prompts", %{session_id: session_id} do
     assert {:ok, prompt} = PendingInputStore.append_prompt(session_id, "next turn", [])
     assert {:ok, steer} = PendingInputStore.append_steer(session_id, "use the current file")

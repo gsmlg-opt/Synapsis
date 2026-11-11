@@ -119,6 +119,14 @@ defmodule Synapsis.Session.Worker do
   def steer_message(session_id, content),
     do: :gen_statem.call(via(session_id), {:steer_message, content}, 30_000)
 
+  @doc "Drop one queued prompt before it starts."
+  def remove_queued_input(session_id, input_id),
+    do: :gen_statem.call(via(session_id), {:withdraw_queued_input, input_id, :remove}, 30_000)
+
+  @doc "Move one queued text prompt into the running turn as a steer."
+  def steer_queued_input(session_id, input_id),
+    do: :gen_statem.call(via(session_id), {:withdraw_queued_input, input_id, :steer}, 30_000)
+
   def cancel(session_id), do: :gen_statem.cast(via(session_id), :cancel)
   def retry(session_id), do: :gen_statem.call(via(session_id), :retry, 30_000)
 
@@ -353,6 +361,12 @@ defmodule Synapsis.Session.Worker do
 
   def handle_event({:call, from}, {:send_message, content, image_parts}, _state, data) do
     {data, actions} = PendingInputs.prompt(data, content, image_parts, from)
+    advance(data, actions)
+  end
+
+  def handle_event({:call, from}, {:withdraw_queued_input, input_id, intent}, _state, data)
+      when is_binary(input_id) do
+    {data, actions} = PendingInputs.withdraw(data, input_id, intent, from)
     advance(data, actions)
   end
 
