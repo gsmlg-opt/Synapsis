@@ -1376,6 +1376,9 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   end
 
   defp assign_session_status(socket, status) when status in ~w(streaming tool_executing) do
+    # A new run supersedes the previous run's error alert.
+    socket = clear_flash(socket, :error)
+
     socket =
       case socket.assigns[:reply_presentation] do
         %{phase: phase, occurrence_id: previous_occurrence}

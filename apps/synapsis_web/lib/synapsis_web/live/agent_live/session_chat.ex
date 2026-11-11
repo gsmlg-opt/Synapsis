@@ -20,26 +20,13 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
       roster[:recovery_required] == true or not is_nil(roster[:error]) or
         get_in(roster, [:root, :status]) in [:unknown_outcome, "unknown_outcome"]
 
+    displayed = assigns.messages |> Enum.map(&display_message/1) |> Enum.reject(&is_nil/1)
+    results = settled_tool_results(displayed)
+    can_regenerate? = assigns.session_status == "idle" and not waiting? and not subagents?
+
     %{
       messages:
-        Enum.flat_map(
-          assigns.messages,
-          fn raw ->
-            case display_message(raw) do
-              nil ->
-                []
-
-              displayed ->
-                [
-                  message(
-                    displayed,
-                    label,
-                    assigns.session_status == "idle" and not waiting? and not subagents?
-                  )
-                ]
-            end
-          end
-        ) ++
+        Enum.flat_map(displayed, &message(&1, label, can_regenerate?, results)) ++
           live_messages(assigns, label, active?) ++
           Enum.map(assigns.queued_inputs, &queued_message/1) ++
           Enum.map(assigns.heartbeat_notifications, &heartbeat_message/1) ++
@@ -83,8 +70,37 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
 
   defp display_message(message), do: EventReply.display_message(message)
 
-  defp message(message, label, can_regenerate?) do
-    parts = Enum.map(message.parts || [], &part(&1, message.role))
+  # Provider history carries tool results as user-role turns. Presentation
+  # settles each result onto its matching tool card instead, so a completed
+  # call shows its outcome and result-only turns do not render as "You".
+  defp settled_tool_results(messages) do
+    parts = Enum.flat_map(messages, &(&1.parts || []))
+    calls = for %Part.ToolUse{tool_use_id: id} <- parts, into: MapSet.new(), do: id
+
+    for %Part.ToolResult{tool_use_id: id} = result <- parts,
+        MapSet.member?(calls, id),
+        into: %{},
+        do: {id, result}
+  end
+
+  defp message(message, label, can_regenerate?, results) do
+    raw_parts = message.parts || []
+
+    visible =
+      Enum.reject(
+        raw_parts,
+        &match?(%Part.ToolResult{tool_use_id: id} when is_map_key(results, id), &1)
+      )
+
+    if raw_parts != [] and visible == [] do
+      []
+    else
+      [message(message, visible, label, can_regenerate?, results)]
+    end
+  end
+
+  defp message(message, visible, label, can_regenerate?, results) do
+    parts = Enum.map(visible, &settle(part(&1, message.role), results))
 
     %{
       id: message.id,
@@ -154,6 +170,18 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
       []
     end
   end
+
+  defp settle(%{type: "tool_use", id: id} = tool, results) when is_map_key(results, id) do
+    result = Map.fetch!(results, id)
+
+    Map.merge(tool, %{
+      status: if(result.is_error, do: "error", else: "complete"),
+      result: result.content,
+      display: ToolResultView.present(result)
+    })
+  end
+
+  defp settle(part, _results), do: part
 
   defp queued_message(input) do
     %{

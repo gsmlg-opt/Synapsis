@@ -214,7 +214,7 @@ defmodule SynapsisWeb.AgentLive.ToolResultChatFunctionalTest do
     do:
       snapshot.messages
       |> Enum.flat_map(&(&1.metadata[:parts] || []))
-      |> Enum.find(&(&1.type == "tool_result"))
+      |> Enum.find(&(&1.type == "tool_use" and &1.id == @call_id))
 
   defp assert_wire_image(request, text) do
     blocks = Enum.flat_map(request["messages"], &List.wrap(&1["content"]))

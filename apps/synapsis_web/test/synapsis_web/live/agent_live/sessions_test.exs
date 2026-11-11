@@ -1195,14 +1195,84 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
             metadata: %{
               parts: [
                 %{type: "reasoning"},
-                %{type: "tool_use"},
-                %{type: "tool_result"},
+                %{
+                  type: "tool_use",
+                  id: "tool-1",
+                  status: "complete",
+                  result: "file contents"
+                },
                 %{type: "text"}
               ]
             }
           }
         ]
       })
+    end
+
+    test "durable tool results settle their tool card instead of rendering as user turns",
+         %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      prompt =
+        Synapsis.Message.append(session.id, %{
+          role: "user",
+          parts: [%Synapsis.Part.Text{content: "list"}]
+        })
+
+      assert {:ok, _} = prompt
+
+      {:ok, call} =
+        Synapsis.Message.append(session.id, %{
+          role: "assistant",
+          parts: [
+            %Synapsis.Part.ToolUse{tool: "synapsis::ls", tool_use_id: "ok-1", input: %{}},
+            %Synapsis.Part.ToolUse{tool: "exec_command", tool_use_id: "bad-1", input: %{}}
+          ]
+        })
+
+      {:ok, _results} =
+        Synapsis.Message.append(session.id, %{
+          role: "user",
+          parts: [
+            %Synapsis.Part.ToolResult{tool_use_id: "ok-1", content: "a.txt"},
+            %Synapsis.Part.ToolResult{tool_use_id: "bad-1", content: "denied", is_error: true}
+          ]
+        })
+
+      {:ok, answer} =
+        Synapsis.Message.append(session.id, %{
+          role: "assistant",
+          parts: [%Synapsis.Part.Text{content: "1 entry"}]
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      %{messages: messages} = :sys.get_state(view.pid).socket.assigns.react_chat_initial
+
+      call_id = call.id
+      answer_id = answer.id
+
+      assert [
+               %{role: "user", content: "list"},
+               %{id: ^call_id, metadata: %{parts: [ok, bad]}},
+               %{id: ^answer_id, content: "1 entry"}
+             ] = messages
+
+      assert %{type: "tool_use", status: "complete", result: "a.txt", display: %{}} = ok
+      assert %{type: "tool_use", status: "error", result: "denied"} = bad
+    end
+
+    test "a new run clears the previous run's error alert", %{conn: conn} do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      send(view.pid, {"error", %{message: "Provider error (HTTP 500)"}})
+      assert render(view) =~ "Provider error (HTTP 500)"
+
+      send(view.pid, {"session_status", %{status: "streaming"}})
+      refute render(view) =~ "Provider error (HTTP 500)"
     end
 
     test "accepted queued image sends acknowledge once and survive remount", %{conn: conn} do
