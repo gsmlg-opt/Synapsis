@@ -656,6 +656,26 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       assert {:ok, %{status: "idle"}} = Synapsis.Sessions.get(session.id)
     end
 
+    test "a run still preparing is active even before its durable status commits", %{
+      conn: conn
+    } do
+      {:ok, session} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      set_worker_running(session)
+      # Preparation has not committed the input yet; the last durable status is the
+      # previous run's error.
+      assert {:ok, _session} = SessionPersistence.update_session_status(session.id, "error")
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+
+      send(view.pid, {"session_status", %{status: "streaming"}})
+
+      assert %{runtime: %{phase: "streaming", active: true}, admission: admission} =
+               chat_snapshot(view)
+
+      assert %{canSteer: true, sendLabel: "Queue"} = admission
+    end
+
     test "chat island owns the composer and idle steer is unavailable", %{conn: conn} do
       {:ok, session} =
         Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
@@ -1338,6 +1358,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       send(view.pid, {"error", %{message: "Provider error (HTTP 500)"}})
       assert render(view) =~ "Provider error (HTTP 500)"
 
+      set_worker_running(session)
       send(view.pid, {"session_status", %{status: "streaming"}})
       refute render(view) =~ "Provider error (HTTP 500)"
     end

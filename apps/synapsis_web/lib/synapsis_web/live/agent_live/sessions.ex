@@ -1421,38 +1421,48 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   end
 
   defp assign_session_status(socket, status) when status in ~w(streaming tool_executing) do
-    # A new run supersedes the previous run's error alert.
-    socket = clear_flash(socket, :error)
+    live = Synapsis.Session.Read.live_snapshot(socket.assigns.current_session.id)
 
-    socket =
-      case socket.assigns[:reply_presentation] do
-        %{phase: phase, occurrence_id: previous_occurrence}
-        when phase in ["committed", "closed"] ->
-          case Synapsis.Session.Read.live_snapshot(socket.assigns.current_session.id) do
-            {:live, %{reply_presentation: nil}} ->
-              assign(socket, :reply_presentation, nil)
+    # ADR-006: the live worker is the read authority for the in-flight turn. The
+    # durable status only becomes "streaming" once turn preparation commits the
+    # input, so consulting it first hid every run still preparing as idle/error.
+    case {live, fetch_current_session(socket)} do
+      {{:live, %{status: :running}}, _session} ->
+        socket
+        # A new run supersedes the previous run's error alert.
+        |> clear_flash(:error)
+        |> refresh_reply_presentation(live)
+        |> assign(:session_status, status)
 
-            {:live, %{reply_presentation: %{occurrence_id: occurrence} = live}}
-            when occurrence != previous_occurrence ->
-              assign(socket, :reply_presentation, live)
-
-            _ ->
-              socket
-          end
-
-        _ ->
-          socket
-      end
-
-    case fetch_current_session(socket) do
-      {:ok, %{status: terminal_status} = session} when terminal_status in ~w(idle error) ->
+      # Stale active status after the run finished.
+      {_live, {:ok, %{status: terminal_status} = session}}
+      when terminal_status in ~w(idle error) ->
         socket
         |> assign(:current_session, session)
         |> clear_transient_generation()
         |> assign(:session_status, terminal_status)
 
       _ ->
-        assign(socket, :session_status, status)
+        socket
+        |> clear_flash(:error)
+        |> refresh_reply_presentation(live)
+        |> assign(:session_status, status)
+    end
+  end
+
+  defp refresh_reply_presentation(socket, live) do
+    case {socket.assigns[:reply_presentation], live} do
+      {%{phase: phase}, {:live, %{reply_presentation: nil}}}
+      when phase in ["committed", "closed"] ->
+        assign(socket, :reply_presentation, nil)
+
+      {%{phase: phase, occurrence_id: previous},
+       {:live, %{reply_presentation: %{occurrence_id: occurrence} = presentation}}}
+      when phase in ["committed", "closed"] and occurrence != previous ->
+        assign(socket, :reply_presentation, presentation)
+
+      _ ->
+        socket
     end
   end
 
