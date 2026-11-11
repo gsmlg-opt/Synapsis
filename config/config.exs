@@ -104,6 +104,16 @@ config :duskmoon_bundler, :synapsis_web,
       %{
         base: Path.expand("../deps/phoenix_duskmoon/lib", __DIR__),
         pattern: "**/*.{ex,heex}"
+      },
+      # The React Chat island's markup uses Tailwind utilities (e.g. the
+      # jump-to-latest controls' `bottom-3 end-3`) that only exist if scanned here.
+      # TODO(upstream): duskmoon-dev/phoenix-duskmoon-ui#215
+      # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#215 — remove once the
+      # island no longer relies on consumer-generated utilities or the guides make
+      # this source part of the supported setup.
+      %{
+        base: Path.expand("../deps/phoenix_duskmoon/assets/js/react_chat", __DIR__),
+        pattern: "**/*.js"
       }
     ]
   ],

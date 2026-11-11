@@ -48,7 +48,7 @@ defmodule SynapsisServer.MixProject do
       {:gaoxy_http, "~> 0.15.1"},
       {:websock_adapter, "~> 0.15.1", hex: :gaoxy_websock_adapter, override: true},
       {:cors_plug, "~> 3.0"},
-      {:duskmoon_bundler, "~> 10.1.2", runtime: Mix.env() in [:dev, :test]}
+      {:duskmoon_bundler, "~> 10.1.6", runtime: Mix.env() in [:dev, :test]}
     ]
   end
 end

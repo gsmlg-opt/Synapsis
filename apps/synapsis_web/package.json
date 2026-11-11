@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@duskmoon-dev/core": "1.20.7",
-    "@duskmoon-dev/css-art": "1.20.7",
+    "@duskmoon-dev/core": "1.21.2",
+    "@duskmoon-dev/css-art": "1.21.2",
     "@duskmoon-dev/elements": "1.10.2",
     "@duskmoon-dev/art-elements": "1.10.2",
     "@duskmoon-dev/el-markdown": "1.10.2",
@@ -17,7 +17,7 @@
     "phoenix_html": "file:../../deps/phoenix_html",
     "phoenix_live_view": "file:../../deps/phoenix_live_view",
     "tailwindcss": "4.3.3",
-    "@duskmoon-dev/components": "0.5.3",
+    "@duskmoon-dev/components": "0.6.2",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },

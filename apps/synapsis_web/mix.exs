@@ -38,13 +38,13 @@ defmodule SynapsisWeb.MixProject do
       {:phoenix, "~> 1.8"},
       {:phoenix_html, "~> 4.2"},
       {:phoenix_live_view, "~> 1.2"},
-      {:phoenix_duskmoon, "~> 10.0"},
+      {:phoenix_duskmoon, "~> 10.1"},
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.4"},
       {:gaoxy_test, "~> 0.15.1", only: :test},
       {:websock_adapter, "~> 0.15.1", hex: :gaoxy_websock_adapter, override: true},
-      {:duskmoon_bundler_runtime, "~> 10.1.2"},
-      {:duskmoon_bundler, "~> 10.1.2", runtime: Mix.env() in [:dev, :test]},
+      {:duskmoon_bundler_runtime, "~> 10.1.6"},
+      {:duskmoon_bundler, "~> 10.1.6", runtime: Mix.env() in [:dev, :test]},
       {:lazy_html, "~> 0.1.13"}
     ]
   end
