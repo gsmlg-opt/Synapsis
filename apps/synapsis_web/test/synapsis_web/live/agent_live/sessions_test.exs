@@ -1674,6 +1674,248 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
                  do: part
                )
     end
+
+    test "projects registered questions and option descriptions while retaining Queue and Stop",
+         %{conn: conn} do
+      session = create_running_question_session()
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      options = [%{"label" => "Small change", "description" => "Keep the patch focused"}]
+      {ref, task} = start_user_question(session, options)
+
+      assert_eventually(fn -> chat_snapshot(view).metadata.userQuestions != [] end)
+      chat = chat_snapshot(view)
+
+      assert chat.metadata.userQuestions == [
+               %{ref: ref, question: "Which approach?", options: options}
+             ]
+
+      assert %{phase: "waiting_for_user", active: true} = chat.runtime
+
+      assert %{canSubmit: true, canSteer: false, allowWhileStreaming: true, sendLabel: "Queue"} =
+               chat.admission
+
+      assert chat.metadata.canStop
+
+      assert Enum.find(
+               chat.messages,
+               &(&1.id == SynapsisWeb.AgentLive.SessionChat.live_id(session.id))
+             ).status == "pending"
+
+      refute Jason.encode!(chat.metadata) =~ "deadline_ms"
+      refute Jason.encode!(chat.metadata) =~ "owner"
+
+      render_hook(
+        view,
+        "chat.send",
+        Map.merge(chat_scope(view), %{
+          "request_id" => "queue-during-question",
+          "text" => "follow-up prompt"
+        })
+      )
+
+      assert [%{content: "follow-up prompt"}] = PendingInputStore.queued_prompts(session.id)
+      params = answer_params(view, ref, "Small change", "answer-question")
+
+      assert {:reply, %{status: "ok"}, _socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.action",
+                 params,
+                 chat_socket(view)
+               )
+
+      assert {:ok, "Small change"} = Task.await(task, 1_000)
+    end
+
+    test "answer acceptance is deduplicated and closes the question in every mounted view", %{
+      conn: conn
+    } do
+      session = create_running_question_session()
+      {:ok, first, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      {:ok, second, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      {ref, task} = start_user_question(session)
+      assert_eventually(fn -> length(chat_snapshot(first).metadata.userQuestions) == 1 end)
+      assert_eventually(fn -> length(chat_snapshot(second).metadata.userQuestions) == 1 end)
+      second_socket = chat_socket(second)
+      second_params = answer_params(second, ref, "a second answer", "second-answer")
+      params = answer_params(first, ref, "chosen response", "answer-once")
+
+      assert {:reply, %{status: "ok"}, accepted} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.action",
+                 params,
+                 chat_socket(first)
+               )
+
+      assert {:reply, %{status: "ok"}, _same} =
+               SynapsisWeb.AgentLive.Sessions.handle_event("chat.action", params, accepted)
+
+      assert {:ok, "chosen response"} = Task.await(task, 1_000)
+
+      assert {:reply, %{status: "error", message: "Question is no longer pending"}, rejected} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.action",
+                 second_params,
+                 second_socket
+               )
+
+      assert rejected.assigns.user_questions == []
+      assert_eventually(fn -> chat_snapshot(first).metadata.userQuestions == [] end)
+      assert_eventually(fn -> chat_snapshot(second).metadata.userQuestions == [] end)
+      assert chat_snapshot(first).runtime.phase == "streaming"
+      assert chat_snapshot(first).admission.canSteer
+      assert PendingInputStore.queued_prompts(session.id) == []
+      assert PendingInputStore.queued_steers(session.id) == []
+      assert Sessions.get_messages(session.id) == []
+    end
+
+    test "mount, reselect and sync recover questions from the live Worker", %{conn: conn} do
+      session = create_running_question_session()
+      {ref, task} = start_user_question(session)
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      assert [%{ref: ^ref}] = chat_snapshot(view).metadata.userQuestions
+      old_scope = chat_scope(view)
+
+      {:ok, other} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      render_patch(view, ~p"/agent/agents/main/sessions/#{other.id}")
+      assert chat_snapshot(view).metadata.userQuestions == []
+      send(view.pid, {:ask_user, ref, %{session_id: session.id, question: "old question"}})
+      render(view)
+      assert chat_snapshot(view).metadata.userQuestions == []
+
+      assert {:reply, %{status: "error", message: "Conversation changed"}, _socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.action",
+                 Map.merge(old_scope, %{
+                   "action" => "answer_question",
+                   "ref" => ref,
+                   "response" => "stale",
+                   "request_id" => "stale-answer"
+                 }),
+                 chat_socket(view)
+               )
+
+      assert [%{ref: ^ref}] = Worker.snapshot(session.id).user_questions
+
+      render_patch(view, ~p"/agent/agents/main/sessions/#{session.id}")
+      assert [%{ref: ^ref}] = chat_snapshot(view).metadata.userQuestions
+      stale_socket = Phoenix.Component.assign(chat_socket(view), :user_questions, [])
+
+      assert {:reply, %{status: "ok"}, recovered} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.sync",
+                 chat_scope(view),
+                 stale_socket
+               )
+
+      assert [%{ref: ^ref}] = recovered.assigns.react_chat.metadata.userQuestions
+      assert recovered.assigns.react_chat.runtime.phase == "waiting_for_user"
+
+      assert :ok = Worker.answer_question(session.id, ref, "recovered answer")
+      assert {:ok, "recovered answer"} = Task.await(task, 1_000)
+    end
+
+    test "rejects invalid, oversized and foreign answers without consuming the active question",
+         %{conn: conn} do
+      session = create_running_question_session()
+      {ref, task} = start_user_question(session)
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      socket = chat_socket(view)
+
+      for response <- ["   ", String.duplicate("x", 256_001), %{"value" => "not a string"}] do
+        params = answer_params(view, ref, response, Ecto.UUID.generate())
+
+        assert {:reply, %{status: "error", message: "Invalid question response"}, _socket} =
+                 SynapsisWeb.AgentLive.Sessions.handle_event("chat.action", params, socket)
+      end
+
+      params = answer_params(view, ref, "valid text", "valid-answer")
+
+      assert {:reply, %{status: "error", message: "Invalid question response"}, _socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.action",
+                 Map.delete(params, "request_id"),
+                 socket
+               )
+
+      assert {:reply, %{status: "error", message: "Invalid question response"}, _socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.action",
+                 %{params | "ref" => String.duplicate("r", 129)},
+                 socket
+               )
+
+      assert {:reply, %{status: "error", message: "Question is no longer pending"}, _socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.action",
+                 %{params | "ref" => Ecto.UUID.generate()},
+                 socket
+               )
+
+      assert [%{ref: ^ref}] = Worker.snapshot(session.id).user_questions
+
+      {:ok, other} =
+        Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+      {:ok, other_view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{other.id}")
+
+      assert {:reply, %{status: "error", message: "Question is no longer pending"}, _socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.action",
+                 answer_params(other_view, ref, "wrong session", "foreign-answer"),
+                 chat_socket(other_view)
+               )
+
+      assert [%{ref: ^ref}] = Worker.snapshot(session.id).user_questions
+      assert PendingInputStore.queued_prompts(session.id) == []
+      assert PendingInputStore.queued_steers(session.id) == []
+
+      assert {:reply, %{status: "ok"}, _socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event("chat.action", params, socket)
+
+      assert {:ok, "valid text"} = Task.await(task, 1_000)
+    end
+
+    test "owner exit removes pending questions through the closed event", %{conn: conn} do
+      session = create_running_question_session()
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      {_ref, task} = start_user_question(session)
+      assert_eventually(fn -> length(chat_snapshot(view).metadata.userQuestions) == 1 end)
+      Task.shutdown(task, :brutal_kill)
+      assert_eventually(fn -> chat_snapshot(view).metadata.userQuestions == [] end)
+      assert chat_snapshot(view).runtime.phase == "streaming"
+    end
+
+    test "stop, completion and failure clear the question projection", %{conn: conn} do
+      session = create_running_question_session()
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      {ref, task} = start_user_question(session)
+      assert_eventually(fn -> length(chat_snapshot(view).metadata.userQuestions) == 1 end)
+      socket = chat_socket(view)
+
+      for event <- [{"done", %{}}, {"error", %{message: "failed"}}] do
+        assert {:noreply, terminal} = SynapsisWeb.AgentLive.Sessions.handle_info(event, socket)
+        assert terminal.assigns.react_chat.metadata.userQuestions == []
+        refute terminal.assigns.react_chat.runtime.active
+      end
+
+      assert {:reply, %{status: "ok"}, stopped} =
+               SynapsisWeb.AgentLive.Sessions.handle_event("chat.stop", chat_scope(view), socket)
+
+      assert stopped.assigns.react_chat.metadata.userQuestions == []
+      assert_eventually(fn -> Worker.snapshot(session.id).user_questions == [] end)
+      assert_eventually(fn -> chat_snapshot(view).metadata.userQuestions == [] end)
+
+      assert {:reply, %{status: "error", message: "Question is no longer pending"}, _socket} =
+               SynapsisWeb.AgentLive.Sessions.handle_event(
+                 "chat.action",
+                 answer_params(view, ref, "after cancellation", "cancelled-answer"),
+                 chat_socket(view)
+               )
+
+      Task.shutdown(task, :brutal_kill)
+    end
   end
 
   describe "chat_bubble component DuskMoon rendering" do
@@ -1944,6 +2186,59 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
     :sys.replace_state(pid, fn {:idle, data} ->
       {:generating, %{data | stream_ref: make_ref(), engine_node: :llm_stream}}
     end)
+  end
+
+  defp create_running_question_session do
+    {:ok, session} =
+      Sessions.create("__global__", %{provider: "anthropic", model: "test", agent: "main"})
+
+    set_worker_running(session)
+    session
+  end
+
+  # Stands in for the question tool: registers through the Worker's {:ask_user, ...}
+  # host protocol and waits for the answer on the session's response topic.
+  defp start_user_question(session, options \\ nil) do
+    Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{session.id}")
+    [{worker, _}] = Registry.lookup(Synapsis.Session.Registry, session.id)
+    ref = Ecto.UUID.generate()
+    parent = self()
+
+    task =
+      Task.async(fn ->
+        Phoenix.PubSub.subscribe(Synapsis.PubSub, "ask_user_response:#{session.id}")
+
+        send(
+          worker,
+          {:ask_user, ref,
+           %{
+             owner: self(),
+             session_id: session.id,
+             question: "Which approach?",
+             options: options,
+             deadline_ms: System.monotonic_time(:millisecond) + 30_000
+           }}
+        )
+
+        send(parent, {:question_registered, ref})
+
+        receive do
+          {:user_response, ^ref, response} -> {:ok, response}
+          {:ask_user_cancelled, ^ref} -> {:error, :cancelled}
+        after
+          30_000 -> {:error, :timeout}
+        end
+      end)
+
+    on_exit(fn -> if Process.alive?(task.pid), do: Process.exit(task.pid, :kill) end)
+    assert_receive {:question_registered, ^ref}, 1_000
+    assert_receive {:ask_user, ^ref, _payload}, 1_000
+
+    assert_eventually(fn ->
+      Enum.any?(Worker.snapshot(session.id).user_questions, &(&1.ref == ref))
+    end)
+
+    {ref, task}
   end
 
   defp answer_params(view, ref, response, request_id) do
