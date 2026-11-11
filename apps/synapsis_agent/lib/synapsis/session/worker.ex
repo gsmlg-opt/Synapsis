@@ -140,9 +140,6 @@ defmodule Synapsis.Session.Worker do
   def switch_model(session_id, p, m),
     do: :gen_statem.call(via(session_id), {:switch_model, p, m}, 10_000)
 
-  def switch_mode(session_id, mode),
-    do: :gen_statem.call(via(session_id), {:switch_mode, mode}, 10_000)
-
   def get_status(session_id), do: :gen_statem.call(via(session_id), :get_status, 10_000)
 
   @doc "Bounded exact-session context; an absent Worker uses a supervised durable reader."
@@ -586,7 +583,7 @@ defmodule Synapsis.Session.Worker do
   end
 
   def handle_event({:call, from}, request, _state, %{runtime_active: true} = data)
-      when is_tuple(request) and elem(request, 0) in [:switch_agent, :switch_model, :switch_mode],
+      when is_tuple(request) and elem(request, 0) in [:switch_agent, :switch_model],
       do: keep(data, [{:reply, from, {:error, :session_busy}}])
 
   def handle_event({:call, from}, {:switch_model, _provider, _model}, status, data)
@@ -615,14 +612,6 @@ defmodule Synapsis.Session.Worker do
 
       {:error, reason} ->
         keep(data, [{:reply, from, {:error, reason}}])
-    end
-  end
-
-  def handle_event({:call, from}, {:switch_mode, mode}, _state, data) do
-    case Config.apply_mode(mode, data) do
-      # execution_mode may change — re-derive the state.
-      {:ok, d} -> advance(d, [{:reply, from, :ok}])
-      {:error, r} -> keep(data, [{:reply, from, {:error, r}}])
     end
   end
 

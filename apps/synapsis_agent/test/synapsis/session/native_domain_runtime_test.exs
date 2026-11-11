@@ -202,13 +202,11 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
     runtime =
       run(ctx, [
         {"synapsis::todo_write", %{"todos" => todos}},
-        {"synapsis::todo_read", %{}},
-        {"synapsis::enter_plan_mode", %{}},
-        {"synapsis::exit_plan_mode", %{"plan" => "Reviewed planning intent"}}
+        {"synapsis::todo_read", %{}}
       ])
 
-    assert [write, read, enter, exit] = results(ctx.id)
-    assert Enum.all?([write, read, enter, exit], &(&1.is_error == false))
+    assert [write, read] = results(ctx.id)
+    assert Enum.all?([write, read], &(&1.is_error == false))
 
     assert Enum.map(read.projection["result"]["structured"]["todos"], & &1["id"]) ==
              ["second", "first"]
@@ -216,11 +214,8 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
     assert_public_replay(ctx, read)
 
     assert Enum.map(Store.get_value(ctx.id, "todos"), & &1["todo_id"]) == ["second", "first"]
-    assert {:ok, %{agent: "main"}} = Store.get_meta(ctx.id)
     assert_receive {:todo_update, _, _}
-    assert_receive {:agent_mode_changed, :main}
-    assert_receive {:plan_submitted, "Reviewed planning intent"}
-    assert length(intents(runtime)) == 4
+    assert length(intents(runtime)) == 2
     assert Enum.all?(runtime.descriptors, fn {_, d} -> d.backend == SessionState end)
   end
 

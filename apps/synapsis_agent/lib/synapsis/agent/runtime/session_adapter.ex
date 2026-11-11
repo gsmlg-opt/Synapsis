@@ -426,21 +426,14 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
       notify(state, {:runtime_admission_failed, state.epoch, state.error || :runtime_busy})
       {:noreply, state}
     else
-      case Config.mode_provenance(context.session) do
-        {:ok, mode_provenance} ->
-          context = Map.put(context, :mode_provenance, mode_provenance)
-          run_id = Ecto.UUID.generate()
-          state = %{state | busy: true, context: context, run_id: run_id}
+      context = Map.put(context, :mode_provenance, Config.mode_provenance(context.session))
+      run_id = Ecto.UUID.generate()
+      state = %{state | busy: true, context: context, run_id: run_id}
 
-          {:noreply,
-           job(state, :prepare_inputs, fn ->
-             prepare(self_host(state), state, context, run_id, content)
-           end)}
-
-        {:error, reason} ->
-          notify(state, {:runtime_admission_failed, state.epoch, reason})
-          {:noreply, state}
-      end
+      {:noreply,
+       job(state, :prepare_inputs, fn ->
+         prepare(self_host(state), state, context, run_id, content)
+       end)}
     end
   end
 

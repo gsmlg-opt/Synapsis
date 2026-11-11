@@ -72,8 +72,6 @@ defmodule Synapsis.Agent.Tools.DisplayCatalog do
     {"synapsis::ask_user", :interaction, "Ask the user an interactive question."},
     {"synapsis::todo_read", :planning, "Read the session task list."},
     {"synapsis::todo_write", :planning, "Update the session task list."},
-    {"synapsis::enter_plan_mode", :planning, "Enter session planning mode."},
-    {"synapsis::exit_plan_mode", :planning, "Exit session planning mode."},
     {"synapsis::session_status", :session, "Read live or durable session status."},
     {"synapsis::sessions_list", :session,
      "List bounded durable session metadata, including inactive sessions."},

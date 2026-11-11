@@ -17,9 +17,7 @@ defmodule Synapsis.Agent.Tools.SessionStateTest do
 
   @read "synapsis::todo_read"
   @write "synapsis::todo_write"
-  @enter "synapsis::enter_plan_mode"
-  @exit "synapsis::exit_plan_mode"
-  @names [@read, @write, @enter, @exit]
+  @names [@read, @write]
 
   setup do
     :ok = Store.ensure_started()
@@ -34,7 +32,7 @@ defmodule Synapsis.Agent.Tools.SessionStateTest do
   test "fixed native descriptors have closed schemas, independent identities and honest safety",
        ctx do
     assert SessionState.names() == @names
-    assert {:ok, [read, write, enter, exit] = descriptors} = SessionState.descriptors(ctx.context)
+    assert {:ok, [read, write] = descriptors} = SessionState.descriptors(ctx.context)
     assert Enum.map(descriptors, & &1.tool_name) == @names
 
     for descriptor <- descriptors do
@@ -50,20 +48,13 @@ defmodule Synapsis.Agent.Tools.SessionStateTest do
 
     assert read.safety == %{read_only: true, retry_safe: true, parallel_safe: true}
 
-    for descriptor <- [write, enter, exit] do
-      assert descriptor.safety == %{read_only: false, retry_safe: false, parallel_safe: false}
-    end
+    assert write.safety == %{read_only: false, retry_safe: false, parallel_safe: false}
 
     assert write.schema["properties"]["todos"]["maxItems"] == 100
     assert write.schema["properties"]["todos"]["items"]["additionalProperties"] == false
 
     assert write.schema["properties"]["todos"]["items"]["properties"]["content"]["maxLength"] ==
              8192
-
-    assert enter.description =~ "intent"
-    assert exit.description =~ "intent"
-    refute enter.description =~ "read-only"
-    refute exit.description =~ "full tool access"
 
     assert {:ok, _} =
              ToolCatalog.admit_batch(descriptors, mode: :strict, authority: authority(ctx))
@@ -73,9 +64,7 @@ defmodule Synapsis.Agent.Tools.SessionStateTest do
        ctx do
     for {name, action, suffix, arguments} <- [
           {@read, "session.todo.read", "todos", %{}},
-          {@write, "session.todo.write", "todos", %{"todos" => []}},
-          {@enter, "session.plan.enter", "plan", %{}},
-          {@exit, "session.plan.exit", "plan", %{"plan" => "Review first"}}
+          {@write, "session.todo.write", "todos", %{"todos" => []}}
         ] do
       assert {:ok, %{action: ^action, resource: resource}} =
                SessionState.classify(ctx.context, operation(ctx, name, arguments))
@@ -169,40 +158,13 @@ defmodule Synapsis.Agent.Tools.SessionStateTest do
     end
   end
 
-  test "both plan tools retain legacy main metadata semantics and exit submits optional plan",
-       ctx do
-    assert {:ok, %{content: "Entered plan mode", structured: %{agent: "main"}}} =
-             SessionState.execute(operation(ctx, @enter, %{}))
-
-    assert_receive {:agent_mode_changed, :main}
-
-    assert {:ok, %{agent: "main", title: "Keep metadata"}} =
-             Store.get_meta(ctx.context.session_id)
-
-    refute_receive {:plan_submitted, _}
-
-    assert {:ok,
-            %{content: "Exited plan mode", structured: %{agent: "main", plan: "Implement safely"}}} =
-             SessionState.execute(operation(ctx, @exit, %{"plan" => "Implement safely"}))
-
-    assert_receive {:plan_submitted, "Implement safely"}
-    assert_receive {:agent_mode_changed, :main}
-    assert {:ok, %{agent: "main"}} = Store.get_meta(ctx.context.session_id)
-
-    assert {:ok, _} = SessionState.execute(operation(ctx, @exit, %{}))
-    assert_receive {:plan_submitted, nil}
-    assert_receive {:agent_mode_changed, :main}
-  end
-
   test "missing sessions never become empty successful reads or orphan writes", ctx do
     missing = put_in(ctx.context.session_id, Ecto.UUID.generate())
     :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{missing.context.session_id}")
 
     for {name, args} <- [
           {@read, %{}},
-          {@write, %{"todos" => [todo("a", "A")]}},
-          {@enter, %{}},
-          {@exit, %{}}
+          {@write, %{"todos" => [todo("a", "A")]}}
         ] do
       assert {:error, %Error{class: :not_found}} =
                SessionState.execute(operation(missing, name, args))
@@ -210,8 +172,6 @@ defmodule Synapsis.Agent.Tools.SessionStateTest do
 
     assert Store.get_value(missing.context.session_id, "todos") == nil
     refute_receive {:todo_update, _, _}
-    refute_receive {:agent_mode_changed, _}
-    refute_receive {:plan_submitted, _}
   end
 
   test "complete validation precedes replacement and rejects model authority selectors", ctx do
@@ -238,20 +198,12 @@ defmodule Synapsis.Agent.Tools.SessionStateTest do
       assert Store.get_value(ctx.context.session_id, "todos") == original
     end
 
-    for {name, args} <- [{@read, %{}}, {@enter, %{}}, {@exit, %{}}],
-        selector <- ["session_id", "run_id", "root", "backend"] do
+    for selector <- ["session_id", "run_id", "root", "backend"] do
       assert {:error, %Error{class: :validation}} =
-               SessionState.execute(operation(ctx, name, Map.put(args, selector, "other")))
-    end
-
-    for plan <- [nil, 123, <<255>>, String.duplicate("a", 32769)] do
-      assert {:error, %Error{class: :validation}} =
-               SessionState.execute(operation(ctx, @exit, %{"plan" => plan}))
+               SessionState.execute(operation(ctx, @read, %{selector => "other"}))
     end
 
     refute_receive {:todo_update, _, _}
-    refute_receive {:agent_mode_changed, _}
-    refute_receive {:plan_submitted, _}
   end
 
   test "storage admission failures preserve prior data and emit no success events", ctx do
@@ -264,20 +216,12 @@ defmodule Synapsis.Agent.Tools.SessionStateTest do
         else: Application.delete_env(:concord, :kv)
     end)
 
-    for {name, args} <- [
-          {@write, %{"todos" => [todo("a", "A")]}},
-          {@enter, %{}},
-          {@exit, %{"plan" => "Plan"}}
-        ] do
-      assert {:error, %Error{class: :execution_failure, details: %{code: "storage_failed"}}} =
-               SessionState.execute(operation(ctx, name, args))
-    end
+    assert {:error, %Error{class: :execution_failure, details: %{code: "storage_failed"}}} =
+             SessionState.execute(operation(ctx, @write, %{"todos" => [todo("a", "A")]}))
 
     assert {:ok, %{agent: "review"}} = Store.get_meta(ctx.context.session_id)
     assert Store.get_value(ctx.context.session_id, "todos") == nil
     refute_receive {:todo_update, _, _}
-    refute_receive {:agent_mode_changed, _}
-    refute_receive {:plan_submitted, _}
   end
 
   test "exact invocation fencing and only documented runtime context enrichment", ctx do
@@ -401,16 +345,14 @@ defmodule Synapsis.Agent.Tools.SessionStateTest do
     assert_receive {:todo_update, _, [%{"todo_id" => "native"}]}
   end
 
-  test "native Conversation executes all four tools using runtime-enriched hierarchical scope",
+  test "native Conversation executes both tools using runtime-enriched hierarchical scope",
        ctx do
     {:ok, descriptors} = SessionState.descriptors(ctx.context)
     {:ok, bundle} = ToolCatalog.admit_batch(descriptors, authority: authority(ctx))
 
     calls = [
       {@write, %{"todos" => [todo("conversation", "Plan it")]}},
-      {@read, %{}},
-      {@enter, %{}},
-      {@exit, %{"plan" => "Approved intent"}}
+      {@read, %{}}
     ]
 
     script = fn request ->
@@ -439,22 +381,21 @@ defmodule Synapsis.Agent.Tools.SessionStateTest do
 
     pid = start_supervised!({Conversation, opts})
     caller = start_supervised!(Task.Supervisor)
-    assert {:ok, _} = Proof.prompt(caller, pid, "Track and submit planning intent")
+    assert {:ok, _} = Proof.prompt(caller, pid, "Track the todo list")
     run_id = ctx.context.run_id
     assert_receive {:agent_runtime, ^run_id, %{type: :run_completed}}, 3000
 
-    assert [write, read, enter, exit] =
+    assert [write, read] =
              Enum.filter(Conversation.status(pid).messages, &(&1.role == :tool))
 
-    for message <- [write, read, enter, exit],
+    for message <- [write, read],
         do: refute(Map.get(message.result, :is_error, false))
 
     assert read.result.structured.todos == [
              %{id: "conversation", content: "Plan it", status: "pending", sort_order: 0}
            ]
 
-    assert exit.result.structured.plan == "Approved intent"
-    assert {:ok, %{agent: "main"}} = Store.get_meta(ctx.context.session_id)
+    assert {:ok, %{agent: "review"}} = Store.get_meta(ctx.context.session_id)
   end
 
   defp todo(id, content, status \\ "pending"),

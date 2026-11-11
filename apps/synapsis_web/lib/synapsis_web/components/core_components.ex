@@ -314,30 +314,6 @@ defmodule SynapsisWeb.CoreComponents do
   end
 
   @doc """
-  Toggle button group for mode selection.
-  """
-  attr :current_mode, :string, required: true
-  attr :modes, :list, required: true
-  attr :on_change, :string, required: true
-  attr :class, :string, default: nil
-
-  def mode_toggle(assigns) do
-    ~H"""
-    <div class={["flex gap-0 bg-surface-container-high rounded-lg p-0.5", @class]}>
-      <.dm_btn
-        :for={{value, label} <- @modes}
-        variant={if(@current_mode == value, do: "primary", else: "ghost")}
-        size="sm"
-        phx-click={@on_change}
-        phx-value-mode={value}
-      >
-        {label}
-      </.dm_btn>
-    </div>
-    """
-  end
-
-  @doc """
   Shared layout for settings pages with consistent left navigation.
   """
   attr :current_path, :string, required: true
@@ -424,51 +400,26 @@ defmodule SynapsisWeb.CoreComponents do
   end
 
   @doc """
-  Bottom status bar with 4-mode selector and session status indicator.
-
-  Modes: bypass_permissions, ask_before_edits, edit_automatically, plan_mode.
+  Bottom status bar with context, model, and session status indicators.
   """
-  attr :current_mode, :string, required: true
   attr :session_status, :string, default: "idle"
-  attr :on_mode_change, :string, required: true
   attr :has_session, :boolean, default: true
   attr :context_label, :string, default: nil
   attr :model_label, :string, default: nil
   attr :class, :string, default: nil
 
-  @session_modes [
-    {"bypass_permissions", "Bypass", "shield-off-outline"},
-    {"ask_before_edits", "Ask", "shield-check-outline"},
-    {"edit_automatically", "Auto-edit", "pencil-outline"},
-    {"plan_mode", "Plan", "file-document-outline"}
-  ]
-
   def session_status_bar(assigns) do
-    assigns = assign(assigns, :modes, @session_modes)
-
     ~H"""
     <div class={[
       "flex items-center justify-between bg-surface-container border-t border-outline-variant px-3 py-1",
       @class
     ]}>
-      <div :if={@has_session} class="flex gap-0 bg-surface-container-high rounded-lg p-0.5">
-        <.dm_btn
-          :for={{value, label, icon} <- @modes}
-          variant={if(@current_mode == value, do: "primary", else: "ghost")}
-          size="xs"
-          phx-click={@on_mode_change}
-          phx-value-mode={value}
-        >
-          <.dm_mdi name={icon} class="w-3.5 h-3.5" />
-          <span class="hidden sm:inline">{label}</span>
-        </.dm_btn>
-      </div>
       <div :if={!@has_session} class="text-xs text-on-surface-variant">
         No active session
       </div>
       <div
         data-session-status-meta
-        class="flex min-w-0 items-center gap-3 text-xs text-on-surface-variant"
+        class="ml-auto flex min-w-0 items-center gap-3 text-xs text-on-surface-variant"
       >
         <span
           :if={@context_label not in [nil, ""]}

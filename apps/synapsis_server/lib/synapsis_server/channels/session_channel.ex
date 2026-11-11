@@ -279,16 +279,6 @@ defmodule SynapsisServer.SessionChannel do
     {:noreply, socket}
   end
 
-  def handle_info({:agent_mode_changed, mode}, socket) do
-    push(socket, "agent_mode_changed", %{mode: to_string(mode)})
-    {:noreply, socket}
-  end
-
-  def handle_info({:plan_submitted, plan}, socket) do
-    push(socket, "plan_submitted", %{plan: plan})
-    {:noreply, socket}
-  end
-
   def handle_info({:todo_update, _session_id, todos}, socket) do
     push(socket, "todo_update", %{todos: todos})
     {:noreply, socket}

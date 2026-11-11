@@ -1,16 +1,14 @@
 defmodule Synapsis.Agent.Tools.SessionState do
   @moduledoc """
-  Native bounded session todo and planning-intent effects.
+  Native bounded session todo effects.
 
   The persisted session UUID comes from trusted host context, independently of
   opaque native run IDs. Native admission and the host per-tool permission gate
   remain required, including overrides for the `:none` permission level.
   Execution owns cancellation; this module creates no processes or journal.
 
-  Todo replacement writes one Concord value before broadcasting. Both planning
-  tools retain the existing `agent: "main"` metadata behavior; they mark or submit
-  intent and do not enforce planning restrictions or change tool authority.
-  Completed writes are not rolled back by cancellation or broadcast failure.
+  Todo replacement writes one Concord value before broadcasting. Completed
+  writes are not rolled back by cancellation or broadcast failure.
 
   A real session metadata read is required before reading or changing state.
   Store.get_value/3 defaults on all read errors, so a storage failure between
@@ -24,9 +22,7 @@ defmodule Synapsis.Agent.Tools.SessionState do
 
   @read "synapsis::todo_read"
   @write "synapsis::todo_write"
-  @enter "synapsis::enter_plan_mode"
-  @exit "synapsis::exit_plan_mode"
-  @names [@read, @write, @enter, @exit]
+  @names [@read, @write]
   @context_keys [:session_id, :run_id, :incarnation, :catalog_revision]
   # Conversation 1.10.35 adds these runtime capabilities to effect context.
   # They cannot select a different session and are never invoked here.
@@ -35,7 +31,6 @@ defmodule Synapsis.Agent.Tools.SessionState do
   @statuses ~w(pending in_progress completed)
   @max_todos 100
   @max_content 8192
-  @max_plan 32768
   @output_limit 1_048_576
 
   def names, do: @names
@@ -57,8 +52,6 @@ defmodule Synapsis.Agent.Tools.SessionState do
         case operation.tool_name do
           @read -> {"session.todo.read", "todos"}
           @write -> {"session.todo.write", "todos"}
-          @enter -> {"session.plan.enter", "plan"}
-          @exit -> {"session.plan.exit", "plan"}
         end
 
       {:ok, %{action: action, resource: "session:#{context.session_id}:#{suffix}"}}
@@ -118,13 +111,6 @@ defmodule Synapsis.Agent.Tools.SessionState do
     do:
       "Atomically replace the current session todo list, preserving supplied IDs and list order."
 
-  defp description(@enter),
-    do: "Mark planning intent using the existing main agent metadata and mode event."
-
-  defp description(@exit),
-    do:
-      "Submit optional planning intent and retain the existing main agent metadata and mode event."
-
   defp schema(name) do
     {properties, required} =
       case name do
@@ -145,9 +131,6 @@ defmodule Synapsis.Agent.Tools.SessionState do
                }
              }
            }, ["todos"]}
-
-        @exit ->
-          {%{"plan" => %{"type" => "string", "maxLength" => @max_plan}}, []}
 
         _ ->
           {%{}, []}
@@ -216,9 +199,6 @@ defmodule Synapsis.Agent.Tools.SessionState do
     end) and length(Enum.uniq_by(todos, & &1["id"])) == length(todos)
   end
 
-  defp bounded_input?(@exit, args),
-    do: not Map.has_key?(args, "plan") or text?(args["plan"], @max_plan)
-
   defp bounded_input?(_, _), do: true
 
   defp session(id) do
@@ -271,17 +251,6 @@ defmodule Synapsis.Agent.Tools.SessionState do
 
       {:ok,
        %{content: "Updated #{length(records)} todo(s).", structured: %{count: length(records)}}}
-    end
-  end
-
-  defp run(id, meta, %{tool_name: name, arguments: args}) when name in [@enter, @exit] do
-    with :ok <- persisted(Store.put_meta(id, Map.put(meta, :agent, "main"))) do
-      plan = Map.get(args, "plan")
-      if name == @exit, do: broadcast(id, {:plan_submitted, plan})
-      broadcast(id, {:agent_mode_changed, :main})
-      public = if name == @exit, do: %{agent: "main", plan: plan}, else: %{agent: "main"}
-      content = if name == @exit, do: "Exited plan mode", else: "Entered plan mode"
-      {:ok, %{content: content, structured: public}}
     end
   end
 

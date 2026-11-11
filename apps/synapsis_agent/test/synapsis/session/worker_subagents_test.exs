@@ -180,7 +180,6 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
     assert :ok = Worker.send_message(id, "second")
     assert_receive {"input_queued", %{content: "second"}}, 1_000
     assert {:error, :session_busy} = Worker.set_subagents(id, false)
-    assert {:error, :session_busy} = Worker.switch_mode(id, "assistant_mode")
     send(handler, :release)
     assert_receive {:run_event, %{type: "session.completed"}}, 10_000
     assert_receive {:run_event, %{type: "session.completed"}}, 10_000

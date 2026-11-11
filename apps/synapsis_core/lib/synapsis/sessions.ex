@@ -368,13 +368,6 @@ defmodule Synapsis.Sessions do
     :exit, reason -> {:error, exit_reason(reason)}
   end
 
-  def switch_mode(session_id, mode_name) do
-    ensure_session_running(session_id)
-    Synapsis.Session.Worker.switch_mode(session_id, mode_name)
-  catch
-    :exit, reason -> {:error, exit_reason(reason)}
-  end
-
   def approve_tool(session_id, tool_use_id) do
     Synapsis.Session.Worker.approve_tool(session_id, tool_use_id)
   end

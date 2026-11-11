@@ -44,7 +44,6 @@ defmodule SynapsisWeb.AgentLive.Sessions do
        session_status: "idle",
        delete_session: nil,
        show_sidebar: true,
-       current_mode: agent_id,
        react_chat: nil,
        react_chat_initial: nil
      )}
@@ -88,8 +87,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
            runtime_permissions: permissions,
            user_questions: user_questions,
            code_agent_sessions: %{},
-           session_status: status,
-           current_mode: session.agent || agent_id
+           session_status: status
          )
          |> start_chat()
          |> then(fn socket ->
@@ -674,14 +672,6 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     end
   end
 
-  defp handle_session_event("switch_mode", %{"mode" => mode}, socket) do
-    if session = socket.assigns.current_session do
-      Sessions.switch_mode(session.id, mode)
-    end
-
-    {:noreply, assign(socket, :current_mode, mode)}
-  end
-
   defp send_message_with_images(content, images, socket) do
     case Image.decode_payloads(images) do
       {:ok, image_parts} -> send_message(content, image_parts, socket)
@@ -994,10 +984,6 @@ defmodule SynapsisWeb.AgentLive.Sessions do
      |> assign_session_status("error")}
   end
 
-  defp handle_session_info({"agent_switched", %{agent: agent}}, socket) do
-    {:noreply, assign(socket, :current_mode, agent)}
-  end
-
   defp handle_session_info({"model_switched", _payload}, socket) do
     if session = socket.assigns.current_session do
       case Sessions.get(session.id) do
@@ -1014,10 +1000,6 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     else
       {:noreply, socket}
     end
-  end
-
-  defp handle_session_info({"mode_switched", %{agent: agent}}, socket) do
-    {:noreply, assign(socket, :current_mode, agent)}
   end
 
   defp handle_session_info({"auditing", _payload}, socket), do: {:noreply, socket}
@@ -1248,11 +1230,9 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
           <%!-- Status bar --%>
           <.session_status_bar
-            current_mode={@current_mode}
             session_status={@session_status}
             context_label={session_context_size_label(@messages)}
             model_label={session_model_label(@current_session)}
-            on_mode_change="switch_mode"
             has_session={true}
           />
         <% else %>

@@ -9,7 +9,7 @@ defmodule Synapsis.Agent.Tools.DisplayCatalogTest do
     send_message spawn_agent synapsis::agents_list synapsis::ask_user synapsis::automations
     synapsis::automations_create synapsis::automations_manage synapsis::automations_remove
     synapsis::automations_update synapsis::automations_wake synapsis::browser synapsis::edit
-    synapsis::enter_plan_mode synapsis::exit_plan_mode synapsis::firecrawl_search synapsis::ls
+    synapsis::firecrawl_search synapsis::ls
     synapsis::memory_save synapsis::memory_source_search synapsis::memory_update
     synapsis::process synapsis::read synapsis::session_status synapsis::session_summarize
     synapsis::sessions_history synapsis::sessions_list synapsis::skill

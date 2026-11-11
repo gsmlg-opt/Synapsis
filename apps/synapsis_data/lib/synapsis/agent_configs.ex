@@ -16,7 +16,6 @@ defmodule Synapsis.AgentConfigs do
     synapsis::read synapsis::write synapsis::edit synapsis::ls
     apply_patch exec_command write_stdin view_image synapsis::process
     synapsis::todo_read synapsis::todo_write
-    synapsis::enter_plan_mode synapsis::exit_plan_mode
     spawn_agent send_message followup_task interrupt_agent list_agents wait_agent
     synapsis::skill synapsis::skills_search synapsis::skills_read
     synapsis::ask_user clock::sleep

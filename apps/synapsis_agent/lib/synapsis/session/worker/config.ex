@@ -1,67 +1,8 @@
 defmodule Synapsis.Session.Worker.Config do
-  @moduledoc "Provider, agent, and mode resolution for Session.Worker."
+  @moduledoc "Provider and agent resolution for Session.Worker."
 
   alias Synapsis.Session
   alias Synapsis.Session.Store
-
-  @valid_modes ~w(bypass_permissions ask_before_edits edit_automatically plan_mode assistant_mode)
-  @mode_configs %{
-    "bypass_permissions" => %{
-      agent: "main",
-      permission: %{
-        mode: :autonomous,
-        allow_read: :allow,
-        allow_write: :allow,
-        allow_execute: :allow,
-        allow_destructive: :allow,
-        tool_overrides: %{}
-      }
-    },
-    "ask_before_edits" => %{
-      agent: "main",
-      permission: %{
-        mode: :interactive,
-        allow_read: :allow,
-        allow_write: :ask,
-        allow_execute: :ask,
-        allow_destructive: :ask,
-        tool_overrides: %{}
-      }
-    },
-    "edit_automatically" => %{
-      agent: "main",
-      permission: %{
-        mode: :autonomous,
-        allow_read: :allow,
-        allow_write: :allow,
-        allow_execute: :allow,
-        allow_destructive: :ask,
-        tool_overrides: %{}
-      }
-    },
-    "plan_mode" => %{
-      agent: "main",
-      permission: %{
-        mode: :interactive,
-        allow_read: :allow,
-        allow_write: :deny,
-        allow_execute: :deny,
-        allow_destructive: :deny,
-        tool_overrides: %{}
-      }
-    },
-    "assistant_mode" => %{
-      agent: "main",
-      permission: %{
-        mode: :interactive,
-        allow_read: :allow,
-        allow_write: :deny,
-        allow_execute: :deny,
-        allow_destructive: :deny,
-        tool_overrides: %{}
-      }
-    }
-  }
 
   def resolve_agent(session) do
     agent =
@@ -411,59 +352,11 @@ defmodule Synapsis.Session.Worker.Config do
     end
   end
 
-  def apply_mode(mode_name, state) when mode_name in @valid_modes do
-    config = @mode_configs[mode_name]
-    agent = Synapsis.Agent.Resolver.resolve(config.agent, state.session.config)
-
-    agent =
-      agent
-      |> Map.put(:configured_default_model, configured_identity(agent))
-      |> ensure_agent_model(state.session)
-
-    execution_mode =
-      case config.agent do
-        "assistant" -> :query_loop
-        _ -> state.execution_mode
-      end
-
-    session_config = Map.put(state.session.config || %{}, "user_mode", mode_name)
-
-    with {:ok, updated_session} <-
-           persist_session(state.session, %{agent: config.agent, config: session_config}),
-         {:ok, _} <-
-           Synapsis.Tool.Permission.update_config(state.session_id, config.permission) do
-      Phoenix.PubSub.broadcast(
-        Synapsis.PubSub,
-        "session:#{state.session_id}",
-        {"mode_switched", %{mode: mode_name, agent: config.agent}}
-      )
-
-      {:ok, %{state | agent: agent, session: updated_session, execution_mode: execution_mode}}
-    else
-      {:error, _} -> {:error, :mode_switch_failed}
-    end
-  end
-
-  def apply_mode(_mode_name, _state), do: {:error, :invalid_mode}
-
-  def mode_provenance(%Session{} = session) do
-    case Map.fetch(session.config || %{}, "user_mode") do
-      {:ok, selected_mode} when selected_mode in @valid_modes ->
-        {:ok,
-         %{
-           version: 1,
-           mode: if(selected_mode == "plan_mode", do: :plan, else: :execution),
-           source: :user_mode,
-           selected_mode: selected_mode
-         }}
-
-      :error ->
-        {:ok, %{version: 1, mode: :execution, source: :default, selected_mode: nil}}
-
-      {:ok, _} ->
-        {:error, :invalid_mode}
-    end
-  end
+  # Session modes are retired: every run is an execution run with default
+  # provenance. Retained goal facts from older plan/user modes stay readable
+  # through GoalLifecycle's provenance validation.
+  def mode_provenance(%Session{}),
+    do: %{version: 1, mode: :execution, source: :default, selected_mode: nil}
 
   defp env_key(provider_name) do
     Synapsis.Providers.env_api_key(provider_name)

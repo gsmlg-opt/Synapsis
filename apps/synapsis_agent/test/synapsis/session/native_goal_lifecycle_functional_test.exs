@@ -14,12 +14,6 @@ defmodule Synapsis.Session.NativeGoalLifecycleFunctionalTest do
 
   @moduletag :tmp_dir
   @moduletag timeout: 120_000
-  @execution %{
-    version: 1,
-    mode: :execution,
-    source: :user_mode,
-    selected_mode: "bypass_permissions"
-  }
   @default %{version: 1, mode: :execution, source: :default, selected_mode: nil}
   @call_ids ~w(goal-spawn goal-wait-one goal-followup goal-wait-two)
   @projection_fields ~w(thread_id run_id incarnation mode expected_goal_id root_thread_id root_goal_id)a
@@ -35,14 +29,14 @@ defmodule Synapsis.Session.NativeGoalLifecycleFunctionalTest do
     seeded = seed_existing_goal(id)
     trace = trace_lifecycle(id)
     SessionHarness.ensure_running!(id)
-    select_mode(id, harness, "bypass_permissions")
+    await_selection_ready(id, System.monotonic_time(:millisecond) + 5_000)
 
     assert :ok = Worker.send_message(id, "goal first root")
     assert_receive {:run_event, %{type: "session.completed"}}, 25_000
     await_selection_ready(id, System.monotonic_time(:millisecond) + 5_000)
     {worker, first_data, first} = runtime(id)
     assert is_pid(first.goal)
-    assert first.context.mode_provenance == @execution
+    assert first.context.mode_provenance == @default
     assert first.goal_binding.run_id == first.run_id
     assert_goal_accounting(first.goal, id, seeded.goal.goal_id, 4)
     assert {:ok, first_locators} = Journal.list_facts(id, :run_locator)
@@ -72,7 +66,7 @@ defmodule Synapsis.Session.NativeGoalLifecycleFunctionalTest do
              second.run_id
 
     assert_run_contexts(second, locators)
-    assert_attribution_facts(id, locators, seeded.goal.goal_id, @execution)
+    assert_attribution_facts(id, locators, seeded.goal.goal_id, @default)
     assert_tool_history(id)
     old_aggregates = load_aggregates(locators)
     assert_terminal_outboxes(old_aggregates)
@@ -108,7 +102,7 @@ defmodule Synapsis.Session.NativeGoalLifecycleFunctionalTest do
     assert Enum.all?(locators, &(&1 in final_locators))
     assert [fresh_locator] = final_locators -- locators
     assert fresh_locator.kind == :root
-    assert_attribution_facts(id, final_locators, seeded.goal.goal_id, @execution)
+    assert_attribution_facts(id, final_locators, seeded.goal.goal_id, @default)
     assert load_aggregates(locators) == old_aggregates
     assert Enum.take(Synapsis.Sessions.get_messages(id), length(old_messages)) == old_messages
     assert {:ok, ^old_intents} = Journal.list_facts(id, :admission_intent)
@@ -436,22 +430,6 @@ defmodule Synapsis.Session.NativeGoalLifecycleFunctionalTest do
                |> Enum.count(&(&1.type == :tool))
              end
            ) == expected
-  end
-
-  defp select_mode(id, harness, mode) do
-    await_selection_ready(id, System.monotonic_time(:millisecond) + 5_000)
-    assert :ok = Worker.switch_mode(id, mode)
-    assert {:ok, meta} = Synapsis.Session.Store.get_meta(id)
-
-    assert meta.config == %{
-             "memory_context" => false,
-             "user_mode" => mode
-           }
-
-    assert {:ok, reloaded} = Synapsis.Sessions.get(id)
-    assert reloaded.config == meta.config
-    assert :ok = Worker.switch_agent(id, harness.agent_name)
-    assert Worker.snapshot(id).session.config == meta.config
   end
 
   defp await_selection_ready(id, deadline) do
