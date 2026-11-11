@@ -7,7 +7,8 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapter do
   empty catalog after revocation; frozen context tools are never reused.
   Atom-keyed request options carry model/system instructions. Provider-state
   affinity is derived from the same config used by the host stream decoder.
-  Optional `:stream_timeout` (default 30s) is an absolute attempt deadline and
+  Optional `:stream_timeout` (default 300s, matching the provider HTTP stream
+  receive timeout) is an absolute attempt deadline and
   `:output_limit` (default 1 MiB) bounds accumulated host event bytes. This adapter
   is used by session and daemon dispatch.
 
@@ -18,6 +19,9 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapter do
   @behaviour Backplane.AgentRuntime.ConversationAdapter
 
   alias Backplane.AgentRuntime.Error
+
+  # A long reply streams for minutes; 30s cut every long answer mid-stream.
+  @stream_timeout 300_000
   alias Synapsis.Agent.Runtime.{ProviderEvents, ProviderMessages}
   alias Synapsis.Provider.Adapter
 
@@ -29,7 +33,7 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapter do
   defp start(request, context) do
     owner = self()
     token = make_ref()
-    timeout = Map.get(context, :stream_timeout, 30_000)
+    timeout = Map.get(context, :stream_timeout, @stream_timeout)
     limit = Map.get(context, :output_limit, 1_048_576)
 
     if is_integer(timeout) and timeout > 0 and is_integer(limit) and limit > 0 do
