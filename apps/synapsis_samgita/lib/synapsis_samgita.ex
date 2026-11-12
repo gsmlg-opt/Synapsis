@@ -75,9 +75,14 @@ defmodule SynapsisSamgita do
                  &1["agent_id"] == Connection.status().agent_id)
            ),
          {:ok, _} <-
-           API.report_delivery(conn, project_id, delivery, decision_id, "completed", %{
-             "note" => note
-           }) do
+           API.report_delivery(
+             conn,
+             project_id,
+             delivery,
+             decision_id,
+             "completed",
+             report_result(note)
+           ) do
       true
     else
       nil -> {:error, "no_open_delivery"}
@@ -86,6 +91,10 @@ defmodule SynapsisSamgita do
   end
 
   defp report_processed(_entry, _decision_id, _note), do: {:error, "no_project"}
+
+  # Samgita accepts only allowlisted text fields in a report result.
+  defp report_result(""), do: nil
+  defp report_result(note), do: %{"summary" => String.slice(note, 0, 2000)}
 
   def attempt_start(attempt_id), do: with_attempt(attempt_id, &Attempt.start_work/1)
 

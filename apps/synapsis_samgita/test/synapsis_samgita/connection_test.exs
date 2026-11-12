@@ -178,7 +178,7 @@ defmodule SynapsisSamgita.ConnectionTest do
                "operation_id" => "op-1",
                "fence" => 2,
                "processing_status" => "completed",
-               "result" => %{"note" => "seen"}
+               "result" => %{"summary" => "seen"}
              } = body
 
       assert {:ok, _} = Ecto.UUID.cast(body["decision_id"])
