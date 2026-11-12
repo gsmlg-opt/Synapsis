@@ -11,6 +11,9 @@ defmodule SynapsisLocalAgents.Runner do
   alias SynapsisLocalAgents.{Adapter, Event}
 
   @call_timeout 10_000
+  # Stopping a running adapter waits for it to close its agent (Codex: up to 35 s).
+  @stop_timeout 45_000
+  @query_timeout 1_000
 
   def start_link(agent_id), do: GenServer.start_link(__MODULE__, agent_id, name: via(agent_id))
 
@@ -24,11 +27,11 @@ defmodule SynapsisLocalAgents.Runner do
   end
 
   def start(pid), do: GenServer.call(pid, :start, @call_timeout)
-  def stop(pid), do: GenServer.call(pid, :stop, @call_timeout)
-  def status(pid), do: GenServer.call(pid, :status)
+  def stop(pid), do: GenServer.call(pid, :stop, @stop_timeout)
+  def status(pid), do: GenServer.call(pid, :status, @query_timeout)
 
   @doc "The adapter `{module, pid}` while running, else nil."
-  def adapter_ref(pid), do: GenServer.call(pid, :adapter)
+  def adapter_ref(pid), do: GenServer.call(pid, :adapter, @query_timeout)
 
   @doc "Adapter pid for `agent_id` while running (used by tests and the facade)."
   def adapter(agent_id) do
@@ -65,6 +68,13 @@ defmodule SynapsisLocalAgents.Runner do
       :error -> {:reply, {:error, :unsupported_kind}, s}
       {:error, reason} -> {:reply, {:error, reason}, publish(crashed(s, reason))}
     end
+  end
+
+  # Still booting (e.g. Codex initializing): nothing to close gracefully yet.
+  def handle_call(:stop, _from, %{adapter: pid, state: :starting} = s) when is_pid(pid) do
+    Process.exit(pid, :kill)
+    receive_exit(pid)
+    {:reply, :ok, publish(%{s | state: :stopped, adapter: nil, module: nil})}
   end
 
   def handle_call(:stop, _from, %{adapter: pid, module: module} = s) when is_pid(pid) do

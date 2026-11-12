@@ -18,6 +18,7 @@ defmodule SynapsisWeb.LocalAgentLiveTest do
     on_exit(fn ->
       SynapsisLocalAgents.stop(config.id)
       :persistent_term.erase({Fake, :observer})
+      :persistent_term.erase({Fake, :hold_boot})
 
       if previous,
         do: Application.put_env(:synapsis_local_agents, :adapters, previous),
@@ -153,5 +154,22 @@ defmodule SynapsisWeb.LocalAgentLiveTest do
     render_click(element(view, "[phx-click='start_agent'][phx-value-id='#{id}']"))
     render_click(element(view, "[phx-click='stop_agent'][phx-value-id='#{id}']"))
     assert has_element?(view, "#local-agent-#{id} [data-role=status]", "stopped")
+  end
+
+  test "the page stays up while the runner is busy", %{conn: conn, id: id} do
+    :ok = SynapsisLocalAgents.start(id)
+    {:ok, view, _html} = live(conn, ~p"/local-agents")
+    runner = SynapsisLocalAgents.Runner.whereis(id)
+    :sys.suspend(runner)
+    on_exit(fn -> if Process.alive?(runner), do: :sys.resume(runner) end)
+
+    render_click(element(view, "[phx-click='stop_agent'][phx-value-id='#{id}']"))
+    assert Process.alive?(view.pid)
+    {:ok, _view, html} = live(conn, ~p"/local-agents")
+    assert html =~ "busy"
+
+    :sys.resume(runner)
+    render_async(view, 5_000)
+    assert Process.alive?(view.pid)
   end
 end

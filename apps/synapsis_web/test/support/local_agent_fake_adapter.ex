@@ -39,12 +39,25 @@ defmodule SynapsisWeb.LocalAgentFakeAdapter do
 
   @impl GenServer
   def init({config, owner}) do
-    send(
-      owner,
-      {:local_agent_event, %Event{agent_id: config.id, type: :status, data: %{state: :running}}}
-    )
+    state = %{config: config, owner: owner, crash_on_stop: false}
 
-    {:ok, %{config: config, owner: owner, crash_on_stop: false}}
+    # {__MODULE__, :hold_boot} simulates an agent stuck while starting up.
+    if :persistent_term.get({__MODULE__, :hold_boot}, false) do
+      {:ok, state, {:continue, :hold}}
+    else
+      send(
+        owner,
+        {:local_agent_event, %Event{agent_id: config.id, type: :status, data: %{state: :running}}}
+      )
+
+      {:ok, state}
+    end
+  end
+
+  @impl GenServer
+  def handle_continue(:hold, state) do
+    Process.sleep(30_000)
+    {:noreply, state}
   end
 
   @impl GenServer

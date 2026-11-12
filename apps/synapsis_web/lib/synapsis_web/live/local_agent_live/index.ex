@@ -62,21 +62,11 @@ defmodule SynapsisWeb.LocalAgentLive.Index do
   end
 
   @impl true
-  def handle_event("start_agent", %{"id" => id}, socket) do
-    case SynapsisLocalAgents.start(id) do
-      :ok ->
-        {:noreply, load_agents(socket)}
+  def handle_event("start_agent", %{"id" => id}, socket),
+    do: {:noreply, start_async(socket, {:lifecycle, id}, fn -> SynapsisLocalAgents.start(id) end)}
 
-      {:error, reason} ->
-        {:noreply,
-         socket |> load_agents() |> put_flash(:error, "Start failed: #{inspect(reason)}")}
-    end
-  end
-
-  def handle_event("stop_agent", %{"id" => id}, socket) do
-    :ok = SynapsisLocalAgents.stop(id)
-    {:noreply, load_agents(socket)}
-  end
+  def handle_event("stop_agent", %{"id" => id}, socket),
+    do: {:noreply, start_async(socket, {:lifecycle, id}, fn -> SynapsisLocalAgents.stop(id) end)}
 
   def handle_event("new_thread", _params, socket) do
     agent_id = socket.assigns.agent_id
@@ -114,6 +104,18 @@ defmodule SynapsisWeb.LocalAgentLive.Index do
   end
 
   @impl true
+  def handle_async({:lifecycle, _id}, {:ok, :ok}, socket), do: {:noreply, load_agents(socket)}
+
+  def handle_async({:lifecycle, _id}, {:ok, {:error, reason}}, socket),
+    do:
+      {:noreply,
+       socket |> load_agents() |> put_flash(:error, "Agent action failed: #{inspect(reason)}")}
+
+  def handle_async({:lifecycle, _id}, {:exit, reason}, socket),
+    do:
+      {:noreply,
+       socket |> load_agents() |> put_flash(:error, "Agent action failed: #{inspect(reason)}")}
+
   def handle_async(:threads, {:ok, {:ok, threads}}, socket),
     do: {:noreply, assign(socket, threads: threads)}
 
@@ -240,7 +242,7 @@ defmodule SynapsisWeb.LocalAgentLive.Index do
 
   defp status_variant(:running), do: "success"
   defp status_variant(:crashed), do: "error"
-  defp status_variant(:starting), do: "info"
+  defp status_variant(s) when s in [:starting, :busy], do: "info"
   defp status_variant(_), do: "warning"
 
   defp streaming_list(streaming),
@@ -296,7 +298,7 @@ defmodule SynapsisWeb.LocalAgentLive.Index do
                 Start
               </.dm_btn>
               <.dm_btn
-                :if={agent.status.state in [:starting, :running]}
+                :if={agent.status.state in [:starting, :running, :busy]}
                 variant="ghost"
                 size="xs"
                 phx-click="stop_agent"

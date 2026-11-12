@@ -17,6 +17,7 @@ defmodule SynapsisLocalAgents.RunnerTest do
     on_exit(fn ->
       SynapsisLocalAgents.stop(config.id)
       :persistent_term.erase({FakeAdapter, :observer})
+      :persistent_term.erase({FakeAdapter, :hold_boot})
 
       if previous,
         do: Application.put_env(:synapsis_local_agents, :adapters, previous),
@@ -113,5 +114,28 @@ defmodule SynapsisLocalAgents.RunnerTest do
 
   test "start/1 for an unknown agent fails", _ctx do
     assert {:error, :not_found} = SynapsisLocalAgents.start(Ecto.UUID.generate())
+  end
+
+  test "status/1 answers while the runner is busy", %{id: id} do
+    :ok = SynapsisLocalAgents.start(id)
+    runner = SynapsisLocalAgents.Runner.whereis(id)
+    :sys.suspend(runner)
+    on_exit(fn -> if Process.alive?(runner), do: :sys.resume(runner) end)
+
+    {micros, status} = :timer.tc(fn -> SynapsisLocalAgents.status(id) end)
+    assert %{state: :busy} = status
+    assert micros < 3_000_000
+    assert {:error, _} = SynapsisLocalAgents.list_threads(id)
+    :sys.resume(runner)
+  end
+
+  test "stopping an agent that is still starting does not wait for it", %{id: id} do
+    :persistent_term.put({FakeAdapter, :hold_boot}, true)
+    :ok = SynapsisLocalAgents.start(id)
+    assert %{state: :starting} = SynapsisLocalAgents.status(id)
+
+    {micros, :ok} = :timer.tc(fn -> SynapsisLocalAgents.stop(id) end)
+    assert micros < 3_000_000
+    assert %{state: :stopped} = SynapsisLocalAgents.status(id)
   end
 end

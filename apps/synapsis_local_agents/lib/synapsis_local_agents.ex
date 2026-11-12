@@ -12,7 +12,7 @@ defmodule SynapsisLocalAgents do
   def status(agent_id) do
     case Runner.whereis(agent_id) do
       nil -> %{state: :stopped, last_error: nil}
-      pid -> Runner.status(pid)
+      pid -> safe(fn -> Runner.status(pid) end, %{state: :busy, last_error: nil})
     end
   end
 
@@ -47,19 +47,22 @@ defmodule SynapsisLocalAgents do
   def interrupt_turn(agent_id, thread_id, turn_id),
     do: request(agent_id, :interrupt_turn, [thread_id, turn_id])
 
+  # Adapters bound every call with their own timeout; an adapter (or a busy
+  # Runner) must never take the caller — e.g. a LiveView — down with it.
   defp request(agent_id, fun, args) do
     with pid when is_pid(pid) <- Runner.whereis(agent_id),
-         {module, adapter} <- Runner.adapter_ref(pid) do
-      # Adapters bound every call with their own timeout; an adapter that dies
-      # mid-call must not take the caller (e.g. a LiveView) down with it.
-      try do
-        apply(module, fun, [adapter | args])
-      catch
-        :exit, reason -> {:error, {:adapter_exit, reason}}
-      end
+         {module, adapter} <- safe(fn -> Runner.adapter_ref(pid) end, :busy) do
+      safe(fn -> apply(module, fun, [adapter | args]) end, &{:error, {:adapter_exit, &1}})
     else
+      :busy -> {:error, :busy}
       _ -> {:error, :not_running}
     end
+  end
+
+  defp safe(fun, fallback) do
+    fun.()
+  catch
+    :exit, reason -> if is_function(fallback, 1), do: fallback.(reason), else: fallback
   end
 
   defp ensure_runner(agent_id) do
