@@ -239,6 +239,8 @@ defmodule Synapsis.MCP do
             [{pid, _}] ->
               case Server.refresh(pid) do
                 {:error, :connection_changed} -> restart(config)
+                # One fresh client per refresh; a still-unreachable source just fails again.
+                {:error, {:negotiation_failed, _error}} -> restart(config)
                 result -> result
               end
 

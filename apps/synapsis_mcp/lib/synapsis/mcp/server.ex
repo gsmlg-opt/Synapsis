@@ -611,7 +611,7 @@ defmodule Synapsis.MCP.Server do
     task =
       Task.Supervisor.async_nolink(Synapsis.MCP.TaskSupervisor, fn ->
         if current_transport(config) == transport do
-          with :ok <- MCPClient.await_ready(client, timeout: @await_timeout),
+          with :ok <- await_client_ready(client),
                {:ok, tools, metadata} <- discover_source_tools(client, config.name) do
             {:ok, tools, metadata}
           end
@@ -622,6 +622,21 @@ defmodule Synapsis.MCP.Server do
 
     Process.send_after(self(), {:refresh_timeout, task.ref}, @await_timeout + @discovery_timeout)
     %{state | refresh_task: task}
+  end
+
+  # A client whose initialize failed never renegotiates, so the source can only
+  # recover with a fresh client; tag that case for Synapsis.MCP.refresh/1.
+  defp await_client_ready(client) do
+    case MCPClient.await_ready(client, timeout: @await_timeout) do
+      :ok ->
+        :ok
+
+      {:error, error} ->
+        case MCPClient.get_protocol_info(client, timeout: @runtime_lookup_timeout) do
+          %{negotiation_status: :failed} -> {:error, {:negotiation_failed, error}}
+          _ -> {:error, error}
+        end
+    end
   end
 
   defp discover_source_tools(client, server_name) do

@@ -102,6 +102,43 @@ defmodule Synapsis.MCPTest do
     assert :ok = Synapsis.MCP.refresh(config.id)
   end
 
+  test "refresh reconnects a source whose initial negotiation failed once it is reachable" do
+    bypass = Gaoxy.Test.open()
+    {:ok, health} = Agent.start_link(fn -> :down end)
+
+    Gaoxy.Test.stub(bypass, "POST", "/mcp", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+      case Agent.get(health, & &1) do
+        # A gateway mid-reload answers with an HTML error page.
+        :down -> Plug.Conn.resp(conn, 500, "<html>CompileError</html>")
+        :up -> handle(conn, Jason.decode!(body))
+      end
+    end)
+
+    Gaoxy.Test.stub(bypass, "GET", "/mcp", fn conn -> Plug.Conn.resp(conn, 200, "") end)
+    name = "renegotiate-#{System.unique_integer([:positive])}"
+
+    {:ok, config} =
+      MCPConfigs.create(%{
+        name: name,
+        transport: "streamable_http",
+        url: String.trim_trailing(Gaoxy.Test.url(bypass), "/")
+      })
+
+    on_exit(fn ->
+      Synapsis.MCP.stop(name)
+      MCPConfigs.delete(config)
+    end)
+
+    {:ok, server} = Synapsis.MCP.start(config)
+    assert {:error, _reason} = Synapsis.MCP.Server.await_ready(server)
+    assert {:error, _reason} = Synapsis.MCP.refresh(config.id)
+
+    Agent.update(health, fn _ -> :up end)
+    assert :ok = Synapsis.MCP.refresh(config.id)
+  end
+
   test "refresh reports per-source errors when the discovery task supervisor is unavailable" do
     {:ok, config} =
       MCPConfigs.create(%{
