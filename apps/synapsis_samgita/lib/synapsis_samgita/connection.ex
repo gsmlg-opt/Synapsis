@@ -24,8 +24,13 @@ defmodule SynapsisSamgita.Connection do
   def attempts, do: GenServer.call(__MODULE__, :attempts)
   def disconnect, do: GenServer.call(__MODULE__, :disconnect)
 
+  @doc """
+  Register a new connection generation. Samgita replaces earlier connections,
+  which would orphan every open attempt, so this is refused while any is active.
+  """
   def connect do
-    with {:ok, conn} <- base_conn() do
+    with :ok <- ensure_no_active_attempts(),
+         {:ok, conn} <- base_conn() do
       result = API.connect(conn)
       GenServer.call(__MODULE__, {:connected, result})
     end
@@ -40,6 +45,15 @@ defmodule SynapsisSamgita.Connection do
       _ ->
         {:error, %{status: nil, code: "not_connected", detail: nil}}
     end
+  end
+
+  @doc "Whether any claimed attempt process is still running."
+  def attempts_active?, do: Registry.count(SynapsisSamgita.AttemptRegistry) > 0
+
+  defp ensure_no_active_attempts do
+    if attempts_active?(),
+      do: {:error, %{status: nil, code: "attempts_active", detail: nil}},
+      else: :ok
   end
 
   defp base_conn do

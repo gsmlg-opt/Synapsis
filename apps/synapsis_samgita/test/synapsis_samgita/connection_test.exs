@@ -77,4 +77,35 @@ defmodule SynapsisSamgita.ConnectionTest do
     assert_receive {:claim_body, %{"expected_version" => 7, "session_id" => "s-1"}}
     assert [%{id: "a-1"}] = SynapsisSamgita.list_attempts()
   end
+
+  test "reconnecting is refused while an attempt is active", %{server: s} do
+    stub_connect(s)
+    {:ok, _} = SynapsisSamgita.connect()
+
+    Gaoxy.Test.stub(s, "POST", "/api/agent/projects/p-1/sessions", fn conn ->
+      json(conn, 201, %{"data" => %{"id" => "s-1", "state" => "open"}})
+    end)
+
+    Gaoxy.Test.stub(s, "POST", "/api/agent/projects/p-1/tasks/t-1/claim", fn conn ->
+      json(conn, 201, %{
+        "data" => %{"id" => "a-9", "task_id" => "t-1", "state" => "leased", "version" => 1}
+      })
+    end)
+
+    Gaoxy.Test.stub(s, "GET", "/api/agent/projects/p-1/attempts/a-9/proof", fn conn ->
+      json(conn, 200, %{"data" => %{"attempt_id" => "a-9", "proof" => "v1.k.p0"}})
+    end)
+
+    {:ok, _} = SynapsisSamgita.claim("p-1", %{"id" => "t-1", "version" => 1})
+
+    connects = fn ->
+      Enum.count(Gaoxy.Test.requests(s).entries, &(&1.path == "/api/agent/connect"))
+    end
+
+    before = connects.()
+
+    assert {:error, %{code: "attempts_active"}} = SynapsisSamgita.connect()
+    assert connects.() == before
+    assert %{state: :connected, connection_id: "conn-1"} = SynapsisSamgita.status()
+  end
 end

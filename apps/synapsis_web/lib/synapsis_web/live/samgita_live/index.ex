@@ -187,6 +187,9 @@ defmodule SynapsisWeb.SamgitaLive.Index do
 
   defp secret_label(kind), do: Map.fetch!(@secret_labels, kind)
 
+  defp active_attempts?(attempts),
+    do: Enum.any?(Map.values(attempts), &(&1.state in ["leased", "running"]))
+
   defp active_attempt?(attempts, task_id),
     do:
       Enum.any?(
@@ -269,9 +272,17 @@ defmodule SynapsisWeb.SamgitaLive.Index do
           </div>
 
           <div class="flex flex-wrap items-center gap-3 text-sm">
-            <.dm_btn variant="primary" size="sm" phx-click="connect" disabled={@busy}>
+            <.dm_btn
+              variant="primary"
+              size="sm"
+              phx-click="connect"
+              disabled={@busy or active_attempts?(@attempts)}
+            >
               {if @status.state == :connected, do: "Reconnect", else: "Connect"}
             </.dm_btn>
+            <span :if={active_attempts?(@attempts)} class="text-xs text-on-surface-variant">
+              Finish open attempts before reconnecting.
+            </span>
             <span :if={@status.agent_id} class="text-on-surface-variant">
               Agent <code>{@status.agent_id}</code> · connection <code>{@status.connection_id}</code>
             </span>

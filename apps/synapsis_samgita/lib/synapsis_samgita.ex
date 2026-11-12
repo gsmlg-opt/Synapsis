@@ -9,6 +9,7 @@ defmodule SynapsisSamgita do
   defdelegate connect, to: Connection
   defdelegate disconnect, to: Connection
   defdelegate status, to: Connection
+  defdelegate attempts_active?, to: Connection
   def subscribe, do: Events.subscribe_status()
   def subscribe_attempts, do: Events.subscribe_attempts()
 

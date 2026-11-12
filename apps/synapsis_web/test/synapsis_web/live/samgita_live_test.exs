@@ -86,8 +86,10 @@ defmodule SynapsisWeb.SamgitaLiveTest do
       last_error: nil
     }
 
+    refute has_element?(view, "[phx-click='connect'][disabled]")
     SynapsisSamgita.Events.broadcast_attempt(Map.put(base, :state, "leased"))
     assert has_element?(view, "[phx-click='attempt_start'][phx-value-id='a-1']")
+    assert has_element?(view, "[phx-click='connect'][disabled]")
 
     SynapsisSamgita.Events.broadcast_attempt(%{base | version: 2} |> Map.put(:state, "running"))
     refute has_element?(view, "[phx-click='attempt_start'][phx-value-id='a-1']")
