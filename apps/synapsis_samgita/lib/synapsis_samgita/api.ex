@@ -22,6 +22,13 @@ defmodule SynapsisSamgita.API do
   @spec list_projects(conn) :: result
   def list_projects(conn), do: read(conn, "/projects", limit: 100)
 
+  @spec project_context(conn, String.t()) :: result
+  def project_context(conn, project_id), do: read(conn, "/projects/#{project_id}/context", [])
+
+  @spec get_task(conn, String.t(), String.t()) :: result
+  def get_task(conn, project_id, task_id),
+    do: read(conn, "/projects/#{project_id}/tasks/#{task_id}", [])
+
   @spec list_tasks(conn, String.t(), String.t()) :: result
   def list_tasks(conn, project_id, agent_id),
     do: read(conn, "/projects/#{project_id}/tasks", assignee_agent_id: agent_id, limit: 100)

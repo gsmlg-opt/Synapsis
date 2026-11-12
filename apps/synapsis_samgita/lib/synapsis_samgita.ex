@@ -4,6 +4,7 @@ defmodule SynapsisSamgita do
   operator-driven claim → start → progress → report flow.
   """
 
+  require Logger
   alias SynapsisSamgita.{API, Attempt, Connection, Events}
 
   defdelegate connect, to: Connection
@@ -19,28 +20,69 @@ defmodule SynapsisSamgita do
     with {:ok, conn} <- Connection.api_conn(), do: API.list_projects(conn)
   end
 
+  def project_context(project_id) do
+    with {:ok, conn} <- Connection.api_conn(), do: API.project_context(conn, project_id)
+  end
+
+  def get_task(project_id, task_id) do
+    with {:ok, conn} <- Connection.api_conn(), do: API.get_task(conn, project_id, task_id)
+  end
+
   def list_tasks(project_id) do
     with {:ok, conn} <- Connection.api_conn() do
       API.list_tasks(conn, project_id, Connection.status().agent_id)
     end
   end
 
-  @doc "Open a session, claim `task`, and supervise the resulting attempt."
+  @doc "Claim `task` on this connection's session for the project and supervise the attempt."
   def claim(project_id, %{"id" => task_id, "version" => version}) do
-    external_id = "synapsis-#{task_id}-#{Ecto.UUID.generate()}"
-
     with {:ok, conn} <- Connection.api_conn(),
-         {:ok, session} <- API.create_session(conn, project_id, external_id),
-         {:ok, attempt} <- API.claim(conn, project_id, task_id, version, session["id"]),
-         {:ok, pid} <-
-           DynamicSupervisor.start_child(
-             SynapsisSamgita.AttemptSupervisor,
-             {Attempt,
-              conn: conn,
-              project_id: project_id,
-              attempt: Map.put_new(attempt, "task_id", task_id)}
-           ) do
-      {:ok, Attempt.view(pid)}
+         {:ok, session_id} <- session_for(conn, project_id, task_id),
+         {:ok, attempt} <- claim_on(conn, project_id, task_id, version, session_id) do
+      start_attempt(conn, project_id, Map.put_new(attempt, "task_id", task_id))
+    end
+  end
+
+  defp session_for(conn, project_id, task_id) do
+    case Connection.session(project_id) do
+      nil ->
+        external_id = "synapsis-#{task_id}-#{Ecto.UUID.generate()}"
+
+        with {:ok, %{"id" => id}} <- API.create_session(conn, project_id, external_id) do
+          Connection.put_session(project_id, id)
+          {:ok, id}
+        end
+
+      id ->
+        {:ok, id}
+    end
+  end
+
+  # A session Samgita no longer accepts is dropped so the next claim opens a new one.
+  defp claim_on(conn, project_id, task_id, version, session_id) do
+    with {:error, %{code: code}} = error when code in ~w(not_found ownership_lost invalid) <-
+           API.claim(conn, project_id, task_id, version, session_id) do
+      Connection.forget_session(project_id)
+      error
+    end
+  end
+
+  # Samgita has no release: an attempt left without a process lapses at its
+  # 30 s start deadline.
+  defp start_attempt(conn, project_id, attempt) do
+    spec = {Attempt, conn: conn, project_id: project_id, attempt: attempt}
+
+    case DynamicSupervisor.start_child(SynapsisSamgita.AttemptSupervisor, spec) do
+      {:ok, pid} ->
+        {:ok, Attempt.view(pid)}
+
+      {:error, reason} ->
+        Logger.warning("samgita_attempt_unsupervised",
+          attempt_id: attempt["id"],
+          reason: inspect(reason)
+        )
+
+        {:error, %{status: nil, code: "attempt_unsupervised", detail: inspect(reason)}}
     end
   end
 

@@ -85,16 +85,19 @@ defmodule SynapsisWeb.SamgitaLiveTest do
       task_id: "t-1",
       version: 1,
       lease_expires_at: nil,
+      start_deadline: "2026-11-12T00:00:30Z",
       last_error: nil
     }
 
     refute has_element?(view, "[phx-click='connect'][disabled]")
     SynapsisSamgita.Events.broadcast_attempt(Map.put(base, :state, "leased"))
     assert has_element?(view, "[phx-click='attempt_start'][phx-value-id='a-1']")
+    assert has_element?(view, "#samgita-attempt-a-1 [data-role=start-deadline]", "00:00:30")
     assert has_element?(view, "[phx-click='connect'][disabled]")
 
     SynapsisSamgita.Events.broadcast_attempt(%{base | version: 2} |> Map.put(:state, "running"))
     refute has_element?(view, "[phx-click='attempt_start'][phx-value-id='a-1']")
+    refute has_element?(view, "#samgita-attempt-a-1 [data-role=start-deadline]")
     assert has_element?(view, "[phx-click='open_progress'][phx-value-id='a-1']")
     assert has_element?(view, "[phx-click='open_report'][phx-value-id='a-1']")
 

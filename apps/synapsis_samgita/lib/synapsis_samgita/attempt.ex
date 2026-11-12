@@ -19,16 +19,26 @@ defmodule SynapsisSamgita.Attempt do
   @default_retry_interval_ms 5_000
   # Extra verbatim attempts for a write whose outcome is unknown (transport failure).
   @uncertain_retries 2
-  @call_timeout 30_000
+  # A step makes at most 1 + @uncertain_retries requests of up to 5 s connect +
+  # 10 s receive each. A step still queued (e.g. behind a renew) when less than
+  # that remains of the caller's timeout is refused instead of applied after the
+  # caller has given up.
+  @step_budget_ms (1 + @uncertain_retries) * 15_000
+  @call_timeout @step_budget_ms + 15_000
 
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: name(opts))
 
   def view(pid), do: GenServer.call(pid, :view, @call_timeout)
-  def start_work(pid), do: GenServer.call(pid, :start, @call_timeout)
-  def progress(pid, summary), do: GenServer.call(pid, {:progress, summary}, @call_timeout)
+  def start_work(pid), do: step_call(pid, :start)
+  def progress(pid, summary), do: step_call(pid, {:progress, summary})
 
   def report(pid, outcome, effects_resolved, result),
-    do: GenServer.call(pid, {:report, outcome, effects_resolved, result}, @call_timeout)
+    do: step_call(pid, {:report, outcome, effects_resolved, result})
+
+  defp step_call(pid, request) do
+    deadline = System.monotonic_time(:millisecond) + @call_timeout - @step_budget_ms
+    GenServer.call(pid, {:step, request, deadline}, @call_timeout)
+  end
 
   defp name(opts) do
     case Keyword.get(opts, :registry, SynapsisSamgita.AttemptRegistry) do
@@ -49,6 +59,7 @@ defmodule SynapsisSamgita.Attempt do
       state: attempt["state"],
       version: attempt["version"],
       lease_expires_at: attempt["lease_expires_at"],
+      start_deadline: attempt["start_deadline"],
       proof: nil,
       proof_stale: true,
       last_error: nil,
@@ -71,19 +82,27 @@ defmodule SynapsisSamgita.Attempt do
   @impl true
   def handle_call(:view, _from, state), do: {:reply, view_of(state), state}
 
-  def handle_call(:start, _from, state) do
+  def handle_call({:step, request, deadline}, from, state) do
+    if System.monotonic_time(:millisecond) > deadline do
+      {:reply, {:error, %{status: nil, code: "attempt_busy", detail: "retry the step"}}, state}
+    else
+      handle_step(request, from, state)
+    end
+  end
+
+  defp handle_step(:start, _from, state) do
     step(state, fn s, opts ->
       s.api.start(s.conn, s.project_id, s.id, s.version, s.proof, opts)
     end)
   end
 
-  def handle_call({:progress, summary}, _from, state) do
+  defp handle_step({:progress, summary}, _from, state) do
     step(state, fn s, opts ->
       s.api.progress(s.conn, s.project_id, s.id, s.version, s.proof, summary, opts)
     end)
   end
 
-  def handle_call({:report, outcome, effects_resolved, result}, _from, state) do
+  defp handle_step({:report, outcome, effects_resolved, result}, _from, state) do
     report = fn s, opts ->
       s.api.report(
         s.conn,
@@ -173,7 +192,8 @@ defmodule SynapsisSamgita.Attempt do
       state
       | state: attempt["state"] || state.state,
         version: attempt["version"] || state.version,
-        lease_expires_at: attempt["lease_expires_at"] || state.lease_expires_at
+        lease_expires_at: attempt["lease_expires_at"] || state.lease_expires_at,
+        start_deadline: attempt["start_deadline"] || state.start_deadline
     }
   end
 
@@ -216,6 +236,31 @@ defmodule SynapsisSamgita.Attempt do
   defp send_view(name, view), do: GenServer.cast(name, {:attempt_view, view})
 
   defp view_of(state) do
-    Map.take(state, [:id, :project_id, :task_id, :state, :version, :lease_expires_at, :last_error])
+    Map.take(state, [
+      :id,
+      :project_id,
+      :task_id,
+      :state,
+      :version,
+      :lease_expires_at,
+      :start_deadline,
+      :last_error
+    ])
   end
+
+  # Keep the agent credential and owner proof out of crash reports and
+  # `:sys.get_status/1`.
+  @impl true
+  def format_status(status) do
+    Map.update(status, :state, nil, fn
+      %{conn: conn} = state when is_map(conn) ->
+        %{state | conn: %{conn | credential: :redacted}, proof: proof_mark(state.proof)}
+
+      other ->
+        other
+    end)
+  end
+
+  defp proof_mark(nil), do: nil
+  defp proof_mark(_proof), do: :redacted
 end

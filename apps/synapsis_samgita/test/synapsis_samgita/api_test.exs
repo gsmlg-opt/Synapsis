@@ -58,6 +58,23 @@ defmodule SynapsisSamgita.APITest do
              API.list_tasks(%{c | connection_id: "conn-1"}, "p-1", "agent-1")
   end
 
+  test "project_context/2 and get_task/3 read project context and task detail", %{
+    server: s,
+    conn: c
+  } do
+    Gaoxy.Test.expect_once(s, "GET", "/api/agent/projects/p-1/context", fn conn ->
+      json(conn, 200, %{"data" => %{"project" => %{"id" => "p-1"}}})
+    end)
+
+    Gaoxy.Test.expect_once(s, "GET", "/api/agent/projects/p-1/tasks/t-1", fn conn ->
+      json(conn, 200, %{"data" => %{"id" => "t-1", "version" => 3}})
+    end)
+
+    c = %{c | connection_id: "conn-1"}
+    assert {:ok, %{"project" => %{"id" => "p-1"}}} = API.project_context(c, "p-1")
+    assert {:ok, %{"id" => "t-1", "version" => 3}} = API.get_task(c, "p-1", "t-1")
+  end
+
   test "claim/5 and the attempt commands send version, proof and command ids", %{
     server: s,
     conn: c

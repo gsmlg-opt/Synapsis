@@ -74,4 +74,34 @@ defmodule Synapsis.Samgita.InboxTest do
     assert ["evt-2", "evt-1"] = Enum.map(Inbox.list(10), & &1["event"]["event_id"])
     assert [_] = Inbox.list(1)
   end
+
+  test "list/1 reads only the newest entries through the received_at index" do
+    for n <- 1..5 do
+      {:ok, :new, _} = Inbox.record(%{@event | "event_id" => "evt-#{n}"})
+      Process.sleep(2)
+    end
+
+    assert {:ok, index, _} =
+             Concord.Turso.list(prefix: "coord/samgita/inbox/~at/", keys_only: true)
+
+    assert length(index) == 5
+    assert ["evt-5", "evt-4"] = Enum.map(Inbox.list(2), & &1["event"]["event_id"])
+  end
+
+  test "entries stored before the index existed are indexed on first list" do
+    legacy = %{
+      "event" => Map.delete(%{@event | "event_id" => "evt-old"}, "delivery_attempt_id"),
+      "acceptance" => "durable",
+      "processing_status" => "pending",
+      "received_at" => "2026-01-01T00:00:00.000000Z",
+      "updated_at" => "2026-01-01T00:00:00.000000Z"
+    }
+
+    key = "coord/samgita/inbox/" <> Base.url_encode64("evt-old", padding: false)
+    :ok = Concord.Turso.put(key, legacy)
+    {:ok, :new, _} = Inbox.record(@event)
+
+    assert ["evt-1", "evt-old"] = Enum.map(Inbox.list(10), & &1["event"]["event_id"])
+    assert {:ok, :duplicate, _} = Inbox.record(@event)
+  end
 end

@@ -430,6 +430,13 @@ defmodule SynapsisWeb.SamgitaLive.Index do
               {attempt.state}
             </.dm_badge>
             <span class="text-xs text-on-surface-variant">v{attempt.version} · lease {attempt.lease_expires_at}</span>
+            <span
+              :if={attempt.state == "leased" && attempt.start_deadline}
+              data-role="start-deadline"
+              class="text-xs text-warning"
+            >
+              start by {attempt.start_deadline}
+            </span>
             <span :if={attempt.last_error} class="text-xs text-error">{attempt.last_error}</span>
             <div class="ml-auto flex gap-2">
               <.dm_btn

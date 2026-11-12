@@ -147,6 +147,36 @@ defmodule SynapsisSamgita.AttemptTest do
     assert_receive {:attempt_view, %{state: "lost", last_error: "ownership_lost"}}
   end
 
+  test "the view carries the start deadline from the claim", ctx do
+    attempt = Map.put(ctx.attempt, "start_deadline", "2026-11-12T00:00:30Z")
+    pid = start_attempt(%{ctx | attempt: attempt})
+    assert %{start_deadline: "2026-11-12T00:00:30Z"} = Attempt.view(pid)
+  end
+
+  test "crash reports and sys status redact the credential and proof", ctx do
+    pid = start_attempt(ctx)
+    :sys.get_state(pid)
+    status = inspect(:sys.get_status(pid), limit: :infinity, printable_limit: :infinity)
+    refute status =~ ctx.conn.credential
+    refute status =~ "v1.k.p0"
+  end
+
+  test "a step still queued when its caller's time is nearly up is refused", ctx do
+    test_pid = self()
+
+    Gaoxy.Test.stub(ctx.server, "POST", "/api/agent/projects/p-1/attempts/a-1/start", fn conn ->
+      send(test_pid, :start_sent)
+      json(conn, 200, %{"data" => %{"id" => "a-1", "state" => "running", "version" => 2}})
+    end)
+
+    pid = start_attempt(ctx)
+    expired = System.monotonic_time(:millisecond) - 1
+
+    assert {:error, %{code: "attempt_busy"}} = GenServer.call(pid, {:step, :start, expired})
+    refute_received :start_sent
+    assert %{state: "leased", version: 1} = Attempt.view(pid)
+  end
+
   describe "failure recovery" do
     defp scripted(server, method, path, responses) do
       {:ok, agent} = Agent.start_link(fn -> responses end)
@@ -190,6 +220,19 @@ defmodule SynapsisSamgita.AttemptTest do
       assert t2 - t1 < 200
       # Let the in-flight proof re-read finish before the test server closes.
       :sys.get_state(pid)
+    end
+
+    test "a successful renew clears the previous error", ctx do
+      fail = fn conn, _ -> json(conn, 503, %{"errors" => %{"code" => "unavailable"}}) end
+
+      scripted(ctx.server, "POST", "/api/agent/projects/p-1/attempts/a-1/renew", [
+        fail,
+        ok_attempt("leased")
+      ])
+
+      start_attempt(ctx, renew_interval_ms: 300, retry_interval_ms: 20)
+      assert_receive {:attempt_view, %{last_error: "unavailable"}}, 2_000
+      assert_receive {:attempt_view, %{last_error: nil, version: 2}}, 2_000
     end
 
     @tag :custom_proof

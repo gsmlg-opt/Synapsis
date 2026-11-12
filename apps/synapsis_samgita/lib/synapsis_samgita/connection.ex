@@ -25,6 +25,16 @@ defmodule SynapsisSamgita.Connection do
   def disconnect, do: GenServer.call(__MODULE__, :disconnect)
 
   @doc """
+  Execution session id cached for `project_id` on the current connection.
+  Samgita has no session close; reusing one session per project keeps failed
+  claims from leaving open sessions behind. Reconnecting clears the cache
+  (Samgita binds sessions to the connection).
+  """
+  def session(project_id), do: GenServer.call(__MODULE__, {:session, project_id})
+  def put_session(project_id, id), do: GenServer.cast(__MODULE__, {:put_session, project_id, id})
+  def forget_session(project_id), do: GenServer.cast(__MODULE__, {:forget_session, project_id})
+
+  @doc """
   Register a new connection generation. Samgita replaces earlier connections,
   which would orphan every open attempt, so this is refused while any is active.
   """
@@ -66,14 +76,15 @@ defmodule SynapsisSamgita.Connection do
   end
 
   @impl true
-  def init(_opts), do: {:ok, %{status: @initial, attempts: %{}}}
+  def init(_opts), do: {:ok, %{status: @initial, attempts: %{}, sessions: %{}}}
 
   @impl true
   def handle_call(:status, _from, s), do: {:reply, s.status, s}
   def handle_call(:attempts, _from, s), do: {:reply, Map.values(s.attempts), s}
+  def handle_call({:session, project_id}, _from, s), do: {:reply, s.sessions[project_id], s}
 
   def handle_call(:disconnect, _from, s) do
-    {:reply, :ok, publish(%{s | status: @initial, attempts: %{}})}
+    {:reply, :ok, publish(%{s | status: @initial, attempts: %{}, sessions: %{}})}
   end
 
   def handle_call({:connected, {:ok, data}}, _from, s) do
@@ -86,18 +97,24 @@ defmodule SynapsisSamgita.Connection do
     }
 
     Logger.info("samgita_connected", agent_id: data["agent_id"])
-    s = publish(%{s | status: status})
+    s = publish(%{s | status: status, sessions: %{}})
     {:reply, {:ok, status}, s}
   end
 
   def handle_call({:connected, {:error, error}}, _from, s) do
     Logger.warning("samgita_connect_failed", reason: error.code)
-    s = publish(%{s | status: %{@initial | state: :error, last_error: error.code}})
+    s = publish(%{s | status: %{@initial | state: :error, last_error: error.code}, sessions: %{}})
     {:reply, {:error, error}, s}
   end
 
   @impl true
   def handle_cast({:attempt_view, view}, s), do: {:noreply, put_in(s.attempts[view.id], view)}
+
+  def handle_cast({:put_session, project_id, id}, s),
+    do: {:noreply, put_in(s.sessions[project_id], id)}
+
+  def handle_cast({:forget_session, project_id}, s),
+    do: {:noreply, %{s | sessions: Map.delete(s.sessions, project_id)}}
 
   defp publish(s) do
     Events.broadcast_status(s.status)

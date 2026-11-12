@@ -52,8 +52,10 @@ It needs `SAMGITA_LEASE_KEYS` (JSON `{"<id>": "<base64 key, ≥32 bytes>"}`) and
   **Mark processed** completes them and reports the result on the Samgita
   delivery, which then shows `completed` (Samgita does not re-poll accepted deliveries).
 - Tasks assigned to this Agent appear under **Assigned tasks**. **Claim**, then
-  **Start**, **Progress** and **Report**. Synapsis renews the 120 s lease in the
-  background while the attempt is open.
+  **Start**, **Progress** and **Report**. Samgita requires **Start** within 30 s
+  of the claim (the row shows the "start by" time); a later start fails with
+  `ownership_lost`. Synapsis renews the 120 s lease in the background while the
+  attempt is open.
 
 ## Limits
 

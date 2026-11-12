@@ -78,6 +78,33 @@ defmodule SynapsisSamgita.ConnectionTest do
     assert [%{id: "a-1"}] = SynapsisSamgita.list_attempts()
   end
 
+  test "a failed claim leaves no extra session: the next claim reuses it", %{server: s} do
+    stub_connect(s)
+    {:ok, _} = SynapsisSamgita.connect()
+
+    Gaoxy.Test.stub(s, "POST", "/api/agent/projects/p-1/sessions", fn conn ->
+      json(conn, 201, %{"data" => %{"id" => "s-1", "state" => "open"}})
+    end)
+
+    Gaoxy.Test.stub(s, "POST", "/api/agent/projects/p-1/tasks/t-1/claim", fn conn ->
+      json(conn, 409, %{"errors" => %{"code" => "stale_version"}})
+    end)
+
+    assert {:error, %{code: "stale_version"}} =
+             SynapsisSamgita.claim("p-1", %{"id" => "t-1", "version" => 1})
+
+    assert {:error, %{code: "stale_version"}} =
+             SynapsisSamgita.claim("p-1", %{"id" => "t-1", "version" => 1})
+
+    sessions =
+      Enum.count(
+        Gaoxy.Test.requests(s).entries,
+        &(&1.path == "/api/agent/projects/p-1/sessions")
+      )
+
+    assert sessions == 1
+  end
+
   test "reconnecting is refused while an attempt is active", %{server: s} do
     stub_connect(s)
     {:ok, _} = SynapsisSamgita.connect()
