@@ -23,7 +23,8 @@ defmodule SynapsisServer.Router do
               SynapsisWeb.MCPLive.Index,
               SynapsisWeb.MCPLive.Show,
               SynapsisWeb.ModelTierLive.Index,
-              SynapsisWeb.WorkspaceLive.Explorer
+              SynapsisWeb.WorkspaceLive.Explorer,
+              SynapsisWeb.SamgitaLive.Index
             ]}
 
   pipeline :browser do
@@ -115,6 +116,8 @@ defmodule SynapsisServer.Router do
 
     # TODO: add authentication guard (on_mount hook or pipeline plug) before production
     live "/workspace", WorkspaceLive.Explorer, :index
+
+    live "/samgita", SamgitaLive.Index, :index
 
     live "/settings", SettingsLive, :index
 
