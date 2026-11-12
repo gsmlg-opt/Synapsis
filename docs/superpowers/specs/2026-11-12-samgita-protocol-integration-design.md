@@ -114,3 +114,8 @@ Synapsis ──HTTPS/HTTP──▶ Samgita /api/agent/* （Synapsis 是 manageme
 4. 停止 Codex → stopped；Codex 进程意外退出时页面显示 crashed 与原因。
 
 **通用**：新增模块有聚焦测试；`mix test`、`mix compile --warnings-as-errors`、`mix format --check-formatted` 通过；`devenv processes restart synapsis` 后 `/api/health` 就绪。
+
+## 7. Sigma 接入的已知缺口
+
+- **会话列表**：`sessions.v1` 没有 `thread/list`，已提需求 gsmlg-opt/Samgita#2。在此之前 Synapsis 只能列出自己经 `thread/start` 创建的 Sigma 会话。
+- **起停 Sigma（需要，暂搁置）**：本地 agent 管理要求能起停 Sigma，但 Sigma 的部署方式未定（目前由其 devenv 常驻运行，且不允许另起第二个实例）。部署方式确定前，Synapsis 对 Sigma 只做连接/断开与状态显示，不负责拉起进程。
