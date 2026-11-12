@@ -41,6 +41,8 @@ defmodule SynapsisServer.Endpoint do
 
   plug CORSPlug, origin: ["http://localhost:3000", "http://localhost:4000"]
 
+  plug SynapsisSamgita.AppServer.Plug
+
   plug Plug.Parsers,
     parsers: [:urlencoded, :multipart, :json],
     pass: ["*/*"],
