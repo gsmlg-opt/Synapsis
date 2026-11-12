@@ -38,7 +38,7 @@ defmodule SynapsisWeb.MixProject do
       {:phoenix, "~> 1.8"},
       {:phoenix_html, "~> 4.2"},
       {:phoenix_live_view, "~> 1.2"},
-      {:phoenix_duskmoon, "~> 10.1"},
+      {:phoenix_duskmoon, "~> 10.1.3"},
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.4"},
       {:gaoxy_test, "~> 0.15.1", only: :test},

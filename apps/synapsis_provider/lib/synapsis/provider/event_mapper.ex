@@ -25,8 +25,6 @@ defmodule Synapsis.Provider.EventMapper do
     {:tool_call_delta, event.index, event.call_id, decode_name(event.name), ""}
   end
 
-  # TODO(upstream): gsmlg-opt/backplane#168 — the OpenAI codec concatenates a
-  # repeated tool-call id, so event.call_id can arrive doubled mid-stream.
   def map_event(%StreamEvent{type: :tool_call_delta} = event) do
     {:tool_call_delta, event.index, event.call_id, decode_name(event.name),
      event.arguments_delta || ""}

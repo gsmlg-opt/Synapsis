@@ -3,7 +3,7 @@ defmodule Synapsis.Agent.Tools.ConformanceTest do
 
   @root Path.expand("../../../../../..", __DIR__)
   @capture Path.join(@root, "scripts/backplane/capture-contracts.exs")
-  @fixture Path.join(@root, "apps/synapsis_agent/test/fixtures/backplane/1.10.61/contracts.json")
+  @fixture Path.join(@root, "apps/synapsis_agent/test/fixtures/backplane/1.10.74/contracts.json")
 
   Code.require_file(Path.join(@root, "scripts/backplane/contracts.exs"))
 
@@ -133,7 +133,7 @@ defmodule Synapsis.Agent.Tools.ConformanceTest do
     snapshot = Capture.snapshot()
     assert File.read!(@fixture) == Capture.encode(snapshot)
     assert Capture.encode(snapshot) == Capture.encode(Capture.snapshot())
-    assert snapshot["provenance"]["version"] == "1.10.61"
+    assert snapshot["provenance"]["version"] == "1.10.74"
 
     for {_family, profile} <- snapshot["profiles"] do
       assert profile["status"] == "admitted"

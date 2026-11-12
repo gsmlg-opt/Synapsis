@@ -5672,29 +5672,29 @@
   "provenance": {
     "dependency_packages": {
       "backplane_ai_protocol": {
-        "outer_checksum": "1c2c3d55cc2b6c7ba78af9e878a10451247e81281dd050fd1e4b1ad8a1229b7d",
-        "package_checksum": "23728b4e5baba42229e4f90be30b26265f70c3b030330fdf7c08f255c0e56d53",
-        "version": "1.10.57"
+        "outer_checksum": "c283edbf967a598121a42ff378066eef52f5ba19d1b0dfbf5c41327b04c69cca",
+        "package_checksum": "20dca876604c1e8b9e33ee07b746c79c4a4c62b85053978d9f7db2ae2cdf8563",
+        "version": "1.10.74"
       },
       "backplane_json_schema": {
-        "outer_checksum": "39bce21e1bcd872cbb3fea6a57e2974550b772279bce8890b9957b6c605b7389",
-        "package_checksum": "b4b69325fbfa9abd87fa0f1dd2ca16261d1ede76f74b24651f7b4c8aba94a26d",
-        "version": "1.10.60"
+        "outer_checksum": "68f6bb3d115abfd66ee2fa58b5c3212ae09483cb13a842ae6cc69cd0e821fb1b",
+        "package_checksum": "b8dc750e26e19ee7a2487d2236f991a674396ef2fe18e8facef8eb7b225027eb",
+        "version": "1.10.74"
       },
       "backplane_mcp_protocol": {
-        "outer_checksum": "4217b5187995368cb70f474e451d96852d24c9dbca54ddb8162d8317637fba50",
-        "package_checksum": "cfb9c6fd183ae8d92fa1af5057c32a761feef7e1206f5635a1e9b8de5f33a475",
-        "version": "1.10.60"
+        "outer_checksum": "be1625ba7d4b05b7287cc6291aa648180592b876e90de873d6b25fc0538041d0",
+        "package_checksum": "686589ae966831c752d140a337c04fac90835fa39b38d6204129a54155043e49",
+        "version": "1.10.74"
       },
       "backplane_plugin_protocol": {
-        "outer_checksum": "c6272a0adc66bc33f85a6eccabec51e713dfdccf6e81e87cfc7cb5f598c15c97",
-        "package_checksum": "e2b3839d86a95368b376418a492ba59a41efa4ab2a8cd9f39df9428cac26bf68",
-        "version": "1.10.57"
+        "outer_checksum": "6c9d5ef26cab6ba2a28b60843db59822cfc6c3f639de1c55dd9d531dc1535e89",
+        "package_checksum": "3c56b00d06678610e267c3256526bd5f6e0756cd5fa77e3c59d237a21f62d334",
+        "version": "1.10.74"
       },
       "backplane_skill_protocol": {
-        "outer_checksum": "c2f9a08ad3a8a2ab2f1fc564942378f5dce8b31a32b71c1f5d1bcbbbfcf63407",
-        "package_checksum": "2bc48c27b20ef67b7ca2ff655446edf8ee7b4d299188c8a53fc15fa72a4ddaa4",
-        "version": "1.10.57"
+        "outer_checksum": "2b12fc3ba03f05e5404359757e932916cedbef26c09b36040166507f14c0dea2",
+        "package_checksum": "a29265933b7e772e17f2a9cab9cc797e9fe78d50cfa220553bcf74abc8f54629",
+        "version": "1.10.74"
       },
       "ex_json_pointer": {
         "outer_checksum": "e0292f6476e903bedd77cec1585e24554760d66b3c2dd731abe31ca147a8d3f5",
@@ -5702,9 +5702,9 @@
         "version": "0.9.0"
       }
     },
-    "outer_checksum": "504a91bd245920877ac1893a522dd882833c43fcd2ae560e9ede00e7cd7bf8bb",
+    "outer_checksum": "8621ee1a7d6b7160458f72a1b9aa919e4ad40d99afa481e926d21a9fa2cb1df0",
     "package": "backplane_agent_runtime",
-    "package_checksum": "7310e371bda54fade4a7b627c8bff93cd11fa295026673d2883ed5cde46e3701",
+    "package_checksum": "d97c5b5d655a67c04123175c4be68bb44e952d2102f172df4d6f63f417f2f1b6",
     "public_apis": [
       {
         "exports": [
@@ -5939,7 +5939,7 @@
         ],
         "module": "Elixir.Backplane.AgentRuntime.Codex.CodeMode",
         "source": "lib/backplane/agent_runtime/codex/code_mode.ex",
-        "source_sha256": "75f32e795d2cb46939feac643f8c2da756d67b7c589f3937f60cb80028bc8488"
+        "source_sha256": "1f98e0f76616430145e4fab1b798e365ac4d6b470b6ada944426e35106cd76be"
       },
       {
         "exports": [
@@ -6100,7 +6100,7 @@
         ],
         "module": "Elixir.Backplane.AgentRuntime.Conversation",
         "source": "lib/backplane/agent_runtime/conversation.ex",
-        "source_sha256": "38789b79687285c4593e5b98eaffb02aa80805619c6ac9c77481b0caed82347d"
+        "source_sha256": "337b938bfad16be3f78f30d9838e4960a76744d0f1bb2fd9afa86ac76da821a0"
       },
       {
         "callbacks": [
@@ -6182,7 +6182,7 @@
       }
     ],
     "repository": "hexpm",
-    "version": "1.10.61"
+    "version": "1.10.74"
   },
   "readable_fetch": {
     "authority": {

@@ -14,9 +14,9 @@ defmodule Synapsis.BackplaneContractCapture do
     Tools
   }
 
-  @version "1.10.61"
+  @version "1.10.74"
   @root Path.expand("../..", __DIR__)
-  @default_out "apps/synapsis_agent/test/fixtures/backplane/1.10.61/contracts.json"
+  @default_out "apps/synapsis_agent/test/fixtures/backplane/1.10.74/contracts.json"
   @families [
     :local,
     :interactive,
