@@ -24,6 +24,7 @@ defmodule SynapsisWeb.LocalAgentLive.Index do
        streaming: %{},
        current_turn: nil,
        turn_status: nil,
+       turn_error: nil,
        subscribed: nil
      )
      |> load_agents()}
@@ -158,7 +159,7 @@ defmodule SynapsisWeb.LocalAgentLive.Index do
   def handle_info(_message, socket), do: {:noreply, socket}
 
   defp apply_event(socket, %Event{type: :turn_started, turn_id: turn_id}),
-    do: assign(socket, current_turn: turn_id, turn_status: "running")
+    do: assign(socket, current_turn: turn_id, turn_status: "running", turn_error: nil)
 
   defp apply_event(socket, %Event{type: :item_delta, item_id: item_id, data: %{delta: delta}}) do
     streaming =
@@ -199,7 +200,7 @@ defmodule SynapsisWeb.LocalAgentLive.Index do
     )
   end
 
-  defp apply_event(socket, %Event{type: :turn_completed, data: %{status: status}}) do
+  defp apply_event(socket, %Event{type: :turn_completed, data: %{status: status} = data}) do
     # Keep any text still streaming as a finished agent message.
     pending =
       socket.assigns.streaming
@@ -208,7 +209,7 @@ defmodule SynapsisWeb.LocalAgentLive.Index do
 
     socket
     |> update(:messages, &(&1 ++ pending))
-    |> assign(streaming: %{}, current_turn: nil, turn_status: status)
+    |> assign(streaming: %{}, current_turn: nil, turn_status: status, turn_error: data[:error])
   end
 
   defp apply_event(socket, _event), do: socket
@@ -351,6 +352,10 @@ defmodule SynapsisWeb.LocalAgentLive.Index do
                   Interrupt
                 </.dm_btn>
               </div>
+            </div>
+
+            <div :if={@turn_error} data-role="turn-error" role="alert" class="text-sm text-error">
+              {@turn_error}
             </div>
 
             <div data-role="agent-stream" class="space-y-2">

@@ -30,6 +30,7 @@ defmodule SynapsisLocalAgents.MixProject do
       {:synapsis_core, in_umbrella: true},
       {:synapsis_data, in_umbrella: true},
       {:samgita_codex_driver, "~> 0.4.0"},
+      {:toml, "~> 0.7"},
       {:jason, "~> 1.4"}
     ]
   end

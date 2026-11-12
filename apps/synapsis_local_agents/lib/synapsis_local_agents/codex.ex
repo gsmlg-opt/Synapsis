@@ -230,7 +230,7 @@ defmodule SynapsisLocalAgents.Codex do
       type: :turn_completed,
       thread_id: p["threadId"],
       turn_id: get_in(p, ["turn", "id"]),
-      data: %{status: get_in(p, ["turn", "status"])}
+      data: %{status: get_in(p, ["turn", "status"]), error: get_in(p, ["turn", "error", "message"])}
     }
   end
 
@@ -281,16 +281,48 @@ defmodule SynapsisLocalAgents.Codex do
 
   defp text_input(text), do: %{"type" => "text", "text" => text}
 
-  defp transport(config) do
-    Application.get_env(:synapsis_local_agents, :codex_transport) ||
-      {SamgitaCodexDriver.Transport.Stdio,
-       [
-         executable: config.executable,
-         args: config.args,
-         codex_home: config.codex_home,
-         env: %{"HOME" => System.user_home!()}
-       ] ++ if(config.cwd, do: [cwd: config.cwd], else: [])}
+  defp transport(config),
+    do: Application.get_env(:synapsis_local_agents, :codex_transport) || stdio_transport(config)
+
+  # Stdio's default inherited variables (SamgitaCodexDriver.Transport.Stdio @inherit).
+  @default_inherit ~w(PATH LANG LC_ALL LC_CTYPE TMPDIR TEMP TMP SystemRoot WINDIR)
+
+  @doc """
+  Stdio transport for `config`. Besides the driver's minimal environment, Codex
+  receives the variables its own `config.toml` declares as provider `env_key`s
+  (e.g. an API token), so configured providers authenticate as in a shell.
+  """
+  def stdio_transport(config) do
+    opts =
+      [
+        executable: config.executable,
+        args: config.args,
+        codex_home: config.codex_home,
+        env: %{"HOME" => System.user_home!()},
+        inherit_env: Enum.uniq(@default_inherit ++ declared_env_keys(config.codex_home))
+      ] ++ if(config.cwd, do: [cwd: config.cwd], else: [])
+
+    {SamgitaCodexDriver.Transport.Stdio, opts}
   end
+
+  defp declared_env_keys(nil), do: []
+
+  defp declared_env_keys(codex_home) do
+    case Toml.decode_file(Path.join(codex_home, "config.toml")) do
+      {:ok, config} -> collect_env_keys(config)
+      {:error, _} -> []
+    end
+  end
+
+  defp collect_env_keys(map) when is_map(map) do
+    Enum.flat_map(map, fn
+      {"env_key", key} when is_binary(key) -> [key]
+      {_key, value} -> collect_env_keys(value)
+    end)
+  end
+
+  defp collect_env_keys(list) when is_list(list), do: Enum.flat_map(list, &collect_env_keys/1)
+  defp collect_env_keys(_), do: []
 
   defp version, do: :synapsis_local_agents |> Application.spec(:vsn) |> to_string()
 end

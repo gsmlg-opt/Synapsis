@@ -3,7 +3,8 @@ defmodule SynapsisLocalAgents.Event do
   A local agent domain event, independent of any agent's wire format.
 
   Types: `:status` (`data: %{state, last_error}`), `:thread_started`,
-  `:turn_started`, `:turn_completed` (`data.status` ∈ "completed" | "interrupted" | "failed"),
+  `:turn_started`, `:turn_completed` (`data.status` ∈ "completed" | "interrupted" | "failed",
+  optional `data.error` message),
   `:item_started` / `:item_completed` (`data.item: %{type, text}`),
   `:item_delta` (`data.delta`), `:interaction` (`data: %{method, decision}`).
   """

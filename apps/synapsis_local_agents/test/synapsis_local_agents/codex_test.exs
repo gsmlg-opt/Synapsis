@@ -122,6 +122,16 @@ defmodule SynapsisLocalAgents.CodexTest do
                    2_000
   end
 
+  test "a failed turn carries Codex's error message", %{session: s} do
+    send(s, {:incoming, %{"method" => "turn/completed",
+      "params" => %{"threadId" => "th-1", "turn" => %{"id" => "tu-1", "items" => [], "status" => "failed",
+        "error" => %{"message" => "Missing environment variable: `BP_TOKEN`.", "codexErrorInfo" => "other"}}}}})
+
+    assert_receive {:local_agent_event,
+                    %Event{type: :turn_completed, data: %{status: "failed", error: "Missing environment variable: `BP_TOKEN`."}}},
+                   2_000
+  end
+
   test "approval requests are accepted automatically", %{session: s} do
     send(s, {:incoming, %{"id" => "srv-1", "method" => "item/commandExecution/requestApproval",
       "params" => %{"threadId" => "th-1", "turnId" => "tu-1", "itemId" => "i-1", "startedAtMs" => 1}}})
@@ -143,5 +153,42 @@ defmodule SynapsisLocalAgents.CodexTest do
     assert :ok = Codex.stop(pid)
     assert_receive {:transport_closed, _}, 2_000
     refute Process.alive?(pid)
+  end
+
+  describe "stdio_transport/1" do
+    @tag :tmp_dir
+    test "passes through env vars that Codex providers declare via env_key", %{tmp_dir: dir} do
+      File.write!(Path.join(dir, "config.toml"), """
+      model_provider = "backplane"
+      [model_providers.backplane]
+      base_url = "http://localhost"
+      env_key = "BP_TOKEN"
+      [model_providers.other]
+      env_key = "OTHER_KEY"
+      """)
+
+      config = %LocalAgentConfig{id: "c", name: "Codex", kind: "codex", executable: "/bin/codex",
+        args: ["app-server"], codex_home: dir}
+
+      {SamgitaCodexDriver.Transport.Stdio, opts} = Codex.stdio_transport(config)
+      assert "PATH" in opts[:inherit_env]
+      assert "BP_TOKEN" in opts[:inherit_env]
+      assert "OTHER_KEY" in opts[:inherit_env]
+      assert opts[:codex_home] == dir
+      assert opts[:executable] == "/bin/codex"
+    end
+
+    @tag :tmp_dir
+    test "a missing or invalid Codex config keeps the default env", %{tmp_dir: dir} do
+      config = %LocalAgentConfig{id: "c", name: "Codex", kind: "codex", executable: "/bin/codex",
+        args: [], codex_home: dir}
+
+      {_, opts} = Codex.stdio_transport(config)
+      assert opts[:inherit_env] == ~w(PATH LANG LC_ALL LC_CTYPE TMPDIR TEMP TMP SystemRoot WINDIR)
+
+      File.write!(Path.join(dir, "config.toml"), "not = [valid")
+      {_, opts} = Codex.stdio_transport(config)
+      assert "PATH" in opts[:inherit_env]
+    end
   end
 end

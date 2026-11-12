@@ -124,6 +124,22 @@ defmodule SynapsisWeb.LocalAgentLiveTest do
     refute has_element?(view, "[phx-click='interrupt_turn']")
   end
 
+  test "a failed turn shows the agent's reason", %{conn: conn, id: id} do
+    :ok = SynapsisLocalAgents.start(id)
+    {:ok, view, _html} = live(conn, ~p"/local-agents/#{id}/threads/th-1")
+    render_async(view)
+
+    emit(id,
+      type: :turn_completed,
+      thread_id: "th-1",
+      turn_id: "tu-2",
+      data: %{status: "failed", error: "Missing BP_TOKEN"}
+    )
+
+    assert has_element?(view, "[data-role=turn-status]", "failed")
+    assert has_element?(view, "[data-role=turn-error]", "Missing BP_TOKEN")
+  end
+
   test "a crash is shown and the agent can be stopped", %{conn: conn, id: id} do
     :ok = SynapsisLocalAgents.start(id)
     {:ok, view, _html} = live(conn, ~p"/local-agents")
