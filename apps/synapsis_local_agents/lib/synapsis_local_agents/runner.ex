@@ -66,7 +66,14 @@ defmodule SynapsisLocalAgents.Runner do
   end
 
   def handle_call(:stop, _from, %{adapter: pid, module: module} = s) when is_pid(pid) do
-    module.stop(pid)
+    # The adapter may already be dying (or die while stopping); stopping is
+    # still the outcome the operator asked for.
+    try do
+      module.stop(pid)
+    catch
+      :exit, _ -> :ok
+    end
+
     receive_exit(pid)
     {:reply, :ok, publish(%{s | state: :stopped, adapter: nil, module: nil})}
   end

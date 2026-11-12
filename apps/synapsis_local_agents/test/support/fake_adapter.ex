@@ -9,6 +9,7 @@ defmodule SynapsisLocalAgents.Test.FakeAdapter do
 
   def emit(pid, %Event{} = event), do: GenServer.cast(pid, {:emit, event})
   def crash(pid, reason), do: GenServer.cast(pid, {:crash, reason})
+  def crash_on_stop(pid), do: GenServer.call(pid, :crash_on_stop)
 
   @impl SynapsisLocalAgents.Adapter
   def start_link(config, owner), do: GenServer.start_link(__MODULE__, {config, owner})
@@ -37,10 +38,12 @@ defmodule SynapsisLocalAgents.Test.FakeAdapter do
   @impl GenServer
   def init({config, owner}) do
     send(owner, {:local_agent_event, %Event{agent_id: config.id, type: :status, data: %{state: :running}}})
-    {:ok, %{config: config, owner: owner}}
+    {:ok, %{config: config, owner: owner, crash_on_stop: false}}
   end
 
   @impl GenServer
+  def handle_call(:crash_on_stop, _from, state), do: {:reply, :ok, %{state | crash_on_stop: true}}
+
   def handle_call({:call, name, args}, _from, state) do
     case :persistent_term.get({__MODULE__, :observer}, nil) do
       nil -> :ok
@@ -57,6 +60,10 @@ defmodule SynapsisLocalAgents.Test.FakeAdapter do
   end
 
   def handle_cast({:crash, reason}, state), do: {:stop, reason, state}
+
+  @impl GenServer
+  def terminate(:normal, %{crash_on_stop: true}), do: exit(:crashed_while_stopping)
+  def terminate(_reason, _state), do: :ok
 
   defp reply(:list_threads, _), do: {:ok, [%{id: "th-1", title: "First chat", updated_at: "2026-11-12T00:00:00Z"}]}
   defp reply(:start_thread, _), do: {:ok, %{id: "th-new"}}

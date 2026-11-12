@@ -79,6 +79,16 @@ defmodule SynapsisLocalAgents.RunnerTest do
     assert Process.alive?(self())
   end
 
+  test "stop/1 survives an adapter that dies while stopping", %{id: id} do
+    :ok = SynapsisLocalAgents.start(id)
+    runner = SynapsisLocalAgents.Runner.whereis(id)
+    :ok = FakeAdapter.crash_on_stop(SynapsisLocalAgents.Runner.adapter(id))
+
+    assert :ok = SynapsisLocalAgents.stop(id)
+    assert Process.alive?(runner)
+    assert %{state: :stopped} = SynapsisLocalAgents.status(id)
+  end
+
   test "stop/1 stops the adapter", %{id: id} do
     :ok = SynapsisLocalAgents.start(id)
     assert :ok = SynapsisLocalAgents.stop(id)

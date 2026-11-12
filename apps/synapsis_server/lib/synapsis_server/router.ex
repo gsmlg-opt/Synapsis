@@ -24,7 +24,8 @@ defmodule SynapsisServer.Router do
               SynapsisWeb.MCPLive.Show,
               SynapsisWeb.ModelTierLive.Index,
               SynapsisWeb.WorkspaceLive.Explorer,
-              SynapsisWeb.SamgitaLive.Index
+              SynapsisWeb.SamgitaLive.Index,
+              SynapsisWeb.LocalAgentLive.Index
             ]}
 
   pipeline :browser do
@@ -118,6 +119,10 @@ defmodule SynapsisServer.Router do
     live "/workspace", WorkspaceLive.Explorer, :index
 
     live "/samgita", SamgitaLive.Index, :index
+
+    live "/local-agents", LocalAgentLive.Index, :index
+    live "/local-agents/:agent_id", LocalAgentLive.Index, :agent
+    live "/local-agents/:agent_id/threads/:thread_id", LocalAgentLive.Index, :thread
 
     live "/settings", SettingsLive, :index
 
