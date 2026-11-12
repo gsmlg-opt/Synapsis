@@ -10,7 +10,13 @@ defmodule SynapsisSamgita.Connection do
   alias Synapsis.SamgitaConfig
   alias SynapsisSamgita.{API, Events}
 
-  @initial %{state: :disconnected, agent_id: nil, connection_id: nil, expires_at: nil, last_error: nil}
+  @initial %{
+    state: :disconnected,
+    agent_id: nil,
+    connection_id: nil,
+    expires_at: nil,
+    last_error: nil
+  }
 
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 

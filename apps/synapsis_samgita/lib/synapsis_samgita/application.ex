@@ -9,6 +9,7 @@ defmodule SynapsisSamgita.Application do
       {DynamicSupervisor, name: SynapsisSamgita.AttemptSupervisor, strategy: :one_for_one},
       SynapsisSamgita.Connection
     ]
+
     opts = [strategy: :one_for_one, name: SynapsisSamgita.Supervisor]
     Supervisor.start_link(children, opts)
   end

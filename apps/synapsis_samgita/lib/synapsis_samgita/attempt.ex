@@ -74,7 +74,19 @@ defmodule SynapsisSamgita.Attempt do
   end
 
   def handle_call({:report, outcome, effects_resolved, result}, _from, state) do
-    case step(state, &API.report(&1.conn, &1.project_id, &1.id, &1.version, &1.proof, outcome, effects_resolved, result)) do
+    case step(
+           state,
+           &API.report(
+             &1.conn,
+             &1.project_id,
+             &1.id,
+             &1.version,
+             &1.proof,
+             outcome,
+             effects_resolved,
+             result
+           )
+         ) do
       {:reply, {:ok, _} = reply, state} ->
         Logger.info("samgita_attempt_reported", attempt_id: state.id, outcome: outcome)
         {:stop, :normal, reply, state}

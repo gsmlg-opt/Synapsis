@@ -34,14 +34,19 @@ defmodule SynapsisSamgita do
          {:ok, pid} <-
            DynamicSupervisor.start_child(
              SynapsisSamgita.AttemptSupervisor,
-             {Attempt, conn: conn, project_id: project_id, attempt: Map.put_new(attempt, "task_id", task_id)}
+             {Attempt,
+              conn: conn,
+              project_id: project_id,
+              attempt: Map.put_new(attempt, "task_id", task_id)}
            ) do
       {:ok, Attempt.view(pid)}
     end
   end
 
   def attempt_start(attempt_id), do: with_attempt(attempt_id, &Attempt.start_work/1)
-  def attempt_progress(attempt_id, summary), do: with_attempt(attempt_id, &Attempt.progress(&1, summary))
+
+  def attempt_progress(attempt_id, summary),
+    do: with_attempt(attempt_id, &Attempt.progress(&1, summary))
 
   def attempt_report(attempt_id, outcome, effects_resolved, result),
     do: with_attempt(attempt_id, &Attempt.report(&1, outcome, effects_resolved, result))

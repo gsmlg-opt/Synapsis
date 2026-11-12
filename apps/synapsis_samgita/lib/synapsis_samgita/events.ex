@@ -10,7 +10,8 @@ defmodule SynapsisSamgita.Events do
   def subscribe_attempts, do: Phoenix.PubSub.subscribe(Synapsis.PubSub, @attempts_topic)
 
   def broadcast_inbox_changed(event_id),
-    do: Phoenix.PubSub.broadcast(Synapsis.PubSub, @inbox_topic, {:samgita_inbox_changed, event_id})
+    do:
+      Phoenix.PubSub.broadcast(Synapsis.PubSub, @inbox_topic, {:samgita_inbox_changed, event_id})
 
   def broadcast_status(status),
     do: Phoenix.PubSub.broadcast(Synapsis.PubSub, @status_topic, {:samgita_status, status})

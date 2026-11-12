@@ -20,7 +20,8 @@ defmodule SynapsisLocalAgents.Adapter do
   @callback start_thread(pid()) :: {:ok, %{id: String.t()}} | {:error, term()}
   @callback read_thread(pid(), String.t()) :: {:ok, thread} | {:error, term()}
   @callback resume_thread(pid(), String.t()) :: {:ok, %{id: String.t()}} | {:error, term()}
-  @callback start_turn(pid(), String.t(), String.t()) :: {:ok, %{turn_id: String.t()}} | {:error, term()}
+  @callback start_turn(pid(), String.t(), String.t()) ::
+              {:ok, %{turn_id: String.t()}} | {:error, term()}
   @callback steer_turn(pid(), String.t(), String.t(), String.t()) :: :ok | {:error, term()}
   @callback interrupt_turn(pid(), String.t(), String.t()) :: :ok | {:error, term()}
   @callback stop(pid()) :: :ok

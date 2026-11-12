@@ -23,7 +23,9 @@ defmodule SynapsisLocalAgents.Test.FakeAdapter do
   @impl SynapsisLocalAgents.Adapter
   def resume_thread(pid, thread_id), do: GenServer.call(pid, {:call, :resume_thread, [thread_id]})
   @impl SynapsisLocalAgents.Adapter
-  def start_turn(pid, thread_id, text), do: GenServer.call(pid, {:call, :start_turn, [thread_id, text]})
+  def start_turn(pid, thread_id, text),
+    do: GenServer.call(pid, {:call, :start_turn, [thread_id, text]})
+
   @impl SynapsisLocalAgents.Adapter
   def steer_turn(pid, thread_id, turn_id, text),
     do: GenServer.call(pid, {:call, :steer_turn, [thread_id, turn_id, text]})
@@ -37,7 +39,11 @@ defmodule SynapsisLocalAgents.Test.FakeAdapter do
 
   @impl GenServer
   def init({config, owner}) do
-    send(owner, {:local_agent_event, %Event{agent_id: config.id, type: :status, data: %{state: :running}}})
+    send(
+      owner,
+      {:local_agent_event, %Event{agent_id: config.id, type: :status, data: %{state: :running}}}
+    )
+
     {:ok, %{config: config, owner: owner, crash_on_stop: false}}
   end
 
@@ -65,7 +71,9 @@ defmodule SynapsisLocalAgents.Test.FakeAdapter do
   def terminate(:normal, %{crash_on_stop: true}), do: exit(:crashed_while_stopping)
   def terminate(_reason, _state), do: :ok
 
-  defp reply(:list_threads, _), do: {:ok, [%{id: "th-1", title: "First chat", updated_at: "2026-11-12T00:00:00Z"}]}
+  defp reply(:list_threads, _),
+    do: {:ok, [%{id: "th-1", title: "First chat", updated_at: "2026-11-12T00:00:00Z"}]}
+
   defp reply(:start_thread, _), do: {:ok, %{id: "th-new"}}
 
   defp reply(:read_thread, [id]) do
@@ -73,8 +81,14 @@ defmodule SynapsisLocalAgents.Test.FakeAdapter do
      %{
        id: id,
        turns: [
-         %{id: "tu-1", status: "completed",
-           items: [%{id: "i-1", role: :user, text: "hello there"}, %{id: "i-2", role: :agent, text: "hi from codex"}]}
+         %{
+           id: "tu-1",
+           status: "completed",
+           items: [
+             %{id: "i-1", role: :user, text: "hello there"},
+             %{id: "i-2", role: :agent, text: "hi from codex"}
+           ]
+         }
        ]
      }}
   end

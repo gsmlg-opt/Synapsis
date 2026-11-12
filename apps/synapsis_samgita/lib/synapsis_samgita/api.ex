@@ -42,7 +42,8 @@ defmodule SynapsisSamgita.API do
 
   @spec proof(conn, String.t(), String.t()) :: {:ok, String.t()} | {:error, error}
   def proof(conn, project_id, attempt_id) do
-    with {:ok, %{"proof" => proof}} <- read(conn, "/projects/#{project_id}/attempts/#{attempt_id}/proof", []) do
+    with {:ok, %{"proof" => proof}} <-
+           read(conn, "/projects/#{project_id}/attempts/#{attempt_id}/proof", []) do
       {:ok, proof}
     end
   end
@@ -54,10 +55,29 @@ defmodule SynapsisSamgita.API do
     do: attempt(conn, project_id, attempt_id, "renew", version, proof, %{}, opts)
 
   def progress(conn, project_id, attempt_id, version, proof, summary, opts \\ []) do
-    attempt(conn, project_id, attempt_id, "progress", version, proof, %{"payload" => %{"summary" => summary}}, opts)
+    attempt(
+      conn,
+      project_id,
+      attempt_id,
+      "progress",
+      version,
+      proof,
+      %{"payload" => %{"summary" => summary}},
+      opts
+    )
   end
 
-  def report(conn, project_id, attempt_id, version, proof, outcome, effects_resolved, result, opts \\ [])
+  def report(
+        conn,
+        project_id,
+        attempt_id,
+        version,
+        proof,
+        outcome,
+        effects_resolved,
+        result,
+        opts \\ []
+      )
       when outcome in ["succeeded", "failed"] and is_boolean(effects_resolved) do
     body =
       %{"outcome" => outcome, "effects_resolved" => effects_resolved}
@@ -97,11 +117,14 @@ defmodule SynapsisSamgita.API do
     |> normalize()
   end
 
-  defp normalize({:ok, %Req.Response{status: status, body: %{"data" => data}}}) when status in 200..299,
-    do: {:ok, data}
+  defp normalize({:ok, %Req.Response{status: status, body: %{"data" => data}}})
+       when status in 200..299,
+       do: {:ok, data}
 
-  defp normalize({:ok, %Req.Response{status: status, body: %{"errors" => %{"code" => code} = errors}}}),
-    do: {:error, %{status: status, code: code, detail: errors["detail"]}}
+  defp normalize(
+         {:ok, %Req.Response{status: status, body: %{"errors" => %{"code" => code} = errors}}}
+       ),
+       do: {:error, %{status: status, code: code, detail: errors["detail"]}}
 
   defp normalize({:ok, %Req.Response{status: status}}),
     do: {:error, %{status: status, code: "unexpected_response", detail: nil}}

@@ -37,7 +37,8 @@ defmodule SynapsisLocalAgents.Codex do
 
   @impl SynapsisLocalAgents.Adapter
   def start_thread(pid) do
-    with {:ok, result} <- request(pid, "thread/start", %{}), do: {:ok, %{id: result["thread"]["id"]}}
+    with {:ok, result} <- request(pid, "thread/start", %{}),
+         do: {:ok, %{id: result["thread"]["id"]}}
   end
 
   # Codex returns a thread's turns from `thread/resume` (`thread/read` with
@@ -47,7 +48,8 @@ defmodule SynapsisLocalAgents.Codex do
   def read_thread(pid, thread_id) do
     case request(pid, "thread/resume", %{"threadId" => thread_id}) do
       {:ok, result} ->
-        {:ok, %{id: thread_id, turns: Enum.map(get_in(result, ["thread", "turns"]) || [], &turn/1)}}
+        {:ok,
+         %{id: thread_id, turns: Enum.map(get_in(result, ["thread", "turns"]) || [], &turn/1)}}
 
       {:error, error} ->
         if no_rollout?(error) do
@@ -81,13 +83,19 @@ defmodule SynapsisLocalAgents.Codex do
 
   @impl SynapsisLocalAgents.Adapter
   def steer_turn(pid, thread_id, turn_id, text) do
-    params = %{"threadId" => thread_id, "expectedTurnId" => turn_id, "input" => [text_input(text)]}
+    params = %{
+      "threadId" => thread_id,
+      "expectedTurnId" => turn_id,
+      "input" => [text_input(text)]
+    }
+
     with {:ok, _} <- request(pid, "turn/steer", params), do: :ok
   end
 
   @impl SynapsisLocalAgents.Adapter
   def interrupt_turn(pid, thread_id, turn_id) do
-    with {:ok, _} <- request(pid, "turn/interrupt", %{"threadId" => thread_id, "turnId" => turn_id}),
+    with {:ok, _} <-
+           request(pid, "turn/interrupt", %{"threadId" => thread_id, "turnId" => turn_id}),
          do: :ok
   end
 
@@ -109,7 +117,9 @@ defmodule SynapsisLocalAgents.Codex do
   defp result({:error, %Error{code: :unvalidated_response, wire: %{"result" => result}}}),
     do: {:ok, result}
 
-  defp result({:error, %Error{code: :upstream_error, wire: %{"error" => %{"message" => message}}}})
+  defp result(
+         {:error, %Error{code: :upstream_error, wire: %{"error" => %{"message" => message}}}}
+       )
        when is_binary(message),
        do: {:error, %{code: :upstream_error, message: String.slice(message, 0, 300)}}
 
@@ -127,7 +137,10 @@ defmodule SynapsisLocalAgents.Codex do
   def handle_continue(:boot, state) do
     with {:ok, session} <- Session.start_link(transport: transport(state.config), owner: self()),
          {:ok, _} <-
-           Session.initialize(session, %{"name" => "synapsis", "version" => version()}, %{"experimentalApi" => false},
+           Session.initialize(
+             session,
+             %{"name" => "synapsis", "version" => version()},
+             %{"experimentalApi" => false},
              timeout_ms: @request_timeout
            ) do
       Logger.info("codex_session_ready", agent_id: state.config.id)
@@ -140,7 +153,9 @@ defmodule SynapsisLocalAgents.Codex do
   end
 
   @impl GenServer
-  def handle_call(:session, _from, %{session: nil} = state), do: {:reply, {:error, :not_ready}, state}
+  def handle_call(:session, _from, %{session: nil} = state),
+    do: {:reply, {:error, :not_ready}, state}
+
   def handle_call(:session, _from, state), do: {:reply, {:ok, state.session}, state}
 
   def handle_call(:stop, _from, %{session: session} = state) do
@@ -154,7 +169,10 @@ defmodule SynapsisLocalAgents.Codex do
     {:noreply, state}
   end
 
-  def handle_info({:codex_driver, session, {:gap, %{reason: reason}}}, %{session: session} = state) do
+  def handle_info(
+        {:codex_driver, session, {:gap, %{reason: reason}}},
+        %{session: session} = state
+      ) do
     {:stop, {:codex_disconnected, reason}, state}
   end
 
@@ -198,7 +216,10 @@ defmodule SynapsisLocalAgents.Codex do
     end
   end
 
-  defp handle_event(%{kind: :server_request, handle: handle, wire: %{"method" => method} = wire}, state) do
+  defp handle_event(
+         %{kind: :server_request, handle: handle, wire: %{"method" => method} = wire},
+         state
+       ) do
     params = wire["params"] || %{}
 
     if method in @approval_methods do
@@ -213,7 +234,12 @@ defmodule SynapsisLocalAgents.Codex do
       })
     else
       Logger.info("codex_server_request_unsupported", method: method)
-      Session.respond(state.session, handle, {:error, %{"code" => -32601, "message" => "unsupported by synapsis"}})
+
+      Session.respond(
+        state.session,
+        handle,
+        {:error, %{"code" => -32601, "message" => "unsupported by synapsis"}}
+      )
     end
   end
 
@@ -230,37 +256,59 @@ defmodule SynapsisLocalAgents.Codex do
       type: :turn_completed,
       thread_id: p["threadId"],
       turn_id: get_in(p, ["turn", "id"]),
-      data: %{status: get_in(p, ["turn", "status"]), error: get_in(p, ["turn", "error", "message"])}
+      data: %{
+        status: get_in(p, ["turn", "status"]),
+        error: get_in(p, ["turn", "error", "message"])
+      }
     }
   end
 
   defp notification("item/agentMessage/delta", p) do
-    %Event{type: :item_delta, thread_id: p["threadId"], turn_id: p["turnId"], item_id: p["itemId"],
-      data: %{delta: p["delta"]}}
+    %Event{
+      type: :item_delta,
+      thread_id: p["threadId"],
+      turn_id: p["turnId"],
+      item_id: p["itemId"],
+      data: %{delta: p["delta"]}
+    }
   end
 
   defp notification(method, p) when method in ["item/started", "item/completed"] do
     item = p["item"] || %{}
     type = if method == "item/started", do: :item_started, else: :item_completed
 
-    %Event{type: type, thread_id: p["threadId"], turn_id: p["turnId"], item_id: item["id"],
-      data: %{item: %{type: item["type"], text: item_text(item)}}}
+    %Event{
+      type: type,
+      thread_id: p["threadId"],
+      turn_id: p["turnId"],
+      item_id: item["id"],
+      data: %{item: %{type: item["type"], text: item_text(item)}}
+    }
   end
 
   defp notification(_method, _params), do: nil
 
-  defp notify(state, event), do: send(state.owner, {:local_agent_event, %{event | agent_id: state.config.id}})
+  defp notify(state, event),
+    do: send(state.owner, {:local_agent_event, %{event | agent_id: state.config.id}})
 
   # ── Mapping helpers ───────────────────────────────────────────────────────
 
   defp thread_summary(thread) do
-    %{id: thread["id"], title: thread["name"] || thread["preview"], updated_at: unix_iso(thread["updatedAt"])}
+    %{
+      id: thread["id"],
+      title: thread["name"] || thread["preview"],
+      updated_at: unix_iso(thread["updatedAt"])
+    }
   end
 
   defp turn(turn) do
     items =
       for item <- turn["items"] || [], item["type"] in ["userMessage", "agentMessage"] do
-        %{id: item["id"], role: if(item["type"] == "userMessage", do: :user, else: :agent), text: item_text(item)}
+        %{
+          id: item["id"],
+          role: if(item["type"] == "userMessage", do: :user, else: :agent),
+          text: item_text(item)
+        }
       end
 
     %{id: turn["id"], status: turn["status"], items: items}

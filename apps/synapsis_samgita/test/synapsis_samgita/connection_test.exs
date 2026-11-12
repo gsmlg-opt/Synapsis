@@ -6,12 +6,14 @@ defmodule SynapsisSamgita.ConnectionTest do
   setup do
     Synapsis.DataCase.clear_config_store(:samgita)
     SynapsisSamgita.disconnect()
+
     on_exit(fn ->
       for {_, pid, _, _} <- DynamicSupervisor.which_children(SynapsisSamgita.AttemptSupervisor),
           do: DynamicSupervisor.terminate_child(SynapsisSamgita.AttemptSupervisor, pid)
 
       SynapsisSamgita.disconnect()
     end)
+
     %{server: configure!()}
   end
 
@@ -55,8 +57,13 @@ defmodule SynapsisSamgita.ConnectionTest do
       send(test_pid, {:claim_body, body})
 
       json(conn, 201, %{
-        "data" => %{"id" => "a-1", "task_id" => "t-1", "state" => "leased", "version" => 1,
-                    "lease_expires_at" => "2026-11-12T00:02:00Z"}
+        "data" => %{
+          "id" => "a-1",
+          "task_id" => "t-1",
+          "state" => "leased",
+          "version" => 1,
+          "lease_expires_at" => "2026-11-12T00:02:00Z"
+        }
       })
     end)
 

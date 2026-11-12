@@ -8,7 +8,13 @@ defmodule SynapsisSamgita.APITest do
 
   setup do
     server = Gaoxy.Test.open()
-    conn = %{base_url: Gaoxy.Test.url(server) |> String.trim_trailing("/"), credential: @credential, connection_id: nil}
+
+    conn = %{
+      base_url: Gaoxy.Test.url(server) |> String.trim_trailing("/"),
+      credential: @credential,
+      connection_id: nil
+    }
+
     %{server: server, conn: conn}
   end
 
@@ -23,13 +29,17 @@ defmodule SynapsisSamgita.APITest do
     {Jason.decode!(raw), conn}
   end
 
-  test "connect/1 authenticates and sends a command_id without a connection header", %{server: s, conn: c} do
+  test "connect/1 authenticates and sends a command_id without a connection header", %{
+    server: s,
+    conn: c
+  } do
     Gaoxy.Test.expect_once(s, "POST", "/api/agent/connect", fn conn ->
       headers = Map.new(conn.req_headers)
       assert headers["authorization"] == "Bearer " <> @credential
       refute Map.has_key?(headers, "x-agent-connection")
       {body, conn} = body(conn)
       assert {:ok, _} = Ecto.UUID.cast(body["command_id"])
+
       json(conn, 201, %{"data" => %{"id" => "conn-1", "agent_id" => "agent-1", "generation" => 2}})
     end)
 
@@ -44,10 +54,14 @@ defmodule SynapsisSamgita.APITest do
       json(conn, 200, %{"data" => [%{"id" => "t-1"}], "limit" => 100, "offset" => 0})
     end)
 
-    assert {:ok, [%{"id" => "t-1"}]} = API.list_tasks(%{c | connection_id: "conn-1"}, "p-1", "agent-1")
+    assert {:ok, [%{"id" => "t-1"}]} =
+             API.list_tasks(%{c | connection_id: "conn-1"}, "p-1", "agent-1")
   end
 
-  test "claim/5 and the attempt commands send version, proof and command ids", %{server: s, conn: c} do
+  test "claim/5 and the attempt commands send version, proof and command ids", %{
+    server: s,
+    conn: c
+  } do
     c = %{c | connection_id: "conn-1"}
 
     Gaoxy.Test.expect_once(s, "POST", "/api/agent/projects/p-1/tasks/t-1/claim", fn conn ->
@@ -113,7 +127,11 @@ defmodule SynapsisSamgita.APITest do
     assert {:error, %{status: 409, code: "stale_version"}} =
              API.start(%{c | connection_id: "conn-1"}, "p-1", "a-1", 1, "v1.k.p")
 
-    log = capture_log(fn -> assert {:error, %{status: 401, code: "unauthorized"}} = API.connect(c) end)
+    log =
+      capture_log(fn ->
+        assert {:error, %{status: 401, code: "unauthorized"}} = API.connect(c)
+      end)
+
     refute log =~ @credential
   end
 

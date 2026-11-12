@@ -14,7 +14,12 @@ defmodule SynapsisLocalAgents.CodexTest do
 
   setup do
     previous = Application.get_env(:synapsis_local_agents, :codex_transport)
-    Application.put_env(:synapsis_local_agents, :codex_transport, {ScriptedTransport, observer: self()})
+
+    Application.put_env(
+      :synapsis_local_agents,
+      :codex_transport,
+      {ScriptedTransport, observer: self()}
+    )
 
     on_exit(fn ->
       if previous,
@@ -22,7 +27,13 @@ defmodule SynapsisLocalAgents.CodexTest do
         else: Application.delete_env(:synapsis_local_agents, :codex_transport)
     end)
 
-    config = %LocalAgentConfig{id: "codex-1", name: "Codex", kind: "codex", executable: "/bin/true"}
+    config = %LocalAgentConfig{
+      id: "codex-1",
+      name: "Codex",
+      kind: "codex",
+      executable: "/bin/true"
+    }
+
     Process.flag(:trap_exit, true)
     {:ok, pid} = Codex.start_link(config, self())
     assert_receive {:transport_opened, session}, 2_000
@@ -43,12 +54,21 @@ defmodule SynapsisLocalAgents.CodexTest do
 
   test "start_turn sends the text input and returns the turn id", %{pid: pid, session: s} do
     {result, wire} =
-      answering(s, "turn/start", %{"turn" => %{"id" => "tu-1", "items" => [], "status" => "inProgress"}}, fn ->
-        Codex.start_turn(pid, "th-1", "hello")
-      end)
+      answering(
+        s,
+        "turn/start",
+        %{"turn" => %{"id" => "tu-1", "items" => [], "status" => "inProgress"}},
+        fn ->
+          Codex.start_turn(pid, "th-1", "hello")
+        end
+      )
 
     assert {:ok, %{turn_id: "tu-1"}} = result
-    assert wire["params"] == %{"threadId" => "th-1", "input" => [%{"type" => "text", "text" => "hello"}]}
+
+    assert wire["params"] == %{
+             "threadId" => "th-1",
+             "input" => [%{"type" => "text", "text" => "hello"}]
+           }
   end
 
   defp failing(session, method, error, fun) do
@@ -62,26 +82,42 @@ defmodule SynapsisLocalAgents.CodexTest do
 
   test "read_thread takes history from thread/resume", %{pid: pid, session: s} do
     turns = [
-      %{"id" => "tu-1", "status" => "completed", "items" => [
-        %{"type" => "userMessage", "id" => "i-1", "content" => [%{"type" => "text", "text" => "hello there"}]},
-        %{"type" => "reasoning", "id" => "i-r"},
-        %{"type" => "agentMessage", "id" => "i-2", "text" => "hi from codex"}
-      ]}
+      %{
+        "id" => "tu-1",
+        "status" => "completed",
+        "items" => [
+          %{
+            "type" => "userMessage",
+            "id" => "i-1",
+            "content" => [%{"type" => "text", "text" => "hello there"}]
+          },
+          %{"type" => "reasoning", "id" => "i-r"},
+          %{"type" => "agentMessage", "id" => "i-2", "text" => "hi from codex"}
+        ]
+      }
     ]
 
     {result, _} =
-      answering(s, "thread/resume", %{"thread" => %{"id" => "th-1", "turns" => turns}}, fn -> Codex.read_thread(pid, "th-1") end)
+      answering(s, "thread/resume", %{"thread" => %{"id" => "th-1", "turns" => turns}}, fn ->
+        Codex.read_thread(pid, "th-1")
+      end)
 
     assert {:ok, %{id: "th-1", turns: [%{id: "tu-1", items: items}]}} = result
     assert [%{role: :user, text: "hello there"}, %{role: :agent, text: "hi from codex"}] = items
   end
 
-  test "a fresh thread has no rollout: resume succeeds and history is empty", %{pid: pid, session: s} do
+  test "a fresh thread has no rollout: resume succeeds and history is empty", %{
+    pid: pid,
+    session: s
+  } do
     task = failing(s, "thread/resume", @no_rollout, fn -> Codex.resume_thread(pid, "th-new") end)
     assert {:ok, %{id: "th-new"}} = Task.await(task)
 
     task = failing(s, "thread/resume", @no_rollout, fn -> Codex.read_thread(pid, "th-new") end)
-    assert_receive {:sent, ^s, %{"id" => id, "method" => "thread/read", "params" => params}}, 2_000
+
+    assert_receive {:sent, ^s, %{"id" => id, "method" => "thread/read", "params" => params}},
+                   2_000
+
     refute Map.has_key?(params, "includeTurns")
     send(s, {:incoming, %{"id" => id, "result" => %{"thread" => %{"id" => "th-new"}}}})
     assert {:ok, %{id: "th-new", turns: []}} = Task.await(task)
@@ -90,56 +126,131 @@ defmodule SynapsisLocalAgents.CodexTest do
   test "upstream errors carry Codex's message", %{pid: pid, session: s} do
     error = %{"code" => -32600, "message" => "thread th-1 already has an active writer"}
     task = failing(s, "thread/resume", error, fn -> Codex.resume_thread(pid, "th-1") end)
-    assert {:error, %{code: :upstream_error, message: "thread th-1 already has an active writer"}} = Task.await(task)
+
+    assert {:error, %{code: :upstream_error, message: "thread th-1 already has an active writer"}} =
+             Task.await(task)
   end
 
   test "list_threads maps thread/list data", %{pid: pid, session: s} do
     data = [%{"id" => "th-1", "preview" => "First chat", "updatedAt" => 1_762_905_600}]
-    {result, _} = answering(s, "thread/list", %{"data" => data}, fn -> Codex.list_threads(pid) end)
+
+    {result, _} =
+      answering(s, "thread/list", %{"data" => data}, fn -> Codex.list_threads(pid) end)
+
     assert {:ok, [%{id: "th-1", title: "First chat"}]} = result
   end
 
   test "a result the pinned schema rejects is still read from the wire", %{pid: pid, session: s} do
     {result, _} =
-      answering(s, "thread/start", %{"thread" => %{"id" => "th-new"}}, fn -> Codex.start_thread(pid) end)
+      answering(s, "thread/start", %{"thread" => %{"id" => "th-new"}}, fn ->
+        Codex.start_thread(pid)
+      end)
 
     assert {:ok, %{id: "th-new"}} = result
   end
 
   test "deltas and turn completion become local agent events", %{session: s} do
-    send(s, {:incoming, %{"method" => "item/agentMessage/delta",
-      "params" => %{"threadId" => "th-1", "turnId" => "tu-1", "itemId" => "i-1", "delta" => "Hel"}}})
+    send(
+      s,
+      {:incoming,
+       %{
+         "method" => "item/agentMessage/delta",
+         "params" => %{
+           "threadId" => "th-1",
+           "turnId" => "tu-1",
+           "itemId" => "i-1",
+           "delta" => "Hel"
+         }
+       }}
+    )
 
-    send(s, {:incoming, %{"method" => "turn/completed",
-      "params" => %{"threadId" => "th-1", "turn" => %{"id" => "tu-1", "items" => [], "status" => "interrupted"}}}})
+    send(
+      s,
+      {:incoming,
+       %{
+         "method" => "turn/completed",
+         "params" => %{
+           "threadId" => "th-1",
+           "turn" => %{"id" => "tu-1", "items" => [], "status" => "interrupted"}
+         }
+       }}
+    )
 
     assert_receive {:local_agent_event,
-                    %Event{type: :item_delta, thread_id: "th-1", turn_id: "tu-1", item_id: "i-1", data: %{delta: "Hel"}}},
+                    %Event{
+                      type: :item_delta,
+                      thread_id: "th-1",
+                      turn_id: "tu-1",
+                      item_id: "i-1",
+                      data: %{delta: "Hel"}
+                    }},
                    2_000
 
     assert_receive {:local_agent_event,
-                    %Event{type: :turn_completed, thread_id: "th-1", turn_id: "tu-1", data: %{status: "interrupted"}}},
+                    %Event{
+                      type: :turn_completed,
+                      thread_id: "th-1",
+                      turn_id: "tu-1",
+                      data: %{status: "interrupted"}
+                    }},
                    2_000
   end
 
   test "a failed turn carries Codex's error message", %{session: s} do
-    send(s, {:incoming, %{"method" => "turn/completed",
-      "params" => %{"threadId" => "th-1", "turn" => %{"id" => "tu-1", "items" => [], "status" => "failed",
-        "error" => %{"message" => "Missing environment variable: `BP_TOKEN`.", "codexErrorInfo" => "other"}}}}})
+    send(
+      s,
+      {:incoming,
+       %{
+         "method" => "turn/completed",
+         "params" => %{
+           "threadId" => "th-1",
+           "turn" => %{
+             "id" => "tu-1",
+             "items" => [],
+             "status" => "failed",
+             "error" => %{
+               "message" => "Missing environment variable: `BP_TOKEN`.",
+               "codexErrorInfo" => "other"
+             }
+           }
+         }
+       }}
+    )
 
     assert_receive {:local_agent_event,
-                    %Event{type: :turn_completed, data: %{status: "failed", error: "Missing environment variable: `BP_TOKEN`."}}},
+                    %Event{
+                      type: :turn_completed,
+                      data: %{
+                        status: "failed",
+                        error: "Missing environment variable: `BP_TOKEN`."
+                      }
+                    }},
                    2_000
   end
 
   test "approval requests are accepted automatically", %{session: s} do
-    send(s, {:incoming, %{"id" => "srv-1", "method" => "item/commandExecution/requestApproval",
-      "params" => %{"threadId" => "th-1", "turnId" => "tu-1", "itemId" => "i-1", "startedAtMs" => 1}}})
+    send(
+      s,
+      {:incoming,
+       %{
+         "id" => "srv-1",
+         "method" => "item/commandExecution/requestApproval",
+         "params" => %{
+           "threadId" => "th-1",
+           "turnId" => "tu-1",
+           "itemId" => "i-1",
+           "startedAtMs" => 1
+         }
+       }}
+    )
 
     assert_receive {:sent, ^s, %{"id" => "srv-1", "result" => %{"decision" => "accept"}}}, 2_000
 
     assert_receive {:local_agent_event,
-                    %Event{type: :interaction, data: %{method: "item/commandExecution/requestApproval", decision: "accept"}}},
+                    %Event{
+                      type: :interaction,
+                      data: %{method: "item/commandExecution/requestApproval", decision: "accept"}
+                    }},
                    2_000
   end
 
@@ -167,8 +278,14 @@ defmodule SynapsisLocalAgents.CodexTest do
       env_key = "OTHER_KEY"
       """)
 
-      config = %LocalAgentConfig{id: "c", name: "Codex", kind: "codex", executable: "/bin/codex",
-        args: ["app-server"], codex_home: dir}
+      config = %LocalAgentConfig{
+        id: "c",
+        name: "Codex",
+        kind: "codex",
+        executable: "/bin/codex",
+        args: ["app-server"],
+        codex_home: dir
+      }
 
       {SamgitaCodexDriver.Transport.Stdio, opts} = Codex.stdio_transport(config)
       assert "PATH" in opts[:inherit_env]
@@ -180,8 +297,14 @@ defmodule SynapsisLocalAgents.CodexTest do
 
     @tag :tmp_dir
     test "a missing or invalid Codex config keeps the default env", %{tmp_dir: dir} do
-      config = %LocalAgentConfig{id: "c", name: "Codex", kind: "codex", executable: "/bin/codex",
-        args: [], codex_home: dir}
+      config = %LocalAgentConfig{
+        id: "c",
+        name: "Codex",
+        kind: "codex",
+        executable: "/bin/codex",
+        args: [],
+        codex_home: dir
+      }
 
       {_, opts} = Codex.stdio_transport(config)
       assert opts[:inherit_env] == ~w(PATH LANG LC_ALL LC_CTYPE TMPDIR TEMP TMP SystemRoot WINDIR)

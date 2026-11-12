@@ -10,7 +10,9 @@ defmodule SynapsisLocalAgents.RunnerTest do
     previous = Application.get_env(:synapsis_local_agents, :adapters)
     Application.put_env(:synapsis_local_agents, :adapters, %{"codex" => FakeAdapter})
     :persistent_term.put({FakeAdapter, :observer}, self())
-    {:ok, config} = LocalAgentConfigs.create(%{name: "Codex", kind: "codex", executable: "/bin/true"})
+
+    {:ok, config} =
+      LocalAgentConfigs.create(%{name: "Codex", kind: "codex", executable: "/bin/true"})
 
     on_exit(fn ->
       SynapsisLocalAgents.stop(config.id)
@@ -35,7 +37,10 @@ defmodule SynapsisLocalAgents.RunnerTest do
     SynapsisLocalAgents.subscribe_all()
 
     assert :ok = SynapsisLocalAgents.start(id)
-    assert_receive {:local_agent_event, %Event{agent_id: ^id, type: :status, data: %{state: :running}}}
+
+    assert_receive {:local_agent_event,
+                    %Event{agent_id: ^id, type: :status, data: %{state: :running}}}
+
     assert_receive {:local_agent_event, %Event{type: :status}}
     assert %{state: :running} = SynapsisLocalAgents.status(id)
   end
@@ -47,7 +52,14 @@ defmodule SynapsisLocalAgents.RunnerTest do
     assert {:ok, %{turn_id: "tu-2"}} = SynapsisLocalAgents.start_turn(id, "th-1", "hi")
     assert_receive {:fake_adapter_call, :start_turn, ["th-1", "hi"]}
 
-    delta = %Event{agent_id: id, type: :item_delta, thread_id: "th-1", turn_id: "tu-2", data: %{delta: "he"}}
+    delta = %Event{
+      agent_id: id,
+      type: :item_delta,
+      thread_id: "th-1",
+      turn_id: "tu-2",
+      data: %{delta: "he"}
+    }
+
     FakeAdapter.emit(SynapsisLocalAgents.Runner.adapter(id), delta)
     assert_receive {:local_agent_event, ^delta}
   end
@@ -57,7 +69,10 @@ defmodule SynapsisLocalAgents.RunnerTest do
     SynapsisLocalAgents.subscribe(id)
 
     FakeAdapter.crash(SynapsisLocalAgents.Runner.adapter(id), {:codex_exited, 1})
-    assert_receive {:local_agent_event, %Event{type: :status, data: %{state: :crashed, last_error: error}}}
+
+    assert_receive {:local_agent_event,
+                    %Event{type: :status, data: %{state: :crashed, last_error: error}}}
+
     assert error =~ "codex_exited"
     assert %{state: :crashed} = SynapsisLocalAgents.status(id)
 

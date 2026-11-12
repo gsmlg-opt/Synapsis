@@ -6,7 +6,13 @@ defmodule SynapsisSamgita.AttemptTest do
 
   setup do
     server = Gaoxy.Test.open()
-    conn = %{base_url: String.trim_trailing(Gaoxy.Test.url(server), "/"), credential: String.duplicate("c", 43), connection_id: "conn-1"}
+
+    conn = %{
+      base_url: String.trim_trailing(Gaoxy.Test.url(server), "/"),
+      credential: String.duplicate("c", 43),
+      connection_id: "conn-1"
+    }
+
     {:ok, proofs} = Agent.start_link(fn -> ["v1.k.p0", "v1.k.p1", "v1.k.p2", "v1.k.p3"] end)
 
     Gaoxy.Test.stub(server, "GET", "/api/agent/projects/p-1/attempts/a-1/proof", fn conn ->
@@ -14,8 +20,13 @@ defmodule SynapsisSamgita.AttemptTest do
       json(conn, 200, %{"data" => %{"attempt_id" => "a-1", "proof" => proof}})
     end)
 
-    attempt = %{"id" => "a-1", "task_id" => "t-1", "state" => "leased", "version" => 1,
-                "lease_expires_at" => DateTime.to_iso8601(DateTime.add(DateTime.utc_now(), 120))}
+    attempt = %{
+      "id" => "a-1",
+      "task_id" => "t-1",
+      "state" => "leased",
+      "version" => 1,
+      "lease_expires_at" => DateTime.to_iso8601(DateTime.add(DateTime.utc_now(), 120))
+    }
 
     %{server: server, conn: conn, attempt: attempt}
   end
@@ -24,7 +35,11 @@ defmodule SynapsisSamgita.AttemptTest do
     SynapsisSamgita.Events.subscribe_attempts()
 
     start_supervised!(
-      {Attempt, Keyword.merge([conn: ctx.conn, project_id: "p-1", attempt: ctx.attempt, notify: self(), registry: nil], opts)}
+      {Attempt,
+       Keyword.merge(
+         [conn: ctx.conn, project_id: "p-1", attempt: ctx.attempt, notify: self(), registry: nil],
+         opts
+       )}
     )
   end
 
@@ -34,13 +49,23 @@ defmodule SynapsisSamgita.AttemptTest do
     Gaoxy.Test.stub(ctx.server, "POST", "/api/agent/projects/p-1/attempts/a-1/renew", fn conn ->
       {body, conn} = body(conn)
       send(test_pid, {:renew, body["proof"], body["expected_version"]})
-      json(conn, 200, %{"data" => %{"id" => "a-1", "state" => "leased", "version" => body["expected_version"] + 1}})
+
+      json(conn, 200, %{
+        "data" => %{"id" => "a-1", "state" => "leased", "version" => body["expected_version"] + 1}
+      })
     end)
 
     Gaoxy.Test.stub(ctx.server, "POST", "/api/agent/projects/p-1/attempts/a-1/start", fn conn ->
       {body, conn} = body(conn)
       send(test_pid, {:start, body["proof"], body["expected_version"]})
-      json(conn, 200, %{"data" => %{"id" => "a-1", "state" => "running", "version" => body["expected_version"] + 1}})
+
+      json(conn, 200, %{
+        "data" => %{
+          "id" => "a-1",
+          "state" => "running",
+          "version" => body["expected_version"] + 1
+        }
+      })
     end)
 
     pid = start_attempt(ctx, renew_interval_ms: 50)
@@ -77,7 +102,9 @@ defmodule SynapsisSamgita.AttemptTest do
     pid = start_attempt(ctx)
     ref = Process.monitor(pid)
 
-    assert {:ok, %{state: "succeeded"}} = Attempt.report(pid, "succeeded", true, %{"note" => "ok"})
+    assert {:ok, %{state: "succeeded"}} =
+             Attempt.report(pid, "succeeded", true, %{"note" => "ok"})
+
     assert_receive {:DOWN, ^ref, :process, ^pid, :normal}
     assert_receive {:attempt_view, %{state: "succeeded"}}
   end
@@ -87,7 +114,11 @@ defmodule SynapsisSamgita.AttemptTest do
       json(conn, 409, %{"errors" => %{"code" => "ownership_lost"}})
     end)
 
-    expired = %{ctx.attempt | "lease_expires_at" => DateTime.to_iso8601(DateTime.add(DateTime.utc_now(), -1))}
+    expired = %{
+      ctx.attempt
+      | "lease_expires_at" => DateTime.to_iso8601(DateTime.add(DateTime.utc_now(), -1))
+    }
+
     pid = start_attempt(%{ctx | attempt: expired}, renew_interval_ms: 20)
     ref = Process.monitor(pid)
 

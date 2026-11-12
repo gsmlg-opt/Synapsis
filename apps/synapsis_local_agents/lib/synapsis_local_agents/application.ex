@@ -9,6 +9,7 @@ defmodule SynapsisLocalAgents.Application do
       {DynamicSupervisor, name: SynapsisLocalAgents.RunnerSupervisor, strategy: :one_for_one},
       Supervisor.child_spec({Task, &boot/0}, restart: :temporary)
     ]
+
     opts = [strategy: :one_for_one, name: SynapsisLocalAgents.Supervisor]
     Supervisor.start_link(children, opts)
   end

@@ -30,7 +30,9 @@ defmodule SynapsisLocalAgents do
     end
   end
 
-  def subscribe(agent_id), do: Phoenix.PubSub.subscribe(Synapsis.PubSub, "local_agent:#{agent_id}")
+  def subscribe(agent_id),
+    do: Phoenix.PubSub.subscribe(Synapsis.PubSub, "local_agent:#{agent_id}")
+
   def subscribe_all, do: Phoenix.PubSub.subscribe(Synapsis.PubSub, "local_agents")
 
   def list_threads(agent_id), do: request(agent_id, :list_threads, [])

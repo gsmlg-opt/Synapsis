@@ -57,7 +57,9 @@ defmodule SynapsisLocalAgents.Runner do
          {:ok, module} <- Adapter.module_for(config.kind),
          {:ok, pid} <- module.start_link(config, self()) do
       Logger.info("local_agent_starting", agent_id: s.id, kind: config.kind)
-      {:reply, :ok, publish(%{s | state: :starting, last_error: nil, module: module, adapter: pid})}
+
+      {:reply, :ok,
+       publish(%{s | state: :starting, last_error: nil, module: module, adapter: pid})}
     else
       nil -> {:reply, {:error, :not_found}, s}
       :error -> {:reply, {:error, :unsupported_kind}, s}
@@ -111,9 +113,11 @@ defmodule SynapsisLocalAgents.Runner do
     end
   end
 
-  defp crashed(s, reason), do: %{s | state: :crashed, last_error: short(reason), adapter: nil, module: nil}
+  defp crashed(s, reason),
+    do: %{s | state: :crashed, last_error: short(reason), adapter: nil, module: nil}
 
-  defp short(reason), do: reason |> inspect(limit: 5, printable_limit: 200) |> String.slice(0, 200)
+  defp short(reason),
+    do: reason |> inspect(limit: 5, printable_limit: 200) |> String.slice(0, 200)
 
   defp status_of(s), do: %{state: s.state, last_error: s.last_error}
 
@@ -125,5 +129,6 @@ defmodule SynapsisLocalAgents.Runner do
   end
 
   defp broadcast(id, event),
-    do: Phoenix.PubSub.broadcast(Synapsis.PubSub, "local_agent:#{id}", {:local_agent_event, event})
+    do:
+      Phoenix.PubSub.broadcast(Synapsis.PubSub, "local_agent:#{id}", {:local_agent_event, event})
 end

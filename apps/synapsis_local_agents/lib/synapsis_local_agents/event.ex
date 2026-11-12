@@ -12,8 +12,14 @@ defmodule SynapsisLocalAgents.Event do
   defstruct [:agent_id, :type, :thread_id, :turn_id, :item_id, data: %{}]
 
   @type type ::
-          :status | :thread_started | :turn_started | :turn_completed | :item_started
-          | :item_delta | :item_completed | :interaction
+          :status
+          | :thread_started
+          | :turn_started
+          | :turn_completed
+          | :item_started
+          | :item_delta
+          | :item_completed
+          | :interaction
 
   @type t :: %__MODULE__{
           agent_id: String.t() | nil,
