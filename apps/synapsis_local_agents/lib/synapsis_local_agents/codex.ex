@@ -40,19 +40,37 @@ defmodule SynapsisLocalAgents.Codex do
     with {:ok, result} <- request(pid, "thread/start", %{}), do: {:ok, %{id: result["thread"]["id"]}}
   end
 
+  # Codex returns a thread's turns from `thread/resume` (`thread/read` with
+  # `includeTurns` is unsupported). A thread created in this process has no
+  # rollout yet: it is already loaded and has no history.
   @impl SynapsisLocalAgents.Adapter
   def read_thread(pid, thread_id) do
-    with {:ok, result} <-
-           request(pid, "thread/read", %{"threadId" => thread_id, "includeTurns" => true}, effect: :read) do
-      {:ok, %{id: thread_id, turns: Enum.map(result["thread"]["turns"] || [], &turn/1)}}
+    case request(pid, "thread/resume", %{"threadId" => thread_id}) do
+      {:ok, result} ->
+        {:ok, %{id: thread_id, turns: Enum.map(get_in(result, ["thread", "turns"]) || [], &turn/1)}}
+
+      {:error, error} ->
+        if no_rollout?(error) do
+          with {:ok, _} <- request(pid, "thread/read", %{"threadId" => thread_id}, effect: :read),
+               do: {:ok, %{id: thread_id, turns: []}}
+        else
+          {:error, error}
+        end
     end
   end
 
   @impl SynapsisLocalAgents.Adapter
   def resume_thread(pid, thread_id) do
-    with {:ok, result} <- request(pid, "thread/resume", %{"threadId" => thread_id}),
-         do: {:ok, %{id: get_in(result, ["thread", "id"]) || thread_id}}
+    case request(pid, "thread/resume", %{"threadId" => thread_id}) do
+      {:ok, result} -> {:ok, %{id: get_in(result, ["thread", "id"]) || thread_id}}
+      {:error, error} -> if no_rollout?(error), do: {:ok, %{id: thread_id}}, else: {:error, error}
+    end
   end
+
+  defp no_rollout?(%{code: :upstream_error, message: message}) when is_binary(message),
+    do: String.contains?(message, "no rollout found")
+
+  defp no_rollout?(_), do: false
 
   @impl SynapsisLocalAgents.Adapter
   def start_turn(pid, thread_id, text) do
@@ -90,6 +108,10 @@ defmodule SynapsisLocalAgents.Codex do
 
   defp result({:error, %Error{code: :unvalidated_response, wire: %{"result" => result}}}),
     do: {:ok, result}
+
+  defp result({:error, %Error{code: :upstream_error, wire: %{"error" => %{"message" => message}}}})
+       when is_binary(message),
+       do: {:error, %{code: :upstream_error, message: String.slice(message, 0, 300)}}
 
   defp result({:error, %Error{code: code}}), do: {:error, code}
 

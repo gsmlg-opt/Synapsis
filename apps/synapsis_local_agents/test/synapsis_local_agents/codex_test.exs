@@ -51,6 +51,48 @@ defmodule SynapsisLocalAgents.CodexTest do
     assert wire["params"] == %{"threadId" => "th-1", "input" => [%{"type" => "text", "text" => "hello"}]}
   end
 
+  defp failing(session, method, error, fun) do
+    task = Task.async(fun)
+    assert_receive {:sent, ^session, %{"id" => id, "method" => ^method}}, 2_000
+    send(session, {:incoming, %{"id" => id, "error" => error}})
+    task
+  end
+
+  @no_rollout %{"code" => -32600, "message" => "no rollout found for thread id th-new"}
+
+  test "read_thread takes history from thread/resume", %{pid: pid, session: s} do
+    turns = [
+      %{"id" => "tu-1", "status" => "completed", "items" => [
+        %{"type" => "userMessage", "id" => "i-1", "content" => [%{"type" => "text", "text" => "hello there"}]},
+        %{"type" => "reasoning", "id" => "i-r"},
+        %{"type" => "agentMessage", "id" => "i-2", "text" => "hi from codex"}
+      ]}
+    ]
+
+    {result, _} =
+      answering(s, "thread/resume", %{"thread" => %{"id" => "th-1", "turns" => turns}}, fn -> Codex.read_thread(pid, "th-1") end)
+
+    assert {:ok, %{id: "th-1", turns: [%{id: "tu-1", items: items}]}} = result
+    assert [%{role: :user, text: "hello there"}, %{role: :agent, text: "hi from codex"}] = items
+  end
+
+  test "a fresh thread has no rollout: resume succeeds and history is empty", %{pid: pid, session: s} do
+    task = failing(s, "thread/resume", @no_rollout, fn -> Codex.resume_thread(pid, "th-new") end)
+    assert {:ok, %{id: "th-new"}} = Task.await(task)
+
+    task = failing(s, "thread/resume", @no_rollout, fn -> Codex.read_thread(pid, "th-new") end)
+    assert_receive {:sent, ^s, %{"id" => id, "method" => "thread/read", "params" => params}}, 2_000
+    refute Map.has_key?(params, "includeTurns")
+    send(s, {:incoming, %{"id" => id, "result" => %{"thread" => %{"id" => "th-new"}}}})
+    assert {:ok, %{id: "th-new", turns: []}} = Task.await(task)
+  end
+
+  test "upstream errors carry Codex's message", %{pid: pid, session: s} do
+    error = %{"code" => -32600, "message" => "thread th-1 already has an active writer"}
+    task = failing(s, "thread/resume", error, fn -> Codex.resume_thread(pid, "th-1") end)
+    assert {:error, %{code: :upstream_error, message: "thread th-1 already has an active writer"}} = Task.await(task)
+  end
+
   test "list_threads maps thread/list data", %{pid: pid, session: s} do
     data = [%{"id" => "th-1", "preview" => "First chat", "updatedAt" => 1_762_905_600}]
     {result, _} = answering(s, "thread/list", %{"data" => data}, fn -> Codex.list_threads(pid) end)
