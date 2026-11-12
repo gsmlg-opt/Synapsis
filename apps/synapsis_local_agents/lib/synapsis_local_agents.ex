@@ -19,7 +19,7 @@ defmodule SynapsisLocalAgents do
   def start(agent_id) do
     case LocalAgentConfigs.get(agent_id) do
       nil -> {:error, :not_found}
-      _config -> agent_id |> ensure_runner() |> Runner.start()
+      _config -> with {:ok, pid} <- ensure_runner(agent_id), do: Runner.start(pid)
     end
   end
 
@@ -67,8 +67,10 @@ defmodule SynapsisLocalAgents do
 
   defp ensure_runner(agent_id) do
     case DynamicSupervisor.start_child(SynapsisLocalAgents.RunnerSupervisor, {Runner, agent_id}) do
-      {:ok, pid} -> pid
-      {:error, {:already_started, pid}} -> pid
+      {:ok, pid} -> {:ok, pid}
+      {:error, {:already_started, pid}} -> {:ok, pid}
+      {:error, reason} -> {:error, {:runner_start_failed, reason}}
+      :ignore -> {:error, {:runner_start_failed, :ignore}}
     end
   end
 end

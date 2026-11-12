@@ -143,14 +143,9 @@ defmodule SynapsisWeb.LocalAgentLive.Index do
 
   @impl true
   def handle_info({:local_agent_event, %Event{type: :status, agent_id: id}}, socket) do
+    was_running? = running?(socket, id)
     socket = load_agents(socket)
-    # A freshly started agent can now serve the page it was opened on.
-    if id == socket.assigns.agent_id and running?(socket, id) and socket.assigns.threads == [] and
-         is_nil(socket.assigns.thread_id) do
-      {:noreply, start_async(socket, :threads, fn -> SynapsisLocalAgents.list_threads(id) end)}
-    else
-      {:noreply, socket}
-    end
+    {:noreply, on_status(socket, id, was_running?, running?(socket, id))}
   end
 
   def handle_info({:local_agent_event, %Event{thread_id: thread_id} = event}, socket)
@@ -202,8 +197,35 @@ defmodule SynapsisWeb.LocalAgentLive.Index do
     )
   end
 
-  defp apply_event(socket, %Event{type: :turn_completed, data: %{status: status} = data}) do
-    # Keep any text still streaming as a finished agent message.
+  defp apply_event(socket, %Event{type: :turn_completed, data: %{status: status} = data}),
+    do: finish_turn(socket, status, data[:error])
+
+  defp apply_event(socket, _event), do: socket
+
+  # Status changes of the agent this page is showing.
+  defp on_status(%{assigns: %{agent_id: id}} = socket, id, was_running?, running?) do
+    %{thread_id: thread_id, threads: threads} = socket.assigns
+
+    cond do
+      # A (re)started agent can now serve the page it was opened on; any turn
+      # shown from before a crash is gone, so reload the thread from scratch.
+      running? and not was_running? and thread_id ->
+        socket
+        |> assign(messages: [], streaming: %{}, current_turn: nil, turn_status: nil)
+        |> start_async(:thread, fn -> open_thread(id, thread_id) end)
+
+      running? and threads == [] and is_nil(thread_id) ->
+        start_async(socket, :threads, fn -> SynapsisLocalAgents.list_threads(id) end)
+
+      true ->
+        socket
+    end
+  end
+
+  defp on_status(socket, _id, _was_running?, _running?), do: socket
+
+  # Keep any text still streaming as a finished agent message.
+  defp finish_turn(socket, status, error) do
     pending =
       socket.assigns.streaming
       |> Enum.sort_by(fn {_id, s} -> s.order end)
@@ -211,10 +233,8 @@ defmodule SynapsisWeb.LocalAgentLive.Index do
 
     socket
     |> update(:messages, &(&1 ++ pending))
-    |> assign(streaming: %{}, current_turn: nil, turn_status: status, turn_error: data[:error])
+    |> assign(streaming: %{}, current_turn: nil, turn_status: status, turn_error: error)
   end
-
-  defp apply_event(socket, _event), do: socket
 
   defp open_thread(agent_id, thread_id) do
     with {:ok, _} <- SynapsisLocalAgents.resume_thread(agent_id, thread_id),

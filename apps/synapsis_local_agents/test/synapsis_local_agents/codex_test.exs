@@ -196,6 +196,27 @@ defmodule SynapsisLocalAgents.CodexTest do
                    2_000
   end
 
+  test "a user message without content does not crash the adapter", %{pid: pid, session: s} do
+    send(
+      s,
+      {:incoming,
+       %{
+         "method" => "item/completed",
+         "params" => %{
+           "threadId" => "th-1",
+           "turnId" => "tu-1",
+           "item" => %{"type" => "userMessage", "id" => "i-1", "content" => nil}
+         }
+       }}
+    )
+
+    assert_receive {:local_agent_event,
+                    %Event{type: :item_completed, item_id: "i-1", data: %{item: %{text: nil}}}},
+                   2_000
+
+    assert Process.alive?(pid)
+  end
+
   test "a failed turn carries Codex's error message", %{session: s} do
     send(
       s,

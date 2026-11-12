@@ -314,10 +314,12 @@ defmodule SynapsisLocalAgents.Codex do
     %{id: turn["id"], status: turn["status"], items: items}
   end
 
-  defp item_text(%{"type" => "agentMessage", "text" => text}), do: text
+  defp item_text(%{"type" => "agentMessage", "text" => text}) when is_binary(text), do: text
 
-  defp item_text(%{"type" => "userMessage", "content" => content}) do
-    content |> Enum.filter(&(&1["type"] == "text")) |> Enum.map_join("\n", & &1["text"])
+  defp item_text(%{"type" => "userMessage", "content" => content}) when is_list(content) do
+    content
+    |> Enum.filter(&(is_map(&1) and &1["type"] == "text"))
+    |> Enum.map_join("\n", &(&1["text"] || ""))
   end
 
   defp item_text(_), do: nil

@@ -156,6 +156,27 @@ defmodule SynapsisWeb.LocalAgentLiveTest do
     assert has_element?(view, "#local-agent-#{id} [data-role=status]", "stopped")
   end
 
+  test "a restart after a crash drops the dead turn and reloads the thread", %{conn: conn, id: id} do
+    :ok = SynapsisLocalAgents.start(id)
+    {:ok, view, _html} = live(conn, ~p"/local-agents/#{id}/threads/th-1")
+    render_async(view)
+    assert_receive {:fake_adapter_call, :read_thread, ["th-1"]}
+    SynapsisLocalAgents.subscribe(id)
+
+    emit(id, type: :turn_started, thread_id: "th-1", turn_id: "tu-2")
+    assert has_element?(view, "[phx-click='interrupt_turn']")
+
+    Fake.crash(SynapsisLocalAgents.Runner.adapter(id), {:codex_exited, 7})
+    assert_receive {:local_agent_event, %Event{type: :status, data: %{state: :crashed}}}
+
+    :ok = SynapsisLocalAgents.start(id)
+    assert_receive {:local_agent_event, %Event{type: :status, data: %{state: :running}}}
+    render_async(view)
+    assert_receive {:fake_adapter_call, :read_thread, ["th-1"]}
+    refute has_element?(view, "[phx-click='interrupt_turn']")
+    refute has_element?(view, "[data-role=turn-status]")
+  end
+
   test "the page stays up while the runner is busy", %{conn: conn, id: id} do
     :ok = SynapsisLocalAgents.start(id)
     {:ok, view, _html} = live(conn, ~p"/local-agents")
