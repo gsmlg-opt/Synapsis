@@ -4,7 +4,11 @@ defmodule SynapsisSamgita.Application do
 
   @impl true
   def start(_type, _args) do
-    children = []
+    children = [
+      {Registry, keys: :unique, name: SynapsisSamgita.AttemptRegistry},
+      {DynamicSupervisor, name: SynapsisSamgita.AttemptSupervisor, strategy: :one_for_one},
+      SynapsisSamgita.Connection
+    ]
     opts = [strategy: :one_for_one, name: SynapsisSamgita.Supervisor]
     Supervisor.start_link(children, opts)
   end
