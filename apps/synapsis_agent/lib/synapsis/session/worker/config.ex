@@ -245,7 +245,9 @@ defmodule Synapsis.Session.Worker.Config do
         with {:ok, _permission} <-
                Synapsis.Tool.Permission.update_config(
                  updated_session.id,
-                 Synapsis.Tool.Permission.config_for_mode(agent[:permission_mode])
+                 Synapsis.Tool.Permission.config_for_mode(agent[:permission_mode],
+                   interactive: (updated_session.config || %{})["interactive"] == true
+                 )
                ) do
           {:ok, agent, updated_session}
         else

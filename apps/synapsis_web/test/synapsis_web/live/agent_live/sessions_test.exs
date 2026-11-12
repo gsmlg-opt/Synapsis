@@ -41,6 +41,34 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
     assert {:ok, []} = Sessions.list(agent.name)
   end
 
+  test "sessions created from the UI record an attending user for ask_user", %{conn: conn} do
+    {:ok, provider} =
+      Synapsis.Providers.create(%{
+        name: "attended-session-provider",
+        type: "openai",
+        config: %{"model_catalog_migrated" => true}
+      })
+
+    {:ok, _model} = Synapsis.Models.create(%{provider_id: provider.id, model: "chosen-model"})
+
+    {:ok, agent} =
+      AgentConfigs.create(%{
+        name: "attended-session-agent",
+        provider: provider.name,
+        model: "chosen-model"
+      })
+
+    {:ok, view, _} = live(conn, ~p"/agent/agents/#{agent.name}/sessions")
+    render_hook(view, "create_session", %{})
+    assert {:ok, [session]} = Sessions.list(agent.name)
+    on_exit(fn -> Sessions.delete(session.id) end)
+
+    assert session.config["interactive"] == true
+
+    assert %{mode: :interactive, allow_execute: :allow} =
+             Synapsis.Session.Store.get_value(session.id, "permission")
+  end
+
   setup do
     previous = Application.get_env(:synapsis_core, :mcp_refresh)
     Application.put_env(:synapsis_core, :mcp_refresh, {__MODULE__, :refresh_mcp, []})

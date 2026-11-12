@@ -137,13 +137,20 @@ defmodule Synapsis.Tool.Permission do
   @spec valid_permission_modes() :: [String.t()]
   def valid_permission_modes, do: @permission_modes
 
-  @doc "Map an agent permission mode to a session permission config."
-  @spec config_for_mode(String.t() | atom() | nil) :: map()
-  def config_for_mode(mode) do
+  @doc """
+  Map an agent permission mode to a session permission config.
+
+  `yolo` never asks for approval. Its snapshot mode still records whether a
+  person is attending the session (`interactive: true`, e.g. Web UI chats), which
+  is what lets the agent ask that person a question; unattended sessions such as
+  daemon runs stay `:autonomous` and refuse questions immediately.
+  """
+  @spec config_for_mode(String.t() | atom() | nil, keyword()) :: map()
+  def config_for_mode(mode, opts \\ []) do
     case normalize_permission_mode(mode) do
       "yolo" ->
         %{
-          mode: :autonomous,
+          mode: if(Keyword.get(opts, :interactive, false), do: :interactive, else: :autonomous),
           allow_read: :allow,
           allow_write: :allow,
           allow_execute: :allow,

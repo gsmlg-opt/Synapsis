@@ -66,6 +66,19 @@ defmodule Synapsis.Tool.PermissionTest do
              } = Permission.config_for_mode("yolo")
     end
 
+    test "yolo keeps its allowances but records an attending user as interactive" do
+      assert %{
+               mode: :interactive,
+               allow_read: :allow,
+               allow_write: :allow,
+               allow_execute: :allow,
+               allow_destructive: :allow,
+               tool_overrides: %{}
+             } = Permission.config_for_mode("yolo", interactive: true)
+
+      assert %{mode: :autonomous} = Permission.config_for_mode("yolo", interactive: false)
+    end
+
     test "ask allows reads, asks for write/execute, denies destructive" do
       assert %{
                mode: :interactive,

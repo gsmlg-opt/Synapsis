@@ -21,6 +21,7 @@ defmodule Synapsis.Sessions do
     provider = opts[:provider] || agent_config.provider || default_provider(config, agent)
     model = opts[:model] || agent_config.model || default_model(config, provider, agent)
     config = model_selection_config(config, provider, model)
+    config = if opts[:interactive] == true, do: Map.put(config, "interactive", true), else: config
 
     attrs = %{
       provider: provider,
@@ -542,11 +543,14 @@ defmodule Synapsis.Sessions do
     ensure_session_running(session_id)
   end
 
+  defp interactive?(%Session{config: config}),
+    do: is_map(config) and config["interactive"] == true
+
   defp apply_agent_permission(%Session{} = session, agent_name) do
     agent_name
     |> Synapsis.Agent.Resolver.resolve()
     |> Map.get(:permission_mode)
-    |> Synapsis.Tool.Permission.config_for_mode()
+    |> Synapsis.Tool.Permission.config_for_mode(interactive: interactive?(session))
     |> Map.put(:tool_contract_version, 1)
     |> then(&Synapsis.Tool.Permission.update_config(session.id, &1))
   end

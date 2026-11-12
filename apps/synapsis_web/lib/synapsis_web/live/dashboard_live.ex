@@ -31,7 +31,12 @@ defmodule SynapsisWeb.DashboardLive do
     provider = agent_config.provider || "anthropic"
     model = agent_config.model || Synapsis.Providers.default_model(provider)
 
-    case Sessions.create(agent_name, %{provider: provider, model: model, agent: agent_name}) do
+    case Sessions.create(agent_name, %{
+           provider: provider,
+           model: model,
+           agent: agent_name,
+           interactive: true
+         }) do
       {:ok, session} ->
         {:noreply,
          push_navigate(socket, to: ~p"/agent/agents/#{agent_name}/sessions/#{session.id}")}

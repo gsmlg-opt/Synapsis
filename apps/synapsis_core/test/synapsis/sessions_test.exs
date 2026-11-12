@@ -86,6 +86,38 @@ defmodule Synapsis.SessionsTest do
     assert %{tool_contract_version: 1} = Store.get_value(session.id, "permission")
   end
 
+  @tag :contract_version
+  test "only sessions created for an attending user can ask the user questions" do
+    create = fn opts ->
+      assert {:ok, session} =
+               Sessions.create(
+                 "main",
+                 Map.merge(
+                   %{
+                     provider: "contract-version-fixture",
+                     model: "fixture-model",
+                     session_runtime: InertSessionRuntime
+                   },
+                   opts
+                 )
+               )
+
+      on_exit(fn -> Sessions.delete(session.id) end)
+      session
+    end
+
+    attended = create.(%{interactive: true})
+    unattended = create.(%{})
+
+    assert attended.config["interactive"] == true
+    refute Map.has_key?(unattended.config, "interactive")
+
+    assert %{mode: :interactive, allow_execute: :allow} =
+             Store.get_value(attended.id, "permission")
+
+    assert %{mode: :autonomous} = Store.get_value(unattended.id, "permission")
+  end
+
   test "retains an unavailable saved model until an explicit choice is made" do
     provider_name = "mixed-provider-#{System.unique_integer([:positive])}"
 

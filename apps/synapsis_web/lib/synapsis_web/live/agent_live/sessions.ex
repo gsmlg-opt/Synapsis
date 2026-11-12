@@ -561,7 +561,13 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
     result =
       if agent_model_ready?(agent_config),
-        do: Sessions.create(agent_id, %{provider: provider, model: model, agent: agent_id}),
+        do:
+          Sessions.create(agent_id, %{
+            provider: provider,
+            model: model,
+            agent: agent_id,
+            interactive: true
+          }),
         else: {:error, :model_unavailable}
 
     case result do
