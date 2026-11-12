@@ -107,7 +107,7 @@ defmodule SynapsisSamgita.API do
       method: method,
       url: conn.base_url <> "/api/agent" <> path,
       headers: headers,
-      receive_timeout: @receive_timeout,
+      receive_timeout: Map.get(conn, :receive_timeout, @receive_timeout),
       connect_options: [timeout: 5_000],
       retry: false,
       redirect: false
@@ -124,7 +124,9 @@ defmodule SynapsisSamgita.API do
   defp normalize(
          {:ok, %Req.Response{status: status, body: %{"errors" => %{"code" => code} = errors}}}
        ),
-       do: {:error, %{status: status, code: code, detail: errors["detail"]}}
+       do:
+         {:error,
+          %{status: status, code: code, detail: errors["detail"], fields: errors["fields"]}}
 
   defp normalize({:ok, %Req.Response{status: status}}),
     do: {:error, %{status: status, code: "unexpected_response", detail: nil}}

@@ -1,10 +1,29 @@
 defmodule SynapsisSamgita.AttemptTest do
   use ExUnit.Case, async: false
 
+  # Delegates to the real API except `start`, whose first call has an unknown
+  # outcome (transport failure) and whose retry succeeds.
+  defmodule FlakyAPI do
+    defdelegate proof(conn, project_id, attempt_id), to: SynapsisSamgita.API
+    defdelegate renew(conn, project_id, attempt_id, version, proof, opts), to: SynapsisSamgita.API
+
+    def start(_conn, _project_id, _attempt_id, version, _proof, opts) do
+      test = :persistent_term.get({__MODULE__, :test})
+      send(test, {:flaky_start, {opts[:command_id], version}})
+
+      if Process.get(:flaky_seen) do
+        {:ok, %{"id" => "a-1", "state" => "running", "version" => version + 1}}
+      else
+        Process.put(:flaky_seen, true)
+        {:error, %{status: nil, code: "transport_error", detail: "timeout"}}
+      end
+    end
+  end
+
   import SynapsisSamgita.Test.SamgitaStub
   alias SynapsisSamgita.Attempt
 
-  setup do
+  setup ctx do
     server = Gaoxy.Test.open()
 
     conn = %{
@@ -15,10 +34,12 @@ defmodule SynapsisSamgita.AttemptTest do
 
     {:ok, proofs} = Agent.start_link(fn -> ["v1.k.p0", "v1.k.p1", "v1.k.p2", "v1.k.p3"] end)
 
-    Gaoxy.Test.stub(server, "GET", "/api/agent/projects/p-1/attempts/a-1/proof", fn conn ->
-      proof = Agent.get_and_update(proofs, fn [h | t] -> {h, if(t == [], do: [h], else: t)} end)
-      json(conn, 200, %{"data" => %{"attempt_id" => "a-1", "proof" => proof}})
-    end)
+    unless ctx[:custom_proof] do
+      Gaoxy.Test.stub(server, "GET", "/api/agent/projects/p-1/attempts/a-1/proof", fn conn ->
+        proof = Agent.get_and_update(proofs, fn [h | t] -> {h, if(t == [], do: [h], else: t)} end)
+        json(conn, 200, %{"data" => %{"attempt_id" => "a-1", "proof" => proof}})
+      end)
+    end
 
     attempt = %{
       "id" => "a-1",
@@ -124,5 +145,90 @@ defmodule SynapsisSamgita.AttemptTest do
 
     assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 2_000
     assert_receive {:attempt_view, %{state: "lost", last_error: "ownership_lost"}}
+  end
+
+  describe "failure recovery" do
+    defp scripted(server, method, path, responses) do
+      {:ok, agent} = Agent.start_link(fn -> responses end)
+
+      Gaoxy.Test.stub(server, method, path, fn conn ->
+        {body, conn} = if method == "POST", do: body(conn), else: {%{}, conn}
+        step = Agent.get_and_update(agent, fn [h | t] -> {h, if(t == [], do: [h], else: t)} end)
+        step.(conn, body)
+      end)
+    end
+
+    defp ok_attempt(state),
+      do: fn conn, body ->
+        json(conn, 200, %{
+          "data" => %{
+            "id" => "a-1",
+            "state" => state,
+            "version" => (body["expected_version"] || 0) + 1
+          }
+        })
+      end
+
+    test "a failed renew is retried well before the next interval", ctx do
+      test_pid = self()
+      fail = fn conn, _ -> json(conn, 503, %{"errors" => %{"code" => "unavailable"}}) end
+
+      scripted(ctx.server, "POST", "/api/agent/projects/p-1/attempts/a-1/renew", [
+        fn conn, body ->
+          send(test_pid, {:renew, System.monotonic_time(:millisecond)})
+          fail.(conn, body)
+        end,
+        fn conn, body ->
+          send(test_pid, {:renew, System.monotonic_time(:millisecond)})
+          ok_attempt("leased").(conn, body)
+        end
+      ])
+
+      pid = start_attempt(ctx, renew_interval_ms: 300, retry_interval_ms: 20)
+      assert_receive {:renew, t1}, 2_000
+      assert_receive {:renew, t2}, 2_000
+      assert t2 - t1 < 200
+      # Let the in-flight proof re-read finish before the test server closes.
+      :sys.get_state(pid)
+    end
+
+    @tag :custom_proof
+    test "a proof re-read that fails after renew is retried before the next renew", ctx do
+      test_pid = self()
+
+      proof = fn p ->
+        fn conn, _ -> json(conn, 200, %{"data" => %{"attempt_id" => "a-1", "proof" => p}}) end
+      end
+
+      scripted(ctx.server, "GET", "/api/agent/projects/p-1/attempts/a-1/proof", [
+        proof.("v1.k.p0"),
+        fn conn, _ -> json(conn, 500, %{"errors" => %{"code" => "internal"}}) end,
+        proof.("v1.k.p1"),
+        proof.("v1.k.p2")
+      ])
+
+      Gaoxy.Test.stub(ctx.server, "POST", "/api/agent/projects/p-1/attempts/a-1/renew", fn conn ->
+        {body, conn} = body(conn)
+        send(test_pid, {:renew_proof, body["proof"]})
+        ok_attempt("leased").(conn, body)
+      end)
+
+      pid = start_attempt(ctx, renew_interval_ms: 200, retry_interval_ms: 10)
+      assert_receive {:renew_proof, "v1.k.p0"}, 2_000
+      assert_receive {:renew_proof, second}, 2_000
+      assert second == "v1.k.p1"
+      :sys.get_state(pid)
+    end
+
+    test "an uncertain write is retried with the same command_id and body", ctx do
+      Process.put(:flaky_api_test, self())
+      :persistent_term.put({FlakyAPI, :test}, self())
+      pid = start_attempt(ctx, api: FlakyAPI)
+
+      assert {:ok, %{state: "running", version: 2}} = Attempt.start_work(pid)
+      assert_receive {:flaky_start, first}
+      assert_receive {:flaky_start, second}
+      assert first == second
+    end
   end
 end

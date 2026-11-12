@@ -16,6 +16,9 @@ defmodule SynapsisSamgita.Attempt do
   alias SynapsisSamgita.{API, Events}
 
   @default_renew_interval_ms 60_000
+  @default_retry_interval_ms 5_000
+  # Extra verbatim attempts for a write whose outcome is unknown (transport failure).
+  @uncertain_retries 2
   @call_timeout 30_000
 
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: name(opts))
@@ -47,9 +50,12 @@ defmodule SynapsisSamgita.Attempt do
       version: attempt["version"],
       lease_expires_at: attempt["lease_expires_at"],
       proof: nil,
+      proof_stale: true,
       last_error: nil,
       notify: Keyword.get(opts, :notify, SynapsisSamgita.Connection),
-      interval: Keyword.get(opts, :renew_interval_ms, @default_renew_interval_ms)
+      api: Keyword.get(opts, :api, API),
+      interval: Keyword.get(opts, :renew_interval_ms, @default_renew_interval_ms),
+      retry_interval: Keyword.get(opts, :retry_interval_ms, @default_retry_interval_ms)
     }
 
     {:ok, state, {:continue, :proof}}
@@ -58,7 +64,7 @@ defmodule SynapsisSamgita.Attempt do
   @impl true
   def handle_continue(:proof, state) do
     state = refresh_proof(state)
-    schedule_renew(state)
+    schedule_renew(state, if(state.proof_stale, do: state.retry_interval, else: state.interval))
     {:noreply, publish(state)}
   end
 
@@ -66,27 +72,33 @@ defmodule SynapsisSamgita.Attempt do
   def handle_call(:view, _from, state), do: {:reply, view_of(state), state}
 
   def handle_call(:start, _from, state) do
-    step(state, &API.start(&1.conn, &1.project_id, &1.id, &1.version, &1.proof))
+    step(state, fn s, opts ->
+      s.api.start(s.conn, s.project_id, s.id, s.version, s.proof, opts)
+    end)
   end
 
   def handle_call({:progress, summary}, _from, state) do
-    step(state, &API.progress(&1.conn, &1.project_id, &1.id, &1.version, &1.proof, summary))
+    step(state, fn s, opts ->
+      s.api.progress(s.conn, s.project_id, s.id, s.version, s.proof, summary, opts)
+    end)
   end
 
   def handle_call({:report, outcome, effects_resolved, result}, _from, state) do
-    case step(
-           state,
-           &API.report(
-             &1.conn,
-             &1.project_id,
-             &1.id,
-             &1.version,
-             &1.proof,
-             outcome,
-             effects_resolved,
-             result
-           )
-         ) do
+    report = fn s, opts ->
+      s.api.report(
+        s.conn,
+        s.project_id,
+        s.id,
+        s.version,
+        s.proof,
+        outcome,
+        effects_resolved,
+        result,
+        opts
+      )
+    end
+
+    case step(state, report) do
       {:reply, {:ok, _} = reply, state} ->
         Logger.info("samgita_attempt_reported", attempt_id: state.id, outcome: outcome)
         {:stop, :normal, reply, state}
@@ -96,27 +108,56 @@ defmodule SynapsisSamgita.Attempt do
     end
   end
 
+  # A proof that could not be re-read after a renew is refreshed first: the old
+  # one is invalid once a renew rotates it. Failures retry on the short
+  # interval so a transient error is retried well within the 120 s lease.
   @impl true
+  def handle_info(:renew, %{proof_stale: true} = state), do: after_renew(refresh_proof(state))
+
   def handle_info(:renew, state) do
     state =
-      case API.renew(state.conn, state.project_id, state.id, state.version, state.proof) do
-        {:ok, attempt} -> state |> apply_attempt(attempt) |> refresh_proof()
-        {:error, error} -> %{state | last_error: error.code}
+      case with_retries(fn opts ->
+             state.api.renew(
+               state.conn,
+               state.project_id,
+               state.id,
+               state.version,
+               state.proof,
+               opts
+             )
+           end) do
+        {:ok, attempt} ->
+          state |> apply_attempt(attempt) |> Map.put(:proof_stale, true) |> refresh_proof()
+
+        {:error, error} ->
+          %{state | last_error: error.code}
       end
 
-    if state.last_error && lease_expired?(state) do
-      Logger.warning("samgita_attempt_lost", attempt_id: state.id, reason: state.last_error)
-      {:stop, :normal, publish(%{state | state: "lost"})}
-    else
-      schedule_renew(state)
-      {:noreply, publish(state)}
-    end
+    after_renew(state)
   end
 
   def handle_info(_message, state), do: {:noreply, state}
 
+  defp after_renew(state) do
+    failed? = state.proof_stale or not is_nil(state.last_error)
+
+    cond do
+      failed? and lease_expired?(state) ->
+        Logger.warning("samgita_attempt_lost", attempt_id: state.id, reason: state.last_error)
+        {:stop, :normal, publish(%{state | state: "lost"})}
+
+      failed? ->
+        schedule_renew(state, state.retry_interval)
+        {:noreply, publish(state)}
+
+      true ->
+        schedule_renew(state, state.interval)
+        {:noreply, publish(state)}
+    end
+  end
+
   defp step(state, fun) do
-    case fun.(state) do
+    case with_retries(&fun.(state, &1)) do
       {:ok, attempt} ->
         state = state |> apply_attempt(attempt) |> Map.put(:last_error, nil) |> publish()
         {:reply, {:ok, view_of(state)}, state}
@@ -136,14 +177,23 @@ defmodule SynapsisSamgita.Attempt do
     }
   end
 
-  defp refresh_proof(state) do
-    case API.proof(state.conn, state.project_id, state.id) do
-      {:ok, proof} -> %{state | proof: proof}
-      {:error, error} -> %{state | last_error: error.code}
+  # Retry a write whose outcome is unknown with the same command_id and body, so
+  # Samgita replays the stored result instead of applying it twice.
+  defp with_retries(fun, command_id \\ Ecto.UUID.generate(), left \\ @uncertain_retries) do
+    case fun.(command_id: command_id) do
+      {:error, %{status: nil}} when left > 0 -> with_retries(fun, command_id, left - 1)
+      result -> result
     end
   end
 
-  defp schedule_renew(state), do: Process.send_after(self(), :renew, state.interval)
+  defp refresh_proof(state) do
+    case state.api.proof(state.conn, state.project_id, state.id) do
+      {:ok, proof} -> %{state | proof: proof, proof_stale: false, last_error: nil}
+      {:error, error} -> %{state | proof_stale: true, last_error: error.code}
+    end
+  end
+
+  defp schedule_renew(_state, interval), do: Process.send_after(self(), :renew, interval)
 
   defp lease_expired?(%{lease_expires_at: at}) when is_binary(at) do
     case DateTime.from_iso8601(at) do
