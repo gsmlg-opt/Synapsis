@@ -2432,9 +2432,11 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
         job(%{state | closing: true}, :close, fn ->
           # The root can already be retired by an in-flight terminal status job.
           # A vanished root must not prevent closing its session-owned children.
-          # TODO(upstream): gsmlg-opt/backplane#164 — cancelling during a provider
-          # attempt settles unknown_outcome, so the next turn requires recovery.
-          if is_pid(state.root), do: safe(fn -> Conversation.cancel(state.root) end)
+          if is_pid(state.root) do
+            safe(fn -> Conversation.cancel(state.root) end)
+            await_root_settled(state.root, owner_stop_timeout(state))
+          end
+
           cleanup = close_sessions(state)
           history = closed_history(state)
           stop(state.root, owner_stop_timeout(state))
@@ -2454,6 +2456,31 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     if Enum.all?(children, &match?({:ok, %{status: :confirmed}}, &1)),
       do: cleanup,
       else: failure(:unknown_outcome, "Child Session cleanup is unconfirmed")
+  end
+
+  # Conversation.cancel/1 only acknowledges; the run then settles and commits
+  # asynchronously. Shutting the root down before that commit leaves the run
+  # unsettled, and the next turn's recovery treats it as an unknown outcome.
+  # Runs inside the close job, never in the adapter process; bounded by `timeout`.
+  defp await_root_settled(root, timeout),
+    do: await_root_settled(root, System.monotonic_time(:millisecond) + timeout, :poll)
+
+  defp await_root_settled(root, deadline, :poll) do
+    case safe(fn -> Conversation.status(root) end) do
+      %{phase: phase} when phase in [:terminal, :recovery_required, :storage_failed] ->
+        :settled
+
+      %{phase: _} ->
+        if System.monotonic_time(:millisecond) >= deadline do
+          :timeout
+        else
+          Process.sleep(20)
+          await_root_settled(root, deadline, :poll)
+        end
+
+      _unavailable ->
+        :unavailable
+    end
   end
 
   defp close_child_sessions(state) do
