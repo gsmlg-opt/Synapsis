@@ -73,15 +73,14 @@ defmodule SynapsisWeb.SamgitaLive.Index do
     do: {:noreply, assign(socket, marking: nil)}
 
   def handle_event("mark_processed", %{"note" => note}, socket) do
-    case Inbox.mark_processed(socket.assigns.marking, String.trim(note)) do
-      {:ok, _} ->
-        Events.broadcast_inbox_changed(socket.assigns.marking)
-        {:noreply, socket |> assign(marking: nil) |> load_events()}
+    event_id = socket.assigns.marking
 
-      {:error, _} ->
-        {:noreply,
-         socket |> assign(marking: nil) |> put_flash(:error, "Event could not be updated")}
-    end
+    {:noreply,
+     socket
+     |> assign(marking: nil)
+     |> start_async(:mark_processed, fn ->
+       SynapsisSamgita.mark_processed(event_id, String.trim(note))
+     end)}
   end
 
   def handle_event("claim", %{"project" => project_id, "task" => task_id}, socket) do
@@ -123,6 +122,21 @@ defmodule SynapsisWeb.SamgitaLive.Index do
   end
 
   @impl true
+  def handle_async(:mark_processed, {:ok, {:ok, %{reported: true}}}, socket),
+    do:
+      {:noreply,
+       socket |> load_events() |> put_flash(:info, "Marked processed and reported to Samgita")}
+
+  def handle_async(:mark_processed, {:ok, {:ok, %{reported: {:error, code}}}}, socket),
+    do:
+      {:noreply,
+       socket
+       |> load_events()
+       |> put_flash(:error, "Marked processed locally; not reported to Samgita: #{code}")}
+
+  def handle_async(:mark_processed, {:ok, {:error, _}}, socket),
+    do: {:noreply, socket |> load_events() |> put_flash(:error, "Event could not be updated")}
+
   def handle_async(_name, {:ok, {:error, %{code: code}}}, socket),
     do: {:noreply, socket |> assign(busy: false) |> put_flash(:error, "Samgita: #{code}")}
 

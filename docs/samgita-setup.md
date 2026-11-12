@@ -38,11 +38,19 @@ SAMGITA_EVENT_DESTINATIONS='{"<agent_uuid>":{"url":"ws://127.0.0.1:4657/app-serv
 SAMGITA_EVENT_CREDENTIALS='{"synapsis-local-v1":"<app-server token>"}'
 ```
 
-## 4. Use it
+## 4. Activate Samgita execution authority
+
+Samgita dispatches deliveries and accepts claims only after platform activation.
+It needs `SAMGITA_LEASE_KEYS` (JSON `{"<id>": "<base64 key, ≥32 bytes>"}`) and
+`SAMGITA_LEASE_KEY_ID` in its environment, then `POST /api/platform/activate` with
+`expected_version` and `evidence` (`legacy_fenced`, `effects_resolved`, `reference`).
+
+## 5. Use it
 
 - Click **Connect** on `/samgita`. The agent and connection ids appear.
 - Events Samgita delivers appear under **Events received** as `durable` / `pending`.
-  **Mark processed** completes them; Samgita sees `completed` on its next status query.
+  **Mark processed** completes them and reports the result on the Samgita
+  delivery, which then shows `completed` (Samgita does not re-poll accepted deliveries).
 - Tasks assigned to this Agent appear under **Assigned tasks**. **Claim**, then
   **Start**, **Progress** and **Report**. Synapsis renews the 120 s lease in the
   background while the attempt is open.

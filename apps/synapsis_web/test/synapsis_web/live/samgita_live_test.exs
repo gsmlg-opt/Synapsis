@@ -55,8 +55,10 @@ defmodule SynapsisWeb.SamgitaLiveTest do
     assert has_element?(view, "#samgita-event-evt-l1", "pending")
     render_click(element(view, "[phx-click='open_mark_processed'][phx-value-id='evt-l1']"))
     react_form_submit(view, "mark-processed-form", %{"note" => "seen"})
+    render_async(view)
 
     assert {:ok, %{"processing_status" => "completed", "note" => "seen"}} = Inbox.get("evt-l1")
+    assert render(view) =~ "not reported to Samgita: not_connected"
     assert has_element?(view, "#samgita-event-evt-l1", "completed")
   end
 

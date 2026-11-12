@@ -108,4 +108,88 @@ defmodule SynapsisSamgita.ConnectionTest do
     assert connects.() == before
     assert %{state: :connected, connection_id: "conn-1"} = SynapsisSamgita.status()
   end
+
+  describe "mark_processed/2" do
+    @event %{
+      "schema_version" => "1.0",
+      "event_id" => "evt-mp",
+      "delivery_attempt_id" => "att-1",
+      "created_at" => "2026-11-12T00:00:00Z",
+      "correlation_id" => "c-1",
+      "type" => "manual.triggered",
+      "project_ref" => "p-1",
+      "payload" => %{}
+    }
+
+    setup do
+      Synapsis.DataCase.clear_coord("coord/samgita/inbox/")
+      on_exit(fn -> Synapsis.DataCase.clear_coord("coord/samgita/inbox/") end)
+      {:ok, :new, _} = Synapsis.Samgita.Inbox.record(@event)
+      :ok
+    end
+
+    test "completes the event locally and reports it to Samgita", %{server: s} do
+      stub_connect(s)
+      {:ok, _} = SynapsisSamgita.connect()
+      test_pid = self()
+
+      Gaoxy.Test.expect_once(s, "GET", "/api/agent/projects/p-1/deliveries", fn conn ->
+        json(conn, 200, %{
+          "data" => [
+            %{
+              "id" => "d-other",
+              "event_id" => "evt-x",
+              "agent_id" => "agent-1",
+              "state" => "accepted"
+            },
+            %{
+              "id" => "d-1",
+              "event_id" => "evt-mp",
+              "agent_id" => "agent-1",
+              "state" => "accepted",
+              "version" => 3,
+              "operation_id" => "op-1",
+              "fence" => 2
+            }
+          ],
+          "limit" => 100,
+          "offset" => 0
+        })
+      end)
+
+      Gaoxy.Test.expect_once(
+        s,
+        "POST",
+        "/api/agent/projects/p-1/deliveries/d-1/report",
+        fn conn ->
+          {body, conn} = body(conn)
+          send(test_pid, {:report, body})
+          json(conn, 200, %{"data" => %{"id" => "d-1", "state" => "completed"}})
+        end
+      )
+
+      assert {:ok, %{entry: %{"processing_status" => "completed"}, reported: true}} =
+               SynapsisSamgita.mark_processed("evt-mp", "seen")
+
+      assert_receive {:report, body}
+
+      assert %{
+               "expected_version" => 3,
+               "operation_id" => "op-1",
+               "fence" => 2,
+               "processing_status" => "completed",
+               "result" => %{"note" => "seen"}
+             } = body
+
+      assert {:ok, _} = Ecto.UUID.cast(body["decision_id"])
+      assert {:ok, %{"decision_id" => decision_id}} = Synapsis.Samgita.Inbox.get("evt-mp")
+      assert decision_id == body["decision_id"]
+    end
+
+    test "without a connection the event is still completed locally" do
+      assert {:ok,
+              %{entry: %{"processing_status" => "completed"}, reported: {:error, "not_connected"}}} =
+               SynapsisSamgita.mark_processed("evt-mp", "seen")
+    end
+  end
 end

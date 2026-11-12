@@ -44,6 +44,49 @@ defmodule SynapsisSamgita do
     end
   end
 
+  @doc """
+  Mark an inbox event processed and, when connected, report it on its Samgita
+  delivery so Samgita records it completed (Samgita does not re-poll accepted
+  deliveries). The local completion stands even if the report fails.
+  """
+  def mark_processed(event_id, note) do
+    decision_id = Ecto.UUID.generate()
+
+    with {:ok, entry} <- Synapsis.Samgita.Inbox.mark_processed(event_id, note, decision_id) do
+      Events.broadcast_inbox_changed(event_id)
+      {:ok, %{entry: entry, reported: report_processed(entry, decision_id, note)}}
+    end
+  end
+
+  @reportable ~w(delivering accepted reconciling)
+
+  defp report_processed(
+         %{"event" => %{"event_id" => event_id, "project_ref" => project_id}},
+         decision_id,
+         note
+       )
+       when is_binary(project_id) do
+    with {:ok, conn} <- Connection.api_conn(),
+         {:ok, deliveries} <- API.list_deliveries(conn, project_id),
+         %{} = delivery <-
+           Enum.find(
+             deliveries,
+             &(&1["event_id"] == event_id and &1["state"] in @reportable and
+                 &1["agent_id"] == Connection.status().agent_id)
+           ),
+         {:ok, _} <-
+           API.report_delivery(conn, project_id, delivery, decision_id, "completed", %{
+             "note" => note
+           }) do
+      true
+    else
+      nil -> {:error, "no_open_delivery"}
+      {:error, %{code: code}} -> {:error, code}
+    end
+  end
+
+  defp report_processed(_entry, _decision_id, _note), do: {:error, "no_project"}
+
   def attempt_start(attempt_id), do: with_attempt(attempt_id, &Attempt.start_work/1)
 
   def attempt_progress(attempt_id, summary),

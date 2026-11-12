@@ -26,6 +26,27 @@ defmodule SynapsisSamgita.API do
   def list_tasks(conn, project_id, agent_id),
     do: read(conn, "/projects/#{project_id}/tasks", assignee_agent_id: agent_id, limit: 100)
 
+  @spec list_deliveries(conn, String.t()) :: result
+  def list_deliveries(conn, project_id),
+    do: read(conn, "/projects/#{project_id}/deliveries", limit: 100)
+
+  @doc "Report a final processing status for an accepted delivery (`operation_id`/`fence` from the delivery)."
+  @spec report_delivery(conn, String.t(), map(), String.t(), String.t(), map() | nil, keyword) ::
+          result
+  def report_delivery(conn, project_id, delivery, decision_id, status, result, opts \\ []) do
+    body =
+      %{
+        "expected_version" => delivery["version"],
+        "operation_id" => delivery["operation_id"],
+        "fence" => delivery["fence"],
+        "decision_id" => decision_id,
+        "processing_status" => status
+      }
+      |> then(&if(is_map(result), do: Map.put(&1, "result", result), else: &1))
+
+    write(conn, "/projects/#{project_id}/deliveries/#{delivery["id"]}/report", body, opts)
+  end
+
   @spec create_session(conn, String.t(), String.t(), keyword) :: result
   def create_session(conn, project_id, external_id, opts \\ []),
     do: write(conn, "/projects/#{project_id}/sessions", %{"external_id" => external_id}, opts)

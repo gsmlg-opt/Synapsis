@@ -67,11 +67,16 @@ defmodule Synapsis.Samgita.Inbox do
     end
   end
 
-  @spec mark_processed(String.t(), String.t()) :: {:ok, entry} | {:error, :not_found | term}
-  def mark_processed(event_id, note) when is_binary(note) do
+  @spec mark_processed(String.t(), String.t(), String.t() | nil) ::
+          {:ok, entry} | {:error, :not_found | term}
+  def mark_processed(event_id, note, decision_id \\ nil) when is_binary(note) do
+    fields =
+      %{"processing_status" => "completed", "note" => note}
+      |> then(&if(decision_id, do: Map.merge(&1, %{"decision_id" => decision_id, "decision" => %{"note" => note}}), else: &1))
+
     cas(event_id, fn
       nil -> {:error, :not_found}
-      entry -> {:ok, :updated, Map.merge(entry, %{"processing_status" => "completed", "note" => note})}
+      entry -> {:ok, :updated, Map.merge(entry, fields)}
     end)
     |> unwrap()
   end
