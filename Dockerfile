@@ -34,9 +34,11 @@ COPY rel/filesystem_runtime.exs rel/
 COPY apps/synapsis_agent/mix.exs apps/synapsis_agent/
 COPY apps/synapsis_cli/mix.exs apps/synapsis_cli/
 COPY apps/synapsis_core/mix.exs apps/synapsis_core/
+COPY apps/synapsis_local_agents/mix.exs apps/synapsis_local_agents/
 COPY apps/synapsis_data/mix.exs apps/synapsis_data/
 COPY apps/synapsis_mcp/mix.exs apps/synapsis_mcp/
 COPY apps/synapsis_provider/mix.exs apps/synapsis_provider/
+COPY apps/synapsis_samgita/mix.exs apps/synapsis_samgita/
 COPY apps/synapsis_sandbox/mix.exs apps/synapsis_sandbox/
 COPY apps/synapsis_server/mix.exs apps/synapsis_server/
 COPY apps/synapsis_web/mix.exs apps/synapsis_web/

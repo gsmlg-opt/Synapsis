@@ -36,6 +36,7 @@ defmodule SynapsisServer.MixProject do
       {:synapsis_provider, in_umbrella: true},
       {:synapsis_mcp, in_umbrella: true},
       {:synapsis_sandbox, in_umbrella: true},
+      {:synapsis_samgita, in_umbrella: true},
       {:phoenix, "~> 1.8.16"},
       {:phoenix_html, "~> 4.2"},
       {:phoenix_live_view, "~> 1.2.13"},

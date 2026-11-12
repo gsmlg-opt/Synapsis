@@ -35,6 +35,8 @@ defmodule SynapsisWeb.MixProject do
       {:synapsis_agent, in_umbrella: true},
       {:synapsis_mcp, in_umbrella: true},
       {:synapsis_workspace, in_umbrella: true},
+      {:synapsis_samgita, in_umbrella: true},
+      {:synapsis_local_agents, in_umbrella: true},
       {:phoenix, "~> 1.8"},
       {:phoenix_html, "~> 4.2"},
       {:phoenix_live_view, "~> 1.2"},
