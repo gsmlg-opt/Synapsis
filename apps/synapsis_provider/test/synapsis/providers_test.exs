@@ -1073,7 +1073,7 @@ defmodule Synapsis.ProvidersTest do
       assert %{
                name: "backplane",
                label: "Backplane",
-               type: "openai",
+               type: "openai_responses",
                base_url: "https://backplane.gsmlg.net/v1",
                base_url_editable: true,
                api_key_required: false,

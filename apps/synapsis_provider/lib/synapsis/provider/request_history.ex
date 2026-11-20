@@ -1,5 +1,5 @@
 defmodule Synapsis.Provider.RequestHistory do
-  @moduledoc "Target-specific request history for explicit session model changes."
+  @moduledoc "Projects canonical session history onto the target provider protocol."
 
   alias Backplane.AiProtocol.Error
 
@@ -13,12 +13,13 @@ defmodule Synapsis.Provider.RequestHistory do
     :credential_version
   ]
 
-  def project(messages, protocol, opts) do
+  def project(messages, protocol, opts, validate_pairs?) do
     messages = Enum.flat_map(messages, &project_message(&1, Atom.to_string(protocol), opts))
 
-    case validate_tool_pairs(messages) do
-      :ok -> {:ok, messages}
-      {:error, _} = error -> error
+    if validate_pairs? do
+      with :ok <- validate_tool_pairs(messages), do: {:ok, messages}
+    else
+      {:ok, messages}
     end
   end
 
@@ -32,7 +33,8 @@ defmodule Synapsis.Provider.RequestHistory do
 
     content =
       Enum.reject(message.content, fn block ->
-        incompatible?.(block) or (changed_origin? and block.type == :reasoning)
+        incompatible?.(block) or
+          (block.type == :reasoning and (changed_origin? or protocol == "openai_responses"))
       end)
 
     if content == [], do: [], else: [%{message | content: content}]

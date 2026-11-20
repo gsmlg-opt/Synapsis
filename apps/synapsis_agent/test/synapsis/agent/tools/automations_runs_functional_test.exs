@@ -238,7 +238,7 @@ defmodule Synapsis.Agent.Tools.AutomationsRunsFunctionalTest do
                tools: ["exec_command", "synapsis::automations"]
              })
 
-    Gaoxy.Test.stub(fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
       index = Agent.get_and_update(counter, &{&1, &1 + 1})
@@ -308,7 +308,7 @@ defmodule Synapsis.Agent.Tools.AutomationsRunsFunctionalTest do
     assert catalog.registry.tools["synapsis::automations"].tool_revision == 2
     assert catalog.registry.tools["exec_command"].tool_revision == 1
 
-    assert Enum.sort(Enum.map(first["tools"], & &1["function"]["name"])) ==
+    assert Enum.sort(Enum.map(first["tools"], & &1["name"])) ==
              Enum.sort(
                Enum.map(
                  ["exec_command", "synapsis::automations"],
@@ -412,8 +412,12 @@ defmodule Synapsis.Agent.Tools.AutomationsRunsFunctionalTest do
 
   defp assert_wire_history(request, parts) do
     for part <- parts do
-      assert %{"role" => "tool", "tool_call_id" => part.tool_use_id, "content" => part.content} in request[
-               "messages"
+      assert %{
+               "type" => "function_call_output",
+               "call_id" => part.tool_use_id,
+               "output" => part.content
+             } in request[
+               "input"
              ]
     end
   end
@@ -440,10 +444,10 @@ defmodule Synapsis.Agent.Tools.AutomationsRunsFunctionalTest do
                config: %{"workspace_path" => root}
              })
 
-    Gaoxy.Test.stub(fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
-      following? = Enum.any?(request["messages"], &(&1["role"] == "tool"))
+      following? = Enum.any?(request["input"], &(&1["type"] == "function_call_output"))
       send(owner, {:producer_request, label, following?, request})
 
       chunks =
@@ -486,7 +490,7 @@ defmodule Synapsis.Agent.Tools.AutomationsRunsFunctionalTest do
     assert completed.capability_snapshot == run.capability_snapshot
     assert completed.finished_at
     assert_receive {:producer_request, ^label, false, first}, 5_000
-    assert Enum.map(first["tools"], & &1["function"]["name"]) == ["exec_command"]
+    assert Enum.map(first["tools"], & &1["name"]) == ["exec_command"]
     assert_receive {:producer_request, ^label, true, following}, 5_000
     assert File.read!(Path.join(root, "#{label}.txt")) == "effect"
 
@@ -497,8 +501,12 @@ defmodule Synapsis.Agent.Tools.AutomationsRunsFunctionalTest do
                do: part
              )
 
-    assert %{"role" => "tool", "tool_call_id" => result.tool_use_id, "content" => result.content} in following[
-             "messages"
+    assert %{
+             "type" => "function_call_output",
+             "call_id" => result.tool_use_id,
+             "output" => result.content
+           } in following[
+             "input"
            ]
 
     assert {:ok, turns} = Store.list_turns(completed.session_id)

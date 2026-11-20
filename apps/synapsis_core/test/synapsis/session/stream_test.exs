@@ -288,19 +288,17 @@ defmodule Synapsis.Session.StreamTest do
       provider_name = unique_provider_name()
       config = register_provider(provider_name, "openai", port)
 
-      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/responses", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.send_resp(200, """
-        data: {"id":"chatcmpl-1","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
 
-        data: {"id":"chatcmpl-1","choices":[{"index":0,"delta":{"content":"OpenAI"},"finish_reason":null}]}
 
-        data: {"id":"chatcmpl-1","choices":[{"index":0,"delta":{"content":" response"},"finish_reason":null}]}
+        data: {"type":"response.output_text.delta","delta":"OpenAI"}
 
-        data: {"id":"chatcmpl-1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+        data: {"type":"response.output_text.delta","delta":" response"}
 
-        data: [DONE]
+        data: {"type":"response.completed","response":{"status":"completed","output":[]}}
 
         """)
       end)

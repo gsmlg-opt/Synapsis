@@ -4,7 +4,7 @@ defmodule Synapsis.Provider.ProtocolCodecIntegrationTest do
   alias Synapsis.Provider.Adapter
 
   test "request preparation returns a tagged string-keyed wire map" do
-    assert {:ok, %{"model" => "gpt-test", "messages" => []}} =
+    assert {:ok, %{"model" => "gpt-test", "input" => []}} =
              Adapter.format_request([], [], %{
                model: "gpt-test",
                provider_type: "openai",
@@ -35,7 +35,7 @@ defmodule Synapsis.Provider.ProtocolCodecIntegrationTest do
     base_url = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
     Gaoxy.Test.verify_and_close!(bypass)
 
-    request = %{"model" => "gpt-test", "messages" => [], "stream" => true}
+    request = %{"model" => "gpt-test", "input" => [], "stream" => true}
 
     assert {:ok, %{pid: pid, ref: ref} = handle} =
              Adapter.stream(request, %{

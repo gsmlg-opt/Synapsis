@@ -91,7 +91,7 @@ defmodule Synapsis.Session.NativeCollaborationRuntimeTest do
     child_request =
       Agent.get(ctx.harness.counter, fn state ->
         Enum.find(state.provider_requests, fn request ->
-          Enum.any?(request["messages"], &(user_text(&1) == @child))
+          Enum.any?(request["input"], &(user_text(&1) == @child))
         end)
       end)
 
@@ -253,22 +253,26 @@ defmodule Synapsis.Session.NativeCollaborationRuntimeTest do
   defp install_provider(harness, scenario) do
     owner = self()
 
-    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
       Agent.update(harness.counter, &%{&1 | provider_requests: &1.provider_requests ++ [request]})
-      messages = request["messages"]
+      messages = request["input"]
 
       cond do
         Enum.any?(messages, &(user_text(&1) == @child)) ->
           send(owner, :native_collaboration_child_requested)
 
-          case {scenario, Enum.find(messages, &(&1["tool_call_id"] == "child-memory"))} do
+          case {scenario,
+                Enum.find(
+                  messages,
+                  &(&1["type"] == "function_call_output" and &1["call_id"] == "child-memory")
+                )} do
             {:spawn_host, nil} ->
               call(conn, @get, "child-memory", %{"path" => "MEMORY.md"})
 
             {:spawn_host, result} ->
-              send(owner, {:native_child_memory_read, result["content"]})
+              send(owner, {:native_child_memory_read, result["output"]})
               answer(conn, "native child complete")
 
             _ ->
@@ -276,15 +280,21 @@ defmodule Synapsis.Session.NativeCollaborationRuntimeTest do
           end
 
         result =
-            Enum.find(messages, &(&1["role"] == "tool" and &1["tool_call_id"] == "native-spawn")) ->
-          if Enum.any?(messages, &(&1["role"] == "tool" and &1["tool_call_id"] == "native-wait")) or
+            Enum.find(
+              messages,
+              &(&1["type"] == "function_call_output" and &1["call_id"] == "native-spawn")
+            ) ->
+          if Enum.any?(
+               messages,
+               &(&1["type"] == "function_call_output" and &1["call_id"] == "native-wait")
+             ) or
                denied?(result) do
             answer(conn, "native collaboration complete")
           else
             call(conn, "wait_agent", "native-wait", %{"timeout_ms" => 10_000})
           end
 
-        Enum.any?(messages, &(&1["role"] == "tool")) ->
+        Enum.any?(messages, &(&1["type"] == "function_call_output")) ->
           answer(conn, "native collaboration complete")
 
         true ->
@@ -328,7 +338,7 @@ defmodule Synapsis.Session.NativeCollaborationRuntimeTest do
 
   defp denied?(result),
     do:
-      String.contains?(inspect(result["content"]), [
+      String.contains?(inspect(result["output"]), [
         "forbidden",
         "denied",
         "approval_required",
@@ -376,7 +386,7 @@ defmodule Synapsis.Session.NativeCollaborationRuntimeTest do
   end
 
   defp wire_names(request),
-    do: Enum.map(request["tools"] || [], &ToolName.decode(&1["function"]["name"]))
+    do: Enum.map(request["tools"] || [], &ToolName.decode(&1["name"]))
 
   defp assert_completed, do: assert_receive({:run_event, %{type: "session.completed"}}, 15_000)
 

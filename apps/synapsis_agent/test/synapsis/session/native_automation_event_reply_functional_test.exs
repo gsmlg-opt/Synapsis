@@ -110,8 +110,14 @@ defmodule Synapsis.Session.NativeAutomationEventReplyFunctionalTest do
     assert canonical.revision > meaningful.revision
     assert Worker.snapshot(id).reply_presentation.text == "Event ready🙂🙂"
     assert Worker.snapshot(id).in_flight_text == @event_text
-    effect_result = Enum.find(following["messages"], &(&1["tool_call_id"] == @effect_id))
-    assert content(effect_result["content"]) =~ "HEARTBEAT_OK"
+
+    effect_result =
+      Enum.find(
+        following["input"],
+        &(&1["type"] == "function_call_output" and &1["call_id"] == @effect_id)
+      )
+
+    assert content(effect_result["output"]) =~ "HEARTBEAT_OK"
     native_event = runtime(id)
     native_messages = Backplane.AgentRuntime.Conversation.status(native_event.root).messages
 
@@ -223,12 +229,12 @@ defmodule Synapsis.Session.NativeAutomationEventReplyFunctionalTest do
     assert_receive {:replay_request, replay}, 10_000
 
     assert Enum.any?(
-             replay["messages"],
+             replay["input"],
              &(&1["role"] == "assistant" and content(&1["content"]) == @event_text)
            )
 
     assert Enum.any?(
-             replay["messages"],
+             replay["input"],
              &(&1["role"] == "assistant" and content(&1["content"]) == "HEARTBEAT_OK")
            )
 
@@ -245,7 +251,7 @@ defmodule Synapsis.Session.NativeAutomationEventReplyFunctionalTest do
     h = fixture(ctx.tmp_dir, [])
     owner = self()
 
-    Gaoxy.Test.stub(h.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(h.provider.fixture, "POST", "/v1/responses", fn conn ->
       conn = start_stream(conn)
       conn = chunk(conn, DeterministicProvider.text_chunk("HEARTBEAT_"))
       hold(owner, {:ordinary_prefix_sent, self()})
@@ -310,7 +316,7 @@ defmodule Synapsis.Session.NativeAutomationEventReplyFunctionalTest do
   defp install_event_provider(h) do
     owner = self()
 
-    Gaoxy.Test.stub(h.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(h.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
       Agent.update(h.log, &(&1 ++ [{request, self()}]))
@@ -453,15 +459,19 @@ defmodule Synapsis.Session.NativeAutomationEventReplyFunctionalTest do
   defp text(blocks), do: Enum.map_join(blocks, "", &Map.get(&1, :text, ""))
 
   defp names(request),
-    do: Enum.sort(Enum.map(request["tools"], &ToolName.decode(&1["function"]["name"])))
+    do: Enum.sort(Enum.map(request["tools"], &ToolName.decode(&1["name"])))
 
   defp has_result?(request, call_id),
-    do: Enum.any?(request["messages"], &(&1["role"] == "tool" and &1["tool_call_id"] == call_id))
+    do:
+      Enum.any?(
+        request["input"],
+        &(&1["type"] == "function_call_output" and &1["call_id"] == call_id)
+      )
 
   defp user_texts(request),
     do:
       for(
-        message <- request["messages"],
+        message <- request["input"],
         message["role"] == "user",
         do: content(message["content"])
       )

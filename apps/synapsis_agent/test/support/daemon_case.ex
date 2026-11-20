@@ -861,7 +861,7 @@ defmodule Synapsis.Agent.DaemonCase do
   def register_text_provider(tmp_dir, response_text) do
     fixture = Gaoxy.Test.open()
 
-    Gaoxy.Test.expect_once(fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect_once(fixture, "POST", "/v1/responses", fn conn ->
       send_sse(conn, [text_chunk(response_text), finish_chunk("stop")])
     end)
 
@@ -873,7 +873,7 @@ defmodule Synapsis.Agent.DaemonCase do
     fixture = Gaoxy.Test.open()
     {:ok, counter} = Agent.start_link(fn -> 0 end)
 
-    Gaoxy.Test.expect(fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request_number = Agent.get_and_update(counter, &{&1 + 1, &1 + 1})
       send(owner, {:provider_request, request_number, body, self()})
@@ -976,33 +976,9 @@ defmodule Synapsis.Agent.DaemonCase do
   def restore_application_env(key, :missing, app), do: Application.delete_env(app, key)
   def restore_application_env(key, value, app), do: Application.put_env(app, key, value)
 
-  def text_chunk(text) do
-    %{
-      "id" => "daemon-response",
-      "choices" => [
-        %{"index" => 0, "delta" => %{"content" => text}, "finish_reason" => nil}
-      ]
-    }
-  end
-
-  def finish_chunk(reason) do
-    %{"choices" => [%{"index" => 0, "delta" => %{}, "finish_reason" => reason}]}
-  end
-
-  def send_sse(conn, chunks) do
-    body =
-      Enum.map_join(chunks, "\n\n", fn chunk -> "data: #{Jason.encode!(chunk)}" end) <>
-        "\n\ndata: [DONE]\n\n"
-
-    if conn.state == :chunked do
-      {:ok, conn} = Plug.Conn.chunk(conn, body)
-      conn
-    else
-      conn
-      |> Plug.Conn.put_resp_content_type("text/event-stream")
-      |> Plug.Conn.send_resp(200, body)
-    end
-  end
+  defdelegate text_chunk(text), to: Synapsis.Agent.TestSupport.DeterministicProvider
+  defdelegate finish_chunk(reason), to: Synapsis.Agent.TestSupport.DeterministicProvider
+  defdelegate send_sse(conn, chunks), to: Synapsis.Agent.TestSupport.DeterministicProvider
 
   def wait_for(fun, timeout \\ 5_000) do
     deadline = System.monotonic_time(:millisecond) + timeout

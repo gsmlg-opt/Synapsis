@@ -8,7 +8,7 @@ defmodule Synapsis.Agent.DaemonSubmissionCancelTest do
     fixture = Gaoxy.Test.open()
     {:ok, counter} = Agent.start_link(fn -> 0 end)
 
-    Gaoxy.Test.expect(fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request_number = Agent.get_and_update(counter, &{&1 + 1, &1 + 1})
       send(owner, {:provider_request, request_number, body, self()})

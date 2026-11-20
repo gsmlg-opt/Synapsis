@@ -105,7 +105,7 @@ defmodule Synapsis.Session.NativeSessionStatusTest do
   defp run(ctx, calls) do
     owner = self()
 
-    Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
 
@@ -114,7 +114,7 @@ defmodule Synapsis.Session.NativeSessionStatusTest do
         &%{&1 | provider_requests: &1.provider_requests ++ [request]}
       )
 
-      completed = Enum.count(request["messages"], &(&1["role"] == "tool"))
+      completed = Enum.count(request["input"], &(&1["type"] == "function_call_output"))
       if completed == 0, do: send(owner, {:status_catalog, request["tools"]})
 
       chunks =
@@ -142,7 +142,7 @@ defmodule Synapsis.Session.NativeSessionStatusTest do
     SessionHarness.ensure_running!(ctx.id)
     assert :ok = Worker.send_message(ctx.id, "Observe session status")
     assert_receive {:status_catalog, [descriptor]}, 5_000
-    assert ToolName.decode(descriptor["function"]["name"]) == @name
+    assert ToolName.decode(descriptor["name"]) == @name
     assert_receive {:run_event, %{type: "session.completed"}}, 10_000
     assert SessionStatus.names() == [@name]
   end
@@ -151,7 +151,10 @@ defmodule Synapsis.Session.NativeSessionStatusTest do
     requests = Agent.get(ctx.harness.counter, & &1.provider_requests)
 
     calls =
-      requests |> List.last() |> Map.fetch!("messages") |> Enum.count(&(&1["role"] == "tool"))
+      requests
+      |> List.last()
+      |> Map.fetch!("input")
+      |> Enum.count(&(&1["type"] == "function_call_output"))
 
     turns =
       for index <- 0..(2 * calls + 1) do
@@ -171,12 +174,12 @@ defmodule Synapsis.Session.NativeSessionStatusTest do
       next_request = Enum.fetch!(requests, index + 1)
 
       message =
-        Enum.find(next_request["messages"], fn message ->
-          message["role"] == "tool" and message["tool_call_id"] == result.tool_use_id
+        Enum.find(next_request["input"], fn message ->
+          message["type"] == "function_call_output" and message["call_id"] == result.tool_use_id
         end)
 
       assert message
-      assert message["content"] == result.content
+      assert message["output"] == result.content
       page
     end
   end

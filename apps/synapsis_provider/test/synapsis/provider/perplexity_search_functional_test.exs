@@ -96,101 +96,9 @@ defmodule Synapsis.Provider.PerplexitySearchFunctionalTest do
     end
   end
 
-  test "Sonar sends model and messages only, retains full prose and exact top-level citation order",
-       ctx do
-    content = "  " <> String.duplicate("🙂", 10_001) <> "  "
-
-    payload = %{
-      "choices" => [
-        %{
-          "message" => %{
-            "content" => content,
-            "annotations" => [%{"type" => "url_citation", "url" => "https://ignored.example/"}]
-          }
-        }
-      ],
-      "citations" => [
-        "https://b.example/",
-        "https://a.example/",
-        "https://b.example/",
-        " https://b.example/ "
-      ]
-    }
-
-    stub(ctx, "/proxy/chat/completions", payload)
-
-    assert {:ok, result} =
-             WebSearch.search(config(ctx, "chat_completions"), %{
-               "query" => " answer ",
-               "count" => 9,
-               "freshness" => "PD"
-             })
-
-    assert_receive {:http, body, _}
-
-    assert body == %{
-             "model" => "perplexity/sonar-pro",
-             "messages" => [%{"role" => "user", "content" => "answer"}],
-             "search_recency_filter" => "day"
-           }
-
-    assert result["content"] == content
-
-    assert result["citations"] == [
-             "https://b.example/",
-             "https://a.example/",
-             " https://b.example/ "
-           ]
-
-    assert result["model"] == "perplexity/sonar-pro"
-    refute Map.has_key?(result, "results")
-    refute Map.has_key?(result, "count")
-  end
-
-  test "Sonar collects trimmed nested and flat annotations from all choices and permits no citations",
-       ctx do
-    payload = %{
-      "choices" => [
-        %{
-          "message" => %{
-            "content" => "Answer",
-            "annotations" => [
-              %{"type" => "url_citation", "url_citation" => %{"url" => " https://b.example/ "}}
-            ]
-          }
-        },
-        %{
-          "message" => %{
-            "annotations" => [
-              %{"type" => "url_citation", "url" => "https://a.example/"},
-              %{"type" => "url_citation", "url" => "https://b.example/"}
-            ]
-          }
-        }
-      ]
-    }
-
-    stub(ctx, "/proxy/chat/completions", payload)
-
-    assert {:ok, result} =
-             WebSearch.search(config(ctx, "chat_completions"), %{"query" => "annotations"})
-
-    assert result["citations"] == ["https://b.example/", "https://a.example/"]
-
-    stub(ctx, "/uncited/chat/completions", %{
-      "choices" => [%{"message" => %{"content" => "Uncited answer"}}]
-    })
-
-    assert {:ok, result} =
-             WebSearch.search(
-               %{
-                 config(ctx, "chat_completions")
-                 | base_url: Gaoxy.Test.url(ctx.fixture, "/uncited")
-               },
-               %{"query" => "uncited"}
-             )
-
-    assert result["citations"] == []
+  test "former Sonar configuration returns an error before HTTP", ctx do
+    assert {:error, :unsupported_perplexity_mode} =
+             WebSearch.search(config(ctx, "chat_completions"), %{"query" => "unsupported"})
   end
 
   test "pinned Perplexity callbacks match request formats and ordinary HTTP response contracts",
@@ -204,7 +112,10 @@ defmodule Synapsis.Provider.PerplexitySearchFunctionalTest do
     reference = Jason.decode!(File.read!(path))
     assert length(reference["groups"]) == 25
 
-    for group <- reference["groups"], step <- group["steps"], step["request"] != nil do
+    for group <- reference["groups"],
+        group["mode"] == "search_api",
+        step <- group["steps"],
+        step["request"] != nil do
       options =
         get_in(step, [
           "setup",
@@ -215,12 +126,6 @@ defmodule Synapsis.Provider.PerplexitySearchFunctionalTest do
           "config",
           "webSearch"
         ])
-
-      model =
-        case String.trim(options["model"] || "") do
-          "" -> "perplexity/sonar-pro"
-          value -> value
-        end
 
       source_base =
         case String.trim(options["baseUrl"] || "") do
@@ -233,7 +138,6 @@ defmodule Synapsis.Provider.PerplexitySearchFunctionalTest do
       trusted = %{
         config(ctx, group["mode"])
         | base_url: source_base,
-          model: model,
           count: outer["maxResults"]
       }
 
@@ -246,21 +150,17 @@ defmodule Synapsis.Provider.PerplexitySearchFunctionalTest do
       assert url == step["request"]["url"], group["id"]
       assert body == step["request"]["body"], group["id"]
 
-      assert Enum.into(headers, %{})["accept"] ==
-               if(group["mode"] == "search_api", do: "application/json", else: nil)
+      assert Enum.into(headers, %{})["accept"] == "application/json"
 
       prefix = "/" <> group["id"] <> "/" <> Integer.to_string(step["cumulativeRequests"])
       local = %{trusted | base_url: Gaoxy.Test.url(ctx.fixture, prefix)}
-      path = prefix <> if(group["mode"] == "search_api", do: "/search", else: "/chat/completions")
+      path = prefix <> "/search"
 
       stub(ctx, path, group["httpPayload"])
       assert {:ok, result} = WebSearch.search(local, step["arguments"])
       assert_receive {:http, actual_body, _}
 
-      local_body =
-        if group["mode"] == "chat_completions", do: Map.put(body, "model", model), else: body
-
-      assert actual_body == local_body, group["id"]
+      assert actual_body == body, group["id"]
 
       assert unframe(result) ==
                Map.drop(step["providerUnwrappedResult"], ~w(externalContent tookMs cached)),

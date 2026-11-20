@@ -63,7 +63,7 @@ defmodule Synapsis.Agent.DaemonExecutionTest do
     {daemon, _task_supervisor} = start_test_daemon()
     fixture = Gaoxy.Test.open()
 
-    Gaoxy.Test.expect_once(fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect_once(fixture, "POST", "/v1/responses", fn conn ->
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
       |> Plug.Conn.send_resp(503, Jason.encode!(%{"error" => %{"message" => "offline"}}))

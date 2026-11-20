@@ -1,5 +1,7 @@
 defmodule Synapsis.Agent.Runtime.DeliveredImageHistoryFunctionalTest do
   use ExUnit.Case, async: false
+
+  alias Synapsis.Provider.TestSupport.ResponsesFixture
   @moduletag :functional
 
   alias Synapsis.Agent.Runtime.{ProviderAdapter, ProviderMessages}
@@ -50,30 +52,14 @@ defmodule Synapsis.Agent.Runtime.DeliveredImageHistoryFunctionalTest do
     on_exit(fn -> Gaoxy.Test.close(fixture) end)
     observer = self()
 
-    Gaoxy.Test.expect_once(fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect_once(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       send(observer, {:delivered_image_wire, Jason.decode!(body)})
 
-      chunks = [
-        %{
-          "id" => "image-history",
-          "choices" => [
-            %{"index" => 0, "delta" => %{"content" => "Observed image"}, "finish_reason" => nil}
-          ]
-        },
-        %{
-          "id" => "image-history",
-          "choices" => [%{"index" => 0, "delta" => %{}, "finish_reason" => "stop"}]
-        }
-      ]
-
-      conn
-      |> Plug.Conn.put_resp_content_type("text/event-stream")
-      |> Plug.Conn.resp(
-        200,
-        Enum.map_join(chunks, "", &("data: " <> Jason.encode!(&1) <> "\n\n")) <>
-          "data: [DONE]\n\n"
-      )
+      ResponsesFixture.send_sse(conn, [
+        ResponsesFixture.text_delta("Observed image"),
+        ResponsesFixture.completed()
+      ])
     end)
 
     request = %{
@@ -100,9 +86,9 @@ defmodule Synapsis.Agent.Runtime.DeliveredImageHistoryFunctionalTest do
     events = request |> ProviderAdapter.stream(context) |> Enum.to_list()
     assert_receive {:delivered_image_wire, wire}, 2_000
 
-    assert wire["messages"] == [
-             %{"role" => "assistant", "content" => [%{"type" => "text", "text" => text}]}
-           ]
+    assert [
+             %{"role" => "assistant", "content" => [%{"type" => "output_text", "text" => ^text}]}
+           ] = wire["input"]
 
     assert List.last(events) == %{
              type: :response_completed,

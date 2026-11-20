@@ -11,7 +11,7 @@ defmodule Synapsis.Provider.RequestHistoryTest do
     original = :erlang.term_to_binary(messages)
 
     assert {:ok, wire} =
-             MessageMapper.build_request(:openai, messages, [], %{
+             MessageMapper.build_request(:openai_responses, messages, [], %{
                model: "new-model",
                provider_name: "secondary",
                endpoint: "https://other.example/v1",
@@ -20,16 +20,15 @@ defmodule Synapsis.Provider.RequestHistoryTest do
 
     assert [
              %{"role" => "user", "content" => [%{"text" => "Find it"}]},
+             %{"role" => "assistant", "content" => [%{"text" => "Searching"}]},
              %{
-               "role" => "assistant",
-               "content" => [%{"text" => "Searching"}],
-               "tool_calls" => [call]
+               "type" => "function_call",
+               "call_id" => "call-1",
+               "arguments" => ~s({"q":"query"})
              },
-             %{"role" => "tool", "tool_call_id" => "call-1", "content" => "Found it"}
-           ] = wire["messages"]
+             %{"type" => "function_call_output", "call_id" => "call-1", "output" => "Found it"}
+           ] = wire["input"]
 
-    assert call["id"] == "call-1"
-    assert call["function"]["arguments"] == ~s({"q":"query"})
     assert :erlang.term_to_binary(messages) == original
     refute inspect(wire) =~ "private reasoning"
     refute inspect(wire) =~ "opaque-signature"
@@ -64,7 +63,7 @@ defmodule Synapsis.Provider.RequestHistoryTest do
     ]
 
     assert {:error, %Backplane.AiProtocol.Error{kind: :incompatible}} =
-             MessageMapper.build_request(:openai, messages, [], %{
+             MessageMapper.build_request(:openai_responses, messages, [], %{
                model: "new-model",
                history_projection: :portable
              })
@@ -76,8 +75,8 @@ defmodule Synapsis.Provider.RequestHistoryTest do
       %{role: "user", parts: [%Part.Text{content: "Continue"}]}
     ]
 
-    assert {:ok, %{"messages" => [%{"role" => "user", "content" => [%{"text" => "Continue"}]}]}} =
-             MessageMapper.build_request(:openai, messages, [], %{
+    assert {:ok, %{"input" => [%{"role" => "user", "content" => [%{"text" => "Continue"}]}]}} =
+             MessageMapper.build_request(:openai_responses, messages, [], %{
                model: "new-model",
                history_projection: :portable
              })
@@ -86,7 +85,7 @@ defmodule Synapsis.Provider.RequestHistoryTest do
   test "portable projection rejects an orphan tool result rather than inventing a call" do
     assert {:error, %Backplane.AiProtocol.Error{kind: :invalid_request}} =
              MessageMapper.build_request(
-               :openai,
+               :openai_responses,
                [
                  %{role: "user", parts: [%Part.ToolResult{tool_use_id: "missing", content: "ok"}]}
                ],

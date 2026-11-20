@@ -121,7 +121,7 @@ defmodule Synapsis.Agent.DaemonNativeFunctionalTest do
     {blocker, blocking_fixture} = native_agent(ctx.tmp_dir, [])
     owner = self()
 
-    Gaoxy.Test.stub(blocking_fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(blocking_fixture, "POST", "/v1/responses", fn conn ->
       send(owner, {:blocking_native_request, self()})
 
       receive do
@@ -276,7 +276,7 @@ defmodule Synapsis.Agent.DaemonNativeFunctionalTest do
     {:ok, counter} = Agent.start_link(fn -> 0 end)
     on_exit(fn -> if Process.alive?(counter), do: Agent.stop(counter) end)
 
-    Gaoxy.Test.stub(fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
       index = Agent.get_and_update(counter, &{&1, &1 + 1})
@@ -300,7 +300,7 @@ defmodule Synapsis.Agent.DaemonNativeFunctionalTest do
     end)
   end
 
-  def tool_names(request), do: Enum.map(request["tools"] || [], & &1["function"]["name"])
+  def tool_names(request), do: Enum.map(request["tools"] || [], & &1["name"])
 
   def parts(id, module),
     do:
@@ -312,8 +312,12 @@ defmodule Synapsis.Agent.DaemonNativeFunctionalTest do
       )
 
   def assert_wire_result(request, result) do
-    assert %{"role" => "tool", "tool_call_id" => result.tool_use_id, "content" => result.content} in request[
-             "messages"
+    assert %{
+             "type" => "function_call_output",
+             "call_id" => result.tool_use_id,
+             "output" => result.content
+           } in request[
+             "input"
            ]
   end
 end

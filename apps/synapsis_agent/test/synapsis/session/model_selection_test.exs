@@ -16,7 +16,7 @@ defmodule Synapsis.Session.ModelSelectionTest do
       )
 
     SessionHarness.subscribe!(harness.session.id)
-    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/chat/completions", &answer/1)
+    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", &answer/1)
     on_exit(fn -> SessionHarness.cleanup!(harness) end)
     %{harness: harness, id: harness.session.id}
   end
@@ -48,12 +48,12 @@ defmodule Synapsis.Session.ModelSelectionTest do
       Providers.delete(target.id)
     end)
 
-    Gaoxy.Test.stub(fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
       send(owner, {:target_request, request})
 
-      if message_text(List.last(request["messages"])) == "hold switched turn" do
+      if message_text(List.last(request["input"])) == "hold switched turn" do
         send(owner, {:target_waiting, self()})
         receive do: (:release -> :ok), after: (5_000 -> :ok)
       end
@@ -78,7 +78,7 @@ defmodule Synapsis.Session.ModelSelectionTest do
     assert_receive {:target_request, second}
     assert first["model"] == model.model
     assert second["model"] == model.model
-    assert Enum.any?(first["messages"], &(message_text(&1) == "original history"))
+    assert Enum.any?(first["input"], &(message_text(&1) == "original history"))
     assert AgentConfigs.get(harness.agent_config.id).model == "characterization-model"
     assert AgentConfigs.get(harness.agent_config.id).provider == harness.provider.name
 

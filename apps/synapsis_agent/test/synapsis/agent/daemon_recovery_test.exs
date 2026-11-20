@@ -7,7 +7,7 @@ defmodule Synapsis.Agent.DaemonRecoveryTest do
     fixture = Gaoxy.Test.open()
     {:ok, counter} = Agent.start_link(fn -> 0 end)
 
-    Gaoxy.Test.expect(fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, _body, conn} = Plug.Conn.read_body(conn)
       request_number = Agent.get_and_update(counter, &{&1 + 1, &1 + 1})
       send(owner, {:provider_request, request_number, self()})
@@ -184,7 +184,7 @@ defmodule Synapsis.Agent.DaemonRecoveryTest do
     owner = self()
     fixture = Gaoxy.Test.open()
 
-    Gaoxy.Test.expect(fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       send(owner, {:recovered_provider_request, body})
       send_sse(conn, [text_chunk("recovered"), finish_chunk("stop")])

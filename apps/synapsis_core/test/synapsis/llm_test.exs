@@ -24,12 +24,12 @@ defmodule Synapsis.LLMTest do
       caller = self()
       provider_name = "llm-managed-#{System.unique_integer([:positive])}"
 
-      Gaoxy.Test.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.stub(bypass, "POST", "/v1/responses", fn conn ->
         send(caller, :provider_http_called)
 
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(200, Jason.encode!(%{"choices" => []}))
+        |> Plug.Conn.send_resp(200, Jason.encode!(%{"status" => "completed", "output" => []}))
       end)
 
       assert {:ok, _connection} =

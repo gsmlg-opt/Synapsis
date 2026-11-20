@@ -38,7 +38,7 @@ defmodule Synapsis.Session.NativeSessionUsageFunctionalTest do
   test "native status observes committed attempts once across continuations turns and ordinary fresh Worker replay",
        %{tmp_dir: root} do
     h = fixture(root)
-    install_chat(h)
+    install_responses(h)
     observe_status_execution()
     id = h.session.id
 
@@ -61,7 +61,7 @@ defmodule Synapsis.Session.NativeSessionUsageFunctionalTest do
            ]
 
     for {body, count} <- Enum.with_index(requests),
-        do: assert_chat_history(body, Enum.take(first_results, count))
+        do: assert_responses_history(body, Enum.take(first_results, count))
 
     assert Enum.map(status_executions(), & &1.invocation_id) |> Enum.uniq() |> length() === 3
     {worker, adapter} = runtime(id)
@@ -85,8 +85,8 @@ defmodule Synapsis.Session.NativeSessionUsageFunctionalTest do
       ])
 
     assert Enum.take(all_results, 3) === first_results
-    assert_chat_history(request4, first_results)
-    assert_chat_history(request5, all_results)
+    assert_responses_history(request4, first_results)
+    assert_responses_history(request5, all_results)
     assert length(status_executions()) === 1
     assert runtime(id) |> elem(0) === worker
     before_recreation = aggregates(id)
@@ -108,7 +108,7 @@ defmodule Synapsis.Session.NativeSessionUsageFunctionalTest do
     await_completion(id)
     {fresh_worker, _fresh_adapter} = runtime(id)
     assert fresh_worker != worker
-    assert_chat_history(replay, all_results)
+    assert_responses_history(replay, all_results)
 
     assert assert_parts(id, @calls, [
              expected(1, 1, {11, 3, 5, 2}),
@@ -233,10 +233,10 @@ defmodule Synapsis.Session.NativeSessionUsageFunctionalTest do
     }
   end
 
-  defp install_chat(h) do
+  defp install_responses(h) do
     owner = self()
 
-    Gaoxy.Test.stub(h.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(h.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
 
@@ -257,37 +257,32 @@ defmodule Synapsis.Session.NativeSessionUsageFunctionalTest do
           _ -> nil
         end
 
-      response =
+      event =
         case call do
           {id, input} ->
-            [
-              DeterministicProvider.tool_call_chunk(ToolName.encode(@status), id, input),
-              DeterministicProvider.finish_chunk("tool_calls")
-            ]
+            DeterministicProvider.tool_call_chunk(ToolName.encode(@status), id, input)
 
           nil ->
-            [
-              DeterministicProvider.text_chunk("Committed usage observed #{index}"),
-              DeterministicProvider.finish_chunk("stop")
-            ]
+            DeterministicProvider.text_chunk("Committed usage observed #{index}")
         end
 
-      usage = chat_usage(Enum.at(@chat_metrics, index))
-      # These are repeated final cumulative snapshots, not additive deltas or
-      # duplicated retired callbacks. Native records one report per attempt.
-      DeterministicProvider.send_sse(conn, response ++ [usage, usage])
+      DeterministicProvider.send_sse(conn, [event, responses_usage(Enum.at(@chat_metrics, index))])
     end)
   end
 
-  defp chat_usage({input, cached, output, reasoning}) do
+  defp responses_usage({input, cached, output, reasoning}) do
     %{
-      "choices" => [],
-      "usage" => %{
-        "prompt_tokens" => input,
-        "completion_tokens" => output,
-        "prompt_tokens_details" => %{"cached_tokens" => cached},
-        "completion_tokens_details" => %{"reasoning_tokens" => reasoning},
-        "total_tokens" => input + output
+      "type" => "response.completed",
+      "response" => %{
+        "status" => "completed",
+        "output" => [],
+        "usage" => %{
+          "input_tokens" => input,
+          "output_tokens" => output,
+          "input_tokens_details" => %{"cached_tokens" => cached},
+          "output_tokens_details" => %{"reasoning_tokens" => reasoning},
+          "total_tokens" => input + output
+        }
       }
     }
   end
@@ -392,10 +387,11 @@ defmodule Synapsis.Session.NativeSessionUsageFunctionalTest do
     results
   end
 
-  defp assert_chat_history(request, results) do
-    actual = for message <- request["messages"], message["role"] == "tool", do: message
+  defp assert_responses_history(request, results) do
+    actual =
+      for message <- request["input"], message["type"] == "function_call_output", do: message
 
-    assert Enum.map(actual, &{&1["tool_call_id"], &1["content"]}) ===
+    assert Enum.map(actual, &{&1["call_id"], &1["output"]}) ===
              Enum.map(results, &{&1.tool_use_id, &1.content})
   end
 

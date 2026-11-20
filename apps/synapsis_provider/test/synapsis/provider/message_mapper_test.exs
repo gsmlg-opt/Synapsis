@@ -74,6 +74,11 @@ defmodule Synapsis.Provider.MessageMapperTest do
             tool: @tool.name,
             tool_use_id: "call-1",
             input: %{"query" => "elixir"}
+          },
+          %Synapsis.Part.ToolUse{
+            tool: @tool.name,
+            tool_use_id: "call-2",
+            input: %{"query" => "otp"}
           }
         ]
       },
@@ -87,31 +92,22 @@ defmodule Synapsis.Provider.MessageMapperTest do
     ]
 
     assert {:ok, wire} =
-             MessageMapper.build_request(:openai, messages, [@tool], %{model: "gpt-test"})
+             MessageMapper.build_request(:openai_responses, messages, [@tool], %{
+               model: "gpt-test"
+             })
 
     encoded = ToolName.encode(@tool.name)
-    assert get_in(wire, ["tools", Access.at(0), "function", "name"]) == encoded
-
-    assert get_in(wire, ["messages", Access.at(0), "tool_calls", Access.at(0), "function", "name"]) ==
-             encoded
+    assert get_in(wire, ["tools", Access.at(0), "name"]) == encoded
 
     assert [
-             _,
-             %{"role" => "tool", "tool_call_id" => "call-1"},
-             %{"role" => "tool", "tool_call_id" => "call-2"}
-           ] =
-             wire["messages"]
+             %{"type" => "function_call", "name" => ^encoded, "call_id" => "call-1"},
+             %{"type" => "function_call", "name" => ^encoded, "call_id" => "call-2"},
+             %{"type" => "function_call_output", "call_id" => "call-1", "output" => "one"},
+             %{"type" => "function_call_output", "call_id" => "call-2", "output" => "two"}
+           ] = wire["input"]
   end
 
-  test "enables MiniMax reasoning details through a canonical extension" do
-    assert {:ok, %{"reasoning_split" => true}} =
-             MessageMapper.build_request(:openai, [@text_message], [], %{
-               model: "MiniMax-M3",
-               base_url: "https://api.minimaxi.com/v1"
-             })
-  end
-
-  test "replays MiniMax reasoning detail batches as a flat ordered array" do
+  test "projects legacy MiniMax transcripts onto Responses without replaying old reasoning state" do
     first = %{"type" => "reasoning.text", "text" => "first", "signature" => "opaque"}
     second = %{"type" => "reasoning.text", "text" => "second"}
     third = %{"type" => "reasoning.text", "text" => "third"}
@@ -151,29 +147,29 @@ defmodule Synapsis.Provider.MessageMapperTest do
         base_url: "http://localhost:4220/v1"
       }
 
-      assert {:ok, wire} = MessageMapper.build_request(:openai, messages, [], opts)
-      assistant = Enum.at(wire["messages"], 1)
-      assert assistant["reasoning_details"] == [first, second, third]
-      assert assistant["reasoning_content"] == "why"
-      assert assistant["content"] == [%{"type" => "text", "text" => "Hello"}]
+      assert {:ok, wire} = MessageMapper.build_request(:openai_responses, messages, [], opts)
 
-      assert {:error, %Backplane.AiProtocol.Error{kind: :incompatible}} =
-               MessageMapper.build_request(:openai, messages, [], %{opts | model: "changed"})
+      assert %{
+               "role" => "assistant",
+               "content" => [%{"type" => "output_text", "text" => "Hello"}]
+             } = Enum.at(wire["input"], 1)
+
+      refute inspect(wire) =~ "opaque"
+      refute inspect(wire) =~ "reasoning"
     end
   end
 
-  test "preserves explicit false stream and MiniMax reasoning options for atom and string keys" do
+  test "preserves explicit false stream for atom and string keys" do
     for opts <- [
-          %{model: "m", provider_name: "minimax", stream: false, reasoning_split: false},
+          %{model: "m", provider_name: "minimax", stream: false},
           %{
             "model" => "m",
             "provider_name" => "minimax",
-            "stream" => false,
-            "reasoning_split" => false
+            "stream" => false
           }
         ] do
-      assert {:ok, %{"stream" => false, "reasoning_split" => false}} =
-               MessageMapper.build_request(:openai, [@text_message], [], opts)
+      assert {:ok, %{"stream" => false}} =
+               MessageMapper.build_request(:openai_responses, [@text_message], [], opts)
     end
   end
 
@@ -226,16 +222,16 @@ defmodule Synapsis.Provider.MessageMapperTest do
            ]) == "search"
   end
 
-  test "preserves plain reasoning but rejects a legacy signature without origin" do
+  test "omits plain reasoning from Responses and rejects legacy signatures without origin" do
     assert {:ok, wire} =
              MessageMapper.build_request(
-               :openai,
+               :openai_responses,
                [%{role: "assistant", parts: [%Synapsis.Part.Reasoning{content: "why"}]}],
                [],
                %{model: "gpt-test"}
              )
 
-    assert get_in(wire, ["messages", Access.at(0), "reasoning_content"]) == "why"
+    assert wire["input"] == []
 
     assert {:error, %Backplane.AiProtocol.Error{kind: :incompatible}} =
              MessageMapper.build_request(
@@ -348,7 +344,7 @@ defmodule Synapsis.Provider.MessageMapperTest do
     message = %{role: "user", parts: [%Synapsis.Part.File{path: "a.txt", content: "data"}]}
 
     assert {:error, %Backplane.AiProtocol.Error{kind: :incompatible}} =
-             MessageMapper.build_request(:openai, [message], [], %{model: "gpt-test"})
+             MessageMapper.build_request(:openai_responses, [message], [], %{model: "gpt-test"})
   end
 
   defp provider_state(thinking) do
@@ -400,11 +396,11 @@ defmodule Synapsis.Provider.MessageMapperTest do
       tool = %{name: name, description: "List notes", parameters: %{"type" => "object"}}
 
       assert {:ok, anthropic} = MessageMapper.build_request(:anthropic, [], [tool], %{})
-      assert {:ok, openai} = MessageMapper.build_request(:openai, [], [tool], %{})
+      assert {:ok, openai} = MessageMapper.build_request(:openai_responses, [], [tool], %{})
       assert {:ok, google} = MessageMapper.build_request(:google, [], [tool], %{})
 
       anthropic_alias = get_in(anthropic, ["tools", Access.at(0), "name"])
-      openai_alias = get_in(openai, ["tools", Access.at(0), "function", "name"])
+      openai_alias = get_in(openai, ["tools", Access.at(0), "name"])
 
       google_alias =
         get_in(google, ["tools", Access.at(0), "functionDeclarations", Access.at(0), "name"])

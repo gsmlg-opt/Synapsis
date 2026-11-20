@@ -69,13 +69,20 @@ defmodule Synapsis.Agent.Runtime.ProviderMessagesTest do
 
     assert {:error, %Error{}} = ProviderMessages.tool_result_text(arbitrary, "view_image")
 
-    for protocol <- [:openai, :google] do
-      assert {:error, %Backplane.AiProtocol.Error{kind: :incompatible}} =
-               Synapsis.Provider.Adapter.format_request(host, [], %{
-                 model: "fixture",
-                 provider_type: protocol
-               })
-    end
+    assert {:ok, wire} =
+             Synapsis.Provider.Adapter.format_request(host, [], %{
+               model: "fixture",
+               provider_type: :openai_responses
+             })
+
+    assert %{"type" => "function_call_output", "output" => [_, %{"type" => "input_image"}]} =
+             List.last(wire["input"])
+
+    assert {:error, %Backplane.AiProtocol.Error{kind: :incompatible}} =
+             Synapsis.Provider.Adapter.format_request(host, [], %{
+               model: "fixture",
+               provider_type: :google
+             })
   end
 
   test "named historical view_image nil projections preserve legacy text and provider wire" do
@@ -192,7 +199,7 @@ defmodule Synapsis.Agent.Runtime.ProviderMessagesTest do
                  provider_type: :openai
                })
 
-      assert List.last(wire["messages"])["content"] == live
+      assert List.last(wire["input"])["output"] == live
 
       assert {:ok, [%{parts: [^part]}]} =
                ProviderMessages.to_host([
@@ -467,13 +474,16 @@ defmodule Synapsis.Agent.Runtime.ProviderMessagesTest do
       assert {:ok, runtime} = ProviderMessages.from_host(host)
       assert {:ok, ^host} = ProviderMessages.to_host(runtime)
 
+      call = %ToolUse{tool_use_id: "status", tool: name, input: %{}}
+      messages = [%{role: :assistant, parts: [call]} | host]
+
       assert {:ok, wire} =
-               Synapsis.Provider.Adapter.format_request(host, [], %{
+               Synapsis.Provider.Adapter.format_request(messages, [], %{
                  model: "fixture",
-                 provider_type: :openai
+                 provider_type: :openai_responses
                })
 
-      assert [%{"content" => ^expected}] = wire["messages"]
+      assert [_, %{"output" => ^expected}] = wire["input"]
       refute Jason.encode!(wire) =~ "private reasoning"
       refute Jason.encode!(wire) =~ "opaque-signed-state"
     end

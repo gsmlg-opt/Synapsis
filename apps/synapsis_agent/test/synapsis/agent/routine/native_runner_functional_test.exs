@@ -94,10 +94,10 @@ defmodule Synapsis.Agent.Routine.NativeRunnerFunctionalTest do
                config: %{"workspace_path" => root}
              })
 
-    Gaoxy.Test.stub(fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
-      following? = Enum.any?(request["messages"], &(&1["role"] == "tool"))
+      following? = Enum.any?(request["input"], &(&1["type"] == "function_call_output"))
       send(owner, {:producer_request, label, following?, request})
 
       chunks =
@@ -140,7 +140,7 @@ defmodule Synapsis.Agent.Routine.NativeRunnerFunctionalTest do
     assert completed.capability_snapshot == run.capability_snapshot
     assert completed.finished_at
     assert_receive {:producer_request, ^label, false, first}, 5_000
-    assert Enum.map(first["tools"], & &1["function"]["name"]) == ["exec_command"]
+    assert Enum.map(first["tools"], & &1["name"]) == ["exec_command"]
     assert_receive {:producer_request, ^label, true, following}, 5_000
     assert File.read!(Path.join(root, "#{label}.txt")) == "effect"
 
@@ -151,8 +151,12 @@ defmodule Synapsis.Agent.Routine.NativeRunnerFunctionalTest do
                do: part
              )
 
-    assert %{"role" => "tool", "tool_call_id" => result.tool_use_id, "content" => result.content} in following[
-             "messages"
+    assert %{
+             "type" => "function_call_output",
+             "call_id" => result.tool_use_id,
+             "output" => result.content
+           } in following[
+             "input"
            ]
 
     assert {:ok, turns} = Store.list_turns(completed.session_id)

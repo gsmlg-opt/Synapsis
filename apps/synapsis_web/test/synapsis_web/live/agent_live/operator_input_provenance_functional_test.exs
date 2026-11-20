@@ -4,7 +4,7 @@ defmodule SynapsisWeb.AgentLive.OperatorInputProvenanceFunctionalTest do
 
   import Synapsis.Agent.DaemonCase, only: [wait_for: 1]
 
-  alias Synapsis.Agent.TestSupport.{DeterministicProvider, SessionHarness}
+  alias Synapsis.Agent.TestSupport.SessionHarness
   alias Synapsis.Session.{PendingInputStore, Store, Worker}
   alias Synapsis.{Message, Part, Sessions}
 
@@ -94,7 +94,14 @@ defmodule SynapsisWeb.AgentLive.OperatorInputProvenanceFunctionalTest do
         session_config: %{"subagents" => false, "memory_context" => false}
       )
 
-    Gaoxy.Test.stub(h.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    :ok =
+      Synapsis.Provider.Registry.register(h.provider.name, %{
+        type: "anthropic",
+        api_key: "test-key",
+        base_url: h.provider.base_url
+      })
+
+    Gaoxy.Test.stub(h.provider.fixture, "POST", "/v1/messages", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
       handler = self()
@@ -113,10 +120,28 @@ defmodule SynapsisWeb.AgentLive.OperatorInputProvenanceFunctionalTest do
         20_000 -> raise "ordinary operator fixture was not released"
       end
 
-      DeterministicProvider.send_sse(conn, [
-        DeterministicProvider.text_chunk("operator ingress reply #{index}"),
-        DeterministicProvider.finish_chunk("stop")
-      ])
+      frames = [
+        %{"type" => "message_start", "message" => %{}},
+        %{
+          "type" => "content_block_start",
+          "index" => 0,
+          "content_block" => %{"type" => "text", "text" => ""}
+        },
+        %{
+          "type" => "content_block_delta",
+          "index" => 0,
+          "delta" => %{"type" => "text_delta", "text" => "operator ingress reply #{index}"}
+        },
+        %{"type" => "content_block_stop", "index" => 0},
+        %{"type" => "message_stop"}
+      ]
+
+      conn
+      |> Plug.Conn.put_resp_content_type("text/event-stream")
+      |> Plug.Conn.resp(
+        200,
+        Enum.map_join(frames, "", &("data: " <> Jason.encode!(&1) <> "\n\n"))
+      )
     end)
 
     on_exit(fn ->
@@ -228,7 +253,12 @@ defmodule SynapsisWeb.AgentLive.OperatorInputProvenanceFunctionalTest do
   defp wire_parts(text, true),
     do:
       wire_parts(text, false) ++
-        [%{"type" => "image_url", "image_url" => %{"url" => "data:image/png;base64," <> @png}}]
+        [
+          %{
+            "type" => "image",
+            "source" => %{"type" => "base64", "media_type" => "image/png", "data" => @png}
+          }
+        ]
 
   defp wire_messages(request) do
     request["messages"]

@@ -242,9 +242,9 @@ defmodule Synapsis.Session.NativeAutomationManagementFunctionalTest do
     assert_receive {:management_request, 1, following}, 5_000
 
     acknowledgement =
-      following["messages"]
-      |> Enum.find(&(&1["role"] == "tool" and &1["tool_call_id"] == "manage-0"))
-      |> Map.fetch!("content")
+      following["input"]
+      |> Enum.find(&(&1["type"] == "function_call_output" and &1["call_id"] == "manage-0"))
+      |> Map.fetch!("output")
       |> Jason.decode!()
 
     assert acknowledgement["enqueued"] == true
@@ -290,17 +290,17 @@ defmodule Synapsis.Session.NativeAutomationManagementFunctionalTest do
                config: %{"workspace_path" => root}
              })
 
-    Gaoxy.Test.stub(http, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(http, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
-      encoded = Jason.encode!(request["messages"])
+      encoded = Jason.encode!(request["input"])
 
       source =
         Enum.find(~w(routine heartbeat), &String.contains?(encoded, "automation-execute:#{&1}"))
 
       chunks =
         if source do
-          following? = Enum.any?(request["messages"], &(&1["role"] == "tool"))
+          following? = Enum.any?(request["input"], &(&1["type"] == "function_call_output"))
 
           if not following? and Keyword.get(opts, :hold_effect, false) do
             send(owner, {:effect_waiting, self()})
@@ -438,8 +438,12 @@ defmodule Synapsis.Session.NativeAutomationManagementFunctionalTest do
 
   defp assert_wire(request, parts) do
     for part <- parts do
-      assert %{"role" => "tool", "tool_call_id" => part.tool_use_id, "content" => part.content} in request[
-               "messages"
+      assert %{
+               "type" => "function_call_output",
+               "call_id" => part.tool_use_id,
+               "output" => part.content
+             } in request[
+               "input"
              ]
     end
   end

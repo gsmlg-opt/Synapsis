@@ -274,10 +274,10 @@ defmodule Synapsis.Agent.Runtime.RunInventoryFunctionalTest do
   end
 
   defp install_provider(harness) do
-    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
-      users = for message <- request["messages"], message["role"] == "user", do: text(message)
+      users = for message <- request["input"], message["role"] == "user", do: text(message)
 
       phase =
         cond do
@@ -289,9 +289,9 @@ defmodule Synapsis.Agent.Runtime.RunInventoryFunctionalTest do
         end
 
       call_ids =
-        for message <- request["messages"],
-            message["role"] == "tool" and message["tool_call_id"] in @call_ids,
-            do: message["tool_call_id"]
+        for message <- request["input"],
+            message["type"] == "function_call_output" and message["call_id"] in @call_ids,
+            do: message["call_id"]
 
       Agent.update(harness.counter, fn state ->
         Map.update(state, :inventory_requests, [{phase, call_ids, request}], fn requests ->
@@ -367,9 +367,9 @@ defmodule Synapsis.Agent.Runtime.RunInventoryFunctionalTest do
           do: {phase, ids, request}
 
     assert [{:child_first, [], _}, {:child_followup, [], followup}] = children
-    users = for message <- followup["messages"], message["role"] == "user", do: text(message)
+    users = for message <- followup["input"], message["role"] == "user", do: text(message)
     assert users == ["inventory child first", "inventory child followup"]
-    assert Enum.any?(followup["messages"], &(text(&1) == "inventory child first complete"))
+    assert Enum.any?(followup["input"], &(text(&1) == "inventory child first complete"))
   end
 
   defp assert_tool_history(id) do

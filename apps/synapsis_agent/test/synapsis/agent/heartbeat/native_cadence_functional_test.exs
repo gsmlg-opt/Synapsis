@@ -134,9 +134,11 @@ defmodule Synapsis.Agent.Heartbeat.NativeCadenceFunctionalTest do
     requests = Agent.get(fixture.log, & &1)
     assert length(requests) == 2
 
-    assert %{"role" => "tool", "tool_call_id" => result.tool_use_id, "content" => result.content} in List.last(
-             requests
-           )["messages"]
+    assert %{
+             "type" => "function_call_output",
+             "call_id" => result.tool_use_id,
+             "output" => result.content
+           } in List.last(requests)["input"]
 
     assert {:ok, turns} = Synapsis.Session.Store.list_turns(completed.session_id)
 
@@ -195,13 +197,13 @@ defmodule Synapsis.Agent.Heartbeat.NativeCadenceFunctionalTest do
                config: %{"workspace_path" => root}
              })
 
-    Gaoxy.Test.stub(http, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(http, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
       Agent.update(log, &(&1 ++ [request]))
 
       chunks =
-        if Enum.any?(request["messages"], &(&1["role"] == "tool")) do
+        if Enum.any?(request["input"], &(&1["type"] == "function_call_output")) do
           [
             DeterministicProvider.text_chunk("Cadence complete"),
             DeterministicProvider.finish_chunk("stop")

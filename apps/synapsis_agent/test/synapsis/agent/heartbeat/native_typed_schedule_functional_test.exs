@@ -378,14 +378,14 @@ defmodule Synapsis.Agent.Heartbeat.NativeTypedScheduleFunctionalTest do
                config: %{"workspace_path" => root}
              })
 
-    Gaoxy.Test.stub(http, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(http, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
 
       number =
         Agent.get_and_update(log, fn previous -> {length(previous) + 1, previous ++ [request]} end)
 
-      following? = Enum.any?(request["messages"], &(&1["role"] == "tool"))
+      following? = Enum.any?(request["input"], &(&1["type"] == "function_call_output"))
 
       if number == 1 and Keyword.get(opts, :hold_first, false) do
         send(owner, {:typed_provider_waiting, self()})
@@ -398,7 +398,9 @@ defmodule Synapsis.Agent.Heartbeat.NativeTypedScheduleFunctionalTest do
       end
 
       tool_ids =
-        for message <- request["messages"], message["role"] == "tool", do: message["tool_call_id"]
+        for message <- request["input"],
+            message["type"] == "function_call_output",
+            do: message["call_id"]
 
       chunks =
         cond do
@@ -516,18 +518,18 @@ defmodule Synapsis.Agent.Heartbeat.NativeTypedScheduleFunctionalTest do
 
     assert Enum.any?(requests(fixture), fn request ->
              %{
-               "role" => "tool",
-               "tool_call_id" => result.tool_use_id,
-               "content" => result.content
-             } in request["messages"]
+               "type" => "function_call_output",
+               "call_id" => result.tool_use_id,
+               "output" => result.content
+             } in request["input"]
            end)
 
     first =
       Enum.find(requests(fixture), fn request ->
-        not Enum.any?(request["messages"], &(&1["role"] == "tool"))
+        not Enum.any?(request["input"], &(&1["type"] == "function_call_output"))
       end)
 
-    assert Enum.sort(Enum.map(first["tools"], & &1["function"]["name"])) ==
+    assert Enum.sort(Enum.map(first["tools"], & &1["name"])) ==
              Enum.sort(Enum.map(fixture.tools, &Synapsis.Provider.ToolName.encode/1))
 
     assert {:ok, turns} = Store.list_turns(completed.session_id)
@@ -561,8 +563,12 @@ defmodule Synapsis.Agent.Heartbeat.NativeTypedScheduleFunctionalTest do
 
     for part <- [listed, fetched] do
       assert Enum.any?(requests(fixture), fn request ->
-               %{"role" => "tool", "tool_call_id" => part.tool_use_id, "content" => part.content} in request[
-                 "messages"
+               %{
+                 "type" => "function_call_output",
+                 "call_id" => part.tool_use_id,
+                 "output" => part.content
+               } in request[
+                 "input"
                ]
              end)
 
@@ -596,8 +602,12 @@ defmodule Synapsis.Agent.Heartbeat.NativeTypedScheduleFunctionalTest do
     replay = List.last(requests(fixture))
 
     for part <- parts do
-      assert %{"role" => "tool", "tool_call_id" => part.tool_use_id, "content" => part.content} in replay[
-               "messages"
+      assert %{
+               "type" => "function_call_output",
+               "call_id" => part.tool_use_id,
+               "output" => part.content
+             } in replay[
+               "input"
              ]
     end
 

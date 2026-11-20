@@ -304,53 +304,26 @@ defmodule SynapsisWeb.AgentLive.DaemonNativeFunctionalTest do
                config: %{"workspace_path" => root}
              })
 
-    Gaoxy.Test.stub(fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
-      following? = Enum.any?(request["messages"], &(&1["role"] == "tool"))
+      following? = Enum.any?(request["input"], &(&1["type"] == "function_call_output"))
       send(owner, {:native_ui_request, label, following?, request})
 
-      delta =
-        if following?,
-          do: %{"content" => "Native UI complete"},
-          else: %{
-            "tool_calls" => [
-              %{
-                "index" => 0,
-                "id" => "ui-call",
-                "type" => "function",
-                "function" => %{
-                  "name" => "exec_command",
-                  "arguments" =>
-                    Jason.encode!(%{
-                      "cmd" => "printf effect >> #{label}.txt",
-                      "login" => false,
-                      "yield_time_ms" => 1000
-                    })
-                }
-              }
-            ]
-          }
+      alias Synapsis.Provider.TestSupport.ResponsesFixture
 
-      chunks = [
-        %{"choices" => [%{"index" => 0, "delta" => delta, "finish_reason" => nil}]},
-        %{
-          "choices" => [
-            %{
-              "index" => 0,
-              "delta" => %{},
-              "finish_reason" => if(following?, do: "stop", else: "tool_calls")
-            }
-          ]
-        }
-      ]
+      event =
+        if following? do
+          ResponsesFixture.text_delta("Native UI complete")
+        else
+          ResponsesFixture.function_call("exec_command", "ui-call", %{
+            "cmd" => "printf effect >> #{label}.txt",
+            "login" => false,
+            "yield_time_ms" => 1000
+          })
+        end
 
-      body =
-        Enum.map_join(chunks, "\n\n", &("data: " <> Jason.encode!(&1))) <> "\n\ndata: [DONE]\n\n"
-
-      conn
-      |> Plug.Conn.put_resp_content_type("text/event-stream")
-      |> Plug.Conn.send_resp(200, body)
+      ResponsesFixture.send_sse(conn, [event, ResponsesFixture.completed()])
     end)
 
     on_exit(fn ->
@@ -408,7 +381,7 @@ defmodule SynapsisWeb.AgentLive.DaemonNativeFunctionalTest do
     assert run.status == "completed"
     assert run.finished_at
     assert_receive {:native_ui_request, ^label, false, first}, 5_000
-    assert Enum.map(first["tools"], & &1["function"]["name"]) == ["exec_command"]
+    assert Enum.map(first["tools"], & &1["name"]) == ["exec_command"]
     assert_receive {:native_ui_request, ^label, true, following}, 5_000
     assert File.read!(Path.join(root, "#{label}.txt")) == "effect"
 
@@ -419,8 +392,12 @@ defmodule SynapsisWeb.AgentLive.DaemonNativeFunctionalTest do
                do: part
              )
 
-    assert %{"role" => "tool", "tool_call_id" => result.tool_use_id, "content" => result.content} in following[
-             "messages"
+    assert %{
+             "type" => "function_call_output",
+             "call_id" => result.tool_use_id,
+             "output" => result.content
+           } in following[
+             "input"
            ]
 
     assert {:ok, turns} = Synapsis.Session.Store.list_turns(run.session_id)

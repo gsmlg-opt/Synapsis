@@ -1,5 +1,5 @@
 defmodule Synapsis.Provider.WebSearch.Perplexity do
-  @moduledoc "Explicit Search API and Sonar formats with privately canonicalized arguments."
+  @moduledoc "Perplexity Search API request and result mapping."
 
   @search_keys ~w(country language date_after date_before domain_filter max_tokens max_tokens_per_page)
   @optional_keys ["freshness" | @search_keys]
@@ -14,7 +14,12 @@ defmodule Synapsis.Provider.WebSearch.Perplexity do
     "py" => "year"
   }
 
-  def prepare(config, arguments) do
+  def prepare_config(%{mode: mode}) when mode != "search_api",
+    do: {:error, :unsupported_perplexity_mode}
+
+  def prepare_config(config), do: {:ok, Map.put(config, :mode, "search_api")}
+
+  def prepare(_config, arguments) do
     values = Map.new(@optional_keys -- ["domain_filter"], &{&1, trim(arguments[&1])})
     freshness = if values["freshness"], do: @freshness[String.downcase(values["freshness"])]
     domains = domains(arguments["domain_filter"])
@@ -32,12 +37,7 @@ defmodule Synapsis.Provider.WebSearch.Perplexity do
            Enum.all?(domains, &String.starts_with?(&1, "-")) or
              Enum.all?(domains, &(not String.starts_with?(&1, "-"))),
          true <- positive?(arguments["max_tokens"], 1_000_000),
-         true <- positive?(arguments["max_tokens_per_page"], 9_007_199_254_740_991),
-         true <-
-           Map.get(config, :mode, "search_api") == "search_api" or
-             (Enum.all?(~w(country language date_after date_before), &is_nil(values[&1])) and
-                domains == [] and is_nil(arguments["max_tokens"]) and
-                is_nil(arguments["max_tokens_per_page"])) do
+         true <- positive?(arguments["max_tokens_per_page"], 9_007_199_254_740_991) do
       prepared =
         arguments |> Map.drop(@optional_keys) |> Map.put("query", trim(arguments["query"]))
 
@@ -60,105 +60,48 @@ defmodule Synapsis.Provider.WebSearch.Perplexity do
   end
 
   def request(config, args) do
-    structured = Map.get(config, :mode, "search_api") == "search_api"
-
-    {path, body} =
-      if structured do
-        {"/search",
-         %{"query" => args["query"], "max_results" => args["count"]}
-         |> optional("country", args["country"])
-         |> optional("search_domain_filter", args["domain_filter"])
-         |> optional("search_recency_filter", args["freshness"])
-         |> optional("search_language_filter", if(args["language"], do: [args["language"]]))
-         |> optional("search_after_date_filter", request_date(args["date_after"]))
-         |> optional("search_before_date_filter", request_date(args["date_before"]))
-         |> optional("max_tokens", args["max_tokens"])
-         |> optional("max_tokens_per_page", args["max_tokens_per_page"])}
-      else
-        model = Map.get(config, :model, "perplexity/sonar-pro")
-
-        model =
-          if String.downcase(URI.parse(config.base_url).host || "") == "api.perplexity.ai",
-            do: String.replace_prefix(model, "perplexity/", ""),
-            else: model
-
-        {"/chat/completions",
-         %{"model" => model, "messages" => [%{"role" => "user", "content" => args["query"]}]}
-         |> optional("search_recency_filter", args["freshness"])}
-      end
+    body =
+      %{"query" => args["query"], "max_results" => args["count"]}
+      |> optional("country", args["country"])
+      |> optional("search_domain_filter", args["domain_filter"])
+      |> optional("search_recency_filter", args["freshness"])
+      |> optional("search_language_filter", if(args["language"], do: [args["language"]]))
+      |> optional("search_after_date_filter", request_date(args["date_after"]))
+      |> optional("search_before_date_filter", request_date(args["date_before"]))
+      |> optional("max_tokens", args["max_tokens"])
+      |> optional("max_tokens_per_page", args["max_tokens_per_page"])
 
     uri = URI.parse(config.base_url)
 
     url =
       uri
-      |> Map.put(:path, String.trim_trailing(uri.path || "", "/") <> path)
+      |> Map.put(:path, String.trim_trailing(uri.path || "", "/") <> "/search")
       |> Map.put(:query, nil)
       |> URI.to_string()
 
     headers = [
+      {"accept", "application/json"},
       {"content-type", "application/json"},
       {"authorization", "Bearer " <> config.api_key}
     ]
 
-    headers = if structured, do: [{"accept", "application/json"} | headers], else: headers
     {:ok, :post, url, headers, body}
   end
 
-  def result(config, args, payload) do
-    if Map.get(config, :mode, "search_api") == "search_api" do
-      rows =
-        payload
-        |> Map.get("results", [])
-        |> Enum.take(args["count"])
-        |> Enum.map(fn row ->
-          url = text(row["url"])
-
-          %{"title" => text(row["title"]), "url" => url, "description" => text(row["snippet"])}
-          |> optional("published", row["date"])
-          |> optional("siteName", site(url))
-        end)
-
-      {:ok, %{"results" => rows, "count" => length(rows)}}
-    else
-      content = get_in(payload, ["choices", Access.at(0), "message", "content"])
-
-      if is_binary(content) and String.trim(content) != "" do
-        {:ok,
-         %{
-           "content" => content,
-           "citations" => citations(payload),
-           "model" => Map.get(config, :model, "perplexity/sonar-pro")
-         }}
-      else
-        {:error, :provider_response}
-      end
-    end
-  end
-
-  defp citations(payload) do
-    top = Enum.filter(Map.get(payload, "citations", []), &(not is_nil(trim(&1))))
-
-    if top != [] do
-      Enum.uniq(top)
-    else
+  def result(_config, args, payload) do
+    rows =
       payload
-      |> Map.get("choices", [])
-      |> Enum.flat_map(fn choice ->
-        choice
-        |> get_in(["message", "annotations"])
-        |> List.wrap()
-        |> Enum.flat_map(fn annotation ->
-          nested = get_in(annotation, ["url_citation", "url"])
-          value = if is_binary(nested), do: nested, else: annotation["url"]
+      |> Map.get("results", [])
+      |> Enum.take(args["count"])
+      |> Enum.map(fn row ->
+        url = text(row["url"])
 
-          case {annotation["type"], trim(value)} do
-            {"url_citation", value} when is_binary(value) -> [value]
-            _ -> []
-          end
-        end)
+        %{"title" => text(row["title"]), "url" => url, "description" => text(row["snippet"])}
+        |> optional("published", row["date"])
+        |> optional("siteName", site(url))
       end)
-      |> Enum.uniq()
-    end
+
+    {:ok, %{"results" => rows, "count" => length(rows)}}
   end
 
   defp date(nil), do: {:ok, nil}

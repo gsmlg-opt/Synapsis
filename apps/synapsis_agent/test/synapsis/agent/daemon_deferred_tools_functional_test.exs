@@ -13,7 +13,7 @@ defmodule Synapsis.Agent.DaemonDeferredToolsFunctionalTest do
     {blocker, blocking_fixture} = native_agent(ctx.tmp_dir, [])
     owner = self()
 
-    Gaoxy.Test.stub(blocking_fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(blocking_fixture, "POST", "/v1/responses", fn conn ->
       send(owner, {:queue_held, self()})
 
       receive do
@@ -57,8 +57,8 @@ defmodule Synapsis.Agent.DaemonDeferredToolsFunctionalTest do
     assert_receive {:deferred_request, 2, last_request}, 5_000
 
     assert Enum.any?(
-             last_request["messages"],
-             &(&1["role"] == "tool" and &1["tool_call_id"] == "clock")
+             last_request["input"],
+             &(&1["type"] == "function_call_output" and &1["call_id"] == "clock")
            )
 
     assert completed.capability_snapshot == queued.capability_snapshot
@@ -110,7 +110,7 @@ defmodule Synapsis.Agent.DaemonDeferredToolsFunctionalTest do
     owner = self()
     counter = start_supervised!({Agent, fn -> 0 end})
 
-    Gaoxy.Test.stub(fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
       index = Agent.get_and_update(counter, &{&1, &1 + 1})
@@ -142,7 +142,7 @@ defmodule Synapsis.Agent.DaemonDeferredToolsFunctionalTest do
   end
 
   defp tool_names(request),
-    do: Enum.sort(Enum.map(request["tools"] || [], & &1["function"]["name"]))
+    do: Enum.sort(Enum.map(request["tools"] || [], & &1["name"]))
 
   def native_agent(root, tools, extra \\ %{}) do
     fixture = Gaoxy.Test.open()

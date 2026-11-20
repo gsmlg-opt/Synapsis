@@ -452,10 +452,10 @@ defmodule Synapsis.Session.NativeGoalLifecycleFunctionalTest do
   end
 
   defp install_provider(harness) do
-    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
-      users = for message <- request["messages"], message["role"] == "user", do: text(message)
+      users = for message <- request["input"], message["role"] == "user", do: text(message)
 
       phase =
         cond do
@@ -468,9 +468,9 @@ defmodule Synapsis.Session.NativeGoalLifecycleFunctionalTest do
         end
 
       ids =
-        for message <- request["messages"],
-            message["role"] == "tool" and message["tool_call_id"] in @call_ids,
-            do: message["tool_call_id"]
+        for message <- request["input"],
+            message["type"] == "function_call_output" and message["call_id"] in @call_ids,
+            do: message["call_id"]
 
       response =
         case {phase, ids} do
@@ -531,7 +531,6 @@ defmodule Synapsis.Session.NativeGoalLifecycleFunctionalTest do
     do:
       DeterministicProvider.send_sse(conn, [
         DeterministicProvider.tool_call_chunk(name, id, arguments),
-        DeterministicProvider.finish_chunk("tool_calls"),
         usage_chunk()
       ])
 
@@ -539,7 +538,6 @@ defmodule Synapsis.Session.NativeGoalLifecycleFunctionalTest do
     do:
       DeterministicProvider.send_sse(conn, [
         DeterministicProvider.text_chunk(answer),
-        DeterministicProvider.finish_chunk("stop"),
         usage_chunk()
       ])
 
@@ -1294,13 +1292,17 @@ defmodule Synapsis.Session.NativeGoalLifecycleFunctionalTest do
 
   defp usage_chunk do
     %{
-      "choices" => [],
-      "usage" => %{
-        "prompt_tokens" => 7,
-        "prompt_tokens_details" => %{"cached_tokens" => 2},
-        "completion_tokens" => 3,
-        "completion_tokens_details" => %{"reasoning_tokens" => 0},
-        "total_tokens" => 10
+      "type" => "response.completed",
+      "response" => %{
+        "status" => "completed",
+        "output" => [],
+        "usage" => %{
+          "input_tokens" => 7,
+          "input_tokens_details" => %{"cached_tokens" => 2},
+          "output_tokens" => 3,
+          "output_tokens_details" => %{"reasoning_tokens" => 0},
+          "total_tokens" => 10
+        }
       }
     }
   end

@@ -268,10 +268,10 @@ defmodule Synapsis.Session.ChildSessionRuntimeTest do
   defp install(harness, scenario) do
     owner = self()
 
-    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
-      messages = request["messages"]
+      messages = request["input"]
       Agent.update(harness.counter, &%{&1 | provider_requests: &1.provider_requests ++ [request]})
 
       {prompt, index} =
@@ -290,7 +290,10 @@ defmodule Synapsis.Session.ChildSessionRuntimeTest do
       turn = Enum.drop(messages, index + 1)
 
       results =
-        Map.new(for %{"role" => "tool", "tool_call_id" => id} = result <- turn, do: {id, result})
+        Map.new(
+          for %{"type" => "function_call_output", "call_id" => id} = result <- turn,
+              do: {id, result}
+        )
 
       cond do
         latest in [@child, @child_follow] ->
@@ -345,11 +348,11 @@ defmodule Synapsis.Session.ChildSessionRuntimeTest do
   defp child_response(conn, @child, results, owner, harness, scenario) do
     cond do
       Map.has_key?(results, "child-list") ->
-        send(owner, {:child_list, results["child-list"]["content"]})
+        send(owner, {:child_list, results["child-list"]["output"]})
         answer(conn)
 
       Map.has_key?(results, "child-exec") ->
-        content = results["child-exec"]["content"]
+        content = results["child-exec"]["output"]
         send(owner, {:child_command, content})
 
         case Regex.run(~r/Session ID: (\d+)/, content) do
@@ -394,7 +397,7 @@ defmodule Synapsis.Session.ChildSessionRuntimeTest do
 
   defp child_response(conn, @child_follow, results, owner, harness, _scenario) do
     if Map.has_key?(results, "child-stdin") do
-      send(owner, {:child_stdin, results["child-stdin"]["content"]})
+      send(owner, {:child_stdin, results["child-stdin"]["output"]})
       answer(conn)
     else
       send(owner, {:child_request, @child_follow, self()})

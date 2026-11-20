@@ -450,11 +450,6 @@ defmodule Synapsis.Web.Search do
       end
 
     arguments =
-      if config.provider == "perplexity" and config.mode == "chat_completions",
-        do: Map.delete(arguments, "count"),
-        else: arguments
-
-    arguments =
       if config.provider in ["firecrawl", "firecrawl-free"],
         do: Map.delete(arguments, "timeout_seconds"),
         else: arguments

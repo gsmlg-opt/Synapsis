@@ -150,7 +150,7 @@ defmodule Synapsis.Session.MCPRefreshTest do
       assert Task.await(Task.async(fn -> Worker.snapshot(ctx.id) end), 1_000).session.id == ctx.id
       send(discovery, :release_source)
       assert_receive {:mcp_worker_provider, request, handler}, 5_000
-      assert [%{"function" => function}] = request["tools"]
+      assert [%{"type" => "function"} = function] = request["tools"]
       assert function["name"] == ToolName.encode(ctx.name)
       assert function["parameters"]["properties"] == %{field => %{"type" => "string"}}
       runtime = runtime(ctx.id)
@@ -273,7 +273,7 @@ defmodule Synapsis.Session.MCPRefreshTest do
       assert {:ok, _} = Synapsis.AgentConfigs.update(ctx.harness.agent_config, attrs)
       assert :ok = Worker.send_message(ctx.id, "Use saved source selection")
       assert_receive {:mcp_worker_provider, request, handler}, 5_000
-      assert [%{"function" => %{"name" => name}}] = request["tools"]
+      assert [%{"name" => name}] = request["tools"]
       assert name == ToolName.encode(ctx.name)
       send(handler, :release_provider)
       assert_receive {:run_event, %{type: "session.completed"}}, 10_000
@@ -283,10 +283,10 @@ defmodule Synapsis.Session.MCPRefreshTest do
   defp provider(ctx, call?) do
     owner = self()
 
-    Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
-      has_result = Enum.any?(request["messages"], &(&1["role"] == "tool"))
+      has_result = Enum.any?(request["input"], &(&1["type"] == "function_call_output"))
 
       conn =
         if has_result do

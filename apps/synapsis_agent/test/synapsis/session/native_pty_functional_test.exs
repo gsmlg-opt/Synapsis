@@ -66,7 +66,7 @@ defmodule Synapsis.Session.NativePtyFunctionalTest do
 
     assert_receive {:pty_request, 0, first}, 5_000
 
-    assert Enum.sort(Enum.map(first["tools"], & &1["function"]["name"])) ==
+    assert Enum.sort(Enum.map(first["tools"], & &1["name"])) ==
              ["exec_command", "write_stdin"]
 
     assert_receive {:pty_request, 1, started}, 5_000
@@ -151,7 +151,7 @@ defmodule Synapsis.Session.NativePtyFunctionalTest do
   defp install_provider(harness) do
     owner = self()
 
-    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
 
@@ -225,22 +225,22 @@ defmodule Synapsis.Session.NativePtyFunctionalTest do
   end
 
   defp session_id(request) do
-    first = Enum.find(tool_results(request), &(&1["tool_call_id"] == hd(@call_ids)))
+    first = Enum.find(tool_results(request), &(&1["call_id"] == hd(@call_ids)))
     [_, id] = Regex.run(~r/Session ID: (\d+)/, first["content"])
     String.to_integer(id)
   end
 
-  defp tool_results(request), do: Enum.filter(request["messages"], &(&1["role"] == "tool"))
+  defp tool_results(request),
+    do: Enum.filter(request["input"], &(&1["type"] == "function_call_output"))
 
   defp assert_wire_history(request, uses, results) do
-    calls = for message <- request["messages"], call <- message["tool_calls"] || [], do: call
+    calls = Enum.filter(request["input"], &(&1["type"] == "function_call"))
 
     assert Enum.map(calls, fn call ->
-             {call["id"], ToolName.decode(call["function"]["name"]),
-              Jason.decode!(call["function"]["arguments"])}
+             {call["call_id"], ToolName.decode(call["name"]), Jason.decode!(call["arguments"])}
            end) == Enum.map(uses, &{&1.tool_use_id, &1.tool, &1.input})
 
-    assert Enum.map(tool_results(request), &{&1["tool_call_id"], &1["content"]}) ==
+    assert Enum.map(tool_results(request), &{&1["call_id"], &1["output"]}) ==
              Enum.map(results, &{&1.tool_use_id, &1.content})
   end
 

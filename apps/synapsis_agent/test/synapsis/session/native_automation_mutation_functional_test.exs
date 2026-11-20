@@ -297,11 +297,11 @@ defmodule Synapsis.Session.NativeAutomationMutationFunctionalTest do
                config: %{"workspace_path" => root}
              })
 
-    Gaoxy.Test.stub(http, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(http, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
       Agent.update(log, &(&1 ++ [request]))
-      following = Enum.any?(request["messages"], &(&1["role"] == "tool"))
+      following = Enum.any?(request["input"], &(&1["type"] == "function_call_output"))
       prompt = List.last(user_texts(request))
 
       cond do
@@ -426,7 +426,7 @@ defmodule Synapsis.Session.NativeAutomationMutationFunctionalTest do
   defp user_texts(request), do: for({"user", text} <- wire_texts(request), do: text)
 
   defp wire_texts(request),
-    do: Enum.map(request["messages"], &{&1["role"], content(&1["content"])})
+    do: Enum.map(request["input"], &{&1["role"], content(&1["content"])})
 
   defp content(text) when is_binary(text), do: text
 

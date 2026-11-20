@@ -15,9 +15,11 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
   Does not contact real model providers or the public network.
   """
 
-  @chat_path "/v1/chat/completions"
+  @responses_path "/v1/responses"
 
   alias Synapsis.Agent.TestSupport.AbortableHTTP
+  alias Synapsis.Provider.TestSupport.ResponsesFixture
+  alias Synapsis.Provider.ToolName
 
   @type scenario ::
           :success
@@ -117,7 +119,7 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
       handle_request(conn, scenario, request, ctx)
     end
 
-    Gaoxy.Test.expect(fixture, "POST", @chat_path, fun)
+    Gaoxy.Test.expect(fixture, "POST", @responses_path, fun)
 
     :ok
   end
@@ -126,64 +128,16 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
   # SSE builders (shared with characterization / release-readiness tests)
   # ---------------------------------------------------------------------------
 
-  def text_chunk(text, id \\ "det-response") do
-    %{
-      "id" => id,
-      "choices" => [
-        %{"index" => 0, "delta" => %{"content" => text}, "finish_reason" => nil}
-      ]
-    }
+  def text_chunk(text, _id \\ "det-response"), do: ResponsesFixture.text_delta(text)
+
+  def tool_call_chunk(name, call_id, args, _id \\ "det-response-tool") do
+    wire_name = if ToolName.openai_safe?(name), do: name, else: ToolName.encode(name)
+    ResponsesFixture.function_call(wire_name, call_id, args)
   end
 
-  def tool_call_chunk(tool_name, tool_call_id, args, id \\ "det-response-tool") do
-    arguments =
-      case args do
-        bin when is_binary(bin) -> bin
-        map when is_map(map) -> Jason.encode!(map)
-      end
+  def finish_chunk(reason) when reason in ["stop", "tool_calls"], do: ResponsesFixture.completed()
 
-    %{
-      "id" => id,
-      "choices" => [
-        %{
-          "index" => 0,
-          "delta" => %{
-            "tool_calls" => [
-              %{
-                "index" => 0,
-                "id" => tool_call_id,
-                "type" => "function",
-                "function" => %{
-                  "name" => tool_name,
-                  "arguments" => arguments
-                }
-              }
-            ]
-          },
-          "finish_reason" => nil
-        }
-      ]
-    }
-  end
-
-  def finish_chunk(reason) do
-    %{"choices" => [%{"index" => 0, "delta" => %{}, "finish_reason" => reason}]}
-  end
-
-  def send_sse(conn, chunks) do
-    body =
-      Enum.map_join(chunks, "\n\n", fn chunk -> "data: #{Jason.encode!(chunk)}" end) <>
-        "\n\ndata: [DONE]\n\n"
-
-    if conn.state == :chunked do
-      {:ok, conn} = Plug.Conn.chunk(conn, body)
-      conn
-    else
-      conn
-      |> Plug.Conn.put_resp_content_type("text/event-stream")
-      |> Plug.Conn.send_resp(200, body)
-    end
-  end
+  defdelegate send_sse(conn, chunks), to: ResponsesFixture
 
   # ---------------------------------------------------------------------------
   # Scenario handlers
@@ -244,22 +198,8 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
   end
 
   defp request_turn(request) when is_map(request) do
-    messages = request["messages"] || []
-
     has_tool_result? =
-      Enum.any?(messages, fn
-        %{"role" => "tool"} ->
-          true
-
-        %{"role" => "user", "content" => content} when is_list(content) ->
-          Enum.any?(content, fn
-            %{"type" => "tool_result"} -> true
-            _ -> false
-          end)
-
-        _ ->
-          false
-      end)
+      Enum.any?(request["input"], &(&1["type"] == "function_call_output"))
 
     if has_tool_result?, do: 2, else: 1
   end

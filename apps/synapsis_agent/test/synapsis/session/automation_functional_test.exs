@@ -139,7 +139,7 @@ defmodule Synapsis.Session.AutomationFunctionalTest do
                config: %{"workspace_path" => root}
              })
 
-    Gaoxy.Test.stub(http, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(http, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
 
@@ -203,7 +203,7 @@ defmodule Synapsis.Session.AutomationFunctionalTest do
   end
 
   defp wire_messages(request) do
-    request["messages"]
+    request["input"]
     |> Enum.reject(&(&1["role"] == "system"))
     |> Enum.map(fn message ->
       content =

@@ -143,7 +143,13 @@ defmodule SynapsisWeb.AgentLive.EventReplyFunctionalTest do
              next_occurrence
 
     send(second, {:text, "HEARTBEAT_OK Next event"})
-    assert_receive {"text_delta", _}, 10_000
+    assert_receive {"text_delta", %{text: "HEARTBEAT_OK Next event"}}, 10_000
+
+    assert_push_event(view, "chat:event", %{
+      type: "chat.message",
+      message: %{content: "Next event"}
+    })
+
     assert live_text(view) == "Next event"
     send(second, :complete)
     assert_receive {"done", _}, 10_000
@@ -206,7 +212,14 @@ defmodule SynapsisWeb.AgentLive.EventReplyFunctionalTest do
 
     owner = self()
 
-    Gaoxy.Test.stub(h.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    :ok =
+      Synapsis.Provider.Registry.register(h.provider.name, %{
+        type: "anthropic",
+        api_key: "test-key",
+        base_url: h.provider.base_url
+      })
+
+    Gaoxy.Test.stub(h.provider.fixture, "POST", "/v1/messages", fn conn ->
       {:ok, _, conn} = Plug.Conn.read_body(conn)
 
       conn =
@@ -215,7 +228,8 @@ defmodule SynapsisWeb.AgentLive.EventReplyFunctionalTest do
         |> Plug.Conn.send_chunked(200)
 
       send(owner, {:display_provider, self()})
-      stream(conn)
+      conn = send_frames(conn, [%{"type" => "message_start", "message" => %{}}])
+      stream(conn, nil, 0)
     end)
 
     SessionHarness.subscribe!(h.session.id)
@@ -223,53 +237,58 @@ defmodule SynapsisWeb.AgentLive.EventReplyFunctionalTest do
     h
   end
 
-  defp stream(conn) do
+  defp stream(conn, current, index) do
     receive do
-      {:reasoning, text} ->
-        {:ok, conn} =
-          Plug.Conn.chunk(
-            conn,
-            frame(%{
-              "choices" => [
-                %{"index" => 0, "delta" => %{"reasoning_content" => text}, "finish_reason" => nil}
-              ]
-            })
-          )
+      {type, text} when type in [:reasoning, :text] ->
+        {conn, index} = start_block(conn, current, type, index)
 
-        stream(conn)
+        delta =
+          if type == :reasoning,
+            do: %{"type" => "thinking_delta", "thinking" => text},
+            else: %{"type" => "text_delta", "text" => text}
 
-      {:text, text} ->
-        {:ok, conn} =
-          Plug.Conn.chunk(
-            conn,
-            frame(%{
-              "choices" => [
-                %{
-                  "index" => 0,
-                  "delta" => %{"role" => "assistant", "content" => text},
-                  "finish_reason" => nil
-                }
-              ]
-            })
-          )
+        conn =
+          send_frames(conn, [
+            %{"type" => "content_block_delta", "index" => index, "delta" => delta}
+          ])
 
-        stream(conn)
+        stream(conn, type, index)
 
       :complete ->
-        {:ok, conn} =
-          Plug.Conn.chunk(
-            conn,
-            frame(%{"choices" => [%{"index" => 0, "delta" => %{}, "finish_reason" => "stop"}]})
-          )
-
-        {:ok, conn} = Plug.Conn.chunk(conn, "data: [DONE]\n\n")
-        conn
+        conn = if current, do: stop_block(conn, index), else: conn
+        send_frames(conn, [%{"type" => "message_stop"}])
     after
       15_000 -> raise "ordinary display fixture was not released"
     end
   end
 
-  defp frame(data), do: "data: " <> Jason.encode!(data) <> "\n\n"
+  defp start_block(conn, type, type, index), do: {conn, index}
+
+  defp start_block(conn, current, type, index) do
+    {conn, index} = if current, do: {stop_block(conn, index), index + 1}, else: {conn, index}
+
+    block =
+      if type == :reasoning,
+        do: %{"type" => "thinking", "thinking" => ""},
+        else: %{"type" => "text", "text" => ""}
+
+    conn =
+      send_frames(conn, [
+        %{"type" => "content_block_start", "index" => index, "content_block" => block}
+      ])
+
+    {conn, index}
+  end
+
+  defp stop_block(conn, index),
+    do: send_frames(conn, [%{"type" => "content_block_stop", "index" => index}])
+
+  defp send_frames(conn, frames) do
+    {:ok, conn} =
+      Plug.Conn.chunk(conn, Enum.map_join(frames, "", &("data: " <> Jason.encode!(&1) <> "\n\n")))
+
+    conn
+  end
 
   defp chat(view) do
     render(view)

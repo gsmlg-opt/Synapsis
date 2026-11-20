@@ -1,6 +1,8 @@
 defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
   use ExUnit.Case, async: false
 
+  alias Synapsis.Provider.TestSupport.ResponsesFixture
+
   alias Backplane.AgentRuntime.Conversation
   alias Synapsis.Agent.Runtime.ProviderAdapter
   alias Synapsis.Agent.TestSupport.BackplaneRuntimeProof, as: Proof
@@ -36,17 +38,15 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
   test "is lazy and uses the host transport for text, usage and canonical terminal", ctx do
     owner = self()
 
-    Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       send(owner, {:wire_request, Jason.decode!(body)})
 
       sse(conn, [
-        chunk(%{"content" => "Hello"}),
-        %{
-          "choices" => [],
-          "usage" => %{"prompt_tokens" => 3, "completion_tokens" => 1, "total_tokens" => 4}
-        },
-        chunk(%{}, "stop")
+        ResponsesFixture.text_delta("Hello"),
+        ResponsesFixture.completed([], %{
+          "usage" => %{"input_tokens" => 3, "output_tokens" => 1, "total_tokens" => 4}
+        })
       ])
     end)
 
@@ -56,9 +56,9 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
     assert_receive {:wire_request, wire}
     assert wire["model"] == "gpt-test"
 
-    assert %{"role" => "system", "content" => [%{"type" => "text", "text" => "Host instruction"}]} in wire[
-             "messages"
-           ]
+    assert wire["instructions"] == "Host instruction"
+    assert wire["store"] == false
+    assert [%{"role" => "user"}] = wire["input"]
 
     assert hd(events).type == :response_started
     assert hd(events).attempt_id == "a"
@@ -93,8 +93,8 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
   end
 
   test "a real HTTP stream completes a Backplane conversation", ctx do
-    Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/chat/completions", fn conn ->
-      sse(conn, [chunk(%{"content" => "From HTTP"}), chunk(%{}, "stop")])
+    Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/responses", fn conn ->
+      sse(conn, [ResponsesFixture.text_delta("From HTTP"), ResponsesFixture.completed()])
     end)
 
     caller = start_supervised!(Task.Supervisor)
@@ -127,11 +127,11 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
     Gaoxy.Test.expect(
       ctx.fixture,
       "POST",
-      "/v1/chat/completions",
+      "/v1/responses",
       fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         send(owner, {:catalog_wire, Jason.decode!(body)})
-        sse(conn, [chunk(%{"content" => "ok"}), chunk(%{}, "stop")])
+        sse(conn, [ResponsesFixture.text_delta("ok"), ResponsesFixture.completed()])
       end,
       times: 2
     )
@@ -143,14 +143,14 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
                ProviderAdapter.stream(request, context) |> Enum.to_list() |> List.last()
 
       assert_receive {:catalog_wire, wire}
-      assert Enum.map(wire["tools"] || [], & &1["function"]["name"]) == names
+      assert Enum.map(wire["tools"] || [], & &1["name"]) == names
     end
   end
 
   test "malformed or unsupported request catalogs fail before HTTP", ctx do
     owner = self()
 
-    Gaoxy.Test.stub(ctx.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(ctx.fixture, "POST", "/v1/responses", fn conn ->
       send(owner, :invalid_catalog_http)
       Plug.Conn.resp(conn, 500, "Unexpected HTTP")
     end)
@@ -185,7 +185,7 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
     owner = self()
     error = Backplane.AgentRuntime.Error.new(:forbidden, "Catalog context is stale")
 
-    Gaoxy.Test.stub(ctx.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(ctx.fixture, "POST", "/v1/responses", fn conn ->
       send(owner, :unresolved_catalog_http)
       Plug.Conn.resp(conn, 500, "unexpected")
     end)
@@ -229,10 +229,10 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
         {:ok, %{}}
       end)
 
-    Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       send(owner, {:resolved_catalog_http, Jason.decode!(body)})
-      sse(conn, [chunk(%{"content" => "Current catalog"}), chunk(%{}, "stop")])
+      sse(conn, [ResponsesFixture.text_delta("Current catalog"), ResponsesFixture.completed()])
     end)
 
     assert %{type: :response_completed} =
@@ -245,7 +245,7 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
   end
 
   test "HTTP failure emits exactly one terminal error", ctx do
-    Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/responses", fn conn ->
       Plug.Conn.resp(conn, 500, "fixture failure")
     end)
 
@@ -358,11 +358,11 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
   end
 
   test "a missing HTTP terminal never becomes a successful response", ctx do
-    Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/responses", fn conn ->
       Plug.Conn.resp(
         conn,
         200,
-        "data: " <> Jason.encode!(chunk(%{"content" => "partial"})) <> "\n\n"
+        "data: " <> Jason.encode!(ResponsesFixture.text_delta("partial")) <> "\n\n"
       )
     end)
 
@@ -389,8 +389,8 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
   end
 
   test "output limit fails explicitly", ctx do
-    Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/chat/completions", fn conn ->
-      sse(conn, [chunk(%{"content" => String.duplicate("x", 100)})])
+    Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/responses", fn conn ->
+      sse(conn, [ResponsesFixture.text_delta(String.duplicate("x", 100))])
     end)
 
     events =
@@ -403,7 +403,7 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
     test "#{mode} cleans up the relay and its linked provider task", ctx do
       owner = self()
 
-      Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/responses", fn conn ->
         {:ok, _body, conn} = Plug.Conn.read_body(conn)
         conn = Plug.Conn.send_chunked(conn, 200)
         send(owner, {:http_waiting, self()})
@@ -482,16 +482,5 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
     end
   end
 
-  defp chunk(delta, finish \\ nil),
-    do: %{
-      "id" => "fixture",
-      "choices" => [%{"index" => 0, "delta" => delta, "finish_reason" => finish}]
-    }
-
-  defp sse(conn, chunks) do
-    body =
-      Enum.map_join(chunks, "", &("data: " <> Jason.encode!(&1) <> "\n\n")) <> "data: [DONE]\n\n"
-
-    conn |> Plug.Conn.put_resp_content_type("text/event-stream") |> Plug.Conn.resp(200, body)
-  end
+  defp sse(conn, chunks), do: ResponsesFixture.send_sse(conn, chunks)
 end

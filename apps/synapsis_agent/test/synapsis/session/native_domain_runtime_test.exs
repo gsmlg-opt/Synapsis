@@ -277,7 +277,7 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
 
     owner = self()
 
-    Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       send(owner, :unexpected_selection_provider_request)
       Plug.Conn.resp(conn, 500, "must not request")
     end)
@@ -418,11 +418,11 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
 
     replay =
       for request <- requests,
-          message <- request["messages"],
-          message["role"] == "tool" and message["tool_call_id"] == "domain-0",
+          message <- request["input"],
+          message["type"] == "function_call_output" and message["call_id"] == "domain-0",
           do: message
 
-    assert [%{"content" => content} | _] = replay
+    assert [%{"output" => content} | _] = replay
     assert content == result.content
     assert Jason.decode!(content) == public
     refute Jason.encode!(requests) =~ secret
@@ -638,7 +638,7 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
   defp run(ctx, calls, opts \\ []) do
     owner = self()
 
-    Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
 
@@ -646,7 +646,7 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
         %{state | provider_requests: state.provider_requests ++ [request]}
       end)
 
-      completed = Enum.count(request["messages"], &(&1["role"] == "tool"))
+      completed = Enum.count(request["input"], &(&1["type"] == "function_call_output"))
 
       conn =
         if completed == 0 do
@@ -684,7 +684,7 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
 
     assert_receive {:domain_request, request, handler}, 5_000
 
-    assert Enum.sort(Enum.map(request["tools"], &ToolName.decode(&1["function"]["name"]))) ==
+    assert Enum.sort(Enum.map(request["tools"], &ToolName.decode(&1["name"]))) ==
              Enum.sort(
                ctx.harness.agent_config.id
                |> Synapsis.AgentConfigs.get()
@@ -723,9 +723,9 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
 
     replay =
       for request <- requests,
-          message <- request["messages"],
-          message["role"] == "tool" and message["tool_call_id"] == result.tool_use_id,
-          do: message["content"]
+          message <- request["input"],
+          message["type"] == "function_call_output" and message["call_id"] == result.tool_use_id,
+          do: message["output"]
 
     assert [_ | _] = replay
 

@@ -208,7 +208,7 @@ defmodule Synapsis.Session.NativeAutomationWakeFunctionalTest do
     owner = self()
     id = harness.session.id
 
-    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
       handler = self()
@@ -290,8 +290,8 @@ defmodule Synapsis.Session.NativeAutomationWakeFunctionalTest do
     for index <- 1..count do
       result =
         Enum.find(
-          request["messages"],
-          &(&1["role"] == "tool" and &1["tool_call_id"] == "native-wake-#{index}")
+          request["input"],
+          &(&1["type"] == "function_call_output" and &1["call_id"] == "native-wake-#{index}")
         )
 
       assert Jason.decode!(content(result["content"])) == %{"ok" => true}
@@ -314,9 +314,9 @@ defmodule Synapsis.Session.NativeAutomationWakeFunctionalTest do
     assert result.is_error == false
 
     assert Enum.any?(
-             following["messages"],
-             &(&1["role"] == "tool" and &1["tool_call_id"] == call_id and
-                 content(&1["content"]) == result.content)
+             following["input"],
+             &(&1["type"] == "function_call_output" and &1["call_id"] == call_id and
+                 content(&1["output"]) == result.content)
            )
 
     assert_durable_result(harness.session.id, result)
@@ -433,15 +433,19 @@ defmodule Synapsis.Session.NativeAutomationWakeFunctionalTest do
   defp effect_path(harness), do: Path.join(harness.tmp_dir, "native-wake-effect.txt")
 
   defp names(request),
-    do: Enum.sort(Enum.map(request["tools"], &ToolName.decode(&1["function"]["name"])))
+    do: Enum.sort(Enum.map(request["tools"], &ToolName.decode(&1["name"])))
 
   defp has_result?(request, call_id),
-    do: Enum.any?(request["messages"], &(&1["role"] == "tool" and &1["tool_call_id"] == call_id))
+    do:
+      Enum.any?(
+        request["input"],
+        &(&1["type"] == "function_call_output" and &1["call_id"] == call_id)
+      )
 
   defp user_texts(request),
     do:
       for(
-        message <- request["messages"],
+        message <- request["input"],
         message["role"] == "user",
         do: content(message["content"])
       )

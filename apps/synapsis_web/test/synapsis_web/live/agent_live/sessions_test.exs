@@ -1660,12 +1660,12 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       :ok = Store.put_value(harness.session.id, "permission", %{raw | mode: :interactive})
       SessionHarness.subscribe!(harness.session.id)
 
-      Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         request = Jason.decode!(body)
 
         chunks =
-          if Enum.any?(request["messages"], &(&1["role"] == "tool")) do
+          if Enum.any?(request["input"], &(&1["type"] == "function_call_output")) do
             [
               DeterministicProvider.text_chunk("Answer received"),
               DeterministicProvider.finish_chunk("stop")

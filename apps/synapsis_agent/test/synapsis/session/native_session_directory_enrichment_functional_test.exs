@@ -88,7 +88,7 @@ defmodule Synapsis.Session.NativeSessionDirectoryEnrichmentFunctionalTest do
 
     owner = self()
 
-    Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
 
@@ -97,7 +97,7 @@ defmodule Synapsis.Session.NativeSessionDirectoryEnrichmentFunctionalTest do
         &%{&1 | provider_requests: &1.provider_requests ++ [request]}
       )
 
-      completed = Enum.any?(request["messages"], &(&1["role"] == "tool"))
+      completed = Enum.any?(request["input"], &(&1["type"] == "function_call_output"))
 
       chunks =
         if completed do
@@ -129,13 +129,13 @@ defmodule Synapsis.Session.NativeSessionDirectoryEnrichmentFunctionalTest do
     SessionHarness.ensure_running!(ctx.id)
     assert :ok = Worker.send_message(ctx.id, "Read the enriched directory")
     assert_receive {:enrichment_catalog, [descriptor]}, 5_000
-    assert ToolName.decode(descriptor["function"]["name"]) == @name
+    assert ToolName.decode(descriptor["name"]) == @name
     assert_receive {:enrichment_selected, selected}, 5_000
     assert selected.tool_name == @name
     assert selected.tool_revision == 3
 
     for flag <- ~w(include_derived_titles include_last_message) do
-      property = descriptor["function"]["parameters"]["properties"][flag]
+      property = descriptor["parameters"]["properties"][flag]
       assert property["type"] == "boolean"
       assert property["default"] == false
     end
@@ -172,11 +172,11 @@ defmodule Synapsis.Session.NativeSessionDirectoryEnrichmentFunctionalTest do
 
     tool_reply =
       Enum.find(
-        next["messages"],
-        &(&1["role"] == "tool" and &1["tool_call_id"] == result.tool_use_id)
+        next["input"],
+        &(&1["type"] == "function_call_output" and &1["call_id"] == result.tool_use_id)
       )
 
-    assert tool_reply["content"] == result.content
+    assert tool_reply["output"] == result.content
     assert {:ok, replayed} = ProviderMessages.from_host(durable)
     replayed_result = Enum.find(replayed, &(Map.get(&1, :tool_call_id) == result.tool_use_id))
     assert replayed_result.result["structured"] == page

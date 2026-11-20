@@ -24,7 +24,7 @@ defmodule Synapsis.Session.NativeRuntimeRetirementFunctionalTest do
   test "queued and sequential prompts use the same native conversation history", ctx do
     owner = self()
 
-    Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {index, request, conn} = record_request(conn, ctx.harness.counter)
       send(owner, {:provider_request, index, request, self()})
 
@@ -60,7 +60,7 @@ defmodule Synapsis.Session.NativeRuntimeRetirementFunctionalTest do
        ctx do
     owner = self()
 
-    Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {index, request, conn} = record_request(conn, ctx.harness.counter)
       send(owner, {:provider_request, index, request, self()})
 
@@ -90,7 +90,7 @@ defmodule Synapsis.Session.NativeRuntimeRetirementFunctionalTest do
   end
 
   test "retry regenerate and checkpoints retain their native unsupported replies", ctx do
-    Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       complete(conn, "Ordinary response")
     end)
 
@@ -130,7 +130,7 @@ defmodule Synapsis.Session.NativeRuntimeRetirementFunctionalTest do
   end
 
   defp user_texts(request) do
-    for %{"role" => "user", "content" => content} <- request["messages"] do
+    for %{"role" => "user", "content" => content} <- request["input"] do
       Enum.map_join(content, fn %{"type" => "text", "text" => text} -> text end)
     end
   end

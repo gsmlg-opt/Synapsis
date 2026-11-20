@@ -164,10 +164,10 @@ defmodule Synapsis.Session.NativeLocalRuntimeTest do
   defp install(ctx, scenario) do
     owner = self()
 
-    Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
-      messages = request["messages"]
+      messages = request["input"]
 
       Agent.update(
         ctx.harness.counter,
@@ -175,9 +175,12 @@ defmodule Synapsis.Session.NativeLocalRuntimeTest do
       )
 
       previous =
-        Enum.find(messages, &(&1["role"] == "tool" and &1["tool_call_id"] == "local-one"))
+        Enum.find(
+          messages,
+          &(&1["type"] == "function_call_output" and &1["call_id"] == "local-one")
+        )
 
-      second = Enum.any?(messages, &(&1["tool_call_id"] == "local-two"))
+      second = Enum.any?(messages, &(&1["call_id"] == "local-two"))
 
       cond do
         scenario == :survivor and
@@ -187,7 +190,7 @@ defmodule Synapsis.Session.NativeLocalRuntimeTest do
 
           case AbortableHTTP.await(conn, :release_local_response, 5_000, owner) do
             {:released, conn} ->
-              [_, id] = Regex.run(~r/Session ID: (\d+)/, previous["content"])
+              [_, id] = Regex.run(~r/Session ID: (\d+)/, previous["output"])
 
               call(conn, "write_stdin", "local-two", %{
                 "session_id" => String.to_integer(id),
@@ -205,7 +208,7 @@ defmodule Synapsis.Session.NativeLocalRuntimeTest do
 
           case AbortableHTTP.await(conn, :release_local_response, 5_000, owner) do
             {:released, conn} ->
-              [_, session_id] = Regex.run(~r/Session ID: (\d+)/, previous["content"])
+              [_, session_id] = Regex.run(~r/Session ID: (\d+)/, previous["output"])
 
               call(conn, "write_stdin", "local-two", %{
                 "session_id" => String.to_integer(session_id),
@@ -275,7 +278,7 @@ defmodule Synapsis.Session.NativeLocalRuntimeTest do
         DeterministicProvider.finish_chunk("stop")
       ])
 
-  defp names(request), do: Enum.map(request["tools"], &ToolName.decode(&1["function"]["name"]))
+  defp names(request), do: Enum.map(request["tools"], &ToolName.decode(&1["name"]))
 
   defp user_text(%{"role" => "user", "content" => content}) when is_binary(content),
     do: content

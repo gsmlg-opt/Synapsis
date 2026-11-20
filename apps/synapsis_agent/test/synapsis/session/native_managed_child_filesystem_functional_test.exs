@@ -120,7 +120,7 @@ defmodule Synapsis.Session.NativeManagedChildFilesystemFunctionalTest do
     {_root_after_spawn, root_http} = request(:root)
     respond(root_http, Enum.at(@root_calls, 2))
     {root_after_wait, root_http} = request(:root)
-    assert inspect(root_after_wait["messages"]) =~ @first_final
+    assert inspect(root_after_wait["input"]) =~ @first_final
     respond(root_http, Enum.at(@root_calls, 3))
 
     {followup_first, followup_http} = request(:followup)
@@ -137,7 +137,7 @@ defmodule Synapsis.Session.NativeManagedChildFilesystemFunctionalTest do
     assert_fresh(runtime.adapter, followup_scope)
     assert :sys.get_state(runtime.adapter).child_sessions[child.id].binding == followup_binding
     assert user_texts(followup_first) == [@initial, @followup]
-    assert inspect(followup_first["messages"]) =~ @first_final
+    assert inspect(followup_first["input"]) =~ @first_final
     assert_filesystem_history(followup_first, child_journal, @child_calls)
     respond(followup_http, @fresh_read)
 
@@ -153,8 +153,8 @@ defmodule Synapsis.Session.NativeManagedChildFilesystemFunctionalTest do
     {_root_after_followup, root_http} = request(:root)
     respond(root_http, Enum.at(@root_calls, 4))
     {root_after_second_wait, root_http} = request(:root)
-    assert inspect(root_after_second_wait["messages"]) =~ @first_final
-    assert inspect(root_after_second_wait["messages"]) =~ @second_final
+    assert inspect(root_after_second_wait["input"]) =~ @first_final
+    assert inspect(root_after_second_wait["input"]) =~ @second_final
     respond(root_http, {:answer, @parent_final})
     assert_receive {:run_event, %{type: "session.completed"}}, 15_000
     await(fn -> Worker.get_status(harness.session.id) == :waiting end)
@@ -246,7 +246,7 @@ defmodule Synapsis.Session.NativeManagedChildFilesystemFunctionalTest do
   defp install_provider(harness) do
     owner = self()
 
-    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       wire = Jason.decode!(body)
       Agent.update(harness.counter, &%{&1 | provider_requests: &1.provider_requests ++ [wire]})
@@ -291,7 +291,7 @@ defmodule Synapsis.Session.NativeManagedChildFilesystemFunctionalTest do
   end
 
   defp user_texts(wire) do
-    for %{"role" => "user", "content" => content} <- wire["messages"], do: wire_text(content)
+    for %{"role" => "user", "content" => content} <- wire["input"], do: wire_text(content)
   end
 
   defp wire_text(content) when is_binary(content), do: content
@@ -325,7 +325,7 @@ defmodule Synapsis.Session.NativeManagedChildFilesystemFunctionalTest do
     assert wire["model"] == "gpt-4o"
     assert scope.catalog.revision == 1
 
-    assert Enum.sort(Enum.map(wire["tools"], &ToolName.decode(&1["function"]["name"]))) ==
+    assert Enum.sort(Enum.map(wire["tools"], &ToolName.decode(&1["name"]))) ==
              Enum.sort(@names)
 
     assert Enum.sort(Map.keys(scope.catalog.registry.tools)) == Enum.sort(@names)
@@ -475,12 +475,12 @@ defmodule Synapsis.Session.NativeManagedChildFilesystemFunctionalTest do
 
   defp assert_wire_calls(wire, calls) do
     wire_calls =
-      for message <- wire["messages"], call <- Map.get(message, "tool_calls", []), do: call
+      Enum.filter(wire["input"], &(&1["type"] == "function_call"))
 
     for {id, name, arguments} <- calls do
       assert Enum.count(wire_calls, fn call ->
-               call["id"] == id and ToolName.decode(call["function"]["name"]) == name and
-                 Jason.decode!(call["function"]["arguments"]) == arguments
+               call["call_id"] == id and ToolName.decode(call["name"]) == name and
+                 Jason.decode!(call["arguments"]) == arguments
              end) == 1
     end
   end
@@ -498,9 +498,9 @@ defmodule Synapsis.Session.NativeManagedChildFilesystemFunctionalTest do
       assert part.content == Enum.map_join(expected["content"], "\n", & &1["text"])
 
       assert Enum.count(
-               wire["messages"],
-               &(&1["role"] == "tool" and &1["tool_call_id"] == id and
-                   &1["content"] == part.content)
+               wire["input"],
+               &(&1["type"] == "function_call_output" and &1["call_id"] == id and
+                   &1["output"] == part.content)
              ) == 1
     end
   end

@@ -54,7 +54,7 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
     refute Synapsis.Provider.ToolName.encode(destructive_tool) in tool_names(first_request)
     refute Synapsis.Provider.ToolName.encode(unannotated_tool) in tool_names(first_request)
 
-    assert %{"function" => %{"parameters" => parameters}} =
+    assert %{"parameters" => parameters} =
              Enum.find(first_request["tools"], fn tool ->
                get_in(tool, ["function", "name"]) == wire_safe_tool
              end)
@@ -137,7 +137,7 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
     fixture = Gaoxy.Test.open()
     owner = self()
 
-    Gaoxy.Test.stub(fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(fixture, "POST", "/v1/responses", fn conn ->
       send(owner, :unexpected_provider_request)
       Plug.Conn.send_resp(conn, 500, "prompt must not be sent")
     end)
@@ -162,7 +162,7 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
     fixture = Gaoxy.Test.open()
     {:ok, counter} = Agent.start_link(fn -> 0 end)
 
-    Gaoxy.Test.expect(fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
       request_number = Agent.get_and_update(counter, &{&1 + 1, &1 + 1})
@@ -323,28 +323,10 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
   end
 
   defp tool_names(request) do
-    Enum.map(request["tools"] || [], &get_in(&1, ["function", "name"]))
+    Enum.map(request["tools"] || [], & &1["name"])
   end
 
-  defp tool_call_chunk(tool_name, tool_call_id, input) do
-    %{
-      "id" => "daemon-tool-response",
-      "choices" => [
-        %{
-          "index" => 0,
-          "delta" => %{
-            "tool_calls" => [
-              %{
-                "index" => 0,
-                "id" => tool_call_id,
-                "type" => "function",
-                "function" => %{"name" => tool_name, "arguments" => Jason.encode!(input)}
-              }
-            ]
-          },
-          "finish_reason" => nil
-        }
-      ]
-    }
-  end
+  defp tool_call_chunk(tool_name, tool_call_id, input),
+    do:
+      Synapsis.Provider.TestSupport.ResponsesFixture.function_call(tool_name, tool_call_id, input)
 end

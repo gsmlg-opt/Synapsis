@@ -20,7 +20,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
 
     on_exit(fn -> Synapsis.Credentials.delete(credential.id) end)
     {:ok, view, _} = live(conn, ~p"/settings/providers/new")
-    render_hook(view, "select_custom", %{"type" => "openai"})
+    render_hook(view, "select_custom", %{"type" => "openai_responses"})
     assert has_element?(view, "select[name='credential_id'] option[value='']", "No credential")
 
     assert has_element?(
@@ -118,7 +118,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
     test "new action shows custom options", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/settings/providers/new")
       assert html =~ "Custom"
-      assert html =~ "OpenAI Compatible"
+      assert html =~ "OpenAI Responses"
       assert html =~ "Anthropic Compatible"
     end
 
@@ -225,7 +225,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
                "Provider created; model suggestions loaded. Import models in Manage Models."
 
       assert {:ok, provider} = Synapsis.Providers.get_by_name("backplane-dev")
-      assert provider.type == "openai"
+      assert provider.type == "openai_responses"
       assert provider.preset == "backplane"
       assert provider.base_url == Gaoxy.Test.url(bypass, "/v1")
       assert is_nil(provider.api_key_encrypted)
@@ -237,10 +237,10 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
 
       html =
         view
-        |> element(~s(button[phx-click="select_custom"][phx-value-type="openai"]))
+        |> element(~s(button[phx-click="select_custom"][phx-value-type="openai_responses"]))
         |> render_click()
 
-      assert html =~ "New OpenAI Compatible"
+      assert html =~ "New OpenAI Responses"
       assert html =~ ~s(name="base_url")
     end
 
@@ -362,7 +362,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       {:ok, view, _html} = live(conn, ~p"/settings/providers/new")
 
       view
-      |> element(~s(button[phx-click="select_custom"][phx-value-type="openai"]))
+      |> element(~s(button[phx-click="select_custom"][phx-value-type="openai_responses"]))
       |> render_click()
 
       view
@@ -377,7 +377,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
 
       assert {:ok, provider} = Synapsis.Providers.get_by_name("my-local-llm")
       assert provider.base_url == String.trim_trailing(Gaoxy.Test.url(bypass), "/")
-      assert provider.type == "openai"
+      assert provider.type == "openai_responses"
       refute Map.has_key?(provider.config, "available_models")
       assert {:ok, _config} = Synapsis.Provider.Registry.get("my-local-llm")
     end
@@ -394,7 +394,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       {:ok, view, _html} = live(conn, ~p"/settings/providers/new")
 
       view
-      |> element(~s(button[phx-click="select_custom"][phx-value-type="openai"]))
+      |> element(~s(button[phx-click="select_custom"][phx-value-type="openai_responses"]))
       |> render_click()
 
       view

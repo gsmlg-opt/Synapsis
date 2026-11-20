@@ -120,12 +120,11 @@ defmodule Synapsis.Agent.Runtime.ResponsesCustomTransportTest do
     end
   end
 
-  test "custom declarations and replay reject unsupported protocols before HTTP, including an empty catalog" do
+  test "custom replay rejects unsupported protocols before HTTP, including an empty catalog" do
     fixture = Gaoxy.Test.open()
     owner = self()
 
     for path <- [
-          "/v1/chat/completions",
           "/v1/messages",
           "/v1beta/models/probe:streamGenerateContent"
         ] do
@@ -140,9 +139,8 @@ defmodule Synapsis.Agent.Runtime.ResponsesCustomTransportTest do
       content: [%{type: :tool_call, id: "c", name: "raw_probe", arguments: "raw"}]
     }
 
-    for protocol <- [:openai, :anthropic, :google],
-        {tools, history} <- [{[@tool], []}, {[], [replay]}] do
-      request = %{request(tools) | messages: [%{role: :user, content: "probe"}] ++ history}
+    for protocol <- [:anthropic, :google], tools <- [[@tool], []] do
+      request = %{request(tools) | messages: [%{role: :user, content: "probe"}, replay]}
 
       assert [
                %{

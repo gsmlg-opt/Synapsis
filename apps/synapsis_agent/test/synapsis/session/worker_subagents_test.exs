@@ -28,7 +28,7 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
     end
 
     unless ctx[:custom_provider] do
-      Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
         DeterministicProvider.send_sse(conn, [
           DeterministicProvider.text_chunk("runtime answer"),
           DeterministicProvider.finish_chunk("stop")
@@ -94,7 +94,7 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
 
     install_provider(harness, fn conn, request ->
       send(owner, {:http_request, request})
-      messages = request["messages"]
+      messages = request["input"]
       child? = Enum.any?(messages, &(user_text(&1) == "child marker"))
       send(owner, {:memory_prompt, child?, system_text(request)})
 
@@ -146,7 +146,7 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
            end)
 
     assert_receive {:http_request, %{"tools" => tools}}, 1_000
-    names = Enum.map(tools, &get_in(&1, ["function", "name"]))
+    names = Enum.map(tools, & &1["name"])
     assert "spawn_agent" in names
     refute "task" in names
   end
@@ -156,7 +156,7 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
     owner = self()
 
     install_provider(harness, fn conn, request ->
-      if List.last(request["messages"]) |> user_text() == "first" do
+      if List.last(request["input"]) |> user_text() == "first" do
         send(owner, {:provider_waiting, self()})
 
         receive do
@@ -200,7 +200,7 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
     owner = self()
 
     install_provider(harness, fn conn, request ->
-      if List.last(request["messages"]) |> user_text() == "cancel this" do
+      if List.last(request["input"]) |> user_text() == "cancel this" do
         send(owner, {:provider_waiting, self()})
 
         case AbortableHTTP.await(conn, :release, 5_000, owner) do
@@ -236,7 +236,7 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
   end
 
   defp install_provider(harness, fun) do
-    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       fun.(conn, Jason.decode!(body))
     end)
@@ -257,18 +257,9 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
       ])
 
   defp tool_result?(messages, id),
-    do: Enum.any?(messages, &(&1["role"] == "tool" and &1["tool_call_id"] == id))
+    do: Enum.any?(messages, &(&1["type"] == "function_call_output" and &1["call_id"] == id))
 
-  defp system_text(request) do
-    request["messages"]
-    |> Enum.filter(&(&1["role"] in ["system", "developer"]))
-    |> Enum.map_join("\n", fn message ->
-      case message["content"] do
-        text when is_binary(text) -> text
-        parts when is_list(parts) -> Enum.map_join(parts, &(&1["text"] || ""))
-      end
-    end)
-  end
+  defp system_text(request), do: request["instructions"]
 
   defp user_text(%{"role" => "user", "content" => text}) when is_binary(text), do: text
 

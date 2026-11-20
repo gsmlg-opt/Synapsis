@@ -116,21 +116,19 @@ defmodule Synapsis.Provider.MessageMapperProjectionTest do
   end
 
   test "projected text works across the three existing provider codecs" do
-    for protocol <- [:anthropic, :openai, :google] do
+    for protocol <- [:anthropic, :openai_responses, :google] do
       assert {:ok, wire} = build(protocol, projected([text("projected")]))
       assert Jason.encode!(wire) =~ "projected"
       refute Jason.encode!(wire) =~ "legacy-must-not-be-used"
     end
   end
 
-  test "OpenAI and Google reject image tool results through the native codec" do
-    for protocol <- [:openai, :google] do
-      assert {:error,
-              %Error{
-                kind: :incompatible,
-                message: "Provider cannot preserve non-text tool result content"
-              }} = build(protocol, projected([@image]))
-    end
+  test "Google rejects image tool results through the native codec" do
+    assert {:error,
+            %Error{
+              kind: :incompatible,
+              message: "Provider cannot preserve non-text tool result content"
+            }} = build(:google, projected([@image]))
   end
 
   test "malformed wrappers and inconsistent status return a fixed safe error" do

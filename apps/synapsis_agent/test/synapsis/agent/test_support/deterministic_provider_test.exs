@@ -9,9 +9,9 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProviderTest do
     harness = DeterministicProvider.start!(scenario: :success, text: "hello-det")
     on_exit(fn -> DeterministicProvider.stop(harness) end)
 
-    assert {:ok, body} = post_chat(harness.base_url)
+    assert {:ok, body} = post_responses(harness.base_url)
     assert body =~ "hello-det"
-    assert body =~ "[DONE]"
+    assert body =~ "response.completed"
   end
 
   test "streamed_success emits multiple text deltas" do
@@ -23,7 +23,7 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProviderTest do
 
     on_exit(fn -> DeterministicProvider.stop(harness) end)
 
-    assert {:ok, body} = post_chat(harness.base_url)
+    assert {:ok, body} = post_responses(harness.base_url)
     assert body =~ "a"
     assert body =~ "b"
     assert body =~ "c"
@@ -33,14 +33,14 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProviderTest do
     harness = DeterministicProvider.start!(scenario: :provider_failure)
     on_exit(fn -> DeterministicProvider.stop(harness) end)
 
-    assert {:ok, %{status: 500}} = post_chat_raw(harness.base_url)
+    assert {:ok, %{status: 500}} = post_responses_raw(harness.base_url)
   end
 
   test "timeout returns HTTP 408" do
     harness = DeterministicProvider.start!(scenario: :timeout)
     on_exit(fn -> DeterministicProvider.stop(harness) end)
 
-    assert {:ok, %{status: 408}} = post_chat_raw(harness.base_url)
+    assert {:ok, %{status: 408}} = post_responses_raw(harness.base_url)
   end
 
   test "malformed_tool_request emits invalid tool arguments JSON" do
@@ -52,7 +52,7 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProviderTest do
 
     on_exit(fn -> DeterministicProvider.stop(harness) end)
 
-    assert {:ok, body} = post_chat(harness.base_url)
+    assert {:ok, body} = post_responses(harness.base_url)
     assert body =~ "{not-json"
   end
 
@@ -68,37 +68,37 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProviderTest do
     on_exit(fn -> DeterministicProvider.stop(harness) end)
 
     assert {:ok, first} =
-             post_chat(harness.base_url, messages: [%{"role" => "user", "content" => "go"}])
+             post_responses(harness.base_url, input: [%{"role" => "user", "content" => "go"}])
 
     assert first =~ "det_tool"
     assert first =~ "call-1"
 
     assert {:ok, second} =
-             post_chat(harness.base_url,
-               messages: [
+             post_responses(harness.base_url,
+               input: [
                  %{"role" => "user", "content" => "go"},
-                 %{"role" => "tool", "content" => "result", "tool_call_id" => "call-1"}
+                 %{"type" => "function_call_output", "output" => "result", "call_id" => "call-1"}
                ]
              )
 
     assert second =~ "after-tool"
   end
 
-  defp post_chat(base_url, opts \\ []) do
-    case post_chat_raw(base_url, opts) do
+  defp post_responses(base_url, opts \\ []) do
+    case post_responses_raw(base_url, opts) do
       {:ok, %{status: 200, body: body}} -> {:ok, body}
-      other -> other
+      other -> flunk("Responses fixture failed: #{inspect(other)}")
     end
   end
 
-  defp post_chat_raw(base_url, opts \\ []) do
-    messages = Keyword.get(opts, :messages, [%{"role" => "user", "content" => "hi"}])
+  defp post_responses_raw(base_url, opts \\ []) do
+    input = Keyword.get(opts, :input, [%{"role" => "user", "content" => "hi"}])
 
-    Req.post("#{base_url}/v1/chat/completions",
+    Req.post("#{base_url}/v1/responses",
       json: %{
         "model" => "test",
         "stream" => true,
-        "messages" => messages
+        "input" => input
       }
     )
   end

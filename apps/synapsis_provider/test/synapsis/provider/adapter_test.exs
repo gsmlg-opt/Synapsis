@@ -2,6 +2,7 @@ defmodule Synapsis.Provider.AdapterTest do
   use ExUnit.Case
 
   alias Synapsis.Provider.Adapter
+  alias Synapsis.Provider.TestSupport.ResponsesFixture
 
   defmodule Request do
     defstruct [:model, messages: []]
@@ -19,7 +20,7 @@ defmodule Synapsis.Provider.AdapterTest do
     } do
       owner = self()
 
-      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/responses", fn conn ->
         Process.flag(:trap_exit, true)
         conn = Plug.Conn.send_chunked(conn, 200)
         send(owner, {:http_started, self()})
@@ -163,22 +164,18 @@ defmodule Synapsis.Provider.AdapterTest do
       assert {:ok, request} =
                Adapter.format_request([], [tool], %{model: "gpt-4o", provider_type: "openai"})
 
-      alias_name = get_in(request, ["tools", Access.at(0), "function", "name"])
+      alias_name = get_in(request, ["tools", Access.at(0), "name"])
 
-      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/responses", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         decoded = Jason.decode!(body)
         refute Map.has_key?(decoded, "__synapsis_tool_name_aliases__")
-        assert get_in(decoded, ["tools", Access.at(0), "function", "name"]) == alias_name
+        assert get_in(decoded, ["tools", Access.at(0), "name"]) == alias_name
 
-        conn
-        |> Plug.Conn.put_resp_content_type("text/event-stream")
-        |> Plug.Conn.send_resp(200, """
-        data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"#{alias_name}","arguments":"{}"}}]}}]}
-
-        data: [DONE]
-
-        """)
+        ResponsesFixture.send_sse(conn, [
+          ResponsesFixture.function_call(alias_name, "call_1", %{}),
+          ResponsesFixture.completed()
+        ])
       end)
 
       config = %{api_key: "test-key", base_url: "http://localhost:#{port}", type: "openai"}
@@ -195,12 +192,15 @@ defmodule Synapsis.Provider.AdapterTest do
       on_exit(fn -> Synapsis.DataCase.clear_config_store(:provider) end)
       caller = self()
 
-      Gaoxy.Test.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.stub(bypass, "POST", "/v1/responses", fn conn ->
         send(caller, :http_called)
 
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
-        |> Plug.Conn.send_resp(200, "data: [DONE]\n\n")
+        |> Plug.Conn.send_resp(
+          200,
+          "data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[]}}\n\n"
+        )
       end)
 
       config = managed_provider_config(port, "managed-stream-provider")
@@ -218,12 +218,15 @@ defmodule Synapsis.Provider.AdapterTest do
       on_exit(fn -> Synapsis.DataCase.clear_config_store(:provider) end)
       caller = self()
 
-      Gaoxy.Test.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.stub(bypass, "POST", "/v1/responses", fn conn ->
         send(caller, :http_called)
 
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
-        |> Plug.Conn.send_resp(200, "data: [DONE]\n\n")
+        |> Plug.Conn.send_resp(
+          200,
+          "data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[]}}\n\n"
+        )
       end)
 
       config = managed_provider_config(port, "managed-stream-nil-id", nil)
@@ -242,12 +245,15 @@ defmodule Synapsis.Provider.AdapterTest do
       caller = self()
       provider_name = "managed-stream-unchecked-model"
 
-      Gaoxy.Test.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.stub(bypass, "POST", "/v1/responses", fn conn ->
         send(caller, :http_called)
 
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
-        |> Plug.Conn.send_resp(200, "data: [DONE]\n\n")
+        |> Plug.Conn.send_resp(
+          200,
+          "data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[]}}\n\n"
+        )
       end)
 
       _config = managed_provider_config(port, provider_name)
@@ -278,17 +284,22 @@ defmodule Synapsis.Provider.AdapterTest do
       refute_receive :http_called, 100
     end
 
-    test "string-key config uses custom base URL and bearer credentials", %{
+    test "existing OpenAI configs send Responses requests to a custom base URL", %{
       bypass: bypass,
       port: port
     } do
-      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/responses", fn conn ->
         headers = Map.new(conn.req_headers)
         assert headers["authorization"] == "Bearer string-key"
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        assert %{"input" => [], "stream" => true} = Jason.decode!(body)
 
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
-        |> Plug.Conn.send_resp(200, "data: [DONE]\n\n")
+        |> Plug.Conn.send_resp(
+          200,
+          "data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[]}}\n\n"
+        )
       end)
 
       config = %{
@@ -307,16 +318,16 @@ defmodule Synapsis.Provider.AdapterTest do
       bypass: bypass,
       port: port
     } do
-      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/responses", fn conn ->
         headers = Map.new(conn.req_headers)
         refute Map.has_key?(headers, "authorization")
 
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.send_resp(200, """
-        data: {"id":"1","choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":null}]}
+        data: {"type":"response.output_text.delta","delta":"Hi"}
 
-        data: [DONE]
+        data: {"type":"response.completed","response":{"status":"completed","output":[]}}
 
         """)
       end)
@@ -329,22 +340,20 @@ defmodule Synapsis.Provider.AdapterTest do
     end
 
     test "receives streaming chunks", %{bypass: bypass, port: port} do
-      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/responses", fn conn ->
         headers = Map.new(conn.req_headers)
         assert headers["authorization"] == "Bearer test-key"
 
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.send_resp(200, """
-        data: {"id":"chatcmpl-1","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
 
-        data: {"id":"chatcmpl-1","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}
 
-        data: {"id":"chatcmpl-1","choices":[{"index":0,"delta":{"content":" there"},"finish_reason":null}]}
+        data: {"type":"response.output_text.delta","delta":"Hello"}
 
-        data: {"id":"chatcmpl-1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+        data: {"type":"response.output_text.delta","delta":" there"}
 
-        data: [DONE]
+        data: {"type":"response.completed","response":{"status":"completed","output":[]}}
 
         """)
       end)
@@ -365,11 +374,14 @@ defmodule Synapsis.Provider.AdapterTest do
       assert " there" in text_deltas
     end
 
-    test "Azure OpenAI uses deployment URL and api-key header", %{bypass: bypass, port: port} do
+    test "Azure OpenAI uses the versioned Responses URL and api-key header", %{
+      bypass: bypass,
+      port: port
+    } do
       Gaoxy.Test.expect_once(
         bypass,
         "POST",
-        "/openai/deployments/gpt-4o/chat/completions",
+        "/openai/v1/responses",
         fn conn ->
           headers = Map.new(conn.req_headers)
           assert headers["api-key"] == "azure-key"
@@ -377,14 +389,14 @@ defmodule Synapsis.Provider.AdapterTest do
 
           {:ok, body, conn} = Plug.Conn.read_body(conn)
           parsed = Jason.decode!(body)
-          refute Map.has_key?(parsed, "model")
+          assert parsed["model"] == "gpt-4o"
 
           conn
           |> Plug.Conn.put_resp_content_type("text/event-stream")
           |> Plug.Conn.send_resp(200, """
-          data: {"id":"1","choices":[{"index":0,"delta":{"content":"Azure response"},"finish_reason":null}]}
+          data: {"type":"response.output_text.delta","delta":"Azure response"}
 
-          data: [DONE]
+          data: {"type":"response.completed","response":{"status":"completed","output":[]}}
 
           """)
         end
@@ -405,15 +417,13 @@ defmodule Synapsis.Provider.AdapterTest do
     end
 
     test "works without api_key for local models", %{bypass: bypass, port: port} do
-      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/responses", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.send_resp(200, """
-        data: {"id":"1","choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":null}]}
+        data: {"type":"response.output_text.delta","delta":"Hi"}
 
-        data: {"id":"1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
-
-        data: [DONE]
+        data: {"type":"response.completed","response":{"status":"completed","output":[]}}
 
         """)
       end)
@@ -436,15 +446,13 @@ defmodule Synapsis.Provider.AdapterTest do
       bypass: bypass,
       port: port
     } do
-      Gaoxy.Test.expect_once(bypass, "POST", "/api/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/v1/responses", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.send_resp(200, """
-        data: {"id":"1","choices":[{"index":0,"delta":{"content":"OK"},"finish_reason":null}]}
+        data: {"type":"response.output_text.delta","delta":"OK"}
 
-        data: {"id":"1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
-
-        data: [DONE]
+        data: {"type":"response.completed","response":{"status":"completed","output":[]}}
 
         """)
       end)
@@ -463,17 +471,15 @@ defmodule Synapsis.Provider.AdapterTest do
       bypass: bypass,
       port: port
     } do
-      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/responses", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
         |> Plug.Conn.send_resp(200, """
-        data: {"id":"1","choices":[{"index":0,"delta":{"content":"prefix se"},"finish_reason":null}]}
+        data: {"type":"response.output_text.delta","delta":"prefix se"}
 
-        data: {"id":"1","choices":[{"index":0,"delta":{"content":"cret suffix"},"finish_reason":null}]}
+        data: {"type":"response.output_text.delta","delta":"cret suffix"}
 
-        data: {"id":"1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
-
-        data: [DONE]
+        data: {"type":"response.completed","response":{"status":"completed","output":[]}}
 
         """)
       end)
@@ -607,16 +613,14 @@ defmodule Synapsis.Provider.AdapterTest do
       on_exit(fn -> Synapsis.DataCase.clear_config_store(:provider) end)
       caller = self()
 
-      Gaoxy.Test.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.stub(bypass, "POST", "/v1/responses", fn conn ->
         send(caller, :http_called)
 
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           200,
-          Jason.encode!(%{
-            "choices" => [%{"message" => %{"role" => "assistant", "content" => "wrong"}}]
-          })
+          Jason.encode!(ResponsesFixture.response([ResponsesFixture.message("wrong")]))
         )
       end)
 
@@ -635,16 +639,14 @@ defmodule Synapsis.Provider.AdapterTest do
       on_exit(fn -> Synapsis.DataCase.clear_config_store(:provider) end)
       caller = self()
 
-      Gaoxy.Test.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.stub(bypass, "POST", "/v1/responses", fn conn ->
         send(caller, :http_called)
 
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           200,
-          Jason.encode!(%{
-            "choices" => [%{"message" => %{"role" => "assistant", "content" => "wrong"}}]
-          })
+          Jason.encode!(ResponsesFixture.response([ResponsesFixture.message("wrong")]))
         )
       end)
 
@@ -688,7 +690,7 @@ defmodule Synapsis.Provider.AdapterTest do
     end
 
     test "OpenAI synchronous completion returns text", %{bypass: bypass, port: port} do
-      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/responses", fn conn ->
         headers = Map.new(conn.req_headers)
         assert headers["authorization"] == "Bearer test-key"
 
@@ -696,14 +698,7 @@ defmodule Synapsis.Provider.AdapterTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           200,
-          Jason.encode!(%{
-            "choices" => [
-              %{
-                "message" => %{"role" => "assistant", "content" => "Hello"},
-                "finish_reason" => "stop"
-              }
-            ]
-          })
+          Jason.encode!(ResponsesFixture.response([ResponsesFixture.message("Hello")]))
         )
       end)
 
@@ -720,7 +715,7 @@ defmodule Synapsis.Provider.AdapterTest do
     end
 
     test "OpenAI complete accepts an all-string config", %{bypass: bypass, port: port} do
-      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/responses", fn conn ->
         headers = Map.new(conn.req_headers)
         assert headers["authorization"] == "Bearer string-key"
 
@@ -728,14 +723,7 @@ defmodule Synapsis.Provider.AdapterTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           200,
-          Jason.encode!(%{
-            "choices" => [
-              %{
-                "message" => %{"role" => "assistant", "content" => "Hi"},
-                "finish_reason" => "stop"
-              }
-            ]
-          })
+          Jason.encode!(ResponsesFixture.response([ResponsesFixture.message("Hi")]))
         )
       end)
 
@@ -754,7 +742,7 @@ defmodule Synapsis.Provider.AdapterTest do
       bypass: bypass,
       port: port
     } do
-      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/responses", fn conn ->
         headers = Map.new(conn.req_headers)
         refute Map.has_key?(headers, "authorization")
 
@@ -762,14 +750,7 @@ defmodule Synapsis.Provider.AdapterTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           200,
-          Jason.encode!(%{
-            "choices" => [
-              %{
-                "message" => %{"role" => "assistant", "content" => "Hi"},
-                "finish_reason" => "stop"
-              }
-            ]
-          })
+          Jason.encode!(ResponsesFixture.response([ResponsesFixture.message("Hi")]))
         )
       end)
 
@@ -783,7 +764,7 @@ defmodule Synapsis.Provider.AdapterTest do
       bypass: bypass,
       port: port
     } do
-      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/responses", fn conn ->
         headers = Map.new(conn.req_headers)
         refute Map.has_key?(headers, "authorization")
 
@@ -791,14 +772,7 @@ defmodule Synapsis.Provider.AdapterTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           200,
-          Jason.encode!(%{
-            "choices" => [
-              %{
-                "message" => %{"role" => "assistant", "content" => "Hi"},
-                "finish_reason" => "stop"
-              }
-            ]
-          })
+          Jason.encode!(ResponsesFixture.response([ResponsesFixture.message("Hi")]))
         )
       end)
 
@@ -812,19 +786,12 @@ defmodule Synapsis.Provider.AdapterTest do
       bypass: bypass,
       port: port
     } do
-      Gaoxy.Test.expect_once(bypass, "POST", "/api/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/api/v1/responses", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           200,
-          Jason.encode!(%{
-            "choices" => [
-              %{
-                "message" => %{"role" => "assistant", "content" => "OK"},
-                "finish_reason" => "stop"
-              }
-            ]
-          })
+          Jason.encode!(ResponsesFixture.response([ResponsesFixture.message("OK")]))
         )
       end)
 
@@ -918,7 +885,7 @@ defmodule Synapsis.Provider.AdapterTest do
       bypass: bypass,
       port: port
     } do
-      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/responses", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(200, Jason.encode!(%{"unexpected" => "format"}))
@@ -930,7 +897,7 @@ defmodule Synapsis.Provider.AdapterTest do
         Adapter.format_request([], [], %{model: "gpt-4o", provider_type: "openai"})
 
       assert {:error, reason} = Adapter.complete(request, config)
-      assert reason =~ "OpenAI choices must be a list"
+      assert reason =~ "Responses"
     end
 
     test "Google complete returns error for unexpected response format", %{
@@ -963,7 +930,7 @@ defmodule Synapsis.Provider.AdapterTest do
       bypass: bypass,
       port: port
     } do
-      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/responses", fn conn ->
         headers = Map.new(conn.req_headers)
         refute Map.has_key?(headers, "authorization")
 
@@ -971,14 +938,7 @@ defmodule Synapsis.Provider.AdapterTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           200,
-          Jason.encode!(%{
-            "choices" => [
-              %{
-                "message" => %{"role" => "assistant", "content" => "Hi"},
-                "finish_reason" => "stop"
-              }
-            ]
-          })
+          Jason.encode!(ResponsesFixture.response([ResponsesFixture.message("Hi")]))
         )
       end)
 
@@ -993,7 +953,7 @@ defmodule Synapsis.Provider.AdapterTest do
       bypass: bypass,
       port: port
     } do
-      Gaoxy.Test.expect_once(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/responses", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
@@ -1041,8 +1001,9 @@ defmodule Synapsis.Provider.AdapterTest do
         })
 
       assert request["model"] == "gpt-4o"
-      assert length(request["messages"]) == 2
-      assert hd(request["messages"])["role"] == "system"
+      assert request["instructions"] == "You are helpful"
+      assert request["store"] == false
+      assert [%{"role" => "user"}] = request["input"]
     end
 
     test "formats for google" do
@@ -1116,29 +1077,29 @@ defmodule Synapsis.Provider.AdapterTest do
   describe "resolve_transport_type/1" do
     test "maps string types correctly" do
       assert :anthropic = Adapter.resolve_transport_type("anthropic")
-      assert :openai = Adapter.resolve_transport_type("openai")
-      assert :openai = Adapter.resolve_transport_type("openai_compat")
-      assert :openai = Adapter.resolve_transport_type("local")
-      assert :openai = Adapter.resolve_transport_type("openrouter")
-      assert :openai = Adapter.resolve_transport_type("groq")
-      assert :openai = Adapter.resolve_transport_type("deepseek")
+      assert :openai_responses = Adapter.resolve_transport_type("openai")
+      assert :openai_responses = Adapter.resolve_transport_type("openai_compat")
+      assert :openai_responses = Adapter.resolve_transport_type("local")
+      assert :openai_responses = Adapter.resolve_transport_type("openrouter")
+      assert :openai_responses = Adapter.resolve_transport_type("groq")
+      assert :openai_responses = Adapter.resolve_transport_type("deepseek")
       assert :google = Adapter.resolve_transport_type("google")
     end
 
     test "passes through atoms" do
       assert :anthropic = Adapter.resolve_transport_type(:anthropic)
-      assert :openai = Adapter.resolve_transport_type(:openai)
+      assert :openai_responses = Adapter.resolve_transport_type(:openai)
       assert :google = Adapter.resolve_transport_type(:google)
     end
 
     test "defaults to openai for unknown" do
-      assert :openai = Adapter.resolve_transport_type("unknown")
-      assert :openai = Adapter.resolve_transport_type(nil)
+      assert :openai_responses = Adapter.resolve_transport_type("unknown")
+      assert :openai_responses = Adapter.resolve_transport_type(nil)
     end
 
     test "defaults to openai for unknown atom" do
-      assert :openai = Adapter.resolve_transport_type(:unknown_custom)
-      assert :openai = Adapter.resolve_transport_type(:foo)
+      assert :openai_responses = Adapter.resolve_transport_type(:unknown_custom)
+      assert :openai_responses = Adapter.resolve_transport_type(:foo)
     end
   end
 
@@ -1186,16 +1147,16 @@ defmodule Synapsis.Provider.AdapterTest do
   # ---------------------------------------------------------------------------
 
   describe "resolve_transport_type/1 edge cases" do
-    test "groq maps to :openai" do
-      assert :openai = Adapter.resolve_transport_type("groq")
+    test "groq maps to :openai_responses" do
+      assert :openai_responses = Adapter.resolve_transport_type("groq")
     end
 
-    test "deepseek maps to :openai" do
-      assert :openai = Adapter.resolve_transport_type("deepseek")
+    test "deepseek maps to :openai_responses" do
+      assert :openai_responses = Adapter.resolve_transport_type("deepseek")
     end
 
     test "integer input defaults to :openai" do
-      assert :openai = Adapter.resolve_transport_type(42)
+      assert :openai_responses = Adapter.resolve_transport_type(42)
     end
   end
 

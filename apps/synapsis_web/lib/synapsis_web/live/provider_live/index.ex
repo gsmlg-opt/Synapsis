@@ -3,7 +3,6 @@ defmodule SynapsisWeb.ProviderLive.Index do
   use SynapsisWeb.ReactFormEvents
 
   @custom_presets [
-    %{name: "", type: "openai", base_url: "", label: "OpenAI Compatible", custom: true},
     %{name: "", type: "openai_responses", base_url: "", label: "OpenAI Responses", custom: true},
     %{name: "", type: "anthropic", base_url: "", label: "Anthropic Compatible", custom: true}
   ]

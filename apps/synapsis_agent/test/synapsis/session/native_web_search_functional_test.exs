@@ -68,13 +68,13 @@ defmodule Synapsis.Session.NativeWebSearchFunctionalTest do
     assert_receive {:search_descriptors, descriptors}, 5_000
     first = hd(requests)
 
-    assert Enum.sort(Enum.map(first["tools"], &ToolName.decode(&1["function"]["name"]))) ==
+    assert Enum.sort(Enum.map(first["tools"], &ToolName.decode(&1["name"]))) ==
              Enum.sort(@names)
 
     for tool <- first["tools"] do
-      name = ToolName.decode(tool["function"]["name"])
+      name = ToolName.decode(tool["name"])
       assert descriptors[name].backend == Search
-      assert tool["function"]["parameters"] == descriptors[name].schema
+      assert tool["parameters"] == descriptors[name].schema
     end
 
     parts = parts(harness.session.id)
@@ -244,7 +244,7 @@ defmodule Synapsis.Session.NativeWebSearchFunctionalTest do
   defp install_provider(harness, calls) do
     owner = self()
 
-    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       req = Jason.decode!(body)
 
@@ -263,7 +263,7 @@ defmodule Synapsis.Session.NativeWebSearchFunctionalTest do
         send(owner, {:search_descriptors, :sys.get_state(runtime.root).catalog.registry.tools})
       end
 
-      completed = Enum.count(req["messages"], &(&1["role"] == "tool"))
+      completed = Enum.count(req["input"], &(&1["type"] == "function_call_output"))
 
       chunks =
         case Enum.at(calls, completed) do
@@ -293,19 +293,22 @@ defmodule Synapsis.Session.NativeWebSearchFunctionalTest do
     do: for(message <- Synapsis.Message.list_by_session(id), part <- message.parts, do: part)
 
   defp assert_wire(req, calls, results) do
-    uses = for message <- req["messages"], call <- List.wrap(message["tool_calls"]), do: call
+    uses = Enum.filter(req["input"], &(&1["type"] == "function_call"))
 
     assert Enum.map(uses, fn call ->
-             {call["id"], ToolName.decode(call["function"]["name"]),
-              Jason.decode!(call["function"]["arguments"])}
+             {call["call_id"], ToolName.decode(call["name"]), Jason.decode!(call["arguments"])}
            end) == calls
 
-    actual = for message <- req["messages"], message["role"] == "tool", do: message
+    actual = for message <- req["input"], message["type"] == "function_call_output", do: message
 
     assert actual ==
              Enum.map(
                results,
-               &%{"role" => "tool", "tool_call_id" => &1.tool_use_id, "content" => &1.content}
+               &%{
+                 "type" => "function_call_output",
+                 "call_id" => &1.tool_use_id,
+                 "output" => &1.content
+               }
              )
   end
 

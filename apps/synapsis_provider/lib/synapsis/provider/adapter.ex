@@ -1,7 +1,7 @@
 defmodule Synapsis.Provider.Adapter do
   @moduledoc """
-  Host-owned HTTP adapter for Anthropic Messages, OpenAI Chat Completions and
-  Responses, and Google Gemini GenerateContent.
+  Host-owned HTTP adapter for Anthropic Messages, OpenAI Responses, and
+  Google Gemini GenerateContent.
 
   Request and response wire semantics are delegated to
   `Backplane.AiProtocol.Codec`. This module owns endpoint selection,
@@ -15,7 +15,7 @@ defmodule Synapsis.Provider.Adapter do
   - `models/1` - returns available models
   - `format_request/3` - returns a tagged provider wire-map result
 
-  Responses uses explicit `openai_responses` selection and bearer authentication.
+  OpenAI-compatible provider configurations use the Responses protocol.
   """
 
   alias Synapsis.Provider.{EventMapper, MessageMapper, ModelRegistry, StreamGuard, ToolName}
@@ -95,7 +95,7 @@ defmodule Synapsis.Provider.Adapter do
     base_url = config[:base_url] || config["base_url"] || ""
 
     case transport_type do
-      type when type in [:openai, :openai_responses] ->
+      :openai_responses ->
         Transport.OpenAI.fetch_models(config)
 
       :anthropic ->
@@ -181,7 +181,7 @@ defmodule Synapsis.Provider.Adapter do
   # Streaming
   # ---------------------------------------------------------------------------
 
-  defp do_stream(:openai = protocol, request, config, caller, tool_aliases) do
+  defp do_stream(:openai_responses = protocol, request, config, caller, tool_aliases) do
     case perform_stream(protocol, request, config, caller, tool_aliases) do
       {:retry_auth, _response} ->
         case maybe_refresh_oauth(config) do
@@ -242,6 +242,7 @@ defmodule Synapsis.Provider.Adapter do
               state = response_codec_state(response, codec_state)
               guard = response_stream_guard(response, stream_guard)
 
+              # TODO(upstream): gsmlg-opt/backplane#180 — decode gateway Responses events.
               case Backplane.AiProtocol.Codec.stream_feed(protocol, state, data) do
                 {:ok, state, events} ->
                   case emit_mapped_events(events, caller, guard, tool_aliases) do
@@ -281,7 +282,7 @@ defmodule Synapsis.Provider.Adapter do
   end
 
   defp finish_stream_response(
-         :openai,
+         :openai_responses,
          request,
          config,
          %{status: 401} = response,
@@ -291,7 +292,14 @@ defmodule Synapsis.Provider.Adapter do
     if config[:oauth] == true or config["oauth"] == true do
       {:retry_auth, response}
     else
-      finish_stream_response_body(:openai, request, config, response, caller, tool_aliases)
+      finish_stream_response_body(
+        :openai_responses,
+        request,
+        config,
+        response,
+        caller,
+        tool_aliases
+      )
     end
   end
 
@@ -549,7 +557,7 @@ defmodule Synapsis.Provider.Adapter do
   # Synchronous complete
   # ---------------------------------------------------------------------------
 
-  defp do_complete(:openai = protocol, request, config) do
+  defp do_complete(:openai_responses = protocol, request, config) do
     case perform_complete(protocol, request, config) do
       {:retry_auth, _response} ->
         case maybe_refresh_oauth(config) do
@@ -569,7 +577,7 @@ defmodule Synapsis.Provider.Adapter do
 
     case Req.post(url, headers: headers, json: body, receive_timeout: @request_timeout_ms) do
       {:ok, %{status: 401} = response} ->
-        if protocol == :openai and (config[:oauth] == true or config["oauth"] == true) do
+        if protocol == :openai_responses and (config[:oauth] == true or config["oauth"] == true) do
           {:retry_auth, response}
         else
           decode_complete_response(protocol, request, config, response)
@@ -615,27 +623,6 @@ defmodule Synapsis.Provider.Adapter do
     {"#{base_url}/v1/messages", headers, Map.put(request, "stream", stream?)}
   end
 
-  defp request_parts(:openai, request, config, stream?) do
-    base_url = config[:base_url] || config["base_url"] || Transport.OpenAI.default_base_url()
-    body = Map.put(request, "stream", stream?)
-
-    if config[:azure] || config["azure"] do
-      model = request["model"] || request[:model] || "gpt-4.1"
-      api_version = config[:api_version] || config["api_version"] || "2024-02-15-preview"
-      url = "#{base_url}/openai/deployments/#{model}/chat/completions?api-version=#{api_version}"
-
-      headers = [
-        {"api-key", config[:api_key] || config["api_key"]},
-        {"content-type", "application/json"}
-      ]
-
-      {url, headers, Map.drop(body, ["model", :model])}
-    else
-      headers = [{"content-type", "application/json"}] ++ openai_auth_headers(config)
-      {openai_chat_completions_url(base_url), headers, body}
-    end
-  end
-
   defp request_parts(:google, request, config, stream?) do
     base_url = config[:base_url] || config["base_url"] || Transport.Google.default_base_url()
     model = request["model"] || request[:model] || "gemini-2.5-flash"
@@ -654,12 +641,18 @@ defmodule Synapsis.Provider.Adapter do
     base_url = config[:base_url] || config["base_url"] || Transport.OpenAI.default_base_url()
     base_url = base_url |> to_string() |> String.trim_trailing("/")
 
-    url =
-      if String.ends_with?(base_url, "/v1"),
-        do: "#{base_url}/responses",
-        else: "#{base_url}/v1/responses"
+    {url, auth} =
+      if config[:azure] || config["azure"] do
+        base_url = base_url |> String.trim_trailing("/v1") |> String.trim_trailing("/openai")
+        {"#{base_url}/openai/v1/responses", [{"api-key", config[:api_key] || config["api_key"]}]}
+      else
+        versioned_url =
+          if String.ends_with?(base_url, "/v1"), do: base_url, else: base_url <> "/v1"
 
-    headers = [{"content-type", "application/json"}] ++ openai_auth_headers(config)
+        {"#{versioned_url}/responses", openai_auth_headers(config)}
+      end
+
+    headers = [{"content-type", "application/json"} | auth]
     {url, headers, Map.put(request, "stream", stream?)}
   end
 
@@ -668,7 +661,7 @@ defmodule Synapsis.Provider.Adapter do
       config[:base_url] || config["base_url"] ||
         case protocol do
           :anthropic -> Transport.Anthropic.default_base_url()
-          type when type in [:openai, :openai_responses] -> Transport.OpenAI.default_base_url()
+          :openai_responses -> Transport.OpenAI.default_base_url()
           :google -> Transport.Google.default_base_url()
         end
 
@@ -697,16 +690,6 @@ defmodule Synapsis.Provider.Adapter do
 
       _other ->
         []
-    end
-  end
-
-  defp openai_chat_completions_url(base_url) do
-    base_url = base_url |> to_string() |> String.trim_trailing("/")
-
-    if String.ends_with?(base_url, "/v1") do
-      "#{base_url}/chat/completions"
-    else
-      "#{base_url}/v1/chat/completions"
     end
   end
 
@@ -818,25 +801,7 @@ defmodule Synapsis.Provider.Adapter do
   # ---------------------------------------------------------------------------
 
   @doc false
-  def resolve_transport_type(type) when is_binary(type) do
-    case type do
-      "anthropic" -> :anthropic
-      "openai" -> :openai
-      "openai_responses" -> :openai_responses
-      "openai_compat" -> :openai
-      "local" -> :openai
-      "openrouter" -> :openai
-      "groq" -> :openai
-      "deepseek" -> :openai
-      "google" -> :google
-      _ -> :openai
-    end
-  end
-
-  def resolve_transport_type(nil), do: :openai
-
-  def resolve_transport_type(type) when type in [:anthropic, :openai, :openai_responses, :google],
-    do: type
-
-  def resolve_transport_type(_), do: :openai
+  def resolve_transport_type(type) when type in [:anthropic, "anthropic"], do: :anthropic
+  def resolve_transport_type(type) when type in [:google, "google"], do: :google
+  def resolve_transport_type(_type), do: :openai_responses
 end

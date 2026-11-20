@@ -202,7 +202,7 @@ defmodule Synapsis.Session.NativeCommandBudgetFunctionalTest do
   defp install_provider(harness) do
     owner = self()
 
-    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
 
@@ -278,15 +278,15 @@ defmodule Synapsis.Session.NativeCommandBudgetFunctionalTest do
   end
 
   defp assert_selected_schemas(request) do
-    assert Enum.sort(Enum.map(request["tools"], &{&1["type"], &1["function"]["name"]})) ==
+    assert Enum.sort(Enum.map(request["tools"], &{&1["type"], &1["name"]})) ==
              [{"function", "exec_command"}, {"function", "write_stdin"}]
 
-    schemas = Map.new(request["tools"], &{&1["function"]["name"], &1["function"]["parameters"]})
+    schemas = Map.new(request["tools"], &{&1["name"], &1["parameters"]})
     assert schemas == %{"exec_command" => @exec_schema, "write_stdin" => @stdin_schema}
   end
 
   defp session_id(request) do
-    started = Enum.find(tool_results(request), &(&1["tool_call_id"] == "budget-start"))
+    started = Enum.find(tool_results(request), &(&1["call_id"] == "budget-start"))
     [_, id] = Regex.run(~r/Session ID: (\d+)/, started["content"])
     String.to_integer(id)
   end
@@ -340,17 +340,17 @@ defmodule Synapsis.Session.NativeCommandBudgetFunctionalTest do
     assert String.valid?(raw["output"])
   end
 
-  defp tool_results(request), do: Enum.filter(request["messages"], &(&1["role"] == "tool"))
+  defp tool_results(request),
+    do: Enum.filter(request["input"], &(&1["type"] == "function_call_output"))
 
   defp assert_wire_history(request, uses, results) do
-    calls = for message <- request["messages"], call <- message["tool_calls"] || [], do: call
+    calls = Enum.filter(request["input"], &(&1["type"] == "function_call"))
 
     assert Enum.map(calls, fn call ->
-             {call["id"], ToolName.decode(call["function"]["name"]),
-              Jason.decode!(call["function"]["arguments"])}
+             {call["call_id"], ToolName.decode(call["name"]), Jason.decode!(call["arguments"])}
            end) == Enum.map(uses, &{&1.tool_use_id, &1.tool, &1.input})
 
-    assert Enum.map(tool_results(request), &{&1["tool_call_id"], &1["content"]}) ==
+    assert Enum.map(tool_results(request), &{&1["call_id"], &1["output"]}) ==
              Enum.map(results, &{&1.tool_use_id, &1.content})
   end
 

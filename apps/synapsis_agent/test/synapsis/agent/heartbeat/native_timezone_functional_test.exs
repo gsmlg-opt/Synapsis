@@ -246,10 +246,10 @@ defmodule Synapsis.Agent.Heartbeat.NativeTimezoneFunctionalTest do
                config: %{"workspace_path" => root}
              })
 
-    Gaoxy.Test.stub(fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
-      following? = Enum.any?(request["messages"], &(&1["role"] == "tool"))
+      following? = Enum.any?(request["input"], &(&1["type"] == "function_call_output"))
       Agent.update(counter, &(&1 + 1))
       send(owner, {:timezone_request, following?, request})
 
@@ -293,7 +293,7 @@ defmodule Synapsis.Agent.Heartbeat.NativeTimezoneFunctionalTest do
     assert run.capability_snapshot["tool_names"] == ["exec_command"]
     assert {:ok, completed} = wait_for_run(run.id, "completed")
     assert_receive {:timezone_request, false, first}, 5_000
-    assert Enum.map(first["tools"], & &1["function"]["name"]) == ["exec_command"]
+    assert Enum.map(first["tools"], & &1["name"]) == ["exec_command"]
     assert_receive {:timezone_request, true, following}, 5_000
     assert File.read!(Path.join(root, "timezone-effect.txt")) == "effect"
 
@@ -304,8 +304,12 @@ defmodule Synapsis.Agent.Heartbeat.NativeTimezoneFunctionalTest do
                do: part
              )
 
-    assert %{"role" => "tool", "tool_call_id" => result.tool_use_id, "content" => result.content} in following[
-             "messages"
+    assert %{
+             "type" => "function_call_output",
+             "call_id" => result.tool_use_id,
+             "output" => result.content
+           } in following[
+             "input"
            ]
 
     assert {:ok, turns} = Store.list_turns(completed.session_id)
@@ -340,8 +344,12 @@ defmodule Synapsis.Agent.Heartbeat.NativeTimezoneFunctionalTest do
     assert_receive {:timezone_request, true, replay}, 5_000
 
     for part <- parts do
-      assert %{"role" => "tool", "tool_call_id" => part.tool_use_id, "content" => part.content} in replay[
-               "messages"
+      assert %{
+               "type" => "function_call_output",
+               "call_id" => part.tool_use_id,
+               "output" => part.content
+             } in replay[
+               "input"
              ]
     end
 

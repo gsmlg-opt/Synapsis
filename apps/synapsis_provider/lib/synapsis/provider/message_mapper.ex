@@ -32,10 +32,9 @@ defmodule Synapsis.Provider.MessageMapper do
            Request.new(
              %{
                model: model,
-               input: system_message(opts) ++ protocol_tool_results(input, protocol),
+               input: system_message(protocol, opts) ++ protocol_tool_results(input, protocol),
                tools: Enum.map(tools, &canonical_tool(&1, protocol)),
-               settings: settings(protocol, opts),
-               extensions: extensions(protocol, opts)
+               settings: settings(protocol, opts)
              },
              limits: @limits
            ),
@@ -54,8 +53,15 @@ defmodule Synapsis.Provider.MessageMapper do
     do: Enum.reject(tools, &(Map.get(&1, :type) in [:custom, "custom"]))
 
   defp project_history(input, protocol, model, opts) do
-    if option(opts, :history_projection) == :portable do
-      Synapsis.Provider.RequestHistory.project(input, protocol, codec_opts(protocol, model, opts))
+    portable? = option(opts, :history_projection) == :portable
+
+    if protocol == :openai_responses or portable? do
+      Synapsis.Provider.RequestHistory.project(
+        input,
+        protocol,
+        codec_opts(protocol, model, opts),
+        portable?
+      )
     else
       {:ok, input}
     end
@@ -401,6 +407,7 @@ defmodule Synapsis.Provider.MessageMapper do
   defp canonical_part(%Synapsis.Part.Audio{} = part),
     do: {:ok, %{type: :text, text: Synapsis.Part.Audio.summary(part)}}
 
+  # TODO(upstream): gsmlg-opt/backplane#179 — encode ordinary Responses image inputs.
   defp canonical_part(%Synapsis.Part.Image{media_type: media_type, data: data}) do
     {:ok,
      %{
@@ -524,7 +531,9 @@ defmodule Synapsis.Provider.MessageMapper do
     }
   end
 
-  defp system_message(opts) do
+  defp system_message(:openai_responses, _opts), do: []
+
+  defp system_message(_protocol, opts) do
     case option(opts, :system_prompt) do
       prompt when prompt in [nil, ""] -> []
       prompt -> [%{role: :system, content: [%{type: :text, text: prompt}]}]
@@ -535,13 +544,6 @@ defmodule Synapsis.Provider.MessageMapper do
     do:
       compact(%{
         "max_tokens" => option(opts, :max_tokens) || 8192,
-        "temperature" => option(opts, :temperature)
-      })
-
-  defp settings(:openai, opts),
-    do:
-      compact(%{
-        "max_tokens" => option(opts, :max_tokens),
         "temperature" => option(opts, :temperature)
       })
 
@@ -556,24 +558,11 @@ defmodule Synapsis.Provider.MessageMapper do
   defp settings(:openai_responses, opts),
     do:
       compact(%{
+        "instructions" => option(opts, :system_prompt) || "",
+        "store" => false,
         "max_output_tokens" => option(opts, :max_output_tokens) || option(opts, :max_tokens),
         "temperature" => option(opts, :temperature)
       })
-
-  defp extensions(:openai, opts) do
-    reasoning_split = option(opts, :reasoning_split)
-
-    if is_boolean(reasoning_split) or minimax?(opts) do
-      %{
-        "minimax::reasoning_split" =>
-          if(is_boolean(reasoning_split), do: reasoning_split, else: true)
-      }
-    else
-      %{}
-    end
-  end
-
-  defp extensions(_protocol, _opts), do: %{}
 
   defp codec_opts(protocol, model, opts) do
     [
@@ -588,19 +577,9 @@ defmodule Synapsis.Provider.MessageMapper do
     |> Enum.reject(fn {_key, value} -> is_nil(value) end)
   end
 
-  defp minimax?(opts) do
-    [:provider_name, :base_url, :endpoint, :model]
-    |> Enum.map(&option(opts, &1))
-    |> Enum.any?(fn
-      value when is_binary(value) -> String.contains?(String.downcase(value), "minimax")
-      _ -> false
-    end)
-  end
-
   defp compact(map), do: Map.reject(map, fn {_key, value} -> is_nil(value) end)
 
   defp default_base_url(:anthropic), do: Transport.Anthropic.default_base_url()
-  defp default_base_url(:openai), do: Transport.OpenAI.default_base_url()
   defp default_base_url(:openai_responses), do: Transport.OpenAI.default_base_url()
   defp default_base_url(:google), do: Transport.Google.default_base_url()
 

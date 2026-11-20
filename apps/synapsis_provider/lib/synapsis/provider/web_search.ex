@@ -25,6 +25,8 @@ defmodule Synapsis.Provider.WebSearch do
   @months ~w(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec)
 
   @doc "Canonicalize provider endpoint identity before preparing arguments or reading the cache."
+  def prepare_config(%{provider: "perplexity"} = config), do: Perplexity.prepare_config(config)
+
   def prepare_config(%{provider: "gemini"} = config), do: Gemini.prepare_config(config)
 
   def prepare_config(%{provider: "grok"} = config), do: Grok.prepare_config(config)

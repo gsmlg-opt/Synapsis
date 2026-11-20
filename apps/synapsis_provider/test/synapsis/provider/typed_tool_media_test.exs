@@ -5,13 +5,13 @@ defmodule Synapsis.Provider.TypedToolMediaTest do
   alias Synapsis.Part.{ToolResult, ToolUse}
   alias Synapsis.Provider.{Adapter, MessageMapper}
 
-  @protocols [:anthropic, :openai, :openai_responses, :google]
+  @protocols [:anthropic, :openai_responses, :google]
   @audio %{"type" => "audio", "mimeType" => "audio/wav", "data" => "UklGRg=="}
   @image %{"type" => "image", "mimeType" => "image/png", "data" => "AA=="}
 
   test "raw MCP inline audio reaches each native codec as primary audio" do
     for protocol <- @protocols do
-      reason = if protocol in [:openai, :google], do: "message_role", else: "media_form"
+      reason = if protocol in [:google], do: "message_role", else: "media_form"
       assert_native_incompatibility(protocol, [@audio], "audio", reason)
     end
   end
@@ -66,7 +66,7 @@ defmodule Synapsis.Provider.TypedToolMediaTest do
 
     for {type, data} <- blocks, protocol <- @protocols do
       reason =
-        if type == "audio" and Map.has_key?(data, "data") and protocol in [:openai, :google],
+        if type == "audio" and Map.has_key?(data, "data") and protocol in [:google],
           do: "message_role",
           else: "media_form"
 
@@ -133,7 +133,6 @@ defmodule Synapsis.Provider.TypedToolMediaTest do
       assert {:ok, loaded} = dumped |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
       assert loaded === part
       assert loaded.projection["result"]["content"] === content
-      assert_native_incompatibility(:openai, loaded, "audio", "message_role")
     end
   end
 

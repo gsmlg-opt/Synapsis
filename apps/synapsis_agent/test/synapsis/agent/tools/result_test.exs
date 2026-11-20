@@ -982,19 +982,23 @@ defmodule Synapsis.Agent.Tools.ResultTest do
     assert replay.content == [%{"type" => "text", "text" => "Workspace memory written"}]
     assert {:ok, [%{parts: [^part]}] = host} = ProviderMessages.to_host(runtime)
 
+    call = %Synapsis.Part.ToolUse{tool_use_id: "memory", tool: "memory_save", input: %{}}
+    messages = [%{role: :assistant, parts: [call]} | host]
+
     assert {:ok, wire} =
-             Synapsis.Provider.Adapter.format_request(host, [], %{
+             Synapsis.Provider.Adapter.format_request(messages, [], %{
                model: "fixture",
-               provider_type: :openai
+               provider_type: :openai_responses
              })
 
     assert [
+             %{"type" => "function_call", "call_id" => "memory"},
              %{
-               "role" => "tool",
-               "tool_call_id" => "memory",
-               "content" => "Workspace memory written"
+               "type" => "function_call_output",
+               "call_id" => "memory",
+               "output" => "Workspace memory written"
              }
-           ] = wire["messages"]
+           ] = wire["input"]
   end
 
   defp native_image(data, mime \\ "image/png", detail \\ "high") do

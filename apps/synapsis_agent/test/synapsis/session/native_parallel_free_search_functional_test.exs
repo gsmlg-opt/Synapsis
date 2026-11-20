@@ -99,11 +99,9 @@ defmodule Synapsis.Session.NativeParallelFreeSearchFunctionalTest do
     assert hd(requests)["tools"] == [
              %{
                "type" => "function",
-               "function" => %{
-                 "name" => ToolName.encode(@name),
-                 "description" => description(),
-                 "parameters" => schema()
-               }
+               "name" => ToolName.encode(@name),
+               "description" => description(),
+               "parameters" => schema()
              }
            ]
 
@@ -410,7 +408,7 @@ defmodule Synapsis.Session.NativeParallelFreeSearchFunctionalTest do
   defp install_provider(harness, calls) do
     owner = self()
 
-    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       req = Jason.decode!(body)
 
@@ -433,15 +431,15 @@ defmodule Synapsis.Session.NativeParallelFreeSearchFunctionalTest do
         )
       end
 
-      completed = Enum.count(req["messages"], &(&1["role"] == "tool"))
+      completed = Enum.count(req["input"], &(&1["type"] == "function_call_output"))
 
       chunks =
         case Enum.at(calls, completed) do
           {id, name, args} ->
             args =
               if completed == 2 do
-                first = Enum.find(req["messages"], &(&1["role"] == "tool"))
-                session = Jason.decode!(first["content"])["sessionId"]
+                first = Enum.find(req["input"], &(&1["type"] == "function_call_output"))
+                session = Jason.decode!(first["output"])["sessionId"]
                 Map.put(args, "session_id", " " <> session <> " ")
               else
                 args
@@ -477,25 +475,30 @@ defmodule Synapsis.Session.NativeParallelFreeSearchFunctionalTest do
     do: for(message <- Synapsis.Message.list_by_session(id), part <- message.parts, do: part)
 
   defp assert_wire(req, calls, results) do
-    uses = for message <- req["messages"], call <- List.wrap(message["tool_calls"]), do: call
+    uses = Enum.filter(req["input"], &(&1["type"] == "function_call"))
 
     assert Enum.map(uses, fn call ->
              update_in(call, ["function", "arguments"], &Jason.decode!/1)
            end) ==
              Enum.map(calls, fn {id, name, input} ->
                %{
-                 "id" => id,
-                 "type" => "function",
-                 "function" => %{"name" => ToolName.encode(name), "arguments" => input}
+                 "call_id" => id,
+                 "type" => "function_call",
+                 "name" => ToolName.encode(name),
+                 "arguments" => input
                }
              end)
 
-    actual = for message <- req["messages"], message["role"] == "tool", do: message
+    actual = for message <- req["input"], message["type"] == "function_call_output", do: message
 
     assert actual ==
              Enum.map(
                results,
-               &%{"role" => "tool", "tool_call_id" => &1.tool_use_id, "content" => &1.content}
+               &%{
+                 "type" => "function_call_output",
+                 "call_id" => &1.tool_use_id,
+                 "output" => &1.content
+               }
              )
   end
 

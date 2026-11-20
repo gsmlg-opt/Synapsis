@@ -655,8 +655,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
   defp default_chat_model(models, current),
     do: if(Enum.any?(models, &(&1.id == current)), do: current, else: hd(models).id)
 
-  defp build_chat_request(%{type: type} = config, model, messages)
-       when type in ["openai_responses", :openai_responses] do
+  defp build_responses_chat_request(config, model, messages) do
     messages =
       messages
       |> Enum.reject(&(&1.role == "error"))
@@ -665,7 +664,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
       end)
 
     Synapsis.Provider.Adapter.format_request(messages, [], %{
-      provider_type: type,
+      provider_type: :openai_responses,
       model: model,
       max_tokens: 1024,
       stream: true,
@@ -675,7 +674,6 @@ defmodule SynapsisWeb.ProviderLive.Show do
 
   defp build_chat_request(config, model, messages) do
     transport = Synapsis.Provider.Adapter.resolve_transport_type(config[:type])
-    formatted_messages = Enum.map(messages, &format_chat_message(transport, &1))
 
     case transport do
       :anthropic ->
@@ -683,31 +681,23 @@ defmodule SynapsisWeb.ProviderLive.Show do
           model: model,
           max_tokens: 1024,
           stream: true,
-          messages: formatted_messages
+          messages: Enum.map(messages, &format_chat_message(:anthropic, &1))
         }
 
-      :openai ->
-        %{
-          model: model,
-          stream: true,
-          messages: formatted_messages
-        }
+      :openai_responses ->
+        build_responses_chat_request(config, model, messages)
 
       :google ->
         %{
           model: model,
           stream: true,
-          contents: formatted_messages
+          contents: Enum.map(messages, &format_chat_message(:google, &1))
         }
     end
   end
 
   defp format_chat_message(:anthropic, %{role: role, content: content}) do
     %{role: role, content: [%{type: "text", text: content}]}
-  end
-
-  defp format_chat_message(:openai, %{role: role, content: content}) do
-    %{role: role, content: content}
   end
 
   defp format_chat_message(:google, %{role: "user", content: content}) do

@@ -1,4 +1,6 @@
 defmodule Synapsis.ProviderCredentialsTest do
+  alias Synapsis.Provider.TestSupport.ResponsesFixture
+
   use Synapsis.DataCase, async: false
 
   alias Synapsis.{Config.Store, Credentials, Models, Providers}
@@ -248,24 +250,22 @@ defmodule Synapsis.ProviderCredentialsTest do
     Gaoxy.Test.expect(
       bypass,
       "POST",
-      "/v1/chat/completions",
+      "/v1/responses",
       fn conn ->
         assert Plug.Conn.get_req_header(conn, "authorization") == ["Bearer new-session-secret"]
         {:ok, body, conn} = Plug.Conn.read_body(conn)
 
         if Jason.decode!(body)["stream"] do
-          conn
-          |> Plug.Conn.put_resp_content_type("text/event-stream")
-          |> Plug.Conn.resp(
-            200,
-            "data: {\"choices\":[{\"delta\":{\"content\":\"fresh\"},\"finish_reason\":null}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
-          )
+          ResponsesFixture.send_sse(conn, [
+            ResponsesFixture.text_delta("fresh"),
+            ResponsesFixture.completed()
+          ])
         else
           conn
           |> Plug.Conn.put_resp_content_type("application/json")
           |> Plug.Conn.resp(
             200,
-            Jason.encode!(%{choices: [%{message: %{content: "fresh"}, finish_reason: "stop"}]})
+            Jason.encode!(ResponsesFixture.response([ResponsesFixture.message("fresh")]))
           )
         end
       end,
@@ -273,9 +273,9 @@ defmodule Synapsis.ProviderCredentialsTest do
     )
 
     assert {:ok, "fresh"} =
-             Adapter.complete(%{"model" => "fixture-model", "messages" => []}, config)
+             Adapter.complete(%{"model" => "fixture-model", "input" => []}, config)
 
-    assert {:ok, handle} = Adapter.stream(%{"model" => "fixture-model", "messages" => []}, config)
+    assert {:ok, handle} = Adapter.stream(%{"model" => "fixture-model", "input" => []}, config)
     assert_receive :provider_done, 3_000
     Process.demonitor(handle.ref, [:flush])
     :ets.delete(:synapsis_config_credential, provider.credential_id)

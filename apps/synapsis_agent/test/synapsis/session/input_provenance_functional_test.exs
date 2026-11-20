@@ -199,7 +199,7 @@ defmodule Synapsis.Session.InputProvenanceFunctionalTest do
                config: %{"workspace_path" => root}
              })
 
-    Gaoxy.Test.stub(http, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(http, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
       handler = self()
@@ -253,7 +253,7 @@ defmodule Synapsis.Session.InputProvenanceFunctionalTest do
   end
 
   defp native_response(conn, request, owner, tag) do
-    messages = request["messages"]
+    messages = request["input"]
 
     cond do
       Enum.any?(wire_messages(request), &(&1 == {"user", @child_prompt})) ->
@@ -267,10 +267,10 @@ defmodule Synapsis.Session.InputProvenanceFunctionalTest do
 
         answer(conn, "ordinary child complete")
 
-      Enum.any?(messages, &(&1["tool_call_id"] == "input-wait")) ->
+      Enum.any?(messages, &(&1["call_id"] == "input-wait")) ->
         answer(conn, "ordinary delegation complete")
 
-      Enum.any?(messages, &(&1["tool_call_id"] == "input-spawn")) ->
+      Enum.any?(messages, &(&1["call_id"] == "input-spawn")) ->
         tool_call(conn, "wait_agent", "input-wait", %{"timeout_ms" => 10_000})
 
       true ->
@@ -413,7 +413,7 @@ defmodule Synapsis.Session.InputProvenanceFunctionalTest do
     do: Agent.get(fixture.requests, &Enum.map(&1, fn entry -> entry.request end))
 
   defp wire_messages(request) do
-    request["messages"]
+    request["input"]
     |> Enum.reject(&(&1["role"] == "system"))
     |> Enum.map(fn message ->
       text =

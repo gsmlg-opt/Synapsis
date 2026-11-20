@@ -129,7 +129,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
     fixture = Gaoxy.Test.open()
     {:ok, counter} = Agent.start_link(fn -> 0 end)
 
-    Gaoxy.Test.expect(fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
       request_number = Agent.get_and_update(counter, &{&1 + 1, &1 + 1})
@@ -166,7 +166,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
 
     assert_receive {:schedule_provider_request, 1, first_request, request_pid}, 2_000
 
-    tool_names = Enum.map(first_request["tools"], &get_in(&1, ["function", "name"]))
+    tool_names = Enum.map(first_request["tools"], & &1["name"])
     assert "file_read" in tool_names
     refute "file_write" in tool_names
     refute "bash" in tool_names
@@ -178,10 +178,10 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
     assert_receive {:schedule_provider_request, 2, second_request, _request_pid}, 2_000
 
     assert %{
-             "role" => "tool",
-             "tool_call_id" => "schedule-file-read",
-             "content" => ^file_content
-           } = Enum.find(second_request["messages"], &(&1["role"] == "tool"))
+             "type" => "function_call_output",
+             "call_id" => "schedule-file-read",
+             "output" => ^file_content
+           } = Enum.find(second_request["input"], &(&1["type"] == "function_call_output"))
 
     refute_receive {"permission_requests", _payload}, 100
     assert {:ok, completed} = wait_for_run(schedule.id, "completed")
@@ -231,7 +231,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
     fixture = Gaoxy.Test.open()
     {:ok, counter} = Agent.start_link(fn -> 0 end)
 
-    Gaoxy.Test.expect(fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
       request_number = Agent.get_and_update(counter, &{&1 + 1, &1 + 1})
@@ -268,8 +268,8 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
 
     assert_receive {:dream_memory_provider_request, 1, first_request, request_pid}, 2_000
 
-    assert "memory_save" in Enum.map(first_request["tools"], &get_in(&1, ["function", "name"]))
-    refute "bash" in Enum.map(first_request["tools"], &get_in(&1, ["function", "name"]))
+    assert "memory_save" in Enum.map(first_request["tools"], & &1["name"])
+    refute "bash" in Enum.map(first_request["tools"], & &1["name"])
 
     assert {:ok, running} = wait_for_run(dream.id, "running")
     assert :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{running.session_id}")
@@ -346,7 +346,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
         "ignored_noise" => []
       })
 
-    Gaoxy.Test.expect_once(fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect_once(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       send(owner, {:dream_request, body})
       send_sse(conn, [text_chunk(dream_json), finish_chunk("stop")])
@@ -463,7 +463,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
         "ignored_noise" => []
       })
 
-    Gaoxy.Test.expect_once(fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect_once(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       send(owner, {:dream_project_status_request, body})
       send_sse(conn, [text_chunk(dream_json), finish_chunk("stop")])
@@ -552,7 +552,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
         "ignored_noise" => []
       })
 
-    Gaoxy.Test.expect_once(fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect_once(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       send(owner, {:bounded_dream_request, body})
       send_sse(conn, [text_chunk(dream_json), finish_chunk("stop")])
@@ -676,7 +676,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
   test "provider failure leaves the dream run failed and the daemon healthy", %{tmp_dir: tmp_dir} do
     fixture = Gaoxy.Test.open()
 
-    Gaoxy.Test.expect_once(fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect_once(fixture, "POST", "/v1/responses", fn conn ->
       Plug.Conn.send_resp(conn, 503, "provider unavailable")
     end)
 
@@ -739,25 +739,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
     out
   end
 
-  defp tool_call_chunk(tool_name, tool_call_id, input) do
-    %{
-      "id" => "dream-tool-response",
-      "choices" => [
-        %{
-          "index" => 0,
-          "delta" => %{
-            "tool_calls" => [
-              %{
-                "index" => 0,
-                "id" => tool_call_id,
-                "type" => "function",
-                "function" => %{"name" => tool_name, "arguments" => Jason.encode!(input)}
-              }
-            ]
-          },
-          "finish_reason" => nil
-        }
-      ]
-    }
-  end
+  defp tool_call_chunk(tool_name, tool_call_id, input),
+    do:
+      Synapsis.Provider.TestSupport.ResponsesFixture.function_call(tool_name, tool_call_id, input)
 end

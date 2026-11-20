@@ -43,42 +43,6 @@ defmodule Synapsis.Agent.Runtime.ProviderUsageFunctionalTest do
     )
   end
 
-  test "Chat HTTP trailing cache revisions and repeated snapshots produce one final report" do
-    final_usage = %{
-      "prompt_tokens" => 20,
-      "completion_tokens" => 8,
-      "prompt_tokens_details" => %{"cached_tokens" => 6},
-      "completion_tokens_details" => %{"reasoning_tokens" => 3},
-      "total_tokens" => 28
-    }
-
-    assert_http_usage(
-      "openai",
-      "/v1/chat/completions",
-      [
-        %{
-          "choices" => [
-            %{"index" => 0, "delta" => %{"content" => "Hello"}, "finish_reason" => "stop"}
-          ]
-        },
-        %{
-          "choices" => [],
-          "usage" => %{
-            "prompt_tokens" => 20,
-            "completion_tokens" => 8,
-            "prompt_tokens_details" => %{"cached_tokens" => 2},
-            "completion_tokens_details" => %{"reasoning_tokens" => 3},
-            "total_tokens" => 28
-          }
-        },
-        %{"choices" => [], "usage" => final_usage},
-        %{"choices" => [], "usage" => final_usage}
-      ],
-      %{input_tokens: 20, cached_tokens: 6, output_tokens: 8, reasoning_tokens: 3},
-      done: true
-    )
-  end
-
   test "Responses HTTP output already includes its reasoning token breakdown" do
     assert_http_usage(
       "openai_responses",
@@ -393,48 +357,27 @@ defmodule Synapsis.Agent.Runtime.ProviderUsageFunctionalTest do
     end
   end
 
-  test "a real native Conversation retains final HTTP usage and its terminal repeat" do
+  test "a real native Conversation retains final HTTP usage" do
     fixture = Gaoxy.Test.open()
 
-    Gaoxy.Test.expect_once(fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect_once(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       assert Jason.decode!(body)["model"] == "usage-fixture"
 
-      chunks = [
-        %{
-          "choices" => [
-            %{"index" => 0, "delta" => %{"content" => "Native HTTP"}, "finish_reason" => "stop"}
-          ]
-        },
-        %{
-          "choices" => [],
+      alias Synapsis.Provider.TestSupport.ResponsesFixture
+
+      ResponsesFixture.send_sse(conn, [
+        ResponsesFixture.text_delta("Native HTTP"),
+        ResponsesFixture.completed([], %{
           "usage" => %{
-            "prompt_tokens" => 20,
-            "prompt_tokens_details" => %{"cached_tokens" => 2},
-            "completion_tokens" => 8,
-            "completion_tokens_details" => %{"reasoning_tokens" => 3},
+            "input_tokens" => 20,
+            "input_tokens_details" => %{"cached_tokens" => 6},
+            "output_tokens" => 8,
+            "output_tokens_details" => %{"reasoning_tokens" => 3},
             "total_tokens" => 28
           }
-        },
-        %{
-          "choices" => [],
-          "usage" => %{
-            "prompt_tokens" => 20,
-            "prompt_tokens_details" => %{"cached_tokens" => 6},
-            "completion_tokens" => 8,
-            "completion_tokens_details" => %{"reasoning_tokens" => 3},
-            "total_tokens" => 28
-          }
-        }
-      ]
-
-      body =
-        Enum.map_join(chunks, "", &("data: " <> Jason.encode!(&1) <> "\n\n")) <>
-          "data: [DONE]\n\n"
-
-      conn
-      |> Plug.Conn.put_resp_content_type("text/event-stream")
-      |> Plug.Conn.resp(200, body)
+        })
+      ])
     end)
 
     run_id = Ecto.UUID.generate()
@@ -509,7 +452,6 @@ defmodule Synapsis.Agent.Runtime.ProviderUsageFunctionalTest do
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       assert is_map(Jason.decode!(body))
       body = Enum.map_join(chunks, "", &("data: " <> Jason.encode!(&1) <> "\n\n"))
-      body = if opts[:done], do: body <> "data: [DONE]\n\n", else: body
 
       conn
       |> Plug.Conn.put_resp_content_type("text/event-stream")

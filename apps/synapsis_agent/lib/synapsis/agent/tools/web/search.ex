@@ -334,11 +334,6 @@ defmodule Synapsis.Agent.Tools.Web.Search do
     }
 
     config =
-      if provider == "perplexity",
-        do: Map.put(config, :model, Map.get(raw, "model", "perplexity/sonar-pro")),
-        else: config
-
-    config =
       if provider == "gemini",
         do:
           config
@@ -404,14 +399,8 @@ defmodule Synapsis.Agent.Tools.Web.Search do
          true <- is_integer(config.cache_ttl_ms) and config.cache_ttl_ms in 0..@timer_limit,
          true <- is_integer(config.count) and config.count in 1..max_count(name, provider),
          true <-
-           if(provider == "perplexity",
-             do:
-               config.mode in ["search_api", "chat_completions"] and
-                 nonempty_string?(config.model),
-             else: config.mode in ["web", "llm-context"]
-           ) do
-      {:ok,
-       if(provider == "perplexity", do: Map.update!(config, :model, &String.trim/1), else: config)}
+           provider == "perplexity" or config.mode in ["web", "llm-context"] do
+      {:ok, config}
     else
       _ -> failure(:validation, "Search configuration is invalid")
     end
@@ -552,10 +541,6 @@ defmodule Synapsis.Agent.Tools.Web.Search do
     do:
       "Search the web using DeepSeek. Returns titles, URLs, and model-oriented summaries. " <>
         "Queries support site:, -site:, lang:, after:, before:, and quoted phrases; maximum 128 Unicode characters."
-
-  defp description(@generic, %{provider: "perplexity", mode: "chat_completions"}),
-    do:
-      "Search Perplexity Sonar for AI-synthesized answers with ordered citations. Count is accepted but does not affect Sonar requests. Provider, model, endpoint and credentials are Agent configuration."
 
   defp description(@generic, %{provider: provider}),
     do:
@@ -749,9 +734,6 @@ defmodule Synapsis.Agent.Tools.Web.Search do
       }
     }
   end
-
-  defp extra_properties(@generic, %{provider: "perplexity", mode: "chat_completions"}),
-    do: %{"freshness" => %{"type" => "string"}}
 
   defp extra_properties(@generic, %{provider: "exa"}) do
     %{

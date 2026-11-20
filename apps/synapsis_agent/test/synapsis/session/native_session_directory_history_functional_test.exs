@@ -232,7 +232,7 @@ defmodule Synapsis.Session.NativeSessionDirectoryHistoryFunctionalTest do
   defp install_provider(harness, input) do
     owner = self()
 
-    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
 
@@ -272,8 +272,8 @@ defmodule Synapsis.Session.NativeSessionDirectoryHistoryFunctionalTest do
 
   defp assert_catalog(request) do
     assert [descriptor] = request["tools"]
-    assert ToolName.decode(descriptor["function"]["name"]) == @name
-    properties = descriptor["function"]["parameters"]["properties"]
+    assert ToolName.decode(descriptor["name"]) == @name
+    properties = descriptor["parameters"]["properties"]
     property = properties["message_limit"]
     assert property["type"] == "integer"
     assert property["minimum"] == 0
@@ -286,7 +286,10 @@ defmodule Synapsis.Session.NativeSessionDirectoryHistoryFunctionalTest do
 
   defp assert_wire_history(request, input, result) do
     actual =
-      Enum.filter(request["messages"], &(Map.has_key?(&1, "tool_calls") or &1["role"] == "tool"))
+      Enum.filter(
+        request["input"],
+        &(Map.has_key?(&1, "tool_calls") or &1["type"] == "function_call_output")
+      )
 
     assert [call, reply] = actual
 
@@ -297,15 +300,17 @@ defmodule Synapsis.Session.NativeSessionDirectoryHistoryFunctionalTest do
                %{
                  "id" => @call_id,
                  "type" => "function",
-                 "function" => %{
-                   "name" => ToolName.encode(@name),
-                   "arguments" => Jason.encode!(input)
-                 }
+                 "name" => ToolName.encode(@name),
+                 "arguments" => Jason.encode!(input)
                }
              ]
            }
 
-    assert reply == %{"role" => "tool", "tool_call_id" => @call_id, "content" => result.content}
+    assert reply == %{
+             "type" => "function_call_output",
+             "call_id" => @call_id,
+             "output" => result.content
+           }
   end
 
   defp assert_parts(id, input, page) do

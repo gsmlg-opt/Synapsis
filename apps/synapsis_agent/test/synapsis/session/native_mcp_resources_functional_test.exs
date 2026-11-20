@@ -88,8 +88,8 @@ defmodule Synapsis.Session.NativeMCPResourcesFunctionalTest do
       assert descriptor.tool_revision == 1
       assert descriptor.backend_context.family == :dynamic
       assert descriptor.backend_context.session_binding.run_id != ""
-      tool = Enum.find(hd(requests)["tools"], &(ToolName.decode(&1["function"]["name"]) == name))
-      assert tool["function"]["parameters"] == descriptor.schema
+      tool = Enum.find(hd(requests)["tools"], &(ToolName.decode(&1["name"]) == name))
+      assert tool["parameters"] == descriptor.schema
       properties = if name == "read_mcp_resource", do: ~w(server uri), else: ~w(cursor server)
       assert Enum.sort(Map.keys(descriptor.schema["properties"])) == properties
       required = if name == "read_mcp_resource", do: ~w(server uri), else: []
@@ -200,7 +200,7 @@ defmodule Synapsis.Session.NativeMCPResourcesFunctionalTest do
     first = request(0)
     next = request(1)
     assert_receive {:run_event, %{type: "session.completed"}}, 20_000
-    assert [%{"function" => %{"name" => wire_name}}] = first["tools"]
+    assert [%{"name" => wire_name}] = first["tools"]
     assert ToolName.decode(wire_name) == "list_mcp_resources"
 
     assert [%ToolResult{is_error: false} = result] =
@@ -333,7 +333,7 @@ defmodule Synapsis.Session.NativeMCPResourcesFunctionalTest do
   defp install_provider(harness, calls) do
     owner = self()
 
-    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       req = Jason.decode!(body)
 
@@ -352,7 +352,7 @@ defmodule Synapsis.Session.NativeMCPResourcesFunctionalTest do
         send(owner, {:resource_descriptors, :sys.get_state(runtime.root).catalog.registry.tools})
       end
 
-      completed = Enum.count(req["messages"], &(&1["role"] == "tool"))
+      completed = Enum.count(req["input"], &(&1["type"] == "function_call_output"))
 
       chunks =
         case Enum.at(calls, completed) do
@@ -409,19 +409,22 @@ defmodule Synapsis.Session.NativeMCPResourcesFunctionalTest do
     do: for(message <- Synapsis.Message.list_by_session(id), part <- message.parts, do: part)
 
   defp assert_wire(req, calls, results) do
-    uses = for message <- req["messages"], call <- List.wrap(message["tool_calls"]), do: call
+    uses = Enum.filter(req["input"], &(&1["type"] == "function_call"))
 
     assert Enum.map(uses, fn call ->
-             {call["id"], ToolName.decode(call["function"]["name"]),
-              Jason.decode!(call["function"]["arguments"])}
+             {call["call_id"], ToolName.decode(call["name"]), Jason.decode!(call["arguments"])}
            end) == calls
 
-    actual = for message <- req["messages"], message["role"] == "tool", do: message
+    actual = for message <- req["input"], message["type"] == "function_call_output", do: message
 
     assert actual ==
              Enum.map(
                results,
-               &%{"role" => "tool", "tool_call_id" => &1.tool_use_id, "content" => &1.content}
+               &%{
+                 "type" => "function_call_output",
+                 "call_id" => &1.tool_use_id,
+                 "output" => &1.content
+               }
              )
   end
 

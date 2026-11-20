@@ -104,7 +104,7 @@ defmodule SynapsisServer.EventReplyFunctionalTest do
     owner = self()
     raw = "HEARTBEAT_OK Ready🙂"
 
-    Gaoxy.Test.expect_once(ctx.provider, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect_once(ctx.provider, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
 
@@ -112,7 +112,7 @@ defmodule SynapsisServer.EventReplyFunctionalTest do
                "role" => "user",
                "content" => [%{"type" => "text", "text" => "manual event notice"}]
              } =
-               List.last(request["messages"])
+               List.last(request["input"])
 
       conn =
         conn

@@ -36,7 +36,7 @@ defmodule SynapsisServer.DebugStoreTest do
       request = %{
         request_id: "req-2",
         method: :post,
-        url: "https://api.openai.com/v1/chat/completions",
+        url: "https://api.openai.com/v1/responses",
         headers: [],
         body: "{}",
         provider: :openai,

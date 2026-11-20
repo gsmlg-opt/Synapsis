@@ -164,19 +164,19 @@ defmodule SynapsisWeb.ProviderLive.ResponsesTest do
     refute_receive :original_endpoint_called
   end
 
-  test "Responses has an explicit default endpoint while existing OpenAI presets keep Chat", %{
+  test "Responses is used by existing OpenAI types and provider presets", %{
     conn: conn
   } do
     assert Providers.default_base_url("openai_responses") == "https://api.openai.com"
-    assert Adapter.resolve_transport_type("openai") == :openai
+    assert Adapter.resolve_transport_type("openai") == :openai_responses
 
     {:ok, view, _} = live(conn, ~p"/settings/providers/new")
-    html = render_hook(view, "select_custom", %{"type" => "openai"})
-    assert html =~ "New OpenAI Compatible"
+    html = render_hook(view, "select_custom", %{"type" => "openai_responses"})
+    assert html =~ "New OpenAI Responses"
 
     for name <- ["openai", "openai-sub", "backplane"] do
       preset = Enum.find(Providers.preset_providers(), &(&1.name == name))
-      assert preset.type == "openai"
+      assert preset.type == "openai_responses"
     end
   end
 

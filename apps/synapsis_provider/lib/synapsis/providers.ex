@@ -728,7 +728,7 @@ defmodule Synapsis.Providers do
   @backplane_preset %{
     name: "backplane",
     label: "Backplane",
-    type: "openai",
+    type: "openai_responses",
     base_url: "https://backplane.gsmlg.net/v1",
     base_url_editable: true,
     api_key_required: false,
@@ -737,8 +737,8 @@ defmodule Synapsis.Providers do
 
   @default_providers [
     %{name: "anthropic", type: "anthropic", base_url: "https://api.anthropic.com"},
-    %{name: "openai", type: "openai", base_url: "https://api.openai.com"},
-    %{name: "openai-sub", type: "openai", base_url: "https://api.chatgpt.com"},
+    %{name: "openai", type: "openai_responses", base_url: "https://api.openai.com"},
+    %{name: "openai-sub", type: "openai_responses", base_url: "https://api.chatgpt.com"},
     %{name: "moonshot-ai", type: "anthropic", base_url: "https://api.moonshot.ai/anthropic"},
     %{name: "moonshot-cn", type: "anthropic", base_url: "https://api.moonshot.cn/anthropic"},
     %{name: "zhipu-ai", type: "anthropic", base_url: "https://api.z.ai/api/anthropic"},

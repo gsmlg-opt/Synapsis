@@ -203,7 +203,7 @@ defmodule Synapsis.Session.NativeToolsRuntimeTest do
     owner = self()
     tool_call? = Keyword.get(opts, :tool_call?, true)
 
-    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
 
@@ -212,7 +212,7 @@ defmodule Synapsis.Session.NativeToolsRuntimeTest do
       end)
 
       send(owner, {:native_request, request, self()})
-      tool_result? = Enum.any?(request["messages"], &(&1["role"] == "tool"))
+      tool_result? = Enum.any?(request["input"], &(&1["type"] == "function_call_output"))
 
       if tool_result? do
         answer(conn)
@@ -250,7 +250,7 @@ defmodule Synapsis.Session.NativeToolsRuntimeTest do
   end
 
   defp wire_names(request) do
-    Enum.map(request["tools"] || [], &ToolName.decode(&1["function"]["name"]))
+    Enum.map(request["tools"] || [], &ToolName.decode(&1["name"]))
   end
 
   defp runtime(id) do

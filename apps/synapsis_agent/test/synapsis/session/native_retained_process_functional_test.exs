@@ -268,7 +268,7 @@ defmodule Synapsis.Session.NativeRetainedProcessFunctionalTest do
     Agent.update(h.counter, &Map.merge(&1, %{reply: nil, expected_calls: []}))
     owner = self()
 
-    Gaoxy.Test.stub(h.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(h.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
 
@@ -310,17 +310,17 @@ defmodule Synapsis.Session.NativeRetainedProcessFunctionalTest do
     assert :ok = Worker.send_message(h.session.id, "Inspect finite ordinary native commands")
     pending = {_, request, _} = receive_request(0)
 
-    assert Enum.sort(Enum.map(request["tools"], &ToolName.decode(&1["function"]["name"]))) ==
+    assert Enum.sort(Enum.map(request["tools"], &ToolName.decode(&1["name"]))) ==
              Enum.sort(h.selected_tools)
 
-    stdin = Enum.find(request["tools"], &(&1["function"]["name"] == "write_stdin"))
-    assert stdin["function"]["parameters"]["properties"]["eof"] == %{"type" => "boolean"}
+    stdin = Enum.find(request["tools"], &(&1["name"] == "write_stdin"))
+    assert stdin["parameters"]["properties"]["eof"] == %{"type" => "boolean"}
 
     if @process in h.selected_tools do
       process =
-        Enum.find(request["tools"], &(ToolName.decode(&1["function"]["name"]) == @process))
+        Enum.find(request["tools"], &(ToolName.decode(&1["name"]) == @process))
 
-      assert process["function"]["parameters"]["properties"]["action"]["enum"] ==
+      assert process["parameters"]["properties"]["action"]["enum"] ==
                ~w(list inspect log poll remove clear_finished)
     end
 
@@ -344,7 +344,7 @@ defmodule Synapsis.Session.NativeRetainedProcessFunctionalTest do
     send(handler, :respond)
     pending = receive_request(index + 1)
     {_, request, _} = pending
-    assert Enum.any?(tool_results(request), &(&1["tool_call_id"] == id))
+    assert Enum.any?(tool_results(request), &(&1["call_id"] == id))
 
     if name == @process do
       assert_receive {"tool_result", %{tool_use_id: ^id} = result}, 5000
@@ -360,14 +360,14 @@ defmodule Synapsis.Session.NativeRetainedProcessFunctionalTest do
   defp response({_, request, _}, id) do
     request
     |> tool_results()
-    |> Enum.find(&(&1["tool_call_id"] == "inspection-" <> id))
+    |> Enum.find(&(&1["call_id"] == "inspection-" <> id))
     |> Map.fetch!("content")
     |> Jason.decode!()
   end
 
   defp session_id({_, request, _}, id) do
-    result = Enum.find(tool_results(request), &(&1["tool_call_id"] == id))
-    assert [_, value] = Regex.run(~r/Session ID: (\d+)/, result["content"])
+    result = Enum.find(tool_results(request), &(&1["call_id"] == id))
+    assert [_, value] = Regex.run(~r/Session ID: (\d+)/, result["output"])
     String.to_integer(value)
   end
 
@@ -388,7 +388,9 @@ defmodule Synapsis.Session.NativeRetainedProcessFunctionalTest do
     }
 
   defp output(result), do: Base.decode64!(result["output_base64"])
-  defp tool_results(request), do: Enum.filter(request["messages"], &(&1["role"] == "tool"))
+
+  defp tool_results(request),
+    do: Enum.filter(request["input"], &(&1["type"] == "function_call_output"))
 
   defp parts!(h) do
     parts =
@@ -454,15 +456,14 @@ defmodule Synapsis.Session.NativeRetainedProcessFunctionalTest do
   end
 
   defp assert_wire(request, uses, results) do
-    calls = for message <- request["messages"], call <- message["tool_calls"] || [], do: call
+    calls = Enum.filter(request["input"], &(&1["type"] == "function_call"))
 
     assert Enum.map(
              calls,
-             &{&1["id"], ToolName.decode(&1["function"]["name"]),
-              Jason.decode!(&1["function"]["arguments"])}
+             &{&1["call_id"], ToolName.decode(&1["name"]), Jason.decode!(&1["arguments"])}
            ) == Enum.map(uses, &{&1.tool_use_id, &1.tool, &1.input})
 
-    assert Enum.map(tool_results(request), &{&1["tool_call_id"], &1["content"]}) ==
+    assert Enum.map(tool_results(request), &{&1["call_id"], &1["output"]}) ==
              Enum.map(results, &{&1.tool_use_id, &1.content})
   end
 

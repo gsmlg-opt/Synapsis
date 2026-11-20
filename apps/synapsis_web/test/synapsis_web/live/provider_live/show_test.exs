@@ -555,12 +555,15 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       bypass = Gaoxy.Test.open()
       test_pid = self()
 
-      Gaoxy.Test.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.stub(bypass, "POST", "/v1/responses", fn conn ->
         send(test_pid, :provider_http_called)
 
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
-        |> Plug.Conn.send_resp(200, "data: [DONE]\n\n")
+        |> Plug.Conn.send_resp(
+          200,
+          "data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[]}}\n\n"
+        )
       end)
 
       provider =
@@ -608,12 +611,15 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       assert {:ok, _connection} =
                Synapsis.Config.Store.put(:backplane, %{"id" => "source-1", "enabled" => true})
 
-      Gaoxy.Test.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.stub(bypass, "POST", "/v1/responses", fn conn ->
         send(test_pid, :provider_http_called)
 
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
-        |> Plug.Conn.send_resp(200, "data: [DONE]\n\n")
+        |> Plug.Conn.send_resp(
+          200,
+          "data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[]}}\n\n"
+        )
       end)
 
       provider =
@@ -669,12 +675,15 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       bypass = Gaoxy.Test.open()
       test_pid = self()
 
-      Gaoxy.Test.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+      Gaoxy.Test.stub(bypass, "POST", "/v1/responses", fn conn ->
         send(test_pid, :local_provider_http_called)
 
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
-        |> Plug.Conn.send_resp(200, "data: [DONE]\n\n")
+        |> Plug.Conn.send_resp(
+          200,
+          "data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[]}}\n\n"
+        )
       end)
 
       provider =
@@ -888,7 +897,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
   defp controlled_chat_provider(test_pid) do
     bypass = Gaoxy.Test.open()
 
-    Gaoxy.Test.stub(bypass, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(bypass, "POST", "/v1/responses", fn conn ->
       {:ok, _body, conn} = Plug.Conn.read_body(conn)
       send(test_pid, {:provider_request, self()})
 
@@ -931,11 +940,10 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
   end
 
   defp chat_stream_response(text) do
-    "data: " <>
-      Jason.encode!(%{choices: [%{index: 0, delta: %{content: text}}]}) <>
-      "\n\ndata: " <>
-      Jason.encode!(%{choices: [%{index: 0, delta: %{}, finish_reason: "stop"}]}) <>
-      "\n\ndata: [DONE]\n\n"
+    alias Synapsis.Provider.TestSupport.ResponsesFixture
+
+    [ResponsesFixture.text_delta(text), ResponsesFixture.completed()]
+    |> Enum.map_join("", &("data: " <> Jason.encode!(&1) <> "\n\n"))
   end
 
   defp create_provider!(attrs) do

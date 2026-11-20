@@ -90,7 +90,7 @@ defmodule Synapsis.Memory.SessionSummaryTest do
 
     queue = start_supervised!({Agent, fn -> invalid end})
 
-    Gaoxy.Test.stub(ctx.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(ctx.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       send(owner, {:summary_request, Jason.decode!(body)})
       patch = Agent.get_and_update(queue, fn [next | rest] -> {next, rest} end)
@@ -164,7 +164,7 @@ defmodule Synapsis.Memory.SessionSummaryTest do
     put_messages(ctx, [String.duplicate("architecture context ", 5)])
     owner = self()
 
-    Gaoxy.Test.stub(ctx.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(ctx.fixture, "POST", "/v1/responses", fn conn ->
       conn =
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
@@ -251,24 +251,14 @@ defmodule Synapsis.Memory.SessionSummaryTest do
     }
 
   defp response(fixture, candidates),
-    do: Gaoxy.Test.stub(fixture, "POST", "/v1/chat/completions", &stream_response(&1, candidates))
+    do: Gaoxy.Test.stub(fixture, "POST", "/v1/responses", &stream_response(&1, candidates))
 
   defp stream_response(conn, candidates) do
-    chunk = %{
-      "id" => "summary",
-      "choices" => [%{"index" => 0, "delta" => %{"content" => Jason.encode!(candidates)}}]
-    }
+    alias Synapsis.Provider.TestSupport.ResponsesFixture
 
-    finish = %{
-      "id" => "summary",
-      "choices" => [%{"index" => 0, "delta" => %{}, "finish_reason" => "stop"}]
-    }
-
-    conn
-    |> Plug.Conn.put_resp_content_type("text/event-stream")
-    |> Plug.Conn.send_resp(
-      200,
-      "data: #{Jason.encode!(chunk)}\n\ndata: #{Jason.encode!(finish)}\n\ndata: [DONE]\n\n"
-    )
+    ResponsesFixture.send_sse(conn, [
+      ResponsesFixture.text_delta(Jason.encode!(candidates)),
+      ResponsesFixture.completed()
+    ])
   end
 end

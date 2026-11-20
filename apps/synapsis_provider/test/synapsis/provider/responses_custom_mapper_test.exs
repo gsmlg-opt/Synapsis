@@ -98,7 +98,7 @@ defmodule Synapsis.Provider.ResponsesCustomMapperTest do
 
     message = %{role: :user, parts: [%Synapsis.Part.Text{content: "hi"}]}
 
-    for protocol <- [:anthropic, :openai, :google] do
+    for protocol <- [:anthropic, :google] do
       assert {:ok, wire} =
                MessageMapper.build_request(protocol, [message], [patch, read], %{model: "m"})
 
@@ -114,5 +114,4 @@ defmodule Synapsis.Provider.ResponsesCustomMapperTest do
 
     assert Jason.encode!(wire) =~ "apply_patch"
   end
-
 end

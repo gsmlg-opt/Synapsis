@@ -72,7 +72,7 @@ defmodule Synapsis.Session.NativeReadableWebFetchFunctionalTest do
                )
 
       assert descriptor == original.registry.tools[@name]
-      assert [%{"function" => %{"name" => encoded, "parameters" => schema}}] = initial["tools"]
+      assert [%{"name" => encoded, "parameters" => schema}] = initial["tools"]
       assert ToolName.decode(encoded) == @name
       assert schema == ReadableFetch.schema()
       assert initial["model"] == "gpt-4o"
@@ -236,7 +236,7 @@ defmodule Synapsis.Session.NativeReadableWebFetchFunctionalTest do
   defp install_provider(h, calls) do
     owner = self()
 
-    Gaoxy.Test.stub(h.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(h.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, bytes, conn} = Plug.Conn.read_body(conn, length: 1_000_000)
       request = Jason.decode!(bytes)
 
@@ -279,11 +279,12 @@ defmodule Synapsis.Session.NativeReadableWebFetchFunctionalTest do
     end)
   end
 
-  defp wire_results(request), do: Enum.filter(request["messages"], &(&1["role"] == "tool"))
+  defp wire_results(request),
+    do: Enum.filter(request["input"], &(&1["type"] == "function_call_output"))
 
   defp assert_wire(request, calls, started_at) do
     results = wire_results(request)
-    assert Enum.map(results, & &1["tool_call_id"]) == Enum.map(calls, & &1.id)
+    assert Enum.map(results, & &1["call_id"]) == Enum.map(calls, & &1.id)
 
     Enum.zip(results, calls)
     |> Enum.each(fn {message, call} ->

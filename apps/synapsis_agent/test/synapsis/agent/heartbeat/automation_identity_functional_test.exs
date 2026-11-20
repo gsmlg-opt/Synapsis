@@ -85,7 +85,7 @@ defmodule Synapsis.Agent.Heartbeat.AutomationIdentityFunctionalTest do
 
     assert {:ok, routine_run} = Routines.trigger({"routine", id}, scheduler: scheduler)
     assert_receive {:identity_request, "routine", false, handler, first}, 5_000
-    assert first["tools"] |> Enum.map(& &1["function"]["name"]) == ["exec_command"]
+    assert first["tools"] |> Enum.map(& &1["name"]) == ["exec_command"]
 
     assert {:ok, heartbeat_run} = Routines.trigger({"heartbeat", id}, scheduler: scheduler)
     assert heartbeat_run.id != routine_run.id
@@ -261,16 +261,16 @@ defmodule Synapsis.Agent.Heartbeat.AutomationIdentityFunctionalTest do
                config: %{"workspace_path" => root}
              })
 
-    Gaoxy.Test.stub(fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
 
       source =
-        if String.contains?(Jason.encode!(request["messages"]), "source heartbeat"),
+        if String.contains?(Jason.encode!(request["input"]), "source heartbeat"),
           do: "heartbeat",
           else: "routine"
 
-      following? = Enum.any?(request["messages"], &(&1["role"] == "tool"))
+      following? = Enum.any?(request["input"], &(&1["type"] == "function_call_output"))
       Agent.update(counter, &(&1 + 1))
       send(owner, {:identity_request, source, following?, self(), request})
 
@@ -331,8 +331,12 @@ defmodule Synapsis.Agent.Heartbeat.AutomationIdentityFunctionalTest do
                do: part
              )
 
-    assert %{"role" => "tool", "tool_call_id" => result.tool_use_id, "content" => result.content} in following[
-             "messages"
+    assert %{
+             "type" => "function_call_output",
+             "call_id" => result.tool_use_id,
+             "output" => result.content
+           } in following[
+             "input"
            ]
 
     assert {:ok, turns} = Store.list_turns(completed.session_id)
@@ -367,8 +371,12 @@ defmodule Synapsis.Agent.Heartbeat.AutomationIdentityFunctionalTest do
     assert_receive {:identity_request, "routine", true, _handler, replay}, 5_000
 
     for part <- parts do
-      assert %{"role" => "tool", "tool_call_id" => part.tool_use_id, "content" => part.content} in replay[
-               "messages"
+      assert %{
+               "type" => "function_call_output",
+               "call_id" => part.tool_use_id,
+               "output" => part.content
+             } in replay[
+               "input"
              ]
     end
 

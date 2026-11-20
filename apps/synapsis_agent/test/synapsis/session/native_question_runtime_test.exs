@@ -26,10 +26,10 @@ defmodule Synapsis.Session.NativeQuestionRuntimeTest do
     SessionHarness.ensure_running!(harness.session.id)
     SessionHarness.subscribe!(harness.session.id)
 
-    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
-      has_result = Enum.any?(request["messages"], &(&1["role"] == "tool"))
+      has_result = Enum.any?(request["input"], &(&1["type"] == "function_call_output"))
 
       chunks =
         if has_result do

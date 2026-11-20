@@ -67,7 +67,7 @@ defmodule Synapsis.Session.NativeWebFetchFunctionalTest do
 
     owner = self()
 
-    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
 
@@ -87,7 +87,7 @@ defmodule Synapsis.Session.NativeWebFetchFunctionalTest do
         send(owner, {:fetch_descriptor, catalog.registry.tools[@name], catalog.authority})
       end
 
-      completed = Enum.count(request["messages"], &(&1["role"] == "tool"))
+      completed = Enum.count(request["input"], &(&1["type"] == "function_call_output"))
 
       chunks =
         case Enum.at(expected, completed) do
@@ -127,7 +127,7 @@ defmodule Synapsis.Session.NativeWebFetchFunctionalTest do
              )
 
     assert descriptor == original.registry.tools[@name]
-    assert [%{"function" => %{"name" => encoded, "parameters" => schema}}] = first["tools"]
+    assert [%{"name" => encoded, "parameters" => schema}] = first["tools"]
     assert ToolName.decode(encoded) == @name
     assert schema == descriptor.schema
     assert_receive {:fetch_request, 1, following}, 10_000
@@ -249,15 +249,17 @@ defmodule Synapsis.Session.NativeWebFetchFunctionalTest do
   end
 
   defp assert_wire_results(request, expected) do
-    results = for message <- request["messages"], message["role"] == "tool", do: message
-    assert Enum.map(results, & &1["tool_call_id"]) == Enum.map(expected, & &1.id)
+    results =
+      for message <- request["input"], message["type"] == "function_call_output", do: message
+
+    assert Enum.map(results, & &1["call_id"]) == Enum.map(expected, & &1.id)
 
     Enum.zip(results, expected)
     |> Enum.each(fn {message, call} ->
       assert message == %{
-               "role" => "tool",
-               "tool_call_id" => call.id,
-               "content" => call.result["body"]
+               "type" => "function_call_output",
+               "call_id" => call.id,
+               "output" => call.result["body"]
              }
     end)
   end

@@ -194,12 +194,12 @@ defmodule Synapsis.Agent.ManagedAutomationLifecycleFunctionalTest do
     owner = self()
     requests = start_supervised!({Agent, fn -> [] end})
 
-    Gaoxy.Test.expect(http, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.expect(http, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
 
       prompt =
-        request["messages"]
+        request["input"]
         |> Enum.filter(&(&1["role"] == "user"))
         |> List.last()
         |> Map.fetch!("content")

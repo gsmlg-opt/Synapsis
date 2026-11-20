@@ -78,7 +78,7 @@ defmodule Synapsis.Session.NativeExaSearchFunctionalTest do
     assert Map.keys(descriptors) == [@name]
     assert descriptors[@name].backend == Search
     schema = descriptors[@name].schema
-    assert hd(hd(requests)["tools"])["function"]["parameters"] == schema
+    assert hd(hd(requests)["tools"])["parameters"] == schema
 
     assert Enum.sort(Map.keys(schema["properties"])) ==
              ~w(contents count date_after date_before freshness query type)
@@ -205,7 +205,7 @@ defmodule Synapsis.Session.NativeExaSearchFunctionalTest do
   defp install_provider(harness, calls) do
     owner = self()
 
-    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       req = Jason.decode!(body)
 
@@ -228,7 +228,7 @@ defmodule Synapsis.Session.NativeExaSearchFunctionalTest do
         )
       end
 
-      completed = Enum.count(req["messages"], &(&1["role"] == "tool"))
+      completed = Enum.count(req["input"], &(&1["type"] == "function_call_output"))
 
       chunks =
         case Enum.at(calls, completed) do
@@ -258,19 +258,22 @@ defmodule Synapsis.Session.NativeExaSearchFunctionalTest do
     do: for(message <- Synapsis.Message.list_by_session(id), part <- message.parts, do: part)
 
   defp assert_wire(req, calls, results) do
-    uses = for message <- req["messages"], call <- List.wrap(message["tool_calls"]), do: call
+    uses = Enum.filter(req["input"], &(&1["type"] == "function_call"))
 
     assert Enum.map(uses, fn call ->
-             {call["id"], ToolName.decode(call["function"]["name"]),
-              Jason.decode!(call["function"]["arguments"])}
+             {call["call_id"], ToolName.decode(call["name"]), Jason.decode!(call["arguments"])}
            end) == calls
 
-    actual = for message <- req["messages"], message["role"] == "tool", do: message
+    actual = for message <- req["input"], message["type"] == "function_call_output", do: message
 
     assert actual ==
              Enum.map(
                results,
-               &%{"role" => "tool", "tool_call_id" => &1.tool_use_id, "content" => &1.content}
+               &%{
+                 "type" => "function_call_output",
+                 "call_id" => &1.tool_use_id,
+                 "output" => &1.content
+               }
              )
   end
 

@@ -69,23 +69,20 @@ defmodule Synapsis.Session.NativeResolverMCPFunctionalTest do
 
     assert :ok = Worker.send_message(harness.session.id, "Read the selected source label")
     assert_receive {:native_resolver_provider, 0, first, _handler}, 5_000
-    assert [%{"type" => "function", "function" => function}] = first["tools"]
+    assert [%{"type" => "function"} = function] = first["tools"]
     assert function["name"] == ToolName.encode(name)
     assert function["description"] == @description
     assert function["parameters"] == @schema
 
-    prompt =
-      first["messages"]
-      |> Enum.filter(&(&1["role"] == "system"))
-      |> Enum.map_join("\n", &content_text(&1["content"]))
+    prompt = first["instructions"]
 
     assert prompt =~ "Selected tools:\n- #{name}: #{@description}"
     assert_receive {:native_resolver_source_call, source_call}, 5_000
     assert source_call == %{"name" => @raw_name, "arguments" => @arguments}
     assert_receive {:native_resolver_provider, 1, following, handler}, 5_000
 
-    assert [%{"role" => "tool", "tool_call_id" => @call_id} = wire_result] =
-             Enum.filter(following["messages"], &(&1["role"] == "tool"))
+    assert [%{"type" => "function_call_output", "call_id" => @call_id} = wire_result] =
+             Enum.filter(following["input"], &(&1["type"] == "function_call_output"))
 
     send(handler, :complete_native_resolver_mcp)
     assert_receive {:run_event, %{type: "session.completed"}}, 10_000
@@ -97,7 +94,7 @@ defmodule Synapsis.Session.NativeResolverMCPFunctionalTest do
                do: part
              )
 
-    assert wire_result["content"] == result.content
+    assert wire_result["output"] == result.content
 
     assert result.projection["result"]["content"] == [
              %{"type" => "text", "text" => "source label retained"}
@@ -180,7 +177,7 @@ defmodule Synapsis.Session.NativeResolverMCPFunctionalTest do
   end
 
   defp install_provider(harness, name, owner) do
-    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/chat/completions", fn conn ->
+    Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       request = Jason.decode!(body)
 
@@ -210,7 +207,4 @@ defmodule Synapsis.Session.NativeResolverMCPFunctionalTest do
       end
     end)
   end
-
-  defp content_text(content) when is_binary(content), do: content
-  defp content_text(blocks) when is_list(blocks), do: Enum.map_join(blocks, & &1["text"])
 end
