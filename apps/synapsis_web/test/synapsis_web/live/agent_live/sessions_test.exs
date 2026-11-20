@@ -381,7 +381,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
              )
     end
 
-    test "model selector is disabled while running and rejects forged switch events", %{
+    test "model selector waits for idle after done and rejects switches while busy", %{
       conn: conn
     } do
       {:ok, provider} =
@@ -408,10 +408,19 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       set_worker_running(session)
       send(view.pid, {"session_status", %{status: "streaming"}})
       assert has_element?(view, "#session-model-selector[disabled]")
+
+      send(view.pid, {"done", %{}})
+      assert has_element?(view, "#session-model-selector[disabled]")
+
       render_hook(view, "switch_model", %{"model_id" => model.id})
       assert render(view) =~ "Wait for the session to become idle"
       assert {:ok, unchanged} = Sessions.get(session.id)
       assert unchanged.model == "current"
+
+      assert :ok = Worker.cancel(session.id)
+      assert_eventually(fn -> has_element?(view, "#session-model-selector:not([disabled])") end)
+      view |> form("#session-model-form", %{"model_id" => model.id}) |> render_change()
+      assert {:ok, %{model: "target"}} = Sessions.get(session.id)
     end
 
     test "disables LiveView parameter logging for Base64 image payloads" do

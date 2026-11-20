@@ -42,6 +42,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
        heartbeat_notifications: [],
        code_agent_sessions: %{},
        session_status: "idle",
+       awaiting_session_idle: false,
        delete_session: nil,
        show_sidebar: true,
        react_chat: nil,
@@ -87,7 +88,8 @@ defmodule SynapsisWeb.AgentLive.Sessions do
            runtime_permissions: permissions,
            user_questions: user_questions,
            code_agent_sessions: %{},
-           session_status: status
+           session_status: status,
+           awaiting_session_idle: false
          )
          |> start_chat()
          |> then(fn socket ->
@@ -436,10 +438,6 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     cond do
       is_nil(socket.assigns.current_session) ->
         {:noreply, put_flash(socket, :error, "Select a session first")}
-
-      running_session_status?(socket.assigns.session_status) ->
-        {:noreply,
-         put_flash(socket, :error, "Wait for the session to become idle before switching models")}
 
       is_nil(model) ->
         {:noreply, put_flash(socket, :error, "Selected model is unavailable")}
@@ -1003,24 +1001,19 @@ defmodule SynapsisWeb.AgentLive.Sessions do
         []
       end
 
-    sessions = load_sessions(name)
-
-    # Keep tool calls with error status visible so failed tools remain in chat
-    error_tool_calls =
-      socket.assigns.tool_calls
-      |> Enum.filter(fn {_id, tc} -> tc[:status] == "error" end)
-      |> Map.new()
+    # The reply can be complete while the Worker is still reconciling queued inputs.
+    awaiting_session_idle =
+      socket.assigns.awaiting_session_idle or
+        running_session_status?(socket.assigns.session_status)
 
     {:noreply,
-     assign(socket,
+     socket
+     |> clear_transient_generation()
+     |> assign(
        messages: messages,
-       sessions: sessions,
-       streaming_text: "",
-       streaming_reasoning: "",
-       tool_calls: error_tool_calls,
-       permission_requests: [],
-       user_questions: [],
-       session_status: "idle"
+       sessions: load_sessions(name),
+       session_status: "idle",
+       awaiting_session_idle: awaiting_session_idle
      )}
   end
 
@@ -1227,7 +1220,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
               <.session_model_selector
                 session={@current_session}
                 models={@configured_models}
-                busy={running_session_status?(@session_status)}
+                busy={@awaiting_session_idle or running_session_status?(@session_status)}
               />
               <.dm_btn
                 id="session-subagents-toggle"
@@ -1468,7 +1461,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     |> maybe_refresh_current_session()
     |> clear_transient_generation()
     |> assign(:messages, messages)
-    |> assign(:session_status, status)
+    |> assign(session_status: status, awaiting_session_idle: false)
   end
 
   defp assign_session_status(socket, status), do: assign(socket, :session_status, status)
