@@ -43,10 +43,11 @@ defmodule Synapsis.Agent.Heartbeat.DaemonTriggerTest do
   end
 
   test "heartbeat max runtime overrides the daemon default" do
+    # The fake completes after 150 ms, between the two configured deadlines.
+    Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :delayed_done)
+
     {daemon, _task_supervisor} =
       start_test_daemon(sessions: FakeSessions, run_timeout: 2_000, cleanup_timeout: 50)
-
-    started_at = System.monotonic_time(:millisecond)
 
     assert {:ok, run} =
              Daemon.trigger(daemon, :heartbeat, %{
@@ -55,9 +56,8 @@ defmodule Synapsis.Agent.Heartbeat.DaemonTriggerTest do
                max_runtime_ms: 50
              })
 
-    assert_receive {:waiting_session, _session_id}, 1_000
     assert {:ok, failed} = wait_for_run(run.id, "failed")
+    assert failed.metadata["max_runtime_ms"] == 50
     assert failed.error =~ "session_timeout"
-    assert System.monotonic_time(:millisecond) - started_at < 1_000
   end
 end
