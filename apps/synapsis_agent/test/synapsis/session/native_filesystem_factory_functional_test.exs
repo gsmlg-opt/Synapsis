@@ -10,7 +10,6 @@ defmodule Synapsis.Session.NativeFilesystemFactoryFunctionalTest do
 
   @moduletag :tmp_dir
   @names ~w(synapsis::read synapsis::write synapsis::edit synapsis::ls)
-  @node System.fetch_env!("SYNAPSIS_FILESYSTEM_NODE")
   @fixtures Path.expand("../../fixtures/openclaw/488631c", __DIR__)
   @edits [
     %{"oldText" => "alpha", "newText" => "beta"},
@@ -18,11 +17,12 @@ defmodule Synapsis.Session.NativeFilesystemFactoryFunctionalTest do
   ]
 
   setup %{tmp_dir: root} do
+    node = System.fetch_env!("SYNAPSIS_FILESYSTEM_NODE")
     previous_node = Application.fetch_env(:synapsis_agent, :filesystem_node)
     previous_workspace = System.get_env("SYNAPSIS_WORKSPACE_ROOT")
     workspace = Path.join(root, "captured-workspace")
     File.mkdir_p!(workspace)
-    Application.put_env(:synapsis_agent, :filesystem_node, @node)
+    Application.put_env(:synapsis_agent, :filesystem_node, node)
     System.put_env("SYNAPSIS_WORKSPACE_ROOT", workspace)
 
     on_exit(fn ->
@@ -36,7 +36,7 @@ defmodule Synapsis.Session.NativeFilesystemFactoryFunctionalTest do
         else: System.delete_env("SYNAPSIS_WORKSPACE_ROOT")
     end)
 
-    %{workspace_root: workspace}
+    %{workspace_root: workspace, filesystem_node: node}
   end
 
   for namespace <- [:local, :workspace] do
@@ -108,7 +108,7 @@ defmodule Synapsis.Session.NativeFilesystemFactoryFunctionalTest do
                }
 
         assert is_function(context.prepared_target_resolver, 3)
-        assert context.execution_options[:node_executable] == @node
+        assert context.execution_options[:node_executable] == ctx.filesystem_node
         assert context.execution_options[:model_has_vision] == true
       end
 
