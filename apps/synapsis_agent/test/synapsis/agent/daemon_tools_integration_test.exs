@@ -25,13 +25,13 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
   end
 
   @tag :tmp_dir
-  test "default daemon run exposes and executes only annotated read-only MCP tools", %{
+  test "default daemon run denies MCP tools outside its captured basic profile", %{
     tmp_dir: tmp_dir
   } do
-    {server_name, _mcp_pid} = start_annotated_mcp()
-    safe_tool = "mcp:#{server_name}:read_note"
-    destructive_tool = "mcp:#{server_name}:delete_note"
-    unannotated_tool = "mcp:#{server_name}:mystery"
+    {source, _mcp_pid} = start_annotated_mcp()
+    safe_tool = "mcp::#{source.id}::read_note"
+    destructive_tool = "mcp::#{source.id}::delete_note"
+    unannotated_tool = "mcp::#{source.id}::mystery"
     wire_safe_tool = Synapsis.Provider.ToolName.encode(safe_tool)
 
     {daemon, _task_supervisor} = start_test_daemon()
@@ -50,33 +50,19 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
 
     assert_receive {:tool_provider_request, 1, first_request, request_pid}, 2_000
 
-    assert wire_safe_tool in tool_names(first_request)
+    refute wire_safe_tool in tool_names(first_request)
     refute Synapsis.Provider.ToolName.encode(destructive_tool) in tool_names(first_request)
     refute Synapsis.Provider.ToolName.encode(unannotated_tool) in tool_names(first_request)
-
-    assert %{"parameters" => parameters} =
-             Enum.find(first_request["tools"], fn tool ->
-               get_in(tool, ["function", "name"]) == wire_safe_tool
-             end)
-
-    assert parameters == %{
-             "type" => "object",
-             "properties" => %{"text" => %{"type" => "string"}},
-             "required" => ["text"]
-           }
 
     assert {:ok, running} = wait_for_run(queued.id, "running")
     assert :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{running.session_id}")
     send(request_pid, :respond)
 
-    assert_receive {:mcp_tool_called, %{"name" => "read_note", "arguments" => arguments}}, 2_000
-    assert arguments == %{"text" => "deployment note"}
-    refute_receive {:mcp_tool_called, %{"name" => "delete_note"}}, 100
-    refute_receive {:mcp_tool_called, %{"name" => "mystery"}}, 100
+    refute_receive {:mcp_tool_called, _params}, 100
     refute_receive {"permission_requests", _payload}, 100
 
     assert_receive {:tool_provider_request, 2, second_request, _request_pid}, 2_000
-    assert Jason.encode!(second_request) =~ "deployment note"
+    assert Jason.encode!(second_request) =~ "Tool denied"
     assert {:ok, completed} = wait_for_run(queued.id, "completed")
     assert completed.summary == "daemon tool run complete"
   end
@@ -241,7 +227,7 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
       Synapsis.Config.Store.delete(:backplane, source_id)
     end)
 
-    {server_name, mcp_pid}
+    {mcp_config, mcp_pid}
   end
 
   defp stub_annotated_mcp(fixture, server_name, owner, mode) do

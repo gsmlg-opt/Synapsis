@@ -275,10 +275,9 @@ defmodule Synapsis.Agent.RoutinesTest do
       start_supervised!(
         {LocalScheduler,
          name: String.to_atom("routines_scheduler_#{System.unique_integer([:positive])}"),
-         daemon: :test_daemon,
+         daemon: Synapsis.Agent.Daemon,
          task_supervisor: task_supervisor,
          config_loader: fn -> Enum.filter(Store.list(:routine), &(&1["name"] == name)) end,
-         config_writer: &Store.put/2,
          trigger_fun: fn config, _daemon ->
            send(owner, {:submitted_stored_config, config})
 

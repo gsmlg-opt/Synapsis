@@ -31,29 +31,6 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
     end
 
     def touch_accessed(_ids), do: :ok
-
-    def store(attrs) do
-      record = Map.put(attrs, :id, "dream-saved-#{System.unique_integer([:positive])}")
-
-      Agent.update(
-        Application.fetch_env!(:synapsis_agent, :dream_test_memory_store),
-        &[record | &1]
-      )
-
-      send(
-        Application.fetch_env!(:synapsis_agent, :daemon_test_owner),
-        {:dream_memory_stored, record}
-      )
-
-      {:ok, record}
-    end
-
-    def list(_filters) do
-      Agent.get(
-        Application.fetch_env!(:synapsis_agent, :dream_test_memory_store),
-        &Enum.reverse/1
-      )
-    end
   end
 
   @tag :tmp_dir
@@ -140,7 +117,11 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
           receive do
             :respond ->
               send_sse(conn, [
-                tool_call_chunk("file_read", "schedule-file-read", %{"path" => "scheduled.txt"}),
+                tool_call_chunk(
+                  Synapsis.Provider.ToolName.encode("synapsis::read"),
+                  "schedule-file-read",
+                  %{"path" => "scheduled.txt"}
+                ),
                 finish_chunk("tool_calls")
               ])
           after
@@ -167,9 +148,9 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
     assert_receive {:schedule_provider_request, 1, first_request, request_pid}, 2_000
 
     tool_names = Enum.map(first_request["tools"], & &1["name"])
-    assert "file_read" in tool_names
-    refute "file_write" in tool_names
-    refute "bash" in tool_names
+    assert Synapsis.Provider.ToolName.encode("synapsis::read") in tool_names
+    refute Synapsis.Provider.ToolName.encode("synapsis::write") in tool_names
+    refute "exec_command" in tool_names
 
     assert {:ok, running} = wait_for_run(schedule.id, "running")
     assert :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{running.session_id}")
@@ -193,16 +174,23 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
     tmp_dir: tmp_dir
   } do
     previous_adapter = Application.get_env(:synapsis_core, :memory_adapter)
-    memory_store = start_supervised!({Agent, fn -> [] end})
-    Application.put_env(:synapsis_core, :memory_adapter, DreamMemoryAdapter)
-    Application.put_env(:synapsis_agent, :dream_test_memory_store, memory_store)
+    previous_dir = System.get_env("SYNAPSIS_MEMORY_DIR")
+    records = Path.join(tmp_dir, "memories")
+    File.mkdir_p!(records)
+    System.put_env("SYNAPSIS_MEMORY_DIR", records)
+    Application.put_env(:synapsis_core, :memory_adapter, Synapsis.Memory.FileAdapter)
+    Synapsis.Memory.Cache.clear()
 
     on_exit(fn ->
-      Application.delete_env(:synapsis_agent, :dream_test_memory_store)
+      if previous_dir,
+        do: System.put_env("SYNAPSIS_MEMORY_DIR", previous_dir),
+        else: System.delete_env("SYNAPSIS_MEMORY_DIR")
 
       if previous_adapter,
         do: Application.put_env(:synapsis_core, :memory_adapter, previous_adapter),
         else: Application.delete_env(:synapsis_core, :memory_adapter)
+
+      Synapsis.Memory.Cache.clear()
     end)
 
     memory_input = %{
@@ -242,7 +230,11 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
           receive do
             :respond ->
               send_sse(conn, [
-                tool_call_chunk("memory_save", "dream-memory-call", memory_input),
+                tool_call_chunk(
+                  Synapsis.Provider.ToolName.encode("synapsis::memory_save"),
+                  "dream-memory-call",
+                  memory_input
+                ),
                 finish_chunk("tool_calls")
               ])
           after
@@ -255,6 +247,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
     end)
 
     {provider_name, agent_name} = register_provider_agent(tmp_dir, fixture)
+    %{id: agent_id} = Synapsis.AgentConfigs.get_by_name(agent_name)
     {daemon, _task_supervisor} = start_test_daemon()
 
     assert {:ok, dream} =
@@ -266,10 +259,16 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
                model: "daemon-test-model"
              })
 
+    assert dream.assistant_name == agent_name
+    assert dream.capability_snapshot["agent_id"] == agent_id
     assert_receive {:dream_memory_provider_request, 1, first_request, request_pid}, 2_000
 
-    assert "memory_save" in Enum.map(first_request["tools"], & &1["name"])
-    refute "bash" in Enum.map(first_request["tools"], & &1["name"])
+    assert Synapsis.Provider.ToolName.encode("synapsis::memory_save") in Enum.map(
+             first_request["tools"],
+             & &1["name"]
+           )
+
+    refute "exec_command" in Enum.map(first_request["tools"], & &1["name"])
 
     assert {:ok, running} = wait_for_run(dream.id, "running")
     assert :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{running.session_id}")
@@ -277,25 +276,35 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
     assert %{root: %{status: :running, run_id: native_run_id}} =
              Synapsis.Session.Worker.snapshot(running.session_id).subagents
 
+    assert :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, "memory:agent:#{agent_id}")
     send(request_pid, :respond)
 
-    assert_receive {:dream_memory_stored,
-                    %{
-                      scope: "agent",
-                      scope_id: ^agent_name,
-                      kind: "lesson",
-                      title: "Verify imported tools",
-                      contributed_by: ^agent_name
-                    } = saved},
-                   2_000
+    assert_receive {:memory_promoted, memory_id}, 2_000
+
+    assert {:ok,
+            %{
+              scope: "agent",
+              scope_id: ^agent_id,
+              kind: "lesson",
+              title: "Verify imported tools",
+              contributed_by: ^agent_id
+            } = saved} = Synapsis.Memory.get_semantic(memory_id)
+
+    assert File.exists?(Path.join([records, "agent", agent_id, "#{memory_id}.md"]))
 
     assert_receive {:dream_memory_provider_request, 2, second_request, _request_pid}, 2_000
-    assert Jason.encode!(second_request) =~ "Verify imported tools"
-    assert Jason.encode!(second_request) =~ "saved"
+
+    assert %{
+             "type" => "function_call_output",
+             "call_id" => "dream-memory-call",
+             "output" => output
+           } = Enum.find(second_request["input"], &(&1["type"] == "function_call_output"))
+
+    assert output == "Saved #{memory_id}: Verify imported tools"
     refute_receive {"permission_requests", _payload}, 100
     refute_receive {"runtime_permissions", [_pending | _]}, 100
 
-    assert [persisted] = Synapsis.Memory.list_semantic(scope: "agent", scope_id: agent_name)
+    assert [persisted] = Synapsis.Memory.list_semantic(scope: "agent", scope_id: agent_id)
     assert persisted.id == saved.id
     assert {:ok, completed} = wait_for_run(dream.id, "completed")
     assert completed.metadata["output"]["recent_summary"] == "Saved the release lesson"

@@ -313,16 +313,26 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
     owner = self()
     config = routine(Ecto.UUID.generate(), "early-terminal", "schedule")
 
+    run = completed_routine_run(config)
+
     scheduler =
       start_scheduler([config], daemon, task_supervisor,
+        trigger_fun: fn _config, _daemon ->
+          send(owner, {:trigger_waiting, self()})
+
+          receive do
+            :return_run -> {:ok, run}
+          end
+        end,
         config_writer: fn type, attrs ->
           send(owner, {:routine_config_written, type, attrs})
           {:ok, attrs}
         end
       )
 
-    assert_receive {:routine_config_written, :routine, %{"next_run_at" => next_run_at}}, 1_000
-    run = completed_routine_run(config)
+    assert_receive {:routine_config_written, :routine, %{"next_run_at" => _next_run_at}}, 1_000
+    trigger = Task.async(fn -> LocalScheduler.trigger(scheduler, config.id) end)
+    assert_receive {:trigger_waiting, producer}, 1_000
     :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, Daemon.topic())
 
     assert :ok = RunEvents.publish_lifecycle(:completed, run)
@@ -343,10 +353,9 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
     assert started_at == DateTime.to_iso8601(run.started_at)
     assert inserted_at == DateTime.to_iso8601(run.inserted_at)
 
-    GenServer.cast(
-      scheduler,
-      {:track_trigger, config.id, config, {:ok, run}, run.started_at, next_run_at}
-    )
+    _state = :sys.get_state(scheduler)
+    send(producer, :return_run)
+    assert {:ok, %{id: ^run_id}} = Task.await(trigger)
 
     assert_receive {:routine_config_written, :routine,
                     %{"last_status" => "completed", "last_run_at" => last_run_at}},
@@ -687,10 +696,42 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
   defp start_scheduler(configs_or_loader, daemon, task_supervisor, opts \\ []) do
     name = String.to_atom("heartbeat_scheduler_test_#{System.unique_integer([:positive])}")
 
-    loader =
-      if is_function(configs_or_loader, 0),
-        do: configs_or_loader,
-        else: fn -> configs_or_loader end
+    {loader, opts} =
+      if is_function(configs_or_loader, 0) do
+        {configs_or_loader, opts}
+      else
+        configs =
+          start_supervised!(
+            Supervisor.child_spec({Agent, fn -> configs_or_loader end}, id: make_ref())
+          )
+
+        writer = Keyword.get(opts, :config_writer, fn _type, attrs -> {:ok, attrs} end)
+
+        persistent_writer = fn type, attrs ->
+          result = writer.(type, attrs)
+
+          if result == :ok or match?({:ok, _}, result) do
+            Agent.update(configs, fn entries ->
+              Enum.map(entries, fn entry ->
+                if Map.get(entry, :id, entry["id"]) == attrs["id"] do
+                  entry = Map.new(entry, fn {key, value} -> {to_string(key), value} end)
+
+                  patch =
+                    Map.reject(attrs, fn {key, _value} -> String.starts_with?(key, "__") end)
+
+                  Map.merge(entry, patch)
+                else
+                  entry
+                end
+              end)
+            end)
+          end
+
+          result
+        end
+
+        {fn -> Agent.get(configs, & &1) end, Keyword.put(opts, :config_writer, persistent_writer)}
+      end
 
     scheduler_opts =
       Keyword.merge(

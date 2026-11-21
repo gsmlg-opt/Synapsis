@@ -97,12 +97,12 @@ defmodule Synapsis.Agent.DaemonRecoveryTest do
       tool_profile: "read_only"
     }
 
-    assert {:ok, running} = Runs.create(Map.put(attrs, :status, "queued"))
+    assert {:ok, running} = create_recoverable_run(Map.put(attrs, :status, "queued"))
     assert {:ok, running} = Runs.mark_running(running)
-    assert {:ok, waiting} = Runs.create(Map.put(attrs, :status, "queued"))
+    assert {:ok, waiting} = create_recoverable_run(Map.put(attrs, :status, "queued"))
     assert {:ok, waiting} = Runs.mark_running(waiting)
     assert {:ok, waiting} = Runs.mark_waiting_approval(waiting)
-    assert {:ok, queued} = Runs.create(Map.put(attrs, :status, "queued"))
+    assert {:ok, queued} = create_recoverable_run(Map.put(attrs, :status, "queued"))
 
     {:ok, fault_agent} =
       Agent.start_link(fn ->
@@ -150,9 +150,9 @@ defmodule Synapsis.Agent.DaemonRecoveryTest do
       tool_profile: "read_only"
     }
 
-    assert {:ok, running} = Runs.create(Map.put(attrs, :status, "queued"))
+    assert {:ok, running} = create_recoverable_run(Map.put(attrs, :status, "queued"))
     assert {:ok, running} = Runs.mark_running(running)
-    assert {:ok, queued} = Runs.create(Map.put(attrs, :status, "queued"))
+    assert {:ok, queued} = create_recoverable_run(Map.put(attrs, :status, "queued"))
 
     Application.put_env(:synapsis_agent, :daemon_hanging_event, :append_run_interrupted)
     Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :waiting)
@@ -202,8 +202,8 @@ defmodule Synapsis.Agent.DaemonRecoveryTest do
       tool_profile: "read_only"
     }
 
-    assert {:ok, first} = Runs.create(Map.put(attrs, :prompt, "recover first"))
-    assert {:ok, second} = Runs.create(Map.put(attrs, :prompt, "recover second"))
+    assert {:ok, first} = create_recoverable_run(Map.put(attrs, :prompt, "recover first"))
+    assert {:ok, second} = create_recoverable_run(Map.put(attrs, :prompt, "recover second"))
 
     {daemon, _task_supervisor} = start_test_daemon(recover?: true)
 
@@ -239,12 +239,12 @@ defmodule Synapsis.Agent.DaemonRecoveryTest do
       tool_profile: "read_only"
     }
 
-    assert {:ok, running} = Runs.create(Map.put(attrs, :status, "queued"))
+    assert {:ok, running} = create_recoverable_run(Map.put(attrs, :status, "queued"))
     assert {:ok, running} = Runs.mark_running(running)
-    assert {:ok, waiting} = Runs.create(Map.put(attrs, :status, "queued"))
+    assert {:ok, waiting} = create_recoverable_run(Map.put(attrs, :status, "queued"))
     assert {:ok, waiting} = Runs.mark_running(waiting)
     assert {:ok, waiting} = Runs.mark_waiting_approval(waiting)
-    assert {:ok, queued} = Runs.create(Map.put(attrs, :status, "queued"))
+    assert {:ok, queued} = create_recoverable_run(Map.put(attrs, :status, "queued"))
 
     Application.put_env(
       :synapsis_agent,
@@ -288,9 +288,9 @@ defmodule Synapsis.Agent.DaemonRecoveryTest do
       tool_profile: "read_only"
     }
 
-    assert {:ok, first} = Runs.create(Map.put(attrs, :prompt, "first"))
-    assert {:ok, second} = Runs.create(Map.put(attrs, :prompt, "second"))
-    assert {:ok, third} = Runs.create(Map.put(attrs, :prompt, "third"))
+    assert {:ok, first} = create_recoverable_run(Map.put(attrs, :prompt, "first"))
+    assert {:ok, second} = create_recoverable_run(Map.put(attrs, :prompt, "second"))
+    assert {:ok, third} = create_recoverable_run(Map.put(attrs, :prompt, "third"))
 
     {daemon, _task_supervisor} =
       start_test_daemon(recover?: true, sessions: FakeSessions, queue_capacity: 1)
@@ -335,9 +335,9 @@ defmodule Synapsis.Agent.DaemonRecoveryTest do
       tool_profile: "read_only"
     }
 
-    assert {:ok, _first} = Runs.create(Map.put(attrs, :prompt, "backlog first"))
-    assert {:ok, second} = Runs.create(Map.put(attrs, :prompt, "backlog second"))
-    assert {:ok, third} = Runs.create(Map.put(attrs, :prompt, "backlog third"))
+    assert {:ok, _first} = create_recoverable_run(Map.put(attrs, :prompt, "backlog first"))
+    assert {:ok, second} = create_recoverable_run(Map.put(attrs, :prompt, "backlog second"))
+    assert {:ok, third} = create_recoverable_run(Map.put(attrs, :prompt, "backlog third"))
 
     {daemon, _task_supervisor} =
       start_test_daemon(
@@ -378,7 +378,7 @@ defmodule Synapsis.Agent.DaemonRecoveryTest do
       tool_profile: "read_only"
     }
 
-    assert {:ok, queued} = Runs.create(attrs)
+    assert {:ok, queued} = create_recoverable_run(attrs)
     {:ok, deadline_agent} = Agent.start_link(fn -> %{{:scan, "running"} => :hang} end)
     Application.put_env(:synapsis_agent, :daemon_deadline_agent, deadline_agent)
     Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :waiting)
@@ -402,5 +402,12 @@ defmodule Synapsis.Agent.DaemonRecoveryTest do
              wait_for_status(daemon, &(&1.ready and &1.active_run_id == queued.id))
 
     assert active_id == queued.id
+  end
+
+  defp create_recoverable_run(attrs) do
+    attrs = Map.put_new(attrs, :assistant_name, "main")
+
+    with {:ok, captured} <- Synapsis.Agent.Daemon.NativeSelection.capture(attrs),
+         do: Runs.create(captured)
   end
 end
