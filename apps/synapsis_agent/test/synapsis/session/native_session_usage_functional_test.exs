@@ -219,7 +219,7 @@ defmodule Synapsis.Session.NativeSessionUsageFunctionalTest do
       source: "native_committed",
       coverage: "retained_runs",
       observation: "sequential",
-      runtime_version: "1.10.60",
+      runtime_version: "1.10.74",
       retained_runs: runs,
       observed_runs: runs,
       provider_attempts: attempts,
