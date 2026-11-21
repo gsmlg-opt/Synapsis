@@ -48,6 +48,12 @@ defmodule Synapsis.WorkspaceDocuments do
     FileDocuments.tool_perform(scope.root, action, arguments, author, scope.io)
   end
 
+  @doc "Validates all edit metadata under the caller's full batch scope before writes."
+  def check_edit_metadata(arguments, scope) do
+    scope = domain_scope(scope)
+    FileDocuments.check_edit_metadata(scope.root, arguments, scope.io)
+  end
+
   def text_files(action, arguments, author, opts \\ [], scope \\ nil) do
     scope = domain_scope(scope)
 

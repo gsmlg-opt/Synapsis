@@ -142,6 +142,13 @@ defmodule Synapsis.Workspace.FileDocuments do
     end
   end
 
+  @doc "Checks every batch sidecar before the domain starts per-file completion."
+  def check_edit_metadata(root, arguments, io_opts) do
+    with_paths(root, operation_paths(:multi_edit, arguments), io_opts, fn io ->
+      with {:ok, _metadata} <- tool_metadata(root, :multi_edit, arguments, io), do: :ok
+    end)
+  end
+
   @doc """
   Bounded file-tool store entrypoint. Content uses the real-filesystem domain;
   metadata remains owned here. The caller owns logical authorization and domain

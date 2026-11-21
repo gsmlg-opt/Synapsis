@@ -389,6 +389,26 @@ defmodule Synapsis.Workspace.ToolFilesTest do
     {skill, other}
   end
 
+  test "multi-edit checks every metadata sidecar before changing content", ctx do
+    first = own_path("a.txt")
+    second = own_path("b.txt")
+    fixture(ctx, first, "x")
+    fixture(ctx, second, "x")
+    first_meta = File.read!(metadata_path(ctx, first))
+    File.write!(metadata_path(ctx, second), "invalid metadata")
+
+    edits =
+      for path <- [first, second],
+          do: %{"path" => path, "old_string" => "x", "new_string" => "y"}
+
+    assert {:error, :invalid_metadata} =
+             ToolFiles.perform(ctx.identity, :multi_edit, %{"edits" => edits})
+
+    for path <- [first, second], do: assert(File.read!(physical(ctx, path)) == "x")
+    assert File.read!(metadata_path(ctx, first)) == first_meta
+    refute_receive {:workspace_changed, _}, 0
+  end
+
   test "interrupted batches persist and publish metadata for known completed files", ctx do
     first = own_path("a.txt")
     second = own_path("b.txt")
@@ -434,6 +454,7 @@ defmodule Synapsis.Workspace.ToolFilesTest do
     assert_receive {:tool_files_finished, {:error, {:unknown_outcome, evidence}}}, 2_000
     assert Enum.any?(evidence.files, &(&1.path == first and &1.status == "updated"))
     assert Enum.any?(evidence.files, &(&1.path == second and &1.status == "unknown_outcome"))
+    assert Enum.map(evidence.files, & &1.path) == [first, second]
     assert {:ok, document} = FileDocuments.get(ctx.root, first)
     assert document.version == previous.version + 1
     assert_receive {:workspace_changed, %{path: ^first, action: :updated}}

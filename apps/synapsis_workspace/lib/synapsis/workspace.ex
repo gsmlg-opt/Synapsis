@@ -34,12 +34,101 @@ defmodule Synapsis.Workspace do
   """
   def tool_files(action, arguments, author) do
     with :ok <- Local.validate(action, arguments) do
-      WorkspaceDocuments.with_paths(tool_paths(action, arguments), fn scope ->
-        WorkspaceDocuments.tool_files(action, arguments, author, scope)
-        |> finish_files(scope)
-      end)
+      result =
+        WorkspaceDocuments.with_paths(tool_paths(action, arguments), fn scope ->
+          if action == :multi_edit do
+            with :ok <- WorkspaceDocuments.check_edit_metadata(arguments, scope),
+                 do: edit_files(arguments, author, scope)
+          else
+            WorkspaceDocuments.tool_files(action, arguments, author, scope)
+            |> finish_files(scope)
+          end
+        end)
+
+      if action == :multi_edit, do: edit_outcome(result, arguments), else: result
     end
   end
+
+  defp edit_files(arguments, author, scope) do
+    # The outer scope has already admitted and budgeted every content/sidecar
+    # target. Finish each file under that same lease before opening the next one,
+    # so a later interrupted file cannot strand earlier metadata/publication.
+    arguments["edits"]
+    |> Enum.group_by(&edit_path(&1["path"]))
+    |> Enum.sort_by(&elem(&1, 0))
+    |> Enum.reduce_while({:ok, [], false}, fn {_path, edits}, {:ok, completed, uncertain} ->
+      persisted = WorkspaceDocuments.tool_files(:multi_edit, %{"edits" => edits}, author, scope)
+      result = finish_files(persisted, scope)
+
+      case result do
+        {:ok, %{files: files}} ->
+          {:cont, {:ok, completed ++ files, uncertain}}
+
+        {:error, {:unknown_outcome, %{reason: "metadata_persistence", files: files}}} ->
+          {:cont, {:ok, completed ++ files, true}}
+
+        error ->
+          files = completed ++ edit_result_files(persisted)
+
+          if files == [] do
+            {:halt, error}
+          else
+            {:halt,
+             {:error,
+              {:unknown_outcome,
+               %{
+                 status: "partial",
+                 reason: "file_operation",
+                 operation: error,
+                 files: files
+               }}}}
+          end
+      end
+    end)
+    |> case do
+      {:ok, files, uncertain} ->
+        successes = Enum.count(files, &(&1.status in ["updated", "unchanged"]))
+
+        status =
+          cond do
+            files == [] -> "unchanged"
+            successes == length(files) -> "updated"
+            successes == 0 -> "failed"
+            true -> "partial"
+          end
+
+        result = %{status: status, files: files}
+
+        if uncertain,
+          do: {:error, {:unknown_outcome, Map.put(result, :reason, "metadata_persistence")}},
+          else: {:ok, result}
+
+      error ->
+        error
+    end
+  end
+
+  defp edit_result_files({:ok, %{result: %{files: files}}}), do: files
+  defp edit_result_files({:error, {:unknown_outcome, %{files: files}}, _changes}), do: files
+  defp edit_result_files(_result), do: []
+
+  defp edit_outcome({:error, {:unknown_outcome, %{files: files} = evidence}}, arguments) do
+    requested =
+      arguments["edits"] |> Enum.map(&edit_path(&1["path"])) |> Enum.uniq() |> Enum.sort()
+
+    known = Map.new(files, &{edit_path(&1.path), &1})
+
+    files =
+      Enum.map(requested, fn path ->
+        known |> Map.get(path, %{status: "unknown_outcome"}) |> Map.put(:path, path)
+      end)
+
+    {:error, {:unknown_outcome, %{evidence | files: files}}}
+  end
+
+  defp edit_outcome(result, _arguments), do: result
+
+  defp edit_path(path), do: Path.expand("/" <> String.trim_leading(path, "/"))
 
   @doc "Source text operations with content, metadata and publication in one scope."
   def text_files(action, arguments, author, opts \\ [], root \\ WorkspaceDocuments.root()) do
