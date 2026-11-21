@@ -16,7 +16,14 @@ defmodule Synapsis.Session.Worker.UserQuestionsTest do
       end)
 
     on_exit(fn -> if Process.alive?(owner), do: Process.exit(owner, :kill) end)
-    %{data: %Worker{session_id: session_id, epoch: 1}, owner: owner}
+
+    data = %Worker{
+      session_id: session_id,
+      epoch: 1,
+      pending_inputs: %{Synapsis.Session.Worker.PendingInputs.new() | booted: true}
+    }
+
+    %{data: data, owner: owner}
   end
 
   test "snapshot retains pending questions without exposing private process state", ctx do

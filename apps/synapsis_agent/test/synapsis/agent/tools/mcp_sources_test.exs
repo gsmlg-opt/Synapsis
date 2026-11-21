@@ -6,6 +6,8 @@ defmodule Synapsis.Agent.Tools.MCPSourcesTest do
   alias Synapsis.MCPConfigs
 
   setup do
+    Synapsis.DataCase.clear_config_store(:mcp)
+    on_exit(fn -> Synapsis.DataCase.clear_config_store(:mcp) end)
     fixture = Gaoxy.Test.open()
     owner = self()
     state = start_supervised!({Agent, fn -> "original" end})

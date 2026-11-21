@@ -81,6 +81,8 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
     Synapsis.DataCase.clear_config_store(:provider)
     Synapsis.DataCase.clear_config_store(:model)
+    Synapsis.DataCase.clear_config_store(:agent)
+    :ok = AgentConfigs.seed_defaults()
     on_exit(fn -> Synapsis.DataCase.clear_config_store(:provider) end)
     :ok
   end

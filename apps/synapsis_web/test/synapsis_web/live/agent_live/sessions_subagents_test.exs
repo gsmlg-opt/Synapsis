@@ -151,6 +151,8 @@ defmodule SynapsisWeb.AgentLive.SessionsSubagentsTest do
     |> render_click()
 
     assert_receive {:runtime_decision, "allow-this", true}
+    assert has_element?(view, "[data-runtime-permission='allow-this']")
+    acknowledge_permission(session, "allow-this")
     refute has_element?(view, "[data-runtime-permission='allow-this']")
     assert has_element?(view, "[data-runtime-permission='deny-this']")
 
@@ -159,6 +161,8 @@ defmodule SynapsisWeb.AgentLive.SessionsSubagentsTest do
     |> render_click()
 
     assert_receive {:runtime_decision, "deny-this", false}
+    assert has_element?(view, "[data-runtime-permission='deny-this']")
+    acknowledge_permission(session, "deny-this")
     assert Worker.snapshot(session.id).runtime_permissions == []
     refute has_element?(view, "[data-runtime-permission]")
   end
@@ -289,6 +293,21 @@ defmodule SynapsisWeb.AgentLive.SessionsSubagentsTest do
       :stop ->
         :ok
     end
+  end
+
+  defp acknowledge_permission(session, id) do
+    [{pid, _}] = Registry.lookup(Synapsis.Session.Registry, session.id)
+    {_, data} = :sys.get_state(pid)
+
+    send(pid, {
+      :runtime_event,
+      data.runtime_epoch,
+      data.runtime_run_id,
+      %{type: :interaction_resolved, interaction_id: id}
+    })
+
+    # Wait for the real Worker to publish its acknowledged projection.
+    Worker.snapshot(session.id)
   end
 
   # The Worker briefly reconciles its durable input queue after boot.

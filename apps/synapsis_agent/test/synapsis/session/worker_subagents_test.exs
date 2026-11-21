@@ -22,6 +22,11 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
     harness = SessionHarness.setup_session!(opts)
 
     if ctx[:omitted_session_config] do
+      assert {:ok, _} =
+               Synapsis.AgentConfigs.update(harness.agent_config, %{
+                 tools: ~w(spawn_agent wait_agent)
+               })
+
       :ok = Synapsis.Session.DynamicSupervisor.stop_session(harness.session.id)
       {:ok, meta} = Synapsis.Session.Store.get_meta(harness.session.id)
       :ok = Synapsis.Session.Store.put_meta(harness.session.id, Map.delete(meta, :config))
