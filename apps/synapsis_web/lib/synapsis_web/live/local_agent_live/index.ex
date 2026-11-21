@@ -142,9 +142,13 @@ defmodule SynapsisWeb.LocalAgentLive.Index do
     do: {:noreply, put_flash(socket, :error, "#{name} failed: #{inspect(reason)}")}
 
   @impl true
-  def handle_info({:local_agent_event, %Event{type: :status, agent_id: id}}, socket) do
+  def handle_info({:local_agent_event, %Event{type: :status, agent_id: id, data: status}}, socket) do
     was_running? = running?(socket, id)
-    socket = load_agents(socket)
+
+    # Preserve lifecycle edges even when the Runner has already restarted by
+    # the time this event reaches the LiveView.
+    socket = update(socket, :agents, &apply_agent_status(&1, id, status))
+
     {:noreply, on_status(socket, id, was_running?, running?(socket, id))}
   end
 
@@ -253,6 +257,15 @@ defmodule SynapsisWeb.LocalAgentLive.Index do
     end
 
     assign(socket, subscribed: id)
+  end
+
+  defp apply_agent_status(agents, id, status) do
+    statuses = agents |> Map.new(&{&1.config.id, &1.status}) |> Map.put(id, status)
+
+    Enum.map(Synapsis.LocalAgentConfigs.list(), fn config ->
+      status = Map.get_lazy(statuses, config.id, fn -> SynapsisLocalAgents.status(config.id) end)
+      %{config: config, status: status}
+    end)
   end
 
   defp load_agents(socket), do: assign(socket, agents: SynapsisLocalAgents.list())

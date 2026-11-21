@@ -49,6 +49,26 @@ defmodule SynapsisWeb.LocalAgentLiveTest do
     assert has_element?(view, "#local-agent-#{id} [data-role=status]", "running")
   end
 
+  test "discovers an agent configured after the page opened when it starts", %{conn: conn, id: id} do
+    {:ok, view, _html} = live(conn, ~p"/local-agents")
+
+    {:ok, config} =
+      LocalAgentConfigs.create(%{name: "New Codex", kind: "codex", executable: "/bin/true"})
+
+    on_exit(fn -> SynapsisLocalAgents.stop(config.id) end)
+    refute has_element?(view, "#local-agent-#{config.id}")
+    SynapsisLocalAgents.subscribe_all()
+
+    :ok = SynapsisLocalAgents.start(config.id)
+    new_id = config.id
+
+    assert_receive {:local_agent_event,
+                    %Event{agent_id: ^new_id, type: :status, data: %{state: :running}}}
+
+    assert has_element?(view, "#local-agent-#{config.id} [data-role=status]", "running")
+    assert has_element?(view, "#local-agent-#{id} [data-role=status]", "stopped")
+  end
+
   test "shows threads and opens a new session", %{conn: conn, id: id} do
     :ok = SynapsisLocalAgents.start(id)
     {:ok, view, _html} = live(conn, ~p"/local-agents/#{id}")
@@ -162,19 +182,31 @@ defmodule SynapsisWeb.LocalAgentLiveTest do
     :ok = SynapsisLocalAgents.start(id)
     {:ok, view, _html} = live(conn, ~p"/local-agents/#{id}/threads/th-1")
     render_async(view)
+    assert_receive {:fake_adapter_call, :resume_thread, ["th-1"]}
     assert_receive {:fake_adapter_call, :read_thread, ["th-1"]}
     SynapsisLocalAgents.subscribe(id)
 
     emit(id, type: :turn_started, thread_id: "th-1", turn_id: "tu-2")
     assert has_element?(view, "[phx-click='interrupt_turn']")
 
-    Fake.crash(SynapsisLocalAgents.Runner.adapter(id), {:codex_exited, 7})
-    assert_receive {:local_agent_event, %Event{type: :status, data: %{state: :crashed}}}
+    # Queue the whole lifecycle while the view is delayed: a fresh Runner
+    # query would see only :running and miss the crash/restart transition.
+    :ok = :sys.suspend(view.pid)
 
-    :ok = SynapsisLocalAgents.start(id)
-    assert_receive {:local_agent_event, %Event{type: :status, data: %{state: :running}}}
+    try do
+      Fake.crash(SynapsisLocalAgents.Runner.adapter(id), {:codex_exited, 7})
+      assert_receive {:local_agent_event, %Event{type: :status, data: %{state: :crashed}}}
+
+      :ok = SynapsisLocalAgents.start(id)
+      assert_receive {:local_agent_event, %Event{type: :status, data: %{state: :running}}}
+    after
+      :ok = :sys.resume(view.pid)
+    end
+
     render_async(view)
+    assert_receive {:fake_adapter_call, :resume_thread, ["th-1"]}
     assert_receive {:fake_adapter_call, :read_thread, ["th-1"]}
+    assert has_element?(view, "[data-role=agent-stream]", "hi from codex")
     refute has_element?(view, "[phx-click='interrupt_turn']")
     refute has_element?(view, "[data-role=turn-status]")
   end
