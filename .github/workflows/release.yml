@@ -49,6 +49,14 @@ jobs:
           elixir-version: '1.18'
           otp-version: '28'
 
+      - name: Set up filesystem runtime
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.22.1'
+
+      - name: Select filesystem runtime for tests
+        run: echo "SYNAPSIS_FILESYSTEM_NODE=$(node -p 'process.execPath')" >> "$GITHUB_ENV"
+
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:

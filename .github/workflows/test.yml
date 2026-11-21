@@ -38,7 +38,12 @@ jobs:
           mix local.rebar --force
           mix deps.get
 
+      - name: Set up filesystem runtime
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.22.1'
+
       # ADR-006 C4: no PostgreSQL. Storage is the embedded Concord store
       # (node-local Ra), files, and the memory port — all started by the apps.
       - name: Run tests
-        run: mix test
+        run: SYNAPSIS_FILESYSTEM_NODE="$(node -p 'process.execPath')" mix test
