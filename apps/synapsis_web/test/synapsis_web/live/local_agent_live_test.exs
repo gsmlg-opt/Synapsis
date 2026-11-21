@@ -152,7 +152,9 @@ defmodule SynapsisWeb.LocalAgentLiveTest do
     assert has_element?(view, "#local-agent-#{id}", "codex_exited")
 
     render_click(element(view, "[phx-click='start_agent'][phx-value-id='#{id}']"))
+    render_async(view)
     render_click(element(view, "[phx-click='stop_agent'][phx-value-id='#{id}']"))
+    render_async(view)
     assert has_element?(view, "#local-agent-#{id} [data-role=status]", "stopped")
   end
 
