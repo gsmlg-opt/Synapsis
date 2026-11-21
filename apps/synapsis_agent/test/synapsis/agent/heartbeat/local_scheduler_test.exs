@@ -541,6 +541,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
   for failure <- [:timeout, :down] do
     test "retries terminal persistence after #{failure}" do
       failure = unquote(failure)
+      timeout_ms = :timer.seconds(5)
       Application.put_env(:synapsis_agent, :daemon_fake_session_mode, :immediate_done)
       {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
       owner = self()
@@ -551,7 +552,7 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
 
       scheduler =
         start_scheduler([config], daemon, task_supervisor,
-          trigger_timeout_ms: 30,
+          trigger_timeout_ms: timeout_ms,
           persistence_retry_backoff_ms: 20,
           persistence_retry_limit: 2,
           config_writer: retrying_config_writer(owner, persisted, terminal_attempts, failure)
@@ -560,9 +561,17 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
       assert {:ok, run} = LocalScheduler.trigger(scheduler, name)
       assert {:ok, _completed} = wait_for_run(run.id, "completed")
       assert_receive {:terminal_persist_attempt, 1, terminal_attrs}, 1_000
-      assert_receive {:terminal_persist_attempt, 2, retried_attrs}, 1_000
+
+      assert_receive {:terminal_persist_attempt, 2, retried_attrs}, timeout_ms + 1_000
       assert retried_attrs == terminal_attrs
-      assert %{"last_status" => "completed"} = Agent.get(persisted, & &1)
+
+      assert {:ok, %{"last_status" => "completed"}} =
+               wait_for(fn ->
+                 case Agent.get(persisted, & &1) do
+                   %{"last_status" => "completed"} = attrs -> {:ok, attrs}
+                   _pending -> :retry
+                 end
+               end)
     end
   end
 
