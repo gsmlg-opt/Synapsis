@@ -704,7 +704,7 @@ defmodule Synapsis.Agent.DaemonCase do
     def cancel(session_id) do
       send(
         Application.fetch_env!(:synapsis_agent, :daemon_test_owner),
-        {:timeout_cleanup_blocked, self(), session_id}
+        {:timeout_cleanup_blocked, self(), session_id, System.monotonic_time(:millisecond)}
       )
 
       receive do

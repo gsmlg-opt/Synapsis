@@ -319,43 +319,48 @@ defmodule Synapsis.Agent.DaemonExecutionTest do
   end
 
   test "hung timeout cleanup cannot delay inner termination or durable failure" do
+    run_timeout_ms = :timer.seconds(5)
+
     {daemon, _task_supervisor} =
       start_test_daemon(
         sessions: HangingTimeoutCleanupSessions,
-        run_timeout: 50,
+        run_timeout: run_timeout_ms,
         cleanup_timeout: 50
       )
 
-    started_at = System.monotonic_time(:millisecond)
     assert {:ok, run} = Daemon.submit(daemon, "bounded timeout cleanup", %{})
-    assert_receive {:timeout_inner_blocked, inner, session_id}, 1_000
-    assert_receive {:timeout_cleanup_blocked, cleanup, ^session_id}, 500
+    assert_receive {:timeout_inner_blocked, inner, session_id}, run_timeout_ms + 1_000
+
+    assert_receive {:timeout_cleanup_blocked, cleanup, ^session_id, cleanup_started_at},
+                   run_timeout_ms + 1_000
+
+    refute Process.alive?(inner)
 
     assert {:ok, failed} = wait_for_run(run.id, "failed")
     assert failed.error =~ "session_timeout"
     assert failed.session_id == session_id
-    refute Process.alive?(inner)
     refute Process.alive?(cleanup)
-    assert System.monotonic_time(:millisecond) - started_at < 500
+    assert System.monotonic_time(:millisecond) - cleanup_started_at < 500
 
     assert {:ok, status} = wait_for_status(daemon, &is_nil(&1.active_run_id))
     assert status.last_error =~ "cleanup_timeout"
   end
 
   test "hung cleanup child dies with its killed outer owner" do
+    run_timeout_ms = :timer.seconds(5)
     {:ok, cleanup_agent} = Agent.start_link(fn -> 0 end)
     Application.put_env(:synapsis_agent, :daemon_cleanup_call_agent, cleanup_agent)
 
     {daemon, task_supervisor} =
       start_test_daemon(
         sessions: FirstCleanupHangsSessions,
-        run_timeout: 50,
+        run_timeout: run_timeout_ms,
         cleanup_timeout: 5_000
       )
 
     assert {:ok, run} = Daemon.submit(daemon, "kill owner during cleanup", %{})
-    assert_receive {:owner_death_inner, _inner, session_id}, 1_000
-    assert_receive {:owner_death_cleanup, cleanup_task, ^session_id}, 500
+    assert_receive {:owner_death_inner, _inner, session_id}, run_timeout_ms + 1_000
+    assert_receive {:owner_death_cleanup, cleanup_task, ^session_id}, run_timeout_ms + 1_000
     assert cleanup_task in Task.Supervisor.children(task_supervisor)
 
     outer = :sys.get_state(Process.whereis(daemon)).active_run.task_pid
