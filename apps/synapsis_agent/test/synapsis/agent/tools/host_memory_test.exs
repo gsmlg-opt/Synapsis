@@ -508,7 +508,7 @@ defmodule Synapsis.Agent.Tools.HostMemoryTest do
       else: assert(public.hits == [])
 
     {:ok, denied_table} = EphemeralStore.new(1)
-    requests_before = Gaoxy.Test.requests(ctx.server)
+    request_cursor = Gaoxy.Test.requests(ctx.server).cursor
 
     denied = Keyword.put(options, :authority, %{authority | grants: []})
 
@@ -522,7 +522,7 @@ defmodule Synapsis.Agent.Tools.HostMemoryTest do
              )
 
     assert :ets.tab2list(denied_table) == []
-    assert Gaoxy.Test.requests(ctx.server) == requests_before
+    assert Gaoxy.Test.requests(ctx.server).cursor == request_cursor
   end
 
   defp authority,
