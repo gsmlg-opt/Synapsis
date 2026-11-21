@@ -33,30 +33,47 @@ defmodule Synapsis.Session.Worker.ConfigTest do
     refute Map.has_key?(google, :provider_id)
   end
 
-  test "refresh preserves the Skill catalog frozen at session boot" do
-    session = %Session{
-      id: Ecto.UUID.generate(),
-      agent: "main",
-      provider: "anthropic",
-      model: "claude-sonnet-4-6",
-      config: %{}
-    }
+  for native_snapshot? <- [false, true] do
+    test "refresh preserves the Skill catalog frozen at session boot, native snapshot: #{native_snapshot?}" do
+      session = %Session{
+        id: Ecto.UUID.generate(),
+        agent:
+          if(unquote(native_snapshot?),
+            do: "main",
+            else: "catalog-only-#{System.unique_integer([:positive])}"
+          ),
+        provider: "anthropic",
+        model: "claude-sonnet-4-6",
+        config: %{}
+      }
 
-    frozen = [%{locator: "synapsis://skills/boot-snapshot"}]
+      frozen = [%{locator: "synapsis://skills/boot-snapshot"}]
+      previous = %{skill_catalog: frozen}
 
-    state = %{
-      session: session,
-      agent: %{skill_catalog: frozen},
-      provider_config: %{},
-      engine_ctx: %{},
-      engine_state: %{agent_config: %{}}
-    }
+      previous =
+        if unquote(native_snapshot?),
+          do: Map.put(previous, :skill_snapshot, %{id: "boot-snapshot"}),
+          else: previous
 
-    assert {:ok, refreshed} = Config.refresh_agent_defaults(state)
-    assert refreshed.agent.skill_catalog == frozen
-    assert refreshed.engine_state.agent_config.skill_catalog == frozen
+      state = %{
+        session: session,
+        agent: previous,
+        provider_config: %{},
+        engine_ctx: %{},
+        engine_state: %{agent_config: %{}}
+      }
 
-    on_exit(fn -> Synapsis.Session.Store.delete_session(session.id) end)
+      assert {:ok, refreshed} = Config.refresh_agent_defaults(state)
+      assert refreshed.agent.skill_catalog == frozen
+      assert refreshed.engine_state.agent_config.skill_catalog == frozen
+
+      if unquote(native_snapshot?) do
+        assert refreshed.agent.skill_snapshot == previous.skill_snapshot
+        assert refreshed.engine_state.agent_config.skill_snapshot == previous.skill_snapshot
+      end
+
+      on_exit(fn -> Synapsis.Session.Store.delete_session(session.id) end)
+    end
   end
 
   test "keeps local providers available even when they carry an unrelated false marker" do

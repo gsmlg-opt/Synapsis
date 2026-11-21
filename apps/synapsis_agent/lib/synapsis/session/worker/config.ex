@@ -137,6 +137,9 @@ defmodule Synapsis.Session.Worker.Config do
       %{skill_catalog: catalog, skill_snapshot: snapshot} ->
         agent |> Map.put(:skill_catalog, catalog) |> Map.put(:skill_snapshot, snapshot)
 
+      %{skill_catalog: catalog} when not is_map_key(agent, :skill_snapshot) ->
+        Map.put(agent, :skill_catalog, catalog)
+
       _ ->
         agent
     end
